@@ -155,7 +155,7 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		data->selected_runtime_setting.Initialize(editor_state->editor_allocator, 0, MAX_SIZE_SETTING);
 
 		const size_t ALLOCATOR_SIZE = ECS_KB * 2;
-		data->runtime_settings_allocator = LinearAllocator(editor_state->editor_allocator->Allocate(ALLOCATOR_SIZE), ALLOCATOR_SIZE);
+		data->runtime_settings_allocator = LinearAllocator::InitializeFrom(editor_state->editor_allocator, ALLOCATOR_SIZE);
 	}
 	
 	UIDrawConfig config;
@@ -248,7 +248,7 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 	// Clear the linear allocator
 	data->runtime_settings_allocator.Clear();
 	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, runtime_settings, 128);
-	GetSandboxAvailableRuntimeSettings(editor_state, runtime_settings, GetAllocatorPolymorphic(&data->runtime_settings_allocator));
+	GetSandboxAvailableRuntimeSettings(editor_state, runtime_settings, &data->runtime_settings_allocator);
 	runtime_settings.AssertCapacity();
 
 	auto create_new_runtime_setting_action = [](ActionData* action_data) {

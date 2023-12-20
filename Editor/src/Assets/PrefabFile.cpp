@@ -46,7 +46,7 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 
 	// We need a temporary database since the load scene core will
 	// Erase everything that is stored in the reference
-	AssetDatabaseReference temporary_database(editor_state->asset_database, GetAllocatorPolymorphic(&temporary_memory));
+	AssetDatabaseReference temporary_database(editor_state->asset_database, &temporary_memory);
 
 	// Create the pointer remap
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);

@@ -11,7 +11,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	TaskScheduler::TaskScheduler(MemoryManager* allocator) : elements(GetAllocatorPolymorphic(allocator), 0), query_infos(nullptr, 0), query_index(0) {}
+	TaskScheduler::TaskScheduler(MemoryManager* allocator) : elements(allocator, 0), query_infos(nullptr, 0), query_index(0) {}
 
 	// ------------------------------------------------------------------------------------------------------------
 
@@ -684,7 +684,7 @@ namespace ECSEngine {
 
 	MemoryManager TaskScheduler::DefaultAllocator(GlobalMemoryManager* memory)
 	{
-		return MemoryManager(ECS_KB * 32, 1024, ECS_KB * 32, GetAllocatorPolymorphic(memory));
+		return MemoryManager(ECS_KB * 32, 1024, ECS_KB * 32, memory);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

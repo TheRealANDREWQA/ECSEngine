@@ -189,16 +189,16 @@ namespace ECSEngine {
 		// The global memory manager, the graphics allocator, the resource manager allocator, the task scheduler allocator 
 		// and the debug drawer allocator. The task manager allocators are probably not worth including
 		// Since they will consume a small amount of memory and increase the entry count by quite a bit
-		AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(world->memory), physical_memory_profiler);
+		AddAllocatorToPhysicalMemoryProfiling(world->memory, physical_memory_profiler);
 
 		// It seems that we cannot monitor these allocators since they will cause background threads from the
 		// GPU drivers to fail since they won't handle the page guard exception
-		//AddAllocatorToPhysicalMemoryProfiling(world->graphics->Allocator(), physical_memory_profiler);
-		//AddAllocatorToPhysicalMemoryProfiling(world->resource_manager->Allocator(), physical_memory_profiler);
+		//AddAllocatorToPhysicalMemoryProfiling(world->graphics->SettingsAllocator(), physical_memory_profiler);
+		//AddAllocatorToPhysicalMemoryProfiling(world->resource_manager->SettingsAllocator(), physical_memory_profiler);
 		
 		//unsigned int thread_count = world->task_manager->GetThreadCount();
 		//for (unsigned int index = 0; index < thread_count; index++) {
-		//	AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(&world->task_manager->m_thread_linear_allocators[index].value), physical_memory_profiler);
+		//	AddAllocatorToPhysicalMemoryProfiling(&world->task_manager->m_thread_linear_allocators[index].value, physical_memory_profiler);
 		//	// For the dynamic task allocators, we can insert them directly
 		//	physical_memory_profiler->AddEntry({ 
 		//		world->task_manager->m_dynamic_task_allocators[index].value.buffer, 

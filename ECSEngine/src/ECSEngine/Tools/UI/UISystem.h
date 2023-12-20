@@ -261,7 +261,7 @@ namespace ECSEngine {
 
 			void* AllocateHandlerMemory(LinearAllocator* allocator, size_t size, size_t alignment, const void* memory_to_copy);
 
-			AllocatorPolymorphic AllocatorSnapshotRunnables(const UIDockspace* dockspace, unsigned int border_index);
+			AllocatorPolymorphic AllocatorSnapshotRunnables(UIDockspace* dockspace, unsigned int border_index);
 
 			// this is triggered when the element is placed over one of the four sides of the Docking gizmo, not in center of it
 			void AddElementToDockspace(

@@ -98,7 +98,7 @@ namespace ECSEngine {
 	// Write_Type_Table: write at the beginning of the section the field names and the corresponding types
 	// Write_Type_Table_Tags: write type tags and fields tags to the file in the header table
 	// Verify_Dependent_Types: if you want to skip the check, set this to false
-	// Allocator: an allocator to be used for writing the whole data in memory for commiting then into a file
+	// SettingsAllocator: an allocator to be used for writing the whole data in memory for commiting then into a file
 	// OmitFields: optionally tell the serializer to omit fields of certain types
 	// Error_Message: a stream where the error message will be written if an error occurs
 	struct SerializeOptions {
@@ -128,7 +128,7 @@ namespace ECSEngine {
 	// OmitFields: optionally tell the deserializer to ignore certain fields
 	// File_Allocator: an allocator to be used to read the whole file into memory
 	// Field_Allocator: an allocator to be used to read off streams of data into the fields
-	// Backup Allocator: an allocator to be used if there are incompatible user defined types
+	// Backup SettingsAllocator: an allocator to be used if there are incompatible user defined types
 	// or streams whose data type has changed
 	// Error_Message: a stream where an error message will be written if one occurs
 	struct DeserializeOptions {
@@ -191,7 +191,7 @@ namespace ECSEngine {
 	);
 
 	// Serializes into a temporary memory buffer, then commits to the file
-	// Allocator nullptr means use malloc
+	// SettingsAllocator nullptr means use malloc
 	ECSENGINE_API ECS_SERIALIZE_CODE Serialize(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,

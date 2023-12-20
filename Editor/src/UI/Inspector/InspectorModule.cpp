@@ -35,7 +35,7 @@ struct DrawModuleData {
 static void AllocateInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
 	ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
 	DrawModuleData* draw_data = (DrawModuleData*)editor_state->inspector_manager.data[inspector_index].draw_data;
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&draw_data->settings_allocator);
+	AllocatorPolymorphic allocator = &draw_data->settings_allocator;
 
 	AllocateModuleSettings(editor_state, module_index, settings, allocator);
 	draw_data->reflected_settings.InitializeAndCopy(allocator, settings);
@@ -45,7 +45,7 @@ static void CreateInspectorSettingsHelper(EditorState* editor_state, unsigned in
 	ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
 
 	DrawModuleData* draw_data = (DrawModuleData*)editor_state->inspector_manager.data[inspector_index].draw_data;
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&draw_data->settings_allocator);
+	AllocatorPolymorphic allocator = &draw_data->settings_allocator;
 	CreateModuleSettings(editor_state, module_index, settings, allocator, inspector_index);
 
 	draw_data->reflected_settings.InitializeAndCopy(allocator, settings);
@@ -77,7 +77,7 @@ static bool LoadInspectorSettingsHelper(EditorState* editor_state, unsigned int 
 		module_index,
 		absolute_path,
 		draw_data->reflected_settings,
-		GetAllocatorPolymorphic(&draw_data->settings_allocator)
+		&draw_data->settings_allocator
 	);
 
 	return success;
@@ -638,14 +638,14 @@ void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsi
 			Stream<wchar_t> module_name = StringCopy(editor_state->EditorAllocator(), initialize_data->module_name);
 			draw_data->module_name = module_name;
 			draw_data->inspector_index = inspector_index;
-			draw_data->linear_allocator = LinearAllocator(editor_state->editor_allocator->Allocate(DRAW_MODULE_LINEAR_ALLOCATOR_CAPACITY), DRAW_MODULE_LINEAR_ALLOCATOR_CAPACITY);
+			draw_data->linear_allocator = LinearAllocator::InitializeFrom(editor_state->editor_allocator, DRAW_MODULE_LINEAR_ALLOCATOR_CAPACITY);
 			draw_data->header_states = (bool*)editor_state->editor_allocator->Allocate(sizeof(bool) * MAX_HEADER_STATES);
 			memset(draw_data->header_states, false, sizeof(bool)* MAX_HEADER_STATES);
 			draw_data->settings_allocator = MemoryManager(
 				DRAW_MODULE_SETTINGS_ALLOCATOR_CAPACITY,
 				DRAW_MODULE_SETTINGS_ALLOCATOR_POOL_COUNT,
 				DRAW_MODULE_SETTINGS_ALLOCATOR_BACKUP_SIZE,
-				GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
+				editor_state->GlobalMemoryManager()
 			);
 
 			if (initialize_data->initial_settings.size > 0) {

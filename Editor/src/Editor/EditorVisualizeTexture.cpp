@@ -75,7 +75,7 @@ void UpdateVisualizeTextureSandboxReferences(EditorState* editor_state, unsigned
 		if (digit_count > 0) {
 			if (existing_index == previous_sandbox_index) {
 				VisualizeTextureSelectElement new_entry = *element;
-				new_entry.name = element->name.Copy(GetAllocatorPolymorphic(&stack_allocator));
+				new_entry.name = element->name.Copy(&stack_allocator);
 				Stream<char> digit = FindFirstCharacter(new_entry.name, (char)previous_sandbox_index + '0');
 				digit[0] = (char)new_sandbox_index + '0';
 				add_elements.AddAssert(new_entry);

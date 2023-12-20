@@ -5,9 +5,6 @@
 #include "../Profiling/AllocatorProfilingGlobal.h"
 
 namespace ECSEngine {
-	
-	LinearAllocator::LinearAllocator(AllocatorPolymorphic allocator, size_t capacity) : m_buffer(ECSEngine::Allocate(allocator, capacity)),
-		m_capacity(capacity), m_top(0), m_marker(0), m_spin_lock(), m_debug_mode(false), m_profiling_mode(false) {}
 
 	void* LinearAllocator::Allocate(size_t size, size_t alignment, DebugInfo debug_info) {
 		// calculating the current pointer and aligning it
@@ -119,6 +116,20 @@ namespace ECSEngine {
 
 	void LinearAllocator::SetMarker() {
 		m_marker = m_top;
+	}
+
+	LinearAllocator LinearAllocator::InitializeFrom(AllocatorPolymorphic allocator, size_t capacity) {
+		LinearAllocator return_value;
+		
+		return_value.m_buffer = ECSEngine::Allocate(allocator, capacity);
+		return_value.m_capacity = capacity;
+		return_value.m_top = 0;
+		return_value.m_marker = 0;
+		return_value.m_spin_lock.Clear();
+		return_value.m_debug_mode = false;
+		return_value.m_profiling_mode = false;
+
+		return return_value;
 	}
 
 	// ---------------------- Thread safe variants -----------------------------

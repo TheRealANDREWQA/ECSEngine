@@ -104,7 +104,7 @@ namespace ECSEngine {
 
 		UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager)
 		{
-			return CreateResizableMemoryArena(15'000'000, 8, 512, GetAllocatorPolymorphic(global_manager), 5'000'000, 4, 512);
+			return CreateResizableMemoryArena(15'000'000, 8, 512, global_manager, 5'000'000, 4, 512);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -223,7 +223,7 @@ namespace ECSEngine {
 			m_resources.system_draw.region_viewport_info = m_graphics->CreateConstantBuffer(sizeof(float) * ECS_TOOLS_UI_CONSTANT_BUFFER_FLOAT_SIZE);
 
 			m_resources.system_draw.sprite_textures = CapacityStream<UIDynamicStream<UISpriteTexture>>((void*)buffer, 1, ECS_TOOLS_UI_PASSES);
-			m_resources.system_draw.sprite_textures[0] = UIDynamicStream<UISpriteTexture>(GetAllocatorPolymorphic(m_memory), 0);
+			m_resources.system_draw.sprite_textures[0] = UIDynamicStream<UISpriteTexture>(m_memory, 0);
 
 			buffer += sizeof(UIDynamicStream<UISpriteTexture>) * ECS_TOOLS_UI_PASSES;
 
@@ -306,7 +306,7 @@ namespace ECSEngine {
 
 		void UISystem::AddActionHandlerForced(UIHandler* handler, float2 position, float2 scale, UIActionHandler action_handler, UIHandlerCopyBuffers copy_function)
 		{
-			handler->AddResizable(GetAllocatorPolymorphic(m_memory), position, scale, action_handler, copy_function);
+			handler->AddResizable(m_memory, position, scale, action_handler, copy_function);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -377,8 +377,8 @@ namespace ECSEngine {
 		void* UISystem::AddGlobalResource(Stream<void> resource, Stream<char> name)
 		{
 			resource.buffer = CopyNonZero(m_memory, resource.buffer, resource.size);
-			name = StringCopy(GetAllocatorPolymorphic(m_memory), name);
-			InsertIntoDynamicTable(m_global_resources, GetAllocatorPolymorphic(m_memory), resource, name);
+			name = StringCopy(m_memory, name);
+			InsertIntoDynamicTable(m_global_resources, m_memory, resource, name);
 			return resource.buffer;
 		}
 
@@ -702,7 +702,7 @@ namespace ECSEngine {
 			if (action_handler.data_size > 0) {
 				action_handler.data = AllocateHandlerMemory(temp_allocator, action_handler.data_size, 8, action_handler.data);
 			}
-			handler->Insert(GetAllocatorPolymorphic(temp_allocator), position, scale, action_handler, copy_function, add_index);
+			handler->Insert(temp_allocator, position, scale, action_handler, copy_function, add_index);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -758,9 +758,9 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		AllocatorPolymorphic UISystem::AllocatorSnapshotRunnables(const UIDockspace* dockspace, unsigned int border_index)
+		AllocatorPolymorphic UISystem::AllocatorSnapshotRunnables(UIDockspace* dockspace, unsigned int border_index)
 		{
-			return GetAllocatorPolymorphic(&dockspace->borders[border_index].snapshot_runnable_data_allocator);
+			return &dockspace->borders[border_index].snapshot_runnable_data_allocator;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -984,7 +984,7 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic UISystem::Allocator() const
 		{
-			return GetAllocatorPolymorphic(m_memory);
+			return m_memory;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1363,7 +1363,7 @@ namespace ECSEngine {
 
 		void UISystem::AddFrameHandler(UIActionHandler handler)
 		{
-			handler.data = CopyNonZero(GetAllocatorPolymorphic(m_memory), handler.data, handler.data_size);
+			handler.data = CopyNonZero(m_memory, handler.data, handler.data_size);
 			m_frame_handlers.AddAssert(handler);
 		}
 
@@ -2332,7 +2332,7 @@ namespace ECSEngine {
 				m_resources.texture_semaphore.Enter();
 
 				ProcessTextureData data;
-				data.filename = StringCopy(GetAllocatorPolymorphic(&m_resources.temp_allocator), filename).buffer;
+				data.filename = StringCopy(&m_resources.temp_allocator, filename).buffer;
 				data.system = this;
 				data.texture = sprite_texture;
 
@@ -2373,7 +2373,7 @@ namespace ECSEngine {
 			memcpy(&window.descriptors->font, &m_descriptors.font, sizeof(UIFontDescriptor));
 			memcpy(&window.descriptors->layout, &m_descriptors.window_layout, sizeof(UILayoutDescriptor));
 
-			AllocatorPolymorphic polymorphic_memory = GetAllocatorPolymorphic(m_memory);
+			AllocatorPolymorphic polymorphic_memory = m_memory;
 			// misc stuff
 			window.memory_resources.Initialize(polymorphic_memory, 0);
 			window.dynamic_resources.Initialize(m_memory, 128);
@@ -2945,7 +2945,7 @@ namespace ECSEngine {
 
 		void UISystem::DeallocateDockspaceBorderSnapshot(UIDockspace* dockspace, unsigned int border_index, bool free_allocator)
 		{
-			dockspace->borders[border_index].DeallocateSnapshot(GetAllocatorPolymorphic(&m_snapshot_allocator), free_allocator);
+			dockspace->borders[border_index].DeallocateSnapshot(&m_snapshot_allocator, free_allocator);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3016,7 +3016,7 @@ namespace ECSEngine {
 
 			for (size_t index = 0; index < border.draw_resources.sprite_textures.size; index++) {
 				border.draw_resources.sprite_textures[index] = UIDynamicStream<UISpriteTexture>(
-					GetAllocatorPolymorphic(m_memory),
+					m_memory,
 					m_descriptors.dockspaces.border_default_sprite_texture_count
 					);
 			}
@@ -3029,7 +3029,7 @@ namespace ECSEngine {
 			}
 
 			border.draw_resources.sprite_cluster_subtreams = UIDynamicStream<unsigned int>(
-				GetAllocatorPolymorphic(m_memory),
+				m_memory,
 				ECS_TOOLS_UI_CLUSTER_SPRITE_SUBSTREAM_INITIAL_COUNT
 				);
 
@@ -4266,7 +4266,7 @@ namespace ECSEngine {
 					snapshot_info.hoverable_handler = &border.hoverable_handler;
 					snapshot_info.clickable_handlers = { border.clickable_handler, std::size(border.clickable_handler) };
 					snapshot_info.general_handler = &border.general_handler;
-					snapshot_info.allocator = GetAllocatorPolymorphic(&m_snapshot_allocator);
+					snapshot_info.allocator = &m_snapshot_allocator;
 					snapshot_info.runnables = border.snapshot_runnables;
 					snapshot_info.runnable_allocator = AllocatorSnapshotRunnables(data->dockspace, data->border_index);
 					border.snapshot.ConstructFrom(&snapshot_info);
@@ -4291,8 +4291,8 @@ namespace ECSEngine {
 				restore_info.clickable_handlers = { border.clickable_handler, std::size(border.clickable_handler) };
 				restore_info.general_handler = &border.general_handler;
 				restore_info.handler_buffer_allocator = Allocator();
-				restore_info.handler_data_allocator = GetAllocatorPolymorphic(TemporaryAllocator(ECS_UI_DRAW_NORMAL));
-				restore_info.handler_system_data_allocator = GetAllocatorPolymorphic(TemporaryAllocator(ECS_UI_DRAW_SYSTEM));
+				restore_info.handler_data_allocator = TemporaryAllocator(ECS_UI_DRAW_NORMAL);
+				restore_info.handler_system_data_allocator = TemporaryAllocator(ECS_UI_DRAW_SYSTEM);
 				restore_info.runnable_data = GetFilledActionData(window_index);
 
 				bool should_redraw = border.snapshot.Restore(&restore_info);
@@ -5521,9 +5521,9 @@ namespace ECSEngine {
 			// Then deallocate the snapshot and have the window redraw itself
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 
-			ResizableStream<void*> removed_textures(GetAllocatorPolymorphic(&stack_allocator), 16);
+			ResizableStream<void*> removed_textures(&stack_allocator, 16);
 			EvictOutdatedResourcesOptions evict_options;
-			evict_options.allocator = GetAllocatorPolymorphic(&stack_allocator);
+			evict_options.allocator = &stack_allocator;
 			evict_options.removed_values = &removed_textures;
 			m_resource_manager->EvictOutdatedResources(ResourceType::Texture, &evict_options);
 
@@ -5567,7 +5567,7 @@ namespace ECSEngine {
 		{
 			// Don't remove it right away because other windows won't have a chance to register the acquirement
 			// Use a frame handler
-			void* allocation = CoalesceStreamWithData(GetAllocatorPolymorphic(m_memory), name, sizeof(char));
+			void* allocation = CoalesceStreamWithData(m_memory, name, sizeof(char));
 			PushFrameHandler({ EndDragDropFrameHandler, allocation, 0 });
 		}
 
@@ -5595,8 +5595,8 @@ namespace ECSEngine {
 				m_windows[index].draw = data[index].draw;
 				m_windows[index].private_handler.action = data[index].private_action;
 
-				m_windows[index].private_handler.data = CopyNonZero(GetAllocatorPolymorphic(m_memory), data[index].private_action_data, data[index].private_action_data_size);
-				m_windows[index].window_data = CopyNonZero(GetAllocatorPolymorphic(m_memory), data[index].window_data, data[index].window_data_size);
+				m_windows[index].private_handler.data = CopyNonZero(m_memory, data[index].private_action_data, data[index].private_action_data_size);
+				m_windows[index].window_data = CopyNonZero(m_memory, data[index].window_data, data[index].window_data_size);
 
 				if (data[index].resource_count != 0) {
 					m_memory->Deallocate(m_windows[index].table.GetAllocatedBuffer());
@@ -8929,7 +8929,7 @@ namespace ECSEngine {
 
 		bool UISystem::LoadUIFile(Stream<wchar_t> filename, Stream<Stream<char>>& window_names)
 		{
-			Stream<void> contents = ReadWholeFileBinary(filename, GetAllocatorPolymorphic(m_memory));
+			Stream<void> contents = ReadWholeFileBinary(filename, m_memory);
 
 			if (contents.size > 0) {
 				AddToUIFileData data;
@@ -9111,7 +9111,7 @@ namespace ECSEngine {
 			data.is_fixed = is_fixed;
 			data.is_initialized = is_initialized;
 
-			data.name = StringCopy(GetAllocatorPolymorphic(m_memory), name);
+			data.name = StringCopy(m_memory, name);
 			data.reset_when_window_is_destroyed = true;
 
 			UIActionHandler handler;
@@ -10242,7 +10242,7 @@ namespace ECSEngine {
 		UIReservedHandler UISystem::ReserveHoverable(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase)
 		{
 			UIHandler* handler = &dockspace->borders[border_index].hoverable_handler;
-			return { TemporaryAllocator(phase), handler, handler->ReserveOne(GetAllocatorPolymorphic(m_memory)) };
+			return { TemporaryAllocator(phase), handler, handler->ReserveOne(m_memory) };
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10255,7 +10255,7 @@ namespace ECSEngine {
 		)
 		{
 			UIHandler* handler = &dockspace->borders[border_index].clickable_handler[button_type];
-			return { TemporaryAllocator(phase), handler, handler->ReserveOne(GetAllocatorPolymorphic(m_memory)) };
+			return { TemporaryAllocator(phase), handler, handler->ReserveOne(m_memory) };
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10263,7 +10263,7 @@ namespace ECSEngine {
 		UIReservedHandler UISystem::ReserveGeneral(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase)
 		{
 			UIHandler* handler = &dockspace->borders[border_index].general_handler;
-			return { TemporaryAllocator(phase), handler, handler->ReserveOne(GetAllocatorPolymorphic(m_memory)) };
+			return { TemporaryAllocator(phase), handler, handler->ReserveOne(m_memory) };
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

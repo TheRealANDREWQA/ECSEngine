@@ -198,7 +198,7 @@ namespace ECSEngine {
 		) {
 			if (label_size == 0) {
 				copy_label = *(Stream<char>*)label;
-				copy_label = StringCopy(GetAllocatorPolymorphic(system->m_memory), copy_label);
+				copy_label = StringCopy(system->m_memory, copy_label);
 				system->AddWindowMemoryResource(copy_label.buffer, window_index);
 				if (dynamic_index != -1) {
 					system->AddWindowDynamicElementAllocation(window_index, dynamic_index, copy_label.buffer);
@@ -346,7 +346,7 @@ namespace ECSEngine {
 					Stream<Stream<char>> char_labels = labels.AsIs<Stream<char>>();
 					Stream<Stream<char>> char_selected_labels = selected_labels.AsIs<Stream<char>>();
 					for (size_t index = 0; index < char_labels.size; index++) {
-						char_selected_labels[index] = StringCopy(GetAllocatorPolymorphic(system->m_memory), char_labels[index]);
+						char_selected_labels[index] = StringCopy(system->m_memory, char_labels[index]);
 						system->AddWindowMemoryResource(char_selected_labels[index].buffer, window_index);
 						if (dynamic_index != -1) {
 							system->AddWindowDynamicElementAllocation(window_index, dynamic_index, char_selected_labels[index].buffer);
@@ -754,7 +754,7 @@ namespace ECSEngine {
 				// We can reference it directly
 				dummy_data.data = monitor_selection->callback.data;
 
-				Stream<void> user_selected_labels = selected_labels.Copy(GetAllocatorPolymorphic(&stack_allocator), label_size == 0 ? sizeof(Stream<char>) : label_size);
+				Stream<void> user_selected_labels = selected_labels.Copy(&stack_allocator, label_size == 0 ? sizeof(Stream<char>) : label_size);
 
 				UIConfigLabelHierarchyMonitorSelectionInfo monitor_info;
 				monitor_info.monitor_selection = monitor_selection;

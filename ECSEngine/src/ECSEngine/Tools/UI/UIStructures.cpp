@@ -368,7 +368,7 @@ namespace ECSEngine {
 			clickable_handler[button_type] = *handler;
 			clickable_handler[button_type].data = CopyNonZero(&clickable_handler_allocator[button_type], handler->data, handler->data_size);
 			if (copy_function) {
-				copy_function(clickable_handler[button_type].data, GetAllocatorPolymorphic(&clickable_handler_allocator[button_type]));
+				copy_function(clickable_handler[button_type].data, &clickable_handler_allocator[button_type]);
 			}
 
 			return clickable_handler[button_type].data;
@@ -383,7 +383,7 @@ namespace ECSEngine {
 			general_handler = *handler;
 			general_handler.data = CopyNonZero(&general_handler_allocator, handler->data, handler->data_size);
 			if (copy_function) {
-				copy_function(general_handler.data, GetAllocatorPolymorphic(&general_handler_allocator));
+				copy_function(general_handler.data, &general_handler_allocator);
 			}
 			clean_up_call_general = false;
 
@@ -399,7 +399,7 @@ namespace ECSEngine {
 			hoverable_handler = *handler;
 			hoverable_handler.data = CopyNonZero(&hoverable_handler_allocator, handler->data, handler->data_size);
 			if (copy_function) {
-				copy_function(hoverable_handler.data, GetAllocatorPolymorphic(&hoverable_handler_allocator));
+				copy_function(hoverable_handler.data, &hoverable_handler_allocator);
 			}
 			clean_up_call_hoverable = false;
 

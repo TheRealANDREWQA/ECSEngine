@@ -78,12 +78,14 @@ struct EditorState {
 		return ui_system->m_keyboard;
 	}
 
-	ECS_INLINE ECSEngine::AllocatorPolymorphic EditorAllocator() const {
-		return ECSEngine::GetAllocatorPolymorphic(editor_allocator);
+	ECS_INLINE ECSEngine::AllocatorPolymorphic EditorAllocator() {
+		return editor_allocator;
 	}
 
-	ECS_INLINE ECSEngine::AllocatorPolymorphic MultithreadedEditorAllocator() const {
-		return ECSEngine::GetAllocatorPolymorphic(multithreaded_editor_allocator, ECSEngine::ECS_ALLOCATION_MULTI);
+	ECS_INLINE ECSEngine::AllocatorPolymorphic MultithreadedEditorAllocator() {
+		AllocatorPolymorphic allocator = multithreaded_editor_allocator;
+		allocator.allocation_type = ECSEngine::ECS_ALLOCATION_MULTI;
+		return allocator;
 	}
 
 	EditorStateTick editor_tick;

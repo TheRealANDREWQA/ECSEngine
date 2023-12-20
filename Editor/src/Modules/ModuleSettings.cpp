@@ -264,7 +264,7 @@ bool LoadModuleSettings(
 	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
 
 	if (indices.size > 0) {
-		AllocatorPolymorphic editor_allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
+		AllocatorPolymorphic editor_allocator = editor_state->editor_allocator;
 
 		Stream<void> file_data = ReadWholeFileBinary(path, editor_allocator);
 		if (file_data.buffer == nullptr) {
@@ -287,7 +287,7 @@ bool LoadModuleSettings(
 		uintptr_t file_ptr_limit = file_ptr + file_data.size;
 		while (file_ptr < file_ptr_limit) {
 			stack_allocator.Clear();
-			DeserializeFieldTable field_table = DeserializeFieldTableFromData(file_ptr, GetAllocatorPolymorphic(&stack_allocator));
+			DeserializeFieldTable field_table = DeserializeFieldTableFromData(file_ptr, &stack_allocator);
 			// It failed
 			if (field_table.types.size == 0) {
 				editor_state->editor_allocator->Deallocate(file_data.buffer);

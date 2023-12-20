@@ -87,7 +87,7 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 }
 
 static bool SaveScenePrefabChunk(SaveSceneChunkFunctionData* function_data) {
-	const EditorState* editor_state = (const EditorState*)function_data->user_data;
+	EditorState* editor_state = (EditorState*)function_data->user_data;
 
 	// Get all the prefabs that are referenced inside the entity manager
 	unsigned int prefab_count = editor_state->prefabs.set.size;
@@ -231,7 +231,7 @@ static bool LoadEditorSceneCoreImpl(
 	SetDataSourceFunctor&& set_data_source
 ) {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
-	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+	AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 	LoadSceneData load_data;
 	bool initialize_data = GetLoadSceneDataBase(&load_data, editor_state, entity_manager, database, stack_allocator);
@@ -322,7 +322,7 @@ bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, 
 bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_manager, const AssetDatabaseReference* database, Stream<wchar_t> filename)
 {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 256, ECS_MB * 8);
-	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+	AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 	// Convert the asset database reference into a standalone
 	AssetDatabase standalone_database;

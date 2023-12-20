@@ -60,8 +60,12 @@ struct EditorSandboxEntitySlot {
 // -------------------------------------------------------------------------------------------------------------
 
 struct ECS_REFLECT EditorSandboxModule {
-	ECS_INLINE ECSEngine::AllocatorPolymorphic Allocator() {
-		return ECSEngine::GetAllocatorPolymorphic(&settings_allocator);
+	ECS_INLINE ECSEngine::AllocatorPolymorphic SettingsAllocator() {
+		return &settings_allocator;
+	}
+
+	ECS_INLINE ECSEngine::AllocatorPolymorphic EnabledDebugTasksAllocator() {
+		return &enabled_debug_tasks_allocator;
 	}
 
 	ECS_FIELDS_START_REFLECT;
@@ -72,9 +76,12 @@ struct ECS_REFLECT EditorSandboxModule {
 
 	// These are needed for reflection of the settings
 	ECSEngine::Stream<wchar_t> settings_name;
+	// Here all the debug draw tasks which belong to this module which are enabled will be kept
+	ECSEngine::ResizableStream<ECSEngine::Stream<char>> enabled_debug_tasks;
 
 	ECSEngine::Stream<EditorModuleReflectedSetting> reflected_settings; ECS_SKIP_REFLECTION()
 	ECSEngine::MemoryManager settings_allocator; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::MemoryManager) == 80))
+	ECSEngine::MemoryManager enabled_debug_tasks_allocator; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::MemoryManager) == 80))
 	// The time stamp is used to determine when a change has happened in order to refresh the data
 	size_t time_stamp; ECS_SKIP_REFLECTION()
 

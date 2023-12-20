@@ -524,19 +524,21 @@ namespace ECSEngine {
 		static Deck<T, RangeSelector> InitializeTempReference(Stream<T> data, void* temp_buffer) {
 			Deck<T, RangeSelector> deck;
 
-			ulong2 next_capacity = RangeSelector::GetNextCapacity(data.size);
-			deck.buffers.buffer = (CapacityStream<T>*)temp_buffer;
-			deck.buffers.capacity = 1;
-			deck.buffers.size = 1;
-			deck.buffers.allocator = { nullptr };
-			temp_buffer = OffsetPointer(temp_buffer, sizeof(deck.buffers.buffer[0]));
+			if (data.size > 0) {
+				ulong2 next_capacity = RangeSelector::GetNextCapacity(data.size);
+				deck.buffers.buffer = (CapacityStream<T>*)temp_buffer;
+				deck.buffers.capacity = 1;
+				deck.buffers.size = 1;
+				deck.buffers.allocator = { nullptr };
+				temp_buffer = OffsetPointer(temp_buffer, sizeof(deck.buffers.buffer[0]));
 
-			deck.buffers[0] = { data.buffer, (unsigned int)data.size, (unsigned int)data.size };
-			deck.chunk_size = next_capacity.x;
-			deck.miscellaneous = next_capacity.y;
+				deck.buffers[0] = { data.buffer, (unsigned int)data.size, (unsigned int)data.size };
+				deck.chunk_size = next_capacity.x;
+				deck.miscellaneous = next_capacity.y;
 
-			deck.chunks_with_space.InitializeFromBuffer(temp_buffer, 1);
-			deck.chunks_with_space[0] = 0;
+				deck.chunks_with_space.InitializeFromBuffer(temp_buffer, 1);
+				deck.chunks_with_space[0] = 0;
+			}
 
 			return deck;
 		}

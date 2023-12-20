@@ -30,12 +30,28 @@ bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandb
 
 // -------------------------------------------------------------------------------------------------------------
 
+void AggregateSandboxModuleEnabledDebugDrawTasks(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	CapacityStream<Stream<char>>* task_names
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_module_index, Stream<char> task_name);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Binds the module settings to the system manager in the runtime
 void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, ECSEngine::Stream<wchar_t> settings_name);
+void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, Stream<wchar_t> settings_name);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -210,6 +226,10 @@ void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_in
 // It returns true if it succeeded, else false. (it can fail only if it cannot read the data from the file)
 // If it fails, it will set the default values
 bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void UpdateSandboxModuleEnabledDebugDrawTasks(EditorState* editor_state, unsigned int sandbox_index, const TaskManager* task_manager);
 
 // -------------------------------------------------------------------------------------------------------------
 

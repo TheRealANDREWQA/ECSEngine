@@ -1,6 +1,5 @@
 #pragma once
 #include "ECSEngineMath.h"
-#include "ECSEngineEntities.h"
 #include "ECSEngineContainers.h"
 #include "Export.h"
 
@@ -9,15 +8,15 @@ using namespace ECSEngine;
 #define GRID_CHUNK_COUNT (8)
 
 struct GridChunk {
-	void AddEntry(AABBStorage aabb, Entity entity, unsigned char layer);
+	void AddEntry(AABBStorage aabb, unsigned int identifier, unsigned char layer);
 
 	ECS_INLINE bool IsFull() const {
 		return count == GRID_CHUNK_COUNT;
 	}
 
 	AABBStorage colliders[GRID_CHUNK_COUNT];
-	Entity entities[GRID_CHUNK_COUNT];
-	unsigned char entity_layers[GRID_CHUNK_COUNT];
+	unsigned int identifiers[GRID_CHUNK_COUNT];
+	unsigned char layers[GRID_CHUNK_COUNT];
 	unsigned char count;
 	unsigned int next_chunk;
 };
@@ -26,16 +25,27 @@ struct GridCell {
 	unsigned int head_index;
 };
 
+struct CollisionInfo {
+	unsigned int identifier;
+	unsigned char layer;
+};
+
 struct CollisionLayer {
 	// This is a boolean bit mask that tells whether or not
 	unsigned char entries[32];
 };
 
-struct CollisionInfo {
-	Entity entity;
-	unsigned char layer;
+struct FixedGridHandlerData {
+	FixedGrid* grid;
+	void* user_data;
+	unsigned int first_identifier;
+	unsigned int second_identifier;
+	unsigned char first_layer;
+	unsigned char second_layer;
 };
 
+// When a collision is detected, a collision handler will be called to perform the necessary action
+// The handler must take as parameter a FixedGridHandlerData* pointer and then it can cast its own data
 struct FixedGrid {
 	// Adds a new cell. Make sure it doesn't exist previosuly!
 	// Returns the newly assigned chunk for it
@@ -44,7 +54,7 @@ struct FixedGrid {
 	// Adds a new entry to the given chunk, or if it is full, it will chain a new chunk
 	// And add to that one instead. Returns the "current" chunk - the chained one if it
 	// is the case, else the original chunk
-	GridChunk* AddToChunk(Entity entity, unsigned char layer, AABBStorage aabb, GridChunk* chunk);
+	GridChunk* AddToChunk(unsigned int identifier, unsigned char layer, AABBStorage aabb, GridChunk* chunk);
 
 	// Returns the cell x, y and z indices that can be used to retrieve a grid cell
 	uint3 CalculateCell(float3 position) const;
@@ -52,7 +62,7 @@ struct FixedGrid {
 	GridChunk* ChainChunk(GridChunk* current_chunk);
 
 	// Fills in the collisions that the given AABB has with a given cell. Returns the last chunk of the cell
-	// Or nullptr if the cell is not yet inserted
+	// It does not call the handler in this case - it will report them directly to you
 	GridChunk* CheckCollisions(uint3 cell_index, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions);
 
 	void Clear();
@@ -67,28 +77,42 @@ struct FixedGrid {
 
 	bool IsLayerCollidingWith(unsigned char layer_index, unsigned char collision_layer) const;
 
-	void Initialize(AllocatorPolymorphic allocator, uint3 dimensions, uint3 cell_size_power_of_two, size_t deck_power_of_two);
+	// If the handler data size is 0, it will reference it, otherwise it will copy the data
+	void Initialize(
+		AllocatorPolymorphic allocator, 
+		uint3 dimensions, 
+		uint3 cell_size_power_of_two, 
+		size_t deck_power_of_two, 
+		ThreadFunction handler_function,
+		void* handler_data,
+		size_t handler_data_size
+	);
 
 	// The AABB needs to be transformed already. It will fill in the collisions
 	// That it finds inside the given buffer
-	void InsertEntry(Entity entity, unsigned char entity_layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions);
+	void InsertEntry(unsigned int identifier, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions);
 
-	void InsertIntoCell(uint3 cell_indices, Entity entity, unsigned char layer, AABBStorage aabb);
+	void InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, AABBStorage aabb);
 
 	void StartFrame();
 
-	void SetLayerMask(unsigned char layer_index, const CollisionLayer* mask);
+	void SetLayerMask(unsigned char layer_index, const CollisionLayer* layer_mask);
 
 	uint3 dimensions;
 	// These cell sizes must be a power of two
 	// We use modulo two trick to map the AABB
 	uint3 cell_size_power_of_two;
+	// We need to offset entries based on the half of the size
+	// In order to not have AABBs straddle incorrect cells
+	float3 half_cell_size;
 	// We maintain the cells in a sparse hash table
 	// The unsigned int as resource identifier is the actual hash value
 	// The cell hash value must be computed by the user
 	HashTable<GridCell, unsigned int, HashFunctionPowerOfTwo> cells;
 	DeckPowerOfTwo<GridChunk> chunks;
 	AllocatorPolymorphic allocator;
+	// This is the array with all the inserted cells
+	ResizableStream<uint3> inserted_cells;
 
 	// Record these values such that we can have a good approximation for the initial
 	// Allocations for the cells and chunks
@@ -96,6 +120,9 @@ struct FixedGrid {
 	unsigned int last_frame_cell_capacity;
 
 	Stream<CollisionLayer> layers;
+	// This is the function that will be called to handle the collisions
+	ThreadFunction handler_function;
+	void* handler_data;
 };
 
 unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z);

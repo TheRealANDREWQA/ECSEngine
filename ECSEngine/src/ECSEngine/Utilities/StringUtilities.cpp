@@ -1338,7 +1338,7 @@ namespace ECSEngine {
 	template<typename CharacterType>
 	static Stream<CharacterType> ReplaceCharacterImpl(CapacityStream<CharacterType>& string, Stream<CharacterType> token, Stream<CharacterType> replacement) {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-		ResizableStream<unsigned int> token_appereances(GetAllocatorPolymorphic(&stack_allocator), ECS_KB);
+		ResizableStream<unsigned int> token_appereances(&stack_allocator, ECS_KB);
 		AdditionStream<unsigned int> token_appereances_addition = &token_appereances;
 		FindToken(string.ToStream(), token, token_appereances_addition);
 

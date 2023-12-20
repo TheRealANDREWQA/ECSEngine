@@ -159,7 +159,7 @@ namespace ECSEngine {
 
 	MemoryManager DefaultConsoleStableAllocator(GlobalMemoryManager* global_manager)
 	{
-		return MemoryManager(ECS_KB * 512, ECS_KB * 4, ECS_KB * 512, GetAllocatorPolymorphic(global_manager));
+		return MemoryManager(ECS_KB * 512, ECS_KB * 4, ECS_KB * 512, global_manager);
 	}
 
 	// -------------------------------------------------------------------------------------------------------

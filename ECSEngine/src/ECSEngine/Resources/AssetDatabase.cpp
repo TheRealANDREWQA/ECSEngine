@@ -1664,10 +1664,10 @@ namespace ECSEngine {
 		Stream<char> previous_name = {};
 		Stream<wchar_t> previous_file = {};
 		if (update_dependency_metadata_files != nullptr) {
-			previous_name = ECSEngine::GetAssetName(metadata, type).Copy(GetAllocatorPolymorphic(&temporary_allocator));
-			previous_file = ECSEngine::GetAssetFile(metadata, type).Copy(GetAllocatorPolymorphic(&temporary_allocator));
+			previous_name = ECSEngine::GetAssetName(metadata, type).Copy(&temporary_allocator);
+			previous_file = ECSEngine::GetAssetFile(metadata, type).Copy(&temporary_allocator);
 		}
-		CopyAssetBase(metadata_storage, metadata, type, GetAllocatorPolymorphic(&temporary_allocator));
+		CopyAssetBase(metadata_storage, metadata, type, &temporary_allocator);
 		rename_functor(metadata_storage, database->Allocator());
 		bool success = database->UpdateAsset(handle, metadata_storage, type);
 		if (success && update_dependency_metadata_files != nullptr) {
@@ -1694,7 +1694,7 @@ namespace ECSEngine {
 		if (ECSEngine::ExistsStaticArray(type, ECS_ASSET_TYPES_REFERENCEABLE)) {
 			bool success = true;
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
-			AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+			AllocatorPolymorphic stack_allocator = &_stack_allocator;
 			// We could load the metadata files directly into our database, but to keep things
 			// Clean and to not have to do any cleanup here, create a temporary database that uses
 			// This stack allocator
@@ -2213,7 +2213,7 @@ namespace ECSEngine {
 	bool AssetDatabase::UpdateAssetFromFile(unsigned int handle, ECS_ASSET_TYPE type)
 	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-		AllocatorPolymorphic stack_allocator_polymorphic = GetAllocatorPolymorphic(&stack_allocator);
+		AllocatorPolymorphic stack_allocator_polymorphic = &stack_allocator;
 
 		size_t temporary_asset[AssetMetadataMaxSizetSize()];
 		Stream<char> asset_name = GetAssetName(handle, type);
@@ -2256,7 +2256,7 @@ namespace ECSEngine {
 				GetAssetFile(current_metadata, asset_type),
 				temporary_asset,
 				asset_type,
-				GetAllocatorPolymorphic(&stack_allocator),
+				&stack_allocator,
 				true
 			);
 			if (current_success) {
@@ -2306,7 +2306,7 @@ namespace ECSEngine {
 					GetAssetFile(current_metadata, asset_type), 
 					temporary_asset, 
 					asset_type, 
-					GetAllocatorPolymorphic(&stack_allocator),
+					&stack_allocator,
 					true
 				);
 				if (current_success) {

@@ -190,7 +190,7 @@ namespace ECSEngine {
 		ECS_INLINE Keyboard() {}
         ECS_INLINE Keyboard(GlobalMemoryManager* allocator) {
             Reset();
-            m_character_queue = KeyboardCharacterQueue(GetAllocatorPolymorphic(allocator), ECS_KEYBOARD_CHARACTER_QUEUE_DEFAULT_SIZE);
+            m_character_queue = KeyboardCharacterQueue(allocator, ECS_KEYBOARD_CHARACTER_QUEUE_DEFAULT_SIZE);
             DoNotCaptureCharacters();
         }
 

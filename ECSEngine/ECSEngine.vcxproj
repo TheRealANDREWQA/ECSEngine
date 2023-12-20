@@ -256,11 +256,20 @@
     <ClInclude Include="src\ECSEngine\ECS\LinkComponents.h" />
     <ClInclude Include="src\ECSEngine\Input\Controller\WASDController.h" />
     <ClInclude Include="src\ECSEngine\Math\AABB.h" />
+    <ClInclude Include="src\ECSEngine\Math\AABB_Inline.h" />
+    <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
+    <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
+    <ClInclude Include="src\ECSEngine\Math\Hermite.h" />
     <ClInclude Include="src\ECSEngine\Math\Intersection.h" />
+    <ClInclude Include="src\ECSEngine\Math\Intersection_Inline.h" />
     <ClInclude Include="src\ECSEngine\Math\MathHelpers.h" />
     <ClInclude Include="src\ECSEngine\Math\MathTypeSizes.h" />
     <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
     <ClInclude Include="src\ECSEngine\Math\Plane.h" />
+    <ClInclude Include="src\ECSEngine\Math\Plane_Inline.h" />
+    <ClInclude Include="src\ECSEngine\Math\Quaternion.h" />
+    <ClInclude Include="src\ECSEngine\Math\Transform.h" />
+    <ClInclude Include="src\ECSEngine\Math\Vector.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\RingBuffer.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\TaskSchedulerTypes.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\TaskStealing.h" />
@@ -305,11 +314,11 @@
     <ClInclude Include="src\ECSEngine\Resources\Scene.h" />
     <ClInclude Include="src\ECSEngine\ECS\SystemManager.h" />
     <ClInclude Include="src\ECSEngine\ECS\VectorComponentSignature.h" />
-    <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
-    <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
-    <ClInclude Include="src\ECSEngine\Math\Hermite.h" />
-    <ClInclude Include="src\ECSEngine\Math\Quaternion.h" />
-    <ClInclude Include="src\ECSEngine\Math\Transform.h" />
+    <ClInclude Include="src\ECSEngine\Math\Bezier_Inline.h" />
+    <ClInclude Include="src\ECSEngine\Math\Conversion_Inline.h" />
+    <ClInclude Include="src\ECSEngine\Math\Hermite_Inline.h" />
+    <ClInclude Include="src\ECSEngine\Math\Quaternion_Inline.h" />
+    <ClInclude Include="src\ECSEngine\Math\Transform_Inline.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompression.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompressionTypes.h" />
     <ClInclude Include="src\ECSEngine\Rendering\DirectXTexHelpers.h" />
@@ -433,7 +442,7 @@
     <ClInclude Include="src\ECSEngine\Multithreading\TaskScheduler.h" />
     <ClInclude Include="src\ECSEngine\Math\Matrix_Inline.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
-    <ClInclude Include="src\ECSEngine\Math\Vector.h" />
+    <ClInclude Include="src\ECSEngine\Math\Vector_Inline.h" />
     <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
     <ClInclude Include="src\ECSEngine\Resources\ResourceManager.h" />
     <ClInclude Include="src\ECSEngine\ECS\Archetype.h" />
@@ -507,15 +516,59 @@
     <ClCompile Include="src\ECSEngine\ECS\ForEach.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\LinkComponents.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Controller\WASDController.cpp" />
-    <ClCompile Include="src\ECSEngine\Math\AABB.cpp" />
+    <ClCompile Include="src\ECSEngine\Math\AABB.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\Bezier.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\Conversion.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\Hermite.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\Intersection.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\Math\MathHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Math\MathTypeSizes.cpp" />
     <ClCompile Include="src\ECSEngine\Math\Matrix.cpp">
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ECSENGINE_PLATFORM_WINDOWS;ECSENGINE_BUILD_DLL;ECSENGINE_DISTRIBUTION;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ECSENGINE_PLATFORM_WINDOWS;ECSENGINE_BUILD_DLL;ECSENGINE_RELEASE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
       <FavorSizeOrSpeed Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Neither</FavorSizeOrSpeed>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\Plane.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\Quaternion.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\Transform.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\Vector.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Multithreading\AtomicLinearAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\RingBuffer.cpp" />

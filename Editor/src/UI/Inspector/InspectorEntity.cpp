@@ -72,16 +72,16 @@ struct InspectorDrawEntityData {
 		unsigned char is_ui_change_triggered;
 	};
 
-	ECS_INLINE AllocatorPolymorphic Allocator() const {
-		return GetAllocatorPolymorphic(&allocator);
+	ECS_INLINE AllocatorPolymorphic Allocator() {
+		return &allocator;
 	}
 
 	ECS_INLINE MemoryManager CreateLinkTargetAllocator(EditorState* editor_state) {
 		return MemoryManager(ECS_KB * 32, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
 	}
 
-	ECS_INLINE AllocatorPolymorphic TargetAllocator(unsigned int link_index) const {
-		return GetAllocatorPolymorphic(&link_components[link_index].target_allocator);
+	ECS_INLINE AllocatorPolymorphic TargetAllocator(unsigned int link_index) {
+		return &link_components[link_index].target_allocator;
 	}
 
 	unsigned int AddCreatedInstance(EditorState* editor_state, Stream<char> name, void* pointer_bound) {
@@ -359,7 +359,7 @@ struct InspectorDrawEntityData {
 			component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, target_component, is_shared);
 		}
 		Reflection::CopyReflectionDataOptions copy_options;
-		copy_options.allocator = GetAllocatorPolymorphic(&allocator);
+		copy_options.allocator = &allocator;
 		copy_options.always_allocate_for_buffers = true;
 		Reflection::CopyReflectionTypeInstance(
 			editor_state->editor_components.internal_manager,
@@ -1130,7 +1130,7 @@ static void DrawComponents(
 
 			auto set_instance_inputs = [&]() {
 				// Check to see if it has any buffers and bind their allocators
-				AllocatorPolymorphic component_allocator = entity_manager->GetComponentAllocatorPolymorphicFromType(signature[index], component_type);
+				AllocatorPolymorphic component_allocator = entity_manager->GetComponentAllocatorFromType(signature[index], component_type);
 				if (component_allocator.allocator != nullptr) {
 					unsigned int exists_component = data->FindMatchingInput(current_component_name);
 					if (exists_component != -1) {

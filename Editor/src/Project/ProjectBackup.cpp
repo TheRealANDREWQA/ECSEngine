@@ -156,7 +156,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	GetDirectoriesOrFilesOptions get_directories_options;
 	get_directories_options.relative_root = assets_folder;
 
-	GetDirectoriesRecursive(assets_folder, GetAllocatorPolymorphic(&stack_allocator), asset_folder_directories, get_directories_options);
+	GetDirectoriesRecursive(assets_folder, &stack_allocator, asset_folder_directories, get_directories_options);
 
 	// Create the directories first
 	unsigned int backup_asset_folder_base_size = backup_assets_path.size;
@@ -175,7 +175,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 
 	stack_allocator.Clear();
 	
-	Stream<Stream<wchar_t>> asset_paths = GetAssetsFromAssetsFolder(editor_state, GetAllocatorPolymorphic(&stack_allocator));
+	Stream<Stream<wchar_t>> asset_paths = GetAssetsFromAssetsFolder(editor_state, &stack_allocator);
 	unsigned int asset_folder_size = assets_folder.size;
 	// Now copy the asset thunk or forwarding files
 	for (size_t index = 0; index < asset_paths.size; index++) {
@@ -393,7 +393,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
 
-		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		AllocatorPolymorphic stack_allocator = &_stack_allocator;
 		ResizableStream<Stream<wchar_t>> asset_files_paths(stack_allocator, 0);
 		AdditionStream<Stream<wchar_t>> asset_files_paths_addition = &asset_files_paths;
 
@@ -440,7 +440,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		GetProjectAssetsFolder(editor_state, project_assets_folder);
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
-		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 		ResizableStream<Stream<wchar_t>> scene_files(stack_allocator, 0);
 		AdditionStream<Stream<wchar_t>> scene_files_addition = &scene_files;

@@ -199,9 +199,9 @@ namespace ECSEngine {
 		// Only those that are considered to be resident
 		DrawDebugGridResidencyFunction residency_function = nullptr;
 		void* residency_data = nullptr;
-		// If this field is filled in, it will assume these are the cells that are
-		// to be drawn
-		DeckPowerOfTwo<float3> valid_cells = {};
+		// You must set has_valid_cells to true in order for this to be considered
+		DeckPowerOfTwo<uint3> valid_cells = {};
+		bool has_valid_cells = false;
 	};
 
 	struct ECSENGINE_API DebugDrawer {
@@ -810,7 +810,7 @@ namespace ECSEngine {
 		void RestorePreviousRenderState(const GraphicsPipelineRenderState* state);
 
 		ECS_INLINE static MemoryManager DefaultAllocator(GlobalMemoryManager* global_memory) {
-			return MemoryManager(DefaultAllocatorSize(), ECS_KB * 16, DefaultAllocatorSize(), GetAllocatorPolymorphic(global_memory));
+			return MemoryManager(DefaultAllocatorSize(), ECS_KB * 16, DefaultAllocatorSize(), global_memory);
 		}
 
 		ECS_INLINE static size_t DefaultAllocatorSize() {

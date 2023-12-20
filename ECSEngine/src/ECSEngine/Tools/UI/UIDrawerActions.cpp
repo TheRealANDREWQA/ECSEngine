@@ -2919,7 +2919,7 @@ namespace ECSEngine {
 						tagged_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 						tagged_name.AddStream("menu_windows");
 
-						tagged_name = StringCopy(GetAllocatorPolymorphic(system->m_memory), tagged_name);
+						tagged_name = StringCopy(system->m_memory, tagged_name);
 						submenu_descriptor.window_name = tagged_name;
 
 						system->CreateWindowAndDockspace(submenu_descriptor,
@@ -3626,7 +3626,7 @@ namespace ECSEngine {
 			if (data->is_callback) {
 				// Call the callback - it should take as parameter a resizable stream ResizbleStream<Stream<wchar_t>> and 
 				// allocate the strings from it such that they are visible in this scope
-				ResizableStream<Stream<wchar_t>> resizable_path_stream(GetAllocatorPolymorphic(&allocator), 0);
+				ResizableStream<Stream<wchar_t>> resizable_path_stream(&allocator, 0);
 
 				action_data->data = data->callback_handler.data;
 				action_data->additional_data = &resizable_path_stream;

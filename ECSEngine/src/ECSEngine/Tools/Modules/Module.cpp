@@ -88,7 +88,7 @@ namespace ECSEngine {
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 		// Read the file as binary, but interpret it as text
-		Stream<void> file = ReadWholeFileBinary(path, GetAllocatorPolymorphic(&stack_allocator));
+		Stream<void> file = ReadWholeFileBinary(path, (&stack_allocator));
 		if (file.buffer != nullptr) {
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 
@@ -239,7 +239,7 @@ namespace ECSEngine {
 		const size_t STACK_MEMORY_CAPACITY = ECS_KB * 64;
 		void* stack_allocation = ECS_STACK_ALLOC(STACK_MEMORY_CAPACITY);
 		LinearAllocator temp_allocator(stack_allocation, STACK_MEMORY_CAPACITY);
-		AllocatorPolymorphic poly_allocator = GetAllocatorPolymorphic(&temp_allocator);
+		AllocatorPolymorphic poly_allocator = &temp_allocator;
 
 		ECS_STACK_CAPACITY_STREAM(TaskSchedulerElement, schedule_tasks, 128);
 
@@ -292,7 +292,7 @@ namespace ECSEngine {
 
 		ModuleUIFunctionData function_data;
 		function_data.window_descriptors = &window_descriptors;
-		function_data.allocator = GetAllocatorPolymorphic(&stack_allocator);
+		function_data.allocator = &stack_allocator;
 		module->ui_function(&function_data);
 		window_descriptors.AssertCapacity();
 
@@ -346,7 +346,7 @@ namespace ECSEngine {
 
 		ModuleBuildFunctionsData function_data;
 		function_data.asset_types = &asset_types;
-		function_data.allocator = GetAllocatorPolymorphic(&extra_memory);
+		function_data.allocator = &extra_memory;
 		module->build_functions(&function_data);
 		asset_types.AssertCapacity();
 
@@ -409,7 +409,7 @@ namespace ECSEngine {
 		function_data.deserialize_components = &deserialize_components;
 		function_data.serialize_shared_components = &serialize_shared_components;
 		function_data.deserialize_shared_components = &deserialize_shared_components;
-		function_data.allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		function_data.allocator = &_stack_allocator;
 		module->serialize_function(&function_data);
 
 		serialize_components.AssertCapacity();
@@ -468,7 +468,7 @@ namespace ECSEngine {
 
 		ModuleRegisterLinkComponentFunctionData function_data;
 		function_data.functions = &link_components;
-		function_data.allocator = GetAllocatorPolymorphic(&temp_allocator);
+		function_data.allocator = &temp_allocator;
 		register_function(&function_data);
 
 		link_components.AssertCapacity();
@@ -515,7 +515,7 @@ namespace ECSEngine {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 64, ECS_MB);
 
 		ModuleRegisterExtraInformationFunctionData function_data;
-		function_data.allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		function_data.allocator = &_stack_allocator;
 		function_data.extra_information.Initialize(function_data.allocator, 0);
 		function(&function_data);
 
@@ -570,7 +570,7 @@ namespace ECSEngine {
 		const size_t STACK_MEMORY_CAPACITY = ECS_KB * 64;
 		void* stack_allocation = ECS_STACK_ALLOC(STACK_MEMORY_CAPACITY);
 		LinearAllocator temp_allocator(stack_allocation, STACK_MEMORY_CAPACITY);
-		AllocatorPolymorphic poly_allocator = GetAllocatorPolymorphic(&temp_allocator);
+		AllocatorPolymorphic poly_allocator = &temp_allocator;
 
 		ECS_STACK_CAPACITY_STREAM(ModuleDebugDrawTaskElement, elements, 128);
 
@@ -794,9 +794,9 @@ namespace ECSEngine {
 	struct ModuleDebugDrawWrapperData {
 		bool is_enabled;
 		InputMappingElement input_element;
-		unsigned int inherit_data_index;
 		unsigned int inherit_data_name_size;
 		ThreadFunction function;
+		void* inherit_data;
 	};
 
 	static ECS_THREAD_TASK(ModuleDebugDrawWrapper) {
@@ -809,14 +809,15 @@ namespace ECSEngine {
 		}
 
 		if (data->is_enabled) {
-			void* function_data = nullptr;
 			if (data->inherit_data_name_size > 0) {
-				if (data->inherit_data_index == -1) {
+				if (data->inherit_data == nullptr) {
 					Stream<char> inherit_name = { OffsetPointer(data, sizeof(*data)), data->inherit_data_name_size };
-					data->inherit_data_index = world->task_manager->FindTask(inherit_name);
+					unsigned int task_index = world->task_manager->FindTask(inherit_name);
+					ECS_CRASH_CONDITION(task_index != -1, "Failed to find task {#} to reference data", inherit_name);
+					data->inherit_data = world->task_manager->GetTaskPtr(task_index)->data;
 				}
-				function_data = world->task_manager->GetTaskPtr(data->inherit_data_index)->data;
 			}
+			void* function_data = data->inherit_data;
 			data->function(thread_id, world, function_data);
 		}
 	}
@@ -839,7 +840,7 @@ namespace ECSEngine {
 		function_data->function = data->run_function;
 		function_data->is_enabled = false;
 		function_data->inherit_data_name_size = data->initialize_task_name.size;
-		function_data->inherit_data_index = -1;
+		function_data->inherit_data = nullptr;
 		function_data->input_element = data->button_element;
 		unsigned int write_size = sizeof(*function_data);
 		if (data->initialize_task_name.size > 0) {
@@ -871,10 +872,30 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
+	void RetrieveModuleDebugDrawTaskElementsInitializeData(const TaskScheduler* scheduler, TaskManager* target_manager, const TaskManager* source_manager)
+	{
+		for (unsigned int index = 0; index < scheduler->elements.size; index++) {
+			if (scheduler->elements[index].initialize_data_task_name.size > 0) {
+				unsigned int task_index = target_manager->FindTask(scheduler->elements[index].task_name);
+				if (task_index != -1) {
+					ThreadTask* target_task = target_manager->GetTaskPtr(task_index);
+					unsigned int source_index = source_manager->FindTask(scheduler->elements[index].initialize_data_task_name);
+					if (source_index != -1) {
+						ModuleDebugDrawWrapperData* wrapper_data = (ModuleDebugDrawWrapperData*)target_task->data;
+						ThreadTask source_task = source_manager->GetTask(source_index);
+						wrapper_data->inherit_data = source_task.data;
+					}
+				}
+			}
+		}
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
 	void DisableModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name) {
 		unsigned int task_index = task_manager->FindTask(task_name);
 		ECS_ASSERT_FORMAT(task_index != -1, "Failed to disable debug draw task {#}", task_name);
-		void* task_data = task_manager->GetTaskPtr(task_index);
+		void* task_data = task_manager->GetTaskPtr(task_index)->data;
 		ModuleDebugDrawWrapperData* data = (ModuleDebugDrawWrapperData*)task_data;
 		data->is_enabled = false;
 	}
@@ -882,17 +903,43 @@ namespace ECSEngine {
 	void EnableModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name) {
 		unsigned int task_index = task_manager->FindTask(task_name);
 		ECS_ASSERT_FORMAT(task_index != -1, "Failed to enable debug draw task {#}", task_name);
-		void* task_data = task_manager->GetTaskPtr(task_index);
+		void* task_data = task_manager->GetTaskPtr(task_index)->data;
 		ModuleDebugDrawWrapperData* data = (ModuleDebugDrawWrapperData*)task_data;
 		data->is_enabled = true;
 	}
 
-	void FlipModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name) {
+	bool FlipModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name) {
 		unsigned int task_index = task_manager->FindTask(task_name);
 		ECS_ASSERT_FORMAT(task_index != -1, "Failed to flip state for debug draw task {#}", task_name);
-		void* task_data = task_manager->GetTaskPtr(task_index);
+		void* task_data = task_manager->GetTaskPtr(task_index)->data;
 		ModuleDebugDrawWrapperData* data = (ModuleDebugDrawWrapperData*)task_data;
 		data->is_enabled = !data->is_enabled;
+		return data->is_enabled;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	bool IsModuleDebugDrawTaskElementEnabled(const TaskManager* task_manager, Stream<char> task_name)
+	{
+		unsigned int task_index = task_manager->FindTask(task_name);
+		ECS_ASSERT_FORMAT(task_index != -1, "Failed to get enabled status for debug draw task {#}", task_name);
+		void* task_data = task_manager->GetTask(task_index).data;
+		ModuleDebugDrawWrapperData* data = (ModuleDebugDrawWrapperData*)task_data;
+		return data->is_enabled;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void SetEnabledModuleDebugDrawTaskElements(TaskManager* task_manager, Stream<Stream<char>> task_names)
+	{
+		for (size_t index = 0; index < task_names.size; index++) {
+			unsigned int task_index = task_manager->FindTask(task_names[index]);
+			if (task_index != -1) {
+				ThreadTask* target_task = task_manager->GetTaskPtr(task_index);
+				ModuleDebugDrawWrapperData* data = (ModuleDebugDrawWrapperData*)target_task->data;
+				data->is_enabled = true;
+			}
+		}
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

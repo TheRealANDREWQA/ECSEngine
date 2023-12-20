@@ -546,7 +546,7 @@ namespace ECSEngine {
 		AssetDatabase temp_database;
 
 		temp_database.reflection_manager = reflection_manager;
-		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&temp_allocator);
+		AllocatorPolymorphic allocator_polymorphic = &temp_allocator;
 		reference->ToStandalone(allocator_polymorphic, &temp_database);
 
 		return functor(&temp_database);
@@ -605,7 +605,7 @@ namespace ECSEngine {
 		AssetDatabase temp_database;
 		temp_database.reflection_manager = reflection_manager;
 
-		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&temp_allocator);
+		AllocatorPolymorphic allocator_polymorphic = &temp_allocator;
 		temp_database.SetAllocator(allocator_polymorphic);
 
 		return functor(&temp_database);

@@ -80,7 +80,7 @@ namespace ECSEngine {
 		static void EnumerateModulesDebug() {
 			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, modules, 512);
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-			Data data = { modules, GetAllocatorPolymorphic(&stack_allocator) };
+			Data data = { modules, &stack_allocator };
 			BOOL success = SymEnumerateModulesW64(GetCurrentProcess(), EnumerateModules, &data);
 		}
 

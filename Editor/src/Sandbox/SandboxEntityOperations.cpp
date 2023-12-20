@@ -118,7 +118,7 @@ void AttachSandboxEntityName(
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity)) {
 		Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
-		AllocatorPolymorphic allocator = entity_manager->GetComponentAllocatorPolymorphic(name_component);
+		AllocatorPolymorphic allocator = entity_manager->GetComponentAllocator(name_component);
 
 		Name name_data = { StringCopy(allocator, name) };
 		entity_manager->AddComponentCommit(entity, name_component, &name_data);
@@ -141,7 +141,7 @@ void ChangeSandboxEntityName(
 		Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
 		if (entity_manager->HasComponent(entity, name_component)) {
 			Name* name_data = (Name*)entity_manager->GetComponent(entity, name_component);
-			AllocatorPolymorphic allocator = entity_manager->GetComponentAllocatorPolymorphic(name_component);
+			AllocatorPolymorphic allocator = entity_manager->GetComponentAllocator(name_component);
 			if (name_data->name.size > 0) {
 				Deallocate(allocator, name_data->name.buffer);
 			}
@@ -1803,7 +1803,7 @@ bool SandboxUpdateUniqueLinkComponentForEntity(
 	SandboxUpdateLinkComponentForEntityInfo info
 ) {
 	Component component = editor_state->editor_components.GetComponentIDWithLink(link_name);
-	AllocatorPolymorphic component_allocator = GetAllocatorPolymorphic(GetSandboxComponentAllocator(editor_state, sandbox_index, component, info.viewport));
+	AllocatorPolymorphic component_allocator = GetSandboxComponentAllocator(editor_state, sandbox_index, component, info.viewport);
 	bool success = ConvertSandboxLinkComponentToTarget(
 		editor_state, 
 		sandbox_index, 
@@ -1863,7 +1863,7 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 		previous_shared_data,
 		previous_link_component,
 		info.apply_modifier_function,
-		GetAllocatorPolymorphic(&stack_allocator)
+		&stack_allocator
 	);
 	if (!success) {
 		if (info.give_error_when_failing) {

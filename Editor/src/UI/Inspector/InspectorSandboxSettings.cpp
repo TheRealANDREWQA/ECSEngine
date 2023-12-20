@@ -251,7 +251,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		// Bind the pointers
 		ui_drawer->BindInstancePtrs(instance, &data->ui_descriptor);
 
-		data->runtime_settings_allocator = LinearAllocator(editor_allocator, AVAILABLE_RUNTIME_SETTINGS_ALLOCATOR_CAPACITY);
+		data->runtime_settings_allocator = LinearAllocator::InitializeFrom(editor_allocator, AVAILABLE_RUNTIME_SETTINGS_ALLOCATOR_CAPACITY);
 		data->module_settings_allocator = ResizableLinearAllocator(
 			AVAILABLE_MODULE_SETTINGS_ALLOCATOR_CAPACITY, 
 			AVAILABLE_MODULE_SETTINGS_BACKUP_ALLOCATOR_CAPACITY, 
@@ -410,7 +410,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		data->available_module_settings.size = 0;
 		ECS_ASSERT(module_display_order.size <= data->available_module_settings.capacity);
 
-		AllocatorPolymorphic settings_allocator = GetAllocatorPolymorphic(&data->module_settings_allocator);
+		AllocatorPolymorphic settings_allocator = &data->module_settings_allocator;
 		for (unsigned int index = 0; index < module_display_order.size; index++) {
 			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, current_options, 256);
 			GetModuleAvailableSettings(
@@ -631,7 +631,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		// Display all the available settings
 		ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, available_settings, 128);
 		data->runtime_settings_allocator.Clear();
-		GetSandboxAvailableRuntimeSettings(editor_state, available_settings, GetAllocatorPolymorphic(&data->runtime_settings_allocator));
+		GetSandboxAvailableRuntimeSettings(editor_state, available_settings, &data->runtime_settings_allocator);
 
 		// Reload the values if the lazy evaluation has finished
 		if (data->last_write_descriptor != sandbox->runtime_settings_last_write) {

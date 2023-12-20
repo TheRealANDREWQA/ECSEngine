@@ -84,7 +84,7 @@ void InvertSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sand
 void InitializeSandboxProfilers(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	AllocatorPolymorphic sandbox_allocator = GetAllocatorPolymorphic(sandbox->GlobalMemoryManager());
+	AllocatorPolymorphic sandbox_allocator = sandbox->GlobalMemoryManager();
 
 	WorldProfilingInitializeDescriptor descriptor;
 	descriptor.allocator = sandbox_allocator;

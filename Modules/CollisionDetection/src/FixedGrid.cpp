@@ -34,23 +34,27 @@ GridChunk* FixedGrid::AddCell(uint3 indices)
 	
 	unsigned int hash = HashGridCellIndices(indices);
 	InsertIntoDynamicTable(cells, allocator, cell, hash);
-
+	inserted_cells.Add(indices);
 	return chunk;
 }
 
-GridChunk* FixedGrid::AddToChunk(Entity entity, unsigned char layer, AABBStorage aabb, GridChunk* chunk)
+GridChunk* FixedGrid::AddToChunk(unsigned int identifier, unsigned char layer, AABBStorage aabb, GridChunk* chunk)
 {
 	if (chunk->IsFull()) {
 		chunk = ChainChunk(chunk);
 	}
-	chunk->AddEntry(aabb, entity, layer);
+	chunk->AddEntry(aabb, identifier, layer);
 	return chunk;
 }
 
 uint3 FixedGrid::CalculateCell(float3 position) const
 {
 	// Truncate the position to uints, then use modulo power of two trick
-	uint3 int_position = position;
+	float3 adjusted_position = position + half_cell_size;
+	adjusted_position.x = floor(adjusted_position.x);
+	adjusted_position.y = floor(adjusted_position.y);
+	adjusted_position.z = floor(adjusted_position.z);
+	int3 int_position = adjusted_position;
 	int_position.x = (int_position.x >> cell_size_power_of_two.x) & (dimensions.x - 1);
 	int_position.y = (int_position.y >> cell_size_power_of_two.y) & (dimensions.y - 1);
 	int_position.z = (int_position.z >> cell_size_power_of_two.z) & (dimensions.z - 1);
@@ -78,9 +82,15 @@ GridChunk* FixedGrid::CheckCollisions(uint3 cell_index, unsigned char layer, AAB
 			chunk = &chunks[current_chunk];
 			for (unsigned char index = 0; index < chunk->count; index++) {
 				// Test the layer first
-				if (IsLayerCollidingWith(layer, chunk->entity_layers[index])) {
+				if (IsLayerCollidingWith(layer, chunk->layers[index])) {
 					if (AABBOverlapStorage(aabb, chunk->colliders[index])) {
-						collisions->AddAssert({ chunk->entities[index], chunk->entity_layers[index] });
+						// Check to see if this entity was already added
+						bool already_collided = collisions->Find(chunk->identifiers[index], [](CollisionInfo collision_info) {
+							return collision_info.identifier;
+						}) != -1;
+						if (!already_collided) {
+							collisions->AddAssert({ chunk->identifiers[index], chunk->layers[index] });
+						}
 					}
 				}
 			}
@@ -95,6 +105,7 @@ void FixedGrid::Clear()
 {
 	cells.Deallocate(allocator);
 	chunks.Deallocate();
+	inserted_cells.FreeBuffer();
 }
 
 bool FixedGrid::ExistsCell(uint3 index) const
@@ -128,20 +139,37 @@ bool FixedGrid::IsLayerCollidingWith(unsigned char layer_index, unsigned char co
 	return GetBit((void*)layers[layer_index].entries, collision_layer);
 }
 
-void FixedGrid::Initialize(AllocatorPolymorphic _allocator, uint3 _dimensions, uint3 _cell_size_power_of_two, size_t deck_power_of_two)
+void FixedGrid::Initialize(
+	AllocatorPolymorphic _allocator, 
+	uint3 _dimensions, 
+	uint3 _cell_size_power_of_two, 
+	size_t deck_power_of_two,
+	ThreadFunction _handler_function,
+	void* _handler_data,
+	size_t _handler_data_size
+)
 {
+	ECS_CRASH_CONDITION(IsPowerOfTwo(_dimensions.x) && IsPowerOfTwo(_dimensions.y) && IsPowerOfTwo(_dimensions.z), "Fixed grid dimensions must be a power of two");
+	ECS_CRASH_CONDITION(_handler_function != nullptr, "Fixed grid handler function must be specified");
+
 	memset(this, 0, sizeof(*this));
 	allocator = _allocator;
 	dimensions = _dimensions;
 	cell_size_power_of_two = _cell_size_power_of_two;
+	half_cell_size = ulong3((size_t)1 << cell_size_power_of_two.x, (size_t)1 << cell_size_power_of_two.y, (size_t)1 << cell_size_power_of_two.z);
+	half_cell_size *= float3::Splat(0.5f);
 	chunks.Initialize(allocator, 0, (size_t)1 << deck_power_of_two, deck_power_of_two);
+	inserted_cells.Initialize(allocator, 0);
 
 	// Initialize the layers as well
 	layers.Initialize(allocator, UCHAR_MAX);
 	memset(layers.buffer, 0, layers.MemoryOf(layers.size));
+
+	handler_function = _handler_function;
+	handler_data = CopyNonZero(allocator, _handler_data, _handler_data_size);
 }
 
-void FixedGrid::InsertEntry(Entity entity, unsigned char entity_layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions)
+void FixedGrid::InsertEntry(unsigned int identifier, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions)
 {
 	// Determine the grid indices for the min and max points for the aabb
 	uint3 min_cell = CalculateCell(aabb.min);
@@ -162,20 +190,22 @@ void FixedGrid::InsertEntry(Entity entity, unsigned char entity_layer, AABBStora
 	for (unsigned int x = 0; x < iteration_count.x; x++) {
 		for (unsigned int y = 0; y < iteration_count.y; y++) {
 			for (unsigned int z = 0; z < iteration_count.z; z++) {
-				GridChunk* chunk = CheckCollisions(current_cell, entity_layer, aabb, collisions);
-				AddToChunk(entity, entity_layer, aabb, chunk);
+				GridChunk* chunk = CheckCollisions(current_cell, layer, aabb, collisions);
+				AddToChunk(identifier, layer, aabb, chunk);
 				current_cell.z++;
 				current_cell.z = current_cell.z == dimensions.z ? 0 : current_cell.z;
 			}
+			current_cell.z = min_cell.z;
 			current_cell.y++;
 			current_cell.y = current_cell.y == dimensions.y ? 0 : current_cell.y;
 		}
+		current_cell.y = min_cell.y;
 		current_cell.x++;
 		current_cell.x = current_cell.x == dimensions.x ? 0 : current_cell.x;
 	}
 }
 
-void FixedGrid::InsertIntoCell(uint3 cell_indices, Entity entity, unsigned char layer, AABBStorage aabb)
+void FixedGrid::InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, AABBStorage aabb)
 {
 	unsigned int hash = HashGridCellIndices(cell_indices);
 	GridCell cell;
@@ -186,13 +216,13 @@ void FixedGrid::InsertIntoCell(uint3 cell_indices, Entity entity, unsigned char 
 			current_chunk = &chunks[chunk_index];
 			chunk_index = current_chunk->next_chunk;
 		}
-		AddToChunk(entity, layer, aabb, current_chunk);
+		AddToChunk(identifier, layer, aabb, current_chunk);
 	}
 	else {
 		// TODO: Small performance optimization - use the hash value from here
 		// Instead of recalculating inside the function
 		GridChunk* chunk = AddCell(cell_indices);
-		chunk->AddEntry(aabb, entity, layer);
+		chunk->AddEntry(aabb, identifier, layer);
 	}
 }
 
@@ -202,6 +232,7 @@ void FixedGrid::StartFrame()
 	unsigned int chunk_initial_count = last_frame_chunk_count == 0 ? EMPTY_INITIAL_CHUNK_COUNT : last_frame_chunk_count;
 	unsigned int cell_initial_capacity = last_frame_cell_capacity == 0 ? 1 << EMPTY_INITIAL_CELL_CAPACITY_POWER_OF_TWO : last_frame_cell_capacity;
 	cells.Initialize(allocator, cell_initial_capacity);
+	inserted_cells.ResizeNoCopy(cell_initial_capacity);
 	chunks.ResizeNoCopy(chunk_initial_count);
 }
 
@@ -210,11 +241,11 @@ void FixedGrid::SetLayerMask(unsigned char layer_index, const CollisionLayer* ma
 	memcpy(&layers[layer_index], mask, sizeof(*mask));
 }
 
-void GridChunk::AddEntry(AABBStorage aabb, Entity entity, unsigned char layer)
+void GridChunk::AddEntry(AABBStorage aabb, unsigned int identifier, unsigned char layer)
 {
 	ECS_ASSERT(count < GRID_CHUNK_COUNT);
 	colliders[count] = aabb;
-	entities[count] = entity;
-	entity_layers[count] = layer;
+	identifiers[count] = identifier;
+	layers[count] = layer;
 	count++;
 }

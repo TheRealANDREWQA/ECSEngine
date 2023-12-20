@@ -378,7 +378,7 @@ namespace ECSEngine {
 			SourceCodeMacros source_macros;
 			GetSourceCodeMacrosCTokens(&source_macros);
 			source_macros.defined_macros = &total_macros;
-			source_macros.allocator = GetAllocatorPolymorphic(&temp_allocator);
+			source_macros.allocator = &temp_allocator;
 			GetSourceCodeMacros(source_code, &source_macros);
 			macros = total_macros;
 		}

@@ -9,13 +9,92 @@
 #define MODULE_FILE_SETTING_EXTENSION L".config"
 //#define MODULE_FILE_MANUAL_SETTING_EXTENSION L".mconfig"
 
-#define MODULE_ALLOCATOR_SIZE ECS_KB * 32
-#define MODULE_ALLOCATOR_POOL_COUNT 1024
-#define MODULE_ALLOCATOR_BACKUP_SIZE ECS_KB * 128
+#define MODULE_SETTINGS_ALLOCATOR_SIZE ECS_KB * 32
+#define MODULE_SETTINGS_ALLOCATOR_POOL_COUNT 1024
+#define MODULE_SETTINGS_ALLOCATOR_BACKUP_SIZE ECS_KB * 128
+
+#define MODULE_ENABLED_DEBUG_TASKS_ALLOCATOR_SIZE ECS_KB * 4
+#define MODULE_ENABLED_DEBUG_TASKS_POOL_COUNT ECS_KB
 
 #define LAZY_EVALUATION_MS 100
 
 using namespace ECSEngine;
+
+static bool ExistsSandboxModuleEnabledDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name) {
+	unsigned int module_index = GetDebugDrawTasksBelongingModule(editor_state, task_name);
+	ECS_ASSERT(module_index != -1);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	ECS_ASSERT(in_stream_index != -1);
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_index);
+	return FindString(task_name, sandbox_module->enabled_debug_tasks.ToStream()) != -1;
+}
+
+static void RemoveSandboxModuleEnabledDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name) {
+	unsigned int module_index = GetDebugDrawTasksBelongingModule(editor_state, task_name);
+	ECS_ASSERT(module_index != -1);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	ECS_ASSERT(in_stream_index != -1);
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_index);
+	unsigned int enabled_index = FindString(task_name, sandbox_module->enabled_debug_tasks.ToStream());
+	ECS_ASSERT(enabled_index != -1);
+	sandbox_module->enabled_debug_tasks[enabled_index].Deallocate(sandbox_module->EnabledDebugTasksAllocator());
+	sandbox_module->enabled_debug_tasks.RemoveSwapBack(enabled_index);
+}
+
+// It will update the debug draw tasks that are registered according to the state of the runtime task manager
+static void UpdateSandboxModuleEnabledDebugDrawTasks(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	unsigned int in_stream_module_index,
+	const TaskManager* task_manager
+) {
+	bool change_happened = false;
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_module_index);
+	const EditorModuleInfo* module_info = GetSandboxModuleInfo(editor_state, sandbox_index, in_stream_module_index);
+	Stream<ModuleDebugDrawTaskElement> debug_draw_elements = module_info->ecs_module.debug_draw_task_elements;
+	for (size_t index = 0; index < debug_draw_elements.size; index++) {
+		Stream<char> task_name = debug_draw_elements[index].base_element.task_name;
+		bool is_enabled = IsModuleDebugDrawTaskElementEnabled(task_manager, task_name);
+		unsigned int existing_index = FindString(task_name, sandbox_module->enabled_debug_tasks.ToStream());
+		if (is_enabled) {
+			// Insert it if it doesn't exist
+			if (existing_index == -1) {
+				AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, in_stream_module_index, task_name);
+				change_happened = true;
+			}
+		}
+		else {
+			// Remove it if it exists
+			if (existing_index != -1) {
+				sandbox_module->enabled_debug_tasks[existing_index].Deallocate(sandbox_module->EnabledDebugTasksAllocator());
+				sandbox_module->enabled_debug_tasks.RemoveSwapBack(existing_index);
+				change_happened = true;
+			}
+		}
+	}
+
+	if (change_happened) {
+		SaveEditorSandboxFile(editor_state);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name) {
+	unsigned int module_index = GetDebugDrawTasksBelongingModule(editor_state, task_name);
+	ECS_ASSERT(module_index != -1);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	ECS_ASSERT(in_stream_index != -1);
+	AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, in_stream_index, task_name);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_module_index, Stream<char> task_name)
+{
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_module_index);
+	sandbox_module->enabled_debug_tasks.Add(task_name.Copy(sandbox_module->EnabledDebugTasksAllocator()));
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
@@ -49,13 +128,21 @@ void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, uns
 	sandbox_module->settings_name.size = 0;
 	sandbox_module->reflected_settings = {};
 
-	// Create the allocator
+	// Create the allocators
 	sandbox_module->settings_allocator = MemoryManager(
-		MODULE_ALLOCATOR_SIZE, 
-		MODULE_ALLOCATOR_POOL_COUNT, 
-		MODULE_ALLOCATOR_BACKUP_SIZE, 
-		GetAllocatorPolymorphic(sandbox->GlobalMemoryManager())
+		MODULE_SETTINGS_ALLOCATOR_SIZE, 
+		MODULE_SETTINGS_ALLOCATOR_POOL_COUNT, 
+		MODULE_SETTINGS_ALLOCATOR_BACKUP_SIZE, 
+		sandbox->GlobalMemoryManager()
 	);
+	sandbox_module->enabled_debug_tasks_allocator = MemoryManager(
+		MODULE_ENABLED_DEBUG_TASKS_ALLOCATOR_SIZE,
+		MODULE_ENABLED_DEBUG_TASKS_POOL_COUNT,
+		MODULE_ENABLED_DEBUG_TASKS_ALLOCATOR_SIZE,
+		sandbox->GlobalMemoryManager()
+	);
+
+	sandbox_module->enabled_debug_tasks.Initialize(sandbox_module->SettingsAllocator(), 0);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -103,6 +190,17 @@ bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandb
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void AggregateSandboxModuleEnabledDebugDrawTasks(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<Stream<char>>* task_names)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, index);
+		task_names->AddStreamAssert(sandbox_module->enabled_debug_tasks);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -145,7 +243,7 @@ void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 
 	// Change the path
 	if (settings_name.size > 0) {
-		sandbox_module->settings_name = StringCopy(sandbox_module->Allocator(), settings_name);
+		sandbox_module->settings_name = StringCopy(sandbox_module->SettingsAllocator(), settings_name);
 		bool success = LoadSandboxModuleSettings(editor_state, sandbox_index, module_index);
 		if (!success) {
 			Stream<wchar_t> library_name = editor_state->project_modules->buffer[module_index].library_name;
@@ -192,7 +290,7 @@ void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_
 
 		// Make the streams nullptr for easier debugging
 		if (settings_name.size > 0) {
-			sandbox_module->settings_name = StringCopy(sandbox_module->Allocator(), settings_name);
+			sandbox_module->settings_name = StringCopy(sandbox_module->SettingsAllocator(), settings_name);
 		}
 		else {
 			sandbox_module->settings_name = { nullptr, 0 };
@@ -301,6 +399,9 @@ void DisableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int s
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	DisableModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
+	if (ExistsSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name)) {
+		RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -309,6 +410,9 @@ void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sa
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	EnableModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
+	if (!ExistsSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name)) {
+		AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, task_name);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -316,7 +420,13 @@ void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sa
 void FlipSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	FlipModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
+	bool is_set = FlipModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
+	if (is_set) {
+		AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, task_name);
+	}
+	else {
+		RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -558,7 +668,7 @@ bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_i
 	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
 	EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_index].modules_in_use.buffer + in_stream_index;
 
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&sandbox_module->settings_allocator);
+	AllocatorPolymorphic allocator = &sandbox_module->settings_allocator;
 	ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
 	AllocateModuleSettings(editor_state, module_index, settings, allocator);
 
@@ -570,7 +680,7 @@ bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_i
 			settings_path.CopyOther(sandbox_module->settings_name);
 
 			sandbox_module->settings_allocator.Clear();
-			sandbox_module->settings_name = StringCopy(sandbox_module->Allocator(), settings_path);
+			sandbox_module->settings_name = StringCopy(sandbox_module->SettingsAllocator(), settings_path);
 			return false;
 		}
 	}
@@ -600,8 +710,9 @@ void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + in_stream_index;
-	// Deallocate the reflected settings allocator
+	// Deallocate the allocators
 	sandbox_module->settings_allocator.Free();
+	sandbox_module->enabled_debug_tasks_allocator.Free();
 
 	// Destroy the reflected settings. This is related to the UI instances
 	// Do that for all possible inspector indices
@@ -662,7 +773,7 @@ bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 		unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
 		EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_index].modules_in_use.buffer + in_stream_index;
 
-		AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&sandbox_module->settings_allocator);
+		AllocatorPolymorphic allocator = sandbox_module->SettingsAllocator();
 		ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
 		AllocateModuleSettings(editor_state, module_index, settings, allocator);
 		sandbox_module->reflected_settings = settings;
@@ -670,6 +781,16 @@ bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 		return false;
 	}
 	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void UpdateSandboxModuleEnabledDebugDrawTasks(EditorState* editor_state, unsigned int sandbox_index, const TaskManager* task_manager)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		UpdateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_index, index, task_manager);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

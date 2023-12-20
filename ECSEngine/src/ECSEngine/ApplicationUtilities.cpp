@@ -35,7 +35,7 @@ namespace ECSEngine {
 		unsigned int new_width = width;
 		unsigned int new_height = height;
 
-		MemoryManager* graphics_allocator = new MemoryManager(500'000, 2048, 100'000, GetAllocatorPolymorphic(global_manager));
+		MemoryManager* graphics_allocator = new MemoryManager(500'000, 2048, 100'000, global_manager);
 		
 		graphics_descriptor.window_size = { new_width, new_height };
 		graphics_descriptor.gamma_corrected = false;

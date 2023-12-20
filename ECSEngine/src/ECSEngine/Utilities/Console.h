@@ -59,8 +59,8 @@ namespace ECSEngine {
 		Console(const Console& other) = default;
 		Console& operator = (const Console& other) = default;
 
-		ECS_INLINE AllocatorPolymorphic StableAllocator() const {
-			return GetAllocatorPolymorphic(stable_allocator);
+		ECS_INLINE AllocatorPolymorphic StableAllocator() {
+			return stable_allocator;
 		}
 
 		void Clear();

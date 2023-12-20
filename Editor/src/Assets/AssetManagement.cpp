@@ -844,7 +844,7 @@ static void ForEachAssetMetadata(const EditorState* editor_state, Stream<ECS_ASS
 	}
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&stack_allocator);
+	AllocatorPolymorphic allocator = &stack_allocator;
 
 	ECS_STACK_CAPACITY_STREAM(ResizableStream<Stream<wchar_t>>, files, ECS_ASSET_TYPE_COUNT);
 	if (retrieve_existing_files) {
@@ -1001,7 +1001,7 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 		if (recurse) {
 			// Deallocate its dependent assets before randomizing the pointer
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-			Stream<Stream<unsigned int>> current_dependent_assets = editor_state->asset_database->GetDependentAssetsFor(metadata, type, GetAllocatorPolymorphic(&stack_allocator));
+			Stream<Stream<unsigned int>> current_dependent_assets = editor_state->asset_database->GetDependentAssetsFor(metadata, type, &stack_allocator);
 			for (size_t index = 0; index < current_dependent_assets.size; index++) {
 				ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
 				for (size_t subindex = 0; subindex < current_dependent_assets[index].size; subindex++) {
@@ -2076,7 +2076,7 @@ void LoadAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned i
 	// Determine which handles are not already being loaded
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 	bool has_entries = false;
-	Stream<Stream<unsigned int>> not_loading_handles = GetNotLoadedAssets(editor_state, GetAllocatorPolymorphic(&stack_allocator), handles, &has_entries);
+	Stream<Stream<unsigned int>> not_loading_handles = GetNotLoadedAssets(editor_state, &stack_allocator, handles, &has_entries);
 
 	if (has_entries) {
 		// Add these entries to the loading array

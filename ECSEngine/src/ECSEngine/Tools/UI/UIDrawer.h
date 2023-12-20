@@ -3623,7 +3623,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			ECS_INLINE AllocatorPolymorphic TemporaryAllocator(ECS_UI_DRAW_PHASE phase) {
-				return record_snapshot_runnables ? SnapshotRunnableAllocator() : GetAllocatorPolymorphic(system->TemporaryAllocator(phase));
+				return record_snapshot_runnables ? SnapshotRunnableAllocator() : system->TemporaryAllocator(phase);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------

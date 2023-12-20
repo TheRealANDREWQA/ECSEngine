@@ -67,7 +67,7 @@ namespace ECSEngine {
 		// Keep track of all materials found up until now for unique entries
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 		ResizableStream<Stream<char>> tracked_materials;
-		tracked_materials.Initialize(GetAllocatorPolymorphic(&stack_allocator), 0);
+		tracked_materials.Initialize(&stack_allocator, 0);
 
 		internal::ForEachMeshInGLTF(gltf_data, [&](const cgltf_node* nodes, size_t node_index, size_t node_count) {
 			PBRMaterial placeholder;
@@ -133,7 +133,7 @@ namespace ECSEngine {
 					if (unique_material_entries) {
 						bool is_tracked = FindString(material_name, tracked_materials.ToStream()) != -1;
 						if (!is_tracked) {
-							tracked_materials.Add(material_name.Copy(GetAllocatorPolymorphic(&stack_allocator)));
+							tracked_materials.Add(material_name.Copy(&stack_allocator));
 							add_entries();
 						}
 					}
@@ -152,7 +152,7 @@ namespace ECSEngine {
 		// Keep track of all materials found up until now for unique entries
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 		ResizableStream<Stream<char>> tracked_materials;
-		tracked_materials.Initialize(GetAllocatorPolymorphic(&stack_allocator), 0);
+		tracked_materials.Initialize(&stack_allocator, 0);
 
 		internal::ForEachMeshInGLTF(gltf_data, [&](const cgltf_node* nodes, size_t node_index, size_t node_count) {
 			PBRMaterial placeholder;
@@ -169,7 +169,7 @@ namespace ECSEngine {
 					if (unique_material_entries) {
 						bool is_tracked = FindString(material_name, tracked_materials.ToStream()) != -1;
 						if (!is_tracked) {
-							tracked_materials.Add(material_name.Copy(GetAllocatorPolymorphic(&stack_allocator)));
+							tracked_materials.Add(material_name.Copy(&stack_allocator));
 							add_entries();
 						}
 					}
@@ -319,7 +319,7 @@ namespace ECSEngine {
 		// Keep track of all materials found up until now for unique entries
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 		ResizableStream<Stream<char>> tracked_materials;
-		tracked_materials.Initialize(GetAllocatorPolymorphic(&stack_allocator), 0);
+		tracked_materials.Initialize(&stack_allocator, 0);
 
 		wchar_t* stable_directory = (wchar_t*)malloc(directory.MemoryOf(directory.size));
 		directory.CopyTo(stable_directory);
@@ -455,7 +455,7 @@ namespace ECSEngine {
 
 					bool is_tracked = FindString(material_name, tracked_materials.ToStream()) != -1;
 					if (!is_tracked) {
-						tracked_materials.Add(material_name.Copy(GetAllocatorPolymorphic(&stack_allocator)));
+						tracked_materials.Add(material_name.Copy(&stack_allocator));
 						add_entries();
 					}
 				});

@@ -137,7 +137,6 @@ public:
 		//free(large_allocation);
 		//float durations_ = timer.GetDurationSinceMarkerFloat(ECS_TIMER_DURATION_US);
 
-
 		MSG message;
 		BOOL result = 0;
 

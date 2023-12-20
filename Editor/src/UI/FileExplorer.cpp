@@ -1143,7 +1143,7 @@ ECS_THREAD_TASK(MeshExportSelectionTask) {
 		// If not, don't bother to add the event
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 		ECS_STACK_CAPACITY_STREAM(PBRMaterialMapping, textures, ECS_KB);
-		GLTFGetExportTexturesNames(gltf_data, &textures, GetAllocatorPolymorphic(&stack_allocator));
+		GLTFGetExportTexturesNames(gltf_data, &textures, &stack_allocator);
 
 		if (textures.size > 0) {
 			MeshExportSelectionEventData event_data;
@@ -1540,7 +1540,7 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 
 	// Load the texture normally - don't generate mip maps as that will require the immediate context
 	ResourceManagerTextureDesc descriptor;
-	AllocatorPolymorphic current_allocator = GetAllocatorPolymorphic(&allocator);
+	AllocatorPolymorphic current_allocator = &allocator;
 	descriptor.allocator = current_allocator;
 
 	constexpr size_t TEXTURE_WIDTH = 256;
@@ -1876,7 +1876,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 		// Also add it to the 
 		if (data->explorer_data->mesh_thumbnails.Find(path) == -1) {
 			// Allocate the identifier for the hash table
-			Stream<wchar_t> allocated_path = StringCopy(GetAllocatorPolymorphic(data->editor_allocator), path);
+			Stream<wchar_t> allocated_path = StringCopy(data->editor_allocator, path);
 			FileExplorerMeshThumbnail thumbnail;
 
 			//Try to read the mesh here and create it's buffers GPU buffers
@@ -2371,7 +2371,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			UIDrawConfig* config = _data->config;
 			UIDrawer* drawer = _data->drawer;
 
-			Path stream_path = StringCopy(GetAllocatorPolymorphic(&data->temporary_allocator), path);
+			Path stream_path = StringCopy(&data->temporary_allocator, path);
 
 			SelectableData selectable_data;
 			selectable_data.editor_state = _data->editor_state;
@@ -2479,7 +2479,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			UIDrawConfig* config = _data->config;
 			UIDrawer* drawer = _data->drawer;
 
-			Path stream_path = StringCopy(GetAllocatorPolymorphic(&data->temporary_allocator), path);
+			Path stream_path = StringCopy(&data->temporary_allocator, path);
 
 			Path extension = PathExtension(stream_path);
 
@@ -2776,7 +2776,7 @@ void InitializeFileExplorer(EditorState* editor_state)
 			polymorphic_allocator
 		);
 	}
-	data->displayed_items.Initialize(GetAllocatorPolymorphic(data->displayed_items_allocator + 0), 0);
+	data->displayed_items.Initialize(data->displayed_items_allocator + 0, 0);
 	data->displayed_items_allocator_index = 0;
 }
 
@@ -2881,7 +2881,7 @@ void TickFileExplorer(EditorState* editor_state)
 
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_RETAINED_FILE_CHECK, FILE_EXPLORER_RETAINED_MODE_FILE_RECHECK_LAZY_EVALUATION)) {
 		unsigned int next_allocator_index = data->displayed_items_allocator_index == 0 ? 1 : 0;
-		AllocatorPolymorphic next_allocator = GetAllocatorPolymorphic(data->displayed_items_allocator + next_allocator_index);
+		AllocatorPolymorphic next_allocator = data->displayed_items_allocator + next_allocator_index;
 		ResizableStream<Stream<wchar_t>> current_file_paths(next_allocator, 0);
 		AdditionStream<Stream<wchar_t>> addition_stream = &current_file_paths;
 

@@ -17,12 +17,12 @@ namespace ECSEngine {
 		SystemManager() = default;
 		SystemManager(GlobalMemoryManager* global_memory);
 
-		ECS_INLINE AllocatorPolymorphic Allocator() const {
-			return GetAllocatorPolymorphic(allocator);
+		ECS_INLINE AllocatorPolymorphic Allocator() {
+			return allocator;
 		}
 
-		ECS_INLINE AllocatorPolymorphic TemporaryAllocator() const {
-			return GetAllocatorPolymorphic(&temporary_allocator);
+		ECS_INLINE AllocatorPolymorphic TemporaryAllocator() {
+			return &temporary_allocator;
 		}
 
 		// Returns the pointer stored in the hash table

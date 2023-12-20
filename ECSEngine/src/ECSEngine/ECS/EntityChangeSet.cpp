@@ -292,7 +292,7 @@ namespace ECSEngine {
 						components_to_be_updated,
 						unique_components[index],
 						unique_component_changes[index],
-						entity_manager->GetComponentAllocatorPolymorphic(unique_component_signature[index])
+						entity_manager->GetComponentAllocator(unique_component_signature[index])
 					);
 					components_to_be_updated.Deallocate(entity_manager->MainAllocator());
 				}

@@ -33,7 +33,7 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API CPUFrameProfilerThread {
-		AllocatorPolymorphic Allocator() const;
+		AllocatorPolymorphic Allocator();
 
 		void Clear();
 

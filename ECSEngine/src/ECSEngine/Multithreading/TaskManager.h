@@ -309,8 +309,8 @@ namespace ECSEngine {
 			return m_thread_task_index->load(ECS_ACQUIRE);
 		}
 
-		ECS_INLINE AllocatorPolymorphic GetThreadTempAllocator(unsigned int thread_id) const {
-			return GetAllocatorPolymorphic(&m_thread_linear_allocators[thread_id].value);
+		ECS_INLINE AllocatorPolymorphic GetThreadTempAllocator(unsigned int thread_id) {
+			return &m_thread_linear_allocators[thread_id].value;
 		}
 
 		// Returns the current static thread wrapper. If the data pointer is specified, it will copy the thread

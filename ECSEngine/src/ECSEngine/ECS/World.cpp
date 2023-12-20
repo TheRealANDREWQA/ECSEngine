@@ -78,7 +78,7 @@ namespace ECSEngine {
 			descriptor.entity_manager_memory_size,
 			descriptor.entity_manager_memory_pool_count,
 			descriptor.entity_manager_memory_new_allocation_size,
-			GetAllocatorPolymorphic(memory)
+			memory
 		);
 		allocation = OffsetPointer(allocation, sizeof(MemoryManager));
 		
@@ -283,12 +283,18 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	void PrepareWorld(World* world, const TaskSchedulerSetManagerOptions* options, Stream<TaskSchedulerElement> scheduler_elements)
+	void PrepareWorldBase(World* world)
 	{
 		world->entity_manager->ClearCache();
 		world->entity_manager->ClearFrame();
 		world->delta_time = 0.0f;
+	}
 
+	// ---------------------------------------------------------------------------------------------------------------------
+
+	void PrepareWorld(World* world, const TaskSchedulerSetManagerOptions* options, Stream<TaskSchedulerElement> scheduler_elements)
+	{
+		PrepareWorldBase(world);
 		TaskSchedulerSetManagerOptions set_options;
 		if (options == nullptr) {
 			options = &set_options;

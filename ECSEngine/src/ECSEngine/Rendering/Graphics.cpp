@@ -349,7 +349,7 @@ namespace ECSEngine {
 
 		// The shader helpers
 		auto load_source_code = [&](const wchar_t* path) {
-			return ReadWholeFileText(path, GetAllocatorPolymorphic(graphics->m_allocator));
+			return ReadWholeFileText(path, graphics->m_allocator);
 		};
 
 		Stream<wchar_t> include_directory = ECS_SHADER_DIRECTORY;
@@ -459,8 +459,8 @@ namespace ECSEngine {
 	}
 	
 	static void EnumerateDiscreteGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
-		EnumGPU(adapters, DXGI_GPU_PREFERENCE_MINIMUM_POWER);
-		//EnumGPU(adapters, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE);
+		//EnumGPU(adapters, DXGI_GPU_PREFERENCE_MINIMUM_POWER);
+		EnumGPU(adapters, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE);
 	}
 
 	static void EnumerateIntegratedGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
@@ -1471,7 +1471,8 @@ namespace ECSEngine {
 	Stream<void> Graphics::CompileShaderToByteCode(Stream<char> source_code, ECS_SHADER_TYPE type, ID3DInclude* include_policy, AllocatorPolymorphic allocator, ShaderCompileOptions options)
 	{
 		if (allocator.allocator == nullptr) {
-			allocator = GetAllocatorPolymorphic(m_allocator, ECS_ALLOCATION_MULTI);
+			allocator = m_allocator;
+			allocator.allocation_type = ECS_ALLOCATION_MULTI;
 		}
 
 		ID3DBlob* blob = ShaderByteCode(GetDevice(), source_code, options, include_policy, type);
@@ -1980,7 +1981,7 @@ namespace ECSEngine {
 
 	AllocatorPolymorphic Graphics::Allocator() const
 	{
-		return GetAllocatorPolymorphic(m_allocator);
+		return m_allocator;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3845,7 +3846,7 @@ namespace ECSEngine {
 		CommitInternalResourcesToBeFreed();
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
-		ResizableStream<GraphicsLiveObject> live_objects(GetAllocatorPolymorphic(&stack_allocator), 512);
+		ResizableStream<GraphicsLiveObject> live_objects(&stack_allocator, 512);
 		bool success = ExtractLiveObjectsFromDebugInterface(this, &live_objects);
 		if (!success) {
 			return false;
@@ -4092,7 +4093,7 @@ namespace ECSEngine {
 
 		constexpr size_t NAME_POOL_SIZE = 8192;
 		ECS_STACK_LINEAR_ALLOCATOR(allocator, NAME_POOL_SIZE);
-		bool success = m_shader_reflection->ReflectVertexShaderInputSource(source_code, element_descriptors, GetAllocatorPolymorphic(&allocator));
+		bool success = m_shader_reflection->ReflectVertexShaderInputSource(source_code, element_descriptors, &allocator);
 		if (!success) {
 			return {};
 		}
@@ -4160,7 +4161,7 @@ namespace ECSEngine {
 		graphics->CommitInternalResourcesToBeFreed();
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
-		ResizableStream<GraphicsLiveObject> live_objects(GetAllocatorPolymorphic(&stack_allocator), 512);
+		ResizableStream<GraphicsLiveObject> live_objects(&stack_allocator, 512);
 		bool success = ExtractLiveObjectsFromDebugInterface(graphics, &live_objects);
 		if (!success) {
 			return false;
@@ -4262,7 +4263,7 @@ namespace ECSEngine {
 
 	MemoryManager DefaultGraphicsAllocator(GlobalMemoryManager* manager)
 	{
-		return MemoryManager(DefaultGraphicsAllocatorSize(), ECS_KB * 4, DefaultGraphicsAllocatorSize(), GetAllocatorPolymorphic(manager));
+		return MemoryManager(DefaultGraphicsAllocatorSize(), ECS_KB * 4, DefaultGraphicsAllocatorSize(), manager);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

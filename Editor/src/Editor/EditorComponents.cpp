@@ -345,7 +345,7 @@ void EditorComponents::RecoverData(
 	uintptr_t ptr = (uintptr_t)stack_allocation;
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&stack_allocator);
+	AllocatorPolymorphic allocator = &stack_allocator;
 
 	SerializeFieldTable(internal_manager, old_type, ptr);
 	ptr = (uintptr_t)stack_allocation;
@@ -368,7 +368,7 @@ void EditorComponents::RecoverData(
 
 	Reflection::ReflectionManager deserialized_temporary_manager;
 	deserialized_temporary_manager.type_definitions.Initialize(&stack_allocator, HashTableCapacityForElements(field_table.types.size));
-	field_table.ToNormalReflection(&deserialized_temporary_manager, GetAllocatorPolymorphic(&stack_allocator));
+	field_table.ToNormalReflection(&deserialized_temporary_manager, &stack_allocator);
 	deserialize_options.deserialized_field_manager = &deserialized_temporary_manager;
 
 	SerializeOptions serialize_options;
@@ -474,7 +474,7 @@ void EditorComponents::RecoverData(
 			}
 
 			if (arena != nullptr) {
-				AllocatorPolymorphic component_allocator = GetAllocatorPolymorphic(arena);
+				AllocatorPolymorphic component_allocator = arena;
 				deserialize_options.field_allocator = component_allocator;
 				deserialize_options.backup_allocator = component_allocator;
 			}
@@ -539,7 +539,7 @@ void EditorComponents::RecoverData(
 				}
 				
 				if (arena != nullptr) {
-					AllocatorPolymorphic alloc = GetAllocatorPolymorphic(arena);
+					AllocatorPolymorphic alloc = arena;
 					deserialize_options.field_allocator = alloc;
 					deserialize_options.backup_allocator = alloc;
 				}
@@ -714,7 +714,7 @@ void EditorComponents::RecoverData(
 				}
 
 				if (arena != nullptr) {
-					AllocatorPolymorphic alloc = GetAllocatorPolymorphic(arena);
+					AllocatorPolymorphic alloc = arena;
 					deserialize_options.field_allocator = alloc;
 					deserialize_options.backup_allocator = alloc;
 				}
@@ -786,7 +786,7 @@ void EditorComponents::RecoverData(
 				}
 
 				if (arena != nullptr) {
-					AllocatorPolymorphic alloc = GetAllocatorPolymorphic(arena);
+					AllocatorPolymorphic alloc = arena;
 					deserialize_options.backup_allocator = alloc;
 					deserialize_options.field_allocator = alloc;
 				}
@@ -813,7 +813,7 @@ void EditorComponents::RecoverData(
 				}
 
 				if (arena != nullptr) {
-					AllocatorPolymorphic alloc = GetAllocatorPolymorphic(arena);
+					AllocatorPolymorphic alloc = arena;
 					deserialize_options.backup_allocator = alloc;
 					deserialize_options.field_allocator = alloc;
 				}
@@ -2081,12 +2081,12 @@ void EditorComponents::Initialize(void* buffer)
 	CreateBaseAllocatorInfo info;
 	info.allocator_type = ECS_ALLOCATOR_ARENA;
 	*arena = MemoryArena(OffsetPointer(arena, sizeof(*arena)), ARENA_COUNT, ARENA_CAPACITY, ARENA_BLOCK_COUNT);
-	Initialize(GetAllocatorPolymorphic(arena));
+	InitializeAllocator(arena);
 }
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::Initialize(AllocatorPolymorphic _allocator)
+void EditorComponents::InitializeAllocator(AllocatorPolymorphic _allocator)
 {
 	allocator = _allocator;
 	loaded_modules.Initialize(allocator, 0);

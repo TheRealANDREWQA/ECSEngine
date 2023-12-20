@@ -44,9 +44,9 @@ namespace ECSEngine {
 		thread->thread_handle = thread_handle;
 	}
 
-	AllocatorPolymorphic CPUFrameProfilerThread::Allocator() const
+	AllocatorPolymorphic CPUFrameProfilerThread::Allocator()
 	{
-		return GetAllocatorPolymorphic(&allocator);
+		return &allocator;
 	}
 
 	void CPUFrameProfilerThread::Clear()
@@ -222,7 +222,7 @@ namespace ECSEngine {
 		if (thread_id == -1) {
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 			Stream<unsigned char> usages;
-			usages.Initialize(GetAllocatorPolymorphic(&stack_allocator), entry_capacity);
+			usages.Initialize(&stack_allocator, entry_capacity);
 			usages.size = 0;
 			unsigned int entry_count = threads[0].frame_utilization.entries.GetSize();
 			for (unsigned int index = 0; index < entry_count; index++) {

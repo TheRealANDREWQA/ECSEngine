@@ -1997,7 +1997,7 @@ namespace ECSEngine {
 			ECS_ASSERT(IsPowerOfTwo(instance_table_count));
 			type_definition.Initialize(allocator, type_table_count);
 			instances.Initialize(allocator, instance_table_count);
-			overrides.Initialize(GetAllocatorPolymorphic(allocator), 0);
+			overrides.Initialize(allocator, 0);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -2063,12 +2063,12 @@ namespace ECSEngine {
 		{
 			// At the moment there is a limit to how many groupings an instance can have
 			ECS_ASSERT(type->groupings.size < UI_REFLECTION_MAX_GROUPINGS_PER_TYPE);
-			grouping.name = StringCopy(GetAllocatorPolymorphic(allocator), grouping.name);
+			grouping.name = StringCopy(allocator, grouping.name);
 			if (grouping.per_element_name.size > 0) {
-				grouping.per_element_name = StringCopy(GetAllocatorPolymorphic(allocator), grouping.per_element_name);
+				grouping.per_element_name = StringCopy(allocator, grouping.per_element_name);
 			}
 
-			type->groupings.AddResize(grouping, GetAllocatorPolymorphic(allocator));
+			type->groupings.AddResize(grouping, allocator);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -2433,7 +2433,7 @@ namespace ECSEngine {
 				field_value.standalone_data.Initialize({ nullptr }, 0);
 			}
 			else {
-				field_value.standalone_data.Initialize(GetAllocatorPolymorphic(drawer->allocator), 0);
+				field_value.standalone_data.Initialize(drawer->allocator, 0);
 			}
 
 			return field_value;
@@ -2962,7 +2962,7 @@ namespace ECSEngine {
 					OverrideAllocationData* data = (OverrideAllocationData*)instance->data[index];
 					if (data->override_index == override_index) {
 						// Same type, can proceed
-						modify_override(GetAllocatorPolymorphic(allocator), data->GetData(), overrides[override_index].global_data, user_data);
+						modify_override(allocator, data->GetData(), overrides[override_index].global_data, user_data);
 					}
 				}
 			}
@@ -2982,7 +2982,7 @@ namespace ECSEngine {
 			ECS_ASSERT(override_index != -1);
 
 			if (override_allocator.allocator == nullptr) {
-				override_allocator = GetAllocatorPolymorphic(allocator);
+				override_allocator = allocator;
 			}
 
 			modify_override(override_allocator, override_data, overrides[override_index].global_data, user_data);
@@ -3719,7 +3719,7 @@ namespace ECSEngine {
 				data->base_data.stream.element_byte_size = reflection_field.info.stream_byte_size;
 
 				Stream<char> user_defined_type = GetUserDefinedTypeFromStreamUserDefined(reflection_field.definition, reflection_field.info.stream_type);
-				Stream<char> allocated_type = StringCopy(GetAllocatorPolymorphic(allocator), user_defined_type);
+				Stream<char> allocated_type = StringCopy(allocator, user_defined_type);
 				data->type_name = allocated_type.buffer;
 
 				field.configuration = 0;
@@ -4014,7 +4014,7 @@ namespace ECSEngine {
 			unsigned int inserted_position = 0;
 			ResourceIdentifier identifier(type.name);
 			if (identifier_name.size > 0) {
-				identifier_name = StringCopy(GetAllocatorPolymorphic(allocator), identifier_name);
+				identifier_name = StringCopy(allocator, identifier_name);
 				type.has_overriden_identifier = true;
 				identifier = identifier_name;
 			}
@@ -4040,7 +4040,7 @@ namespace ECSEngine {
 			AllocatorPolymorphic user_defined_allocator
 		)
 		{
-			user_defined_allocator = user_defined_allocator.allocator == nullptr ? GetAllocatorPolymorphic(allocator) : user_defined_allocator;
+			user_defined_allocator = user_defined_allocator.allocator == nullptr ? allocator : user_defined_allocator;
 
 			ResourceIdentifier identifier(name);
 			ECS_ASSERT(instances.Find(identifier) == -1);
@@ -4322,7 +4322,7 @@ namespace ECSEngine {
 			
 			if (overrides[override_index].deallocate_function != nullptr) {
 				if (override_allocator.allocator == nullptr) {
-					override_allocator = GetAllocatorPolymorphic(allocator);
+					override_allocator = (allocator);
 				}
 				overrides[override_index].deallocate_function(override_allocator, data, overrides[override_index].global_data);
 			}
@@ -5089,7 +5089,7 @@ namespace ECSEngine {
 
 		void* UIReflectionDrawer::InitializeFieldOverride(Stream<char> tag, Stream<char> name, AllocatorPolymorphic user_defined_allocator)
 		{
-			user_defined_allocator = user_defined_allocator.allocator == nullptr ? GetAllocatorPolymorphic(allocator) : user_defined_allocator;
+			user_defined_allocator = user_defined_allocator.allocator == nullptr ? allocator : user_defined_allocator;
 
 			unsigned int override_index = FindFieldOverride(tag);
 			ECS_ASSERT(override_index != -1);
@@ -5149,11 +5149,11 @@ namespace ECSEngine {
 
 		void UIReflectionDrawer::SetFieldOverride(const UIReflectionFieldOverride* override)
 		{
-			Stream<char> tag = StringCopy(GetAllocatorPolymorphic(allocator), override->tag);
+			Stream<char> tag = StringCopy(allocator, override->tag);
 			UIReflectionFieldOverride new_override;
 			memcpy(&new_override, override, sizeof(new_override));
 			new_override.tag = tag;
-			new_override.global_data = CopyNonZero(GetAllocatorPolymorphic(allocator), new_override.global_data, new_override.global_data_size);
+			new_override.global_data = CopyNonZero(allocator, new_override.global_data, new_override.global_data_size);
 
 			overrides.Add(&new_override);
 		}
