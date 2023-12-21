@@ -7,7 +7,6 @@
 #include "ECSEngineDebugDrawer.h"
 #include "ECSEngineCBufferTags.h"
 #include "ECSEngineMath.h"
-#include "CollisionDetection/src/FixedGrid.h"
 
 using namespace ECSEngine;
 

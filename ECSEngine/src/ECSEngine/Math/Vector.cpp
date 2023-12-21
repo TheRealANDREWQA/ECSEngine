@@ -368,7 +368,7 @@ namespace ECSEngine {
 
 	EXPORT_TEMPLATE_PRECISION_LANE_WIDTH(Vector8, NormalizeIfNot, Vector8);
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<VectorOperationPrecision precision>
 	Vector8 ECS_VECTORCALL OneDividedVector(Vector8 value) {
 		if constexpr (precision == ECS_VECTOR_PRECISE) {
 			return VectorGlobals::ONE / value;

@@ -19,6 +19,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CollisionDetection", "Modul
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Graphics", "Modules\Graphics\Graphics.vcxproj", "{737DA5FD-1447-4B07-B900-2FC298AD259B}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Physics", "Modules\Physics\Physics.vcxproj", "{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -62,6 +64,12 @@ Global
 		{737DA5FD-1447-4B07-B900-2FC298AD259B}.Distribution|x64.Build.0 = Distribution|x64
 		{737DA5FD-1447-4B07-B900-2FC298AD259B}.Release|x64.ActiveCfg = Release|x64
 		{737DA5FD-1447-4B07-B900-2FC298AD259B}.Release|x64.Build.0 = Release|x64
+		{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}.Debug|x64.ActiveCfg = Debug|x64
+		{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}.Debug|x64.Build.0 = Debug|x64
+		{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}.Distribution|x64.ActiveCfg = Distribution|x64
+		{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}.Distribution|x64.Build.0 = Distribution|x64
+		{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}.Release|x64.ActiveCfg = Release|x64
+		{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
