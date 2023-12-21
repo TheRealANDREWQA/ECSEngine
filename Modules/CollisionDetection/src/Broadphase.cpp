@@ -30,17 +30,7 @@ static void UpdateBroadphaseGrid(
 		}
 
 		AABBStorage aabb = TransformAABB(mesh->mesh->mesh.bounds, translation_value, rotation_matrix, scale_value).ToStorage();
-		fixed_grid->InsertEntry(for_each_data->entity, 0, aabb, &collisions);
-		if (collisions.size > 0) {
-			ECS_STACK_CAPACITY_STREAM(char, message, 512);
-			message.CopyOther("Collision between ");
-			EntityToString(for_each_data->entity, message);
-			message.AddStreamAssert(" and ");
-			for (size_t index = 0; index < collisions.size; index++) {
-				EntityToString(collisions[index].entity, message);
-			}
-			GetConsole()->Info(message);
-		}
+		fixed_grid->InsertEntry(for_each_data->thread_id, for_each_data->world, for_each_data->entity, 0, aabb);
 	}
 }
 
@@ -55,12 +45,14 @@ ECS_THREAD_TASK(CollisionBroadphase) {
 		.Function(UpdateBroadphaseGrid, _data);
 }
 
+ECS_THREAD_TASK(EmptyGridHandler) {}
+
 ECS_THREAD_TASK(InitializeCollisionBroadphase) {
 	StaticThreadTaskInitializeInfo* initialize_info = (StaticThreadTaskInitializeInfo*)_data;
 
 	FixedGrid fixed_grid;
-	fixed_grid.Initialize(world->memory, { 2, 2, 2 }, { 2, 2, 2 }, 10);
-	//fixed_grid.EnableLayerCollisions(0, 0);
+	fixed_grid.Initialize(world->memory, { 2, 2, 2 }, { 2, 2, 2 }, 10, EmptyGridHandler, nullptr, 0);
+	fixed_grid.EnableLayerCollisions(0, 0);
 	initialize_info->frame_data->CopyOther(&fixed_grid, sizeof(fixed_grid));
 }
 

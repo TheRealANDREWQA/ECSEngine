@@ -2,6 +2,8 @@
 #include "../Core.h"
 #include "VCLExtensions.h"
 
+#define ECS_SIMD_VECTOR_EPSILON_VALUE 0.00001f
+
 namespace ECSEngine {
 
 	// Have the functions that return a vector mask that can be used then to generate all the permutations
@@ -342,8 +344,6 @@ namespace ECSEngine {
 
 		Vec8f value;
 	};
-
-#define ECS_SIMD_VECTOR_EPSILON_VALUE 0.0001f
 
 	namespace VectorGlobals {
 		ECSENGINE_API extern Vector8 ONE;

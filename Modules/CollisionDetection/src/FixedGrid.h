@@ -35,6 +35,8 @@ struct CollisionLayer {
 	unsigned char entries[32];
 };
 
+struct FixedGrid;
+
 struct FixedGridHandlerData {
 	FixedGrid* grid;
 	void* user_data;
@@ -63,7 +65,16 @@ struct FixedGrid {
 
 	// Fills in the collisions that the given AABB has with a given cell. Returns the last chunk of the cell
 	// It does not call the handler in this case - it will report them directly to you
-	GridChunk* CheckCollisions(uint3 cell_index, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions);
+	// The world is needed to be passed to the handler
+	GridChunk* CheckCollisions(
+		unsigned int thread_id, 
+		World* world, 
+		uint3 cell_index, 
+		unsigned int identifier,
+		unsigned char layer, 
+		AABBStorage aabb, 
+		CapacityStream<CollisionInfo>* collisions
+	);
 
 	void Clear();
 	
@@ -88,9 +99,12 @@ struct FixedGrid {
 		size_t handler_data_size
 	);
 
+	// The AABB needs to be transformed already. The collision handler will be called for each collision
+	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBStorage aabb);
+
 	// The AABB needs to be transformed already. It will fill in the collisions
-	// That it finds inside the given buffer
-	void InsertEntry(unsigned int identifier, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions);
+	// That it finds inside the given buffer and calls the functor for each collision pair that it finds
+	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions);
 
 	void InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, AABBStorage aabb);
 
@@ -121,8 +135,8 @@ struct FixedGrid {
 
 	Stream<CollisionLayer> layers;
 	// This is the function that will be called to handle the collisions
-	ThreadFunction handler_function;
-	void* handler_data;
+	//ThreadFunction handler_function;
+	//void* handler_data;
 };
 
 unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z);

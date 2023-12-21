@@ -71,7 +71,15 @@ GridChunk* FixedGrid::ChainChunk(GridChunk* current_chunk)
 	return new_chunk;
 }
 
-GridChunk* FixedGrid::CheckCollisions(uint3 cell_index, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions)
+GridChunk* FixedGrid::CheckCollisions(
+	unsigned int thread_id, 
+	World* world, 
+	uint3 cell_index,
+	unsigned int identifier,
+	unsigned char layer, 
+	AABBStorage aabb, 
+	CapacityStream<CollisionInfo>* collisions
+)
 {
 	unsigned int cell_hash = HashGridCellIndices(cell_index);
 	GridCell cell;
@@ -89,7 +97,16 @@ GridChunk* FixedGrid::CheckCollisions(uint3 cell_index, unsigned char layer, AAB
 							return collision_info.identifier;
 						}) != -1;
 						if (!already_collided) {
+							// Add the collision and call the handler
 							collisions->AddAssert({ chunk->identifiers[index], chunk->layers[index] });
+							/*FixedGridHandlerData callback_handler_data;
+							callback_handler_data.grid = this;
+							callback_handler_data.user_data = handler_data;
+							callback_handler_data.first_identifier = identifier;
+							callback_handler_data.first_layer = layer;
+							callback_handler_data.second_identifier = chunk->identifiers[index];
+							callback_handler_data.second_layer = chunk->layers[index];
+							handler_function(thread_id, world, &callback_handler_data);*/
 						}
 					}
 				}
@@ -165,11 +182,18 @@ void FixedGrid::Initialize(
 	layers.Initialize(allocator, UCHAR_MAX);
 	memset(layers.buffer, 0, layers.MemoryOf(layers.size));
 
-	handler_function = _handler_function;
-	handler_data = CopyNonZero(allocator, _handler_data, _handler_data_size);
+	//handler_function = _handler_function;
+	//handler_data = CopyNonZero(allocator, _handler_data, _handler_data_size);
 }
 
-void FixedGrid::InsertEntry(unsigned int identifier, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions)
+void FixedGrid::InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBStorage aabb)
+{
+	// Just ignore the collisions
+	ECS_STACK_CAPACITY_STREAM(CollisionInfo, collisions, ECS_KB);
+	InsertEntry(thread_id, world, identifier, layer, aabb, &collisions);
+}
+
+void FixedGrid::InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions)
 {
 	// Determine the grid indices for the min and max points for the aabb
 	uint3 min_cell = CalculateCell(aabb.min);
@@ -190,7 +214,7 @@ void FixedGrid::InsertEntry(unsigned int identifier, unsigned char layer, AABBSt
 	for (unsigned int x = 0; x < iteration_count.x; x++) {
 		for (unsigned int y = 0; y < iteration_count.y; y++) {
 			for (unsigned int z = 0; z < iteration_count.z; z++) {
-				GridChunk* chunk = CheckCollisions(current_cell, layer, aabb, collisions);
+				GridChunk* chunk = CheckCollisions(thread_id, world, current_cell, identifier, layer, aabb, collisions);
 				AddToChunk(identifier, layer, aabb, chunk);
 				current_cell.z++;
 				current_cell.z = current_cell.z == dimensions.z ? 0 : current_cell.z;
