@@ -55,7 +55,7 @@ namespace ECSEngine {
 
 	struct TransformGizmo {
 		float3 position;
-		QuaternionStorage rotation;
+		QuaternionScalar rotation;
 	};
 
 	struct ECSENGINE_API TransformGizmoPointers {
@@ -65,7 +65,7 @@ namespace ECSEngine {
 		float3* position;
 		union {
 			float3* euler_rotation;
-			float4* quaternion_rotation;
+			QuaternionScalar* quaternion_rotation;
 		};
 		float3* scale;
 	};

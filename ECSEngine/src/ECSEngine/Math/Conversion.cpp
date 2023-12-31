@@ -5,206 +5,188 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------
 
-	namespace SIMDHelpers {
-
-		// These are placed here because these are a probabily slower way of producing the matrices
-		// From quaternions. Can investigate which is faster
-
-		ECS_INLINE Matrix ECS_VECTORCALL QuaternionToMatrixLowMultiplication(Quaternion quaternion) {
-			// Make sure that the quaternion has the low and high
-			quaternion.value = SplatLowLane(quaternion.value);
-
-			Vector8 right = RightVector();
-			Vector8 up = UpVector();
-			Vector8 forward = ForwardVector();
-
-			Vector8 right_up_shuffle = Permute2f128Helper<0, 2>(right, up);
-			Vector8 rotated_right_up = QuaternionVectorMultiply(quaternion, right_up_shuffle);
-			Vector8 rotated_forward = QuaternionVectorMultiply(quaternion, forward);
-
-			Vector8 zero = ZeroVector();
-			rotated_right_up = PerLaneBlend<0, 1, 2, 7>(rotated_right_up, zero);
-			rotated_forward = PerLaneBlend<0, 1, 2, 7>(rotated_forward, zero);
-
-			Vector8 quat_identity = QuaternionIdentity().value;
-			return Matrix(
-				rotated_right_up,
-				BlendLowAndHigh(rotated_forward, quat_identity)
-			);
-		}
-
-		ECS_INLINE void ECS_VECTORCALL QuaternionToMatrixMultiplication(Quaternion quaternion, Matrix* low, Matrix* high) {
-			Vector8 right = QuaternionVectorMultiply(quaternion, RightVector());
-			Vector8 up = QuaternionVectorMultiply(quaternion, UpVector());
-			Vector8 forward = QuaternionVectorMultiply(quaternion, ForwardVector());
-
-			Vector8 zero = ZeroVector();
-			// zero the last element of each vector
-			right = PerLaneBlend<0, 1, 2, 7>(right, zero);
-			up = PerLaneBlend<0, 1, 2, 7>(up, zero);
-			forward = PerLaneBlend<0, 1, 2, 7>(forward, zero);
-
-			Vector8 quat_identity = QuaternionIdentity().value;
-			*low = Matrix(
-				Permute2f128Helper<0, 2>(right, up),
-				PerLaneBlend<0, 1, 2, 3>(forward, quat_identity)
-			);
-
-			*low = Matrix(
-				Permute2f128Helper<1, 3>(right, up),
-				Permute2f128Helper<1, 3>(forward, quat_identity)
-			);
-		}
-
-		ECS_INLINE Matrix ECS_VECTORCALL QuaternionRotationMatrixMultiplication(float3 rotation) {
-			return QuaternionToMatrixLowMultiplication(QuaternionFromEuler(rotation));
-		}
-
-		ECS_INLINE void ECS_VECTORCALL QuaternionRotationMatrixMultiplication(float3 rotation1, float3 rotation2, Matrix* low, Matrix* high) {
-			QuaternionToMatrixMultiplication(QuaternionFromEuler(rotation1, rotation2), low, high);
-		}
-
-		// This is for the method that computes using component multiplications
-		ECS_INLINE void ECS_VECTORCALL QuaternionToMatrixVectors(Quaternion quaternion, Vector8* diagonal, Vector8* upper_three, Vector8* lower_three) {
-			// The formula is this one (on the internet the values are provided in column major format, here they are row major)
-			// w * w + x * x - y * y - z * z          2 w * z + 2 x * y               2 x * z - 2 y * w         0
-			//       2 x * y - 2 z * w          w * w + y * y - x * x - z * z         2 x * w + 2 y * z         0
-			//       2 w * y + 2 x * z                2 y * z - 2 x * w         w * w + z * z - x * x - y * y   0
-			//               0                                0                               0                 1
-			Vector8 squared = quaternion.value * quaternion.value;
-
-			// Construct the elements on the main diagonal
-			Vector8 diagonal_first_permutation = PerLanePermute<3, 3, 3, V_DC>(squared);
-			// They are already in order here
-			Vector8 diagonal_second_permutation = squared;
-			Vector8 diagonal_third_permutation = PerLanePermute<1, 0, 0, V_DC>(squared);
-			Vector8 diagonal_fourth_permutation = PerLanePermute<2, 2, 1, V_DC>(squared);
-			*diagonal = diagonal_first_permutation + diagonal_second_permutation - diagonal_third_permutation - diagonal_fourth_permutation;
-
-			// Now calculate the upper three elements and the lower three elements separately
-			Vector8 two = 2.0f;
-
-			// Upper three elements
-			Vector8 upper_three_first = PerLanePermute<0, 3, 0, V_DC>(quaternion.value);
-			Vector8 upper_three_second = PerLanePermute<1, 2, 2, V_DC>(quaternion.value);
-			Vector8 upper_three_third = PerLanePermute<2, 0, 1, V_DC>(quaternion.value);
-			Vector8 upper_three_fourth = PerLanePermute<3, 1, 3, V_DC>(quaternion.value);
-			// Can use Fmsubadd in order to avoid the change sign operation in order for the second value to be subtracted
-			*upper_three = Fmsubadd(upper_three_first, upper_three_second, upper_three_third * upper_three_fourth);
-			*upper_three = *upper_three * two;
-
-			// Lower three elements
-			Vector8 lower_three_first = PerLanePermute<3, 1, 0, V_DC>(quaternion.value);
-			Vector8 lower_three_second = PerLanePermute<1, 2, 3, V_DC>(quaternion.value);
-			Vector8 lower_three_third = PerLanePermute<0, 0, 1, V_DC>(quaternion.value);
-			Vector8 lower_three_fourth = PerLanePermute<2, 3, 2, V_DC>(quaternion.value);
-			// Can use Fmaddsub in order to avoid the change sign operation in order for the second value to be added
-			*lower_three = Fmaddsub(lower_three_first, lower_three_second, lower_three_third * lower_three_fourth);
-			*lower_three = *lower_three * two;
-		}
-
-	}
-
-	Matrix ECS_VECTORCALL QuaternionToMatrixLow(Quaternion quaternion) {
+	Matrix ECS_VECTORCALL QuaternionToMatrix(QuaternionScalar quaternion) {
 		// The formula is this one (on the internet the values are provided in column major format, here they are row major)
 		// w * w + x * x - y * y - z * z          2 w * z + 2 x * y               2 x * z - 2 y * w         0
 		//       2 x * y - 2 z * w          w * w + y * y - x * x - z * z         2 x * w + 2 y * z         0
 		//       2 w * y + 2 x * z                2 y * z - 2 x * w         w * w + z * z - x * x - y * y   0
 		//               0                                0                               0                 1
 
-		quaternion = QuaternionNormalize(quaternion);
-		Vector8 zero = ZeroVector();
-		Vector8 quat_identity = LastElementOneVector();
+		alignas(ECS_SIMD_BYTE_SIZE) float4 values[sizeof(Matrix) / sizeof(float4)];
+		float two = 2.0f;
+		float x_squared = quaternion.x * quaternion.x;
+		float y_squared = quaternion.y * quaternion.y;
+		float z_squared = quaternion.z * quaternion.z;
+		float w_squared = quaternion.w * quaternion.w;
+		float two_wz = two * quaternion.w * quaternion.z;
+		float two_xy = two * quaternion.x * quaternion.y;
+		float two_xz = two * quaternion.x * quaternion.z;
+		float two_yw = two * quaternion.y * quaternion.w;
+		float two_xw = two * quaternion.x * quaternion.w;
+		float two_yz = two * quaternion.y * quaternion.z;
+		values[0] = { w_squared + x_squared - y_squared - z_squared, two_wz + two_xy, two_xz - two_yw, 0.0f };
+		values[1] = { two_xy - two_wz, w_squared + y_squared - x_squared - z_squared, two_xw + two_yz, 0.0f };
+		values[2] = { two_yw + two_xz, two_yz - two_xw, w_squared + z_squared - x_squared - y_squared, 0.0f };
+		values[3] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-		Vector8 diagonal, upper_three, lower_three;
-		SIMDHelpers::QuaternionToMatrixVectors(quaternion, &diagonal, &upper_three, &lower_three);
-
-		Vector8 diagonal_low_to_high = Permute2f128Helper<1, 0>(diagonal, diagonal);
-		Vector8 upper_three_low_to_high = Permute2f128Helper<1, 0>(upper_three, upper_three);
-		Vector8 lower_three_low_to_high = Permute2f128Helper<1, 0>(lower_three, lower_three);
-
-		Vector8 matrix_low_4_0 = PerLaneBlend<0, 5, 6, V_DC>(diagonal, upper_three);
-		Vector8 matrix_high_4_0_temp = PerLaneBlend<0, 5, V_DC, V_DC>(upper_three_low_to_high, diagonal_low_to_high);
-		Vector8 matrix_high_4_0 = PerLaneBlend<0, 1, 6, V_DC>(matrix_high_4_0_temp, lower_three_low_to_high);
-		Vector8 matrix_0 = BlendLowAndHigh(matrix_low_4_0, matrix_high_4_0);
-
-		Vector8 matrix_low_12_0 = PerLaneBlend<0, 1, 6, V_DC>(lower_three, diagonal);
-		Vector8 matrix_1_temp = PerLaneBlend<0, 1, 2, 7>(matrix_low_12_0, zero);
-
-		// Now set with 0 the last column of the matrix values
-		matrix_0 = PerLaneBlend<0, 1, 2, 7>(matrix_0, zero);
-		Vector8 matrix_1 = BlendLowAndHigh(matrix_1_temp, quat_identity);
-
-		return { matrix_0, matrix_1 };
+		return Matrix().LoadAligned(values);
 	}
 
-	void ECS_VECTORCALL QuaternionToMatrix(Quaternion quaternion, Matrix* low, Matrix* high) {
+	void ECS_VECTORCALL QuaternionToMatrix(Quaternion quaternion, Matrix* matrices, size_t write_count) {
+		// The formula is this one (on the internet the values are provided in column major format, here they are row major)
+		// w * w + x * x - y * y - z * z          2 w * z + 2 x * y               2 x * z - 2 y * w         0
+		//       2 x * y - 2 z * w          w * w + y * y - x * x - z * z         2 x * w + 2 y * z         0
+		//       2 w * y + 2 x * z                2 y * z - 2 x * w         w * w + z * z - x * x - y * y   0
+		//               0                                0                               0                 1
+
+		Vec8f two = 2.0f;
+		Vec8f x_squared = quaternion.x * quaternion.x;
+		Vec8f y_squared = quaternion.y * quaternion.y;
+		Vec8f z_squared = quaternion.z * quaternion.z;
+		Vec8f w_squared = quaternion.w * quaternion.w;
+		Vec8f two_wz = two * quaternion.w * quaternion.z;
+		Vec8f two_xy = two * quaternion.x * quaternion.y;
+		Vec8f two_xz = two * quaternion.x * quaternion.z;
+		Vec8f two_yw = two * quaternion.y * quaternion.w;
+		Vec8f two_xw = two * quaternion.x * quaternion.w;
+		Vec8f two_yz = two * quaternion.y * quaternion.z;
+
+		Vec8f element_00 = w_squared + x_squared - y_squared - z_squared;
+		Vec8f element_01 = two_xy - two_wz;
+		Vec8f element_02 = two_yw + two_xz;
+		Vec8f element_10 = two_wz + two_xy;
+		Vec8f element_11 = w_squared + y_squared - x_squared - z_squared;
+		Vec8f element_12 = two_yz - two_xw;
+		Vec8f element_20 = two_xz - two_yw;
+		Vec8f element_21 = two_xw + two_yz;
+		Vec8f element_22 = w_squared + z_squared - x_squared - y_squared;
+
+		// Unfortunately, we don't have a scatter function, so we will have to store into a temp
+		// stack buffer and copy with a scalar loop
+		alignas(ECS_SIMD_BYTE_SIZE) float scalar_values[Vec8f::size()];
+		auto write_values = [write_count, matrices, &scalar_values](size_t offset) {
+			float* float_matrices = (float*)matrices;
+			for (size_t index = 0; index < write_count; index++) {
+				size_t index_offset = index * 16;
+				float_matrices[index_offset + offset] = scalar_values[index];
+			}
+		};
+
+		element_00.store_a(scalar_values);
+		write_values(0);
+		element_01.store_a(scalar_values);
+		write_values(1);
+		element_02.store_a(scalar_values);
+		write_values(2);
+		element_10.store_a(scalar_values);
+		write_values(4);
+		element_11.store_a(scalar_values);
+		write_values(5);
+		element_12.store_a(scalar_values);
+		write_values(6);
+		element_20.store_a(scalar_values);
+		write_values(8);
+		element_21.store_a(scalar_values);
+		write_values(9);
+		element_22.store_a(scalar_values);
+		write_values(10);
+
+		// Now write the 0s and the 1
+		for (size_t index = 0; index < write_count; index++) {
+			scalar_values[index] = 0.0f;
+		}
+		write_values(3);
+		write_values(7);
+		write_values(11);
+		write_values(12);
+		write_values(13);
+		write_values(14);
+		for (size_t index = 0; index < write_count; index++) {
+			scalar_values[index] = 1.0f;
+		}
+		write_values(15);
+	}
+
+	Matrix ECS_VECTORCALL QuaternionToMatrix(Quaternion quaternion, size_t index) {
 		// The formula is this one (on the internet the values are provided in column major format, here they are row major)
 		// w * w + x * x - y * y - z * z           2 x * y - 2 z * w               2 w * y + 2 x * z        0
 		//       2 w * z + 2 x * y           w * w + y * y - x * x - z * z         2 y * z - 2 x * w        0
 		//       2 x * z - 2 y * w                 2 x * w + 2 y * z         w * w + z * z - x * x - y * y  0
 		//               0                                 0                               0                1
 
-		Vector8 zero = ZeroVector();
-		Vector8 quat_identity = LastElementOneVector();
+		Matrix matrix;
 
-		Vector8 diagonal, upper_three, lower_three;
-		SIMDHelpers::QuaternionToMatrixVectors(quaternion, &diagonal, &upper_three, &lower_three);
+		Vec8f two = 2.0f;
+		Vec8f x_squared = quaternion.x * quaternion.x;
+		Vec8f y_squared = quaternion.y * quaternion.y;
+		Vec8f z_squared = quaternion.z * quaternion.z;
+		Vec8f w_squared = quaternion.w * quaternion.w;
+		Vec8f two_wz = two * quaternion.w * quaternion.z;
+		Vec8f two_xy = two * quaternion.x * quaternion.y;
+		Vec8f two_xz = two * quaternion.x * quaternion.z;
+		Vec8f two_yw = two * quaternion.y * quaternion.w;
+		Vec8f two_xw = two * quaternion.x * quaternion.w;
+		Vec8f two_yz = two * quaternion.y * quaternion.z;
 
-		// Calculate the first 2 rows - do the calculations for both lanes
-		Vector8 matrix_low_4_0 = PerLaneBlend<0, 5, 6, V_DC>(diagonal, upper_three);
-		Vector8 matrix_high_4_0_temp = PerLaneBlend<0, 5, V_DC, V_DC>(upper_three, diagonal);
-		Vector8 matrix_high_4_0 = PerLaneBlend<0, 1, 6, V_DC>(matrix_high_4_0_temp, lower_three);
+		Vec8f element_00 = w_squared + x_squared - y_squared - z_squared;
+		Vec8f element_01 = two_xy - two_wz;
+		Vec8f element_02 = two_yw + two_xz;
+		Vec8f element_10 = two_wz + two_xy;
+		Vec8f element_11 = w_squared + y_squared - x_squared - z_squared;
+		Vec8f element_12 = two_yz - two_xw;
+		Vec8f element_20 = two_xz - two_yw;
+		Vec8f element_21 = two_xw + two_yz;
+		Vec8f element_22 = w_squared + z_squared - x_squared - y_squared;
 
-		matrix_low_4_0 = PerLaneBlend<0, 1, 2, 7>(matrix_low_4_0, zero);
-		matrix_high_4_0 = PerLaneBlend<0, 1, 2, 7>(matrix_high_4_0, zero);
-		Vector8 matrix_low_first = Permute2f128Helper<0, 2>(matrix_low_4_0, matrix_high_4_0);
-		Vector8 matrix_high_first = Permute2f128Helper<1, 3>(matrix_low_4_0, matrix_high_4_0);
+		element_00 = Broadcast8(element_00, index);
+		element_01 = Broadcast8(element_01, index);
+		element_02 = Broadcast8(element_02, index);
+		element_10 = Broadcast8(element_10, index);
+		element_11 = Broadcast8(element_11, index);
+		element_12 = Broadcast8(element_12, index);
+		element_20 = Broadcast8(element_20, index);
+		element_21 = Broadcast8(element_21, index);
+		element_22 = Broadcast8(element_22, index);
 
-		// Calculate the 3rd row
-		Vector8 matrix_low_12_0 = PerLaneBlend<0, 1, 6, V_DC>(lower_three, diagonal);
-		matrix_low_12_0 = PerLaneBlend<0, 1, 2, 7>(matrix_low_12_0, zero);
+		Vec8f blend_00_01 = blend8<0, 9, V_DC, V_DC, V_DC, V_DC, V_DC, V_DC>(element_00, element_01);
+		Vec8f blend_00_01_02 = blend8<0, 1, 10, V_DC, V_DC, V_DC, V_DC, V_DC>(blend_00_01, element_02);
+		Vec8f blend_10_11 = blend8<V_DC, V_DC, V_DC, V_DC, 4, 13, V_DC, V_DC>(element_10, element_11);
+		Vec8f blend_10_11_12 = blend8<V_DC, V_DC, V_DC, V_DC, 4, 5, 14, V_DC>(blend_10_11, element_12);
+		Vec8f blend_first_two_rows = blend8<0, 1, 2, V_DC, 12, 13, 14, V_DC>(blend_00_01_02, blend_10_11_12);
 
-		Vector8 matrix_low_second = BlendLowAndHigh(matrix_low_12_0, quat_identity);
-		Vector8 matrix_high_second = BlendLowAndHigh(quat_identity, matrix_low_12_0);
+		Vec8f blend_20_21 = blend8<0, 9, V_DC, V_DC, V_DC, V_DC, V_DC, V_DC>(element_20, element_21);
+		Vec8f blend_20_21_22 = blend8<0, 1, 10, V_DC, V_DC, V_DC, V_DC, V_DC>(blend_20_21, element_22);
 
-		*low = { matrix_low_first, matrix_low_second };
-		*high = { matrix_high_first, matrix_high_second };
+		matrix.v[0] = blend8<0, 1, 2, 11, 4, 5, 6, 15>(blend_first_two_rows, ZeroVectorFloat());
+		matrix.v[1] = ZeroVectorFloat();
+		// Blend without the final 1
+		matrix.v[1] = blend8<0, 1, 2, 11, 12, 13, 14, 15>(blend_20_21_22, matrix.v[1]);
+		// Blend to set the final one
+		matrix.v[1] = blend8<0, 1, 2, 3, 4, 5, 6, 15>(matrix.v[1], VectorGlobals::ONE);
+
+		return matrix;
 	}
 
 	// -------------------------------------------------------------------------------------------------
 
-	Quaternion ECS_VECTORCALL MatrixToQuaternion(Matrix matrix) {
+	QuaternionScalar ECS_VECTORCALL MatrixToQuaternion(Matrix matrix) {
 		// Since a matrix can contain scale, the vectors cannot be taken as they are
 		// So they must be deducted in order to be orthogonal
+		alignas(ECS_SIMD_BYTE_SIZE) float4 scalar_matrix[4];
+		matrix.StoreAligned(scalar_matrix);
 
-		// This seems reduntant, we already perform a normalization inside the quaternion look rotation
-		/*Vector8 right_up = NormalizeIfNot(matrix.v[0]);
-		Vector8 forward = NormalizeIfNot(matrix.v[1]);*/
-
-		Vector8 right_up = matrix.v[0];
-		Vector8 forward = matrix.v[1];
-
-		Vector8 up_right = Permute2f128Helper<1, 0>(right_up, right_up);
-		Vector8 right = Cross(up_right, forward);
-		Vector8 orthogonal_up = Cross(forward, right);
+		float3 up = scalar_matrix[1].xyz();
+		float3 forward = scalar_matrix[2].xyz();
+		float3 right = Cross(up, forward);
+		float3 orthogonal_up = Cross(forward, right);
 		return QuaternionLookRotation(forward, orthogonal_up);
 	}
 
-	Quaternion ECS_VECTORCALL MatrixToQuaternion(Matrix matrix1, Matrix matrix2) {
-		// Since a matrix can contain scale, the vectors cannot be taken as they are
-		// So they must be deducted in order to be orthogonal
-
-		Vector8 ups = Permute2f128Helper<1, 3>(matrix1.v[0], matrix2.v[0]);
-		Vector8 forwards = Permute2f128Helper<0, 2>(matrix1.v[1], matrix2.v[1]);
-
-		// This seems reduntant, we already perform a normalization inside the quaternion look rotation
-		/*ups = NormalizeIfNot(ups);
-		forwards = NormalizeIfNot(forwards);*/
-
-		Vector8 rights = Cross(ups, forwards);
-		Vector8 orthogonal_up = Cross(forwards, rights);
-		return QuaternionLookRotation(forwards, orthogonal_up);
+	void ECS_VECTORCALL MatrixToQuaternion(Matrix matrix, Quaternion* quaternion, size_t index) {
+		// We can use the scalar version and then write into the SIMD quaternion at the end
+		// If this is really necessary, we can convert to an all SIMD conversion - if need be
+		QuaternionScalar scalar_quaternion = MatrixToQuaternion(matrix);
+		quaternion->Set(scalar_quaternion, index);
 	}
 
 	// -------------------------------------------------------------------------------------------------

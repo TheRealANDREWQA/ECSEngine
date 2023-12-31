@@ -851,13 +851,13 @@ float3 GetSandboxEntityTranslation(const EditorState* editor_state, unsigned int
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-QuaternionStorage GetSandboxEntityRotation(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, EDITOR_SANDBOX_VIEWPORT viewport)
+QuaternionScalar GetSandboxEntityRotation(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	const Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, entity, viewport);
 	if (rotation != nullptr) {
 		return rotation->value;
 	}
-	return QuaternionIdentity().StorageLow();
+	return QuaternionIdentityScalar();
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -873,10 +873,10 @@ float3 GetSandboxEntityScale(const EditorState* editor_state, unsigned int sandb
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-Transform GetSandboxEntityTransform(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, EDITOR_SANDBOX_VIEWPORT viewport)
+TransformScalar GetSandboxEntityTransform(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	float3 translation = GetSandboxEntityTranslation(editor_state, sandbox_index, entity, viewport);
-	QuaternionStorage rotation = GetSandboxEntityRotation(editor_state, sandbox_index, entity, viewport);
+	QuaternionScalar rotation = GetSandboxEntityRotation(editor_state, sandbox_index, entity, viewport);
 	float3 scale = GetSandboxEntityScale(editor_state, sandbox_index, entity, viewport);
 	return { translation, rotation, scale };
 }
@@ -1114,13 +1114,13 @@ static void GetSandboxEntitiesMidpointImpl(
 	unsigned int sandbox_index,
 	Stream<Entity> entities,
 	float3* translation_midpoint,
-	Quaternion* rotation_midpoint,
+	QuaternionScalar* rotation_midpoint,
 	Stream<TransformGizmo> transform_gizmos,
 	bool add_transform_gizmos_to_total_count,
 	EDITOR_SANDBOX_VIEWPORT viewport
 ) {
 	float3 translation_average = float3::Splat(0.0f);
-	Quaternion rotation_average = QuaternionAverageCumulatorInitialize();
+	QuaternionScalar rotation_average = QuaternionAverageCumulatorInitializeScalar();
 
 	for (size_t index = 0; index < entities.size; index++) {
 		if constexpr (has_translation) {
@@ -1173,14 +1173,14 @@ float3 GetSandboxEntitiesTranslationMidpoint(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-Quaternion ECS_VECTORCALL GetSandboxEntitiesRotationMidpoint(
+QuaternionScalar GetSandboxEntitiesRotationMidpoint(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Stream<Entity> entities, 
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
-	Quaternion midpoint;
+	QuaternionScalar midpoint;
 	GetSandboxEntitiesMidpointImpl<false, true>(editor_state, sandbox_index, entities, nullptr, &midpoint, {}, false, viewport);
 	return midpoint;
 }
@@ -1192,7 +1192,7 @@ void GetSandboxEntitiesMidpoint(
 	unsigned int sandbox_index, 
 	Stream<Entity> entities, 
 	float3* translation_midpoint, 
-	Quaternion* rotation_midpoint,
+	QuaternionScalar* rotation_midpoint,
 	Stream<TransformGizmo> transform_gizmos,
 	bool add_transform_gizmos_to_total_count,
 	EDITOR_SANDBOX_VIEWPORT viewport
@@ -1515,25 +1515,24 @@ void ResetSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbox
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, Quaternion rotation_delta)
+void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, QuaternionScalar rotation_delta)
 {
 	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
 	ECS_STACK_CAPACITY_STREAM(TransformGizmoPointers, transform_gizmo_pointers, ECS_KB);
 	ECS_STACK_CAPACITY_STREAM(Entity, transform_gizmo_entities, ECS_KB);
 	GetSandboxSelectedVirtualEntitiesTransformPointers(editor_state, sandbox_index, &transform_gizmo_pointers, &transform_gizmo_entities);
 
-	auto apply_delta = [rotation_delta](float4* rotation_storage) {
-		Quaternion original_quat = Quaternion(*rotation_storage);
+	auto apply_delta = [rotation_delta](QuaternionScalar* rotation_storage) {
 		// We need to use local rotation regardless of the transform space
 		// The transform tool takes care of the correct rotation delta
-		Quaternion combined_quaternion = AddLocalRotation(original_quat, rotation_delta);
-		*rotation_storage = combined_quaternion.StorageLow();
+		QuaternionScalar new_quaternion = AddLocalRotation(*rotation_storage, rotation_delta);
+		*rotation_storage = new_quaternion;
 	};
 
 	for (size_t index = 0; index < selected_entities.size; index++) {
 		Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
 		if (rotation != nullptr) {
-			apply_delta(&rotation->value);
+			apply_delta((QuaternionScalar*)&rotation->value);
 		}
 		else {
 			// Check the virtual entities
@@ -1541,9 +1540,9 @@ void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandb
 			if (gizmo_index != -1) {
 				if (transform_gizmo_pointers[gizmo_index].euler_rotation != nullptr) {
 					if (transform_gizmo_pointers[gizmo_index].is_euler_rotation) {
-						float4 rotation_storage = QuaternionFromEuler(*transform_gizmo_pointers[gizmo_index].euler_rotation).StorageLow();
+						QuaternionScalar rotation_storage = QuaternionFromEuler(*transform_gizmo_pointers[gizmo_index].euler_rotation);
 						apply_delta(&rotation_storage);
-						*transform_gizmo_pointers[gizmo_index].euler_rotation = QuaternionToEulerLow(rotation_storage);
+						*transform_gizmo_pointers[gizmo_index].euler_rotation = QuaternionToEuler(rotation_storage);
 					}
 					else {
 						apply_delta(transform_gizmo_pointers[gizmo_index].quaternion_rotation);

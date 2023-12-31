@@ -19,7 +19,10 @@ namespace ECSEngine {
 
 		Matrix(const float4& row0, const float4& row1, const float4& row2, const float4& row3);
 
-		Matrix(Vector8 _v1, Vector8 _v2);
+		ECS_INLINE Matrix(Vec8f _v1, Vec8f _v2) {
+			v[0] = _v1;
+			v[1] = _v2;
+		}
 
 		Matrix(const Matrix& other) = default;
 		Matrix& ECS_VECTORCALL operator = (const Matrix& other) = default;
@@ -32,9 +35,9 @@ namespace ECSEngine {
 
 		Matrix ECS_VECTORCALL operator - (Matrix other) const;
 
-		Matrix operator * (float value) const;
+		Matrix ECS_VECTORCALL operator * (float value) const;
 
-		Matrix operator / (float value) const;
+		Matrix ECS_VECTORCALL operator / (float value) const;
 
 		Matrix ECS_VECTORCALL operator * (Matrix other) const;
 
@@ -56,7 +59,7 @@ namespace ECSEngine {
 
 		void StoreStreamed(void* values) const;
 
-		Vector8 v[2];
+		Vec8f v[2];
 	};
 
 	// -----------------------------------------------------------------------------------------------------
@@ -126,7 +129,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API Matrix ECS_VECTORCALL MatrixRotationXRad(Vector8 angle_radians);
+	ECSENGINE_API Matrix ECS_VECTORCALL MatrixRotationXRad(float angle_radians);
 
 	ECSENGINE_API Matrix ECS_VECTORCALL MatrixRotationX(float angle);
 
@@ -144,9 +147,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API Matrix ECS_VECTORCALL MatrixRotation(float3 rotation);
-
 	ECSENGINE_API Matrix ECS_VECTORCALL MatrixRotationRad(float3 rotation);
+
+	ECSENGINE_API Matrix ECS_VECTORCALL MatrixRotation(float3 rotation);
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -193,16 +196,12 @@ namespace ECSEngine {
 	ECSENGINE_API Matrix ECS_VECTORCALL MatrixMVPToGPU(Matrix translation, Matrix rotation, Matrix scale, Matrix camera_matrix);
 
 	// --------------------------------------------------------------------------------------------------------------
-	
-	ECSENGINE_API void ECS_VECTORCALL MatrixLookTo(Vector8 origin, Vector8 direction, Vector8 up, Matrix* low, Matrix* high);
 
-	ECSENGINE_API Matrix ECS_VECTORCALL MatrixLookToLow(Vector8 origin, Vector8 direction, Vector8 up);
+	ECSENGINE_API Matrix ECS_VECTORCALL MatrixLookTo(float3 origin, float3 direction, float3 up);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void ECS_VECTORCALL MatrixLookAt(Vector8 origin, Vector8 focus_point, Vector8 up, Matrix* low, Matrix* high);
-
-	ECSENGINE_API Matrix ECS_VECTORCALL MatrixLookAtLow(Vector8 origin, Vector8 focus_point, Vector8 up);
+	ECSENGINE_API Matrix ECS_VECTORCALL MatrixLookAt(float3 origin, float3 focus_point, float3 up);
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -256,36 +255,53 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// Multiplies only the low part of the vector
-	ECSENGINE_API Vector8 ECS_VECTORCALL MatrixVectorMultiplyLow(Vector8 vector, Matrix matrix);
+	ECSENGINE_API float3 ECS_VECTORCALL MatrixVectorMultiply(float3 vector, Matrix matrix);
 
-	// Applies the same matrix to low and upper
-	ECSENGINE_API Vector8 ECS_VECTORCALL MatrixVectorMultiply(Vector8 vector, Matrix matrix);
+	ECSENGINE_API float4 ECS_VECTORCALL MatrixVectorMultiply(float4 vector, Matrix matrix);
 
-	// If matrices are different, this method can be used but it might perform worse than the single matrix
-	// because of the register usage that might push onto the stack some registers
-	ECSENGINE_API Vector8 ECS_VECTORCALL MatrixVectorMultiply(Vector8 vector, Matrix matrix0, Matrix matrix1);
+	ECSENGINE_API Vector3 ECS_VECTORCALL MatrixVectorMultiply(Vector3 vector, Matrix matrix);
+
+	ECSENGINE_API Vector4 ECS_VECTORCALL MatrixVectorMultiply(Vector4 vector, Matrix matrix);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API float3 ECS_VECTORCALL RotateVectorMatrixLow(Vector8 direction, Matrix rotation_matrix);
+	ECS_INLINE float3 ECS_VECTORCALL RotateVector(float3 direction, Matrix rotation_matrix) {
+		return MatrixVectorMultiply(direction, rotation_matrix);
+	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL RotateVectorMatrixSIMD(Vector8 direction, Matrix rotation_matrix);
+	ECS_INLINE Vector3 ECS_VECTORCALL RotateVector(Vector3 direction, Matrix rotation_matrix) {
+		return MatrixVectorMultiply(direction, rotation_matrix);
+	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL RotateVectorMatrixSIMD(Vector8 direction, Matrix rotation_matrix0, Matrix rotation_matrix1);
+	ECS_INLINE float3 RotatePoint(float3 point, Matrix rotation_matrix) {
+		// We can treat the position as a displacement vector
+		return RotateVector(point, rotation_matrix);
+	}
 
-	ECSENGINE_API float3 ECS_VECTORCALL RotatePointMatrixLow(Vector8 point, Matrix rotation_matrix);
-
-	ECSENGINE_API Vector8 ECS_VECTORCALL RotatePointMatrixSIMD(Vector8 point, Matrix rotation_matrix);
-
-	ECSENGINE_API Vector8 ECS_VECTORCALL RotatePointMatrixSIMD(Vector8 point, Matrix rotation_matrix0, Matrix rotation_matrix1);
+	ECS_INLINE Vector3 ECS_VECTORCALL RotatePoint(Vector3 point, Matrix rotation_matrix) {
+		// We can treat the position as a displacement vector
+		return RotateVector(point, rotation_matrix);
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// It will set the 4th component to 1.0f as points need that
-	ECSENGINE_API Vector8 ECS_VECTORCALL TransformPoint(Vector8 point, Matrix matrix);
+	ECS_INLINE float4 ECS_VECTORCALL TransformPoint(float4 point, Matrix matrix) {
+		return MatrixVectorMultiply(point, matrix);
+	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL TransformPoint(Vector8 point, Matrix matrix0, Matrix matrix1);
+	// It will set the 4th component to 1.0f as points need that and transform with it
+	ECS_INLINE float4 ECS_VECTORCALL TransformPoint(float3 point, Matrix matrix) {
+		return TransformPoint(float4(point, 1.0f), matrix);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL TransformPoint(Vector4 point, Matrix matrix) {
+		return MatrixVectorMultiply(point, matrix);
+	}
+
+	// It will set the 4th component to 1.0f as points need that and transform with it
+	ECS_INLINE Vector4 ECS_VECTORCALL TransformPoint(Vector3 point, Matrix matrix) {
+		return TransformPoint({ point, VectorGlobals::ONE }, matrix);
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 

@@ -1,11 +1,10 @@
 #include "ecspch.h"
 #include "AABB.h"
-#include "Vector.h"
 #include "../Utilities/Utilities.h"
 
 namespace ECSEngine {
 
-	AABBStorage GetCoalescedAABB(Stream<AABBStorage> aabbs)
+	AABBScalar GetCoalescedAABB(Stream<AABBScalar> aabbs)
 	{
 		float3 min = float3::Splat(FLT_MAX);
 		float3 max = float3::Splat(-FLT_MAX);
@@ -17,89 +16,115 @@ namespace ECSEngine {
 		return { min, max };
 	}
 
-	AABBStorage GetAABBFromPoints(Stream<float3> points)
+	AABBScalar GetAABBFromPoints(Stream<float3> points)
 	{
-		Vector8 vector_min(FLT_MAX), vector_max(-FLT_MAX);
-		size_t simd_count = GetSimdCount(points.size, vector_min.Lanes());
-		for (size_t index = 0; index < simd_count; index += vector_min.Lanes()) {
-			Vector8 current_positions(points.buffer + index);
+		Vec8f vector_min = FLT_MAX;
+		Vec8f vector_max = -FLT_MAX;
+		// Here we are using just 2 float3's at a time
+		const size_t simd_width = Vec8f::size() / float3::Count();
+		size_t simd_count = GetSimdCount(points.size, simd_width);
+		for (size_t index = 0; index < simd_count; index += simd_width) {
+			Vec8f current_positions = Vec8f().load((const float*)(points.buffer + index));
 			vector_min = min(vector_min, current_positions);
 			vector_max = max(vector_max, current_positions);
 		}
 
-		float4 mins[2];
-		float4 maxs[2];
+		float3 mins[simd_width + 1];
+		float3 maxs[simd_width + 1];
 
-		vector_min.Store(mins);
-		vector_max.Store(maxs);
+		vector_min.store((float*)mins);
+		vector_max.store((float*)maxs);
 
-		float3 current_min = BasicTypeMin(mins[0].xyz(), mins[1].xyz());
-		float3 current_max = BasicTypeMax(maxs[0].xyz(), maxs[1].xyz());
+		float3 current_min = BasicTypeMin(mins[0], mins[1]);
+		float3 current_max = BasicTypeMax(maxs[0], maxs[1]);
 
-		if (simd_count < points.size) {
-			current_min = BasicTypeMin(current_min, points[simd_count]);
-			current_max = BasicTypeMax(current_max, points[simd_count]);
+		for (size_t index = simd_count; index < points.size; index++) {
+			current_min = BasicTypeMin(current_min, points[index]);
+			current_max = BasicTypeMax(current_max, points[index]);
 		}
 
 		return { current_min, current_max };
 	}
 
-	AABBStorage GetCombinedAABBStorage(AABBStorage first, AABBStorage second)
-	{
-		return {
-			BasicTypeMin(first.min, second.min),
-			BasicTypeMax(first.max, second.max)
-		};
-	}
+	template<typename RotationStructure>
+	ECS_INLINE RotatedAABB ECS_VECTORCALL RotateAABBImpl(AABB aabb, RotationStructure rotation_structure) {
+		Vector3 x_axis = RightVector();
+		Vector3 y_axis = UpVector();
 
-	bool CompareAABBStorage(AABBStorage first, AABBStorage second, float3 epsilon) {
-		return BasicTypeFloatCompareBoolean(first.min, first.min, epsilon) && BasicTypeFloatCompareBoolean(first.max, second.max, epsilon);
-	}
+		Vector3 rotated_x_axis = RotateVector(x_axis, rotation_structure);
+		Vector3 rotated_y_axis = RotateVector(y_axis, rotation_structure);
 
-	Vector8 ECS_VECTORCALL AABBCenter(AABB aabb) {
-		Vector8 shuffle_min = SplatLowLane(aabb.value);
-		Vector8 shuffle_max = SplatHighLane(aabb.value);
-		Vector8 half = 0.5f;
-		return Fmadd(shuffle_max - shuffle_min, half, shuffle_min);
-	}
+		Vector3 aabb_center = AABBCenter(aabb);
+		Vector3 half_extents = AABBHalfExtents(aabb);
 
-	Vector8 ECS_VECTORCALL AABBExtents(AABB aabb) {
-		Vector8 shuffle = Permute2f128Helper<1, 0>(aabb.value, aabb.value);
-		// Broadcast the low lane to the upper lane
-		Vector8 extents = shuffle - aabb.value;
-		return SplatLowLane(extents);
-	}
-
-	Vector8 ECS_VECTORCALL AABBHalfExtents(AABB aabb) {
-		return AABBExtents(aabb) * Vector8(0.5f);
-	}
-
-	namespace SIMDHelpers {
-
-		template<typename RotationStructure>
-		ECS_INLINE RotatedAABB ECS_VECTORCALL RotateAABB(AABB aabb, RotationStructure rotation_structure) {
-			Vector8 x_axis = RightVector();
-			Vector8 y_axis = UpVector();
-			Vector8 z_axis = ForwardVector();
-
-			Vector8 xy_axis = BlendLowAndHigh(x_axis, y_axis);
-			Vector8 rotated_xy_axis = RotateVector(xy_axis, rotation_structure);
-			Vector8 rotated_z_axis = RotateVector(z_axis, rotation_structure);
-
-			Vector8 aabb_center = AABBCenter(aabb);
-			Vector8 half_extents = AABBHalfExtents(aabb);
-
-			return { BlendLowAndHigh(aabb_center, half_extents), rotated_xy_axis, rotated_z_axis };
-		}
-
+		return { aabb_center, half_extents, rotated_x_axis, rotated_y_axis };
 	}
 
 	RotatedAABB ECS_VECTORCALL RotateAABB(AABB aabb, Matrix rotation_matrix) {
-		return SIMDHelpers::RotateAABB(aabb, rotation_matrix);
+		return RotateAABBImpl(aabb, rotation_matrix);
 	}
 
 	RotatedAABB ECS_VECTORCALL RotateAABB(AABB aabb, Quaternion rotation) {
-		return SIMDHelpers::RotateAABB(aabb, rotation);
+		return RotateAABBImpl(aabb, rotation);
+	}
+
+	AABBScalar AABBFromRotation(const AABBScalar& aabb, const Matrix& rotation_matrix)
+	{
+		/*
+			Let A be a min-max AAABB and M is a row major matrix. The axis aligned
+			bounding box B that bounds A is specified by the extent intervals formed by
+			the projection of the eight rotated vertices of A onto the world-coordinate axes. For,
+			say, the x extents of B, only the x components of the row vectors of M contribute.
+			Therefore, finding the extents corresponds to finding the vertices that produce the
+			minimal and maximal products with the rows of M. Each vertex of B is a combination
+			of three transformed min or max values from A. The minimum extent value is the
+			sum of the smaller terms, and the maximum extent is the sum of the larger terms.
+			Translation does not affect the size calculation of the new bounding box and can just
+			be added in. For instance, the maximum extent along the x axis can be computed as:
+
+			B.max[0] = max(m[0][0] * A.min[0], m[0][0] * A.max[0])
+					 + max(m[1][0] * A.min[1], m[1][0] * A.max[1])
+					 + max(m[2][0] * A.min[2], m[2][0] * A.max[2]);
+
+			Credit to Christer Ericson's book Realtime collision detection
+
+			Scalar algorithm
+			for (int i = 0; i < 3; i++) {
+				b.min[i] = b.max[i] = 0;
+				// Form extent by summing smaller and larger terms respectively
+				for (int j = 0; j < 3; j++) {
+					float e = m[j][i] * a.min[j];
+					float f = m[j][i] * a.max[j];
+					if (e < f) {
+						b.min[i] += e;
+						b.max[i] += f;
+					}
+					else {
+						b.min[i] += f;
+						b.max[i] += e;
+					}
+				}
+			}
+		*/
+
+		AABBScalar result;
+		alignas(ECS_SIMD_BYTE_SIZE) float matrix_values[4][4];
+		rotation_matrix.StoreAligned(matrix_values);
+		for (size_t index = 0; index < 3; index++) {
+			result.min[index] = 0.0f;
+			result.max[index] = 0.0f;
+			for (size_t subindex = 0; subindex < 3; subindex++) {
+				float min_factor = matrix_values[subindex][index] * aabb.min[subindex];
+				float max_factor = matrix_values[subindex][index] * aabb.max[subindex];
+				if (min_factor > max_factor) {
+					std::swap(min_factor, max_factor);
+				}
+				result.min[index] += min_factor;
+				result.max[index] += max_factor;
+			}
+		}
+
+		return result;
 	}
 
 	AABB ECS_VECTORCALL AABBFromRotation(AABB aabb, Matrix rotation_matrix) {
@@ -140,78 +165,106 @@ namespace ECSEngine {
 			}
 		*/
 
-		// An attempt at making this vectorized failed since there are so many shuffles and
-		// Permutes that need to be made such that the best way is to go with the scalar algorithm
-		// Maybe investigate later on a better vectorization method
+		AABB result;
+		for (size_t index = 0; index < 3; index++) {
+			result.min[index] = ZeroVectorFloat();
+			result.max[index] = ZeroVectorFloat();
+			// Broadcast the matrix element such that we perform the multiplication
+			// With the entire min/max vectors
+			// Instead of using a loop, flatten it out such that we don't branch on the broadcasted element
+			// Multiple times
+			Vec8f matrix_element;
+			auto perform_step = [&](size_t j) {
+				Vec8f min_factor = matrix_element * aabb.min[j];
+				Vec8f max_factor = matrix_element * aabb.max[j];
+				SIMDVectorMask min_mask = min_factor < max_factor;
+				min_factor = select(min_mask, min_factor, max_factor);
+				max_factor = select(min_mask, max_factor, min_factor);
+				result.min[index] += min_factor;
+				result.max[index] += max_factor;
+			};
 
-		float4 scalar_matrix[4];
-		AABBStorage aabb_storage = aabb.ToStorage();
-		rotation_matrix.Store(scalar_matrix);
-
-		// Use 2 float4's for the final aabb such that we can do a load without any permute
-		float4 resulting_aabb[2];
-
-		for (size_t column = 0; column < 3; column++) {
-			resulting_aabb[0][column] = 0.0f;
-			resulting_aabb[1][column] = 0.0f;
-			// Form extent by summing smaller and larger terms respectively
-			for (size_t row = 0; row < 3; row++) {
-				float min_val = scalar_matrix[row][column] * aabb_storage.min[row];
-				float max_val = scalar_matrix[row][column] * aabb_storage.max[row];
-				if (min_val < max_val) {
-					resulting_aabb[0][column] += min_val;
-					resulting_aabb[1][column] += max_val;
-				}
-				else {
-					resulting_aabb[0][column] += max_val;
-					resulting_aabb[1][column] += min_val;
-				}
+			if (index == 0) {
+				matrix_element = Broadcast8<0>(rotation_matrix.v[0]);
 			}
+			else if (index == 1) {
+				matrix_element = Broadcast8<1>(rotation_matrix.v[0]);
+			}
+			else {
+				matrix_element = Broadcast8<2>(rotation_matrix.v[0]);
+			}
+			perform_step(0);
+
+			if (index == 0) {
+				matrix_element = Broadcast8<4>(rotation_matrix.v[0]);
+			}
+			else if (index == 1) {
+				matrix_element = Broadcast8<5>(rotation_matrix.v[0]);
+			}
+			else {
+				matrix_element = Broadcast8<6>(rotation_matrix.v[0]);
+			}
+			perform_step(1);
+
+			if (index == 0) {
+				matrix_element = Broadcast8<0>(rotation_matrix.v[1]);
+			}
+			else if (index == 1) {
+				matrix_element = Broadcast8<1>(rotation_matrix.v[1]);
+			}
+			else {
+				matrix_element = Broadcast8<2>(rotation_matrix.v[1]);
+			}
+			perform_step(2);
 		}
-
-		return Vector8(resulting_aabb);
+		return result;
 	}
 
-	AABB ECS_VECTORCALL ScaleAABB(AABB aabb, Vector8 scale) {
-		Vector8 center = AABBCenter(aabb);
-		Vector8 half_extents = AABBHalfExtents(aabb);
-		Vector8 new_extents = half_extents * scale;
-		Vector8 min_corner = center - new_extents;
-		Vector8 max_corner = center + new_extents;
-		return BlendLowAndHigh(min_corner, max_corner);
+	template<typename AABB, typename Vector>
+	static ECS_INLINE AABB ECS_VECTORCALL ScaleAABBImpl(AABB aabb, Vector scale) {
+		Vector center = AABBCenter(aabb);
+		Vector half_extents = AABBHalfExtents(aabb);
+		Vector new_extents = half_extents * scale;
+		Vector min_corner = center - new_extents;
+		Vector max_corner = center + new_extents;
+		return { min_corner, max_corner };
 	}
 
-	AABB ECS_VECTORCALL TransformAABB(AABB aabb, Vector8 translation, Matrix rotation_matrix, Vector8 scale) {
+	AABBScalar ScaleAABB(const AABBScalar& aabb, float3 scale) {
+		return ScaleAABBImpl(aabb, scale);
+	}
+
+	AABB ECS_VECTORCALL ScaleAABB(AABB aabb, Vector3 scale) {
+		return ScaleAABBImpl(aabb, scale);
+	}
+
+	template<typename AABBType, typename Vector>
+	static ECS_INLINE AABBType ECS_VECTORCALL TransformAABBImpl(AABBType aabb, Vector translation, Matrix rotation_matrix, Vector scale) {
 		// Firstly scale the AABB, then rotate and then translate, like a normal transformation
-		AABB scaled_aabb = ScaleAABB(aabb, scale.SplatLow());
-		AABB rotated_aabb = AABBFromRotation(scaled_aabb, rotation_matrix);
-		return TranslateAABB(rotated_aabb, translation.SplatLow());
+		auto scaled_aabb = ScaleAABB(aabb, scale);
+		auto rotated_aabb = AABBFromRotation(scaled_aabb, rotation_matrix);
+		return TranslateAABB(rotated_aabb, translation);
+	}
+
+	AABBScalar TransformAABB(const AABBScalar& aabb, float3 translation, const Matrix& rotation_matrix, float3 scale) {
+		return TransformAABBImpl(aabb, translation, rotation_matrix, scale);
+	}
+
+	AABB ECS_VECTORCALL TransformAABB(AABB aabb, Vector3 translation, Matrix rotation_matrix, Vector3 scale) {
+		return TransformAABBImpl(aabb, translation, rotation_matrix, scale);
+	}
+
+	AABBScalar GetCombinedAABB(const AABBScalar& first, const AABBScalar& second) {
+		return { BasicTypeMin(first.min, second.min), BasicTypeMax(first.max, second.max) };
 	}
 
 	AABB ECS_VECTORCALL GetCombinedAABB(AABB first, AABB second) {
-		return Vector8(BlendLowAndHigh(min(first.value, second.value), max(first.value, second.value)));
+		return { Min(first.min, second.min), Max(first.max, second.max) };
 	}
 
-	bool ECS_VECTORCALL AABBOverlap(AABB first, AABB second) {
+	bool AABBOverlap(const AABBScalar& first, const AABBScalar& second) {
 		// Conditions: first.max < second.min || first.min > second.max -> false
 		//				If passes for all dimensions, return true
-
-		AABB second_max_first_min_shuffle = Permute2f128Helper<3, 0>(first.value, second.value);
-		auto first_condition = first.value < second_max_first_min_shuffle.value;
-		auto second_condition = first.value > second_max_first_min_shuffle.value;
-		auto is_outside = BlendLowAndHigh(Vector8(second_condition), Vector8(first_condition));
-		// We need to zero out the 4th component such that it doesn't give a false
-		// Response that they overlap when there is garbage in that value
-		auto zero_vector = ZeroVector();
-		is_outside = PerLaneBlend<0, 1, 2, 7>(Vector8(is_outside), zero_vector);
-		// If any of the bits is set, then we have one of the
-		return horizontal_or(is_outside.AsMask());
-	}
-
-	bool AABBOverlapStorage(AABBStorage first, AABBStorage second)
-	{
-		// Conditions: first.max < second.min || first.min > second.max -> false
-		// If passes for all dimensions, return true
 
 		if (first.max.x < second.min.x || first.min.x > second.max.x) {
 			return false;
@@ -225,23 +278,44 @@ namespace ECSEngine {
 		return true;
 	}
 
-	void GetAABBCorners(AABB aabb, Vector8* corners)
-	{
-		Vector8 max_min = Permute2f128Helper<1, 0>(aabb.value, aabb.value);
-		Vector8 xy_min_z_max = PerLaneBlend<0, 1, 6, V_DC>(aabb.value, max_min);
-		Vector8 x_min_y_max_z_min = PerLaneBlend<0, 5, 2, V_DC>(aabb.value, max_min);
-		Vector8 x_max_yz_min = PerLaneBlend<4, 1, 2, V_DC>(aabb.value, max_min);
-		Vector8 xy_max_z_min = PerLaneBlend<4, 5, 2, V_DC>(aabb.value, max_min);
-		Vector8 x_max_y_min_z_max = PerLaneBlend<4, 1, 6, V_DC>(aabb.value, max_min);
-		Vector8 x_min_yz_max = PerLaneBlend<0, 5, 6, V_DC>(aabb.value, max_min);
+	SIMDVectorMask ECS_VECTORCALL AABBOverlap(AABB first, AABB second, size_t first_index) {
+		// Conditions: first.max < second.min || first.min > second.max -> false
+		//				If passes for all dimensions, return true
+		Vector3 first_min = { Broadcast8(first.min.x, first_index), Broadcast8(first.min.y, first_index), Broadcast8(first.min.z, first_index) };
+		Vector3 first_max = { Broadcast8(first.max.x, first_index), Broadcast8(first.max.y, first_index), Broadcast8(first.max.z, first_index) };
+		
+		SIMDVectorMask x_passed = first_max.x >= second.min.x && first_min.x <= second.max.x;
+		SIMDVectorMask y_passed = first_max.y >= second.min.y && first_min.y <= second.max.y;
+		SIMDVectorMask z_passed = first_max.z >= second.min.z && first_min.z <= second.max.z;
+		return x_passed && y_passed && z_passed;
+	}
 
+	SIMDVectorMask ECS_VECTORCALL AABBOverlap(AABB aabbs, size_t index) {
+		return AABBOverlap(aabbs, aabbs, index);
+	}
+
+	template<typename AABB, typename Vector>
+	static ECS_INLINE void GetAABBCornersImpl(AABB aabb, Vector* corners) {
 		// The left face have the x min
-		// The right face have the x max
-		corners[0] = BlendLowAndHigh(aabb.value, xy_min_z_max);
-		corners[1] = BlendLowAndHigh(x_min_y_max_z_min, x_min_yz_max);
+		corners[0] = aabb.min;
+		corners[1] = { aabb.min.x, aabb.max.y, aabb.max.z };
+		corners[2] = { aabb.min.x, aabb.min.y, aabb.max.z };
+		corners[3] = { aabb.min.x, aabb.max.y, aabb.min.z };
 
-		corners[2] = BlendLowAndHigh(x_max_yz_min, x_max_y_min_z_max);
-		corners[3] = BlendLowAndHigh(xy_max_z_min, aabb.value);
+		// The right face have the x max
+		corners[4] = aabb.max;
+		corners[5] = { aabb.max.x, aabb.min.y, aabb.min.z };
+		corners[6] = { aabb.max.x, aabb.min.y, aabb.max.z };
+		corners[7] = { aabb.max.x, aabb.max.y, aabb.min.z };
+	}
+
+	void GetAABBCorners(const AABBScalar& aabb, float3* corners) {
+		GetAABBCornersImpl(aabb, corners);
+	}
+
+	void GetAABBCorners(AABB aabb, Vector3* corners)
+	{
+		GetAABBCornersImpl(aabb, corners);
 	}
 
 }

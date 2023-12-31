@@ -13,7 +13,7 @@ namespace ECSEngine {
 	void VectorComponentSignature::ConvertComponents(ComponentSignature signature)
 	{
 		// Increment the component indices so as to not have 0 as a valid component index
-		alignas(32) uint16_t increments[sizeof(__m256i) / sizeof(uint16_t)] = { 0 };
+		alignas(ECS_SIMD_BYTE_SIZE) uint16_t increments[sizeof(__m256i) / sizeof(uint16_t)] = { 0 };
 		for (size_t index = 0; index < signature.count; index++) {
 			increments[index] = 1;
 		}

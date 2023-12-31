@@ -72,14 +72,14 @@ namespace ECSEngine {
 			curve.control2 * (3.0f * one_minus * percentage * percentage) + curve.point2 * percentage * percentage * percentage;
 	}
 
-	ECSENGINE_API float ECS_VECTORCALL InterpolateBezier(BezierFloat curve, Vector8 percentage);
+	ECSENGINE_API float ECS_VECTORCALL InterpolateBezier(BezierFloat curve, Vector3 percentage);
 
-	ECSENGINE_API float2 ECS_VECTORCALL InterpolateBezier(BezierFloat curve0, BezierFloat curve1, Vector8 percentage);
+	ECSENGINE_API float2 ECS_VECTORCALL InterpolateBezier(BezierFloat curve0, BezierFloat curve1, Vector3 percentage);
 
-	ECSENGINE_API float2 ECS_VECTORCALL InterpolateBezier(BezierFloat2 curve, Vector8 percentage);
+	ECSENGINE_API float2 ECS_VECTORCALL InterpolateBezier(BezierFloat2 curve, Vector3 percentage);
 
-	ECSENGINE_API float3 ECS_VECTORCALL InterpolateBezier(const BezierFloat3& curve, Vector8 percentages);
+	ECSENGINE_API float3 ECS_VECTORCALL InterpolateBezier(const BezierFloat3& curve, Vector3 percentages);
 
-	ECSENGINE_API float4 ECS_VECTORCALL InterpolateBezier(const BezierFloat4& curve, Vector8 percentages);
+	ECSENGINE_API float4 ECS_VECTORCALL InterpolateBezier(const BezierFloat4& curve, Vector3 percentages);
 
 }

@@ -9,251 +9,305 @@
 namespace ECSEngine {
 
 	namespace VectorGlobals {
-		ECSENGINE_API extern Vector8 QUATERNION_EPSILON;
+		ECSENGINE_API extern Vec8f QUATERNION_EPSILON;
 	}
 
-	struct Quaternion;
+	struct QuaternionScalar;
 
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionMultiply(Quaternion a, Quaternion b);
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionFromEuler(float3 rotation);
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionFromEuler(float3 rotation0, float3 rotation1);
-	float3 ECS_VECTORCALL QuaternionToEulerLow(Quaternion quaternion);
-	float3 ECS_VECTORCALL QuaternionToEulerHigh(Quaternion quaternion);
+	ECSENGINE_API QuaternionScalar QuaternionMultiply(QuaternionScalar a, QuaternionScalar b);
 
-	// When wanting to store a quaternion value into structures but you don't want
-	// to store the SIMD quaternion is this value
-	typedef float4 QuaternionStorage;
+	struct ECSENGINE_API QuaternionScalar {
+		ECS_INLINE QuaternionScalar() {}
+		ECS_INLINE QuaternionScalar(const float* values) : x(values[0]), y(values[1]), z(values[2]), w(values[3]) {}
+		ECS_INLINE QuaternionScalar(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
+		ECS_INLINE QuaternionScalar(float4 _value) {
+			x = _value.x;
+			y = _value.y;
+			z = _value.z;
+			w = _value.w;
+		}
+		ECS_INLINE QuaternionScalar(float3 axis, float angle) : QuaternionScalar(axis.x, axis.y, axis.z, angle) {}
 
-	struct ECSENGINE_API Quaternion {
-		typedef Vector8 VectorType;
+		ECS_INLINE QuaternionScalar(const QuaternionScalar& other) = default;
+		ECS_INLINE QuaternionScalar& operator = (const QuaternionScalar& other) = default;
 
+		ECS_INLINE bool operator == (QuaternionScalar other) const {
+			return x == other.x && y == other.y && z == other.z && w == other.w;
+		}
+
+		ECS_INLINE bool operator != (QuaternionScalar other) const {
+			return !(*this == other);
+		}
+
+		ECS_INLINE float& operator [](size_t index) {
+			return ((float*)this)[index];
+		}
+
+		ECS_INLINE const float& operator [](size_t index) const {
+			return ((const float*)this)[index];
+		}
+
+		ECS_INLINE operator float4() const {
+			return { x, y, z, w };
+		}
+
+		ECS_INLINE QuaternionScalar operator + (QuaternionScalar other) const {
+			return { x + other.x, y + other.y, z + other.z, w + other.w };
+		}
+
+		ECS_INLINE QuaternionScalar operator - (QuaternionScalar other) const {
+			return { x - other.x, y - other.y, z - other.z, w - other.w };
+		}
+
+		ECS_INLINE QuaternionScalar operator * (float scalar) const {
+			return { x * scalar, y * scalar, z * scalar, w * scalar };
+		}
+
+		ECS_INLINE QuaternionScalar operator * (QuaternionScalar other) const {
+			return QuaternionMultiply(*this, other);
+		}
+
+		ECS_INLINE QuaternionScalar operator -() const {
+			return { -x, -y, -z, -w };
+		}
+
+		ECS_INLINE QuaternionScalar& operator += (QuaternionScalar other) {
+			*this = *this + other;
+			return *this;
+		}
+
+		ECS_INLINE QuaternionScalar& operator -= (QuaternionScalar other) {
+			*this = *this - other;
+			return *this;
+		}
+
+		ECS_INLINE QuaternionScalar& operator *= (float scalar) {
+			*this = *this * scalar;
+			return *this;
+		}
+
+		ECS_INLINE QuaternionScalar& operator *= (QuaternionScalar other) {
+			*this = *this * other;
+			return *this;
+		}
+
+		ECS_INLINE float2 xy() const {
+			return { x, y };
+		}
+
+		ECS_INLINE float3 xyz() const {
+			return { x, y, z };
+		}
+
+		ECS_INLINE static QuaternionScalar Splat(float value) {
+			return { value, value, value, value };
+		}
+
+		float x;
+		float y;
+		float z;
+		float w;
+	};
+
+	struct ECSENGINE_API Quaternion : public Vector4 {
 		ECS_INLINE Quaternion() {}
-		ECS_INLINE Quaternion(float x1, float y1, float z1, float w1, float x2, float y2, float z2, float w2)
-			: value(x1, y1, z1, w1, x2, y2, z2, w2) {}
-		ECS_INLINE Quaternion(const float* values) {
-			value.load(values);
+		ECS_INLINE Quaternion(const float4* values) {
+			Gather(values);
 		}
-		ECS_INLINE Quaternion(float3 rotation) {
-			*this = QuaternionFromEuler(rotation);
+		ECS_INLINE Quaternion(Vec8f x, Vec8f y, Vec8f z, Vec8f w) : Vector4(x, y, z, w) {}
+		ECS_INLINE Quaternion(Vector4 _value) {
+			x = _value.x;
+			y = _value.y;
+			z = _value.y;
+			w = _value.w;
 		}
-		ECS_INLINE Quaternion(QuaternionStorage storage_value) {
-			value = Vector8(storage_value).value;
-		}
-		ECS_INLINE Quaternion(float3 rotation0, float3 rotation1) {
-			*this = QuaternionFromEuler(rotation0, rotation1);
-		}
-		ECS_INLINE Quaternion(QuaternionStorage value0, QuaternionStorage value1) {
-			value = Vector8(value0, value1).value;
-		}
-		ECS_INLINE Quaternion(Vec8f _value) : value(_value) {}
-		ECS_INLINE Quaternion(Vector8 _value) : value(_value.value) {}
+		ECS_INLINE Quaternion(Vector3 axis, Vec8f angle) : Vector4(axis.x, axis.y, axis.z, angle) {}
 
 		ECS_INLINE Quaternion(const Quaternion& other) = default;
 		ECS_INLINE Quaternion& ECS_VECTORCALL operator = (const Quaternion& other) = default;
 
-		ECS_INLINE ECS_VECTORCALL operator Vec8f() const {
-			return value;
+		bool ECS_VECTORCALL operator == (Quaternion other) const;
+
+		bool ECS_VECTORCALL operator != (Quaternion other) const;
+
+		ECS_INLINE Vec8f& operator [](size_t index) {
+			return ((Vec8f*)this)[index];
 		}
 
-		ECS_INLINE ECS_VECTORCALL operator __m256() const {
-			return value.operator __m256();
+		ECS_INLINE const Vec8f& operator [](size_t index) const {
+			return ((const Vec8f*)this)[index];
 		}
 
-		bool2 ECS_VECTORCALL operator == (Quaternion other) const;
+		Quaternion ECS_VECTORCALL operator + (Quaternion other) const;
 
-		bool2 ECS_VECTORCALL operator != (Quaternion other) const;
+		Quaternion ECS_VECTORCALL operator - (Quaternion other) const;
 
-		ECS_INLINE float ECS_VECTORCALL operator [](unsigned int index) const {
-			return value.extract(index);
-		}
+		Quaternion ECS_VECTORCALL operator * (float scalar) const;
 
-		ECS_INLINE Quaternion ECS_VECTORCALL operator + (Quaternion other) const {
-			return value + other.value;
-		}
+		Quaternion ECS_VECTORCALL operator * (Quaternion other) const;
 
-		ECS_INLINE Quaternion ECS_VECTORCALL operator - (Quaternion other) const {
-			return value - other.value;
-		}
+		Quaternion ECS_VECTORCALL operator -() const;
 
-		ECS_INLINE Quaternion ECS_VECTORCALL operator * (float scalar) const {
-			return value * Vec8f(scalar);
-		}
+		Quaternion& ECS_VECTORCALL operator += (Quaternion other);
 
-		ECS_INLINE Quaternion ECS_VECTORCALL operator * (Quaternion other) const {
-			return QuaternionMultiply(*this, other);
-		}
+		Quaternion& ECS_VECTORCALL operator -= (Quaternion other);
 
-		ECS_INLINE Quaternion ECS_VECTORCALL operator -() const {
-			return -value;
-		}
+		Quaternion& ECS_VECTORCALL operator *= (float scalar);
 
-		ECS_INLINE Quaternion& ECS_VECTORCALL operator += (Quaternion other) {
-			value += other.value;
-			return *this;
-		}
+		Quaternion& ECS_VECTORCALL operator *= (Quaternion other);
 
-		ECS_INLINE Quaternion& ECS_VECTORCALL operator -= (Quaternion other) {
-			value -= other.value;
-			return *this;
-		}
-
-		ECS_INLINE Quaternion& ECS_VECTORCALL operator *= (float scalar) {
-			value *= Vec8f(scalar);
-			return *this;
-		}
-
-		ECS_INLINE Quaternion& ECS_VECTORCALL operator *= (Quaternion other) {
-			*this = QuaternionMultiply(*this, other);
-			return *this;
-		}
-
-		ECS_INLINE Vec4f ECS_VECTORCALL LowSIMD() const {
-			return value.get_low();
-		}
-
-		ECS_INLINE Vec4f ECS_VECTORCALL HighSIMD() const {
-			return value.get_high();
-		}
-
-		ECS_INLINE float4 ECS_VECTORCALL StorageLow() const {
-			return Vector8(value).AsFloat4Low();
-		}
-
-		ECS_INLINE float4 ECS_VECTORCALL StorageHigh() const {
-			return Vector8(value).AsFloat4High();
-		}
-
-		ECS_INLINE float3 EulerLow() const {
-			return QuaternionToEulerLow(*this);
-		}
-
-		ECS_INLINE float3 EulerHigh() const {
-			return QuaternionToEulerHigh(*this);
-		}
-
-		// Returns a quaternion with the low duplicated
-		ECS_INLINE Quaternion ECS_VECTORCALL SplatLow() const {
-			return SplatLowLane(value);
-		}
-
-		// Returns a quaternion with the high duplicated
-		ECS_INLINE Quaternion ECS_VECTORCALL SplatHigh() const {
-			return SplatHighLane(value);
-		}
-
-		ECS_INLINE void Store(void* destination) const {
-			value.store((float*)destination);
-		}
-
-		Vec8f value;
+		// Changes a value at a certain index
+		void Set(QuaternionScalar scalar_quat, size_t index);
 	};
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionIdentity() {
-		return LastElementOneVector();
+		return { ZeroVectorFloat(), ZeroVectorFloat(), ZeroVectorFloat(), VectorGlobals::ONE };
+	}
+
+	ECS_INLINE QuaternionScalar QuaternionIdentityScalar() {
+		return QuaternionScalar(0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionCompareMask(Quaternion a, Quaternion b, Vector8 epsilon = VectorGlobals::QUATERNION_EPSILON) {
-		return CompareMask<true>(a.value, b.value, epsilon);
+	ECS_INLINE bool QuaternionCompareMask(QuaternionScalar a, QuaternionScalar b, float epsilon = ECS_QUATERNION_EPSILON) {
+		return CompareMask(a, b, float4::Splat(epsilon));
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		QuaternionCompare,
-		4,
-		FORWARD(Quaternion a, Quaternion b, Vector8 epsilon = VectorGlobals::EPSILON),
-		FORWARD(a, b, epsilon)
-	);
+	ECS_INLINE SIMDVectorMask ECS_VECTORCALL QuaternionCompareMask(Quaternion a, Quaternion b, Vec8f epsilon = VectorGlobals::QUATERNION_EPSILON) {
+		return CompareMask(a, b, epsilon);
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	// The value is replicated across all register values
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionDot(Quaternion a, Quaternion b) {
-		return Dot<true>(a.value, b.value);
+	ECS_INLINE float QuaternionDot(QuaternionScalar a, QuaternionScalar b) {
+		return Dot(a, b);
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionSquaredLength(Quaternion a) {
-		return QuaternionDot(a, a);
+	ECS_INLINE Vec8f ECS_VECTORCALL QuaternionDot(Quaternion a, Quaternion b) {
+		return Dot(a, b);
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLength(Quaternion quaternion) {
-		return sqrt(QuaternionSquaredLength(quaternion).value);
+	ECS_INLINE float QuaternionSquaredLength(QuaternionScalar quaternion) {
+		return QuaternionDot(quaternion, quaternion);
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL QuaternionSquaredLength(Quaternion quaternion) {
+		return QuaternionDot(quaternion, quaternion);
+	}
+
+	ECS_INLINE float QuaternionLength(QuaternionScalar quaternion) {
+		return Length(quaternion);
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL QuaternionLength(Quaternion quaternion) {
+		return Length(quaternion);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECS_INLINE QuaternionScalar QuaternionNormalize(QuaternionScalar quaternion) {
+		return Normalize<precision>(quaternion);
+	}
+
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNormalize(Quaternion quaternion) {
-		return Normalize<precision, true>(Vector8(quaternion.value));
+		return Normalize<precision>(quaternion);
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionIsNormalizedMask(Quaternion quaternion) {
-		return IsNormalizedMask<true>(Vector8(quaternion));
+	ECS_INLINE bool QuaternionIsNormalizedMask(QuaternionScalar quaternion) {
+		return IsNormalizedSquareLengthMask(QuaternionSquaredLength(quaternion));
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE
-	(
-		QuaternionIsNormalized,
-		4,
-		Quaternion quaternion,
-		quaternion
-	);
+	ECS_INLINE SIMDVectorMask ECS_VECTORCALL QuaternionIsNormalizedMask(Quaternion quaternion) {
+		return IsNormalizedSquareLengthMask(QuaternionSquaredLength(quaternion));
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// Angle must be expressed in radians
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionAngleFromAxisRad(Vector8 vector_axis, Vector8 angle_radians);
+	ECSENGINE_API QuaternionScalar QuaternionAngleFromAxisRad(float3 vector_axis, float angle_radians);
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAngleFromAxis(Vector8 vector_axis, Vector8 angle_degrees) {
+	ECS_INLINE QuaternionScalar QuaternionAngleFromAxis(float3 vector_axis, float angle_degrees) {
+		return QuaternionAngleFromAxisRad(vector_axis, DegToRad(angle_degrees));
+	}
+
+	// Angle must be expressed in radians
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionAngleFromAxisRad(Vector3 vector_axis, Vec8f angle_radians);
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAngleFromAxis(Vector3 vector_axis, Vec8f angle_degrees) {
 		return QuaternionAngleFromAxisRad(vector_axis, DegToRad(angle_degrees));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisXRad(Vector8 angle_radians) {
+	ECS_INLINE QuaternionScalar QuaternionForAxisXRadScalar(float angle_radians) {
+		return QuaternionAngleFromAxisRad(GetRightVector(), angle_radians);
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisXRad(Vec8f angle_radians) {
 		return QuaternionAngleFromAxisRad(RightVector(), angle_radians);
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisYRad(Vector8 angle_radians) {
+	ECS_INLINE QuaternionScalar QuaternionForAxisYRadScalar(float angle_radians) {
+		return QuaternionAngleFromAxisRad(GetUpVector(), angle_radians);
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisYRad(Vec8f angle_radians) {
 		return QuaternionAngleFromAxisRad(UpVector(), angle_radians);
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisZRad(Vector8 angle_radians) {
+	ECS_INLINE QuaternionScalar QuaternionForAxisZRadScalar(float angle_radians) {
+		return QuaternionAngleFromAxisRad(GetForwardVector(), angle_radians);
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisZRad(Vec8f angle_radians) {
 		return QuaternionAngleFromAxisRad(ForwardVector(), angle_radians);
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisX(Vector8 angle_degrees) {
+	ECS_INLINE QuaternionScalar QuaternionForAxisXScalar(float angle_degrees) {
+		return QuaternionForAxisXRadScalar(DegToRad(angle_degrees));
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisX(Vec8f angle_degrees) {
 		return QuaternionForAxisXRad(DegToRad(angle_degrees));
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisY(Vector8 angle_degrees) {
+	ECS_INLINE QuaternionScalar QuaternionForAxisYScalar(float angle_degrees) {
+		return QuaternionForAxisYRadScalar(DegToRad(angle_degrees));
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisY(Vec8f angle_degrees) {
 		return QuaternionForAxisYRad(DegToRad(angle_degrees));
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisZ(Vector8 angle_degrees) {
+	ECS_INLINE QuaternionScalar QuaternionForAxisZScalar(float angle_degrees) {
+		return QuaternionForAxisZRadScalar(DegToRad(angle_degrees));
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisZ(Vec8f angle_degrees) {
 		return QuaternionForAxisZRad(DegToRad(angle_degrees));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// The angles must be expressed in radians
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionFromEulerRad(float3 rotation_radians0, float3 rotation_radians1);
-
-	// The angles must be expressed in degrees
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEuler(float3 rotation_degrees0, float3 rotation_degrees1) {
-		return QuaternionFromEulerRad(DegToRad(rotation_degrees0), DegToRad(rotation_degrees1));
-	}
+	ECSENGINE_API QuaternionScalar QuaternionFromEulerRad(float3 rotation_radians);
 
 	// The angles must be expressed in radians
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEulerRad(float3 rotation) {
-		return QuaternionFromEulerRad(rotation, rotation);
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionFromEulerRad(Vector3 rotation_radians);
+
+	// The angles must be expressed in degrees
+	ECS_INLINE QuaternionScalar ECS_VECTORCALL QuaternionFromEuler(float3 rotation_degrees) {
+		return QuaternionFromEulerRad(DegToRad(rotation_degrees));
 	}
 
 	// The angles must be expressed in degrees
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEuler(float3 rotation) {
-		return QuaternionFromEulerRad(DegToRad(rotation));
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEuler(Vector3 rotation_degrees) {
+		return QuaternionFromEulerRad(DegToRad(rotation_degrees));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
@@ -265,93 +319,113 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// Expects the from vector and the to vector to be normalized
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionFromVectorsNormalized(Vector8 from_vector_normalized, Vector8 to_vector_normalized);
+	ECSENGINE_API QuaternionScalar QuaternionFromVectorsNormalized(float3 from_vector_normalized, float3 to_vector_normalized);
+
+	// Expects the from vector and the to vector to be normalized. This version is identical to the other scalar one,
+	// The reason for which it exists is that, if you want to write agnostic algorithms with this function there is a
+	// signature mismatch with the SIMD variant
+	ECS_INLINE QuaternionScalar QuaternionFromVectorsNormalized(float3 from_vector_normalized, float3 to_vector_normalized, size_t vector_count) {
+		return QuaternionFromVectorsNormalized(from_vector_normalized, to_vector_normalized);
+	}
+
+	// Expects the from vector and the to vector to be normalized
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionFromVectorsNormalized(Vector3 from_vector_normalized, Vector3 to_vector_normalized, size_t vector_count);
 
 	// If the vectors are already normalized you can call directly the other function
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionFromVectors(Vector8 from, Vector8 to);
+	ECSENGINE_API QuaternionScalar QuaternionFromVectors(float3 from, float3 to);
+
+	// If the vectors are already normalized you can call directly the other function. It exists to match the SIMD
+	// variant for agnostic calls
+	ECS_INLINE QuaternionScalar QuaternionFromVectors(float3 from, float3 to, size_t vector_count) {
+		return QuaternionFromVectors(from, to);
+	}
+
+	// If the vectors are already normalized you can call directly the other function
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionFromVectors(Vector3 from, Vector3 to, size_t vector_count);
+
+	// ---------------------------------------------------------------------------------------------------------------
+	
+	// The quaternion needs to be normalized
+	// The returned axis is normalized
+	ECSENGINE_API float3 QuaternionAxisNormalized(QuaternionScalar quaternion_normalized);
+
+	// The quaternion needs to be normalized
+	// The returned axis is normalized
+	ECSENGINE_API Vector3 ECS_VECTORCALL QuaternionAxisNormalized(Quaternion quaternion_normalized);
+
+	// If the quaternion is normalized use the other variant
+	// The returned axis is normalized
+	ECSENGINE_API float3 QuaternionAxis(QuaternionScalar quaternion);
+
+	// If the quaternion is normalized use the other variant
+	// The returned axis is normalized
+	ECSENGINE_API Vector3 ECS_VECTORCALL QuaternionAxis(Quaternion quaternion);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	// The quaternion needs to be normalized
-	ECSENGINE_API void ECS_VECTORCALL QuaternionAxisNormalized(Quaternion quaternion_normalized, float3* axis_low, float3* axis_high);
-
-	// The quaternion needs to be normalized
-	ECS_INLINE float3 ECS_VECTORCALL QuaternionAxisNormalized(Quaternion quaternion_normalized) {
-		Vector8 vector_axis(quaternion_normalized.value);
-		return vector_axis.AsFloat3Low();
-	}
-
-	// If the quaternion is normalized use the other variant
-	ECSENGINE_API void ECS_VECTORCALL QuaternionAxis(Quaternion quaternion, float3* axis_low, float3* axis_high);
-
-	// If the quaternion is normalized use the other variant
-	ECSENGINE_API float3 ECS_VECTORCALL QuaternionAxis(Quaternion quaternion);
-
-	// ---------------------------------------------------------------------------------------------------------------
+	// The angle is in radians
+	ECSENGINE_API float QuaternionAngleRad(QuaternionScalar quaternion);
 
 	// The angle is in radians
-	ECSENGINE_API float ECS_VECTORCALL QuaternionAngleRadLow(Quaternion quaternion);
+	ECSENGINE_API Vec8f ECS_VECTORCALL QuaternionAngleRad(Quaternion quaternion);
+	
+	// The angle is in radians
+	ECSENGINE_API float QuaternionHalfAngleRad(QuaternionScalar quaternion);
 
 	// The angle is in radians
-	ECSENGINE_API float2 ECS_VECTORCALL QuaternionAngleRad(Quaternion quaternion);
-
-	// The angle is in radians
-	// The angle value is splatted across the lane
-	ECSENGINE_API Vector8 ECS_VECTORCALL QuaternionHalfAngleRadSIMD(Quaternion quaternion);
-
-	// The angle is in radians
-	// The angle value is splatted across the lane
-	ECSENGINE_API Vector8 ECS_VECTORCALL QuaternionAngleRadSIMD(Quaternion quaternion);
+	ECSENGINE_API Vec8f ECS_VECTORCALL QuaternionHalfAngleRad(Quaternion quaternion);
 
 	// The angle is in degrees
-	ECS_INLINE float ECS_VECTORCALL QuaternionAngleLow(Quaternion quaternion) {
-		return RadToDeg(QuaternionAngleRadLow(quaternion));
-	}
-
-	// The angle is in degrees
-	ECS_INLINE float2 ECS_VECTORCALL QuaternionAngle(Quaternion quaternion) {
+	ECS_INLINE float ECS_VECTORCALL QuaternionAngle(QuaternionScalar quaternion) {
 		return RadToDeg(QuaternionAngleRad(quaternion));
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionHalfAngleSIMD(Quaternion quaternion) {
-		return RadToDeg(QuaternionHalfAngleRadSIMD(quaternion));
+	// The angle is in degrees
+	ECS_INLINE Vec8f ECS_VECTORCALL QuaternionAngle(Quaternion quaternion) {
+		return RadToDeg(QuaternionAngleRad(quaternion));
 	}
 
 	// The angle is in degrees
-	// The angle value is splatted across the lane
-	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionAngleSIMD(Quaternion quaternion) {
-		return RadToDeg(QuaternionAngleRadSIMD(quaternion));
+	ECS_INLINE float QuaternionHalfAngle(QuaternionScalar quaternion) {
+		return RadToDeg(QuaternionHalfAngleRad(quaternion));
+	}
+
+	// The angle is in degrees
+	ECS_INLINE Vec8f ECS_VECTORCALL QuaternionHalfAngle(Quaternion quaternion) {
+		return RadToDeg(QuaternionHalfAngleRad(quaternion));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL QuaternionSameOrientationMask(Quaternion a, Quaternion b);
+	ECSENGINE_API bool QuaternionSameOrientationMask(QuaternionScalar a, QuaternionScalar b);
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		QuaternionSameOrientation,
-		4,
-		FORWARD(Quaternion a, Quaternion b),
-		FORWARD(a, b)
-	);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL QuaternionSameOrientationMask(Quaternion a, Quaternion b);
 
 	// Returns true if the quaternions are located in the same hyperspace
 	// (The dot product between them is positive)
-	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionSameHyperspaceMask(Quaternion a, Quaternion b) {
-		return QuaternionDot(a, b) > ZeroVector();
+	ECS_INLINE bool QuaternionSameHyperspaceMask(QuaternionScalar a, QuaternionScalar b) {
+		return QuaternionDot(a, b) > 0.0f;
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		QuaternionSameHyperspace,
-		4,
-		FORWARD(Quaternion a, Quaternion b),
-		FORWARD(a, b)
-	);
+	// Returns true if the quaternions are located in the same hyperspace
+	// (The dot product between them is positive)
+	ECS_INLINE SIMDVectorMask ECS_VECTORCALL QuaternionSameHyperspaceMask(Quaternion a, Quaternion b) {
+		return QuaternionDot(a, b) > ZeroVectorFloat();
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API QuaternionScalar QuaternionConjugate(QuaternionScalar quaternion);
 
 	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionConjugate(Quaternion quaternion);
 
 	// ---------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE QuaternionScalar QuaternionInverseNormalized(QuaternionScalar quaternion) {
+		// The conjugate and the inverse are the same if the quaternion is normalized;
+		// Avoids a division, a square root and a dot product
+		return QuaternionConjugate(quaternion);
+	}
 
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionInverseNormalized(Quaternion quaternion) {
 		// The conjugate and the inverse are the same if the quaternion is normalized;
@@ -359,19 +433,31 @@ namespace ECSEngine {
 		return QuaternionConjugate(quaternion);
 	}
 
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionInverse(Quaternion quaternion);
+	ECSENGINE_API QuaternionScalar QuaternionInverse(QuaternionScalar quaternion);
+
+	// It exists to match the SIMD function
+	ECS_INLINE QuaternionScalar QuaternionInverse(QuaternionScalar quaternion, size_t vector_count) {
+		return QuaternionInverse(quaternion);
+	}
+
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionInverse(Quaternion quaternion, size_t vector_count);
 
 	// ---------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API QuaternionScalar QuaternionMultiply(QuaternionScalar a, QuaternionScalar b);
 
 	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionMultiply(Quaternion a, Quaternion b);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	// Can choose to preserve the 4th component from the original or not
-	template<bool preserve = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL QuaternionVectorMultiply(Quaternion quaternion, Vector8 vector);
+	ECSENGINE_API float3 QuaternionVectorMultiply(QuaternionScalar quaternion, float3 vector);
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL QuaternionVectorMultiply(Quaternion quaternion, Vector3 vector);
 
 	// ---------------------------------------------------------------------------------------------------------------
+
+	// Returns the negated quaternion if they are in different hyperspaces
+	ECSENGINE_API QuaternionScalar QuaternionNeighbour(QuaternionScalar quat_a, QuaternionScalar quat_b);
 
 	// Returns the negated quaternion if they are in different hyperspaces
 	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionNeighbour(Quaternion quat_a, Quaternion quat_b);
@@ -380,59 +466,118 @@ namespace ECSEngine {
 
 	// If inputs are unit length, output will be unit length as well; assumes neighbour quaternions
 	// Similar to a lerp but slightly different
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionMix(Quaternion from, Quaternion to, Vector8 percentages);
+	ECSENGINE_API QuaternionScalar QuaternionMix(QuaternionScalar from, QuaternionScalar to, float percentage);
+
+	// If inputs are unit length, output will be unit length as well; assumes neighbour quaternions
+	// Similar to a lerp but slightly different
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionMix(Quaternion from, Quaternion to, Vec8f percentage);
 
 	// If inputs are unit length, output will be the same; makes neighbour correction as needed
 	// Similar to a lerp but slightly different
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionMixNeighbour(Quaternion from, Quaternion to, Vector8 percentages);
+	ECS_INLINE QuaternionScalar QuaternionMixNeighbour(QuaternionScalar from, QuaternionScalar to, float percentage) {
+		return QuaternionMix(from, QuaternionNeighbour(from, to), percentage);
+	}
+
+	// If inputs are unit length, output will be the same; makes neighbour correction as needed
+	// Similar to a lerp but slightly different
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionMixNeighbour(Quaternion from, Quaternion to, Vec8f percentage) {
+		return QuaternionMix(from, QuaternionNeighbour(from, to), percentage);
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// Assumes neighbour quaternions
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionNLerp(Quaternion from, Quaternion to, Vector8 percentages);
+	ECSENGINE_API QuaternionScalar QuaternionNLerp(QuaternionScalar from, QuaternionScalar to, float percentage);
+
+	// Assumes neighbour quaternions
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionNLerp(Quaternion from, Quaternion to, Vec8f percentage);
 
 	// Makes neighbour correction
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionNLerpNeighbour(Quaternion from, Quaternion to, Vector8 percentages);
+	ECS_INLINE QuaternionScalar QuaternionNLerpNeighbour(QuaternionScalar from, QuaternionScalar to, float percentage) {
+		return QuaternionNLerp(from, QuaternionNeighbour(from, to), percentage);
+	}
+
+	// Makes neighbour correction
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNLerpNeighbour(Quaternion from, Quaternion to, Vec8f percentage) {
+		return QuaternionNLerp(from, QuaternionNeighbour(from, to), percentage);
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionToPower(Quaternion quaternion, Vector8 power);
+	ECSENGINE_API QuaternionScalar QuaternionToPower(QuaternionScalar quaternion, float power);
+
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionToPower(Quaternion quaternion, Vec8f power);
 
 	// ---------------------------------------------------------------------------------------------------------------
+
+	// Assumes neighbour quaternions and normalized ones
+	ECSENGINE_API QuaternionScalar QuaternionSlerp(QuaternionScalar from_normalized, QuaternionScalar to_normalized, float percentage);
+
+	// Assumes neighbour quaternions and normalized ones. It exists to match the SIMD function
+	ECS_INLINE QuaternionScalar QuaternionSlerp(QuaternionScalar from_normalized, QuaternionScalar to_normalized, float percentage, size_t vector_count) {
+		return QuaternionSlerp(from_normalized, to_normalized, percentage);
+	}
 
 	// Assumes neighbour quaternions
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionSLerp(Quaternion from, Quaternion to, Vector8 percentages);
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionSlerp(Quaternion from_normalized, Quaternion to_normalized, Vec8f percentage, size_t vector_count);
 
-	// Makes the neighbour adjustment
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionSLerpNeighbour(Quaternion from, Quaternion to, Vector8 percentage);
+	// Makes the neighbour adjustment. Assumes neighbour quaternions
+	ECS_INLINE QuaternionScalar QuaternionSlerpNeighbour(QuaternionScalar from_normalized, QuaternionScalar to_normalized, float percentage) {
+		return QuaternionSlerp(from_normalized, QuaternionNeighbour(from_normalized, to_normalized), percentage);
+	}
+
+	// Makes the neighbour adjustment. Assumes neighbour quaternions. It exists to match the SIMD function
+	ECS_INLINE QuaternionScalar QuaternionSlerpNeighbour(QuaternionScalar from_normalized, QuaternionScalar to_normalized, float percentage, size_t vector_count) {
+		return QuaternionSlerpNeighbour(from_normalized, to_normalized, percentage);
+	}
+
+	// Makes the neighbour adjustment. Assumes neighbour quaternions
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionSlerpNeighbour(Quaternion from_normalized, Quaternion to_normalized, Vec8f percentage, size_t vector_count) {
+		return QuaternionSlerp(from_normalized, QuaternionNeighbour(from_normalized, to_normalized), percentage, vector_count);
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionLookRotationNormalized(Vector8 direction_normalized, Vector8 up_normalized);
+	ECSENGINE_API QuaternionScalar QuaternionLookRotationNormalized(float3 direction_normalized, float3 up_normalized);
 
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionLookRotation(Vector8 direction, Vector8 up);
+	// It exists to match the SIMD function
+	ECS_INLINE QuaternionScalar QuaternionLookRotationNormalized(float3 direction_normalized, float3 up_normalized, size_t vector_count) {
+		return QuaternionLookRotationNormalized(direction_normalized, up_normalized);
+	}
+
+	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionLookRotationNormalized(Vector3 direction_normalized, Vector3 up_normalized, size_t vector_count);
+
+	ECS_INLINE QuaternionScalar QuaternionLookRotation(float3 direction, float3 up) {
+		return QuaternionLookRotationNormalized(Normalize(direction), Normalize(up));
+	}
+
+	// It exists to match the SIMD function
+	ECS_INLINE QuaternionScalar QuaternionLookRotation(float3 direction, float3 up, size_t vector_count) {
+		return QuaternionLookRotation(direction, up);
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLookRotation(Vector3 direction, Vector3 up, size_t vector_count) {
+		return QuaternionLookRotationNormalized(Normalize(direction), Normalize(up), vector_count);
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	template<bool preserve = false>
-	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorQuaternionSIMD(Vector8 vector, Quaternion quaternion) {
-		return QuaternionVectorMultiply<preserve>(quaternion, vector);
+	ECS_INLINE float3 RotateVector(float3 vector, QuaternionScalar quaternion) {
+		return QuaternionVectorMultiply(quaternion, vector);
 	}
 
-	template<bool preserve = false>
-	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointQuaternionSIMD(Vector8 point, Quaternion quaternion) {
+	ECS_INLINE Vector3 ECS_VECTORCALL RotateVector(Vector3 vector, Quaternion quaternion) {
+		return QuaternionVectorMultiply(quaternion, vector);
+	}
+
+	ECS_INLINE float3 RotatePoint(float3 point, QuaternionScalar quaternion) {
 		// We can treat the point as a displacement vector that is rotated
-		return RotateVectorQuaternionSIMD<preserve>(quaternion, point);
+		return RotateVector(point, quaternion);
 	}
 
-	// This only rotates the low part
-	ECS_INLINE float3 ECS_VECTORCALL RotateVectorQuaternion(Vector8 vector, Quaternion quaternion) {
-		return RotateVectorQuaternionSIMD(vector, quaternion).AsFloat3Low();
-	}
-
-	ECS_INLINE float3 ECS_VECTORCALL RotatePointQuaternion(Vector8 vector, Quaternion quaternion) {
+	ECS_INLINE Vector3 ECS_VECTORCALL RotatePoint(Vector3 point, Quaternion quaternion) {
 		// We can treat the point as a displacement vector that is rotated
-		return RotatePointQuaternion(vector, quaternion);
+		return RotateVector(point, quaternion);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -450,57 +595,37 @@ namespace ECSEngine {
 		return !IsClockwise(a, b, normalize_late);
 	}
 
-	// The vectors don't need to be normalized
-	ECSENGINE_API bool2 ECS_VECTORCALL IsClockwise(Vector8 a, Vector8 b);
-
-	// The vectors don't need to be normalized
-	ECS_INLINE bool IsClockwiseLow(Vector8 a, Vector8 b) {
-		return IsClockwise(a, b).x;
-	}
-
-	// The vectors don't need to be normalized
-	ECS_INLINE bool IsClockwiseBoth(Vector8 a, Vector8 b) {
-		return BasicTypeLogicAndBoolean(IsClockwise(a, b));
-	}
-
-	// The vectors don't need to be normalized
-	ECS_INLINE bool2 IsCounterClockwise(Vector8 a, Vector8 b) {
-		return !IsClockwise(a, b);
-	}
-
-	// The vectors don't need to be normalized
-	ECS_INLINE bool IsCounterClockwiseLow(Vector8 a, Vector8 b) {
-		return !IsClockwiseLow(a, b);
-	}
-
-	// The vectors don't need to be normalized
-	ECS_INLINE bool IsCounterClockwiseBoth(Vector8 a, Vector8 b) {
-		return !IsClockwiseBoth(a, b);
-	}
-
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API float3 ECS_VECTORCALL QuaternionToEulerRadLow(Quaternion quaternion);
+	ECSENGINE_API float3 QuaternionToEulerRad(QuaternionScalar quaternion);
 
-	ECSENGINE_API void ECS_VECTORCALL QuaternionToEulerRad(Quaternion quaternion, float3* low, float3* high);
+	ECSENGINE_API Vector3 ECS_VECTORCALL QuaternionToEulerRad(Quaternion quaternion);
 
-	ECS_INLINE float3 ECS_VECTORCALL QuaternionToEulerLow(Quaternion quaternion) {
-		return RadToDeg(QuaternionToEulerRadLow(quaternion));
+	// The result is in degrees
+	ECS_INLINE float3 QuaternionToEuler(QuaternionScalar quaternion) {
+		return RadToDeg(QuaternionToEulerRad(quaternion));
 	}
 
-	ECS_INLINE float3 ECS_VECTORCALL QuaternionToEulerHigh(Quaternion quaternion) {
-		float3 low; float3 high;
-		QuaternionToEulerRad(quaternion, &low, &high);
-		return RadToDeg(high);
+	// The result is in degrees
+	ECS_INLINE Vector3 ECS_VECTORCALL QuaternionToEuler(Quaternion quaternion) {
+		return RadToDeg(QuaternionToEulerRad(quaternion));
 	}
-
-	ECSENGINE_API void ECS_VECTORCALL QuaternionToEuler(Quaternion quaternion, float3* low, float3* high);
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Add a rotation with respect to the local axes of the object
+	ECS_INLINE QuaternionScalar AddLocalRotation(QuaternionScalar current_rotation, QuaternionScalar add_rotation) {
+		return current_rotation * add_rotation;
+	}
+
+	// Add a rotation with respect to the local axes of the object
 	ECS_INLINE Quaternion ECS_VECTORCALL AddLocalRotation(Quaternion current_rotation, Quaternion add_rotation) {
 		return current_rotation * add_rotation;
+	}
+
+	// Add a rotation with respect to the global axes of the object
+	ECS_INLINE QuaternionScalar AddWorldRotation(QuaternionScalar current_rotation, QuaternionScalar add_rotation) {
+		return add_rotation * current_rotation;
 	}
 
 	// Add a rotation with respect to the global axes of the object
@@ -510,8 +635,21 @@ namespace ECSEngine {
 
 	// This computes the delta between a known operand and a final quaternion
 	// delta * operand = final_quaternion -> delta = final_quaternion * inverse(operand)
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionDelta(Quaternion operand, Quaternion final_quaternion) {
+	ECS_INLINE QuaternionScalar QuaternionDelta(QuaternionScalar operand, QuaternionScalar final_quaternion) {
 		return final_quaternion * QuaternionInverse(operand);
+	}
+
+	// This computes the delta between a known operand and a final quaternion
+	// delta * operand = final_quaternion -> delta = final_quaternion * inverse(operand)
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionDelta(Quaternion operand, Quaternion final_quaternion) {
+		// Assume that all lanes are utilized to not overcomplicate the API
+		return final_quaternion * QuaternionInverse(operand, Vec8f::size());
+	}
+
+	// This computes the delta between a known operand and a final quaternion
+	// delta * operand = final_quaternion -> delta = final_quaternion * inverse(operand)
+	ECS_INLINE QuaternionScalar QuaternionDeltaNormalized(QuaternionScalar operand_normalized, QuaternionScalar final_quaternion) {
+		return final_quaternion * QuaternionInverseNormalized(operand_normalized);
 	}
 
 	// This computes the delta between a known operand and a final quaternion
@@ -523,33 +661,57 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Converts the given direction into a quaternion
-	ECSENGINE_API Quaternion ECS_VECTORCALL DirectionToQuaternion(Vector8 direction_normalized);
+	ECSENGINE_API QuaternionScalar DirectionToQuaternion(float3 direction_normalized);
+
+	// Converts the given direction into a quaternion. It exists to match the SIMD function
+	ECS_INLINE QuaternionScalar DirectionToQuaternion(float3 direction_normalized, size_t vector_count) {
+		return DirectionToQuaternion(direction_normalized);
+	}
+
+	// Converts the given direction into a quaternion
+	ECSENGINE_API Quaternion ECS_VECTORCALL DirectionToQuaternion(Vector3 direction_normalized, size_t vector_count);
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	ECS_INLINE QuaternionScalar QuaternionAverageCumulatorInitializeScalar() {
+		return float4::Splat(0.0f);
+	}
+
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAverageCumulatorInitialize() {
-		return ZeroVector();
+		return Quaternion(ZeroVectorFloat(), ZeroVectorFloat(), ZeroVectorFloat(), ZeroVectorFloat());
 	}
 
 	// The reference quaternion is used to changed the sign of the current quaternion if they are in different hyperplanes
-	// It needs to be the same value across multiple cumulations. Usually, it is the first quaternion that is being cumulated
 	// This only does the cumulative step
-	ECSENGINE_API void ECS_VECTORCALL QuaternionAddToAverageStep(Quaternion* cumulator, Quaternion current_quaternion);
+	ECSENGINE_API void QuaternionAddToAverageStep(QuaternionScalar* cumulator, QuaternionScalar current_quaternion);
+
+	// The reference quaternion is used to changed the sign of the current quaternion if they are in different hyperplanes
+	// This only does the cumulative step
+	ECSENGINE_API void QuaternionAddToAverageStep(Quaternion* cumulator, Quaternion current_quaternion);
+
+	ECSENGINE_API QuaternionScalar QuaternionAverageFromCumulator(QuaternionScalar cumulator, unsigned int count);
 
 	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionAverageFromCumulator(Quaternion cumulator, unsigned int count);
 
 	// The reference quaternion is used to changed the sign of the current quaternion if they are in different hyperplanes
-	// It needs to be the same value across multiple cumulations. Usually, it is the first quaternion that is being cumulated
+	ECSENGINE_API QuaternionScalar QuaternionAddToAverage(QuaternionScalar* cumulator, float4 current_quaternion, unsigned int count);
+
+	// The reference quaternion is used to changed the sign of the current quaternion if they are in different hyperplanes
 	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionAddToAverage(Quaternion* cumulator, Quaternion current_quaternion, unsigned int count);
 
-	// Call this function only for 2 quaternions - otherwise use the cumulative version
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAverage2(Quaternion a, Quaternion b) {
-		return QuaternionSLerpNeighbour(a, b, 0.5f);
+	ECS_INLINE QuaternionScalar QuaternionAverage2(QuaternionScalar a, QuaternionScalar b) {
+		return QuaternionSlerpNeighbour(a, b, 0.5f);
 	}
 
-	// Returns the average between the low and high lane
-	// It will be splatted in the low and high as well
-	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionAverageLowAndHigh(Quaternion average);
+	// It exists to match the SIMD version
+	ECS_INLINE QuaternionScalar QuaternionAverage2(QuaternionScalar a, QuaternionScalar b, size_t vector_count) {
+		return QuaternionAverage2(a, b);
+	}
+
+	// Call this function only for 2 quaternions - otherwise use the cumulative version
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAverage2(Quaternion a, Quaternion b, size_t vector_count) {
+		return QuaternionSlerpNeighbour(a, b, Vec8f(0.5f), vector_count);
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 

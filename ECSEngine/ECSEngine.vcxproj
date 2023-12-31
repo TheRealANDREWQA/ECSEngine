@@ -257,6 +257,7 @@
     <ClInclude Include="src\ECSEngine\Input\Controller\WASDController.h" />
     <ClInclude Include="src\ECSEngine\Math\AABB.h" />
     <ClInclude Include="src\ECSEngine\Math\AABB_Inline.h" />
+    <ClInclude Include="src\ECSEngine\Math\BaseVector.h" />
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
     <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
     <ClInclude Include="src\ECSEngine\Math\Hermite.h" />
@@ -521,6 +522,11 @@
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
     </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\BaseVector.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MinSpace</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\Math\Bezier.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
@@ -569,6 +575,7 @@
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <SupportJustMyCode Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</SupportJustMyCode>
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Multithreading\AtomicLinearAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\RingBuffer.cpp" />

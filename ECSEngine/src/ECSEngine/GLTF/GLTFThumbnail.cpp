@@ -9,7 +9,7 @@
 
 #define DEFAULT_ROTATION { 0.0f, 0.0f, 0.0f }
 #define LIGHT_COLOR { 8.0f, 3.0f, 2.0f, 1.0f }
-#define LIGHT_DIRECTION { -0.3f, 0.8f, -0.2f }
+#define LIGHT_DIRECTION float3{ -0.3f, 0.8f, -0.2f }
 #define OBJECT_TINT { 0.5f, 0.5f, 0.5f, 1.0f }
 
 namespace ECSEngine {

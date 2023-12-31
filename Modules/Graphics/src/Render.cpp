@@ -34,7 +34,7 @@ static void DrawMeshTask(
 
 	if (render_mesh->Validate()) {
 		float3 translation_value = { 0.0f, 0.0f, 0.0f };
-		float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
+		float4 rotation_value = QuaternionIdentityScalar();
 		float3 scale_value = { 1.0f, 1.0f, 1.0f };
 		Matrix matrix_translation;
 		Matrix matrix_rotation;
@@ -50,7 +50,7 @@ static void DrawMeshTask(
 
 		if (rotation != nullptr) {
 			rotation_value = rotation->value;
-			matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
+			matrix_rotation = QuaternionToMatrix(rotation_value);
 		}
 		else {
 			matrix_rotation = MatrixIdentity();
@@ -141,7 +141,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 					ECSTransformToolEx transform_tool = GetEditorRuntimeTransformToolEx(system_manager);
 
 					float3 translation_midpoint = { 0.0f, 0.0f, 0.0f };
-					Quaternion rotation_midpoint = QuaternionAverageCumulatorInitialize();
+					QuaternionScalar rotation_midpoint = QuaternionAverageCumulatorInitializeScalar();
 					size_t total_valid_count = valid_entities + transform_gizmos.size;
 					if (total_valid_count > 0) {
 						HighlightObjectElement* highlight_elements = nullptr;
@@ -171,8 +171,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 									if (translation != nullptr) {
 										Matrix translation_matrix = MatrixTranslation(translation->value);
 										if (rotation != nullptr) {
-											Quaternion rotation_quaternion = Quaternion(rotation->value);
-											Matrix rotation_matrix = QuaternionToMatrixLow(rotation_quaternion);
+											Matrix rotation_matrix = QuaternionToMatrix(rotation->value);
 											if (scale != nullptr) {
 												entity_matrix = MatrixTRS(translation_matrix, rotation_matrix, MatrixScale(scale->value));
 											}
@@ -180,7 +179,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 												entity_matrix = MatrixTR(translation_matrix, rotation_matrix);
 											}
 											if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
-												QuaternionAddToAverageStep(&rotation_midpoint, rotation_quaternion);
+												QuaternionAddToAverageStep(&rotation_midpoint, rotation->value);
 											}
 										}
 										else if (scale != nullptr) {
@@ -192,8 +191,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 										translation_midpoint += translation->value;
 									}
 									else if (rotation != nullptr) {
-										Quaternion rotation_quaternion = Quaternion(rotation->value);
-										Matrix rotation_matrix = QuaternionToMatrixLow(rotation_quaternion);
+										Matrix rotation_matrix = QuaternionToMatrix(rotation->value);
 										if (scale != nullptr) {
 											entity_matrix = MatrixRS(rotation_matrix, MatrixScale(scale->value));
 										}
@@ -201,7 +199,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 											entity_matrix = rotation_matrix;
 										}
 										if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
-											QuaternionAddToAverageStep(&rotation_midpoint, rotation_quaternion);
+											QuaternionAddToAverageStep(&rotation_midpoint, rotation->value);
 										}
 									}
 									else if (scale != nullptr) {
@@ -231,14 +229,12 @@ ECS_THREAD_TASK(DrawSelectables) {
 							rotation_midpoint = QuaternionAverageFromCumulator(rotation_midpoint, total_valid_count);
 						}
 						else {
-							rotation_midpoint = QuaternionIdentity();
+							rotation_midpoint = QuaternionIdentityScalar();
 						}
-						QuaternionStorage rotation_midpoint_storage = rotation_midpoint.StorageLow();
-
 						DebugDrawer* debug_drawer = world->debug_drawer;
 
 						float3 camera_distance = translation_midpoint - camera.translation;
-						float distance = Length(Vector8(camera_distance)).First();			
+						float distance = Length(camera_distance);			
 
 						float constant_viewport_size = GetConstantObjectSizeInPerspective(camera.fov, distance, 0.25f);
 
@@ -275,7 +271,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 							memcpy(&info.color_x, &transform_colors[ECS_AXIS_X], sizeof(Color) * ECS_AXIS_COUNT);
 							debug_drawer->AddOOBBCross(
 								translation_midpoint,
-								rotation_midpoint_storage,
+								rotation_midpoint,
 								10000.0f,
 								pow(constant_viewport_size, 0.33f),
 								false,
@@ -297,7 +293,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 								axes_info.color_z = transform_colors[ECS_AXIS_Z];
 								debug_drawer->AddAxes(
 									translation_midpoint, 
-									rotation_midpoint_storage,
+									rotation_midpoint,
 									constant_viewport_size,
 									&axes_info,
 									debug_options
@@ -306,31 +302,31 @@ ECS_THREAD_TASK(DrawSelectables) {
 								break;
 							case ECS_TRANSFORM_ROTATION:
 							{
-								Quaternion x_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisZ(90.0f));
+								QuaternionScalar x_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisZScalar(90.0f));
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_X]);
 								debug_drawer->AddCircle(
 									translation_midpoint,
-									x_rotation.StorageLow(),
+									x_rotation,
 									constant_viewport_size,
 									transform_colors[ECS_AXIS_X],
 									debug_options
 								);
 
-								Quaternion y_rotation = rotation_midpoint;
+								QuaternionScalar y_rotation = rotation_midpoint;
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Y]);
 								debug_drawer->AddCircle(
 									translation_midpoint,
-									y_rotation.StorageLow(),
+									y_rotation,
 									constant_viewport_size,
 									transform_colors[ECS_AXIS_Y],
 									debug_options
 								);
 
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Z]);
-								Quaternion z_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisX(90.0f));
+								QuaternionScalar z_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisXScalar(90.0f));
 								debug_drawer->AddCircle(
 									translation_midpoint,
-									z_rotation.StorageLow(),
+									z_rotation,
 									constant_viewport_size,
 									transform_colors[ECS_AXIS_Z],
 									debug_options
@@ -348,7 +344,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 								info.instance_thickness_z = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Z]);
 								debug_drawer->AddOOBBCross(
 									translation_midpoint,
-									rotation_midpoint_storage,
+									rotation_midpoint,
 									constant_viewport_size * 0.45f,
 									constant_viewport_size,
 									true,
@@ -404,7 +400,7 @@ static void DrawInstancedFramebufferMeshTask(
 
 	if (render_mesh->Validate()) {
 		float3 translation_value = { 0.0f, 0.0f, 0.0f };
-		float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
+		float4 rotation_value = QuaternionIdentityScalar();
 		float3 scale_value = { 1.0f, 1.0f, 1.0f };
 		Matrix matrix_translation;
 		Matrix matrix_rotation;
@@ -420,7 +416,7 @@ static void DrawInstancedFramebufferMeshTask(
 
 		if (rotation != nullptr) {
 			rotation_value = rotation->value;
-			matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
+			matrix_rotation = QuaternionToMatrix(rotation_value);
 		}
 		else {
 			matrix_rotation = MatrixIdentity();

@@ -493,7 +493,7 @@ void ResizeSandboxTextures(
 )
 {
 	uint2 new_size = drawer.system->GetWindowTexelSize(drawer.window_index);
-	uint2 difference = AbsoluteDifference(new_size, *previous_size);
+	uint2 difference = BasicTypeAbsoluteDifference(new_size, *previous_size);
 	if (difference.x >= threshold || difference.y >= threshold) {
 		*previous_size = new_size;
 		sandbox_index = sandbox_index == -1 ? GetWindowNameIndex(drawer) : sandbox_index;

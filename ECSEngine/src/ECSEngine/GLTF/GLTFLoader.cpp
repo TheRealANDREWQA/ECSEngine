@@ -126,9 +126,10 @@ namespace ECSEngine {
 
 			Matrix ecs_matrix(world_matrix);
 			if (ecs_matrix != MatrixIdentity()) {
-				ApplySIMD(mesh_positions, mesh_positions, Vector8::Lanes(), Vector8::Lanes(), [ecs_matrix](const float3* input, float3* output, size_t count) {
-					Vector8 transformed_positions = TransformPoint(Vector8(input), ecs_matrix);
-					transformed_positions.StoreFloat3(output);
+				ApplySIMD(mesh_positions, mesh_positions, Vector3::ElementCount(), Vector3::ElementCount(), [ecs_matrix](const float3* input, float3* output, size_t count) {
+					Vector3 positions = Vector3().Gather(input);
+					Vector3 transformed_positions = TransformPoint(positions, ecs_matrix).AsVector3();
+					transformed_positions.Scatter(output);
 					return count;
 				});
 			}
@@ -137,46 +138,47 @@ namespace ECSEngine {
 		// -------------------------------------------------------------------------------------------------------------------------------
 
 		static void ProcessMeshNormals(Stream<float3> mesh_normals, const cgltf_node* nodes, size_t current_node_index) {
-			float matrix[16];
-			cgltf_node_transform_world(nodes + current_node_index, matrix);
-			Matrix ecs_matrix(matrix);
-			ecs_matrix.v[1] = BlendLowAndHigh(ecs_matrix.v[1], LastElementOneVector());
+			float4 matrix[sizeof(Matrix) / sizeof(float4)];
+			cgltf_node_transform_world(nodes + current_node_index, (float*)matrix);
+			// Eliminate any position from the matrix
+			matrix[3] = { 0.0f, 0.0f, 0.0f, 1.0f };
+			Matrix ecs_matrix((const float*)matrix);
 
 			const float TOLERANCE_VAL = 0.000001f;
-			Vector8 tolerance(TOLERANCE_VAL);
+			Vec8f tolerance(TOLERANCE_VAL);
 
 			// Takes a lambda that transforms the normal if needed
-			auto loop = [&](Vector8 (ECS_VECTORCALL *perform_world_transformation)(Vector8 normal, Matrix transform_matrix)) {
-				ApplySIMD(mesh_normals, mesh_normals, tolerance.Lanes(), tolerance.Lanes(), [&](const float3* input, float3* output, size_t count) {
-					Vector8 normal(input);
+			auto loop = [&](Vector3 (ECS_VECTORCALL *perform_world_transformation)(Vector3 normal, Matrix transform_matrix)) {
+				ApplySIMD(mesh_normals, mesh_normals, Vector3::ElementCount(), Vector3::ElementCount(), [&](const float3* input, float3* output, size_t count) {
+					Vector3 normal = Vector3().Gather(input);
 					//normal = PerLanePermute<0, 2, 1, V_DC>(normal);
-					Vector8 less_than_tolerance_mask = SquareLength(normal) < tolerance;
-					if (BasicTypeLogicAndBoolean(PerLaneHorizontalAnd<3>(less_than_tolerance_mask.AsMask()))) {
-						normal = UpVector();
-						/*if (error_message != nullptr) {
+					SIMDVectorMask less_than_tolerance_mask = SquareLength(normal) < tolerance;
+					Vector3 up_vector = UpVector();
+					normal = Select(less_than_tolerance_mask, up_vector, normal);
+					// We could say error if the normal data seems invalid
+					/*if (error_message != nullptr) {
 							ECS_FORMAT_STRING(*error_message, "Mesh normal data is invalid. A normal has a squared length smaller than the tolerance. Index is {#}", index);
 						}
-						return false;*/
-					}
+					return false;*/
 
 					// Transform the normal
 					normal = perform_world_transformation(normal, ecs_matrix);
 
-					normal = NormalizeIfNot(normal);
-					normal.StoreFloat3(output);
+					normal = NormalizeIfNot(normal, count);
+					normal.Scatter(output);
 					return count;
 				});
 			};
 
 			if (ecs_matrix != MatrixIdentity()) {
 				// Perform normalization + world transformation
-				loop([](Vector8 normal, Matrix transform_matrix) {
+				loop([](Vector3 normal, Matrix transform_matrix) {
 					return MatrixVectorMultiply(normal, transform_matrix);
 				});
 			}
 			else {
 				// Perform only normalization
-				loop([](Vector8 normal, Matrix transform_matrix) {
+				loop([](Vector3 normal, Matrix transform_matrix) {
 					return normal;
 				});
 			}
@@ -929,7 +931,7 @@ namespace ECSEngine {
 					submesh.bounds = GetMeshBoundingBox(positions);
 				}
 				else {
-					submesh.bounds = InfiniteAABBStorage();
+					submesh.bounds = InfiniteAABBScalar();
 				}
 
 				submeshes[submesh_index++] = submesh;
@@ -954,9 +956,8 @@ namespace ECSEngine {
 				ScaleGLTFMeshes({ mesh, 1 }, scale_factor);
 				// Check the bounding boxes as well - those need to be scaled here
 				if (determine_submesh_bounding_box) {
-					Vector8 vector_scaling = { float3::Splat(scale_factor), float3::Splat(scale_factor) };
 					for (size_t index = 0; index < data.mesh_count; index++) {
-						submeshes[index].bounds = ScaleAABBFromOrigin(submeshes[index].bounds, vector_scaling).ToStorage();
+						submeshes[index].bounds = ScaleAABBFromOrigin(submeshes[index].bounds, float3::Splat(scale_factor));
 					}
 				}
 			}
@@ -1273,7 +1274,7 @@ namespace ECSEngine {
 		size_t submesh_offset = 0;
 		// For every material run through the submeshes to combine those that have the same material
 		for (size_t index = 0; index < material_count; index++) {
-			submeshes[index].bounds = InfiniteAABBStorage();
+			submeshes[index].bounds = InfiniteAABBScalar();
 			for (size_t subindex = 0; subindex < gltf_meshes.size; subindex++) {
 				if (submesh_material_index[subindex] == index) {
 					// Indices must be adjusted per material
@@ -1375,10 +1376,10 @@ namespace ECSEngine {
 		}
 		
 		// Compute the coalesced bounding box with the intermediate submesh bounding boxes
-		mesh.bounds = ReverseInfiniteAABBStorage();
+		mesh.bounds = ReverseInfiniteAABBScalar();
 		for (size_t index = 0; index < gltf_meshes.size; index++) {
-			AABBStorage current_bounding_box = GetGLTFMeshBoundingBox(gltf_meshes.buffer + index);
-			mesh.bounds = GetCombinedAABBStorage(mesh.bounds, submeshes[index].bounds);
+			AABBScalar current_bounding_box = GetGLTFMeshBoundingBox(gltf_meshes.buffer + index);
+			mesh.bounds = GetCombinedAABB(mesh.bounds, submeshes[index].bounds);
 		}
 
 		size_t submesh_vertex_offset = 0;
@@ -1487,7 +1488,7 @@ namespace ECSEngine {
 		// Now fill in the submeshes and calculate the bounds
 		total_vertex_buffer_count = 0;
 		total_index_buffer_count = 0;
-		mesh.bounds = ReverseInfiniteAABBStorage();
+		mesh.bounds = ReverseInfiniteAABBScalar();
 		for (size_t index = 0; index < gltf_meshes.size; index++) {
 			submeshes[index].vertex_buffer_offset = total_vertex_buffer_count;
 			submeshes[index].index_buffer_offset = total_index_buffer_count;
@@ -1499,7 +1500,7 @@ namespace ECSEngine {
 
 			submeshes[index].name = { nullptr, 0 };
 			submeshes[index].bounds = GetGLTFMeshBoundingBox(gltf_meshes.buffer + index);
-			mesh.bounds = GetCombinedAABBStorage(mesh.bounds, submeshes[index].bounds);
+			mesh.bounds = GetCombinedAABB(mesh.bounds, submeshes[index].bounds);
 		}
 
 		return mesh;
@@ -1645,15 +1646,15 @@ namespace ECSEngine {
 	{
 		if (scale_factor != 1.0f) {
 			// Scaling with the same factor on all axis basically means multiplying the coordinates by the given scale factor
-			Vector8 splatted_factor(scale_factor);
+			Vec8f splatted_factor(scale_factor);
 
 			for (size_t index = 0; index < meshes.size; index++) {
 				size_t vertex_count = meshes[index].positions.size;
 				Stream<float> float_positions = { meshes[index].positions.buffer, vertex_count * 3 };
-				ApplySIMD(float_positions, float_positions, 8, 8, [=](const float* input, float* output, size_t count) {
-					Vector8 positions(input);
+				ApplySIMD(float_positions, float_positions, splatted_factor.size(), splatted_factor.size(), [=](const float* input, float* output, size_t count) {
+					Vec8f positions = Vec8f().load(input);
 					positions *= splatted_factor;
-					positions.Store(output);
+					positions.store(output);
 					return count;
 				});
 			}
@@ -1662,14 +1663,14 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	AABBStorage GetGLTFMeshBoundingBox(const GLTFMesh* mesh)
+	AABBScalar GetGLTFMeshBoundingBox(const GLTFMesh* mesh)
 	{
 		return GetMeshBoundingBox(mesh->positions);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, AABBStorage* bounding_boxes)
+	void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, AABBScalar* bounding_boxes)
 	{
 		for (size_t index = 0; index < meshes.size; index++) {
 			bounding_boxes[index] = GetGLTFMeshBoundingBox(meshes.buffer + index);
@@ -1678,12 +1679,12 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	AABBStorage GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes)
+	AABBScalar GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes)
 	{
-		AABBStorage bounding_box = ReverseInfiniteAABBStorage();
+		AABBScalar bounding_box = ReverseInfiniteAABBScalar();
 		for (size_t index = 0; index < meshes.size; index++) {
-			AABBStorage current_bounding_box = GetGLTFMeshBoundingBox(meshes.buffer + index);
-			bounding_box = GetCombinedAABBStorage(bounding_box, current_bounding_box);
+			AABBScalar current_bounding_box = GetGLTFMeshBoundingBox(meshes.buffer + index);
+			bounding_box = GetCombinedAABB(bounding_box, current_bounding_box);
 		}
 		
 		return bounding_box;

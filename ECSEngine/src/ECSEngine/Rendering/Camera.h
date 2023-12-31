@@ -72,11 +72,11 @@ namespace ECSEngine {
 			return MatrixRotation(rotation);
 		}
 
-		ECS_INLINE Quaternion ECS_VECTORCALL GetRotationQuaternion() const {
+		ECS_INLINE QuaternionScalar ECS_VECTORCALL GetRotationQuaternion() const {
 			return QuaternionFromEuler(-rotation);
 		}
 
-		ECS_INLINE Quaternion ECS_VECTORCALL GetRotationQuaternionAsIs() const {
+		ECS_INLINE QuaternionScalar ECS_VECTORCALL GetRotationQuaternionAsIs() const {
 			return QuaternionFromEuler(rotation);
 		}
 
@@ -89,18 +89,33 @@ namespace ECSEngine {
 		}
 
 		// The vector is already normalized
-		ECS_INLINE Vector8 ECS_VECTORCALL GetRightVector() const {
-			return RotateVector(RightVector(), GetRotationAsIs());
+		ECS_INLINE Vector3 ECS_VECTORCALL RightVector() const {
+			return RotateVector(ECSEngine::RightVector(), GetRotationAsIs());
 		}
 
 		// The vector is already normalized
-		ECS_INLINE Vector8 ECS_VECTORCALL GetUpVector() const {
-			return RotateVector(UpVector(), GetRotationAsIs());
+		ECS_INLINE float3 ECS_VECTORCALL GetRightVector() const {
+			return RotateVector(ECSEngine::GetRightVector(), GetRotationAsIs());
 		}
 
 		// The vector is already normalized
-		ECS_INLINE Vector8 ECS_VECTORCALL GetForwardVector() const {
-			return RotateVector(ForwardVector(), GetRotationAsIs());
+		ECS_INLINE Vector3 ECS_VECTORCALL UpVector() const {
+			return RotateVector(ECSEngine::UpVector(), GetRotationAsIs());
+		}
+
+		// The vector is already normalized
+		ECS_INLINE float3 ECS_VECTORCALL GetUpVector() const {
+			return RotateVector(ECSEngine::GetUpVector(), GetRotationAsIs());
+		}
+
+		// The vector is already normalized
+		ECS_INLINE Vector3 ECS_VECTORCALL ForwardVector() const {
+			return RotateVector(ECSEngine::ForwardVector(), GetRotationAsIs());
+		}
+
+		// The vector is already normalized
+		ECS_INLINE float3 ECS_VECTORCALL GetForwardVector() const {
+			return RotateVector(ECSEngine::GetForwardVector(), GetRotationAsIs());
 		}
 
 		ECS_INLINE float VerticalFOV() const {
@@ -176,11 +191,11 @@ namespace ECSEngine {
 			return rotation_as_is_matrix;
 		}
 
-		ECS_INLINE Quaternion ECS_VECTORCALL GetRotationQuaternion() const {
+		ECS_INLINE QuaternionScalar ECS_VECTORCALL GetRotationQuaternion() const {
 			return QuaternionFromEuler(-rotation);
 		}
 
-		ECS_INLINE Quaternion ECS_VECTORCALL GetRotationQuaternionAsIs() const {
+		ECS_INLINE QuaternionScalar ECS_VECTORCALL GetRotationQuaternionAsIs() const {
 			return QuaternionFromEuler(rotation);
 		}
 
@@ -193,18 +208,33 @@ namespace ECSEngine {
 		}
 
 		// The vector is already normalized
-		ECS_INLINE Vector8 ECS_VECTORCALL GetRightVector() const {
-			return RotateVector(RightVector(), rotation_as_is_matrix);
+		ECS_INLINE Vector3 ECS_VECTORCALL RightVector() const {
+			return RotateVector(ECSEngine::RightVector(), rotation_as_is_matrix);
 		}
 
 		// The vector is already normalized
-		ECS_INLINE Vector8 ECS_VECTORCALL GetUpVector() const {
-			return RotateVector(UpVector(), rotation_as_is_matrix);
+		ECS_INLINE float3 ECS_VECTORCALL GetRightVector() const {
+			return RotateVector(ECSEngine::GetRightVector(), rotation_as_is_matrix);
 		}
 
 		// The vector is already normalized
-		ECS_INLINE Vector8 ECS_VECTORCALL GetForwardVector() const {
-			return RotateVector(ForwardVector(), rotation_as_is_matrix);
+		ECS_INLINE Vector3 ECS_VECTORCALL UpVector() const {
+			return RotateVector(ECSEngine::UpVector(), rotation_as_is_matrix);
+		}
+
+		// The vector is already normalized
+		ECS_INLINE float3 ECS_VECTORCALL GetUpVector() const {
+			return RotateVector(ECSEngine::GetUpVector(), rotation_as_is_matrix);
+		}
+
+		// The vector is already normalized
+		ECS_INLINE Vector3 ECS_VECTORCALL ForwardVector() const {
+			return RotateVector(ECSEngine::ForwardVector(), rotation_as_is_matrix);
+		}
+
+		// The vector is already normalized
+		ECS_INLINE float3 ECS_VECTORCALL GetForwardVector() const {
+			return RotateVector(ECSEngine::GetForwardVector(), rotation_as_is_matrix);
 		}
 
 		ECS_INLINE float VerticalFOV() const {
@@ -320,19 +350,37 @@ namespace ECSEngine {
 
 	// The vector is already normalized
 	template<typename CameraType>
-	ECS_INLINE Vector8 ECS_VECTORCALL GetCameraRightVector(const CameraType* camera) {
+	ECS_INLINE Vector3 ECS_VECTORCALL GetCameraRightVector(const CameraType* camera) {
+		return camera->RightVector();
+	}
+
+	// The vector is already normalized
+	template<typename CameraType>
+	ECS_INLINE float3 ECS_VECTORCALL GetCameraRightVectorScalar(const CameraType* camera) {
 		return camera->GetRightVector();
 	}
 
 	// The vector is already normalized
 	template<typename CameraType>
-	ECS_INLINE Vector8 ECS_VECTORCALL GetCameraUpVector(const CameraType* camera) {
+	ECS_INLINE Vector3 ECS_VECTORCALL GetCameraUpVector(const CameraType* camera) {
+		return camera->UpVector();
+	}
+
+	// The vector is already normalized
+	template<typename CameraType>
+	ECS_INLINE float3 ECS_VECTORCALL GetCameraUpVectorScalar(const CameraType* camera) {
 		return camera->GetUpVector();
 	}
 
 	// The vector is already normalized
 	template<typename CameraType>
-	ECS_INLINE Vector8 ECS_VECTORCALL GetCameraForwardVector(const CameraType* camera) {
+	ECS_INLINE Vector3 ECS_VECTORCALL GetCameraForwardVector(const CameraType* camera) {
+		return camera->ForwardVector();
+	}
+
+	// The vector is already normalized
+	template<typename CameraType>
+	ECS_INLINE float3 ECS_VECTORCALL GetCameraForwardVectorScalar(const CameraType* camera) {
 		return camera->GetForwardVector();
 	}
 
@@ -392,9 +440,9 @@ namespace ECSEngine {
 	ECSENGINE_API float3 FocusCameraOnObjectViewSpace(
 		const CameraType* camera, 
 		float3 object_translation, 
-		Quaternion object_rotation, 
+		QuaternionScalar object_rotation, 
 		float3 object_scale,
-		AABBStorage object_bounds,
+		AABBScalar object_bounds,
 		float2 view_space_proportion
 	);
 

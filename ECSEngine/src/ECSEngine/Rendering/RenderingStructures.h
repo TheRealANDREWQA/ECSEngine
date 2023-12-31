@@ -1428,7 +1428,7 @@ namespace ECSEngine {
 		ECS_MESH_INDEX mapping[ECS_MESH_BUFFER_COUNT];
 		unsigned char mapping_count;
 		Stream<char> name;
-		AABBStorage bounds;
+		AABBScalar bounds;
 	};
 
 	struct ECSENGINE_API Submesh {
@@ -1468,13 +1468,13 @@ namespace ECSEngine {
 		unsigned int vertex_buffer_offset;
 		unsigned int index_count;
 		unsigned int vertex_count;
-		AABBStorage bounds;
+		AABBScalar bounds;
 	};
 
-	ECS_INLINE AABBStorage GetSubmeshesBoundingBox(Stream<Submesh> submeshes) {
-		AABBStorage combined = ReverseInfiniteAABBStorage();
+	ECS_INLINE AABBScalar GetSubmeshesBoundingBox(Stream<Submesh> submeshes) {
+		AABBScalar combined = ReverseInfiniteAABBScalar();
 		for (size_t index = 0; index < submeshes.size; index++) {
-			combined = GetCombinedAABBStorage(combined, submeshes[index].bounds);
+			combined = GetCombinedAABB(combined, submeshes[index].bounds);
 		}
 		return combined;
 	}

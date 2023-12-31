@@ -51,44 +51,17 @@ namespace ECSEngine {
         return float3::Splat(0.0f);
     }
 
-    float3 ECS_VECTORCALL AxisDirectionLocal(ECS_AXIS axis, Quaternion rotation)
+    float3 AxisDirectionLocal(ECS_AXIS axis, QuaternionScalar rotation)
     {
-        return RotateVectorQuaternion(AxisDirectionSIMD(axis), rotation);
+        return RotateVector(AxisDirection(axis), rotation);
     }
 
-    Vector8 ECS_VECTORCALL AxisDirectionSIMD(ECS_AXIS axis)
-    {
-        switch (axis) {
-        case ECS_AXIS_X:
-            return RightVector();
-        case ECS_AXIS_Y:
-            return UpVector();
-        case ECS_AXIS_Z:
-            return ForwardVector();
-        default:
-            ECS_ASSERT(false, "Invalid axis");
-        }
-
-        return ZeroVector();
-    }
-
-    Vector8 ECS_VECTORCALL AxisDirectionLocalSIMD(ECS_AXIS axis, Quaternion rotation, bool copy_low_to_high)
-    {
-        if (copy_low_to_high) {
-            rotation = rotation.SplatLow();
-        }
-        return RotateVectorQuaternionSIMD(AxisDirectionSIMD(axis), rotation);
-    }
-
-    float3 ECS_VECTORCALL AxisDirection(ECS_AXIS axis, Quaternion rotation, ECS_TRANSFORM_SPACE space, bool copy_low_to_high)
+    float3 AxisDirection(ECS_AXIS axis, QuaternionScalar rotation, ECS_TRANSFORM_SPACE space)
     {
         if (space == ECS_TRANSFORM_WORLD_SPACE) {
             return AxisDirection(axis);
         }
         else if (space == ECS_TRANSFORM_LOCAL_SPACE) {
-            if (copy_low_to_high) {
-                rotation = rotation.SplatLow();
-            }
             return AxisDirectionLocal(axis, rotation);
         }
         else {
@@ -97,143 +70,123 @@ namespace ECSEngine {
         }
     }
 
-    Vector8 ECS_VECTORCALL AxisDirectionSIMD(ECS_AXIS axis, Quaternion rotation, ECS_TRANSFORM_SPACE space, bool copy_low_to_high)
-    {
-        if (space == ECS_TRANSFORM_WORLD_SPACE) {
-            return AxisDirectionSIMD(axis);
-        }
-        else if (space == ECS_TRANSFORM_LOCAL_SPACE) {
-            return AxisDirectionLocalSIMD(axis, rotation, copy_low_to_high);
-        }
-        else {
-            ECS_ASSERT(false, "Invalid transform space");
-            return ZeroVector();
-        }
-    }
-
-    Plane ECS_VECTORCALL AxisPlane(ECS_AXIS axis, float3 offset) {
+    PlaneScalar AxisPlane(ECS_AXIS axis, float3 offset) {
         switch (axis) {
         case ECS_AXIS_X:
-            return PlaneXY(offset.z);
+            return PlaneXYScalar(offset.z);
         case ECS_AXIS_Y:
-            return PlaneXY(offset.z);
+            return PlaneXYScalar(offset.z);
         case ECS_AXIS_Z:
-            return PlaneXZ(offset.y);
+            return PlaneXZScalar(offset.y);
         }
 
         // Should not reach here
         ECS_ASSERT(false);
-        return Plane();
+        return PlaneScalar();
     }
 
-    Plane ECS_VECTORCALL AxisPlane(ECS_AXIS axis, Vector8 view_direction_normalized, float3 offset) {
-        Vector8 view_angle_threshold = DegToRad(10.0f);
-        Plane current_plane;
-        Plane other_plane;
+    PlaneScalar AxisPlane(ECS_AXIS axis, float3 view_direction_normalized, float3 offset) {
+        float view_angle_threshold = DegToRad(10.0f);
+        PlaneScalar current_plane;
+        PlaneScalar other_plane;
         switch (axis) {
         case ECS_AXIS_X:
         {
-            current_plane = PlaneXY(offset.z);
-            other_plane = PlaneXZ(offset.y);
+            current_plane = PlaneXYScalar(offset.z);
+            other_plane = PlaneXZScalar(offset.y);
         }
         break;
         case ECS_AXIS_Y:
         {
-            current_plane = PlaneXY(offset.z);
-            other_plane = PlaneYZ(offset.x);
+            current_plane = PlaneXYScalar(offset.z);
+            other_plane = PlaneYZScalar(offset.x);
         }
         break;
         case ECS_AXIS_Z:
         {
-            current_plane = PlaneXZ(offset.y);
-            other_plane = PlaneYZ(offset.x);
+            current_plane = PlaneXZScalar(offset.y);
+            other_plane = PlaneYZScalar(offset.x);
         }
         break;
         default:
             ECS_ASSERT(false, "Invalid axis");
         }
 
-        Vector8 select_mask = PlaneIsParallelAngleMask(current_plane, view_direction_normalized, view_angle_threshold);
-        return Select(select_mask, other_plane.normal_dot, current_plane.normal_dot);
+        bool select_mask = PlaneIsParallelAngleMask(current_plane, view_direction_normalized, view_angle_threshold);
+        return select_mask ? other_plane : current_plane;
     }
 
-    Plane ECS_VECTORCALL AxisPlaneLocal(ECS_AXIS axis, Quaternion rotation, float3 offset, bool copy_low_to_high)
+    PlaneScalar AxisPlaneLocal(ECS_AXIS axis, QuaternionScalar rotation, float3 offset)
     {
-        if (copy_low_to_high) {
-            rotation = rotation.SplatLow();
-        }
-        return RotateVectorQuaternionSIMD<true>(AxisPlane(axis, offset).normal_dot, rotation);
+        PlaneScalar plane = AxisPlane(axis, offset);
+        plane.normal = RotateVector(plane.normal, rotation);
+        return plane;
     }
 
-    Plane ECS_VECTORCALL AxisPlaneLocal(ECS_AXIS axis, Vector8 view_direction_normalized, Quaternion rotation, float3 offset, bool copy_low_to_high)
+    PlaneScalar AxisPlaneLocal(ECS_AXIS axis, float3 view_direction_normalized, QuaternionScalar rotation, float3 offset)
     {
-        if (copy_low_to_high) {
-            rotation = rotation.SplatLow();
-        }
-
-        Vector8 view_angle_threshold = DegToRad(10.0f);
-        Vector8 vector_offset = { offset, offset };
+        float view_angle_threshold = DegToRad(10.0f);
 
         // Calculate only the first plane
         // Calculate the second plane only if needed
-        Plane current_plane;
+        PlaneScalar current_plane;
         switch (axis) {
         case ECS_AXIS_X:
         {
-            current_plane = PlaneXYRotated(rotation, vector_offset);
+            current_plane = PlaneXYRotated(rotation, offset);
         }
         break;
         case ECS_AXIS_Y:
         {
-            current_plane = PlaneXYRotated(rotation, vector_offset);
+            current_plane = PlaneXYRotated(rotation, offset);
         }
         break;
         case ECS_AXIS_Z:
         {
-            current_plane = PlaneXZRotated(rotation, vector_offset);
+            current_plane = PlaneXZRotated(rotation, offset);
         }
         break;
         default:
             ECS_ASSERT(false, "Invalid axis");
         }
 
-        Vector8 select_mask = PlaneIsParallelAngleMask(current_plane, view_direction_normalized, view_angle_threshold);
-        if (select_mask.MaskResultNone<3>()) {
+        bool select_mask = PlaneIsParallelAngleMask(current_plane, view_direction_normalized, view_angle_threshold);
+        if (!select_mask) {
             // We can return already since there is no conflict
             return current_plane;
         }
 
-        Plane other_plane;
+        PlaneScalar other_plane;
         switch (axis) {
         case ECS_AXIS_X:
         {
-            other_plane = PlaneXZRotated(rotation, vector_offset);
+            other_plane = PlaneXZRotated(rotation, offset);
         }
         break;
         case ECS_AXIS_Y:
         {
-            other_plane = PlaneYZRotated(rotation, vector_offset);
+            other_plane = PlaneYZRotated(rotation, offset);
         }
         break;
         case ECS_AXIS_Z:
         {
-            other_plane = PlaneYZRotated(rotation, vector_offset);
+            other_plane = PlaneYZRotated(rotation, offset);
         }
         break;
         }
-        return Select(select_mask, other_plane.normal_dot, current_plane.normal_dot);
+
+        return other_plane;
     }
 
-    Plane ECS_VECTORCALL AxisPlane(
+    PlaneScalar AxisPlane(
         ECS_AXIS axis,
-        Quaternion rotation,
+        QuaternionScalar rotation,
         ECS_TRANSFORM_SPACE space,
-        float3 offset,
-        bool copy_low_to_high
+        float3 offset
     )
     {
         if (space == ECS_TRANSFORM_LOCAL_SPACE) {
-            return AxisPlaneLocal(axis, rotation, offset, copy_low_to_high);
+            return AxisPlaneLocal(axis, rotation, offset);
         }
         else if (space == ECS_TRANSFORM_WORLD_SPACE) {
             return AxisPlane(axis, offset);
@@ -242,20 +195,19 @@ namespace ECSEngine {
             ECS_ASSERT(false, "Invalid transform space");
         }
 
-        return Plane();
+        return PlaneScalar();
     }
 
-    Plane ECS_VECTORCALL AxisPlane(
+    PlaneScalar AxisPlane(
         ECS_AXIS axis,
-        Vector8 view_direction_normalized,
-        Quaternion rotation,
+        float3 view_direction_normalized,
+        QuaternionScalar rotation,
         ECS_TRANSFORM_SPACE space,
-        float3 offset,
-        bool copy_low_to_high
+        float3 offset
     )
     {
         if (space == ECS_TRANSFORM_LOCAL_SPACE) {
-            return AxisPlaneLocal(axis, view_direction_normalized, rotation, offset, copy_low_to_high);
+            return AxisPlaneLocal(axis, view_direction_normalized, rotation, offset);
         }
         else if (space == ECS_TRANSFORM_WORLD_SPACE) {
             return AxisPlane(axis, view_direction_normalized, offset);
@@ -264,44 +216,36 @@ namespace ECSEngine {
             ECS_ASSERT(false, "Invalid transform space");
         }
 
-        return Plane();
+        return PlaneScalar();
     }
 
-    TransformAxisInfo ECS_VECTORCALL AxisInfo(
+    TransformAxisInfo AxisInfo(
         ECS_AXIS axis,
-        Quaternion rotation,
+        QuaternionScalar rotation,
         ECS_TRANSFORM_SPACE space,
-        float3 plane_offset,
-        bool copy_low_to_high
+        float3 plane_offset
     )
     {
         TransformAxisInfo info;
 
-        if (copy_low_to_high) {
-            rotation = rotation.SplatLow();
-        }
-        info.axis_direction = AxisDirection(axis, rotation, space, false);
-        info.plane = AxisPlane(axis, rotation, space, plane_offset, false);
+        info.axis_direction = AxisDirection(axis, rotation, space);
+        info.plane = AxisPlane(axis, rotation, space, plane_offset);
 
         return info;
     }
 
-    TransformAxisInfo ECS_VECTORCALL AxisInfo(
+    TransformAxisInfo AxisInfo(
         ECS_AXIS axis,
-        Quaternion rotation,
+        QuaternionScalar rotation,
         ECS_TRANSFORM_SPACE space,
-        Vector8 plane_view_direction_normalized,
-        float3 plane_offset,
-        bool copy_low_to_high
+        float3 plane_view_direction_normalized,
+        float3 plane_offset
     )
     {
         TransformAxisInfo info;
 
-        if (copy_low_to_high) {
-            rotation = rotation.SplatLow();
-        }
-        info.axis_direction = AxisDirectionSIMD(axis, rotation, space, false);
-        info.plane = AxisPlane(axis, plane_view_direction_normalized, rotation, space, plane_offset, false);
+        info.axis_direction = AxisDirection(axis, rotation, space);
+        info.plane = AxisPlane(axis, plane_view_direction_normalized, rotation, space, plane_offset);
 
         return info;
     }

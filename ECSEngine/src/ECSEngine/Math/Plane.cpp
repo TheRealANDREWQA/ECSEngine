@@ -3,80 +3,168 @@
 
 namespace ECSEngine {
 	
-	Plane::Plane(Vector8 axis_direction, Vector8 point) {
+	PlaneScalar::PlaneScalar(float3 axis_direction, float3 point)
+	{
 		axis_direction = NormalizeIfNot(axis_direction);
-		Vector8 dot = ECSEngine::Dot(axis_direction, point);
-		normal_dot = PerLaneBlend<0, 1, 2, 7>(axis_direction, dot);
+		dot = Dot(axis_direction, point);
+		normal = axis_direction;
 	}
 
-	Plane ECS_VECTORCALL ComputePlane(Vector8 a, Vector8 b, Vector8 c) {
-		Vector8 normal = Normalize(Cross(b - a, c - a));
-		Vector8 dot = Dot(normal, a);
-		return PerLaneBlend<0, 1, 2, 7>(normal, dot);
+	PlaneScalar PlaneScalar::FromNormalized(float3 axis_direction_normalized, float3 point)
+	{
+		PlaneScalar result;
+		result.normal = axis_direction_normalized;
+		result.dot = Dot(axis_direction_normalized, point);
+		return result;
 	}
 
-	Plane ECS_VECTORCALL PlaneFromNormalizedAxis(Vector8 axis_direction_normalized, Vector8 offset, bool invert_normal) {
-		Vector8 dot = Dot(axis_direction_normalized, offset);
-		Vector8 axis = Select(invert_normal ? TrueMaskVector() : ZeroVector(), -axis_direction_normalized, axis_direction_normalized);
-		return PerLaneBlend<0, 1, 2, 7>(axis, dot);
+	void PlaneScalar::Normalize() {
+		// We need to divide both the normal and the dot with the normal's length
+		float reciprocal_length = ECSEngine::ReciprocalLength(normal);
+		normal *= float3::Splat(reciprocal_length);
+		dot *= reciprocal_length;
 	}
 
-	namespace SIMDHelpers {
+	Plane::Plane(Vector3 axis_direction, Vector3 point, size_t vector_count) {
+		axis_direction = NormalizeIfNot(axis_direction, vector_count);
+		dot = ECSEngine::Dot(axis_direction, point);
+		normal = axis_direction;
+	}
 
-		ECS_INLINE Plane ECS_VECTORCALL PlaneFromAxis(Vector8 normal, float offset, bool invert_normal) {
-			normal = Select(invert_normal ? TrueMaskVector() : ZeroVector(), -normal, normal);
-			Vector8 vector_offset = offset;
-			return PerLaneBlend<0, 1, 2, 7>(normal, vector_offset);
+	Plane Plane::FromNormalized(Vector3 axis_direction_normalized, Vector3 point)
+	{
+		Plane result;
+		result.normal = axis_direction_normalized;
+		result.dot = ECSEngine::Dot(axis_direction_normalized, point);
+		return result;
+	}
+
+	void Plane::Normalize() {
+		// We need to divide both the normal and the dot with the normal's length
+		Vec8f reciprocal_length = ECSEngine::ReciprocalLength(normal);
+		normal *= Vector3::Splat(reciprocal_length);
+		dot *= reciprocal_length;
+	}
+
+	void Plane::Set(PlaneScalar plane, size_t index)
+	{
+		normal.Set(plane.normal, index);
+		// Broadcast and blend with that single value
+		Vec8f dot_broadcast = plane.dot;
+		dot = BlendSingleSwitch(dot, dot_broadcast, index);
+	}
+
+	template<typename Plane, typename Vector>
+	static ECS_INLINE Plane ECS_VECTORCALL ComputePlaneImpl(Vector a, Vector b, Vector c) {
+		auto normal = Normalize(Cross(b - a, c - a));
+		auto dot = Dot(normal, a);
+		return { normal, dot };
+	}
+
+	PlaneScalar ComputePlane(float3 a, float3 b, float3 c) {
+		return ComputePlaneImpl<PlaneScalar>(a, b, c);
+	}
+
+	Plane ECS_VECTORCALL ComputePlane(Vector3 a, Vector3 b, Vector3 c) {
+		return ComputePlaneImpl<Plane>(a, b, c);
+	}
+
+	template<typename Plane, typename Vector, typename OffsetType>
+	static ECS_INLINE Plane ECS_VECTORCALL PlaneFromAxisImpl(Vector normal, OffsetType offset, bool invert_normal) {
+		if (invert_normal) {
+			normal = -normal;
+			offset = -offset;
 		}
+		// Here the plane dot is directly the given offset
+		return Plane::FromNormalized(normal, Vector::Splat(offset));
+	}
 
-		// The normal is already normalized
-		ECS_INLINE Plane ECS_VECTORCALL PlaneFromAxisRotated(Vector8 normal_normalized, Quaternion rotation, Vector8 offset, bool invert_normal) {
-			normal_normalized = RotateVectorQuaternionSIMD(normal_normalized, rotation);
-			return PlaneFromNormalizedAxis(normal_normalized, offset, invert_normal);
+	template<typename Plane, typename Vector, typename Quaternion>
+	ECS_INLINE Plane ECS_VECTORCALL PlaneFromAxisRotatedImpl(Vector normal_normalized, Quaternion rotation, Vector offset, bool invert_normal) {
+		normal_normalized = RotateVector(normal_normalized, rotation);
+		if (invert_normal) {
+			normal_normalized = -normal_normalized;
 		}
-
+		return Plane::FromNormalized(normal_normalized, offset);
 	}
 
-	Plane ECS_VECTORCALL PlaneXY(float z_offset, bool invert_normal) {
-		Vector8 normal = ForwardVector();
-		return SIMDHelpers::PlaneFromAxis(normal, z_offset, invert_normal);
+	PlaneScalar PlaneXYScalar(float z_offset, bool invert_normal) {
+		float3 normal = GetForwardVector();
+		return PlaneFromAxisImpl<PlaneScalar>(normal, z_offset, invert_normal);
 	}
 
-	Plane ECS_VECTORCALL PlaneXZ(float y_offset, bool invert_normal) {
-		Vector8 normal = UpVector();
-		return SIMDHelpers::PlaneFromAxis(normal, y_offset, invert_normal);
+	Plane ECS_VECTORCALL PlaneXY(Vec8f z_offset, bool invert_normal) {
+		Vector3 normal = ForwardVector();
+		return PlaneFromAxisImpl<Plane>(normal, z_offset, invert_normal);
 	}
 
-	Plane ECS_VECTORCALL PlaneYZ(float x_offset, bool invert_normal) {
-		Vector8 normal = RightVector();
-		return SIMDHelpers::PlaneFromAxis(normal, x_offset, invert_normal);
+	PlaneScalar PlaneXZScalar(float y_offset, bool invert_normal) {
+		float3 normal = GetUpVector();
+		return PlaneFromAxisImpl<PlaneScalar>(normal, y_offset, invert_normal);
 	}
 
-	Plane ECS_VECTORCALL PlaneXYRotated(Quaternion rotation, Vector8 plane_offset, bool invert_normal) {
-		Vector8 normal = ForwardVector();
-		return SIMDHelpers::PlaneFromAxisRotated(normal, rotation, plane_offset, invert_normal);
+	Plane ECS_VECTORCALL PlaneXZ(Vec8f y_offset, bool invert_normal) {
+		Vector3 normal = UpVector();
+		return PlaneFromAxisImpl<Plane>(normal, y_offset, invert_normal);
 	}
 
-	Plane ECS_VECTORCALL PlaneXZRotated(Quaternion rotation, Vector8 plane_offset, bool invert_normal) {
-		Vector8 normal = UpVector();
-		return SIMDHelpers::PlaneFromAxisRotated(normal, rotation, plane_offset, invert_normal);
+	PlaneScalar PlaneYZScalar(float x_offset, bool invert_normal) {
+		float3 normal = GetRightVector();
+		return PlaneFromAxisImpl<PlaneScalar>(normal, x_offset, invert_normal);
 	}
 
-	Plane ECS_VECTORCALL PlaneYZRotated(Quaternion rotation, Vector8 plane_offset, bool invert_normal) {
-		Vector8 normal = RightVector();
-		return SIMDHelpers::PlaneFromAxisRotated(normal, rotation, plane_offset, invert_normal);
+	Plane ECS_VECTORCALL PlaneYZ(Vec8f x_offset, bool invert_normal) {
+		Vector3 normal = RightVector();
+		return PlaneFromAxisImpl<Plane>(normal, x_offset, invert_normal);
 	}
 
-	Vector8 ECS_VECTORCALL IsAbovePlaneMask(Plane plane, Vector8 point) {
+	PlaneScalar PlaneXYRotated(QuaternionScalar rotation, float3 point, bool invert_normal) {
+		float3 normal = GetForwardVector();
+		return PlaneFromAxisRotatedImpl<PlaneScalar>(normal, rotation, point, invert_normal);
+	}
+
+	Plane ECS_VECTORCALL PlaneXYRotated(Quaternion rotation, Vector3 point, bool invert_normal) {
+		Vector3 normal = ForwardVector();
+		return PlaneFromAxisRotatedImpl<Plane>(normal, rotation, point, invert_normal);
+	}
+
+	PlaneScalar PlaneXZRotated(QuaternionScalar rotation, float3 point, bool invert_normal) {
+		float3 normal = GetUpVector();
+		return PlaneFromAxisRotatedImpl<PlaneScalar>(normal, rotation, point, invert_normal);
+	}
+
+	Plane ECS_VECTORCALL PlaneXZRotated(Quaternion rotation, Vector3 point, bool invert_normal) {
+		Vector3 normal = UpVector();
+		return PlaneFromAxisRotatedImpl<Plane>(normal, rotation, point, invert_normal);
+	}
+
+	PlaneScalar PlaneYZRotated(QuaternionScalar rotation, float3 point, bool invert_normal) {
+		float3 normal = GetRightVector();
+		return PlaneFromAxisRotatedImpl<PlaneScalar>(normal, rotation, point, invert_normal);
+	}
+
+	Plane ECS_VECTORCALL PlaneYZRotated(Quaternion rotation, Vector3 point, bool invert_normal) {
+		Vector3 normal = RightVector();
+		return PlaneFromAxisRotatedImpl<Plane>(normal, rotation, point, invert_normal);
+	}
+
+	template<typename Mask, typename Plane, typename Vector>
+	static ECS_INLINE Mask ECS_VECTORCALL IsAbovePlaneMaskImpl(Plane plane, Vector point) {
 		// Get a point on the plane, calculate the direction to the original point
 		// If the cosine of the normal and the direction is positive, then the point
 		// is above. If the value is 0, then it's on the plane and negative means bellow the plane
-		Vector8 plane_point = plane.normal_dot * PerLaneBroadcast<3>(plane.normal_dot);
-		Vector8 direction = point - plane_point;
-		Vector8 cosine = Dot(plane.normal_dot, direction);
-		Vector8 mask = cosine > ZeroVector();
-		mask = PerLaneBroadcast<0>(mask);
-		return mask;
+		Vector plane_point = plane.normal * plane.dot;
+		Vector direction = point - plane_point;
+		auto cosine = Dot(plane.normal, direction);
+		return cosine > SingleZeroVector<Vector>();
+	}
+
+	bool IsAbovePlaneMask(PlaneScalar plane, float3 point) {
+		return IsAbovePlaneMaskImpl<bool>(plane, point);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL IsAbovePlaneMask(Plane plane, Vector3 point) {
+		return IsAbovePlaneMaskImpl<SIMDVectorMask>(plane, point);
 	}
 
 }

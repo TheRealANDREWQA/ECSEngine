@@ -47,6 +47,8 @@ namespace ECSEngine {
 		// Used for the optimizer to not throw away your result
 		void DoNotOptimize(size_t value);
 
+		void DoNotOptimizeFloat(float float_value);
+
 		Stream<char>* names;
 		CapacityStream<ResizableStream<size_t>> durations;
 		Timer timer;

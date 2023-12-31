@@ -34,85 +34,63 @@ namespace ECSEngine {
 	ECSENGINE_API float3 AxisDirection(ECS_AXIS axis);
 
 	// Rotates the AxisDirection by the given rotation
-	ECSENGINE_API float3 ECS_VECTORCALL AxisDirectionLocal(ECS_AXIS axis, Quaternion rotation);
-
-	// Returns { 1.0f, 0.0f, 0.0f } for X
-	// Returns { 0.0f, 1.0f, 0.0f } for Y
-	// Returns { 0.0f, 0.0f, 1.0f } for Z
-	ECSENGINE_API Vector8 ECS_VECTORCALL AxisDirectionSIMD(ECS_AXIS axis);
-
-	// If copy_low_to_high is enabled, then the low part of the quaternion is used for the high lane as well
-	// Rotates the AxisDirection by the given rotation
-	ECSENGINE_API Vector8 ECS_VECTORCALL AxisDirectionLocalSIMD(ECS_AXIS axis, Quaternion rotation, bool copy_low_to_high = true);
+	ECSENGINE_API float3 AxisDirectionLocal(ECS_AXIS axis, QuaternionScalar rotation);
 
 	// Returns either the world or the local space axis according to the space given
-	ECSENGINE_API float3 ECS_VECTORCALL AxisDirection(ECS_AXIS axis, Quaternion rotation, ECS_TRANSFORM_SPACE space, bool copy_low_to_high = true);
-
-	// If copy_low_to_high is enabled, then the low part of the quaternion is used for the high lane as well
-	// Returns either the world or the local space axis according to the space given
-	ECSENGINE_API Vector8 ECS_VECTORCALL AxisDirectionSIMD(ECS_AXIS axis, Quaternion rotation, ECS_TRANSFORM_SPACE space, bool copy_low_to_high = true);
+	ECSENGINE_API float3 AxisDirection(ECS_AXIS axis, QuaternionScalar rotation, ECS_TRANSFORM_SPACE space);
 
 	// Returns one of the two possible planes for that axis
 	// Can optionally offer an offset. The functions knows how to extract the correct offset
 	// from the given float3
-	// The plane is splatted on both the low and high
-	ECSENGINE_API Plane ECS_VECTORCALL AxisPlane(ECS_AXIS axis, float3 offset = float3::Splat(0.0f));
+	ECSENGINE_API PlaneScalar AxisPlane(ECS_AXIS axis, float3 offset);
 
 	// Returns the plane of the axis such that the view direction is not parallel to it
 	// Can optionally offer an offset. The functions knows how to extract the correct offset
 	// from the given float3. The view direction needs to be normalized
-	// The plane is splatted on both the low and high
-	ECSENGINE_API Plane ECS_VECTORCALL AxisPlane(ECS_AXIS axis, Vector8 view_direction_normalized, float3 offset = float3::Splat(0.0f));
+	ECSENGINE_API PlaneScalar AxisPlane(ECS_AXIS axis, float3 view_direction_normalized, float3 offset);
 
-	// If copy_low_to_high is enabled, then the low part of the quaternion is used for the high lane as well
-	ECSENGINE_API Plane ECS_VECTORCALL AxisPlaneLocal(ECS_AXIS axis, Quaternion rotation, float3 offset, bool copy_low_to_high = true);
+	ECSENGINE_API PlaneScalar AxisPlaneLocal(ECS_AXIS axis, QuaternionScalar rotation, float3 offset);
 
-	// If copy_low_to_high is enabled, then the low part of the quaternion is used for the high lane as well
-	ECSENGINE_API Plane ECS_VECTORCALL AxisPlaneLocal(
+	ECSENGINE_API PlaneScalar AxisPlaneLocal(
 		ECS_AXIS axis,
-		Vector8 view_direction_normalized,
-		Quaternion rotation,
-		float3 offset,
-		bool copy_low_to_high = true
+		float3 view_direction_normalized,
+		QuaternionScalar rotation,
+		float3 offset
 	);
 
-	ECSENGINE_API Plane ECS_VECTORCALL AxisPlane(
+	ECSENGINE_API PlaneScalar AxisPlane(
 		ECS_AXIS axis,
-		Quaternion rotation,
+		QuaternionScalar rotation,
 		ECS_TRANSFORM_SPACE space,
-		float3 offset,
-		bool copy_low_to_high = true
+		float3 offset
 	);
 
-	ECSENGINE_API Plane ECS_VECTORCALL AxisPlane(
+	ECSENGINE_API PlaneScalar AxisPlane(
 		ECS_AXIS axis,
-		Vector8 view_direction_normalized,
-		Quaternion rotation,
+		float3 view_direction_normalized,
+		QuaternionScalar rotation,
 		ECS_TRANSFORM_SPACE space,
-		float3 offset,
-		bool copy_low_to_high
+		float3 offset
 	);
 
 	struct TransformAxisInfo {
-		Vector8 axis_direction;
-		Plane plane;
+		float3 axis_direction;
+		PlaneScalar plane;
 	};
 
-	ECSENGINE_API TransformAxisInfo ECS_VECTORCALL AxisInfo(
+	ECSENGINE_API TransformAxisInfo AxisInfo(
 		ECS_AXIS axis,
-		Quaternion rotation,
+		QuaternionScalar rotation,
 		ECS_TRANSFORM_SPACE space,
-		float3 plane_offset,
-		bool copy_low_to_high = true
+		float3 plane_offset
 	);
 
-	ECSENGINE_API TransformAxisInfo ECS_VECTORCALL AxisInfo(
+	ECSENGINE_API TransformAxisInfo AxisInfo(
 		ECS_AXIS axis,
-		Quaternion rotation,
+		QuaternionScalar rotation,
 		ECS_TRANSFORM_SPACE space,
-		Vector8 plane_view_direction_normalized,
-		float3 plane_offset,
-		bool copy_low_to_high = true
+		float3 plane_view_direction_normalized,
+		float3 plane_offset
 	);
 
 }

@@ -225,10 +225,10 @@ namespace ECSEngine {
 		float2 normalized_values = MouseToNDC(window_size, mouse_texel_position);
 		float4 near_clip_space_position(normalized_values.x, normalized_values.y, -1.0f, 1.0f);
 		Matrix inverse_matrix = GetCameraInverseViewProjectionMatrix(camera);
-		Vector8 eye_space_pos = MatrixVectorMultiplyLow(near_clip_space_position, inverse_matrix);
-		eye_space_pos /= PerLaneBroadcast<3>(eye_space_pos);
-		Vector8 ray_direction_world = eye_space_pos - camera->translation;
-		return Normalize(ray_direction_world).AsFloat3Low();
+		float4 eye_space_pos = MatrixVectorMultiply(near_clip_space_position, inverse_matrix);
+		eye_space_pos = PerspectiveDivide(eye_space_pos);
+		float3 ray_direction_world = eye_space_pos.xyz() - camera->translation;
+		return Normalize(ray_direction_world);
 	}
 
 	ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, ViewportToWorldRayDirection, const Camera*, const CameraCached*, uint2, int2);
@@ -237,12 +237,10 @@ namespace ECSEngine {
 	int2 PositionToViewportTexels(const CameraType* camera, uint2 viewport_size, float3 position) {
 		Matrix view_projection_matrix = GetCameraViewProjectionMatrix(camera);
 		// Transform the point using the view projection matrix
-		Vector8 transformed_point = TransformPoint(position, view_projection_matrix);
+		float4 transformed_point = TransformPoint(position, view_projection_matrix);
 		// Perform the perspective divide
-		transformed_point = PerspectiveDivide(transformed_point);
-
 		// Now we have the NDC position of the point
-		float4 ndc_point = transformed_point.AsFloat4Low();
+		float4 ndc_point = ClipSpaceToNDC(transformed_point);
 		return NDCToViewportTexels(viewport_size, ndc_point.xy());
 	}
 
@@ -250,7 +248,7 @@ namespace ECSEngine {
 
 	template<typename CameraType>
 	float3 FocusCameraOnObject(const CameraType* camera, float3 object_translation, float distance) {
-		float3 camera_forward = GetCameraForwardVector(camera).AsFloat3Low();
+		float3 camera_forward = GetCameraForwardVectorScalar(camera);
 		return object_translation - camera_forward * distance;
 	}
 
@@ -260,9 +258,9 @@ namespace ECSEngine {
 	float3 FocusCameraOnObjectViewSpace(
 		const CameraType* camera,
 		float3 object_translation,
-		Quaternion object_rotation,
+		QuaternionScalar object_rotation,
 		float3 object_scale,
-		AABBStorage object_bounds,
+		AABBScalar object_bounds,
 		float2 view_space_proportion
 	) {
 		ECS_ASSERT(view_space_proportion.x == 0.0f || view_space_proportion.y == 0.0f);
@@ -276,7 +274,7 @@ namespace ECSEngine {
 		const float LINEAR_SEARCH_STEP_SIZE = 0.001f;
 
 		// Transform the AABB into the world space position
-		AABB transformed_bounds = TransformAABB(object_bounds, object_translation, QuaternionToMatrixLow(object_rotation), object_scale);
+		AABBScalar transformed_bounds = TransformAABB(object_bounds, object_translation, QuaternionToMatrix(object_rotation), object_scale);
 		Matrix view_projection_matrix = GetCameraViewProjectionMatrix(camera);
 
 		// Bring the center of the world space AABB right at the camera
@@ -284,40 +282,40 @@ namespace ECSEngine {
 		// Such that the camera won't penetrate the object
 		// Inside the binary search and linear search we will offset in alongside the 
 		// negative forward vector of the camera
-		Vector8 transformed_bounds_center = AABBCenter(transformed_bounds);
-		Vector8 camera_forward = GetCameraForwardVector(camera);
-		Vector8 camera_translation = { camera->translation, camera->translation };
+		float3 transformed_bounds_center = AABBCenter(transformed_bounds);
+		float3 camera_forward = GetCameraForwardVectorScalar(camera);
+		float3 camera_translation = camera->translation;
 
-		Vector8 half_extents = AABBHalfExtents(transformed_bounds) * Vector8(1.05f);
-		Vector8 displacement = camera_translation - transformed_bounds_center + Length(half_extents) * camera_forward;
+		float3 half_extents = AABBHalfExtents(transformed_bounds);
+		float3 displacement = camera_translation - transformed_bounds_center + camera_forward * Length(half_extents);
 		transformed_bounds = TranslateAABB(transformed_bounds, displacement);
 		
 		// In case it is not possible to attain, the
 		float resulting_distance = FLT_MAX;
 		float smallest_difference = FLT_MAX;
 		auto get_aabb_distance_info = [&](float current_distance, bool* is_out_of_frustum, bool* is_smaller, float2* coverage, float* current_difference) {
-			Vector8 aabb_translation = camera_forward * Vector8(current_distance);
-			AABB current_aabb = TranslateAABB(transformed_bounds, aabb_translation);
+			float3 aabb_translation = camera_forward * current_distance;
+			AABBScalar current_aabb = TranslateAABB(transformed_bounds, aabb_translation);
 
 			// Project the min and max point on the screen and determine the percentage of coverage
-			Vector8 projected_points = ApplyMatrixOnAABB(current_aabb, view_projection_matrix);
-			Vector8 ndc_values = ClipSpaceToNDC(projected_points);
+			float4 projected_min = TransformPoint(current_aabb.min, view_projection_matrix);
+			float4 projected_max = TransformPoint(current_aabb.max, view_projection_matrix);
+			float4 ndc_min_values = ClipSpaceToNDC(projected_min);
+			float4 ndc_max_values = ClipSpaceToNDC(projected_max);
 
-			float4 scalar_ndc_values[2];
-			ndc_values.Store(scalar_ndc_values);
-			float2 min_pos = scalar_ndc_values[0].xy();
-			float2 max_pos = scalar_ndc_values[1].xy();
-			*coverage = AbsoluteDifference(min_pos, max_pos);
-			*is_out_of_frustum = !CullClipSpaceWhole(projected_points);
+			float2 min_pos = ndc_min_values.xy();
+			float2 max_pos = ndc_max_values.xy();
+			*coverage = BasicTypeAbsoluteDifference(min_pos, max_pos);
+			*is_out_of_frustum = !CullClipSpaceMask(ndc_min_values) || !CullClipSpaceMask(ndc_max_values);
 
 			if (view_space_proportion.x == 0.0f) {
 				// The Y proportion is specified
-				*current_difference = AbsoluteDifference(view_space_proportion.y, coverage->y);
+				*current_difference = AbsoluteDifferenceSingle(view_space_proportion.y, coverage->y);
 				*is_smaller = coverage->y < view_space_proportion.y;
 			}
 			else {
 				// The X proportion is specified
-				*current_difference = AbsoluteDifference(view_space_proportion.x, coverage->x);
+				*current_difference = AbsoluteDifferenceSingle(view_space_proportion.x, coverage->x);
 				*is_smaller = coverage->x < view_space_proportion.x;
 			}
 		};
@@ -342,7 +340,7 @@ namespace ECSEngine {
 		get_aabb_distance_info(0.0f, &initial_is_out_of_frustum, &initial_is_smaller, &initial_coverage, &initial_difference);
 		if (initial_is_smaller) {
 			// Move along
-			return transformed_bounds_center.AsFloat3Low() - camera_forward.AsFloat3Low() * Length(half_extents).AsFloat3Low();
+			return transformed_bounds_center - camera_forward * Length(half_extents);
 		}
 
 		BinaryIntoLinearSearch(min_distance, max_distance, 0.001f, 2.0f, LINEAR_SEARCH_STEP_SIZE, &resulting_distance,
@@ -353,11 +351,11 @@ namespace ECSEngine {
 				return aabb_compare(current_distance, LINEAR_SEARCH_EPSILON);
 			}
 		);
-		resulting_distance += Length(half_extents).AsFloat3Low()[0];
-		return transformed_bounds_center.AsFloat3Low() - camera_forward.AsFloat3Low() * float3::Splat(resulting_distance);
+		resulting_distance += Length(half_extents);
+		return transformed_bounds_center - camera_forward * float3::Splat(resulting_distance);
 	}
 
-	ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, FocusCameraOnObjectViewSpace, const Camera*, const CameraCached*, float3, Quaternion, float3, AABBStorage, float2);
+	ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, FocusCameraOnObjectViewSpace, const Camera*, const CameraCached*, float3, QuaternionScalar, float3, AABBScalar, float2);
 
 	float2 GetCameraFrustumPlaneDimensions(float vertical_fov, float aspect_ratio, float z_depth)
 	{
@@ -409,9 +407,9 @@ namespace ECSEngine {
 		FrustumPoints points;
 
 		float4 plane_dimensions = GetCameraFrustumNearAndFarPlaneDimensions(camera);
-		float3 camera_direction = GetCameraForwardVector(camera).AsFloat3Low();
-		float3 camera_right = GetCameraRightVector(camera).AsFloat3Low();
-		float3 camera_up = GetCameraUpVector(camera).AsFloat3Low();
+		float3 camera_direction = GetCameraForwardVectorScalar(camera);
+		float3 camera_right = GetCameraRightVectorScalar(camera);
+		float3 camera_up = GetCameraUpVectorScalar(camera);
 
 		float3 near_plane_center = camera->translation + camera_direction * GetCameraNearZ(camera);
 		float3 far_plane_center = camera->translation + camera_direction * GetCameraFarZ(camera);

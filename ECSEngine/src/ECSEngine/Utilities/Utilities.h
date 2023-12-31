@@ -390,8 +390,30 @@ namespace ECSEngine {
 
 		if (simd_count < input.size) {
 			// We need to perform another iteration here but with redirection
-			size_t temporary_memory[ECS_SIMD_SIZE_T_SIZE];
+			alignas(alignof(void*)) char temporary_memory[ECS_SIMD_BYTE_SIZE * sizeof(output.buffer)];
 			size_t write_count = functor(input.buffer + simd_count, (decltype(output.buffer))temporary_memory, input.size - simd_count);
+			memcpy(output.buffer + output_element_index, temporary_memory, output.MemoryOf(1) * write_count);
+		}
+	}
+
+	// The functor receives as parameters (auto is_remainder, const Input* input_values, Output* output_values, size_t element_count)
+	// And must return how many elements to write (this value is ignored when a full iteration is in place, it is
+	// needed only when there is a remainder - this value must be expressed in elements of output type). The is_remainder is
+	// a std::true_type{} if this is a normal iteration and std::false_type{} if it is the remainder
+	template<typename InputStreamType, typename OutputStreamType, typename Functor>
+	void ApplySIMDConstexpr(InputStreamType input, OutputStreamType output, size_t simd_elements, size_t output_count_per_iteration, Functor&& functor) {
+		size_t simd_count = GetSimdCount(input.size, simd_elements);
+		size_t output_element_index = 0;
+		for (size_t index = 0; index < simd_count; index += simd_elements) {
+			// No need to marshal here
+			functor(std::true_type{}, input.buffer + index, output.buffer + output_element_index, simd_elements);
+			output_element_index += output_count_per_iteration;
+		}
+
+		if (simd_count < input.size) {
+			// We need to perform another iteration here but with redirection
+			alignas(alignof(void*)) char temporary_memory[ECS_SIMD_BYTE_SIZE];
+			size_t write_count = functor(std::false_type{}, input.buffer + simd_count, (decltype(output.buffer))temporary_memory, input.size - simd_count);
 			memcpy(output.buffer + output_element_index, temporary_memory, output.MemoryOf(1) * write_count);
 		}
 	}

@@ -1,248 +1,439 @@
 #include "ecspch.h"
+#include "BaseVector.h"
 #include "Vector.h"
 
 namespace ECSEngine {
 
-#define EXPORT_TEMPLATE_PRECISION_LANE_WIDTH(return_value, function_name, ...) \
-	template ECSENGINE_API return_value function_name<ECS_VECTOR_PRECISE, false>(__VA_ARGS__); \
-	template ECSENGINE_API return_value function_name<ECS_VECTOR_PRECISE, true>(__VA_ARGS__); \
-	template ECSENGINE_API return_value function_name<ECS_VECTOR_ACCURATE, false>(__VA_ARGS__); \
-	template ECSENGINE_API return_value function_name<ECS_VECTOR_ACCURATE, true>(__VA_ARGS__); \
-	template ECSENGINE_API return_value function_name<ECS_VECTOR_FAST, false>(__VA_ARGS__); \
-	template ECSENGINE_API return_value function_name<ECS_VECTOR_FAST, true>(__VA_ARGS__);
+#define INFINITY_MASK_VALUE 0x7F800000
+#define SIGN_MASK_VALUE 0x7FFFFFFF
 
 #define EXPORT_TEMPLATE_PRECISION(return_value, function_name, ...) \
 	template ECSENGINE_API return_value function_name<ECS_VECTOR_PRECISE>(__VA_ARGS__); \
 	template ECSENGINE_API return_value function_name<ECS_VECTOR_ACCURATE>(__VA_ARGS__); \
 	template ECSENGINE_API return_value function_name<ECS_VECTOR_FAST>(__VA_ARGS__);
+
+#define EXPORT_TEMPLATE_PRECISION_VECTORCALL(return_value, function_name, ...) \
+	template ECSENGINE_API return_value ECS_VECTORCALL function_name<ECS_VECTOR_PRECISE>(__VA_ARGS__); \
+	template ECSENGINE_API return_value ECS_VECTORCALL function_name<ECS_VECTOR_ACCURATE>(__VA_ARGS__); \
+	template ECSENGINE_API return_value ECS_VECTORCALL function_name<ECS_VECTOR_FAST>(__VA_ARGS__);
 	
 
 	namespace VectorGlobals {
-		Vector8 ONE = Vector8(1.0f);
-		Vector8 INFINITY_MASK = Vector8(0x7F800000);
-		Vector8 SIGN_MASK = Vector8(0x7FFFFFFF);
-		Vector8 EPSILON = Vector8(ECS_SIMD_VECTOR_EPSILON_VALUE);
+		Vec8f ONE = Vec8f(1.0f);
+		Vec8f EPSILON = Vec8f(ECS_SIMD_VECTOR_EPSILON_VALUE);
+		Vec8i INFINITY_MASK = Vec8i(INFINITY_MASK_VALUE);
+		Vec8i SIGN_MASK = Vec8i(SIGN_MASK_VALUE);
+	}
+
+	// We could use these templates to refer to the types in the Impl functions, but they are
+	// A bit cumbersome. If at a later time this method is preferred, they can be simply uncommented
+	/*template<typename VectorType>
+	struct Mask {};
+
+	template<>
+	struct Mask<Vector3> {
+		typedef SIMDVectorMask T;
+	};
+
+	template<>
+	struct Mask<Vector4> {
+		typedef SIMDVectorMask T;
+	};
+
+	template<>
+	struct Mask<float3> {
+		typedef bool T;
+	};
+
+	template<typename VectorType>
+	struct SingleValue {};
+
+	template<>
+	struct SingleValue<Vector3> {
+		typedef Vec8f T;
+	};
+
+	template<>
+	struct SingleValue<float3> {
+		typedef float T;
+	};*/
+
+	static ECS_INLINE float approx_recipr(float value) {
+		__m128 temp_simd = _mm_set1_ps(value);
+		__m128 result = _mm_rcp_ss(temp_simd);
+		return _mm_cvtss_f32(result);
+	}
+
+	static ECS_INLINE float approx_rsqrt(float squared_value) {
+		__m128 temp_simd = _mm_set1_ps(squared_value);
+		__m128 result = _mm_rsqrt_ss(temp_simd);
+		return _mm_cvtss_f32(result);
+	}
+
+	// To conform to the SIMD vector function
+	struct SingleMask {
+		ECS_INLINE bool AreAllSet(size_t count) const {
+			return value;
+		}
+
+		bool value;
+	};
+
+	// Used to conform to the to_bits vector function
+	static ECS_INLINE SingleMask to_bits(bool value) {
+		return SingleMask{ value };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	void Vector8::StoreFloat3(float3* low, float3* high) const
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL DegToRadImpl(Vector angles) {
+		return angles * DEG_TO_RAD_FACTOR;
+	}
+
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL RadToDegImpl(Vector angles) {
+		return angles * RAD_TO_DEG_FACTOR;
+	}
+
+	Vec8f ECS_VECTORCALL DegToRad(Vec8f angles)
 	{
-		// Store into a temp stack buffer the entire value such that
-		// We don't have to perform multiple slower moves and some shifts
-		float4 values[2];
-		Store(values);
-
-		*low = values[0].xyz();
-		*high = values[1].xyz();
+		return DegToRadImpl(angles);
 	}
 
-	float3 Vector8::AsFloat3Low() const {
-		// Store into a float4 since it will allow to issue a store
-		// intrinsic instead of having to do some shifting and 2 moves
-		float4 result;
-		StorePartialConstant<4, true>(&result);
-		return result.xyz();
+	Vec8f ECS_VECTORCALL RadToDeg(Vec8f angles) {
+		return RadToDegImpl(angles);
 	}
 
-	float3 Vector8::AsFloat3High() const {
-		// Store into a float4 since it will allow to issue a store
-		// intrinsic instead of having to do some shifting and 2 moves
-		float4 result;
-		StorePartialConstant<4, false>(&result);
-		return result.xyz();
+	Vector3 ECS_VECTORCALL DegToRad(Vector3 angles) {
+		return DegToRadImpl(angles);
 	}
 
-	float4 Vector8::AsFloat4Low() const {
-		float4 result;
-		StorePartialConstant<4, true>(&result);
+	Vector3 ECS_VECTORCALL RadToDeg(Vector3 angles) {
+		return RadToDegImpl(angles);
+	}
+
+	Vector4 ECS_VECTORCALL DegToRad(Vector4 angles) {
+		return DegToRadImpl(angles);
+	}
+
+	Vector4 ECS_VECTORCALL RadToDeg(Vector4 angles) {
+		return RadToDegImpl(angles);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	bool IsInfiniteMask(float value)
+	{
+		int int_value = *(int*)&value;
+		return (int_value & SIGN_MASK_VALUE) == INFINITY_MASK_VALUE;
+	}
+
+	SIMDVectorMask ECS_VECTORCALL IsInfiniteMask(Vec8f vector) {
+		Vec8i integer_representation = CastToInteger(vector);
+		integer_representation &= VectorGlobals::SIGN_MASK;
+		return integer_representation == VectorGlobals::INFINITY_MASK;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	Vector3 ECS_VECTORCALL Select(SIMDVectorMask mask, Vector3 a, Vector3 b) {
+		return Vector3(select(mask, a.x, b.x), select(mask, a.y, b.y), select(mask, a.z, b.z));
+	}
+
+	Vector3 ECS_VECTORCALL Select(SIMDVectorMask mask, Vector3 a, Vector3 b, ECS_SIMD_VECTOR_COMPONENT component) {
+		Vector3 result = a;
+		result[component] = select(mask, a[component], b[component]);
 		return result;
 	}
 
-	float4 Vector8::AsFloat4High() const {
-		float4 result;
-		StorePartialConstant<4, false>(&result);
+	Vector4 ECS_VECTORCALL Select(SIMDVectorMask mask, Vector4 a, Vector4 b) {
+		return Vector4(select(mask, a.x, b.x), select(mask, a.y, b.y), select(mask, a.z, b.z), select(mask, a.w, b.w));
+	}
+
+	Vector4 ECS_VECTORCALL Select(SIMDVectorMask mask, Vector4 a, Vector4 b, ECS_SIMD_VECTOR_COMPONENT component) {
+		Vector4 result = a;
+		result[component] = select(mask, a[component], b[component]);
+		return result;
+	}
+	
+	// --------------------------------------------------------------------------------------------------------------
+
+	Vector3 ECS_VECTORCALL Min(Vector3 a, Vector3 b) {
+		return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z) };
+	}
+
+	Vector4 ECS_VECTORCALL Min(Vector4 a, Vector4 b) {
+		return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w) };
+	}
+
+	Vector3 ECS_VECTORCALL Max(Vector3 a, Vector3 b) {
+		return { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z) };
+	}
+
+	Vector4 ECS_VECTORCALL Max(Vector4 a, Vector4 b) {
+		return { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w) };
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	bool IsNanMask(float value) {
+		return isnan(value);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL IsNanMask(Vec8f value) {
+		return value != value;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL AbsImpl(Vector vector) {
+		Vector result;
+		for (size_t index = 0; index < Vector::Count(); index++) {
+			result[index] = abs(vector[index]);
+		}
 		return result;
 	}
 
-	float Vector8::Last() const {
-		return _mm_cvtss_f32(_mm256_castps256_ps128(permute8<3, V_DC, V_DC, V_DC, 7, V_DC, V_DC, V_DC>(value)));
-	}
-
-	float Vector8::LastHigh() const {
-		return _mm_cvtss_f32(permute4<3, V_DC, V_DC, V_DC>(value.get_high()));
-	}
-
-	float2 Vector8::GetLasts() const {
-		Vec8f permuted = permute8<3, V_DC, V_DC, V_DC, 7, V_DC, V_DC, V_DC>(value);
-		return { _mm_cvtss_f32(_mm256_castps256_ps128(permuted)), _mm_cvtss_f32(permuted.get_high()) };
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	Vector8 ECS_VECTORCALL DegToRad(Vector8 angles) {
-		Vector8 factor(DEG_TO_RAD_FACTOR);
-		return angles * factor;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	Vector8 ECS_VECTORCALL RadToDeg(Vector8 angles) {
-		Vector8 factor(RAD_TO_DEG_FACTOR);
-		return angles * factor;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	Vector8 ECS_VECTORCALL ZeroVector() {
-		return Vec8f(_mm256_setzero_ps());
-	}
-
-	Vector8 ECS_VECTORCALL RightVector() {
-		return PerLaneBlend<4, 1, 2, 3>(ZeroVector(), VectorGlobals::ONE);
-	}
-
-	Vector8 ECS_VECTORCALL UpVector() {
-		return PerLaneBlend<0, 5, 2, 3>(ZeroVector(), VectorGlobals::ONE);
-	}
-
-	Vector8 ECS_VECTORCALL ForwardVector() {
-		return PerLaneBlend<0, 1, 6, 3>(ZeroVector(), VectorGlobals::ONE);
-	}
-
-	Vector8 ECS_VECTORCALL LastElementOneVector() {
-		return PerLaneBlend<0, 1, 2, 7>(ZeroVector(), VectorGlobals::ONE);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	Vector8 ECS_VECTORCALL IsInfiniteMask(Vector8 vector) {
-		vector.value &= VectorGlobals::SIGN_MASK;
-		return vector.value == VectorGlobals::INFINITY_MASK.value;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL Dot(Vector8 first, Vector8 second) {
-		// It seems that the dot implementation might be slower than the
-		// actual shuffles and add/mul
-		Vector8 multiplication = first * second;
-		Vector8 x = PerLaneBroadcast<0>(multiplication);
-		Vector8 y = PerLaneBroadcast<1>(multiplication);
-		Vector8 z = PerLaneBroadcast<2>(multiplication);
-		if constexpr (use_full_lane) {
-			Vector8 w = PerLaneBroadcast<3>(multiplication);
-			return x + y + z + w;
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL AbsoluteDifferenceImpl(Vector a, Vector b) {
+		Vector result;
+		for (size_t index = 0; index < Vector::Count(); index++) {
+			result[index] = abs(a[index] - b[index]);
 		}
-		else {
-			return x + y + z;
-		}
+		return result;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, Dot, Vector8, Vector8);
+	Vector3 ECS_VECTORCALL Abs(Vector3 vector) {
+		return AbsImpl(vector);
+	}
 
-	float Dot(float2 first, float2 second) {
+	Vector4 ECS_VECTORCALL Abs(Vector4 vector) {
+		return AbsImpl(vector);
+	}
+
+	Vec8f ECS_VECTORCALL AbsoluteDifference(Vec8f a, Vec8f b) {
+		return abs(a - b);
+	}
+	
+	Vector3 ECS_VECTORCALL AbsoluteDifference(Vector3 a, Vector3 b) {
+		return AbsoluteDifferenceImpl(a, b);
+	}
+
+	Vector4 ECS_VECTORCALL AbsoluteDifference(Vector4 a, Vector4 b) {
+		return AbsoluteDifferenceImpl(a, b);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	float ECS_VECTORCALL Dot(float2 first, float2 second) {
 		return first.x * second.x + first.y * second.y;
 	}
 
+	float ECS_VECTORCALL Dot(float3 first, float3 second) {
+		return first.x * second.x + first.y * second.y + first.z * second.z;
+	}
+
+	float ECS_VECTORCALL Dot(float4 first, float4 second) {
+		return first.x * second.x + first.y * second.y + first.z * second.z + first.w * second.w;
+	}
+
+	template<typename Vector>
+	static ECS_INLINE Vec8f ECS_VECTORCALL DotImpl(Vector first, Vector second) {
+		Vec8f result = first[0] * second[0];
+		for (size_t index = 1; index < Vector::Count(); index++) {
+			result += first[index] * second[index];
+		}
+		return result;
+	}
+
+	Vec8f ECS_VECTORCALL Dot(Vector3 first, Vector3 second) {
+		return DotImpl(first, second);
+	}
+
+	Vec8f ECS_VECTORCALL Dot(Vector4 first, Vector4 second) {
+		return DotImpl(first, second);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL CompareMask(Vector8 first, Vector8 second, Vector8 epsilon) {
-		Vector8 zero_vector = ZeroVector();
-		Vector8 absolute_difference = abs(first - second);
-		auto comparison = absolute_difference < epsilon;
-		return Vector8(comparison);
+	template<typename Vector>
+	static ECS_INLINE SIMDVectorMask ECS_VECTORCALL CompareMaskImpl(Vector first, Vector second, Vec8f epsilon) {
+		SIMDVectorMask result = CompareMask(first[0], second[0], epsilon);
+		for (size_t index = 0; index < Vector::Count(); index++) {
+			result &= CompareMask(first[index], second[index], epsilon);
+		}
+		return result;
 	}
-	
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, CompareMask, Vector8, Vector8, Vector8);
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL CompareAngleNormalizedRadMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians) {
-		Vector8 angle_cosine = cos(radians);
-		Vector8 direction_cosine = abs(Dot<use_full_lane>(first_normalized, second_normalized));
+	bool ECS_VECTORCALL CompareMask(float3 first, float3 second, float3 epsilon) {
+		return BasicTypeLess(AbsoluteDifference(first, second), epsilon);
+	}
+
+	bool ECS_VECTORCALL CompareMask(float4 first, float4 second, float4 epsilon)
+	{
+		return BasicTypeLess(AbsoluteDifference(first, second), epsilon);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL CompareMask(Vec8f first, Vec8f second, Vec8f epsilon)
+	{
+		return AbsoluteDifference(first, second) < epsilon;
+	}
+
+	SIMDVectorMask ECS_VECTORCALL CompareMask(Vector3 first, Vector3 second, Vec8f epsilon)
+	{
+		return CompareMaskImpl(first, second, epsilon);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL CompareMask(Vector4 first, Vector4 second, Vec8f epsilon)
+	{
+		return CompareMaskImpl(first, second, epsilon);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+	
+	template<typename ReturnType, typename Vector, typename SingleValue>
+	static ECS_INLINE ReturnType ECS_VECTORCALL CompareAngleNormalizedRadMaskImpl(Vector first_normalized, Vector second_normalized, SingleValue radians) {
+		SingleValue angle_cosine = cos(radians);
+		SingleValue direction_cosine = AbsSingle(Dot(first_normalized, second_normalized));
 		return direction_cosine > angle_cosine;
 	}
-	
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, CompareAngleNormalizedRadMask, Vector8, Vector8, Vector8);
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL CompareAngleRadMask(Vector8 first, Vector8 second, Vector8 radians) {
-		return CompareAngleNormalizedRadMask<use_full_lane>(Normalize<use_full_lane>(first), Normalize<use_full_lane>(second), radians);
+	bool ECS_VECTORCALL CompareAngleNormalizedRadMask(float3 first_normalized, float3 second_normalized, float radians)
+	{
+		return CompareAngleNormalizedRadMaskImpl<bool>(first_normalized, second_normalized, radians);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, CompareAngleRadMask, Vector8, Vector8, Vector8);
+	bool ECS_VECTORCALL CompareAngleRadMask(float3 first, float3 second, float radians)
+	{
+		return CompareAngleNormalizedRadMask(Normalize(first), Normalize(second), radians);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL CompareAngleNormalizedRadMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
+		return CompareAngleNormalizedRadMaskImpl<SIMDVectorMask>(first_normalized, second_normalized, radians);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL CompareAngleRadMask(Vector3 first, Vector3 second, Vec8f radians) {
+		return CompareAngleNormalizedRadMask(Normalize(first), Normalize(second), radians);
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL ProjectPointOnLineDirection(Vector8 line_point, Vector8 line_direction, Vector8 point) {
-		// Formula A + dot(AP,line_direction) / dot(line_direction, line_direction) * line_direction
-		// Where A is a point on the line and P is the point that we want to project
-		return line_point + Dot<use_full_lane>(point - line_point, line_direction) / Dot<use_full_lane>(line_direction, line_direction) * line_direction;
+	float3 ECS_VECTORCALL Lerp(float3 a, float3 b, float percentage)
+	{
+		return Fmadd(a, b - a, float3::Splat(percentage));
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, ProjectPointOnLineDirection, Vector8, Vector8, Vector8);
+	float4 ECS_VECTORCALL Lerp(float4 a, float4 b, float percentage)
+	{
+		return Fmadd(a, b - a, float4::Splat(percentage));
+	}
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL ProjectPointOnLineDirectionNormalized(Vector8 line_point, Vector8 line_direction_normalized, Vector8 point) {
+	Vector3 ECS_VECTORCALL Lerp(Vector3 a, Vector3 b, Vec8f percentage)
+	{
+		return Fmadd(a, b - a, Vector3::Splat(percentage));
+	}
+
+	Vector4 ECS_VECTORCALL Lerp(Vector4 a, Vector4 b, Vec8f percentage)
+	{
+		return Fmadd(a, b - a, Vector4::Splat(percentage));
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL ProjectPointOnLineDirectionImpl(Vector line_point, Vector line_direction, Vector point) {
+		// Formula A + (dot(AP,line_direction) / dot(line_direction, line_direction)) * line_direction
+		// Where A is a point on the line and P is the point that we want to project
+		return line_point + line_direction * (Dot(point - line_point, line_direction) / Dot(line_direction, line_direction));
+	}
+
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL ProjectPointOnLineDirectionNormalizedImpl(Vector line_point, Vector line_direction_normalized, Vector point) {
 		// In this version we don't need to divide by the magnitude of the line direction
-		// Formula A + dot(AP,line_direction) * line_direction
+		// Formula A + line_direction * dot(AP,line_direction)
 		// Where A is a point on the line and P is the point that we want to project
-		return line_point + Dot<use_full_lane>(point - line_point, line_direction_normalized) * line_direction_normalized;
+		return line_point + line_direction_normalized * Dot(point - line_point, line_direction_normalized);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, ProjectPointOnLineDirectionNormalized, Vector8, Vector8, Vector8);
-
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL ProjectPointOnLine(Vector8 line_a, Vector8 line_b, Vector8 point) {
-		Vector8 line_direction = line_b - line_a;
-		return ProjectPointOnLineDirection<use_full_lane>(line_a, line_direction, point);
+	float3 ECS_VECTORCALL ProjectPointOnLineDirection(float3 line_point, float3 line_direction, float3 point) {
+		return ProjectPointOnLineDirectionImpl(line_point, line_direction, point);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, ProjectPointOnLine, Vector8, Vector8, Vector8);
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	// Cross for 3 element wide register
-	Vector8 ECS_VECTORCALL Cross(Vector8 a, Vector8 b) {
-		// v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x
-		Vector8 vector1_yzx = PerLanePermute<1, 2, 0, V_DC>(a);
-		Vector8 vector1_zxy = PerLanePermute<2, 0, 1, V_DC>(a);
-		Vector8 vector2_zxy = PerLanePermute<2, 0, 1, V_DC>(b);
-		Vector8 vector2_yzx = PerLanePermute<1, 2, 0, V_DC>(b);
-
-		Vector8 second_multiply = vector1_zxy * vector2_yzx;
-		return Fmsub(vector1_yzx, vector2_zxy, second_multiply);
+	Vector3 ECS_VECTORCALL ProjectPointOnLineDirection(Vector3 line_point, Vector3 line_direction, Vector3 point) {
+		return ProjectPointOnLineDirectionImpl(line_point, line_direction, point);
 	}
 
-	// --------------------------------------------------------------------------------------------------------------
-
-	float SquareLength(float3 vector) {
-		return vector.x * vector.x + vector.y * vector.y + vector.z * vector.z;
+	float3 ECS_VECTORCALL ProjectPointOnLineDirectionNormalized(float3 line_point, float3 line_direction_normalized, float3 point) {
+		return ProjectPointOnLineDirectionNormalizedImpl(line_point, line_direction_normalized, point);
 	}
 
-	float SquareLength(float2 vector) {
-		return vector.x * vector.x + vector.y * vector.y;
+	Vector3 ECS_VECTORCALL ProjectPointOnLineDirectionNormalized(Vector3 line_point, Vector3 line_direction_normalized, Vector3 point) {
+		return ProjectPointOnLineDirectionNormalizedImpl(line_point, line_direction_normalized, point);
+	}
+
+	float3 ECS_VECTORCALL ProjectPointOnLine(float3 line_a, float3 line_b, float3 point) {
+		float3 line_direction = line_b - line_a;
+		return ProjectPointOnLineDirection(line_a, line_direction, point);
+	}
+
+	Vector3 ECS_VECTORCALL ProjectPointOnLine(Vector3 line_a, Vector3 line_b, Vector3 point) {
+		Vector3 line_direction = line_b - line_a;
+		return ProjectPointOnLineDirection(line_a, line_direction, point);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL Length(Vector8 vector) {
-		return sqrt(SquareLength<use_full_lane>(vector));
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL CrossImpl(Vector a, Vector b) {
+		// a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
+		return Vector(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, Length, Vector8);
+	float3 ECS_VECTORCALL Cross(float3 a, float3 b)
+	{
+		return CrossImpl(a, b);
+	}
+
+	Vector3 ECS_VECTORCALL Cross(Vector3 a, Vector3 b) {
+		return CrossImpl(a, b);
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<VectorOperationPrecision precision, bool use_full_lane>
-	Vector8 ECS_VECTORCALL ReciprocalLength(Vector8 vector) {
-		Vector8 square_length = SquareLength<use_full_lane>(vector);
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL LengthImpl(Vector vector) {
+		return sqrt(SquareLength(vector));
+	}
+
+	Vec8f ECS_VECTORCALL Length(Vector3 vector) {
+		return LengthImpl<Vec8f>(vector);
+	}
+
+	Vec8f ECS_VECTORCALL Length(Vector4 vector) {
+		return LengthImpl<Vec8f>(vector);
+	}
+
+	float ECS_VECTORCALL Length(float2 vector) {
+		return LengthImpl<float>(vector);
+	}
+
+	float ECS_VECTORCALL Length(float3 vector) {
+		return LengthImpl<float>(vector);
+	}
+
+	float ECS_VECTORCALL Length(float4 vector) {
+		return LengthImpl<float>(vector);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	template<typename ReturnValue, VectorOperationPrecision precision, typename Vector>
+	static ECS_INLINE ReturnValue ECS_VECTORCALL ReciprocalLengthImpl(Vector vector) {
+		auto square_length = SquareLength(vector);
 		if constexpr (precision == ECS_VECTOR_PRECISE) {
-			return VectorGlobals::ONE / Vector8(sqrt(square_length));
+			return OneVector<Vector>() / sqrt(square_length);
 		}
 		else if constexpr (precision == ECS_VECTOR_ACCURATE) {
 			return approx_recipr(sqrt(square_length));
@@ -251,110 +442,150 @@ namespace ECSEngine {
 			return approx_rsqrt(square_length);
 		}
 		else {
-			static_assert(false);
+			static_assert(false, "Invalid Vector precision");
 		}
 	}
 
-	EXPORT_TEMPLATE_PRECISION_LANE_WIDTH(Vector8, ReciprocalLength, Vector8);
+	template<VectorOperationPrecision precision>
+	float ECS_VECTORCALL ReciprocalLength(float3 vector) {
+		return ReciprocalLengthImpl<float, precision>(vector);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(float, ReciprocalLength, float3);
+
+	template<VectorOperationPrecision precision>
+	float ECS_VECTORCALL ReciprocalLength(float4 vector) {
+		return ReciprocalLengthImpl<float, precision>(vector);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(float, ReciprocalLength, float4);
+
+	template<VectorOperationPrecision precision>
+	Vec8f ECS_VECTORCALL ReciprocalLength(Vector3 vector) {
+		return ReciprocalLengthImpl<Vec8f, precision>(vector);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(Vec8f, ReciprocalLength, Vector3);
+
+	template<VectorOperationPrecision precision>
+	Vec8f ECS_VECTORCALL ReciprocalLength(Vector4 vector)
+	{
+		return ReciprocalLengthImpl<Vec8f, precision>(vector);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(Vec8f, ReciprocalLength, Vector4);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL SquaredDistanceToLine(Vector8 line_point, Vector8 line_direction, Vector8 point) {
-		Vector8 projected_point = ProjectPointOnLineDirection<use_full_lane>(line_point, line_direction, point);
-		return SquareLength<use_full_lane>(projected_point - point);
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL SquaredDistanceToLineImpl(Vector line_point, Vector line_direction, Vector point) {
+		Vector projected_point = ProjectPointOnLineDirection(line_point, line_direction, point);
+		return SquareLength(projected_point - point);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, SquaredDistanceToLine, Vector8, Vector8, Vector8);
-
-	// This version is much faster than the other one since it avoids a dot and a division
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL SquaredDistanceToLineNormalized(Vector8 line_point, Vector8 line_direction_normalized, Vector8 point) {
-		Vector8 projected_point = ProjectPointOnLineDirectionNormalized<use_full_lane>(line_point, line_direction_normalized, point);
-		return SquareLength<use_full_lane>(projected_point - point);
+	float ECS_VECTORCALL SquaredDistanceToLine(float3 line_point, float3 line_direction, float3 point) {
+		return SquaredDistanceToLineImpl<float>(line_point, line_direction, point);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, SquaredDistanceToLineNormalized, Vector8, Vector8, Vector8);
-
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL DistanceToLine(Vector8 line_point, Vector8 line_direction, Vector8 point) {
-		return sqrt(SquaredDistanceToLine<use_full_lane>(line_point, line_direction, point));
+	Vec8f ECS_VECTORCALL SquaredDistanceToLine(Vector3 line_point, Vector3 line_direction, Vector3 point) {
+		return SquaredDistanceToLineImpl<Vec8f>(line_point, line_direction, point);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, DistanceToLine, Vector8, Vector8, Vector8);
-
-	// This version is much faster than the other one since it avoids a dot and a division
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL DistanceToLineNormalized(Vector8 line_point, Vector8 line_direction_normalized, Vector8 point) {
-		return sqrt(SquaredDistanceToLineNormalized<use_full_lane>(line_point, line_direction_normalized, point));
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL SquaredDistanceToLineNormalizedImpl(Vector line_point, Vector line_direction_normalized, Vector point) {
+		Vector projected_point = ProjectPointOnLineDirectionNormalized(line_point, line_direction_normalized, point);
+		return SquareLength(projected_point - point);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, DistanceToLineNormalized, Vector8, Vector8, Vector8);
+	float ECS_VECTORCALL SquaredDistanceToLineNormalized(float3 line_point, float3 line_direction_normalized, float3 point) {
+		return SquaredDistanceToLineNormalizedImpl<float>(line_point, line_direction_normalized, point);
+	}
+
+	Vec8f ECS_VECTORCALL SquaredDistanceToLineNormalized(Vector3 line_point, Vector3 line_direction_normalized, Vector3 point) {
+		return SquaredDistanceToLineNormalizedImpl<Vec8f>(line_point, line_direction_normalized, point);
+	}
+
+	Vec8f ECS_VECTORCALL DistanceToLine(Vector3 line_point, Vector3 line_direction, Vector3 point) {
+		return sqrt(SquaredDistanceToLine(line_point, line_direction, point));
+	}
+
+	Vec8f ECS_VECTORCALL DistanceToLineNormalized(Vector3 line_point, Vector3 line_direction_normalized, Vector3 point) {
+		return sqrt(SquaredDistanceToLineNormalized(line_point, line_direction_normalized, point));
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE, bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL Normalize(Vector8 vector) {
-		if constexpr (precision == ECS_VECTOR_PRECISE) {
-			// Don't use reciprocal length so as to not add an extra read to the
-			// VectorGlobals::ONE and then a multiplication
-			return vector / Length<use_full_lane>(vector);
-		}
-		else {
-			return vector * ReciprocalLength<precision, use_full_lane>(vector);
-		}
+	template<VectorOperationPrecision precision, typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL NormalizeImpl(Vector vector) {
+		//if constexpr (precision == ECS_VECTOR_PRECISE) {
+		//	// Don't use reciprocal length so as to not add an extra read to the
+		//	// VectorGlobals::ONE and then a multiplication
+		//	auto divisor = Length(vector);
+		//	return vector / divisor;
+		//}
+		//else {
+		//	auto divisor = ReciprocalLength<precision>(vector);
+		//	return vector * divisor;
+		//}
+
+		auto divisor = ReciprocalLength<precision>(vector);
+		return vector * divisor;
 	}
 
-	EXPORT_TEMPLATE_PRECISION_LANE_WIDTH(Vector8, Normalize, Vector8);
-
-	float3 Normalize(float3 vector) {
-		Vector8 simd_vector(vector);
-		simd_vector = Normalize<ECS_VECTOR_PRECISE>(simd_vector);
-		return simd_vector.AsFloat3Low();
+	template<VectorOperationPrecision precision>
+	float3 ECS_VECTORCALL Normalize(float3 vector) {
+		return NormalizeImpl<precision>(vector);
 	}
 
-	// Add the float2 variant as well
-	float2 Normalize(float2 vector) {
+	EXPORT_TEMPLATE_PRECISION_VECTORCALL(float3, Normalize, float3);
+
+	template<VectorOperationPrecision precision>
+	float4 ECS_VECTORCALL Normalize(float4 vector) {
+		return NormalizeImpl<precision>(vector);
+	}
+
+	EXPORT_TEMPLATE_PRECISION_VECTORCALL(float4, Normalize, float4);
+
+	template<VectorOperationPrecision precision>
+	Vector3 ECS_VECTORCALL Normalize(Vector3 vector) {
+		return NormalizeImpl<precision>(vector);
+	}
+
+	EXPORT_TEMPLATE_PRECISION_VECTORCALL(Vector3, Normalize, Vector3);
+
+	template<VectorOperationPrecision precision>
+	Vector4 ECS_VECTORCALL Normalize(Vector4 vector) {
+		return NormalizeImpl<precision>(vector);
+	}
+	
+	EXPORT_TEMPLATE_PRECISION_VECTORCALL(Vector4, Normalize, Vector4);
+
+	float2 ECS_VECTORCALL Normalize(float2 vector) {
 		return vector * float2::Splat(1.0f / Length(vector));
 	}
 
-	// The vector needs to have 2 packed float2
-	// It will normalize both at the same time
-	Vector8 Normalize2x2(Vector8 vector) {
-		Vector8 multiplication = vector * vector;
-		Vector8 shuffle = PerLanePermute<1, 0, 3, 2>(multiplication);
-
-		Vector8 squared_length = shuffle + multiplication;
-		Vector8 length = sqrt(squared_length);
-		return vector / length;
+	SIMDVectorMask ECS_VECTORCALL IsNormalizedSquareLengthMask(Vec8f squared_length) {
+		Vec8f one = VectorGlobals::ONE;
+		return CompareMaskSingle(squared_length, one);
 	}
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL IsNormalizedSquareLengthMask(Vector8 squared_length) {
-		Vector8 one = VectorGlobals::ONE;
-		return CompareMask<use_full_lane>(squared_length, one);
+	SIMDVectorMask ECS_VECTORCALL IsNormalizedMask(Vec8f length) {
+		Vec8f one = VectorGlobals::ONE;
+		return CompareMaskSingle(length, one);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, IsNormalizedSquareLengthMask, Vector8);
-
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL IsNormalizedMask(Vector8 vector) {
-		Vector8 squared_length = SquareLength<use_full_lane>(vector);
-		return IsNormalizedSquareLengthMask<use_full_lane>(squared_length);
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, IsNormalizedMask, Vector8);
-
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE, bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL NormalizeIfNot(Vector8 vector) {
+	template<VectorOperationPrecision precision, typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL NormalizeIfNotImpl(Vector vector, size_t vector_count) {
 		if constexpr (precision == ECS_VECTOR_PRECISE || precision == ECS_VECTOR_ACCURATE) {
-			Vector8 square_length = SquareLength<use_full_lane>(vector);
-			if (!IsNormalizedSquareLengthWhole(square_length)) {
+			auto square_length = SquareLength(vector);
+			auto mask = IsNormalizedSquareLengthMask(square_length);
+			bool bool_mask = SIMDMaskAreAllSet(mask, vector_count);
+			if (!bool_mask) {
 				if constexpr (precision == ECS_VECTOR_PRECISE) {
-					return vector / Vector8(sqrt(square_length));
+					return vector / Vector::Splat(sqrt(square_length));
 				}
 				else {
-					return vector * Vector8(approx_recipr(square_length));
+					return vector * Vector::Splat(approx_recipr(square_length));
 				}
 			}
 			else {
@@ -362,237 +593,453 @@ namespace ECSEngine {
 			}
 		}
 		else {
-			return Normalize<ECS_VECTOR_FAST, use_full_lane>(vector);
+			return Normalize<ECS_VECTOR_FAST>(vector);
 		}
 	}
-
-	EXPORT_TEMPLATE_PRECISION_LANE_WIDTH(Vector8, NormalizeIfNot, Vector8);
 
 	template<VectorOperationPrecision precision>
-	Vector8 ECS_VECTORCALL OneDividedVector(Vector8 value) {
+	float3 ECS_VECTORCALL NormalizeIfNot(float3 vector) {
+		// The count is not used
+		return NormalizeIfNotImpl<precision>(vector, 1);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(float3, NormalizeIfNot, float3);
+
+	template<VectorOperationPrecision precision>
+	float4 ECS_VECTORCALL NormalizeIfNot(float4 vector) {
+		// The count is not used
+		return NormalizeIfNotImpl<precision>(vector, 1);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(float4, NormalizeIfNot, float4);
+
+	template<VectorOperationPrecision precision>
+	Vector3 ECS_VECTORCALL NormalizeIfNot(Vector3 vector, size_t vector_count) {
+		return NormalizeIfNotImpl<precision>(vector, vector_count);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(Vector3, NormalizeIfNot, Vector3, size_t);
+
+	template<VectorOperationPrecision precision>
+	Vector4 ECS_VECTORCALL NormalizeIfNot(Vector4 vector, size_t vector_count) {
+		return NormalizeIfNotImpl<precision>(vector, vector_count);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(Vector4, NormalizeIfNot, Vector4, size_t);
+
+	template<VectorOperationPrecision precision>
+	float OneDividedVector(float value) {
 		if constexpr (precision == ECS_VECTOR_PRECISE) {
-			return VectorGlobals::ONE / value;
+			return 1.0f / value;
 		}
 		else {
-			return approx_recipr(value);
+			return value * approx_recipr(value);
 		}
 	}
 
-	EXPORT_TEMPLATE_PRECISION(Vector8, OneDividedVector, Vector8);
+	EXPORT_TEMPLATE_PRECISION(float, OneDividedVector, float);
+
+	template<VectorOperationPrecision precision>
+	Vec8f ECS_VECTORCALL OneDividedVector(Vec8f value) {
+		if constexpr (precision == ECS_VECTOR_PRECISE) {
+			return 1.0f / value;
+		}
+		else {
+			return value * approx_recipr(value);
+		}
+	}
+
+	EXPORT_TEMPLATE_PRECISION(Vec8f, OneDividedVector, Vec8f);
+
+	template<VectorOperationPrecision precision, typename Vector>
+	Vector ECS_VECTORCALL OneDividedVectorImpl(Vector value) {
+		if constexpr (precision == ECS_VECTOR_PRECISE) {
+			if constexpr (std::is_same_v<Vector, Vector3>) {
+				return Vector::Splat(VectorGlobals::ONE) / value;
+			}
+			else {
+				return float3::Splat(1.0f) / value;
+			}
+		}
+		else {
+			Vector return_value;
+			for (size_t index = 0; index < Vector::Count(); index++) {
+				return_value[index] = value[index] * approx_recipr(value[index]);
+			}
+			return return_value;
+		}
+	}
+
+	template<VectorOperationPrecision precision>
+	float3 ECS_VECTORCALL OneDividedVector(float3 value) {
+		return OneDividedVectorImpl<precision>(value);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(float3, OneDividedVector, float3);
+
+	template<VectorOperationPrecision precision>
+	Vector3 ECS_VECTORCALL OneDividedVector(Vector3 value) {
+		return OneDividedVectorImpl<precision>(value);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(Vector3, OneDividedVector, Vector3);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	Vector8 ECS_VECTORCALL IsParallelMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 epsilon) {
+	bool ECS_VECTORCALL IsParallelMask(float3 first_normalized, float3 second_normalized, float epsilon) {
+		return CompareMask(first_normalized, second_normalized, float3::Splat(epsilon));
+	}
+
+	SIMDVectorMask ECS_VECTORCALL IsParallelMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f epsilon) {
 		return CompareMask(first_normalized, second_normalized, epsilon);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	Vector8 ECS_VECTORCALL IsParallelAngleMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians) {
+	bool ECS_VECTORCALL IsParallelAngleMask(float3 first_normalized, float3 second_normalized, float radians) {
+		return CompareAngleNormalizedRadMask(first_normalized, second_normalized, radians);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL IsParallelAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
 		return CompareAngleNormalizedRadMask(first_normalized, second_normalized, radians);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	Vector8 ECS_VECTORCALL IsPerpendicularMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 epsilon) {
-		return CompareMask(Dot(first_normalized, second_normalized), ZeroVector(), epsilon);
+	bool ECS_VECTORCALL IsPerpendicularMask(float3 first_normalized, float3 second_normalized, float epsilon) {
+		return AbsoluteDifferenceSingle(Dot(first_normalized, second_normalized), 0.0f) < epsilon;
+	}
+
+	SIMDVectorMask ECS_VECTORCALL IsPerpendicularMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f epsilon) {
+		return CompareMask(Dot(first_normalized, second_normalized), ZeroVectorFloat(), epsilon);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	Vector8 ECS_VECTORCALL IsPerpendicularAngleMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians) {
-		Vector8 half_pi = PI / 2;
-		return Vector8(Vec8fb(Not(CompareAngleNormalizedRadMask(first_normalized, second_normalized, half_pi - radians))));
+	bool ECS_VECTORCALL IsPerpendicularAngleMask(float3 first_normalized, float3 second_normalized, float radians) {
+		return !CompareAngleNormalizedRadMask(first_normalized, second_normalized, (PI / 2) - radians);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL IsPerpendicularAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
+		return !CompareAngleNormalizedRadMask(first_normalized, second_normalized, Vec8f(PI / 2) - radians);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	Vector8 ECS_VECTORCALL Clamp(Vector8 value, Vector8 min, Vector8 max) {
-		auto is_smaller = value < min;
-		auto is_greater = value > max;
-		return select(is_greater, max, select(is_smaller, min, value));
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL ClampImpl(Vector value, Vector min, Vector max) {
+		Vector return_value;
+		for (size_t index = 0; index < Vector::Count(); index++) {
+			auto is_smaller = value[index] < min[index];
+			auto is_greater = value[index] > max[index];
+			return_value[index] = SelectSingle(is_greater, max[index], SelectSingle(is_smaller, min[index], value[index]));
+		}
+		return return_value;
 	}
 
-	template<bool equal_min = false, bool equal_max = false>
-	Vector8 ECS_VECTORCALL IsInRangeMask(Vector8 value, Vector8 min, Vector8 max) {
-		Vector8 is_lower, is_greater;
-
-		if constexpr (equal_min) {
-			is_lower = value >= min;
-		}
-		else {
-			is_lower = value > min;
-		}
-
-		if constexpr (equal_max) {
-			is_greater = value <= max;
-		}
-		else {
-			is_greater = value < max;
-		}
-
-		return is_lower.AsMask() && is_greater.AsMask();
+	Vector3 ECS_VECTORCALL Clamp(Vector3 value, Vector3 min, Vector3 max) {
+		return ClampImpl(value, min, max);
 	}
 
-	ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL(Vector8, IsInRangeMask, Vector8, Vector8, Vector8);
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL Reflect(Vector8 incident, Vector8 normal) {
-		// result = incident - (2 * Dot(incident, normal)) * normal
-		Vector8 dot = Dot<use_full_lane>(incident, normal);
-		return incident - Vector8(((dot + dot) * normal));
+	Vector4 ECS_VECTORCALL Clamp(Vector4 value, Vector4 min, Vector4 max) {
+		return ClampImpl(value, min, max);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, Reflect, Vector8, Vector8);
+	template<typename ReturnType, bool equal_min, bool equal_max, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL IsInRangeMaskImpl(Vector value, Vector min, Vector max) {
+		ReturnType all_is_lower, all_is_greater;
 
-	// --------------------------------------------------------------------------------------------------------------
-
-	namespace SIMDHelpers {
-		template<bool is_low_only, bool use_full_lane = false>
-		Vector8 ECS_VECTORCALL Refract(Vector8 incident, Vector8 normal, Vector8 refraction_index) {
-			// result = refraction_index * incident - normal * (refraction_index * Dot(incident, normal) +
-			// sqrt(1 - refraction_index * refraction_index * (1 - Dot(incident, normal) * Dot(incident, normal))))
-
-			Vector8 dot = Dot<use_full_lane>(incident, normal);
-			Vector8 one = VectorGlobals::ONE;
-			Vector8 zero = ZeroVector();
-			Vector8 sqrt_dot_factor = one - dot * dot;
-			Vector8 refraction_index_squared = refraction_index * refraction_index;
-
-			Vector8 sqrt_value = one - refraction_index_squared * sqrt_dot_factor;
-			auto is_less_or_zero = sqrt_value <= zero;
-
-			Vector8 result = sqrt_value;
-
-			int mask = _mm256_movemask_ps(is_less_or_zero);
-			if constexpr (is_low_only) {
-				if (mask == 0x0F) {
-					return zero;
-				}
-			}
-
-			// total reflection
-			if (mask == 0xFF) {
-				return zero;
+		auto compare = [&](ReturnType& is_lower, ReturnType& is_greater, size_t index) {
+			if constexpr (equal_min) {
+				is_lower = value[index] >= min[index];
 			}
 			else {
-				result = Fmsub(refraction_index, incident, normal * Vector8(Fmadd(refraction_index, dot, Vector8(sqrt(result)))));
-				if (mask == 0xF0) {
-					result = Vector8(zero.value.get_low(), result.value.get_high());
-				}
-				else if (mask == 0x0F) {
-					result = Vector8(result.value.get_low(), zero.value.get_low());
-				}
-				return result;
+				is_lower = value[index] > min[index];
 			}
+
+			if constexpr (equal_max) {
+				is_greater = value[index] <= max[index];
+			}
+			else {
+				is_greater = value[index] < max[index];
+			}
+		};
+
+		compare(all_is_lower, all_is_greater, 0);
+		for (size_t index = 1; index < Vector::Count(); index++) {
+			ReturnType current_is_lower, current_is_greater;
+			compare(current_is_lower, current_is_greater, index);
+			all_is_lower &= current_is_lower;
+			all_is_greater &= current_is_greater;
 		}
+		return all_is_lower && all_is_greater;
 	}
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL Refract(Vector8 incident, Vector8 normal, Vector8 refraction_index) {
-		return SIMDHelpers::Refract<false, use_full_lane>(incident, normal, refraction_index);
+	template<bool equal_min, bool equal_max>
+	bool ECS_VECTORCALL IsInRangeMask(float3 value, float3 min, float3 max) {
+		return IsInRangeMaskImpl<bool, equal_min, equal_max>(value, min, max);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, Refract, Vector8, Vector8, Vector8);
+	ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL(bool, IsInRangeMask, float3, float3, float3);
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL RefractLow(Vector8 incident, Vector8 normal, Vector8 refraction_index) {
-		return SIMDHelpers::Refract<true, use_full_lane>(incident, normal, refraction_index);
+	template<bool equal_min, bool equal_max>
+	bool ECS_VECTORCALL IsInRangeMask(float4 value, float4 min, float4 max) {
+		return IsInRangeMaskImpl<bool, equal_min, equal_max>(value, min, max);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, RefractLow, Vector8, Vector8, Vector8);
+	ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL(bool, IsInRangeMask, float4, float4, float4);
+
+	template<bool equal_min, bool equal_max>
+	SIMDVectorMask ECS_VECTORCALL IsInRangeMask(Vector3 value, Vector3 min, Vector3 max) {
+		return IsInRangeMaskImpl<SIMDVectorMask, equal_min, equal_max>(value, min, max);
+	}
+
+	ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL(SIMDVectorMask, IsInRangeMask, Vector3, Vector3, Vector3);
+
+	template<bool equal_min, bool equal_max>
+	SIMDVectorMask ECS_VECTORCALL IsInRangeMask(Vector4 value, Vector4 min, Vector4 max) {
+		return IsInRangeMaskImpl<SIMDVectorMask, equal_min, equal_max>(value, min, max);
+	}
+
+	ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL(SIMDVectorMask, IsInRangeMask, Vector4, Vector4, Vector4);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL AngleBetweenVectorsNormalizedRad(Vector8 a_normalized, Vector8 b_normalized) {
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL ReflectImpl(Vector incident, Vector normal) {
+		// result = incident - (2 * Dot(incident, normal)) * normal
+		auto dot = Dot(incident, normal);
+		return incident - Vector::Splat(dot + dot) * normal;
+	}
+
+	float3 ECS_VECTORCALL Reflect(float3 incident, float3 normal) {
+		return ReflectImpl(incident, normal);
+	}
+
+	Vector3 ECS_VECTORCALL Reflect(Vector3 incident, Vector3 normal) {
+		return ReflectImpl(incident, normal);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	template<typename MaskType, typename Vector, typename RefractionType>
+	static ECS_INLINE Vector ECS_VECTORCALL RefractImpl(Vector incident, Vector normal, RefractionType refraction_index, size_t vector_count) {
+		// result = refraction_index * incident - normal * (refraction_index * Dot(incident, normal) +
+		// sqrt(1 - refraction_index * refraction_index * (1 - Dot(incident, normal) * Dot(incident, normal))))
+
+		RefractionType dot = Dot(incident, normal);
+		RefractionType one;
+		RefractionType zero;
+		if constexpr (std::is_same_v<Vector, float3>) {
+			one = 1.0f;
+			zero = 0.0f;
+		}
+		else {
+			one = VectorGlobals::ONE;
+			zero = ZeroVectorFloat();
+		}
+		RefractionType sqrt_dot_factor = one - dot * dot;
+		RefractionType refraction_index_squared = refraction_index * refraction_index;
+
+		RefractionType sqrt_value = one - refraction_index_squared * sqrt_dot_factor;
+		auto is_less_or_zero = sqrt_value <= zero;
+
+		RefractionType result = sqrt_value;
+
+		MaskType mask = { is_less_or_zero };
+
+		// Total reflection
+		if (mask.AreAllSet(vector_count)) {
+			return Vector::Splat(zero);
+		}
+
+		return Fmsub(Vector::Splat(refraction_index), incident, normal * Fmadd(refraction_index, dot, sqrt(result)));
+	}
+
+	float3 ECS_VECTORCALL Refract(float3 incident, float3 normal, float refraction_index) {
+		return RefractImpl<SingleMask>(incident, normal, refraction_index, 1);
+	}
+
+	Vector3 ECS_VECTORCALL Refract(Vector3 incident, Vector3 normal, Vec8f refraction_index, size_t vector_count) {
+		return RefractImpl<VectorMask>(incident, normal, refraction_index, vector_count);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL AngleBetweenVectorsNormalizedRadImpl(Vector a_normalized, Vector b_normalized) {
 		// Just take the cosine (dot) between them and return the acos result
-		Vector8 dot = Dot<use_full_lane>(a_normalized, b_normalized);
+		ReturnType dot = Dot(a_normalized, b_normalized);
 		return acos(dot);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, AngleBetweenVectorsNormalizedRad, Vector8, Vector8);
-
-	// Returns the value of the angle between the 2 vectors in radians
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE, bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL AngleBetweenVectorsRad(Vector8 a, Vector8 b) {
-		return AngleBetweenVectorsNormalizedRad(Normalize<precision, use_full_lane>(a), Normalize<precision, use_full_lane>(b));
+	float ECS_VECTORCALL AngleBetweenVectorsNormalizedRad(float3 a_normalized, float3 b_normalized) {
+		return AngleBetweenVectorsNormalizedRadImpl<float>(a_normalized, b_normalized);
 	}
 
-	EXPORT_TEMPLATE_PRECISION_LANE_WIDTH(Vector8, AngleBetweenVectorsRad, Vector8, Vector8);
-
-	// Return the value of the angle between the 2 vectors in degrees
-	template<bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL AngleBetweenVectorsNormalized(Vector8 a_normalized, Vector8 b_normalized) {
-		return RadToDeg(AngleBetweenVectorsNormalizedRad<use_full_lane>(a_normalized, b_normalized));
+	Vec8f ECS_VECTORCALL AngleBetweenVectorsNormalizedRad(Vector3 a_normalized, Vector3 b_normalized) {
+		return AngleBetweenVectorsNormalizedRadImpl<Vec8f>(a_normalized, b_normalized);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Vector8, AngleBetweenVectorsNormalized, Vector8, Vector8);
-
-	// Return the value of the angle between the 2 vectors in degrees
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE, bool use_full_lane = false>
-	Vector8 ECS_VECTORCALL AngleBetweenVectors(Vector8 a, Vector8 b) {
-		return RadToDeg(AngleBetweenVectorsRad<precision, use_full_lane>(a, b));
+	template<typename ReturnType, VectorOperationPrecision precision, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL AngleBetweenVectorsRadImpl(Vector a, Vector b) {
+		return AngleBetweenVectorsNormalizedRad(Normalize<precision>(a), Normalize<precision>(b));
 	}
 
-	EXPORT_TEMPLATE_PRECISION_LANE_WIDTH(Vector8, AngleBetweenVectors, Vector8, Vector8);
+	template<VectorOperationPrecision precision>
+	float ECS_VECTORCALL AngleBetweenVectorsRad(float3 a, float3 b) {
+		return AngleBetweenVectorsRadImpl<float, precision>(a, b);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(float, AngleBetweenVectorsRad, float3, float3);
+
+	template<VectorOperationPrecision precision>
+	Vec8f ECS_VECTORCALL AngleBetweenVectorsRad(Vector3 a, Vector3 b) {
+		return AngleBetweenVectorsRadImpl<Vec8f, precision>(a, b);
+	}
+
+	EXPORT_TEMPLATE_PRECISION(Vec8f, AngleBetweenVectorsRad, Vector3, Vector3);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	Vector8 ECS_VECTORCALL VectorFmod(Vector8 x, Vector8 y) {
-		// Formula x - truncate(x / y) * y;
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL FmaddImpl(Vector a, Vector b, Vector c) {
+		Vector result;
+		for (size_t index = 0; index < Vector::Count(); index++) {
+			result[index] = Fmadd(a[index], b[index], c[index]);
+		}
+		return result;
+	}
+
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL FmsubImpl(Vector a, Vector b, Vector c) {
+		Vector result;
+		for (size_t index = 0; index < Vector::Count(); index++) {
+			result[index] = Fmsub(a[index], b[index], c[index]);
+		}
+		return result;
+	}
+
+	float3 ECS_VECTORCALL Fmadd(float3 a, float3 b, float3 c) {
+		return FmaddImpl(a, b, c);
+	}
+
+	float4 ECS_VECTORCALL Fmadd(float4 a, float4 b, float4 c) {
+		return FmaddImpl(a, b, c);
+	}
+
+	Vector3 ECS_VECTORCALL Fmadd(Vector3 a, Vector3 b, Vector3 c) {
+		return FmaddImpl(a, b, c);
+	}
+
+	Vector4 ECS_VECTORCALL Fmadd(Vector4 a, Vector4 b, Vector4 c) {
+		return FmaddImpl(a, b, c);
+	}
+
+	float3 ECS_VECTORCALL Fmsub(float3 a, float3 b, float3 c) {
+		return FmsubImpl(a, b, c);
+	}
+
+	float4 ECS_VECTORCALL Fmsub(float4 a, float4 b, float4 c) {
+		return FmsubImpl(a, b, c);
+	}
+
+	Vector3 ECS_VECTORCALL Fmsub(Vector3 a, Vector3 b, Vector3 c) {
+		return FmsubImpl(a, b, c);
+	}
+
+	Vector4 ECS_VECTORCALL Fmsub(Vector4 a, Vector4 b, Vector4 c) {
+		return FmsubImpl(a, b, c);
+	}
+
+	Vec8f ECS_VECTORCALL Fmod(Vec8f a, Vec8f b) {
+		// Formula a - truncate(a / b) * b;
 
 		// Fmadd version might have better precision but slightly slower because of the _mm_set1_ps
-		//return Fmadd(truncate(x / y), -y, x);
+		//return Fmadd(truncate(a / b), -b, a);
 
-		// Cannot use approximate reciprocal of y and multiply instead of division
+		// Cannot use approximate reciprocal of b and multiply instead of division
 		// since the error is big enough that it will break certain use cases
-		return x - Vector8(truncate(x / y) * y);
+		return a - truncate(a / b) * b;
+	}
+
+	float3 ECS_VECTORCALL Fmod(float3 a, float3 b) {
+		float3 result;
+		for (size_t index = 0; index < result.Count(); index++) {
+			result[index] = Fmod(a[index], b[index]);
+		}
+		return result;
+	}
+
+	Vector3 ECS_VECTORCALL Fmod(Vector3 a, Vector3 b) {
+		Vector3 result;
+		for (size_t index = 0; index < result.Count(); index++) {
+			result[index] = Fmod(a[index], b[index]);
+		}
+		return result;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	Vector8 ECS_VECTORCALL DirectionToRotationEulerRad(Vector8 direction) {
+	template<typename SingleValue, typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL DirectionToRotationEulerRadImpl(Vector direction) {
 		/* Scalar algorithm
 		float x_angle = fmod(atan2(direction.y, direction.z), PI);
 		float y_angle = fmod(atan2(direction.z, direction.x), PI);
 		float z_angle = fmod(atan2(direction.y, direction.x), PI);*/
 
-		Vector8 tangent_numerator = PerLanePermute<1, 2, 1, V_DC>(direction);
-		Vector8 tangent_denominator = PerLanePermute<2, 0, 0, V_DC>(direction);
-
-		Vector8 radians = atan2(tangent_numerator, tangent_denominator);
-		Vector8 pi = Vector8(PI);
-		radians = VectorFmod(radians, pi);
-
+		const float EPSILON = 0.001f;
+		SingleValue pi;
+		SingleValue zero;
+		SingleValue epsilon;
+		if constexpr (std::is_same_v<Vector, float3>) {
+			pi = PI;
+			zero = 0.0f;
+			epsilon = EPSILON;
+		}
+		else {
+			pi = Vec8f(PI);
+			zero = ZeroVectorFloat();
+			epsilon = Vec8f(EPSILON);
+		}
 		// It can happen that atan2 is unstable when values are really small and returns 
 		// something close to PI when it should be 0
 		// Handle this case - we need a slightly larger epsilon
-		Vector8 close_to_pi_mask = CompareMask(radians, pi, Vector8(0.001f));
-		Vector8 zero_vector = ZeroVector();
-		return Select(close_to_pi_mask, zero_vector, radians);
+		auto x_radians_base = atan2(direction.y, direction.z);
+		auto y_radians_base = atan2(direction.z, direction.x);
+		auto z_radians_base = atan2(direction.y, direction.x);
+
+		auto x_angle = Fmod(x_radians_base, pi);
+		auto y_angle = Fmod(y_radians_base, pi);
+		auto z_angle = Fmod(z_radians_base, pi);
+
+		Vector result = Vector(x_angle, y_angle, z_angle);
+		for (size_t index = 0; index < Vector::Count(); index++) {
+			result[index] = SelectSingle(CompareMaskSingle(result[index], pi, epsilon), zero, result[index]);
+		}
+		return result;
 	}
 
-	// Returns the euler angles in radians that correspond to that direction
-	float3 DirectionToRotationEulerRad(float3 direction) {
-		Vector8 vector_dir(direction);
-		vector_dir = DirectionToRotationEuler(vector_dir);
-		return vector_dir.AsFloat3Low();
+	float3 ECS_VECTORCALL DirectionToRotationEulerRad(float3 direction) {
+		return DirectionToRotationEulerRadImpl<float>(direction);
+	}
+
+	Vector3 ECS_VECTORCALL DirectionToRotationEulerRad(Vector3 direction) {
+		return DirectionToRotationEulerRadImpl<Vec8f>(direction);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// Constructs an orthonormal basis out of a given direction
-	void ECS_VECTORCALL OrthonormalBasis(Vector8 direction_normalized, Vector8* direction_first, Vector8* direction_second) {
+	template<typename Vector>
+	void ECS_VECTORCALL OrthonormalBasisImpl(Vector direction_normalized, Vector* direction_first, Vector* direction_second) {
 		/*
 		*   Scalar algorithm - Credit to Building an Orthonormal Basis, Revisited - 2017
-			if(n.z<0.){
+			Here n maps to direction normalized
+			if(n.z<0.0f){
 				const float a = 1.0f / (1.0f - n.z);
 				const float b = n.x * n.y * a;
 				b1 = Vec3f(1.0f - n.x * n.x * a, -b, n.x);
-				b2 = Vec3f(b, n.y * n.y*a - 1.0f, -n.y);
+				b2 = Vec3f(b, n.y * n.y * a - 1.0f, -n.y);
 			}
 			else{
 				const float a = 1.0f / (1.0f + n.z);
@@ -602,90 +1049,107 @@ namespace ECSEngine {
 			}
 		*/
 
-		Vector8 negative_z = direction_normalized < ZeroVector();
-		Vector8 splatted_x = PerLaneBroadcast<0>(direction_normalized);
-		Vector8 splatted_y = PerLaneBroadcast<1>(direction_normalized);
-		Vector8 splatted_z = PerLaneBroadcast<2>(direction_normalized);
-		Vector8 xx = splatted_x * splatted_x;
-		Vector8 yy = splatted_y * splatted_y;
-		Vector8 xy = splatted_x * splatted_y;
-		negative_z = PerLaneBroadcast<2>(negative_z);
+		if constexpr (std::is_same_v<Vector, float3>) {
+			if (direction_normalized.z < 0.0f) {
+				float a = 1.0f / (1.0f - direction_normalized.z);
+				float b = direction_normalized.x * direction_normalized.y * a;
+				*direction_first = float3(1.0f - direction_normalized.x * direction_normalized.x * a, -b, direction_normalized.x);
+				*direction_second = float3(b, direction_normalized.y * direction_normalized.y * a - 1.0f, -direction_normalized.y);
+			}
+			else {
+				float a = 1.0f / (1.0f + direction_normalized.z);
+				float b = -direction_normalized.x * direction_normalized.y * a;
+				*direction_first = float3(1.0f - direction_normalized.x * direction_normalized.x * a, b, -direction_normalized.x);
+				*direction_second = float3(b, 1.0f - direction_normalized.y * direction_normalized.y * a, -direction_normalized.y);
+			}
+		}
+		else {
+			SIMDVectorMask less_than_zero = direction_normalized.z < ZeroVectorFloat();
+			// Use this mask to generate an inversion mask that can be used to invert some values
+			Vec8f invert_mask = ChangeSignMask(less_than_zero);
+			// We'll basically use the else branch and invert with the mask in case it doesn't fit in that branch
+			Vec8f a = 1.0f / (1.0f + ChangeSign(direction_normalized.z, invert_mask));
+			Vec8f b = direction_normalized.x * direction_normalized.y * ChangeSign(a, invert_mask);
+			*direction_first = Vector3(1.0f - direction_normalized.x * direction_normalized.x * a, ChangeSign(b, invert_mask), ChangeSign(-direction_normalized.x, invert_mask));
+			*direction_second = Vector3(b, ChangeSign(VectorGlobals::ONE - direction_normalized.y * direction_normalized.y * a, invert_mask), -direction_normalized.y);
+		}
+	}
 
-		Vector8 one = VectorGlobals::ONE;
-		Vector8 first_a = one / (one + splatted_z);
-		Vector8 second_a = one / (one - splatted_z);
+	void ECS_VECTORCALL OrthonormalBasis(float3 direction_normalized, float3* direction_first, float3* direction_second) {
+		OrthonormalBasisImpl(direction_normalized, direction_first, direction_second);
+	}
 
-		Vector8 a = Select(negative_z, first_a, second_a);
-		Vector8 b = xy * a;
-		Vector8 x_factor = one - xx * a;
-		Vector8 y_factor = one - yy * a;
-
-		Vector8 a_result_xy = PerLaneBlend<0, 5, V_DC, V_DC>(x_factor, b);
-		Vector8 a_result = PerLaneBlend<0, 1, 6, V_DC>(a_result_xy, splatted_x);
-		Vector8 b_result_xy = PerLaneBlend<4, 1, V_DC, V_DC>(y_factor, b);
-		Vector8 b_result = PerLaneBlend<0, 1, 6, V_DC>(b_result_xy, splatted_y);
-
-		Vector8 negative_a_sign_mask = PerLaneChangeSignMask<0, 1, 0, 0, Vector8>();
-		Vector8 positive_a_sign_mask = PerLaneChangeSignMask<0, 0, 1, 0, Vector8>();
-		Vector8 negative_b_sign_mask = PerLaneChangeSignMask<0, 0, 1, 0, Vector8>();
-		Vector8 positive_b_sign_mask = PerLaneChangeSignMask<0, 1, 1, 0, Vector8>();
-
-		Vector8 a_mask = Select(negative_z, negative_a_sign_mask, positive_a_sign_mask);
-		Vector8 b_mask = Select(negative_z, negative_b_sign_mask, positive_b_sign_mask);
-
-		*direction_first = PerLaneChangeSign(a_result, a_mask);
-		*direction_second = PerLaneChangeSign(b_result, b_mask);
+	void ECS_VECTORCALL OrthonormalBasis(Vector3 direction_normalized, Vector3* direction_first, Vector3* direction_second) {
+		OrthonormalBasisImpl(direction_normalized, direction_first, direction_second);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	namespace SIMDHelpers {
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceXMaskImpl(Vector vector) {
+		return (-vector.w) <= vector.x && vector.x <= vector.w;
+	}
 
-		Vector8 ECS_VECTORCALL CullClipSpaceXMask(Vector8 vector, Vector8 splatted_w, Vector8 negative_splatted_w) {
-			Vector8 splatted_x = PerLaneBroadcast<0>(vector);
-			Vector8 x_greater = negative_splatted_w <= splatted_x;
-			Vector8 x_smaller = splatted_x <= splatted_w;
-			return x_greater.value & x_smaller.value;
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceYMaskImpl(Vector vector) {
+		return (-vector.w) <= vector.y && vector.y <= vector.w;
+	}
+
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceZMaskImpl(Vector vector) {
+		if constexpr (std::is_same_v<Vector, float4>) {
+			return 0.0f <= vector.z && vector.z <= vector.w;
 		}
-
-		Vector8 ECS_VECTORCALL CullClipSpaceYMask(Vector8 vector, Vector8 splatted_w, Vector8 negative_splatted_w) {
-			Vector8 splatted_y = PerLaneBroadcast<1>(vector);
-			Vector8 y_greater = negative_splatted_w <= splatted_y;
-			Vector8 y_smaller = splatted_y <= splatted_w;
-			return y_greater.value & y_smaller.value;
+		else {
+			return ZeroVectorFloat() <= vector.z && vector.z <= vector.w;
 		}
+	}
 
-		Vector8 ECS_VECTORCALL CullClipSpaceZMask(Vector8 vector, Vector8 splatted_w) {
-			Vector8 splatted_z = PerLaneBroadcast<2>(vector);
-			Vector8 z_greater = ZeroVector() <= splatted_z;
-			Vector8 z_smaller = splatted_z <= splatted_w;
-			return z_greater.value & z_greater.value;
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceWMaskImpl(Vector vector) {
+		if constexpr (std::is_same_v<Vector, float4>) {
+			return vector.w > 0.0f;
 		}
-
+		else {
+			return vector.w > ZeroVectorFloat();
+		}
 	}
 
-	Vector8 ECS_VECTORCALL CullClipSpaceXMask(Vector8 vector) {
-		Vector8 splatted_w = PerLaneBroadcast<3>(vector);
-		return SIMDHelpers::CullClipSpaceXMask(vector, splatted_w, -splatted_w);
+	bool CullClipSpaceXMask(float4 vector) {
+		return CullClipSpaceXMaskImpl<bool>(vector);
 	}
 
-	Vector8 ECS_VECTORCALL CullClipSpaceYMask(Vector8 vector) {
-		Vector8 splatted_w = PerLaneBroadcast<3>(vector);
-		return SIMDHelpers::CullClipSpaceYMask(vector, splatted_w, -splatted_w);
+	SIMDVectorMask ECS_VECTORCALL CullClipSpaceXMask(Vector4 vector) {
+		return CullClipSpaceXMaskImpl<SIMDVectorMask>(vector);
 	}
 
-	Vector8 ECS_VECTORCALL CullClipSpaceZMask(Vector8 vector) {
-		return SIMDHelpers::CullClipSpaceZMask(vector, PerLaneBroadcast<3>(vector));
+	bool CullClipSpaceYMask(float4 vector) {
+		return CullClipSpaceYMaskImpl<bool>(vector);
 	}
 
-	Vector8 ECS_VECTORCALL CullClipSpaceWMask(Vector8 vector) {
-		Vector8 w_mask = vector >= ZeroVector();
-		Vector8 splatted_w_mask = PerLaneBroadcast<3>(w_mask);
-		return splatted_w_mask;
+	SIMDVectorMask ECS_VECTORCALL CullClipSpaceYMask(Vector4 vector) {
+		return CullClipSpaceYMaskImpl<SIMDVectorMask>(vector);
+	}
+
+	bool CullClipSpaceZMask(float4 vector) {
+		return CullClipSpaceZMaskImpl<bool>(vector);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL CullClipSpaceZMask(Vector4 vector) {
+		return CullClipSpaceZMaskImpl<SIMDVectorMask>(vector);
+	}
+
+	bool CullClipSpaceWMask(float4 vector) {
+		return CullClipSpaceWMaskImpl<bool>(vector);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL CullClipSpaceWMask(Vector4 vector) {
+		return CullClipSpaceWMaskImpl<SIMDVectorMask>(vector);
 	}
 
 	// Returns a mask where vertices which should be kept have their lane set to true
-	Vector8 ECS_VECTORCALL CullClipSpaceMask(Vector8 vector) {
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceMaskImpl(Vector vector) {
 		// The entire conditions are like this
 		/*
 			w > 0
@@ -694,115 +1158,112 @@ namespace ECSEngine {
 			0 <= z <= w
 		*/
 
-		// Check the w first. If it is negative, than it's behind the camera
-		Vector8 w_mask = CullClipSpaceWMask(vector);
-		// Both w are ngative, can early exit
-		if (!horizontal_or(Vec8fb(w_mask.value))) {
-			return ZeroVector();
-		}
-
-		Vector8 current_mask = w_mask;
-
-		// Continue the testing with the X condition
-		Vector8 splatted_w = PerLaneBroadcast<3>(vector);
-		Vector8 negative_splatted_w = -splatted_w;
-
-		current_mask.value &= SIMDHelpers::CullClipSpaceXMask(vector, splatted_w, negative_splatted_w);
-		// If both tests have failed up until now we can exit
-		if (!horizontal_or(Vec8fb(current_mask.value))) {
-			return ZeroVector();
-		}
-
-		current_mask.value &= SIMDHelpers::CullClipSpaceYMask(vector, splatted_w, negative_splatted_w);
-		if (!horizontal_or(Vec8fb(current_mask.value))) {
-			return ZeroVector();
-		}
-
-		current_mask.value &= SIMDHelpers::CullClipSpaceZMask(vector, splatted_w);
-		return current_mask;
+		ReturnType x_mask = CullClipSpaceXMask(vector);
+		ReturnType y_mask = CullClipSpaceYMask(vector);
+		ReturnType z_mask = CullClipSpaceZMask(vector);
+		ReturnType w_mask = CullClipSpaceWMask(vector);
+		return x_mask && y_mask && z_mask && w_mask;
 	}
 
-	// Converts from clip space to NDC
-	Vector8 ECS_VECTORCALL ClipSpaceToNDC(Vector8 vector) {
+	bool CullClipSpaceMask(float4 vector) {
+		return CullClipSpaceMaskImpl<bool>(vector);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL CullClipSpaceMask(Vector4 vector) {
+		return CullClipSpaceMaskImpl<SIMDVectorMask>(vector);
+	}
+
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL ClipSpaceToNDCImpl(Vector vector) {
 		// We just need to divide xyz / w, but here we also divide w by w
 		// so as to not add another masking instruction
-		return vector / PerLaneBroadcast<3>(vector);
+		return vector / Vector::Splat(vector.w);
+	}
+
+	float4 ECS_VECTORCALL ClipSpaceToNDC(float4 vector) {
+		return ClipSpaceToNDCImpl(vector);
+	}
+
+	Vector4 ECS_VECTORCALL ClipSpaceToNDC(Vector4 vector) {
+		return ClipSpaceToNDCImpl(vector);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	Vector8 ECS_VECTORCALL GetRightVectorForDirection(Vector8 direction_normalized) {
-		// Compute the cross product between the world up and the given direction
-		// If they are parallel, then the right vector is the global right vector if the direction
-		// is positive, else the negative right vector if the direction is negative
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL GetVectorForDirectionImpl(Vector direction_normalized, Vector world_compute_product, Vector world_same_direction) {
+		// Compute the cross product between the a world axis and the given direction
+		// If they are parallel, then the return vector is the world same direction if the direction
+		// is positive, else the negative world same direction vector if the direction is negative
 
-		Vector8 world_up = UpVector();
-		Vector8 is_parallel_to_up = IsParallelMask(direction_normalized, world_up);
+		auto is_parallel_to_up = IsParallelMask(direction_normalized, world_compute_product);
+		
+		// In case it is parallel to the world compute product, we can return the corresponding world direction
+		// With the appropriate Sign
+		Vector parallel_result = direction_normalized * world_same_direction;
 
-		// This is the branch were we calculate the result for the case where
-		// the direction is parallel to the world up
-		Vector8 world_right = RightVector();
-		// The direction is either (0.0f, 1.0f, 0.0f) or (0.0f, -1.0f, 0.0f)
-		// We can permute the value and the multiply with right
-		Vector8 sign = PerLanePermute<1, V_DC, V_DC, V_DC>(direction_normalized);
-		Vector8 parallel_result = sign * world_right;
-
-		if (is_parallel_to_up.MaskResultWhole<3>()) {
-			return parallel_result;
-		}
-		else {
-			// Compute the cross product
-			Vector8 cross_product = Cross(direction_normalized, world_up);
-			cross_product = Normalize(cross_product);
-
-			return Select(is_parallel_to_up, parallel_result, cross_product);
-		}
+		// Compute the cross product
+		Vector cross_product = Cross(direction_normalized, world_compute_product);
+		cross_product = Normalize(cross_product);
+		return Select(is_parallel_to_up, parallel_result, cross_product);
 	}
 
-	Vector8 ECS_VECTORCALL GetUpVectorForDirection(Vector8 direction_normalized) {
-		// This is the same as the the Right case, we just need to replace the
-		// vectors and the permutation for the sign
+	float3 ECS_VECTORCALL GetRightVectorForDirection(float3 direction_normalized) {
+		return GetVectorForDirectionImpl(direction_normalized, GetUpVector(), GetRightVector());
+	}
+	
+	Vector3 ECS_VECTORCALL GetRightVectorForDirection(Vector3 direction_normalized) {
+		return GetVectorForDirectionImpl(direction_normalized, UpVector(), RightVector());
+	}
 
-		Vector8 world_right = RightVector();
-		Vector8 is_parallel_to_right = IsParallelMask(direction_normalized, world_right);
+	float3 ECS_VECTORCALL GetUpVectorForDirection(float3 direction_normalized) {
+		return GetVectorForDirectionImpl(direction_normalized, GetRightVector(), GetUpVector());
+	}
 
-		// This is the branch were we calculate the result for the case where
-		// the direction is parallel to the world up
-		Vector8 world_up = UpVector();
-		// The direction is either (0.0f, 1.0f, 0.0f) or (0.0f, -1.0f, 0.0f)
-		// We can permute the value and the multiply with right
-		Vector8 sign = PerLanePermute<1, V_DC, V_DC, V_DC>(direction_normalized);
-		Vector8 parallel_result = sign * world_up;
-
-		if (is_parallel_to_right.MaskResultWhole<3>()) {
-			return parallel_result;
-		}
-		else {
-			// Compute the cross product
-			Vector8 cross_product = Cross(direction_normalized, world_right);
-			cross_product = Normalize(cross_product);
-
-			return Select(is_parallel_to_right, parallel_result, cross_product);
-		}
+	Vector3 ECS_VECTORCALL GetUpVectorForDirection(Vector3 direction_normalized) {
+		return GetVectorForDirectionImpl(direction_normalized, RightVector(), UpVector());
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	Vector8 ECS_VECTORCALL ClosestPoint(Stream<Vector8> points, Vector8 origin) {
-		Vector8 smallest_distance = FLT_MAX;
-		Vector8 closest_point;
-		for (size_t index = 0; index < points.size; index++) {
-			Vector8 distance = SquareLength(points[index] - origin);
-			Vector8 is_closer = smallest_distance > distance;
-			smallest_distance = Select(is_closer, distance, smallest_distance);
-			closest_point = Select(is_closer, points[index], closest_point);
+	float3 ECS_VECTORCALL ClosestPoint(Stream<float3> points, float3 origin) {
+		Vector3 closest_points = Vector3().Splat(float3::Splat(FLT_MAX));
+		Vec8f smallest_distance = Vec8f(FLT_MAX);
+		Vector3 vector_origin = Vector3().Splat(origin);
+
+		float smallest_dist = FLT_MAX;
+		size_t smallest_simd_index = 0;
+		float3 smallest_dist_point;
+		size_t simd_count = points.size - (points.size % Vec8f().size());
+		if (simd_count > 0) {
+			for (size_t index = 0; index < simd_count; index++) {
+				Vector3 simd_points = Vector3().Gather(points.buffer + index);
+				Vec8f distance = SquareLength(simd_points - vector_origin);
+				SIMDVectorMask is_closer = smallest_distance > distance;
+				smallest_distance = select(is_closer, distance, smallest_distance);
+				closest_points = Select(is_closer, simd_points, closest_points);
+			}
+
+			alignas(ECS_SIMD_BYTE_SIZE) float scalar_smallest_distance[Vec8f::size()];
+			smallest_distance.store_a(scalar_smallest_distance);
+			for (size_t index = 0; index < Vec8f::size(); index++) {
+				if (smallest_dist > scalar_smallest_distance[index]) {
+					smallest_dist = scalar_smallest_distance[index];
+					smallest_simd_index = index;
+				}
+			}
 		}
 
-		Vector8 closest_permute = Permute2f128Helper<1, 0>(closest_point, closest_point);
-		Vector8 smallest_distance_permute = Permute2f128Helper<1, 0>(smallest_distance, smallest_distance);
-		Vector8 permute_mask = smallest_distance_permute < smallest_distance;
-		Vector8 final_point = Select(permute_mask, closest_permute, closest_point);
-		return SplatLowLane(final_point);
+		for (size_t index = simd_count; index < points.size; index++) {
+			float distance = SquareLength(points[index] - origin);
+			if (distance < smallest_dist) {
+				smallest_dist = distance;
+				smallest_simd_index = -1;
+				smallest_dist_point = points[index];
+			}
+		}
+
+		return smallest_simd_index == -1 ? smallest_dist_point : closest_points.At(smallest_simd_index);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
