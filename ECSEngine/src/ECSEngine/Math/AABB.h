@@ -6,71 +6,92 @@
 
 namespace ECSEngine {
 
-	struct AABBStorage {
+	struct AABBScalar {
+		ECS_INLINE AABBScalar() {}
+		ECS_INLINE AABBScalar(float3 min, float3 max) : min(min), max(max) {}
+
+		ECS_INLINE float3& operator [](size_t index) {
+			float3* corners = (float3*)this;
+			return corners[index];
+		}
+
+		ECS_INLINE const float3& operator [](size_t index) const {
+			const float3* corners = (const float3*)this;
+			return corners[index];
+		}
+
 		float3 min;
 		float3 max;
 	};
 
 	struct AABB {
 		ECS_INLINE AABB() {}
-		ECS_INLINE AABB(float3 min, float3 max) : value(min, max) {}
-		ECS_INLINE AABB(AABBStorage storage) : value((float3*)&storage) {}
-		ECS_INLINE AABB(Vector8 _value) : value(_value) {}
+		ECS_INLINE AABB(Vector3 min, Vector3 max) : min(min), max(max) {}
 
-		ECS_INLINE operator Vector8() const {
-			return value;
+		ECS_INLINE AABBScalar At(size_t index) const {
+			return { min.At(index), max.At(index) };
 		}
 
-		ECS_INLINE AABBStorage ToStorage() const {
-			AABBStorage aabb;
-			value.StoreFloat3((float3*)&aabb);
-			return aabb;
+		ECS_INLINE Vector3& operator[](size_t index) {
+			Vector3* corners = (Vector3*)this;
+			return corners[index];
 		}
 
-		Vector8 value;
+		ECS_INLINE const Vector3& operator [](size_t index) const {
+			const Vector3* corners = (const Vector3*)this;
+			return corners[index];
+		}
+
+		Vector3 min;
+		Vector3 max;
 	};
 
 	// This is the same as an OOBB but we haven't decided upon the OOBB
 	// Representation yet. Use this as a placeholder
 	struct RotatedAABB {
-		// Low lane center, high lane extents
-		Vector8 center_extents;
-		Vector8 local_axis_xy;
-		// The axis is splatted in both lanes
-		Vector8 local_axis_z;
+		Vector3 center;
+		Vector3 extents;
+		// The Z axis can be deduced from the 
+		Vector3 local_x_axis;
+		Vector3 local_y_axis;
 	};
 
-	// Returns the AABBStorage that encompases all of them
-	ECSENGINE_API AABBStorage GetCoalescedAABB(Stream<AABBStorage> aabbs);
+	// Returns the AABBScalar that encompases all of them
+	ECSENGINE_API AABBScalar GetCoalescedAABB(Stream<AABBScalar> aabbs);
 
-	ECSENGINE_API AABBStorage GetAABBFromPoints(Stream<float3> points);
+	ECSENGINE_API AABBScalar GetAABBFromPoints(Stream<float3> points);
 
-	ECSENGINE_API AABBStorage GetCombinedAABBStorage(AABBStorage first, AABBStorage second);
-
-	ECS_INLINE AABBStorage InfiniteAABBStorage() {
-		return { float3::Splat(-FLT_MAX), float3::Splat(FLT_MAX) };
+	ECS_INLINE float3 AABBCenter(AABBScalar aabb) {
+		return (aabb.min + aabb.max) * float3::Splat(0.5f);
 	}
 
-	// Can use this to initialized the bounding box when calculating it from points
-	ECS_INLINE AABBStorage ReverseInfiniteAABBStorage() {
-		return { float3::Splat(FLT_MAX), float3::Splat(-FLT_MAX) };
+	ECS_INLINE Vector3 ECS_VECTORCALL AABBCenter(AABB aabb) {
+		Vector3 half = Vector3::Splat(0.5f);
+		return (aabb.min + aabb.max) * half;
 	}
 
-	ECSENGINE_API bool CompareAABBStorage(AABBStorage first, AABBStorage second, float3 epsilon = float3::Splat(ECS_SIMD_VECTOR_EPSILON_VALUE));
-
-	ECS_INLINE float3 AABBCenterStorage(AABBStorage aabb) {
-		return aabb.min + (aabb.max - aabb.min) * float3::Splat(0.5f);
+	ECS_INLINE float3 AABBExtents(AABBScalar aabb) {
+		return aabb.max - aabb.min;
 	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL AABBCenter(AABB aabb);
+	ECS_INLINE Vector3 ECS_VECTORCALL AABBExtents(AABB aabb) {
+		return aabb.max - aabb.min;
+	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL AABBExtents(AABB aabb);
+	ECS_INLINE float3 AABBHalfExtents(AABBScalar aabb) {
+		return AABBExtents(aabb) * float3::Splat(0.5f);
+	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL AABBHalfExtents(AABB aabb);
+	ECS_INLINE Vector3 ECS_VECTORCALL AABBHalfExtents(AABB aabb) {
+		return AABBExtents(aabb) * Vector3::Splat(0.5f);
+	}
 
-	// The translation value needs to be same in the low and high lanes
-	ECS_INLINE AABB ECS_VECTORCALL TranslateAABB(AABB aabb, Vector8 translation) {
-		return aabb.value + translation;
+	ECS_INLINE AABBScalar TranslateAABB(AABBScalar aabb, float3 translation) {
+		return { aabb.min + translation, aabb.max + translation };
+	}
+
+	ECS_INLINE AABB ECS_VECTORCALL TranslateAABB(AABB aabb, Vector3 translation) {
+		return { aabb.min + translation, aabb.max + translation };
 	}
 
 	// It does not rotate the center of the AABB, it only rotates the corners
@@ -84,53 +105,80 @@ namespace ECSEngine {
 	// Computes the corresponding AABB from the given rotation matrix
 	// If you want to use a quaternion, you must convert it to a rotation matrix first
 	// And then call this function
+	ECSENGINE_API AABBScalar AABBFromRotation(const AABBScalar& aabb, const Matrix& rotation_matrix);
+
+	// Computes the corresponding AABB from the given rotation matrix
+	// If you want to use a quaternion, you must convert it to a rotation matrix first
+	// And then call this function
 	ECSENGINE_API AABB ECS_VECTORCALL AABBFromRotation(AABB aabb, Matrix rotation_matrix);
 
-	// The low and high lanes of the scale need to be the same
-	// This one scales the dimensions of the aabb (the center stays the same)
-	ECSENGINE_API AABB ECS_VECTORCALL ScaleAABB(AABB aabb, Vector8 scale);
+	ECSENGINE_API AABBScalar ScaleAABB(const AABBScalar& aabb, float3 scale);
 
-	// The low and high lanes of the scale need to be the same
+	// This one scales the dimensions of the aabb (the center stays the same)
+	ECSENGINE_API AABB ECS_VECTORCALL ScaleAABB(AABB aabb, Vector3 scale);
+
 	// This version scales the values from the origin (it is as if the
 	// min and max are multiplied with the factor scale)
-	ECS_INLINE AABB ECS_VECTORCALL ScaleAABBFromOrigin(AABB aabb, Vector8 scale) {
-		return aabb.value * scale;
+	ECS_INLINE AABBScalar ECS_VECTORCALL ScaleAABBFromOrigin(AABBScalar aabb, float3 scale) {
+		return { aabb.min * scale, aabb.max * scale };
+	}
+
+	// This version scales the values from the origin (it is as if the
+	// min and max are multiplied with the factor scale)
+	ECS_INLINE AABB ECS_VECTORCALL ScaleAABBFromOrigin(AABB aabb, Vector3 scale) {
+		return { aabb.min * scale, aabb.max * scale };
 	}
 
 	// Returns an encompasing AABB from the given transformation
-	// Only the low for translation and scale are considered
-	ECSENGINE_API AABB ECS_VECTORCALL TransformAABB(AABB aabb, Vector8 translation, Matrix rotation_matrix, Vector8 scale);
+	ECSENGINE_API AABBScalar TransformAABB(const AABBScalar& aabb, float3 translation, const Matrix& rotation_matrix, float3 scale);
 
-	// Applies the matrix to both the min and max
-	ECS_INLINE Vector8 ECS_VECTORCALL ApplyMatrixOnAABB(AABB aabb, Matrix matrix) {
-		return TransformPoint(aabb.value, matrix);
+	// Returns an encompasing AABB from the given transformation
+	ECSENGINE_API AABB ECS_VECTORCALL TransformAABB(AABB aabb, Vector3 translation, Matrix rotation_matrix, Vector3 scale);
+
+	ECS_INLINE bool CompareAABBMask(AABBScalar first, AABBScalar second, float epsilon = ECS_SIMD_VECTOR_EPSILON_VALUE) {
+		return CompareMask(first.min, second.min, float3::Splat(epsilon)) && CompareMask(first.max, second.max, float3::Splat(epsilon));
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL CompareAABBMask(AABB first, AABB second, Vector8 epsilon = VectorGlobals::EPSILON) {
-		return CompareMask(first.value, second.value, epsilon);
+	ECS_INLINE SIMDVectorMask ECS_VECTORCALL CompareAABBMask(AABB first, AABB second, Vec8f epsilon = VectorGlobals::EPSILON) {
+		return CompareMask(first.min, second.min, epsilon) && CompareMask(first.max, second.max, epsilon);
 	}
 
-	ECS_INLINE bool ECS_VECTORCALL CompareAABB(AABB first, AABB second, Vector8 epsilon = VectorGlobals::EPSILON) {
-		return CompareWhole(first.value, second.value, epsilon);
-	}
+	ECSENGINE_API AABBScalar GetCombinedAABB(const AABBScalar& first, const AABBScalar& second);
 
 	ECSENGINE_API AABB ECS_VECTORCALL GetCombinedAABB(AABB first, AABB second);
 
+	ECS_INLINE AABBScalar InfiniteAABBScalar() {
+		return { float3::Splat(-FLT_MAX), float3::Splat(FLT_MAX) };
+	}
+
 	ECS_INLINE AABB ECS_VECTORCALL InfiniteAABB() {
-		return InfiniteAABBStorage();
+		return { Vector3::Splat(-FLT_MAX), Vector3::Splat(FLT_MAX) };
+	}
+
+	ECS_INLINE AABBScalar ReverseInfiniteAABBScalar() {
+		return { float3::Splat(FLT_MAX), float3::Splat(-FLT_MAX) };
 	}
 
 	ECS_INLINE AABB ECS_VECTORCALL ReverseInfiniteAABB() {
-		return ReverseInfiniteAABBStorage();
+		return { Vector3::Splat(FLT_MAX), Vector3::Splat(-FLT_MAX) };
 	}
 
-	ECSENGINE_API bool ECS_VECTORCALL AABBOverlap(AABB first, AABB second);
+	ECSENGINE_API bool AABBOverlap(const AABBScalar& first, const AABBScalar& second);
 
-	ECSENGINE_API bool AABBOverlapStorage(AABBStorage first, AABBStorage second);
+	// It will test a given aabb from the first against all the aabbs from the second
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL AABBOverlap(AABB first, AABB second, size_t first_index);
 
-	// There need to be 4 entries for the corners pointer
-	// The first 2 entries are the "left" face and the other
-	// 2 are for the "right" face
-	ECSENGINE_API void GetAABBCorners(AABB aabb, Vector8* corners);
+	// Tests the selected aabb against all the other aabbs
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL AABBOverlap(AABB aabbs, size_t index);
+
+	// There need to be 8 entries for the corners pointer
+	// The first 4 entries are the "left" face and the other
+	// 4 are for the "right" face
+	ECSENGINE_API void GetAABBCorners(const AABBScalar& aabb, float3* corners);
+
+	// There need to be 8 entries for the corners pointer
+	// The first 4 entries are the "left" face and the other
+	// 4 are for the "right" face
+	ECSENGINE_API void GetAABBCorners(AABB aabb, Vector3* corners);
 
 }

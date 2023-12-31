@@ -55,19 +55,19 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	AABBStorage GetMeshBoundingBox(Stream<float3> positions)
+	AABBScalar GetMeshBoundingBox(Stream<float3> positions)
 	{
 		return GetAABBFromPoints(positions);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	AABBStorage GetMeshBoundingBox(Graphics* graphics, VertexBuffer positions_buffer)
+	AABBScalar GetMeshBoundingBox(Graphics* graphics, VertexBuffer positions_buffer)
 	{
 		VertexBuffer staging_buffer = BufferToStaging(graphics, positions_buffer);
 
 		float3* positions = (float3*)graphics->MapBuffer(staging_buffer.buffer, ECS_GRAPHICS_MAP_READ);
-		AABBStorage bounding_box = GetMeshBoundingBox(Stream<float3>(positions, positions_buffer.size));
+		AABBScalar bounding_box = GetMeshBoundingBox(Stream<float3>(positions, positions_buffer.size));
 
 		staging_buffer.Release();
 		return bounding_box;

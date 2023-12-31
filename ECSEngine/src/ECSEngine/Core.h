@@ -33,8 +33,8 @@ constexpr size_t ECS_TB_10 = 1'000'000'000'000;
 #define ECS_OS_PATH_SEPARATOR_REL L'/'
 #define ECS_OS_PATH_SEPARATOR_ASCII_REL '/'
 
-#define ECS_SIMD_BYTE_SIZE 256
-#define ECS_SIMD_SIZE_T_SIZE 32
+#define ECS_SIMD_BIT_SIZE 256
+#define ECS_SIMD_BYTE_SIZE 32
 
 namespace ECSEngine {
 

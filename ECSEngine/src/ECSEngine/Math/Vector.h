@@ -1,58 +1,11 @@
 #pragma once
 #include "../Core.h"
 #include "VCLExtensions.h"
+#include "BaseVector.h"
 
 #define ECS_SIMD_VECTOR_EPSILON_VALUE 0.00001f
 
 namespace ECSEngine {
-
-	// Have the functions that return a vector mask that can be used then to generate all the permutations
-	// of the boolean functions that correspond to that function
-
-#define ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(function_name, default_lanes, signature, arguments) \
-	template<int lanes = default_lanes> \
-	ECS_INLINE bool ECS_VECTORCALL function_name##Low(signature) { \
-		return PerLaneHorizontalAnd<lanes>(function_name##Mask(arguments).AsMaskLow()); \
-	} \
-	\
-	template<int lanes = default_lanes> \
-	ECS_INLINE bool2 ECS_VECTORCALL function_name(signature) { \
-		return PerLaneHorizontalAnd<lanes>(function_name##Mask(arguments).AsMask()); \
-	} \
-	\
-	template<int lanes = default_lanes> \
-	ECS_INLINE bool ECS_VECTORCALL function_name##Whole(signature) { \
-		return BasicTypeLogicAndBoolean(function_name(arguments)); \
-	}
-
-#define ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(function_name, lanes, signature, arguments) \
-	ECS_INLINE bool ECS_VECTORCALL function_name##Low(signature) { \
-		return PerLaneHorizontalAnd<lanes>(function_name##Mask(arguments).AsMaskLow()); \
-	} \
-	\
-	ECS_INLINE bool2 ECS_VECTORCALL function_name(signature) { \
-		return PerLaneHorizontalAnd<lanes>(function_name##Mask(arguments).AsMask()); \
-	} \
-	\
-	ECS_INLINE bool ECS_VECTORCALL function_name##Whole(signature) { \
-		return BasicTypeLogicAndBoolean(function_name(arguments)); \
-	}
-
-#define ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_USE_FULL_LANE(function_name, signature, arguments) \
-	template<bool use_full_lane = false> \
-	ECS_INLINE bool ECS_VECTORCALL function_name##Low(signature) { \
-		return PerLaneHorizontalAnd<use_full_lane ? 4 : 3>(function_name##Mask<use_full_lane>(arguments).AsMaskLow()); \
-	} \
-	\
-	template<bool use_full_lane = false> \
-	ECS_INLINE bool2 ECS_VECTORCALL function_name(signature) { \
-		return PerLaneHorizontalAnd<use_full_lane ? 4 : 3>(function_name##Mask<use_full_lane>(arguments).AsMask()); \
-	} \
-	\
-	template<bool use_full_lane = false> \
-	ECS_INLINE bool ECS_VECTORCALL function_name##Whole(signature) { \
-		return horizontal_and(function_name##Mask<use_full_lane>(arguments).AsMask()); \
-	}
 
 	enum VectorOperationPrecision {
 		ECS_VECTOR_PRECISE,
@@ -60,535 +13,557 @@ namespace ECSEngine {
 		ECS_VECTOR_FAST
 	};
 
-	struct ECSENGINE_API Vector8 {
-		ECS_INLINE Vector8() {}
-		ECS_INLINE Vector8(const void* values) { value.load((float*)values); }
-		ECS_INLINE Vector8(float _value) {
-			value = Vec8f(_value);
-		}
-		// It will splat the first into the first 4 values and second in the last 4 values
-		ECS_INLINE Vector8(float low, float high) {
-			value = Vec8f(low, low, low, low, high, high, high, high);
-		}
-		// Useful for masks
-		explicit ECS_INLINE Vector8(int _value) {
-			value = _mm256_castsi256_ps(Vec8i(_value));
-		}
-		ECS_INLINE Vector8(float x0, float y0, float z0, float w0, float x1, float y1, float z1, float w1) {
-			value = Vec8f(x0, y0, z0, w0, x1, y1, z1, w1);
-		}
-		// Useful for masks
-		ECS_INLINE Vector8(int x0, int y0, int z0, int w0, int x1, int y1, int z1, int w1) {
-			value = _mm256_castsi256_ps(Vec8i(x0, y0, z0, w0, x1, y1, z1, w1));
-		}
-		ECS_INLINE Vector8(Vec4f _low, Vec4f _high) : value(_low, _high) {}
-		ECS_INLINE Vector8(Vec8fb _value) : value(_value) {}
-		ECS_INLINE Vector8(Vec8f _value) : value(_value) {}
-		ECS_INLINE Vector8(const float* values) {
-			value.load(values);
-		}
-		ECS_INLINE Vector8(float3 low) {
-			// Try to see if loading directly leads to crashes
-			value.load((const float*)&low);
-		}
-		ECS_INLINE Vector8(float4 low) {
-			// Try to see if loading directly leads to crashes
-			value.load((const float*)&low);
-		}
-		ECS_INLINE Vector8(float4 values0, float4 values1) {
-			value = Vec8f(values0.x, values0.y, values0.z, values0.w, values1.x, values1.y, values1.z, values1.w);
-		}
-		ECS_INLINE Vector8(float3 values0, float3 values1) {
-			value = Vec8f(values0.x, values0.y, values0.z, 0.0f, values1.x, values1.y, values1.z, 0.0f);
-		}
-		ECS_INLINE Vector8(const float3* values) {
-			value = PerLaneLoad3((const float*)values);
-		}
-
-		Vector8(const Vector8& other) = default;
-		Vector8& ECS_VECTORCALL operator = (const Vector8& other) = default;
-
-		ECS_INLINE bool ECS_VECTORCALL operator == (Vector8 other) const {
-			return horizontal_and(value == other.value);
-		}
-
-		ECS_INLINE bool ECS_VECTORCALL operator != (Vector8 other) const {
-			return !(*this == other);
-		}
-
-		ECS_INLINE Vector8 ECS_VECTORCALL operator + (const Vector8 other) const {
-			return Vector8(value + other.value);
-		}
-
-		ECS_INLINE Vector8 ECS_VECTORCALL operator - (const Vector8 other) const {
-			return Vector8(value - other.value);
-		}
-
-		ECS_INLINE Vector8 ECS_VECTORCALL operator -() const {
-			return Vector8(-value);
-		}
-
-		ECS_INLINE Vector8 ECS_VECTORCALL operator * (const Vector8 other) const {
-			return Vector8(value * other.value);
-		}
-
-		ECS_INLINE Vector8 ECS_VECTORCALL operator / (const Vector8 other) const {
-			return Vector8(value / other.value);
-		}
-
-		ECS_INLINE Vector8& ECS_VECTORCALL operator += (const Vector8 other) {
-			value += other.value;
-			return *this;
-		}
-
-		ECS_INLINE Vector8& ECS_VECTORCALL operator -= (const Vector8 other) {
-			value -= other.value;
-			return *this;
-		}
-
-		ECS_INLINE Vector8& ECS_VECTORCALL operator *= (const Vector8 other) {
-			value *= other.value;
-			return *this;
-		}
-
-		ECS_INLINE Vector8& ECS_VECTORCALL operator /= (const Vector8 other) {
-			value /= other.value;
-			return *this;
-		}
-
-		ECS_INLINE Vector8& ECS_VECTORCALL operator *= (float _value) {
-			value *= Vec8f(_value);
-			return *this;
-		}
-
-		ECS_INLINE Vector8& ECS_VECTORCALL operator /= (float _value) {
-			value /= Vec8f(_value);
-			return *this;
-		}
-
-		ECS_INLINE ECS_VECTORCALL operator Vec8f() const {
-			return value;
-		}
-
-		ECS_INLINE ECS_VECTORCALL operator __m256() const {
-			return value.operator __m256();
-		}
-
-		ECS_INLINE Vec4f Low() const {
-			return value.get_low();
-		}
-
-		ECS_INLINE Vec4f High() const {
-			return value.get_high();
-		}
-
-		ECS_INLINE Vector8& Load(const void* data) {
-			value.load((float*)data);
-			return *this;
-		}
-
-		ECS_INLINE Vector8& LoadAligned(const void* data) {
-			value.load_a((float*)data);
-			return *this;
-		}
-
-		ECS_INLINE Vector8& LoadStreamed(const void* data) {
-			value = _mm256_castsi256_ps(_mm256_stream_load_si256((const __m256i*)data));
-			return *this;
-		}
-
-		ECS_INLINE void Store(void* destination) const {
-			value.store((float*)destination);
-		}
-
-		ECS_INLINE void StoreAligned(void* destination) const {
-			value.store_a((float*)destination);
-		}
-
-		ECS_INLINE void StoreStreamed(void* destination) const {
-			value.store_nt((float*)destination);
-		}
-
-		ECS_INLINE void StorePartial(void* destination, int count) const {
-			value.store_partial(count, (float*)destination);
-		}
-
-		// If the count is <= 4, the low parameter tells which part to write
-		// For count >= 5, low is irrelevant
-		template<int count, bool low = true>
-		void StorePartialConstant(void* destination) const {
-			float* float_destination = (float*)destination;
-
-			auto store = [&](Vec4f value) {
-				float* float_destination = (float*)destination;
-				if constexpr (count == 1) {
-					_mm_store_ss(float_destination, value);
-				}
-				else if constexpr (count == 2) {
-					_mm_store_sd((double*)float_destination, _mm_castps_pd(value));
-				}
-				else if constexpr (count == 3) {
-					_mm_store_sd((double*)float_destination, _mm_castps_pd(value));
-					__m128 temp = _mm_movehl_ps(value, value);
-					_mm_store_ss(float_destination + 2, temp);
-				}
-				else if constexpr (count == 4) {
-					value.store(float_destination);
-				}
-			};
-
-			if constexpr (count <= 4) {
-				if constexpr (low) {
-					store(value.get_low());
-				}
-				else {
-					store(value.get_high());
-				}
-			}
-			else if constexpr (count <= 8) {
-				StorePartialConstant<4, true>(float_destination);
-				StorePartialConstant<count - 4, false>(float_destination + 4);
-			}
-		}
-
-		void StoreFloat3(float3* low, float3* high) const;
-
-		// Stores both the low and the high part
-		ECS_INLINE void StoreFloat3(float3* destinations) const {
-			StoreFloat3(destinations, destinations + 1);
-		}
-
-		// Returns only the float3 from the low
-		float3 AsFloat3Low() const;
-
-		float3 AsFloat3High() const;
-
-		float4 AsFloat4Low() const;
-
-		float4 AsFloat4High() const;
-
-		ECS_INLINE float First() const {
-			return _mm256_cvtss_f32(value);
-		}
-
-		ECS_INLINE float FirstHigh() const {
-			return _mm_cvtss_f32(value.get_high());
-		}
-
-		ECS_INLINE float2 GetFirsts() const {
-			return { First(), FirstHigh() };
-		}
-
-		// Returns the 4th float (the last float in the low 4 components)
-		float Last() const;
-
-		// Returns the 8th float (the last float in the high 4 components)
-		float LastHigh() const;
-
-		float2 GetLasts() const;
-
-		ECS_INLINE Vec4fb ECS_VECTORCALL AsMaskLow() const {
-			return value.get_low().operator __m128();
-		}
-
-		ECS_INLINE Vec4fb ECS_VECTORCALL AsMaskHigh() const {
-			return value.get_high().operator __m128();
-		}
-
-		ECS_INLINE Vec8fb ECS_VECTORCALL AsMask() const {
-			return Vec8fb(value.operator __m256());
-		}
-
-		template<int element_count>
-		ECS_INLINE bool MaskResultLow() const {
-			return PerLaneHorizontalAnd<element_count>(AsMaskLow());
-		}
-
-		template<int element_count>
-		ECS_INLINE bool MaskResultHigh() const {
-			return PerLaneHorizontalAnd<element_count>(AsMaskHigh());
-		}
-
-		template<int element_count>
-		ECS_INLINE bool2 MaskResult() const {
-			return PerLaneHorizontalAnd<element_count>(AsMask());
-		}
-
-		template<int element_count>
-		ECS_INLINE bool MaskResultWhole() const {
-			return BasicTypeLogicAndBoolean(MaskResult<element_count>());
-		}
-
-		template<int element_count>
-		ECS_INLINE bool MaskResultNone() const {
-			bool2 result = MaskResult<element_count>();
-			return result.x == false && result.y == false;
-		}
-
-		// Make this call compliant with the underlying call
-		ECS_INLINE constexpr static int size() {
-			return Vec8f::size();
-		}
-
-		ECS_INLINE constexpr static int Lanes() {
-			return 2;
-		}
-
-		ECS_INLINE Vector8 ECS_VECTORCALL SplatLow() const {
-			return SplatLowLane(value);
-		}
-
-		ECS_INLINE Vector8 ECS_VECTORCALL SplatHigh() const {
-			return SplatHighLane(value);
-		}
-
-		Vec8f value;
+	enum ECS_SIMD_VECTOR_COMPONENT : unsigned char {
+		ECS_SIMD_VECTOR_X,
+		ECS_SIMD_VECTOR_Y,
+		ECS_SIMD_VECTOR_Z,
+		ECS_SIMD_VECTOR_W
 	};
 
 	namespace VectorGlobals {
-		ECSENGINE_API extern Vector8 ONE;
-		ECSENGINE_API extern Vector8 INFINITY_MASK;
-		ECSENGINE_API extern Vector8 SIGN_MASK;
-		ECSENGINE_API extern Vector8 EPSILON;
+		ECSENGINE_API extern Vec8f ONE;
+		ECSENGINE_API extern Vec8f EPSILON;
+		ECSENGINE_API extern Vec8i INFINITY_MASK;
+		ECSENGINE_API extern Vec8i SIGN_MASK;
 
 		// Investigate if having a global stored value
 		// is faster than doing a blend. If the one vector
 		// is used somewhere else we can have that value already in a register
 		// instead of having to do a cold read and a blend is basically 1 cycle
-		// This is the case for RIGHT, UP, FORWARD, QuaternionIdentity
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL DegToRad(Vector8 angles);
+	ECS_INLINE float3 ECS_VECTORCALL DegToRad(float3 angles) {
+		return BasicTypeDegToRad(angles);
+	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL RadToDeg(Vector8 angles);
+	ECS_INLINE float3 ECS_VECTORCALL RadToDeg(float3 angles) {
+		return BasicTypeRadToDeg(angles);
+	}
+
+	ECSENGINE_API Vec8f ECS_VECTORCALL DegToRad(Vec8f angles);
+
+	ECSENGINE_API Vec8f ECS_VECTORCALL RadToDeg(Vec8f angles);
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL DegToRad(Vector3 angles);
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL RadToDeg(Vector3 angles);
+
+	ECSENGINE_API Vector4 ECS_VECTORCALL DegToRad(Vector4 angles);
+
+	ECSENGINE_API Vector4 ECS_VECTORCALL RadToDeg(Vector4 angles);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL ZeroVector();
+	ECS_INLINE Vector3 ECS_VECTORCALL ZeroVector() {
+		return Vector3(ZeroVectorFloat(), ZeroVectorFloat(), ZeroVectorFloat());
+	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL RightVector();
+	ECS_INLINE Vector3 ECS_VECTORCALL OneVector() {
+		return Vector3(VectorGlobals::ONE, VectorGlobals::ONE, VectorGlobals::ONE);
+	}
 
-	ECS_INLINE float3 GetRightVector() {
+	// The value will be splatted along all values
+	ECS_INLINE Vector3 ECS_VECTORCALL RightVector() {
+		return Vector3(VectorGlobals::ONE, ZeroVectorFloat(), ZeroVectorFloat());
+	}
+
+	ECS_INLINE float3 ECS_VECTORCALL GetRightVector() {
 		return float3(1.0f, 0.0f, 0.0f);
 	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL UpVector();
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL RightVector() {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vec8f>) {
+			return RightVector();
+		}
+		else {
+			return GetRightVector();
+		}
+	}
 
-	ECS_INLINE float3 GetUpVector() {
+	// The value will be splatted along all values
+	ECS_INLINE Vector3 ECS_VECTORCALL UpVector() {
+		return Vector3(ZeroVectorFloat(), VectorGlobals::ONE, ZeroVectorFloat());
+	}
+
+	ECS_INLINE float3 ECS_VECTORCALL GetUpVector() {
 		return float3(0.0f, 1.0f, 0.0f);
 	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL ForwardVector();
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL UpVector() {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vec8f>) {
+			return UpVector();
+		}
+		else {
+			return GetUpVector();
+		}
+	}
 
-	ECS_INLINE float3 GetForwardVector() {
+	// The value will be splatted along all values
+	ECS_INLINE Vector3 ECS_VECTORCALL ForwardVector() {
+		return Vector3(ZeroVectorFloat(), ZeroVectorFloat(), VectorGlobals::ONE);
+	}
+
+	ECS_INLINE float3 ECS_VECTORCALL GetForwardVector() {
 		return float3(0.0f, 0.0f, 1.0f);
 	}
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL LastElementOneVector();
-
-	ECS_INLINE Vector8 MinusOneVector() {
-		return ZeroVector() - VectorGlobals::ONE;
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL ForwardVector() {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vec8f>) {
+			return ForwardVector();
+		}
+		else {
+			return GetForwardVector();
+		}
 	}
 
-	ECS_INLINE Vector8 TrueMaskVector() {
-		return Vector8(INT_MAX);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API Vector8 ECS_VECTORCALL IsInfiniteMask(Vector8 vector);
-
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(IsInfinite, 4, Vector8 vector, vector);
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Vector8 ECS_VECTORCALL Select(Vector8 mask, Vector8 a, Vector8 b) {
-		return select(Vec8fb(mask.value), a.value, b.value);
+	ECS_INLINE Vector3 ECS_VECTORCALL MinusOneVector() {
+		return ZeroVector() - OneVector();
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Vector8 ECS_VECTORCALL IsNanMask(Vector8 vector) {
-		return vector.value != vector.value;
-	}
+	ECSENGINE_API bool IsInfiniteMask(float value);
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(IsNan, 4, Vector8 vector, vector);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsInfiniteMask(Vec8f value);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Vector8 ECS_VECTORCALL Negate(Vector8 vector) {
-		return ZeroVector() - vector;
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL OneVector() {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vec8f>) {
+			return VectorGlobals::ONE;
+		}
+		else {
+			return 1.0f;
+		}
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL Abs(Vector8 vector) {
-		return abs(vector.value);
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL SingleZeroVector() {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vec8f>) {
+			return Vec8f(ZeroVectorFloat());
+		}
+		else {
+			return 0.0f;
+		}
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL AbsoluteDifference(Vector8 a, Vector8 b) {
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL ZeroVectorGeneric() {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vec8f>) {
+			return ZeroVector();
+		}
+		else {
+			return float3::Splat(0.0f);
+		}
+	}
+
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL SingleValueVector(float value) {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vec8f>) {
+			return Vec8f(value);
+		}
+		else {
+			return value;
+		}
+	}
+
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL TrueVectorMask() {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vec8f>) {
+			return Vec8fb(true);
+		}
+		else {
+			return true;
+		}
+	}
+
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL FalseVectorMask() {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same<Vector, Vec8f>) {
+			return Vec8fb(ZeroVectorFloat());
+		}
+		else {
+			return false;
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	/*
+		Unfortunately, having two functions Select with (bool, float, float) and
+		(SIMDVectorMask, Vec8f, Vec8f) does not work since the Vec8f version for
+		some reason converts the floats to their type and then it uses that overload
+		To solve this, create a separate template function that makes distinction between
+		These 2 types
+	*/
+
+	// Use only for floats or Vec8f - we cannot have 
+	template<typename Type, typename MaskType>
+	ECS_INLINE Type ECS_VECTORCALL SelectSingle(MaskType mask, Type a, Type b) {
+		if constexpr (std::is_same_v<Type, float>) {
+			return mask ? a : b;
+		}
+		else if constexpr (std::is_same_v<Type, Vec8f>) {
+			return select(mask, a, b);
+		}
+		else {
+			static_assert(false, "Invalid types for SelectSingle!");
+		}
+	}
+
+	ECS_INLINE float3 ECS_VECTORCALL Select(bool mask, float3 a, float3 b) {
+		return mask ? a : b;
+	}
+
+	ECS_INLINE float4 ECS_VECTORCALL Select(bool mask, float4 a, float4 b) {
+		return mask ? a : b;
+	}
+
+	// The ternary operator ? :
+	ECSENGINE_API Vector3 ECS_VECTORCALL Select(SIMDVectorMask mask, Vector3 a, Vector3 b);
+
+	// The ternary operator ? :
+	// The result is the same as a with the component selected
+	ECSENGINE_API Vector3 ECS_VECTORCALL Select(SIMDVectorMask mask, Vector3 a, Vector3 b, ECS_SIMD_VECTOR_COMPONENT component);
+
+	// The ternary operator ? :
+	ECSENGINE_API Vector4 ECS_VECTORCALL Select(SIMDVectorMask mask, Vector4 a, Vector4 b);
+
+	// The ternary operator ? :
+	// The result is the same as a with the component selected
+	ECSENGINE_API Vector4 ECS_VECTORCALL Select(SIMDVectorMask mask, Vector4 a, Vector4 b, ECS_SIMD_VECTOR_COMPONENT component);
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL Min(Vector3 a, Vector3 b);
+
+	ECSENGINE_API Vector4 ECS_VECTORCALL Min(Vector4 a, Vector4 b);
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL Max(Vector3 a, Vector3 b);
+
+	ECSENGINE_API Vector4 ECS_VECTORCALL Max(Vector4 a, Vector4 b);
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API bool IsNanMask(float value);
+
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsNanMask(Vec8f value);
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL Abs(float3 vector) {
+		return BasicTypeAbs(vector);
+	}
+
+	ECS_INLINE float4 ECS_VECTORCALL Abs(float4 vector) {
+		return BasicTypeAbs(vector);
+	}
+
+	// Again conversions ruin these functions
+	template<typename SingleValue>
+	ECS_INLINE SingleValue ECS_VECTORCALL AbsSingle(SingleValue value) {
+		if constexpr (std::is_same_v<SingleValue, float>) {
+			return fabsf(value);
+		}
+		else if constexpr (std::is_same_v<SingleValue, Vec8f> || std::is_same_v<SingleValue, __m256>) {
+			return abs(value);
+		}
+		else {
+			static_assert(false, "Invalid single value for AbsSingle");
+		}
+	}
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL Abs(Vector3 vector);
+
+	ECSENGINE_API Vector4 ECS_VECTORCALL Abs(Vector4 vector);
+
+	template<typename SingleValue>
+	ECS_INLINE SingleValue ECS_VECTORCALL AbsoluteDifferenceSingle(SingleValue a, SingleValue b) {
+		if constexpr (std::is_same_v<SingleValue, float> || std::is_same_v<SingleValue, Vec8f> || std::is_same_v<SingleValue, __m256>) {
+			return AbsSingle(a - b);
+		}
+		else {
+			static_assert(false, "Invalid single value for AbsoluteDifferenceSingle");
+		}
+	}
+
+	ECS_INLINE float3 ECS_VECTORCALL AbsoluteDifference(float3 a, float3 b) {
 		return Abs(a - b);
 	}
 
-	// --------------------------------------------------------------------------------------------------------------
+	ECS_INLINE float4 ECS_VECTORCALL AbsoluteDifference(float4 a, float4 b) {
+		return Abs(a - b);
+	}
 
-	// By default it will only operate on the first 3 elements (as it is the
-	// case for 3D operations) but can force it to use all 4 channels
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL Dot(Vector8 first, Vector8 second);
-
-	// Add the float2 variant as well
-	ECSENGINE_API float Dot(float2 first, float2 second);
+	ECSENGINE_API Vector3 ECS_VECTORCALL AbsoluteDifference(Vector3 a, Vector3 b);
+	
+	ECSENGINE_API Vector4 ECS_VECTORCALL AbsoluteDifference(Vector4 a, Vector4 b);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// Returns a mask that can be used to select some values. The difference is compared to an epsilon
-	// The template here is needed to comply with the rule of thumb for use full lane
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL CompareMask(Vector8 first, Vector8 second, Vector8 epsilon = VectorGlobals::EPSILON);
+	ECSENGINE_API float ECS_VECTORCALL Dot(float2 first, float2 second);
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_USE_FULL_LANE(
-		Compare,
-		FORWARD(Vector8 first, Vector8 second, Vector8 epsilon = VectorGlobals::EPSILON),
-		FORWARD(first, second, epsilon)
-	);
+	ECSENGINE_API float ECS_VECTORCALL Dot(float3 first, float3 second);
+
+	ECSENGINE_API float ECS_VECTORCALL Dot(float4 first, float4 second);
+
+	ECSENGINE_API Vec8f ECS_VECTORCALL Dot(Vector3 first, Vector3 second);
+	
+	ECSENGINE_API Vec8f ECS_VECTORCALL Dot(Vector4 first, Vector4 second);
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	template<typename SingleValue>
+	ECS_INLINE auto CompareMaskSingle(SingleValue first, SingleValue second) {
+		if constexpr (std::is_same_v<SingleValue, float>) {
+			return abs(first - second) < ECS_SIMD_VECTOR_EPSILON_VALUE;
+		}
+		else if constexpr (std::is_same_v<SingleValue, Vec8f> || std::is_same_v<SingleValue, __m256>) {
+			return abs(first - second) < VectorGlobals::EPSILON;
+		}
+		else {
+			static_assert(false, "Invalid compare mask single value - only floats or Vec8f are accepted");
+		}
+	}
+
+	template<typename SingleValue>
+	ECS_INLINE auto CompareMaskSingle(SingleValue first, SingleValue second, SingleValue epsilon) {
+		if constexpr (std::is_same_v<SingleValue, float>) {
+			return abs(first - second) < epsilon;
+		}
+		else if constexpr (std::is_same_v<SingleValue, Vec8f> || std::is_same_v<SingleValue, __m256>) {
+			return abs(first - second) < epsilon;
+		}
+		else {
+			static_assert(false, "Invalid compare mask single value - only floats or Vec8f are accepted");
+		}
+	}
+
+	ECSENGINE_API bool ECS_VECTORCALL CompareMask(float3 first, float3 second, float3 epsilon = float3::Splat(ECS_SIMD_VECTOR_EPSILON_VALUE));
+
+	ECSENGINE_API bool ECS_VECTORCALL CompareMask(float4 first, float4 second, float4 epsilon = float4::Splat(ECS_SIMD_VECTOR_EPSILON_VALUE));
+
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CompareMask(Vector3 first, Vector3 second, Vec8f epsilon = VectorGlobals::EPSILON);
+
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CompareMask(Vector4 first, Vector4 second, Vec8f epsilon = VectorGlobals::EPSILON);
+
+	ECSENGINE_API bool ECS_VECTORCALL CompareAngleNormalizedRadMask(float3 first_normalized, float3 second_normalized, float radians);
 
 	// Both directions need to be normalized beforehand
 	// The angle must be given in radians
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL CompareAngleNormalizedRadMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CompareAngleNormalizedRadMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians);
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_USE_FULL_LANE(
-		CompareAngleNormalizedRad,
-		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians),
-		FORWARD(first_normalized, second_normalized, radians)
-	);
+	ECSENGINE_API bool ECS_VECTORCALL CompareAngleRadMask(float3 first, float3 second, float radians);
 
 	// The angle must be given in radians
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL CompareAngleRadMask(Vector8 first, Vector8 second, Vector8 radians);
-
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_USE_FULL_LANE(
-		CompareAngleRad,
-		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians),
-		FORWARD(first_normalized, second_normalized, radians)
-	);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CompareAngleRadMask(Vector3 first, Vector3 second, Vec8f radians);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Vector8 ECS_VECTORCALL Lerp(Vector8 a, Vector8 b, Vector8 percentages) {
-		return Fmadd(b - a, percentages, a);
-	}
+	ECSENGINE_API float3 ECS_VECTORCALL Lerp(float3 a, float3 b, float percentage);
+
+	ECSENGINE_API float4 ECS_VECTORCALL Lerp(float4 a, float4 b, float percentage);
+	
+	ECSENGINE_API Vector3 ECS_VECTORCALL Lerp(Vector3 a, Vector3 b, Vec8f percentages);
+
+	ECSENGINE_API Vector4 ECS_VECTORCALL Lerp(Vector4 a, Vector4 b, Vec8f percentages);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL ProjectPointOnLineDirection(Vector8 line_point, Vector8 line_direction, Vector8 point);
+	ECSENGINE_API float3 ECS_VECTORCALL ProjectPointOnLineDirection(float3 line_point, float3 line_direction, float3 point);
 
+	ECSENGINE_API Vector3 ECS_VECTORCALL ProjectPointOnLineDirection(Vector3 line_point, Vector3 line_direction, Vector3 point);
+
+	ECSENGINE_API float3 ECS_VECTORCALL ProjectPointOnLineDirectionNormalized(float3 line_point, float3 line_direction_normalized, float3 point);
+	
 	// This version is much faster than the other one since it avoids a dot and a division
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL ProjectPointOnLineDirectionNormalized(Vector8 line_point, Vector8 line_direction_normalized, Vector8 point);
+	ECSENGINE_API Vector3 ECS_VECTORCALL ProjectPointOnLineDirectionNormalized(Vector3 line_point, Vector3 line_direction_normalized, Vector3 point);
 
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL ProjectPointOnLine(Vector8 line_a, Vector8 line_b, Vector8 point);
+	ECSENGINE_API float3 ECS_VECTORCALL ProjectPointOnLine(float3 line_a, float3 line_b, float3 point);
 
-	// --------------------------------------------------------------------------------------------------------------
-
-	// Cross for 3 element wide register
-	ECSENGINE_API Vector8 ECS_VECTORCALL Cross(Vector8 a, Vector8 b);
+	ECSENGINE_API Vector3 ECS_VECTORCALL ProjectPointOnLine(Vector3 line_a, Vector3 line_b, Vector3 point);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<bool use_full_lane = false>
-	ECS_INLINE Vector8 ECS_VECTORCALL SquareLength(Vector8 vector) {
-		return Dot<use_full_lane>(vector, vector);
+	ECSENGINE_API float3 ECS_VECTORCALL Cross(float3 a, float3 b);
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL Cross(Vector3 a, Vector3 b);
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float ECS_VECTORCALL SquareLength(float2 vector) {
+		return Dot(vector, vector);
 	}
 
-	// Add the float2 variant as well
-	ECSENGINE_API float SquareLength(float3 vector);
-
-	// Add the float2 variant as well
-	ECSENGINE_API float SquareLength(float2 vector);
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL Length(Vector8 vector);
-
-	ECS_INLINE float Length(float3 vector) {
-		return sqrt(SquareLength(vector));
+	ECS_INLINE float ECS_VECTORCALL SquareLength(float3 vector) {
+		return Dot(vector, vector);
 	}
 
-	ECS_INLINE float Length(float2 vector) {
-		return sqrt(SquareLength(vector));
+	ECS_INLINE float ECS_VECTORCALL SquareLength(float4 vector) {
+		return Dot(vector, vector);
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL SquareLength(Vector3 vector) {
+		return Dot(vector, vector);
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL SquareLength(Vector4 vector) {
+		return Dot(vector, vector);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE, bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL ReciprocalLength(Vector8 vector);
+	ECSENGINE_API Vec8f ECS_VECTORCALL Length(Vector3 vector);
+	
+	ECSENGINE_API Vec8f ECS_VECTORCALL Length(Vector4 vector);
+
+	ECSENGINE_API float ECS_VECTORCALL Length(float2 vector);
+
+	ECSENGINE_API float ECS_VECTORCALL Length(float3 vector);
+
+	ECSENGINE_API float ECS_VECTORCALL Length(float4 vector);
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API float ECS_VECTORCALL ReciprocalLength(float3 vector);
+
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API float ECS_VECTORCALL ReciprocalLength(float4 vector);
+
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API Vec8f ECS_VECTORCALL ReciprocalLength(Vector3 vector);
+
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API Vec8f ECS_VECTORCALL ReciprocalLength(Vector4 vector);
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Project the point on the line and then get the distance between these 2 points
 
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL SquaredDistanceToLine(Vector8 line_point, Vector8 line_direction, Vector8 point);
+	ECSENGINE_API float ECS_VECTORCALL SquaredDistanceToLine(float3 line_point, float3 line_direction, float3 point);
+
+	ECSENGINE_API Vec8f ECS_VECTORCALL SquaredDistanceToLine(Vector3 line_point, Vector3 line_direction, Vector3 point);
 
 	// This version is much faster than the other one since it avoids a dot and a division
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL SquaredDistanceToLineNormalized(Vector8 line_point, Vector8 line_direction_normalized, Vector8 point);
-
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL DistanceToLine(Vector8 line_point, Vector8 line_direction, Vector8 point);
+	ECSENGINE_API float ECS_VECTORCALL SquaredDistanceToLineNormalized(float3 line_point, float3 line_direction_normalized, float3 point);
 
 	// This version is much faster than the other one since it avoids a dot and a division
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL DistanceToLineNormalized(Vector8 line_point, Vector8 line_direction_normalized, Vector8 point);
+	ECSENGINE_API Vec8f ECS_VECTORCALL SquaredDistanceToLineNormalized(Vector3 line_point, Vector3 line_direction_normalized, Vector3 point);
+
+	ECS_INLINE float ECS_VECTORCALL DistanceToLine(float3 line_point, float3 line_direction, float3 point) {
+		return sqrt(SquaredDistanceToLine(line_point, line_direction, point));
+	}
+
+	ECSENGINE_API Vec8f ECS_VECTORCALL DistanceToLine(Vector3 line_point, Vector3 line_direction, Vector3 point);
+
+	// This version is much faster than the other one since it avoids a dot and a division
+	ECS_INLINE float ECS_VECTORCALL DistanceToLineNormalized(float3 line_point, float3 line_direction_normalized, float3 point) {
+		return sqrt(SquaredDistanceToLineNormalized(line_point, line_direction_normalized, point));
+	}
+
+	// This version is much faster than the other one since it avoids a dot and a division
+	ECSENGINE_API Vec8f ECS_VECTORCALL DistanceToLineNormalized(Vector3 line_point, Vector3 line_direction_normalized, Vector3 point);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE, bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL Normalize(Vector8 vector);
+	ECSENGINE_API float2 ECS_VECTORCALL Normalize(float2 vector);
 
-	ECSENGINE_API float3 Normalize(float3 vector);
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API float3 ECS_VECTORCALL Normalize(float3 vector);
 
-	// Add the float2 variant as well
-	ECSENGINE_API float2 Normalize(float2 vector);
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API float4 ECS_VECTORCALL Normalize(float4 vector);
 
-	// The vector needs to have 2 packed float2
-	// It will normalize both at the same time
-	ECSENGINE_API Vector8 Normalize2x2(Vector8 vector);
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API Vector3 ECS_VECTORCALL Normalize(Vector3 vector);
 
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL IsNormalizedSquareLengthMask(Vector8 squared_length);
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API Vector4 ECS_VECTORCALL Normalize(Vector4 vector);
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_USE_FULL_LANE(
-		IsNormalizedSquareLength,
-		Vector8 squared_length,
-		squared_length
-	);
+	// Returns true if a vector's squared length is already normalized
+	ECS_INLINE bool IsNormalizedSquareLengthMask(float squared_length) {
+		return abs(squared_length - 1.0f) < ECS_SIMD_VECTOR_EPSILON_VALUE;
+	}
 
-	// Returns true if the vector is already normalized
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL IsNormalizedMask(Vector8 vector);
+	// Returns true if a vector's squared length is already normalized
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsNormalizedSquareLengthMask(Vec8f squared_length);
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_USE_FULL_LANE(
-		IsNormalized,
-		Vector8 vector,
-		vector
-	);
+	// Returns true if a vector's length is already normalized
+	ECS_INLINE bool IsNormalizedMask(float length) {
+		return abs(length - 1.0f) < ECS_SIMD_VECTOR_EPSILON_VALUE;
+	}
+
+	// Returns true if a vector's length is already normalized
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsNormalizedMask(Vec8f length);
 
 	// This only performs the square root and the division if the vector is not normalized already
 	// This only applies for the precise and the accurate versions (the fast version already produces
 	// a value that can be used to multiply directly)
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE, bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL NormalizeIfNot(Vector8 vector);
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API float3 ECS_VECTORCALL NormalizeIfNot(float3 vector);
+
+	// This only performs the square root and the division if the vector is not normalized already
+	// This only applies for the precise and the accurate versions (the fast version already produces
+	// a value that can be used to multiply directly)
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API float4 ECS_VECTORCALL NormalizeIfNot(float4 vector);
+
+	// This only performs the square root and the division if the vector is not normalized already
+	// This only applies for the precise and the accurate versions (the fast version already produces
+	// a value that can be used to multiply directly). It exists only to match the SIMD function
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECS_INLINE float3 ECS_VECTORCALL NormalizeIfNot(float3 vector, size_t vector_count) {
+		return NormalizeIfNot<precision>(vector);
+	}
+
+	// This only performs the square root and the division if the vector is not normalized already
+	// This only applies for the precise and the accurate versions (the fast version already produces
+	// a value that can be used to multiply directly). It exists only to match the SIMD function
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECS_INLINE float4 ECS_VECTORCALL NormalizeIfNot(float4 vector, size_t vector_count) {
+		return NormalizeIfNot<precision>(vector);
+	}
+
+	// This only performs the square root and the division if the vector is not normalized already
+	// This only applies for the precise and the accurate versions (the fast version already produces
+	// a value that can be used to multiply directly). The vector count is used to determine whether
+	// Or not a normalization is needed or not
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API Vector3 ECS_VECTORCALL NormalizeIfNot(Vector3 vector, size_t vector_count);
+
+	// This only performs the square root and the division if the vector is not normalized already
+	// This only applies for the precise and the accurate versions (the fast version already produces
+	// a value that can be used to multiply directly). The vector count is used to determine whether
+	// Or not a normalization is needed or not
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API Vector4 ECS_VECTORCALL NormalizeIfNot(Vector4 vector, size_t vector_count);
 
 	// Returns 1.0f / value when using precise mode
 	// And an approximate version when using ACCURATE/FAST
 	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
-	ECSENGINE_API Vector8 ECS_VECTORCALL OneDividedVector(Vector8 value);
+	ECSENGINE_API float OneDividedVector(float value);
+
+	// Returns 1.0f / value when using precise mode
+	// And an approximate version when using ACCURATE/FAST
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API float3 ECS_VECTORCALL OneDividedVector(float3 value);
+
+	// Returns 1.0f / value when using precise mode
+	// And an approximate version when using ACCURATE/FAST
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API Vec8f ECS_VECTORCALL OneDividedVector(Vec8f value);
+
+	// Returns 1.0f / value when using precise mode
+	// And an approximate version when using ACCURATE/FAST
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API Vector3 ECS_VECTORCALL OneDividedVector(Vector3 value);
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -597,184 +572,247 @@ namespace ECSEngine {
 	// produce different results
 
 	// Both directions need to be normalized beforehand - if you want consistent behaviour
-	// Returns a SIMD mask that can be used to perform a selection
-	ECSENGINE_API Vector8 ECS_VECTORCALL IsParallelMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 epsilon = VectorGlobals::EPSILON);
+	ECSENGINE_API bool ECS_VECTORCALL IsParallelMask(float3 first_normalized, float3 second_normalized, float epsilon = ECS_SIMD_VECTOR_EPSILON_VALUE);
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		IsParallel,
-		3,
-		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 epsilon = VectorGlobals::EPSILON),
-		FORWARD(first_normalized, second_normalized, epsilon)
-	);
+	// Both directions need to be normalized beforehand - if you want consistent behaviour
+	// Returns a SIMD mask that can be used to perform a selection
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsParallelMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f epsilon = VectorGlobals::EPSILON);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// This only compares the first 3 elements
+	// Both directions need to be normalized beforehand
+	ECSENGINE_API bool ECS_VECTORCALL IsParallelAngleMask(float3 first_normalized, float3 second_normalized, float radians);
+
 	// Both directions need to be normalized beforehand
 	// Returns a SIMD mask that can be used to perform a selection
-	ECSENGINE_API Vector8 ECS_VECTORCALL IsParallelAngleMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians);
-
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		IsParallelAngle,
-		3,
-		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians),
-		FORWARD(first_normalized, second_normalized, radians)
-	);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsParallelAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians);
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	// The cosine (dot) between them needs to be 0
 
-	// This only compares the first 3 elements
-	ECSENGINE_API Vector8 ECS_VECTORCALL IsPerpendicularMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 epsilon = VectorGlobals::EPSILON);
+	ECSENGINE_API bool ECS_VECTORCALL IsPerpendicularMask(float3 first_normalized, float3 second_normalized, float epsilon = ECS_SIMD_VECTOR_EPSILON_VALUE);
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		IsPerpendicular,
-		3,
-		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 epsilon = VectorGlobals::EPSILON),
-		FORWARD(first_normalized, second_normalized, epsilon)
-	);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsPerpendicularMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f epsilon = VectorGlobals::EPSILON);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// This only compares the first 3 elements
+	ECSENGINE_API bool ECS_VECTORCALL IsPerpendicularAngleMask(float3 first_normalized, float3 second_normalized, float radians);
+
 	// The radians angle needs to be smaller than half pi
-	ECSENGINE_API Vector8 ECS_VECTORCALL IsPerpendicularAngleMask(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians);
-
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		IsPerpendicularAngle,
-		3,
-		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians),
-		FORWARD(first_normalized, second_normalized, radians)
-	);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsPerpendicularAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL Clamp(Vector8 value, Vector8 min, Vector8 max);
+	ECSENGINE_API Vector3 ECS_VECTORCALL Clamp(Vector3 value, Vector3 min, Vector3 max);
+
+	ECSENGINE_API Vector4 ECS_VECTORCALL Clamp(Vector4 value, Vector4 min, Vector4 max);
 
 	template<bool equal_min = false, bool equal_max = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL IsInRangeMask(Vector8 value, Vector8 min, Vector8 max);
+	ECSENGINE_API bool ECS_VECTORCALL IsInRangeMask(float3 value, float3 min, float3 max);
+
+	template<bool equal_min = false, bool equal_max = false>
+	ECSENGINE_API bool ECS_VECTORCALL IsInRangeMask(float4 value, float4 min, float4 max);
+
+	// Again, conversions from float to Vec8f take precedence...
+	template<bool equal_min = false, bool equal_max = false, typename SingleValue>
+	ECS_INLINE auto ECS_VECTORCALL IsInRangeMaskSingle(SingleValue value, SingleValue min, SingleValue max) {
+		static_assert(std::is_same_v<SingleValue, float> || std::is_same_v<SingleValue, Vec8f> || std::is_same_v<SingleValue, __m256>,
+			"Invalid single type for IsInRangeMaskSingle");
+		if constexpr (equal_min) {
+			if constexpr (equal_max) {
+				return value >= min && value <= max;
+			}
+			else {
+				return value >= min && value < max;
+			}
+		}
+		else {
+			if constexpr (equal_max) {
+				return value > min && value <= max;
+			}
+			else {
+				return value > min && value < max;
+			}
+		}
+	}
+
+	template<bool equal_min = false, bool equal_max = false>
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsInRangeMask(Vector3 value, Vector3 min, Vector3 max);
+
+	template<bool equal_min = false, bool equal_max = false>
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsInRangeMask(Vector4 value, Vector4 min, Vector4 max);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// Operates on the full vector
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL Reflect(Vector8 incident, Vector8 normal);
+	ECSENGINE_API float3 ECS_VECTORCALL Reflect(float3 incident, float3 normal);
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL Reflect(Vector3 incident, Vector3 normal);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL Refract(Vector8 incident, Vector8 normal, Vector8 refraction_index);
+	ECSENGINE_API float3 ECS_VECTORCALL Refract(float3 incident, float3 normal, float refraction_index);
 
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL RefractLow(Vector8 incident, Vector8 normal, Vector8 refraction_index);
+	// It exists only to match the SIMD function
+	ECS_INLINE float3 ECS_VECTORCALL Refract(float3 incident, float3 normal, float refraction_index, size_t vector_count) {
+		return Refract(incident, normal, refraction_index);
+	}
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL Refract(Vector3 incident, Vector3 normal, Vec8f refraction_index, size_t vector_count);
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	// The vectors need to be normalized before
 	// Returns the value of the angle between the 2 vectors in radians
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL AngleBetweenVectorsNormalizedRad(Vector8 a_normalized, Vector8 b_normalized);
+	ECSENGINE_API float ECS_VECTORCALL AngleBetweenVectorsNormalizedRad(float3 a_normalized, float3 b_normalized);
+
+	// The vectors need to be normalized before
+	// Returns the value of the angle between the 2 vectors in radians
+	ECSENGINE_API Vec8f ECS_VECTORCALL AngleBetweenVectorsNormalizedRad(Vector3 a_normalized, Vector3 b_normalized);
 
 	// Returns the value of the angle between the 2 vectors in radians
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE, bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL AngleBetweenVectorsRad(Vector8 a, Vector8 b);
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API float ECS_VECTORCALL AngleBetweenVectorsRad(float3 a, float3 b);
+		
+	// Returns the value of the angle between the 2 vectors in radians
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECSENGINE_API Vec8f ECS_VECTORCALL AngleBetweenVectorsRad(Vector3 a, Vector3 b);
+	
+	// Return the value of the angle between the 2 vectors in degrees
+	ECS_INLINE float ECS_VECTORCALL AngleBetweenVectorsNormalized(float3 a_normalized, float3 b_normalized) {
+		return RadToDeg(AngleBetweenVectorsNormalizedRad(a_normalized, b_normalized));
+	}
 
 	// Return the value of the angle between the 2 vectors in degrees
-	template<bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL AngleBetweenVectorsNormalized(Vector8 a_normalized, Vector8 b_normalized);
+	ECS_INLINE Vec8f ECS_VECTORCALL AngleBetweenVectorsNormalized(Vector3 a_normalized, Vector3 b_normalized) {
+		return RadToDeg(AngleBetweenVectorsNormalizedRad(a_normalized, b_normalized));
+	}
 
 	// Return the value of the angle between the 2 vectors in degrees
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE, bool use_full_lane = false>
-	ECSENGINE_API Vector8 ECS_VECTORCALL AngleBetweenVectors(Vector8 a, Vector8 b);
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECS_INLINE float ECS_VECTORCALL AngleBetweenVectors(float3 a, float3 b) {
+		return RadToDeg(AngleBetweenVectorsRad<precision>(a, b));
+	}
+
+	// Return the value of the angle between the 2 vectors in degrees
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECS_INLINE Vec8f ECS_VECTORCALL AngleBetweenVectors(Vector3 a, Vector3 b) {
+		return RadToDeg(AngleBetweenVectorsRad<precision>(a, b));
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// x % y
-	ECSENGINE_API Vector8 ECS_VECTORCALL VectorFmod(Vector8 x, Vector8 y);
+	ECS_INLINE float Fmadd(float a, float b, float c) {
+		return a * b + c;
+	}
+
+	ECS_INLINE float Fmsub(float a, float b, float c) {
+		return a * b - c;
+	}
+
+	// a * b + c
+	ECSENGINE_API float3 ECS_VECTORCALL Fmadd(float3 a, float3 b, float3 c);
+
+	// a * b + c
+	ECSENGINE_API float4 ECS_VECTORCALL Fmadd(float4 a, float4 b, float4 c);
+
+	// a * b + c
+	ECSENGINE_API Vector3 ECS_VECTORCALL Fmadd(Vector3 a, Vector3 b, Vector3 c);
+
+	// a * b + c
+	ECSENGINE_API Vector4 ECS_VECTORCALL Fmadd(Vector4 a, Vector4 b, Vector4 c);
+
+	// a * b - c
+	ECSENGINE_API float3 ECS_VECTORCALL Fmsub(float3 a, float3 b, float3 c);
+
+	// a * b - c
+	ECSENGINE_API float4 ECS_VECTORCALL Fmsub(float4 a, float4 b, float4 c);
+
+	// a * b - c
+	ECSENGINE_API Vector3 ECS_VECTORCALL Fmsub(Vector3 a, Vector3 b, Vector3 c);
+
+	// a * b - c
+	ECSENGINE_API Vector4 ECS_VECTORCALL Fmsub(Vector4 a, Vector4 b, Vector4 c);
+
+	ECS_INLINE float Fmod(float a, float b) {
+		return fmodf(a, b);
+	}
+
+	ECSENGINE_API Vec8f ECS_VECTORCALL Fmod(Vec8f a, Vec8f b);
+
+	// a % b
+	ECSENGINE_API float3 ECS_VECTORCALL Fmod(float3 a, float3 b);
+
+	// a % b
+	ECSENGINE_API Vector3 ECS_VECTORCALL Fmod(Vector3 a, Vector3 b);
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Returns the euler angles in radians that correspond to that direction
-	// The 4th component is undefined
-	ECSENGINE_API Vector8 ECS_VECTORCALL DirectionToRotationEulerRad(Vector8 direction);
+	ECSENGINE_API Vector3 ECS_VECTORCALL DirectionToRotationEulerRad(Vector3 direction);
 
 	// Returns the euler angles in angles that correspond to that direction
-	// The 4th component is undefined
-	ECS_INLINE Vector8 ECS_VECTORCALL DirectionToRotationEuler(Vector8 direction) {
+	ECS_INLINE Vector3 ECS_VECTORCALL DirectionToRotationEuler(Vector3 direction) {
 		return RadToDeg(DirectionToRotationEulerRad(direction));
 	}
 
 	// Returns the euler angles in radians that correspond to that direction
-	ECSENGINE_API float3 DirectionToRotationEulerRad(float3 direction);
+	ECSENGINE_API float3 ECS_VECTORCALL DirectionToRotationEulerRad(float3 direction);
 
 	// Returns the euler angles in angles that correspond to that direction
-	ECS_INLINE float3 DirectionToRotationEuler(float3 direction) {
+	ECS_INLINE float3 ECS_VECTORCALL DirectionToRotationEuler(float3 direction) {
 		return RadToDeg(DirectionToRotationEulerRad(direction));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Constructs an orthonormal basis out of a given direction
-	ECSENGINE_API void ECS_VECTORCALL OrthonormalBasis(Vector8 direction_normalized, Vector8* direction_first, Vector8* direction_second);
+	ECSENGINE_API void ECS_VECTORCALL OrthonormalBasis(Vector3 direction_normalized, Vector3* direction_first, Vector3* direction_second);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL CullClipSpaceXMask(Vector8 vector);
+	// Returns true if the point is in view, else false
+	ECSENGINE_API bool CullClipSpaceXMask(float4 vector);
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL CullClipSpaceYMask(Vector8 vector);
+	// Returns true if the point is in view, else false
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CullClipSpaceXMask(Vector4 vector);
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL CullClipSpaceZMask(Vector8 vector);
+	// Returns true if the point is in view, else false
+	ECSENGINE_API bool CullClipSpaceYMask(float4 vector);
 
-	ECSENGINE_API Vector8 ECS_VECTORCALL CullClipSpaceWMask(Vector8 vector);
+	// Returns true if the point is in view, else false
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CullClipSpaceYMask(Vector4 vector);
+
+	// Returns true if the point is in view, else false
+	ECSENGINE_API bool CullClipSpaceZMask(float4 vector);
+
+	// Returns true if the point is in view, else false
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CullClipSpaceZMask(Vector4 vector);
+
+	// Returns true if the point is in view, else false
+	ECSENGINE_API bool CullClipSpaceWMask(float4 vector);
+
+	// Returns true if the point is in view, else false
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CullClipSpaceWMask(Vector4 vector);
+
+	// Returns true if the point is in view, else false
+	ECSENGINE_API bool CullClipSpaceMask(float4 vector);
 
 	// Returns a mask where vertices which should be kept have their lane set to true
-	ECSENGINE_API Vector8 ECS_VECTORCALL CullClipSpaceMask(Vector8 vector);
-
-	// Returns true if the point is in the camera frustum
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		CullClipSpaceX,
-		4,
-		FORWARD(Vector8 vector),
-		FORWARD(vector)
-	);
-
-	// Returns true if the point is in the camera frustum
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		CullClipSpaceY,
-		4,
-		FORWARD(Vector8 vector),
-		FORWARD(vector)
-	);
-
-	// Returns true if the point is in the camera frustum
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		CullClipSpaceZ,
-		4,
-		FORWARD(Vector8 vector),
-		FORWARD(vector)
-	);
-
-	// Returns true if the point is in the camera frustum
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		CullClipSpaceW,
-		4,
-		FORWARD(Vector8 vector),
-		FORWARD(vector)
-	);
-
-	// Returns true if the point is in the camera frustum
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
-		CullClipSpace,
-		4,
-		FORWARD(Vector8 vector),
-		FORWARD(vector)
-	);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CullClipSpaceMask(Vector4 vector);
 
 	// Converts from clip space to NDC
-	ECSENGINE_API Vector8 ECS_VECTORCALL ClipSpaceToNDC(Vector8 vector);
+	ECSENGINE_API float4 ECS_VECTORCALL ClipSpaceToNDC(float4 vector);
 
-	ECS_INLINE Vector8 ECS_VECTORCALL PerspectiveDivide(Vector8 vector) {
+	// Converts from clip space to NDC
+	ECSENGINE_API Vector4 ECS_VECTORCALL ClipSpaceToNDC(Vector4 vector);
+
+	ECS_INLINE float4 ECS_VECTORCALL PerspectiveDivide(float4 vector) {
+		// Same as ClipSpaceToNDC
+		return ClipSpaceToNDC(vector);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL PerspectiveDivide(Vector4 vector) {
 		// Same as ClipSpaceToNDC
 		return ClipSpaceToNDC(vector);
 	}
@@ -783,19 +821,24 @@ namespace ECSEngine {
 
 	// The direction needs to be normalized before hand
 	// The output is normalized as well
-	ECSENGINE_API Vector8 ECS_VECTORCALL GetRightVectorForDirection(Vector8 direction_normalized);
+	ECSENGINE_API float3 ECS_VECTORCALL GetRightVectorForDirection(float3 direction_normalized);
 
 	// The direction needs to be normalized before hand
 	// The output is normalized as well
-	ECSENGINE_API Vector8 ECS_VECTORCALL GetUpVectorForDirection(Vector8 direction_normalized);
+	ECSENGINE_API Vector3 ECS_VECTORCALL GetRightVectorForDirection(Vector3 direction_normalized);
+
+	// The direction needs to be normalized before hand
+	// The output is normalized as well
+	ECSENGINE_API float3 ECS_VECTORCALL GetUpVectorForDirection(float3 direction_normalized);
+
+
+	// The direction needs to be normalized before hand
+	// The output is normalized as well
+	ECSENGINE_API Vector3 ECS_VECTORCALL GetUpVectorForDirection(Vector3 direction_normalized);
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// The origin needs to be splatted in both the low and high
-	// If there are an odd count of points (3D ones, not vector), 
-	// then the last value needs to be splatted to the high lane as well
-	// The point will be splatted in both the low and high
-	ECSENGINE_API Vector8 ECS_VECTORCALL ClosestPoint(Stream<Vector8> points, Vector8 origin);
+	ECSENGINE_API float3 ECS_VECTORCALL ClosestPoint(Stream<float3> points, float3 origin);
 
 	// --------------------------------------------------------------------------------------------------------------
 

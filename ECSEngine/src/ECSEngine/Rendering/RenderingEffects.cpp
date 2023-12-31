@@ -278,7 +278,7 @@ namespace ECSEngine {
 					for (unsigned int overlap_row = 0; overlap_row < overlap_height; overlap_row++) {
 						for (unsigned int overlap_column = 0; overlap_column < overlap_width; overlap_column++) {
 							uint2 current_instance_position = top_left + uint2(overlap_row, overlap_column);
-							uint2 difference = AbsoluteDifference(current_instance_position, current_position);
+							uint2 difference = BasicTypeAbsoluteDifference(current_instance_position, current_position);
 							if (difference.x <= pixel_thickness && difference.y <= pixel_thickness) {
 								values[overlap_row * dimensions.x + overlap_column] = instance_index;
 							}
@@ -356,7 +356,7 @@ namespace ECSEngine {
 					);
 
 					if (instance_index != 0) {
-						uint2 position_difference = AbsoluteDifference(initial_position, uint2(start.x + column, start.y + row));
+						uint2 position_difference = BasicTypeAbsoluteDifference(initial_position, uint2(start.x + column, start.y + row));
 						if (position_difference.x <= pixel_thickness && position_difference.y <= pixel_thickness) {
 							if (pixel_thickness >= max_pixel_thickness) {
 								instance_index--;

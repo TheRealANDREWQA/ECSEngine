@@ -808,16 +808,16 @@ namespace ECSEngine {
 		return SphereMatrix(translation, POINT_SIZE, camera_matrix);
 	}
 
-	ECS_INLINE Matrix ECS_VECTORCALL CrossMatrix(float3 position, QuaternionStorage rotation, float size, Matrix camera_matrix) {
+	ECS_INLINE Matrix ECS_VECTORCALL CrossMatrix(float3 position, QuaternionScalar rotation, float size, Matrix camera_matrix) {
 		return MatrixMVPToGPU(
 			MatrixTranslation(position),
-			QuaternionToMatrixLow(rotation),
+			QuaternionToMatrix(rotation),
 			MatrixScale(float3::Splat(size)),
 			camera_matrix
 		);
 	}
 
-	ECS_INLINE Matrix ECS_VECTORCALL CircleMatrix(float3 position, QuaternionStorage rotation, float radius, Matrix camera_matrix) {
+	ECS_INLINE Matrix ECS_VECTORCALL CircleMatrix(float3 position, QuaternionScalar rotation, float radius, Matrix camera_matrix) {
 		// The same as the cross
 		return CrossMatrix(position, rotation, radius, camera_matrix);
 	}
@@ -826,10 +826,10 @@ namespace ECSEngine {
 		return MatrixMVPToGPU(MatrixTS(MatrixTranslation(position), MatrixScale(scale)), camera_matrix);
 	}
 
-	ECS_INLINE Matrix ECS_VECTORCALL OOBBMatrix(float3 position, QuaternionStorage rotation, float3 scale, Matrix camera_matrix) {
+	ECS_INLINE Matrix ECS_VECTORCALL OOBBMatrix(float3 position, QuaternionScalar rotation, float3 scale, Matrix camera_matrix) {
 		return MatrixMVPToGPU(
 			MatrixTranslation(position),
-			QuaternionToMatrixLow(rotation),
+			QuaternionToMatrix(rotation),
 			MatrixScale(scale),
 			camera_matrix
 		);
@@ -849,15 +849,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	// QuaternionStorage rotation and the length is in the w component
-	void ArrowStartEndToRotation(float3 start, float3 end, QuaternionStorage* rotation, float* length) {
+	// QuaternionScalar rotation and the length is in the w component
+	void ArrowStartEndToRotation(float3 start, float3 end, QuaternionScalar* rotation, float* length) {
 		float4 result;
 
 		float3 direction = start - end;
-		Vector8 direction_simd(direction);
-		Quaternion rotation_quat = DirectionToQuaternion(Normalize(direction_simd));
-		*rotation = rotation_quat.StorageLow();
-		*length = Length(direction_simd).First();
+		QuaternionScalar rotation_quat = DirectionToQuaternion(Normalize(direction));
+		*rotation = rotation_quat;
+		*length = Length(direction);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -872,8 +871,8 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL ArrowMatrix(float3 translation, QuaternionStorage rotation, float length, float size, Matrix camera_matrix) {
-		Matrix rotation_matrix = QuaternionToMatrixLow(rotation);
+	ECS_INLINE Matrix ECS_VECTORCALL ArrowMatrix(float3 translation, QuaternionScalar rotation, float length, float size, Matrix camera_matrix) {
+		Matrix rotation_matrix = QuaternionToMatrix(rotation);
 		float3 current_translation = translation;
 		return MatrixMVPToGPU(
 			MatrixTranslation(current_translation),
@@ -885,13 +884,13 @@ namespace ECSEngine {
 
 	ECS_INLINE Matrix ECS_VECTORCALL OOBBCrossMatrix(
 		float3 translation, 
-		QuaternionStorage rotation, 
+		QuaternionScalar rotation, 
 		float length, 
 		float size, 
 		float size_override, 
 		Matrix camera_matrix
 	) {
-		Matrix rotation_matrix = QuaternionToMatrixLow(rotation);
+		Matrix rotation_matrix = QuaternionToMatrix(rotation);
 		float3 current_translation = translation;
 		return MatrixMVPToGPU(
 			MatrixTranslation(current_translation),
@@ -901,34 +900,34 @@ namespace ECSEngine {
 		);
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL AxesArrowXRotationSIMD(Quaternion rotation) {
+	ECS_INLINE QuaternionScalar ECS_VECTORCALL AxesArrowXRotationSIMD(QuaternionScalar rotation) {
 		return rotation;
 	}
 
-	ECS_INLINE QuaternionStorage AxesArrowXRotation(QuaternionStorage rotation) {
+	ECS_INLINE QuaternionScalar AxesArrowXRotation(QuaternionScalar rotation) {
 		return rotation;
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL AxesArrowYRotationSIMD(Quaternion rotation) {
-		return AddWorldRotation(rotation, QuaternionAngleFromAxis(ForwardVector(), 90.0f));
+	ECS_INLINE QuaternionScalar ECS_VECTORCALL AxesArrowYRotationSIMD(QuaternionScalar rotation) {
+		return AddWorldRotation(rotation, QuaternionAngleFromAxis(GetForwardVector(), 90.0f));
 	}
 
-	ECS_INLINE QuaternionStorage AxesArrowYRotation(QuaternionStorage rotation) {
-		return AxesArrowYRotationSIMD(rotation).StorageLow();
+	ECS_INLINE QuaternionScalar AxesArrowYRotation(QuaternionScalar rotation) {
+		return AxesArrowYRotationSIMD(rotation);
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL AxesArrowZRotationSIMD(Quaternion rotation) {
-		return AddWorldRotation(rotation, QuaternionAngleFromAxis(UpVector(), -90.0f));
+	ECS_INLINE QuaternionScalar ECS_VECTORCALL AxesArrowZRotationSIMD(QuaternionScalar rotation) {
+		return AddWorldRotation(rotation, QuaternionAngleFromAxis(GetUpVector(), -90.0f));
 	}
 
-	ECS_INLINE QuaternionStorage AxesArrowZRotation(QuaternionStorage rotation) {
-		return AxesArrowZRotationSIMD(rotation).StorageLow();
+	ECS_INLINE QuaternionScalar AxesArrowZRotation(QuaternionScalar rotation) {
+		return AxesArrowZRotationSIMD(rotation);
 	}
 
-	float3 OOBBCrossTranslation(float3 translation, Quaternion rotation, float length, bool start_from_same_point) {
+	float3 OOBBCrossTranslation(float3 translation, QuaternionScalar rotation, float length, bool start_from_same_point) {
 		// Offset in the direction of the by half of the length - if start from same point
 		if (start_from_same_point) {
-			float3 direction = RotateVectorQuaternion(RightVector(), rotation);
+			float3 direction = RotateVector(GetRightVector(), rotation);
 			return translation + direction * float3::Splat(length);
 		}
 		else {
@@ -936,25 +935,25 @@ namespace ECSEngine {
 		}
 	}
 
-	ECS_INLINE float3 OOBBCrossXTranslation(float3 translation, Quaternion rotation, float length, bool start_from_same_point) {
+	ECS_INLINE float3 OOBBCrossXTranslation(float3 translation, QuaternionScalar rotation, float length, bool start_from_same_point) {
 		return OOBBCrossTranslation(translation, AxesArrowXRotationSIMD(rotation), length, start_from_same_point);
 	}
 
-	ECS_INLINE float3 OOBBCrossYTranslation(float3 translation, Quaternion rotation, float length, bool start_from_same_point) {
+	ECS_INLINE float3 OOBBCrossYTranslation(float3 translation, QuaternionScalar rotation, float length, bool start_from_same_point) {
 		return OOBBCrossTranslation(translation, AxesArrowYRotationSIMD(rotation), length, start_from_same_point);
 	}
 
-	ECS_INLINE float3 OOBBCrossZTranslation(float3 translation, Quaternion rotation, float length, bool start_from_same_point) {
+	ECS_INLINE float3 OOBBCrossZTranslation(float3 translation, QuaternionScalar rotation, float length, bool start_from_same_point) {
 		return OOBBCrossTranslation(translation, AxesArrowZRotationSIMD(rotation), length, start_from_same_point);
 	}
 
-	void ConvertTranslationLineIntoStartEnd(float3 translation, QuaternionStorage rotation, float size, float3& start, float3& end) {
+	void ConvertTranslationLineIntoStartEnd(float3 translation, QuaternionScalar rotation, float size, float3& start, float3& end) {
 		start = translation;
-		float3 direction = RotateVectorQuaternion(rotation, RightVector());
+		float3 direction = RotateVector(GetRightVector(), rotation);
 		end = translation + float3::Splat(size) * direction;
 	}
 
-	DebugLine ConvertTranslationLineIntoStartEnd(float3 translation, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options) {
+	DebugLine ConvertTranslationLineIntoStartEnd(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options) {
 		DebugLine debug_line;
 
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, debug_line.start, debug_line.end);
@@ -981,7 +980,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLine(float3 translation, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
@@ -1013,7 +1012,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCross(float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		crosses.Add({ position, rotation, size, color, options });
 	}
@@ -1022,7 +1021,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::AddOOBBCross(
 		float3 position, 
-		QuaternionStorage rotation, 
+		QuaternionScalar rotation, 
 		float length,
 		float size, 
 		bool start_from_same_point, 
@@ -1030,7 +1029,7 @@ namespace ECSEngine {
 		DebugDrawCallOptions options
 	)
 	{
-		Quaternion rotation_quaternion = rotation;
+		QuaternionScalar rotation_quaternion = rotation;
 		float3 complete_size_x = OOBBCrossSize(length, size, info->size_override_x);
 		float3 complete_size_y = OOBBCrossSize(length, size, info->size_override_y);
 		float3 complete_size_z = OOBBCrossSize(length, size, info->size_override_z);
@@ -1068,7 +1067,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCircle(float3 position, QuaternionStorage rotation, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawCallOptions options)
 	{
 		circles.Add({ position, rotation, radius, color, options });
 	}
@@ -1077,7 +1076,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::AddArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
 	{
-		QuaternionStorage rotation;
+		QuaternionScalar rotation;
 		float length;
 		ArrowStartEndToRotation(start, end, &rotation, &length);
 		AddArrowRotation(start, rotation, length, size, color, options);
@@ -1085,14 +1084,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowRotation(float3 translation, QuaternionStorage rotation, float length, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawCallOptions options)
 	{
 		arrows.Add({ translation, rotation, length, size, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAxes(float3 translation, QuaternionStorage rotation, float size, const DebugAxesInfo* info, DebugDrawCallOptions options)
+	void DebugDrawer::AddAxes(float3 translation, QuaternionScalar rotation, float size, const DebugAxesInfo* info, DebugDrawCallOptions options)
 	{
 		DebugDrawCallOptions options_x = options;
 		DebugDrawCallOptions options_y = options;
@@ -1124,7 +1123,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddOOBB(float3 translation, QuaternionStorage rotation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawCallOptions options)
 	{
 		oobbs.Add({ translation, rotation, scale, color, options });
 	}
@@ -1139,10 +1138,10 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringRotation(float3 position, QuaternionStorage rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringRotation(float3 position, QuaternionScalar rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
 		Stream<char> text_copy = StringCopy(Allocator(), text);
-		float3 direction = RotateVectorQuaternion(rotation, RightVector());
+		float3 direction = RotateVector(GetRightVector(), rotation);
 		AddString(position, direction, size, text, color, options);
 	}
 
@@ -1176,7 +1175,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 translation, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
@@ -1224,7 +1223,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCrossThread(unsigned int thread_index, float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCrossThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1239,7 +1238,7 @@ namespace ECSEngine {
 	void DebugDrawer::AddOOBBCrossThread(
 		unsigned int thread_index, 
 		float3 position, 
-		QuaternionStorage rotation,
+		QuaternionScalar rotation,
 		float length,
 		float size, 
 		bool start_from_same_point, 
@@ -1247,7 +1246,7 @@ namespace ECSEngine {
 		DebugDrawCallOptions options
 	)
 	{
-		Quaternion rotation_quaternion = rotation;
+		QuaternionScalar rotation_quaternion = rotation;
 		float3 complete_size_x = OOBBCrossSize(length, size, info->size_override_x);
 		float3 complete_size_y = OOBBCrossSize(length, size, info->size_override_y);
 		float3 complete_size_z = OOBBCrossSize(length, size, info->size_override_z);
@@ -1288,7 +1287,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCircleThread(unsigned int thread_index, float3 position, QuaternionStorage rotation, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCircleThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1307,7 +1306,7 @@ namespace ECSEngine {
 		if (thread_arrows[thread_index].IsFull()) {
 			FlushArrow(thread_index);
 		}
-		QuaternionStorage rotation;
+		QuaternionScalar rotation;
 		float length;
 		ArrowStartEndToRotation(start, end, &rotation, &length);
 		thread_arrows[thread_index].Add({ start, rotation, length, size, color, options });
@@ -1315,7 +1314,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowRotationThread(unsigned int thread_index, float3 translation, QuaternionStorage rotation, float length, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowRotationThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1327,7 +1326,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAxesThread(unsigned int thread_index, float3 translation, QuaternionStorage rotation, float size, const DebugAxesInfo* info, DebugDrawCallOptions options)
+	void DebugDrawer::AddAxesThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float size, const DebugAxesInfo* info, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1374,7 +1373,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddOOBBThread(unsigned int thread_index, float3 translation, QuaternionStorage rotation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddOOBBThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1399,7 +1398,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringRotationThread(unsigned int thread_index, float3 position, QuaternionStorage rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringRotationThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1407,7 +1406,7 @@ namespace ECSEngine {
 			FlushString(thread_index);
 		}
 		Stream<char> string_copy = StringCopy(AllocatorTs(), text);
-		thread_strings[thread_index].Add({ position, RotateVectorQuaternion(rotation, RightVector()), size, string_copy, color, options });
+		thread_strings[thread_index].Add({ position, RotateVector(GetRightVector(), rotation), size, string_copy, color, options });
 	}
 
 	void DebugDrawer::AddGridThread(unsigned int thread_index, const DebugGrid* grid, bool retrieve_entries_now)
@@ -1593,7 +1592,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawLine(float3 translation, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
@@ -1650,7 +1649,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCross(float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1667,7 +1666,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawOOBBCross(
 		float3 position, 
-		QuaternionStorage rotation,
+		QuaternionScalar rotation,
 		float length,
 		float size, 
 		bool start_from_same_point, 
@@ -1682,7 +1681,7 @@ namespace ECSEngine {
 			info->color_z
 		};
 
-		Quaternion rotation_quaternion = rotation;
+		QuaternionScalar rotation_quaternion = rotation;
 
 		// Hopefully since the function is marked as inline the compiler will notice the same function being
 		// called multiple times and fold the calls into a single one (with optimizations for sure, in release
@@ -1727,7 +1726,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCircle(float3 position, QuaternionStorage rotation, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawCallOptions options)
 	{
 		options.wireframe = false;
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR, DRAW_TRANSFORM_CIRCLE_BUFFER>(
@@ -1745,13 +1744,13 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
 	{
-		QuaternionStorage rotation;
+		QuaternionScalar rotation;
 		float length;
 		ArrowStartEndToRotation(start, end, &rotation, &length);
 		DrawArrowRotation(start, rotation, length, size, color, options);
 	}
 
-	void DebugDrawer::DrawArrowRotation(float3 translation, QuaternionStorage rotation, float length, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawCallOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1766,7 +1765,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawAxes(float3 translation, QuaternionStorage rotation, float size, Color color_x, Color color_y, Color color_z, DebugDrawCallOptions options)
+	void DebugDrawer::DrawAxes(float3 translation, QuaternionScalar rotation, float size, Color color_x, Color color_y, Color color_z, DebugDrawCallOptions options)
 	{
 		// The same as drawing 3 arrows for each axis
 		DebugDrawerOutput colors[] = {
@@ -1815,12 +1814,12 @@ namespace ECSEngine {
 	// It uses a scaled cube to draw it
 	void DebugDrawer::DrawAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options)
 	{
-		DrawOOBB(translation, QuaternionIdentity().StorageLow(), scale, color, options);
+		DrawOOBB(translation, QuaternionIdentityScalar(), scale, color, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawOOBB(float3 translation, QuaternionStorage rotation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawCallOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1845,7 +1844,7 @@ namespace ECSEngine {
 		float3 rotation_from_direction = DirectionToRotationEuler(direction);
 		// Invert the y axis 
 		rotation_from_direction.y = -rotation_from_direction.y;
-		float3 up_direction = RotateVectorQuaternion(rotation_from_direction, UpVector());
+		float3 up_direction = RotateVector(GetUpVector(), QuaternionFromEuler(rotation_from_direction));
 
 		// Splat these early
 		float3 space_size = float3::Splat(STRING_SPACE_SIZE * size) * direction;
@@ -1944,13 +1943,13 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawStringRotation(
 		float3 translation,
-		QuaternionStorage rotation,
+		QuaternionScalar rotation,
 		float size,
 		Stream<char> text,
 		Color color,
 		DebugDrawCallOptions options
 	) {
-		DrawString(translation, RotateVectorQuaternion(rotation, GetRightVector()), size, text, color, options);
+		DrawString(translation, RotateVector(GetRightVector(), rotation), size, text, color, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2358,7 +2357,7 @@ namespace ECSEngine {
 					float3 rotation_from_direction = DirectionToRotationEuler(direction);
 					// Invert the y axis 
 					rotation_from_direction.y = -rotation_from_direction.y;
-					float3 up_direction = RotateVectorQuaternion(rotation_from_direction, GetUpVector());
+					float3 up_direction = RotateVector(GetUpVector(), QuaternionFromEuler(rotation_from_direction));
 
 					// Splat these early
 					float3 space_size = float3::Splat(STRING_SPACE_SIZE * string->size) * direction;
@@ -2566,7 +2565,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexLine(
 		float3 translation, 
-		QuaternionStorage rotation, 
+		QuaternionScalar rotation, 
 		float size, 
 		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugLine>* addition_stream
@@ -2640,7 +2639,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexCross(
 		float3 position, 
-		QuaternionStorage rotation, 
+		QuaternionScalar rotation, 
 		float size, 
 		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugCross>* addition_stream
@@ -2658,7 +2657,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexOOBBCross(
 		float3 position, 
-		QuaternionStorage rotation,
+		QuaternionScalar rotation,
 		float length,
 		float size, 
 		bool start_from_same_point, 
@@ -2667,13 +2666,13 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugOOBB>* addition_stream
 	)
 	{
-		Quaternion rotation_quaternion = rotation;
+		QuaternionScalar rotation_quaternion = rotation;
 		float3 translations[] = {
 			OOBBCrossXTranslation(position, rotation_quaternion, length, start_from_same_point),
 			OOBBCrossYTranslation(position, rotation_quaternion, length, start_from_same_point),
 			OOBBCrossZTranslation(position, rotation_quaternion, length, start_from_same_point),
 		};
-		QuaternionStorage rotations[] = {
+		QuaternionScalar rotations[] = {
 			AxesArrowXRotation(rotation),
 			AxesArrowYRotation(rotation),
 			AxesArrowZRotation(rotation)
@@ -2738,7 +2737,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexCircle(
 		float3 position, 
-		QuaternionStorage rotation, 
+		QuaternionScalar rotation, 
 		float radius, 
 		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugCircle>* addition_stream
@@ -2765,7 +2764,7 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugArrow>* addition_stream
 	)
 	{
-		QuaternionStorage rotation;
+		QuaternionScalar rotation;
 		float length;
 		ArrowStartEndToRotation(start, end, &rotation, &length);
 		OutputInstanceIndexArrowRotation(start, rotation, length, size, options, addition_stream);
@@ -2775,7 +2774,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexArrowRotation(
 		float3 translation, 
-		QuaternionStorage rotation, 
+		QuaternionScalar rotation, 
 		float length, 
 		float size, 
 		DebugDrawCallOptions options,
@@ -2797,7 +2796,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexAxes(
 		float3 translation,
-		QuaternionStorage rotation,
+		QuaternionScalar rotation,
 		float size,
 		unsigned int instance_thickness_x,
 		unsigned int instance_thickness_y,
@@ -2889,7 +2888,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexOOBB(
 		float3 translation, 
-		QuaternionStorage rotation, 
+		QuaternionScalar rotation, 
 		float3 scale, 
 		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugOOBB>* addition_stream
@@ -2924,7 +2923,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexStringRotation(
 		float3 translation, 
-		QuaternionStorage rotation, 
+		QuaternionScalar rotation, 
 		float size, 
 		Stream<char> text, 
 		DebugDrawCallOptions options,
@@ -2932,7 +2931,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	)
 	{
-		OutputInstanceIndexString(translation, RotateVectorQuaternion(rotation, GetRightVector()), size, text, options, addition_stream, allocator);
+		OutputInstanceIndexString(translation, RotateVector(GetRightVector(), rotation), size, text, options, addition_stream, allocator);
 	}
 
 
@@ -3635,17 +3634,17 @@ namespace ECSEngine {
 		debug_options.ignore_depth = true;
 		debug_options.wireframe = true;
 		drawer->AddAABB({ 0.0f, 0.0f, 0.0f }, float3::Splat(1.0f), AxisXColor(), debug_options);
-		drawer->AddOOBB({ 0.0f, 0.0f, 0.0f }, QuaternionFromEuler(float3::Splat(45.0f)).StorageLow(), float3::Splat(1.0f), AxisZColor(), debug_options);
+		drawer->AddOOBB({ 0.0f, 0.0f, 0.0f }, QuaternionFromEuler(float3::Splat(45.0f)), float3::Splat(1.0f), AxisZColor(), debug_options);
 		drawer->AddLine({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -5.0f }, AxisYColor());
 		drawer->AddRectangle({ 5.0f, 0.0f, -5.0f }, { 0.0f, 5.0f, -5.0f }, Color(100, 120, 160), debug_options);
 
 		debug_options.wireframe = false;
 		drawer->AddArrow({ 5.0f, 0.0f, -5.0f }, { 10.0f, 0.0f, -5.0f }, 10.0f, Color(200, 100, 150), debug_options);
-		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, QuaternionFromEuler(float3(0.0f, 0.0f, 0.0f)).StorageLow(), 1.0f, Color(100, 150, 200), debug_options);
-		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, QuaternionFromEuler(float3(90.0f, 0.0f, 0.0f)).StorageLow(), 1.0f, Color(100, 150, 200), debug_options);
-		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, QuaternionFromEuler(float3(0.0f, 0.0f, 90.0f)).StorageLow(), 1.0f, Color(100, 150, 200), debug_options);
+		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, QuaternionFromEuler(float3(0.0f, 0.0f, 0.0f)), 1.0f, Color(100, 150, 200), debug_options);
+		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, QuaternionFromEuler(float3(90.0f, 0.0f, 0.0f)), 1.0f, Color(100, 150, 200), debug_options);
+		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, QuaternionFromEuler(float3(0.0f, 0.0f, 90.0f)), 1.0f, Color(100, 150, 200), debug_options);
 
-		drawer->AddCross({ 10.0f, 10.0f, 0.0f }, QuaternionFromEuler(float3(0.0f, 0.0f, 0.0f)).StorageLow(), 1.0f, Color(200, 200, 200), debug_options);
+		drawer->AddCross({ 10.0f, 10.0f, 0.0f }, QuaternionFromEuler(float3(0.0f, 0.0f, 0.0f)), 1.0f, Color(200, 200, 200), debug_options);
 		drawer->AddPoint({ 0.0f, 0.0f, -10.0f }, Color(255, 255, 255), debug_options);
 		drawer->AddTriangle({ 2.0f, 0.0f, 0.0f }, { 5.0f, 0.0f, 0.0f }, { 0.0f, 5.0f, 0.0f }, Color(10, 50, 200), debug_options);
 

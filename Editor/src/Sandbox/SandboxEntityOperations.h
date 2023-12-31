@@ -371,7 +371,7 @@ float3 GetSandboxEntityTranslation(
 );
 
 // Returns QuaternionIdentity() if it doesn't have the rotation component
-QuaternionStorage GetSandboxEntityRotation(
+QuaternionScalar GetSandboxEntityRotation(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	Entity entity,
@@ -387,7 +387,7 @@ float3 GetSandboxEntityScale(
 );
 
 // Returns a default field if one of the components is missing
-Transform GetSandboxEntityTransform(
+TransformScalar GetSandboxEntityTransform(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	Entity entity,
@@ -515,7 +515,7 @@ float3 GetSandboxEntitiesTranslationMidpoint(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-Quaternion ECS_VECTORCALL GetSandboxEntitiesRotationMidpoint(
+QuaternionScalar GetSandboxEntitiesRotationMidpoint(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	Stream<Entity> entities,
@@ -530,7 +530,7 @@ void GetSandboxEntitiesMidpoint(
 	unsigned int sandbox_index,
 	Stream<Entity> entities,
 	float3* translation_midpoint,
-	Quaternion* rotation_midpoint,
+	QuaternionScalar* rotation_midpoint,
 	Stream<TransformGizmo> transform_gizmos = {},
 	bool add_transform_gizmos_to_total_count = true,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -665,7 +665,7 @@ void ResetSandboxGlobalComponent(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, Quaternion rotation_delta);
+void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, QuaternionScalar rotation_delta);
 
 // Readonly. It returns the archetype's components
 // Does nothing if the entity doesn't exist

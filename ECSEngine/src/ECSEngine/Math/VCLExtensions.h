@@ -78,7 +78,7 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region Zero Vector
+#pragma region Zero Vector3
 
 	ECS_INLINE __m256 ECS_VECTORCALL ZeroVectorFloat() {
 		return _mm256_setzero_ps();
@@ -328,6 +328,227 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Gather Stride
+
+	template<int stride, int offset>
+	ECS_INLINE Vec8f ECS_VECTORCALL GatherStride(const void* data) {
+		return gather8f<offset + stride * 0, offset + stride * 1, offset + stride * 2, offset + stride * 3,
+			offset + stride * 4, offset + stride * 5, offset + stride * 6, offset + stride * 7>((const float*)data);
+	}
+	
+	// This version will gather the first element in the non used slots
+	template<int stride, int offset>
+	ECS_INLINE Vec8f ECS_VECTORCALL GatherStride(const void* data, size_t load_count) {
+		if (load_count == Vec8f::size()) {
+			GatherStride<stride, offset>(data);
+		}
+		else {
+			alignas(ECS_SIMD_BYTE_SIZE) int indices_array[Vec8f::size()];
+			for (size_t index = 0; index < load_count; index++) {
+				indices_array[index] = offset + stride * index;
+			}
+			// Set the remaining elements to zero such that we don't access memory that is not used
+			for (size_t index = load_count; index < Vec8f::size(); index++) {
+				indices_array[index] = offset;
+			}
+			Vec8i indices;
+			indices.load_a(indices_array);
+			return _mm256_i32gather_ps((const float*)data, indices, 4);
+		}
+	}
+
+	// This version will set not used slots to 0
+	template<int stride, int offset>
+	ECS_INLINE Vec8f ECS_VECTORCALL GatherStrideMasked(const void* data, size_t load_count) {
+		if (load_count == Vec8f::size()) {
+			GatherStride<stride, offset>(data);
+		}
+		else {
+			alignas(ECS_SIMD_BYTE_SIZE) int indices_array[Vec8f::size()];
+			alignas(ECS_SIMD_BYTE_SIZE) int mask_array[Vec8f::size()];
+			for (size_t index = 0; index < load_count; index++) {
+				indices_array[index] = offset + stride * index;
+				// The mask needs to be all ones
+				mask_array[index] = -1;
+			}
+			for (size_t index = load_count; index < Vec8f::size(); index++) {
+				mask_array[index] = 0;
+			}
+			Vec8i indices;
+			indices.load_a(indices_array);
+			Vec8i mask;
+			mask.load_a(mask_array);
+			return _mm256_mask_i32gather_ps(ZeroVectorFloat(), (const float*)data, indices, CastToFloat(mask), 4);
+		}
+	}
+
+#pragma endregion
+
+#pragma region Scatter
+
+	// An element is not stored if the index is negative
+	// Helpful for vectors that are not entirely full
+	ECS_INLINE void Scatter(Vec8f vector, void* destination, const int* indices) {
+		alignas(ECS_SIMD_BYTE_SIZE) float vector_values[8];
+		vector.store_a(vector_values);
+		float* float_destination = (float*)destination;
+		for (size_t index = 0; index < vector.size(); index++) {
+			if (indices[index] >= 0) {
+				float_destination[indices[index]] = vector_values[index];
+			}
+		}
+	}
+
+	// An element is not stored if the index is negative
+	// Helpful for vectors that are not entirely full
+	ECS_INLINE void Scatter(Vec8f vector, void* destination, const int* indices, size_t write_count) {
+		alignas(ECS_SIMD_BYTE_SIZE) float vector_values[8];
+		vector.store_a(vector_values);
+		float* float_destination = (float*)destination;
+		for (size_t index = 0; index < write_count; index++) {
+			if (indices[index] >= 0) {
+				float_destination[indices[index]] = vector_values[index];
+			}
+		}
+	}
+
+	// An element is not stored if the index is negative
+	// Helpful for vectors that are not entirely full
+	template<int i0, int i1, int i2, int i3, int i4, int i5, int i6, int i7>
+	ECS_INLINE void Scatter(Vec8f vector, void* destination) {
+		const int indices[] = { i0, i1, i2, i3, i4, i5, i6, i7 };
+		Scatter(vector, destination, indices);
+	}
+
+	template<int stride, int offset>
+	ECS_INLINE void ScatterStride(Vec8f vector, void* destination, size_t count) {
+		int indices[vector.size()];
+		for (size_t index = 0; index < count; index++) {
+			indices[index] = offset + stride * index;
+		}
+		for (size_t index = count; index < vector.size(); index++) {
+			indices[index] = -1;
+		}
+		Scatter(vector, destination, indices);
+	}
+
+	template<int stride, int offset>
+	ECS_INLINE void ScatterStride(Vec8f vector, void* destination) {
+		// Use the template version, since in the future this version might have a speed up intrinsic function
+		Scatter<offset + stride * 0, offset + stride * 1, offset + stride * 2, offset + stride * 3,
+			offset + stride * 4, offset + stride * 5, offset + stride * 6, offset + stride * 7>(vector, destination);
+	}
+
+#pragma endregion
+
+#pragma region Store Partial Constant
+
+	template<int count>
+	ECS_INLINE void StorePartialConstant(Vec8f value, void* destination) {
+		float* float_destination = (float*)destination;
+
+		auto basic_store = [](Vec4f vector, float* float_destination, auto store_count) {
+			if constexpr (store_count == 1) {
+				_mm_store_ss(float_destination, vector);
+			}
+			else if constexpr (store_count == 2) {
+				_mm_store_sd((double*)float_destination, _mm_castps_pd(vector));
+			}
+			else if constexpr (store_count == 3) {
+				_mm_store_sd((double*)float_destination, _mm_castps_pd(vector));
+				__m128 temp = _mm_movehl_ps(vector, vector);
+				_mm_store_ss(float_destination + 2, temp);
+			}
+			else if constexpr (store_count == 4) {
+				vector.store(float_destination);
+			}
+		};
+
+		if constexpr (count <= 4) {
+			basic_store(value.get_low(), float_destination, std::integral_constant<size_t, count>{});
+		}
+		else {
+			basic_store(value.get_low(), float_destination, std::integral_constant<size_t, 4>{});
+			basic_store(value.get_high(), float_destination + 4, std::integral_constant<size_t, count - 4>{});
+		}
+	}
+
+#pragma endregion
+
+#pragma region Load SoA functions
+
+	// Load data from a buffer that is stored contiguously like XXX YYY ZZZ
+	template<size_t count>
+	ECS_INLINE void LoadAdjacent(Vec8f* vectors, const void* values, size_t offset, size_t capacity) {
+		const float* float_values = (const float*)values;
+		for (size_t index = 0; index < count; index++) {
+			vectors[index].load(float_values + offset + capacity * index);
+		}
+	}
+
+	// Load data from a buffer that is stored contiguously like XXX YYY ZZZ
+	// The address needs to be aligned to a ECS_SIMD_BYTE_SIZE byte boundary
+	template<size_t count>
+	ECS_INLINE void LoadAlignedAdjacent(Vec8f* vectors, const void* values, size_t offset, size_t capacity) {
+		const float* float_values = (const float*)values;
+		for (size_t index = 0; index < count; index++) {
+			vectors[index].load_a(float_values + offset + capacity * index);
+		}
+	}
+
+	// Load data from a buffer that is stored contiguously like XXX YYY ZZZ
+	template<size_t vector_count>
+	ECS_INLINE void LoadPartialAdjacent(Vec8f* vectors, const void* values, size_t offset, size_t capacity, size_t load_count) {
+		const float* float_values = (const float*)values;
+		for (size_t index = 0; index < vector_count; index++) {
+			vectors[index].load_partial(load_count, float_values + offset + capacity * index);
+		}
+	}
+
+#pragma endregion
+
+#pragma endregion Store SoA functions
+
+	// Store data into a buffer that is stored contiguously like XXX YYY ZZZ
+	template<size_t count>
+	ECS_INLINE void StoreAdjacent(const Vec8f* vectors, void* values, size_t offset, size_t capacity) {
+		float* float_values = (float*)values;
+		for (size_t index = 0; index < count; index++) {
+			vectors[index].store(float_values + offset + capacity * index);
+		}
+	}
+
+	// Store data into a buffer that is stored contiguously like XXX YYY ZZZ
+	// The address needs to be aligned to a ECS_SIMD_BYTE_SIZE byte boundary
+	template<size_t count>
+	ECS_INLINE void StoreAlignedAdjacent(const Vec8f* vectors, void* values, size_t offset, size_t capacity) {
+		float* float_values = (float*)values;
+		for (size_t index = 0; index < count; index++) {
+			vectors[index].store_a(float_values + offset + capacity * index);
+		}
+	}
+
+	// Store data into a buffer that is stored contiguously like XXX YYY ZZZ
+	// The address needs to be aligned to a ECS_SIMD_BYTE_SIZE byte boundary
+	template<size_t count>
+	ECS_INLINE void StoreStreamedAdjacent(const Vec8f* vectors, void* values, size_t offset, size_t capacity) {
+		float* float_values = (float*)values;
+		for (size_t index = 0; index < count; index++) {
+			vectors[index].store_nt(float_values + offset + capacity * index);
+		}
+	}
+
+	// Store data into a buffer that is stored contiguously like XXX YYY ZZZ
+	template<size_t vector_count>
+	ECS_INLINE void StorePartialAdjacent(const Vec8f* vectors, void* values, size_t offset, size_t capacity, size_t store_count) {
+		float* float_values = (float*)values;
+		for (size_t index = 0; index < vector_count; index++) {
+			vectors[index].store_partial(store_count, float_values + offset + capacity * index);
+		}
+	}
+
+#pragma endregion
+
 #pragma region HorizontalFindFirst
 
 	template<typename VectorType>
@@ -356,9 +577,41 @@ namespace ECSEngine {
 		return blend8<0, 1, 2, 3, 12, 13, 14, 15>(a, b);
 	}
 
+	// Blends the high of a with the low of b
 	template<typename VectorType>
 	ECS_INLINE VectorType ECS_VECTORCALL BlendHighAndLow(VectorType a, VectorType b) {
-		return Permute2f128Helper<3, 0>(a, b);
+		return Permute2f128Helper<1, 2>(a, b);
+	}
+	
+	// Blends a single value from b into a given by the index
+	ECS_INLINE __m256 ECS_VECTORCALL BlendSingle(__m256 a, __m256 b, size_t index) {
+		alignas(ECS_SIMD_BYTE_SIZE) int mask[Vec8f::size()] = { 0 };
+		mask[index] = -1;
+		return _mm256_blendv_ps(a, b, CastToFloat(_mm256_load_si256((const __m256i*)mask)));
+	}
+
+	// This variant uses a switch, which in compiled mode should result in a jump table implementation
+	ECS_INLINE __m256 ECS_VECTORCALL BlendSingleSwitch(__m256 a, __m256 b, size_t index) {
+		switch (index) {
+		case 0:
+			return _mm256_blend_ps(a, b, 1 << 0);
+		case 1:
+			return _mm256_blend_ps(a, b, 1 << 1);
+		case 2:
+			return _mm256_blend_ps(a, b, 1 << 2);
+		case 3:
+			return _mm256_blend_ps(a, b, 1 << 3);
+		case 4:
+			return _mm256_blend_ps(a, b, 1 << 4);
+		case 5:
+			return _mm256_blend_ps(a, b, 1 << 5);
+		case 6:
+			return _mm256_blend_ps(a, b, 1 << 6);
+		case 7:
+			return _mm256_blend_ps(a, b, 1 << 7);
+		}
+
+		return ZeroVectorFloat();
 	}
 
 
@@ -509,6 +762,19 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Change Sign
+
+	ECS_INLINE Vec8f ECS_VECTORCALL ChangeSignMask(Vec8fb mask) {
+		const Vec8f int_mask = CastToFloat(Vec8i(0x80000000));
+		return select(mask, int_mask, ZeroVectorFloat());
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL ChangeSign(Vec8f value, Vec8f mask) {
+		return _mm256_xor_ps(value, mask);
+	}
+
+#pragma endregion
+
 #pragma region For Each Bit
 
 	// The functor can return true in order to early exit from the function
@@ -605,7 +871,7 @@ namespace ECSEngine {
 			return _mm256_broadcastss_ps(_mm256_castps256_ps128(permutation));
 		}
 		else {
-			constexpr int shifted_position = position >> 2;
+			constexpr int shifted_position = position - 4;
 			permutation = _mm256_permute_ps(vector, shifted_position);
 			return _mm256_broadcastss_ps(_mm256_extractf128_ps(permutation, 1));
 		}
@@ -614,6 +880,11 @@ namespace ECSEngine {
 	template<int position>
 	ECS_INLINE __m256i ECS_VECTORCALL Broadcast8(__m256i vector) {
 		return _mm256_castps_si256(Broadcast8<position>(_mm256_castsi256_ps(vector)));
+	}
+
+	ECS_INLINE __m256 ECS_VECTORCALL Broadcast8(__m256 vector, size_t index) {
+		__m256i mask = _mm256_set1_epi32(index);
+		return _mm256_permutevar8x32_ps(vector, mask);
 	}
 
 	template<int position>
@@ -738,7 +1009,7 @@ namespace ECSEngine {
 	) {
 		__m256i zeros = ZeroVectorInteger();
 
-		alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)];
 #define LOOP_ITERATION(index) mask[index] = element_##index ? UCHAR_MAX : 0;
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
@@ -759,7 +1030,7 @@ namespace ECSEngine {
 	static __m256i ECS_VECTORCALL SelectMask32(const bool* elements) {
 		__m256i zeros = ZeroVectorInteger();
 
-		alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)];
 #define LOOP_ITERATION(index) mask[index] = elements[index] ? UCHAR_MAX : 0;
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
@@ -797,7 +1068,7 @@ namespace ECSEngine {
 	) {
 		__m256i zeros = ZeroVectorInteger();
 
-		alignas(32) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)];
 #define LOOP_ITERATION(index) mask[index] = element_##index ? UINT_MAX : 0;
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
@@ -814,7 +1085,7 @@ namespace ECSEngine {
 	static __m256i ECS_VECTORCALL SelectMask16(const bool* elements) {
 		__m256i zeros = ZeroVectorInteger();
 
-		alignas(32) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)];
 #define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT_MAX : 0;
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
@@ -840,7 +1111,7 @@ namespace ECSEngine {
 	) {
 		__m256 zeros = ZeroVectorFloat();
 
-		alignas(32) uint32_t mask[sizeof(__m256) / sizeof(float)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint32_t mask[sizeof(__m256) / sizeof(float)];
 #define LOOP_ITERATION(index) mask[index] = element_##index ? UINT_MAX : 0; 
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
@@ -855,7 +1126,7 @@ namespace ECSEngine {
 	static __m256 ECS_VECTORCALL SelectMask8(const bool* elements) {
 		__m256 zeros = ZeroVectorFloat();
 
-		alignas(32) uint32_t mask[sizeof(__m256) / sizeof(float)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint32_t mask[sizeof(__m256) / sizeof(float)];
 #define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT_MAX : 0; 
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
@@ -894,7 +1165,7 @@ namespace ECSEngine {
 	) {
 		__m256i zeros = ZeroVectorInteger();
 
-		alignas(32) uint64_t mask[sizeof(__m256i) / sizeof(uint64_t)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint64_t mask[sizeof(__m256i) / sizeof(uint64_t)];
 #define LOOP_ITERATION(index) mask[index] = element_##index ? UINT_MAX : 0; 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 
@@ -907,7 +1178,7 @@ namespace ECSEngine {
 	ECS_INLINE __m256i ECS_VECTORCALL SelectMask4Integer(const bool* elements) {
 		__m256i zeros = ZeroVectorInteger();
 
-		alignas(32) uint64_t mask[sizeof(__m256i) / sizeof(uint64_t)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint64_t mask[sizeof(__m256i) / sizeof(uint64_t)];
 #define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT_MAX : 0; 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 
@@ -993,7 +1264,7 @@ namespace ECSEngine {
 		// A mask will be used - 16 condition switch table might be too much
 		__m256i zeros = ZeroVectorInteger();
 
-		alignas(32) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)] = { 0 };
+		alignas(ECS_SIMD_BYTE_SIZE) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)] = { 0 };
 		mask[position] = USHORT_MAX;
 
 		__m256i vector_mask = _mm256_load_si256((const __m256i*)mask);
@@ -1005,7 +1276,7 @@ namespace ECSEngine {
 		// A mask will be used - 32 condition switch table might be too much
 		__m256i zeros = ZeroVectorInteger();
 
-		alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
+		alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
 		mask[position] = UCHAR_MAX;
 
 		__m256i vector_mask = _mm256_load_si256((const __m256i*)mask);
@@ -1018,7 +1289,7 @@ namespace ECSEngine {
 
 	template<bool right>
 	__m256 ECS_VECTORCALL Rotate(__m256 vector, unsigned int count) {
-		alignas(32) uint32_t indices[sizeof(__m256i) / sizeof(uint32_t)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint32_t indices[sizeof(__m256i) / sizeof(uint32_t)];
 		for (unsigned int index = 0; index < 7; index++) {
 			if constexpr (right) {
 				unsigned int offset = count + index;
@@ -1037,7 +1308,7 @@ namespace ECSEngine {
 	template<bool right>
 	__m256d ECS_VECTORCALL Rotate(__m256d vector, unsigned int count) {
 		// Use the same permutevar8x32 but make two indices corresponding to a double
-		alignas(32) uint32_t indices[sizeof(__m256i) / sizeof(uint32_t)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint32_t indices[sizeof(__m256i) / sizeof(uint32_t)];
 		for (unsigned int index = 0; index < 4; index++) {
 			unsigned int first = index * 2;
 			unsigned int second = index * 2 + 1;
@@ -1132,7 +1403,7 @@ namespace ECSEngine {
 			__m256i permuted_left_shift = _mm256_permute4x64_epi64(left_shift, (0x03 << 0) | (0x00 << 2) | (0x01 << 4) | (0x02 << 6));
 
 			// Create the mask for blendv
-			alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
+			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
 			mask[0] = UCHAR_MAX;
 			mask[4] = UCHAR_MAX;
 			mask[8] = UCHAR_MAX;
@@ -1156,7 +1427,7 @@ namespace ECSEngine {
 			__m256i permuted_right_shift = _mm256_permute4x64_epi64(left_shift, (0x01 << 0) | (0x02 << 2) | (0x03 << 4) | (0x00 << 6));
 
 			// Create the mask for blendv
-			alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
+			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
 			mask[3] = UCHAR_MAX;
 			mask[7] = UCHAR_MAX;
 			mask[11] = UCHAR_MAX;
@@ -1184,7 +1455,7 @@ namespace ECSEngine {
 			__m256i permuted_left_shift = _mm256_permute4x64_epi64(left_shift, (0x03 << 0) | (0x00 << 2) | (0x01 << 4) | (0x02 << 6));
 
 			// Create the mask for blendv
-			alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
+			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
 			
 #define LOOP_ITERATION(index) mask[(index) * 4] = UCHAR_MAX; mask[(index) * 4 + 1] = UCHAR_MAX;
 
@@ -1206,7 +1477,7 @@ namespace ECSEngine {
 			__m256i permuted_right_shift = _mm256_permute4x64_epi64(left_shift, (0x01 << 0) | (0x02 << 2) | (0x03 << 4) | (0x00 << 6));
 
 			// Create the mask for blendv
-			alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
+			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
 
 #define LOOP_ITERATION(index) mask[(index) * 4 + 2] = UCHAR_MAX; mask[(index) * 4 + 3] = UCHAR_MAX;
 
@@ -1232,7 +1503,7 @@ namespace ECSEngine {
 			__m256i permuted_left_shift = _mm256_permute4x64_epi64(left_shift, (0x03 << 0) | (0x00 << 2) | (0x01 << 4) | (0x02 << 6));
 
 			// Create the mask for blendv
-			alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 1 };
+			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 1 };
 
 #define LOOP_ITERATION(index) mask[(index) * 4 + 3] = 0;
 
@@ -1254,7 +1525,7 @@ namespace ECSEngine {
 			__m256i permuted_right_shift = _mm256_permute4x64_epi64(left_shift, (0x01 << 0) | (0x02 << 2) | (0x03 << 4) | (0x00 << 6));
 
 			// Create the mask for blendv
-			alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 1 };
+			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 1 };
 
 #define LOOP_ITERATION(index) mask[(index) * 4] = 0;
 

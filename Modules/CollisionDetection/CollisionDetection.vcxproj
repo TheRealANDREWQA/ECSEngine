@@ -180,6 +180,7 @@
     <ClCompile Include="src\FixedGrid.cpp" />
     <ClCompile Include="src\Logging.cpp" />
     <ClCompile Include="src\ModuleFunction.cpp" />
+    <ClCompile Include="src\Narrowphase.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Create</PrecompiledHeader>
@@ -193,6 +194,7 @@
     <ClInclude Include="src\FixedGrid.h" />
     <ClInclude Include="src\Logging.h" />
     <ClInclude Include="src\ModuleFunction.h" />
+    <ClInclude Include="src\Narrowphase.h" />
     <ClInclude Include="src\pch.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

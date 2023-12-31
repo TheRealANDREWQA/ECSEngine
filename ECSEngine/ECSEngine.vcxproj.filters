@@ -279,6 +279,7 @@
     <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
     <ClInclude Include="src\ECSEngine\Math\AABB.h" />
+    <ClInclude Include="src\ECSEngine\Math\BaseVector.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -446,6 +447,7 @@
     <ClCompile Include="src\ECSEngine\Math\Quaternion.cpp" />
     <ClCompile Include="src\ECSEngine\Math\Transform.cpp" />
     <ClCompile Include="src\ECSEngine\Math\Vector.cpp" />
+    <ClCompile Include="src\ECSEngine\Math\BaseVector.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

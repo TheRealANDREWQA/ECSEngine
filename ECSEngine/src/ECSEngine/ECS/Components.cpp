@@ -22,14 +22,22 @@ namespace ECSEngine {
 		//else {
 		//	rotation->value = QuaternionFromEuler(rotation_link->value).StorageLow();
 		//}
-		rotation->value = QuaternionFromEuler(rotation_link->value).StorageLow();
+		rotation->value = QuaternionFromEuler(rotation_link->value);
+		float3 euler = QuaternionToEuler(rotation->value);
+		/*if (!FloatCompare(euler.x, rotation_link->value.x, 0.05f)) {
+			__debugbreak();
+		}*/
 	}
 
 	void ConvertRotationToLink(ModuleLinkComponentReverseFunctionData* data) {
 		const Rotation* rotation = (const Rotation*)data->component;
 		RotationLink* rotation_link = (RotationLink*)data->link_component;
 
-		rotation_link->value = QuaternionToEulerLow(rotation->value);
+		rotation_link->value = QuaternionToEuler(rotation->value);
+		QuaternionScalar scalar = QuaternionFromEuler(rotation_link->value);
+		/*if (!FloatCompare(abs(scalar.x), abs(rotation->value.x), 0.1f)) {
+			__debugbreak();
+		}*/
 	}
 
 	//void ApplyLinkToRotation(ModuleLinkComponentApplyModifierFieldsFunctionData* data) {

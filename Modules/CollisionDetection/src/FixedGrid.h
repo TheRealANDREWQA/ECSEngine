@@ -8,13 +8,13 @@ using namespace ECSEngine;
 #define GRID_CHUNK_COUNT (8)
 
 struct GridChunk {
-	void AddEntry(AABBStorage aabb, unsigned int identifier, unsigned char layer);
+	void AddEntry(AABBScalar aabb, unsigned int identifier, unsigned char layer);
 
 	ECS_INLINE bool IsFull() const {
 		return count == GRID_CHUNK_COUNT;
 	}
 
-	AABBStorage colliders[GRID_CHUNK_COUNT];
+	AABBScalar colliders[GRID_CHUNK_COUNT];
 	unsigned int identifiers[GRID_CHUNK_COUNT];
 	unsigned char layers[GRID_CHUNK_COUNT];
 	unsigned char count;
@@ -56,7 +56,7 @@ struct FixedGrid {
 	// Adds a new entry to the given chunk, or if it is full, it will chain a new chunk
 	// And add to that one instead. Returns the "current" chunk - the chained one if it
 	// is the case, else the original chunk
-	GridChunk* AddToChunk(unsigned int identifier, unsigned char layer, AABBStorage aabb, GridChunk* chunk);
+	GridChunk* AddToChunk(unsigned int identifier, unsigned char layer, AABBScalar aabb, GridChunk* chunk);
 
 	// Returns the cell x, y and z indices that can be used to retrieve a grid cell
 	uint3 CalculateCell(float3 position) const;
@@ -72,7 +72,7 @@ struct FixedGrid {
 		uint3 cell_index, 
 		unsigned int identifier,
 		unsigned char layer, 
-		AABBStorage aabb, 
+		AABBScalar aabb, 
 		CapacityStream<CollisionInfo>* collisions
 	);
 
@@ -100,13 +100,13 @@ struct FixedGrid {
 	);
 
 	// The AABB needs to be transformed already. The collision handler will be called for each collision
-	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBStorage aabb);
+	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBScalar aabb);
 
 	// The AABB needs to be transformed already. It will fill in the collisions
 	// That it finds inside the given buffer and calls the functor for each collision pair that it finds
-	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions);
+	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBScalar aabb, CapacityStream<CollisionInfo>* collisions);
 
-	void InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, AABBStorage aabb);
+	void InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, AABBScalar aabb);
 
 	void StartFrame();
 

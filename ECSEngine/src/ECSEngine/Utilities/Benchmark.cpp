@@ -389,8 +389,8 @@ namespace ECSEngine {
         }
     }
 
-    void BenchmarkState::DoNotOptimize(size_t value) {
-        options.reserved = value;
-    }
+    void BenchmarkState::DoNotOptimize(size_t value) {}
+
+    void BenchmarkState::DoNotOptimizeFloat(float float_value) {}
 
 }

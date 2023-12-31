@@ -71,14 +71,14 @@ namespace ECSEngine {
 			+ curve.point2 * (3.0f - 2 * percentage)(percentage * percentage) + curve.slope2 * (percentage * percentage * (percentage - 1.0f));
 	}
 
-	ECSENGINE_API float ECS_VECTORCALL InterpolateHermite(HermiteFloat curve, Vector8 percentage);
+	ECSENGINE_API float ECS_VECTORCALL InterpolateHermite(HermiteFloat curve, Vector3 percentage);
 
-	ECSENGINE_API float2 ECS_VECTORCALL InterpolateHermite(HermiteFloat curve0, HermiteFloat curve1, Vector8 percentage);
+	ECSENGINE_API float2 ECS_VECTORCALL InterpolateHermite(HermiteFloat curve0, HermiteFloat curve1, Vector3 percentage);
 
-	ECSENGINE_API float2 ECS_VECTORCALL InterpolateHermite(HermiteFloat2 curve, Vector8 percentage);
+	ECSENGINE_API float2 ECS_VECTORCALL InterpolateHermite(HermiteFloat2 curve, Vector3 percentage);
 
-	ECSENGINE_API float3 ECS_VECTORCALL InterpolateHermite(const HermiteFloat3& curve, Vector8 percentage);
+	ECSENGINE_API float3 ECS_VECTORCALL InterpolateHermite(const HermiteFloat3& curve, Vector3 percentage);
 
-	ECSENGINE_API float4 ECS_VECTORCALL InterpolateHermite(const HermiteFloat4& curve, Vector8 percentage);
+	ECSENGINE_API float4 ECS_VECTORCALL InterpolateHermite(const HermiteFloat4& curve, Vector3 percentage);
 
 }

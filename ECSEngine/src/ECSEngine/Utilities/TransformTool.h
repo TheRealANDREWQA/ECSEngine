@@ -139,7 +139,7 @@ namespace ECSEngine {
 	ECSENGINE_API float3 HandleTranslationToolDelta(
 		const CameraType* camera,
 		float3 plane_point,
-		Quaternion object_rotation,
+		QuaternionScalar object_rotation,
 		ECS_AXIS axis,
 		ECS_TRANSFORM_SPACE space,
 		uint2 window_size,
@@ -153,7 +153,7 @@ namespace ECSEngine {
 	ECSENGINE_API float3 HandleTranslationToolDelta(
 		const CameraType* camera,
 		float3 plane_point,
-		Quaternion object_rotation,
+		QuaternionScalar object_rotation,
 		ECS_AXIS axis,
 		ECS_TRANSFORM_SPACE space,
 		float3 previous_ray_direction,
@@ -166,7 +166,7 @@ namespace ECSEngine {
 	ECSENGINE_API float3 HandleTranslationToolDelta(
 		const CameraType* camera,
 		float3 plane_point,
-		Quaternion object_rotation,
+		QuaternionScalar object_rotation,
 		TranslationToolDrag* drag_tool,
 		float3 current_ray_direction
 	);
@@ -176,7 +176,7 @@ namespace ECSEngine {
 	ECSENGINE_API float3 HandleRotationToolDelta(
 		const CameraType* camera,
 		float3 rotation_center,
-		Quaternion rotation_value,
+		QuaternionScalar rotation_value,
 		RotationToolDrag* drag_tool,
 		uint2 window_size,
 		int2 mouse_texel_position,
@@ -184,10 +184,10 @@ namespace ECSEngine {
 	);
 
 	template<typename CameraType>
-	ECSENGINE_API QuaternionStorage HandleRotationToolDeltaCircleMapping(
+	ECSENGINE_API QuaternionScalar HandleRotationToolDeltaCircleMapping(
 		const CameraType* camera,
 		float3 rotation_center,
-		Quaternion rotation_value,
+		QuaternionScalar rotation_value,
 		RotationToolDrag* drag_tool,
 		uint2 window_size,
 		int2 mouse_texel_position,
@@ -199,7 +199,7 @@ namespace ECSEngine {
 	ECSENGINE_API float3 HandleScaleToolDelta(
 		const CameraType* camera,
 		float3 scale_center,
-		Quaternion rotation_value,
+		QuaternionScalar rotation_value,
 		ScaleToolDrag* scale_tool,
 		int2 mouse_texel_delta,
 		float scale_factor

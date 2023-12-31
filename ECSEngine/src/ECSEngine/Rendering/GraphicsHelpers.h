@@ -15,11 +15,11 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeXPositive() {
-		return MatrixLookAtLow(ZeroVector(), RightVector(), UpVector());
+		return MatrixLookAt(float3::Splat(0.0f), GetRightVector(), GetUpVector());
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeXNegative() {
-		return MatrixLookAtLow(ZeroVector(), -RightVector(), UpVector());
+		return MatrixLookAt(float3::Splat(0.0f), -GetRightVector(), GetUpVector());
 	}
 
 	// For some reason, the matrices for up must be inverted - positive direction takes negative up
@@ -27,19 +27,19 @@ namespace ECSEngine {
 	// These matrices are used in constructing the matrix for texture cube conversion and 
 	// diffuse environment convolution
 	ECS_INLINE Matrix ViewMatrixTextureCubeYPositive() {
-		return MatrixLookAtLow(ZeroVector(), -UpVector(), ForwardVector());
+		return MatrixLookAt(float3::Splat(0.0f), -GetUpVector(), GetForwardVector());
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeYNegative() {
-		return MatrixLookAtLow(ZeroVector(), UpVector(), -ForwardVector());
+		return MatrixLookAt(float3::Splat(0.0f), GetUpVector(), -GetForwardVector());
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeZPositive() {
-		return MatrixLookAtLow(ZeroVector(), ForwardVector(), UpVector());
+		return MatrixLookAt(float3::Splat(0.0f), GetForwardVector(), GetUpVector());
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeZNegative() {
-		return MatrixLookAtLow(ZeroVector(), -ForwardVector(), UpVector());
+		return MatrixLookAt(float3::Splat(0.0f), -GetForwardVector(), GetUpVector());
 	}
 
 	inline Matrix ViewMatrixTextureCube(TextureCubeFace face) {
@@ -63,11 +63,11 @@ namespace ECSEngine {
 
 	ECSENGINE_API VertexBuffer CreateRectangleVertexBuffer(Graphics* graphics, float3 top_left, float3 bottom_right, bool temporary = false);
 
-	ECSENGINE_API AABBStorage GetMeshBoundingBox(Stream<float3> positions);
+	ECSENGINE_API AABBScalar GetMeshBoundingBox(Stream<float3> positions);
 
 	// If the vertex buffer is on the GPU, it will copy it to the CPU and then perform the bounding box deduction
 	// It needs the immediate context to perform the copy and the mapping
-	ECSENGINE_API AABBStorage GetMeshBoundingBox(Graphics* graphics, VertexBuffer positions_buffer);
+	ECSENGINE_API AABBScalar GetMeshBoundingBox(Graphics* graphics, VertexBuffer positions_buffer);
 
 	// It will make a staging texture that has copied the contents of the supplied texture
 	// It relies on the immediate context to copy the contents - SINGLE THREADED

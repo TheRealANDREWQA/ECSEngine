@@ -174,7 +174,7 @@ namespace ECSEngine {
 	struct Base2 {
 		typedef Base Base;
 		typedef Base2<bool> BooleanEquivalent;
-		constexpr static inline size_t BaseCount() {
+		ECS_INLINE constexpr static size_t Count() {
 			return 2;
 		}
 		
@@ -283,7 +283,7 @@ namespace ECSEngine {
 	struct Base3 {
 		typedef Base Base;
 		typedef Base3<bool> BooleanEquivalent;
-		constexpr inline static size_t BaseCount() {
+		ECS_INLINE constexpr static size_t Count() {
 			return 3;
 		}
 
@@ -403,7 +403,7 @@ namespace ECSEngine {
 	struct Base4 {
 		typedef Base Base;
 		typedef Base4<bool> BooleanEquivalent;
-		constexpr static inline size_t BaseCount() {
+		ECS_INLINE constexpr static size_t Count() {
 			return 4;
 		}
 
@@ -481,6 +481,18 @@ namespace ECSEngine {
 			y *= factor;
 			z *= factor;
 			w *= factor;
+			return *this;
+		}
+
+		ECS_INLINE Base4 operator / (float factor) const {
+			return *this / Splat(factor);
+		}
+
+		ECS_INLINE Base4 operator /= (float factor) {
+			x /= factor;
+			y /= factor;
+			z /= factor;
+			w /= factor;
 			return *this;
 		}
 
@@ -604,7 +616,7 @@ namespace ECSEngine {
 
 	template<typename ReturnType, typename BasicType, typename Functor>
 	ECS_INLINE ReturnType BasicTypeAction(BasicType type, Functor&& functor) {
-		// Check for fundamental types first since they don't have the BaseCount() static function
+		// Check for fundamental types first since they don't have the Count() static function
 		
 		if constexpr (std::is_arithmetic_v<BasicType>) {
 			// Allow this case for when we have types like bool and bool2 and we want
@@ -612,7 +624,7 @@ namespace ECSEngine {
 			return functor(type);
 		}
 		else {
-			constexpr size_t base_count = BasicType::BaseCount();
+			constexpr size_t base_count = BasicType::Count();
 			if constexpr (base_count == 2) {
 				return BasicType2Action<ReturnType>(type, functor);
 			}
@@ -657,14 +669,14 @@ namespace ECSEngine {
 
 	template<typename ReturnType, typename BasicType, typename Functor>
 	ECS_INLINE ReturnType BasicTypeAction(BasicType first, BasicType second, Functor&& functor) {
-		// Check for fundamental types first since they don't have the BaseCount() static function
+		// Check for fundamental types first since they don't have the Count() static function
 		if constexpr (std::is_arithmetic_v<BasicType>) {
 			// Allow this case for when we have types like bool and bool2 and we want
 			// to apply a functor on both cases without having to write conditional checks
 			return functor(first, second);
 		}
 		else {
-			constexpr size_t base_count = BasicType::BaseCount();
+			constexpr size_t base_count = BasicType::Count();
 			if constexpr (base_count == 2) {
 				return BasicType2Action<ReturnType>(first, second, functor);
 			}
@@ -681,28 +693,28 @@ namespace ECSEngine {
 	}
 
 	template<typename BasicType>
-	ECS_INLINE BasicType AbsoluteDifference(BasicType first, BasicType second) {
+	ECS_INLINE BasicType BasicTypeAbsoluteDifference(BasicType first, BasicType second) {
 		return BasicTypeAction<BasicType>(first, second, [](auto first, auto second) {
 			return first > second ? first - second : second - first;
 		});
 	}
 
 	template<typename BasicType>
-	ECS_INLINE BasicType Abs(BasicType value) {
+	ECS_INLINE BasicType BasicTypeAbs(BasicType value) {
 		return BasicTypeAction<BasicType>(value, [](auto value) {
 			return abs(value);
 		});
 	}
 
 	template<typename BasicType>
-	ECS_INLINE BasicType DegToRad(BasicType angles) {
+	ECS_INLINE BasicType BasicTypeDegToRad(BasicType angles) {
 		return BasicTypeAction<BasicType>(angles, [](auto value) {
 			return DegToRad((float)value);
 		});
 	}
 
 	template<typename BasicType>
-	ECS_INLINE BasicType RadToDeg(BasicType angles) {
+	ECS_INLINE BasicType BasicTypeRadToDeg(BasicType angles) {
 		return BasicTypeAction<BasicType>(angles, [](auto value) {
 			return RadToDeg((float)value);
 		});
@@ -757,21 +769,61 @@ namespace ECSEngine {
 			logic_values[0] = functor(value);
 		}
 		else {
-			if constexpr (BasicType::BaseCount() > 4) {
+			if constexpr (BasicType::Count() > 4) {
 				static_assert(false, "Invalid basic type for logical op");
 			}
 
 			logic_values[0] = functor(value.x);
 			logic_values[1] = functor(value.y);
-			if constexpr (BasicType::BaseCount() == 3) {
+			if constexpr (BasicType::Count() == 3) {
 				logic_values[2] = functor(value.z);
 			}
-			if constexpr (BasicType::BaseCount() == 4) {
+			if constexpr (BasicType::Count() == 4) {
 				logic_values[3] = functor(value.w);
 			}
-			iterate_count = BasicType::BaseCount() - 1;
+			iterate_count = BasicType::Count() - 1;
 		}
 		
+		for (size_t index = 0; index < iterate_count; index++) {
+			if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+				logic_values[0] &= logic_values[index + 1];
+			}
+			else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+				logic_values[0] |= logic_values[index + 1];
+			}
+			else {
+				static_assert(false);
+			}
+		}
+		return logic_values[0];
+	}
+
+	// This function accepts normal arithmetic values like float, double
+	// The functor must convert the given value into a boolean
+	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicalOp(BasicType first, BasicType second, Functor&& functor) {
+		bool logic_values[4];
+		size_t iterate_count = 0;
+
+		if constexpr (std::is_arithmetic_v<BasicType>) {
+			logic_values[0] = functor(first, second);
+		}
+		else {
+			if constexpr (BasicType::Count() > 4) {
+				static_assert(false, "Invalid basic type for logical op");
+			}
+
+			logic_values[0] = functor(first.x, second.x);
+			logic_values[1] = functor(first.y, second.y);
+			if constexpr (BasicType::Count() == 3) {
+				logic_values[2] = functor(first.z, second.z);
+			}
+			if constexpr (BasicType::Count() == 4) {
+				logic_values[3] = functor(first.w, second.z);
+			}
+			iterate_count = BasicType::Count() - 1;
+		}
+
 		for (size_t index = 0; index < iterate_count; index++) {
 			if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
 				logic_values[0] &= logic_values[index + 1];
@@ -843,6 +895,48 @@ namespace ECSEngine {
 		return BasicTypeLogicAndBoolean(BasicTypeAction<BasicType>(AbsoluteDifference(a, b), epsilon, [](auto difference_value, auto epsilon_value) {
 			return difference_value < epsilon_value;
 		}));
+	}
+
+	template<typename BasicType>
+	ECS_INLINE bool BasicTypeLess(BasicType a, BasicType b) {
+		return BasicTypeLogicalOp<ECS_BASIC_TYPE_LOGIC_AND>(a, b, [](auto a, auto b) {
+			return a < b;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE bool BasicTypeLessEqual(BasicType a, BasicType b) {
+		return BasicTypeLogicalOp<ECS_BASIC_TYPE_LOGIC_AND>(a, b, [](auto a, auto b) {
+			return a <= b;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE bool BasicTypeGreater(BasicType a, BasicType b) {
+		return BasicTypeLogicalOp<ECS_BASIC_TYPE_LOGIC_AND>(a, b, [](auto a, auto b) {
+			return a > b;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE bool BasicTypeGreaterEqual(BasicType a, BasicType b) {
+		return BasicTypeLogicalOp<ECS_BASIC_TYPE_LOGIC_AND>(a, b, [](auto a, auto b) {
+			return a >= b;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE bool BasicTypeEqual(BasicType a, BasicType b) {
+		return BasicTypeLogicalOp<ECS_BASIC_TYPE_LOGIC_AND>(a, b, [](auto a, auto b) {
+			return a == b;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE bool BasicTypeNotEqual(BasicType a, BasicType b) {
+		return BasicTypeLogicalOp<ECS_BASIC_TYPE_LOGIC_AND>(a, b, [](auto a, auto b) {
+			return a != b;
+		});
 	}
 
 }

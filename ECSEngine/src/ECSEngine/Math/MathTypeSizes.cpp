@@ -1,6 +1,5 @@
 #include "ecspch.h"
 #include "MathTypeSizes.h"
-#include "Vector.h"
 #include "Matrix.h"
 #include "Quaternion.h"
 #include "Transform.h"
@@ -10,22 +9,22 @@
 namespace ECSEngine {
 
 	Stream<char> ECS_MATH_STRUCTURE_TYPE_STRINGS[] = {
-		STRING(Vector8),
+		STRING(Vector3),
 		STRING(Matrix),
 		STRING(Quaternion),
 		STRING(Plane),
-		STRING(VectorTransform),
+		STRING(Transform),
 		STRING(AABB),
 	};
 
 	static_assert(ECS_MATH_STRUCTURE_TYPE_COUNT == std::size(ECS_MATH_STRUCTURE_TYPE_STRINGS));
 
 	size_t ECS_MATH_STRUCTURE_TYPE_BYTE_SIZES[] = {
-		sizeof(Vector8),
+		sizeof(Vector3),
 		sizeof(Matrix),
 		sizeof(Quaternion),
 		sizeof(Plane),
-		sizeof(VectorTransform),
+		sizeof(Transform),
 		sizeof(AABB),
 	};
 

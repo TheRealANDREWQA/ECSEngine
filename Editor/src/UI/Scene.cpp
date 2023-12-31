@@ -32,14 +32,14 @@ struct HandleSelectedEntitiesTransformUpdateDescriptor {
 	unsigned int window_index;
 	float2 mouse_position;
 	float3* translation_midpoint;
-	Quaternion rotation_midpoint;
+	QuaternionScalar rotation_midpoint;
 	TransformToolDrag* tool_drag;
 	ECS_TRANSFORM_TOOL tool_to_use;
 
 	// If this is set to true, the ray will be cast at the objects location instead of the mouse'
 	bool launch_at_object_position = false;
 	// If this is specified, this will add the rotation delta to this quaternion
-	Quaternion* rotation_delta = nullptr;
+	QuaternionScalar* rotation_delta = nullptr;
 	// If this is specified, this will add the scale delta to the value
 	float3* scale_delta = nullptr;
 };
@@ -118,7 +118,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 			factor *= 5.0f;
 		}
-		float4 rotation_delta = HandleRotationToolDeltaCircleMapping(
+		QuaternionScalar rotation_delta = HandleRotationToolDeltaCircleMapping(
 			&camera,
 			*descriptor->translation_midpoint,
 			descriptor->rotation_midpoint,
@@ -128,7 +128,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 			factor
 		);
 
-		if (rotation_delta != QuaternionIdentity().StorageLow()) {
+		if (rotation_delta != QuaternionIdentityScalar()) {
 			RotateSandboxSelectedEntities(editor_state, sandbox_index, rotation_delta);
 
 			if (descriptor->rotation_delta != nullptr) {
@@ -208,7 +208,7 @@ struct ScenePrivateActionData {
 			// This needs to be calculated once when rotating and scaling and updated when translating
 			float3 translation_midpoint;
 			// This needs to be calculated once and then kept the same across calls
-			Quaternion rotation_midpoint;
+			QuaternionScalar rotation_midpoint;
 		};
 		// These are used when the camera wasd movement is activated
 		struct {
@@ -219,7 +219,7 @@ struct ScenePrivateActionData {
 
 	// This is the value calculated when the keyboard tool was activated
 	float3 original_translation_midpoint;
-	Quaternion rotation_delta;
+	QuaternionScalar rotation_delta;
 	// This is the total scale change
 	float3 scale_delta;
 };
@@ -286,8 +286,8 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 
 	// Check the wasd keys
 	Camera camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-	float3 camera_forward = camera.GetForwardVector().AsFloat3Low();
-	float3 camera_right = camera.GetRightVector().AsFloat3Low();
+	float3 camera_forward = camera.GetForwardVector();
+	float3 camera_right = camera.GetRightVector();
 	float3 delta = WASDController(
 		&editor_state->input_mapping, 
 		EDITOR_INPUT_WASD_W, 
@@ -348,9 +348,9 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 						bool is_shared_component = editor_state->editor_components.IsSharedComponent(bounds.component);
 						Component component = editor_state->editor_components.GetComponentID(bounds.component);
 
-						AABB selection_bounds = ReverseInfiniteAABB();
+						AABBScalar selection_bounds = ReverseInfiniteAABBScalar();
 						for (size_t index = 0; index < selected_entities.size; index++) {
-							AABB current_bounds = InfiniteAABB();
+							AABBScalar current_bounds = InfiniteAABBScalar();
 							const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, selected_entities[index], component, is_shared_component);
 							if (component_data) {
 								// Verify that the asset pointer is valid as well
@@ -361,26 +361,26 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 								}
 							}
 
-							if (!CompareAABB(current_bounds, InfiniteAABB())) {
+							if (!CompareAABBMask(current_bounds, InfiniteAABBScalar())) {
 								// We have found a match
-								Transform entity_transform = GetSandboxEntityTransform(editor_state, sandbox_index, selected_entities[index]);
+								TransformScalar entity_transform = GetSandboxEntityTransform(editor_state, sandbox_index, selected_entities[index]);
 								// Transform the aabb
-								current_bounds = TransformAABB(current_bounds, entity_transform.position, QuaternionToMatrixLow(entity_transform.rotation), entity_transform.scale);
+								current_bounds = TransformAABB(current_bounds, entity_transform.position, QuaternionToMatrix(entity_transform.rotation), entity_transform.scale);
 								// Combine the current aabb
 								selection_bounds = GetCombinedAABB(selection_bounds, current_bounds);
 							}
 						}
 
-						if (!CompareAABB(selection_bounds, ReverseInfiniteAABB())) {
+						if (!CompareAABBMask(selection_bounds, ReverseInfiniteAABBScalar())) {
 							Camera scene_camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 							
 							// If we have at least one AABB, then focus on it
 							float3 camera_position = FocusCameraOnObjectViewSpace(
 								&scene_camera,
 								float3::Splat(0.0f),
-								QuaternionIdentity(),
+								QuaternionIdentityScalar(),
 								float3::Splat(1.0f),
-								selection_bounds.ToStorage(),
+								selection_bounds,
 								{ 1.5f, 0.0f }
 							);
 							if (camera_position != float3::Splat(FLT_MAX)) {
@@ -540,7 +540,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 						data->drag_tool.SetAxis(axis);
 						data->scale_delta = float3::Splat(0.0f);
 						data->original_translation_midpoint = data->translation_midpoint;
-						data->rotation_delta = QuaternionIdentity();
+						data->rotation_delta = QuaternionIdentityScalar();
 					};
 
 					if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_X)) {
@@ -568,7 +568,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 						HandleSelectedEntitiesTransformUpdateDescriptor update_descriptor;
 						update_descriptor.editor_state = editor_state;
 						update_descriptor.mouse_position = mouse_position;
-						update_descriptor.rotation_midpoint = sandbox->transform_keyboard_space == ECS_TRANSFORM_LOCAL_SPACE ? data->rotation_midpoint : QuaternionIdentity();
+						update_descriptor.rotation_midpoint = sandbox->transform_keyboard_space == ECS_TRANSFORM_LOCAL_SPACE ? data->rotation_midpoint : QuaternionIdentityScalar();
 						update_descriptor.sandbox_index = sandbox_index;
 						update_descriptor.system = system;
 						update_descriptor.tool_drag = &data->drag_tool;
@@ -697,7 +697,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 			case ECS_TRANSFORM_ROTATION:
 			{
 				// Restore the rotation by adding the inverse delta
-				Quaternion inverse_rotation = QuaternionInverse(data->rotation_delta);
+				QuaternionScalar inverse_rotation = QuaternionInverse(data->rotation_delta);
 				RotateSandboxSelectedEntities(editor_state, sandbox_index, inverse_rotation);
 			}
 			break;
@@ -821,8 +821,8 @@ static void SceneTranslationAction(ActionData* action_data) {
 		if (mouse->IsHeld(ECS_MOUSE_MIDDLE)) {
 			if (mouse_delta.x != 0.0f || mouse_delta.y != 0.0f) {
 				Camera scene_camera = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-				float3 right_vector = scene_camera.GetRightVector().AsFloat3Low();
-				float3 up_vector = scene_camera.GetUpVector().AsFloat3Low();
+				float3 right_vector = scene_camera.GetRightVector();
+				float3 up_vector = scene_camera.GetUpVector();
 
 				float translation_factor = 10.0f;
 
@@ -862,7 +862,7 @@ static void SceneZoomAction(ActionData* action_data) {
 			}
 
 			float3 camera_rotation = GetSandboxCameraPoint(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).rotation;
-			float3 forward_vector = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).GetForwardVector().AsFloat3Low();
+			float3 forward_vector = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).GetForwardVector();
 			//float3 forward_vector = RotateVectorMatrixLow(GetForwardVector(), MatrixRotation(camera_rotation));
 
 			TranslateSandboxCamera(editor_state, data->sandbox_index, forward_vector * float3::Splat(scroll_delta * factor), EDITOR_SANDBOX_VIEWPORT_SCENE);
@@ -882,7 +882,7 @@ struct SceneLeftClickableActionData {
 	ECS_AXIS tool_axis;
 	// This is cached such that it doesn't need to be calculated each time
 	float3 gizmo_translation_midpoint;
-	Quaternion gizmo_rotation_midpoint;
+	QuaternionScalar gizmo_rotation_midpoint;
 	TransformToolDrag transform_drag;
 	
 	CPUInstanceFramebuffer cpu_framebuffer;
@@ -1001,7 +1001,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			// Check to see if the mouse moved
 			uint2 hovered_texel_offset = system->GetWindowTexelPositionClamped(window_index, mouse_position);
 			if (!data->is_selection_mode) {
-				float2 mouse_difference = AbsoluteDifference(mouse_position, data->click_ui_position);
+				float2 mouse_difference = BasicTypeAbsoluteDifference(mouse_position, data->click_ui_position);
 				if (mouse_difference.x > CLICK_SELECTION_MARGIN_X || mouse_difference.y > CLICK_SELECTION_MARGIN_Y) {
 					data->is_selection_mode = true;
 				}

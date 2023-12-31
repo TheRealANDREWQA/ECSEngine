@@ -72,7 +72,7 @@ void RenderMeshDebugDraw(ModuleDebugDrawComponentFunctionData* data) {
 		const Scale* scale = (const Scale*)data->dependency_components[2];
 
 		float3 translation_value = float3::Splat(0.0f);
-		Quaternion rotation_value = QuaternionIdentity();
+		QuaternionScalar rotation_value = QuaternionIdentityScalar();
 		float3 scale_value = float3::Splat(1.0f);
 
 		if (translation != nullptr) {
@@ -87,9 +87,9 @@ void RenderMeshDebugDraw(ModuleDebugDrawComponentFunctionData* data) {
 			scale_value = scale->value;
 		}
 
-		AABB aabb = TransformAABB(mesh->mesh->mesh.bounds, { translation_value }, QuaternionToMatrixLow(rotation_value), scale_value);
-		float3 aabb_center = AABBCenter(aabb).AsFloat3Low();
-		float3 aabb_scale = AABBHalfExtents(aabb).AsFloat3Low();
+		AABBScalar aabb = TransformAABB(mesh->mesh->mesh.bounds, { translation_value }, QuaternionToMatrix(rotation_value), scale_value);
+		float3 aabb_center = AABBCenter(aabb);
+		float3 aabb_scale = AABBHalfExtents(aabb);
 
 		data->debug_drawer->AddAABB(aabb_center, aabb_scale, ECS_COLOR_RED, { true, false });
 	}

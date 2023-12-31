@@ -23,13 +23,13 @@ static void UpdateBroadphaseGrid(
 			translation_value = translation->value;
 		}
 		if (rotation != nullptr) {
-			rotation_matrix = QuaternionToMatrixLow(rotation->value);
+			rotation_matrix = QuaternionToMatrix(rotation->value);
 		}
 		if (scale != nullptr) {
 			scale_value = scale->value;
 		}
 
-		AABBStorage aabb = TransformAABB(mesh->mesh->mesh.bounds, translation_value, rotation_matrix, scale_value).ToStorage();
+		AABBScalar aabb = TransformAABB(mesh->mesh->mesh.bounds, translation_value, rotation_matrix, scale_value);
 		fixed_grid->InsertEntry(for_each_data->thread_id, for_each_data->world, for_each_data->entity, 0, aabb);
 	}
 }

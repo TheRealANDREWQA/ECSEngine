@@ -92,7 +92,7 @@ namespace ECSEngine {
 		bool coalesce_submesh_name_allocations = true;
 		float scale_factor = 1.0f;
 
-		// If this is set, then it will deduce the AABBStorage of the object
+		// If this is set, then it will deduce the AABBScalar of the object
 		bool deduce_submesh_bounds = true;
 		// If this is set, then it will calculate the midpoint of the object
 		// and offset the vertices such that the origin is at the center of
@@ -252,11 +252,11 @@ namespace ECSEngine {
 
 	ECSENGINE_API void ScaleGLTFMeshes(Stream<GLTFMesh> meshes, float scale_factor);
 	
-	ECSENGINE_API AABBStorage GetGLTFMeshBoundingBox(const GLTFMesh* mesh);
+	ECSENGINE_API AABBScalar GetGLTFMeshBoundingBox(const GLTFMesh* mesh);
 
-	ECSENGINE_API void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, AABBStorage* bounding_boxes);
+	ECSENGINE_API void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, AABBScalar* bounding_boxes);
 
-	ECSENGINE_API AABBStorage GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes);
+	ECSENGINE_API AABBScalar GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes);
 
 	// Updates the location of the vertices such that the origin is at the center of the object
 	ECSENGINE_API void GLTFMeshOriginToCenter(const GLTFMesh* mesh);

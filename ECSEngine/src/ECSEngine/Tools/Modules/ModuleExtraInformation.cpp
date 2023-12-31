@@ -138,7 +138,7 @@ namespace ECSEngine {
 								}
 								else if (deep_field.type->fields[deep_field.field_index].info.basic_type == Reflection::ReflectionBasicFieldType::Float4) {
 									gizmo.is_euler_rotation = false;
-									float4* quaternion = (float4*)deep_field.GetFieldData(data[index]);
+									QuaternionScalar* quaternion = (QuaternionScalar*)deep_field.GetFieldData(data[index]);
 									gizmo.quaternion_rotation = quaternion;
 								}
 							}
@@ -180,7 +180,7 @@ namespace ECSEngine {
 				gizmo.position = pointers.position != nullptr ? *pointers.position : float3::Splat(0.0f);
 				if (pointers.euler_rotation != nullptr) {
 					if (pointers.is_euler_rotation) {
-						gizmo.rotation = QuaternionFromEuler(*pointers.euler_rotation).StorageLow();
+						gizmo.rotation = QuaternionFromEuler(*pointers.euler_rotation);
 					}
 					else {
 						gizmo.rotation = *pointers.quaternion_rotation;
@@ -221,7 +221,7 @@ namespace ECSEngine {
 
 		if (euler_rotation != nullptr) {
 			if (is_euler_rotation) {
-				value.rotation = QuaternionFromEuler(*euler_rotation).StorageLow();
+				value.rotation = QuaternionFromEuler(*euler_rotation);
 			}
 			else {
 				value.rotation = *quaternion_rotation;
