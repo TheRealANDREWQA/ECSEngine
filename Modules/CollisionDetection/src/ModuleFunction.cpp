@@ -8,7 +8,6 @@ static void ApplyMovementTask(
 	Translation* translation
 ) {
 	static bool was_used = false;
-	CollisionSettings* settings = (CollisionSettings*)for_each_data->world->system_manager->GetSystemSettings("CollisionDetection", STRING(CollisionSettings));
 
 	//translation->value.x -= settings->factor * for_each_data->world->delta_time;
 	//translation->value.x -= 5.5f * for_each_data->world->delta_time;

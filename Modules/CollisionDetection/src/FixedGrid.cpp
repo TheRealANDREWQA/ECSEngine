@@ -99,14 +99,14 @@ GridChunk* FixedGrid::CheckCollisions(
 						if (!already_collided) {
 							// Add the collision and call the handler
 							collisions->AddAssert({ chunk->identifiers[index], chunk->layers[index] });
-							/*FixedGridHandlerData callback_handler_data;
+							FixedGridHandlerData callback_handler_data;
 							callback_handler_data.grid = this;
 							callback_handler_data.user_data = handler_data;
 							callback_handler_data.first_identifier = identifier;
 							callback_handler_data.first_layer = layer;
 							callback_handler_data.second_identifier = chunk->identifiers[index];
 							callback_handler_data.second_layer = chunk->layers[index];
-							handler_function(thread_id, world, &callback_handler_data);*/
+							handler_function(thread_id, world, &callback_handler_data);
 						}
 					}
 				}
@@ -182,8 +182,8 @@ void FixedGrid::Initialize(
 	layers.Initialize(allocator, UCHAR_MAX);
 	memset(layers.buffer, 0, layers.MemoryOf(layers.size));
 
-	//handler_function = _handler_function;
-	//handler_data = CopyNonZero(allocator, _handler_data, _handler_data_size);
+	handler_function = _handler_function;
+	handler_data = CopyNonZero(allocator, _handler_data, _handler_data_size);
 }
 
 void FixedGrid::InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBScalar aabb)

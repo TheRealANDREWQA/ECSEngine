@@ -6,5 +6,6 @@
 #include "ECSEngineConsole.h"
 #include "ECSEngineReflection.h"
 #include "ECSEngineUtilities.h"
+#include "Logging.h"
 
 using namespace ECSEngine;

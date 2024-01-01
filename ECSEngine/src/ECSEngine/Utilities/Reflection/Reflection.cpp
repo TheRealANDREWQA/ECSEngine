@@ -987,6 +987,8 @@ namespace ECSEngine {
 					ResourceIdentifier identifier(enum_.name);
 					if (enum_definitions.Find(identifier) != -1) {
 						// If the enum already exists, fail
+						ECS_FORMAT_TEMP_STRING(message, "Enum {#} was already reflect - conflict detected", enum_.name);
+						WriteErrorMessage(data, message.buffer, -1);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
@@ -1110,6 +1112,9 @@ namespace ECSEngine {
 								byte_size_alignment = SearchReflectionUserDefinedTypeByteSizeAlignment(this, data_type->fields[field_index].definition);
 								if (byte_size_alignment.x == -1) {
 									// Fail if couldn't determine
+									ECS_FORMAT_TEMP_STRING(message, "Failed to determine byte size and alignment for | {#} {#}; |, type {#}",
+										data_type->fields[field_index].definition, data_type->fields[field_index].name, data_type->name);
+									WriteErrorMessage(data, message.buffer, -1);
 									FreeFolderHierarchy(folder_index);
 									return false;
 								}
@@ -1155,6 +1160,8 @@ namespace ECSEngine {
 					ResourceIdentifier identifier(type.name);
 					// If the type already exists, fail
 					if (type_definitions.Find(identifier) != -1) {
+						ECS_FORMAT_TEMP_STRING(message, "The reflection type {#} was already reflected - a conflict was detected", type.name);
+						WriteErrorMessage(data, message.buffer, -1);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
@@ -1406,10 +1413,19 @@ namespace ECSEngine {
 
 											// It means it is not a container nor a user defined which could be referenced
 											if (byte_size == -1) {
-												// Some error has happened
-												// Fail
-												FreeFolderHierarchy(folder_index);
-												return false;
+												// There is a use case where there was nothing to be reflected on a row
+												// And the field was omitted but it is empty - in that case just set the byte size to 0
+												if (field->definition.size == 0 || field->name.size == 0) {
+													byte_size = 0;
+												}
+												else {
+													// Some error has happened
+													// Fail
+													ECS_FORMAT_TEMP_STRING(message, "Cannot determine user defined type for field | {#} {#}; | for type {#}", field->definition, field->name, type->name);
+													WriteErrorMessage(data, message.buffer, -1);
+													FreeFolderHierarchy(folder_index);
+													return false;
+												}
 											}
 
 											if (byte_size != 0) {
@@ -3634,6 +3650,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			bool success = DeduceFieldType(data, type, pointer_offset, current_character, last_line_character, last_field_character - 1);
 			if (success) {
+				if (type.fields[type.fields.size - 1].definition.size == 0 || type.fields[type.fields.size - 1].name.size == 0) {
+					// There was nothing to be reflected - just mark it as omitted
+					return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
+				}
+
 				ReflectionFieldInfo& info = type.fields[type.fields.size - 1].info;
 				// Set the default value to false initially
 				info.has_default_value = false;

@@ -9,16 +9,11 @@
 
 #define COLLISION_DETECTION_GLOBAL_COMPONENT_BASE ECS_CONSTANT_REFLECT(200)
 
-struct ECS_REFLECT_COMPONENT CollisionComponent {
-	constexpr static ECS_INLINE short ID() {
-		return COLLISION_DETECTION_COMPONENT_BASE + 1;
-	}
-
-	constexpr static ECS_INLINE bool IsShared() {
-		return false;
-	}
-
-	ECSEngine::float3 my_value;
+enum ECS_REFLECT COLLIDER_TYPE : unsigned char {
+	COLLIDER_SPHERE,
+	COLLIDER_CAPSULE,
+	COLLIDER_CONVEX_HULL,
+	COLLIDER_TYPE_COUNT
 };
 
 struct ECS_REFLECT_COMPONENT Collider {
@@ -30,7 +25,21 @@ struct ECS_REFLECT_COMPONENT Collider {
 		return false;
 	}
 
-	ECSEngine::float3 value;
+	COLLIDER_TYPE type;
+	union {
+		struct {
+			float3 center_offset;
+			float radius;
+		};
+		struct {
+			float3 center_offset;
+			float radius;
+			ECS_AXIS axis;
+		};
+		struct {
+			// Convex hull
+		};
+	};
 };
 
 struct ECS_REFLECT_SETTINGS CollisionSettings {
@@ -38,3 +47,7 @@ struct ECS_REFLECT_SETTINGS CollisionSettings {
 	float inverse;
 	unsigned int count;
 };
+
+//struct ECS_REFLECT_LINK_COMPONENT(Collider) Collider_Link {
+//	bool;
+//}

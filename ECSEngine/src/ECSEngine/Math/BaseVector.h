@@ -58,7 +58,13 @@ namespace ECSEngine {
 		Vector3& operator /= (float _value);
 
 		// Use this only to retrieve a single value, since it is expensive
-		float3 At(size_t index) const;
+		float3 ECS_VECTORCALL At(size_t index) const;
+
+		// Loads a stored vector in the XXX YYY ZZZ format with SIMD_WIDTH entries
+		Vector3& LoadEntry(const void* data);
+
+		// Loads a stored vector in the XXX YYY ZZZ format with load count entries
+		Vector3& LoadEntry(const void* data, size_t load_count);
 
 		Vector3& Load(const void** source_data);
 
@@ -88,6 +94,10 @@ namespace ECSEngine {
 		Vector3& Splat(float3 value);
 
 		static Vector3 Splat(Vec8f value);
+
+		void StoreEntry(void* destination) const;
+
+		void StoreEntry(void* destination, size_t store_count) const;
 
 		void Store(void** destination) const;
 
@@ -206,7 +216,13 @@ namespace ECSEngine {
 			return { x, y, z };
 		}
 
-		float4 At(size_t index) const;
+		float4 ECS_VECTORCALL At(size_t index) const;
+
+		// Loads a stored vector in the XXX YYY ZZZ WWW format with SIMD_WIDTH entries
+		Vector4& LoadEntry(const void* data);
+
+		// Loads a stored vector in the XXX YYY ZZZ WWW format with load count entries
+		Vector4& LoadEntry(const void* data, size_t load_count);
 
 		Vector4& Load(const void** source_data);
 
@@ -236,6 +252,10 @@ namespace ECSEngine {
 		Vector4& Splat(float4 value);
 
 		static Vector4 Splat(Vec8f value);
+
+		void StoreEntry(void* destination) const;
+		
+		void StoreEntry(void* destination, size_t load_count) const;
 
 		void Store(void** destination) const;
 

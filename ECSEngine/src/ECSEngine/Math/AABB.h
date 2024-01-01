@@ -42,6 +42,11 @@ namespace ECSEngine {
 			return corners[index];
 		}
 
+		ECS_INLINE void Set(AABBScalar aabb, size_t index) {
+			min.Set(aabb.min, index);
+			max.Set(aabb.max, index);
+		}
+
 		Vector3 min;
 		Vector3 max;
 	};

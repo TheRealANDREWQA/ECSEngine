@@ -156,6 +156,8 @@ namespace ECSEngine {
 
 		Quaternion& ECS_VECTORCALL operator *= (Quaternion other);
 
+		QuaternionScalar ECS_VECTORCALL At(size_t index) const;
+
 		// Changes a value at a certain index
 		void Set(QuaternionScalar scalar_quat, size_t index);
 	};

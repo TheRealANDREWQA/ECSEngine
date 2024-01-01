@@ -9,5 +9,6 @@
 #include "ECSEngineForEach.h"
 #include "ECSEngineComponents.h"
 #include "ECSEngineWorld.h"
+#include "Logging.h"
 
 using namespace ECSEngine;

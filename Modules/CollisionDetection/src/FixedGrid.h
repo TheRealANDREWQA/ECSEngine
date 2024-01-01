@@ -135,8 +135,8 @@ struct FixedGrid {
 
 	Stream<CollisionLayer> layers;
 	// This is the function that will be called to handle the collisions
-	//ThreadFunction handler_function;
-	//void* handler_data;
+	ThreadFunction handler_function;
+	void* handler_data;
 };
 
 unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z);

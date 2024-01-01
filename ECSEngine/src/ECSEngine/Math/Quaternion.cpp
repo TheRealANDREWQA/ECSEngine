@@ -55,6 +55,11 @@ namespace ECSEngine {
 		return *this;
 	}
 
+	QuaternionScalar ECS_VECTORCALL Quaternion::At(size_t index) const
+	{
+		return Vector4::At(index);
+	}
+
 	void Quaternion::Set(QuaternionScalar scalar_quat, size_t index)
 	{
 		// Broadcast the values and then blend

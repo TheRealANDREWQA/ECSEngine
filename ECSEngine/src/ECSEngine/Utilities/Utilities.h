@@ -396,9 +396,24 @@ namespace ECSEngine {
 		}
 	}
 
-	// The functor receives as parameters (auto is_remainder, const Input* input_values, Output* output_values, size_t element_count)
+	// The functor receives as parameters (auto is_full_iteration, size_t index, size_t count)
+	// The is_full_iteration is std::true_type{} if this is a normal iteration, std::false_type{}
+	// If it is the remainder
+	template<typename Functor>
+	void ApplySIMDConstexpr(size_t count, size_t simd_elements, Functor&& functor) {
+		size_t simd_count = GetSimdCount(count, simd_elements);
+		for (size_t index = 0; index < simd_count; index += simd_elements) {
+			functor(std::true_type{}, index, simd_elements);
+		}
+
+		if (simd_count < count) {
+			functor(std::false_type{}, simd_count, count - simd_count);
+		}
+	}
+
+	// The functor receives as parameters (auto is_full_iteration, const Input* input_values, Output* output_values, size_t element_count)
 	// And must return how many elements to write (this value is ignored when a full iteration is in place, it is
-	// needed only when there is a remainder - this value must be expressed in elements of output type). The is_remainder is
+	// needed only when there is a remainder - this value must be expressed in elements of output type). The is_full_iteration is
 	// a std::true_type{} if this is a normal iteration and std::false_type{} if it is the remainder
 	template<typename InputStreamType, typename OutputStreamType, typename Functor>
 	void ApplySIMDConstexpr(InputStreamType input, OutputStreamType output, size_t simd_elements, size_t output_count_per_iteration, Functor&& functor) {

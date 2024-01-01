@@ -285,6 +285,17 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	// It is still a matrix vector multiplication, but it better transmits the intent of the code
+	ECS_INLINE float3 ECS_VECTORCALL TransformVector(float3 vector, Matrix matrix) {
+		return MatrixVectorMultiply(vector, matrix);
+	}
+
+	// It is still a matrix vector multiplication, but it better transmits the intent of the code
+	ECS_INLINE Vector3 ECS_VECTORCALL TransformVector(Vector3 vector, Matrix matrix) {
+		return MatrixVectorMultiply(vector, matrix);
+	}
+
+	// It will set the 4th component to 1.0f as points need that and transform with it
 	ECS_INLINE float4 ECS_VECTORCALL TransformPoint(float4 point, Matrix matrix) {
 		return MatrixVectorMultiply(point, matrix);
 	}
@@ -294,6 +305,7 @@ namespace ECSEngine {
 		return TransformPoint(float4(point, 1.0f), matrix);
 	}
 
+	// It will set the 4th component to 1.0f as points need that and transform with it
 	ECS_INLINE Vector4 ECS_VECTORCALL TransformPoint(Vector4 point, Matrix matrix) {
 		return MatrixVectorMultiply(point, matrix);
 	}

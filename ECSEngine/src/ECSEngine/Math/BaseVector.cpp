@@ -1,5 +1,6 @@
 #include "ecspch.h"
 #include "BaseVector.h"
+#include "../Utilities/PointerUtilities.h"
 
 namespace ECSEngine {
 
@@ -134,9 +135,23 @@ namespace ECSEngine {
 		return *this;
 	}
 
-	float3 Vector3::At(size_t index) const
+	float3 ECS_VECTORCALL Vector3::At(size_t index) const
 	{
-		return float3(x[index], y[index], z[index]);
+		return {
+			VectorAt(x, index),
+			VectorAt(y, index),
+			VectorAt(z, index)
+		};
+	}
+
+	Vector3& Vector3::LoadEntry(const void* data) {
+		LoadEntry(data, ElementCount());
+		return *this;
+	}
+
+	Vector3& Vector3::LoadEntry(const void* data, size_t load_count) {
+		Load(data, OffsetPointer(data, sizeof(float) * load_count), OffsetPointer(data, sizeof(float) * load_count * 2));
+		return *this;
 	}
 
 	Vector3& Vector3::Load(const void** source_data)
@@ -219,6 +234,14 @@ namespace ECSEngine {
 	Vector3 Vector3::Splat(Vec8f value)
 	{
 		return Vector3(value, value, value);
+	}
+
+	void Vector3::StoreEntry(void* destination) const {
+		StoreEntry(destination, ElementCount());
+	}
+
+	void Vector3::StoreEntry(void* destination, size_t store_count) const {
+		StorePartial(destination, OffsetPointer(destination, sizeof(float) * store_count), OffsetPointer(destination, sizeof(float) * store_count * 2), store_count);
 	}
 
 	void Vector3::Store(void** destination) const
@@ -430,9 +453,25 @@ namespace ECSEngine {
 		return *this;
 	}
 
-	float4 Vector4::At(size_t index) const
+	float4 ECS_VECTORCALL Vector4::At(size_t index) const
 	{
-		return float4(x[index], y[index], z[index], w[index]);
+		return {
+			VectorAt(x, index),
+			VectorAt(y, index),
+			VectorAt(z, index),
+			VectorAt(w, index)
+		};
+	}
+
+	Vector4& Vector4::LoadEntry(const void* data) {
+		LoadEntry(data, ElementCount());
+		return *this;
+	}
+
+	Vector4& Vector4::LoadEntry(const void* data, size_t load_count) {
+		Load(data, OffsetPointer(data, sizeof(float) * ElementCount()), OffsetPointer(data, sizeof(float) * ElementCount() * 2), 
+			OffsetPointer(data, sizeof(float) * ElementCount() * 3));
+		return *this;
 	}
 
 	Vector4& Vector4::Load(const void** source_data)
@@ -524,6 +563,15 @@ namespace ECSEngine {
 	Vector4 Vector4::Splat(Vec8f value)
 	{
 		return Vector4(value, value, value, value);
+	}
+
+	void Vector4::StoreEntry(void* destination) const {
+		StoreEntry(destination, ElementCount());
+	}
+
+	void Vector4::StoreEntry(void* destination, size_t load_count) const {
+		Store(destination, OffsetPointer(destination, sizeof(float) * load_count), OffsetPointer(destination, sizeof(float) * load_count * 2),
+			OffsetPointer(destination, sizeof(float) * load_count * 3));
 	}
 
 	void Vector4::Store(void** destination) const

@@ -121,6 +121,88 @@ public:
 			return EXCEPTION_CONTINUE_EXECUTION;
 		};
 
+		struct ConvexHull {
+			float3 FurthestFrom(float3 direction) const
+			{
+				Vec8f max_distance = -FLT_MAX;
+				Vector3 max_points;
+				Vector3 vector_direction = Vector3().Splat(direction);
+				size_t simd_count = GetSimdCount(size, Vector3::ElementCount());
+				for (size_t index = 0; index < simd_count; index += Vector3::ElementCount()) {
+					Vector3 values = Vector3().LoadAdjacent(vertices_x, index, size);
+					Vec8f distance = Dot(values, vector_direction);
+					SIMDVectorMask is_greater = distance > max_distance;
+					max_distance = SelectSingle(is_greater, distance, max_distance);
+					max_points = Select(is_greater, values, max_points);
+				}
+
+				// Consider the remaining
+				if (simd_count < size) {
+					Vector3 values = Vector3().LoadAdjacent(vertices_x, simd_count, size);
+					Vec8f distance = Dot(values, vector_direction);
+					// Mask the distance such that we don't consider elements which are out of bounds
+					distance.cutoff(size - simd_count);
+					SIMDVectorMask is_greater = distance > max_distance;
+					max_distance = SelectSingle(is_greater, distance, max_distance);
+					max_points = Select(is_greater, values, max_points);
+				}
+
+				Vec8f max = HorizontalMax8(max_distance);
+				size_t index = HorizontalMax8Index(max_distance, max);
+				return max_points.At(index);
+			}
+
+			float* vertices_x;
+			float* vertices_y;
+			float* vertices_z;
+			size_t size;
+		};
+
+		struct ConvexHullSecond {
+			float3 FurthestFrom(float3 direction) const
+			{
+				Vec8f max_distance = -FLT_MAX;
+				Vector3 max_points;
+				Vector3 vector_direction = Vector3().Splat(direction);
+				size_t simd_count = GetSimdCount(size, Vector3::ElementCount());
+				for (size_t index = 0; index < simd_count; index += Vector3::ElementCount()) {
+					Vector3 values = Vector3().LoadAdjacent(vertices_x, index, size);
+					Vec8f distance = Dot(values, vector_direction);
+					SIMDVectorMask is_greater = distance > max_distance;
+					max_distance = SelectSingle(is_greater, distance, max_distance);
+					max_points = Select(is_greater, values, max_points);
+				}
+
+				// Consider the remaining
+				if (simd_count < size) {
+					Vector3 values = Vector3().LoadAdjacent(vertices_x, simd_count, size);
+					Vec8f distance = Dot(values, vector_direction);
+					// Mask the distance such that we don't consider elements which are out of bounds
+					distance.cutoff(size - simd_count);
+					SIMDVectorMask is_greater = distance > max_distance;
+					max_distance = SelectSingle(is_greater, distance, max_distance);
+					max_points = Select(is_greater, values, max_points);
+				}
+
+				float values[8];
+				max_distance.store(values);
+				float max = -FLT_MAX;
+				size_t min_index = 0;
+				for (size_t index = 0; index < 8; index++) {
+					if (values[index] > max) {
+						max = values[index];
+						min_index = index;
+					}
+				}
+				return max_points.At(min_index);
+			}
+
+			float* vertices_x;
+			float* vertices_y;
+			float* vertices_z;
+			size_t size;
+		};
+
 		/*void* malloced = malloc(ECS_GB);
 		OS::GuardPages(malloced, ECS_GB);
 		__try {
@@ -140,11 +222,7 @@ public:
 
 		//Stream<char> names[] = {
 		//	"Scalar",
-		//	"Scalar Inline",
-		//	"SIMD Inline",
-		//	"SIMD",
-		//	"SIMD Inline Sequential",
-		//	"SIMD Sequential"
+		//	"Scalar Inline"
 		//};
 
 		//BenchmarkState benchmark_state(editor_state.EditorAllocator(), std::size(names), nullptr, names);
@@ -162,163 +240,32 @@ public:
 		//	}
 		//	float3* ptr = ts.buffer;
 
-		//	while (benchmark_state.Run()) {
-		//		Stream<float3> current_buffer = benchmark_state.GetCurrentBuffer().As<float3>();
-		//		for (size_t index = 0; index < current_buffer.size; index++) {
-		//			float3 dot_product = Cross(current_buffer[index], current_buffer[index]);
-		//			dot_product = Normalize(dot_product);
-		//			dot_product = Cross(dot_product, current_buffer[index]);
-		//			dot_product = DirectionToRotationEulerRad(dot_product);
-		//			//float dot_product = Dot(current_buffer[index], current_buffer[index]);
-		//			benchmark_state.DoNotOptimizeFloat(dot_product.x);
-		//		}
-		//	}
+		//	size_t random = rand() % 8;
 
 		//	while (benchmark_state.Run()) {
-		//		auto cross = [](float3 a, float3 b) {
-		//			return float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.x, a.x * b.y - a.y * b.x);
-		//		};
-
-		//		auto normalize = [](float3 vector) {
-		//			return vector * (OneVector<float3>() / sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z));
-		//		};
-
-		//		auto direction = [](float3 direction) {
-		//			const float EPSILON = 0.001f;
-		//			float pi;
-		//			float zero;
-		//			float epsilon;
-		//			pi = PI;
-		//			zero = 0.0f;
-		//			epsilon = EPSILON;
-		//			// It can happen that atan2 is unstable when values are really small and returns 
-		//			// something close to PI when it should be 0
-		//			// Handle this case - we need a slightly larger epsilon
-		//			auto x_radians_base = atan2(direction.y, direction.z);
-		//			auto y_radians_base = atan2(direction.z, direction.x);
-		//			auto z_radians_base = atan2(direction.y, direction.x);
-
-		//			auto x_angle = Fmod(x_radians_base, pi);
-		//			auto y_angle = Fmod(y_radians_base, pi);
-		//			auto z_angle = Fmod(z_radians_base, pi);
-
-		//			float3 result = float3(x_angle, y_angle, z_angle);
-		//			for (size_t index = 0; index < float3::Count(); index++) {
-		//				result[index] = SelectSingle(CompareMaskSingle(result[index], pi, epsilon), zero, result[index]);
-		//			}
-		//			return result;
-		//		};
-
 		//		Stream<float3> current_buffer = benchmark_state.GetCurrentBuffer().As<float3>();
-		//		for (size_t index = 0; index < current_buffer.size; index++) {
-		//			float3 dot_product = cross(current_buffer[index], current_buffer[index]);
-		//			dot_product = normalize(dot_product);
-		//			dot_product = cross(dot_product, current_buffer[index]);
-		//			dot_product = direction(dot_product);
+		//		for (size_t index = 0; index < current_buffer.size; index += 16) {
+		//			ConvexHull hull;
+		//			hull.vertices_x = (float*)(current_buffer.buffer + index);
+		//			hull.vertices_y = (float*)(current_buffer.buffer + index) + 16;
+		//			hull.vertices_z = (float*)(current_buffer.buffer + index) + 32;
+		//			hull.size = 16;
+		//			float3 value = hull.FurthestFrom(float3{ 0.7f, 0.7f, 0.0f });
 		//			//float dot_product = Dot(current_buffer[index], current_buffer[index]);
-		//			benchmark_state.DoNotOptimizeFloat(dot_product.x);
-		//		}
-		//	}
-
-		//	while (benchmark_state.Run()) {
-		//		auto cross = [](Vector3 a, Vector3 b) {
-		//			return Vector3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.x, a.x * b.y - a.y * b.x);
-		//		};
-
-		//		auto normalize = [](Vector3 vector) {
-		//			return vector * (OneVector<Vector3>() / sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z));
-		//		};
-
-		//		auto direction = [](Vector3 direction) {
-		//			const float EPSILON = 0.001f;
-		//			Vec8f pi;
-		//			Vec8f zero;
-		//			Vec8f epsilon;
-		//				pi = Vec8f(PI);
-		//				zero = ZeroVectorFloat();
-		//				epsilon = Vec8f(EPSILON);
-		//			// It can happen that atan2 is unstable when values are really small and returns 
-		//			// something close to PI when it should be 0
-		//			// Handle this case - we need a slightly larger epsilon
-		//			auto x_radians_base = atan2(direction.y, direction.z);
-		//			auto y_radians_base = atan2(direction.z, direction.x);
-		//			auto z_radians_base = atan2(direction.y, direction.x);
-
-		//			auto x_angle = Fmod(x_radians_base, pi);
-		//			auto y_angle = Fmod(y_radians_base, pi);
-		//			auto z_angle = Fmod(z_radians_base, pi);
-
-		//			Vector3 result = Vector3(x_angle, y_angle, z_angle);
-		//			for (size_t index = 0; index < Vector3::Count(); index++) {
-		//				result[index] = SelectSingle(CompareMaskSingle(result[index], pi, epsilon), zero, result[index]);
-		//			}
-		//			return result;
-		//		};
-
-		//		Stream<float3> current_buffer = benchmark_state.GetCurrentBuffer().As<float3>();
-		//		size_t simd_count = GetSimdCount(current_buffer.size, 8);
-		//		for (size_t index = 0; index < simd_count; index += 8) {
-		//			Vector3 elements = Vector3().Gather(current_buffer.buffer + index);
-		//			Vector3 dot_product = cross(elements, elements);
-		//			dot_product = normalize(dot_product);
-		//			dot_product = cross(dot_product, elements);
-		//			dot_product = direction(dot_product);
-
-		//			float value = *(const float*)&dot_product;
-		//			//float dot_product = Dot(current_buffer[index], current_buffer[index]);
-		//			benchmark_state.DoNotOptimizeFloat(value);
+		//			benchmark_state.DoNotOptimizeFloat(value.x);
 		//		}
 		//	}
 
 		//	while (benchmark_state.Run()) {
 		//		Stream<float3> current_buffer = benchmark_state.GetCurrentBuffer().As<float3>();
-		//		size_t simd_count = GetSimdCount(current_buffer.size, 8);
-		//		for (size_t index = 0; index < simd_count; index += 8) {
-		//			Vector3 elements = Vector3().Gather(current_buffer.buffer + index);
-		//			Vector3 dot_product = Cross(elements, elements);
-		//			dot_product = Normalize(dot_product);
-		//			dot_product = Cross(dot_product, elements);
-		//			dot_product = DirectionToRotationEulerRad(dot_product);
-		//			//float dot_product = Dot(current_buffer[index], current_buffer[index]);
-		//			//benchmark_state.DoNotOptimizeFloat(dot_product.At(0).x);
-		//			float value = *(const float*)&dot_product;
-		//			benchmark_state.DoNotOptimizeFloat(value);
-		//		}
-		//	}
-
-		//	while (benchmark_state.Run()) {
-		//		auto cross = [](Vector3 a, Vector3 b) {
-		//			return Vector3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.x, a.x * b.y - a.y * b.x);
-		//		};
-
-		//		Stream<float3> current_buffer = benchmark_state.GetCurrentBuffer().As<float3>();
-		//		size_t simd_count = GetSimdCount(current_buffer.size, 8);
-		//		for (size_t index = 0; index < simd_count; index += 8) {
-		//			Vector3 elements = Vector3().LoadAdjacent(current_buffer.buffer + index, 0, 8);
-		//			Vector3 dot_product = cross(elements, elements);
-		//			dot_product = cross(dot_product, elements);
-		//			dot_product = cross(dot_product, elements);
-		//			dot_product = cross(dot_product, elements);
-
-		//			float value = *(const float*)&dot_product;
-		//			//float dot_product = Dot(current_buffer[index], current_buffer[index]);
-		//			benchmark_state.DoNotOptimizeFloat(value);
-		//		}
-		//	}
-
-		//	while (benchmark_state.Run()) {
-		//		Stream<float3> current_buffer = benchmark_state.GetCurrentBuffer().As<float3>();
-		//		size_t simd_count = GetSimdCount(current_buffer.size, 8);
-		//		for (size_t index = 0; index < simd_count; index += 8) {
-		//			Vector3 elements = Vector3().LoadAdjacent(current_buffer.buffer + index, 0, 8);
-		//			Vector3 dot_product = Cross(elements, elements);
-		//			dot_product = Cross(dot_product, elements);
-		//			dot_product = Cross(dot_product, elements);
-		//			dot_product = Cross(dot_product, elements);
-		//			//float dot_product = Dot(current_buffer[index], current_buffer[index]);
-		//			//benchmark_state.DoNotOptimizeFloat(dot_product.At(0).x);
-		//			float value = *(const float*)&dot_product;
-		//			benchmark_state.DoNotOptimizeFloat(value);
+		//		for (size_t index = 0; index < current_buffer.size; index += 16) {
+		//			ConvexHullSecond hull;
+		//			hull.vertices_x = (float*)(current_buffer.buffer + index);
+		//			hull.vertices_y = (float*)(current_buffer.buffer + index) + 16;
+		//			hull.vertices_z = (float*)(current_buffer.buffer + index) + 32;
+		//			hull.size = 16;
+		//			float3 value = hull.FurthestFrom(float3{ 0.7f, 0.7f, 0.0f });
+		//			benchmark_state.DoNotOptimizeFloat(value.x);
 		//		}
 		//	}
 		//}
@@ -327,11 +274,6 @@ public:
 		//benchmark_state.GetString(bench_string, false);
 		//bench_string[bench_string.size] = '\0';
 		//OutputDebugStringA(bench_string.buffer);
-
-		QuaternionScalar rotation = QuaternionFromEuler(float3{ -15.0f, -70.0f, 36.0f });
-		float3 axis_direction = AxisDirection(ECS_AXIS_X, rotation, ECS_TRANSFORM_LOCAL_SPACE);
-		QuaternionScalar rotation_quaternion = QuaternionAngleFromAxis(axis_direction, 1.0f);
-		float3 new_euler = QuaternionToEuler(rotation_quaternion);
 
 		MSG message;
 		BOOL result = 0;

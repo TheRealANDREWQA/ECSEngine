@@ -10,5 +10,6 @@
 #include "ECSEngineRendering.h"
 #include "ECSEngineDebugDrawer.h"
 #include "ECSEngineComponents.h"
+#include "Logging.h"
 
 using namespace ECSEngine;

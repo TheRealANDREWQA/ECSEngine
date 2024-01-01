@@ -47,8 +47,6 @@
     <ClInclude Include="src\ECSEngine\Containers\Queues.h" />
     <ClInclude Include="src\ECSEngine\Containers\Stacks.h" />
     <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
-    <ClInclude Include="src\ECSEngine\Math\Matrix_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Vector_Inline.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\Reflection.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\Serialization.h" />
@@ -76,11 +74,6 @@
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFLoader.h" />
-    <ClInclude Include="src\ECSEngine\Math\Quaternion_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Conversion_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Transform_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Bezier_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Hermite_Inline.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\Module.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\Lighting.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />
@@ -214,8 +207,6 @@
     <ClInclude Include="src\ECSEngine\Rendering\SampleTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineSampleTexture.h" />
     <ClInclude Include="src\ECSEngine\Utilities\TransformTool.h" />
-    <ClInclude Include="src\ECSEngine\Math\Plane_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Intersection_Inline.h" />
     <ClInclude Include="src\Includes\ECSEngineInput.h" />
     <ClInclude Include="src\ECSEngine\Input\Controller\WASDController.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorCallsDebug.h" />
@@ -223,7 +214,6 @@
     <ClInclude Include="src\ECSEngine\Rendering\Camera.h" />
     <ClInclude Include="src\ECSEngine\Rendering\TransformHelpers.h" />
     <ClInclude Include="src\Includes\ECSEngineCamera.h" />
-    <ClInclude Include="src\ECSEngine\Math\AABB_Inline.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetMetadataValidate.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.h" />
     <ClInclude Include="src\ECSEngine\Containers\SoA.h" />
@@ -280,6 +270,7 @@
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
     <ClInclude Include="src\ECSEngine\Math\AABB.h" />
     <ClInclude Include="src\ECSEngine\Math\BaseVector.h" />
+    <ClInclude Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -448,6 +439,7 @@
     <ClCompile Include="src\ECSEngine\Math\Transform.cpp" />
     <ClCompile Include="src\ECSEngine\Math\Vector.cpp" />
     <ClCompile Include="src\ECSEngine\Math\BaseVector.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />
