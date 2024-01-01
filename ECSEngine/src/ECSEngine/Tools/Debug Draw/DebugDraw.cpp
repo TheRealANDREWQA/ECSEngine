@@ -2141,7 +2141,6 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawGrid(const DebugGrid* grid, DebugShaderOutput shader_output)
 	{
-		Timer my_timer;
 		DebugAABB aabb;
 		aabb.color = grid->color;
 		aabb.options = grid->options;
@@ -2216,9 +2215,6 @@ namespace ECSEngine {
 				);
 			}
 		}
-		float duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_US);
-		ECS_FORMAT_TEMP_STRING(message, "Duration {#}\n", duration);
-		OutputDebugStringA(message.buffer);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

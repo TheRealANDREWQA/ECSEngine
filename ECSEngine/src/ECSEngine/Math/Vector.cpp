@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "BaseVector.h"
 #include "Vector.h"
+#include "../OS/Thread.h"
 
 namespace ECSEngine {
 
@@ -398,6 +399,30 @@ namespace ECSEngine {
 
 	Vector3 ECS_VECTORCALL Cross(Vector3 a, Vector3 b) {
 		return CrossImpl(a, b);
+	}
+
+	template<typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL TripleProductImpl(Vector line_a, Vector line_b, Vector point) {
+		// This is simply 2 cross products - the line direction with a direction vector from the point
+		// To one of the line points and then cross product with the line direction again
+		Vector line_direction = line_b - line_a;
+		return Cross(Cross(line_direction, point - line_a), line_direction);
+	}
+
+	float3 ECS_VECTORCALL TripleProduct(float3 line_a, float3 line_b, float3 point) {
+		return TripleProductImpl(line_a, line_b, point);
+	}
+
+	Vector3 ECS_VECTORCALL TripleProduct(Vector3 line_a, Vector3 line_b, Vector3 point) {
+		return TripleProductImpl(line_a, line_b, point);
+	}
+
+	float3 ECS_VECTORCALL TripleProduct(float3 line_direction, float3 line_point_direction) {
+		return Cross(Cross(line_direction, line_point_direction), line_direction);
+	}
+
+	Vector3 ECS_VECTORCALL TripleProduct(Vector3 line_direction, Vector3 line_point_direction) {
+		return Cross(Cross(line_direction, line_point_direction), line_direction);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

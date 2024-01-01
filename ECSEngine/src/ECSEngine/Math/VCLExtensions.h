@@ -561,6 +561,64 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Horizontal Min/Max/Add/Sub/Misc
+
+	// Applies an operation successively on all elements of the vector
+	// By shuffling. The value is broadcasted across the result.
+	// The operation receives the 2 vectors as parameters
+	template<typename Operation>
+	ECS_INLINE Vec8f ECS_VECTORCALL HorizontalOperation8(Vec8f vector, Operation operation) {
+		// The initial vector	[0, 1, 2, 3, 4, 5, 6, 7]
+		// First Shuffle		[1, 0, 3, 2, 5, 4, 7, 6]
+		Vec8f first_shuffle = permute8<1, 0, 3, 2, 5, 4, 7, 6>(vector);
+		Vec8f first_result = operation(vector, first_shuffle);
+
+		// Second Shuffle		[2, 2, 0, 0, 6, 6, 4, 4]
+		Vec8f second_shuffle = permute8<2, 2, 0, 0, 6, 6, 4, 4>(first_result);
+		Vec8f second_result = operation(first_result, second_shuffle);
+
+		// Third shuffle		[4, 4, 4, 4, 0, 0, 0, 0]
+		Vec8f third_shuffle = BlendHighAndLow(second_result, second_result);
+		Vec8f result = operation(second_result, third_shuffle);
+		return result;
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL HorizontalMin8(Vec8f vector) {
+		return HorizontalOperation8(vector, [](Vec8f a, Vec8f b) {
+			return min(a, b);
+		});
+	}
+
+	// Returns the index of the min element from the horizontal min
+	ECS_INLINE size_t ECS_VECTORCALL HorizontalMin8Index(Vec8f vector, Vec8f min) {
+		return horizontal_find_first(vector == min);
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL HorizontalMax8(Vec8f vector) {
+		return HorizontalOperation8(vector, [](Vec8f a, Vec8f b) {
+			return max(a, b);
+		});
+	}
+
+	// Returns the index of the max element from the horizontal max
+	ECS_INLINE size_t ECS_VECTORCALL HorizontalMax8Index(Vec8f vector, Vec8f max) {
+		return horizontal_find_first(vector == max);
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL HorizontalAdd8(Vec8f vector) {
+		return HorizontalOperation8(vector, [](Vec8f a, Vec8f b) {
+			return a + b;
+		});
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL HorizontalSub8(Vec8f vector) {
+		return HorizontalOperation8(vector, [](Vec8f a, Vec8f b) {
+			return a - b;
+		});
+	}
+
+#pragma endregion
+
 	template<typename VectorType>
 	ECS_INLINE VectorType ECS_VECTORCALL SplatLowLane(VectorType vector) {
 		return Permute2f128Helper<0, 0>(vector, vector);
@@ -969,6 +1027,18 @@ namespace ECSEngine {
 
 
 #pragma endregion
+
+	ECS_INLINE float ECS_VECTORCALL VectorLow(Vec8f vector) {
+		return _mm256_cvtss_f32(vector);
+	}
+
+	ECS_INLINE int ECS_VECTORCALL VectorLow(Vec8i vector) {
+		return _mm256_cvtsi256_si32(vector);
+	}
+
+	ECS_INLINE float ECS_VECTORCALL VectorAt(Vec8f vector, size_t index) {
+		return VectorLow(Broadcast8(vector, index));
+	}
 
 #pragma region Dynamic Mask Creation
 

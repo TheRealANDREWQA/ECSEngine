@@ -46,6 +46,14 @@ namespace ECSEngine {
 		dot *= reciprocal_length;
 	}
 
+	PlaneScalar ECS_VECTORCALL Plane::At(size_t index) const
+	{
+		PlaneScalar return_value;
+		return_value.normal = normal.At(index);
+		return_value.dot = VectorAt(dot, index);
+		return return_value;
+	}
+
 	void Plane::Set(PlaneScalar plane, size_t index)
 	{
 		normal.Set(plane.normal, index);

@@ -395,6 +395,22 @@ namespace ECSEngine {
 
 	ECSENGINE_API Vector3 ECS_VECTORCALL Cross(Vector3 a, Vector3 b);
 
+	// Returns a perpendicular vector from the line to the point
+	ECSENGINE_API float3 ECS_VECTORCALL TripleProduct(float3 line_a, float3 line_b, float3 point);
+
+	// Returns a perpendicular vector from the line to the point
+	ECSENGINE_API Vector3 ECS_VECTORCALL TripleProduct(Vector3 line_a, Vector3 line_b, Vector3 point);
+
+	// Returns a perpendicular vector from the line to the point
+	// When the line direction and line to point directions are known
+	// If unsure about the correct order, use the variant with the 3 points
+	ECSENGINE_API float3 ECS_VECTORCALL TripleProduct(float3 line_direction, float3 line_point_direction);
+
+	// Returns a perpendicular vector from the line to the point
+	// When the line direction and line to point directions are known
+	// If unsure about the correct order, use the variant with the 3 points
+	ECSENGINE_API Vector3 ECS_VECTORCALL TripleProduct(Vector3 line_direction, Vector3 line_point_direction);
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE float ECS_VECTORCALL SquareLength(float2 vector) {

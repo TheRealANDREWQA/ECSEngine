@@ -10,34 +10,38 @@ namespace ECSEngine {
 	struct TransformScalar {
 		ECS_INLINE TransformScalar() {}
 		ECS_INLINE TransformScalar(float3 _position, QuaternionScalar _rotation, float3 _scale) : position(_position),
-			scale(_scale), rotation(_rotation) {}
+			rotation(_rotation), scale(_scale) {}
 
 		// Translation - 0.0f, 0.0f, 0.0f
 		// Scale - 1.0f, 1.0f, 1.0f
 		// Rotation - Quaternion Identity
 		ECS_INLINE void Default() {
 			position = { 0.0f, 0.0f, 0.0f };
-			scale = { 1.0f, 1.0f, 1.0f };
 			rotation = QuaternionIdentityScalar();
+			scale = { 1.0f, 1.0f, 1.0f };
 		}
 
 		float3 position;
-		float3 scale;
 		QuaternionScalar rotation;
+		float3 scale;
 	};
 
 	struct Transform {
 		ECS_INLINE Transform() {}
-		ECS_INLINE Transform(Vector3 _position, Vector3 _scale, Quaternion _rotation) : position(_position),
-			scale(_scale), rotation(_rotation) {}
+		ECS_INLINE Transform(Vector3 _position, Quaternion _rotation, Vector3 _scale) : position(_position),
+			rotation(_rotation), scale(_scale) {}
 
 		// Translation - 0.0f, 0.0f, 0.0f
 		// Scale - 1.0f, 1.0f, 1.0f
 		// Rotation - Quaternion Identity
 		ECS_INLINE void Default() {
 			position = ZeroVector();
-			scale = Vector3::Splat(VectorGlobals::ONE);
 			rotation = QuaternionIdentity();
+			scale = Vector3::Splat(VectorGlobals::ONE);
+		}
+
+		ECS_INLINE TransformScalar At(size_t index) const {
+			return { position.At(index), rotation.At(index), scale.At(index) };
 		}
 
 		ECS_INLINE void Set(const TransformScalar* scalar, size_t index) {
@@ -47,8 +51,8 @@ namespace ECSEngine {
 		}
 
 		Vector3 position;
-		Vector3 scale;
 		Quaternion rotation;
+		Vector3 scale;
 	};
 
 	// ---------------------------------------------------------------------------------------------------------------------

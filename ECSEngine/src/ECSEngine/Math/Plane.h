@@ -37,6 +37,8 @@ namespace ECSEngine {
 
 		void Normalize();
 
+		PlaneScalar ECS_VECTORCALL At(size_t index) const;
+
 		void Set(PlaneScalar plane, size_t index);
 
 		ECS_INLINE operator Vector4() const {

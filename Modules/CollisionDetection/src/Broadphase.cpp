@@ -3,8 +3,7 @@
 #include "Graphics/src/Components.h"
 #include "Components.h"
 #include "FixedGrid.h"
-
-bool DISPLAY_DEBUG_GRID = false;
+#include "Narrowphase.h"
 
 static void UpdateBroadphaseGrid(
 	ForEachEntityData* for_each_data,
@@ -50,8 +49,13 @@ ECS_THREAD_TASK(EmptyGridHandler) {}
 ECS_THREAD_TASK(InitializeCollisionBroadphase) {
 	StaticThreadTaskInitializeInfo* initialize_info = (StaticThreadTaskInitializeInfo*)_data;
 
+	if (initialize_info->previous_data.size > 0) {
+		FixedGrid* previous_grid = (FixedGrid*)initialize_info->previous_data.buffer;
+		previous_grid->Clear();
+	}
+
 	FixedGrid fixed_grid;
-	fixed_grid.Initialize(world->memory, { 2, 2, 2 }, { 2, 2, 2 }, 10, EmptyGridHandler, nullptr, 0);
+	fixed_grid.Initialize(world->memory, { 128, 128, 128 }, { 2, 2, 2 }, 10, NarrowphaseGridHandler, nullptr, 0);
 	fixed_grid.EnableLayerCollisions(0, 0);
 	initialize_info->frame_data->CopyOther(&fixed_grid, sizeof(fixed_grid));
 }
@@ -79,6 +83,7 @@ void SetBroadphaseTasks(ECSEngine::ModuleTaskFunctionData* data) {
 	TaskSchedulerElement broadphase_element;
 	broadphase_element.task_group = ECS_THREAD_TASK_INITIALIZE_EARLY;
 	broadphase_element.initialize_task_function = InitializeCollisionBroadphase;
+	broadphase_element.preserve_data = false;
 	ECS_REGISTER_FOR_EACH_TASK(broadphase_element, CollisionBroadphase, data);
 
 	TaskSchedulerElement broadphase_end_frame;

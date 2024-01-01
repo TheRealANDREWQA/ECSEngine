@@ -1,11 +1,6 @@
 #pragma once
-#include "Export.h"
-#include "ECSEngineContainers.h"
+#include "FixedGrid.h"
 
-struct ConvexHull {
-	float3 FurthestFrom(float3 direction) const;
+ECS_THREAD_TASK(NarrowphaseGridHandler);
 
-	Stream<float3> vertices;
-};
-
-float GJK(ConvexHull collider_a, ConvexHull collider_b);
+void SetNarrowphaseTasks(ECSEngine::ModuleTaskFunctionData* data);

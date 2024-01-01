@@ -240,6 +240,7 @@
     <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
     <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
+    <ClInclude Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.h" />
     <ClInclude Include="src\ECSEngine\ECS\EntityChangeSet.h" />
     <ClInclude Include="src\ECSEngine\ECS\WorldCrashHandler.h" />
     <ClInclude Include="src\ECSEngine\ECS\RuntimeCrashPersistence.h" />
@@ -256,18 +257,15 @@
     <ClInclude Include="src\ECSEngine\ECS\LinkComponents.h" />
     <ClInclude Include="src\ECSEngine\Input\Controller\WASDController.h" />
     <ClInclude Include="src\ECSEngine\Math\AABB.h" />
-    <ClInclude Include="src\ECSEngine\Math\AABB_Inline.h" />
     <ClInclude Include="src\ECSEngine\Math\BaseVector.h" />
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
     <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
     <ClInclude Include="src\ECSEngine\Math\Hermite.h" />
     <ClInclude Include="src\ECSEngine\Math\Intersection.h" />
-    <ClInclude Include="src\ECSEngine\Math\Intersection_Inline.h" />
     <ClInclude Include="src\ECSEngine\Math\MathHelpers.h" />
     <ClInclude Include="src\ECSEngine\Math\MathTypeSizes.h" />
     <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
     <ClInclude Include="src\ECSEngine\Math\Plane.h" />
-    <ClInclude Include="src\ECSEngine\Math\Plane_Inline.h" />
     <ClInclude Include="src\ECSEngine\Math\Quaternion.h" />
     <ClInclude Include="src\ECSEngine\Math\Transform.h" />
     <ClInclude Include="src\ECSEngine\Math\Vector.h" />
@@ -315,11 +313,6 @@
     <ClInclude Include="src\ECSEngine\Resources\Scene.h" />
     <ClInclude Include="src\ECSEngine\ECS\SystemManager.h" />
     <ClInclude Include="src\ECSEngine\ECS\VectorComponentSignature.h" />
-    <ClInclude Include="src\ECSEngine\Math\Bezier_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Conversion_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Hermite_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Quaternion_Inline.h" />
-    <ClInclude Include="src\ECSEngine\Math\Transform_Inline.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompression.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompressionTypes.h" />
     <ClInclude Include="src\ECSEngine\Rendering\DirectXTexHelpers.h" />
@@ -441,9 +434,7 @@
     <ClInclude Include="src\ECSEngine\Containers\Stacks.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\AtomicLinearAllocator.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\TaskScheduler.h" />
-    <ClInclude Include="src\ECSEngine\Math\Matrix_Inline.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
-    <ClInclude Include="src\ECSEngine\Math\Vector_Inline.h" />
     <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
     <ClInclude Include="src\ECSEngine\Resources\ResourceManager.h" />
     <ClInclude Include="src\ECSEngine\ECS\Archetype.h" />
@@ -497,6 +488,7 @@
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Containers\SparseSet.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ComponentHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\Components.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\EntityChangeSet.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\WorldCrashHandler.cpp" />
