@@ -710,6 +710,20 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		ReflectionEnum ReflectionEnum::Copy(AllocatorPolymorphic allocator) const
+		{
+			ReflectionEnum copy;
+
+			copy.folder_hierarchy_index = folder_hierarchy_index;
+			copy.name.InitializeAndCopy(allocator, name);
+			copy.fields = StreamCoalescedDeepCopy(fields, allocator);
+			copy.original_fields = StreamCoalescedDeepCopy(original_fields, allocator);
+
+			return copy;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionConstant ReflectionConstant::CopyTo(uintptr_t& ptr) const
 		{
 			ReflectionConstant constant;

@@ -3,6 +3,7 @@
 #include "../Containers/Stream.h"
 #include "../Rendering/RenderingStructures.h"
 #include "../ECS/EntityManagerSerializeTypes.h"
+#include "../Tools/Modules/ModuleDefinition.h"
 
 // These are some chunks that can be used to fill in various information
 // Without a predefined connotation
@@ -83,6 +84,7 @@ namespace ECSEngine {
 		};
 		bool is_file_data = true;
 		const Reflection::ReflectionManager* reflection_manager;
+		Stream<ModuleComponentFunctions> module_component_functions;
 
 		// One of these needs to be set
 		AssetDatabase* database = nullptr;

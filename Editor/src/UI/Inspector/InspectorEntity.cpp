@@ -84,14 +84,40 @@ struct InspectorDrawEntityData {
 		return &link_components[link_index].target_allocator;
 	}
 
+	bool IsSharedComponentAndNoLink(const EditorState* editor_state, Stream<char> component_name) {
+		bool is_shared = editor_state->editor_components.IsSharedComponent(component_name);
+		if (is_shared) {
+			bool has_link_component = editor_state->editor_components.IsLinkComponentTarget(component_name);
+			if (!has_link_component) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	unsigned int AddCreatedInstance(EditorState* editor_state, Stream<char> name, void* pointer_bound) {
 		name = StringCopy(Allocator(), name);
+
 		void* old_buffer = created_instances.buffer;
 		size_t previous_size = created_instances.size;
-
 		void* allocation = allocator.Allocate(created_instances.MemoryOf(created_instances.size + 1));
 		uintptr_t ptr = (uintptr_t)allocation;
 		created_instances.InitializeAndCopy(ptr, created_instances);
+
+		// Check to see if the component is shared and has no link component. If that is the case, we need
+		// To bind a pointer that is different from the shared instance storage. We do this in order to
+		// Not have the storage be changed when the user interacts with the UI. After a change, we see if
+		// there is an instance with that data already and change the instance only, or we create a new instance
+		// And assign that one
+		Stream<char> component_name = InspectorComponentNameFromUIInstanceName(name);
+		bool is_shared_no_link = IsSharedComponentAndNoLink(editor_state, component_name);
+		if (is_shared_no_link) {
+			size_t byte_size = editor_state->editor_components.GetComponentByteSize(component_name);
+			void* component_allocation = allocator.Allocate(byte_size);
+			memcpy(component_allocation, pointer_bound, byte_size);
+			pointer_bound = component_allocation;
+		}
+
 		unsigned int index = created_instances.Add({ name, pointer_bound });
 		if (previous_size > 0) {
 			allocator.Deallocate(old_buffer);
@@ -316,6 +342,14 @@ struct InspectorDrawEntityData {
 		return FindString(name, created_instances, [](CreatedInstance instance) { return instance.name; });
 	}
 
+	unsigned int FindCreatedInstanceByComponentName(unsigned int sandbox_index, Stream<char> component_name) {
+		ECS_STACK_CAPACITY_STREAM(char, full_name, 1024);
+		ECS_STACK_CAPACITY_STREAM(char, entity_name, 512);
+		EntityToString(entity, entity_name, true);
+		InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, full_name);
+		return FindCreatedInstance(full_name);
+	}
+
 	ECS_INLINE unsigned int FindLinkComponent(Stream<char> name) const {
 		return FindString(name, link_components, [](LinkComponent component) { return component.name; });
 	}
@@ -373,6 +407,12 @@ struct InspectorDrawEntityData {
 	}
 
 	void RemoveCreatedInstance(EditorState* editor_state, unsigned int index) {
+		// Don't forget to deallocate the pointer bound in case it is shared and without a link
+		Stream<char> component_name = InspectorComponentNameFromUIInstanceName(created_instances[index].name);
+		if (IsSharedComponentAndNoLink(editor_state, component_name)) {
+			allocator.Deallocate(created_instances[index].pointer_bound);
+		}
+
 		if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
 			// It is from the module side
 			editor_state->module_reflection->DestroyInstance(created_instances[index].name);
@@ -664,6 +704,18 @@ struct InspectorDrawEntityData {
 				}
 			}
 		}
+
+		// Include in this function the case for shared components without link
+		// They have a "pseudo" link component in the sense that the data is detached from
+		// The shared instance in order to not affect them all
+		for (size_t index = 0; index < created_instances.size; index++) {
+			Stream<char> component_name = InspectorComponentNameFromUIInstanceName(created_instances[index].name);
+			if (IsSharedComponentAndNoLink(editor_state, component_name)) {
+				const void* shared_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, editor_state->editor_components.GetComponentID(component_name), true);
+				size_t byte_size = editor_state->editor_components.GetComponentByteSize(component_name);
+				memcpy(created_instances[index].pointer_bound, shared_data, byte_size);
+			}
+		}
 	}
 
 	// Use the same implementation for global components and entities - global components
@@ -894,6 +946,16 @@ void InspectorComponentCallback(ActionData* action_data) {
 	bool is_shared = IsReflectionTypeSharedComponent(info_type);
 	Component component = GetReflectionTypeComponent(info_type);
 
+	if (is_shared) {
+		// We need to change the shared instance
+		if (data->draw_data->IsSharedComponentAndNoLink(editor_state, component_name)) {
+			unsigned int created_index = data->draw_data->FindCreatedInstanceByComponentName(sandbox_index, component_name);
+			ECS_ASSERT(created_index != -1);
+			SharedInstance new_instance = FindOrCreateSandboxSharedComponentInstance(editor_state, sandbox_index, component, data->draw_data->created_instances[created_index].pointer_bound);
+			SetSandboxEntitySharedInstance(editor_state, sandbox_index, entity, component, new_instance);
+		}
+	}
+
 	unsigned int matching_index = data->draw_data->FindMatchingInput(component_name);
 	if (matching_index != -1) {
 		// Check to see if it has buffers and copy them if they have changed
@@ -932,11 +994,12 @@ void InspectorComponentCallback(ActionData* action_data) {
 			else {
 				if (is_shared) {
 					arena = active_manager->GetSharedComponentAllocator(component);
+					SharedInstance shared_instance = SandboxEntitySharedInstance(editor_state, sandbox_index, entity, component);
 					component_data = GetSandboxSharedInstance(
 						editor_state,
 						sandbox_index,
 						component,
-						SandboxEntitySharedInstance(editor_state, sandbox_index, entity, component)
+						shared_instance
 					);
 				}
 				else {
@@ -1194,7 +1257,7 @@ static void DrawComponents(
 			if (instance == nullptr) {
 				instance = ui_drawer->CreateInstance(instance_name, current_component_name);
 				// Check to see if the created instance already exists. It might happen that if the
-				// component is updated the instance will become invalidated but it won't be removed
+				// component is updated, the instance will become invalidated but it won't be removed
 				// from the created instance stream resulting in a duplicate
 				unsigned int created_instance_index = data->FindCreatedInstance(instance_name);
 				if (created_instance_index == -1) {

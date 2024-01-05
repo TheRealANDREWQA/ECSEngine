@@ -4,6 +4,8 @@
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 
+#define MAX_COMPONENT_BUFFERS 16
+
 namespace ECSEngine {
 
 	using namespace Reflection;
@@ -128,6 +130,67 @@ namespace ECSEngine {
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
+
+	struct RuntimeComponentCopyDeallocateData {
+		ComponentBuffer component_buffers[MAX_COMPONENT_BUFFERS];
+		unsigned char count;
+	};
+
+	static void ReflectionTypeRuntimeComponentCopy(ComponentCopyFunctionData* copy_data) {
+		RuntimeComponentCopyDeallocateData* data = (RuntimeComponentCopyDeallocateData*)copy_data->function_data;
+		if (copy_data->deallocate_previous) {
+			for (unsigned char index = 0; index < data->count; index++) {
+				ComponentBufferReallocate(data->component_buffers[index], copy_data->allocator, copy_data->source, copy_data->destination);
+			}
+		}
+		else {
+			for (unsigned char index = 0; index < data->count; index++) {
+				ComponentBufferCopy(data->component_buffers[index], copy_data->allocator, copy_data->source, copy_data->destination);
+			}
+		}
+	}
+
+	static void ReflectionTypeRuntimeComponentDeallocate(ComponentDeallocateFunctionData* deallocate_data) {
+		RuntimeComponentCopyDeallocateData* data = (RuntimeComponentCopyDeallocateData*)deallocate_data->function_data;
+		for (unsigned char index = 0; index < data->count; index++) {
+			ComponentBufferDeallocate(data->component_buffers[index], deallocate_data->allocator, deallocate_data->data);
+			// Set the stream or data pointer to empty for good measure - even tho it is not entirely necessary
+			ComponentBufferSetStream(data->component_buffers[index], deallocate_data->data, {});
+		}
+	}
+
+	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, CapacityStream<void>* stack_memory)
+	{
+		ComponentFunctions component_functions;
+		ECS_STACK_CAPACITY_STREAM(ComponentBuffer, component_buffers, MAX_COMPONENT_BUFFERS);
+		GetReflectionTypeRuntimeBuffers(type, component_buffers);
+		if (component_buffers.size > 0) {
+			component_functions.copy_function = ReflectionTypeRuntimeComponentCopy;
+			component_functions.deallocate_function = ReflectionTypeRuntimeComponentDeallocate;
+			component_functions.allocator_size = GetReflectionComponentAllocatorSize(type);
+
+			RuntimeComponentCopyDeallocateData* function_data = (RuntimeComponentCopyDeallocateData*)OffsetPointer(*stack_memory);
+			ECS_ASSERT(stack_memory->capacity - stack_memory->size >= sizeof(*function_data), "Insufficient reflection type runtime component functions stack memory");
+			stack_memory->size += sizeof(*function_data);
+			function_data->count = component_buffers.size;
+			component_buffers.CopyTo(function_data->component_buffers);
+			component_functions.data = { function_data, sizeof(*function_data) };
+		}
+
+		return component_functions;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, AllocatorPolymorphic allocator)
+	{
+		ECS_STACK_VOID_STREAM(stack_memory, 1024);
+		ComponentFunctions result = GetReflectionTypeRuntimeComponentFunctions(type, &stack_memory);
+		if (result.data.size > 0) {
+			result.data = result.data.Copy(allocator);
+		}
+		return result;
+	}
 
 	Component GetReflectionTypeComponent(const Reflection::ReflectionType* type)
 	{

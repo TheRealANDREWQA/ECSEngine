@@ -36,7 +36,10 @@
     <ClCompile Include="src\GJK.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\LinkComponents.cpp">
+    <ClCompile Include="src\ConvexHull.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -68,7 +71,7 @@
     <ClInclude Include="src\GJK.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\LinkComponents.h">
+    <ClInclude Include="src\ConvexHull.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

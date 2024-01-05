@@ -644,6 +644,61 @@ namespace ECSEngine {
 			handler.action(action_data);
 		}
 
+		void UIDrawerMenuRightClickData::Initialize(
+			Stream<char> menu_name, 
+			const UIDrawerMenuState* menu_state, 
+			UIActionHandler custom_handler, 
+			AllocatorPolymorphic allocator,
+			unsigned int set_window_index
+		)
+		{
+			state = *menu_state;
+			state.submenu_index = 0;
+			window_index = set_window_index;
+			size_t menu_data_size = UIMenuWalkStatesMemory(menu_state, true);
+			size_t total_size = menu_data_size + menu_name.size + sizeof(UIDrawerMenuWindow) * ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT + sizeof(CapacityStream<UIDrawerMenuWindow>);
+			ECS_ASSERT(custom_handler.data_size <= sizeof(action_data), "The handler data is too large");
+
+			void* allocated_buffer = Allocate(allocator, total_size);
+
+			uintptr_t ptr = (uintptr_t)allocated_buffer;
+			name.InitializeAndCopy(ptr, menu_name);
+
+			UIDrawerMenuWindow* menu_windows = (UIDrawerMenuWindow*)ptr;
+			ptr += sizeof(UIDrawerMenuWindow) * ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT;
+			CapacityStream<UIDrawerMenuWindow>* menu_windows_stream = (CapacityStream<UIDrawerMenuWindow>*)ptr;
+			ptr += sizeof(CapacityStream<UIDrawerMenuWindow>);
+			menu_windows_stream->InitializeFromBuffer(menu_windows, 0, ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT);
+
+			UIMenuSetStateBuffers(&state, ptr, menu_windows_stream, 0, true);
+
+			action = custom_handler.action;
+			if (custom_handler.data_size > 0) {
+				memcpy(action_data, custom_handler.data, custom_handler.data_size);
+				is_action_data_ptr = false;
+			}
+			else {
+				is_action_data_ptr = true;
+				action_data_ptr = custom_handler.data;
+			}
+		}
+
+		UIDrawerMenuRightClickData UIDrawerMenuRightClickData::Copy(AllocatorPolymorphic allocator) const
+		{
+			UIDrawerMenuRightClickData copy;
+			UIActionHandler handler;
+			handler.action = action;
+			handler.data = is_action_data_ptr ? action_data_ptr : (void*)action_data;
+			handler.data_size = is_action_data_ptr ? 0 : sizeof(action_data);
+			copy.Initialize(name, &state, handler, allocator, window_index);
+			return copy;
+		}
+
+		void UIDrawerMenuRightClickData::Deallocate(AllocatorPolymorphic allocator)
+		{
+			ECSEngine::Deallocate(allocator, name.buffer);
+		}
+
 	}
 
 }

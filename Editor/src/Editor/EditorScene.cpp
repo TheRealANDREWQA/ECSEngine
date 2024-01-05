@@ -215,6 +215,7 @@ static bool GetLoadSceneDataBase(
 	load_data->detailed_error_string = (CapacityStream<char>*)Allocate(stack_allocator, sizeof(CapacityStream<char>));
 	load_data->detailed_error_string->Initialize(stack_allocator, 0, 512);
 	load_data->allow_missing_components = true;
+	load_data->module_component_functions = ModuleAggregateComponentFunctions(applied_modules, stack_allocator);
 
 	// Set the extra scene chunks - at the moment, only the prefab chunk is needed
 	load_data->chunk_functors[PREFAB_CHUNK_INDEX] = { LoadScenePrefabChunk, editor_state };

@@ -34,6 +34,14 @@ namespace ECSEngine {
 	// Determines all the buffers that the ECS runtime can use
 	ECSENGINE_API void GetReflectionTypeRuntimeBuffers(const Reflection::ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers);
 
+	// It needs the stack memory to write some data
+	// It builds default functions to handle Streams and DataPointers
+	ECSENGINE_API ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, CapacityStream<void>* stack_memory);
+
+	// It needs the allocator to write some data for the functions to use
+	// It builds default functions to handle Streams and DataPointers
+	ECSENGINE_API ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, AllocatorPolymorphic allocator);
+
 	ECSENGINE_API Component GetReflectionTypeComponent(const Reflection::ReflectionType* type);
 
 	// If the hierarchy index is -1 it will search through all types, regardless of folders

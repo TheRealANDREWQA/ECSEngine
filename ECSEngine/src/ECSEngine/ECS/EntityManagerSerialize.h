@@ -11,6 +11,7 @@ namespace ECSEngine {
 	}
 
 	struct ModuleLinkComponentTarget;
+	struct ModuleComponentFunctions;
 	struct AssetDatabase;
 	struct DeserializeFieldTable;
 
@@ -225,6 +226,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
 		Stream<ModuleLinkComponentTarget> module_links,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		DeserializeEntityManagerComponentInfo* overrides
 	);
 
@@ -237,6 +239,7 @@ namespace ECSEngine {
 		DeserializeEntityManagerComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager,
 		AllocatorPolymorphic allocator,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		Stream<DeserializeEntityManagerComponentInfo> overrides = { nullptr, 0 },
 		Component* override_components = nullptr,
 		Stream<unsigned int> hierarchy_indices = { nullptr, 0 }
@@ -252,11 +255,12 @@ namespace ECSEngine {
 		DeserializeEntityManagerComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager,
 		AllocatorPolymorphic allocator,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		Stream<DeserializeEntityManagerComponentInfo> overrides,
 		Component* override_components = nullptr,
 		Stream<unsigned int> hierarchy_indices = { nullptr, 0 }
 	) {
-		CreateDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices);
+		CreateDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, module_component_functions, overrides, override_components, hierarchy_indices);
 		if (overrides.size > 0) {
 			AddDeserializeEntityManagerComponentTableOverrides(table, reflection_manager, overrides);
 		}
@@ -271,6 +275,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
 		Stream<ModuleLinkComponentTarget> module_links,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		DeserializeEntityManagerSharedComponentInfo* overrides
 	);
 
@@ -283,6 +288,7 @@ namespace ECSEngine {
 		DeserializeEntityManagerSharedComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager,
 		AllocatorPolymorphic allocator,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		Stream<DeserializeEntityManagerSharedComponentInfo> overrides = { nullptr, 0 },
 		Component* override_components = nullptr,
 		Stream<unsigned int> hierarchy_indices = { nullptr, 0 }
@@ -298,11 +304,12 @@ namespace ECSEngine {
 		DeserializeEntityManagerSharedComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager,
 		AllocatorPolymorphic allocator,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		Stream<DeserializeEntityManagerSharedComponentInfo> overrides,
 		Component* override_components = nullptr,
 		Stream<unsigned int> hierarchy_indices = { nullptr, 0 }
 	) {
-		CreateDeserializeEntityManagerSharedComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices);
+		CreateDeserializeEntityManagerSharedComponentTable(table, reflection_manager, allocator, module_component_functions, overrides, override_components, hierarchy_indices);
 		if (overrides.size > 0) {
 			AddDeserializeEntityManagerSharedComponentTableOverrides(table, reflection_manager, overrides);
 		}

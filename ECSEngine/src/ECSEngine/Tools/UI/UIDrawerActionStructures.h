@@ -403,7 +403,19 @@ namespace ECSEngine {
 		// Name needs to be a stable reference; this does not allocate memory for it
 		// Action can be used to do additional stuff on right click; There can be
 		// 64 bytes of action data embedded into this structure
-		struct UIDrawerMenuRightClickData {
+		struct ECSENGINE_API UIDrawerMenuRightClickData {
+			void Initialize(
+				Stream<char> menu_name,
+				const UIDrawerMenuState* menu_state,
+				UIActionHandler custom_handler,
+				AllocatorPolymorphic allocator,
+				unsigned int window_index
+			);
+
+			UIDrawerMenuRightClickData Copy(AllocatorPolymorphic allocator) const;
+
+			void Deallocate(AllocatorPolymorphic allocator);
+
 			Stream<char> name;
 			UIDrawerMenuState state;
 			Action action = nullptr;

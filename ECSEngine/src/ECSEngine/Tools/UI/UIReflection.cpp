@@ -5269,7 +5269,8 @@ namespace ECSEngine {
 					return false;
 				}
 			}
-			return true;
+			// If it doesn't have any fields, assume to not be omitted
+			return type->fields.size > 0;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------

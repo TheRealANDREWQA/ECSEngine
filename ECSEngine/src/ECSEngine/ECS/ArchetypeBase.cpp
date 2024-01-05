@@ -52,7 +52,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::CopyOther(const ArchetypeBase* other)
+	void ArchetypeBase::CopyOther(const ArchetypeBase* other, bool deep_copy)
 	{
 		// Assert they have the same capacity
 		ECS_CRASH_CONDITION(
@@ -73,31 +73,17 @@ namespace ECSEngine {
 		for (size_t index = 0; index < m_components.count; index++) {
 			unsigned short component_byte_size = m_infos[m_components.indices[index].value].size;
 			memcpy(m_buffers[index], other->m_buffers[index], component_byte_size * other_size);
-			// If the component has buffers, we need to make a deep copy of them
-			unsigned int buffer_count = m_infos[m_components.indices[index]].component_buffers_count;
-			if (buffer_count > 0) {
-				const ComponentBuffer* component_buffers = m_infos[m_components.indices[index]].component_buffers;
-				for (unsigned int buffer_index = 0; buffer_index < buffer_count; buffer_index++) {
-					MemoryArena* component_allocator = m_infos[m_components.indices[index]].allocator;
+			if (deep_copy) {
+				// If the component has buffers, we need to make a deep copy of them
+				bool has_copy_function = m_infos[m_components.indices[index]].copy_function != nullptr;
+				if (has_copy_function) {
 					void* current_buffer = m_buffers[index];
-
-					auto entity_loop = [=](auto is_data_pointer) {
-						for (unsigned int entity_index = 0; entity_index < m_size; entity_index++) {
-							void* current_component = OffsetPointer(current_buffer, component_byte_size * entity_index);
-							if constexpr (is_data_pointer) {
-								ComponentBufferCopyDataPointer(component_buffers[buffer_index], component_allocator, current_component, current_component);
-							}
-							else {
-								ComponentBufferCopyStream(component_buffers[buffer_index], component_allocator, current_component, current_component);
-							}
-						}
-					};
-
-					if (component_buffers[buffer_index].is_data_pointer) {
-						entity_loop(std::true_type{});
-					}
-					else {
-						entity_loop(std::false_type{});
+					size_t temporary_component_storage[256];
+					ECS_ASSERT(sizeof(temporary_component_storage) >= component_byte_size);
+					for (unsigned int entity_index = 0; entity_index < m_size; entity_index++) {
+						void* current_component = OffsetPointer(current_buffer, component_byte_size * entity_index);
+						memcpy(temporary_component_storage, current_component, component_byte_size);
+						m_infos[m_components.indices[index]].CallCopyFunction(current_component, temporary_component_storage, false);
 					}
 				}
 			}

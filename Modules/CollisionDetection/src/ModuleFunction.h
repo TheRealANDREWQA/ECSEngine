@@ -36,4 +36,10 @@ extern "C" {
 
 #endif
 
+#if 1
+
+	COLLISIONDETECTION_API void ModuleRegisterComponentFunctionsFunction(ECSEngine::ModuleRegisterComponentFunctionsData* data);
+
+#endif
+
 }

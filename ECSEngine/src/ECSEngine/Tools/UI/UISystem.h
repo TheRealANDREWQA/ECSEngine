@@ -332,7 +332,9 @@ namespace ECSEngine {
 
 			void AddWindowMemoryResourceToTable(void* resource, ResourceIdentifier identifier, unsigned int window_index);
 
-			AllocatorPolymorphic Allocator() const;
+			ECS_INLINE AllocatorPolymorphic Allocator() const {
+				return m_memory;
+			}
 
 			void AppendDockspaceResize(
 				unsigned char dockspace_index,

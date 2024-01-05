@@ -8,7 +8,6 @@
 #include "../../Allocators/LinearAllocator.h"
 #include "../../Allocators/ResizableLinearAllocator.h"
 #include "../../Rendering/RenderingStructures.h"
-#include "../../ECS/InternalStructures.h"
 #include "UIMacros.h"
 #include "../../Application.h"
 #include "../../Utilities/Timer.h"

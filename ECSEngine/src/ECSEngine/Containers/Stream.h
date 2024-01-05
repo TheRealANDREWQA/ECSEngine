@@ -1400,12 +1400,22 @@ namespace ECSEngine {
 
 		template<typename Allocator>
 		ECS_INLINE void Initialize(Allocator* allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			buffer = allocator->Allocate(_size, debug_info);
+			if (_size > 0) {
+				buffer = allocator->Allocate(_size, debug_info);
+			}
+			else {
+				buffer = nullptr;
+			}
 			size = _size;
 		}
 
 		ECS_INLINE void Initialize(AllocatorPolymorphic allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			buffer = AllocateEx(allocator, size, debug_info);
+			if (_size > 0) {
+				buffer = AllocateEx(allocator, _size, debug_info);
+			}
+			else {
+				buffer = nullptr;
+			}
 			size = _size;
 		}
 
@@ -1812,6 +1822,10 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator;
 	};
 
+	/*
+		All projection functions from here receive as argument T or const T&
+	*/
+
 	// The template parameter of the stream must have as functions
 	// Type Copy(AllocatorPolymorphic allocator) const;
 	template<typename Stream>
@@ -1821,6 +1835,20 @@ namespace ECSEngine {
 		result.Initialize(allocator, input.size, debug_info);
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			result[index] = input[index].Copy(allocator);
+		}
+
+		return result;
+	}
+
+	// The template parameter of the stream must have as functions
+	// Type Copy(AllocatorPolymorphic allocator) const;
+	template<typename ProjectedType, typename StreamType, typename Projection>
+	Stream<ProjectedType> StreamDeepCopyProject(StreamType input, AllocatorPolymorphic allocator, Projection&& projection, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		Stream<ProjectedType> result;
+
+		result.Initialize(allocator, input.size, debug_info);
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			result[index] = projection(input[index]).Copy(allocator);
 		}
 
 		return result;
@@ -1845,6 +1873,25 @@ namespace ECSEngine {
 	}
 
 	// The template parameter of the stream must have as functions
+	// Type CopyTo(uintptr_t& ptr) const;
+	// size_t CopySize() const;
+	template<typename ProjectedType, typename StreamType, typename Projection>
+	Stream<ProjectedType> StreamDeepCopyToProject(StreamType input, AllocatorPolymorphic allocator, Projection&& projection, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		Stream<ProjectedType> result;
+
+		result.Initialize(allocator, input.size, debug_info);
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			auto index_projection = projection(input[index]);
+			size_t copy_size = index_projection.CopySize();
+			void* allocation = AllocateEx(allocator, copy_size, debug_info);
+			uintptr_t ptr = (uintptr_t)allocation;
+			result[index] = index_projection.CopyTo(ptr);
+		}
+
+		return result;
+	}
+
+	// The template parameter of the stream must have as functions
 	// Type Copy(AllocatorPolymorphic allocator) const;
 	template<typename Stream>
 	void StreamInPlaceDeepCopy(Stream input, AllocatorPolymorphic allocator) {
@@ -1857,7 +1904,7 @@ namespace ECSEngine {
 	// Type CopyTo(uintptr_t& ptr) const;
 	// size_t CopySize() const;
 	template<typename Stream>
-	void StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info) {
+	void StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
 			void* allocation = AllocateEx(allocator, copy_size, debug_info);
@@ -1878,7 +1925,7 @@ namespace ECSEngine {
 
 	// The template parameter of the stream must have as functions
 	// size_t CopySize() const;
-	// void Copy(uintptr_t& ptr);
+	// Type Copy(uintptr_t& ptr);
 	// If copy size returns 0, it assumes it needs no buffers and does not call
 	// the copy function.
 	template<typename Stream>
@@ -1929,6 +1976,58 @@ namespace ECSEngine {
 
 	// The template parameter of the stream must have as functions
 	// size_t CopySize() const;
+	// Type Copy(uintptr_t& ptr);
+	// If copy size returns 0, it assumes it needs no buffers and does not call
+	// the copy function.
+	template<typename ProjectedType, typename StreamType, typename Projection>
+	Stream<ProjectedType> StreamCoalescedDeepCopyProjection(StreamType input, AllocatorPolymorphic allocator, Projection&& projection, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		Stream<ProjectedType> new_stream;
+
+		if (input.size > 0) {
+			ECS_STACK_CAPACITY_STREAM(size_t, copy_sizes, 1024);
+			size_t total_size = input.MemoryOf(input.size);
+
+			if (input.size < 1024) {
+				for (size_t index = 0; index < (size_t)input.size; index++) {
+					size_t copy_size = projection(input[index]).CopySize();
+					total_size += copy_size;
+
+					copy_sizes[index] = copy_size;
+				}
+			}
+			else {
+				for (size_t index = 0; index < (size_t)input.size; index++) {
+					total_size += projection(input[index]).CopySize();
+				}
+			}
+
+			void* allocation = AllocateEx(allocator, total_size, debug_info);
+			uintptr_t ptr = (uintptr_t)allocation;
+			new_stream.InitializeAndCopy(ptr, input);
+
+			if (input.size < 1024) {
+				for (size_t index = 0; index < (size_t)input.size; index++) {
+					if (copy_sizes[index] > 0) {
+						new_stream[index] = projection(input[index]).CopyTo(ptr);
+					}
+				}
+			}
+			else {
+				for (size_t index = 0; index < (size_t)input.size; index++) {
+					auto current_projection = projection(input[index]);
+					size_t copy_size = current_projection.CopySize();
+					if (copy_size > 0) {
+						new_stream[index] = current_projection.CopyTo(ptr);
+					}
+				}
+			}
+		}
+
+		return new_stream;
+	}
+
+	// The template parameter of the stream must have as functions
+	// size_t CopySize() const;
 	// T CopyTo(uintptr_t& ptr);
 	// If copy size returns 0, it assumes it needs no buffers and does not call
 	// the copy function.
@@ -1941,6 +2040,27 @@ namespace ECSEngine {
 			size_t copy_size = input[index].CopySize();
 			if (copy_size > 0) {
 				new_stream[index] = input[index].CopyTo(ptr);
+			}
+		}
+
+		return new_stream;
+	}
+
+	// The template parameter of the stream must have as functions
+	// size_t CopySize() const;
+	// T CopyTo(uintptr_t& ptr);
+	// If copy size returns 0, it assumes it needs no buffers and does not call
+	// the copy function.
+	template<typename ProjectedType, typename StreamType, typename Projection>
+	Stream<ProjectedType> StreamCoalescedDeepCopyProjection(StreamType input, uintptr_t& ptr, Projection&& projection) {
+		Stream<ProjectedType> new_stream;
+		new_stream.InitializeAndCopy(ptr, input);
+
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			auto current_projection = projection(input[index]);
+			size_t copy_size = current_projection.CopySize();
+			if (copy_size > 0) {
+				new_stream[index] = current_projection.CopyTo(ptr);
 			}
 		}
 
@@ -2008,6 +2128,14 @@ namespace ECSEngine {
 	void StreamDeallocateElements(Stream input, AllocatorPolymorphic allocator) {
 		for (size_t index = 0; index < input.size; index++) {
 			input[index].Deallocate(allocator);
+		}
+	}
+
+	// The elements must have a void Deallocate(AllocatorPolymorphic allocator) function
+	template<typename Stream, typename Projection>
+	void StreamDeallocateElementsProject(Stream input, AllocatorPolymorphic allocator, Projection&& projection) {
+		for (size_t index = 0; index < input.size; index++) {
+			projection(input[index]).Deallocate(allocator);
 		}
 	}
 

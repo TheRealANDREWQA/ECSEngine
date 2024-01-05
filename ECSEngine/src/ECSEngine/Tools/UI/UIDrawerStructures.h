@@ -552,6 +552,26 @@ namespace ECSEngine {
 
 		ECSENGINE_API Stream<char> GetUIDrawerMenuStateRowString(const UIDrawerMenuState* state, unsigned int row_index);
 
+		ECSENGINE_API size_t UIMenuCalculateStateMemory(const UIDrawerMenuState* state, bool copy_states);
+
+		ECSENGINE_API size_t UIMenuWalkStatesMemory(const UIDrawerMenuState* state, bool copy_states);
+
+		ECSENGINE_API void UIMenuSetStateBuffers(
+			UIDrawerMenuState* state,
+			uintptr_t& buffer,
+			CapacityStream<UIDrawerMenuWindow>* stream,
+			unsigned int submenu_index,
+			bool copy_states
+		);
+
+		ECSENGINE_API void UIMenuWalkSetStateBuffers(
+			UIDrawerMenuState* state,
+			uintptr_t& buffer,
+			CapacityStream<UIDrawerMenuWindow>* stream,
+			unsigned int submenu_index,
+			bool copy_states
+		);
+
 		struct UIDrawerMenu {
 			ECS_INLINE bool IsTheSameData(const UIDrawerMenu* other) const {
 				return other != nullptr && name == other->name;

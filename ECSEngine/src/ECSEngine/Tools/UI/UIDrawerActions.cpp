@@ -1103,6 +1103,7 @@ namespace ECSEngine {
 				// Deallocate the menu resource name and the parent window name - it was previously allocated
 				data->menu_resource_name.Deallocate(system->Allocator());
 				data->parent_window_name.Deallocate(system->Allocator());
+				data->menu_window_name.Deallocate(system->Allocator());
 			}
 		}
 
@@ -1935,10 +1936,10 @@ namespace ECSEngine {
 
 						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
 					}
-					else if (keyboard->IsPressed(ECS_KEY_C)) {
+					else if (keyboard->GetAlphanumericKey(ECS_KEY_C) == ECS_BUTTON_PRESSED) {
 						input->CopyCharacters(system);
 					}
-					else if (keyboard->IsPressed(ECS_KEY_V)) {
+					else if (keyboard->GetAlphanumericKey(ECS_KEY_V) == ECS_BUTTON_PRESSED) {
 						char characters[256];
 						unsigned int character_count = system->m_application->CopyTextFromClipboard(characters, 256);
 
@@ -1965,7 +1966,7 @@ namespace ECSEngine {
 							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, input);
 						}
 					}
-					else if (keyboard->IsPressed(ECS_KEY_A)) {
+					else if (keyboard->GetAlphanumericKey(ECS_KEY_A) == ECS_BUTTON_PRESSED) {
 						input->current_selection = 0;
 						input->current_sprite_position = input->text->size;
 					}
@@ -2061,7 +2062,7 @@ namespace ECSEngine {
 					action_data->data = &input_data;
 					TextInputAction(action_data);
 
-					if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) && keyboard->IsPressed(ECS_KEY_C)) {
+					if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) && keyboard->GetAlphanumericKey(ECS_KEY_C) == ECS_BUTTON_PRESSED) {
 						system->m_application->WriteTextToClipboard(slider->characters.buffer);
 					}
 				}
@@ -3177,70 +3178,78 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerMenuRightClickData* data = (UIDrawerMenuRightClickData*)_data;
-			if (mouse->IsReleased(ECS_MOUSE_RIGHT) && IsPointInRectangle(mouse_position, position, scale)) {
-				if (data->action != nullptr) {
-					if (data->is_action_data_ptr) {
-						action_data->data = data->action_data_ptr;
+			if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
+				// We need to copy the state into a temporary allocator
+				*data = data->Copy(system->Allocator());
+			}
+			if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
+				if (IsPointInRectangle(mouse_position, position, scale)) {
+					if (data->action != nullptr) {
+						if (data->is_action_data_ptr) {
+							action_data->data = data->action_data_ptr;
+						}
+						else {
+							action_data->data = data->action_data;
+						}
+						data->action(action_data);
 					}
-					else {
-						action_data->data = data->action_data;
+
+					if (system->GetWindowFromName(data->state.left_characters) != -1) {
+						// mouse position -2.0f -2.0f ensures that it will not fall into an existing 
+						// window and avoid destroying the windows
+						system->HandleFocusedWindowCleanupGeneral({ -2.0f, -2.0f }, 0);
+						system->m_focused_window_data.ResetGeneralHandler();
+						// The window destruction handler and the release handlers are somewhere here
+						system->HandleFrameHandlers();
 					}
-					data->action(action_data);
+
+					unsigned int window_index = data->window_index;
+					UIDrawerDescriptor descriptor = system->GetDrawerDescriptor(window_index);
+					descriptor.do_not_initialize_viewport_sliders = true;
+					UIDrawer drawer = UIDrawer(
+						descriptor,
+						nullptr,
+						true
+					);
+
+					UIDrawConfig config;
+					drawer.Menu(UI_CONFIG_DO_CACHE | UI_CONFIG_MENU_COPY_STATES, config, data->name, &data->state);
+
+					system->SetNewFocusedDockspaceRegion(dockspace, border_index, dockspace_type);
+					system->SetNewFocusedDockspace(dockspace, dockspace_type);
+
+					// call the general handler if it wants to have destruction
+					system->HandleFocusedWindowCleanupGeneral(mouse_position, 0);
+
+					UIActionHandler handler = { MenuGeneral, nullptr, sizeof(UIDrawerMenuGeneralData), ECS_UI_DRAW_SYSTEM };
+					UIDrawerMenuGeneralData* general_data = (UIDrawerMenuGeneralData*)system->m_focused_window_data.ChangeGeneralHandler(position, scale, &handler, nullptr);
+					general_data->menu_initializer_index = 255;
+					general_data->initialize_from_right_click = true;
+					general_data->menu = (UIDrawerMenu*)drawer.GetResource(data->name);
+					general_data->is_opened_when_clicked = false;
+					Stream<char> window_name = system->GetWindowName(window_index);
+					if (window_name.size <= sizeof(general_data->parent_window_name)) {
+						window_name.CopyTo(general_data->parent_window_name);
+						general_data->parent_window_name_size = window_name.size;
+					}
+
+					action_data->data = general_data;
+					action_data->position.x = mouse_position.x;
+					// small padd in order to have IsPointInRectangle detect it
+					action_data->position.y = mouse_position.y - action_data->scale.y + 0.0001f;
+					MenuGeneral(action_data);
+
+					UIDrawerRightClickMenuSystemHandlerData release_data;
+
+					// Allocate the menu resource name - in order to make sure that it is stable
+					release_data.menu_resource_name = data->name.Copy(system->Allocator());
+					release_data.parent_window_name = system->m_windows[data->window_index].name.Copy(system->Allocator());
+					release_data.menu_window_name = data->state.left_characters.Copy(system->Allocator());
+
+					system->AddFrameHandler({ RightClickMenuReleaseResource, &release_data, sizeof(release_data) });
 				}
 
-				if (system->GetWindowFromName(data->state.left_characters) != -1) {
-					// mouse position -2.0f -2.0f ensures that it will not fall into an existing 
-					// window and avoid destroying the windows
-					system->HandleFocusedWindowCleanupGeneral({ -2.0f, -2.0f }, 0);
-					system->m_focused_window_data.ResetGeneralHandler();
-					// The window destruction handler and the release handlers are somewhere here
-					system->HandleFrameHandlers();
-				}
-
-				unsigned int window_index = data->window_index;
-				UIDrawerDescriptor descriptor = system->GetDrawerDescriptor(window_index);
-				descriptor.do_not_initialize_viewport_sliders = true;
-				UIDrawer drawer = UIDrawer(
-					descriptor,
-					nullptr,
-					true
-				);
-
-				UIDrawConfig config;
-				drawer.Menu(UI_CONFIG_DO_CACHE | UI_CONFIG_MENU_COPY_STATES, config, data->name, &data->state);
-
-				system->SetNewFocusedDockspaceRegion(dockspace, border_index, dockspace_type);
-				system->SetNewFocusedDockspace(dockspace, dockspace_type);
-
-				// call the general handler if it wants to have destruction
-				system->HandleFocusedWindowCleanupGeneral(mouse_position, 0);
-
-				UIActionHandler handler = { MenuGeneral, nullptr, sizeof(UIDrawerMenuGeneralData), ECS_UI_DRAW_SYSTEM };
-				UIDrawerMenuGeneralData* general_data = (UIDrawerMenuGeneralData*)system->m_focused_window_data.ChangeGeneralHandler(position, scale, &handler, nullptr);
-				general_data->menu_initializer_index = 255;
-				general_data->initialize_from_right_click = true;
-				general_data->menu = (UIDrawerMenu*)drawer.GetResource(data->name);
-				general_data->is_opened_when_clicked = false;
-				Stream<char> window_name = system->GetWindowName(window_index);
-				if (window_name.size <= sizeof(general_data->parent_window_name)) {
-					window_name.CopyTo(general_data->parent_window_name);
-					general_data->parent_window_name_size = window_name.size;
-				}
-
-				action_data->data = general_data;
-				action_data->position.x = mouse_position.x;
-				// small padd in order to have IsPointInRectangle detect it
-				action_data->position.y = mouse_position.y - action_data->scale.y + 0.0001f;
-				MenuGeneral(action_data);
-
-				UIDrawerRightClickMenuSystemHandlerData release_data;
-
-				// Allocate the menu resource name - in order to make sure that it is stable
-				release_data.menu_resource_name = data->name.Copy(system->Allocator());
-				release_data.parent_window_name = system->m_windows[data->window_index].name.Copy(system->Allocator());
-				release_data.menu_window_name = data->state.left_characters;
-
-				system->AddFrameHandler({ RightClickMenuReleaseResource, &release_data, sizeof(release_data) });
+				data->Deallocate(system->Allocator());
 			}
 		}
 

@@ -818,6 +818,15 @@ void SandboxApplyEntityChanges(
 	Stream<EntityChange> changes
 );
 
+void SetSandboxEntitySharedInstance(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Component component, 
+	SharedInstance instance,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 void ScaleSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 scale_delta);
 
 void TranslateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 delta);

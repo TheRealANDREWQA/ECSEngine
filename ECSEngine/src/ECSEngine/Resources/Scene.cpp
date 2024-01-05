@@ -165,15 +165,33 @@ namespace ECSEngine {
 			return false;
 		}
 
+
 		// Create the deserialize tables firstly
 		DeserializeEntityManagerComponentTable component_table;
-		CreateDeserializeEntityManagerComponentTableAddOverrides(component_table, load_data->reflection_manager, stack_allocator, load_data->unique_overrides);
+		CreateDeserializeEntityManagerComponentTableAddOverrides(
+			component_table, 
+			load_data->reflection_manager, 
+			stack_allocator, 
+			load_data->module_component_functions, 
+			load_data->unique_overrides
+		);
 
 		DeserializeEntityManagerSharedComponentTable shared_component_table;
-		CreateDeserializeEntityManagerSharedComponentTableAddOverrides(shared_component_table, load_data->reflection_manager, stack_allocator, load_data->shared_overrides);
+		CreateDeserializeEntityManagerSharedComponentTableAddOverrides(
+			shared_component_table, 
+			load_data->reflection_manager, 
+			stack_allocator, 
+			load_data->module_component_functions, 
+			load_data->shared_overrides
+		);
 
 		DeserializeEntityManagerGlobalComponentTable global_component_table;
-		CreateDeserializeEntityManagerGlobalComponentTableAddOverrides(global_component_table, load_data->reflection_manager, stack_allocator, load_data->global_overrides);
+		CreateDeserializeEntityManagerGlobalComponentTableAddOverrides(
+			global_component_table, 
+			load_data->reflection_manager, 
+			stack_allocator, 
+			load_data->global_overrides
+		);
 
 		DeserializeEntityManagerOptions deserialize_options;
 		deserialize_options.component_table = &component_table;
@@ -329,9 +347,9 @@ namespace ECSEngine {
 		// Do this only if the file exists at that location
 		ECS_STACK_CAPACITY_STREAM(wchar_t, renamed_file, 512);
 		if (ExistsFileOrFolder(save_data->file)) {
-			renamed_file.CopyOther(PathFilename(save_data->file));
+			renamed_file.CopyOther(save_data->file);
 			renamed_file.AddStream(L".temp");
-			if (!RenameFile(save_data->file, renamed_file)) {
+			if (!RenameFileAbsolute(save_data->file, renamed_file)) {
 				// If we fail, then return now.
 				return false;
 			}
@@ -342,8 +360,6 @@ namespace ECSEngine {
 				renamed_file.CopyOther(original_file);
 				renamed_file.AddStream(L".temp");
 
-				Stream<wchar_t> original_file_filename = PathFilename(original_file);
-
 				// Here we can skip checking if the renaming file exists or not,
 				// the calls will simply fail and we don't care about that
 				if (file_handle != -1) {
@@ -353,14 +369,14 @@ namespace ECSEngine {
 						RemoveFile(original_file);
 
 						// Try to rename the previous file to this name
-						RenameFile(renamed_file, original_file_filename);
+						RenameFile(renamed_file, original_file);
 					}
 					else {
 						RemoveFile(renamed_file);
 					}
 				}
 				else {
-					RenameFile(renamed_file, original_file_filename);
+					RenameFileAbsolute(renamed_file, original_file);
 				}
 			}
 

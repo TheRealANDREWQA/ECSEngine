@@ -110,3 +110,11 @@ void ModuleRegisterDebugDrawFunction(ECSEngine::ModuleRegisterDebugDrawFunctionD
 }
 
 #endif
+
+#if 0
+
+void ModuleRegisterComponentFunctionsFunction(ECSEngine::ModuleRegisterComponentFunctionsData* data) {
+
+}
+
+#endif

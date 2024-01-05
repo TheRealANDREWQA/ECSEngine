@@ -1183,36 +1183,6 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			// If the copy_states is set
-			size_t MenuCalculateStateMemory(const UIDrawerMenuState* state, bool copy_states);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			// If the copy_states is set
-			size_t MenuWalkStatesMemory(const UIDrawerMenuState* state, bool copy_states);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			void MenuSetStateBuffers(
-				UIDrawerMenuState* state,
-				uintptr_t& buffer,
-				CapacityStream<UIDrawerMenuWindow>* stream,
-				unsigned int submenu_index,
-				bool copy_states
-			);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			void MenuWalkSetStateBuffers(
-				UIDrawerMenuState* state,
-				uintptr_t& buffer,
-				CapacityStream<UIDrawerMenuWindow>* stream,
-				unsigned int submenu_index,
-				bool copy_states
-			);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
 			UIDrawerMenu* MenuInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, float2 scale, UIDrawerMenuState* menu_state);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1764,7 +1734,7 @@ namespace ECSEngine {
 			// If the override allocator is specified, it will use that allocator for the memory
 			UIDrawerMenuRightClickData PrepareRightClickMenuActionData(
 				Stream<char> name, 
-				UIDrawerMenuState* menu_state, 
+				const UIDrawerMenuState* menu_state, 
 				UIActionHandler custom_handler = { nullptr },
 				AllocatorPolymorphic override_allocator = { nullptr }
 			);
@@ -1772,7 +1742,7 @@ namespace ECSEngine {
 			// If the override allocator is specified, it will use that allocator for the memory
 			UIActionHandler PrepareRightClickMenuHandler(
 				Stream<char> name, 
-				UIDrawerMenuState* menu_state, 
+				const UIDrawerMenuState* menu_state, 
 				UIActionHandler custom_handler = { nullptr },
 				AllocatorPolymorphic override_allocator = { nullptr }
 			);

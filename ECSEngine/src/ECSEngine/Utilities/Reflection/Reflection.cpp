@@ -309,6 +309,9 @@ namespace ECSEngine {
 							last_copied_value = function_body_end + 1;
 						}
 					}
+					else {
+						last_copied_value = next_new_line.buffer;
+					}
 				}
 
 				Stream<char> search_next_function = { last_copied_value, PointerDifference(type_body.buffer + type_body.size, last_copied_value) };
@@ -924,15 +927,44 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void ReflectionManager::AddEnum(const ReflectionEnum* enum_, AllocatorPolymorphic allocator)
+		{
+			ReflectionEnum copied_enum = *enum_;
+			if (allocator.allocator != nullptr) {
+				copied_enum = enum_->Copy(allocator);
+			}
+			copied_enum.folder_hierarchy_index = -1;
+			InsertIntoDynamicTable(enum_definitions, Allocator(), copied_enum, ResourceIdentifier(copied_enum.name));
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::AddEnumsFrom(const ReflectionManager* other)
+		{
+			other->enum_definitions.ForEachConst([&](const ReflectionEnum& enum_, ResourceIdentifier identifier) {
+				AddEnum(&enum_, Allocator());
+			});
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::AddType(const ReflectionType* type, AllocatorPolymorphic allocator, bool coalesced)
 		{
-			ReflectionType copied_type;
-			const ReflectionType* final_type = type;
+			ReflectionType copied_type = *type;
 			if (allocator.allocator != nullptr) {
 				copied_type = coalesced ? type->CopyCoalesced(allocator) : type->Copy(allocator);
-				final_type = &copied_type;
 			}
-			InsertIntoDynamicTable(type_definitions, Allocator(), *final_type, ResourceIdentifier(final_type->name));
+			copied_type.folder_hierarchy_index = -1;
+			InsertIntoDynamicTable(type_definitions, Allocator(), copied_type, ResourceIdentifier(copied_type.name));
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::AddTypesFrom(const ReflectionManager* other)
+		{
+			other->type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
+				AddType(&type, Allocator());
+			});
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1138,6 +1170,11 @@ namespace ECSEngine {
 							}
 
 							// Remove the field
+							data_type->fields.Remove(field_index);
+							field_index--;
+						}
+						else if (data_type->fields[field_index].definition.size == 0) {
+							// Remove those unneeded fields
 							data_type->fields.Remove(field_index);
 							field_index--;
 						}
@@ -1572,6 +1609,15 @@ namespace ECSEngine {
 			folders[index] = { StringCopy(folders.allocator, root), nullptr };
 			folders[index].added_types.Initialize(Allocator(), 0);
 			return index;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::CopyEnums(ReflectionManager* other) const
+		{
+			HashTableCopy<true, false>(enum_definitions, other->enum_definitions, other->Allocator(), [](const ReflectionEnum* enum_, ResourceIdentifier identifier) {
+				return enum_->name;
+			});
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -2519,13 +2565,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			// Now go through all padding bytes and set them to 0
-			for (size_t field_index = 0; field_index < type->fields.size - 1; field_index++) {
-				size_t current_offset = type->fields[field_index].info.pointer_offset;
-				size_t current_size = type->fields[field_index].info.byte_size;
-				size_t next_offset = type->fields[field_index + 1].info.pointer_offset;
-				size_t difference = next_offset - current_offset - current_size;
-				if (difference > 0) {
-					memset(OffsetPointer(data, current_offset + current_size), 0, difference);
+			// Take into consideration empty types, just to make sure
+			if (type->fields.size > 0) {
+				for (size_t field_index = 0; field_index < type->fields.size - 1; field_index++) {
+					size_t current_offset = type->fields[field_index].info.pointer_offset;
+					size_t current_size = type->fields[field_index].info.byte_size;
+					size_t next_offset = type->fields[field_index + 1].info.pointer_offset;
+					size_t difference = next_offset - current_offset - current_size;
+					if (difference > 0) {
+						memset(OffsetPointer(data, current_offset + current_size), 0, difference);
+					}
 				}
 			}
 		}

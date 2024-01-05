@@ -1,8 +1,10 @@
+// ECS_REFLECT
 #pragma once
 #include "../Core.h"
 #include <stdint.h>
 #include <malloc.h>
 #include "../Containers/Stream.h"
+#include "Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {
 
@@ -30,7 +32,7 @@ namespace ECSEngine {
 		unsigned short milliseconds;
 	};
 
-	enum ECS_AXIS : unsigned char {
+	enum ECS_REFLECT ECS_AXIS : unsigned char {
 		ECS_AXIS_X,
 		ECS_AXIS_Y,
 		ECS_AXIS_Z,

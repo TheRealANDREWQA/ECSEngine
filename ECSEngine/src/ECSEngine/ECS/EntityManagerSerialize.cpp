@@ -35,12 +35,7 @@ namespace ECSEngine {
 		unsigned int reserved[8];
 	};
 
-	// The allocator size and the buffer offsets
-	struct ComponentFixup {
-		size_t allocator_size;
-		ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
-		unsigned short component_buffer_count;
-	};
+	typedef ComponentFunctions ComponentFixup;
 
 	// We are not storing the allocator size nor the buffer offsets because
 	// the type could have changed since the serialization. Push the responsability
@@ -1109,9 +1104,8 @@ namespace ECSEngine {
 				entity_manager->RegisterComponentCommit(
 					component_pairs[index].component,
 					component_fixup->component_byte_size,
-					component_fixup->allocator_size,
 					cached_component_infos[index].info->name,
-					{ component_fixup->component_buffers, component_fixup->component_buffer_count }
+					&component_fixup->component_functions
 				);
 			}
 		}
@@ -1151,9 +1145,10 @@ namespace ECSEngine {
 				entity_manager->RegisterSharedComponentCommit(
 					shared_component_pairs[index].component,
 					component_fixup->component_byte_size,
-					component_fixup->allocator_size,
 					cached_shared_infos[index].info->name,
-					{ component_fixup->component_buffers, component_fixup->component_buffer_count }
+					&component_fixup->component_functions,
+					component_fixup->compare_function,
+					component_fixup->compare_function_data
 				);
 			}
 		}
@@ -1195,8 +1190,8 @@ namespace ECSEngine {
 					cached_global_infos[index].found_at,
 					component_fixup->component_byte_size,
 					dummy_data.buffer,
-					component_fixup->allocator_size,
-					cached_global_infos[index].info->name
+					cached_global_infos[index].info->name,
+					component_fixup->component_functions.allocator_size
 				);
 			}
 		}
@@ -1568,11 +1563,11 @@ namespace ECSEngine {
 #pragma region Remap components
 
 		bool* component_exists = (bool*)entity_manager->m_memory_manager->Allocate(sizeof(bool) * entity_manager->m_unique_components.size);
-		MemoryArena** component_arena_pointers = (MemoryArena**)entity_manager->m_memory_manager->Allocate(sizeof(MemoryArena*) * entity_manager->m_unique_components.size);
+		ComponentInfo* before_remapping_component_infos = (ComponentInfo*)entity_manager->m_memory_manager->Allocate(sizeof(ComponentInfo) * entity_manager->m_unique_components.size);
 
 		/*
 			AWESOME BUG. So having any instance of a VectorComponentSignature on the "stack" (basically in the registers)
-			will result in a failure when using longjmp to exit out of the function. Why that is I have no clue. There is
+			will result in a failure when using longjmp to exit out of the function. Why that is, I have no clue. There is
 			no where an explanation to this. A curious observation that I made is that when optimizations are disabled the
 			compiler writes the registers into addresses on the stack to be easily referenced by the debugger. In some cases
 			turning on optimizations will result in eliding these writes and longjmp proceeds successfully. So it might be related
@@ -1585,7 +1580,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < unique_component_count; index++) {
 			Component component = { (short)index };
 			if (entity_manager->ExistsComponent(component)) {
-				component_arena_pointers[index] = entity_manager->GetComponentAllocator(component);
+				before_remapping_component_infos[index] = entity_manager->m_unique_components[index];
 				component_exists[index] = true;
 			}
 			else {
@@ -1598,44 +1593,14 @@ namespace ECSEngine {
 				Component current_component = { (short)index };
 				auto info = search_matching_component_unique(current_component);
 				if (info.found_at != current_component) {
-					// Register the component with allocator size of 0
-					// Since we are going to redirect the previous allocator
-					entity_manager->RegisterComponentCommit(
-						info.found_at,
-						info.info->component_fixup.component_byte_size,
-						0,
-						info.info->name,
-						{ info.info->component_fixup.component_buffers, info.info->component_fixup.component_buffer_count }
-					);
-					entity_manager->m_unique_components[info.found_at].allocator = component_arena_pointers[index];
-
-					// Make the previous component unallocated such that when it is unregistered
-					// It won't deallocate it
-					entity_manager->m_unique_components[index].allocator = nullptr;
-
-					size_t _component_vector[sizeof(VectorComponentSignature) / sizeof(size_t)];
-					VectorComponentSignature* component_vector = (VectorComponentSignature*)_component_vector;
-					component_vector->ConvertComponents({ &current_component, 1 });
-					unsigned char inside_archetype_index;
-
-					// Update the archetypes as well
-					for (size_t subindex = 0; subindex < entity_manager->m_archetypes.size; subindex++) {
-						GetEntityManagerUniqueVectorSignaturePtr(old_archetype_signatures, subindex)->Find(*component_vector, &inside_archetype_index);
-						if (inside_archetype_index != UCHAR_MAX) {
-							// Replace the component
-							entity_manager->m_archetypes[subindex].m_unique_components.indices[inside_archetype_index].value = info.found_at;
-							entity_manager->GetArchetypeUniqueComponentsPtr(subindex)->ConvertComponents(entity_manager->m_archetypes[subindex].m_unique_components);
-						}
-					}
-
-					entity_manager->UnregisterComponentCommit(current_component);
+					entity_manager->ChangeComponentIndex(current_component, info.found_at);
 				}
 			}
 		}
 
 		// Deallocate the allocations
 		entity_manager->m_memory_manager->Deallocate(component_exists);
-		entity_manager->m_memory_manager->Deallocate(component_arena_pointers);
+		entity_manager->m_memory_manager->Deallocate(before_remapping_component_infos);
 
 #pragma endregion
 
@@ -1665,7 +1630,6 @@ namespace ECSEngine {
 #pragma region Remap Shared Components
 
 		bool* shared_component_exists = (bool*)entity_manager->m_memory_manager->Allocate(sizeof(bool) * entity_manager->m_shared_components.size);
-		MemoryArena** shared_component_arena_pointers = (MemoryArena**)entity_manager->m_memory_manager->Allocate(sizeof(MemoryArena*) * entity_manager->m_shared_components.size);
 
 		// Now determine if a component has changed the ID and broadcast that change to the archetypes as well
 		// We need to store this component count since new components might be remapped and change the size
@@ -1673,7 +1637,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < shared_component_count; index++) {
 			Component component = { (short)index };
 			if (entity_manager->ExistsSharedComponent(component)) {
-				shared_component_arena_pointers[index] = entity_manager->GetSharedComponentAllocator(component);
+				before_remapping_component_infos[index] = entity_manager->m_shared_components[index].info;
 				shared_component_exists[index] = true;
 			}
 			else {
@@ -1689,48 +1653,13 @@ namespace ECSEngine {
 				ECS_ASSERT(info.found_at.value != -1);
 				short new_id = info.found_at;
 				if (new_id != index) {
-					// Register this new component - set the allocator size to 0 such that we can set it later on
-					entity_manager->RegisterSharedComponentCommit(
-						new_id,
-						info.info->component_fixup.component_byte_size,
-						0,
-						info.info->name,
-						{ info.info->component_fixup.component_buffers, info.info->component_fixup.component_buffer_count }
-					);
-
-					// Also copy the instances and named instances
-					entity_manager->m_shared_components[new_id].info.allocator = shared_component_arena_pointers[index];
-					entity_manager->m_shared_components[new_id].instances = entity_manager->m_shared_components[index].instances;
-					entity_manager->m_shared_components[new_id].named_instances = entity_manager->m_shared_components[index].named_instances;
-					// And reset them on the previous component such that when we call unregister the data already stored
-					// Won't be deallocated. The same applies to the allocator
-					entity_manager->m_shared_components[index].instances.Initialize(entity_manager->m_shared_components[index].instances.allocator, 0);
-					entity_manager->m_shared_components[index].named_instances.Clear();
-					entity_manager->m_shared_components[index].info.allocator = nullptr;
-
-					size_t _component_vector[sizeof(VectorComponentSignature) / sizeof(size_t)];
-					VectorComponentSignature* component_vector = (VectorComponentSignature*)_component_vector;
-					component_vector->ConvertComponents({ &current_component, 1 });
-					unsigned char inside_archetype_index;
-
-					// Update the archetypes as well
-					for (size_t subindex = 0; subindex < entity_manager->m_archetypes.size; subindex++) {
-						GetEntityManagerSharedVectorSignaturePtr(old_archetype_signatures, subindex)->Find(*component_vector, &inside_archetype_index);
-						if (inside_archetype_index != UCHAR_MAX) {
-							// Replace the component
-							entity_manager->m_archetypes[subindex].m_shared_components.indices[inside_archetype_index].value = new_id;
-							entity_manager->GetArchetypeSharedComponentsPtr(subindex)->ConvertComponents(entity_manager->m_archetypes[subindex].m_shared_components);
-						}
-					}
-
-					entity_manager->UnregisterSharedComponentCommit(current_component);
+					entity_manager->ChangeSharedComponentIndex(index, new_id);
 				}
 			}
 		}
 
 		// Make the deallocations
 		entity_manager->m_memory_manager->Deallocate(shared_component_exists);
-		entity_manager->m_memory_manager->Deallocate(shared_component_arena_pointers);
 		entity_manager->m_memory_manager->Deallocate(old_archetype_signatures);
 
 #pragma endregion
@@ -2750,6 +2679,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
 		Stream<ModuleLinkComponentTarget> module_links,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		OverrideType* overrides,
 		void* deserialize_function,
 		void* deserialize_header_function
@@ -2790,13 +2720,17 @@ namespace ECSEngine {
 			info.extra_data = data;
 			info.name = target_type->name;
 			info.component_fixup.component_byte_size = Reflection::GetReflectionTypeByteSize(target_type);
-			double _allocator_size = target_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-			info.component_fixup.allocator_size = _allocator_size != DBL_MAX ? (size_t)_allocator_size : 0;
-			if (info.component_fixup.allocator_size > 0) {
-				// Look for the buffers
-				CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
-				GetReflectionTypeRuntimeBuffers(target_type, component_buffers);
-				info.component_fixup.component_buffer_count = component_buffers.size;
+			
+			// Check to see if we find a module defined fixup. If we do not, then auto create one
+			size_t existing_fixup_index = module_component_functions.Find(target, [](const ModuleComponentFunctions& functions) {
+				return functions.component_name;
+			});
+			if (existing_fixup_index == -1) {
+				info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(target_type, allocator);
+			}
+			else {
+				module_component_functions[existing_fixup_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
+				module_component_functions[existing_fixup_index].SetCompareFunctionTo(&info.component_fixup.compare_function, &info.component_fixup.compare_function_data);
 			}
 
 			overrides[index] = info;
@@ -2808,6 +2742,7 @@ namespace ECSEngine {
 		Table& table,
 		const Reflection::ReflectionManager* reflection_manager,
 		AllocatorPolymorphic allocator,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		Stream<DeserializeInfo> overrides,
 		Component* component_overrides,
 		Stream<unsigned int> hierarchy_indices,
@@ -2828,16 +2763,22 @@ namespace ECSEngine {
 				info.extra_data = data;
 				info.name = type->name;
 				info.component_fixup.component_byte_size = Reflection::GetReflectionTypeByteSize(type);
-				double _allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-				info.component_fixup.allocator_size = _allocator_size != DBL_MAX ? (size_t)_allocator_size : 0;
-				if (info.component_fixup.allocator_size > 0) {
-					// Look for the buffers
-					CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
-					GetReflectionTypeRuntimeBuffers(type, component_buffers);
-					info.component_fixup.component_buffer_count = component_buffers.size;
-				}
-				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
+				size_t existing_component_functions_index = module_component_functions.Find(type->name, [](const ModuleComponentFunctions& entry) {
+					return entry.component_name;
+				});
+				if (existing_component_functions_index == -1) {
+					info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(type, allocator);
+				}
+				else {
+					module_component_functions[existing_component_functions_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
+					module_component_functions[existing_component_functions_index].SetCompareFunctionTo(
+						&info.component_fixup.compare_function, 
+						&info.component_fixup.compare_function_data
+					);
+				}
+
+				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 				ECS_ASSERT(!table.Insert(info, component));
 			}
 		});
@@ -2849,6 +2790,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
 		Stream<ModuleLinkComponentTarget> module_links,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		DeserializeEntityManagerComponentInfo* overrides
 	)
 	{
@@ -2858,6 +2800,7 @@ namespace ECSEngine {
 			allocator,
 			link_types,
 			module_links,
+			module_component_functions,
 			overrides,
 			ReflectionDeserializeEntityManagerLinkComponent,
 			ReflectionDeserializeEntityManagerHeaderLinkComponent
@@ -2868,6 +2811,7 @@ namespace ECSEngine {
 		DeserializeEntityManagerComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager, 
 		AllocatorPolymorphic allocator,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		Stream<DeserializeEntityManagerComponentInfo> overrides,
 		Component* override_components,
 		Stream<unsigned int> hierarchy_indices
@@ -2877,6 +2821,7 @@ namespace ECSEngine {
 			table,
 			reflection_manager,
 			allocator,
+			module_component_functions,
 			overrides,
 			override_components,
 			hierarchy_indices,
@@ -2905,6 +2850,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
 		Stream<ModuleLinkComponentTarget> module_links,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		DeserializeEntityManagerSharedComponentInfo* overrides
 	)
 	{
@@ -2914,6 +2860,7 @@ namespace ECSEngine {
 			allocator,
 			link_types,
 			module_links,
+			module_component_functions,
 			overrides,
 			ReflectionDeserializeEntityManagerLinkSharedComponent,
 			ReflectionDeserializeEntityManagerHeaderLinkSharedComponent
@@ -2924,6 +2871,7 @@ namespace ECSEngine {
 		DeserializeEntityManagerSharedComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager, 
 		AllocatorPolymorphic allocator,
+		Stream<ModuleComponentFunctions> module_component_functions,
 		Stream<DeserializeEntityManagerSharedComponentInfo> overrides,
 		Component* override_components,
 		Stream<unsigned int> hierarchy_indices
@@ -2933,6 +2881,7 @@ namespace ECSEngine {
 			table,
 			reflection_manager,
 			allocator,
+			module_component_functions,
 			overrides,
 			override_components,
 			hierarchy_indices,
@@ -2959,8 +2908,8 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const AssetDatabase* database, 
 		AllocatorPolymorphic allocator, 
-		Stream<const Reflection::ReflectionType*> link_types, 
-		Stream<ModuleLinkComponentTarget> module_links, 
+		Stream<const Reflection::ReflectionType*> link_types,
+		Stream<ModuleLinkComponentTarget> module_links,
 		DeserializeEntityManagerGlobalComponentInfo* overrides
 	)
 	{
@@ -2970,6 +2919,7 @@ namespace ECSEngine {
 			allocator,
 			link_types,
 			module_links,
+			{},
 			overrides,
 			ReflectionDeserializeEntityManagerLinkComponent,
 			ReflectionDeserializeEntityManagerHeaderLinkComponent
@@ -2989,6 +2939,7 @@ namespace ECSEngine {
 			table,
 			reflection_manager,
 			allocator,
+			{},
 			overrides,
 			override_components,
 			hierarchy_indices,

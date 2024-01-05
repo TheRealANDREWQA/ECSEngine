@@ -1266,6 +1266,42 @@ EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, u
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+ModuleComponentBuildFunction GetModuleComponentResetFunction(
+	const EditorState* editor_state, 
+	unsigned int index, 
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	Stream<char> component_name
+)
+{
+	if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
+		configuration = GetModuleLoadedConfiguration(editor_state, index);
+		if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
+			return nullptr;
+		}
+	}
+
+	const EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
+	return GetModuleResetFunction(&info->ecs_module, component_name);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+ModuleComponentBuildFunction GetModuleComponentResetFunction(
+	const EditorState* editor_state,
+	Stream<char> component_name
+) {
+	unsigned int module_count = editor_state->project_modules->size;
+	for (unsigned int index = 0; index < module_count; index++) {
+		ModuleComponentBuildFunction function = GetModuleComponentResetFunction(editor_state, index, EDITOR_MODULE_CONFIGURATION_COUNT, component_name);
+		if (function != nullptr) {
+			return function;
+		}
+	}
+	return nullptr;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 void GetModuleStem(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path)
 {
 	module_path.AddStream(library_name);

@@ -271,6 +271,7 @@
     <ClInclude Include="src\ECSEngine\Math\AABB.h" />
     <ClInclude Include="src\ECSEngine\Math\BaseVector.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.h" />
+    <ClInclude Include="src\ECSEngine\ECS\ComponentFunctions.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
