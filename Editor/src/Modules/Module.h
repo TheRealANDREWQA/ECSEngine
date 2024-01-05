@@ -154,6 +154,22 @@ EditorModuleInfo* GetModuleInfo(const EditorState* editor_state, unsigned int in
 
 EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
+// If the configuration is COUNT, it will use the most suitable loaded module
+// Returns nullptr if there is no such function
+ModuleComponentBuildFunction GetModuleComponentResetFunction(
+	const EditorState* editor_state, 
+	unsigned int index, 
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	Stream<char> component_name
+);
+
+// Convenience function - it will search through all modules and return the first found.
+// Returns nullptr if there is no such function
+ModuleComponentBuildFunction GetModuleComponentResetFunction(
+	const EditorState* editor_state,
+	Stream<char> component_name
+);
+
 void GetModuleStem(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);
 
 void GetModuleFilename(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);

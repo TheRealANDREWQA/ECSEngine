@@ -108,29 +108,7 @@ namespace ECSEngine {
 		uint2 indices;
 	};
 
-	struct DeferredCreateComponent {
-		Component component;
-		unsigned int size;
-		size_t allocator_size;
-		Stream<char> name;
-		ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
-		unsigned short component_buffers_count;
-	};
-
 	struct DeferredDestroyComponent {
-		Component component;
-	};
-
-	struct DeferredCreateSharedComponent {
-		Component component;
-		unsigned int size;
-		size_t allocator_size;
-		Stream<char> name;
-		ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
-		unsigned short component_buffers_count;
-	};
-
-	struct DeferredDestroySharedComponent {
 		Component component;
 	};
 
@@ -244,10 +222,6 @@ namespace ECSEngine {
 		DEFERRED_DESTROY_ARCHETYPE,
 		DEFERRED_CREATE_ARCHETYPE_BASE,
 		DEFERRED_DESTROY_ARCHETYPE_BASE,
-		DEFERRED_CREATE_COMPONENT,
-		DEFERRED_DESTROY_COMPONENT,
-		DEFERRED_CREATE_SHARED_COMPONENT,
-		DEFERRED_DESTROY_SHARED_COMPONENT,
 		DEFERRED_CREATE_SHARED_INSTANCE,
 		DEFERRED_CREATE_NAMED_SHARED_INSTANCE,
 		DEFERRED_BIND_NAMED_SHARED_INSTANCE,
@@ -992,11 +966,11 @@ namespace ECSEngine {
 
 		if (data->copy_buffers) {
 			Archetype* archetype = manager->GetArchetype(additional_data.archetype_indices.x);
-			if (archetype->m_unique_components_to_deallocate_count > 0) {
-				for (unsigned char deallocate_index = 0; deallocate_index < archetype->m_unique_components_to_deallocate_count; deallocate_index++) {
+			if (archetype->m_user_defined_components.count > 0) {
+				for (unsigned char deallocate_index = 0; deallocate_index < archetype->m_user_defined_components.count; deallocate_index++) {
 					for (unsigned int index = 0; index < data->count; index++) {
-						void* target_component = base_archetype->GetComponentByIndex(additional_data.copy_position + index, archetype->m_unique_components_to_deallocate[deallocate_index]);
-						archetype->CopyEntityBuffers(additional_data.copy_position + index, additional_data.archetype_indices.y, deallocate_index, target_component);
+						void* target_component = base_archetype->GetComponentByIndex(additional_data.copy_position + index, archetype->m_user_defined_components[deallocate_index]);
+						archetype->CallEntityCopy(additional_data.copy_position + index, additional_data.archetype_indices.y, deallocate_index, target_component, false);
 					}
 				}
 			}
@@ -1116,10 +1090,10 @@ namespace ECSEngine {
 		for (size_t index = 0; index < data->entities.size; index++) {
 			EntityInfo info = manager->GetEntityInfo(data->entities[index]);
 			ArchetypeBase* base_archetype = manager->GetBase(info.main_archetype, info.base_archetype);
-			const Archetype* main_archetype = manager->GetArchetype(info.main_archetype);
+			Archetype* main_archetype = manager->GetArchetype(info.main_archetype);
 			
 			// Dealocate any buffers this entity might have
-			main_archetype->DeallocateEntityBuffers(info);
+			main_archetype->CallEntityDeallocate(info);
 
 			// Remove the entities from the archetype
 			base_archetype->RemoveEntity(info.stream_index, manager->m_entity_pool);
@@ -1373,8 +1347,8 @@ namespace ECSEngine {
 
 		Archetype* archetype = manager->GetArchetype(archetype_index);
 		// If it has components with buffers, those need to be deallocated manually
-		if (archetype->m_unique_components_to_deallocate_count > 0) {
-			archetype->DeallocateEntityBuffers();
+		if (archetype->m_user_defined_components.count > 0) {
+			archetype->CallEntityDeallocate();
 		}
 
 		EntityPool* pool = manager->m_entity_pool;
@@ -1493,174 +1467,6 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region Create Component
-
-	static void CommitCreateComponent(EntityManager* manager, void* _data, void* _additional_data) {
-		DeferredCreateComponent* data = (DeferredCreateComponent*)_data;
-
-		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 16);
-		Stream<char> component_name = data->name;
-		if (data->name.size == 0) {
-			ConvertIntToChars(component_name_storage, data->component.value);
-			component_name = component_name_storage;
-		}
-
-		ECS_CRASH_CONDITION(
-			data->component_buffers_count <= ECS_COMPONENT_INFO_MAX_BUFFER_COUNT,
-			"EntityManager: Trying to create component {#} with too many buffers - max allowed {#}",
-			component_name,
-			ECS_COMPONENT_INFO_MAX_BUFFER_COUNT
-		);
-
-		// Crash if the allocator is specified but the buffer offsets are not
-		ECS_CRASH_CONDITION(
-			data->allocator_size == 0 || data->component_buffers_count > 0, 
-			"EntityManager: Trying to create component {#} with an allocator but without buffer offsets.", 
-			component_name
-		);
-
-		if (manager->m_unique_components.size <= data->component.value) {
-			size_t old_capacity = manager->m_unique_components.size;
-			void* allocation = manager->m_small_memory_manager.Allocate(sizeof(ComponentInfo) * (data->component.value + 1));
-			manager->m_unique_components.CopyTo(allocation);
-			manager->m_small_memory_manager.Deallocate(manager->m_unique_components.buffer);
-
-			manager->m_unique_components.InitializeFromBuffer(allocation, data->component.value + 1);
-			for (size_t index = old_capacity; index < manager->m_unique_components.size; index++) {
-				manager->m_unique_components[index].size = -1;
-			}
-
-			// Update the component info reference to all archetypes and base archetypes
-			for (unsigned int main_index = 0; main_index < manager->m_archetypes.size; main_index++) {
-				Archetype* archetype = manager->GetArchetype(main_index);
-				archetype->m_unique_infos = manager->m_unique_components.buffer;
-				unsigned int base_count = archetype->GetBaseCount();
-				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-					ArchetypeBase* base = archetype->GetBase(base_index);
-					base->m_infos = manager->m_unique_components.buffer;
-				}
-			}
-		}
-		// If the size is different from -1, it means there is a component actually allocated to this slot
-		ECS_CRASH_CONDITION(!manager->ExistsComponent(data->component), "EntityManager: Creating component {#} at position {#} failed. It already exists.", 
-			component_name, data->component.value);
-		manager->m_unique_components[data->component.value].size = data->size;
-		manager->m_unique_components[data->component.value].component_buffers_count = data->component_buffers_count;
-		manager->m_unique_components[data->component.value].name = StringCopy(manager->SmallAllocator(), component_name);
-		memcpy(manager->m_unique_components[data->component.value].component_buffers, data->component_buffers, sizeof(ComponentBuffer) * data->component_buffers_count);
-		CreateAllocatorForComponent(manager, manager->m_unique_components[data->component.value], data->allocator_size);
-	}
-
-#pragma endregion
-
-#pragma region Destroy Component
-
-	static void CommitDestroyComponent(EntityManager* manager, void* _data, void* _additional_data) {
-		DeferredDestroyComponent* data = (DeferredDestroyComponent*)_data;
-
-		ECS_CRASH_CONDITION(data->component.value < manager->m_unique_components.size, "EntityManager: Incorrect component index {#} when trying to delete it.", data->component.value);
-		// -1 Signals it's empty - a component was never associated to this slot
-		ECS_CRASH_CONDITION(manager->ExistsComponent(data->component), "EntityManager: Trying to destroy component {#} when it doesn't exist.", 
-			data->component.value);
-
-		// If it has an allocator, deallocate it
-		if (manager->m_unique_components[data->component.value].allocator != nullptr) {
-			manager->m_memory_manager->Deallocate(manager->m_unique_components[data->component.value].allocator);
-			manager->m_unique_components[data->component.value].allocator = nullptr;
-		}
-
-		manager->m_small_memory_manager.Deallocate(manager->m_unique_components[data->component.value].name.buffer);
-		manager->m_unique_components[data->component.value].size = -1;
-	}
-
-#pragma endregion
-
-#pragma region Create shared component
-
-	static void CommitCreateSharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
-		DeferredCreateSharedComponent* data = (DeferredCreateSharedComponent*)_data;
-
-		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 64);
-		Stream<char> component_name = data->name;
-		if (data->name.size == 0) {
-			ConvertIntToChars(component_name_storage, data->component.value);
-			component_name = component_name_storage;
-		}
-
-		ECS_CRASH_CONDITION(
-			data->component_buffers_count <= ECS_COMPONENT_INFO_MAX_BUFFER_COUNT,
-			"EntityManager: Trying to create shared component {#} with too many buffers - max allowed {#}",
-			component_name,
-			ECS_COMPONENT_INFO_MAX_BUFFER_COUNT
-		);
-
-		// Crash if the allocator size is specified but the buffer offsets are not
-		ECS_CRASH_CONDITION(data->allocator_size == 0 || data->component_buffers_count > 0,
-			"EntityManager: Trying to create shared component {#} with an allocator but without buffer_offsets.", component_name);
-
-		if (manager->m_shared_components.size <= data->component.value) {
-			size_t old_capacity = manager->m_shared_components.size;
-			void* allocation = manager->m_small_memory_manager.Allocate(sizeof(SharedComponentInfo) * (data->component.value + 1));
-			manager->m_shared_components.CopyTo(allocation);
-			manager->m_small_memory_manager.Deallocate(manager->m_shared_components.buffer);
-
-			manager->m_shared_components.InitializeFromBuffer(allocation, data->component.value + 1);
-			for (size_t index = old_capacity; index < manager->m_shared_components.size; index++) {
-				manager->m_shared_components[index].info.size = -1;
-			}
-		}
-
-
-		// If the size is different from -1, it means there is a component actually allocated to this slot
-		ECS_CRASH_CONDITION(manager->m_shared_components[data->component.value].info.size == -1, 
-			"EntityManager: Trying to create shared component {#} when it already exists {#} at that slot.", component_name, manager->GetSharedComponentName(data->component));
-		manager->m_shared_components[data->component.value].info.size = data->size;
-		manager->m_shared_components[data->component.value].info.component_buffers_count = data->component_buffers_count;
-		memcpy(manager->m_shared_components[data->component.value].info.component_buffers, data->component_buffers, sizeof(ComponentBuffer) * data->component_buffers_count);
-		manager->m_shared_components[data->component.value].instances.Initialize(manager->SmallAllocator(), 0);
-		manager->m_shared_components[data->component.value].named_instances.Initialize(manager->SmallAllocator(), 0);
-		manager->m_shared_components[data->component.value].info.name = StringCopy(manager->SmallAllocator(), component_name);
-		
-		CreateAllocatorForComponent(manager, manager->m_shared_components[data->component.value].info, data->allocator_size);
-		// The named instances table should start with size 0 and only create it when actually needing the tags
-	}
-
-#pragma endregion
-
-#pragma region Destroy shared component
-
-	static void CommitDestroySharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
-		DeferredDestroySharedComponent* data = (DeferredDestroySharedComponent*)_data;
-
-		ECS_CRASH_CONDITION(data->component.value < manager->m_shared_components.size, "EntityManager: Invalid shared component {#} when trying to destroy it.", data->component.value);
-		// -1 Signals it's empty - a component was never associated to this slot
-		ECS_CRASH_CONDITION(manager->ExistsSharedComponent(data->component), "EntityManager: Trying to destroy shared component {#} when it doesn't exist.", 
-			data->component.value);
-
-		// If it has an allocator deallocate it
-		MemoryArena** allocator = &manager->m_shared_components[data->component.value].info.allocator;
-		if (*allocator != nullptr) {
-			manager->m_memory_manager->Deallocate(*allocator);
-			*allocator = nullptr;
-		}
-
-		// Deallocate every instance as well
-		manager->m_shared_components[data->component.value].instances.stream.ForEachConst([&](void* data) {
-			Deallocate(manager->SmallAllocator(), data);
-		});
-
-		manager->m_shared_components[data->component.value].instances.FreeBuffer();
-		manager->m_shared_components[data->component.value].info.size = -1;
-		manager->m_small_memory_manager.Deallocate(manager->m_shared_components[data->component.value].info.name.buffer);
-		const void* table_buffer = manager->m_shared_components[data->component.value].named_instances.GetAllocatedBuffer();
-		if (table_buffer != nullptr && manager->m_shared_components[data->component.value].named_instances.GetCapacity() > 0) {
-			// Deallocate the table
-			manager->m_small_memory_manager.Deallocate(table_buffer);
-		}
-	}
-
-#pragma endregion
-
 #pragma region Create shared instance
 
 	static void CommitCreateSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
@@ -1680,13 +1486,8 @@ namespace ECSEngine {
 			manager->GetSharedComponentName(data->component));
 		
 		if (data->copy_buffers) {
-			MemoryArena* arena = manager->GetSharedComponentAllocator(data->component);
-			if (arena != nullptr) {
-				const ComponentInfo* info = &manager->m_shared_components[data->component.value].info;
-				for (unsigned char buffer_index = 0; buffer_index < info->component_buffers_count; buffer_index++) {
-					ComponentBufferCopy(info->component_buffers[buffer_index], arena, data->data, allocation);
-				}
-			}
+			// Call the copy function
+			manager->m_shared_components[data->component.value].info.TryCallCopyFunction(allocation, data->data, false);
 		}
 
 		// Assert that the maximal amount of shared instance is not reached
@@ -1703,8 +1504,9 @@ namespace ECSEngine {
 	static void CommitCreateNamedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateNamedSharedInstance* data = (DeferredCreateNamedSharedInstance*)_data;
 
+		DeferredCreateSharedInstance create_shared_instance = { data->component, data->copy_buffers, data->data };
 		SharedInstance instance;
-		CommitCreateSharedInstance(manager, data, &instance);
+		CommitCreateSharedInstance(manager, &create_shared_instance, &instance);
 		// Allocate memory for the name
 		Stream<char> allocated_identifier;
 		allocated_identifier.InitializeAndCopy(manager->SmallAllocator(), data->identifier);
@@ -1719,7 +1521,8 @@ namespace ECSEngine {
 			"Entity Manager: Trying to bind a named shared instance for component which doesn't exist", manager->GetSharedComponentName(data->component));
 
 		ECS_CRASH_CONDITION(manager->ExistsSharedInstanceOnly(data->component, data->instance), 
-			"EntityManager: Trying to bind named shared instance {#} for component {#} at slot {#} which doesn't exist.", data->identifier, manager->GetSharedComponentName(data->component), data->instance.value);
+			"EntityManager: Trying to bind named shared instance {#} for component {#} at slot {#} which doesn't exist.", data->identifier,
+			manager->GetSharedComponentName(data->component), data->instance.value);
 		
 		Stream<char> allocated_identifier;
 		allocated_identifier.InitializeAndCopy(manager->SmallAllocator(), data->identifier);
@@ -1744,13 +1547,7 @@ namespace ECSEngine {
 		void* instance_data = manager->m_shared_components[data->component.value].instances[data->instance.value];
 
 		// We also need to deallocate the buffers, if any
-		const ComponentInfo* component_info = &manager->m_shared_components[data->component.value].info;
-		if (component_info->component_buffers_count > 0) {
-			for (unsigned short index = 0; index < component_info->component_buffers_count; index++) {
-				ComponentBufferDeallocate(component_info->component_buffers[index], component_info->allocator, instance_data);
-			}
-		}
-
+		manager->m_shared_components[data->component.value].info.TryCallDeallocateFunction(instance_data);
 		Deallocate(manager->SmallAllocator(), instance_data);
 		manager->m_shared_components[data->component.value].instances.Remove(data->instance.value);
 	}
@@ -2080,10 +1877,6 @@ namespace ECSEngine {
 		CommitDestroyArchetype<true>,
 		CommitCreateArchetypeBase,
 		CommitDestroyArchetypeBase<true>,
-		CommitCreateComponent,
-		CommitDestroyComponent,
-		CommitCreateSharedComponent,
-		CommitDestroySharedComponent,
 		CommitCreateSharedInstance,
 		CommitCreateNamedSharedInstance,
 		CommitBindNamedSharedInstance,
@@ -2665,12 +2458,16 @@ namespace ECSEngine {
 			if (!ExistsComponent(component)) {
 				const ComponentInfo* component_info = &other->m_unique_components[component];
 				size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
+				ComponentFunctions component_functions;
+				component_functions.allocator_size = allocator_size;
+				component_functions.copy_function = component_info->copy_function;
+				component_functions.deallocate_function = component_info->deallocate_function;
+				component_functions.data = component_info->copy_deallocate_data;
 				RegisterComponentCommit(
 					component,
 					component_info->size,
-					allocator_size,
 					component_info->name,
-					{ component_info->component_buffers, component_info->component_buffers_count }
+					&component_functions
 				);
 			}
 		});
@@ -2691,12 +2488,16 @@ namespace ECSEngine {
 			if (!ExistsSharedComponent(component)) {
 				const ComponentInfo* component_info = &other->m_shared_components[component].info;
 				size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
+				ComponentFunctions component_functions;
+				component_functions.allocator_size = allocator_size;
+				component_functions.copy_function = component_info->copy_function;
+				component_functions.deallocate_function = component_info->deallocate_function;
+				component_functions.data = component_info->copy_deallocate_data;
 				RegisterSharedComponentCommit(
 					component,
 					component_info->size,
-					allocator_size,
 					component_info->name,
-					{ component_info->component_buffers, component_info->component_buffers_count }
+					&component_functions
 				);
 			}
 
@@ -2717,8 +2518,8 @@ namespace ECSEngine {
 					component,
 					component_info->size,
 					data,
-					allocator_size,
-					component_info->name
+					component_info->name,
+					allocator_size
 				);
 			}
 		});
@@ -2765,32 +2566,19 @@ namespace ECSEngine {
 				// Here we need to specify the entities of the other alongside the other entity pool
 				base_archetype->CopyFromAnotherArchetype({ copy_position, copy_count }, other_archetype_base, other_archetype_base->m_entities, other->m_entity_pool);
 
-				// We also need to copy the entities buffers
-				ECS_STACK_CAPACITY_STREAM(Stream<void>, empty_buffers, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT);
-				for (unsigned int empty_index = 0; empty_index < empty_buffers.size; empty_index++) {
-					empty_buffers[empty_index] = {};
-				}
-				empty_buffers.size = empty_buffers.capacity;
-
-				for (unsigned char deallocate_index = 0; deallocate_index < current_archetype->m_unique_components_to_deallocate_count; deallocate_index++) {
-					unsigned char other_component_index = other_archetype->FindDeallocateComponentIndex(
-						current_archetype->m_unique_components[current_archetype->m_unique_components_to_deallocate[deallocate_index]]
+				for (unsigned char copy_index = 0; copy_index < current_archetype->m_user_defined_components.count; copy_index++) {
+					unsigned char other_component_index = other_archetype->FindCopyDeallocateComponentIndex(
+						current_archetype->m_unique_components[current_archetype->m_user_defined_components[copy_index]]
 					);
 					ECS_ASSERT(other_component_index != -1);
 					for (unsigned int other_entity_index = 0; other_entity_index < other_archetype_base->EntityCount(); other_entity_index++) {
-						// Reinstate the buffers as empty in order to not have this function
-						// Trigger an incorrect reallocate
-						current_archetype->ReinstateEntityBuffers(
-							other_entity_index,
-							base_index,
-							deallocate_index,
-							empty_buffers
-						);
-						current_archetype->SetEntityBuffers(
+						// For this, do not deallocate the previous since it is copied from another entity manager
+						current_archetype->CallEntityCopy(
 							other_entity_index, 
 							base_index, 
-							deallocate_index, 
-							other_archetype_base->GetComponentByIndex(other_entity_index, other_component_index)
+							copy_index,
+							other_archetype_base->GetComponentByIndex(other_entity_index, other_component_index),
+							false
 						);
 					}
 				}
@@ -2835,27 +2623,82 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::CallEntityComponentDeallocateCommit(Entity entity, Component component)
+	{
+		EntityInfo entity_info = GetEntityInfo(entity);
+		Archetype* archetype = GetArchetype(entity_info.main_archetype);
+		unsigned char deallocate_index = archetype->FindCopyDeallocateComponentIndex(component);
+		ECS_CRASH_CONDITION(deallocate_index != UCHAR_MAX, "EntityManager: Trying to deallocate buffers for component {#} for entity {#} but the "
+			"component doesn't exist", GetComponentName(component), entity.value);
+		archetype->CallEntityDeallocate(deallocate_index, entity_info);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::TryCallEntityComponentDeallocateCommit(Entity entity, Component component)
+	{
+		EntityInfo entity_info = GetEntityInfo(entity);
+		Archetype* archetype = GetArchetype(entity_info.main_archetype);
+		unsigned char deallocate_index = archetype->FindCopyDeallocateComponentIndex(component);
+		if (deallocate_index != UCHAR_MAX) {
+			archetype->CallEntityDeallocate(deallocate_index, entity_info);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::CallComponentSharedInstanceDeallocateCommit(Component component, SharedInstance instance)
+	{
+		void* instance_data = GetSharedData(component, instance);
+		const ComponentInfo* component_info = &m_shared_components[component.value].info;
+		component_info->CallDeallocateFunction(instance_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::TryCallComponentSharedInstanceDeallocateCommit(Component component, SharedInstance instance) {
+		void* instance_data = GetSharedData(component, instance);
+		const ComponentInfo* component_info = &m_shared_components[component.value].info;
+		component_info->TryCallDeallocateFunction(instance_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	static void SwapComponentInfoUserDefinedInfo(EntityManager* entity_manager, ComponentInfo* old_info, ComponentInfo* new_info) {
+		if (old_info->allocator != nullptr) {
+			// Copy the user related functions fields
+			new_info->allocator = old_info->allocator;
+			new_info->copy_function = old_info->copy_function;
+			new_info->deallocate_function = old_info->deallocate_function;
+			if (old_info->copy_deallocate_data.size > 0) {
+				new_info->copy_deallocate_data = old_info->copy_deallocate_data.Copy(entity_manager->SmallAllocator());
+			}
+			else {
+				new_info->copy_deallocate_data = old_info->copy_deallocate_data;
+			}
+			old_info->allocator = nullptr;
+			old_info->copy_function = nullptr;
+			old_info->deallocate_function = nullptr;
+			old_info->copy_deallocate_data.Deallocate(entity_manager->SmallAllocator());
+			old_info->copy_deallocate_data = {};
+		}
+	}
+
 	void EntityManager::ChangeComponentIndex(Component old_component, Component new_component)
 	{
 		ECS_ASSERT(ExistsComponent(old_component) && !ExistsComponent(new_component));
 
 		unsigned short byte_size = m_unique_components[old_component.value].size;
 
-		MemoryArena* arena = GetComponentAllocator(old_component);
 		// Always use size 0 allocator size because we will transfer the arena to the new slot
 		// In this way we avoid creating a new allocator and transfer all the existing data to it
 		RegisterComponentCommit(
 			new_component, 
 			byte_size, 
-			0,
-			m_unique_components[old_component.value].name, 
-			{ m_unique_components[old_component.value].component_buffers, m_unique_components[old_component.value].component_buffers_count }
+			m_unique_components[old_component.value].name
 		);
 
-		if (arena != nullptr) {
-			m_unique_components[old_component.value].allocator = nullptr;
-			m_unique_components[new_component.value].allocator = arena;
-		}
+		SwapComponentInfoUserDefinedInfo(this, &m_unique_components[old_component.value], &m_unique_components[new_component.value]);
 
 		// Now destroy the old component
 		UnregisterComponentCommit(old_component);
@@ -2876,33 +2719,32 @@ namespace ECSEngine {
 	{
 		ECS_ASSERT(ExistsSharedComponent(old_component) && !ExistsSharedComponent(new_component));
 
-		MemoryArena* arena = GetSharedComponentAllocator(old_component);
-
 		unsigned short byte_size = m_shared_components[old_component.value].info.size;
 
 		// Record the instances and the named instances in order to be transfered
 		auto instances = m_shared_components[old_component.value].instances;
 		auto named_instances = m_shared_components[old_component.value].named_instances;
+		auto compare_function = m_shared_components[old_component.value].compare_function;
+		auto compare_data = m_shared_components[old_component.value].compare_function_data;
 		m_shared_components[old_component.value].instances.stream.capacity = 0;
 		m_shared_components[old_component.value].named_instances.m_capacity = 0;
+		m_shared_components[old_component.value].compare_function = nullptr;
+		m_shared_components[old_component.value].compare_function_data = {};
 
 		// Always use size 0 allocator size because we will transfer the arena to the new slot
 		// In this way we avoid creating a new allocator and transfer all the existing data to it
 		RegisterSharedComponentCommit(
 			new_component, 
 			byte_size, 
-			0, 
-			m_shared_components[old_component.value].info.name, 
-			{ m_shared_components[old_component.value].info.component_buffers, m_shared_components[old_component.value].info.component_buffers_count }
+			m_shared_components[old_component.value].info.name
 		);
 
 		m_shared_components[new_component.value].instances = instances;
 		m_shared_components[new_component.value].named_instances = named_instances;
+		m_shared_components[new_component.value].compare_function = compare_function;
+		m_shared_components[new_component.value].compare_function_data = compare_data;
 
-		if (arena != nullptr) {
-			m_shared_components[old_component.value].info.allocator = nullptr;
-			m_shared_components[new_component.value].info.allocator = arena;
-		}
+		SwapComponentInfoUserDefinedInfo(this, &m_shared_components[old_component.value].info, &m_shared_components[new_component.value].info);
 
 		// Now destroy the old component
 		UnregisterSharedComponentCommit(old_component);
@@ -3250,8 +3092,8 @@ namespace ECSEngine {
 				entity_manager->m_global_components[index],
 				component_info.size,
 				entity_manager->m_global_components_data[index],
-				allocator_size,
-				component_info.name
+				component_info.name,
+				allocator_size
 			);
 		}
 
@@ -3716,13 +3558,12 @@ namespace ECSEngine {
 			for (unsigned char unique_index = 0; unique_index < unique_signature.count; unique_index++) {
 				if (!subset_manager.ExistsComponent(unique_signature[unique_index])) {
 					const ComponentInfo* component_info = &m_unique_components[unique_signature[unique_index].value];
-					size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
+					ComponentFunctions component_functions = component_info->GetComponentFunctions();
 					subset_manager.RegisterComponentCommit(
 						unique_signature[unique_index],
 						component_info->size,
-						allocator_size,
 						component_info->name,
-						{ component_info->component_buffers, component_info->component_buffers_count }
+						&component_functions
 					);
 				}
 			}
@@ -3730,13 +3571,12 @@ namespace ECSEngine {
 			for (unsigned char shared_index = 0; shared_index < shared_signature.count; shared_index++) {
 				if (!subset_manager.ExistsSharedComponent(shared_signature.indices[shared_index])) {
 					const ComponentInfo* component_info = &m_shared_components[shared_signature.indices[shared_index].value].info;
-					size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
+					ComponentFunctions component_functions = component_info->GetComponentFunctions();
 					subset_manager.RegisterSharedComponentCommit(
 						shared_signature.indices[shared_index],
 						component_info->size,
-						allocator_size,
 						component_info->name,
-						{ component_info->component_buffers, component_info->component_buffers_count }
+						&component_functions
 					);
 				}
 
@@ -3771,7 +3611,7 @@ namespace ECSEngine {
 			Entity subset_entity = subset_manager.CreateEntityCommit(unique_signature, shared_signature);
 			ECS_STACK_CAPACITY_STREAM(void*, unique_components, ECS_ARCHETYPE_MAX_COMPONENTS);
 			GetComponent(entities[index], unique_signature, unique_components.buffer);
-			subset_manager.SetEntityComponentsCommit(subset_entity, unique_signature, (const void**)unique_components.buffer);
+			subset_manager.SetEntityComponentsCommit(subset_entity, unique_signature, (const void**)unique_components.buffer, true, false);
 
 			entity_remapping[index] = subset_entity;
 		}
@@ -3823,43 +3663,6 @@ namespace ECSEngine {
 		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
 		ECS_CRASH_CONDITION_RETURN(index != -1, -1, "EntityManager: Trying to retrieve invalid global component byte size for {#}", component.value);
 		return m_global_components_info[component.value].size;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void EntityManager::DeallocateEntityBuffersCommit(Entity entity, Component component)
-	{
-		EntityInfo entity_info = GetEntityInfo(entity);
-		Archetype* archetype = GetArchetype(entity_info.main_archetype);
-		unsigned char deallocate_index = archetype->FindDeallocateComponentIndex(component);
-		ECS_CRASH_CONDITION(deallocate_index != UCHAR_MAX, "EntityManager: Trying to deallocate buffers for component {#} for entity {#} but the "
-			"component doesn't exist", GetComponentName(component), entity.value);
-		archetype->DeallocateEntityBuffers(deallocate_index, entity_info);
-	}
-	
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void EntityManager::DeallocateEntityBuffersIfExistentCommit(Entity entity, Component component)
-	{
-		EntityInfo entity_info = GetEntityInfo(entity);
-		Archetype* archetype = GetArchetype(entity_info.main_archetype);
-		unsigned char deallocate_index = archetype->FindDeallocateComponentIndex(component);
-		if (deallocate_index != UCHAR_MAX) {
-			archetype->DeallocateEntityBuffers(deallocate_index, entity_info);
-		}
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void EntityManager::DeallocateSharedInstanceBuffersCommit(Component component, SharedInstance instance)
-	{
-		void* instance_data = GetSharedData(component, instance);
-		const ComponentInfo* component_info = &m_shared_components[component.value].info;
-		if (component_info->component_buffers_count > 0) {
-			for (unsigned short index = 0; index < component_info->component_buffers_count; index++) {
-				ComponentBufferDeallocate(component_info->component_buffers[index], component_info->allocator, instance_data);
-			}
-		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4325,6 +4128,17 @@ namespace ECSEngine {
 		}
 
 		return {main_archetype_index, base};
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	SharedInstance EntityManager::FindOrCreateSharedInstanceCommit(Component component, const void* data)
+	{
+		SharedInstance instance = GetSharedComponentInstance(component, data);
+		if (!instance.IsValid()) {
+			instance = RegisterSharedInstanceCommit(component, data);
+		}
+		return instance;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4813,14 +4627,31 @@ namespace ECSEngine {
 			component.value);
 
 		short instance_index = -1;
-		m_shared_components[component.value].instances.stream.ForEachIndex<true>([&](unsigned int index) {
-			const void* current_data = m_shared_components[component.value].instances[index];
-			if (memcmp(current_data, data, component_size) == 0) {
-				instance_index = (short)index;
-				return true;
-			}
-			return false;
-		});
+		// Check to see if we have a compare function. If we do, use that
+		if (m_shared_components[component.value].compare_function != nullptr) {
+			SharedComponentCompareFunctionData compare_data;
+			compare_data.function_data = m_shared_components[component.value].compare_function_data.buffer;
+			compare_data.first = data;
+			m_shared_components[component.value].instances.stream.ForEachIndex<true>([&](unsigned int index) {
+				const void* current_data = m_shared_components[component.value].instances[index];
+				compare_data.second = current_data;
+				if (m_shared_components[component.value].compare_function(&compare_data)) {
+					instance_index = (short)index;
+					return true;
+				}
+				return false;
+			});
+		}
+		else {
+			m_shared_components[component.value].instances.stream.ForEachIndex<true>([&](unsigned int index) {
+				const void* current_data = m_shared_components[component.value].instances[index];
+				if (memcmp(current_data, data, component_size) == 0) {
+					instance_index = (short)index;
+					return true;
+				}
+				return false;
+			});
+		}
 
 		return { instance_index };
 	}
@@ -5204,53 +5035,64 @@ namespace ECSEngine {
 	void EntityManager::RegisterComponentCommit(
 		Component component, 
 		unsigned int size, 
-		size_t allocator_size, 
 		Stream<char> name,
-		Stream<ComponentBuffer> component_buffers
+		const ComponentFunctions* functions
 	) {
-		DeferredCreateComponent commit_data;
-		commit_data.component = component;
-		commit_data.size = size;
-		commit_data.allocator_size = allocator_size;
-		commit_data.name = name;
-		commit_data.component_buffers_count = component_buffers.size;
-		component_buffers.CopyTo(commit_data.component_buffers);
+		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 16);
+		Stream<char> component_name = name;
+		if (name.size == 0) {
+			ConvertIntToChars(component_name_storage, component.value);
+			component_name = component_name_storage;
+		}
 
-		CommitCreateComponent(this, &commit_data, nullptr);
-	}
+		ECS_CRASH_CONDITION(
+			size <= ECS_COMPONENT_MAX_BYTE_SIZE,
+			"EntityManager: Unique component {#} is too large",
+			component_name
+		);
 
-	// --------------------------------------------------------------------------------------------------------------------
+		if (m_unique_components.size <= component.value) {
+			size_t old_capacity = m_unique_components.size;
+			void* allocation = m_small_memory_manager.Allocate(sizeof(ComponentInfo) * (component.value + 1));
+			m_unique_components.CopyTo(allocation);
+			m_small_memory_manager.Deallocate(m_unique_components.buffer);
 
-	void EntityManager::RegisterComponent(
-		Component component, 
-		unsigned int size, 
-		size_t allocator_size,
-		Stream<char> name,
-		Stream<ComponentBuffer> buffer_offsets, 
-		EntityManagerCommandStream* command_stream, 
-		DebugInfo debug_info
-	) {
-		size_t allocation_size = sizeof(DeferredCreateComponent) + name.size;
+			m_unique_components.InitializeFromBuffer(allocation, component.value + 1);
+			for (size_t index = old_capacity; index < m_unique_components.size; index++) {
+				m_unique_components[index].size = -1;
+			}
 
-		void* allocation = AllocateTemporaryBuffer(allocation_size);
-		uintptr_t allocation_ptr = (uintptr_t)allocation;
+			// Update the component info reference to all archetypes and base archetypes
+			for (unsigned int main_index = 0; main_index < m_archetypes.size; main_index++) {
+				Archetype* archetype = GetArchetype(main_index);
+				archetype->m_unique_infos = m_unique_components.buffer;
+				unsigned int base_count = archetype->GetBaseCount();
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					ArchetypeBase* base = archetype->GetBase(base_index);
+					base->m_infos = m_unique_components.buffer;
+				}
+			}
+		}
+		// If the size is different from -1, it means there is a component actually allocated to this slot
+		ECS_CRASH_CONDITION(!ExistsComponent(component), "EntityManager: Creating component {#} at position {#} failed. It already exists.",
+			component_name, component.value);
+		m_unique_components[component.value].size = size;
+		m_unique_components[component.value].name = StringCopy(SmallAllocator(), component_name);
 
-		DeferredCreateComponent* data = (DeferredCreateComponent*)allocation;
-		data->component = component;
-		data->size = size;
-		data->allocator_size = allocator_size;
-		if (buffer_offsets.size > 0) {
-			data->component_buffers_count = buffer_offsets.size;
-			buffer_offsets.CopyTo(data->component_buffers);
+		if (functions != nullptr) {
+			bool is_something_set = functions->allocator_size != 0 || functions->copy_function != nullptr
+				|| functions->deallocate_function != nullptr;
+			bool is_something_not_set = functions->allocator_size == 0 || functions->copy_function == nullptr
+				|| functions->deallocate_function == nullptr;
+			ECS_CRASH_CONDITION((is_something_set && !is_something_not_set) || (!is_something_set && is_something_not_set),
+				"EntityManager: Creating unique component {#} has invalid user defined functions. Make sure they are properly set", component_name);
+
+			CreateAllocatorForComponent(this, m_unique_components[component.value], functions->allocator_size);
+			m_unique_components[component.value].SetComponentFunctions(functions, SmallAllocator());
 		}
 		else {
-			data->component_buffers_count = 0;
+			m_unique_components[component.value].ResetComponentFunctions();
 		}
-		allocation_ptr += sizeof(*data);
-		data->name.InitializeAndCopy(allocation_ptr, name);
-
-		DeferredActionParameters parameters = { command_stream };
-		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_CREATE_COMPONENT), debug_info });
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5258,53 +5100,80 @@ namespace ECSEngine {
 	void EntityManager::RegisterSharedComponentCommit(
 		Component component, 
 		unsigned int size, 
-		size_t allocator_size,
 		Stream<char> name,
-		Stream<ComponentBuffer> component_buffers
+		const ComponentFunctions* component_functions,
+		SharedComponentCompareFunction compare_function,
+		Stream<void> compare_function_data
 	) {
-		DeferredCreateSharedComponent commit_data;
-		commit_data.component = component;
-		commit_data.size = size;
-		commit_data.allocator_size = allocator_size;
-		commit_data.name = name;
-		commit_data.component_buffers_count = component_buffers.size;
-		component_buffers.CopyTo(commit_data.component_buffers);
+		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 64);
+		Stream<char> component_name = name;
+		if (name.size == 0) {
+			ConvertIntToChars(component_name_storage, component.value);
+			component_name = component_name_storage;
+		}
 
-		CommitCreateSharedComponent(this, &commit_data, nullptr);
+		ECS_CRASH_CONDITION(
+			size <= ECS_COMPONENT_MAX_BYTE_SIZE,
+			"EntityManager: Component {#} is too large",
+			component_name
+		);
+
+		if (m_shared_components.size <= component.value) {
+			size_t old_capacity = m_shared_components.size;
+			void* allocation = m_small_memory_manager.Allocate(sizeof(SharedComponentInfo) * (component.value + 1));
+			m_shared_components.CopyTo(allocation);
+			m_small_memory_manager.Deallocate(m_shared_components.buffer);
+
+			m_shared_components.InitializeFromBuffer(allocation, component.value + 1);
+			for (size_t index = old_capacity; index < m_shared_components.size; index++) {
+				m_shared_components[index].info.size = -1;
+			}
+		}
+
+		// If the size is different from -1, it means there is a component actually allocated to this slot
+		ECS_CRASH_CONDITION(m_shared_components[component.value].info.size == -1,
+			"EntityManager: Trying to create shared component {#} when it already exists {#} at that slot.", component_name, GetSharedComponentName(component));
+
+		m_shared_components[component.value].info.size = size;
+		m_shared_components[component.value].instances.Initialize(SmallAllocator(), 0);
+		m_shared_components[component.value].named_instances.Initialize(SmallAllocator(), 0);
+		m_shared_components[component.value].info.name = StringCopy(SmallAllocator(), component_name);
+
+		if (component_functions != nullptr) {
+			bool is_something_set = component_functions->allocator_size != 0 || component_functions->copy_function != nullptr
+				|| component_functions->deallocate_function != nullptr;
+			bool is_something_not_set = component_functions->allocator_size == 0 || component_functions->copy_function == nullptr
+				|| component_functions->deallocate_function == nullptr;
+			// Crash if the allocator size is specified but the buffer offsets are not
+			ECS_CRASH_CONDITION((is_something_set && !is_something_not_set) || (!is_something_set && is_something_not_set),
+				"EntityManager: Trying to create shared component {#} with user defined functions but invalid. Check the allocator size or the assigned functions", component_name);
+			CreateAllocatorForComponent(this, m_shared_components[component.value].info, component_functions->allocator_size);
+			m_shared_components[component.value].info.SetComponentFunctions(component_functions, SmallAllocator());
+		}
+		else {
+			m_shared_components[component.value].info.ResetComponentFunctions();
+		}
+
+		if (compare_function != nullptr) {
+			m_shared_components[component.value].compare_function = compare_function;
+			if (compare_function_data.size == 0) {
+				m_shared_components[component.value].compare_function_data = compare_function_data;
+			}
+			else {
+				m_shared_components[component.value].compare_function_data = compare_function_data.Copy(SmallAllocator());
+			}
+		}
+		else {
+			m_shared_components[component.value].compare_function = nullptr;
+			m_shared_components[component.value].compare_function_data = {};
+		}
+
+		// The named instances table should start with size 0 and only create it when actually needing the tags
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterSharedComponent(
-		Component component, 
-		unsigned int size, 
-		size_t allocator_size,
-		Stream<char> name,
-		Stream<ComponentBuffer> buffer_offsets,
-		EntityManagerCommandStream* command_stream,
-		DebugInfo debug_info
-	) {
-		size_t allocation_size = sizeof(DeferredCreateSharedComponent) + name.size;
-
-		void* allocation = AllocateTemporaryBuffer(allocation_size);
-		uintptr_t allocation_ptr = (uintptr_t)allocation;
-		DeferredCreateSharedComponent* data = (DeferredCreateSharedComponent*)allocation;
-		data->component = component;
-		data->size = size;
-		data->allocator_size = allocator_size;
-		data->component_buffers_count = buffer_offsets.size;
-		buffer_offsets.CopyTo(data->component_buffers);
-
-		allocation_ptr += sizeof(*data);
-		data->name.InitializeAndCopy(allocation_ptr, name);
-
-		DeferredActionParameters parameters = { command_stream };
-		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_CREATE_SHARED_COMPONENT), debug_info });
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void* EntityManager::RegisterGlobalComponentCommit(Component component, unsigned int size, const void* data, size_t allocator_size, Stream<char> name)
+	void* EntityManager::RegisterGlobalComponentCommit(Component component, unsigned int size, const void* data, Stream<char> name, size_t allocator_size)
 	{
 		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 64);
 		Stream<char> component_name = name;
@@ -5324,7 +5193,9 @@ namespace ECSEngine {
 
 		ComponentInfo* component_info = m_global_components_info + m_global_component_count;
 		component_info->size = size;
-		component_info->component_buffers_count = 0;
+		component_info->copy_function = nullptr;
+		component_info->deallocate_function = nullptr;
+		component_info->copy_deallocate_data = {};
 		component_info->name = StringCopy(SmallAllocator(), component_name);
 
 		CreateAllocatorForComponent(this, *component_info, allocator_size);
@@ -5631,34 +5502,29 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::SetEntityComponentCommit(Entity entity, Component component, const void* data, bool allocate_buffers)
+	void EntityManager::SetEntityComponentCommit(Entity entity, Component component, const void* data, bool allocate_buffers, bool deallocate_previous_buffers)
 	{
-		SetEntityComponentsCommit(entity, { &component, 1 }, &data);
+		SetEntityComponentsCommit(entity, { &component, 1 }, &data, allocate_buffers, deallocate_previous_buffers);
 	}
 
-	void EntityManager::SetEntityComponentsCommit(Entity entity, ComponentSignature component_signature, const void** data, bool allocate_buffers)
+	void EntityManager::SetEntityComponentsCommit(
+		Entity entity, 
+		ComponentSignature component_signature, 
+		const void** data, 
+		bool allocate_buffers, 
+		bool deallocate_previous_buffers
+	)
 	{
 		EntityInfo entity_info = GetEntityInfo(entity);
-		ECS_STACK_CAPACITY_STREAM(Stream<void>, old_buffers, 16);
 		Archetype* archetype = GetArchetype(entity_info.main_archetype);
 
 		for (unsigned char index = 0; index < component_signature.count; index++) {
 			unsigned int component_size = ComponentSize(component_signature[index]);
 			void* component = GetComponent(entity, component_signature[index]);
 
-			if (allocate_buffers) {
-				// Before copying the data with memcpy, we need to record the previous data sources and
-				// Reinstate them such that the SetEntityBuffers works as expected (deallocating the old
-				// data and setting the new one)
-				old_buffers.size = 0;
-				archetype->GetEntityBuffers(entity_info, component_signature[index], &old_buffers);
-			}
 			memcpy(component, data[index], component_size);
 			if (allocate_buffers) {
-				// Reinstate the old buffers and then use the SetEntityBuffers function
-				// Which deallocates/reallocates as needed
-				archetype->ReinstateEntityBuffers(entity_info, component_signature[index], old_buffers);
-				archetype->SetEntityBuffers(entity_info, component_signature[index], data[index]);
+				m_unique_components[component_signature[index]].TryCallCopyFunction(component, data[index], deallocate_previous_buffers);
 			}
 		}
 	}
@@ -5753,42 +5619,61 @@ namespace ECSEngine {
 
 	void EntityManager::UnregisterComponentCommit(Component component)
 	{
-		DeferredDestroyComponent commit_data;
-		commit_data.component = component;
-		CommitDestroyComponent(this, &commit_data, nullptr);
-	}
+		ECS_CRASH_CONDITION(component.value < m_unique_components.size, "EntityManager: Incorrect component index {#} when trying to delete it.", component.value);
+		// -1 Signals it's empty - a component was never associated to this slot
+		ECS_CRASH_CONDITION(ExistsComponent(component), "EntityManager: Trying to destroy component {#} when it doesn't exist.",
+			component.value);
 
-	void EntityManager::UnregisterComponent(Component component, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
-	{
-		size_t allocation_size = sizeof(DeferredDestroySharedComponent);
+		if (m_unique_components[component.value].copy_deallocate_data.size > 0) {
+			m_unique_components[component.value].copy_deallocate_data.Deallocate(SmallAllocator());
+		}
 
-		void* allocation = AllocateTemporaryBuffer(allocation_size);
-		DeferredDestroySharedComponent* data = (DeferredDestroySharedComponent*)allocation;
-		data->component = component;
+		// If it has an allocator, deallocate it
+		if (m_unique_components[component.value].allocator != nullptr) {
+			m_memory_manager->Deallocate(m_unique_components[component.value].allocator);
+			m_unique_components[component.value].allocator = nullptr;
+		}
 
-		DeferredActionParameters parameters = { command_stream };
-		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_DESTROY_COMPONENT), debug_info });
+		m_small_memory_manager.Deallocate(m_unique_components[component.value].name.buffer);
+		m_unique_components[component.value].size = -1;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::UnregisterSharedComponentCommit(Component component)
 	{
-		DeferredDestroySharedComponent commit_data;
-		commit_data.component = component;
-		CommitDestroySharedComponent(this, &commit_data, nullptr);
-	}
+		ECS_CRASH_CONDITION(component.value < m_shared_components.size, "EntityManager: Invalid shared component {#} when trying to destroy it.", component.value);
+		// -1 Signals it's empty - a component was never associated to this slot
+		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: Trying to destroy shared component {#} when it doesn't exist.",
+			component.value);
 
-	void EntityManager::UnregisterSharedComponent(Component component, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
-	{
-		size_t allocation_size = sizeof(DeferredDestroySharedComponent);
+		// If it has an allocator deallocate it
+		MemoryArena** allocator = &m_shared_components[component.value].info.allocator;
+		if (*allocator != nullptr) {
+			m_memory_manager->Deallocate(*allocator);
+			*allocator = nullptr;
+		}
 
-		void* allocation = AllocateTemporaryBuffer(allocation_size);
-		DeferredDestroySharedComponent* data = (DeferredDestroySharedComponent*)allocation;
-		data->component = component;
+		// Deallocate every instance as well
+		m_shared_components[component.value].instances.stream.ForEachConst([&](void* data) {
+			Deallocate(SmallAllocator(), data);
+		});
 
-		DeferredActionParameters parameters = { command_stream };
-		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_DESTROY_SHARED_COMPONENT), debug_info });
+		if (m_shared_components[component.value].compare_function_data.size > 0) {
+			m_shared_components[component.value].compare_function_data.Deallocate(SmallAllocator());
+		}
+		if (m_shared_components[component.value].info.copy_deallocate_data.size > 0) {
+			m_shared_components[component.value].info.copy_deallocate_data.Deallocate(SmallAllocator());
+		}
+
+		m_shared_components[component.value].instances.FreeBuffer();
+		m_shared_components[component.value].info.size = -1;
+		m_small_memory_manager.Deallocate(m_shared_components[component.value].info.name.buffer);
+		const void* table_buffer = m_shared_components[component.value].named_instances.GetAllocatedBuffer();
+		if (table_buffer != nullptr && m_shared_components[component.value].named_instances.GetCapacity() > 0) {
+			// Deallocate the table
+			m_small_memory_manager.Deallocate(table_buffer);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

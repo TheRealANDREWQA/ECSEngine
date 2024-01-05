@@ -10,10 +10,12 @@
 #include "../Containers/ResizableStableReferenceStream.h"
 #include "../Utilities/File.h"
 #include "../Containers/DataPointer.h"
+#include "ComponentFunctions.h"
 
 #define ECS_ARCHETYPE_MAX_COMPONENTS 15
 #define ECS_ARCHETYPE_MAX_SHARED_COMPONENTS 15
 #define ECS_SHARED_INSTANCE_MAX_VALUE SHORT_MAX
+#define ECS_COMPONENT_MAX_BYTE_SIZE 2048
 
 namespace ECSEngine {
 
@@ -63,7 +65,21 @@ namespace ECSEngine {
 #define ECS_MAIN_ARCHETYPE_MAX_COUNT (1 << 10)
 #define ECS_BASE_ARCHETYPE_MAX_COUNT (1 << 10)
 #define ECS_STREAM_ARCHETYPE_MAX_COUNT (1 << 24)
-#define ECS_ENTITY_HIERARCHY_MAX_COUNT (4)
+#define ECS_ARCHETYPE_MAX_USER_DEFINED_COMPONENT_FUNCTIONS 5
+
+	struct ArchetypeUserDefinedComponents {
+		ECS_INLINE unsigned char& operator[](size_t index) {
+			return signature_indices[index];
+		}
+
+		ECS_INLINE const unsigned char& operator[](size_t index) const {
+			return signature_indices[index];
+		}
+
+		// These indices refer to the index inside the component signature
+		unsigned char signature_indices[ECS_ARCHETYPE_MAX_USER_DEFINED_COMPONENT_FUNCTIONS];
+		unsigned char count;
+	};
 
 	struct ECSENGINE_API EntityInfo {
 		ECS_INLINE EntityInfo() : main_archetype(0), base_archetype(0), stream_index(0) {}
@@ -245,25 +261,69 @@ namespace ECSEngine {
 	// It will assigns, it does not allocate
 	ECSENGINE_API void ComponentBufferSetStreamNormalPointer(ComponentBuffer component_buffer, void* destination, Stream<void> data);
 
-#define ECS_COMPONENT_INFO_MAX_BUFFER_COUNT (5)
-
 	struct ECSENGINE_API ComponentInfo {
-		ECS_INLINE ComponentInfo() : size(0), component_buffers_count(0) {}
-		ECS_INLINE ComponentInfo(unsigned int _size) : size(_size), component_buffers_count(0) {}
+		ECS_INLINE ComponentInfo() : size(0) {}
+		ECS_INLINE ComponentInfo(unsigned int _size) {
+			memset(this, 0, sizeof(*this));
+			size = _size;
+		}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentInfo);
 
+		// It will call the copy function. It assumes that there is one
+		void CallCopyFunction(void* destination, const void* source, bool deallocate_previous) const;
+
+		// It will call the deallocate function. It assumes that there is one
+		void CallDeallocateFunction(void* data) const;
+
+		// It will call this function only if it is set
+		void TryCallCopyFunction(void* destination, const void* source, bool deallocate_previous) const;
+
+		// It will call this function only if it is set
+		void TryCallDeallocateFunction(void* data) const;
+
+		ECS_INLINE ComponentFunctions GetComponentFunctions() const {
+			ComponentFunctions functions;
+			functions.copy_function = copy_function;
+			functions.deallocate_function = deallocate_function;
+			functions.allocator_size = allocator != nullptr ? allocator->InitialArenaCapacity() : 0;
+			functions.data = copy_deallocate_data;
+			return functions;
+		}
+
+		// It does not create the allocator
+		ECS_INLINE void SetComponentFunctions(const ComponentFunctions* component_functions, AllocatorPolymorphic allocator) {
+			copy_function = component_functions->copy_function;
+			deallocate_function = component_functions->deallocate_function;
+			if (component_functions->data.size == 0) {
+				copy_deallocate_data = component_functions->data;
+			}
+			else {
+				copy_deallocate_data = component_functions->data.Copy(allocator);
+			}
+		}
+
+		ECS_INLINE void ResetComponentFunctions() {
+			copy_function = nullptr;
+			deallocate_function = nullptr;
+			copy_deallocate_data = {};
+		}
+
 		MemoryArena* allocator;
 		unsigned int size;
-		ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
-		unsigned short component_buffers_count;
+		ComponentCopyFunction copy_function;
+		ComponentDeallocateFunction deallocate_function;
+		Stream<void> copy_deallocate_data;
 		Stream<char> name;
 	};
 
-	struct ECSENGINE_API SharedComponentInfo {
+	struct SharedComponentInfo {
 		ComponentInfo info;
 		ResizableStableReferenceStream<void*> instances;
 		HashTableDefault<SharedInstance> named_instances;
+
+		SharedComponentCompareFunction compare_function;
+		Stream<void> compare_function_data;
 	};
 
 	struct ECSENGINE_API ComponentSignature {
@@ -347,7 +407,6 @@ namespace ECSEngine {
 	typedef CapacityStream<DeferredAction> EntityManagerCommandStream;
 
 	struct ECSENGINE_API EntityPool {
-	public:
 		EntityPool(
 			MemoryManager* memory_manager,
 			unsigned int pool_power_of_two

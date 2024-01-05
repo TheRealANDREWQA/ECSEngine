@@ -26,11 +26,9 @@ void AddSandboxEntityComponent(
 			unsigned short byte_size = entity_manager->ComponentSize(component);
 			// Default initialize the component with zeroes
 			// Assume a max of ECS_KB for a unique component
-			void* stack_allocation = ECS_STACK_ALLOC(ECS_KB);
-			editor_state->editor_components.ResetComponent(component_name, stack_allocation);
-
 			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
-			entity_manager->AddComponentCommit(entity, component, stack_allocation);
+			entity_manager->AddComponentCommit(entity, component);
+			editor_state->editor_components.ResetComponent(editor_state, sandbox_index, component_name, entity, ECS_COMPONENT_UNIQUE);
 
 			// Destroy the old archetype if it no longer has entities
 			entity_manager->DestroyArchetypeBaseEmptyCommit(previous_info.main_archetype, previous_info.base_archetype, true);
@@ -60,7 +58,15 @@ void AddSandboxEntitySharedComponent(
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
 			if (instance.value == -1) {
-				instance = GetSandboxSharedComponentDefaultInstance(editor_state, sandbox_index, component, viewport);
+				// If there is a reset function, we must not get the default instance
+				// But instead create a new shared instance and reset it
+				ModuleComponentBuildFunction reset_function = GetModuleComponentResetFunction(editor_state, component_name);
+				if (reset_function != nullptr) {
+
+				}
+				else {
+					instance = GetSandboxSharedComponentDefaultInstance(editor_state, sandbox_index, component, viewport);
+				}
 			}
 
 			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
@@ -195,23 +201,38 @@ Entity CreateSandboxEntity(
 	unique[unique.count] = name_component;
 	unique.count++;
 
+	ECS_STACK_CAPACITY_STREAM(unsigned char, shared_instance_that_needs_reset, ECS_ARCHETYPE_MAX_SHARED_COMPONENTS);
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
-	Entity entity = entity_manager->CreateEntityCommit(unique, shared);
-	
-	for (size_t index = 0; index < unique.count; index++) {
-		void* component_data = entity_manager->GetComponent(entity, unique[index]);
-		editor_state->editor_components.ResetComponent(unique[index], component_data, ECS_COMPONENT_UNIQUE);
-	}
-	
 	// For every shared component, check to see if the instance exists
 	for (size_t index = 0; index < shared.count; index++) {
 		bool exists = entity_manager->ExistsSharedInstance(shared.indices[index], shared.instances[index]);
 		if (!exists) {
-			// Look for a default component and associate it
-			size_t _component_storage[512];
-			editor_state->editor_components.ResetComponent(shared.indices[index], _component_storage, ECS_COMPONENT_SHARED);
+			// Register a shared instance and reset it later after we have the entity
+			char _component_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
 			entity_manager->RegisterSharedInstanceCommit(shared.indices[index], _component_storage);
+			shared_instance_that_needs_reset.Add(index);
 		}
+	}
+
+	Entity entity = entity_manager->CreateEntityCommit(unique, shared);
+	for (size_t index = 0; index < unique.count; index++) {
+		void* component_data = entity_manager->GetComponent(entity, unique[index]);
+		editor_state->editor_components.ResetComponent(
+			editor_state, 
+			sandbox_index, 
+			editor_state->editor_components.ComponentFromID(unique[index], ECS_COMPONENT_UNIQUE), 
+			entity, 
+			ECS_COMPONENT_UNIQUE
+		);
+	}
+	for (unsigned int index = 0; index < shared_instance_that_needs_reset.size; index++) {
+		editor_state->editor_components.ResetComponent(
+			editor_state,
+			sandbox_index,
+			editor_state->editor_components.ComponentFromID(shared.indices[index], ECS_COMPONENT_SHARED),
+			entity,
+			ECS_COMPONENT_SHARED
+		);
 	}
 
 	ECS_STACK_CAPACITY_STREAM(char, entity_name, 512);
@@ -249,7 +270,7 @@ bool CreateSandboxGlobalComponent(
 	}
 
 	size_t allocator_size = GetReflectionComponentAllocatorSize(component_type);
-	entity_manager->RegisterGlobalComponentCommit(component, component_size, data, allocator_size, component_name);
+	entity_manager->RegisterGlobalComponentCommit(component, component_size, data, component_name, allocator_size);
 	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	return true;
 }
@@ -446,10 +467,10 @@ bool ConvertEditorLinkComponentToTarget(
 		// Deallocate any existing buffers
 		if (convert_data.component_type == ECS_COMPONENT_SHARED) {
 			SharedInstance instance = entity_manager->GetSharedComponentInstance(convert_data.component, entity);
-			entity_manager->DeallocateSharedInstanceBuffersCommit(convert_data.component, instance);
+			entity_manager->CallComponentSharedInstanceDeallocateCommit(convert_data.component, instance);
 		}
 		else {
-			entity_manager->DeallocateEntityBuffersIfExistentCommit(entity, convert_data.component);
+			entity_manager->TryCallEntityComponentDeallocateCommit(entity, convert_data.component);
 		}
 
 		// We can copy directly into target data from the component storage
@@ -564,7 +585,14 @@ void DeleteSandboxEntity(
 			UnregisterSandboxAsset(editor_state, sandbox_index, entity_assets);
 		}
 
+		// Retrieve the shared components such that we can remove the unreferenced shared instances
+		ComponentSignature shared_signature = entity_manager->GetEntitySharedSignatureStable(entity).ComponentSignature();
 		entity_manager->DeleteEntityCommit(entity);
+
+		// Remove the unreferenced shared instances as well
+		for (size_t index = 0; index < shared_signature.count; index++) {
+			entity_manager->UnregisterUnreferencedSharedInstancesCommit(shared_signature[index]);
+		}
 		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 
 		// If this entity belongs to the selected group, remove it from there as well
@@ -710,7 +738,7 @@ SharedInstance GetSandboxSharedComponentDefaultInstance(
 )
 {
 	size_t component_storage[ECS_KB * 8];
-	editor_state->editor_components.ResetComponent(component, component_storage, ECS_COMPONENT_SHARED);
+	editor_state->editor_components.ResetComponentBasic(component, component_storage, ECS_COMPONENT_SHARED);
 	return FindOrCreateSandboxSharedComponentInstance(editor_state, sandbox_index, component, component_storage, viewport);
 }
 
@@ -1490,7 +1518,7 @@ void ResetSandboxEntityComponent(
 		}
 
 		// It has built in checks for not crashing
-		editor_state->editor_components.ResetComponentFromManager(entity_manager, component_name, entity);
+		editor_state->editor_components.ResetComponent(editor_state, sandbox_index, component_name, entity, ECS_COMPONENT_UNIQUE);
 	}
 	else {
 		// Remove it and then add it again with the default component
@@ -1510,7 +1538,7 @@ void ResetSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbox
 	if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
 		RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, ECS_COMPONENT_GLOBAL);
 	}
-	editor_state->editor_components.ResetComponent(component, component_data, ECS_COMPONENT_GLOBAL);
+	editor_state->editor_components.ResetGlobalComponent(component, component_data);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1880,7 +1908,7 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 
 	if (new_shared_instance != current_instance) {
 		EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, info.viewport);
-		SharedInstance old_instance = entity_manager->ChangeEntitySharedInstanceCommit(entity, target_component, new_shared_instance, true);
+		SharedInstance old_instance = entity_manager->ChangeEntitySharedInstanceCommit(entity, target_component, new_shared_instance, false, true);
 
 		// Unregister the shared instance if it longer is referenced
 		entity_manager->UnregisterUnreferencedSharedInstanceCommit(target_component, old_instance);
@@ -1916,6 +1944,25 @@ void SandboxApplyEntityChanges(
 		shared_signature,
 		changes
 	);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void SetSandboxEntitySharedInstance(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Component component, 
+	SharedInstance instance,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	if (entity_manager->ExistsEntity(entity)) {
+		if (entity_manager->ExistsSharedInstance(component, instance)) {
+			entity_manager->ChangeEntitySharedInstanceCommit(entity, component, instance, false, true);
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

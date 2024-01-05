@@ -205,6 +205,9 @@ ECS_THREAD_TASK(DrawSelectables) {
 									else if (scale != nullptr) {
 										entity_matrix = MatrixScale(scale->value);
 									}
+									else {
+										entity_matrix = MatrixIdentity();
+									}
 
 									highlight_elements[index].base.gpu_mvp_matrix = MatrixMVPToGPU(entity_matrix, camera_matrix);
 								}

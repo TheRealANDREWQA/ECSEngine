@@ -36,4 +36,10 @@ extern "C" {
 
 #endif
 
+#if 0
+
+	GRAPHICS_API void ModuleRegisterComponentFunctionsFunction(ECSEngine::ModuleRegisterComponentFunctionsData* data);
+
+#endif
+
 }

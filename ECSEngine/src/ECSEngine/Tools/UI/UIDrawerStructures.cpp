@@ -188,6 +188,160 @@ namespace ECSEngine {
 			return Stream<char>(state->left_characters.buffer + offset, size);
 		}
 
+		size_t UIMenuCalculateStateMemory(const UIDrawerMenuState* state, bool copy_states) {
+			size_t total_memory = 0;
+			if (copy_states) {
+				if (state->unavailables != nullptr) {
+					total_memory += state->row_count * sizeof(bool);
+				}
+				if (state->row_has_submenu != nullptr) {
+					total_memory += state->row_count * (sizeof(bool) + sizeof(UIDrawerMenuState));
+				}
+
+				total_memory += sizeof(UIActionHandler) * state->row_count;
+				// Copy their data as well
+				for (unsigned int index = 0; index < state->row_count; index++) {
+					// Only if there is no submenu on that handler
+					if (state->row_has_submenu == nullptr || !state->row_has_submenu[index]) {
+						total_memory += state->click_handlers[index].data_size;
+					}
+				}
+			}
+			size_t left_character_count = state->left_characters.size;
+			total_memory += left_character_count;
+
+			if (state->right_characters.size > 0) {
+				size_t right_character_count = state->right_characters.size;
+				total_memory += right_character_count;
+				// for the right substream
+				if (state->row_count > 1) {
+					total_memory += sizeof(unsigned short) * state->row_count;
+				}
+			}
+
+			// for the left substream
+			if (state->row_count > 1) {
+				total_memory += sizeof(unsigned short) * state->row_count;
+			}
+			// for alignment
+			total_memory += 8;
+			return total_memory;
+		}
+
+		size_t UIMenuWalkStatesMemory(const UIDrawerMenuState* state, bool copy_states) {
+			size_t total_memory = UIMenuCalculateStateMemory(state, copy_states);
+			if (state->row_has_submenu != nullptr) {
+				for (size_t index = 0; index < state->row_count; index++) {
+					if (state->row_has_submenu[index]) {
+						if (state->unavailables == nullptr || !state->unavailables[index]) {
+							total_memory += UIMenuCalculateStateMemory(&state->submenues[index], copy_states);
+						}
+					}
+				}
+			}
+			return total_memory;
+		}
+
+		void UIMenuSetStateBuffers(
+			UIDrawerMenuState* state,
+			uintptr_t& buffer,
+			CapacityStream<UIDrawerMenuWindow>* stream,
+			unsigned int submenu_index,
+			bool copy_states
+		) {
+			char* left_buffer = (char*)buffer;
+			state->left_characters.CopyTo(buffer);
+			state->left_characters.buffer = left_buffer;
+
+			size_t right_character_count = state->right_characters.size;
+			if (state->right_characters.size > 0) {
+				char* new_buffer = (char*)buffer;
+				state->right_characters.CopyTo(buffer);
+				state->right_characters.buffer = new_buffer;
+			}
+
+			buffer = AlignPointer(buffer, alignof(unsigned short));
+			state->left_row_substreams = (unsigned short*)buffer;
+			buffer += sizeof(unsigned short) * state->row_count;
+
+			if (state->right_characters.size > 0) {
+				state->right_row_substreams = (unsigned short*)buffer;
+				buffer += sizeof(unsigned short) * state->row_count;
+			}
+
+			size_t new_line_count = 0;
+			for (size_t index = 0; index < state->left_characters.size; index++) {
+				if (state->left_characters[index] == '\n') {
+					state->left_row_substreams[new_line_count++] = index;
+				}
+			}
+			state->left_row_substreams[new_line_count] = state->left_characters.size;
+
+			if (state->right_characters.size > 0) {
+				new_line_count = 0;
+				for (size_t index = 0; index < right_character_count; index++) {
+					if (state->right_characters[index] == '\n') {
+						state->right_row_substreams[new_line_count++] = index;
+					}
+				}
+				state->right_row_substreams[new_line_count] = right_character_count;
+			}
+
+			if (copy_states) {
+				if (state->row_has_submenu != nullptr) {
+					memcpy((void*)buffer, state->row_has_submenu, sizeof(bool) * state->row_count);
+					state->row_has_submenu = (bool*)buffer;
+					buffer += sizeof(bool) * state->row_count;
+
+					buffer = AlignPointer(buffer, alignof(UIDrawerMenuState));
+					memcpy((void*)buffer, state->submenues, sizeof(UIDrawerMenuState) * state->row_count);
+					state->submenues = (UIDrawerMenuState*)buffer;
+					buffer += sizeof(UIDrawerMenuState) * state->row_count;
+				}
+
+				if (state->unavailables != nullptr) {
+					memcpy((void*)buffer, state->unavailables, sizeof(bool) * state->row_count);
+					state->unavailables = (bool*)buffer;
+					buffer += sizeof(bool) * state->row_count;
+				}
+
+				buffer = AlignPointer(buffer, alignof(UIActionHandler));
+				memcpy((void*)buffer, state->click_handlers, sizeof(UIActionHandler) * state->row_count);
+				state->click_handlers = (UIActionHandler*)buffer;
+				buffer += sizeof(UIActionHandler) * state->row_count;
+
+				// Copy the handler data as well
+				for (unsigned int index = 0; index < state->row_count; index++) {
+					if (state->click_handlers[index].data_size > 0) {
+						bool can_copy = state->row_has_submenu == nullptr || !state->row_has_submenu[index];
+						if (can_copy) {
+							void* current_buffer = (void*)buffer;
+							memcpy(current_buffer, state->click_handlers[index].data, state->click_handlers[index].data_size);
+							state->click_handlers[index].data = current_buffer;
+							buffer += state->click_handlers[index].data_size;
+						}
+					}
+				}
+			}
+
+			state->windows = stream;
+			state->submenu_index = submenu_index;
+		}
+
+		void UIMenuWalkSetStateBuffers(UIDrawerMenuState* state, uintptr_t& buffer, CapacityStream<UIDrawerMenuWindow>* stream, unsigned int submenu_index, bool copy_states)
+		{
+			UIMenuSetStateBuffers(state, buffer, stream, submenu_index, copy_states);
+			if (state->row_has_submenu != nullptr) {
+				for (size_t index = 0; index < state->row_count; index++) {
+					if (state->row_has_submenu[index]) {
+						if (state->unavailables == nullptr || !state->unavailables[index]) {
+							UIMenuWalkSetStateBuffers(&state->submenues[index], buffer, stream, submenu_index + 1, copy_states);
+						}
+					}
+				}
+			}
+		}
+
 		const void* UIDrawerLabelHierarchyDataAllocateLabel(
 			Stream<char>& copy_label,
 			UISystem* system,

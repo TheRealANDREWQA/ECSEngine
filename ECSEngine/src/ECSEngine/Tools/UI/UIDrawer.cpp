@@ -5699,184 +5699,17 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t UIDrawer::MenuCalculateStateMemory(const UIDrawerMenuState* state, bool copy_states) {
-			size_t total_memory = 0;
-			if (copy_states) {
-				if (state->unavailables != nullptr) {
-					total_memory += state->row_count * sizeof(bool);
-				}
-				if (state->row_has_submenu != nullptr) {
-					total_memory += state->row_count * (sizeof(bool) + sizeof(UIDrawerMenuState));
-				}
-
-				total_memory += sizeof(UIActionHandler) * state->row_count;
-				// Copy their data as well
-				for (unsigned int index = 0; index < state->row_count; index++) {
-					// Only if there is no submenu on that handler
-					if (state->row_has_submenu == nullptr || !state->row_has_submenu[index]) {
-						total_memory += state->click_handlers[index].data_size;
-					}
-				}
-			}
-			size_t left_character_count = state->left_characters.size;
-			total_memory += left_character_count;
-
-			if (state->right_characters.size > 0) {
-				size_t right_character_count = state->right_characters.size;
-				total_memory += right_character_count;
-				// for the right substream
-				if (state->row_count > 1) {
-					total_memory += sizeof(unsigned short) * state->row_count;
-				}
-			}
-
-			// for the left substream
-			if (state->row_count > 1) {
-				total_memory += sizeof(unsigned short) * state->row_count;
-			}
-			// for alignment
-			total_memory += 8;
-			return total_memory;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		size_t UIDrawer::MenuWalkStatesMemory(const UIDrawerMenuState* state, bool copy_states) {
-			size_t total_memory = MenuCalculateStateMemory(state, copy_states);
-			if (state->row_has_submenu != nullptr) {
-				for (size_t index = 0; index < state->row_count; index++) {
-					if (state->row_has_submenu[index]) {
-						if (state->unavailables == nullptr || !state->unavailables[index]) {
-							total_memory += MenuWalkStatesMemory(&state->submenues[index], copy_states);					
-						}
-					}
-				}
-			}
-			return total_memory;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		void UIDrawer::MenuSetStateBuffers(
-			UIDrawerMenuState* state,
-			uintptr_t& buffer,
-			CapacityStream<UIDrawerMenuWindow>* stream,
-			unsigned int submenu_index,
-			bool copy_states
-		) {
-			char* left_buffer = (char*)buffer;
-			state->left_characters.CopyTo(buffer);
-			state->left_characters.buffer = left_buffer;
-
-			size_t right_character_count = state->right_characters.size;
-			if (state->right_characters.size > 0) {
-				char* new_buffer = (char*)buffer;
-				state->right_characters.CopyTo(buffer);
-				state->right_characters.buffer = new_buffer;
-			}
-
-			buffer = AlignPointer(buffer, alignof(unsigned short));
-			state->left_row_substreams = (unsigned short*)buffer;
-			buffer += sizeof(unsigned short) * state->row_count;
-
-			if (state->right_characters.size > 0) {
-				state->right_row_substreams = (unsigned short*)buffer;
-				buffer += sizeof(unsigned short) * state->row_count;
-			}
-
-			size_t new_line_count = 0;
-			for (size_t index = 0; index < state->left_characters.size; index++) {
-				if (state->left_characters[index] == '\n') {
-					state->left_row_substreams[new_line_count++] = index;
-				}
-			}
-			state->left_row_substreams[new_line_count] = state->left_characters.size;
-
-			if (state->right_characters.size > 0) {
-				new_line_count = 0;
-				for (size_t index = 0; index < right_character_count; index++) {
-					if (state->right_characters[index] == '\n') {
-						state->right_row_substreams[new_line_count++] = index;
-					}
-				}
-				state->right_row_substreams[new_line_count] = right_character_count;
-			}
-
-			if (copy_states) {
-				if (state->row_has_submenu != nullptr) {
-					memcpy((void*)buffer, state->row_has_submenu, sizeof(bool) * state->row_count);
-					state->row_has_submenu = (bool*)buffer;
-					buffer += sizeof(bool) * state->row_count;
-
-					buffer = AlignPointer(buffer, alignof(UIDrawerMenuState));
-					memcpy((void*)buffer, state->submenues, sizeof(UIDrawerMenuState) * state->row_count);
-					state->submenues = (UIDrawerMenuState*)buffer;
-					buffer += sizeof(UIDrawerMenuState) * state->row_count;
-				}
-
-				if (state->unavailables != nullptr) {
-					memcpy((void*)buffer, state->unavailables, sizeof(bool) * state->row_count);
-					state->unavailables = (bool*)buffer;
-					buffer += sizeof(bool) * state->row_count;
-				}
-
-				buffer = AlignPointer(buffer, alignof(UIActionHandler));
-				memcpy((void*)buffer, state->click_handlers, sizeof(UIActionHandler) * state->row_count);
-				state->click_handlers = (UIActionHandler*)buffer;
-				buffer += sizeof(UIActionHandler) * state->row_count;
-
-				// Copy the handler data as well
-				for (unsigned int index = 0; index < state->row_count; index++) {
-					if (state->click_handlers[index].data_size > 0) {
-						bool can_copy = state->row_has_submenu == nullptr || !state->row_has_submenu[index];
-						if (can_copy) {
-							void* current_buffer = (void*)buffer;
-							memcpy(current_buffer, state->click_handlers[index].data, state->click_handlers[index].data_size);
-							state->click_handlers[index].data = current_buffer;
-							buffer += state->click_handlers[index].data_size;
-						}
-					}
-				}
-			}
-
-			state->windows = stream;
-			state->submenu_index = submenu_index;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		void UIDrawer::MenuWalkSetStateBuffers(
-			UIDrawerMenuState* state,
-			uintptr_t& buffer,
-			CapacityStream<UIDrawerMenuWindow>* stream,
-			unsigned int submenu_index,
-			bool copy_states
-		) {
-			UIDrawer::MenuSetStateBuffers(state, buffer, stream, submenu_index, copy_states);
-			if (state->row_has_submenu != nullptr) {
-				for (size_t index = 0; index < state->row_count; index++) {
-					if (state->row_has_submenu[index]) {
-						if (state->unavailables == nullptr || !state->unavailables[index]) {
-							MenuWalkSetStateBuffers(&state->submenues[index], buffer, stream, submenu_index + 1, copy_states);
-						}
-					}
-				}
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
 		// Does not allocate the name or the windows buffer
 		void InitializeMenuState(UIDrawer* drawer, UIDrawerMenu* menu_to_fill_in, const UIDrawerMenuState* menu_state_to_copy, bool copy_states) {
 			// Allocate the menu windows separately because for the NON_CACHED menu 
 			// it will continuously deallocate and initialize
-			size_t total_memory = drawer->MenuWalkStatesMemory(menu_state_to_copy, copy_states);
+			size_t total_memory = UIMenuWalkStatesMemory(menu_state_to_copy, copy_states);
 			void* allocation = drawer->GetMainAllocatorBuffer(total_memory);
 			uintptr_t buffer = (uintptr_t)allocation;
 
 			menu_to_fill_in->state = *menu_state_to_copy;
 			menu_to_fill_in->state.submenu_index = 0;
-			drawer->MenuWalkSetStateBuffers(&menu_to_fill_in->state, buffer, &menu_to_fill_in->windows, 0, copy_states);
+			UIMenuWalkSetStateBuffers(&menu_to_fill_in->state, buffer, &menu_to_fill_in->windows, 0, copy_states);
 		}
 
 		// The name is not deallocated - the state only gets deallocated
@@ -9190,51 +9023,19 @@ namespace ECSEngine {
 
 		UIDrawerMenuRightClickData UIDrawer::PrepareRightClickMenuActionData(
 			Stream<char> name, 
-			UIDrawerMenuState* menu_state, 
+			const UIDrawerMenuState* menu_state, 
 			UIActionHandler custom_handler,
 			AllocatorPolymorphic override_allocator
 		)
 		{
 			UIDrawerMenuRightClickData right_click;
-
-			menu_state->submenu_index = 0;
-			size_t menu_data_size = MenuWalkStatesMemory(menu_state, true);
-			size_t total_size = menu_data_size + name.size + sizeof(UIDrawerMenuWindow) * ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT + sizeof(CapacityStream<UIDrawerMenuWindow>);
-			ECS_ASSERT(custom_handler.data_size <= sizeof(right_click.action_data), "The handler data is too large");
-
-			void* allocated_buffer = nullptr;
-			if (override_allocator.allocator == nullptr) {
-				allocated_buffer = GetTempBuffer(total_size, ECS_UI_DRAW_SYSTEM);
-			}
-			else {
-				allocated_buffer = Allocate(override_allocator, total_size);
-			}
-
-			uintptr_t ptr = (uintptr_t)allocated_buffer;
-			name.InitializeAndCopy(ptr, name);
-
-			UIDrawerMenuWindow* menu_windows = (UIDrawerMenuWindow*)ptr;
-			ptr += sizeof(UIDrawerMenuWindow) * ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT;
-			CapacityStream<UIDrawerMenuWindow>* menu_windows_stream = (CapacityStream<UIDrawerMenuWindow>*)ptr;
-			ptr += sizeof(CapacityStream<UIDrawerMenuWindow>);
-			menu_windows_stream->InitializeFromBuffer(menu_windows, 0, ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT);
-
-			MenuSetStateBuffers(menu_state, ptr, menu_windows_stream, 0, true);
-
-			right_click.name = name;
-			right_click.action = custom_handler.action;
-			if (custom_handler.data_size > 0) {
-				memcpy(right_click.action_data, custom_handler.data, custom_handler.data_size);
-				right_click.is_action_data_ptr = false;
-			}
-			else {
-				right_click.is_action_data_ptr = true;
-				right_click.action_data_ptr = custom_handler.data;
-			}
-
-			right_click.state = *menu_state;
-			right_click.window_index = window_index;
-
+			right_click.Initialize(
+				name, 
+				menu_state, 
+				custom_handler, 
+				override_allocator.allocator == nullptr ? TemporaryAllocator(ECS_UI_DRAW_SYSTEM) : override_allocator, 
+				window_index
+			);
 			return right_click;
 		}
 
@@ -9242,14 +9043,14 @@ namespace ECSEngine {
 
 		UIActionHandler UIDrawer::PrepareRightClickMenuHandler(
 			Stream<char> name, 
-			UIDrawerMenuState* menu_state, 
+			const UIDrawerMenuState* menu_state, 
 			UIActionHandler custom_handler,
 			AllocatorPolymorphic override_allocator
 		)
 		{
 			UIDrawerMenuRightClickData* right_click = nullptr;
 			if (override_allocator.allocator == nullptr) {
-				right_click = (UIDrawerMenuRightClickData*)GetTempBuffer(sizeof(UIDrawerMenuRightClickData));
+				right_click = (UIDrawerMenuRightClickData*)GetTempBuffer(sizeof(UIDrawerMenuRightClickData), ECS_UI_DRAW_SYSTEM);
 			}
 			else {
 				right_click = (UIDrawerMenuRightClickData*)Allocate(override_allocator, sizeof(UIDrawerMenuRightClickData));

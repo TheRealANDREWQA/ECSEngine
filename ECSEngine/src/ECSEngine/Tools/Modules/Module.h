@@ -118,6 +118,16 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message = nullptr
 	);
 
+	ECSENGINE_API Stream<ModuleComponentFunctions> LoadModuleComponentFunctions(
+		const Module* module,
+		AllocatorPolymorphic allocator
+	);
+
+	ECSENGINE_API Stream<ModuleComponentFunctions> LoadModuleComponentFunctions(
+		ModuleRegisterComponentFunctionsFunction function,
+		AllocatorPolymorphic allocator
+	);
+
 	// Frees the OS handle to the valid module function but it does not deallocate the tasks
 	// or any other stream that was previously allocated. They must be manually deallocated
 	// If the bool pointer is specified, it will attempt to unload the debugging symbols
@@ -151,6 +161,8 @@ namespace ECSEngine {
 	// It will move all the valid link targets in front of the stream while keeping the invalid ones at the end
 	// Returns the previous size, the new size will reflect the count of the valid link targets
 	ECSENGINE_API size_t ValidateModuleDebugDrawTaskElements(Stream<ModuleDebugDrawTaskElement>& elements, CapacityStream<char>* error_message = nullptr);
+
+	ECSENGINE_API ModuleComponentBuildFunction GetModuleResetFunction(const AppliedModule* applied_module, Stream<char> component_name);
 
 	ECSENGINE_API void AddModuleDebugDrawTaskElementsToScheduler(TaskScheduler* scheduler, Stream<ModuleDebugDrawTaskElement> elements, bool scene_order);
 

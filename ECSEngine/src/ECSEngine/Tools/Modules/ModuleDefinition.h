@@ -16,6 +16,7 @@ namespace ECSEngine {
 
 	struct AssetDatabase;
 	struct TaskManager;
+	struct EntityManager;
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
@@ -431,6 +432,84 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	struct ModuleComponentBuildFunctionData {
+		EntityManager* entity_manager;
+		Entity entity;
+		void* component;
+		// This memory can be used for the returned thread task data
+		CapacityStream<void>* stack_memory;
+	};
+
+	// The build function must deallocate the component in case there is data in it
+	// The return type can be a task that can be run asynchronously in case it takes a long time
+	typedef ThreadTask (*ModuleComponentBuildFunction)(ModuleComponentBuildFunctionData* data);
+
+	struct ModuleComponentBuildEntry {
+		ModuleComponentBuildFunction function;
+		Stream<Stream<char>> component_dependencies;
+	};
+
+	struct ModuleComponentFunctions {
+		ECS_INLINE ModuleComponentFunctions() {
+			memset(this, 0, sizeof(*this));
+		}
+
+		ECS_INLINE size_t CopySize() const {
+			return component_name.CopySize() + copy_deallocate_data.CopySize() + compare_function_data.CopySize();
+		}
+
+		ECS_INLINE ModuleComponentFunctions Copy(AllocatorPolymorphic allocator) const {
+			ModuleComponentFunctions copy = *this;
+			copy.component_name = component_name.Copy(allocator);
+			Stream<void> new_copy_deallocate_data = copy_deallocate_data.size == 0 ? copy_deallocate_data : copy_deallocate_data.Copy(allocator);
+			Stream<void> new_compare_data = compare_function_data.size == 0 ? compare_function_data : compare_function_data.Copy(allocator);
+			copy.copy_deallocate_data = new_copy_deallocate_data;
+			copy.compare_function_data = new_compare_data;
+			return copy;
+		}
+
+		ECS_INLINE ModuleComponentFunctions CopyTo(uintptr_t& ptr) const {
+			ModuleComponentFunctions copy = *this;
+			copy.component_name = component_name.CopyTo(ptr);
+			Stream<void> new_copy_deallocate_data = copy_deallocate_data.size == 0 ? copy_deallocate_data : copy_deallocate_data.CopyTo(ptr);
+			Stream<void> new_compare_data = compare_function_data.size == 0 ? compare_function_data : compare_function_data.CopyTo(ptr);
+			copy.copy_deallocate_data = new_copy_deallocate_data;
+			copy.compare_function_data = new_compare_data;
+			return copy;
+		}
+
+		ECS_INLINE void SetComponentFunctionsTo(ComponentFunctions* functions) const {
+			functions->allocator_size = allocator_size;
+			functions->data = copy_deallocate_data;
+			functions->copy_function = copy_function;
+			functions->deallocate_function = deallocate_function;
+		}
+
+		ECS_INLINE void SetCompareFunctionTo(SharedComponentCompareFunction* function, Stream<void>* function_data) const {
+			*function = compare_function;
+			*function_data = compare_function_data;
+		}
+
+		size_t allocator_size;
+		ModuleComponentBuildFunction reset_function;
+		ComponentCopyFunction copy_function;
+		ComponentDeallocateFunction deallocate_function;
+		Stream<void> copy_deallocate_data;
+		Stream<char> component_name;
+
+		// Only valid for shared components
+		SharedComponentCompareFunction compare_function;
+		Stream<void> compare_function_data;
+	};
+
+	struct ModuleRegisterComponentFunctionsData {
+		CapacityStream<ModuleComponentFunctions>* functions;
+	};
+
+	typedef void (*ModuleRegisterComponentFunctionsFunction)(ModuleRegisterComponentFunctionsData* data);
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	// Module function missing is returned for either graphics function missing
 	enum ECS_MODULE_STATUS : unsigned char {
 		ECS_GET_MODULE_OK,
@@ -451,6 +530,7 @@ namespace ECSEngine {
 		ModuleRegisterExtraInformationFunction extra_information;
 		ModuleRegisterDebugDrawFunction debug_draw;
 		ModuleRegisterDebugDrawTaskElementsFunction debug_draw_tasks;
+		ModuleRegisterComponentFunctionsFunction component_functions;
 
 		void* os_module_handle;
 	};
@@ -467,6 +547,7 @@ namespace ECSEngine {
 		ModuleExtraInformation extra_information;
 		Stream<ModuleDebugDrawElement> debug_draw_elements;
 		Stream<ModuleDebugDrawTaskElement> debug_draw_task_elements;
+		Stream<ModuleComponentFunctions> component_functions;
 	};
 
 	// ----------------------------------------------------------------------------------------------------------------------

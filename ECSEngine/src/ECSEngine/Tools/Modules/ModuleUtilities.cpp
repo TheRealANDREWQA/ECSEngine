@@ -288,7 +288,8 @@ namespace ECSEngine {
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
 		CapacityStream<DeserializeEntityManagerComponentInfo>& infos,
-		Stream<ModuleLinkComponentTarget> extra_targets
+		Stream<ModuleLinkComponentTarget> extra_targets,
+		Stream<ModuleComponentFunctions> component_functions
 	)
 	{
 		return ModuleGatherLinkOverridesImpl(applied_modules, extra_targets,
@@ -297,7 +298,15 @@ namespace ECSEngine {
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
 				ECS_ASSERT(infos.size + unique_link_types.size <= infos.capacity);
-				ConvertLinkTypesToDeserializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, infos.buffer + infos.size);
+				ConvertLinkTypesToDeserializeEntityManagerUnique(
+					reflection_manager, 
+					database, 
+					temp_allocator, 
+					unique_link_types, 
+					unique_link_type_targets,
+					component_functions,
+					infos.buffer + infos.size
+				);
 				infos.size += unique_link_types.size;
 			}
 		);
@@ -311,7 +320,8 @@ namespace ECSEngine {
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
 		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& infos,
-		Stream<ModuleLinkComponentTarget> extra_targets
+		Stream<ModuleLinkComponentTarget> extra_targets,
+		Stream<ModuleComponentFunctions> component_functions
 	)
 	{
 		return ModuleGatherLinkOverridesImpl(applied_modules, extra_targets,
@@ -320,7 +330,15 @@ namespace ECSEngine {
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
 				ECS_ASSERT(infos.size + shared_link_types.size <= infos.capacity);
-				ConvertLinkTypesToDeserializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, infos.buffer + infos.size);
+				ConvertLinkTypesToDeserializeEntityManagerShared(
+					reflection_manager, 
+					database, 
+					temp_allocator, 
+					shared_link_types, 
+					shared_link_type_targets, 
+					component_functions,
+					infos.buffer + infos.size
+				);
 				infos.size += shared_link_types.size;
 			}
 		);
@@ -343,7 +361,14 @@ namespace ECSEngine {
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
 				ECS_ASSERT(infos.size + global_link_types.size <= infos.capacity);
-				ConvertLinkTypesToDeserializeEntityManagerGlobal(reflection_manager, database, temp_allocator, global_link_types, global_link_type_targets, infos.buffer + infos.size);
+				ConvertLinkTypesToDeserializeEntityManagerGlobal(
+					reflection_manager, 
+					database, 
+					temp_allocator, 
+					global_link_types, 
+					global_link_type_targets, 
+					infos.buffer + infos.size
+				);
 				infos.size += global_link_types.size;
 			}
 			);
@@ -359,7 +384,8 @@ namespace ECSEngine {
 		CapacityStream<DeserializeEntityManagerComponentInfo>& unique_infos,
 		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& shared_infos,
 		CapacityStream<DeserializeEntityManagerGlobalComponentInfo>& global_infos,
-		Stream<ModuleLinkComponentTarget> extra_targets
+		Stream<ModuleLinkComponentTarget> extra_targets,
+		Stream<ModuleComponentFunctions> component_functions
 	)
 	{
 		return ModuleGatherLinkOverridesImpl(applied_modules, extra_targets,
@@ -371,9 +397,32 @@ namespace ECSEngine {
 				ECS_ASSERT(shared_infos.size + shared_link_types.size <= shared_infos.capacity);
 				ECS_ASSERT(global_infos.size + global_link_types.size <= global_infos.capacity);
 
-				ConvertLinkTypesToDeserializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, unique_infos.buffer + unique_infos.size);
-				ConvertLinkTypesToDeserializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, shared_infos.buffer + shared_infos.size);
-				ConvertLinkTypesToDeserializeEntityManagerGlobal(reflection_manager, database, temp_allocator, global_link_types, global_link_type_targets, global_infos.buffer + global_infos.size);
+				ConvertLinkTypesToDeserializeEntityManagerUnique(
+					reflection_manager, 
+					database, 
+					temp_allocator, 
+					unique_link_types, 
+					unique_link_type_targets, 
+					component_functions,
+					unique_infos.buffer + unique_infos.size
+				);
+				ConvertLinkTypesToDeserializeEntityManagerShared(
+					reflection_manager, 
+					database, 
+					temp_allocator, 
+					shared_link_types, 
+					shared_link_type_targets, 
+					component_functions,
+					shared_infos.buffer + shared_infos.size
+				);
+				ConvertLinkTypesToDeserializeEntityManagerGlobal(
+					reflection_manager, 
+					database, 
+					temp_allocator, 
+					global_link_types, 
+					global_link_type_targets, 
+					global_infos.buffer + global_infos.size
+				);
 				unique_infos.size += unique_link_types.size;
 				shared_infos.size += shared_link_types.size;
 				global_infos.size += global_link_types.size;
@@ -459,6 +508,25 @@ namespace ECSEngine {
 				output_elements[index] = match_elements[found_index];
 			}
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Stream<ModuleComponentFunctions> ModuleAggregateComponentFunctions(Stream<const AppliedModule*> applied_modules, AllocatorPolymorphic allocator)
+	{
+		Stream<ModuleComponentFunctions> result;
+
+		size_t total_size = 0;
+		for (size_t index = 0; index < applied_modules.size; index++) {
+			total_size += applied_modules[index]->component_functions.size;
+		}
+
+		result.Initialize(allocator, total_size);
+		result.size = 0;
+		for (size_t index = 0; index < applied_modules.size; index++) {
+			result.AddStream(applied_modules[index]->component_functions);
+		}
+		return result;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

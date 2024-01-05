@@ -45,15 +45,18 @@ static void FileExplorerPrefabDragCallback(ActionData* action_data) {
 	if (data->read_success && data->load_assets_success.load(ECS_RELAXED) == LOAD_EDITOR_ASSETS_SUCCESS) {
 		auto set_prefab_position = [&](unsigned int sandbox_index) {
 			Translation* entity_translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, data->entity);
-			if (entity_translation != nullptr) {
-				Camera scene_camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-				uint2 window_dimensions = system->GetWindowTexelSize(window_index);
-				int2 window_pixel_positions = system->GetWindowTexelPositionEx(window_index, mouse_position);
-				float3 direction = ViewportToWorldRayDirection(&scene_camera, window_dimensions, window_pixel_positions);
-				entity_translation->value = scene_camera.translation + direction * CIRCLE_RADIUS;
-				RenderSandboxViewports(editor_state, sandbox_index);
-				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+			if (entity_translation == nullptr) {
+				AddSandboxEntityComponent(editor_state, sandbox_index, data->entity, STRING(Translation));
+				entity_translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, data->entity);
 			}
+
+			Camera scene_camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			uint2 window_dimensions = system->GetWindowTexelSize(window_index);
+			int2 window_pixel_positions = system->GetWindowTexelPositionEx(window_index, mouse_position);
+			float3 direction = ViewportToWorldRayDirection(&scene_camera, window_dimensions, window_pixel_positions);
+			entity_translation->value = scene_camera.translation + direction * CIRCLE_RADIUS;
+			RenderSandboxViewports(editor_state, sandbox_index);
+			system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 		};
 
 		auto add_prefab_to_sandbox = [&](unsigned int sandbox_index) {

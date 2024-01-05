@@ -525,6 +525,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	// Inherit the constants from the ui_reflection
 	module_reflection_manager->InheritConstants(editor_reflection_manager);
+	// Inherit the enums and types from the ui_reflection
+	module_reflection_manager->AddEnumsFrom(editor_reflection_manager);
+	module_reflection_manager->AddTypesFrom(editor_reflection_manager);
 
 	UIReflectionDrawer* module_ui_reflection = (UIReflectionDrawer*)malloc(sizeof(UIReflectionDrawer));
 	*module_ui_reflection = UIReflectionDrawer(resizable_arena, module_reflection_manager);

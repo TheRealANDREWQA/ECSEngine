@@ -2186,7 +2186,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	deselection_menu_data.state.row_has_submenu = FILE_EXPLORER_DESELECTION_HAS_SUBMENUES;
 
 	UIActionHandler deselect_right_click_handler = { RightClickMenu, &deselection_menu_data, sizeof(deselection_menu_data), ECS_UI_DRAW_SYSTEM };
-	drawer.SetWindowHoverable(&deselect_right_click_handler);
+	drawer.SetWindowClickable(&deselect_right_click_handler, ECS_MOUSE_RIGHT);
 
 #pragma endregion
 

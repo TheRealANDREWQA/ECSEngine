@@ -139,7 +139,7 @@ namespace ECSEngine {
 		CapacityStream<SerializeEntityManagerComponentInfo>& unique_infos,
 		CapacityStream<SerializeEntityManagerSharedComponentInfo>& shared_infos,
 		CapacityStream<SerializeEntityManagerGlobalComponentInfo>& global_infos,
-		Stream<ModuleLinkComponentTarget> extra_targets = { nullptr, 0 }
+		Stream<ModuleLinkComponentTarget> extra_targets = {}
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -151,7 +151,8 @@ namespace ECSEngine {
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
 		CapacityStream<DeserializeEntityManagerComponentInfo>& infos,
-		Stream<ModuleLinkComponentTarget> extra_targets = { nullptr, 0 }
+		Stream<ModuleLinkComponentTarget> extra_targets = {},
+		Stream<ModuleComponentFunctions> component_functions = {}
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -163,7 +164,8 @@ namespace ECSEngine {
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
 		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& infos,
-		Stream<ModuleLinkComponentTarget> extra_targets = { nullptr, 0 }
+		Stream<ModuleLinkComponentTarget> extra_targets = {},
+		Stream<ModuleComponentFunctions> component_functions = {}
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -175,7 +177,7 @@ namespace ECSEngine {
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
 		CapacityStream<DeserializeEntityManagerGlobalComponentInfo>& infos,
-		Stream<ModuleLinkComponentTarget> extra_targets = { nullptr, 0 }
+		Stream<ModuleLinkComponentTarget> extra_targets = {}
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -189,7 +191,8 @@ namespace ECSEngine {
 		CapacityStream<DeserializeEntityManagerComponentInfo>& unique_infos,
 		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& shared_infos,
 		CapacityStream<DeserializeEntityManagerGlobalComponentInfo>& global_infos,
-		Stream<ModuleLinkComponentTarget> extra_targets = { nullptr, 0 }
+		Stream<ModuleLinkComponentTarget> extra_targets = {},
+		Stream<ModuleComponentFunctions> component_functions = {}
 	);
 	 
 	// ------------------------------------------------------------------------------------------------------------
@@ -212,6 +215,13 @@ namespace ECSEngine {
 		Stream<ComponentWithType> components,
 		Stream<ModuleDebugDrawElement> match_elements,
 		ModuleDebugDrawElement* output_elements
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API Stream<ModuleComponentFunctions> ModuleAggregateComponentFunctions(
+		Stream<const AppliedModule*> applied_modules,
+		AllocatorPolymorphic allocator
 	);
 
 	// ------------------------------------------------------------------------------------------------------------

@@ -70,16 +70,48 @@ namespace ECSEngine {
 
 	}
 
-	// It will overwrite the given pointer. These pointers need to be copies of the fixed structure
+	// It will overwrite the given pointers. These pointers need to be copies of the fixed structure
 	// You can specify a different capacity from the size to be copied
 	template<typename FirstPointer, typename... Pointers>
 	void SoACopy(AllocatorPolymorphic allocator, size_t size, size_t capacity, FirstPointer** first_pointer, Pointers... pointers) {
-		size_t allocation_size = internal::SoACalculateSizeImpl(capacity, first_pointer, pointers...);
+		if (capacity > 0) {
+			size_t allocation_size = internal::SoACalculateSizeImpl(capacity, first_pointer, pointers...);
 
-		void* allocation = AllocateEx(allocator, allocation_size);
-		uintptr_t ptr = (uintptr_t)allocation;
+			void* allocation = AllocateEx(allocator, allocation_size);
+			uintptr_t ptr = (uintptr_t)allocation;
 
-		internal::SoACopyImpl(ptr, size, capacity, first_pointer, pointers...);
+			internal::SoACopyImpl(ptr, size, capacity, first_pointer, pointers...);
+		}
+		else {
+			uintptr_t ptr = 0;
+			SoAInitializeFromBuffer(0, ptr, first_pointer, pointers...);
+		}
+	}
+
+	// It will overwrite the given pointers. These pointers need to point to data that needs to be copied
+	// You can specify a different capacity from the size to be copied
+	// The current first pointer needs to be the first pointer of the SoA
+	template<typename FirstPointer, typename... Pointers>
+	void SoACopyReallocate(AllocatorPolymorphic allocator, size_t size, size_t capacity, void* current_first_pointer, FirstPointer** first_pointer, Pointers... pointers) {
+		if (capacity > 0) {
+			size_t allocation_size = internal::SoACalculateSizeImpl(capacity, first_pointer, pointers...);
+			
+			void* allocation = nullptr;
+			if (current_first_pointer == nullptr) {
+				allocation = AllocateEx(allocator, allocation_size);
+			}
+			else {
+				allocation = ReallocateEx(allocator, current_first_pointer, allocation_size);
+			}
+			uintptr_t ptr = (uintptr_t)allocation;
+
+			internal::SoACopyImpl(ptr, size, capacity, first_pointer, pointers...);
+		}
+		else {
+			if (current_first_pointer != nullptr) {
+				Deallocate(allocator, current_first_pointer);
+			}
+		}
 	}
 
 	template<typename FirstPointer, typename... Pointers>
@@ -123,6 +155,18 @@ namespace ECSEngine {
 		if constexpr (sizeof...(Pointers) > 0) {
 			SoADisplaceElements(size, offset, displacement, pointers...);
 		}
+	}
+
+	template<typename FirstPointerType, typename... Pointers>
+	bool SoACompare(size_t size, FirstPointerType left_first_pointer, FirstPointerType right_first_pointer, Pointers... pointers) {
+		if (memcmp(left_first_pointer, right_first_pointer, sizeof(*left_first_pointer) * size) == 0) {
+			return false;
+		}
+
+		if constexpr (sizeof...(Pointers) > 0) {
+			return SoACompare(size, pointers...);
+		}
+		return true;
 	}
 
 }

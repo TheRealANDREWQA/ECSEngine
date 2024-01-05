@@ -982,13 +982,6 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		AllocatorPolymorphic UISystem::Allocator() const
-		{
-			return m_memory;
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		void UISystem::AppendDockspaceResize(
 			unsigned char dockspace_index,
 			CapacityStream<UIDockspace>* dockspaces,

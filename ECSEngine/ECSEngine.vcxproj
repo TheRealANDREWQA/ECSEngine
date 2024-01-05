@@ -239,6 +239,7 @@
     <ClInclude Include="src\ECSEngine\Containers\SoA.h" />
     <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
     <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
+    <ClInclude Include="src\ECSEngine\ECS\ComponentFunctions.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.h" />
     <ClInclude Include="src\ECSEngine\ECS\EntityChangeSet.h" />

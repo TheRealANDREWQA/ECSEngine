@@ -5,6 +5,7 @@
 #include "ButtonInput.h"
 
 #define ECS_KEYBOARD_CHARACTER_QUEUE_DEFAULT_SIZE 256
+#define ECS_KEYBOARD_ALPHANUMERIC_CAPACITY 128
 
 namespace ECSEngine {
 
@@ -191,6 +192,7 @@ namespace ECSEngine {
         ECS_INLINE Keyboard(GlobalMemoryManager* allocator) {
             Reset();
             m_character_queue = KeyboardCharacterQueue(allocator, ECS_KEYBOARD_CHARACTER_QUEUE_DEFAULT_SIZE);
+            m_alphanumeric_keys.Initialize(allocator, 0, ECS_KEYBOARD_ALPHANUMERIC_CAPACITY);
             DoNotCaptureCharacters();
         }
 
@@ -199,10 +201,14 @@ namespace ECSEngine {
 
 		ECS_INLINE void CaptureCharacters() {
 			m_process_characters = true;
+            // At the moment, this messes up with the UI text input
+            // Disable it for the time being
+            //m_alphanumeric_keys.size = 0;
 		}
 
 		ECS_INLINE void DoNotCaptureCharacters() {
 			m_process_characters = false;
+            m_alphanumeric_keys.size = 0;
 		}
 
         ECS_INLINE bool IsCaptureCharacters() const {
@@ -221,11 +227,23 @@ namespace ECSEngine {
 
         void UpdateFromOther(const Keyboard* other);
 
+        // Returns the state of an alphanumeric key while text input is activated
+        ECS_BUTTON_STATE GetAlphanumericKey(ECS_KEY key) const;
+
+        struct AlphanumericKey {
+            ECS_KEY key;
+            ECS_BUTTON_STATE state;
+        };
+
 		KeyboardCharacterQueue m_character_queue;
 		bool m_process_characters;
         // Describes how many characters have been pushed since
         // The last message handling pass
         unsigned int m_pushed_character_count;
+        // While characters are pushed into the character queue, their states
+        // Are recorded here separately such that you can still ask for the button
+        // States even when recording characters.
+        CapacityStream<AlphanumericKey> m_alphanumeric_keys;
 	};
 }
 

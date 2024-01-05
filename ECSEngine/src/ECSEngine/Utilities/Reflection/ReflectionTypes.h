@@ -256,6 +256,8 @@ namespace ECSEngine {
 			// Copies everything that needs to be copied into this buffer
 			ReflectionEnum CopyTo(uintptr_t& ptr) const;
 
+			ReflectionEnum Copy(AllocatorPolymorphic allocator) const;
+
 			Stream<char> name;
 			// These are the fields as they are parsed originally
 			Stream<Stream<char>> original_fields;

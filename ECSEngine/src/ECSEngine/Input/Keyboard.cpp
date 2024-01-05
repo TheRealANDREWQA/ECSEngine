@@ -6,12 +6,25 @@ namespace ECSEngine {
 	void Keyboard::Reset() {
 		ButtonInput<ECS_KEY, ECS_KEY_COUNT>::Reset();
 		m_pushed_character_count = 0;
+		//m_alphanumeric_keys.size = 0;
 	}
 
 	void Keyboard::Update()
 	{
 		Tick();
 		m_pushed_character_count = 0;
+
+		// We need to update the alphanumeric keys as well
+		for (unsigned int index = 0; index < m_alphanumeric_keys.size; index++) {
+			if (m_alphanumeric_keys[index].state == ECS_BUTTON_PRESSED) {
+				m_alphanumeric_keys[index].state = ECS_BUTTON_HELD;
+			}
+			else if (m_alphanumeric_keys[index].state == ECS_BUTTON_RELEASED) {
+				// Remove this entry
+				m_alphanumeric_keys.RemoveSwapBack(index);
+				index--;
+			}
+		}
 	}
 
 	void Keyboard::Procedure(const KeyboardProcedureInfo& info)
@@ -435,8 +448,29 @@ namespace ECSEngine {
 			}
 		}
 
-		if (!IsAlphanumeric(ecs_key) || !m_process_characters) {
+		bool is_alphanumeric = IsAlphanumeric(ecs_key);
+		if (!is_alphanumeric || !m_process_characters) {
 			UpdateButton(ecs_key, !down);
+		}
+		else if (is_alphanumeric) {
+			// Update the entry from the alphanumeric keys
+			unsigned int index = 0;
+			for (; index < m_alphanumeric_keys.size; index++) {
+				if (m_alphanumeric_keys[index].key == ecs_key) {
+					if (down) {
+						m_alphanumeric_keys[index].state = m_alphanumeric_keys[index].state != ECS_BUTTON_PRESSED ? ECS_BUTTON_PRESSED : ECS_BUTTON_HELD;
+					}
+					else {
+						m_alphanumeric_keys[index].state = m_alphanumeric_keys[index].state != ECS_BUTTON_RELEASED ? ECS_BUTTON_RELEASED : ECS_BUTTON_RAISED;
+					}
+					break;
+				}
+			}
+
+			if (index == m_alphanumeric_keys.size) {
+				// Add a new entry
+				m_alphanumeric_keys.Add({ ecs_key, down ? ECS_BUTTON_PRESSED : ECS_BUTTON_RELEASED });
+			}
 		}
 	}
 
@@ -447,6 +481,17 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < other->m_pushed_character_count; index++) {
 			m_character_queue.Push(other->m_character_queue.PushPeekByIndex(index));
 		}
+	}
+
+	ECS_BUTTON_STATE Keyboard::GetAlphanumericKey(ECS_KEY key) const
+	{
+		for (unsigned int index = 0; index < m_alphanumeric_keys.size; index++) {
+			if (m_alphanumeric_keys[index].key == key) {
+				return m_alphanumeric_keys[index].state;
+			}
+		}
+
+		return ECS_BUTTON_RAISED;
 	}
 
 	bool IsAlphanumeric(ECS_KEY key)

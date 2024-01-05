@@ -160,17 +160,19 @@ namespace ECSEngine {
 	};
 
 	struct DeserializeEntityManagerComponentFixup {
-		size_t allocator_size = 0;
-		ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
-		unsigned short component_buffer_count = 0;
+		ComponentFunctions component_functions = {};
 		unsigned short component_byte_size = 0;
+
+		// Only valid for shared components
+		SharedComponentCompareFunction compare_function = nullptr;
+		Stream<void> compare_function_data = {};
 	};
 
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct DeserializeEntityManagerComponentInfo {
 		// The copy functions are used for stream deep copy
 		ECS_INLINE size_t CopySize() const {
-			return name.MemoryOf(name.size);
+			return name.CopySize() + component_fixup.component_functions.data.CopySize();
 		}
 
 		DeserializeEntityManagerComponentInfo CopyTo(uintptr_t& ptr) {
@@ -178,6 +180,8 @@ namespace ECSEngine {
 
 			memcpy(&info, this, sizeof(info));
 			info.name.InitializeAndCopy(ptr, name);
+			info.component_fixup.component_functions.data.InitializeFromBuffer(ptr, component_fixup.component_functions.data.size);
+			info.component_fixup.component_functions.data.CopyOther(component_fixup.component_functions.data.buffer, component_fixup.component_functions.data.size);
 
 			return info;
 		}
@@ -193,7 +197,7 @@ namespace ECSEngine {
 	struct DeserializeEntityManagerSharedComponentInfo {
 		// The copy functions are used for stream deep copy
 		ECS_INLINE size_t CopySize() const {
-			return name.MemoryOf(name.size);
+			return name.CopySize() + component_fixup.component_functions.data.CopySize();
 		}
 
 		DeserializeEntityManagerSharedComponentInfo CopyTo(uintptr_t& ptr) {
@@ -201,6 +205,8 @@ namespace ECSEngine {
 
 			memcpy(&info, this, sizeof(info));
 			info.name.InitializeAndCopy(ptr, name);
+			info.component_fixup.component_functions.data.InitializeFromBuffer(ptr, component_fixup.component_functions.data.size);
+			info.component_fixup.component_functions.data.CopyOther(component_fixup.component_functions.data.buffer, component_fixup.component_functions.data.size);
 
 			return info;
 		}

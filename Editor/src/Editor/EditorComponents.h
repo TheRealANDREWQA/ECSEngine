@@ -353,20 +353,19 @@ struct EditorComponents {
 		SpinLock* lock = nullptr
 	) const;
 
-	// Does not deallocate any buffers or remove asset references that would be overwritten. It will only set the default values.
-	void ResetComponent(Stream<char> component_name, void* component_data) const;
+	// This function does not take into consideration the module reset function
+	void ResetComponentBasic(Stream<char> component_name, void* component_data) const;
 
-	// Does not deallocate any buffers or remove asset references that would be overwritten. It will only set the default values.
-	void ResetComponent(Component component, void* component_data, ECS_COMPONENT_TYPE type) const;
-
-	// Allocates the buffers for an entity from the stack memory into the component_buffers parameter
-	// and sets the data to its default values. The buffers will be set to 0.
-	void ResetComponents(ComponentSignature component_signature, void* stack_memory, void** component_buffers) const;
+	// This function does not take into consideration the module reset function
+	void ResetComponentBasic(Component component, void* component_data, ECS_COMPONENT_TYPE type) const;
 
 	// For link components it will reset the target component, without doing anything to the link component.
-	// It works only for unique and link components to unique components
+	// It works for unique and shared components - for global components there is a separate function
 	// Sets the component to default values. If it has buffers, it will deallocate them.
-	void ResetComponentFromManager(EntityManager* entity_manager, Stream<char> component_name, Entity entity) const;
+	void ResetComponent(EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name, Entity entity, ECS_COMPONENT_TYPE type) const;
+
+	// Does not deallocate any buffers or remove asset references that would be overwritten. It will only set the default values.
+	void ResetGlobalComponent(Component component, void* component_data) const;
 
 	// Returns true if it handled the event, else false when the event needs to be reprocessed later on (for example when resizing
 	// a component allocator and the component has not yet been registered because of the event)

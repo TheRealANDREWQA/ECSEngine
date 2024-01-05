@@ -993,14 +993,9 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 	const ReflectionType* internal_type = internal_manager->GetType(component_name);
 	bool is_component = IsReflectionTypeComponent(internal_type);
 	
-	ECS_STACK_CAPACITY_STREAM(ComponentBuffer, component_buffers, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT);
-
 	Component component = { (short)internal_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-	double allocator_size_d = internal_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-	size_t allocator_size = allocator_size_d == DBL_MAX ? 0 : (size_t)allocator_size_d;
-	if (allocator_size > 0) {
-		GetReflectionTypeRuntimeBuffers(internal_type, component_buffers);
-	}
+	ECS_STACK_VOID_STREAM(stack_memory, 256);
+	ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(internal_type, &stack_memory);
 
 	// Lock the small memory manager in order to commit the type
 	if (lock != nullptr) {
@@ -1009,12 +1004,12 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 	// Check to see if it already exists. If it does, don't commit it
 	if (is_component) {
 		if (!entity_manager->ExistsComponent(component)) {
-			entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size, component_name, component_buffers);
+			entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), component_name, &component_functions);
 		}
 	}
 	else {
 		if (!entity_manager->ExistsSharedComponent(component)) {
-			entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size, component_name, component_buffers);
+			entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), component_name, &component_functions);
 		}
 	}
 	if (lock != nullptr) {
@@ -1711,6 +1706,22 @@ void EditorComponents::RemoveTypeFromManager(
 
 // ----------------------------------------------------------------------------------------------
 
+
+void EditorComponents::ResetComponentBasic(Stream<char> component_name, void* component_data) const
+{
+	const ReflectionType* type = internal_manager->GetType(component_name);
+	internal_manager->SetInstanceDefaultData(type, component_data);
+}
+
+void EditorComponents::ResetComponentBasic(Component component, void* component_data, ECS_COMPONENT_TYPE type) const
+{
+	Stream<char> name = ComponentFromID(component, type);
+	ECS_ASSERT(name.size != 0);
+	ResetComponentBasic(name, component_data);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 void EditorComponents::RemoveModuleFromManager(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -1739,40 +1750,26 @@ void EditorComponents::RemoveModuleFromManager(
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::ResetComponent(Stream<char> component_name, void* component_data) const
+void EditorComponents::ResetGlobalComponent(Component component, void* component_data) const
 {
-	const ReflectionType* type = internal_manager->GetType(component_name);
-	internal_manager->SetInstanceDefaultData(type, component_data);
-}
-
-// ----------------------------------------------------------------------------------------------
-
-void EditorComponents::ResetComponent(ECSEngine::Component component, void* component_data, ECS_COMPONENT_TYPE type) const
-{
-	Stream<char> name = ComponentFromID(component, type);
+	Stream<char> name = ComponentFromID(component, ECS_COMPONENT_GLOBAL);
 	ECS_ASSERT(name.size != 0);
-	ResetComponent(name, component_data);
+
+	const ReflectionType* reflection_type = internal_manager->GetType(name);
+	internal_manager->SetInstanceDefaultData(reflection_type, component_data);
 }
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::ResetComponents(ComponentSignature component_signature, void* stack_memory, void** component_buffers) const
+void EditorComponents::ResetComponent(EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name, Entity entity, ECS_COMPONENT_TYPE type) const
 {
-	for (unsigned int index = 0; index < component_signature.count; index++) {
-		Stream<char> component_name = ComponentFromID(component_signature[index], ECS_COMPONENT_UNIQUE);
-
-		// Determine the byte size
-		unsigned short byte_size = GetComponentByteSize(component_name);
-		component_buffers[index] = stack_memory;
-		stack_memory = OffsetPointer(stack_memory, byte_size);
-		ResetComponent(component_name, component_buffers[index]);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
+	if (!entity_manager->ExistsEntity(entity)) {
+		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
+		EditorSetConsoleWarn(warn_message);
+		return;
 	}
-}
 
-// ----------------------------------------------------------------------------------------------
-
-void EditorComponents::ResetComponentFromManager(EntityManager* entity_manager, Stream<char> component_name, Entity entity) const
-{
 	Stream<char> target = GetComponentFromLink(component_name);
 	if (target.size > 0) {
 		component_name = target;
@@ -1787,29 +1784,39 @@ void EditorComponents::ResetComponentFromManager(EntityManager* entity_manager, 
 	}
 
 	// If it is not registered, fail
-	if (!entity_manager->ExistsComponent(component)) {
+	bool exists_component = false;
+	if (type == ECS_COMPONENT_UNIQUE) {
+		exists_component = entity_manager->ExistsComponent(component);
+	}
+	else {
+		exists_component = entity_manager->ExistsSharedComponent(component);
+	}
+	if (!exists_component) {
 		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
 		EditorSetConsoleWarn(warn_message);
 		return;
 	}
-
-	if (!entity_manager->ExistsEntity(entity)) {
-		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
-		EditorSetConsoleWarn(warn_message);
-		return;
+	void* entity_data = nullptr;
+	if (type == ECS_COMPONENT_UNIQUE) {
+		entity_data = entity_manager->GetComponent(entity, component);
 	}
-
-	MemoryArena* arena = entity_manager->GetComponentAllocator(component);
-	void* entity_data = entity_manager->GetComponent(entity, component);
-
-	const ComponentInfo* info = &entity_manager->m_unique_components[component.value];
-
-	// Deallocate the buffers, if any
-	for (unsigned char deallocate_index = 0; deallocate_index < info->component_buffers_count; deallocate_index++) {
-		ComponentBufferDeallocate(info->component_buffers[deallocate_index], arena, entity_data);
+	else {
+		entity_data = entity_manager->GetSharedComponent(entity, component);
 	}
-
-	internal_manager->SetInstanceDefaultData(component_name, entity_data);
+	
+	// If it has a reset function, then we delegate the deallocation to it
+	ModuleComponentBuildFunction reset_function = GetModuleComponentResetFunction(editor_state, component_name);
+	if (reset_function != nullptr) {
+		ModuleComponentBuildFunctionData reset_data;
+		reset_data.entity = entity;
+		reset_data.component = entity_data;
+		reset_data.entity_manager = entity_manager;
+		reset_function(&reset_data);
+	}
+	else {
+		entity_manager->TryCallEntityComponentDeallocateCommit(entity, component);
+		internal_manager->SetInstanceDefaultData(component_name, entity_data);
+	}
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1976,15 +1983,9 @@ void EditorComponents::SetManagerComponents(EntityManager* entity_manager)
 		FunctorData* data = (FunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsComponent(component_id)) {
-			double _allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-			size_t allocator_size = _allocator_size == DBL_MAX ? 0 : (size_t)_allocator_size;
-
-			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, component_buffers, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT);
-			if (allocator_size > 0) {
-				GetReflectionTypeRuntimeBuffers(type, component_buffers);
-			}
- 
-			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size, type->name, component_buffers);
+			ECS_STACK_VOID_STREAM(stack_memory, 256);
+			ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(type, &stack_memory);
+			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name, &component_functions);
 		}
 	};
 
@@ -1997,14 +1998,9 @@ void EditorComponents::SetManagerComponents(EntityManager* entity_manager)
 		SharedFunctorData* data = (SharedFunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsSharedComponent(component_id)) {
-			double _allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-			size_t allocator_size = _allocator_size == DBL_MAX ? 0 : (size_t)_allocator_size;
-
-			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, component_buffers, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT);
-			if (allocator_size > 0) {
-				GetReflectionTypeRuntimeBuffers(type, component_buffers);
-			}
-			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size, type->name, component_buffers);
+			ECS_STACK_VOID_STREAM(stack_memory, 256);
+			ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(type, &stack_memory);
+			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name, &component_functions);
 		}
 	};
 

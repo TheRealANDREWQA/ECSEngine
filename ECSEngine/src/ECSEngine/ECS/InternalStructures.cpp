@@ -1080,4 +1080,40 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void ComponentInfo::CallCopyFunction(void* destination, const void* source, bool deallocate_previous) const 
+	{
+		ComponentCopyFunctionData copy_data;
+		copy_data.allocator = allocator;
+		copy_data.destination = destination;
+		copy_data.source = source;
+		copy_data.function_data = copy_deallocate_data.buffer;
+		copy_data.deallocate_previous = deallocate_previous;
+		copy_function(&copy_data);
+	}
+
+	void ComponentInfo::CallDeallocateFunction(void* data) const
+	{
+		ComponentDeallocateFunctionData deallocate_data;
+		deallocate_data.allocator = allocator;
+		deallocate_data.data = data;
+		deallocate_data.function_data = copy_deallocate_data.buffer;
+		deallocate_function(&deallocate_data);
+	}
+
+	void ComponentInfo::TryCallCopyFunction(void* destination, const void* source, bool deallocate_previous) const
+	{
+		if (copy_function != nullptr) {
+			CallCopyFunction(destination, source, deallocate_previous);
+		}
+	}
+
+	void ComponentInfo::TryCallDeallocateFunction(void* data) const
+	{
+		if (deallocate_function != nullptr) {
+			CallDeallocateFunction(data);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

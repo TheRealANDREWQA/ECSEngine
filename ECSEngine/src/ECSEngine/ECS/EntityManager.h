@@ -323,6 +323,24 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Deallocates any buffers used inside the entity for unique components
+		// If the component doesn't have buffers, it will crash
+		void CallEntityComponentDeallocateCommit(Entity entity, Component component);
+
+		// If the given component doesn't have buffers, it will do nothing
+		// Else same behaviour as the other deallocate function
+		void TryCallEntityComponentDeallocateCommit(Entity entity, Component component);
+
+		// Deallocates any buffers used inside the shared instance. Valid only for shared components
+		// If there is no deallocate function, it will probably crash
+		void CallComponentSharedInstanceDeallocateCommit(Component component, SharedInstance instance);
+
+		// Deallocates any buffers used inside the shared instance. Valid only for shared components
+		// If there are no buffers, it will do nothing.
+		void TryCallComponentSharedInstanceDeallocateCommit(Component component, SharedInstance instance);
+
+		// ---------------------------------------------------------------------------------------------------
+
 		// Mostly for editor purposes, like when a component ID is changed (this function is given
 		// because the vector signature needs to be changed besides the ComponentSignature)
 		// It changes the registration of the component as well
@@ -570,19 +588,6 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// Deallocates any buffers used inside the entity for unique components
-		// If the component doesn't have buffers, it will crash
-		void DeallocateEntityBuffersCommit(Entity entity, Component component);
-
-		// If the given component doesn't have buffers, it will do nothing
-		// Else same behaviour as the other deallocate function
-		void DeallocateEntityBuffersIfExistentCommit(Entity entity, Component component);
-
-		// Deallocates any buffers used inside the shared instance. Valid only for shared components
-		void DeallocateSharedInstanceBuffersCommit(Component component, SharedInstance instance);
-
-		// ---------------------------------------------------------------------------------------------------
-
 		void DeleteEntityCommit(Entity entity);
 
 		// Deferred Call - it will register it inside the command stream
@@ -724,6 +729,10 @@ namespace ECSEngine {
 			SharedComponentSignature shared_signature,
 			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		SharedInstance FindOrCreateSharedInstanceCommit(Component component, const void* data);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1559,29 +1568,9 @@ namespace ECSEngine {
 		// The name is optional - for debugging purposes only
 		void RegisterComponentCommit(
 			Component component, 
-			unsigned int size, 
-			size_t allocator_size = 0,
-			Stream<char> name = { nullptr, 0 },
-			Stream<ComponentBuffer> component_buffers = { nullptr, 0 }
-		);
-
-		// Deferred call
-		// Each component can have an allocator that can be used to keep the data together
-		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
-		// use because all the allocations will happen from this allocator. If the allocator is needed,
-		// alongside it, the buffer offsets must be provided such that destroying an entity its buffers be freed.
-		// You can specify the buffer being a data pointer in order to save on memory. The byte size and the size offset
-		// are only needed when using the CopyEntities function. Outside of that the runtime doesn't depend on it
-		// When deallocating if the pointer is nullptr then it will skip the deallocation
-		// The name is optional - for debugging purposes only
-		void RegisterComponent(
-			Component component, 
 			unsigned int size,
-			size_t allocator_size = 0,
 			Stream<char> name = { nullptr, 0 },
-			Stream<ComponentBuffer> buffer_offsets = { nullptr, 0 },
-			EntityManagerCommandStream* command_stream = nullptr, 
-			DebugInfo debug_info = ECS_DEBUG_INFO
+			const ComponentFunctions* functions = nullptr
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -1594,25 +1583,10 @@ namespace ECSEngine {
 		void RegisterSharedComponentCommit(
 			Component component, 
 			unsigned int size, 
-			size_t allocator_size = 0,
 			Stream<char> name = { nullptr, 0 },
-			Stream<ComponentBuffer> buffer_offset = { nullptr, 0 }
-		);
-
-		// Deferred call
-		// Each component can have an allocator that can be used to keep the data together
-		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
-		// use because all the allocations will happen from this allocator. If the allocator is needed,
-		// alongside it, the buffer offsets must be provided such that destroying an entity its buffers be freed
-		// The name is optional - for debugging purposes only
-		void RegisterSharedComponent(
-			Component component, 
-			unsigned int size,
-			size_t allocator_size = 0,
-			Stream<char> name = { nullptr, 0 },
-			Stream<ComponentBuffer> buffer_offset = { nullptr, 0 },
-			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = ECS_DEBUG_INFO
+			const ComponentFunctions* functions = nullptr,
+			SharedComponentCompareFunction compare_function = nullptr,
+			Stream<void> compare_function_data = {}
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -1629,8 +1603,8 @@ namespace ECSEngine {
 			Component component,
 			unsigned int size,
 			const void* data,
-			size_t allocator_size = 0,
-			Stream<char> name = { nullptr, 0 }
+			Stream<char> name = { nullptr, 0 },
+			size_t allocator_size = 0
 		);
 
 		// The component needs to be a shared component - with the appropriate reflection set
@@ -1762,10 +1736,12 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------
 
 		// Takes care of the buffer copy (and deallocation if the entity already has data in it), if specified
-		void SetEntityComponentCommit(Entity entity, Component component, const void* data, bool allocate_buffers = true);
+		// The deallocate previous buffers is used only if allocate buffers is set to true
+		void SetEntityComponentCommit(Entity entity, Component component, const void* data, bool allocate_buffers = true, bool deallocate_previous_buffers = true);
 
 		// Takes care of the buffer copy (and deallocation if the entity already has data in it), if specified
-		void SetEntityComponentsCommit(Entity entity, ComponentSignature component_signature, const void** data, bool allocate_buffers = true);
+		// The deallocate previous buffers is used only if allocate buffers is set to true
+		void SetEntityComponentsCommit(Entity entity, ComponentSignature component_signature, const void** data, bool allocate_buffers = true, bool deallocate_previous_buffers = true);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1827,18 +1803,10 @@ namespace ECSEngine {
 		// Frees the slot used by that component.
 		void UnregisterComponentCommit(Component component);
 
-		// Deferred call
-		// Frees the slot used by that component.
-		void UnregisterComponent(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
-
 		// ---------------------------------------------------------------------------------------------------
 
 		// Frees the slot used by that component.
 		void UnregisterSharedComponentCommit(Component component);
-
-		// Deferred call
-		// Frees the slot used by that component.
-		void UnregisterSharedComponent(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 

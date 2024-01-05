@@ -207,6 +207,7 @@ namespace ECSEngine {
 		module.extra_information = (ModuleRegisterExtraInformationFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterExtraInformationFunction));
 		module.debug_draw = (ModuleRegisterDebugDrawFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterDebugDrawFunction));
 		module.debug_draw_tasks = (ModuleRegisterDebugDrawTaskElementsFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterDebugDrawTaskElementsFunction));
+		module.component_functions = (ModuleRegisterComponentFunctionsFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterComponentFunctionsFunction));
 
 		module.code = ECS_GET_MODULE_OK;
 		module.os_module_handle = module_handle;
@@ -230,6 +231,7 @@ namespace ECSEngine {
 		module->extra_information = LoadModuleExtraInformation(&module->base_module, allocator);
 		module->debug_draw_elements = LoadModuleDebugDrawElements(&module->base_module, allocator);
 		module->debug_draw_task_elements = LoadModuleDebugDrawTaskElements(&module->base_module, allocator, error_message);
+		module->component_functions = LoadModuleComponentFunctions(&module->base_module, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -587,6 +589,35 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
+	Stream<ModuleComponentFunctions> LoadModuleComponentFunctions(
+		const Module* module,
+		AllocatorPolymorphic allocator
+	) {
+		if (!module->component_functions) {
+			return {};
+		}
+
+		return LoadModuleComponentFunctions(module->component_functions, allocator);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	Stream<ModuleComponentFunctions> LoadModuleComponentFunctions(
+		ModuleRegisterComponentFunctionsFunction function,
+		AllocatorPolymorphic allocator
+	) {
+		ECS_STACK_CAPACITY_STREAM(ModuleComponentFunctions, reset_functions, 1024);
+
+		ModuleRegisterComponentFunctionsData register_data;
+		register_data.functions = &reset_functions;
+		function(&register_data);
+		reset_functions.AssertCapacity();
+
+		return StreamCoalescedDeepCopy(reset_functions, allocator);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
 	void ReleaseModule(Module* module, bool* unload_debugging_symbols) {
 		if (module->code != ECS_GET_MODULE_FAULTY_PATH) {
 			ReleaseModuleHandle(module->os_module_handle, unload_debugging_symbols);
@@ -645,6 +676,11 @@ namespace ECSEngine {
 		if (module->debug_draw_task_elements.size > 0) {
 			DeallocateIfBelongs(allocator, module->debug_draw_task_elements.buffer);
 			module->debug_draw_task_elements = { nullptr, 0 };
+		}
+
+		if (module->component_functions.size > 0) {
+			DeallocateIfBelongs(allocator, module->component_functions.buffer);
+			module->component_functions = { nullptr, 0 };
 		}
 	}
 
@@ -849,6 +885,16 @@ namespace ECSEngine {
 			data->initialize_task_name.CopyTo(OffsetPointer(function_data, sizeof(*function_data)));
 		}
 		initialize_info->frame_data->size = write_size;
+	}
+
+	ModuleComponentBuildFunction GetModuleResetFunction(const AppliedModule* applied_module, Stream<char> component_name) {
+		size_t index = applied_module->component_functions.Find(component_name, [](ModuleComponentFunctions element) {
+			return element.component_name;
+		});
+		if (index != -1) {
+			return applied_module->component_functions[index].reset_function;
+		}
+		return nullptr;
 	}
 
 	void AddModuleDebugDrawTaskElementsToScheduler(TaskScheduler* scheduler, Stream<ModuleDebugDrawTaskElement> elements, bool scene_order)

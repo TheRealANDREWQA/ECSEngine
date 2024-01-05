@@ -2,6 +2,7 @@
 #pragma once
 #include "ECSEngineReflectionMacros.h"
 #include "ECSEngineBasics.h"
+#include "ConvexHull.h"
 
 #define COLLISION_DETECTION_COMPONENT_BASE ECS_CONSTANT_REFLECT(200)
 
@@ -34,13 +35,61 @@ struct ECS_REFLECT_COMPONENT Collider {
 		struct {
 			float3 center_offset;
 			float radius;
-			ECS_AXIS axis;
+			float length;
 		};
 		struct {
 			// Convex hull
 		};
 	};
 };
+
+struct ECS_REFLECT_COMPONENT SphereCollider {
+	constexpr static ECS_INLINE short ID() {
+		return COLLISION_DETECTION_COMPONENT_BASE + 1;
+	}
+
+	constexpr static ECS_INLINE bool IsShared() {
+		return false;
+	}
+
+	float3 center_offset;
+	float radius;
+	CameraParametersFOV fov;
+};
+
+struct ECS_REFLECT_COMPONENT CapsuleCollider {
+	constexpr static ECS_INLINE short ID() {
+		return COLLISION_DETECTION_COMPONENT_BASE + 2;
+	}
+
+	constexpr static ECS_INLINE bool IsShared() {
+		return false;
+	}
+
+	float3 center_offset;
+	float radius;
+	float length;
+	ECS_AXIS axis;
+};
+
+struct ECS_REFLECT_COMPONENT ConvexCollider {
+	constexpr static ECS_INLINE short ID() {
+		return COLLISION_DETECTION_COMPONENT_BASE + 3;
+	}
+
+	constexpr static ECS_INLINE bool IsShared() {
+		return false;
+	}
+
+	ConvexHull hull; ECS_SKIP_REFLECTION(static_assert(sizeof(ConvexHull) == 32))
+};
+
+
+bool CompareConvexCollider(const ConvexCollider* first, const ConvexCollider* second);
+
+void CopyConvexCollider(ConvexCollider* destination, const ConvexCollider* source, AllocatorPolymorphic allocator, bool deallocate_existing_destination);
+
+void DeallocateConvexCollider(ConvexCollider* collider, AllocatorPolymorphic allocator);
 
 struct ECS_REFLECT_SETTINGS CollisionSettings {
 	float factor;

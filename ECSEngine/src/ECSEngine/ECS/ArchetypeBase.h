@@ -34,7 +34,8 @@ namespace ECSEngine {
 		// It returns the offset at which these entities can be written to
 		unsigned int AddEntities(Stream<Entity> entities);
 
-		void CopyOther(const ArchetypeBase* other);
+		// By default, it will deep copy the components but you can disable this
+		void CopyOther(const ArchetypeBase* other, bool deep_copy = true);
 
 		// Splats the same value of the component to all entities
 		void CopySplatComponents(

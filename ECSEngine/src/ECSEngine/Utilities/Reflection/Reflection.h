@@ -139,9 +139,19 @@ namespace ECSEngine {
 
 			void AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment, const void* default_data = nullptr);
 
+			// Adds an enum which is not bound to any folder hierarchy. If the allocator is nullptr
+			// then it will only reference the type streams, not actually copy
+			void AddEnum(const ReflectionEnum* enum_, AllocatorPolymorphic allocator = { nullptr });
+
+			// Adds all the enums from the other reflection manager without binding the enums to a particular hierarchy
+			void AddEnumsFrom(const ReflectionManager* other);
+
 			// Adds a type which is not bound to any folder hierarchy. If the allocator is nullptr
 			// then it will only reference the type streams, not actually copy
 			void AddType(const ReflectionType* type, AllocatorPolymorphic allocator = { nullptr }, bool coalesced = true);
+
+			// Adds all the types from the other reflection manager without binding the types to a particular hierarchy
+			void AddTypesFrom(const ReflectionManager* other);
 
 			// Adds a type to a certain hierarchy. It will add it as is, it will be deallocated when the hierarchy is freed using the allocator given
 			void AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coalesced);
@@ -175,6 +185,8 @@ namespace ECSEngine {
 
 			// Returns the current index; it may change if removals take place
 			unsigned int CreateFolderHierarchy(Stream<wchar_t> root);
+
+			void CopyEnums(ReflectionManager* other) const;
 
 			void CopyTypes(ReflectionManager* other) const;
 
