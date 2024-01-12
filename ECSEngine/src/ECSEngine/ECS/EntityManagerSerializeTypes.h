@@ -164,8 +164,7 @@ namespace ECSEngine {
 		unsigned short component_byte_size = 0;
 
 		// Only valid for shared components
-		SharedComponentCompareFunction compare_function = nullptr;
-		Stream<void> compare_function_data = {};
+		SharedComponentCompareEntry compare_entry = {};
 	};
 
 	// If the name is specified, then it will match the component using the name instead of the index

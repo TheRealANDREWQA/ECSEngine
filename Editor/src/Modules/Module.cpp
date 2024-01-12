@@ -233,6 +233,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 		module->infos[index].load_status = EDITOR_MODULE_LOAD_FAILED;
 		module->infos[index].ecs_module.base_module.code = ECS_GET_MODULE_FAULTY_PATH;
 
+		module->infos[index].lock_count.store(0, ECS_RELAXED);
 		module->infos[index].library_last_write_time = 0;
 	}
 
@@ -887,6 +888,9 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	ProjectModules* modules = editor_state->project_modules;
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 
+	if (IsModuleInfoLocked(editor_state,index, configuration)) {
+		return EDITOR_LAUNCH_BUILD_COMMAND_LOCKED;
+	}
 	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status != EDITOR_MODULE_LOAD_GOOD || force_build) {
 		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status, disable_logging);
 	}
@@ -931,6 +935,9 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
 	bool disable_logging
 ) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
+	if (IsModuleInfoLocked(editor_state, index, configuration)) {
+		return EDITOR_LAUNCH_BUILD_COMMAND_LOCKED;
+	}
 	info->load_status = EDITOR_MODULE_LOAD_FAILED;
 	return RunBuildCommand(editor_state, index, CLEAN_PROJECT_STRING_WIDE, configuration, build_status, disable_logging);
 }
@@ -958,6 +965,9 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildModule(
 	bool disable_logging
 ) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
+	if (IsModuleInfoLocked(editor_state,index,configuration)) {
+		return EDITOR_LAUNCH_BUILD_COMMAND_LOCKED;
+	}
 	info->load_status = EDITOR_MODULE_LOAD_FAILED;
 	return RunBuildCommand(editor_state, index, REBUILD_PROJECT_STRING_WIDE, configuration, build_status, disable_logging);
 }
@@ -992,6 +1002,13 @@ void PrintConsoleMessageForBuildCommand(
 		EditorSetConsoleError(console_message);
 		break;
 	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void DecrementModuleInfoLockCount(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	GetModuleInfo(editor_state, module_index, configuration)->lock_count.fetch_sub(1, ECS_RELAXED);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1266,38 +1283,43 @@ EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, u
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-ModuleComponentBuildFunction GetModuleComponentResetFunction(
+ModuleComponentBuildEntry GetModuleComponentBuildEntry(
 	const EditorState* editor_state, 
 	unsigned int index, 
 	EDITOR_MODULE_CONFIGURATION configuration, 
-	Stream<char> component_name
+	Stream<char> component_name,
+	EDITOR_MODULE_CONFIGURATION* matched_configuration
 )
 {
 	if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
 		configuration = GetModuleLoadedConfiguration(editor_state, index);
+		if (matched_configuration != nullptr) {
+			*matched_configuration = configuration;
+		}
 		if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
-			return nullptr;
+			return { nullptr };
 		}
 	}
 
 	const EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
-	return GetModuleResetFunction(&info->ecs_module, component_name);
+	return GetModuleComponentBuildEntry(&info->ecs_module, component_name);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-ModuleComponentBuildFunction GetModuleComponentResetFunction(
+EditorModuleComponentBuildEntry GetModuleComponentBuildEntry(
 	const EditorState* editor_state,
 	Stream<char> component_name
 ) {
 	unsigned int module_count = editor_state->project_modules->size;
 	for (unsigned int index = 0; index < module_count; index++) {
-		ModuleComponentBuildFunction function = GetModuleComponentResetFunction(editor_state, index, EDITOR_MODULE_CONFIGURATION_COUNT, component_name);
-		if (function != nullptr) {
-			return function;
+		EDITOR_MODULE_CONFIGURATION matched_configuration;
+		ModuleComponentBuildEntry entry = GetModuleComponentBuildEntry(editor_state, index, EDITOR_MODULE_CONFIGURATION_COUNT, component_name, &matched_configuration);
+		if (entry.function != nullptr) {
+			return { entry, index, matched_configuration };
 		}
 	}
-	return nullptr;
+	return { nullptr };
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1575,8 +1597,10 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 			if (info->ecs_module.base_module.code == ECS_GET_MODULE_OK) {
 				AllocatorPolymorphic allocator = editor_state->EditorAllocator();
 
-				ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB * 32);
-				LoadAppliedModule(&info->ecs_module, allocator, &error_message);
+				ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB * 16);
+				ECS_STACK_CAPACITY_STREAM(Stream<char>, component_names, ECS_KB * 16);
+				editor_state->editor_components.GetAllComponentNames(&component_names, ECS_COMPONENT_TYPE_COUNT);
+				LoadAppliedModule(&info->ecs_module, allocator, component_names, &error_message);
 				if (error_message.size > 0) {
 					// At the moment just warn
 					ECS_FORMAT_TEMP_STRING(
@@ -1852,6 +1876,35 @@ void GetModuleMatchedDebugDrawComponents(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+bool IsModuleInfoLocked(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	return GetModuleInfo(editor_state, module_index, configuration)->lock_count.load(ECS_RELAXED) > 0;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool IsAnyModuleInfoLocked(const EditorState* editor_state)
+{
+	unsigned int module_count = editor_state->project_modules->size;
+	for (unsigned int index = 0; index < module_count; index++) {
+		for (size_t configuration = 0; configuration < EDITOR_MODULE_CONFIGURATION_COUNT; configuration++) {
+			if (IsModuleInfoLocked(editor_state, index, (EDITOR_MODULE_CONFIGURATION)configuration)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void IncrementModuleInfoLockCount(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	GetModuleInfo(editor_state, module_index, configuration)->lock_count.fetch_add(1, ECS_RELAXED);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, library_path, 256);
@@ -2087,6 +2140,22 @@ void ResetModules(EditorState* editor_state)
 		ReleaseModule(editor_state, index);
 	}
 	project_modules->Reset();
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void RetrieveModuleComponentBuildDependentEntries(const EditorState* editor_state, Stream<char> component_name, CapacityStream<Stream<char>>* dependent_components)
+{
+	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
+	ModulesToAppliedModules(editor_state, applied_modules);
+	ModuleRetrieveComponentBuildDependentEntries(applied_modules, component_name, dependent_components);
+}
+
+Stream<Stream<char>> RetrieveModuleComponentBuildDependentEntries(const EditorState* editor_state, Stream<char> component_name, AllocatorPolymorphic allocator)
+{
+	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
+	ModulesToAppliedModules(editor_state, applied_modules);
+	return ModuleRetrieveComponentBuildDependentEntries(applied_modules, component_name, allocator);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

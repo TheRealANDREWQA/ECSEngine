@@ -1220,6 +1220,7 @@ namespace ECSEngine {
 			UIConfigCollapsingHeaderButtonType type;
 			UIActionHandler handler = { nullptr }; // The handler can be missing for check box, menu or menu general. It is needed only for image button or check box
 			ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT; // Can be only left or right aligned
+			bool is_enabled = true;
 		};
 
 		// There can be at max 6 buttons

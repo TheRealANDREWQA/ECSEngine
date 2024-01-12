@@ -1021,6 +1021,32 @@ void InspectorComponentCallback(ActionData* action_data) {
 		data->draw_data->UIUpdateLinkComponent(editor_state, data->sandbox_index, linked_index, data->apply_modifier);
 	}
 
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+	// At the very end, if we have build functions that depend on us, we need to notify them
+	Stream<Stream<char>> dependent_components = RetrieveModuleComponentBuildDependentEntries(editor_state, component_name, &stack_allocator);
+	for (size_t index = 0; index < dependent_components.size; index++) {
+		EditorModuleComponentBuildEntry build_entry = GetModuleComponentBuildEntry(editor_state, dependent_components[index]);
+		Component component = editor_state->editor_components.GetComponentID(dependent_components[index]);
+		bool is_shared = editor_state->editor_components.IsSharedComponent(dependent_components[index]);
+		void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+		// Only perform the call if the entity actually has the data
+		if (component_data != nullptr) {
+			if (is_shared) {
+				CallModuleComponentBuildFunctionShared(
+					editor_state, 
+					sandbox_index,
+					&build_entry,
+					component, 
+					SandboxEntitySharedInstance(editor_state, sandbox_index, entity, component), 
+					entity
+				);
+			}
+			else {
+				CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, &build_entry, { &entity, 1 }, component);
+			}
+		}
+	}
+
 	// Re-render the sandbox - for the scene and the game as well
 	RenderSandbox(data->editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	RenderSandbox(data->editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
@@ -1114,7 +1140,9 @@ static void DrawComponents(
 	const DrawComponentsBaseInfo* base_info,
 	ComponentSignature signature, 
 	ECS_COMPONENT_TYPE component_type, 
-	unsigned int header_state_offset, 
+	unsigned int header_state_offset,
+	Stream<EditorSandbox::LockedEntityComponent> locked_components,
+	bool locked_global_component,
 	GetData&& get_current_data
 ) {
 	// Forward the member fields
@@ -1482,7 +1510,29 @@ static void DrawComponents(
 				field_tag_options.AssertCapacity();
 			}
 
-			drawer->CollapsingHeader(UI_CONFIG_COLLAPSING_HEADER_BUTTONS, collapsing_config, component_name_to_display, data->header_state + index + header_state_offset, [&]() {
+			// Check to see if the component is locked
+			UIConfigActiveState component_active_state;
+			component_active_state.state = true;
+			if (component_type == ECS_COMPONENT_GLOBAL) {
+				component_active_state.state = !locked_global_component;
+			}
+			else {
+				bool is_shared = component_type == ECS_COMPONENT_SHARED;
+				for (size_t locked_index = 0; locked_index < locked_components.size; locked_index++) {
+					if (locked_components[locked_index].component == signature[index] && locked_components[locked_index].is_shared == is_shared) {
+						component_active_state.state = false;
+						break;
+					}
+				}
+			}
+			collapsing_config.AddFlag(component_active_state);
+
+			drawer->CollapsingHeader(
+				UI_CONFIG_COLLAPSING_HEADER_BUTTONS | UI_CONFIG_ACTIVE_STATE, 
+				collapsing_config, 
+				component_name_to_display, 
+				data->header_state + index + header_state_offset, 
+				[&]() {
 				UIReflectionDrawInstanceOptions options;
 				options.drawer = drawer;
 				options.config = config;
@@ -1491,6 +1541,8 @@ static void DrawComponents(
 				options.field_tag_options = field_tag_options;
 				ui_drawer->DrawInstance(instance, &options);
 			});
+
+			collapsing_config.flag_count--;
 		}
 	}
 }
@@ -1891,6 +1943,33 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	draw_base_info.entity_manager = entity_manager;
 	draw_base_info.base_entity_name = base_entity_name;
 	draw_base_info.config = &config;
+
+	ECS_STACK_CAPACITY_STREAM(EditorSandbox::LockedEntityComponent, locked_components, ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS);
+	bool is_global_component_locked = false;
+
+	// Retrieve the locked global and entity components for this entity such that we can disable
+	// The UI when those are indeeed locked
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->locked_components_lock.Lock();
+
+	if (!data->is_global_component) {
+		for (unsigned int index = 0; index < sandbox->locked_entity_components.size; index++) {
+			if (sandbox->locked_entity_components[index].entity == data->entity) {
+				locked_components.Add(sandbox->locked_entity_components[index]);
+			}
+		}
+	}
+	else {
+		// Check only the global components
+		for (unsigned int index = 0; index < sandbox->locked_global_components.size; index++) {
+			if (sandbox->locked_global_components[index] == data->global_component) {
+				is_global_component_locked = true;
+				break;
+			}
+		}
+	}
+
+	sandbox->locked_components_lock.Unlock();
 	
 	// Now draw the entity using the reflection drawer
 	if (!data->is_global_component) {
@@ -1899,13 +1978,17 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			unique_signature, 
 			ECS_COMPONENT_UNIQUE,
 			0,
+			locked_components,
+			is_global_component_locked,
 			get_unique_data
 		);
 		DrawComponents(
 			&draw_base_info,
 			{ shared_signature.indices, shared_signature.count }, 
 			ECS_COMPONENT_SHARED, 
-			unique_signature.count, 
+			unique_signature.count,
+			locked_components,
+			is_global_component_locked,
 			get_shared_data
 		);
 	}
@@ -1914,7 +1997,9 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			&draw_base_info,
 			{ &data->global_component, 1 }, 
 			ECS_COMPONENT_GLOBAL, 
-			0, 
+			0,
+			locked_components,
+			is_global_component_locked,
 			get_global_data
 		);
 	}

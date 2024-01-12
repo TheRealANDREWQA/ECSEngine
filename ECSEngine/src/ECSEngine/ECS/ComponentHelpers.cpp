@@ -5,6 +5,7 @@
 #include "../Allocators/ResizableLinearAllocator.h"
 
 #define MAX_COMPONENT_BUFFERS 16
+#define MAX_COMPONENT_BLITTABLE_FIELDS 16
 
 namespace ECSEngine {
 
@@ -57,6 +58,24 @@ namespace ECSEngine {
 	bool IsReflectionTypeLinkComponent(const ReflectionType* type)
 	{
 		return type->HasTag(ECS_LINK_COMPONENT_TAG);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	bool IsReflectionTypeComponentType(const ReflectionType* type, ECS_COMPONENT_TYPE component_type)
+	{
+		if (component_type == ECS_COMPONENT_UNIQUE) {
+			return IsReflectionTypeComponent(type);
+		}
+		else if (component_type == ECS_COMPONENT_SHARED) {
+			return IsReflectionTypeSharedComponent(type);
+		}
+		else if (component_type == ECS_COMPONENT_GLOBAL) {
+			return IsReflectionTypeGlobalComponent(type);
+		}
+		else {
+			return IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type) || IsReflectionTypeGlobalComponent(type);
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
@@ -180,8 +199,6 @@ namespace ECSEngine {
 		return component_functions;
 	}
 
-	// ----------------------------------------------------------------------------------------------------------------------------
-
 	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, AllocatorPolymorphic allocator)
 	{
 		ECS_STACK_VOID_STREAM(stack_memory, 1024);
@@ -191,6 +208,85 @@ namespace ECSEngine {
 		}
 		return result;
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	struct ReflectionTypeRuntimeCompareData {
+		// The x contains the pointers offset, the y the field byte size
+		ushort2 blittable_fields[MAX_COMPONENT_BLITTABLE_FIELDS];
+		ComponentBuffer component_buffers[MAX_COMPONENT_BUFFERS];
+		unsigned char blittable_field_count;
+		unsigned char component_buffer_count;
+	};
+
+	static bool ReflectionTypeRuntimeCompare(SharedComponentCompareFunctionData* data) {
+		const ReflectionTypeRuntimeCompareData* function_data = (const ReflectionTypeRuntimeCompareData*)data->function_data;
+		
+		for (unsigned char index = 0; index < function_data->blittable_field_count; index++) {
+			const void* first_field = OffsetPointer(data->first, function_data->blittable_fields[index].x);
+			const void* second_field = OffsetPointer(data->second, function_data->blittable_fields[index].x);
+			if (memcmp(first_field, second_field, function_data->blittable_fields[index].y) != 0) {
+				return false;
+			}
+		}
+		for (unsigned char index = 0; index < function_data->component_buffer_count; index++) {
+			Stream<void> first_stream = ComponentBufferGetStream(function_data->component_buffers[index], data->first);
+			Stream<void> second_stream = ComponentBufferGetStream(function_data->component_buffers[index], data->second);
+			if (first_stream.size != second_stream.size || memcmp(first_stream.buffer, second_stream.buffer, first_stream.size) != 0) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type, 
+		CapacityStream<void>* stack_memory
+	)
+	{
+		SharedComponentCompareEntry entry;
+
+		if (!IsBlittableWithPointer(type)) {
+			entry.function = ReflectionTypeRuntimeCompare;
+			ECS_ASSERT(stack_memory->size + sizeof(ReflectionTypeRuntimeCompareData) <= stack_memory->capacity);
+			ReflectionTypeRuntimeCompareData* data = (ReflectionTypeRuntimeCompareData*)OffsetPointer(*stack_memory);
+			data->blittable_field_count = 0;
+			data->component_buffer_count = 0;
+
+			for (size_t index = 0; index < type->fields.size; index++) {
+				if (SearchIsBlittableWithPointer(reflection_manager, type->fields[index].definition)) {
+					data->blittable_fields[data->blittable_field_count++] = { type->fields[index].info.pointer_offset, type->fields[index].info.byte_size };
+				}
+			}
+
+			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, runtime_buffers, MAX_COMPONENT_BUFFERS);
+			GetReflectionTypeRuntimeBuffers(type, runtime_buffers);
+			runtime_buffers.AssertCapacity();
+			data->component_buffer_count = runtime_buffers.size;
+			runtime_buffers.CopyTo(data->component_buffers);
+			entry.data = data;
+		}
+
+		return entry;
+	}
+
+	SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type, 
+		AllocatorPolymorphic allocator
+	)
+	{
+		ECS_STACK_VOID_STREAM(stack_memory, 256);
+		SharedComponentCompareEntry entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, type, &stack_memory);
+		if (entry.data.size > 0) {
+			entry.data = entry.data.Copy(allocator);
+		}
+		return entry;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
 
 	Component GetReflectionTypeComponent(const Reflection::ReflectionType* type)
 	{

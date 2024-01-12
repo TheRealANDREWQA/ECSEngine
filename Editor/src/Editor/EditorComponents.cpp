@@ -10,6 +10,7 @@
 #include "../Editor/EditorEvent.h"
 #include "../Sandbox/Sandbox.h"
 #include "../Sandbox/SandboxEntityOperations.h"
+#include "../Sandbox/SandboxModule.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Reflection;
@@ -19,6 +20,17 @@ using namespace ECSEngine::Reflection;
 #define ARENA_CAPACITY 3 * 100'000
 #define ARENA_COUNT 3
 #define ARENA_BLOCK_COUNT 1024
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::GetAllComponentNames(AdditionStream<Stream<char>> names, ECS_COMPONENT_TYPE component_type) const
+{
+	internal_manager->type_definitions.ForEachConst([&](const ReflectionType& reflection_type, ResourceIdentifier identifier) {
+		if (IsReflectionTypeComponentType(&reflection_type, component_type)) {
+			names.Add(reflection_type.name);
+		}
+	});
+}
 
 // ----------------------------------------------------------------------------------------------
 
@@ -101,6 +113,8 @@ void EditorComponents::GetSharedLinkComponents(CapacityStream<const ReflectionTy
 {
 	ECSEngine::GetSharedLinkComponents(internal_manager, link_types);
 }
+
+// ----------------------------------------------------------------------------------------------
 
 void EditorComponents::GetGlobalLinkComponents(ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& link_types) const
 {
@@ -1804,14 +1818,15 @@ void EditorComponents::ResetComponent(EditorState* editor_state, unsigned int sa
 		entity_data = entity_manager->GetSharedComponent(entity, component);
 	}
 	
-	// If it has a reset function, then we delegate the deallocation to it
-	ModuleComponentBuildFunction reset_function = GetModuleComponentResetFunction(editor_state, component_name);
-	if (reset_function != nullptr) {
-		ModuleComponentBuildFunctionData reset_data;
-		reset_data.entity = entity;
-		reset_data.component = entity_data;
-		reset_data.entity_manager = entity_manager;
-		reset_function(&reset_data);
+	// Call the deallocate for both cases
+	EditorModuleComponentBuildEntry build_entry = GetModuleComponentBuildEntry(editor_state, component_name);
+	if (build_entry.entry.function != nullptr) {
+		if (type == ECS_COMPONENT_UNIQUE) {
+			CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, &build_entry, { &entity, 1 }, component);
+		}
+		else {
+			CallModuleComponentBuildFunctionShared(editor_state, sandbox_index, &build_entry, component, entity_manager->GetSharedComponentInstance(component, entity), entity);
+		}
 	}
 	else {
 		entity_manager->TryCallEntityComponentDeallocateCommit(entity, component);

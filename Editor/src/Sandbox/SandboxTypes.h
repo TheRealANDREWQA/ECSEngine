@@ -147,7 +147,11 @@ enum EDITOR_SANDBOX_FLAG : size_t {
 	// When the sandbox was started. It can happen that one of the modules is not
 	// ready and when the sandbox finally resumes it is already in the run state
 	// and it needs to know whether or not this initialization was performed or not
-	EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS = 1 << 3
+	EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS = 1 << 3,
+	// This flag is used by the shared component build function to indicate
+	// That there is a pending event where build functions are considered and
+	// The sandbox should wait them
+	EDITOR_SANDBOX_FLAG_PENDING_BUILD_FUNCTIONS = 1 << 4
 };
 
 enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char {
@@ -259,6 +263,31 @@ struct ECS_REFLECT EditorSandbox {
 	// We need to keep this flag in order to prevent running the simulation
 	// Once the sandbox crashed
 	bool is_crashed;
+
+	// It is atomic since the main thread can try to lock this
+	// While there are background build functions trying to get this as well
+	SpinLock component_build_function_lock;
+	// This describes the count of background build functions that are running
+	std::atomic<unsigned int> background_component_build_functions;
+
+	// For components that have build functions, we must lock their dependencies
+	// Such that they don't get modified or removed while the build is happening
+	// Since this can corrupt the process
+	struct LockedEntityComponent {
+		ECS_INLINE bool operator == (LockedEntityComponent other) const {
+			return entity == other.entity && component == other.component && is_shared == other.is_shared;
+		}
+
+		Entity entity;
+		Component component;
+		bool is_shared;
+	};
+	ResizableStream<LockedEntityComponent> locked_entity_components;
+	ResizableStream<Component> locked_global_components;
+	// We need this lock to synchronize the access to these 2 streams since
+	// The background thread can remove from them while the main thread can
+	// Push into them
+	SpinLock locked_components_lock;
 
 	EDITOR_SANDBOX_STATE run_state;
 	bool is_scene_dirty;

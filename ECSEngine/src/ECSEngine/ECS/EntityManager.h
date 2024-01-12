@@ -1207,6 +1207,31 @@ namespace ECSEngine {
 			});
 		}
 
+		template<bool early_exit = false, typename Functor>
+		bool ForEachEntityWithSharedInstance(Component component, SharedInstance instance, Functor&& functor) const {
+			ArchetypeQuery query;
+			query.shared.ConvertComponents({ &component, 1 });
+			return ForEachArchetype<early_exit>(query, [&](const Archetype* archetype) {
+				SharedComponentSignature shared_signature = { &component, &instance, 1 };
+				unsigned int base_index = archetype->FindBaseIndex(shared_signature);
+				if (base_index != -1) {
+					const ArchetypeBase* base = archetype->GetBase(base_index);
+					unsigned int entity_count = base->EntityCount();
+					for (unsigned int index = 0; index < entity_count; index++) {
+						if constexpr (early_exit) {
+							if (functor(base->GetEntityAtIndex(index))) {
+								return true;
+							}
+						}
+						else {
+							functor(base->GetEntityAtIndex(index));
+						}
+					}
+				}
+				return false;
+			});
+		}
+
 		// ---------------------------------------------------------------------------------------------------
 
 		// Executes all deferred calls, including clearing tags and setting them
@@ -1464,6 +1489,9 @@ namespace ECSEngine {
 		// Returns -1 if the entity doesn't have a parent (it is a root or doesn't exist)
 		Entity GetEntityParent(Entity child) const;
 
+		// Adds all the entities that reference the given shared instance
+		void GetEntitiesForSharedInstance(Component component, SharedInstance instance, AdditionStream<Entity> entities) const;
+
 		// Aliases the internal structures. Do not modify, readonly. If the static_storage is provided
 		// then if the pointer is to a static storage, it will copy to it instead (useful if getting
 		// the children and then doing operations like adding/removing entities from hierarchy)
@@ -1585,8 +1613,7 @@ namespace ECSEngine {
 			unsigned int size, 
 			Stream<char> name = { nullptr, 0 },
 			const ComponentFunctions* functions = nullptr,
-			SharedComponentCompareFunction compare_function = nullptr,
-			Stream<void> compare_function_data = {}
+			SharedComponentCompareEntry compare_entry = {}
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -1787,6 +1814,13 @@ namespace ECSEngine {
 		ECS_INLINE const T* TryGetGlobalComponent() const {
 			return (const T*)TryGetGlobalComponent(T::ID());
 		}
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// It will search to see if there is an existing instance that has the same data. In that case,
+		// It will unregister this one and reroute all entities that reference this shared instance to
+		// That one
+		bool TryMergeSharedInstanceCommit(Component component, SharedInstance instance, bool remove_empty_archetypes = true);
 
 		// ---------------------------------------------------------------------------------------------------
 

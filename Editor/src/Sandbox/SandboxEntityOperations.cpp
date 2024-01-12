@@ -1,6 +1,7 @@
 #include "editorpch.h"
 #include "SandboxEntityOperations.h"
 #include "Sandbox.h"
+#include "SandboxModule.h"
 #include "../Editor/EditorState.h"
 #include "../Modules/Module.h"
 #include "../Assets/EditorSandboxAssets.h"
@@ -58,14 +59,19 @@ void AddSandboxEntitySharedComponent(
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
 			if (instance.value == -1) {
-				// If there is a reset function, we must not get the default instance
-				// But instead create a new shared instance and reset it
-				ModuleComponentBuildFunction reset_function = GetModuleComponentResetFunction(editor_state, component_name);
-				if (reset_function != nullptr) {
-
-				}
-				else {
-					instance = GetSandboxSharedComponentDefaultInstance(editor_state, sandbox_index, component, viewport);
+				// If there is a build function, we must call the build function after finding this instance
+				// This instance should be valid only for this entity
+				instance = GetSandboxSharedComponentDefaultInstance(editor_state, sandbox_index, component, viewport);
+				EditorModuleComponentBuildEntry build_entry = GetModuleComponentBuildEntry(editor_state, component_name);
+				if (build_entry.entry.function != nullptr) {
+					CallModuleComponentBuildFunctionShared(
+						editor_state, 
+						sandbox_index, 
+						&build_entry,
+						component,
+						instance,
+						entity
+					);
 				}
 			}
 
@@ -130,6 +136,478 @@ void AttachSandboxEntityName(
 		entity_manager->AddComponentCommit(entity, name_component, &name_data);
 		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+static void EditorModuleComponentBuildGPULockLock(void* data) {
+	EditorState* editor_state = (EditorState*)data;
+	// We can use the PREVENT_RESOURCE_LOADING flag as a GPU lock
+	// Increment the count by one such that we can wait for the count of 1
+	EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+	EditorStateWaitFlagCount(15, editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, 1);
+}
+
+static void EditorModuleComponentBuildGPULockUnlock(void* data) {
+	EditorState* editor_state = (EditorState*)data;
+	EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+}
+
+static bool EditorModuleComponentBuildGPULockIsLocked(void* data) {
+	EditorState* editor_state = (EditorState*)data;
+	return EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+}
+
+static bool EditorModuleComponentBuildGPULockTryLock(void* data) {
+	EditorState* editor_state = (EditorState*)data;
+	return EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) == 0;
+}
+
+static void EditorModuleComponentBuildPrintFunction(void* data, Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE message_type) {
+	switch (message_type) {
+	case ECS_CONSOLE_INFO:
+		EditorSetConsoleInfo(message);
+		break;
+	case ECS_CONSOLE_WARN:
+		EditorSetConsoleWarn(message);
+		break;
+	case ECS_CONSOLE_ERROR:
+		EditorSetConsoleError(message);
+		break;
+	case ECS_CONSOLE_TRACE:
+		EditorSetConsoleTrace(message);
+		break;
+	default:
+		EditorSetConsoleWarn("Module component build function invalid message type");
+	}
+}
+
+struct BuildFunctionWrapperData {
+	ThreadTask task;
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+	unsigned char locked_components_count;
+	unsigned char locked_global_count;
+	bool is_shared_component;
+	Component component;
+	std::atomic<bool>* finish_flag;
+	unsigned int module_index;
+	EDITOR_MODULE_CONFIGURATION module_configuration;
+
+	EditorSandbox::LockedEntityComponent locked_components[8];
+	Component locked_globals[8];
+};
+
+// We need this wrapper to set the finish flag once
+// It has finished and to eliminate the locked dependencies
+ECS_THREAD_TASK(BuildFunctionWrapper) {
+	BuildFunctionWrapperData* data = (BuildFunctionWrapperData*)_data;
+	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+
+	void* task_data = data->task.data_size == 0 ? data->task.data : OffsetPointer(data, sizeof(*data));
+	data->task.function(thread_id, world, task_data);
+
+	// Acquire the component lock
+	if (data->locked_components_count > 0 || data->locked_global_count > 0) {
+		sandbox->locked_components_lock.Lock();
+
+		for (unsigned char index = 0; index < data->locked_components_count; index++) {
+			unsigned int find_index = sandbox->locked_entity_components.Find(data->locked_components[index]);
+			ECS_ASSERT(find_index != -1);
+			sandbox->locked_entity_components.RemoveSwapBack(find_index);
+		}
+
+		for (unsigned char index = 0; index < data->locked_global_count; index++) {
+			unsigned int find_index = sandbox->locked_global_components.Find(data->locked_globals[index]);
+			ECS_ASSERT(find_index != -1);
+			sandbox->locked_global_components.RemoveSwapBack(find_index);
+		}
+
+		sandbox->locked_components_lock.Unlock();
+	}
+
+	if (data->finish_flag != nullptr) {
+		data->finish_flag->store(true, ECS_RELAXED);
+	}
+	DecrementSandboxModuleComponentBuildCount(data->editor_state, data->sandbox_index);
+	DecrementModuleInfoLockCount(data->editor_state, data->module_index, data->module_configuration);
+}
+
+// Returns true if a background task was launched, else false
+static bool CallModuleComponentBuildFunctionBase(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	Component component,
+	bool is_shared,
+	Entity entity,
+	ModuleComponentBuildEntry build_entry,
+	ModuleComponentBuildFunctionData* build_data,
+	std::atomic<bool>* finish_flag
+) {
+	build_data->entity = entity;
+	build_data->component = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+	build_data->stack_memory->size = 0;
+	ThreadTask task = build_entry.function(build_data);
+	if (task.function != nullptr) {
+		size_t wrapper_data_storage[256];
+		BuildFunctionWrapperData* wrapper_data = (BuildFunctionWrapperData*)wrapper_data_storage;
+		ECS_ASSERT(task.data_size + sizeof(*wrapper_data) <= sizeof(wrapper_data_storage));
+
+		// We also need to register the component dependencies
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		sandbox->locked_components_lock.Lock();
+
+		for (size_t index = 0; index < build_entry.component_dependencies.size; index++) {
+			ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(build_entry.component_dependencies[index]);
+			Component component = editor_state->editor_components.GetComponentID(build_entry.component_dependencies[index]);
+			if (component_type == ECS_COMPONENT_UNIQUE || component_type == ECS_COMPONENT_SHARED) {
+				EditorSandbox::LockedEntityComponent locked_entry = { entity, component, component_type == ECS_COMPONENT_SHARED };
+				sandbox->locked_entity_components.Add(locked_entry);
+				wrapper_data->locked_components[wrapper_data->locked_components_count++] = locked_entry;
+				ECS_ASSERT(wrapper_data->locked_components_count <= std::size(wrapper_data->locked_components));
+			}
+			else {
+				sandbox->locked_global_components.Add(component);
+				wrapper_data->locked_globals[wrapper_data->locked_global_count++] = component;
+				ECS_ASSERT(wrapper_data->locked_global_count <= std::size(wrapper_data->locked_globals));
+			}
+		}
+
+		sandbox->locked_components_lock.Unlock();
+
+		wrapper_data->editor_state = editor_state;
+		wrapper_data->sandbox_index = sandbox_index;
+		wrapper_data->task = task;
+		wrapper_data->is_shared_component = is_shared;
+		wrapper_data->component = component;
+		wrapper_data->finish_flag = finish_flag;
+		wrapper_data->module_index = module_index;
+		wrapper_data->module_configuration = configuration;
+		if (task.data_size > 0) {
+			memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), task.data, task.data_size);
+		}
+
+		// Increment this in order to let the main thread know that it should not run
+		// The simulation for this sandbox
+		IncrementSandboxModuleComponentBuildCount(editor_state, sandbox_index);
+		IncrementModuleInfoLockCount(editor_state, module_index, configuration);
+		EditorStateAddBackgroundTask(editor_state, { BuildFunctionWrapper, wrapper_data, sizeof(wrapper_data) });
+		return true;
+	}
+	return false;
+}
+
+static ModuleComponentBuildFunctionData CreateBuildDataBase(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<void>* stack_memory) {
+	ModuleComponentBuildFunctionData build_data;
+	build_data.entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	build_data.stack_memory = stack_memory;
+
+	build_data.gpu_lock.lock_function = EditorModuleComponentBuildGPULockLock;
+	build_data.gpu_lock.unlock_function = EditorModuleComponentBuildGPULockUnlock;
+	build_data.gpu_lock.is_locked_function = EditorModuleComponentBuildGPULockIsLocked;
+	build_data.gpu_lock.try_lock_function = EditorModuleComponentBuildGPULockTryLock;
+	build_data.gpu_lock.data = editor_state;
+
+	build_data.print_message.print_function = EditorModuleComponentBuildPrintFunction;
+	build_data.print_message.data = nullptr;
+
+	return build_data;
+}
+
+void CallModuleComponentBuildFunctionUnique(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ModuleComponentBuildEntry build_entry,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION module_configuration,
+	Stream<Entity> entities,
+	Component component
+)
+{
+	ECS_STACK_VOID_STREAM(stack_memory, 512);
+
+	ModuleComponentBuildFunctionData build_data = CreateBuildDataBase(editor_state, sandbox_index, &stack_memory);
+
+	for (size_t index = 0; index < entities.size; index++) {
+		CallModuleComponentBuildFunctionBase(
+			editor_state,
+			sandbox_index,
+			module_index,
+			module_configuration,
+			component,
+			false,
+			entities[index],
+			build_entry,
+			&build_data,
+			nullptr
+		);
+	}
+}
+
+void CallModuleComponentBuildFunctionUnique(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	const EditorModuleComponentBuildEntry* build_entry,
+	Stream<Entity> entities,
+	Component component
+) {
+	CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, build_entry->entry, build_entry->module_index, 
+		build_entry->module_configuration, entities, component);
+}
+
+struct SplitBuildSharedInstanceData {
+	struct BackgroundProcessing {
+		std::atomic<bool> has_finished;
+		// This is set to true after it was checked once
+		bool checked;
+		SharedInstance instance;
+	};
+	struct BackgroundProcessingStream {
+		Stream<BackgroundProcessing> entries;
+		bool is_entire_finished;
+	};
+
+	Stream<Entity> entities_to_split;
+	size_t last_split_entity;
+	ModuleComponentBuildEntry build_entry;
+	unsigned int sandbox_index;
+	Component component;
+	SharedInstance original_instance;
+
+	unsigned int module_index;
+	EDITOR_MODULE_CONFIGURATION module_configuration;
+
+	// In case we have background processing, store these and access them later
+	// To perform the merge once they have finished
+	ResizableStream<BackgroundProcessingStream> background_processing;
+};
+
+static EDITOR_EVENT(SplitBuildSharedInstance) {
+	SplitBuildSharedInstanceData* data = (SplitBuildSharedInstanceData*)_data;
+
+	// Process at max a certain count per frame
+	const size_t PER_FRAME_ENTITY_PROCESS_COUNT = 500;
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, data->sandbox_index);
+
+	bool performed_background_processing = true;
+	// Check firstly the background processing streams, to reduce the burden on the shared instance
+	// Count and the component allocator
+	if (data->background_processing.size > 0) {
+		for (size_t index = 0; index < data->background_processing.size; index++) {
+			if (!data->background_processing[index].is_entire_finished) {
+				bool still_waiting = false;
+				for (size_t subindex = 0; subindex < data->background_processing[index].entries.size; subindex++) {
+					if (!data->background_processing[index].entries[subindex].has_finished.load(ECS_RELAXED)) {
+						still_waiting = true;
+					}
+					else {
+						if (!data->background_processing[index].entries[subindex].checked) {
+							data->background_processing[index].entries[subindex].checked = true;
+							// Try to merge this instance
+							entity_manager->TryMergeSharedInstanceCommit(data->component, data->background_processing[index].entries[subindex].instance);
+						}
+					}
+				}
+				if (!still_waiting) {
+					data->background_processing[index].is_entire_finished = true;
+				}
+				performed_background_processing = true;
+			}
+		}
+	}
+
+	// Check to see if we have any more entities to perform
+	bool processed_entities = false;
+	if (data->last_split_entity < data->entities_to_split.size) {
+		// Before this, remove any entity that was deleted before hand
+		for (size_t index = data->last_split_entity; index < data->entities_to_split.size; index++) {
+			if (!entity_manager->ExistsEntity(data->entities_to_split[index])) {
+				data->entities_to_split.RemoveSwapBack(index);
+				index--;
+			}
+		}
+
+		// Create new instances for them, and call the base function for them
+		size_t allocate_count = ClampMax(data->entities_to_split.size - data->last_split_entity, PER_FRAME_ENTITY_PROCESS_COUNT);
+		if (allocate_count > 0) {
+			Stream<SplitBuildSharedInstanceData::BackgroundProcessing> background_processing;
+			background_processing.Initialize(editor_state->EditorAllocator(), allocate_count);
+			const void* instance_data = entity_manager->GetSharedData(data->component, data->original_instance);
+
+			ECS_STACK_VOID_STREAM(stack_memory, 1024);
+			ModuleComponentBuildFunctionData build_data = CreateBuildDataBase(editor_state, data->sandbox_index, &stack_memory);
+
+			bool has_background_tasks = false;
+			for (size_t index = 0; index < allocate_count; index++) {
+				background_processing[index].has_finished.store(false, ECS_RELAXED);
+				background_processing[index].checked = false;
+				background_processing[index].instance = entity_manager->RegisterSharedInstanceCommit(data->component, instance_data);
+				// Call the base module function
+				bool background_thread = CallModuleComponentBuildFunctionBase(
+					editor_state,
+					data->sandbox_index,
+					data->module_index,
+					data->module_configuration,
+					data->component,
+					true,
+					data->entities_to_split[data->last_split_entity + index],
+					data->build_entry,
+					&build_data,
+					&background_processing[index].has_finished
+				);
+				if (background_thread) {
+					has_background_tasks = true;
+				}
+				else {
+					// We can perform the merge right now
+					entity_manager->TryMergeSharedInstanceCommit(data->component, background_processing[index].instance);
+				}
+			}
+
+			if (has_background_tasks) {
+				// Add this entry to the overall background tasks
+				data->background_processing.Add({ background_processing, false });
+			}
+			else {
+				// We can deallocate the data
+				background_processing.Deallocate(editor_state->EditorAllocator());
+			}
+			data->last_split_entity += allocate_count;
+			processed_entities = true;
+		}
+	}
+
+	if (!processed_entities && !performed_background_processing) {
+		// There was nothing to be done, we can finish
+		// Deallocate everything now
+		data->entities_to_split.Deallocate(editor_state->EditorAllocator());
+		for (size_t index = 0; index < data->background_processing.size; index++) {
+			data->background_processing[index].entries.Deallocate(editor_state->EditorAllocator());
+		}
+		data->background_processing.FreeBuffer();
+
+		// At the end, also perform an elimination of the unused shared instances
+		// We do this mostly since the initial build instance now can be not referenced
+		entity_manager->UnregisterUnreferencedSharedInstancesCommit(data->component);
+
+		// Decrement the lock counts
+		DecrementModuleInfoLockCount(editor_state, data->module_index, data->module_configuration);
+		DecrementSandboxModuleComponentBuildCount(editor_state, data->sandbox_index);
+		return false;
+	}
+	return true;
+}
+
+/*
+	Here we have quite a lot to do. Firstly, we need to make the distinction between
+	Shared and unique components. For unique components, we can just call the function
+	Without worries since it is unique. For shared components, we need to determine if this
+	Shared instance is referenced with the same dependencies everywhere. This means that if
+	Any dependency is unique, we must create a separate instance for each entity that references
+	This shared instance. If there are only shared dependencies, we must create new instances
+	And call the build function for each permutation. At the end, the instances can be merged
+	Back if they yield the same instance. So, the heavy lifting is for the shared components.
+
+	EDIT: The comment describes what should have been done. But generating all the permutations
+	Of shared components is extremely time consuming, so we fall back to a more simpler algorithm
+	For each entity that references this shared instance, we launch a build function for it and merge
+	At the end if multiple copies of the same shared instance appear. This covers all cases when the
+	Build entry has dependencies. When it doesn't have dependencies, we can call the build function
+	On it directly
+*/
+
+void CallModuleComponentBuildFunctionShared(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ModuleComponentBuildEntry build_entry,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION module_configuration,
+	Component component,
+	SharedInstance build_instance,
+	Entity changed_entity
+) {
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
+	if (build_entry.component_dependencies.size == 0) {
+		ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 2);
+		ModuleComponentBuildFunctionData build_data = CreateBuildDataBase(editor_state, sandbox_index, &stack_memory);
+		// We can call the build function directly only for this instance
+		CallModuleComponentBuildFunctionBase(
+			editor_state, 
+			sandbox_index, 
+			module_index,
+			module_configuration,
+			component, 
+			true, 
+			changed_entity, 
+			build_entry, 
+			&build_data, 
+			nullptr
+		);
+	}
+	else {
+		// Use an editor event to perform this across multiple frames since it can be quite time
+		// Consuming and to not stall the main thread too much
+		ResizableStream<Entity> matching_entities;
+		matching_entities.Initialize(editor_state->EditorAllocator(), 0);
+		entity_manager->GetEntitiesForSharedInstance(component, build_instance, &matching_entities);
+		ECS_ASSERT(matching_entities.size > 0, "Trying to build component shared instance without matching entities");
+
+		// Have a special case when this entity is the only one which references the instance.
+		// We can safely call the build function directly on it, without having a split event
+		if (matching_entities.size == 1) {
+			ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 2);
+			ModuleComponentBuildFunctionData build_data = CreateBuildDataBase(editor_state, sandbox_index, &stack_memory);
+			// We can call the build function directly only for this instance
+			CallModuleComponentBuildFunctionBase(
+				editor_state, 
+				sandbox_index, 
+				module_index,
+				module_configuration,
+				component, 
+				true, 
+				changed_entity, 
+				build_entry, 
+				&build_data, 
+				nullptr
+			);
+		}
+		else {
+			// Gather all the entities that have this shared instance
+			SplitBuildSharedInstanceData split_data;
+			split_data.build_entry = build_entry;
+			split_data.component = component;
+			split_data.last_split_entity = 0;
+			split_data.entities_to_split = matching_entities.ToStream();
+			split_data.original_instance = build_instance;
+			split_data.sandbox_index = sandbox_index;
+			split_data.background_processing = {};
+			split_data.module_index = module_index;
+			split_data.module_configuration = module_configuration;
+
+			// Set the pending flag to the sandbox
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_PENDING_BUILD_FUNCTIONS);
+			EditorAddEvent(editor_state, SplitBuildSharedInstance, &split_data, sizeof(split_data));
+
+			// Lock the module info such that it won't be removed while we reference it
+			IncrementModuleInfoLockCount(editor_state, module_index, module_configuration);
+			IncrementSandboxModuleComponentBuildCount(editor_state, sandbox_index);
+		}
+	}
+}
+
+void CallModuleComponentBuildFunctionShared(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	const EditorModuleComponentBuildEntry* build_entry,
+	Component component,
+	SharedInstance build_instance,
+	Entity changed_entity
+) {
+	CallModuleComponentBuildFunctionShared(editor_state, sandbox_index, build_entry->entry, build_entry->module_index, 
+		build_entry->module_configuration, component, build_instance, changed_entity);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

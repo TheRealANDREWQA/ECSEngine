@@ -4585,16 +4585,12 @@ namespace ECSEngine {
 
 				UIDrawConfig button_config;
 				size_t user_button_configuration = UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_DO_NOT_FIT_SPACE
-					| UI_CONFIG_COLOR | UI_CONFIG_LATE_DRAW;
+					| UI_CONFIG_COLOR | UI_CONFIG_LATE_DRAW | UI_CONFIG_ACTIVE_STATE;
 				// Change the current color to a different hue such that the element can be easier seen
 				UIConfigColor hued_color;
 				hued_color.color = ChangeHue(current_color, -0.65f);
 				button_config.AddFlag(hued_color);
 
-				if (configuration & UI_CONFIG_ACTIVE_STATE) {
-					button_config.AddFlag(*(const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE));
-					user_button_configuration |= UI_CONFIG_ACTIVE_STATE;
-				}
 				size_t button_config_base_size = button_config.flag_count;
 
 				auto draw_user_button = [&](float2& position, float2 square_scale, const UIConfigCollapsingHeaderButton* button) {
@@ -4603,6 +4599,14 @@ namespace ECSEngine {
 					float2 offseted_position = position + drawer->region_render_offset;
 
 					button_config.flag_count = button_config_base_size;
+
+					bool button_active_state = button->is_enabled;
+					if (!active_state) {
+						button_active_state = false;
+					}
+					UIConfigActiveState button_config_active_state;
+					button_config_active_state.state = button_active_state;
+					button_config.AddFlag(button_config_active_state);
 
 					switch (button->type) {
 					case ECS_UI_COLLAPSING_HEADER_BUTTON_CHECK_BOX:
@@ -4688,6 +4692,7 @@ namespace ECSEngine {
 					}
 
 					position.x += square_scale.x + BUTTON_INDENTATION;
+					button_config.flag_count--;
 				};
 
 				const UIConfigCollapsingHeaderButtons* header_buttons = nullptr;

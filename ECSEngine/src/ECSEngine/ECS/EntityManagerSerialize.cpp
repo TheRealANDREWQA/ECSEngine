@@ -1147,8 +1147,7 @@ namespace ECSEngine {
 					component_fixup->component_byte_size,
 					cached_shared_infos[index].info->name,
 					&component_fixup->component_functions,
-					component_fixup->compare_function,
-					component_fixup->compare_function_data
+					component_fixup->compare_entry
 				);
 			}
 		}
@@ -2727,10 +2726,11 @@ namespace ECSEngine {
 			});
 			if (existing_fixup_index == -1) {
 				info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(target_type, allocator);
+				info.component_fixup.compare_entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, target_type, allocator);
 			}
 			else {
 				module_component_functions[existing_fixup_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
-				module_component_functions[existing_fixup_index].SetCompareFunctionTo(&info.component_fixup.compare_function, &info.component_fixup.compare_function_data);
+				module_component_functions[existing_fixup_index].SetCompareEntryTo(&info.component_fixup.compare_entry);
 			}
 
 			overrides[index] = info;
@@ -2769,13 +2769,11 @@ namespace ECSEngine {
 				});
 				if (existing_component_functions_index == -1) {
 					info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(type, allocator);
+					info.component_fixup.compare_entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, type, allocator);
 				}
 				else {
 					module_component_functions[existing_component_functions_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
-					module_component_functions[existing_component_functions_index].SetCompareFunctionTo(
-						&info.component_fixup.compare_function, 
-						&info.component_fixup.compare_function_data
-					);
+					module_component_functions[existing_component_functions_index].SetCompareEntryTo(&info.component_fixup.compare_entry);
 				}
 
 				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };

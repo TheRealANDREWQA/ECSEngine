@@ -531,4 +531,31 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void ModuleRetrieveComponentBuildDependentEntries(
+		Stream<const AppliedModule*> applied_modules,
+		Stream<char> component_name,
+		CapacityStream<Stream<char>>* dependent_components
+	) {
+		for (size_t index = 0; index < applied_modules.size; index++) {
+			Stream<ModuleComponentFunctions> component_functions = applied_modules[index]->component_functions;
+			for (size_t subindex = 0; subindex < component_functions.size; subindex++) {
+				if (FindString(component_name, component_functions[subindex].build_entry.component_dependencies) != -1) {
+					dependent_components->AddAssert(component_functions[subindex].component_name);
+				}
+			}
+		}
+	}
+
+	Stream<Stream<char>> ModuleRetrieveComponentBuildDependentEntries(
+		Stream<const AppliedModule*> applied_modules,
+		Stream<char> component_name,
+		AllocatorPolymorphic allocator
+	) {
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_components, 1024);
+		ModuleRetrieveComponentBuildDependentEntries(applied_modules, component_name, &dependent_components);
+		return dependent_components.Copy(allocator);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

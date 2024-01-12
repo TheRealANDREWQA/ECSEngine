@@ -14,6 +14,7 @@ enum EDITOR_LAUNCH_BUILD_COMMAND_STATUS : unsigned char {
 	EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING,
 	EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING,
 	EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED,
+	EDITOR_LAUNCH_BUILD_COMMAND_LOCKED,
 	EDITOR_LAUNCH_BUILD_COMMAND_COUNT
 };
 
@@ -103,6 +104,8 @@ void PrintConsoleMessageForBuildCommand(
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status
 );
 
+void DecrementModuleInfoLockCount(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
+
 void DeleteModuleFlagFiles(EditorState* editor_state);
 
 bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
@@ -155,17 +158,26 @@ EditorModuleInfo* GetModuleInfo(const EditorState* editor_state, unsigned int in
 EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
 // If the configuration is COUNT, it will use the most suitable loaded module
+// If you want to know the actual configuration that was matched, you can fill in
+// The last parameter
 // Returns nullptr if there is no such function
-ModuleComponentBuildFunction GetModuleComponentResetFunction(
+ModuleComponentBuildEntry GetModuleComponentBuildEntry(
 	const EditorState* editor_state, 
 	unsigned int index, 
 	EDITOR_MODULE_CONFIGURATION configuration, 
-	Stream<char> component_name
+	Stream<char> component_name,
+	EDITOR_MODULE_CONFIGURATION* matched_configuration = nullptr
 );
+
+struct EditorModuleComponentBuildEntry {
+	ModuleComponentBuildEntry entry;
+	unsigned int module_index;
+	EDITOR_MODULE_CONFIGURATION module_configuration;
+};
 
 // Convenience function - it will search through all modules and return the first found.
 // Returns nullptr if there is no such function
-ModuleComponentBuildFunction GetModuleComponentResetFunction(
+EditorModuleComponentBuildEntry GetModuleComponentBuildEntry(
 	const EditorState* editor_state,
 	Stream<char> component_name
 );
@@ -257,6 +269,13 @@ void GetModuleMatchedDebugDrawComponents(
 	ModuleDebugDrawElement* debug_elements
 );
 
+bool IsModuleInfoLocked(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
+
+// Returns true if any module info is locked, else false
+bool IsAnyModuleInfoLocked(const EditorState* editor_state);
+
+void IncrementModuleInfoLockCount(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
+
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration);
 
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
@@ -299,6 +318,17 @@ void RemoveModuleAssociatedFiles(EditorState* editor_state, Stream<wchar_t> solu
 
 // Releases all the modules and basically no module will be kept
 void ResetModules(EditorState* editor_state);
+
+// The strings will reference the entries from the module data
+void RetrieveModuleComponentBuildDependentEntries(const EditorState* editor_state, Stream<char> component_name, CapacityStream<Stream<char>>* dependent_components);
+
+// The strings will reference the entries from the module data
+// To deallocate, just deallocate the returned buffer
+Stream<Stream<char>> RetrieveModuleComponentBuildDependentEntries(
+	const EditorState* editor_state,
+	Stream<char> component_name,
+	AllocatorPolymorphic allocator
+);
 
 void SetModuleLoadStatus(EditorState* editor_state, unsigned int module_index, bool is_failed, EDITOR_MODULE_CONFIGURATION configuration);
 

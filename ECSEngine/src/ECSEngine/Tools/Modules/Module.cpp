@@ -221,7 +221,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
+	void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, Stream<Stream<char>> component_names, CapacityStream<char>* error_message)
 	{
 		module->build_asset_types = LoadModuleBuildAssetTypes(&module->base_module, allocator, error_message);
 		module->link_components = LoadModuleLinkComponentTargets(&module->base_module, allocator, error_message);
@@ -231,7 +231,7 @@ namespace ECSEngine {
 		module->extra_information = LoadModuleExtraInformation(&module->base_module, allocator);
 		module->debug_draw_elements = LoadModuleDebugDrawElements(&module->base_module, allocator);
 		module->debug_draw_task_elements = LoadModuleDebugDrawTaskElements(&module->base_module, allocator, error_message);
-		module->component_functions = LoadModuleComponentFunctions(&module->base_module, allocator);
+		module->component_functions = LoadModuleComponentFunctions(&module->base_module, allocator, component_names, error_message);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -591,29 +591,35 @@ namespace ECSEngine {
 
 	Stream<ModuleComponentFunctions> LoadModuleComponentFunctions(
 		const Module* module,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		Stream<Stream<char>> component_names,
+		CapacityStream<char>* error_message
 	) {
 		if (!module->component_functions) {
 			return {};
 		}
 
-		return LoadModuleComponentFunctions(module->component_functions, allocator);
+		return LoadModuleComponentFunctions(module->component_functions, allocator, component_names, error_message);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
 	Stream<ModuleComponentFunctions> LoadModuleComponentFunctions(
 		ModuleRegisterComponentFunctionsFunction function,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		Stream<Stream<char>> component_names,
+		CapacityStream<char>* error_message
 	) {
-		ECS_STACK_CAPACITY_STREAM(ModuleComponentFunctions, reset_functions, 1024);
+		ECS_STACK_CAPACITY_STREAM(ModuleComponentFunctions, component_functions, 1024);
 
 		ModuleRegisterComponentFunctionsData register_data;
-		register_data.functions = &reset_functions;
+		register_data.functions = &component_functions;
 		function(&register_data);
-		reset_functions.AssertCapacity();
+		component_functions.AssertCapacity();
 
-		return StreamCoalescedDeepCopy(reset_functions, allocator);
+		Stream<ModuleComponentFunctions> stream_component_functions = component_functions;
+		ValidateModuleComponentFunctions(stream_component_functions, component_names, error_message);
+		return StreamCoalescedDeepCopy(stream_component_functions, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -887,14 +893,73 @@ namespace ECSEngine {
 		initialize_info->frame_data->size = write_size;
 	}
 
-	ModuleComponentBuildFunction GetModuleResetFunction(const AppliedModule* applied_module, Stream<char> component_name) {
-		size_t index = applied_module->component_functions.Find(component_name, [](ModuleComponentFunctions element) {
+	size_t ValidateModuleComponentFunctions(Stream<ModuleComponentFunctions>& elements, Stream<Stream<char>> names, CapacityStream<char>* error_message)
+	{
+		return ValidateModuleInformation(elements, [=](const ModuleComponentFunctions& element) {
+			if (element.component_name.size == 0) {
+				if (error_message != nullptr) {
+					error_message->AddStreamAssert("A component function entry is missing the component");
+				}
+				return true;
+			}
+
+			if (names.size > 0) {
+				if (FindString(element.component_name, names) == -1) {
+					if (error_message != nullptr) {
+						ECS_FORMAT_STRING(*error_message, "Component name {#} for component functions is not valid", element.component_name);
+					}
+					return true;
+				}
+
+				for (size_t index = 0; index < element.build_entry.component_dependencies.size; index++) {
+					Stream<char> dependency = element.build_entry.component_dependencies[index];
+					if (FindString(dependency, names) == -1) {
+						if (error_message != nullptr) {
+							ECS_FORMAT_STRING(*error_message, "Component functions for {#} has build entry invalid dependency {#}", element.component_name, dependency);
+						}
+						return true;
+					}
+				}
+			}
+
+			if (element.allocator_size == 0 || element.copy_function == nullptr || element.deallocate_function == nullptr) {
+				if (error_message != nullptr) {
+					if (element.allocator_size == 0) {
+						ECS_FORMAT_STRING(*error_message, "Component functions for {#} is missing the allocator size", element.component_name);
+					}
+					else if (element.copy_function == nullptr) {
+						ECS_FORMAT_STRING(*error_message, "Component functions for {#} is missing the copy function", element.component_name);
+					}
+					else {
+						ECS_FORMAT_STRING(*error_message, "Component functions for {#} is missing the deallocate function", element.component_name);
+					}
+				}
+				return true;
+			}
+
+			return false;
+		});
+	}
+
+	ModuleComponentBuildFunction GetModuleComponentBuildFunction(const AppliedModule* applied_module, Stream<char> component_name) {
+		size_t index = applied_module->component_functions.Find(component_name, [](const ModuleComponentFunctions& element) {
 			return element.component_name;
 		});
 		if (index != -1) {
-			return applied_module->component_functions[index].reset_function;
+			return applied_module->component_functions[index].build_entry.function;
 		}
 		return nullptr;
+	}
+
+	ModuleComponentBuildEntry GetModuleComponentBuildEntry(const AppliedModule* applied_module, Stream<char> component_name)
+	{
+		size_t index = applied_module->component_functions.Find(component_name, [](const ModuleComponentFunctions& element) {
+			return element.component_name;
+		});
+		if (index != -1) {
+			return applied_module->component_functions[index].build_entry;
+		}
+		return { nullptr };
 	}
 
 	void AddModuleDebugDrawTaskElementsToScheduler(TaskScheduler* scheduler, Stream<ModuleDebugDrawTaskElement> elements, bool scene_order)

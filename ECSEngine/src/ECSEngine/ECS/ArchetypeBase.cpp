@@ -289,13 +289,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned int ArchetypeBase::EntityCount() const
-	{
-		return m_size;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
 	unsigned char ArchetypeBase::FindComponentIndex(Component component) const
 	{
 		for (size_t index = 0; index < m_components.count; index++) {

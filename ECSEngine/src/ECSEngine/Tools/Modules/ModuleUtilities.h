@@ -226,4 +226,23 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	// For a given component, it will fill in the component names that have a build function
+	// Which targets this given component as a dependency
+	ECSENGINE_API void ModuleRetrieveComponentBuildDependentEntries(
+		Stream<const AppliedModule*> applied_modules, 
+		Stream<char> component_name,
+		CapacityStream<Stream<char>>* dependent_components
+	);
+
+	// For a given component, it will fill in the component names that have a build function
+	// Which targets this given component as a dependency
+	// To deallocate, you can deallocate the returned buffer
+	ECSENGINE_API Stream<Stream<char>> ModuleRetrieveComponentBuildDependentEntries(
+		Stream<const AppliedModule*> applied_modules,
+		Stream<char> component_name,
+		AllocatorPolymorphic allocator
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }
