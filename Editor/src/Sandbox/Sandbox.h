@@ -103,6 +103,10 @@ bool ConstructSandboxSchedulingOrder(
 
 // -------------------------------------------------------------------------------------------------------------
 
+void DecrementSandboxModuleComponentBuildCount(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -351,6 +355,10 @@ bool IsAnyDefaultSandboxPaused(const EditorState* editor_state);
 
 // Returns true if any of the sandboxes that want to be run on the global run button is currently not even started
 bool IsAnyDefaultSandboxNotStarted(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void IncrementSandboxModuleComponentBuildCount(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

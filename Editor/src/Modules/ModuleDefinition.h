@@ -38,6 +38,10 @@ struct EditorModuleInfo {
 	ECSEngine::AppliedModule ecs_module;
 
 	EDITOR_MODULE_LOAD_STATUS load_status;
+	// Add this locked boolean in case there are functions from
+	// This dll still running as to not unload this since it will
+	// Result in undefined behaviour
+	std::atomic<unsigned int> lock_count;
 	size_t library_last_write_time;
 };
 
@@ -53,6 +57,11 @@ struct EditorModuleReflectedSetting {
 };
 
 struct EditorModule {
+	ECS_INLINE EditorModule& operator = (const EditorModule& other) {
+		memcpy(this, &other, sizeof(other));
+		return *this;
+	}
+
 	ECSEngine::Stream<wchar_t> solution_path;
 	ECSEngine::Stream<wchar_t> library_name;
 	ECSEngine::Stream<ECSEngine::Stream<char>> dll_imports;

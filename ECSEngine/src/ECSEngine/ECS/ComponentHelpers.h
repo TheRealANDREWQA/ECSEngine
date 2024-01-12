@@ -21,6 +21,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool IsReflectionTypeLinkComponent(const Reflection::ReflectionType* type);
 
+	ECSENGINE_API bool IsReflectionTypeComponentType(const Reflection::ReflectionType* type, ECS_COMPONENT_TYPE component_type);
+
 	// Walks through the fields and returns the component buffer and optionally the index of the field that
 	// corresponds to that buffer index
 	// Example struct { int, Stream<>, Stream<>, int, Stream<> }
@@ -41,6 +43,24 @@ namespace ECSEngine {
 	// It needs the allocator to write some data for the functions to use
 	// It builds default functions to handle Streams and DataPointers
 	ECSENGINE_API ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, AllocatorPolymorphic allocator);
+
+	// It needs the stack memory to write some data
+	// It builds default functions to handle reflectable types - in case it is
+	// Blittable, it won't return a function, it will let the runtime use the default memcmp
+	ECSENGINE_API SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type, 
+		CapacityStream<void>* stack_memory
+	);
+
+	// It needs the allocator to write some data for the function to use
+	// It builds default functions to handle reflectable types - in case it is
+	// Blittable, it won't return a function, it will let the runtime use the default memcmp
+	ECSENGINE_API SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		AllocatorPolymorphic allocator
+	);
 
 	ECSENGINE_API Component GetReflectionTypeComponent(const Reflection::ReflectionType* type);
 

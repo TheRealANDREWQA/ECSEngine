@@ -148,6 +148,10 @@ struct EditorComponents {
 
 	void ForEachSharedComponent(void (*Functor)(const Reflection::ReflectionType* type, void* _data), void* _data) const;
 
+	// Fills in the names of all components for a given type, or if the component type is COUNT,
+	// For all components, including global ones
+	void GetAllComponentNames(AdditionStream<Stream<char>> names, ECS_COMPONENT_TYPE component_type) const;
+	
 	// Returns -1 if it doesn't find it
 	Component GetComponentID(Stream<char> name) const;
 

@@ -322,8 +322,7 @@ namespace ECSEngine {
 		ResizableStableReferenceStream<void*> instances;
 		HashTableDefault<SharedInstance> named_instances;
 
-		SharedComponentCompareFunction compare_function;
-		Stream<void> compare_function_data;
+		SharedComponentCompareEntry compare_entry;
 	};
 
 	struct ECSENGINE_API ComponentSignature {

@@ -686,6 +686,9 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->transform_keyboard_space = ECS_TRANSFORM_LOCAL_SPACE;
 	sandbox->transform_keyboard_tool = ECS_TRANSFORM_COUNT;
 	sandbox->is_camera_wasd_movement = false;
+	sandbox->component_build_function_lock.Clear();
+	sandbox->background_component_build_functions.store(0, ECS_RELAXED);
+	sandbox->locked_components_lock.Unlock();
 	sandbox->camera_wasd_speed = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED;
 	memset(sandbox->transform_tool_selected, 0, sizeof(sandbox->transform_tool_selected));
 
@@ -811,6 +814,13 @@ bool ConstructSandboxSchedulingOrder(
 	// Now try to solve the graph
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 	return sandbox->sandbox_world.task_scheduler->Solve(disable_error_message ? nullptr : &error_message);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void DecrementSandboxModuleComponentBuildCount(EditorState* editor_state, unsigned int sandbox_index)
+{
+	GetSandbox(editor_state, sandbox_index)->background_component_build_functions.fetch_sub(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1634,6 +1644,13 @@ bool IsAnyDefaultSandboxNotStarted(const EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void IncrementSandboxModuleComponentBuildCount(EditorState* editor_state, unsigned int sandbox_index)
+{
+	GetSandbox(editor_state, sandbox_index)->background_component_build_functions.fetch_add(1, ECS_RELAXED);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool LoadSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -1846,6 +1863,10 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->virtual_entities_slots.Initialize(sandbox->GlobalMemoryManager(), 0);
 	sandbox->virtual_entity_slot_type.Initialize(sandbox->GlobalMemoryManager(), 0);
 	sandbox->virtual_entities_slots_recompute = false;
+
+	// The locked components
+	sandbox->locked_entity_components.Initialize(sandbox_allocator, 0);
+	sandbox->locked_global_components.Initialize(sandbox_allocator, 0);
 
 	// Initialize the transfer data allocator
 	sandbox->sandbox_world_transfer_data_allocator = ResizableLinearAllocator(ECS_KB * 128, ECS_MB, sandbox->GlobalMemoryManager());
@@ -2358,9 +2379,16 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		return false;
 	}
 
+	// Check the wait build function background counter
+	unsigned int background_build_function_count = sandbox->background_component_build_functions.load(ECS_RELAXED);
+	if (background_build_function_count > 0) {
+		// Return immediately to signal that we are waiting for the build functions
+		return true;
+	}
+
 	// Clear the sandbox waiting compilation flag - it will be reset if it is still valid
-	bool was_waiting = HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
-	
+	bool was_waiting_compilation = HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+
 	// Before running the simulation, we need to check to see if the modules are still valid - they might have been changed
 	// That's why check the snapshot
 	SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT solve_module_snapshot_result = SolveSandboxModuleSnapshotsChanges(editor_state, sandbox_index);
@@ -2379,7 +2407,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 	}
 
-	if (was_waiting && !HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION)) {
+	if (was_waiting_compilation && !HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION)) {
 		// Clear the runtime info just in case there is something bound from before
 		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_index);
 

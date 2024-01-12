@@ -80,14 +80,14 @@ void EditorSetConsoleTrace(Stream<char> error_message, ECS_CONSOLE_VERBOSITY ver
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateSetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag) {
-	editor_state->flags[flag].fetch_add(1, ECS_RELAXED);
+size_t EditorStateSetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag) {
+	return editor_state->flags[flag].fetch_add(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag) {
-	editor_state->flags[flag].fetch_sub(1, ECS_RELAXED);
+size_t EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag) {
+	return editor_state->flags[flag].fetch_sub(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -101,6 +101,13 @@ bool EditorStateHasFlag(const EditorState* editor_state, EDITOR_STATE_FLAGS flag
 void EditorStateWaitFlag(size_t sleep_milliseconds, const EditorState* editor_state, EDITOR_STATE_FLAGS flag, bool set)
 {
 	TickWait<'!'>(sleep_milliseconds, editor_state->flags[flag], (size_t)set);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorStateWaitFlagCount(size_t sleep_milliseconds, const EditorState* editor_state, EDITOR_STATE_FLAGS flag, size_t count)
+{
+	TickWait<'!'>(sleep_milliseconds, editor_state->flags[flag], count);
 }
 
 // -----------------------------------------------------------------------------------------------------------------

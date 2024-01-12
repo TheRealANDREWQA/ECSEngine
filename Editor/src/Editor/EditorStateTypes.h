@@ -44,12 +44,17 @@ enum EDITOR_STATE_FLAGS : unsigned char {
 struct EditorState;
 
 // These are reference counted, can be called multiple times
-void EditorStateSetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
+// Returns the flag value before the increment
+size_t EditorStateSetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
 // These are reference counted, can be called multiple times
-void EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
+// Returns the flag value before the decrement
+size_t EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
 bool EditorStateHasFlag(const EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
 // Waits until the flag is set or cleared
 void EditorStateWaitFlag(size_t sleep_milliseconds, const EditorState* editor_state, EDITOR_STATE_FLAGS flag, bool set = true);
+
+// Waits until the flag reaches a certain count
+void EditorStateWaitFlagCount(size_t sleep_milliseconds, const EditorState* editor_state, EDITOR_STATE_FLAGS flag, size_t count);

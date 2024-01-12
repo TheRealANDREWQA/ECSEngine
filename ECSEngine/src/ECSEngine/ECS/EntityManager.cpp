@@ -2724,12 +2724,10 @@ namespace ECSEngine {
 		// Record the instances and the named instances in order to be transfered
 		auto instances = m_shared_components[old_component.value].instances;
 		auto named_instances = m_shared_components[old_component.value].named_instances;
-		auto compare_function = m_shared_components[old_component.value].compare_function;
-		auto compare_data = m_shared_components[old_component.value].compare_function_data;
+		auto compare_entry = m_shared_components[old_component.value].compare_entry;
 		m_shared_components[old_component.value].instances.stream.capacity = 0;
 		m_shared_components[old_component.value].named_instances.m_capacity = 0;
-		m_shared_components[old_component.value].compare_function = nullptr;
-		m_shared_components[old_component.value].compare_function_data = {};
+		m_shared_components[old_component.value].compare_entry = compare_entry;
 
 		// Always use size 0 allocator size because we will transfer the arena to the new slot
 		// In this way we avoid creating a new allocator and transfer all the existing data to it
@@ -2741,8 +2739,7 @@ namespace ECSEngine {
 
 		m_shared_components[new_component.value].instances = instances;
 		m_shared_components[new_component.value].named_instances = named_instances;
-		m_shared_components[new_component.value].compare_function = compare_function;
-		m_shared_components[new_component.value].compare_function_data = compare_data;
+		m_shared_components[new_component.value].compare_entry = {};
 
 		SwapComponentInfoUserDefinedInfo(this, &m_shared_components[old_component.value].info, &m_shared_components[new_component.value].info);
 
@@ -4628,14 +4625,14 @@ namespace ECSEngine {
 
 		short instance_index = -1;
 		// Check to see if we have a compare function. If we do, use that
-		if (m_shared_components[component.value].compare_function != nullptr) {
+		if (m_shared_components[component.value].compare_entry.function != nullptr) {
 			SharedComponentCompareFunctionData compare_data;
-			compare_data.function_data = m_shared_components[component.value].compare_function_data.buffer;
+			compare_data.function_data = m_shared_components[component.value].compare_entry.data.buffer;
 			compare_data.first = data;
 			m_shared_components[component.value].instances.stream.ForEachIndex<true>([&](unsigned int index) {
 				const void* current_data = m_shared_components[component.value].instances[index];
 				compare_data.second = current_data;
-				if (m_shared_components[component.value].compare_function(&compare_data)) {
+				if (m_shared_components[component.value].compare_entry.function(&compare_data)) {
 					instance_index = (short)index;
 					return true;
 				}
@@ -4745,6 +4742,15 @@ namespace ECSEngine {
 	Entity EntityManager::GetEntityParent(Entity child) const
 	{
 		return m_hierarchy.GetParent(child);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::GetEntitiesForSharedInstance(Component component, SharedInstance instance, AdditionStream<Entity> entities) const
+	{
+		ForEachEntityWithSharedInstance(component, instance, [&entities](Entity entity) {
+			entities.Add(entity);
+		});
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5102,8 +5108,7 @@ namespace ECSEngine {
 		unsigned int size, 
 		Stream<char> name,
 		const ComponentFunctions* component_functions,
-		SharedComponentCompareFunction compare_function,
-		Stream<void> compare_function_data
+		SharedComponentCompareEntry compare_entry
 	) {
 		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 64);
 		Stream<char> component_name = name;
@@ -5154,18 +5159,14 @@ namespace ECSEngine {
 			m_shared_components[component.value].info.ResetComponentFunctions();
 		}
 
-		if (compare_function != nullptr) {
-			m_shared_components[component.value].compare_function = compare_function;
-			if (compare_function_data.size == 0) {
-				m_shared_components[component.value].compare_function_data = compare_function_data;
-			}
-			else {
-				m_shared_components[component.value].compare_function_data = compare_function_data.Copy(SmallAllocator());
+		if (compare_entry.function != nullptr) {
+			m_shared_components[component.value].compare_entry = compare_entry;
+			if (compare_entry.data.size != 0) {
+				m_shared_components[component.value].compare_entry.data = compare_entry.data.Copy(SmallAllocator());
 			}
 		}
 		else {
-			m_shared_components[component.value].compare_function = nullptr;
-			m_shared_components[component.value].compare_function_data = {};
+			m_shared_components[component.value].compare_entry = {};
 		}
 
 		// The named instances table should start with size 0 and only create it when actually needing the tags
@@ -5581,6 +5582,68 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	bool EntityManager::TryMergeSharedInstanceCommit(Component component, SharedInstance instance, bool remove_empty_archetypes)
+	{
+		ECS_CRASH_CONDITION_RETURN(ExistsSharedInstance(component, instance), false, "EntityManager: Trying to merge invalid shared instance {#} for component {#}", instance.value,
+			GetSharedComponentName(component));
+
+		const void* instance_data = GetSharedData(component, instance);
+		bool was_matched = ForEachSharedInstance<true>(component, [this, component, instance, instance_data](SharedInstance current_instance) {
+			if (current_instance != instance) {
+				bool are_equal = false;
+				const void* current_instance_data = GetSharedData(component, current_instance);
+				if (m_shared_components[component.value].compare_entry.function != nullptr) {
+					SharedComponentCompareFunctionData compare_data;
+					compare_data.function_data = m_shared_components[component.value].compare_entry.data.buffer;
+					compare_data.first = instance_data;
+					compare_data.second = current_instance_data;
+					are_equal = m_shared_components[component.value].compare_entry.function(&compare_data);
+				}
+				else {
+					are_equal = memcmp(instance_data, current_instance_data, m_shared_components[component.value].info.size) == 0;
+				}
+
+				if (are_equal) {
+					// We can use a slightly less efficient but straightforwarwd algorithm -
+					// Remove the shared component for the entities that contain it and then
+					// Readd it again
+					ArchetypeQuery query;
+					Component component_copy = component;
+					query.shared.ConvertComponents({ &component_copy, 1 });
+					ForEachArchetype(query, [this, component, instance, current_instance](Archetype* archetype) {
+						// We need this since the compiler complains that the captured component and instance are const
+						Component component_copy = component;
+						SharedInstance instance_copy = instance;
+						SharedComponentSignature shared_signature = { &component_copy, &instance_copy, 1 };
+						unsigned int base_index = archetype->FindBaseIndex(shared_signature);
+						if (base_index != -1) {
+							ArchetypeBase* base_archetype = archetype->GetBase(base_index);
+							// We need to copy the entities to a temporary buffer since removing
+							// The shared instance will remove them from this base archetype
+							unsigned int entity_count = base_archetype->EntityCount();
+							Entity* temporary_entities = (Entity*)m_memory_manager->Allocate(sizeof(Entity) * entity_count);
+							base_archetype->GetEntitiesCopy(temporary_entities);
+							RemoveSharedComponentCommit({ temporary_entities, entity_count }, shared_signature.ComponentSignature());
+							AddSharedComponentCommit({ temporary_entities, entity_count }, component_copy, current_instance, true);
+						}
+						});
+					return true;
+				}
+			}
+			return false;
+		});
+
+		if (was_matched) {
+			UnregisterSharedInstanceCommit(component, instance);
+			if (remove_empty_archetypes) {
+				DestroyArchetypesBaseEmptyCommit(true);
+			}
+		}
+		return was_matched;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	bool EntityManager::TryRemoveEntityFromHierarchyCommit(Entity entity, bool default_child_destroy)
 	{
 		return TryRemoveEntityFromHierarchyCommit({ &entity, 1 }, default_child_destroy);
@@ -5659,8 +5722,8 @@ namespace ECSEngine {
 			Deallocate(SmallAllocator(), data);
 		});
 
-		if (m_shared_components[component.value].compare_function_data.size > 0) {
-			m_shared_components[component.value].compare_function_data.Deallocate(SmallAllocator());
+		if (m_shared_components[component.value].compare_entry.data.size > 0) {
+			m_shared_components[component.value].compare_entry.data.Deallocate(SmallAllocator());
 		}
 		if (m_shared_components[component.value].info.copy_deallocate_data.size > 0) {
 			m_shared_components[component.value].info.copy_deallocate_data.Deallocate(SmallAllocator());

@@ -97,7 +97,9 @@ namespace ECSEngine {
 
 		void Deallocate();
 
-		unsigned int EntityCount() const;
+		ECS_INLINE unsigned int EntityCount() const {
+			return m_size;
+		}
 
 		// Returns UCHAR_MAX if it doesn't find it
 		unsigned char FindComponentIndex(Component component) const;

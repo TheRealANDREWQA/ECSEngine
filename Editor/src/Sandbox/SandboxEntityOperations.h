@@ -7,6 +7,7 @@
 using namespace ECSEngine;
 
 struct EditorState;
+struct EditorModuleComponentBuildEntry;
 
 /*
 	For all functions calls in this file where viewport is specified and left to COUNT it means
@@ -53,6 +54,58 @@ void AttachSandboxEntityName(
 	Entity entity, 
 	Stream<char> name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// It will call the function with the appropriate lock and print handler. If it returned a thread task,
+// It will push it to run in background. Only a single build function can run at a time for a sandbox -
+// In order to not have the tasks be synchronized in any way
+void CallModuleComponentBuildFunctionUnique(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ModuleComponentBuildEntry build_entry,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	Stream<Entity> entities,
+	Component component
+);
+
+// It will call the function with the appropriate lock and print handler. If it returned a thread task,
+// It will push it to run in background. Only a single build function can run at a time for a sandbox -
+// In order to not have the tasks be synchronized in any way
+void CallModuleComponentBuildFunctionUnique(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	const EditorModuleComponentBuildEntry* build_entry,
+	Stream<Entity> entities,
+	Component component
+);
+
+// It will call the function with the appropriate lock and print handler. If it returned a thread task,
+// It will push it to run in background. Only a single build function can run at a time for a sandbox -
+// In order to not have the tasks be synchronized in any way. We need a distinction from the unique component
+// Since shared components that have build dependencies need to be handled much differently
+void CallModuleComponentBuildFunctionShared(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ModuleComponentBuildEntry build_entry,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	Component component,
+	SharedInstance build_instance,
+	Entity changed_entity
+);
+
+// It will call the function with the appropriate lock and print handler. If it returned a thread task,
+// It will push it to run in background. Only a single build function can run at a time for a sandbox -
+// In order to not have the tasks be synchronized in any way. We need a distinction from the unique component
+// Since shared components that have build dependencies need to be handled much differently
+void CallModuleComponentBuildFunctionShared(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	const EditorModuleComponentBuildEntry* build_entry,
+	Component component,
+	SharedInstance build_instance,
+	Entity changed_entity
 );
 
 void ChangeSandboxEntityName(

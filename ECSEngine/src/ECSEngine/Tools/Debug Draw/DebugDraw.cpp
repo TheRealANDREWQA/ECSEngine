@@ -3226,7 +3226,7 @@ namespace ECSEngine {
 		instanced_large_vertex_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), LARGE_BUFFER_CAPACITY);
 		output_large_matrix_vertex_buffer = graphics->CreateVertexBuffer(sizeof(Matrix), LARGE_BUFFER_CAPACITY);
 		output_large_id_vertex_buffer = graphics->CreateVertexBuffer(sizeof(unsigned int), LARGE_BUFFER_CAPACITY);
-		output_large_instanced_structured_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedVertex), LARGE_BUFFER_CAPACITY);
+		output_large_instanced_structured_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), LARGE_BUFFER_CAPACITY);
 		output_large_instanced_buffer_view = graphics->CreateBufferView(output_large_instanced_structured_buffer);
 		output_large_matrix_structured_buffer = graphics->CreateStructuredBuffer(sizeof(Matrix), LARGE_BUFFER_CAPACITY);
 		output_large_matrix_buffer_view = graphics->CreateBufferView(output_large_matrix_structured_buffer);

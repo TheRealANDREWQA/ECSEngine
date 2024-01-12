@@ -602,15 +602,19 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_ADD_MODULE, {CreateAddModuleWizard, window_data, 0, ECS_UI_DRAW_SYSTEM});
 
 	config.flag_count = HEADER_BASE_CONFIGS;
+	bool is_any_module_info_locked = IsAnyModuleInfoLocked(editor_state);
+	// Have one more condition for the remove active state
+	// If there is a locked module info, don't allow removals
+	// As to not perturb references to that module index
 	UIConfigActiveState is_selected_state;
-	is_selected_state.state = explorer_data->selected_module != -1;
+	is_selected_state.state = explorer_data->selected_module != -1 && !is_any_module_info_locked;
 	config.AddFlag(is_selected_state);
 
 	header_transform.position.x += header_transform.scale.x;
 	header_transform.scale = drawer.GetLabelScale(HEADER_REMOVE_MODULE);
 	config.AddFlag(header_transform);
 
-	drawer.Button(HEADER_BUTTON_CONFIGURATION | UI_CONFIG_ACTIVE_STATE,config, HEADER_REMOVE_MODULE, {ModuleExplorerRemoveModule, explorer_data, 0});
+	drawer.Button(HEADER_BUTTON_CONFIGURATION | UI_CONFIG_ACTIVE_STATE, config, HEADER_REMOVE_MODULE, {ModuleExplorerRemoveModule, explorer_data, 0});
 
 	config.flag_count = HEADER_BASE_CONFIGS;
 	header_transform.position.x += header_transform.scale.x;
@@ -678,7 +682,12 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 	header_transform.scale = drawer.GetLabelScale(HEADER_RESET_ALL);
 	config.AddFlag(header_transform);
 
-	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_RESET_ALL, { ModuleExplorerReset, explorer_data, 0 });
+	// The reset should not be active while there is a locked module
+	UIConfigActiveState reset_active_state;
+	reset_active_state.state = !is_any_module_info_locked;
+	config.AddFlag(reset_active_state);
+	drawer.Button(HEADER_BUTTON_CONFIGURATION | UI_CONFIG_ACTIVE_STATE, config, HEADER_RESET_ALL, { ModuleExplorerReset, explorer_data, 0 });
+	config.flag_count--;
 
 	drawer.UpdateCurrentRowScale(header_transform.scale.y);
 	drawer.SetRowPadding(next_row_padding);
@@ -702,7 +711,7 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 		const size_t MODULE_SPRITE_CONFIGURATION = UI_CONFIG_MAKE_SQUARE;
 		const size_t MAIN_BUTTON_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X |
 			UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_TEXT_PARAMETERS;
-		const size_t SECONDARY_BUTTON_CONFIGURATION = 0;
+		const size_t SECONDARY_BUTTON_CONFIGURATION = UI_CONFIG_ACTIVE_STATE;
 		const size_t COMBO_CONFIGURATION = UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX;
 
 		Stream<wchar_t> module_name = project_modules->buffer[index].library_name;
@@ -811,9 +820,13 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 		build_data.module_index = index;
 		build_data.configuration = explorer_data->configurations[index];
 
+		UIConfigActiveState active_state;
+		active_state.state = !IsModuleInfoLocked(editor_state, index, explorer_data->configurations[index]);
+		config.AddFlag(active_state);
 		drawer.Button(SECONDARY_BUTTON_CONFIGURATION, config, HEADER_BUILD_MODULE, { ModuleExplorerBuildModule, &build_data, sizeof(build_data) });
 		drawer.Button(SECONDARY_BUTTON_CONFIGURATION, config, HEADER_CLEAN_MODULE, { ModuleExplorerCleanModule, &build_data, sizeof(build_data) });
 		drawer.Button(SECONDARY_BUTTON_CONFIGURATION,config, HEADER_REBUILD_MODULE, { ModuleExplorerRebuildModule, &build_data, sizeof(build_data) });
+		config.flag_count--;
 
 		UIConfigComboBoxPrefix prefix;
 		prefix.prefix = "Configuration: ";

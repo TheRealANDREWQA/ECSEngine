@@ -45,5 +45,10 @@ namespace ECSEngine {
 		// If data size is 0, it will reference the data, else it will copy the data
 		Stream<void> data;
 	};
+
+	struct SharedComponentCompareEntry {
+		SharedComponentCompareFunction function;
+		Stream<void> data;
+	};
 	
 }

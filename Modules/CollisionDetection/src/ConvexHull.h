@@ -1,5 +1,6 @@
 #pragma once
 #include "ECSEngineMath.h"
+#include "Export.h"
 
 using namespace ECSEngine;
 
@@ -35,3 +36,5 @@ struct ConvexHull {
 	float* vertices_z;
 	size_t size;
 };
+
+COLLISIONDETECTION_API ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator);

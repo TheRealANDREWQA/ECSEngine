@@ -36,7 +36,7 @@ namespace ECSEngine {
 	ECSENGINE_API Module LoadModule(Stream<wchar_t> path, bool* load_debug_symbols = nullptr);
 
 	// Loads the streams from the given module
-	ECSENGINE_API void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, Stream<Stream<char>> component_names = {}, CapacityStream<char>*error_message = nullptr);
 
 	// It will not release the OS Handle - it must be kept around as long as the tasks are loaded;
 	// It does a single coalesced allocation. Deallocate the buffer to free the memory
@@ -118,14 +118,22 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message = nullptr
 	);
 
+	// The component names can be made empty. They are used to validate that the functions
+	// Have valid targets
 	ECSENGINE_API Stream<ModuleComponentFunctions> LoadModuleComponentFunctions(
 		const Module* module,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		Stream<Stream<char>> component_names = {},
+		CapacityStream<char>* error_message = nullptr
 	);
 
+	// The component names can be made empty. They are used to validate that the functions
+	// Have valid targets
 	ECSENGINE_API Stream<ModuleComponentFunctions> LoadModuleComponentFunctions(
 		ModuleRegisterComponentFunctionsFunction function,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		Stream<Stream<char>> component_names = {},
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	// Frees the OS handle to the valid module function but it does not deallocate the tasks
@@ -162,7 +170,17 @@ namespace ECSEngine {
 	// Returns the previous size, the new size will reflect the count of the valid link targets
 	ECSENGINE_API size_t ValidateModuleDebugDrawTaskElements(Stream<ModuleDebugDrawTaskElement>& elements, CapacityStream<char>* error_message = nullptr);
 
-	ECSENGINE_API ModuleComponentBuildFunction GetModuleResetFunction(const AppliedModule* applied_module, Stream<char> component_name);
+	// It will move all the valid link targets in front of the stream while keeping the invalid ones at the end
+	// Returns the previous size, the new size will reflect the count of valid component functions
+	ECSENGINE_API size_t ValidateModuleComponentFunctions(
+		Stream<ModuleComponentFunctions>& elements, 
+		Stream<Stream<char>> component_names, 
+		CapacityStream<char>* error_message = nullptr
+	);
+
+	ECSENGINE_API ModuleComponentBuildFunction GetModuleComponentBuildFunction(const AppliedModule* applied_module, Stream<char> component_name);
+
+	ECSENGINE_API ModuleComponentBuildEntry GetModuleComponentBuildEntry(const AppliedModule* applied_module, Stream<char> component_name);
 
 	ECSENGINE_API void AddModuleDebugDrawTaskElementsToScheduler(TaskScheduler* scheduler, Stream<ModuleDebugDrawTaskElement> elements, bool scene_order);
 

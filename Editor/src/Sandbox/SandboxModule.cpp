@@ -226,7 +226,7 @@ void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sa
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, ECSEngine::Stream<wchar_t> settings_name)
+void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, Stream<wchar_t> settings_name)
 {
 	unsigned int sandbox_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
 	ECS_ASSERT(sandbox_module_index != -1);
