@@ -1629,6 +1629,10 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 					EditorSetConsoleWarn(message);
 					EditorSetConsoleWarn(error_message);
 				}
+				
+				// We must update the sandboxes that reference this configuration
+				// To update their component functions
+				UpdateSandboxesComponentFunctionsForModule(editor_state, index, configuration);
 
 				info->load_status = EDITOR_MODULE_LOAD_GOOD;
 				return true;
@@ -1951,6 +1955,13 @@ void ReleaseModuleStreamsAndHandle(EditorState* editor_state, unsigned int index
 	bool release_debugging_symbols = false;
 	ReleaseAppliedModule(&info->ecs_module, allocator, &release_debugging_symbols);
 	info->load_status = EDITOR_MODULE_LOAD_FAILED;
+
+	// TODO: Should we reset the component functions for the sandboxes that reference this
+	// Specific module configuration? The assumption is that a sandbox cannot continue
+	// Running when one of its modules is not loaded and, as such, it doesn't really add
+	// Anything of substance. It could help a little bit with debugging but if we reset
+	// The component functions, we will reset the allocator for that component and lose the buffer
+	// Data. For this last point, there is not really a solution at the moment
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

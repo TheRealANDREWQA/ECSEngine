@@ -611,9 +611,11 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message
 	) {
 		ECS_STACK_CAPACITY_STREAM(ModuleComponentFunctions, component_functions, 1024);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 
 		ModuleRegisterComponentFunctionsData register_data;
 		register_data.functions = &component_functions;
+		register_data.allocator = &stack_allocator;
 		function(&register_data);
 		component_functions.AssertCapacity();
 

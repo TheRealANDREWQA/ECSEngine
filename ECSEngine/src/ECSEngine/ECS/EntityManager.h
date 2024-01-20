@@ -408,6 +408,12 @@ namespace ECSEngine {
 		);
 
 		// ---------------------------------------------------------------------------------------------------
+
+		void ChangeComponentFunctionsCommit(Component component, const ComponentFunctions* functions);
+
+		void ChangeSharedComponentFunctionsCommit(Component component, const ComponentFunctions* functions, SharedComponentCompareEntry compare_entry);
+
+		// ---------------------------------------------------------------------------------------------------
 	
 		// The tag should be only the bit index, not the actual value
 		void ClearEntityTagCommit(Stream<Entity> entities, unsigned char tag);

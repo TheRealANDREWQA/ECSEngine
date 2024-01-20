@@ -173,38 +173,6 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void WindowParameterColorInputThemeCallback(ActionData* action_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void WindowParameterColorInputCallback(ActionData* action_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void WindowParameterLayoutCallback(ActionData* action_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void WindowParameterElementDescriptorCallback(ActionData* action_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void SystemParameterColorInputThemeCallback(ActionData* action_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void SystemParameterColorThemeCallback(ActionData* action_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void SystemParameterLayoutCallback(ActionData* action_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void SystemParameterElementDescriptorCallback(ActionData* action_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
 		ECSENGINE_API void ChangeStateAction(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------

@@ -344,6 +344,12 @@ namespace ECSEngine {
 		}
 	}
 
+	static void DeallocateAllocatorForComponent(EntityManager* entity_manager, MemoryArena* allocator) {
+		if (allocator != nullptr) {
+			entity_manager->m_memory_manager->Deallocate(allocator);
+		}
+	}
+
 	static const void** GetDeferredCallData(
 		ComponentSignature components,
 		const void** component_data,
@@ -454,11 +460,9 @@ namespace ECSEngine {
 
 	static void DeallocateGlobalComponent(EntityManager* entity_manager, unsigned int index) {
 		// If it has an allocator deallocate it
-		MemoryArena** allocator = &entity_manager->m_global_components_info[index].allocator;
-		if (*allocator != nullptr) {
-			entity_manager->m_memory_manager->Deallocate(*allocator);
-			*allocator = nullptr;
-		}
+		DeallocateAllocatorForComponent(entity_manager, entity_manager->m_global_components_info[index].allocator);
+		entity_manager->m_global_components_info[index].allocator = nullptr;
+
 		entity_manager->m_small_memory_manager.Deallocate(entity_manager->m_global_components_data[index]);
 		// We also need to deallocate the name
 		Stream<char> component_name = entity_manager->m_global_components_info[index].name;
@@ -2923,6 +2927,110 @@ namespace ECSEngine {
 		}
 
 		WriteCommandStream(this, parameters, { DataPointer(data, DEFERRED_CHANGE_OR_SET_ENTITY_PARENT_HIERARCHY), debug_info });
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::ChangeComponentFunctionsCommit(Component component, const ComponentFunctions* functions)
+	{
+		ECS_CRASH_CONDITION(ExistsComponent(component), "EntityManager: The unique component {#} is not registered when trying to change functions", component.value);
+
+		if (m_unique_components[component.value].copy_deallocate_data.size > 0) {
+			m_unique_components[component.value].copy_deallocate_data.Deallocate(SmallAllocator());
+		}
+
+		if (functions->copy_function != nullptr && functions->deallocate_function != nullptr && functions->allocator_size != 0) {
+			if (functions->allocator_size != 0 && m_unique_components[component.value].allocator != nullptr) {
+				// We need to record the previous allocator, and move the data to the new location
+				MemoryArena* previous_allocator = m_unique_components[component.value].allocator;
+				CreateAllocatorForComponent(this, m_unique_components[component.value], functions->allocator_size);
+				
+				size_t component_byte_size = m_unique_components[component.value].size;
+				// For each component, we must copy the data to the new location
+				ForEachEntityComponent(component, [&](Entity entity, void* data) {
+					// We must use temporary storage since the copy function should not
+					// Deal with aliased pointers
+					alignas(alignof(void*)) char temporary_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
+					// TODO: Should we use the new or the old copy function?
+					// At the moment, use the old function
+					m_unique_components[component.value].CallCopyFunction(temporary_storage, data, false);
+					memcpy(data, temporary_storage, component_byte_size);
+				});
+
+				// We can now deallocate the previous allocator
+				DeallocateAllocatorForComponent(this, previous_allocator);
+				m_unique_components[component.value].SetComponentFunctions(functions, SmallAllocator());
+			}
+			else if (functions->allocator_size != 0) {
+				CreateAllocatorForComponent(this, m_unique_components[component.value], functions->allocator_size);
+			}
+			else if (m_unique_components[component.value].allocator != nullptr) {
+				// We can straight up deallocate it
+				DeallocateAllocatorForComponent(this, m_unique_components[component.value].allocator);
+				m_unique_components[component.value].allocator = nullptr;
+			}
+			m_unique_components[component.value].SetComponentFunctions(functions, SmallAllocator());
+		}
+		else {
+			m_unique_components[component.value].ResetComponentFunctions();
+		}
+	}
+
+	void EntityManager::ChangeSharedComponentFunctionsCommit(
+		Component component, 
+		const ComponentFunctions* functions, 
+		SharedComponentCompareEntry compare_entry
+	)
+	{
+		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: The shared component {#} is not registered when trying to change functions", component.value);
+
+		if (m_shared_components[component.value].info.copy_deallocate_data.size > 0) {
+			m_shared_components[component.value].info.copy_deallocate_data.Deallocate(SmallAllocator());
+		}
+		if (m_shared_components[component.value].compare_entry.data.size > 0) {
+			m_shared_components[component.value].compare_entry.data.Deallocate(SmallAllocator());
+		}
+
+		if (functions->copy_function != nullptr && functions->deallocate_function != nullptr && functions->allocator_size != 0) {
+			if (functions->allocator_size != 0 && m_shared_components[component.value].info.allocator != nullptr) {
+				// We need to record the previous allocator, and move the data to the new location
+				MemoryArena* previous_allocator = m_shared_components[component.value].info.allocator;
+				CreateAllocatorForComponent(this, m_shared_components[component.value].info, functions->allocator_size);
+
+				size_t component_byte_size = m_shared_components[component.value].info.size;
+				// For each component, we must copy the data to the new location
+				ForEachSharedInstance(component, [&](SharedInstance instance) {
+					void* data = GetSharedData(component, instance);
+					// We must use temporary storage since the copy function should not
+					// Deal with aliased pointers
+					alignas(alignof(void*)) char temporary_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
+					// TODO: Should we use the new or the old copy function?
+					// At the moment, use the old function
+					m_shared_components[component.value].info.CallCopyFunction(temporary_storage, data, false);
+					memcpy(data, temporary_storage, component_byte_size);
+				});
+
+				// We can now deallocate the previous allocator
+				DeallocateAllocatorForComponent(this, previous_allocator);
+				m_shared_components[component.value].info.SetComponentFunctions(functions, SmallAllocator());
+			}
+			else if (functions->allocator_size != 0) {
+				CreateAllocatorForComponent(this, m_shared_components[component.value].info, functions->allocator_size);
+			}
+			else if (m_shared_components[component.value].info.allocator != nullptr) {
+				// We can straight up deallocate it
+				DeallocateAllocatorForComponent(this, m_shared_components[component.value].info.allocator);
+				m_shared_components[component.value].info.allocator = nullptr;
+			}
+			m_shared_components[component.value].info.SetComponentFunctions(functions, SmallAllocator());
+		}
+		else {
+			m_shared_components[component.value].info.ResetComponentFunctions();
+		}
+		m_shared_components[component.value].compare_entry = compare_entry;
+		if (compare_entry.data.size > 0) {
+			m_shared_components[component.value].compare_entry.data = compare_entry.data.Copy(SmallAllocator());
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5692,10 +5800,8 @@ namespace ECSEngine {
 		}
 
 		// If it has an allocator, deallocate it
-		if (m_unique_components[component.value].allocator != nullptr) {
-			m_memory_manager->Deallocate(m_unique_components[component.value].allocator);
-			m_unique_components[component.value].allocator = nullptr;
-		}
+		DeallocateAllocatorForComponent(this, m_unique_components[component.value].allocator);
+		m_unique_components[component.value].allocator = nullptr;
 
 		m_small_memory_manager.Deallocate(m_unique_components[component.value].name.buffer);
 		m_unique_components[component.value].size = -1;
@@ -5711,11 +5817,8 @@ namespace ECSEngine {
 			component.value);
 
 		// If it has an allocator deallocate it
-		MemoryArena** allocator = &m_shared_components[component.value].info.allocator;
-		if (*allocator != nullptr) {
-			m_memory_manager->Deallocate(*allocator);
-			*allocator = nullptr;
-		}
+		DeallocateAllocatorForComponent(this, m_shared_components[component.value].info.allocator);
+		m_shared_components[component.value].info.allocator = nullptr;
 
 		// Deallocate every instance as well
 		m_shared_components[component.value].instances.stream.ForEachConst([&](void* data) {

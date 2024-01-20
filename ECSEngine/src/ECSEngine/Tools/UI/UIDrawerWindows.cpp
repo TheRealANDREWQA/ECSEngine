@@ -11,6 +11,101 @@ namespace ECSEngine {
 		constexpr float2 CONSOLE_WINDOW_SIZE = { 1.0f, 0.4f };
 #define CONSOLE_RETAINED_COUNT 50
 
+		static unsigned int FindWindowByDrawerDescriptor(const UISystem* system, const UIWindowDrawerDescriptor* descriptor) {
+			for (unsigned int index = 0; index < system->m_windows.size; index++) {
+				if (system->m_windows[index].descriptors == descriptor) {
+					return index;
+				}
+			}
+			return -1;
+		}
+
+		static void DeallocateWindowSnapshotForDrawerDescriptor(UISystem* system, const UIWindowDrawerDescriptor* descriptor) {
+			unsigned int window_index = FindWindowByDrawerDescriptor(system, descriptor);
+			ECS_ASSERT(window_index != -1);
+			system->DeallocateWindowSnapshot(window_index);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void WindowParameterColorInputThemeCallback(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIWindowDrawerDescriptor* descriptor = (UIWindowDrawerDescriptor*)_data;
+			descriptor->color_theme.SetNewTheme(descriptor->color_theme.theme);
+			descriptor->configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME] = true;
+			DeallocateWindowSnapshotForDrawerDescriptor(system, descriptor);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void WindowParameterColorInputCallback(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIWindowDrawerDescriptor* descriptor = (UIWindowDrawerDescriptor*)_data;
+			descriptor->configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME] = true;
+			DeallocateWindowSnapshotForDrawerDescriptor(system, descriptor);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void WindowParameterLayoutCallback(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIWindowDrawerDescriptor* descriptor = (UIWindowDrawerDescriptor*)_data;
+			descriptor->configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT] = true;
+			DeallocateWindowSnapshotForDrawerDescriptor(system, descriptor);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void WindowParameterElementDescriptorCallback(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIWindowDrawerDescriptor* descriptor = (UIWindowDrawerDescriptor*)_data;
+			descriptor->configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT] = true;
+			DeallocateWindowSnapshotForDrawerDescriptor(system, descriptor);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void SystemParameterColorInputThemeCallback(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIColorThemeDescriptor* theme = &system->m_descriptors.color_theme;
+			theme->SetNewTheme(theme->theme);
+			system->FinalizeColorTheme();
+			system->DeallocateAllWindowSnapshots();
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void SystemParameterColorThemeCallback(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIColorThemeDescriptor* theme = &system->m_descriptors.color_theme;
+			system->FinalizeColorTheme();
+			system->DeallocateAllWindowSnapshots();
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void SystemParameterLayoutCallback(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			system->FinalizeLayout();
+			system->DeallocateAllWindowSnapshots();
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void SystemParameterElementDescriptorCallback(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			system->FinalizeElementDescriptor();
+			system->DeallocateAllWindowSnapshots();
+		}
+
 		// --------------------------------------------------------------------------------------------------------------
 
 		void WindowParameterReturnToDefaultButton(ActionData* action_data) {
@@ -37,6 +132,13 @@ namespace ECSEngine {
 				data->window_descriptor->configured[(unsigned int)data->descriptor_index] = false;
 				void* copy_ptr[] = { &data->window_descriptor->color_theme, &data->window_descriptor->layout, &data->window_descriptor->font, &data->window_descriptor->element_descriptor };
 				memcpy(copy_ptr[(unsigned int)data->descriptor_index], data->default_descriptor, data->descriptor_size);
+			}
+			if (data->is_system_theme) {
+				system->DeallocateAllWindowSnapshots();
+			}
+			else {
+				// Deallocate the window snapshot
+				DeallocateWindowSnapshotForDrawerDescriptor(system, data->window_descriptor);
 			}
 		}
 

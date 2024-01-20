@@ -81,6 +81,7 @@ struct ECS_REFLECT_COMPONENT ConvexCollider {
 		return false;
 	}
 
+	unsigned int hull_size;
 	ConvexHull hull; ECS_SKIP_REFLECTION(static_assert(sizeof(ConvexHull) == 32))
 };
 

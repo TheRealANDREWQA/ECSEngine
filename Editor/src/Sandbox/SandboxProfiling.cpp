@@ -131,13 +131,31 @@ void SynchronizeSandboxProfilingWithStatisticTypes(EditorState* editor_state, un
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	if (sandbox->cpu_statistics_type == EDITOR_SANDBOX_CPU_STATISTICS_NONE) {
+		if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+			// We need to detach th physical memory
+			if (sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
+				sandbox->world_profiling.physical_memory_profiler.Detach();
+			}
+		}
 		sandbox->world_profiling.DisableOption(ECS_WORLD_PROFILING_CPU | ECS_WORLD_PROFILING_ALLOCATOR | ECS_WORLD_PROFILING_PHYSICAL_MEMORY);
 	}
 	else if (sandbox->cpu_statistics_type == EDITOR_SANDBOX_CPU_STATISTICS_BASIC) {
+		if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+			// We need to detach th physical memory
+			if (sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
+				sandbox->world_profiling.physical_memory_profiler.Detach();
+			}
+		}
 		sandbox->world_profiling.DisableOption(ECS_WORLD_PROFILING_ALLOCATOR | ECS_WORLD_PROFILING_PHYSICAL_MEMORY);
 		sandbox->world_profiling.EnableOption(ECS_WORLD_PROFILING_CPU);
 	}
 	else if (sandbox->cpu_statistics_type == EDITOR_SANDBOX_CPU_STATISTICS_ADVANCED) {
+		if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+			// We need to detach th physical memory
+			if (!sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
+				sandbox->world_profiling.physical_memory_profiler.Reattach();
+			}
+		}
 		sandbox->world_profiling.EnableOption(ECS_WORLD_PROFILING_CPU | ECS_WORLD_PROFILING_ALLOCATOR | ECS_WORLD_PROFILING_PHYSICAL_MEMORY);
 	}
 	else {

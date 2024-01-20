@@ -151,6 +151,16 @@ struct EditorComponents {
 	// Fills in the names of all components for a given type, or if the component type is COUNT,
 	// For all components, including global ones
 	void GetAllComponentNames(AdditionStream<Stream<char>> names, ECS_COMPONENT_TYPE component_type) const;
+
+	// Fills in the names of all components for a given type, or if the component type is COUNT,
+	// For all components, including global ones. The module index needs to be the one from the EditorState
+	// ProjectModules, not the loaded modules from here
+	void GetAllComponentNamesForModule(
+		const EditorState* editor_state, 
+		AdditionStream<Stream<char>> names, 
+		unsigned int module_index, 
+		ECS_COMPONENT_TYPE component_type
+	) const;
 	
 	// Returns -1 if it doesn't find it
 	Component GetComponentID(Stream<char> name) const;

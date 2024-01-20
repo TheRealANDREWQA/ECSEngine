@@ -1015,37 +1015,16 @@ void InspectorComponentCallback(ActionData* action_data) {
 	}
 
 	// Now for link types also update the asset handle values - if they have changed
+	Stream<char> ecs_component_name = component_name;
 	if (target.size > 0) {
 		unsigned int linked_index = data->draw_data->FindLinkComponent(component_name);
 		ECS_ASSERT(linked_index != -1);
 		data->draw_data->UIUpdateLinkComponent(editor_state, data->sandbox_index, linked_index, data->apply_modifier);
+
+		ecs_component_name = target;
 	}
 
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
-	// At the very end, if we have build functions that depend on us, we need to notify them
-	Stream<Stream<char>> dependent_components = RetrieveModuleComponentBuildDependentEntries(editor_state, component_name, &stack_allocator);
-	for (size_t index = 0; index < dependent_components.size; index++) {
-		EditorModuleComponentBuildEntry build_entry = GetModuleComponentBuildEntry(editor_state, dependent_components[index]);
-		Component component = editor_state->editor_components.GetComponentID(dependent_components[index]);
-		bool is_shared = editor_state->editor_components.IsSharedComponent(dependent_components[index]);
-		void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
-		// Only perform the call if the entity actually has the data
-		if (component_data != nullptr) {
-			if (is_shared) {
-				CallModuleComponentBuildFunctionShared(
-					editor_state, 
-					sandbox_index,
-					&build_entry,
-					component, 
-					SandboxEntitySharedInstance(editor_state, sandbox_index, entity, component), 
-					entity
-				);
-			}
-			else {
-				CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, &build_entry, { &entity, 1 }, component);
-			}
-		}
-	}
+	NotifySandboxEntityComponentChange(editor_state, sandbox_index, entity, ecs_component_name);
 
 	// Re-render the sandbox - for the scene and the game as well
 	RenderSandbox(data->editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);

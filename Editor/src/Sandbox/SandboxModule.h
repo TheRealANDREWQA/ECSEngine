@@ -233,6 +233,16 @@ void UpdateSandboxModuleEnabledDebugDrawTasks(EditorState* editor_state, unsigne
 
 // -------------------------------------------------------------------------------------------------------------
 
+// It will update the entity manager component functions based upon the loaded module functions
+void UpdateSandboxComponentFunctionsForModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Updates all sandboxes which reference this particular configuration to update their component functions
+void UpdateSandboxesComponentFunctionsForModule(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Determines which settings have been changed in order to refresh the data
 void TickModuleSettingsRefresh(EditorState* editor_state);
 

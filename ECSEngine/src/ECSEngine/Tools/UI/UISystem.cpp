@@ -3129,6 +3129,15 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::DeallocateAllWindowSnapshots()
+		{
+			for (unsigned int index = 0; index < m_windows.size; index++) {
+				DeallocateWindowSnapshot(index);
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DecrementWindowDynamicResource(unsigned int window_index)
 		{
 			m_windows[window_index].dynamic_resources.ForEachIndex([&](unsigned int index) {
@@ -5627,7 +5636,7 @@ namespace ECSEngine {
 		void UISystem::FinalizeColorTheme()
 		{
 			for (size_t index = 0; index < m_windows.size; index++) {
-				if (!m_windows[index].descriptors->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME]) {
+				if (!m_windows[index].descriptors->configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME]) {
 					memcpy(&m_windows[index].descriptors->color_theme, &m_descriptors.color_theme, sizeof(UIColorThemeDescriptor));
 				}
 			}

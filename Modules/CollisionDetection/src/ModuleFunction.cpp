@@ -101,11 +101,27 @@ static void ModuleCopyConvexCollider(ComponentCopyFunctionData* data) {
 	destination->hull.Copy(&source->hull, data->allocator, data->deallocate_previous);
 }
 
-void ModuleRegisterComponentFunctionsFunction(ECSEngine::ModuleRegisterComponentFunctionsData* data) {
+static ThreadTask ModuleBuildConvexCollider(ModuleComponentBuildFunctionData* data) {
+	ConvexCollider* collider = (ConvexCollider*)data->component;
+	float3 points[3] = {
+		{ 1.0f, 0.0f, 0.0f },
+		{ 0.0f, 1.0f, 0.0f },
+		{ 0.0f, 0.0f, 1.0f }
+	};
+
+	collider->hull = CreateConvexHullFromMesh({ points, 3 }, data->component_allocator);
+	collider->hull_size = collider->hull.size;
+	return {};
+}
+
+void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsData* data) {
 	ModuleComponentFunctions convex_collider;
 	convex_collider.compare_function = ModuleCompareConvexCollider;
 	convex_collider.deallocate_function = ModuleDeallocateConvexCollider;
 	convex_collider.copy_function = ModuleCopyConvexCollider;
+	convex_collider.build_entry.function = ModuleBuildConvexCollider;
+	convex_collider.build_entry.component_dependencies.Initialize(data->allocator, 1);
+	convex_collider.build_entry.component_dependencies[0] = STRING(RenderMesh);
 	convex_collider.allocator_size = ECS_KB * 256;
 	convex_collider.component_name = STRING(ConvexCollider);
 

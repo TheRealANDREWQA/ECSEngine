@@ -15,6 +15,14 @@ void ConvexHull::Initialize(AllocatorPolymorphic allocator, size_t _size)
 	Initialize(allocation, size);
 }
 
+void ConvexHull::Initialize(AllocatorPolymorphic allocator, Stream<float3> entries)
+{
+	Initialize(allocator, entries.size);
+	for (size_t index = 0; index < entries.size; index++) {
+		SetPoint(entries[index], index);
+	}
+}
+
 void ConvexHull::Copy(const ConvexHull* other, AllocatorPolymorphic allocator, bool deallocate_existent)
 {
 	void* current_soa_data = vertices_x;
@@ -91,6 +99,18 @@ ConvexHull ECS_VECTORCALL ConvexHull::Transform(Matrix matrix, float* storage) c
 			transformed_elements.StorePartialAdjacent(hull.vertices_x, index, size, count);
 		}
 		});
+
+	return hull;
+}
+
+ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator)
+{
+	ConvexHull hull;
+
+	float3 corners[8];
+	AABBScalar scalar_aabb = GetAABBFromPoints(vertex_positions);
+	GetAABBCorners(scalar_aabb, corners);
+	hull.Initialize(allocator, Stream<float3>(corners, std::size(corners)));
 
 	return hull;
 }
