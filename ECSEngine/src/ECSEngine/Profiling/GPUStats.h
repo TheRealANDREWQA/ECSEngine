@@ -12,6 +12,11 @@ namespace ECSEngine {
 			memset(this, 0, sizeof(*this));
 		}
 
+		// Must be kept in sync with the number of fields in the GPU stats
+		ECS_INLINE constexpr size_t GetFieldCount() {
+			return 6;
+		}
+
 		// Memory - expressed in MB
 		size_t used_memory;
 
@@ -37,11 +42,6 @@ namespace ECSEngine {
 
 	namespace Reflection {
 		struct ReflectionManager;
-	}
-
-	// Must be kept in sync with the number of fields in the GPU stats
-	ECS_INLINE constexpr size_t GetGPUStatsCount() {
-		return 6;
 	}
 
 	ECSENGINE_API Statistic<float>* FillGPUStatsStatistics(

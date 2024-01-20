@@ -9,6 +9,8 @@ struct ConvexHull {
 
 	void Initialize(AllocatorPolymorphic allocator, size_t _size);
 
+	void Initialize(AllocatorPolymorphic allocator, Stream<float3> entries);
+
 	void Copy(const ConvexHull* other, AllocatorPolymorphic allocator, bool deallocate_existent);
 
 	void Deallocate(AllocatorPolymorphic allocator);

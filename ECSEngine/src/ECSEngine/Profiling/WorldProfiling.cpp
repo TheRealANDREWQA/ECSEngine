@@ -56,9 +56,6 @@ namespace ECSEngine {
 	void WorldProfiling::EnableOption(ECS_WORLD_PROFILING_OPTIONS option)
 	{
 		options = (ECS_WORLD_PROFILING_OPTIONS)SetFlag(options, option);
-		if (HasFlag(option, ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
-			SetTaskManagerPhysicalMemoryProfilingExceptionHandler(world->task_manager);
-		}
 	}
 
 	void WorldProfiling::EndSimulation()

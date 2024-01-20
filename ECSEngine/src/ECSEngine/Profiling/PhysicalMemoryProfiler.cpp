@@ -133,6 +133,11 @@ namespace ECSEngine {
 		cyclic_region_usage = 0;
 	}
 
+	void PhysicalMemoryProfiler::Detach()
+	{
+		EndSimulation();
+	}
+
 	void PhysicalMemoryProfiler::CommitGuardPagesIntoPhysical()
 	{
 		for (unsigned int region_index = 0; region_index < region_entries.size; region_index++) {
@@ -228,7 +233,10 @@ namespace ECSEngine {
 	void PhysicalMemoryProfiler::UpdateExistingRegionsUtilizationIteration()
 	{
 		// There must be at least a region inserted - otherwise it complicated the code too much
-		ECS_ASSERT(region_entries.size > 0);
+		// We can simply return in this case
+		if (region_entries.size == 0) {
+			return;
+		}
 
 		// Verify if the current entry index is still in bounds - if it is not
 		// It means that entries have been removed
@@ -357,6 +365,11 @@ namespace ECSEngine {
 				}
 			}
 		}
+	}
+
+	void PhysicalMemoryProfiler::Reattach()
+	{
+		StartSimulation();
 	}
 
 	void PhysicalMemoryProfiler::Initialize(AllocatorPolymorphic _allocator, TaskManager* _task_manager, unsigned int entry_capacity)

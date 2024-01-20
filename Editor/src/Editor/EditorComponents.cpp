@@ -34,6 +34,29 @@ void EditorComponents::GetAllComponentNames(AdditionStream<Stream<char>> names, 
 
 // ----------------------------------------------------------------------------------------------
 
+void EditorComponents::GetAllComponentNamesForModule(
+	const EditorState* editor_state,
+	AdditionStream<Stream<char>> names,
+	unsigned int module_index,
+	ECS_COMPONENT_TYPE component_type
+) const
+{
+	unsigned int loaded_module_index = ModuleIndexFromReflection(editor_state, module_index);
+	ECS_ASSERT_FORMAT(loaded_module_index != -1, "EditorComponents: Invalid module index - the module {#} has not been reflected.", module_index);
+
+	Stream<Stream<char>> module_types = loaded_modules[loaded_module_index].types;
+	for (size_t index = 0; index < module_types.size; index++) {
+		ECS_COMPONENT_TYPE current_component_type = GetComponentType(module_types[index]);
+		if (current_component_type != ECS_COMPONENT_TYPE_COUNT) {
+			if (component_type == ECS_COMPONENT_TYPE_COUNT || component_type == current_component_type) {
+				names.Add(module_types[index]);
+			}
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
 Component EditorComponents::GetComponentID(Stream<char> name) const
 {
 	ReflectionType type;

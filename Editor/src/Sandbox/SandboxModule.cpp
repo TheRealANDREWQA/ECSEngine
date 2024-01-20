@@ -795,6 +795,59 @@ void UpdateSandboxModuleEnabledDebugDrawTasks(EditorState* editor_state, unsigne
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void UpdateSandboxComponentFunctionsForModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+{
+	// Start by seeing if the module has overrides for component functions
+	EDITOR_MODULE_CONFIGURATION configuration = IsModuleUsedBySandbox(editor_state, sandbox_index, module_index);
+	ECS_ASSERT_FORMAT(configuration != EDITOR_MODULE_CONFIGURATION_COUNT, "Trying to update component functions for sandbox {#} "
+		"for module {#} which doesn't exist", sandbox_index, GetModuleLibraryName(editor_state, module_index));
+	Stream<ModuleComponentFunctions> module_functions = GetModuleInfo(editor_state, module_index, configuration)->ecs_module.component_functions;
+
+	if (module_functions.size > 0) {
+		EntityManager* scene_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		EntityManager* runtime_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+
+		for (size_t index = 0; index < module_functions.size; index++) {
+			ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(module_functions[index].component_name);
+			Component component = editor_state->editor_components.GetComponentID(module_functions[index].component_name);
+			ComponentFunctions functions;
+			module_functions[index].SetComponentFunctionsTo(&functions);
+			if (component_type == ECS_COMPONENT_UNIQUE) {
+				if (scene_manager->ExistsComponent(component)) {
+					scene_manager->ChangeComponentFunctionsCommit(component, &functions);
+				}
+				if (runtime_manager->ExistsComponent(component)) {
+					runtime_manager->ChangeComponentFunctionsCommit(component, &functions);
+				}
+			}
+			else if (component_type == ECS_COMPONENT_SHARED) {
+				SharedComponentCompareEntry compare_entry;
+				module_functions[index].SetCompareEntryTo(&compare_entry);
+				if (scene_manager->ExistsSharedComponent(component)) {
+					scene_manager->ChangeSharedComponentFunctionsCommit(component, &functions, compare_entry);
+				}
+				if (runtime_manager->ExistsSharedComponent(component)) {
+					runtime_manager->ChangeSharedComponentFunctionsCommit(component, &functions, compare_entry);
+				}
+			}
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void UpdateSandboxesComponentFunctionsForModule(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_indices, ECS_KB * 4);
+	GetSandboxesForModule(editor_state, module_index, configuration, &sandbox_indices);
+
+	for (unsigned int index = 0; index < sandbox_indices.size; index++) {
+		UpdateSandboxComponentFunctionsForModule(editor_state, sandbox_indices[index], module_index);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void TickModuleSettingsRefresh(EditorState* editor_state)
 {
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_MODULE_SETTINGS_REFRESH, LAZY_EVALUATION_MS)) {

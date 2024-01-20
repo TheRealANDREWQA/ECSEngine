@@ -482,6 +482,7 @@ namespace ECSEngine {
 		EntityManager* entity_manager;
 		Entity entity;
 		void* component;
+		AllocatorPolymorphic component_allocator;
 		// This memory can be used for the returned thread task data
 		// The GPU lock and the print message can be referenced in the thread task
 		CapacityStream<void>* stack_memory;
@@ -489,8 +490,14 @@ namespace ECSEngine {
 		ModuleComponentBuildPrintMessage print_message;
 	};
 
+	// This build function is called only when the user interacts with the editor using the inspector
+	// Automatic modifications done through normal code are not emitted - they are too hard to track
+	// And not helpful in general
+
 	// If you need to make allocations from the component allocator, you need
 	// To use the multithreaded call since multiple of these can be run concurrently
+	// The default provided allocator is multithreaded already. This function can be called
+	// While there is existing data in it, so it must pay attention to deallocate it
 	// The return type can be a task that can be run asynchronously in case it takes a long time
 	typedef ThreadTask (*ModuleComponentBuildFunction)(ModuleComponentBuildFunctionData* data);
 
@@ -560,6 +567,7 @@ namespace ECSEngine {
 
 	struct ModuleRegisterComponentFunctionsData {
 		CapacityStream<ModuleComponentFunctions>* functions;
+		AllocatorPolymorphic allocator;
 	};
 
 	typedef void (*ModuleRegisterComponentFunctionsFunction)(ModuleRegisterComponentFunctionsData* data);

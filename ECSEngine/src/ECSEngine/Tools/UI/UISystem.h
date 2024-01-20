@@ -714,6 +714,9 @@ namespace ECSEngine {
 			// Will deallocate the snapshot only if the window with that name exists, else it does nothing
 			void DeallocateWindowSnapshot(Stream<char> window_name);
 
+			// Deallocates the snapshots for all windows that have one
+			void DeallocateAllWindowSnapshots();
+
 			void DecrementWindowDynamicResource(unsigned int window_index);
 
 			// this is the safe way of destroying dockspaces since if in the same frame have been destroyed

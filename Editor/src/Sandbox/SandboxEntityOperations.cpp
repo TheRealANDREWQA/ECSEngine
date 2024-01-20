@@ -248,6 +248,13 @@ static bool CallModuleComponentBuildFunctionBase(
 ) {
 	build_data->entity = entity;
 	build_data->component = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+	build_data->component_allocator = GetSandboxComponentAllocatorEx(
+		editor_state, 
+		sandbox_index, 
+		component, 
+		is_shared ? ECS_COMPONENT_SHARED : ECS_COMPONENT_UNIQUE
+	);
+	build_data->component_allocator.allocation_type = ECS_ALLOCATION_MULTI;
 	build_data->stack_memory->size = 0;
 	ThreadTask task = build_entry.function(build_data);
 	if (task.function != nullptr) {
@@ -1413,6 +1420,31 @@ MemoryArena* GetSandboxSharedComponentAllocator(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+MemoryArena* GetSandboxComponentAllocatorEx(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	ECS_COMPONENT_TYPE type,
+	EDITOR_SANDBOX_VIEWPORT viewport
+) {
+	switch (type) {
+	case ECS_COMPONENT_UNIQUE:
+		return GetSandboxComponentAllocator(editor_state, sandbox_index, component, viewport);
+	case ECS_COMPONENT_SHARED:
+		return GetSandboxSharedComponentAllocator(editor_state, sandbox_index, component, viewport);
+	case ECS_COMPONENT_GLOBAL:
+	{
+		EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+		return entity_manager->GetGlobalComponentAllocator(component);
+	}
+	break;
+	}
+
+	return nullptr;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 Stream<char> GetSandboxEntityName(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -1765,6 +1797,47 @@ bool NeedsApplyModifierButtonLinkComponent(const EditorState* editor_state, Stre
 {
 	ModuleLinkComponentTarget link_target = GetModuleLinkComponentTarget(editor_state, link_name);
 	return link_target.build_function != nullptr && link_target.apply_modifier != nullptr && link_target.apply_modifier_needs_button;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void NotifySandboxEntityComponentChange(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Component component, bool is_shared)
+{
+	NotifySandboxEntityComponentChange(
+		editor_state, 
+		sandbox_index, 
+		entity, 
+		editor_state->editor_components.ComponentFromID(component, is_shared ? ECS_COMPONENT_SHARED : ECS_COMPONENT_UNIQUE)
+	);
+}
+
+void NotifySandboxEntityComponentChange(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
+{
+	// Determine if this component has any dependencies
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+	Stream<Stream<char>> dependent_components = RetrieveModuleComponentBuildDependentEntries(editor_state, component_name, &stack_allocator);
+	for (size_t index = 0; index < dependent_components.size; index++) {
+		EditorModuleComponentBuildEntry build_entry = GetModuleComponentBuildEntry(editor_state, dependent_components[index]);
+		Component component = editor_state->editor_components.GetComponentID(dependent_components[index]);
+		bool is_shared = editor_state->editor_components.IsSharedComponent(dependent_components[index]);
+		void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+		// Only perform the call if the entity actually has the data
+		if (component_data != nullptr) {
+			if (is_shared) {
+				CallModuleComponentBuildFunctionShared(
+					editor_state,
+					sandbox_index,
+					&build_entry,
+					component,
+					SandboxEntitySharedInstance(editor_state, sandbox_index, entity, component),
+					entity
+				);
+			}
+			else {
+				CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, &build_entry, { &entity, 1 }, component);
+			}
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

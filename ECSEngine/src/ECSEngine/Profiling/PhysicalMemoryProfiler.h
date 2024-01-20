@@ -20,6 +20,8 @@ namespace ECSEngine {
 
 		void Clear();
 
+		void Detach();
+
 		void CommitGuardPagesIntoPhysical();
 
 		void EndSimulation();
@@ -33,6 +35,8 @@ namespace ECSEngine {
 		bool HandlePageGuardEnter(unsigned int thread_id, const void* page);
 
 		void UpdateExistingRegionsUtilizationIteration();
+
+		void Reattach();
 
 		void StartFrame();
 		

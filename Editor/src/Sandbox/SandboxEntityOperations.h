@@ -87,21 +87,6 @@ void CallModuleComponentBuildFunctionUnique(
 void CallModuleComponentBuildFunctionShared(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	ModuleComponentBuildEntry build_entry,
-	unsigned int module_index,
-	EDITOR_MODULE_CONFIGURATION configuration,
-	Component component,
-	SharedInstance build_instance,
-	Entity changed_entity
-);
-
-// It will call the function with the appropriate lock and print handler. If it returned a thread task,
-// It will push it to run in background. Only a single build function can run at a time for a sandbox -
-// In order to not have the tasks be synchronized in any way. We need a distinction from the unique component
-// Since shared components that have build dependencies need to be handled much differently
-void CallModuleComponentBuildFunctionShared(
-	EditorState* editor_state,
-	unsigned int sandbox_index,
 	const EditorModuleComponentBuildEntry* build_entry,
 	Component component,
 	SharedInstance build_instance,
@@ -461,6 +446,14 @@ MemoryArena* GetSandboxSharedComponentAllocator(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+MemoryArena* GetSandboxComponentAllocatorEx(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	ECS_COMPONENT_TYPE type,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 // Might reference the internal storage or the given one
 Stream<char> GetSandboxEntityName(
 	const EditorState* editor_state, 
@@ -621,6 +614,22 @@ bool NeedsApplyModifierLinkComponent(
 bool NeedsApplyModifierButtonLinkComponent(
 	const EditorState* editor_state,
 	Stream<char> link_name
+);
+
+// This will make any operations that are related to a component update
+void NotifySandboxEntityComponentChange(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	Component component,
+	bool is_shared
+);
+
+void NotifySandboxEntityComponentChange(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	Stream<char> component_name
 );
 
 void ParentSandboxEntity(

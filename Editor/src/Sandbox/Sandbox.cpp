@@ -1748,6 +1748,9 @@ bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sand
 		set_options.transfer_data = sandbox->sandbox_world_transfer_data;
 		PrepareWorldConcurrency(&sandbox->sandbox_world, &set_options);
 		if (!tasks_were_initialized) {
+			// In this case, we also need to copy the entities from the scene to the
+			// Runtime entities since that did not happen
+			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
 			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
 		}
 		
@@ -2728,9 +2731,14 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 			success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, disable_error_messages);
 		}
 		if (success) {
-			// Copy the entities from the scene to the runtime
-			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
 			if (!waiting_sandbox_compile) {
+				// Copy the entities from the scene to the runtime
+				// We need to this only if we are not waiting modules
+				// To be compiled since we rely on component functions
+				// From there and if we are compiling, some of these functions
+				// Might be unavailable since the module has been unloaded
+				CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
+
 				// Prepare the sandbox world
 				PrepareWorld(&sandbox->sandbox_world);
 				// Set the initialize task flag
