@@ -357,9 +357,9 @@ namespace ECSEngine {
 		}
 	}
 
-	// This version will set not used slots to 0
+	// This version will set the unused slots to the given mask_vector
 	template<int stride, int offset>
-	ECS_INLINE Vec8f ECS_VECTORCALL GatherStrideMasked(const void* data, size_t load_count) {
+	ECS_INLINE Vec8f ECS_VECTORCALL GatherStrideMasked(const void* data, size_t load_count, Vec8f mask_vector = ZeroVectorFloat()) {
 		if (load_count == Vec8f::size()) {
 			GatherStride<stride, offset>(data);
 		}
@@ -378,7 +378,7 @@ namespace ECSEngine {
 			indices.load_a(indices_array);
 			Vec8i mask;
 			mask.load_a(mask_array);
-			return _mm256_mask_i32gather_ps(ZeroVectorFloat(), (const float*)data, indices, CastToFloat(mask), 4);
+			return _mm256_mask_i32gather_ps(mask_vector, (const float*)data, indices, CastToFloat(mask), 4);
 		}
 	}
 
@@ -594,6 +594,11 @@ namespace ECSEngine {
 		return horizontal_find_first(vector == min);
 	}
 
+	// Returns the index of the min element from the horizontal min
+	ECS_INLINE size_t ECS_VECTORCALL HorizontalMin8Index(Vec8f vector) {
+		return HorizontalMin8Index(vector, HorizontalMin8(vector));
+	}
+
 	ECS_INLINE Vec8f ECS_VECTORCALL HorizontalMax8(Vec8f vector) {
 		return HorizontalOperation8(vector, [](Vec8f a, Vec8f b) {
 			return max(a, b);
@@ -603,6 +608,11 @@ namespace ECSEngine {
 	// Returns the index of the max element from the horizontal max
 	ECS_INLINE size_t ECS_VECTORCALL HorizontalMax8Index(Vec8f vector, Vec8f max) {
 		return horizontal_find_first(vector == max);
+	}
+
+	// Returns the index of the max element from the horizontal max
+	ECS_INLINE size_t ECS_VECTORCALL HorizontalMax8Index(Vec8f vector) {
+		return HorizontalMax8Index(vector, HorizontalMax8(vector));
 	}
 
 	ECS_INLINE Vec8f ECS_VECTORCALL HorizontalAdd8(Vec8f vector) {
@@ -1042,6 +1052,22 @@ namespace ECSEngine {
 
 #pragma region Dynamic Mask Creation
 
+	// It will create a mask such that you can reference the last count elements
+	// Of a vector of the same byte size. So for Vec8ui with count 1, it will let
+	// You select the last element
+	template<typename IntType>
+	static __m256i ECS_VECTORCALL SelectMaskLast(size_t count) {
+		const size_t VECTOR_COUNT = sizeof(__m256i) / sizeof(IntType);
+		IntType values[VECTOR_COUNT * 2];
+		for (size_t index = 0; index < VECTOR_COUNT; index++) {
+			values[index] = 0;
+		}
+		for (size_t index = VECTOR_COUNT; index < 2 * VECTOR_COUNT; index++) {
+			values[index] = -1;
+		}
+		return _mm256_load_si256((const __m256i*)(values + count));
+	}
+
 	// Dynamic mask creation - if possible consider using the compile time variant
 	static __m256i ECS_VECTORCALL SelectMask32(
 		bool element_0,
@@ -1235,7 +1261,7 @@ namespace ECSEngine {
 	) {
 		__m256i zeros = ZeroVectorInteger();
 
-		alignas(ECS_SIMD_BYTE_SIZE) uint64_t mask[sizeof(__m256i) / sizeof(uint64_t)];
+		alignas(ECS_SIMD_BYTE_SIZE) uint64_t mask[4];
 #define LOOP_ITERATION(index) mask[index] = element_##index ? UINT_MAX : 0; 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 

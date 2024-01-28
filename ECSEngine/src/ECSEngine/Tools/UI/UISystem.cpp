@@ -378,7 +378,7 @@ namespace ECSEngine {
 		{
 			resource.buffer = CopyNonZero(m_memory, resource.buffer, resource.size);
 			name = StringCopy(m_memory, name);
-			InsertIntoDynamicTable(m_global_resources, m_memory, resource, name);
+			m_global_resources.InsertDynamic(m_memory, resource, name);
 			return resource.buffer;
 		}
 
@@ -977,7 +977,7 @@ namespace ECSEngine {
 			WindowTable* table = GetWindowTable(window_index);
 
 			ECS_ASSERT(table->Find(identifier) == -1);
-			InsertIntoDynamicTable(*table, m_memory, resource, identifier);
+			table->InsertDynamic(m_memory, resource, identifier);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1325,7 +1325,7 @@ namespace ECSEngine {
 			// Copy the name
 			memcpy((void*)ptr, name.buffer, sizeof(char) * name.size);
 			ResourceIdentifier identifier{ (void*)ptr, (unsigned int)name.size };
-			InsertIntoDynamicTable(m_windows[window_index].dynamic_resources, m_memory, dynamic_resource, identifier);
+			m_windows[window_index].dynamic_resources.InsertDynamic(m_memory, dynamic_resource, identifier);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

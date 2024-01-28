@@ -33,7 +33,7 @@ GridChunk* FixedGrid::AddCell(uint3 indices)
 	chunk->next_chunk = -1;
 	
 	unsigned int hash = HashGridCellIndices(indices);
-	InsertIntoDynamicTable(cells, allocator, cell, hash);
+	cells.InsertDynamic(allocator, cell, hash);
 	inserted_cells.Add(indices);
 	return chunk;
 }

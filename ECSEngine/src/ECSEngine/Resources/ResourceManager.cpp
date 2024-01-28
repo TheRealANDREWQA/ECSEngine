@@ -46,7 +46,7 @@ namespace ECSEngine {
 			entry.suffix_size = load_descriptor.identifier_suffix.size;
 
 			ResourceIdentifier new_identifier(allocation, identifier.size);
-			InsertIntoDynamicTable(resource_manager->m_resource_types[type_int], resource_manager->m_memory, entry, new_identifier);
+			resource_manager->m_resource_types[type_int].InsertDynamic(resource_manager->m_memory, entry, new_identifier);
 		};
 
 		if constexpr (!reference_counted) {
@@ -124,7 +124,7 @@ namespace ECSEngine {
 				entry.suffix_size = load_descriptor.identifier_suffix.size;
 
 				ResourceIdentifier new_identifier(allocation, identifier.size);
-				InsertIntoDynamicTable(resource_manager->m_resource_types[type_int], resource_manager->m_memory, entry, new_identifier);
+				resource_manager->m_resource_types[type_int].InsertDynamic(resource_manager->m_memory, entry, new_identifier);
 
 				if (load_descriptor.reference_counted_is_loaded != nullptr) {
 					*load_descriptor.reference_counted_is_loaded = true;
@@ -425,7 +425,7 @@ namespace ECSEngine {
 		wide_allocation[identifier.size] = L'\0';
 
 		unsigned int resource_type_int = (unsigned int)resource_type;
-		InsertIntoDynamicTable(m_resource_types[resource_type_int], m_memory, entry, identifier);
+		m_resource_types[resource_type_int].InsertDynamic(m_memory, entry, identifier);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

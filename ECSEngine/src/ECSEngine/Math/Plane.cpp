@@ -175,4 +175,17 @@ namespace ECSEngine {
 		return IsAbovePlaneMaskImpl<SIMDVectorMask>(plane, point);
 	}
 
+	template<typename ReturnType, typename Plane>
+	static ECS_INLINE ReturnType ECS_VECTORCALL AngleBetweenPlanesRadImpl(Plane plane_a, Plane plane_b) {
+		return acos(PlanesDotProduct(plane_a, plane_b));
+	}
+
+	float AngleBetweenPlanesRad(PlaneScalar plane_a, PlaneScalar plane_b) {
+		return AngleBetweenPlanesRadImpl<float>(plane_b, plane_b);
+	}
+
+	Vec8f AngleBetweenPlanesRad(Plane plane_a, Plane plane_b) {
+		return AngleBetweenPlanesRadImpl<Vec8f>(plane_b, plane_b);
+	}
+
 }

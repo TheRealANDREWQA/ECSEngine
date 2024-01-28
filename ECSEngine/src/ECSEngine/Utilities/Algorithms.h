@@ -1,5 +1,6 @@
 #pragma once
 #include "../Core.h"
+#include "../Allocators/AllocatorPolymorphic.h"
 
 namespace ECSEngine {
 
@@ -133,7 +134,7 @@ namespace ECSEngine {
 	}
 
 	template<bool ascending = true, typename T>
-	void insertion_sort(T* buffer, size_t size, int increment = 1) {
+	void InsertionSort(T* buffer, size_t size, int increment = 1) {
 		size_t i = 0;
 		while (i + increment < size) {
 			if constexpr (ascending) {
@@ -172,7 +173,7 @@ namespace ECSEngine {
 	// The comparator takes a left and a right T element
 	// It should return -1 if left is smaller than right, 0 if they are equal and 1 if left is greater than right
 	template<typename T, typename Comparator>
-	void insertion_sort(T* buffer, size_t size, int increment, Comparator&& comparator) {
+	void InsertionSort(T* buffer, size_t size, int increment, Comparator&& comparator) {
 		size_t i = 0;
 		while (i + increment < size) {
 			while (i + increment < size) {
@@ -202,7 +203,7 @@ namespace ECSEngine {
 	}
 
 	template<typename BufferType, typename ExtractKey>
-	void byte_counting_sort(BufferType buffer, size_t size, BufferType result, ExtractKey&& extract_key)
+	void CountingSort(const BufferType* ECS_RESTRICT buffer, size_t size, BufferType* ECS_RESTRICT result, ExtractKey&& extract_key)
 	{
 		size_t counts[257] = { 0 };
 
@@ -213,7 +214,7 @@ namespace ECSEngine {
 		}
 
 		// building the array positions
-		for (int i = 2; i < 257; i++)
+		for (size_t i = 2; i < 257; i++)
 		{
 			counts[i] += counts[i - 1];
 		}
@@ -223,11 +224,19 @@ namespace ECSEngine {
 			auto key = extract_key(buffer[i]);
 			result[counts[key]++] = buffer[i];
 		}
-
 	}
 
+	// Counts_size needs to be larger by 1 than the maximum value that the extract key functor returns
+	// The counts buffer must have at least counts_size entries
 	template<typename BufferType, typename ExtractKey>
-	void byte_counting_sort(BufferType buffer, size_t size, BufferType result, ExtractKey&& extract_key, unsigned int* counts)
+	void CountingSortExtended(
+		const BufferType* ECS_RESTRICT buffer, 
+		size_t size, 
+		BufferType* ECS_RESTRICT result, 
+		ExtractKey&& extract_key, 
+		unsigned int* counts, 
+		size_t counts_size
+	)
 	{
 		// building the frequency count
 		for (size_t i = 0; i < size; i++)
@@ -236,7 +245,7 @@ namespace ECSEngine {
 		}
 
 		// building the array positions
-		for (int i = 2; i < 65537; i++)
+		for (size_t i = 2; i < counts_size; i++)
 		{
 			counts[i] += counts[i - 1];
 		}
@@ -246,11 +255,24 @@ namespace ECSEngine {
 			auto key = extract_key(buffer[i]);
 			result[counts[key]++] = buffer[i];
 		}
-
 	}
 
 	template<typename BufferType, typename ExtractKey>
-	void byte_counting_sort(BufferType buffer, size_t size, BufferType result, ExtractKey&& extract_key, unsigned int reduction)
+	unsigned int* CountingSortExtended(
+		const BufferType* ECS_RESTRICT buffer,
+		size_t size,
+		BufferType* ECS_RESTRICT result,
+		ExtractKey&& extract_key,
+		size_t bucket_count,
+		AllocatorPolymorphic allocator
+	) {
+		unsigned int* counts = AllocateEx(allocator, sizeof(unsigned int) * (bucket_count + 1));
+		CountingSortExtended(buffer, size, result, extract_key, counts, bucket_count + 1);
+		return counts;
+	}
+
+	template<typename BufferType, typename ExtractKey, typename Reduction>
+	void CountingSort(const BufferType* ECS_RESTRICT buffer, size_t size, BufferType* ECS_RESTRICT result, ExtractKey&& extract_key, Reduction reduction)
 	{
 		size_t counts[257] = { 0 };
 
@@ -261,7 +283,7 @@ namespace ECSEngine {
 		}
 
 		// building the array positions
-		for (int i = 2; i < 257; i++)
+		for (size_t i = 2; i < 257; i++)
 		{
 			counts[i] += counts[i - 1];
 		}
@@ -271,11 +293,20 @@ namespace ECSEngine {
 			auto key = extract_key(buffer[i], reduction);
 			result[counts[key]++] = buffer[i];
 		}
-
 	}
 
-	template<typename BufferType, typename ExtractKey>
-	void byte_counting_sort(BufferType buffer, size_t size, BufferType result, ExtractKey&& extract_key, unsigned int reduction, unsigned int* counts)
+	// Counts_size needs to be larger by 1 than the maximum value that the extract key functor returns
+	// The counts buffer must have at least counts_size entries
+	template<typename BufferType, typename ExtractKey, typename Reduction>
+	void CountingSortExtended(
+		const BufferType* ECS_RESTRICT buffer, 
+		size_t size, 
+		BufferType* ECS_RESTRICT result, 
+		ExtractKey&& extract_key, 
+		Reduction reduction, 
+		unsigned int* counts, 
+		size_t counts_size
+	)
 	{
 		// building the frequency count
 		for (size_t i = 0; i < size; i++)
@@ -284,7 +315,7 @@ namespace ECSEngine {
 		}
 
 		// building the array positions
-		for (int i = 2; i < 65537; i++)
+		for (size_t i = 2; i < counts_size; i++)
 		{
 			counts[i] += counts[i - 1];
 		}
@@ -294,12 +325,28 @@ namespace ECSEngine {
 			auto key = extract_key(buffer[i], reduction);
 			result[counts[key]++] = buffer[i];
 		}
+	}
 
+	// Allocates the necessary buckets for you and returns them to you
+	// While constructing the sorted values inside the result
+	template<typename BufferType, typename ExtractKey, typename Reduction>
+	unsigned int* CountingSortExtended(
+		const BufferType* ECS_RESTRICT buffer, 
+		size_t size, 
+		BufferType* ECS_RESTRICT result,
+		ExtractKey&& extract_key,
+		Reduction reduction, 
+		size_t bucket_count, 
+		AllocatorPolymorphic allocator
+	) {
+		unsigned int* counts = (unsigned int*)AllocateEx(allocator, sizeof(unsigned int) * (bucket_count + 1));
+		CountingSortExtended(buffer, size, result, extract_key, reduction, counts, bucket_count + 1);
+		return counts;
 	}
 
 	// returns true if the sorted buffer is the intermediate one
 	template<bool randomize = false>
-	bool unsigned_integer_radix_sort(
+	bool RadixSortUnsignedInt(
 		unsigned int* buffer,
 		unsigned int* intermediate,
 		size_t size,
@@ -318,60 +365,60 @@ namespace ECSEngine {
 		bool flag = true;
 		if (reduction < 256 && maximum_element >= 256) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT_REDUCTION;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key1), reduction);
+			CountingSort(buffer, size, intermediate, std::move(extract_key1), reduction);
 		}
 		else if (reduction < 256 && maximum_element < 256) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key1));
+			CountingSort(buffer, size, intermediate, std::move(extract_key1));
 		}
 		else if (reduction < 65'536 && maximum_element >= 65'536) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT_REDUCTION;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key1), reduction);
+			CountingSort(buffer, size, intermediate, std::move(extract_key1), reduction);
 			auto extract_key2 = ECS_SCALAR_BYTE2_EXTRACT_REDUCTION;
-			byte_counting_sort(intermediate, size, buffer, std::move(extract_key2), reduction);
+			CountingSort(intermediate, size, buffer, std::move(extract_key2), reduction);
 			flag = false;
 		}
 		else if (reduction < 65'536 && maximum_element < 65'536) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key1));
+			CountingSort(buffer, size, intermediate, std::move(extract_key1));
 			auto extract_key2 = ECS_SCALAR_BYTE2_EXTRACT;
-			byte_counting_sort(intermediate, size, buffer, std::move(extract_key2));
+			CountingSort(intermediate, size, buffer, std::move(extract_key2));
 			flag = false;
 		}
 		else if (reduction < 16'777'216 && maximum_element >= 16'777'216) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT_REDUCTION;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key1), reduction);
+			CountingSort(buffer, size, intermediate, std::move(extract_key1), reduction);
 			auto extract_key2 = ECS_SCALAR_BYTE2_EXTRACT_REDUCTION;
-			byte_counting_sort(intermediate, size, buffer, std::move(extract_key2), reduction);
+			CountingSort(intermediate, size, buffer, std::move(extract_key2), reduction);
 			auto extract_key3 = ECS_SCALAR_BYTE3_EXTRACT_REDUCTION;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key3), reduction);
+			CountingSort(buffer, size, intermediate, std::move(extract_key3), reduction);
 			flag = true;
 		}
 		else if (reduction < 16'777'216 && maximum_element < 16'777'216) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key1));
+			CountingSort(buffer, size, intermediate, std::move(extract_key1));
 			auto extract_key2 = ECS_SCALAR_BYTE2_EXTRACT;
-			byte_counting_sort(intermediate, size, buffer, std::move(extract_key2));
+			CountingSort(intermediate, size, buffer, std::move(extract_key2));
 			auto extract_key3 = ECS_SCALAR_BYTE3_EXTRACT;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key3));
+			CountingSort(buffer, size, intermediate, std::move(extract_key3));
 			flag = true;
 		}
 		else if (reduction >= 16'777'216) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key1));
+			CountingSort(buffer, size, intermediate, std::move(extract_key1));
 			auto extract_key2 = ECS_SCALAR_BYTE2_EXTRACT;
-			byte_counting_sort(intermediate, size, buffer, std::move(extract_key2));
+			CountingSort(intermediate, size, buffer, std::move(extract_key2));
 			auto extract_key3 = ECS_SCALAR_BYTE3_EXTRACT;
-			byte_counting_sort(buffer, size, intermediate, std::move(extract_key3));
+			CountingSort(buffer, size, intermediate, std::move(extract_key3));
 			auto extract_key4 = ECS_SCALAR_BYTE4_EXTRACT;
-			byte_counting_sort(intermediate, size, buffer, std::move(extract_key4));
+			CountingSort(intermediate, size, buffer, std::move(extract_key4));
 			flag = false;
 		}
 		return flag;
 	}
 
 	//// 2 bytes at a time
-	//static int unsigned_integer_radix_sort(unsigned int* buffer, unsigned int* intermediate, size_t size,
+	//static int RadixSortUnsignedInt(unsigned int* buffer, unsigned int* intermediate, size_t size,
 	//	unsigned int maximum_element, unsigned int minimum_element, unsigned int* counts)
 	//{
 	//	for (size_t index = size; index < size + (size >> 8); index++) {
@@ -383,43 +430,43 @@ namespace ECSEngine {
 	//	int flag = 1;
 	//	if (reduction < 65536 && maximum_element >= 65536) {
 	//		auto extract_key1 = ECS_SCALAR_BYTE12_EXTRACT_REDUCTION;
-	//		byte_counting_sort(buffer, size, intermediate, std::move(extract_key1), reduction, counts);
+	//		CountingSortExtended(buffer, size, intermediate, std::move(extract_key1), reduction, counts);
 	//	}
 	//	else if (reduction < 65536 && maximum_element < 65536) {
 	//		auto extract_key1 = ECS_SCALAR_BYTE12_EXTRACT;
-	//		byte_counting_sort(buffer, size, intermediate, std::move(extract_key1), counts);
+	//		CountingSortExtended(buffer, size, intermediate, std::move(extract_key1), counts);
 	//	}
 	//	else {
 	//		auto extract_key1 = ECS_SCALAR_BYTE12_EXTRACT;
-	//		byte_counting_sort(buffer, size, intermediate, std::move(extract_key1), counts);
+	//		CountingSortExtended(buffer, size, intermediate, std::move(extract_key1), counts);
 	//		memset(counts, 0, sizeof(unsigned int) * 65537);
 	//		auto extract_key2 = ECS_SCALAR_BYTE34_EXTRACT;
-	//		byte_counting_sort(intermediate, size, buffer, std::move(extract_key2), counts);
+	//		CountingSortExtended(intermediate, size, buffer, std::move(extract_key2), counts);
 	//		flag = 0;
 	//	}
 	//	return flag;
 	//}
 
 	//// 2 bytes at a time
-	//static int unsigned_integer_radix_sort(unsigned int* buffer, unsigned int* intermediate, size_t size,
+	//static int RadixSortUnsignedInt(unsigned int* buffer, unsigned int* intermediate, size_t size,
 	//	unsigned int maximum_element, unsigned int minimum_element, unsigned int* counts, bool randomize)
 	//{
 	//	unsigned int reduction = maximum_element - minimum_element;
 	//	int flag = 1;
 	//	if (reduction < 65536 && maximum_element >= 65536) {
 	//		auto extract_key1 = ECS_SCALAR_BYTE12_EXTRACT_REDUCTION;
-	//		byte_counting_sort(buffer, size, intermediate, std::move(extract_key1), reduction, counts);
+	//		CountingSortExtended(buffer, size, intermediate, std::move(extract_key1), reduction, counts);
 	//	}
 	//	else if (reduction < 65536 && maximum_element < 65536) {
 	//		auto extract_key1 = ECS_SCALAR_BYTE12_EXTRACT;
-	//		byte_counting_sort(buffer, size, intermediate, std::move(extract_key1), counts);
+	//		CountingSortExtended(buffer, size, intermediate, std::move(extract_key1), counts);
 	//	}
 	//	else {
 	//		auto extract_key1 = ECS_SCALAR_BYTE12_EXTRACT;
-	//		byte_counting_sort(buffer, size, intermediate, std::move(extract_key1), counts);
+	//		CountingSortExtended(buffer, size, intermediate, std::move(extract_key1), counts);
 	//		memset(counts, 0, sizeof(unsigned int) * 65537);
 	//		auto extract_key2 = ECS_SCALAR_BYTE34_EXTRACT;
-	//		byte_counting_sort(intermediate, size, buffer, std::move(extract_key2), counts);
+	//		CountingSortExtended(intermediate, size, buffer, std::move(extract_key2), counts);
 	//		flag = 0;
 	//	}
 	//	return flag;

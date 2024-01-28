@@ -3,6 +3,7 @@
 #include "../Tools/Modules/ModuleDefinition.h"
 #include "../Tools/Modules/ModuleExtraInformation.h"
 #include "../Tools/Debug Draw/DebugDraw.h"
+#include "EntityManager.h"
 
 namespace ECSEngine {
 
@@ -61,6 +62,41 @@ namespace ECSEngine {
 		link->value = component->value.AsParametersFOV();
 	}
 
+	Stream<char> GetEntityName(const EntityManager* entity_manager, Entity entity, CapacityStream<char>& storage) {
+		const Name* name = entity_manager->TryGetComponent<Name>(entity);
+		if (name != nullptr) {
+			return name->name;
+		}
+		else {
+			EntityToString(entity, storage);
+			return storage;
+		}
+	}
+
+	Stream<char> GetEntityNameIndexOnly(const EntityManager* entity_manager, Entity entity, CapacityStream<char>& storage)
+	{
+		const Name* name = entity_manager->TryGetComponent<Name>(entity);
+		if (name != nullptr) {
+			return name->name;
+		}
+		else {
+			ConvertIntToChars(storage, entity.value);
+			return storage;
+		}
+	}
+	
+	Stream<char> GetEntityNameTempStorage(const EntityManager* entity_manager, Entity entity) {
+		static char _storage[ECS_KB];
+		CapacityStream<char> storage = { _storage, 0, sizeof(_storage) };
+		return GetEntityName(entity_manager, entity, storage);
+	}
+	
+	Stream<char> GetEntityNameIndexOnlyTempStorage(const EntityManager* entity_manager, Entity entity) {
+		static char _storage[ECS_KB];
+		CapacityStream<char> storage = { _storage, 0, sizeof(_storage) };
+		return GetEntityNameIndexOnly(entity_manager, entity, storage);
+	}
+
 	void RegisterECSLinkComponents(ModuleRegisterLinkComponentFunctionData* register_data)
 	{
 		ModuleLinkComponentTarget target;
@@ -92,13 +128,15 @@ namespace ECSEngine {
 		AddDebugFrustumThread(camera_frustum, draw_data->debug_drawer, draw_data->thread_id, ECS_COLOR_LIME);
 	}
 
-	void RegisterECSDebugDrawElements(ModuleRegisterDebugDrawFunctionData* register_data) {
+	void RegisterECSComponentFunctions(ModuleRegisterComponentFunctionsData* register_data) {
 		ModuleDebugDrawElement element;
-		element.component = CameraComponent::ID();
-		element.component_type = ECS_COMPONENT_GLOBAL;
 		element.draw_function = CameraComponentDebugDraw;
 
-		register_data->elements->AddAssert(element);
+		ModuleComponentFunctions entry;
+		entry.debug_draw = element;
+		entry.component_name = STRING(CameraComponent);
+
+		register_data->functions->AddAssert(&entry);
 	}
 
 }

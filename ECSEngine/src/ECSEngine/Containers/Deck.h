@@ -356,14 +356,10 @@ namespace ECSEngine {
 				if (should_deallocate_buffers) {
 					chunks_with_space.Deallocate(buffers.allocator);
 				}
-				chunks_with_space = { AllocateEx(buffers.allocator, sizeof(unsigned int) * new_chunk_count), new_chunk_count - old_chunk_count };
+				chunks_with_space = { AllocateEx(buffers.allocator, sizeof(unsigned int) * new_chunk_count), old_chunk_count };
 				// Copy the old counts
 				for (size_t index = 0; index < old_chunk_count; index++) {
 					chunks_with_space[index] = old_counts[index];
-				}
-
-				for (size_t index = old_count; index < new_chunk_count; index++) {
-					chunks_with_space[index] = old_chunk_count + index;
 				}
 			}
 		}

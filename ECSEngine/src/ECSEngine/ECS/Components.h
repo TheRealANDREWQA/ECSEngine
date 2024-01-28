@@ -9,6 +9,7 @@
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"
 #include "../Rendering/Camera.h"
+#include "InternalStructures.h"
 
 // The base of the ECSEngine unique components
 #define ECS_COMPONENT_BASE ECS_CONSTANT_REFLECT(0)
@@ -108,6 +109,24 @@ namespace ECSEngine {
 		bool detached; ECS_UI_OMIT_FIELD_REFLECT
 	};
 
+	struct EntityManager;
+
+	// Returns the name of the entity if it has such a component, else it will fill in the name in the storage
+	// With the index based description
+	ECSENGINE_API Stream<char> GetEntityName(const EntityManager* entity_manager, Entity entity, CapacityStream<char>& storage);
+
+	// Returns the name of the entity if it has such a component, else it will write the index of the entity
+	// Into the storage (without the leading Entity)
+	ECSENGINE_API Stream<char> GetEntityNameIndexOnly(const EntityManager* entity_manager, Entity entity, CapacityStream<char>& storage);
+
+	// This version has static storage inside it such that you don't have to pass a parameter to it
+	// But the drawback is that you can reference at most one name since otherwise it might get overwritten
+	ECSENGINE_API Stream<char> GetEntityNameTempStorage(const EntityManager* entity_manager, Entity entity);
+
+	// This version has static storage inside it such that you don't have to pass a parameter to it
+	// But the drawback is that you can reference at most one name since otherwise it might get overwritten
+	ECSENGINE_API Stream<char> GetEntityNameIndexOnlyTempStorage(const EntityManager* entity_manager, Entity entity);
+
 	// ------------------------------------ Link Components -----------------------------------------------------------
 
 	struct ECS_REFLECT_LINK_COMPONENT(Rotation) RotationLink {
@@ -120,12 +139,12 @@ namespace ECSEngine {
 
 	struct ModuleRegisterLinkComponentFunctionData;
 	struct ModuleRegisterExtraInformationFunctionData;
-	struct ModuleRegisterDebugDrawFunctionData;
+	struct ModuleRegisterComponentFunctionsData;
 
 	ECSENGINE_API void RegisterECSLinkComponents(ModuleRegisterLinkComponentFunctionData* register_data);
 
 	ECSENGINE_API void RegisterECSModuleExtraInformation(ModuleRegisterExtraInformationFunctionData* register_data);
 
-	ECSENGINE_API void RegisterECSDebugDrawElements(ModuleRegisterDebugDrawFunctionData* register_data);
+	ECSENGINE_API void RegisterECSComponentFunctions(ModuleRegisterComponentFunctionsData* register_data);
 
 }

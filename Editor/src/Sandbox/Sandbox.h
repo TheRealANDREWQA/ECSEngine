@@ -313,6 +313,12 @@ ECS_INLINE ECSEngine::Stream<ECSEngine::Entity> GetSandboxVirtualEntitySlots(
 
 // -------------------------------------------------------------------------------------------------------------
 
+ECS_INLINE unsigned int GetSandboxBackgroundComponentBuildFunctionCount(const EditorState* editor_state, unsigned int sandbox_index) {
+	return GetSandbox(editor_state, sandbox_index)->background_component_build_functions.load(ECS_RELAXED);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Called during the initialization of the editor state to set the allocator
 // and to create the cache graphics and cache resource manager
 void InitializeSandboxes(EditorState* editor_state);

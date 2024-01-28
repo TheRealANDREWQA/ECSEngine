@@ -30,7 +30,7 @@ void SetVisualizeTexture(EditorState* editor_state, ECSEngine::Tools::VisualizeT
 	else {
 		// We must insert it
 		select_element.name = StringCopy(editor_state->EditorAllocator(), select_element.name);
-		InsertIntoDynamicTable(editor_state->visualize_texture.mapping, editor_state->EditorAllocator(), select_element, ResourceIdentifier(select_element.name));
+		editor_state->visualize_texture.mapping.InsertDynamic(editor_state->EditorAllocator(), select_element, ResourceIdentifier(select_element.name));
 	}
 }
 

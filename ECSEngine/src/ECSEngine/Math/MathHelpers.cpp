@@ -1,7 +1,8 @@
 #include "ecspch.h"
 #include "MathHelpers.h"
 #include "../Utilities/Utilities.h"
-
+#include "VCLExtensions.h"
+#include "Vector.h"
 
 namespace ECSEngine {
 
@@ -150,6 +151,416 @@ namespace ECSEngine {
 	void ApplyFloat3Subtraction(Stream<float3> values, float3 subtract_value)
 	{
 		ApplyFloat3Addition(values, -subtract_value);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	void DetermineExtremePoints(Stream<float3> points, float3* values)
+	{
+		ECS_ASSERT(points.size < UINT_MAX);
+
+		size_t simd_count = GetSimdCount(points.size, Vec8f::size());
+		Vec8f smallest_values[3];
+		Vec8f largest_values[3];
+		Vec8ui smallest_values_index[3];
+		Vec8ui largest_values_index[3];
+		if (simd_count > 0) {
+			for (size_t index = 0; index < 3; index++) {
+				smallest_values[index] = FLT_MAX;
+				largest_values[index] = -FLT_MAX;
+			}
+			Vec8ui current_indices = { 0, 1, 2, 3, 4, 5, 6, 7 };
+			Vec8ui increment = Vec8ui::size();
+			for (size_t index = 0; index < simd_count; index += Vec8f::size()) {
+				Vec8f values[3];
+				// The x values
+				values[0] = GatherStride<3, 0>(points.buffer + index);
+				// The y values
+				values[1] = GatherStride<3, 1>(points.buffer + index);
+				// The z values
+				values[2] = GatherStride<3, 2>(points.buffer + index);
+
+				for (size_t axis = 0; axis < 3; axis++) {
+					Vec8fb are_smaller = values[axis] < smallest_values[axis];
+					Vec8fb are_greater = values[axis] > largest_values[axis];
+					
+					smallest_values[axis] = select(are_smaller, values[axis], smallest_values[axis]);
+					smallest_values_index[axis] = select(are_smaller, current_indices, smallest_values_index[axis]);
+				
+					largest_values[axis] = select(are_greater, values[axis], largest_values[axis]);
+					largest_values_index[axis] = select(are_greater, current_indices, largest_values_index[axis]);
+				}
+
+				current_indices += increment;
+			}
+		}
+		
+		uint3 smallest_value_scalar_index;
+		uint3 largest_value_scalar_index;
+		float3 smallest_value_scalar = float3::Splat(FLT_MAX);
+		float3 largest_value_scalar = float3::Splat(-FLT_MAX);
+		for (size_t index = simd_count; index < points.size; index++) {
+			for (size_t axis = 0; axis < 3; axis++) {
+				if (points[index][axis] < smallest_value_scalar[axis]) {
+					smallest_value_scalar[axis] = points[index][axis];
+					smallest_value_scalar_index[axis] = index;
+				}
+				if (points[index][axis] > largest_value_scalar[axis]) {
+					largest_value_scalar[axis] = points[index][axis];
+					largest_value_scalar_index[axis] = index;
+				}
+			}
+		}
+
+		if (simd_count > 0) {
+			// Now we need to get the values out from the SIMD registers into scalar form
+			for (size_t axis = 0; axis < 3; axis++) {
+				Vec8f current_min = HorizontalMin8(smallest_values[axis]);
+				size_t min_index = HorizontalMin8Index(smallest_values[axis], current_min);
+				float min_value = smallest_values[axis].extract(min_index);
+				if (min_value < smallest_value_scalar[axis]) {
+					smallest_value_scalar_index[axis] = smallest_values_index[axis].extract(min_index);
+				}
+
+				Vec8f current_max = HorizontalMax8(largest_values[axis]);
+				size_t max_index = HorizontalMax8Index(largest_values[axis], current_max);
+				float max_value = largest_values[axis].extract(max_index);
+				if (max_value > largest_value_scalar[axis]) {
+					largest_value_scalar_index[axis] = largest_values_index[axis].extract(max_index);
+				}
+			}
+		}
+
+		for (size_t axis = 0; axis < 3; axis++) {
+			values[axis] = points[smallest_value_scalar_index[axis]];
+			values[axis + 3] = points[largest_value_scalar_index[axis]];
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	size_t WeldVertices(Stream<float3>& points, float3 epsilon) {
+		// In order to speed this up for a large number of entries, we can count sort them into buckets
+		// And check values only inside the bucket. This fails if the epsilon is large enough
+		// That some point at the very last of a bucket is near with the point at the very start of the
+		// next bucket
+
+		auto compare_mask = [epsilon](float3 a, float3 b) {
+			float3 absolute_difference = BasicTypeAbsoluteDifference(a, b);
+			return BasicTypeLessEqual(absolute_difference, epsilon);
+		};
+
+		for (size_t index = 0; index < points.size; index++) {
+			for (size_t subindex = index + 1; subindex < points.size; subindex++) {				
+				if (compare_mask(points[index], points[subindex])) {
+					// We can remove the subindex point
+					points.RemoveSwapBack(subindex);
+					subindex--;
+				}
+			}
+		}
+
+		return points.size;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	float3 TriangleNormal(float3 a, float3 b, float3 c)
+	{
+		return Cross(b - a, c - a);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	float3 TriangleNormal(float3 a, float3 b, float3 c, float3 look_point)
+	{
+		// Calculate the normal as usual and if the dot product between the normal
+		// And the direction vector of the look point with one of the triangle corners
+		// Is negative, we need to flip it
+		float3 normal = TriangleNormal(a, b, c);
+		if (Dot(normal, look_point - c) < 0.0f) {
+			return -normal;
+		}
+		return normal;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool IsTriangleFacing(float3 a, float3 b, float3 c, float3 d)
+	{
+		float3 normal = TriangleNormal(a, b, c);
+		return Dot(normal, d - c) >= 0.0f;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	float TriangleArea(float3 point_a, float3 point_b, float3 point_c)
+	{
+		// length(a X b) / 2
+		return Length(Cross(point_a, point_b)) / 2;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	float TetrahedronVolume(float3 point_a, float3 point_b, float3 point_c, float3 point_d) {
+		// (a X b * c) / 6 
+		// a, b, c are three co-terminal edges - they start from the same point
+		// The formula is the cross product between 2 of these vectors, dotted with the third
+		// One and divided by 6
+		float3 a = point_b - point_a;
+		float3 b = point_c - point_a;
+		float3 c = point_d - point_a;
+		return Dot(Cross(a, b), c) / 6;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	template<bool is_min, bool is_max, int offset>
+	static float2 GetFloat3MinMaxSingle(Stream<float3> values, ulong2* indices) {
+		// We are branching here in case the index is not needed
+		// Since we can use the min/max function directly instead
+		// Of 2 selects to have the index available
+		Vec8f min_values = FLT_MAX;
+		Vec8f max_values = -FLT_MAX;
+		if (index == nullptr) {
+			ApplySIMDConstexpr(values.size, Vec8f::size(), [&](auto is_full_iteration, size_t index, size_t count) {
+				Vec8f current_min_values;
+				Vec8f current_max_values;
+				if constexpr (is_full_iteration) {
+					Vec8f current_values = GatherStride<3, offset>(values.buffer + index);
+					current_min_values = current_values;
+					current_max_values = current_values;
+				}
+				else {
+					Vec8f current_values = GatherStride<3, offset>(values.buffer + index, count);
+					// Here we might need to have min and max at the same time
+					// And need to select the last elements accordingly
+					Vec8fb gather_mask = CastToFloat(SelectMaskLast<unsigned int>(Vec8f::size() - count));
+					if constexpr (is_min) {
+						current_min_values = select(gather_mask, FLT_MAX, current_values);
+					}
+					if constexpr (is_max) {
+						current_max_values = select(gather_mask, -FLT_MAX, current_values);
+					}
+				}
+
+				if constexpr (is_min) {
+					min_values = min(current_min_values, min_values);
+				}
+				if constexpr (is_max) {
+					max_values = max(current_max_values, max_values);
+				}
+			});
+			float2 values;
+			if constexpr (is_min) {
+				values.x = VectorLow(HorizontalMin8(min_values));
+			}
+			if constexpr (is_max) {
+				values.y = VectorLow(HorizontalMax8(min_values));
+			}
+			return values;
+		}
+		else {
+			Vec8ui current_indices = { 0, 1, 2, 3, 4, 5, 6, 7 };
+			Vec8ui increment = Vec8f::size();
+			Vec8ui min_indices;
+			Vec8ui max_indices;
+			ApplySIMDConstexpr(values.size, Vec8f::size(), [&](auto is_full_iteration, size_t index, size_t count) {
+				Vec8f current_min_values;
+				Vec8f current_max_values;
+				if constexpr (is_full_iteration) {
+					Vec8f current_values = GatherStride<3, offset>(values.buffer + index);
+					current_min_values = current_values;
+					current_max_values = current_values;
+				}
+				else {
+					Vec8f current_values = GatherStrideMasked<3, offset>(values.buffer + index, count, is_min ? FLT_MAX : -FLT_MAX);
+					Vec8fb mask = CastToFloat(SelectMaskLast<unsigned int>(Vec8f::size() - count));
+					if constexpr (is_min) {
+						current_min_values = select(gather_mask, FLT_MAX, current_values);
+					}
+					if constexpr (is_max) {
+						current_max_values = select(gather_mask, -FLT_MAX, current_values);
+					}
+				}
+
+				if constexpr (is_min) {
+					Vec8fb min_mask = current_min_values < min_values;
+					min_values = select(min_mask, current_min_values, min_values);
+					min_indices = select(min_mask, current_indices, min_indices);
+				}
+				if constexpr (is_max) {
+					Vec8fb max_mask = current_max_values > max_values;
+					max_values = select(max_mask, current_max_values, max_values);
+					max_indices = select(max_mask, current_indices, max_indices);
+				}
+				current_indices += increment;
+			});
+
+			float2 values;
+			if constexpr (is_min) {
+				Vec8f splatted_min = HorizontalMin8(min_values);
+				size_t simd_smallest_index = HorizontalMin8Index(min_values, splatted_min);
+				indices->x = simd_smallest_index;
+				values.x = VectorLow(splatted_min);
+			}
+			if constexpr (is_max) {
+				Vec8f splatted_max = HorizontalMax8(max_values);
+				size_t simd_smallest_index = HorizontalMin8Index(max_values, splatted_max);
+				indices->y = simd_smallest_index;
+				values.y = VectorLow(splatted_max);
+			}
+			return values;
+		}
+	}
+
+	template<bool is_min, int offset>
+	static float GetFloat3MinMaxSingle(Stream<float3> values, size_t* index) {
+		ulong2 indices;
+		float2 value = GetFloat3MinMaxSingle<is_min ? true : false, is_min ? false : true, offset>(values, index != nullptr ? &indices : nullptr);
+		if (index != nullptr) {
+			*index = is_min ? indices.x : indices.y;
+		}
+		return is_min ? value.x : value.y;
+	}
+
+	float GetFloat3MinX(Stream<float3> values, size_t* index) {
+		return GetFloat3MinMaxSingle<true, 0>(values, index);
+	}
+
+	float GetFloat3MinY(Stream<float3> values, size_t* index) {
+		return GetFloat3MinMaxSingle<true, 1>(values, index);
+	}
+
+	float GetFloat3MinZ(Stream<float3> values, size_t* index) {
+		return GetFloat3MinMaxSingle<true, 2>(values, index);
+	}
+
+	float GetFloat3MaxX(Stream<float3> values, size_t* index) {
+		return GetFloat3MinMaxSingle<false, 0>(values, index);
+	}
+
+	float GetFloat3MaxY(Stream<float3> values, size_t* index) {
+		return GetFloat3MinMaxSingle<false, 1>(values, index);
+	}
+
+	float GetFloat3MaxZ(Stream<float3> values, size_t* index) {
+		return GetFloat3MinMaxSingle<false, 2>(values, index);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	float2 GetFloat3MinMaxX(Stream<float3> values, ulong2* indices) {
+		return GetFloat3MinMaxSingle<true, true, 0>(values, indices);
+	}
+
+	float2 GetFloat3MinMaxY(Stream<float3> values, ulong2* indices) {
+		return GetFloat3MinMaxSingle<true, true, 1>(values, indices);
+	}
+
+	float2 GetFloat3MinMaxZ(Stream<float3> values, ulong2* indices) {
+		return GetFloat3MinMaxSingle<true, true, 2>(values, indices);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	template<bool is_min>
+	static float3 GetFloat3MinMaxImpl(Stream<float3> values, ulong3* indices) {
+		// Read 2 float3's at a time and perform the operation there
+		Vec8f min_max_values = is_min ? FLT_MAX : -FLT_MAX;
+		const size_t simd_increment = Vec8f::size() / float3::Count();
+		ECS_ASSERT(IsPowerOfTwo(simd_increment));
+		size_t simd_count = GetSimdCount(values.size, simd_increment);
+		float3 scalar_min_max = is_min ? float3::Splat(FLT_MAX) : -float3::Splat(FLT_MAX);
+		if (indices == nullptr) {
+			// If we don't need the indices, we can speed up the function by a bit
+			// By ommiting that value
+			if (simd_count > 0) {
+				for (size_t index = 0; index < simd_count; index += simd_increment) {
+					Vec8f current_values = Vec8f().load((const float*)(values.buffer + index));
+					min_max_values = is_min ? min(current_values, min_max_values) : max(current_values, min_max_values);
+				}
+
+				float3 simd_values[simd_increment + 1];
+				min_max_values.store((float*)simd_values);
+				for (size_t index = 0; index < simd_increment; index++) {
+					scalar_min_max = is_min ? BasicTypeMin(scalar_min_max, simd_values[index]) : BasicTypeMax(scalar_min_max, simd_values[index]);
+				}
+			}
+
+			for (size_t index = simd_count; index < values.size; index++) {
+				scalar_min_max = is_min ? BasicTypeMin(scalar_min_max, values[index]) : BasicTypeMax(scalar_min_max, values[index]);
+			}
+			return scalar_min_max;
+		}
+		else {
+			ulong3 scalar_indices = ulong3::Splat(-1);
+			if (simd_count > 0) {
+				Vec8ui simd_vector_increment = simd_increment;
+				Vec8ui indices = { 0, 0, 0, 1, 1, 1, -1, -1 };
+				Vec8ui min_max_indices = indices;
+				for (size_t index = 0; index < simd_count; index += simd_increment) {
+					Vec8f current_values = Vec8f().load((const float*)(values.buffer + index));
+					Vec8fb mask = is_min ? current_values < min_max_values : current_values > min_max_values;
+					min_max_values = select(mask, current_values, min_max_values);
+					min_max_indices = select(mask, indices);
+					indices += simd_vector_increment;
+				}
+
+				float3 simd_values[simd_increment + 1];
+				uint3 simd_indices[simd_increment + 1];
+				min_max_values.store((float*)simd_values);
+				min_max_indices.store(simd_indices);
+				for (size_t index = 0; index < simd_increment; index++) {
+					for (size_t subindex = 0; subindex < float3::Count(); subindex++) {
+						bool mask = is_min ? simd_values[index][subindex] < scalar_min_max[subindex] : simd_values[index][subindex] > scalar_min_max[subindex];
+						scalar_min_max[subindex] = mask ? simd_values[index][subindex] : scalar_min_max[subindex];
+						scalar_indices[subindex] = mask ? simd_indices[index][subindex] : scalar_indices[subindex];
+					}
+				}
+			}
+
+			for (size_t index = simd_count; index < values.size; index++) {
+				for (size_t subindex = 0; subindex < float3::Count(); subindex++) {
+					bool mask = is_min ? values[index][subindex] < scalar_min_max[subindex] : values[index][subindex] > scalar_min_max[subindex];
+					scalar_min_max[subindex] = mask ? values[index][subindex] : scalar_min_max[subindex];
+					scalar_indices[subindex] = mask ? values[index][subindex] : scalar_indices[subindex];
+				}
+			}
+
+			*indices = scalar_indices;
+			return scalar_min_max;
+		}
+	}
+
+	float3 GetFloat3Min(Stream<float3> values, ulong3* indices) {
+		return GetFloat3MinMaxImpl<true>(values, indices);
+	}
+
+	float3 GetFloat3Max(Stream<float3> values, ulong3* indices) {
+		return GetFloat3MinMaxImpl<false>(values, indices);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	template<ECS_AXIS axis>
+	static unsigned int* CountSortFloat3Impl(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator) {
+
+	}
+
+	unsigned int* CountSortFloat3X(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator)
+	{
+		return nullptr;
+	}
+
+	unsigned int* CountSortFloat3Y(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator)
+	{
+		return nullptr;
+	}
+
+	unsigned int* CountSortFloat3Z(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator)
+	{
+		return nullptr;
 	}
 
 	// --------------------------------------------------------------------------------------------------

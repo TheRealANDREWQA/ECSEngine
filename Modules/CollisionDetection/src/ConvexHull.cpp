@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "ConvexHull.h"
+#include "GJK.h"
+#include "Quickhull.h"
 
 void ConvexHull::Initialize(float* storage, size_t _size)
 {
@@ -105,12 +107,22 @@ ConvexHull ECS_VECTORCALL ConvexHull::Transform(Matrix matrix, float* storage) c
 
 ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator)
 {
-	ConvexHull hull;
+	/*ConvexHull hull;
 
 	float3 corners[8];
 	AABBScalar scalar_aabb = GetAABBFromPoints(vertex_positions);
 	GetAABBCorners(scalar_aabb, corners);
 	hull.Initialize(allocator, Stream<float3>(corners, std::size(corners)));
 
-	return hull;
+	return hull;*/
+	return {};
+}
+
+ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator, AABBScalar aabb) {
+	//return Quickhull(vertex_positions, allocator, aabb);
+	return {};
+}
+
+bool IsPointInsideConvexHull(const ConvexHull* convex_hull, float3 point) {
+	return GJKPoint(convex_hull, point) < 0.0f;
 }

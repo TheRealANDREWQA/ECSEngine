@@ -141,4 +141,69 @@ namespace ECSEngine {
 	// Uses SIMD operations
 	ECSENGINE_API void ApplyFloat3Subtraction(Stream<float3> values, float3 subtract_value);
 
+	// Determines the extreme points in each direction - they lie on the AABB
+	// There must be 6 entries in the values pointer.
+	// They are filled in the X min, Y min, Z min, X max, Y max, Z max
+	ECSENGINE_API void DetermineExtremePoints(Stream<float3> points, float3* values);
+
+	// It will merge vertices which are close enough and return the new count.
+	// You can specify an epsilon to detect close enough vertices
+	ECSENGINE_API size_t WeldVertices(Stream<float3>& points, float3 epsilon = float3::Splat(0.0f));
+
+	// Returns the normal calculated as the cross product between AB and AC
+	// The normal is not normalized. You must do that manually
+	ECSENGINE_API float3 TriangleNormal(float3 a, float3 b, float3 c);
+
+	// Returns the normal of the triangle facing the given point
+	// The normal is not normalized. You must do that manually
+	ECSENGINE_API float3 TriangleNormal(float3 a, float3 b, float3 c, float3 look_point);
+
+	// Returns true if the triangle ABC is facing d using the TriangleNormal function
+	ECSENGINE_API bool IsTriangleFacing(float3 a, float3 b, float3 c, float3 d);
+
+	ECSENGINE_API float TriangleArea(float3 point_a, float3 point_b, float3 point_c);
+
+	ECSENGINE_API float TetrahedronVolume(float3 point_a, float3 point_b, float3 point_c, float3 point_d);
+
+	ECSENGINE_API float GetFloat3MinX(Stream<float3> values, size_t* index = nullptr);
+
+	ECSENGINE_API float GetFloat3MinY(Stream<float3> values, size_t* index = nullptr);
+
+	ECSENGINE_API float GetFloat3MinZ(Stream<float3> values, size_t* index = nullptr);
+
+	ECSENGINE_API float GetFloat3MaxX(Stream<float3> values, size_t* index = nullptr);
+
+	ECSENGINE_API float GetFloat3MaxY(Stream<float3> values, size_t* index = nullptr);
+
+	ECSENGINE_API float GetFloat3MaxZ(Stream<float3> values, size_t* index = nullptr);
+
+	// The min is the x, the max is the y
+	ECSENGINE_API float2 GetFloat3MinMaxX(Stream<float3> values, ulong2* indices = nullptr);
+
+	// The min is the x, the max is the y
+	ECSENGINE_API float2 GetFloat3MinMaxY(Stream<float3> values, ulong2* indices = nullptr);
+
+	// The min is the x, the max is the y
+	ECSENGINE_API float2 GetFloat3MinMaxZ(Stream<float3> values, ulong2* indices = nullptr);
+
+	// Finds the corresponding min for each x, y and z separately and it can give 
+	// you back the indices of these elements
+	ECSENGINE_API float3 GetFloat3Min(Stream<float3> values, ulong3* indices = nullptr);
+
+	// Finds the corresponding max for each x, y and z separately and it can give
+	// you back the indices of these elements
+	ECSENGINE_API float3 GetFloat3Max(Stream<float3> values, ulong3* indices = nullptr);
+
+	// Returns the allocated counts. There are bucket_count + 1 entries to satisfy the
+	// Count sort requirement. The values are sorted ascending
+	ECSENGINE_API unsigned int* CountSortFloat3X(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator);
+
+	// Returns the allocated counts. There are bucket_count + 1 entries to satisfy the
+	// Count sort requirement. The values are sorted ascending
+	ECSENGINE_API unsigned int* CountSortFloat3Y(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator);
+
+	// Returns the allocated counts. There are bucket_count + 1 entries to satisfy the
+	// Count sort requirement. The values are sorted ascending
+	ECSENGINE_API unsigned int* CountSortFloat3Z(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator);
+
 }

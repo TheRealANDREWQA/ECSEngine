@@ -1895,7 +1895,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 			}
 
 			// Update the hash table
-			InsertIntoDynamicTable(data->explorer_data->mesh_thumbnails, data->editor_allocator, thumbnail, allocated_path);
+			data->explorer_data->mesh_thumbnails.InsertDynamic(data->editor_allocator, thumbnail, allocated_path);
 
 			data->thumbnail_count++;
 			// We also need to redraw the explorer

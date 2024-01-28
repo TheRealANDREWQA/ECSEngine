@@ -95,26 +95,19 @@ void RenderMeshDebugDraw(ModuleDebugDrawComponentFunctionData* data) {
 	}
 }
 
-void ModuleRegisterDebugDrawFunction(ECSEngine::ModuleRegisterDebugDrawFunctionData* data) {
+void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsData* data) {
 	ModuleDebugDrawElement element;
-	element.component = RenderMesh::ID();
-	element.component_type = ECS_COMPONENT_SHARED;
 	element.draw_function = RenderMeshDebugDraw;
-
 	element.dependency_components[0] = { Translation::ID(), ECS_COMPONENT_UNIQUE };
 	element.dependency_components[1] = { Rotation::ID(), ECS_COMPONENT_UNIQUE };
 	element.dependency_components[2] = { Scale::ID(), ECS_COMPONENT_UNIQUE };
 	element.dependency_component_count = 3;
 
-	data->elements->AddAssert(element);
-}
+	ModuleComponentFunctions render_mesh_entry;
+	render_mesh_entry.debug_draw = element;
+	render_mesh_entry.component_name = STRING(RenderMesh);
 
-#endif
-
-#if 0
-
-void ModuleRegisterComponentFunctionsFunction(ECSEngine::ModuleRegisterComponentFunctionsData* data) {
-
+	data->functions->AddAssert(&render_mesh_entry);
 }
 
 #endif

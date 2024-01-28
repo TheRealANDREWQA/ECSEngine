@@ -83,7 +83,7 @@ namespace ECSEngine {
     {
         if (parent.value == -1) {
             roots.Add(child);
-            InsertIntoDynamicTable(parent_table, allocator, parent, child);
+            parent_table.InsertDynamic(allocator, parent, child);
             return;
         }
 
@@ -120,19 +120,19 @@ namespace ECSEngine {
             children.count = 1;
             children.static_children[0] = child;
 
-            InsertIntoDynamicTable(children_table, allocator, children, parent);
+            children_table.InsertDynamic(allocator, children, parent);
             unsigned int parent_index = parent_table.Find(parent);
             if (parent_index == -1) {
                 // It doesn't exist, so add it to the parent table and root buffer
                 roots.Add(parent);
                 Entity root_parent = { (unsigned int)-1 };
-                InsertIntoDynamicTable(parent_table, allocator, root_parent, parent);
+                parent_table.InsertDynamic(allocator, root_parent, parent);
             }
         }
 
         unsigned int child_parent_index = parent_table.Find(child);
         if (child_parent_index == -1) {
-            InsertIntoDynamicTable(parent_table, allocator, parent, child);
+            parent_table.InsertDynamic(allocator, parent, child);
         }
     }
 

@@ -2,6 +2,11 @@
 #include "ModuleFunction.h"
 #include "Components.h"
 #include "Broadphase.h"
+#include "ECSEngineRendering.h"
+
+#include "Graphics/src/Components.h"
+
+#include "GiftWrapping.h"
 
 static void ApplyMovementTask(
 	ForEachEntityData* for_each_data,
@@ -93,25 +98,75 @@ static bool ModuleCompareConvexCollider(SharedComponentCompareFunctionData* data
 static void ModuleDeallocateConvexCollider(ComponentDeallocateFunctionData* data) {
 	ConvexCollider* collider = (ConvexCollider*)data->data;
 	collider->hull.Deallocate(data->allocator);
+	collider->mesh.Deallocate(data->allocator);
 }
 
 static void ModuleCopyConvexCollider(ComponentCopyFunctionData* data) {
 	ConvexCollider* destination = (ConvexCollider*)data->destination;
 	const ConvexCollider* source = (const ConvexCollider*)data->source;
 	destination->hull.Copy(&source->hull, data->allocator, data->deallocate_previous);
+	destination->mesh.Copy(&source->mesh, data->allocator, data->deallocate_previous);
+}
+
+static void BuildConvexColliderTaskBase(ModuleComponentBuildFunctionData* data) {
+	const RenderMesh* render_mesh = data->entity_manager->TryGetComponent<RenderMesh>(data->entity);
+	if (render_mesh != nullptr) {
+		AllocatorPolymorphic world_allocator = data->world_global_memory_manager;
+		// We need to make sure that we use multithreaded allocations here
+		world_allocator.allocation_type = ECS_ALLOCATION_MULTI;
+
+		// Retrieve the mesh vertices from the GPU memory to the CPU side
+		Stream<float3> vertex_positions = GetMeshPositionsCPU(data->world_graphics, render_mesh->mesh->mesh, world_allocator);
+		ConvexCollider* collider = (ConvexCollider*)data->component;
+		if (collider->hull.size > 0) {
+			DeallocateConvexCollider(collider, data->component_allocator);
+		}
+		collider->hull = CreateConvexHullFromMesh(vertex_positions, data->component_allocator);
+		collider->hull_size = collider->hull.size;
+		collider->mesh = GiftWrapping(vertex_positions, data->component_allocator);
+		vertex_positions.Deallocate(world_allocator);
+	}
+	else {
+		// Print a message that the entity requires a render mesh
+		ECS_FORMAT_TEMP_STRING(message, "The entity {#} requires a RenderMesh to calculate the ConvexCollider", GetEntityNameIndexOnlyTempStorage(data->entity_manager, data->entity));
+		data->print_message.Warn(message);
+	}
+}
+
+static ECS_THREAD_TASK(BuildConvexColliderTask) {
+	ModuleComponentBuildFunctionData* data = (ModuleComponentBuildFunctionData*)_data;
+	data->gpu_lock.Lock();
+	BuildConvexColliderTaskBase(data);
+	data->gpu_lock.Unlock();
 }
 
 static ThreadTask ModuleBuildConvexCollider(ModuleComponentBuildFunctionData* data) {
 	ConvexCollider* collider = (ConvexCollider*)data->component;
-	float3 points[3] = {
-		{ 1.0f, 0.0f, 0.0f },
-		{ 0.0f, 1.0f, 0.0f },
-		{ 0.0f, 0.0f, 1.0f }
-	};
 
-	collider->hull = CreateConvexHullFromMesh({ points, 3 }, data->component_allocator);
-	collider->hull_size = collider->hull.size;
-	return {};
+	if (data->gpu_lock.TryLock()) {
+		BuildConvexColliderTaskBase(data);
+		data->gpu_lock.Unlock();
+		return {};
+	}
+	else {
+		// We need to launch a thread task
+		return ECS_THREAD_TASK_NAME(BuildConvexColliderTask, data, sizeof(*data));
+	}
+}
+
+static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) {
+	const ConvexCollider* collider = (const ConvexCollider*)data->component;
+
+	for (size_t index = 0; index < collider->mesh.triangle_count; index++) {
+		uint3 triangle = collider->mesh.triangles[index];
+		float3 a = collider->mesh.positions[triangle.x];
+		float3 b = collider->mesh.positions[triangle.y];
+		float3 c = collider->mesh.positions[triangle.z];
+
+		DebugDrawCallOptions options;
+		options.wireframe = true;
+		data->debug_drawer->AddTriangleThread(data->thread_id, a, b, c, ECS_COLOR_GREEN, options);
+	}
 }
 
 void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsData* data) {
@@ -122,8 +177,10 @@ void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsDa
 	convex_collider.build_entry.function = ModuleBuildConvexCollider;
 	convex_collider.build_entry.component_dependencies.Initialize(data->allocator, 1);
 	convex_collider.build_entry.component_dependencies[0] = STRING(RenderMesh);
-	convex_collider.allocator_size = ECS_KB * 256;
+	convex_collider.allocator_size = ECS_MB * 128;
 	convex_collider.component_name = STRING(ConvexCollider);
+
+	convex_collider.debug_draw.draw_function = ConvexColliderDebugDraw;
 
 	data->functions->AddAssert(convex_collider);
 }

@@ -102,10 +102,6 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	);
 
-	ECSENGINE_API Stream<ModuleDebugDrawElement> LoadModuleDebugDrawElements(const Module* module, AllocatorPolymorphic allocator);
-
-	ECSENGINE_API Stream<ModuleDebugDrawElement> LoadModuleDebugDrawElements(ModuleRegisterDebugDrawFunction function, AllocatorPolymorphic allocator);
-
 	ECSENGINE_API Stream<ModuleDebugDrawTaskElement> LoadModuleDebugDrawTaskElements(
 		const Module* module, 
 		AllocatorPolymorphic allocator,

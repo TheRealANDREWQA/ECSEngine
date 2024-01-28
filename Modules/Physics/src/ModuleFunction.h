@@ -32,12 +32,6 @@ extern "C" {
 
 #if 0
 
-	Physics_API void ModuleSetCurrentWorld(ECSEngine::World* world);
-
-#endif
-
-#if 0
-
 	Physics_API void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data);
 
 #endif

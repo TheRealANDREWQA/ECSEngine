@@ -2,6 +2,17 @@
 #include "GraphicsHelpers.h"
 #include "Graphics.h"
 #include "../Utilities/Crash.h"
+#include "../../Dependencies/DirectXTex/DirectXTex/DirectXTex.h"
+
+#define EXPORT_TEXTURE_TEMPLATE(function_name) ECS_TEMPLATE_FUNCTION(Texture1D, function_name, Graphics*, Texture1D, bool);  \
+ECS_TEMPLATE_FUNCTION(Texture2D, function_name, Graphics*, Texture2D, bool); \
+ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
+ECS_TEMPLATE_FUNCTION(TextureCube, function_name, Graphics*, TextureCube, bool);
+
+#define EXPORT_TEXTURE_TEMPLATE_NO_CUBE(function_name) ECS_TEMPLATE_FUNCTION(Texture1D, function_name, Graphics*, Texture1D, bool);  \
+ECS_TEMPLATE_FUNCTION(Texture2D, function_name, Graphics*, Texture2D, bool); \
+ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool);
+
 
 namespace ECSEngine {
 
@@ -74,10 +85,6 @@ namespace ECSEngine {
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
-
-#define EXPORT_TEXTURE_TEMPLATE(function_name) ECS_TEMPLATE_FUNCTION(Texture1D, function_name, Graphics*, Texture1D, bool);  \
-ECS_TEMPLATE_FUNCTION(Texture2D, function_name, Graphics*, Texture2D, bool); \
-ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	template<typename Texture>
 	Texture TextureToStaging(Graphics* graphics, Texture texture, bool temporary) {
@@ -186,7 +193,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		return new_texture;
 	}
 
-	EXPORT_TEXTURE_TEMPLATE(TextureToImmutableWithStaging);
+	EXPORT_TEXTURE_TEMPLATE_NO_CUBE(TextureToImmutableWithStaging);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
@@ -266,7 +273,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		return new_texture;
 	}
 
-	EXPORT_TEXTURE_TEMPLATE(TextureToImmutableWithMap);
+	EXPORT_TEXTURE_TEMPLATE_NO_CUBE(TextureToImmutableWithMap);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
@@ -310,8 +317,8 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	void InvertMeshZAxis(Graphics* graphics, Mesh& mesh)
 	{
 		// Invert positions, normals, tangents and winding order
-		VertexBuffer position_buffer = GetMeshVertexBuffer(mesh, ECS_MESH_POSITION);
-		VertexBuffer normal_buffer = GetMeshVertexBuffer(mesh, ECS_MESH_NORMAL);
+		VertexBuffer position_buffer = mesh.GetBuffer(ECS_MESH_POSITION);
+		VertexBuffer normal_buffer = mesh.GetBuffer(ECS_MESH_NORMAL);
 
 		// Inverts the z axis of a buffer and returns a new one
 		auto invert_z = [](Graphics* graphics, VertexBuffer buffer) {
@@ -351,10 +358,10 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		};
 
 		if (position_buffer.buffer != nullptr) {
-			SetMeshVertexBuffer(mesh, ECS_MESH_POSITION, invert_z(graphics, position_buffer));
+			mesh.SetBuffer(ECS_MESH_POSITION, invert_z(graphics, position_buffer));
 		}
 		if (normal_buffer.buffer != nullptr) {
-			SetMeshVertexBuffer(mesh, ECS_MESH_NORMAL, invert_z(graphics, normal_buffer));
+			mesh.SetBuffer(ECS_MESH_NORMAL, invert_z(graphics, normal_buffer));
 		}
 
 		// Invert the winding order
@@ -465,6 +472,159 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		result = graphics->CreateConstantBuffer(count * sizeof(ColorFloat), colorize_values.buffer, temporary);
 		return result;
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	template<typename Buffer>
+	size_t GetBufferCPUDataSize(Buffer buffer) {
+		D3D11_BUFFER_DESC descriptor;
+		buffer.buffer->GetDesc(&descriptor);
+		return descriptor.ByteWidth;
+	}
+
+#define EXPORT(type) ECS_TEMPLATE_FUNCTION(size_t, GetBufferCPUDataSize, type);
+
+	ECS_GRAPHICS_BUFFERS(EXPORT);
+
+#undef EXPORT
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	template<typename Texture>
+	TextureCPUData GetTextureCPUDataSize(Texture texture, unsigned int mip_level) {
+		TextureCPUData return_value;
+
+		size_t width, height = 1, depth = 1, array_count = 1;
+		DXGI_FORMAT format;
+		if constexpr (std::is_same_v<Texture, Texture1D>) {
+			D3D11_TEXTURE1D_DESC descriptor;
+			texture.tex->GetDesc(&descriptor);
+			width = descriptor.Width;
+			format = descriptor.Format;
+		}
+		else if constexpr (std::is_same_v<Texture, Texture2D> || std::is_same_v<Texture, TextureCube>) {
+			D3D11_TEXTURE2D_DESC descriptor;
+			texture.tex->GetDesc(&descriptor);
+			width = descriptor.Width;
+			height = descriptor.Height;
+			array_count = descriptor.ArraySize;
+			format = descriptor.Format;
+		}
+		else if constexpr (std::is_same_v<Texture, Texture3D>) {
+			D3D11_TEXTURE3D_DESC descriptor;
+			texture.tex->GetDesc(&descriptor);
+			width = descriptor.Width;
+			height = descriptor.Height;
+			depth = descriptor.Depth;
+			format = descriptor.Format;
+		}
+		else {
+			static_assert(false, "Invalid texture type - make sure it is Texture1D/Texture2D/Texture3D/TextureCube");
+		}
+
+		size_t size_mip_level = mip_level;
+		width >>= size_mip_level;
+		height >>= size_mip_level;
+		depth >>= size_mip_level;
+		width = width == 0 ? 1 : width;
+		height = height == 0 ? 1 : height;
+		depth = depth == 0 ? 1 : depth;
+
+		size_t row_pitch;
+		size_t slice_pitch;
+		ECS_ASSERT(SUCCEEDED(DirectX::ComputePitch(format, width, height, row_pitch, slice_pitch)), "Could not calculate texture CPU byte size");
+
+		return_value.bytes.size = slice_pitch * depth * array_count;
+		return_value.bytes.buffer = nullptr;
+		return_value.width = width;
+		return_value.height = height;
+		return_value.depth = depth;
+		return_value.row_pitch = row_pitch;
+		return_value.depth_pitch = slice_pitch;
+		return return_value;
+	}
+
+#define EXPORT(type) ECS_TEMPLATE_FUNCTION(TextureCPUData, GetTextureCPUDataSize, type, unsigned int);
+
+	ECS_GRAPHICS_TEXTURES(EXPORT);
+
+#undef EXPORT
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	template<typename Buffer>
+	Stream<void> GetGPUBufferDataToCPU(Graphics* graphics, Buffer buffer, AllocatorPolymorphic allocator, SpinLock* lock) {
+		size_t allocation_size = GetBufferCPUDataSize(buffer);
+		void* allocation = AllocateEx(allocator, allocation_size);
+
+		Buffer temporary_buffer = buffer;
+		temporary_buffer.buffer = nullptr;
+		if (lock != nullptr) {
+			lock->Lock();
+		}
+		__try {
+			temporary_buffer = BufferToStaging(graphics, buffer);
+			void* buffer_data = graphics->MapBuffer(temporary_buffer.buffer, ECS_GRAPHICS_MAP_READ);
+			memcpy(allocation, buffer_data, allocation_size);
+			graphics->UnmapBuffer(temporary_buffer.buffer);
+		}
+		__finally {
+			if (lock != nullptr) {
+				lock->Unlock();
+			}
+			if (temporary_buffer.buffer != nullptr) {
+				temporary_buffer.Release();
+			}
+			if (AbnormalTermination()) {
+				DeallocateEx(allocator, allocation);
+			}
+		}
+		return { allocation, allocation_size };
+	}
+
+#define EXPORT(type) ECS_TEMPLATE_FUNCTION(Stream<void>, GetGPUBufferDataToCPU, Graphics*, type, AllocatorPolymorphic, SpinLock*)
+
+	ECS_GRAPHICS_BUFFERS(EXPORT);
+
+#undef EXPORT
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	template<typename Texture>
+	TextureCPUData GetTextureDataToCPU(Graphics* graphics, Texture texture, unsigned int mip_level, AllocatorPolymorphic allocator, SpinLock* lock) {
+		TextureCPUData data = GetTextureCPUDataSize(texture, mip_level);
+		data.bytes.buffer = AllocateEx(allocator, data.bytes.size);
+
+		Texture temporary_texture;
+		temporary_texture.tex = nullptr;
+		if (lock != nullptr) {
+			lock->Lock();
+		}
+		__try {
+			temporary_texture = TextureToStaging(graphics, texture);
+			MappedTexture texture_data = graphics->MapTexture(texture, ECS_GRAPHICS_MAP_READ, mip_level);
+			ECS_ASSERT(texture_data.row_byte_size == data.row_pitch && texture_data.slice_byte_size == data.depth_pitch, "Texture data byte size mismatch");
+			memcpy(data.bytes.buffer, texture_data.data, data.bytes.size);
+			graphics->UnmapTexture(texture, mip_level);
+		}
+		__finally {
+			if (lock != nullptr) {
+				lock->Unlock();
+			}
+			if (temporary_texture.Interface() != nullptr) {
+				temporary_texture.Release();
+			}
+			if (AbnormalTermination()) {
+				DeallocateEx(allocator, data.bytes.buffer);
+			}
+		}
+	}
+
+#define EXPORT(type) ECS_TEMPLATE_FUNCTION(TextureCPUData, GetTextureDataToCPU, Graphics*, type, unsigned int, AllocatorPolymorphic, SpinLock*);
+
+	ECS_GRAPHICS_TEXTURES_NO_CUBE(EXPORT);
+	
+#undef EXPORT
 
 	// ----------------------------------------------------------------------------------------------------------------------
 

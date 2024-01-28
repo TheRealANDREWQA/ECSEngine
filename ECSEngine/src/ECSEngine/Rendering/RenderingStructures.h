@@ -18,7 +18,12 @@ function(UABuffer);
 
 #define ECS_GRAPHICS_TEXTURES(function) /* Useful for macro expansion */ function(Texture1D); \
 function(Texture2D); \
-function(Texture3D); 
+function(Texture3D); \
+function(TextureCube);
+
+#define ECS_GRAPHICS_TEXTURES_NO_CUBE(function) /* Useful for macro expansion */ function(Texture1D); \
+function(Texture2D); \
+function(Texture3D);
 
 #define ECS_GRAPHICS_RESOURCES(function) /* Useful for macro expansion */ ECS_GRAPHICS_TEXTURES(function); \
 ECS_GRAPHICS_BUFFERS(function); 
@@ -443,7 +448,7 @@ namespace ECSEngine {
 	}
 
 	// Row byte size is valid only for Texture2D and 3D
-	// Slice and byte size is valid only for 3D
+	// Slice byte size is valid only for 3D
 	struct MappedTexture {
 		void* data;
 		unsigned int row_byte_size;
@@ -1414,13 +1419,22 @@ namespace ECSEngine {
 		Mesh& operator = (const Mesh& other) = default;
 
 		// Returns a nullptr vertex buffer if there is no vertex buffer for that mapping
-		ECS_INLINE VertexBuffer GetBuffer(ECS_MESH_INDEX vertex_mapping) const {
+		VertexBuffer GetBuffer(ECS_MESH_INDEX vertex_mapping) const {
 			for (unsigned char index = 0; index < mapping_count; index++) {
 				if (mapping[index] == vertex_mapping) {
 					return vertex_buffers[index];
 				}
 			}
 			return {};
+		}
+
+		void SetBuffer(ECS_MESH_INDEX vertex_mapping, VertexBuffer buffer) {
+			for (size_t index = 0; index < mapping_count; index++) {
+				if (mapping[index] == vertex_mapping) {
+					vertex_buffers[index] = buffer;
+					return;
+				}
+			}
 		}
 
 		IndexBuffer index_buffer;
@@ -1893,10 +1907,5 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		CreatePBRMaterialFromNameOptions options = {}
 	);
-
-	ECSENGINE_API VertexBuffer GetMeshVertexBuffer(const Mesh& mesh, ECS_MESH_INDEX buffer_type);
-
-	// It does not release the vertex buffer that is being replaced
-	ECSENGINE_API void SetMeshVertexBuffer(Mesh& mesh, ECS_MESH_INDEX buffer_type, VertexBuffer buffer);
 
 }
