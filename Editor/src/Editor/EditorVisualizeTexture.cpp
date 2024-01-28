@@ -45,7 +45,7 @@ void GetVisualizeTextureNames(const EditorState* editor_state, ECSEngine::Capaci
 		names->Add(element.name);
 		});
 
-	insertion_sort(names->buffer, names->size, 1, [](Stream<char> left, Stream<char> right) {
+	InsertionSort(names->buffer, names->size, 1, [](Stream<char> left, Stream<char> right) {
 		return StringLexicographicCompare(left, right);
 	});
 }
@@ -57,7 +57,7 @@ void GetVisualizeTextureElements(const EditorState* editor_state, ECSEngine::Cap
 		select_elements->Add(element);
 	});
 
-	insertion_sort(select_elements->buffer, select_elements->size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
+	InsertionSort(select_elements->buffer, select_elements->size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
 		return StringLexicographicCompare(left.name, right.name);
 	});
 }

@@ -67,7 +67,7 @@ void VisualizeTextureUIAdditionalDraw(void* window_data, UIDrawerDescriptor* dra
 		ECS_ASSERT(additional_data->combo_labels->capacity >= select_elements.size);
 
 		// Sort again the entries
-		insertion_sort(select_elements.buffer, select_elements.size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
+		InsertionSort(select_elements.buffer, select_elements.size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
 			return StringLexicographicCompare(left.name, right.name);
 		});
 

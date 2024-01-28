@@ -219,7 +219,7 @@ void SortHubProjects(EditorState* editor_state)
 		OS::GetRelativeFileTimes(data->projects[index].data.path, nullptr, nullptr, &sort_elements[index].file_time);
 	}
 
-	insertion_sort(sort_elements, data->projects.size);
+	InsertionSort(sort_elements, data->projects.size);
 	for (size_t index = 0; index < data->projects.size; index++) {
 		data->projects[index] = sort_elements[index].project;
 	}
