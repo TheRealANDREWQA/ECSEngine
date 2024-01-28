@@ -11903,7 +11903,7 @@ namespace ECSEngine {
 					}
 				}
 
-				insertion_sort(pop_up_windows.buffer, pop_up_windows.size);
+				InsertionSort(pop_up_windows.buffer, pop_up_windows.size);
 				/*std::sort(pop_up_windows.buffer, pop_up_windows.buffer + pop_up_windows.size, [](unsigned short a, unsigned short b) {
 					return a < b;
 				});*/
