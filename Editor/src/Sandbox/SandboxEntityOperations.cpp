@@ -143,9 +143,14 @@ void AttachSandboxEntityName(
 static void EditorModuleComponentBuildGPULockLock(void* data) {
 	EditorState* editor_state = (EditorState*)data;
 	// We can use the PREVENT_RESOURCE_LOADING flag as a GPU lock
-	// Increment the count by one such that we can wait for the count of 1
-	EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
-	EditorStateWaitFlagCount(15, editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, 1);
+	// Wait for the flag to become unlocked, and then use a compare exchange
+	// To try to get the lock
+	while (true) {
+		EditorStateWaitFlagCount(15, editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, 0);
+		if (EditorStateTrySetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, 0, 1)) {
+			break;
+		}
+	}
 }
 
 static void EditorModuleComponentBuildGPULockUnlock(void* data) {
@@ -160,7 +165,7 @@ static bool EditorModuleComponentBuildGPULockIsLocked(void* data) {
 
 static bool EditorModuleComponentBuildGPULockTryLock(void* data) {
 	EditorState* editor_state = (EditorState*)data;
-	return EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) == 0;
+	return EditorStateTrySetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, 0, 1);
 }
 
 static void EditorModuleComponentBuildPrintFunction(void* data, Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE message_type) {
@@ -260,6 +265,8 @@ static bool CallModuleComponentBuildFunctionBase(
 	if (task.function != nullptr) {
 		size_t wrapper_data_storage[256];
 		BuildFunctionWrapperData* wrapper_data = (BuildFunctionWrapperData*)wrapper_data_storage;
+		wrapper_data->locked_components_count = 0;
+		wrapper_data->locked_global_count = 0;
 		ECS_ASSERT(task.data_size + sizeof(*wrapper_data) <= sizeof(wrapper_data_storage));
 
 		// We also need to register the component dependencies
@@ -281,6 +288,12 @@ static bool CallModuleComponentBuildFunctionBase(
 				ECS_ASSERT(wrapper_data->locked_global_count <= std::size(wrapper_data->locked_globals));
 			}
 		}
+		// We need to add ourselves to the locked components
+		// As well such that the component is not removed accidentally
+		EditorSandbox::LockedEntityComponent this_component_locked_entry = { entity, component, is_shared };
+		sandbox->locked_entity_components.Add(this_component_locked_entry);
+		wrapper_data->locked_components[wrapper_data->locked_components_count++] = this_component_locked_entry;
+		ECS_ASSERT(wrapper_data->locked_components_count <= std::size(wrapper_data->locked_components));
 
 		sandbox->locked_components_lock.Unlock();
 
@@ -300,15 +313,20 @@ static bool CallModuleComponentBuildFunctionBase(
 		// The simulation for this sandbox
 		IncrementSandboxModuleComponentBuildCount(editor_state, sandbox_index);
 		IncrementModuleInfoLockCount(editor_state, module_index, configuration);
-		EditorStateAddBackgroundTask(editor_state, { BuildFunctionWrapper, wrapper_data, sizeof(wrapper_data) });
+		EditorStateAddBackgroundTask(editor_state, { BuildFunctionWrapper, wrapper_data, sizeof(*wrapper_data) + task.data_size });
 		return true;
 	}
 	return false;
 }
 
 static ModuleComponentBuildFunctionData CreateBuildDataBase(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<void>* stack_memory) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
 	ModuleComponentBuildFunctionData build_data;
 	build_data.entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	build_data.world_resource_manager = sandbox->sandbox_world.resource_manager;
+	build_data.world_graphics = sandbox->sandbox_world.graphics;
+	build_data.world_global_memory_manager = sandbox->sandbox_world.memory;
 	build_data.stack_memory = stack_memory;
 
 	build_data.gpu_lock.lock_function = EditorModuleComponentBuildGPULockLock;
@@ -1049,6 +1067,24 @@ void DeleteSandboxUnreferencedSharedInstances(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+struct DeleteSandboxEntityEventData {
+	unsigned int sandbox_index;
+	Entity entity;
+	EDITOR_SANDBOX_VIEWPORT viewport;
+};
+
+static EDITOR_EVENT(DeleteSandboxEntityEvent) {
+	DeleteSandboxEntityEventData* data = (DeleteSandboxEntityEventData*)_data;
+	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, data->sandbox_index) != 0) {
+		return true;
+	}
+
+	// This function will check to see if the entity exists or not. If it doesn't, it won't do
+	// anything
+	DeleteSandboxEntity(editor_state, data->sandbox_index, data->entity, data->viewport);
+	return false;
+}
+
 void DeleteSandboxEntity(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -1056,6 +1092,19 @@ void DeleteSandboxEntity(
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
+	// Check to see if there are pending build entity components for this sandbox
+	// If that is the case, we need to wait for them to finish since this can
+	// Deletion can introduce race conditions with that function
+	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, sandbox_index) != 0) {
+		// Push an event to perform this
+		DeleteSandboxEntityEventData event_data;
+		event_data.entity = entity;
+		event_data.sandbox_index = sandbox_index;
+		event_data.viewport = viewport;
+		EditorAddEvent(editor_state, DeleteSandboxEntityEvent, &event_data, sizeof(event_data));
+		return;
+	}
+
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 
 	// Be safe. If for some reason the UI lags behind and the runtime might delete the entity before us

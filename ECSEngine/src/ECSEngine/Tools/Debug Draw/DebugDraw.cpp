@@ -14,7 +14,7 @@
 
 #define LARGE_BUFFER_CAPACITY 100 * ECS_KB
 
-#define POINT_SIZE 0.3f
+#define POINT_SIZE 0.15f
 #define CIRCLE_TESSELATION 32
 #define ARROW_HEAD_DARKEN_COLOR 1.0f
 #define AXES_X_SCALE 3.0f
@@ -853,7 +853,7 @@ namespace ECSEngine {
 	void ArrowStartEndToRotation(float3 start, float3 end, QuaternionScalar* rotation, float* length) {
 		float4 result;
 
-		float3 direction = start - end;
+		float3 direction = end - start;
 		QuaternionScalar rotation_quat = DirectionToQuaternion(Normalize(direction));
 		*rotation = rotation_quat;
 		*length = Length(direction);
@@ -2315,8 +2315,14 @@ namespace ECSEngine {
 		unsigned int total_count = deck_pointer->GetElementCount();
 
 		if (total_count > 0) {
-			if (shader_output == ECS_DEBUG_SHADER_OUTPUT_ID) {
+			/*if (shader_output == ECS_DEBUG_SHADER_OUTPUT_ID) {
 				ECS_ASSERT(false);
+			}*/
+			// TODO: At the moment, we just skip in case we have to output IDs
+			// For strings. Add that later on when the need arises
+			if (shader_output == ECS_DEBUG_SHADER_OUTPUT_ID) {
+				// Just exit
+				return;
 			}
 
 			// Allocate 4 times the memory needed to be sure that each type has enough indices
@@ -3453,7 +3459,7 @@ namespace ECSEngine {
 		}
 
 		// Transform the vertex buffer to a staging buffer and read the values
-		VertexBuffer staging_buffer = BufferToStaging(graphics, GetMeshVertexBuffer(string_mesh->mesh, ECS_MESH_POSITION));
+		VertexBuffer staging_buffer = BufferToStaging(graphics, string_mesh->mesh.GetBuffer(ECS_MESH_POSITION));
 
 		// Map the buffer
 		float3* values = (float3*)graphics->MapBuffer(staging_buffer.buffer, ECS_GRAPHICS_MAP_READ);

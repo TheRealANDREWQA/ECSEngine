@@ -92,6 +92,13 @@ size_t EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag) 
 
 // -----------------------------------------------------------------------------------------------------------------
 
+bool EditorStateTrySetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag, size_t compare_value, size_t new_value)
+{
+	return editor_state->flags[flag].compare_exchange_strong(compare_value, new_value);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
 bool EditorStateHasFlag(const EditorState* editor_state, EDITOR_STATE_FLAGS flag) {
 	return editor_state->flags[flag].load(ECS_RELAXED) != 0;
 }
@@ -517,7 +524,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// Register the link components for the engine components
 	editor_state->ecs_link_components = LoadModuleLinkComponentTargets(RegisterECSLinkComponents, editor_state->EditorAllocator());
 	editor_state->ecs_extra_information = LoadModuleExtraInformation(RegisterECSModuleExtraInformation, editor_state->EditorAllocator());
-	editor_state->ecs_debug_draw = LoadModuleDebugDrawElements(RegisterECSDebugDrawElements, editor_state->EditorAllocator());
+	editor_state->ecs_component_functions = LoadModuleComponentFunctions(RegisterECSComponentFunctions, editor_state->EditorAllocator());
 
 	// Update the editor components
 	editor_state->editor_components.UpdateComponents(editor_state, editor_reflection_manager, 0, "ECSEngine");

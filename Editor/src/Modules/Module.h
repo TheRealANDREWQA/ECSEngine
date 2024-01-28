@@ -108,6 +108,12 @@ void DecrementModuleInfoLockCount(EditorState* editor_state, unsigned int module
 
 void DeleteModuleFlagFiles(EditorState* editor_state);
 
+bool ExistsModuleDebugDrawElementIn(
+	const EditorState* editor_state,
+	Stream<ModuleComponentFunctions> component_functions,
+	ComponentWithType component_type
+);
+
 bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
 bool IsGraphicsModule(const EditorState* editor_state, unsigned int index);
@@ -266,7 +272,7 @@ void GetModuleMatchedDebugDrawComponents(
 	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION configuration,
 	Stream<ComponentWithType> components,
-	ModuleDebugDrawElement* debug_elements
+	ModuleDebugDrawElementTyped* debug_elements
 );
 
 bool IsModuleInfoLocked(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
@@ -281,6 +287,13 @@ bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
 void ModulesToAppliedModules(const EditorState* editor_state, CapacityStream<const AppliedModule*>& applied_modules);
+
+void ModuleMatchDebugDrawElements(
+	const EditorState* editor_state,
+	Stream<ComponentWithType> components, 
+	Stream<ModuleComponentFunctions> component_functions, 
+	ModuleDebugDrawElementTyped* output_elements
+);
 
 // This function can also fail if the temporary dll could not be created
 bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);

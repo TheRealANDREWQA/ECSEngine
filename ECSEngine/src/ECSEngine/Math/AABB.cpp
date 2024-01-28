@@ -22,6 +22,7 @@ namespace ECSEngine {
 		Vec8f vector_max = -FLT_MAX;
 		// Here we are using just 2 float3's at a time
 		const size_t simd_width = Vec8f::size() / float3::Count();
+		ECS_ASSERT(IsPowerOfTwo(simd_width));
 		size_t simd_count = GetSimdCount(points.size, simd_width);
 		for (size_t index = 0; index < simd_count; index += simd_width) {
 			Vec8f current_positions = Vec8f().load((const float*)(points.buffer + index));

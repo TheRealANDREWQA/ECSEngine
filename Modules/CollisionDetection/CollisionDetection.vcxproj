@@ -180,6 +180,7 @@
     <ClCompile Include="src\Components.cpp" />
     <ClCompile Include="src\ConvexHull.cpp" />
     <ClCompile Include="src\FixedGrid.cpp" />
+    <ClCompile Include="src\GiftWrapping.cpp" />
     <ClCompile Include="src\GJK.cpp" />
     <ClCompile Include="src\Logging.cpp" />
     <ClCompile Include="src\ModuleFunction.cpp" />
@@ -189,6 +190,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\Quickhull.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Broadphase.h" />
@@ -196,11 +198,13 @@
     <ClInclude Include="src\ConvexHull.h" />
     <ClInclude Include="src\Export.h" />
     <ClInclude Include="src\FixedGrid.h" />
+    <ClInclude Include="src\GiftWrapping.h" />
     <ClInclude Include="src\GJK.h" />
     <ClInclude Include="src\Logging.h" />
     <ClInclude Include="src\ModuleFunction.h" />
     <ClInclude Include="src\Narrowphase.h" />
     <ClInclude Include="src\pch.h" />
+    <ClInclude Include="src\Quickhull.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -205,7 +205,6 @@ namespace ECSEngine {
 		module.serialize_function = (ModuleSerializeComponentFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleSerializeComponentFunction));
 		module.set_world = (ModuleSetCurrentWorld)OS::GetDLLSymbol(module_handle, STRING(ModuleSetCurrentWorld));
 		module.extra_information = (ModuleRegisterExtraInformationFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterExtraInformationFunction));
-		module.debug_draw = (ModuleRegisterDebugDrawFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterDebugDrawFunction));
 		module.debug_draw_tasks = (ModuleRegisterDebugDrawTaskElementsFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterDebugDrawTaskElementsFunction));
 		module.component_functions = (ModuleRegisterComponentFunctionsFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterComponentFunctionsFunction));
 
@@ -229,7 +228,6 @@ namespace ECSEngine {
 		module->serialize_streams = LoadModuleSerializeComponentFunctors(&module->base_module, allocator);
 		module->ui_descriptors = LoadModuleUIDescriptors(&module->base_module, allocator);
 		module->extra_information = LoadModuleExtraInformation(&module->base_module, allocator);
-		module->debug_draw_elements = LoadModuleDebugDrawElements(&module->base_module, allocator);
 		module->debug_draw_task_elements = LoadModuleDebugDrawTaskElements(&module->base_module, allocator, error_message);
 		module->component_functions = LoadModuleComponentFunctions(&module->base_module, allocator, component_names, error_message);
 	}
@@ -527,29 +525,6 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Stream<ModuleDebugDrawElement> LoadModuleDebugDrawElements(const Module* module, AllocatorPolymorphic allocator)
-	{
-		if (!module->debug_draw) {
-			return {};
-		}
-
-		return LoadModuleDebugDrawElements(module->debug_draw, allocator);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	Stream<ModuleDebugDrawElement> LoadModuleDebugDrawElements(ModuleRegisterDebugDrawFunction function, AllocatorPolymorphic allocator)
-	{
-		ECS_STACK_CAPACITY_STREAM(ModuleDebugDrawElement, debug_draw_elements, ECS_KB * 2);
-		ModuleRegisterDebugDrawFunctionData function_data;
-		function_data.elements = &debug_draw_elements;
-		function(&function_data);
-
-		return debug_draw_elements.Copy(allocator);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
 	Stream<ModuleDebugDrawTaskElement> LoadModuleDebugDrawTaskElements(
 		const Module* module, 
 		AllocatorPolymorphic allocator, 
@@ -674,11 +649,6 @@ namespace ECSEngine {
 		if (module->extra_information.pairs.size > 0) {
 			DeallocateIfBelongs(allocator, module->extra_information.pairs.buffer);
 			module->extra_information.pairs = { nullptr, 0 };
-		}
-
-		if (module->debug_draw_elements.size > 0) {
-			DeallocateIfBelongs(allocator, module->debug_draw_elements.buffer);
-			module->debug_draw_elements = { nullptr, 0 };
 		}
 
 		if (module->debug_draw_task_elements.size > 0) {
@@ -924,7 +894,8 @@ namespace ECSEngine {
 				}
 			}
 
-			if (element.allocator_size == 0 || element.copy_function == nullptr || element.deallocate_function == nullptr) {
+			if ((element.allocator_size == 0 || element.copy_function == nullptr || element.deallocate_function == nullptr)
+				&& element.debug_draw.draw_function == nullptr) {
 				if (error_message != nullptr) {
 					if (element.allocator_size == 0) {
 						ECS_FORMAT_STRING(*error_message, "Component functions for {#} is missing the allocator size", element.component_name);

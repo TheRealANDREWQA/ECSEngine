@@ -30,6 +30,12 @@ extern "C" {
 
 #endif
 
+#if 0
+
+	GRAPHICS_API void ModuleRegisterDebugDrawFunction(ECSEngine::ModuleRegisterDebugDrawFunctionData* data);
+
+#endif
+
 #if 1
 
 	COLLISIONDETECTION_API void ModuleRegisterDebugDrawTaskElementsFunction(ECSEngine::ModuleRegisterDebugDrawTaskElementsData* data);

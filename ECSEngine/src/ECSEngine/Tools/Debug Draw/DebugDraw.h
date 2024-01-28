@@ -814,7 +814,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE static size_t DefaultAllocatorSize() {
-			return ECS_MB;
+			return ECS_MB * 32;
 		}
 
 		MemoryManager* allocator;

@@ -712,11 +712,13 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	bool ECS_VECTORCALL IsParallelMask(float3 first_normalized, float3 second_normalized, float epsilon) {
-		return CompareMask(first_normalized, second_normalized, float3::Splat(epsilon));
+		return CompareMask(first_normalized, second_normalized, float3::Splat(epsilon)) 
+			|| CompareMask(first_normalized, -second_normalized, float3::Splat(epsilon));
 	}
 
 	SIMDVectorMask ECS_VECTORCALL IsParallelMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f epsilon) {
-		return CompareMask(first_normalized, second_normalized, epsilon);
+		return CompareMask(first_normalized, second_normalized, epsilon)
+			|| CompareMask(first_normalized, -second_normalized, epsilon);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -1220,12 +1222,11 @@ namespace ECSEngine {
 		// Compute the cross product between the a world axis and the given direction
 		// If they are parallel, then the return vector is the world same direction if the direction
 		// is positive, else the negative world same direction vector if the direction is negative
-
 		auto is_parallel_to_up = IsParallelMask(direction_normalized, world_compute_product);
 		
 		// In case it is parallel to the world compute product, we can return the corresponding world direction
-		// With the appropriate Sign
-		Vector parallel_result = direction_normalized * world_same_direction;
+		// With the appropriate Sign. We can use Dot to get the corresponding sign
+		Vector parallel_result = Vector::Splat(Dot(direction_normalized, world_compute_product)) * world_same_direction;
 
 		// Compute the cross product
 		Vector cross_product = Cross(direction_normalized, world_compute_product);

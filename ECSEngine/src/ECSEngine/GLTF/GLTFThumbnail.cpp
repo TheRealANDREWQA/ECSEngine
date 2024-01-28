@@ -114,7 +114,7 @@ namespace ECSEngine {
 	GLTFThumbnailInfo DetermineObjectInitialBounds(Graphics* graphics, const Mesh* mesh) {
 		// Get the position buffer to determine the minimum and the maximum bounds
 		// Use a staging buffer for this
-		VertexBuffer position_buffer = GetMeshVertexBuffer(*mesh, ECS_MESH_POSITION);
+		VertexBuffer position_buffer = mesh->GetBuffer(ECS_MESH_POSITION);
 
 		// Assert it succeeded
 		ECS_ASSERT(position_buffer.buffer != nullptr);

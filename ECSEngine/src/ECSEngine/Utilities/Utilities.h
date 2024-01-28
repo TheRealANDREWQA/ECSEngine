@@ -4,7 +4,7 @@
 
 namespace ECSEngine {
 
-	ECS_INLINE bool IsPowerOfTwo(int x) {
+	ECS_INLINE bool IsPowerOfTwo(size_t x) {
 		return (x & (x - 1)) == 0;
 	}
 
@@ -254,6 +254,7 @@ namespace ECSEngine {
 	// pointers should be aligned preferably to 32 bytes at least
 	ECSENGINE_API void avx2_copy(void* destination, const void* source, size_t bytes);
 
+	// Vector size needs to be a power of two
 	ECS_INLINE size_t GetSimdCount(size_t count, size_t vector_size) {
 		return count & (-(int64_t)vector_size);
 	}

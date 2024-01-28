@@ -1049,6 +1049,26 @@ void DeleteModuleFlagFiles(EditorState* editor_state)
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+bool ExistsModuleDebugDrawElementIn(
+	const EditorState* editor_state,
+	Stream<ModuleComponentFunctions> component_functions,
+	ComponentWithType component_type
+) {
+	size_t found_index = component_functions.Find(component_type, [editor_state](const ModuleComponentFunctions& element) {
+		if (element.debug_draw.draw_function != nullptr) {
+			Component component = editor_state->editor_components.GetComponentID(element.component_name);
+			ECS_COMPONENT_TYPE type = editor_state->editor_components.GetComponentType(element.component_name);
+			return ComponentWithType{ component, type };
+		}
+		else {
+			return ComponentWithType{ -1, ECS_COMPONENT_TYPE_COUNT };
+		}
+	});
+	return found_index != -1;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 	return info->ecs_module.base_module.code == ECS_GET_MODULE_OK;
@@ -1612,23 +1632,6 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 					EditorSetConsoleWarn(message);
 					EditorSetConsoleWarn(error_message);
 				}
-
-				// Check the debug drawer functions in the context of the module reflection manager
-				// Since updating the internal_reflection might result in events being generated and the state
-				// Not match the reality
-				error_message.size = 0;
-				ModuleValidateDebugDrawComponentsExist(info->ecs_module.debug_draw_elements, editor_state->ModuleReflectionManager(), &error_message);
-				if (error_message.size > 0) {
-					// At the moment just warn - these are not critical
-					ECS_FORMAT_TEMP_STRING(
-						message, 
-						"Module {#} with configuration {#} has failed the debug draw component validation", 
-						library_name, 
-						MODULE_CONFIGURATIONS[configuration]
-					);
-					EditorSetConsoleWarn(message);
-					EditorSetConsoleWarn(error_message);
-				}
 				
 				// We must update the sandboxes that reference this configuration
 				// To update their component functions
@@ -1836,10 +1839,12 @@ void GetModuleDebugDrawComponents(
 )
 {
 	const EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
-	Stream<ModuleDebugDrawElement> elements = info->ecs_module.debug_draw_elements;
+	Stream<ModuleComponentFunctions> elements = info->ecs_module.component_functions;
 	components.AssertNewItems(elements.size);
 	for (size_t index = 0; index < elements.size; index++) {
-		components.Add({ elements[index].component, elements[index].component_type });
+		Component component = editor_state->editor_components.GetComponentID(elements[index].component_name);
+		ECS_COMPONENT_TYPE type = editor_state->editor_components.GetComponentType(elements[index].component_name);
+		components.Add({ component, type });
 	}
 }
 
@@ -1870,12 +1875,11 @@ void GetModuleMatchedDebugDrawComponents(
 	unsigned int module_index, 
 	EDITOR_MODULE_CONFIGURATION configuration, 
 	Stream<ComponentWithType> components, 
-	ModuleDebugDrawElement* debug_elements
+	ModuleDebugDrawElementTyped* debug_elements
 )
 {
 	const EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
-	Stream<ModuleDebugDrawElement> elements = info->ecs_module.debug_draw_elements;
-	ModuleMatchDebugDrawElements(components, elements, debug_elements);
+	ModuleMatchDebugDrawElements(editor_state, components, info->ecs_module.component_functions, debug_elements);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1932,6 +1936,31 @@ void ModulesToAppliedModules(const EditorState* editor_state, CapacityStream<con
 		EDITOR_MODULE_CONFIGURATION configuration = GetModuleLoadedConfiguration(editor_state, index);
 		if (configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
 			applied_modules.AddAssert(&GetModuleInfo(editor_state, index, configuration)->ecs_module);
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void ModuleMatchDebugDrawElements(
+	const EditorState* editor_state,
+	Stream<ComponentWithType> components, 
+	Stream<ModuleComponentFunctions> component_functions, 
+	ModuleDebugDrawElementTyped* output_elements
+) {
+	for (size_t index = 0; index < components.size; index++) {
+		size_t found_index = component_functions.Find(components[index], [editor_state](const ModuleComponentFunctions& element) {
+			if (element.debug_draw.draw_function != nullptr) {
+				Component component = editor_state->editor_components.GetComponentID(element.component_name);
+				ECS_COMPONENT_TYPE type = editor_state->editor_components.GetComponentType(element.component_name);
+				return ComponentWithType{ component, type };
+			}
+			else {
+				return ComponentWithType{ -1, ECS_COMPONENT_TYPE_COUNT };
+			}
+		});
+		if (found_index != -1) {
+			output_elements[index] = { component_functions[found_index].debug_draw, components[index] };
 		}
 	}
 }
@@ -2166,6 +2195,7 @@ Stream<Stream<char>> RetrieveModuleComponentBuildDependentEntries(const EditorSt
 {
 	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
 	ModulesToAppliedModules(editor_state, applied_modules);
+
 	return ModuleRetrieveComponentBuildDependentEntries(applied_modules, component_name, allocator);
 }
 

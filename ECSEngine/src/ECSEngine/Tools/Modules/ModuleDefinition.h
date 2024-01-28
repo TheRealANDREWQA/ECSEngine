@@ -18,6 +18,8 @@ namespace ECSEngine {
 	struct AssetDatabase;
 	struct TaskManager;
 	struct EntityManager;
+	struct Graphics;
+	struct ResourceManager;
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
@@ -359,48 +361,6 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	struct DebugDrawer;
-
-	struct ModuleDebugDrawComponentFunctionData {
-		const void* component;
-		unsigned int thread_id;
-		DebugDrawer* debug_drawer;
-
-		// These are filled in the same order as you provide them
-		// May be null if the entity doesn't have it
-		const void** dependency_components;
-	};
-
-	typedef void (*ModuleDebugDrawComponentFunction)(ModuleDebugDrawComponentFunctionData* data);
-
-	// A dependency component may or may not be there - you should check to see if the pointer
-	// Is valid before accesing it
-	struct ModuleDebugDrawElement {
-		ECS_INLINE void AddDependency(ComponentWithType component_with_type) {
-			ECS_ASSERT(dependency_component_count < std::size(dependency_components));
-			dependency_components[dependency_component_count++] = component_with_type;
-		}
-
-		ECS_INLINE Stream<ComponentWithType> Dependencies() const {
-			return { dependency_components, dependency_component_count };
-		}
-
-		ModuleDebugDrawComponentFunction draw_function = nullptr;
-		Component component = -1;
-		ECS_COMPONENT_TYPE component_type = ECS_COMPONENT_TYPE_COUNT;
-
-		unsigned char dependency_component_count = 0;
-		ComponentWithType dependency_components[4];
-	};
-
-	struct ModuleRegisterDebugDrawFunctionData {
-		CapacityStream<ModuleDebugDrawElement>* elements;
-	};
-
-	typedef void (*ModuleRegisterDebugDrawFunction)(ModuleRegisterDebugDrawFunctionData* data);
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
 	struct ModuleDebugDrawTaskElement {
 		ECS_INLINE size_t CopySize() const {
 			return base_element.CopySize();
@@ -432,6 +392,42 @@ namespace ECSEngine {
 	typedef void (*ModuleRegisterDebugDrawTaskElementsFunction)(ModuleRegisterDebugDrawTaskElementsData* data);
 
 	// ----------------------------------------------------------------------------------------------------------------------
+
+	struct DebugDrawer;
+
+	struct ModuleDebugDrawComponentFunctionData {
+		const void* component;
+		unsigned int thread_id;
+		DebugDrawer* debug_drawer;
+
+		// These are filled in the same order as you provide them
+		// May be null if the entity doesn't have it
+		const void** dependency_components;
+	};
+
+	typedef void (*ModuleDebugDrawComponentFunction)(ModuleDebugDrawComponentFunctionData* data);
+
+	// A dependency component may or may not be there - you should check to see if the pointer
+	// Is valid before accesing it
+	struct ModuleDebugDrawElement {
+		ECS_INLINE void AddDependency(ComponentWithType component_with_type) {
+			ECS_ASSERT(dependency_component_count < std::size(dependency_components));
+			dependency_components[dependency_component_count++] = component_with_type;
+		}
+
+		ECS_INLINE Stream<ComponentWithType> Dependencies() const {
+			return { dependency_components, dependency_component_count };
+		}
+
+		ModuleDebugDrawComponentFunction draw_function = nullptr;
+		unsigned char dependency_component_count = 0;
+		ComponentWithType dependency_components[4];
+	};
+
+	struct ModuleDebugDrawElementTyped {
+		ModuleDebugDrawElement base;
+		ComponentWithType type;
+	};
 
 	struct ModuleComponentBuildGPULock {
 		ECS_INLINE void Lock() const {
@@ -479,7 +475,17 @@ namespace ECSEngine {
 	};
 
 	struct ModuleComponentBuildFunctionData {
-		EntityManager* entity_manager;
+		// We had to make this choice of explicitly giving only some
+		// Of the fields from the world because it would otherwise create
+		// A lot of complications for the editor code if we were to pass a
+		// World* which would have to be stable
+		struct {
+			EntityManager* entity_manager;
+			Graphics* world_graphics;
+			ResourceManager* world_resource_manager;
+			GlobalMemoryManager* world_global_memory_manager;
+		};
+
 		Entity entity;
 		void* component;
 		AllocatorPolymorphic component_allocator;
@@ -526,6 +532,7 @@ namespace ECSEngine {
 			if (build_entry.component_dependencies.size > 0) {
 				copy.build_entry.component_dependencies = build_entry.component_dependencies.Copy(allocator);
 			}
+			copy.debug_draw = debug_draw;
 			return copy;
 		}
 
@@ -539,6 +546,7 @@ namespace ECSEngine {
 			if (build_entry.component_dependencies.size > 0) {
 				copy.build_entry.component_dependencies = StreamCoalescedDeepCopy(build_entry.component_dependencies, ptr);
 			}
+			copy.debug_draw = debug_draw;
 			return copy;
 		}
 
@@ -553,16 +561,18 @@ namespace ECSEngine {
 			*entry = { compare_function, compare_function_data };
 		}
 
-		size_t allocator_size;
-		ModuleComponentBuildEntry build_entry;
-		ComponentCopyFunction copy_function;
-		ComponentDeallocateFunction deallocate_function;
-		Stream<void> copy_deallocate_data;
-		Stream<char> component_name;
+		size_t allocator_size = 0;
+		ModuleComponentBuildEntry build_entry = { nullptr, {} };
+		ComponentCopyFunction copy_function = nullptr;
+		ComponentDeallocateFunction deallocate_function = nullptr;
+		Stream<void> copy_deallocate_data = {};
+		Stream<char> component_name = {};
 
 		// Only valid for shared components
-		SharedComponentCompareFunction compare_function;
-		Stream<void> compare_function_data;
+		SharedComponentCompareFunction compare_function = nullptr;
+		Stream<void> compare_function_data = {};
+
+		ModuleDebugDrawElement debug_draw;
 	};
 
 	struct ModuleRegisterComponentFunctionsData {
@@ -592,7 +602,6 @@ namespace ECSEngine {
 		ModuleRegisterLinkComponentFunction link_components;
 		ModuleSetCurrentWorld set_world;
 		ModuleRegisterExtraInformationFunction extra_information;
-		ModuleRegisterDebugDrawFunction debug_draw;
 		ModuleRegisterDebugDrawTaskElementsFunction debug_draw_tasks;
 		ModuleRegisterComponentFunctionsFunction component_functions;
 
@@ -609,7 +618,6 @@ namespace ECSEngine {
 		Stream<ModuleLinkComponentTarget> link_components;
 		ModuleSerializeComponentStreams serialize_streams;
 		ModuleExtraInformation extra_information;
-		Stream<ModuleDebugDrawElement> debug_draw_elements;
 		Stream<ModuleDebugDrawTaskElement> debug_draw_task_elements;
 		Stream<ModuleComponentFunctions> component_functions;
 	};

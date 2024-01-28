@@ -96,7 +96,7 @@ namespace ECSEngine {
 				DataPointer data_pointer;
 				data_pointer.SetData(data_size);
 				data_pointer.SetPointer(final_pointer);
-				InsertIntoDynamicTable(data_table, allocator, data_pointer, identifier);
+				data_table.InsertDynamic(allocator, data_pointer, identifier);
 			},
 			[&](unsigned int index) {
 				return data_table.GetValueFromIndex(index).GetPointer();
@@ -120,7 +120,7 @@ namespace ECSEngine {
 			uintptr_t ptr = (uintptr_t)allocation;
 			identifier.InitializeAndCopy(ptr, identifier);
 			data = (void*)ptr;
-			InsertIntoDynamicTable(data_table, allocator, DataPointer(data, data_size), identifier);
+			data_table.InsertDynamic(allocator, DataPointer(data, data_size), identifier);
 		}
 		else {
 			data = data_table.GetValueFromIndex(table_index).GetPointer();
@@ -141,7 +141,7 @@ namespace ECSEngine {
 				return temporary_table.Find(identifier);
 			},
 			[&](void* final_pointer, ResourceIdentifier identifier) {
-				InsertIntoDynamicTable(temporary_table, allocator, final_pointer, identifier);
+				temporary_table.InsertDynamic(allocator, final_pointer, identifier);
 			},
 			[&](unsigned int index) {
 				return temporary_table.GetValueFromIndex(index);
@@ -201,7 +201,7 @@ namespace ECSEngine {
 			// Copy the system name to the final ptr location - such that we have a stable name
 			system_name.InitializeAndCopy(ptr, system_name);
 			ECS_ASSERT(ptr - (uintptr_t)allocation <= total_size);
-			InsertIntoDynamicTable(system_settings, allocator, new_settings, system_name);
+			system_settings.InsertDynamic(allocator, new_settings, system_name);
 		}
 		else {
 			Stream<SystemManagerSetting>* settings_ptr = system_settings.GetValuePtrFromIndex(setting_index);

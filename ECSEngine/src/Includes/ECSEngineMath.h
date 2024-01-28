@@ -10,3 +10,5 @@
 #include "../ECSEngine/Math/Intersection.h"
 #include "../ECSEngine/Math/AABB.h"
 #include "../ECSEngine/Math/BaseVector.h"
+#include "../ECSEngine/Math/MathHelpers.h"
+#include "../ECSEngine/Math/TriangleMesh.h"

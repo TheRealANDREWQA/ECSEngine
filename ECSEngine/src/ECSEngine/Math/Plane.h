@@ -111,4 +111,28 @@ namespace ECSEngine {
 	// Returns true if the point is located on the same side as the normal of the plane
 	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsAbovePlaneMask(Plane plane, Vector3 point);
 
+	// This returns a crude form of an angle estimation between 2 planes.
+	// It is basically the dot product between the 2 normals
+	ECS_INLINE float PlanesDotProduct(PlaneScalar plane_a, PlaneScalar plane_b) {
+		return Dot(plane_a.normal, plane_b.normal);
+	}
+
+	// This returns a crude form of an angle estimation between 2 planes.
+	// It is basically the dot product between the 2 normals
+	ECS_INLINE Vec8f PlanesDotProduct(Plane plane_a, Plane plane_b) {
+		return Dot(plane_a.normal, plane_b.normal);
+	}
+
+	ECSENGINE_API float AngleBetweenPlanesRad(PlaneScalar plane_a, PlaneScalar plane_b);
+
+	ECSENGINE_API Vec8f AngleBetweenPlanesRad(Plane plane_a, Plane plane_b);
+
+	ECS_INLINE float AngleBetweenPlanes(PlaneScalar plane_a, PlaneScalar plane_b) {
+		return RadToDeg(AngleBetweenPlanesRad(plane_a, plane_b));
+	}
+
+	ECS_INLINE Vec8f AngleBetweenPlanes(Plane plane_a, Plane plane_b) {
+		return RadToDeg(AngleBetweenPlanesRad(plane_a, plane_b));
+	}
+
 }

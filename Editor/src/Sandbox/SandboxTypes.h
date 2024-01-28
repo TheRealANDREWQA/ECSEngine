@@ -264,9 +264,6 @@ struct ECS_REFLECT EditorSandbox {
 	// Once the sandbox crashed
 	bool is_crashed;
 
-	// It is atomic since the main thread can try to lock this
-	// While there are background build functions trying to get this as well
-	SpinLock component_build_function_lock;
 	// This describes the count of background build functions that are running
 	std::atomic<unsigned int> background_component_build_functions;
 

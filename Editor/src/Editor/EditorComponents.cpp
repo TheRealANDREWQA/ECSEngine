@@ -1007,7 +1007,7 @@ void EditorComponents::AddType(const ReflectionType* type, unsigned int module_i
 
 	// The name of the copied type is stable
 	Stream<char> allocated_name = StringCopy(allocator, copied_type.name);
-	InsertIntoDynamicTable(internal_manager->type_definitions, allocator, copied_type, allocated_name);
+	internal_manager->type_definitions.InsertDynamic(allocator, copied_type, allocated_name);
 
 	bool is_link_component = IsReflectionTypeLinkComponent(type);
 

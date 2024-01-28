@@ -115,7 +115,7 @@ struct EditorState {
 	// ProjectModules with a "fake" module that needs special treatment
 	ECSEngine::Stream<ECSEngine::ModuleLinkComponentTarget> ecs_link_components;
 	ECSEngine::ModuleExtraInformation ecs_extra_information;
-	ECSEngine::Stream<ModuleDebugDrawElement> ecs_debug_draw;
+	ECSEngine::Stream<ModuleComponentFunctions> ecs_component_functions;
 
 	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> launched_module_compilation[EDITOR_MODULE_CONFIGURATION_COUNT];
 	// Needed to syncronize the threads when removing the launched module compilation

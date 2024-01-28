@@ -32,12 +32,6 @@ extern "C" {
 
 #if 1
 
-	GRAPHICS_API void ModuleRegisterDebugDrawFunction(ECSEngine::ModuleRegisterDebugDrawFunctionData* data);
-
-#endif
-
-#if 0
-
 	GRAPHICS_API void ModuleRegisterComponentFunctionsFunction(ECSEngine::ModuleRegisterComponentFunctionsData* data);
 
 #endif

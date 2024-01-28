@@ -132,7 +132,7 @@ static bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 				if (table_index == -1) {
 					// Insert it
 					Stream<char>* settings = (Stream<char>*)table_allocator.Allocate(sizeof(Stream<char>));
-					InsertIntoDynamicTable(hash_table, &table_allocator, Stream<Stream<char>>(settings, 1), identifier);
+					hash_table.InsertDynamic(&table_allocator, Stream<Stream<char>>(settings, 1), identifier);
 
 					settings_buffer = settings;
 					settings_count = 0;

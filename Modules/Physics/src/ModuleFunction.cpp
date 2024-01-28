@@ -41,14 +41,6 @@ void ModuleRegisterLinkComponentFunction(ECSEngine::ModuleRegisterLinkComponentF
 
 #if 0
 
-void ModuleSetCurrentWorld(ECSEngine::World* world) {
-
-}
-
-#endif
-
-#if 0
-
 void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data) {
 	
 }

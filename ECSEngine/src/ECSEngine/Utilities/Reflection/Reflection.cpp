@@ -934,7 +934,7 @@ namespace ECSEngine {
 				copied_enum = enum_->Copy(allocator);
 			}
 			copied_enum.folder_hierarchy_index = -1;
-			InsertIntoDynamicTable(enum_definitions, Allocator(), copied_enum, ResourceIdentifier(copied_enum.name));
+			enum_definitions.InsertDynamic(Allocator(), copied_enum, ResourceIdentifier(copied_enum.name));
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -955,7 +955,7 @@ namespace ECSEngine {
 				copied_type = coalesced ? type->CopyCoalesced(allocator) : type->Copy(allocator);
 			}
 			copied_type.folder_hierarchy_index = -1;
-			InsertIntoDynamicTable(type_definitions, Allocator(), copied_type, ResourceIdentifier(copied_type.name));
+			type_definitions.InsertDynamic(Allocator(), copied_type, ResourceIdentifier(copied_type.name));
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -971,7 +971,7 @@ namespace ECSEngine {
 
 		void ReflectionManager::AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coalesced)
 		{
-			InsertIntoDynamicTable(type_definitions, Allocator(), *type, ResourceIdentifier(type->name));
+			type_definitions.InsertDynamic(Allocator(), *type, ResourceIdentifier(type->name));
 			folders[folder_hierarchy].added_types.Add({ type->name, allocator, coalesced });
 		}
 

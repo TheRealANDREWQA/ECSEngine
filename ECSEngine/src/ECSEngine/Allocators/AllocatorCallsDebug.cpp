@@ -81,7 +81,7 @@ namespace ECSEngine {
 			tracked_allocator.name = { nullptr, 0 };
 		}
 		tracked_allocator.allocator_type = allocator_type;
-		InsertIntoDynamicTable(AllocatorManager.allocators, &AllocatorManager.global_allocator, tracked_allocator, allocator);
+		AllocatorManager.allocators.InsertDynamic(&AllocatorManager.global_allocator, tracked_allocator, allocator);
 	}
 
 	void DebugAllocatorManagerInitialize(const DebugAllocatorManagerDescriptor* descriptor)

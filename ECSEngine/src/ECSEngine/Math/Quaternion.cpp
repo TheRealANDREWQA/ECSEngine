@@ -559,13 +559,12 @@ namespace ECSEngine {
 	template<typename Quaternion, typename Vector>
 	static ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLookRotationNormalizedImpl(Vector direction_normalized, Vector up_normalized, size_t vector_count) {
 		Vector normalized_right = Cross(up_normalized, direction_normalized); // Object Right
-
 		Vector current_up = Cross(direction_normalized, normalized_right); // Object Up
 
 		// From world forward to object forward
 		Vector default_up = UpVector<Vector>();
-		Vector default_forward = ForwardVector<Vector>();
-		Quaternion world_to_object = QuaternionFromVectorsNormalized(default_forward, direction_normalized, vector_count);
+		Vector default_right = RightVector<Vector>();
+		Quaternion world_to_object = QuaternionFromVectorsNormalized(default_right, direction_normalized, vector_count);
 
 		// This is the new up that the object wants to have
 		Vector desired_up = QuaternionVectorMultiply(world_to_object, default_up);

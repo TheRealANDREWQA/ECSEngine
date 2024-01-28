@@ -861,30 +861,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	VertexBuffer GetMeshVertexBuffer(const Mesh& mesh, ECS_MESH_INDEX buffer_type)
-	{
-		for (size_t index = 0; index < mesh.mapping_count; index++) {
-			if (mesh.mapping[index] == buffer_type) {
-				return mesh.vertex_buffers[index];
-			}
-		}
-		return VertexBuffer();
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-	
-	void SetMeshVertexBuffer(Mesh& mesh, ECS_MESH_INDEX buffer_type, VertexBuffer buffer)
-	{
-		for (size_t index = 0; index < mesh.mapping_count; index++) {
-			if (mesh.mapping[index] == buffer_type) {
-				mesh.vertex_buffers[index] = buffer;
-				return;
-			}
-		}
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
 	void SetDepthStencilDescOP(
 		D3D11_DEPTH_STENCIL_DESC* descriptor, 
 		bool front_face, 

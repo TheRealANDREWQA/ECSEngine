@@ -40,3 +40,8 @@ struct ConvexHull {
 };
 
 COLLISIONDETECTION_API ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator);
+
+// This version is faster since it doesn't have to recalculate the AABB for the vertices
+COLLISIONDETECTION_API ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator, AABBScalar aabb);
+
+COLLISIONDETECTION_API bool IsPointInsideConvexHull(const ConvexHull* convex_hull, float3 point);

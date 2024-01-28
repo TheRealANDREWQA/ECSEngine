@@ -11,4 +11,6 @@
 #include "ECSEngineWorld.h"
 #include "Logging.h"
 
+// TODO: Add ECSEngineRendering here?
+
 using namespace ECSEngine;

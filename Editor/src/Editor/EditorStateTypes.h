@@ -51,6 +51,9 @@ size_t EditorStateSetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 // Returns the flag value before the decrement
 size_t EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
+// An atomic compare exchange. Returns true if it succeeded, else false
+bool EditorStateTrySetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag, size_t compare_value, size_t new_value);
+
 bool EditorStateHasFlag(const EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
 // Waits until the flag is set or cleared
