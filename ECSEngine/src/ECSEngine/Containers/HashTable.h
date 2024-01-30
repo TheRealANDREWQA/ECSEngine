@@ -576,7 +576,7 @@ namespace ECSEngine {
 		}
 
 		// The extended capacity is used to check bounds validity
-		ECS_INLINE void SetValue(unsigned int index, T value) {
+		ECS_INLINE void SetValueByIndex(unsigned int index, T value) {
 			*GetValuePtrFromIndex(index) = value;
 		}
 

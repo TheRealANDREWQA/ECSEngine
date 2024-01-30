@@ -2501,7 +2501,8 @@ namespace ECSEngine {
 					component,
 					component_info->size,
 					component_info->name,
-					&component_functions
+					&component_functions,
+					other->m_shared_components[component].compare_entry
 				);
 			}
 
@@ -2731,7 +2732,7 @@ namespace ECSEngine {
 		auto compare_entry = m_shared_components[old_component.value].compare_entry;
 		m_shared_components[old_component.value].instances.stream.capacity = 0;
 		m_shared_components[old_component.value].named_instances.m_capacity = 0;
-		m_shared_components[old_component.value].compare_entry = compare_entry;
+		m_shared_components[old_component.value].compare_entry = {};
 
 		// Always use size 0 allocator size because we will transfer the arena to the new slot
 		// In this way we avoid creating a new allocator and transfer all the existing data to it
@@ -2743,7 +2744,7 @@ namespace ECSEngine {
 
 		m_shared_components[new_component.value].instances = instances;
 		m_shared_components[new_component.value].named_instances = named_instances;
-		m_shared_components[new_component.value].compare_entry = {};
+		m_shared_components[new_component.value].compare_entry = compare_entry;
 
 		SwapComponentInfoUserDefinedInfo(this, &m_shared_components[old_component.value].info, &m_shared_components[new_component.value].info);
 
@@ -2941,29 +2942,31 @@ namespace ECSEngine {
 
 		if (functions->copy_function != nullptr && functions->deallocate_function != nullptr && functions->allocator_size != 0) {
 			if (functions->allocator_size != 0 && m_unique_components[component.value].allocator != nullptr) {
-				// We need to record the previous allocator, and move the data to the new location
-				MemoryArena* previous_allocator = m_unique_components[component.value].allocator;
-				CreateAllocatorForComponent(this, m_unique_components[component.value], functions->allocator_size);
-				// Here, we are setting the component functions to the new values.
-				// The reason is, that in the Editor case, when a module is reloaded,
-				// Its previous functions are not available anymore and using them
-				// Causes crashes. So, we must use the new function when calling the copy
-				m_unique_components[component.value].SetComponentFunctions(functions, SmallAllocator());
-				
-				size_t component_byte_size = m_unique_components[component.value].size;
-				// For each component, we must copy the data to the new location
-				ForEachEntityComponent(component, [&](Entity entity, void* data) {
-					// We must use temporary storage since the copy function should not
-					// Deal with aliased pointers
-					alignas(alignof(void*)) char temporary_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
-					// TODO: Should we use the new or the old copy function?
-					// At the moment, use the old function
-					m_unique_components[component.value].CallCopyFunction(temporary_storage, data, false);
-					memcpy(data, temporary_storage, component_byte_size);
-				});
+				if (functions->allocator_size != m_unique_components[component.value].allocator->InitialArenaCapacity()) {
+					// We need to record the previous allocator, and move the data to the new location
+					MemoryArena* previous_allocator = m_unique_components[component.value].allocator;
+					CreateAllocatorForComponent(this, m_unique_components[component.value], functions->allocator_size);
+					// Here, we are setting the component functions to the new values.
+					// The reason is, that in the Editor case, when a module is reloaded,
+					// Its previous functions are not available anymore and using them
+					// Causes crashes. So, we must use the new function when calling the copy
+					m_unique_components[component.value].SetComponentFunctions(functions, SmallAllocator());
 
-				// We can now deallocate the previous allocator
-				DeallocateAllocatorForComponent(this, previous_allocator);
+					size_t component_byte_size = m_unique_components[component.value].size;
+					// For each component, we must copy the data to the new location
+					ForEachEntityComponent(component, [&](Entity entity, void* data) {
+						// We must use temporary storage since the copy function should not
+						// Deal with aliased pointers
+						alignas(alignof(void*)) char temporary_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
+						// TODO: Should we use the new or the old copy function?
+						// At the moment, use the old function
+						m_unique_components[component.value].CallCopyFunction(temporary_storage, data, false);
+						memcpy(data, temporary_storage, component_byte_size);
+						});
+
+					// We can now deallocate the previous allocator
+					DeallocateAllocatorForComponent(this, previous_allocator);
+				}
 			}
 			else if (functions->allocator_size != 0) {
 				CreateAllocatorForComponent(this, m_unique_components[component.value], functions->allocator_size);
@@ -2997,28 +3000,30 @@ namespace ECSEngine {
 
 		if (functions->copy_function != nullptr && functions->deallocate_function != nullptr && functions->allocator_size != 0) {
 			if (functions->allocator_size != 0 && m_shared_components[component.value].info.allocator != nullptr) {
-				// We need to record the previous allocator, and move the data to the new location
-				MemoryArena* previous_allocator = m_shared_components[component.value].info.allocator;
-				CreateAllocatorForComponent(this, m_shared_components[component.value].info, functions->allocator_size);
-				// Here, we are setting the component functions to the new values.
-				// The reason is, that in the Editor case, when a module is reloaded,
-				// Its previous functions are not available anymore and using them
-				// Causes crashes. So, we must use the new function when calling the copy
-				m_shared_components[component.value].info.SetComponentFunctions(functions, SmallAllocator());
+				if (functions->allocator_size != m_shared_components[component.value].info.allocator->InitialArenaCapacity()) {
+					// We need to record the previous allocator, and move the data to the new location
+					MemoryArena* previous_allocator = m_shared_components[component.value].info.allocator;
+					CreateAllocatorForComponent(this, m_shared_components[component.value].info, functions->allocator_size);
+					// Here, we are setting the component functions to the new values.
+					// The reason is, that in the Editor case, when a module is reloaded,
+					// Its previous functions are not available anymore and using them
+					// Causes crashes. So, we must use the new function when calling the copy
+					m_shared_components[component.value].info.SetComponentFunctions(functions, SmallAllocator());
 
-				size_t component_byte_size = m_shared_components[component.value].info.size;
-				// For each component, we must copy the data to the new location
-				ForEachSharedInstance(component, [&](SharedInstance instance) {
-					void* data = GetSharedData(component, instance);
-					// We must use temporary storage since the copy function should not
-					// Deal with aliased pointers
-					alignas(alignof(void*)) char temporary_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
-					m_shared_components[component.value].info.CallCopyFunction(temporary_storage, data, false);
-					memcpy(data, temporary_storage, component_byte_size);
-				});
+					size_t component_byte_size = m_shared_components[component.value].info.size;
+					// For each component, we must copy the data to the new location
+					ForEachSharedInstance(component, [&](SharedInstance instance) {
+						void* data = GetSharedData(component, instance);
+						// We must use temporary storage since the copy function should not
+						// Deal with aliased pointers
+						alignas(alignof(void*)) char temporary_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
+						m_shared_components[component.value].info.CallCopyFunction(temporary_storage, data, false);
+						memcpy(data, temporary_storage, component_byte_size);
+						});
 
-				// We can now deallocate the previous allocator
-				DeallocateAllocatorForComponent(this, previous_allocator);
+					// We can now deallocate the previous allocator
+					DeallocateAllocatorForComponent(this, previous_allocator);
+				}
 			}
 			else if (functions->allocator_size != 0) {
 				CreateAllocatorForComponent(this, m_shared_components[component.value].info, functions->allocator_size);
@@ -3687,7 +3692,8 @@ namespace ECSEngine {
 						shared_signature.indices[shared_index],
 						component_info->size,
 						component_info->name,
-						&component_functions
+						&component_functions,
+						m_shared_components[shared_signature.indices[shared_index].value].compare_entry
 					);
 				}
 

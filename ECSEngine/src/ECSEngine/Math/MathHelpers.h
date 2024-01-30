@@ -147,7 +147,8 @@ namespace ECSEngine {
 	ECSENGINE_API void DetermineExtremePoints(Stream<float3> points, float3* values);
 
 	// It will merge vertices which are close enough and return the new count.
-	// You can specify an epsilon to detect close enough vertices
+	// You can specify an epsilon to detect close enough vertices (should not
+	// be very large)
 	ECSENGINE_API size_t WeldVertices(Stream<float3>& points, float3 epsilon = float3::Splat(0.0f));
 
 	// Returns the normal calculated as the cross product between AB and AC
@@ -193,6 +194,9 @@ namespace ECSEngine {
 	// Finds the corresponding max for each x, y and z separately and it can give
 	// you back the indices of these elements
 	ECSENGINE_API float3 GetFloat3Max(Stream<float3> values, ulong3* indices = nullptr);
+
+	// Finds the corresponding min and max for each x, y and z separately
+	ECSENGINE_API void GetFloat3MinMax(Stream<float3> values, float3* min, float3* max, ulong3* min_indices = nullptr, ulong3* max_indices = nullptr);
 
 	// Returns the allocated counts. There are bucket_count + 1 entries to satisfy the
 	// Count sort requirement. The values are sorted ascending

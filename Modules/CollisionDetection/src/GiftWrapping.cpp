@@ -143,7 +143,22 @@ static size_t FindNextPointAroundTriangleEdge(
 TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic allocator) {
 	ECS_ASSERT(vertex_positions.size < UINT_MAX, "Gift wrapping for meshes with more than 4GB vertices is not available");
 
-	WeldVertices(vertex_positions);
+	//WeldVertices(vertex_positions, float3::Splat(10.0f));
+	auto compare_mask = [](float3 a, float3 b) {
+		float3 absolute_difference = BasicTypeAbsoluteDifference(a, b);
+		return BasicTypeLessEqual(absolute_difference, float3::Splat(0.00f));
+	};
+
+	for (size_t index = 0; index < vertex_positions.size; index++) {
+		for (size_t subindex = index + 1; subindex < vertex_positions.size; subindex++) {
+			if (compare_mask(vertex_positions[index], vertex_positions[subindex])) {
+				// We can remove the subindex point
+				vertex_positions.RemoveSwapBack(subindex);
+				subindex--;
+			}
+		}
+	}
+
 	// TODO: Decide a better way of initializing the space for this triangle mesh
 	// Guesstimate
 	TriangleMesh triangle_mesh;
@@ -186,7 +201,7 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 	processed_edge_table.Insert({}, { (unsigned int)initial_edge_b_index, (unsigned int)initial_edge_c_index });
 
 	while (active_edges.size > 0) {
-		if (triangle_mesh.triangle_count > 2500) {
+		if (triangle_mesh.triangle_count > 50000) {
 			break;
 		}
 

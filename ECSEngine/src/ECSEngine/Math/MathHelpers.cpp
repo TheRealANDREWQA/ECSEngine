@@ -3,6 +3,9 @@
 #include "../Utilities/Utilities.h"
 #include "VCLExtensions.h"
 #include "Vector.h"
+#include "../Utilities/Algorithms.h"
+#include "SpatialGrid.h"
+#include "../Allocators/ResizableLinearAllocator.h"
 
 namespace ECSEngine {
 
@@ -155,6 +158,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	// TODO: Remove this function? It can be replaced with GetFloat3MinMax
 	void DetermineExtremePoints(Stream<float3> points, float3* values)
 	{
 		ECS_ASSERT(points.size < UINT_MAX);
@@ -240,24 +244,100 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	size_t WeldVertices(Stream<float3>& points, float3 epsilon) {
-		// In order to speed this up for a large number of entries, we can count sort them into buckets
-		// And check values only inside the bucket. This fails if the epsilon is large enough
-		// That some point at the very last of a bucket is near with the point at the very start of the
-		// next bucket
+		// In order to speed this up for a large number of entries, we can use a spatial grid
+		// And check values only inside a cell. This fails if the epsilon is large enough
+		// That some points close to the edges would actually have to be welded but they lie
+		// In different cells
 
-		auto compare_mask = [epsilon](float3 a, float3 b) {
-			float3 absolute_difference = BasicTypeAbsoluteDifference(a, b);
-			return BasicTypeLessEqual(absolute_difference, epsilon);
+		// We want to have a good amount of cells in each direction. Choosing 128x128x128
+		// Should be a reasonable default, we can take advantage of the fact that it is
+		// a sparse grid, and the memory is allocated as needed
+		const uint3 DIMENSIONS = { 128, 128, 128 };
+
+		// Determine the min and max for the points in order to have sensible cell sizes
+		float3 points_min;
+		float3 points_max;
+		GetFloat3MinMax(points, &points_min, &points_max);
+		float3 points_span = points_max - points_min;
+		float3 per_cell_size = points_span / float3(DIMENSIONS);
+		uint3 int_per_cell_size = per_cell_size;
+		uint3 int_per_cell_power_of_two = BasicTypeAction<uint3>(
+			int_per_cell_size,
+			[](unsigned int size) {
+				return PowerOfTwoGreaterEx(size).y;
+			}
+		);
+		
+		// Determine if we need a spatial grid with reduced cell sizes
+		bool has_smaller_factor = false;
+		float3 smaller_factor = float3::Splat(1.0f);
+		if (int_per_cell_size.x == 0) {
+			smaller_factor.x = 1.0f / per_cell_size.x;
+			has_smaller_factor = true;
+		}
+		if (int_per_cell_size.y == 0) {
+			smaller_factor.y = 1.0f / per_cell_size.y;
+			has_smaller_factor = true;
+		}
+		if (int_per_cell_size.z == 0) {
+			smaller_factor.z = 1.0f / per_cell_size.z;
+			has_smaller_factor = true;
+		}
+
+		const size_t CHUNK_POINT_COUNT = 8;
+		struct ChunkData {
+			float3 points[CHUNK_POINT_COUNT];
 		};
 
-		for (size_t index = 0; index < points.size; index++) {
-			for (size_t subindex = index + 1; subindex < points.size; subindex++) {				
-				if (compare_mask(points[index], points[subindex])) {
-					// We can remove the subindex point
-					points.RemoveSwapBack(subindex);
-					subindex--;
+		// Use an auto lambda to receive the spatial grid as parameter in order to have
+		// The case with smaller factor compile time determined
+		auto perform_welding = [&](auto& spatial_grid) {
+			for (size_t index = 0; index < points.size; index++) {
+				float3 current_point = points[index];
+				bool was_inserted = spatial_grid.InsertPointTest(current_point, [&](
+					uint3 cell_indices, 
+					SpatialGridChunk<ChunkData>* initial_chunk, 
+					ChunkData* data, 
+					unsigned int count
+				) {
+					bool was_welded = spatial_grid.IterateChunks<true>(initial_chunk, [&](const ChunkData* data, unsigned int count) {
+						for (unsigned int index = 0; index < count; index++) {
+							float3 absolute_difference = BasicTypeAbsoluteDifference(current_point, data->points[index]);
+							bool should_weld = BasicTypeLessEqual(absolute_difference, epsilon);
+							if (should_weld) {
+								return true;
+							}
+						}
+						return false;
+					});
+					if (!was_welded) {
+						data->points[count] = current_point;
+						return true;
+					}
+					return false;
+				});
+				if (!was_inserted) {
+					points.RemoveSwapBack(index);
+					index--;
 				}
 			}
+		};
+
+		const size_t DECK_POWER_OF_TWO = 8; // 256
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 64);
+
+		if (has_smaller_factor) {
+			SpatialGrid<ChunkData, CHUNK_POINT_COUNT, SpatialGridDefaultCellIndicesHash, true> spatial_grid;
+			// Choose some sensible defaults
+			spatial_grid.Initialize(&stack_allocator, DIMENSIONS, int_per_cell_size, DECK_POWER_OF_TWO);
+			spatial_grid.SetSmallerCellSizeFactor(smaller_factor);
+			perform_welding(spatial_grid);
+		}
+		else {
+			SpatialGrid<ChunkData, CHUNK_POINT_COUNT> spatial_grid;
+			// Choose some sensible defaults
+			spatial_grid.Initialize(&stack_allocator, DIMENSIONS, int_per_cell_size, DECK_POWER_OF_TWO);
+			perform_welding(spatial_grid);
 		}
 
 		return points.size;
@@ -322,7 +402,7 @@ namespace ECSEngine {
 		// Of 2 selects to have the index available
 		Vec8f min_values = FLT_MAX;
 		Vec8f max_values = -FLT_MAX;
-		if (index == nullptr) {
+		if (indices == nullptr) {
 			ApplySIMDConstexpr(values.size, Vec8f::size(), [&](auto is_full_iteration, size_t index, size_t count) {
 				Vec8f current_min_values;
 				Vec8f current_max_values;
@@ -377,10 +457,10 @@ namespace ECSEngine {
 					Vec8f current_values = GatherStrideMasked<3, offset>(values.buffer + index, count, is_min ? FLT_MAX : -FLT_MAX);
 					Vec8fb mask = CastToFloat(SelectMaskLast<unsigned int>(Vec8f::size() - count));
 					if constexpr (is_min) {
-						current_min_values = select(gather_mask, FLT_MAX, current_values);
+						current_min_values = select(mask, FLT_MAX, current_values);
 					}
 					if constexpr (is_max) {
-						current_max_values = select(gather_mask, -FLT_MAX, current_values);
+						current_max_values = select(mask, -FLT_MAX, current_values);
 					}
 				}
 
@@ -401,13 +481,13 @@ namespace ECSEngine {
 			if constexpr (is_min) {
 				Vec8f splatted_min = HorizontalMin8(min_values);
 				size_t simd_smallest_index = HorizontalMin8Index(min_values, splatted_min);
-				indices->x = simd_smallest_index;
+				indices->x = min_indices[simd_smallest_index];
 				values.x = VectorLow(splatted_min);
 			}
 			if constexpr (is_max) {
 				Vec8f splatted_max = HorizontalMax8(max_values);
 				size_t simd_smallest_index = HorizontalMin8Index(max_values, splatted_max);
-				indices->y = simd_smallest_index;
+				indices->y = max_indices[simd_smallest_index];
 				values.y = VectorLow(splatted_max);
 			}
 			return values;
@@ -464,103 +544,187 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	template<bool is_min>
-	static float3 GetFloat3MinMaxImpl(Stream<float3> values, ulong3* indices) {
+	template<bool is_min, bool is_max>
+	static void GetFloat3MinMaxImpl(Stream<float3> values, float3* output_min_values, float3* output_max_values, ulong3* min_indices, ulong3* max_indices) {
 		// Read 2 float3's at a time and perform the operation there
-		Vec8f min_max_values = is_min ? FLT_MAX : -FLT_MAX;
+		Vec8f min_values = FLT_MAX;
+		Vec8f max_values = -FLT_MAX;
 		const size_t simd_increment = Vec8f::size() / float3::Count();
 		ECS_ASSERT(IsPowerOfTwo(simd_increment));
 		size_t simd_count = GetSimdCount(values.size, simd_increment);
-		float3 scalar_min_max = is_min ? float3::Splat(FLT_MAX) : -float3::Splat(FLT_MAX);
-		if (indices == nullptr) {
+		float3 scalar_min = float3::Splat(FLT_MAX);
+		float3 scalar_max = float3::Splat(-FLT_MAX);
+		if (min_indices == nullptr && max_indices == nullptr) {
 			// If we don't need the indices, we can speed up the function by a bit
 			// By ommiting that value
 			if (simd_count > 0) {
 				for (size_t index = 0; index < simd_count; index += simd_increment) {
 					Vec8f current_values = Vec8f().load((const float*)(values.buffer + index));
-					min_max_values = is_min ? min(current_values, min_max_values) : max(current_values, min_max_values);
+					if constexpr (is_min) {
+						min_values = min(current_values, min_values);
+					}
+					if constexpr (is_max) {
+						max_values = max(current_values, max_values);
+					}
 				}
 
-				float3 simd_values[simd_increment + 1];
-				min_max_values.store((float*)simd_values);
-				for (size_t index = 0; index < simd_increment; index++) {
-					scalar_min_max = is_min ? BasicTypeMin(scalar_min_max, simd_values[index]) : BasicTypeMax(scalar_min_max, simd_values[index]);
+				float3 simd_min_values[simd_increment + 1];
+				float3 simd_max_values[simd_increment + 1];
+				if constexpr (is_min) {
+					min_values.store((float*)simd_min_values);
+					for (size_t index = 0; index < simd_increment; index++) {
+						scalar_min = BasicTypeMin(scalar_min, simd_min_values[index]);
+					}
+				}
+				if constexpr (is_max) {
+					max_values.store((float*)simd_max_values);
+					for (size_t index = 0; index < simd_increment; index++) {
+						scalar_max = BasicTypeMax(scalar_max, simd_max_values[index]);
+					}
 				}
 			}
 
 			for (size_t index = simd_count; index < values.size; index++) {
-				scalar_min_max = is_min ? BasicTypeMin(scalar_min_max, values[index]) : BasicTypeMax(scalar_min_max, values[index]);
+				if constexpr (is_min) {
+					scalar_min = BasicTypeMin(scalar_min, values[index]);
+				}
+				if constexpr (is_max) {
+					scalar_max = BasicTypeMax(scalar_max, values[index]);
+				}
 			}
-			return scalar_min_max;
+			if constexpr (is_min) {
+				*output_min_values = scalar_min;
+			}
+			if constexpr (is_max) {
+				*output_max_values = scalar_max;
+			}
 		}
 		else {
-			ulong3 scalar_indices = ulong3::Splat(-1);
+			ulong3 scalar_min_indices = ulong3::Splat(-1);
+			ulong3 scalar_max_indices = ulong3::Splat(-1);
 			if (simd_count > 0) {
 				Vec8ui simd_vector_increment = simd_increment;
-				Vec8ui indices = { 0, 0, 0, 1, 1, 1, -1, -1 };
-				Vec8ui min_max_indices = indices;
+				Vec8ui indices = { 0, 0, 0, 1, 1, 1, (unsigned int)-1, (unsigned int)-1 };
+				Vec8ui min_indices = indices;
+				Vec8ui max_indices = indices;
 				for (size_t index = 0; index < simd_count; index += simd_increment) {
 					Vec8f current_values = Vec8f().load((const float*)(values.buffer + index));
-					Vec8fb mask = is_min ? current_values < min_max_values : current_values > min_max_values;
-					min_max_values = select(mask, current_values, min_max_values);
-					min_max_indices = select(mask, indices);
+					if constexpr (is_min) {
+						Vec8fb mask = current_values < min_values;
+						min_values = select(mask, current_values, min_values);
+						min_indices = select(mask, indices, min_indices);
+					}
+					if constexpr (is_max) {
+						Vec8fb mask = current_values > max_values;
+						max_values = select(mask, current_values, max_values);
+						max_indices = select(mask, indices, max_indices);
+					}
 					indices += simd_vector_increment;
 				}
 
-				float3 simd_values[simd_increment + 1];
-				uint3 simd_indices[simd_increment + 1];
-				min_max_values.store((float*)simd_values);
-				min_max_indices.store(simd_indices);
-				for (size_t index = 0; index < simd_increment; index++) {
-					for (size_t subindex = 0; subindex < float3::Count(); subindex++) {
-						bool mask = is_min ? simd_values[index][subindex] < scalar_min_max[subindex] : simd_values[index][subindex] > scalar_min_max[subindex];
-						scalar_min_max[subindex] = mask ? simd_values[index][subindex] : scalar_min_max[subindex];
-						scalar_indices[subindex] = mask ? simd_indices[index][subindex] : scalar_indices[subindex];
+				float3 simd_min_values[simd_increment + 1];
+				float3 simd_max_values[simd_increment + 1];
+				uint3 simd_min_indices[simd_increment + 1];
+				uint3 simd_max_indices[simd_increment + 1];
+				if constexpr (is_min) {
+					min_values.store((float*)simd_min_values);
+					min_indices.store(simd_min_indices);
+					for (size_t index = 0; index < simd_increment; index++) {
+						for (size_t subindex = 0; subindex < float3::Count(); subindex++) {
+							bool mask = simd_min_values[index][subindex] < scalar_min[subindex];
+							scalar_min[subindex] = mask ? simd_min_values[index][subindex] : scalar_min[subindex];
+							scalar_min_indices[subindex] = mask ? simd_min_indices[index][subindex] : scalar_min_indices[subindex];
+						}
+					}
+				}
+				if constexpr (is_min) {
+					max_values.store((float*)simd_max_values);
+					max_indices.store(simd_max_indices);
+					for (size_t index = 0; index < simd_increment; index++) {
+						for (size_t subindex = 0; subindex < float3::Count(); subindex++) {
+							bool mask = simd_max_values[index][subindex] > scalar_max[subindex];
+							scalar_max[subindex] = mask ? simd_max_values[index][subindex] : scalar_max[subindex];
+							scalar_max_indices[subindex] = mask ? simd_max_indices[index][subindex] : scalar_max_indices[subindex];
+						}
 					}
 				}
 			}
 
 			for (size_t index = simd_count; index < values.size; index++) {
 				for (size_t subindex = 0; subindex < float3::Count(); subindex++) {
-					bool mask = is_min ? values[index][subindex] < scalar_min_max[subindex] : values[index][subindex] > scalar_min_max[subindex];
-					scalar_min_max[subindex] = mask ? values[index][subindex] : scalar_min_max[subindex];
-					scalar_indices[subindex] = mask ? values[index][subindex] : scalar_indices[subindex];
+					if constexpr (is_min) {
+						bool mask = values[index][subindex] < scalar_min[subindex];
+						scalar_min[subindex] = mask ? values[index][subindex] : scalar_min[subindex];
+						scalar_min_indices[subindex] = mask ? values[index][subindex] : scalar_min_indices[subindex];
+					}
+					if constexpr (is_max) {
+						bool mask = values[index][subindex] > scalar_max[subindex];
+						scalar_max[subindex] = mask ? values[index][subindex] : scalar_max[subindex];
+						scalar_max_indices[subindex] = mask ? values[index][subindex] : scalar_max_indices[subindex];
+					}
 				}
 			}
 
-			*indices = scalar_indices;
-			return scalar_min_max;
+			if constexpr (is_min) {
+				*output_min_values = scalar_min;
+				if (min_indices != nullptr) {
+					*min_indices = scalar_min_indices;
+				}
+			}
+			if constexpr (is_max) {
+				*output_max_values = scalar_max;
+				if (max_indices != nullptr) {
+					*max_indices = scalar_max_indices;
+				}
+			}
 		}
 	}
 
 	float3 GetFloat3Min(Stream<float3> values, ulong3* indices) {
-		return GetFloat3MinMaxImpl<true>(values, indices);
+		float3 min;
+		GetFloat3MinMaxImpl<true, false>(values, &min, nullptr, indices, nullptr);
+		return min;
 	}
 
 	float3 GetFloat3Max(Stream<float3> values, ulong3* indices) {
-		return GetFloat3MinMaxImpl<false>(values, indices);
+		float3 max;
+		GetFloat3MinMaxImpl<false, true>(values, nullptr, &max, nullptr, indices);
+		return max;
+	}
+
+	void GetFloat3MinMax(Stream<float3> values, float3* min, float3* max, ulong3* min_indices, ulong3* max_indices)
+	{
+		GetFloat3MinMaxImpl<true, true>(values, min, max, min_indices, max_indices);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	template<ECS_AXIS axis>
+	template<int offset>
 	static unsigned int* CountSortFloat3Impl(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator) {
+		float2 min_max_axis = GetFloat3MinMaxSingle<true, true, offset>(values, nullptr);
+		float difference = min_max_axis.y - min_max_axis.x;
+		float bucket_size = difference / bucket_count;
+		float bucket_size_inverse = 1.0f / bucket_size;
 
+		return CountingSortExtended(values.buffer, values.size, output_values, bucket_count, allocator, [bucket_size_inverse, min_max_axis](float3 value) {
+			float current_value = value[offset];
+			return (size_t)((current_value - min_max_axis.x) * bucket_size_inverse);
+		});
 	}
 
 	unsigned int* CountSortFloat3X(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator)
 	{
-		return nullptr;
+		return CountSortFloat3Impl<0>(values, output_values, bucket_count, allocator);
 	}
 
 	unsigned int* CountSortFloat3Y(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator)
 	{
-		return nullptr;
+		return CountSortFloat3Impl<1>(values, output_values, bucket_count, allocator);
 	}
 
 	unsigned int* CountSortFloat3Z(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator)
 	{
-		return nullptr;
+		return CountSortFloat3Impl<2>(values, output_values, bucket_count, allocator);
 	}
 
 	// --------------------------------------------------------------------------------------------------

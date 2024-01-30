@@ -12,3 +12,4 @@
 #include "../ECSEngine/Math/BaseVector.h"
 #include "../ECSEngine/Math/MathHelpers.h"
 #include "../ECSEngine/Math/TriangleMesh.h"
+#include "../ECSEngine/Math/SpatialGrid.h"

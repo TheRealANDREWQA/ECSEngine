@@ -54,8 +54,58 @@ constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-ECS_INLINE static void OpenModuleLogFile(Stream<wchar_t> log_path) {
-	OS::LaunchFileExplorerWithError(log_path);
+static void OpenModuleLogFile(Stream<wchar_t> log_path) {
+	// TODO: Should we change the name of this function?
+	// Now it opens the file and determines the errors and prints
+	// Them in the ECS console
+	//OS::LaunchFileExplorerWithError(log_path);
+
+	auto print_errors = [](Stream<char> messages_start) {
+		// There are 2 or 3 \n after the messages block
+		Stream<char> messages_end = FindFirstToken(messages_start, "\n\n");
+		messages_start.Advance();
+		Stream<char> line_end = FindFirstCharacter(messages_start, '\n');
+		while (line_end.size > 0 && line_end.buffer <= messages_end.buffer) {
+			Stream<char> current_line = messages_start.StartDifference(line_end);
+			Stream<char> error_token = FindFirstToken(current_line, " error ");
+			if (error_token.size > 0) {
+				// The line contains an error
+				EditorSetConsoleError(current_line);
+			}
+			messages_start = line_end.AdvanceReturn();
+			line_end = FindFirstCharacter(messages_start, '\n');
+		}
+	};
+
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
+	Stream<char> file_content = ReadWholeFileText(log_path, &stack_allocator);
+	// Look for the Build FAILED token. Then the errors are listed there
+	Stream<char> build_failed = FindFirstToken(file_content, "Build FAILED");
+	if (build_failed.size > 0) {
+		// There are 2 things that we are interested in
+		// Compiler errors and linker errors
+		// Compiler errors and warnings are listed on a separate line after a line with (ClCompile target) ->
+		// Linker errors are listed on a separate line after a line with (Link target) ->
+		Stream<char> compiler_errors_or_warnings = FindFirstToken(build_failed, "(ClCompile target) ->");
+		if (compiler_errors_or_warnings.size > 0) {
+			Stream<char> compiler_messages_start = FindFirstCharacter(compiler_errors_or_warnings, '\n');
+			if (compiler_messages_start.size > 0) {
+				print_errors(compiler_messages_start);
+			}
+		}
+
+		Stream<char> linker_errors = FindFirstToken(build_failed, "(Link target) ->");
+		if (linker_errors.size > 0) {
+			Stream<char> linker_messages_start = FindFirstCharacter(linker_errors, '\n');
+			if (linker_messages_start.size > 0) {
+				print_errors(linker_messages_start);
+			}
+		}
+	}
+	else {
+		ECS_FORMAT_TEMP_STRING(message, "Could not open and read log file {#}", log_path);
+		EditorSetConsoleWarn(message);
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -87,6 +137,7 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 								CMD_BUILD_SYSTEM
 							);
 							EditorSetConsoleError(error_message);
+							
 							OpenModuleLogFile(log_path);
 						}
 					}

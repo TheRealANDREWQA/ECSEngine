@@ -6311,12 +6311,12 @@ namespace ECSEngine {
 
 				if (single_sentence) {
 					float2 text_span = TextSpan(Stream<char>(text.buffer, text_length), font_size, character_spacing);
+					if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
+						position.y = AlignMiddle(position.y, current_row_y_scale, text_span.y);
+					}
 					if (ValidatePosition(0, position, text_span)) {
 						if (draw_mode == ECS_UI_DRAWER_FIT_SPACE) {
 							if (position.x + text_span.x < region_limit.x) {
-								if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
-									position.y = AlignMiddle(position.y, current_row_y_scale, text_span.y);
-								}
 								Text(configuration, config, text, position);
 							}
 							else {
@@ -6324,14 +6324,23 @@ namespace ECSEngine {
 							}
 						}
 						else {
-							if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
-								position.y = AlignMiddle(position.y, current_row_y_scale, text_span.y);
-							}
 							Text(configuration, config, text, position);
 						}
 					}
 					else {
-						FinalizeRectangle(0, position, text_span);
+						if (draw_mode == ECS_UI_DRAWER_FIT_SPACE) {
+							// Calculate how many rows this sentence needs
+							float remainder_size = text_span.x - (region_limit.x - position.x);
+							size_t needed_rows = 1;
+							if (remainder_size > 0.0f) {
+								needed_rows += (size_t)(remainder_size / (region_limit.x - GetNextRowXPosition())) + 1;
+							}
+							FinalizeRectangle(0, position, { 0.0f, text_span.y * needed_rows });
+
+						}
+						else {
+							FinalizeRectangle(0, position, text_span);
+						}
 					}
 				}
 				else {

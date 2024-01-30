@@ -140,17 +140,25 @@ void AttachSandboxEntityName(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+static EDITOR_EVENT(BackgroundTaskGPULock) {
+	AtomicFlag* flag = (AtomicFlag*)_data;
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+		flag->Signal();
+		return false;
+	}
+	return true;
+}
+
 static void EditorModuleComponentBuildGPULockLock(void* data) {
 	EditorState* editor_state = (EditorState*)data;
 	// We can use the PREVENT_RESOURCE_LOADING flag as a GPU lock
-	// Wait for the flag to become unlocked, and then use a compare exchange
-	// To try to get the lock
-	while (true) {
-		EditorStateWaitFlagCount(15, editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, 0);
-		if (EditorStateTrySetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, 0, 1)) {
-			break;
-		}
-	}
+	// We need an editor event to acquire this flag since there are
+	// Many events which run on the main thread that don't check for
+	// Async tasks acquiring this flag
+	AtomicFlag atomic_flag;
+	EditorAddEvent(editor_state, BackgroundTaskGPULock, &atomic_flag, 0);
+	atomic_flag.Wait();
 }
 
 static void EditorModuleComponentBuildGPULockUnlock(void* data) {

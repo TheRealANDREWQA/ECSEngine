@@ -14,7 +14,7 @@
 
 #define LARGE_BUFFER_CAPACITY 100 * ECS_KB
 
-#define POINT_SIZE 0.15f
+#define POINT_SIZE 0.05f
 #define CIRCLE_TESSELATION 32
 #define ARROW_HEAD_DARKEN_COLOR 1.0f
 #define AXES_X_SCALE 3.0f
@@ -185,11 +185,26 @@ namespace ECSEngine {
 	template<typename Element>
 	void UpdateElementDurations(DeckPowerOfTwo<Element>* deck, float time_delta) {
 		for (size_t index = 0; index < deck->buffers.size; index++) {
-			for (int64_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
-				deck->buffers[index][subindex].options.duration -= time_delta;
-				if (deck->buffers[index][subindex].options.duration < 0.0f) {
-					deck->buffers[index].RemoveSwapBack(subindex);
-					subindex--;
+			// Check to see if the chunk is completely full with durations less than
+			// Delta time. In that case, we can simply set the buffer size to 0
+			bool can_be_cleared = true;			
+			for (size_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
+				if (deck->buffers[index][subindex].options.duration > time_delta) {
+					can_be_cleared = false;
+					break;
+				}
+			}
+
+			if (can_be_cleared) {
+				deck->buffers[index].size = 0;
+			}
+			else {
+				for (int64_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
+					deck->buffers[index][subindex].options.duration -= time_delta;
+					if (deck->buffers[index][subindex].options.duration < 0.0f) {
+						deck->buffers[index].RemoveSwapBack(subindex);
+						subindex--;
+					}
 				}
 			}
 		}
@@ -245,6 +260,8 @@ namespace ECSEngine {
 			instance_count = 1;
 		}
 		if (instance_count > 0) {
+			Timer timer;
+
 			if constexpr (dynamic_counts) {
 				instance_count = 0;
 				memset(per_type_counts, 0, sizeof(unsigned int) * ELEMENT_COUNT);
@@ -300,6 +317,8 @@ namespace ECSEngine {
 			}
 
 			Matrix gpu_camera = MatrixGPU(drawer->camera_matrix);
+			float init_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
+			timer.SetNewStart();
 
 			InstancedVertex* positions = nullptr;
 			void* instanced_data = nullptr;
@@ -400,15 +419,22 @@ namespace ECSEngine {
 
 			// Draw all the Wireframe depth elements
 			draw_call({ true, false }, WIREFRAME_DEPTH);
+			float first_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
+			timer.SetNewStart();
 
 			// Draw all the Wireframe no depth elements
 			draw_call({ true, true }, WIREFRAME_NO_DEPTH);
+			float second_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
+			timer.SetNewStart();
 
 			// Draw all the Solid depth elements
 			draw_call({ false, false }, SOLID_DEPTH);
+			float third_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
+			timer.SetNewStart();
 
 			// Draw all the Solid no depth elements
 			draw_call({ false, true }, SOLID_NO_DEPTH);
+			float fourth_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
 
 			// Release the temporary vertex buffer, structured buffer and the temporary allocation
 			if (instance_count * vertex_count > LARGE_BUFFER_CAPACITY) {

@@ -47,8 +47,8 @@ namespace ECSEngine {
 	};
 
 	struct SharedComponentCompareEntry {
-		SharedComponentCompareFunction function;
-		Stream<void> data;
+		SharedComponentCompareFunction function = nullptr;
+		Stream<void> data = {};
 	};
 	
 }

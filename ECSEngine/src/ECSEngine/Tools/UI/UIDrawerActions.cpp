@@ -2591,10 +2591,8 @@ namespace ECSEngine {
 				config.AddFlag(alignment);
 
 				struct ClickableWrapperData {
-					UIDrawerMenu* menu;
-					UIDrawerMenuState* current_state;
+					UIDrawerMenuDrawWindowData* drawer_data;
 					unsigned int row_index;
-					Stream<char> parent_window_name;
 				};
 
 				auto clickable_wrapper = [](ActionData* action_data) {
@@ -2603,27 +2601,28 @@ namespace ECSEngine {
 					ClickableWrapperData* data = (ClickableWrapperData*)_data;
 
 					if (IsClickableTrigger(action_data)) {
-						unsigned int data_size = data->current_state->click_handlers[data->row_index].data_size;
+						UIDrawerMenuState* current_state = data->drawer_data->GetState();
+						unsigned int data_size = current_state->click_handlers[data->row_index].data_size;
 						if (data_size > 0) {
 							action_data->data = OffsetPointer(data, sizeof(*data));
 						}
 						else {
-							action_data->data = data->current_state->click_handlers[data->row_index].data;
+							action_data->data = current_state->click_handlers[data->row_index].data;
 						}
-						Stream<char> row_characters = GetUIDrawerMenuStateRowString(data->current_state, data->row_index);
+						Stream<char> row_characters = GetUIDrawerMenuStateRowString(current_state, data->row_index);
 						action_data->additional_data = &row_characters;
 
 						// Set the focused window to that of the parent, in case it is still there
 						// We must do this before the click handler in order to not override a possible
 						// Active window set from inside it
-						system->SetActiveWindow(data->parent_window_name);
+						system->SetActiveWindow(data->drawer_data->parent_window_name);
 
-						data->current_state->click_handlers[data->row_index].action(action_data);
+						current_state->click_handlers[data->row_index].action(action_data);
 
 						UIDrawerMenuCleanupSystemHandlerData cleanup_data;
-						cleanup_data.window_count = data->menu->windows.size;
+						cleanup_data.window_count = data->drawer_data->menu->windows.size;
 						for (size_t index = 0; index < cleanup_data.window_count; index++) {
-							cleanup_data.window_names[index] = data->menu->windows[index].name;
+							cleanup_data.window_names[index] = data->drawer_data->menu->windows[index].name;
 						}
 						system->PushFrameHandler({ MenuCleanupSystemHandler, &cleanup_data, sizeof(cleanup_data) });
 						system->m_focused_window_data.ResetGeneralHandler();
@@ -2650,10 +2649,8 @@ namespace ECSEngine {
 						}
 						else {
 							ClickableWrapperData* wrapper_data = (ClickableWrapperData*)_wrapper_data;
-							wrapper_data->menu = data->menu;
-							wrapper_data->current_state = state;
+							wrapper_data->drawer_data = data;
 							wrapper_data->row_index = index;
-							wrapper_data->parent_window_name = data->parent_window_name;
 							if (state->click_handlers[index].data_size > 0) {
 								memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), state->click_handlers[index].data, state->click_handlers[index].data_size);
 							}

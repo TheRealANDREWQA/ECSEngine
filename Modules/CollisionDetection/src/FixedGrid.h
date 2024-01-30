@@ -7,23 +7,19 @@ using namespace ECSEngine;
 
 #define GRID_CHUNK_COUNT (8)
 
-struct GridChunk {
-	void AddEntry(AABBScalar aabb, unsigned int identifier, unsigned char layer);
-
-	ECS_INLINE bool IsFull() const {
-		return count == GRID_CHUNK_COUNT;
+struct GridChunkData {
+	void AddEntry(AABBScalar aabb, unsigned int identifier, unsigned char layer, unsigned int count) {
+		colliders[count] = aabb;
+		identifiers[count] = identifier;
+		layers[count] = layer;
 	}
 
 	AABBScalar colliders[GRID_CHUNK_COUNT];
 	unsigned int identifiers[GRID_CHUNK_COUNT];
 	unsigned char layers[GRID_CHUNK_COUNT];
-	unsigned char count;
-	unsigned int next_chunk;
 };
 
-struct GridCell {
-	unsigned int head_index;
-};
+typedef SpatialGridChunk<GridChunkData> GridChunk;
 
 struct CollisionInfo {
 	unsigned int identifier;
@@ -49,6 +45,10 @@ struct FixedGridHandlerData {
 // When a collision is detected, a collision handler will be called to perform the necessary action
 // The handler must take as parameter a FixedGridHandlerData* pointer and then it can cast its own data
 struct FixedGrid {
+	ECS_INLINE AllocatorPolymorphic Allocator() const {
+		return spatial_grid.allocator;
+	}
+
 	// Adds a new cell. Make sure it doesn't exist previosuly!
 	// Returns the newly assigned chunk for it
 	GridChunk* AddCell(uint3 indices);
@@ -59,9 +59,9 @@ struct FixedGrid {
 	GridChunk* AddToChunk(unsigned int identifier, unsigned char layer, AABBScalar aabb, GridChunk* chunk);
 
 	// Returns the cell x, y and z indices that can be used to retrieve a grid cell
-	uint3 CalculateCell(float3 position) const;
-
-	GridChunk* ChainChunk(GridChunk* current_chunk);
+	ECS_INLINE uint3 CalculateCell(float3 position) const {
+		return spatial_grid.CalculateCell(position);
+	}
 
 	// Fills in the collisions that the given AABB has with a given cell. Returns the last chunk of the cell
 	// It does not call the handler in this case - it will report them directly to you
@@ -73,6 +73,19 @@ struct FixedGrid {
 		unsigned int identifier,
 		unsigned char layer, 
 		AABBScalar aabb, 
+		CapacityStream<CollisionInfo>* collisions
+	);
+
+	// Fills in the collisions that the given AABB has with a given cell. Returns the last chunk of the cell
+	// It does not call the handler in this case - it will report them directly to you
+	// The world is needed to be passed to the handler
+	GridChunk* CheckCollisions(
+		unsigned int thread_id,
+		World* world,
+		GridChunk* chunk,
+		unsigned int identifier,
+		unsigned char layer,
+		AABBScalar aabb,
 		CapacityStream<CollisionInfo>* collisions
 	);
 
@@ -112,21 +125,7 @@ struct FixedGrid {
 
 	void SetLayerMask(unsigned char layer_index, const CollisionLayer* layer_mask);
 
-	uint3 dimensions;
-	// These cell sizes must be a power of two
-	// We use modulo two trick to map the AABB
-	uint3 cell_size_power_of_two;
-	// We need to offset entries based on the half of the size
-	// In order to not have AABBs straddle incorrect cells
-	float3 half_cell_size;
-	// We maintain the cells in a sparse hash table
-	// The unsigned int as resource identifier is the actual hash value
-	// The cell hash value must be computed by the user
-	HashTable<GridCell, unsigned int, HashFunctionPowerOfTwo> cells;
-	DeckPowerOfTwo<GridChunk> chunks;
-	AllocatorPolymorphic allocator;
-	// This is the array with all the inserted cells
-	ResizableStream<uint3> inserted_cells;
+	SpatialGrid<GridChunkData, GRID_CHUNK_COUNT> spatial_grid;
 
 	// Record these values such that we can have a good approximation for the initial
 	// Allocations for the cells and chunks
@@ -138,10 +137,6 @@ struct FixedGrid {
 	ThreadFunction handler_function;
 	void* handler_data;
 };
-
-unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z);
-
-unsigned int HashGridCellIndices(uint3 indices);
 
 // Data should be the fixed grid
 COLLISIONDETECTION_API bool FixedGridResidencyFunction(uint3 index, void* data);
