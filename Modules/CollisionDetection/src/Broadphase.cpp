@@ -70,11 +70,11 @@ ECS_THREAD_TASK(CollisionBroadphaseDisplayDebugGrid) {
 
 	DebugGrid grid;
 	grid.color = ECS_COLOR_AQUA;
-	grid.cell_size = fixed_grid->half_cell_size;
+	grid.cell_size = fixed_grid->spatial_grid.half_cell_size / fixed_grid->spatial_grid.smaller_cell_size_factor;
 	grid.translation = float3::Splat(0.0f);
-	grid.dimensions = fixed_grid->dimensions;
+	grid.dimensions = fixed_grid->spatial_grid.dimensions;
 	static size_t TEMPORARY_BUFFER[32];
-	grid.valid_cells = DeckPowerOfTwo<uint3>::InitializeTempReference(fixed_grid->inserted_cells, TEMPORARY_BUFFER);
+	grid.valid_cells = DeckPowerOfTwo<uint3>::InitializeTempReference(fixed_grid->spatial_grid.inserted_cells, TEMPORARY_BUFFER);
 	grid.has_valid_cells = true;
 	world->debug_drawer->AddGrid(&grid);
 }

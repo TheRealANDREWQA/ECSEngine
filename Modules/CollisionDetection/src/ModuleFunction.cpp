@@ -141,23 +141,18 @@ static ECS_THREAD_TASK(BuildConvexColliderTask) {
 }
 
 static ThreadTask ModuleBuildConvexCollider(ModuleComponentBuildFunctionData* data) {
-	ConvexCollider* collider = (ConvexCollider*)data->component;
-
-	if (data->gpu_lock.TryLock()) {
-		BuildConvexColliderTaskBase(data);
-		data->gpu_lock.Unlock();
-		return {};
-	}
-	else {
-		// We need to launch a thread task
-		return ECS_THREAD_TASK_NAME(BuildConvexColliderTask, data, sizeof(*data));
-	}
+	// We need to launch a thread task
+	return ECS_THREAD_TASK_NAME(BuildConvexColliderTask, data, sizeof(*data));
 }
 
 static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) {
 	const ConvexCollider* collider = (const ConvexCollider*)data->component;
-
-	for (size_t index = 0; index < collider->mesh.triangle_count; index++) {
+	const Translation* translation = (const Translation*)data->dependency_components[0];
+	float3 translation_value = translation != nullptr ? translation->value : float3::Splat(0.0f);
+	translation_value = float3::Splat(0.0f);
+	
+	size_t count = collider->mesh.triangle_count < collider->hull_size ? 0 : collider->mesh.triangle_count - collider->hull_size;
+	for (size_t index = 0; index < count; index++) {
 		uint3 triangle = collider->mesh.triangles[index];
 		float3 a = collider->mesh.positions[triangle.x];
 		float3 b = collider->mesh.positions[triangle.y];
@@ -165,8 +160,11 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 
 		DebugDrawCallOptions options;
 		options.wireframe = true;
-		data->debug_drawer->AddTriangleThread(data->thread_id, a, b, c, ECS_COLOR_GREEN, options);
+		data->debug_drawer->AddTriangleThread(data->thread_id, translation_value + a, translation_value + b, translation_value + c, ECS_COLOR_GREEN, options);
 	}
+	/*for (size_t index = 0; index < 10; index++) {
+		data->debug_drawer->AddPointThread(data->thread_id, collider->mesh.positions[index], ECS_COLOR_GREEN);
+	}*/
 }
 
 void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsData* data) {
@@ -181,6 +179,7 @@ void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsDa
 	convex_collider.component_name = STRING(ConvexCollider);
 
 	convex_collider.debug_draw.draw_function = ConvexColliderDebugDraw;
+	convex_collider.debug_draw.AddDependency({ Translation::ID(), ECS_COMPONENT_UNIQUE });
 
 	data->functions->AddAssert(convex_collider);
 }

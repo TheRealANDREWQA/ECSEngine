@@ -855,7 +855,7 @@ static void SceneZoomAction(ActionData* action_data) {
 			float factor = 0.015f;
 
 			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-				factor = 0.004f;
+				factor = 0.0025f;
 			}
 			else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 				factor = 0.06f;

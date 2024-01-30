@@ -233,9 +233,9 @@ namespace ECSEngine {
 		const BufferType* ECS_RESTRICT buffer, 
 		size_t size, 
 		BufferType* ECS_RESTRICT result, 
-		ExtractKey&& extract_key, 
 		unsigned int* counts, 
-		size_t counts_size
+		size_t counts_size,
+		ExtractKey&& extract_key
 	)
 	{
 		// building the frequency count
@@ -262,17 +262,17 @@ namespace ECSEngine {
 		const BufferType* ECS_RESTRICT buffer,
 		size_t size,
 		BufferType* ECS_RESTRICT result,
-		ExtractKey&& extract_key,
 		size_t bucket_count,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		ExtractKey&& extract_key
 	) {
-		unsigned int* counts = AllocateEx(allocator, sizeof(unsigned int) * (bucket_count + 1));
-		CountingSortExtended(buffer, size, result, extract_key, counts, bucket_count + 1);
+		unsigned int* counts = (unsigned int*)AllocateEx(allocator, sizeof(unsigned int) * (bucket_count + 1));
+		CountingSortExtended(buffer, size, result, counts, bucket_count + 1, extract_key);
 		return counts;
 	}
 
 	template<typename BufferType, typename ExtractKey, typename Reduction>
-	void CountingSort(const BufferType* ECS_RESTRICT buffer, size_t size, BufferType* ECS_RESTRICT result, ExtractKey&& extract_key, Reduction reduction)
+	void CountingSort(const BufferType* ECS_RESTRICT buffer, size_t size, BufferType* ECS_RESTRICT result, Reduction reduction, ExtractKey&& extract_key)
 	{
 		size_t counts[257] = { 0 };
 
@@ -302,10 +302,10 @@ namespace ECSEngine {
 		const BufferType* ECS_RESTRICT buffer, 
 		size_t size, 
 		BufferType* ECS_RESTRICT result, 
-		ExtractKey&& extract_key, 
 		Reduction reduction, 
 		unsigned int* counts, 
-		size_t counts_size
+		size_t counts_size,
+		ExtractKey&& extract_key
 	)
 	{
 		// building the frequency count
@@ -334,13 +334,13 @@ namespace ECSEngine {
 		const BufferType* ECS_RESTRICT buffer, 
 		size_t size, 
 		BufferType* ECS_RESTRICT result,
-		ExtractKey&& extract_key,
 		Reduction reduction, 
 		size_t bucket_count, 
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		ExtractKey&& extract_key
 	) {
 		unsigned int* counts = (unsigned int*)AllocateEx(allocator, sizeof(unsigned int) * (bucket_count + 1));
-		CountingSortExtended(buffer, size, result, extract_key, reduction, counts, bucket_count + 1);
+		CountingSortExtended(buffer, size, result, reduction, counts, bucket_count + 1, extract_key);
 		return counts;
 	}
 
@@ -365,7 +365,7 @@ namespace ECSEngine {
 		bool flag = true;
 		if (reduction < 256 && maximum_element >= 256) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT_REDUCTION;
-			CountingSort(buffer, size, intermediate, std::move(extract_key1), reduction);
+			CountingSort(buffer, size, intermediate, reduction, std::move(extract_key1));
 		}
 		else if (reduction < 256 && maximum_element < 256) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT;
@@ -373,9 +373,9 @@ namespace ECSEngine {
 		}
 		else if (reduction < 65'536 && maximum_element >= 65'536) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT_REDUCTION;
-			CountingSort(buffer, size, intermediate, std::move(extract_key1), reduction);
+			CountingSort(buffer, size, intermediate, reduction, std::move(extract_key1));
 			auto extract_key2 = ECS_SCALAR_BYTE2_EXTRACT_REDUCTION;
-			CountingSort(intermediate, size, buffer, std::move(extract_key2), reduction);
+			CountingSort(intermediate, size, buffer, reduction, std::move(extract_key2));
 			flag = false;
 		}
 		else if (reduction < 65'536 && maximum_element < 65'536) {
@@ -387,11 +387,11 @@ namespace ECSEngine {
 		}
 		else if (reduction < 16'777'216 && maximum_element >= 16'777'216) {
 			auto extract_key1 = ECS_SCALAR_BYTE1_EXTRACT_REDUCTION;
-			CountingSort(buffer, size, intermediate, std::move(extract_key1), reduction);
+			CountingSort(buffer, size, intermediate, reduction, std::move(extract_key1));
 			auto extract_key2 = ECS_SCALAR_BYTE2_EXTRACT_REDUCTION;
-			CountingSort(intermediate, size, buffer, std::move(extract_key2), reduction);
+			CountingSort(intermediate, size, buffer, reduction, std::move(extract_key2));
 			auto extract_key3 = ECS_SCALAR_BYTE3_EXTRACT_REDUCTION;
-			CountingSort(buffer, size, intermediate, std::move(extract_key3), reduction);
+			CountingSort(buffer, size, intermediate, reduction, std::move(extract_key3));
 			flag = true;
 		}
 		else if (reduction < 16'777'216 && maximum_element < 16'777'216) {

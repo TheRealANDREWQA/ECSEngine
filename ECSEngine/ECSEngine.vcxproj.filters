@@ -273,6 +273,7 @@
     <ClInclude Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentFunctions.h" />
     <ClInclude Include="src\ECSEngine\Math\TriangleMesh.h" />
+    <ClInclude Include="src\ECSEngine\Math\SpatialGrid.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -443,6 +444,7 @@
     <ClCompile Include="src\ECSEngine\Math\BaseVector.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Math\TriangleMesh.cpp" />
+    <ClCompile Include="src\ECSEngine\Math\SpatialGrid.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

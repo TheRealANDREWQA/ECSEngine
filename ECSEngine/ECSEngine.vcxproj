@@ -261,6 +261,7 @@
     <ClInclude Include="src\ECSEngine\Math\BaseVector.h" />
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
     <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
+    <ClInclude Include="src\ECSEngine\Math\SpatialGrid.h" />
     <ClInclude Include="src\ECSEngine\Math\Hermite.h" />
     <ClInclude Include="src\ECSEngine\Math\Intersection.h" />
     <ClInclude Include="src\ECSEngine\Math\MathHelpers.h" />
@@ -531,6 +532,7 @@
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
     </ClCompile>
+    <ClCompile Include="src\ECSEngine\Math\SpatialGrid.cpp" />
     <ClCompile Include="src\ECSEngine\Math\Hermite.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
