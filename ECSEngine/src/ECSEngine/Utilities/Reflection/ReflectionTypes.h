@@ -194,6 +194,78 @@ namespace ECSEngine {
 			double value;
 		};
 
+		enum ECS_REFLECTION_TYPE_MISC_INFO_TYPE : unsigned char {
+			ECS_REFLECTION_TYPE_MISC_INFO_SOA,
+			ECS_REFLECTION_TYPE_MISC_INFO_COUNT
+		};
+
+		struct ReflectionTypeMiscSoa {
+			ECS_INLINE ReflectionTypeMiscSoa Copy(AllocatorPolymorphic allocator) const {
+				ReflectionTypeMiscSoa copy = *this;
+				copy.name = name.Copy(allocator);
+				return copy;
+			}
+
+			ECS_INLINE ReflectionTypeMiscSoa CopyTo(uintptr_t& ptr) const {
+				ReflectionTypeMiscSoa copy = *this;
+				copy.name.InitializeAndCopy(ptr, name);
+				return copy;
+			}
+
+			ECS_INLINE size_t CopySize() const {
+				return name.CopySize();
+			}
+
+			Stream<char> name;
+			unsigned char size_field;
+			unsigned char capacity_field;
+			unsigned char parallel_stream_count;
+			unsigned char parallel_streams[13];
+		};
+
+		struct ReflectionTypeMiscInfo {
+			ECS_INLINE ReflectionTypeMiscInfo Copy(AllocatorPolymorphic allocator) const {
+				switch (type) {
+				case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
+				{
+					return { type, soa.Copy(allocator) };
+				}
+				default:
+					ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
+				}
+				return {};
+			}
+
+			ECS_INLINE ReflectionTypeMiscInfo CopyTo(uintptr_t& ptr) const {
+				switch (type) {
+				case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
+				{
+					return { type, soa.CopyTo(ptr) };
+				}
+				default:
+					ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
+				}
+				return {};
+			}
+
+			ECS_INLINE size_t CopySize() const {
+				switch (type) {
+				case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
+				{
+					return soa.CopySize();
+				}
+				default:
+					ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
+				}
+				return {};
+			}
+
+			ECS_REFLECTION_TYPE_MISC_INFO_TYPE type;
+			union {
+				ReflectionTypeMiscSoa soa;
+			};
+		};
+
 		struct ECSENGINE_API ReflectionType {
 			void DeallocateCoalesced(AllocatorPolymorphic allocator) const;
 
@@ -242,6 +314,7 @@ namespace ECSEngine {
 			Stream<char> tag;
 			Stream<ReflectionField> fields;
 			Stream<ReflectionEvaluation> evaluations;
+			Stream<ReflectionTypeMiscInfo> misc_info;
 			unsigned int folder_hierarchy_index;
 			unsigned int byte_size;
 			unsigned int alignment;

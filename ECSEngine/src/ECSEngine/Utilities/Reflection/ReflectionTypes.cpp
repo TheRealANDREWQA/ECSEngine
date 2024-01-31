@@ -587,6 +587,7 @@ namespace ECSEngine {
 			copy.fields.Initialize(allocator, fields.size);
 			copy.evaluations.InitializeAndCopy(allocator, evaluations);
 			copy.tag.InitializeAndCopy(allocator, tag);
+			copy.misc_info.Initialize(allocator, misc_info.size);
 			copy.byte_size = byte_size;
 			copy.alignment = alignment;
 			copy.folder_hierarchy_index = folder_hierarchy_index;
@@ -597,6 +598,9 @@ namespace ECSEngine {
 				copy.fields[index].tag.InitializeAndCopy(allocator, fields[index].tag);
 				copy.fields[index].definition.InitializeAndCopy(allocator, fields[index].definition);
 				copy.fields[index].info = fields[index].info;
+			}
+			for (size_t index = 0; index < misc_info.size; index++) {
+				copy.misc_info[index] = misc_info[index].Copy(allocator);
 			}
 
 			return copy;
@@ -666,6 +670,17 @@ namespace ECSEngine {
 			else {
 				copy.evaluations = { nullptr, 0 };
 			}
+
+			if (misc_info.size > 0) {
+				copy.misc_info.InitializeFromBuffer(ptr, misc_info.size);
+				for (size_t index = 0; index < misc_info.size; index++) {
+					copy.misc_info[index] = misc_info[index].CopyTo(ptr);
+				}
+			}
+			else {
+				copy.misc_info = {};
+			}
+
 			copy.folder_hierarchy_index = folder_hierarchy_index;
 			copy.is_blittable = is_blittable;
 			copy.is_blittable_with_pointer = is_blittable_with_pointer;

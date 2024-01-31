@@ -29,6 +29,17 @@ namespace ECSEngine {
 			Stream<char> field_name;
 			Stream<char> body;
 		};
+		
+		// This structure differs in the sense that it
+		// Contains the names of the fields, not the indices
+		struct ReflectionTypeMiscNamedSoa {
+			Stream<char> type_name;
+			Stream<char> name;
+			Stream<char> size_field;
+			Stream<char> capacity_field;
+			Stream<char> parallel_streams[_countof(ReflectionTypeMiscSoa::parallel_streams)];
+			unsigned char parallel_stream_count;
+		};
 
 		struct ReflectionManagerParseStructuresThreadTaskData {
 			CapacityStream<char> thread_memory;
@@ -2220,13 +2231,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		{
 			data.error_message = error_message;
 
-			// Allocate memory for the type and enum stream; speculate 64 types and 32 enums
-			const size_t max_types = 32;
+			// Allocate memory for the type and enum stream; speculate some reasonable numbers
+			const size_t max_types = 64;
 			const size_t max_enums = 16;
 			const size_t path_size = 128;
-			const size_t max_constants = 32;
-			const size_t max_expressions = 32;
-			const size_t max_embedded_array_size = 32;
+			const size_t max_constants = 64;
+			const size_t max_expressions = 64;
+			const size_t max_embedded_array_size = 64;
 
 			data.types.Initialize(folders.allocator, 0, max_types);
 			data.enums.Initialize(folders.allocator, 0, max_enums);
@@ -3203,6 +3214,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			type.name = name;
 			type.byte_size = 0;
 
+			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscNamedSoa, type_named_soa, 32);
+
 			// find next line tokens and exclude the next after the opening paranthese and replace
 			// the closing paranthese with \0 in order to stop searching there
 			ECS_STACK_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
@@ -3450,6 +3463,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							field_end[0] = '\0';
 
 							// Must check if it is a function definition - if it is then skip it
+							// Also, some misc macros could fit in here
 							const char* opened_paranthese = strchr(field_start, '(');
 							field_end[0] = ';';
 
@@ -3462,6 +3476,57 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								}
 								else if (result == ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED) {
 									omitted_fields = true;
+								}
+							}
+							else {
+								// Check to see if this is a misc macro
+								Stream<char> misc_macro_parse_range = { field_start + 1, PointerDifference(field_end, field_start + 1) / sizeof(char) };
+								Stream<char> misc_macro = SkipWhitespaceEx(misc_macro_parse_range);
+								if (misc_macro.size > 0) {
+									// Check to see if this is a misc macro
+									if (misc_macro.StartsWith(STRING(ECS_SOA_REFLECT))) {
+										// If this macro is properly written, accept it
+										// It needs to have at least 5 arguments - a name,
+										// a size field and a capacity field and at least 2
+										// parallel streams
+										Stream<char> argument_string = GetStringParameter(misc_macro);
+										if (argument_string.size > 0) {
+											ECS_STACK_CAPACITY_STREAM(Stream<char>, soa_parameters, 32);
+											SplitString(argument_string, ',', soa_parameters);
+											if (soa_parameters.size >= 5) {
+												// Eliminate leading or trailing whitespace
+												for (unsigned int soa_index = 0; soa_index < soa_parameters.size; soa_index++) {
+													soa_parameters[soa_index] = SkipWhitespace(soa_parameters[soa_index]);
+													soa_parameters[soa_index] = SkipWhitespace(soa_parameters[soa_index], -1);
+												}
+												
+												if (soa_parameters.size <= _countof(ReflectionTypeMiscNamedSoa::parallel_streams)) {
+													// Add a new entry. We don't need to allocate anything since the
+													// Names are all stable
+													ReflectionTypeMiscNamedSoa named_soa;
+													named_soa.type_name = type.name;
+													named_soa.name = soa_parameters[0];
+													named_soa.size_field = soa_parameters[1];
+													named_soa.capacity_field = soa_parameters[2];
+													named_soa.parallel_stream_count = soa_parameters.size - 3;
+													memcpy(named_soa.parallel_streams, soa_parameters.buffer + 3, soa_parameters.MemoryOf(named_soa.parallel_stream_count));
+													type_named_soa.AddAssert(&named_soa);
+												}
+												else {
+													WriteErrorMessage(data, "Invalid SoA type specification.", file_index);
+													return false;
+												}
+											}
+											else {
+												WriteErrorMessage(data, "Invalid SoA type specification.", file_index);
+												return false;
+											}
+										}
+										else {
+											WriteErrorMessage(data, "Invalid SoA type specification.", file_index);
+											return false;
+										}
+									}
 								}
 							}
 							current_semicolon_index++;
@@ -3515,6 +3580,58 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			if (type.fields.size == 0 && !omitted_fields) {
 				WriteErrorMessage(data, "There were no fields to reflect: ", file_index);
 				return;
+			}
+
+			// We can validate the SoA fields here, such that we don't continue in case there
+			// Is a mismatch between the fields
+			// Allocate memory for the type misc info
+			type.misc_info.InitializeFromBuffer(OffsetPointer(data->thread_memory), type_named_soa.size);
+			data->thread_memory.size += type_named_soa.MemoryOf(type_named_soa.size);
+			data->total_memory += type_named_soa.MemoryOf(type_named_soa.size);
+			for (unsigned int index = 0; index < type_named_soa.size; index++) {
+				auto output_error = [&](Stream<char> field_type, Stream<char> field_name) {
+					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: {#} field {#} doesn't exist. ", type.name, field_type, field_name);
+					WriteErrorMessage(data, message.buffer, file_index);
+				};
+
+				const ReflectionTypeMiscNamedSoa* named_soa = &type_named_soa[index];
+
+				// Build the entry along the way
+				ReflectionTypeMiscInfo* misc_soa = &type.misc_info[index];
+				misc_soa->type = ECS_REFLECTION_TYPE_MISC_INFO_SOA;
+				misc_soa->soa.name = named_soa->name;
+				misc_soa->soa.parallel_stream_count = named_soa->parallel_stream_count;
+
+				unsigned int size_field_index = type.FindField(named_soa->size_field);
+				if (size_field_index == -1) {
+					output_error("size", named_soa->size_field);
+					return;
+				}
+				ECS_ASSERT(size_field_index <= UCHAR_MAX);
+				misc_soa->soa.size_field = size_field_index;
+
+				unsigned int capacity_field_index = -1;
+				if (named_soa->capacity_field != "\"\"") {
+					capacity_field_index = type.FindField(named_soa->capacity_field);
+					if (capacity_field_index == -1) {
+						output_error("capacity", named_soa->capacity_field);
+						return;
+					}
+					ECS_ASSERT(capacity_field_index <= UCHAR_MAX);
+				}
+				misc_soa->soa.capacity_field = capacity_field_index;
+				for (unsigned char subindex = 0; subindex < named_soa->parallel_stream_count; subindex++) {
+					unsigned int current_field_index = type.FindField(named_soa->parallel_streams[subindex]);
+					if (current_field_index == -1) {
+						output_error("stream", named_soa->parallel_streams[subindex]);
+						return;
+					}
+					ECS_ASSERT(current_field_index <= UCHAR_MAX);
+					misc_soa->soa.parallel_streams[subindex] = current_field_index;
+				}
+
+				// We need to add to the total memory the misc copy size
+				data->total_memory += misc_soa->CopySize();
 			}
 
 			data->types.Add(type);
@@ -4276,16 +4393,49 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t GetReflectionTypeByteSize(const ReflectionType* type)
-		{
-			return type->byte_size;
+		size_t GetReflectionTypeSoaIndex(const ReflectionType* type, Stream<char> field) {
+			unsigned int field_index = type->FindField(field);
+			ECS_ASSERT(field_index != -1, "Invalid field for SoA index");
+			return GetReflectionTypeSoaIndex(type, field_index);
+		}
+
+		size_t GetReflectionTypeSoaIndex(const ReflectionType* type, unsigned int field_index) {
+			for (size_t index = 0; index < type->misc_info.size; index++) {
+				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_SOA) {
+					const ReflectionTypeMiscSoa* soa = &type->misc_info[index].soa;
+					if (soa->size_field == field_index || soa->capacity_field == field_index) {
+						return index;
+					}
+
+					for (unsigned char subindex = 0; subindex < soa->parallel_stream_count; subindex++) {
+						if (soa->parallel_streams[subindex] == field_index) {
+							return index;
+						}
+					}
+				}
+			}
+			return -1;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t GetReflectionTypeAlignment(const ReflectionType* type)
+		Stream<void> GetReflectionTypeSoaStream(const ReflectionType* type, const void* data, unsigned int field_index, bool* is_present)
 		{
-			return type->alignment;
+			*is_present = false;
+			size_t soa_index = GetReflectionTypeSoaIndex(type, field_index);
+			if (soa_index != -1) {
+				unsigned int size_field = type->misc_info[soa_index].soa.size_field;
+				if (size_field != field_index || type->misc_info[soa_index].soa.capacity_field != field_index) {
+					void** buffer = (void**)OffsetPointer(data, type->fields[field_index].info.pointer_offset);
+					size_t buffer_size = 0;
+					const void* buffer_size_ptr = OffsetPointer(data, type->fields[field_index].info.pointer_offset);
+					double4 double_buffer_size = ConvertToDouble4FromBasic(type->fields[field_index].info.basic_type, buffer_size_ptr);
+					buffer_size = double_buffer_size.x;
+					*is_present = true;
+					return { *buffer, buffer_size };
+				}
+			}
+			return {};
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -4429,6 +4579,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const Reflection::ReflectionType* type,
 			bool pointers_are_copyable
 		) {
+			// If it has a SoA specification, then it is not blittable
+			for (size_t index = 0; index < type->misc_info.size; index++) {
+				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_SOA) {
+					return false;
+				}
+			}
+
 			for (size_t index = 0; index < type->fields.size; index++) {
 				// Check exceptions
 				ulong2 exception_index = reflection_manager->FindBlittableException(type->fields[index].definition);
@@ -4576,6 +4733,18 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				else if (reflection_type->fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 					reflection_type->fields[index].info.stream_byte_size = reflection_type->fields[index].info.byte_size / 
 						reflection_type->fields[index].info.basic_type_count;
+				}
+			}
+
+			// Include SoA pointers here as well - we can use their stream_byte_size as well
+			for (size_t index = 0; index < reflection_type->misc_info.size; index++) {
+				if (reflection_type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_SOA) {
+					const ReflectionTypeMiscSoa* soa = &reflection_type->misc_info[index].soa;
+					for (unsigned char soa_index = 0; soa_index < soa->parallel_stream_count; soa_index++) {
+						Stream<char> target_type = GetReflectionFieldPointerTarget(reflection_type->fields[index]);
+						size_t stream_byte_size = SearchReflectionUserDefinedTypeByteSize(reflection_manager, target_type);
+						reflection_type->fields[soa->parallel_streams[soa_index]].info.stream_byte_size = stream_byte_size;
+					}
 				}
 			}
 		}
@@ -4829,6 +4998,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		{
 			ECS_ASSERT(info.stream_type == ReflectionStreamFieldType::Pointer);
 			return info.basic_type_count;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		Stream<char> GetReflectionFieldPointerTarget(const ReflectionField& field)
+		{
+			return field.definition;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

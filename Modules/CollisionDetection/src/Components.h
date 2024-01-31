@@ -82,8 +82,8 @@ struct ECS_REFLECT_COMPONENT ConvexCollider {
 	}
 
 	unsigned int hull_size;
-	ConvexHull hull; ECS_SKIP_REFLECTION(static_assert(sizeof(ConvexHull) == 32))
-	TriangleMesh mesh; ECS_SKIP_REFLECTION(static_assert(sizeof(TriangleMesh) == 32))
+	ConvexHull hull;
+	TriangleMesh mesh;
 };
 
 bool CompareConvexCollider(const ConvexCollider* first, const ConvexCollider* second);

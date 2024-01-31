@@ -710,7 +710,7 @@ namespace ECSEngine {
 			if (closed_paranthesis.size > 0) {
 				opened_paranthesis = SkipWhitespace(opened_paranthesis);
 				closed_paranthesis = SkipWhitespace(closed_paranthesis, -1);
-				return { opened_paranthesis.buffer, PointerDifference(closed_paranthesis.buffer, opened_paranthesis.buffer) };
+				return { opened_paranthesis.buffer + 1, PointerDifference(closed_paranthesis.buffer, opened_paranthesis.buffer + 1) / sizeof(char) };
 			}
 		}
 		return { nullptr, 0 };

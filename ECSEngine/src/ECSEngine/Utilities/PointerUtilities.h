@@ -17,10 +17,6 @@ namespace ECSEngine {
 		return OffsetPointer(pointer.buffer, pointer.size);
 	}
 
-	ECS_INLINE void* OffsetPointer(CapacityStream<void> pointer) {
-		return OffsetPointer(pointer.buffer, pointer.size);
-	}
-
 	// The alignment needs to be a power of two
 	ECS_INLINE uintptr_t AlignPointer(uintptr_t pointer, size_t alignment) {
 		size_t mask = alignment - 1;

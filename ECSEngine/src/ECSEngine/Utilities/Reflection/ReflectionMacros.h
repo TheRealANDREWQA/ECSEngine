@@ -29,10 +29,26 @@
 // you need to make sure programmatically that the byte size and the alignment are set accordingly.
 #define ECS_EVALUATE_FUNCTION_REFLECT
 
+// With this macro you can specify SoA fields. The fields need to be specified by their
+// Name, with the size field being the first one mentioned, with an optional capacity field
+// In order to skip the capacity field if there is none, you simply need to use "". The first
+// Argument is a name that you can give for the overarching SoA stream - in case of aggregate streams, 
+// like for a float3* being split into 3 float*. You can specify empty "" if this is not an aggregate SoA
+// There can be a maximum of 13 parallel streams (should suffice for all intents and purposes)
+#define ECS_SOA_REFLECT(name, size_field, capacity_field, ...)
+//// With this specifier, you can tell other systems to treat multiple SoA streams as a single
+//// Stream of the aggregate type. Works for basic types, like float3, float4. You need to list
+//// The names of the fields here
+//#define ECS_SOA_REFLECT_AGGREGATE(...)
+
 #define ECS_REFLECT_SETTINGS
 #define ECS_REFLECT_COMPONENT
 #define ECS_REFLECT_GLOBAL_COMPONENT
 #define ECS_REFLECT_LINK_COMPONENT(a)
+
+// TODO: The link modifier specifiers are no longer in use
+// Have a thought if these should stick around or they should be removed
+// Together with the link modifier code
 #define ECS_LINK_MODIFIER_FIELD
 #define ECS_LINK_COMPONENT_NEEDS_BUTTON_FUNCTION "NeedsButton"
 

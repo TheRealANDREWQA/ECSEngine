@@ -14,6 +14,20 @@ namespace ECSEngine {
 	// Return true if the header is valid and the deserialization can continue
 	typedef bool (*DeserializeValidateHeader)(Stream<void> header, void* data);
 
+	struct DeserializeFieldInfoFlags {
+		union {
+			unsigned char value = 0;
+			struct {
+				// When the field is tagged as ECS_GIVE_SIZE_REFLECTION this boolean will be set to true
+				// such that the deserializer will know not to treat this as a user defined type and try to
+				// find its definition in the deserialization table
+				bool user_defined_as_blittable : 1;
+				// This is used by the deserializer to know to treat this differently
+				bool soa_pointer : 1;
+			};
+		};
+	};
+
 	struct DeserializeFieldInfo {
 		Stream<char> name;
 		Stream<char> definition;
@@ -24,10 +38,7 @@ namespace ECSEngine {
 		unsigned short byte_size;
 		unsigned short basic_type_count;
 		unsigned int custom_serializer_index;
-		// When the field is tagged as ECS_GIVE_SIZE_REFLECTION this boolean will be set to true
-		// such that the deserializer will know not to treat this as a user defined type and try to
-		// find its definition in the deserialization table
-		bool user_defined_as_blittable;
+		DeserializeFieldInfoFlags flags;
 		unsigned short pointer_offset;
 	};
 
