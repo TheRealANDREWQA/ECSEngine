@@ -426,7 +426,7 @@ string_name.AssertCapacity();
 
 	ECSENGINE_API Date ConvertStringToDate(Stream<wchar_t> characters, ECS_FORMAT_DATE_FLAGS format_flags);
 
-	// Returns the string enclosed in a set of paranthesis. If there are no paranthesis, it returns { nullptr, 0 }
+	// Returns the string enclosed in a set of parenthesis. If there are no parenthesis, it returns { nullptr, 0 }
 	// Example AAAA(BBB) returns BBB
 	ECSENGINE_API Stream<char> GetStringParameter(Stream<char> string);
 

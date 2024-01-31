@@ -1,10 +1,12 @@
+// ECS_REFLECT
 #pragma once
 #include "ECSEngineMath.h"
+#include "ECSEngineReflectionMacros.h"
 #include "Export.h"
 
 using namespace ECSEngine;
 
-struct ConvexHull {
+struct ECS_REFLECT ConvexHull {
 	void Initialize(float* storage, size_t _size);
 
 	void Initialize(AllocatorPolymorphic allocator, size_t _size);
@@ -37,6 +39,8 @@ struct ConvexHull {
 	float* vertices_y;
 	float* vertices_z;
 	size_t size;
+
+	ECS_SOA_REFLECT(vertices, size, "", vertices_x, vertices_y, vertices_z);
 };
 
 COLLISIONDETECTION_API ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator);

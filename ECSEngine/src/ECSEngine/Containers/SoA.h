@@ -89,27 +89,31 @@ namespace ECSEngine {
 	}
 
 	// It will overwrite the given pointers. These pointers need to point to data that needs to be copied
-	// You can specify a different capacity from the size to be copied
 	// The current first pointer needs to be the first pointer of the SoA
 	template<typename FirstPointer, typename... Pointers>
-	void SoACopyReallocate(AllocatorPolymorphic allocator, size_t size, size_t capacity, void* current_first_pointer, FirstPointer** first_pointer, Pointers... pointers) {
+	void SoACopyReallocate(AllocatorPolymorphic allocator, size_t size, size_t capacity, FirstPointer** first_pointer, Pointers... pointers) {
 		if (capacity > 0) {
 			size_t allocation_size = internal::SoACalculateSizeImpl(capacity, first_pointer, pointers...);
 			
+			// Unfortunately, we cannot use ReallocateEx because of the aliasing reason
+			// Since the buffers are coalesced, we would need to write the pointers in reverse
+			// Order using memmove. We could probably write that, by inversing the logic
+			// Inside SoACopyImpl, but it is probably not worth the effort. At the moment, stick
+			// with Allocate/Deallocate pair instead of Reallocate
 			void* allocation = nullptr;
-			if (current_first_pointer == nullptr) {
-				allocation = AllocateEx(allocator, allocation_size);
-			}
-			else {
-				allocation = ReallocateEx(allocator, current_first_pointer, allocation_size);
-			}
+			void* initial_pointer = *first_pointer;
+
+			allocation = AllocateEx(allocator, allocation_size);
 			uintptr_t ptr = (uintptr_t)allocation;
 
 			internal::SoACopyImpl(ptr, size, capacity, first_pointer, pointers...);
+			if (initial_pointer != nullptr) {
+				DeallocateEx(allocator, initial_pointer);
+			}
 		}
 		else {
-			if (current_first_pointer != nullptr) {
-				Deallocate(allocator, current_first_pointer);
+			if (*first_pointer != nullptr) {
+				DeallocateEx(allocator, *first_pointer);
 			}
 		}
 	}

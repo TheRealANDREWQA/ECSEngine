@@ -412,9 +412,24 @@ namespace ECSEngine {
 		// Calculates the byte size and the alignment alongside the is_blittable values
 		ECSENGINE_API void CalculateReflectionTypeCachedParameters(const ReflectionManager* reflection_manager, ReflectionType* type);
 
-		ECSENGINE_API size_t GetReflectionTypeByteSize(const ReflectionType* type);
+		ECS_INLINE size_t GetReflectionTypeByteSize(const ReflectionType* type) {
+			return type->byte_size;
+		}
 
-		ECSENGINE_API size_t GetReflectionTypeAlignment(const ReflectionType* type);
+		ECS_INLINE size_t GetReflectionTypeAlignment(const ReflectionType* type) {
+			return type->alignment;
+		}
+
+		// Returns the index inside the misc_info of the SoA description that contains this field, else -1
+		ECSENGINE_API size_t GetReflectionTypeSoaIndex(const ReflectionType* type, Stream<char> field);
+		
+		// Returns the index inside the misc_info of the SoA description that contains this field, else -1
+		ECSENGINE_API size_t GetReflectionTypeSoaIndex(const ReflectionType* type, unsigned int field_index);
+
+		// Returns { nullptr, 0 } if the field is not an SoA entry, else the stream with the size the actual
+		// Size from the given data (for a parallel stream entry). You must also pass a bool out parameter
+		// Such that you can distinguish between a missing entry and an empty stream
+		ECSENGINE_API Stream<void> GetReflectionTypeSoaStream(const ReflectionType* type, const void* data, unsigned int field_index, bool* is_present);
 
 		// Returns -1 if no match was found. It can return 0 for container types
 		// which have not had their dependencies met yet.
@@ -525,6 +540,10 @@ namespace ECSEngine {
 		ECSENGINE_API size_t GetReflectionFieldStreamElementByteSize(const ReflectionFieldInfo& info);
 
 		ECSENGINE_API unsigned char GetReflectionFieldPointerIndirection(const ReflectionFieldInfo& info);
+
+		// Returns the target of the given pointer field. For multi-indirection pointers, it will return
+		// The next lower leveled of the indirection
+		ECSENGINE_API Stream<char> GetReflectionFieldPointerTarget(const ReflectionField& field);
 
 		ECSENGINE_API ReflectionBasicFieldType ConvertBasicTypeMultiComponentToSingle(ReflectionBasicFieldType type);
 

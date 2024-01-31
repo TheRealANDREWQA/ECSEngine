@@ -1,21 +1,19 @@
+// ECS_REFLECT
 #pragma once
 #include "../Utilities/BasicTypes.h"
 #include "../Containers/Stream.h"
 #include <float.h>
+#include "../Utilities/Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {
 
-	struct ECSENGINE_API TriangleMesh {
+	struct ECSENGINE_API ECS_REFLECT TriangleMesh {
 		ECS_INLINE unsigned int AddPoint(float3 point) {
-			ECS_ASSERT(position_count < position_capacity);
-			positions[position_count++] = point;
-			return position_count - 1;
+			return positions.AddAssert(point);
 		}
 
 		ECS_INLINE unsigned int AddTriangle(uint3 triangle_indices) {
-			ECS_ASSERT(triangle_count < triangle_capacity);
-			triangles[triangle_count++] = triangle_indices;
-			return triangle_count - 1;
+			return triangles.AddAssert(triangle_indices);
 		}
 
 		void AddTriangleWithPoints(float3 point_a, float3 point_b, float3 point_c);
@@ -46,21 +44,9 @@ namespace ECSEngine {
 
 		void Resize(AllocatorPolymorphic allocator, unsigned int new_position_capacity, unsigned int new_triangle_capacity);
 
-		ECS_INLINE Stream<float3> Positions() const {
-			return { positions, position_count };
-		}
-
-		ECS_INLINE Stream<uint3> Triangles() const {
-			return { triangles, triangle_count };
-		}
-
 		// These are coalesced
-		float3* positions;
-		uint3* triangles;
-		unsigned int position_count;
-		unsigned int position_capacity;
-		unsigned int triangle_count;
-		unsigned int triangle_capacity;
+		CapacityStream<float3> positions;
+		CapacityStream<uint3> triangles;
 	};
 
 	//ECSENGINE_API 
