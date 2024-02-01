@@ -24,6 +24,8 @@ namespace ECSEngine {
 		ECSENGINE_API ReflectionBasicFieldType ConvertStringToBasicFieldType(Stream<char> string);
 
 		// This one parses primitive types, float, uint8_t, char, Stream<float>, float*
+		// This function can't tell the difference between SoA pointers and normal pointers
+		// It will report normal pointers all the time
 		ECSENGINE_API void ConvertStringToPrimitiveType(Stream<char> string, ReflectionBasicFieldType& basic_type, ReflectionStreamFieldType& stream_type);
 
 		// This one parses the STRING() variant of the ReflectionBasicFieldType::

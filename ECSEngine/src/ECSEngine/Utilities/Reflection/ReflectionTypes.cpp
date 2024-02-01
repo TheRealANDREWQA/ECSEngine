@@ -182,6 +182,8 @@ namespace ECSEngine {
 			alignof(Stream<void>),
 			alignof(CapacityStream<void>),
 			alignof(ResizableStream<char>),
+			// PointerSoA,
+			alignof(void*),
 			// Unknown
 			8
 		};
@@ -433,6 +435,66 @@ namespace ECSEngine {
 #undef CASE4
 #undef CASE4_INT32
 #undef CASE4_INT_BASE
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t ConvertToSizetFromBasic(ReflectionBasicFieldType basic_type, const void* value) {
+			switch (basic_type) {
+			case ReflectionBasicFieldType::UInt8:
+			{
+				return *(unsigned char*)value;
+			}
+			case ReflectionBasicFieldType::UInt16:
+			{
+				return *(unsigned short*)value;
+			}
+			case ReflectionBasicFieldType::UInt32:
+			{
+				return *(unsigned int*)value;
+			}
+			case ReflectionBasicFieldType::UInt64:
+			{
+				return *(size_t*)value;
+			}
+			default:
+				ECS_ASSERT(false, "Invalid reflection basic type to convert to size_t");
+			}
+
+			return -1;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ConvertFromSizetToBasic(ReflectionBasicFieldType basic_type, size_t value, void* pointer_value) {
+			switch (basic_type) {
+			case ReflectionBasicFieldType::UInt8:
+			{
+				unsigned char* ptr = (unsigned char*)pointer_value;
+				*ptr = value;
+			}
+			break;
+			case ReflectionBasicFieldType::UInt16:
+			{
+				unsigned short* ptr = (unsigned short*)pointer_value;
+				*ptr = value;
+			}
+			break;
+			case ReflectionBasicFieldType::UInt32:
+			{
+				unsigned int* ptr = (unsigned int*)pointer_value;
+				*ptr = value;
+			}
+			break;
+			case ReflectionBasicFieldType::UInt64:
+			{
+				size_t* ptr = (size_t*)pointer_value;
+				*ptr = value;
+			}
+			break;
+			default:
+				ECS_ASSERT(false, "Invalid reflection basic type to write a size_t");
+			}
+		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 

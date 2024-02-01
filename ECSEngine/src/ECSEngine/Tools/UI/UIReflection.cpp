@@ -2405,7 +2405,8 @@ namespace ECSEngine {
 				// No need to mirror
 			}
 			else {
-				if (stream_type == ReflectionStreamFieldType::Pointer || stream_type == ReflectionStreamFieldType::Stream)
+				if (stream_type == ReflectionStreamFieldType::Pointer || stream_type == ReflectionStreamFieldType::PointerSoA 
+					|| stream_type == ReflectionStreamFieldType::Stream)
 				{
 					CapacityStream<void>* allocation = (CapacityStream<void>*)drawer->allocator->Allocate(sizeof(CapacityStream<void>));
 					field_value.capacity = allocation;
@@ -2600,7 +2601,7 @@ namespace ECSEngine {
 						// Only pointers and streams can be used with this - basic type array doesn't make sense since
 						// its capacity is bound at compile time
 						else if (reflect_stream_type == ReflectionStreamFieldType::Pointer || reflect_stream_type == ReflectionStreamFieldType::CapacityStream
-							|| reflect_stream_type == ReflectionStreamFieldType::Stream) {
+							|| reflect_stream_type == ReflectionStreamFieldType::Stream || reflect_stream_type == ReflectionStreamFieldType::PointerSoA) {
 							field_value->resizable = (ResizableStream<void>*)allocator->Allocate(sizeof(ResizableStream<void>));
 							field_value->resizable->buffer = nullptr;
 							field_value->resizable->size = 0;

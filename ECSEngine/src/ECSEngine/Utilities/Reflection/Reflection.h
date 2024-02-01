@@ -541,9 +541,40 @@ namespace ECSEngine {
 
 		ECSENGINE_API unsigned char GetReflectionFieldPointerIndirection(const ReflectionFieldInfo& info);
 
-		// Returns the target of the given pointer field. For multi-indirection pointers, it will return
-		// The next lower leveled of the indirection
+		// Returns the target of the given pointer field
 		ECSENGINE_API Stream<char> GetReflectionFieldPointerTarget(const ReflectionField& field);
+		
+		// Returns the size of the SoA pointer. Can't return a pointer directly to the size since it
+		// Can have different byte sizes
+		ECSENGINE_API size_t GetReflectionFieldPointerSoASize(const ReflectionFieldInfo& info, const void* data);
+
+		// Returns the size of the SoA pointer. Can't return a pointer directly to the size since it
+		// Can have different byte sizes
+		ECSENGINE_API size_t GetReflectionPointerSoASize(const ReflectionType* type, size_t soa_index, const void* data);
+
+		// Returns the element byte size for each entry in the SoA stream
+		ECSENGINE_API size_t GetReflectionPointerSoAPerElementSize(const ReflectionType* type, size_t soa_index);
+
+		// If the SoA pointers have separate allocations, this function will merge them into a single coalesced allocation
+		ECSENGINE_API void MergeReflectionPointerSoAAllocations(const ReflectionType* type, size_t soa_index, void* data, AllocatorPolymorphic allocator);
+
+		// It will perform the merge for all SoA streams
+		ECSENGINE_API void MergeReflectionPointerSoAAllocationsForType(const ReflectionType* type, void* data, AllocatorPolymorphic allocator);
+
+		// Returns true if the field index is the first pointer in a parallel SoA stream
+		ECSENGINE_API bool IsReflectionPointerSoAAllocationHolder(const ReflectionType* type, unsigned int field_index);
+
+		// Deallocate the SoA pointer of the given field only if it is the first one from the SoA stream. Returns true
+		// in that case, else false
+		ECSENGINE_API bool DeallocateReflectionPointerSoAAllocation(const ReflectionType* type, unsigned int field_index, void* data, AllocatorPolymorphic allocator);
+
+		// Writes the size into the size field of the given SoA pointer. This function takes care of the
+		// Byte size of the size field
+		ECSENGINE_API void SetReflectionFieldPointerSoASize(const ReflectionFieldInfo& info, void* data, size_t value);
+
+		// Writes the size into the size field of the given SoA pointer. This function takes care of the
+		// Byte size of the size field
+		ECSENGINE_API void SetReflectionPointerSoASize(const ReflectionType* type, size_t soa_index, void* data, size_t value);
 
 		ECSENGINE_API ReflectionBasicFieldType ConvertBasicTypeMultiComponentToSingle(ReflectionBasicFieldType type);
 
@@ -709,8 +740,10 @@ namespace ECSEngine {
 		ECSENGINE_API void ConvertReflectionFieldToOtherField(
 			const ReflectionManager* first_reflection_manager,
 			const ReflectionManager* second_reflection_manager,
-			const ReflectionField* first_field,
-			const ReflectionField* second_field,
+			const ReflectionType* first_type,
+			const ReflectionType* second_type,
+			unsigned int first_type_field_index,
+			unsigned int second_type_field_index,
 			const void* first_data,
 			void* second_data,
 			const CopyReflectionDataOptions* options
@@ -722,7 +755,8 @@ namespace ECSEngine {
 		// The reflection manager can be made nullptr if you are sure there are no nested types or custom types
 		ECSENGINE_API void CopyReflectionFieldInstance(
 			const ReflectionManager* reflection_manager,
-			const ReflectionField* field,
+			const ReflectionType* type,
+			unsigned int field_index,
 			const void* source,
 			void* destination,
 			const CopyReflectionDataOptions* options

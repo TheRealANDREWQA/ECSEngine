@@ -500,7 +500,8 @@ namespace ECSEngine {
 			else if (info.stream_type == Reflection::ReflectionStreamFieldType::BasicTypeArray) {
 				return Write<write_data>(&stream, &info.basic_type_count, sizeof(info.basic_type_count)) + Write<write_data>(&stream, data, info.byte_size);
 			}
-			else if (IsStream(info.stream_type)) {
+			else if (IsStreamWithSoA(info.stream_type)) {
+				// The SoA case can be handled here as well
 				Stream<void> void_stream = GetReflectionFieldStreamVoid(info, data);
 				size_t element_byte_size = GetReflectionFieldStreamElementByteSize(info);
 				size_t write_size = WriteWithSize<write_data>(&stream, void_stream.buffer, void_stream.size * element_byte_size);
@@ -600,7 +601,8 @@ namespace ECSEngine {
 					ECS_ASSERT(false, "Cannot deserialize pointer with indirection greater than 1.");
 				}
 			}
-			else if (IsStream(info.stream_type)) {
+			// We can put the PointerSoA in the same case as this
+			else if (IsStreamWithSoA(info.stream_type)) {
 				size_t byte_size = 0;
 				Read<true>(&stream, &byte_size, sizeof(byte_size));
 
@@ -676,6 +678,7 @@ namespace ECSEngine {
 						}
 					}
 				}
+				// The pointer SoA case doesn't need to be handled, since the size is read anyways afterwards
 				return byte_size;
 			}
 		}
