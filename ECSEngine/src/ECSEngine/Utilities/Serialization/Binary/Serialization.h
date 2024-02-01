@@ -22,8 +22,6 @@ namespace ECSEngine {
 				// such that the deserializer will know not to treat this as a user defined type and try to
 				// find its definition in the deserialization table
 				bool user_defined_as_blittable : 1;
-				// This is used by the deserializer to know to treat this differently
-				bool soa_pointer : 1;
 			};
 		};
 	};

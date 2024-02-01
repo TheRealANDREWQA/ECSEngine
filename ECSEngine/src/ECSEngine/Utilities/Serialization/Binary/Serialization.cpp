@@ -159,7 +159,6 @@ namespace ECSEngine {
 
 					DeserializeFieldInfoFlags flags;
 					flags.user_defined_as_blittable = blittable_user_defined;
-					flags.soa_pointer = GetReflectionTypeSoaIndex(type, index) != -1;
 					total_size += Write<write_data>(&stream, &field->info.stream_type, sizeof(field->info.stream_type));
 					total_size += Write<write_data>(&stream, &field->info.stream_byte_size, sizeof(field->info.stream_byte_size));
 					total_size += Write<write_data>(&stream, &field->info.basic_type, sizeof(field->info.basic_type));
@@ -591,23 +590,6 @@ namespace ECSEngine {
 						*total_size += Write<write_data>(&stream, field_data, field->info.byte_size);
 					}
 					else {
-						auto serialize_stream = [&](Stream<void> field_stream) {
-							if (is_user_defined) {
-								size_t type_byte_size = GetReflectionTypeByteSize(&nested_type);
-
-								// Write the size first and then the user defined
-								*total_size += Write<write_data>(&stream, &field_stream.size, sizeof(field_stream.size));
-								for (size_t index = 0; index < field_stream.size; index++) {
-									SerializeImplementation<write_data>(reflection_manager, &nested_type, OffsetPointer(field_data, index * type_byte_size), stream, nested_options, total_size);
-								}
-							}
-							else {
-								// This will correctly take the byte size from a SoA pointer
-								field_stream.size *= GetReflectionFieldStreamElementByteSize(field->info);
-								*total_size += WriteWithSize<write_data>(&stream, field_stream.buffer, field_stream.size);
-							}
-						};
-
 						// User defined, call the serialization for it
 						if (stream_type == ReflectionStreamFieldType::Basic && is_user_defined) {
 							// No need to test the return code since it cannot fail if it gets to here
@@ -617,32 +599,24 @@ namespace ECSEngine {
 						// If pointer, only do it for 1 level of indirection and ASCII or wide char strings
 						else if (stream_type == ReflectionStreamFieldType::Pointer) {
 							if (GetReflectionFieldPointerIndirection(type->fields[index].info) == 1) {
-								// Check to see if it is an SoA stream
-								bool is_soa = false;
-								Stream<void> soa_data = GetReflectionTypeSoaStream(type, data, index, &is_soa);
-								if (is_soa) {
-									serialize_stream(soa_data);
+								// Treat user defined pointers as pointers to a single entity
+								if (is_user_defined) {
+									// No need to test the return code since it cannot fail if it gets to here
+									SerializeImplementation<write_data>(reflection_manager, &nested_type, *(void**)field_data, stream, nested_options, total_size);
 								}
+								else if (basic_type == ReflectionBasicFieldType::Int8) {
+									const char* characters = *(const char**)field_data;
+									size_t character_size = strlen(characters) + 1;
+									*total_size += WriteWithSize<write_data>(&stream, characters, character_size);
+								}
+								else if (basic_type == ReflectionBasicFieldType::Wchar_t) {
+									const wchar_t* characters = *(const wchar_t**)field_data;
+									size_t character_size = wcslen(characters) + 1;
+									*total_size += WriteWithSize<write_data>(&stream, characters, character_size * sizeof(wchar_t));
+								}
+								// Other type of pointers cannot be serialized - they must be turned into streams
 								else {
-									// Treat user defined pointers as pointers to a single entity
-									if (is_user_defined) {
-										// No need to test the return code since it cannot fail if it gets to here
-										SerializeImplementation<write_data>(reflection_manager, &nested_type, *(void**)field_data, stream, nested_options, total_size);
-									}
-									else if (basic_type == ReflectionBasicFieldType::Int8) {
-										const char* characters = *(const char**)field_data;
-										size_t character_size = strlen(characters) + 1;
-										*total_size += WriteWithSize<write_data>(&stream, characters, character_size);
-									}
-									else if (basic_type == ReflectionBasicFieldType::Wchar_t) {
-										const wchar_t* characters = *(const wchar_t**)field_data;
-										size_t character_size = wcslen(characters) + 1;
-										*total_size += WriteWithSize<write_data>(&stream, characters, character_size * sizeof(wchar_t));
-									}
-									// Other type of pointers cannot be serialized - they must be turned into streams
-									else {
-										ECS_ASSERT(false, "Cannot serialize pointers of indirection 1 of types other than char or wchar_t.");
-									}
+									ECS_ASSERT(false, "Cannot serialize pointers of indirection 1 of types other than char or wchar_t.");
 								}
 							}
 							// Other types of pointers cannot be serialized - multi level indirections are not allowed
@@ -666,12 +640,31 @@ namespace ECSEngine {
 								*total_size += Write<write_data>(&stream, field_data, field->info.byte_size);
 							}
 						}
-						// Streams should be handled by the custom serializer					
+						// Streams of user defined types should be handled by the custom serializer					
 						else {
-							// Check for streams. All, Stream, CapacityStream and ResizableStream can be aliased with a normal stream
+							// Check for streams. All, Stream, CapacityStream, ResizableStream and PointerSoA can be aliased with a normal stream
 							// Since we are interested in writing only the data along side the byte size
 							Stream<void> field_stream = GetReflectionFieldStreamVoid(field->info, data);
-							serialize_stream(field_stream);
+							if (is_user_defined) {
+								size_t type_byte_size = GetReflectionTypeByteSize(&nested_type);
+
+								// Write the size first and then the user defined
+								*total_size += Write<write_data>(&stream, &field_stream.size, sizeof(field_stream.size));
+								for (size_t index = 0; index < field_stream.size; index++) {
+									SerializeImplementation<write_data>(
+										reflection_manager, 
+										&nested_type, 
+										OffsetPointer(field_data, index * type_byte_size), 
+										stream, 
+										nested_options, 
+										total_size
+									);
+								}
+							}
+							else {
+								field_stream.size *= GetReflectionFieldStreamElementByteSize(field->info);
+								*total_size += WriteWithSize<write_data>(&stream, field_stream.buffer, field_stream.size);
+							}
 						}
 					}
 				}
@@ -779,13 +772,9 @@ namespace ECSEngine {
 				else if (info->basic_type == ReflectionBasicFieldType::Wchar_t) {
 					IgnoreWithSize(&stream);
 				}
-				else if (info->flags.soa_pointer) {
-					// If this is a SoA pointer, we need to ignore with size
-					IgnoreWithSize(&stream);
-				}
 			}
 			else {
-				// All the other stream types can be aliased
+				// All the other stream types or pointerSoA can be aliased
 				IgnoreWithSize(&stream);
 			}
 		}
@@ -830,16 +819,7 @@ namespace ECSEngine {
 					// Indirection 1
 					else if (info->stream_type == ReflectionStreamFieldType::Pointer) {
 						if (info->basic_type_count == 1) {
-							// Check to see if this is a SoA pointer, since we need to read the size
-							// And then ignore the types
-							if (info->flags.soa_pointer) {
-								size_t stream_count = 0;
-								Read<true>(&stream, &stream_count, sizeof(stream_count));
-								IgnoreType(stream, deserialize_table, nested_type, deserialized_manager, stream_count);
-							}
-							else {
-								IgnoreType(stream, deserialize_table, nested_type, deserialized_manager);
-							}
+							IgnoreType(stream, deserialize_table, nested_type, deserialized_manager);
 						}
 						else {
 							ECS_ASSERT(false, "Pointer Indirection greater than 1!");
@@ -848,7 +828,7 @@ namespace ECSEngine {
 					else if (info->stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 						IgnoreType(stream, deserialize_table, nested_type, deserialized_manager, info->basic_type_count);
 					}
-					// The stream types
+					// The stream types or PointerSoA
 					else {
 						size_t stream_count = 0;
 						Read<true>(&stream, &stream_count, sizeof(stream_count));
@@ -1148,100 +1128,9 @@ namespace ECSEngine {
 							case ReflectionStreamFieldType::Pointer:
 							{
 								if (GetReflectionFieldPointerIndirection(type_field_info) == 1) {
-									// Check for SoA pointer mismatch
-									size_t soa_index = GetReflectionTypeSoaIndex(type, subindex);
-									bool type_is_soa = soa_index != -1;
-									bool file_is_soa = file_field_info.flags.soa_pointer;
-									if ((type_is_soa && !file_is_soa) || (!type_is_soa && file_is_soa)) {
-										if (fail_if_mismatch) {
-											if (has_options) {
-												ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
-													" Pointer SoA type mismatch for field {#}. File has {#}, type has {#}.",
-													type_name,
-													type->fields[subindex].name,
-													file_is_soa,
-													type_is_soa
-												);
-											}
-											return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
-										}
-
-										// Ignore the data
-										IgnoreTypeField(stream, deserialize_table, type_index, index, deserialized_manager);
-									}
-
-									if (!type_is_soa) {
-										ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(reflection_manager, nested_type, *(void**)field_data, stream, nested_options, buffer_size);
-										if (code != ECS_DESERIALIZE_OK) {
-											return code;
-										}
-									}
-									else {
-										// We need to read SoA data. We have to treat this more or less like a stream
-										// There is a special case tho - we need to see if we need to make the allocation
-										// Or it has been made already
-										size_t element_count = 0;
-										// This will read the byte size
-										Read<true>(&stream, &element_count, sizeof(element_count));
-
-										*buffer_size += element_count;
-
-										// Must divide by the byte size of each element
-										element_count /= file_field_info.stream_byte_size;
-
-										size_t nested_type_byte_size = GetReflectionTypeByteSize(nested_type);
-
-										void* allocation = nullptr;
-										if constexpr (read_data) {
-											// Verify we need to make the allocation or not
-											bool is_soa_initialized = soa_initialized_indices.Find(soa_index) != -1;
-											if (!is_soa_initialized) {
-												// Gather all the pointer byte sizes to make a single allocation
-												const ReflectionTypeMiscSoa* soa = &type->misc_info[soa_index].soa;
-												size_t per_element_size = 0;
-												// At the same time, push the field indices into the initialized but not read data stream
-												for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
-													per_element_size += type->fields[soa->parallel_streams[soa_stream_index]].info.stream_byte_size;
-													if (soa->parallel_streams[soa_stream_index] != subindex) {
-														// Only if this index is different from ours
-														soa_initialized_but_not_read_indices.AddAssert(soa->parallel_streams[soa_stream_index]);
-													}
-												}
-
-												size_t allocation_size = per_element_size * element_count;
-												AllocatorPolymorphic allocator_to_use = field_allocator.allocator != nullptr ? field_allocator : options->backup_allocator;
-												allocation = Allocate(allocator_to_use, allocation_size);
-
-												// Now write the corresponding pointers in the address
-												for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
-													void** soa_ptr = (void**)OffsetPointer(address, type->fields[soa->parallel_streams[soa_stream_index]].info.pointer_offset);
-													*soa_ptr = allocation;
-													allocation = OffsetPointer(allocation, type->fields[soa->parallel_streams[soa_stream_index]].info.stream_byte_size * element_count);
-												}
-											}
-											else {
-												// We need to remove ourselves from the initialized_but_not_read_indices
-												unsigned int existing_index = soa_initialized_but_not_read_indices.Find(subindex);
-												ECS_ASSERT(existing_index != -1, "Critical error during deserialization");
-												soa_initialized_but_not_read_indices.RemoveSwapBack(existing_index);
-											}
-										}
-
-										// Now deserialize each instance
-										// If the read_data is false, then the offset here does nothing
-										for (size_t element_index = 0; element_index < element_count; element_index++) {
-											ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(
-												reflection_manager,
-												nested_type,
-												OffsetPointer(allocation, element_index * nested_type_byte_size),
-												stream,
-												nested_options,
-												buffer_size
-											);
-											if (code != ECS_DESERIALIZE_OK) {
-												return code;
-											}
-										}
+									ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(reflection_manager, nested_type, *(void**)field_data, stream, nested_options, buffer_size);
+									if (code != ECS_DESERIALIZE_OK) {
+										return code;
 									}
 								}
 								else {
@@ -1257,6 +1146,76 @@ namespace ECSEngine {
 											);
 										}
 										return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
+									}
+								}
+							}
+							break;
+							case ReflectionStreamFieldType::PointerSoA:
+							{
+								// We need to read SoA data. We have to treat this more or less like a stream
+								// There is a special case tho - we need to see if we need to make the allocation
+								// Or it has been made already
+								size_t element_count = 0;
+								// This will read the byte size
+								Read<true>(&stream, &element_count, sizeof(element_count));
+
+								*buffer_size += element_count;
+
+								// Must divide by the byte size of each element
+								element_count /= file_field_info.stream_byte_size;
+
+								size_t nested_type_byte_size = GetReflectionTypeByteSize(nested_type);
+
+								void* allocation = nullptr;
+								if constexpr (read_data) {
+									size_t soa_index = GetReflectionTypeSoaIndex(type, subindex);
+									// Verify we need to make the allocation or not
+									bool is_soa_initialized = soa_initialized_indices.Find(soa_index) != -1;
+									if (!is_soa_initialized) {
+										// Gather all the pointer byte sizes to make a single allocation
+										const ReflectionTypeMiscSoa* soa = &type->misc_info[soa_index].soa;
+										size_t per_element_size = 0;
+										// At the same time, push the field indices into the initialized but not read data stream
+										for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
+											per_element_size += type->fields[soa->parallel_streams[soa_stream_index]].info.stream_byte_size;
+											if (soa->parallel_streams[soa_stream_index] != subindex) {
+												// Only if this index is different from ours
+												soa_initialized_but_not_read_indices.AddAssert(soa->parallel_streams[soa_stream_index]);
+											}
+										}
+
+										size_t allocation_size = per_element_size * element_count;
+										AllocatorPolymorphic allocator_to_use = field_allocator.allocator != nullptr ? field_allocator : options->backup_allocator;
+										allocation = Allocate(allocator_to_use, allocation_size);
+
+										// Now write the corresponding pointers in the address
+										for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
+											void** soa_ptr = (void**)OffsetPointer(address, type->fields[soa->parallel_streams[soa_stream_index]].info.pointer_offset);
+											*soa_ptr = allocation;
+											allocation = OffsetPointer(allocation, type->fields[soa->parallel_streams[soa_stream_index]].info.stream_byte_size * element_count);
+										}
+									}
+									else {
+										// We need to remove ourselves from the initialized_but_not_read_indices
+										unsigned int existing_index = soa_initialized_but_not_read_indices.Find(subindex);
+										ECS_ASSERT(existing_index != -1, "Critical error during deserialization");
+										soa_initialized_but_not_read_indices.RemoveSwapBack(existing_index);
+									}
+								}
+
+								// Now deserialize each instance
+								// If the read_data is false, then the offset here does nothing
+								for (size_t element_index = 0; element_index < element_count; element_index++) {
+									ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(
+										reflection_manager,
+										nested_type,
+										OffsetPointer(allocation, element_index * nested_type_byte_size),
+										stream,
+										nested_options,
+										buffer_size
+										);
+									if (code != ECS_DESERIALIZE_OK) {
+										return code;
 									}
 								}
 							}
@@ -1407,14 +1366,14 @@ namespace ECSEngine {
 								if (file_field_info.stream_type == ReflectionStreamFieldType::Pointer) {
 									// Too difficult to handle this case, at the moment, just leave it be
 									// Ignore the data
-									if (file_field_info.flags.soa_pointer) {
-										size_t pointer_data_byte_size = 0;
-										Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
-										Ignore(&stream, pointer_data_byte_size);
-									}
-									else {
-										Ignore(&stream, file_field_info.stream_byte_size);
-									}
+									Ignore(&stream, file_field_info.stream_byte_size);
+								}
+								else if (file_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+									// Too difficult to handle this case, at the moment, just leave it be
+									// Ignore the data
+									size_t pointer_data_byte_size = 0;
+									Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
+									Ignore(&stream, pointer_data_byte_size);
 								}
 								else {
 									size_t pointer_data_byte_size = 0;
@@ -1542,34 +1501,30 @@ namespace ECSEngine {
 													return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 												}
 
-												// Check to see if this is an SoA stream
-												size_t soa_index = GetReflectionTypeSoaIndex(type, subindex);
-												if (soa_index == -1) {
-													if (type_field_info.basic_type == ReflectionBasicFieldType::Int8) {
-														char** string = (char**)field_data;
-														*string = (char*)allocation;
-													}
-													else if (type_field_info.basic_type == ReflectionBasicFieldType::Wchar_t) {
-														wchar_t** string = (wchar_t**)field_data;
-														*string = (wchar_t*)allocation;
-													}
-													else {
-														ECS_ASSERT(false, "Cannot deserialize pointers of indirection greater than 1");
-
-														if (has_options) {
-															ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Cannot deserialize field {#} which is a "
-																"pointer of indirection greater than 1.", type->fields[subindex].name);
-														}
-														return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
-													}
+												if (type_field_info.basic_type == ReflectionBasicFieldType::Int8) {
+													char** string = (char**)field_data;
+													*string = (char*)allocation;
+												}
+												else if (type_field_info.basic_type == ReflectionBasicFieldType::Wchar_t) {
+													wchar_t** string = (wchar_t**)field_data;
+													*string = (wchar_t*)allocation;
 												}
 												else {
-													// Assert at the moment. Here we should check to see if our
-													// SoA was initialized or not and reject the allocation if we already
-													// Were initialized
-													ECS_ASSERT(false, "Deserialization failed because of a SoA pointer with mismatched type.");
+													ECS_ASSERT(false, "Cannot deserialize pointers of indirection greater than 1");
+
+													if (has_options) {
+														ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Cannot deserialize field {#} which is a "
+															"pointer of indirection greater than 1.", type->fields[subindex].name);
+													}
 													return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 												}
+											}
+											else if (type_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+												// Assert at the moment. Here we should check to see if our
+												// SoA was initialized or not and reject the allocation if we already
+												// Were initialized
+												ECS_ASSERT(false, "Deserialization failed because of a SoA pointer with mismatched type.");
+												return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 											}
 										}
 										else {
@@ -1582,15 +1537,13 @@ namespace ECSEngine {
 						else {
 							// Just ignore the data
 							if (file_field_info.stream_type == ReflectionStreamFieldType::Pointer) {
-								if (file_field_info.flags.soa_pointer) {
-									size_t pointer_data_byte_size = 0;
-									Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
+								Ignore(&stream, file_field_info.stream_byte_size);
+							}
+							else if (file_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+								size_t pointer_data_byte_size = 0;
+								Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
 
-									Ignore(&stream, pointer_data_byte_size);
-								}
-								else {
-									Ignore(&stream, file_field_info.stream_byte_size);
-								}
+								Ignore(&stream, pointer_data_byte_size);
 							}
 							else {
 								size_t pointer_data_byte_size = 0;
@@ -1600,6 +1553,28 @@ namespace ECSEngine {
 							}
 						}
 					}
+				}
+			}
+
+			// Before returning, we need to default initialize the SoA streams that have not been deserialized
+			for (unsigned int index = 0; index < soa_initialized_but_not_read_indices.size; index++) {
+				const ReflectionField* field = &type->fields[soa_initialized_but_not_read_indices[index]];
+				void** pointer = (void**)OffsetPointer(address, field->info.pointer_offset);
+				// If the type is blittable, just memset to 0. Else we need to default initialize every instance
+				size_t pointer_size = GetReflectionFieldPointerSoASize(field->info, address);
+				size_t element_byte_size = GetReflectionFieldStreamElementByteSize(field->info);
+				// At the moment, only user defined types have a special default procedure.
+				// All others are memset'ed. So test for that
+				ReflectionType nested_reflection_type;
+				if (reflection_manager->TryGetType(GetReflectionFieldPointerTarget(*field), nested_reflection_type)) {
+					void* current_pointer = *pointer;
+					for (size_t subindex = 0; subindex < pointer_size; subindex++) {
+						reflection_manager->SetInstanceDefaultData(&nested_reflection_type, current_pointer);
+						current_pointer = OffsetPointer(current_pointer, element_byte_size);
+					}
+				}
+				else {
+					memset(*pointer, 0, pointer_size * element_byte_size);
 				}
 			}
 

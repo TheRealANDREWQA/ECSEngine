@@ -2327,6 +2327,7 @@ namespace ECSEngine {
 						if (data->sections[index].elements[subindex].stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
 							type.fields[0].info.basic_type_count = 1;
 						}
+						// PointerSoA is not handled here
 						type.fields[0].info.has_default_value = false;
 
 						UIReflectionType* ui_type = data->ui_reflection->CreateType(&type);
@@ -2340,6 +2341,7 @@ namespace ECSEngine {
 						if (data->sections[index].elements[subindex].stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
 							bind_instance_ptr = &data->sections[index].elements[subindex].data;
 						}
+						// PointerSoA is not handled here
 						data->ui_reflection->BindInstancePtrs(instance, bind_instance_ptr, &type);
 
 						// Bind the stream capacity - if different from capacity stream

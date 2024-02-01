@@ -143,6 +143,7 @@ namespace ECSEngine {
 			FIELD_TYPE_STRING(Stream),
 			FIELD_TYPE_STRING(CapacityStream),
 			FIELD_TYPE_STRING(ResizableStream),
+			FIELD_TYPE_STRING(PointerSoA),
 			FIELD_TYPE_STRING(Unknown)
 		};
 
@@ -846,6 +847,7 @@ namespace ECSEngine {
 				return definition;
 				break;
 			case ReflectionStreamFieldType::Pointer:
+			case ReflectionStreamFieldType::PointerSoA:
 			{
 				Stream<char> asterisk = FindFirstCharacter(definition, '*');
 				Stream<char> result;

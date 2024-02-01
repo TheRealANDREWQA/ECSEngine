@@ -74,6 +74,7 @@ namespace ECSEngine {
 			Stream,
 			CapacityStream,
 			ResizableStream,
+			PointerSoA,
 			Unknown,
 			COUNT
 		};
@@ -139,6 +140,17 @@ namespace ECSEngine {
 			unsigned short stream_byte_size;
 			unsigned short byte_size;
 			unsigned short pointer_offset;
+			
+			// Many reflection functions used ReflectionField/ReflectionFieldInfo as inputs
+			// And having the SoA information per type would break them, requiring to be
+			// Rewritten to accept the ReflectionType and the field index. In order to achieve
+			// A reasonable compromise, we can have the size pointer offset and the basic type 
+			// for the SoA pointer here directly, which would add another unsigned short and a byte, 
+			// but it is not too much of a problem
+			struct {
+				unsigned short soa_size_pointer_offset = 0;
+				ReflectionBasicFieldType soa_size_basic_type = ReflectionBasicFieldType::COUNT;
+			};
 		};
 
 		struct ECSENGINE_API ReflectionField {
@@ -424,6 +436,12 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ConvertFromDouble4ToBasic(ReflectionBasicFieldType basic_type, double4 values, void* converted_values);
 
+		// Converts a single unsigned integer value to a size_t 
+		ECSENGINE_API size_t ConvertToSizetFromBasic(ReflectionBasicFieldType basic_type, const void* value);
+
+		// Converts a single size_t into an unsigned integer value
+		ECSENGINE_API void ConvertFromSizetToBasic(ReflectionBasicFieldType basic_type, size_t value, void* pointer_value);
+
 		// Checks for single, double, triple and quadruple component integers
 		ECSENGINE_API bool IsIntegral(ReflectionBasicFieldType type);
 
@@ -485,6 +503,10 @@ namespace ECSEngine {
 			return type == ReflectionStreamFieldType::Pointer;
 		}
 
+		ECS_INLINE bool IsPointerWithSoA(ReflectionStreamFieldType type) {
+			return type == ReflectionStreamFieldType::Pointer || type == ReflectionStreamFieldType::PointerSoA;
+		}
+
 		ECS_INLINE bool IsEnum(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Enum;
 		}
@@ -496,6 +518,10 @@ namespace ECSEngine {
 		ECS_INLINE bool IsStream(ReflectionStreamFieldType type) {
 			return type == ReflectionStreamFieldType::Stream || type == ReflectionStreamFieldType::CapacityStream
 				|| type == ReflectionStreamFieldType::ResizableStream;
+		}
+
+		ECS_INLINE bool IsStreamWithSoA(ReflectionStreamFieldType type) {
+			return IsStream(type) || type == ReflectionStreamFieldType::PointerSoA;
 		}
 
 	}
