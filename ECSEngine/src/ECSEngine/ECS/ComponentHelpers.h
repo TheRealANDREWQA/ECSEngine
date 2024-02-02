@@ -8,6 +8,7 @@ namespace ECSEngine {
 	namespace Reflection {
 		struct ReflectionManager;
 		struct ReflectionType;
+		struct ReflectionNestedFieldIndex;
 	}
 
 	ECSENGINE_API bool IsReflectionTypeComponent(const Reflection::ReflectionType* type);
@@ -27,22 +28,43 @@ namespace ECSEngine {
 	// corresponds to that buffer index
 	// Example struct { int, Stream<>, Stream<>, int, Stream<> }
 	// buffer_index: 0 -> 1; 1 -> 2, 2 -> 4
+	// If the reflection_manager is specified, it will search deeply into the user defined types
+	// That are referenced by this type
 	ECSENGINE_API ComponentBuffer GetReflectionTypeRuntimeBufferIndex(
+		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type, 
 		unsigned int buffer_index, 
-		unsigned int* field_index = nullptr
+		Reflection::ReflectionNestedFieldIndex* field_index = nullptr
 	);
 
 	// Determines all the buffers that the ECS runtime can use
-	ECSENGINE_API void GetReflectionTypeRuntimeBuffers(const Reflection::ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers);
+	// If the reflection_manager is specified, it will search deeply into the user defined types
+	// That are referenced by this type
+	ECSENGINE_API void GetReflectionTypeRuntimeBuffers(
+		const Reflection::ReflectionManager* reflection_manager, 
+		const Reflection::ReflectionType* type, 
+		CapacityStream<ComponentBuffer>& component_buffers
+	);
 
 	// It needs the stack memory to write some data
 	// It builds default functions to handle Streams and DataPointers
-	ECSENGINE_API ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, CapacityStream<void>* stack_memory);
+	// If the reflection_manager is specified, it will search deeply into the user defined types
+	// That are referenced by this type
+	ECSENGINE_API ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(
+		const Reflection::ReflectionManager* reflection_manager, 
+		const Reflection::ReflectionType* type, 
+		CapacityStream<void>* stack_memory
+	);
 
 	// It needs the allocator to write some data for the functions to use
 	// It builds default functions to handle Streams and DataPointers
-	ECSENGINE_API ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, AllocatorPolymorphic allocator);
+	// If the reflection_manager is specified, it will search deeply into the user defined types
+	// That are referenced by this type
+	ECSENGINE_API ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(
+		const Reflection::ReflectionManager* reflection_manager, 
+		const Reflection::ReflectionType* type, 
+		AllocatorPolymorphic allocator
+	);
 
 	// It needs the stack memory to write some data
 	// It builds default functions to handle reflectable types - in case it is
@@ -80,13 +102,15 @@ namespace ECSEngine {
 	ECSENGINE_API ECS_COMPONENT_TYPE GetReflectionTypeComponentType(const Reflection::ReflectionType* type);
 
 	enum ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT : unsigned char {
-		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NOT_A_COMPONENT,
-		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_VALID,
-		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION,
-		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_IS_SHARED_FUNCTION,
-		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION,
-		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION
+		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_VALID = 0,
+		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NOT_A_COMPONENT = 1 << 0,
+		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION = 1 << 1,
+		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_IS_SHARED_FUNCTION = 1 << 2,
+		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION = 1 << 3,
+		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION = 1 << 4
 	};
+
+	ECS_ENUM_BITWISE_OPERATIONS(ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT);
 
 	ECSENGINE_API bool HasReflectionTypeComponentBuffers(const Reflection::ReflectionType* type);
 

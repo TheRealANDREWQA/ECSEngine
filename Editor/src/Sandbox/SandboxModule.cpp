@@ -516,7 +516,7 @@ unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned 
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>& in_stream_indices)
+void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>& in_stream_indices)
 {
 	// We need to acquire the lock to inspect the modules which are being compiled right now
 	ECS_STACK_CAPACITY_STREAM(unsigned int, active_sandbox_modules, 512);
@@ -544,7 +544,7 @@ void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned in
 void GetSandboxNeededButMissingModules(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	ECSEngine::CapacityStream<unsigned int>& in_stream_indices, 
+	CapacityStream<unsigned int>& in_stream_indices, 
 	bool include_out_of_date
 )
 {
@@ -560,6 +560,45 @@ void GetSandboxNeededButMissingModules(
 			}
 		}
 	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name) {
+	// At the moment, we don't need to consider the ECS components which are shipped from the engine
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		if (!sandbox->modules_in_use[index].is_deactivated) {
+			const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_index, index);
+			Stream<ModuleComponentFunctions> component_functions = info->ecs_module.component_functions;
+			size_t component_index = component_functions.Find(component_name, [](const ModuleComponentFunctions& functions) {
+				return functions.component_name;
+			});
+			if (component_index != -1) {
+				return &component_functions[component_index];
+			}
+		}
+	}
+	return nullptr;
+}
+
+const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	unsigned int module_index, 
+	Stream<char> component_name
+)
+{
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_index, in_stream_index);
+	Stream<ModuleComponentFunctions> component_functions = info->ecs_module.component_functions;
+	size_t component_index = component_functions.Find(component_name, [](const ModuleComponentFunctions& functions) {
+		return functions.component_name;
+	});
+	if (component_index != -1) {
+		return &component_functions[component_index];
+	}
+	return nullptr;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

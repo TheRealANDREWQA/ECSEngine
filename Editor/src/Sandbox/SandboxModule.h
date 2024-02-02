@@ -131,7 +131,7 @@ unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsi
 
 // -------------------------------------------------------------------------------------------------------------
 
-void GetSandboxModuleSettingsPath(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, ECSEngine::CapacityStream<wchar_t>& path);
+void GetSandboxModuleSettingsPath(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, CapacityStream<wchar_t>& path);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -139,12 +139,12 @@ void GetSandboxModuleSettingsPathByIndex(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	unsigned int in_stream_module_index,
-	ECSEngine::CapacityStream<wchar_t>& path
+	CapacityStream<wchar_t>& path
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>& indices);
+void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>& indices);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -156,7 +156,7 @@ unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned 
 // -------------------------------------------------------------------------------------------------------------
 
 // Fills in the in_stream_indices of the modules that this sandbox targets and are currently being compiled
-void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>& in_stream_indices);
+void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>& in_stream_indices);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -164,8 +164,21 @@ void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned in
 void GetSandboxNeededButMissingModules(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	ECSEngine::CapacityStream<unsigned int>& in_stream_indices, 
+	CapacityStream<unsigned int>& in_stream_indices, 
 	bool include_out_of_date
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// It will return the sandbox version of the component functions for the given component. Returns nullptr if it doesn't find it
+const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name);
+
+// It will return the sandbox version of the component functions for the given component. Returns nullptr if it doesn't find it
+const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	unsigned int module_index,
+	Stream<char> component_name
 );
 
 // -------------------------------------------------------------------------------------------------------------

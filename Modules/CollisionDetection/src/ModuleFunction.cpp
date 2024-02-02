@@ -89,24 +89,24 @@ void ModuleRegisterDebugDrawTaskElementsFunction(ECSEngine::ModuleRegisterDebugD
 
 #if 1
 
-static bool ModuleCompareConvexCollider(SharedComponentCompareFunctionData* data) {
-	const ConvexCollider* first = (const ConvexCollider*)data->first;
-	const ConvexCollider* second = (const ConvexCollider*)data->second;
-	return CompareConvexCollider(first, second);
-}
-
-static void ModuleDeallocateConvexCollider(ComponentDeallocateFunctionData* data) {
-	ConvexCollider* collider = (ConvexCollider*)data->data;
-	collider->hull.Deallocate(data->allocator);
-	collider->mesh.Deallocate(data->allocator);
-}
-
-static void ModuleCopyConvexCollider(ComponentCopyFunctionData* data) {
-	ConvexCollider* destination = (ConvexCollider*)data->destination;
-	const ConvexCollider* source = (const ConvexCollider*)data->source;
-	destination->hull.Copy(&source->hull, data->allocator, data->deallocate_previous);
-	destination->mesh.Copy(&source->mesh, data->allocator, data->deallocate_previous);
-}
+//static bool ModuleCompareConvexCollider(SharedComponentCompareFunctionData* data) {
+//	const ConvexCollider* first = (const ConvexCollider*)data->first;
+//	const ConvexCollider* second = (const ConvexCollider*)data->second;
+//	return CompareConvexCollider(first, second);
+//}
+//
+//static void ModuleDeallocateConvexCollider(ComponentDeallocateFunctionData* data) {
+//	ConvexCollider* collider = (ConvexCollider*)data->data;
+//	collider->hull.Deallocate(data->allocator);
+//	collider->mesh.Deallocate(data->allocator);
+//}
+//
+//static void ModuleCopyConvexCollider(ComponentCopyFunctionData* data) {
+//	ConvexCollider* destination = (ConvexCollider*)data->destination;
+//	const ConvexCollider* source = (const ConvexCollider*)data->source;
+//	destination->hull.Copy(&source->hull, data->allocator, data->deallocate_previous);
+//	destination->mesh.Copy(&source->mesh, data->allocator, data->deallocate_previous);
+//}
 
 static void BuildConvexColliderTaskBase(ModuleComponentBuildFunctionData* data) {
 	const RenderMesh* render_mesh = data->entity_manager->TryGetComponent<RenderMesh>(data->entity);
@@ -151,7 +151,7 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	float3 translation_value = translation != nullptr ? translation->value : float3::Splat(0.0f);
 	translation_value = float3::Splat(0.0f);
 	
-	size_t count = collider->mesh.triangle_count < collider->hull_size ? 0 : collider->mesh.triangle_count - collider->hull_size;
+	size_t count = collider->mesh.triangles.size < collider->hull_size ? 0 : collider->mesh.triangles.size - collider->hull_size;
 	for (size_t index = 0; index < count; index++) {
 		uint3 triangle = collider->mesh.triangles[index];
 		float3 a = collider->mesh.positions[triangle.x];
@@ -169,13 +169,9 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 
 void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsData* data) {
 	ModuleComponentFunctions convex_collider;
-	convex_collider.compare_function = ModuleCompareConvexCollider;
-	convex_collider.deallocate_function = ModuleDeallocateConvexCollider;
-	convex_collider.copy_function = ModuleCopyConvexCollider;
 	convex_collider.build_entry.function = ModuleBuildConvexCollider;
 	convex_collider.build_entry.component_dependencies.Initialize(data->allocator, 1);
 	convex_collider.build_entry.component_dependencies[0] = STRING(RenderMesh);
-	convex_collider.allocator_size = ECS_MB * 128;
 	convex_collider.component_name = STRING(ConvexCollider);
 
 	convex_collider.debug_draw.draw_function = ConvexColliderDebugDraw;

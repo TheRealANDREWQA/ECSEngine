@@ -2719,18 +2719,32 @@ namespace ECSEngine {
 			info.extra_data = data;
 			info.name = target_type->name;
 			info.component_fixup.component_byte_size = Reflection::GetReflectionTypeByteSize(target_type);
+			info.component_fixup.component_functions.allocator_size = GetReflectionComponentAllocatorSize(target_type);
 			
 			// Check to see if we find a module defined fixup. If we do not, then auto create one
 			size_t existing_fixup_index = module_component_functions.Find(target, [](const ModuleComponentFunctions& functions) {
 				return functions.component_name;
 			});
 			if (existing_fixup_index == -1) {
-				info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(target_type, allocator);
+				info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(reflection_manager, target_type, allocator);
 				info.component_fixup.compare_entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, target_type, allocator);
 			}
 			else {
-				module_component_functions[existing_fixup_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
-				module_component_functions[existing_fixup_index].SetCompareEntryTo(&info.component_fixup.compare_entry);
+				// Set the functions only if their values are non null. These can be specified for the debug draw
+				// Or the build function, and if that is the case, we still want to generate reflection functions
+				if (module_component_functions[existing_fixup_index].copy_function == nullptr &&
+					module_component_functions[existing_fixup_index].deallocate_function == nullptr) {
+					info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(reflection_manager, target_type, allocator);
+				}
+				else {
+					module_component_functions[existing_fixup_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
+				}
+				if (module_component_functions[existing_fixup_index].compare_function == nullptr) {
+					info.component_fixup.compare_entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, target_type, allocator);
+				}
+				else {
+					module_component_functions[existing_fixup_index].SetCompareEntryTo(&info.component_fixup.compare_entry);
+				}
 			}
 
 			overrides[index] = info;
@@ -2763,17 +2777,29 @@ namespace ECSEngine {
 				info.extra_data = data;
 				info.name = type->name;
 				info.component_fixup.component_byte_size = Reflection::GetReflectionTypeByteSize(type);
+				info.component_fixup.component_functions.allocator_size = GetReflectionComponentAllocatorSize(type);
 
 				size_t existing_component_functions_index = module_component_functions.Find(type->name, [](const ModuleComponentFunctions& entry) {
 					return entry.component_name;
 				});
 				if (existing_component_functions_index == -1) {
-					info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(type, allocator);
+					info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(reflection_manager, type, allocator);
 					info.component_fixup.compare_entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, type, allocator);
 				}
 				else {
-					module_component_functions[existing_component_functions_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
-					module_component_functions[existing_component_functions_index].SetCompareEntryTo(&info.component_fixup.compare_entry);
+					if (module_component_functions[existing_component_functions_index].copy_function == nullptr &&
+						module_component_functions[existing_component_functions_index].deallocate_function == nullptr) {
+						info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(reflection_manager, type, allocator);
+					}
+					else {
+						module_component_functions[existing_component_functions_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
+					}
+					if (module_component_functions[existing_component_functions_index].compare_function == nullptr) {
+						info.component_fixup.compare_entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, type, allocator);
+					}
+					else {
+						module_component_functions[existing_component_functions_index].SetCompareEntryTo(&info.component_fixup.compare_entry);
+					}
 				}
 
 				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };

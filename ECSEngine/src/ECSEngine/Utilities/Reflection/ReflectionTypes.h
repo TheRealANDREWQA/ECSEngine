@@ -417,6 +417,25 @@ namespace ECSEngine {
 			virtual bool Compare(Reflection::ReflectionCustomTypeCompareData* data) = 0;
 		};
 
+		// This structure can be used to reference fields from a type, including nested fields
+		// Such that you can pinpoint the exact field
+		struct ReflectionNestedFieldIndex {
+			ECS_INLINE void Add(unsigned char field_index) {
+				ECS_ASSERT(count < std::size(indices));
+				indices[count++] = field_index;
+			}
+
+			// Adds the values from other to this instance
+			ECS_INLINE void Append(ReflectionNestedFieldIndex other) {
+				ECS_ASSERT(count + other.count <= std::size(indices));
+				memcpy(indices + count, other.indices, other.count * sizeof(indices[0]));
+				count += other.count;
+			}
+
+			unsigned char count = 0;
+			unsigned char indices[7];
+		};
+
 		// Uses a jump table
 		ECSENGINE_API size_t GetReflectionBasicFieldTypeByteSize(ReflectionBasicFieldType basic_type);
 

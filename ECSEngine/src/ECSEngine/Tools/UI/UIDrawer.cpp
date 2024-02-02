@@ -4619,6 +4619,9 @@ namespace ECSEngine {
 							button_config.AddFlag(check_box_callback);
 						}
 
+						// Here, we don't need to have added the region render offset, since we don't use CheckBox
+						// And we use the drawer instead
+						offseted_position -= drawer->region_render_offset;
 						float2 check_box_position = AlignMiddle(offseted_position, square_scale, user_button_scale);
 
 						// The name doesn't need to be specified
@@ -4639,6 +4642,8 @@ namespace ECSEngine {
 					case ECS_UI_COLLAPSING_HEADER_BUTTON_IMAGE_DISPLAY:
 					{
 						size_t configuration = user_button_configuration;
+						// Here, we don't need to have added the region render offset, since we pass the position directly
+						offseted_position -= drawer->region_render_offset;
 						float2 rectangle_position = AlignMiddle(offseted_position, square_scale, user_button_scale);
 						drawer->SpriteRectangle(configuration, rectangle_position, user_button_scale, button->data.image_texture, button->data.image_color);
 					}

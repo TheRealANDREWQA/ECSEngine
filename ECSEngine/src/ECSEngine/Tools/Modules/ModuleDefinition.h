@@ -478,7 +478,8 @@ namespace ECSEngine {
 		// We had to make this choice of explicitly giving only some
 		// Of the fields from the world because it would otherwise create
 		// A lot of complications for the editor code if we were to pass a
-		// World* which would have to be stable
+		// World* which would have to be stable. Remember to use them like
+		// In a multithreaded context!
 		struct {
 			EntityManager* entity_manager;
 			Graphics* world_graphics;
@@ -551,7 +552,6 @@ namespace ECSEngine {
 		}
 
 		void SetComponentFunctionsTo(ComponentFunctions* functions) const {
-			functions->allocator_size = allocator_size;
 			functions->data = copy_deallocate_data;
 			functions->copy_function = copy_function;
 			functions->deallocate_function = deallocate_function;
@@ -561,7 +561,6 @@ namespace ECSEngine {
 			*entry = { compare_function, compare_function_data };
 		}
 
-		size_t allocator_size = 0;
 		ModuleComponentBuildEntry build_entry = { nullptr, {} };
 		ComponentCopyFunction copy_function = nullptr;
 		ComponentDeallocateFunction deallocate_function = nullptr;

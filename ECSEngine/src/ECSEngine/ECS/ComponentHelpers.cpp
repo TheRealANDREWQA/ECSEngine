@@ -80,23 +80,53 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
-	ComponentBuffer GetReflectionTypeRuntimeBufferIndex(const ReflectionType* type, unsigned int buffer_index, unsigned int* field_index)
+	ComponentBuffer GetReflectionTypeRuntimeBufferIndex(
+		const ReflectionManager* reflection_manager, 
+		const ReflectionType* type, 
+		unsigned int buffer_index, 
+		ReflectionNestedFieldIndex* field_index
+	)
 	{
 		unsigned int index = 0;
 		unsigned int current_buffer_index = 0;
 		for (; index < type->fields.size && current_buffer_index <= buffer_index; index++) {
-			if (IsStream(type->fields[index].info.stream_type) && type->fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
+			if (IsStreamWithSoA(type->fields[index].info.stream_type) && type->fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
 				current_buffer_index++;
 			}
 			else if (type->fields[index].definition == STRING(DataPointer)) {
 				current_buffer_index++;
+			}
+			else {
+				if (reflection_manager != nullptr) {
+					// See if this is a user defined type that we need to recurse to
+					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined && 
+						type->fields[index].info.stream_type == ReflectionStreamFieldType::Basic) {
+						ReflectionType nested_type;
+						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
+							ReflectionNestedFieldIndex nested_buffer_index;
+							ComponentBuffer nested_buffer = GetReflectionTypeRuntimeBufferIndex(
+								reflection_manager,
+								&nested_type,
+								buffer_index - current_buffer_index,
+								&nested_buffer_index
+							);
+							if (nested_buffer_index.count > 0) {
+								// We can return now
+								if (field_index != nullptr) {
+									field_index->Append(nested_buffer_index);
+								}
+								return nested_buffer;
+							}
+						}
+					}
+				}
 			}
 		}
 
 		if (current_buffer_index <= buffer_index) {
 			// Invalid buffer index
 			if (field_index != nullptr) {
-				*field_index = -1;
+				field_index->count = 0;
 			}
 			return {};
 		}
@@ -113,27 +143,37 @@ namespace ECSEngine {
 			component_buffer.element_byte_size = type->fields[index].info.stream_byte_size;
 			component_buffer.is_data_pointer = false;
 			component_buffer.pointer_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, buffer);
-			component_buffer.size_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, size);
+			if (type->fields[index].info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+				component_buffer.size_offset = type->fields[index].info.soa_size_pointer_offset;
+			}
+			else {
+				component_buffer.size_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, size);
+			}
 		}
 		if (field_index != nullptr) {
-			*field_index = index;
+			field_index->Add(index);
 		}
 		return component_buffer;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
-	void GetReflectionTypeRuntimeBuffers(const ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers)
+	void GetReflectionTypeRuntimeBuffers(const ReflectionManager* reflection_manager, const ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers)
 	{
 		// Get the buffers and the data_pointers
 		for (size_t index = 0; index < type->fields.size; index++) {
-			if (IsStream(type->fields[index].info.stream_type) && type->fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
+			if (IsStreamWithSoA(type->fields[index].info.stream_type) && type->fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
 				ComponentBuffer component_buffer;
 				component_buffer.element_byte_size = type->fields[index].info.stream_byte_size;
 				component_buffer.is_data_pointer = false;
 				component_buffer.pointer_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, buffer);
-				component_buffer.size_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, size);
-				component_buffers.Add(component_buffer);
+				if (type->fields[index].info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+					component_buffer.size_offset = type->fields[index].info.soa_size_pointer_offset;
+				}
+				else {
+					component_buffer.size_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, size);
+				}
+				component_buffers.AddAssert(component_buffer);
 			}
 			else if (type->fields[index].definition == STRING(DataPointer)) {
 				// TODO: Add a reflection field tag such that it can specify the stream byte size
@@ -142,13 +182,27 @@ namespace ECSEngine {
 				component_buffer.is_data_pointer = true;
 				component_buffer.pointer_offset = type->fields[index].info.pointer_offset;
 				component_buffer.size_offset = 0;
-				component_buffers.Add(component_buffer);
+				component_buffers.AddAssert(component_buffer);
+			}
+			else {
+				// See if we need to recurse to user defined types
+				if (reflection_manager != nullptr) {
+					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined &&
+						type->fields[index].info.stream_type == ReflectionStreamFieldType::Basic) {
+						ReflectionType nested_type;
+						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
+							GetReflectionTypeRuntimeBuffers(reflection_manager, &nested_type, component_buffers);
+						}
+					}
+				}
 			}
 		}
-		component_buffers.AssertCapacity();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
+
+	// TODO: Should we drop the component buffer representation and just use ReflectionTypes directly?
+	// This would require us storing all the nested types as well.
 
 	struct RuntimeComponentCopyDeallocateData {
 		ComponentBuffer component_buffers[MAX_COMPONENT_BUFFERS];
@@ -178,11 +232,11 @@ namespace ECSEngine {
 		}
 	}
 
-	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, CapacityStream<void>* stack_memory)
+	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const ReflectionManager* reflection_manager, const ReflectionType* type, CapacityStream<void>* stack_memory)
 	{
 		ComponentFunctions component_functions;
 		ECS_STACK_CAPACITY_STREAM(ComponentBuffer, component_buffers, MAX_COMPONENT_BUFFERS);
-		GetReflectionTypeRuntimeBuffers(type, component_buffers);
+		GetReflectionTypeRuntimeBuffers(reflection_manager, type, component_buffers);
 		if (component_buffers.size > 0) {
 			component_functions.copy_function = ReflectionTypeRuntimeComponentCopy;
 			component_functions.deallocate_function = ReflectionTypeRuntimeComponentDeallocate;
@@ -199,10 +253,10 @@ namespace ECSEngine {
 		return component_functions;
 	}
 
-	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const Reflection::ReflectionType* type, AllocatorPolymorphic allocator)
+	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const ReflectionManager* reflection_manager, const ReflectionType* type, AllocatorPolymorphic allocator)
 	{
 		ECS_STACK_VOID_STREAM(stack_memory, 1024);
-		ComponentFunctions result = GetReflectionTypeRuntimeComponentFunctions(type, &stack_memory);
+		ComponentFunctions result = GetReflectionTypeRuntimeComponentFunctions(reflection_manager, type, &stack_memory);
 		if (result.data.size > 0) {
 			result.data = result.data.Copy(allocator);
 		}
@@ -241,8 +295,8 @@ namespace ECSEngine {
 	}
 
 	SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type, 
+		const ReflectionManager* reflection_manager,
+		const ReflectionType* type, 
 		CapacityStream<void>* stack_memory
 	)
 	{
@@ -262,7 +316,7 @@ namespace ECSEngine {
 			}
 
 			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, runtime_buffers, MAX_COMPONENT_BUFFERS);
-			GetReflectionTypeRuntimeBuffers(type, runtime_buffers);
+			GetReflectionTypeRuntimeBuffers(reflection_manager, type, runtime_buffers);
 			runtime_buffers.AssertCapacity();
 			data->component_buffer_count = runtime_buffers.size;
 			runtime_buffers.CopyTo(data->component_buffers);
@@ -373,36 +427,37 @@ namespace ECSEngine {
 
 	ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT ValidateReflectionTypeComponent(const Reflection::ReflectionType* type)
 	{
+		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT validate_value = ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_VALID;
 		ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(type);
 		if (component_type != ECS_COMPONENT_TYPE_COUNT) {
 			// Verify that it has the ID function
 			if (type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) == DBL_MAX) {
-				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION;
+				validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION;
 			}
 
 			// Now check the buffers
 			bool has_buffers = HasReflectionTypeComponentBuffers(type);
 			size_t allocator_size = GetReflectionComponentAllocatorSize(type);
 			if (allocator_size == 0 && has_buffers) {
-				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION;
+				validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION;
 			}
 
 			if (allocator_size != 0 && !has_buffers) {
-				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION;
+				validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION;
 			}
 		}
 
 		// Now check if it has the ECS_REFLECT_COMPONENT tag and is missing the is_shared function
 		if (component_type == ECS_COMPONENT_TYPE_COUNT) {
 			if (IsReflectionTypeMaybeComponent(type)) {
-				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION;
+				validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION;
 			}
 			else {
-				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NOT_A_COMPONENT;
+				validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NOT_A_COMPONENT;
 			}
 		}
 
-		return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_VALID;
+		return validate_value;
 	}
 	
 	// ----------------------------------------------------------------------------------------------------------------------------

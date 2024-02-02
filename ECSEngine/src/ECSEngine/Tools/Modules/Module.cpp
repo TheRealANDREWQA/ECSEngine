@@ -894,13 +894,10 @@ namespace ECSEngine {
 				}
 			}
 
-			if ((element.allocator_size == 0 || element.copy_function == nullptr || element.deallocate_function == nullptr)
-				&& element.debug_draw.draw_function == nullptr) {
+			if ((element.copy_function == nullptr || element.deallocate_function == nullptr) && (element.debug_draw.draw_function == nullptr
+				&& element.build_entry.function == nullptr)) {
 				if (error_message != nullptr) {
-					if (element.allocator_size == 0) {
-						ECS_FORMAT_STRING(*error_message, "Component functions for {#} is missing the allocator size", element.component_name);
-					}
-					else if (element.copy_function == nullptr) {
+					if (element.copy_function == nullptr) {
 						ECS_FORMAT_STRING(*error_message, "Component functions for {#} is missing the copy function", element.component_name);
 					}
 					else {

@@ -146,7 +146,7 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 	//WeldVertices(vertex_positions, float3::Splat(10.0f));
 	auto compare_mask = [](float3 a, float3 b) {
 		float3 absolute_difference = BasicTypeAbsoluteDifference(a, b);
-		return BasicTypeLessEqual(absolute_difference, float3::Splat(0.00f));
+		return BasicTypeLessEqual(absolute_difference, float3::Splat(0.05f));
 	};
 
 	for (size_t index = 0; index < vertex_positions.size; index++) {
@@ -201,7 +201,7 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 	processed_edge_table.Insert({}, { (unsigned int)initial_edge_b_index, (unsigned int)initial_edge_c_index });
 
 	while (active_edges.size > 0) {
-		if (triangle_mesh.triangle_count > 50000) {
+		if (triangle_mesh.triangles.size > 50000) {
 			break;
 		}
 
@@ -255,7 +255,7 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 	}
 
 	// Calculate the triangle mesh center
-	float3 mesh_center = CalculateFloat3Midpoint({ triangle_mesh.positions, triangle_mesh.position_count });
+	float3 mesh_center = CalculateFloat3Midpoint(triangle_mesh.positions);
 	// Point all normals away from the center, by using the triangle winding order
 	triangle_mesh.RetargetNormals(mesh_center);
 

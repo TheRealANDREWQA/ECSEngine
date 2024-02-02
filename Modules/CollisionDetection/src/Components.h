@@ -81,6 +81,10 @@ struct ECS_REFLECT_COMPONENT ConvexCollider {
 		return false;
 	}
 
+	constexpr static ECS_INLINE size_t AllocatorSize() {
+		return ECS_MB_R * 128;
+	}
+
 	unsigned int hull_size;
 	ConvexHull hull;
 	TriangleMesh mesh;

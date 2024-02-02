@@ -962,7 +962,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 		unsigned int ui_input_count = data->draw_data->matching_inputs[matching_index].capacity_inputs.size;
 		if (ui_input_count > 0) {
 			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, runtime_buffers, 64);
-			GetReflectionTypeRuntimeBuffers(type, runtime_buffers);
+			GetReflectionTypeRuntimeBuffers(data->editor_state->GlobalReflectionManager(), type, runtime_buffers);
 			if (runtime_buffers.size != ui_input_count) {
 				// Give a warning
 				ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
