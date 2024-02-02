@@ -621,6 +621,10 @@ namespace ECSEngine {
 #define UI_INT64_T ((unsigned int)1 << (UI_INT_BASE + 6))
 #define UI_UINT64_T ((unsigned int)1 << (UI_INT_BASE + 7))
 
+		static unsigned int GetIntFlags(ReflectionBasicFieldType basic_type) {
+			return 1 << (UI_INT_BASE + (unsigned int)ReduceMultiComponentReflectionType(basic_type));
+		}
+
 #define ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_0(function, a, ...) function(0, __VA_ARGS__)
 
 #define ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(function, a, ...) function(0, __VA_ARGS__) \
@@ -860,10 +864,11 @@ namespace ECSEngine {
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, add_callback);
 
 				if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE)) {
-					UIConfigArrayRemoveCallback remove_callback;
-					remove_callback.handler = handler;
-					remove_callback.copy_on_initialization = false;
-					UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, &remove_callback);
+					UIConfigArrayRemoveCallback* remove_callback = (UIConfigArrayRemoveCallback*)stack_memory;
+					remove_callback->handler = handler;
+					remove_callback->copy_on_initialization = false;
+					stack_memory = OffsetPointer(stack_memory, sizeof(*remove_callback));
+					UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, remove_callback);
 					splat_type = (ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT)ClearFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE);
 				}
 			}
@@ -3474,7 +3479,7 @@ namespace ECSEngine {
 #undef CASE
 
 				data->value_to_modify = nullptr;
-				data->int_flags = 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type);
+				data->int_flags = GetIntFlags(reflection_field.info.basic_type);
 
 				field.stream_type = UIReflectionStreamType::None;
 				field.configuration = 0;
@@ -3487,7 +3492,7 @@ namespace ECSEngine {
 					field, 
 					1 << ((unsigned int)reflection_field.info.basic_type / 2),
 					UIReflectionElement::IntegerInputGroup, 
-					1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type)
+					GetIntFlags(reflection_field.info.basic_type)
 				);
 			};
 
@@ -3595,9 +3600,7 @@ namespace ECSEngine {
 				UIReflectionUserDefinedData* data = (UIReflectionUserDefinedData*)allocator->Allocate(sizeof(UIReflectionUserDefinedData));
 				field.data = data;
 				field.element_index = UIReflectionElement::UserDefined;
-
-				const ReflectionType* user_defined_type = reflection->GetType(reflection_field.definition);
-				field.byte_size = Reflection::GetReflectionTypeByteSize(user_defined_type);
+				field.byte_size = sizeof(*data);
 
 				// +1 for '\0'
 				size_t string_size = reflection_field.definition.size + ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT + reflection_field.name.size + 1;
@@ -3620,6 +3623,7 @@ namespace ECSEngine {
 
 				// If the type doesn't exist in the UI reflection, then create it
 				if (GetType(reflection_field.definition) == nullptr) {
+					const ReflectionType* user_defined_type = reflection->GetType(reflection_field.definition);
 					CreateType(user_defined_type);
 				}
 			};
@@ -3650,11 +3654,23 @@ namespace ECSEngine {
 			};
 
 			auto integer_stream_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::IntegerInput, 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
+				ConvertStreamSingleForType(
+					this, 
+					reflection_field, 
+					field, 
+					UIReflectionElement::IntegerInput, 
+					GetIntFlags(reflection_field.info.basic_type)
+				);
 			};
 
 			auto integer_stream_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamGroupForType(this, reflection_field, field, UIReflectionElement::IntegerInputGroup, 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
+				ConvertStreamGroupForType(
+					this, 
+					reflection_field,
+					field, 
+					UIReflectionElement::IntegerInputGroup, 
+					GetIntFlags(reflection_field.info.basic_type)
+				);
 			};
 
 			auto float_stream_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {

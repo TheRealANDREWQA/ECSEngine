@@ -131,15 +131,8 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 				ChangeSandboxRuntimeSettings(editor_state, index, { nullptr, 0 });
 			}
 
-			if (!ChangeSandboxScenePath(editor_state, index, sandboxes[index].scene_path)) {
-				ECS_FORMAT_TEMP_STRING(console_message, "The scene path {#} doesn't exist or is invalid when trying to deserialize sandbox {#}. "
-					"The sandbox will revert to no scene (check previous messages for more info).", sandboxes[index].scene_path, index);
-				EditorSetConsoleWarn(console_message);
-
-				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
-			}
-
-			// Now the modules
+			// Now the modules. Need to add the modules before the scene load, otherwise
+			// Component functions will be lost
 			for (unsigned int subindex = 0; subindex < sandboxes[index].modules_in_use.size; subindex++) {
 				unsigned int module_index = sandboxes[index].modules_in_use[subindex].module_index;
 				// Only if it is in bounds
@@ -154,6 +147,14 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 						AddSandboxModuleDebugDrawTask(editor_state, index, subindex, sandboxes[index].modules_in_use[subindex].enabled_debug_tasks[enabled_index]);
 					}
 				}
+			}
+
+			if (!ChangeSandboxScenePath(editor_state, index, sandboxes[index].scene_path)) {
+				ECS_FORMAT_TEMP_STRING(console_message, "The scene path {#} doesn't exist or is invalid when trying to deserialize sandbox {#}. "
+					"The sandbox will revert to no scene (check previous messages for more info).", sandboxes[index].scene_path, index);
+				EditorSetConsoleWarn(console_message);
+
+				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
 			}
 
 			// Synchronize the profiling options

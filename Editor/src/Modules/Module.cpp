@@ -86,20 +86,28 @@ static void OpenModuleLogFile(Stream<wchar_t> log_path) {
 		// Compiler errors and linker errors
 		// Compiler errors and warnings are listed on a separate line after a line with (ClCompile target) ->
 		// Linker errors are listed on a separate line after a line with (Link target) ->
-		Stream<char> compiler_errors_or_warnings = FindFirstToken(build_failed, "(ClCompile target) ->");
-		if (compiler_errors_or_warnings.size > 0) {
+		// There can be multiple of (Link target) -> and (ClCompile target)
+		Stream<char> COMPILE_STRING = "(ClCompile target) ->";
+		Stream<char> LINKER_STRING = "(Link target) ->";
+
+		Stream<char> compiler_errors_or_warnings = FindFirstToken(build_failed, COMPILE_STRING);
+		while (compiler_errors_or_warnings.size > 0) {
 			Stream<char> compiler_messages_start = FindFirstCharacter(compiler_errors_or_warnings, '\n');
 			if (compiler_messages_start.size > 0) {
 				print_errors(compiler_messages_start);
 			}
+			compiler_errors_or_warnings.Advance(COMPILE_STRING.size);
+			compiler_errors_or_warnings = FindFirstToken(compiler_errors_or_warnings, COMPILE_STRING);
 		}
 
-		Stream<char> linker_errors = FindFirstToken(build_failed, "(Link target) ->");
-		if (linker_errors.size > 0) {
+		Stream<char> linker_errors = FindFirstToken(build_failed, LINKER_STRING);
+		while (linker_errors.size > 0) {
 			Stream<char> linker_messages_start = FindFirstCharacter(linker_errors, '\n');
 			if (linker_messages_start.size > 0) {
 				print_errors(linker_messages_start);
 			}
+			linker_errors.Advance(LINKER_STRING.size);
+			linker_errors = FindFirstToken(linker_errors, LINKER_STRING);
 		}
 	}
 	else {
@@ -2110,9 +2118,11 @@ bool UpdateModuleSolutionLastWrite(EditorState* editor_state, unsigned int index
 bool UpdateModuleLibraryLastWrite(EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration) {
 	if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
 		// Update all
-		return UpdateModuleLibraryLastWrite(editor_state, index, EDITOR_MODULE_CONFIGURATION_DEBUG) ||
-			UpdateModuleLibraryLastWrite(editor_state, index, EDITOR_MODULE_CONFIGURATION_RELEASE) ||
-			UpdateModuleLibraryLastWrite(editor_state, index, EDITOR_MODULE_CONFIGURATION_DISTRIBUTION);
+		bool success = true;
+		for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
+			success &= UpdateModuleLibraryLastWrite(editor_state, index, (EDITOR_MODULE_CONFIGURATION)configuration_index);
+		}
+		return success;
 	}
 
 	ProjectModules* modules = editor_state->project_modules;

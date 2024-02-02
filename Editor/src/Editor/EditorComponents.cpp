@@ -1032,7 +1032,7 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 	
 	Component component = { (short)internal_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 	ECS_STACK_VOID_STREAM(stack_memory, 256);
-	ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(internal_type, &stack_memory);
+	ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(internal_manager, internal_type, &stack_memory);
 
 	// Lock the small memory manager in order to commit the type
 	if (lock != nullptr) {
@@ -2014,30 +2014,32 @@ void EditorComponents::SetManagerComponents(EntityManager* entity_manager)
 {
 	struct FunctorData {
 		EntityManager* entity_manager;
+		const ReflectionManager* reflection_manager;
 	};
 
-	FunctorData functor_data = { entity_manager };
+	FunctorData functor_data = { entity_manager, internal_manager };
 	auto functor = [](const ReflectionType* type, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsComponent(component_id)) {
 			ECS_STACK_VOID_STREAM(stack_memory, 256);
-			ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(type, &stack_memory);
+			ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(data->reflection_manager, type, &stack_memory);
 			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name, &component_functions);
 		}
 	};
 
 	struct SharedFunctorData {
 		EntityManager* entity_manager;
+		const ReflectionManager* reflection_manager;
 	};
 
-	SharedFunctorData shared_functor_data = { entity_manager };
+	SharedFunctorData shared_functor_data = { entity_manager, internal_manager };
 	auto shared_functor = [](const ReflectionType* type, void* _data) {
 		SharedFunctorData* data = (SharedFunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsSharedComponent(component_id)) {
 			ECS_STACK_VOID_STREAM(stack_memory, 256);
-			ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(type, &stack_memory);
+			ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(data->reflection_manager, type, &stack_memory);
 			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name, &component_functions);
 		}
 	};
@@ -2224,27 +2226,41 @@ void EditorComponents::UpdateComponents(
 			if constexpr (check_id) {
 				ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT validate_result = ValidateReflectionTypeComponent(type);
 
-				if (validate_result == ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION) {
-					Stream<char> name_copy = type->name.Copy(allocator);
-					events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION, name_copy, {}, ECS_COMPONENT_ID_FUNCTION });
-					continue;
-				}
+				if (validate_result != ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_VALID) {
+					bool should_continue = false;
+					if (HasFlag(validate_result, ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION)) {
+						Stream<char> name_copy = type->name.Copy(allocator);
+						events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION, name_copy, {}, ECS_COMPONENT_ID_FUNCTION });
+						should_continue = true;
+					}
 
-				if (validate_result == ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION) {
-					Stream<char> name_copy = type->name.Copy(allocator);
-					events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION, name_copy, {}, ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION });
-					continue;
-				}
+					if (HasFlag(validate_result, ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION)) {
+						Stream<char> name_copy = type->name.Copy(allocator);
+						events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION, name_copy, {}, ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION });
+						// Make it an exception for this case, to not remove the component, and readd it again
+						// Since it can result in data loss. For example, a scene is loaded with this component, but
+						// Its current definition is invalid, and that would lead to removing this component from all
+						// Existing entities
+					}
 
-				if (validate_result == ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_IS_SHARED_FUNCTION) {
-					Stream<char> name_copy = type->name.Copy(allocator);
-					events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION, name_copy, {}, ECS_COMPONENT_IS_SHARED_FUNCTION });
-					continue;
-				}
+					if (HasFlag(validate_result, ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_IS_SHARED_FUNCTION)) {
+						Stream<char> name_copy = type->name.Copy(allocator);
+						events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION, name_copy, {}, ECS_COMPONENT_IS_SHARED_FUNCTION });
+						should_continue = true;
+					}
 
-				if (validate_result == ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION) {
-					events.Add({ EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS, type->name.Copy(allocator) });
-					continue;
+					if (HasFlag(validate_result, ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION)) {
+						events.Add({ EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS, type->name.Copy(allocator) });
+						// Make it an exception for this case as, to not remove the component, and readd it again
+						// Since it can result in data loss. For example, a scene is loaded with this component, but
+						// Its current definition is invalid, and that would lead to removing this component from all
+						// Existing entities
+						//continue;
+					}
+
+					if (should_continue) {
+						continue;
+					}
 				}
 
 				Component type_component = GetReflectionTypeComponent(type);
@@ -2271,13 +2287,19 @@ void EditorComponents::UpdateComponents(
 			ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT validate_result = ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NOT_A_COMPONENT;
 			if constexpr (check_id) {
 				validate_result = ValidateReflectionTypeComponent(type);
-				if (validate_result == ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION) {
-					events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION, type->name.Copy(allocator), {}, ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION });
-					continue;
-				}
-				else if (validate_result == ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION) {
-					events.Add({ EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS, type->name.Copy(allocator) });
-					continue;
+				if (validate_result != ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_VALID) {
+					if (HasFlag(validate_result, ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION)) {
+						events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION, type->name.Copy(allocator), {}, ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION });
+						// Make an exception for this one, do not continue the loop
+						// Since the component is still valid after all, it just needs a function to be specified
+						//continue;
+					}
+					else if (HasFlag(validate_result, ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION)) {
+						events.Add({ EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS, type->name.Copy(allocator) });
+						// Make an exception for this one, do not continue the loop
+						// Since the component is still valid after all, it just needs a function to be specified
+						//continue;
+					}
 				}
 			}
 

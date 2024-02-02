@@ -27,13 +27,12 @@ void ConvexHull::Initialize(AllocatorPolymorphic allocator, Stream<float3> entri
 
 void ConvexHull::Copy(const ConvexHull* other, AllocatorPolymorphic allocator, bool deallocate_existent)
 {
-	void* current_soa_data = vertices_x;
 	vertices_x = other->vertices_x;
 	vertices_y = other->vertices_y;
 	vertices_z = other->vertices_z;
 
 	if (deallocate_existent) {
-		SoACopyReallocate(allocator, other->size, other->size, current_soa_data, &vertices_x, &vertices_y, &vertices_z);
+		SoACopyReallocate(allocator, other->size, other->size, &vertices_x, &vertices_y, &vertices_z);
 	}
 	else {
 		SoACopy(allocator, other->size, other->size, &vertices_x, &vertices_y, &vertices_z);
