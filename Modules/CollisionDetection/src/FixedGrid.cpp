@@ -20,7 +20,7 @@ GridChunk* FixedGrid::AddCell(uint3 indices)
 GridChunk* FixedGrid::AddToChunk(unsigned int identifier, unsigned char layer, AABBScalar aabb, GridChunk* chunk)
 {
 	GridChunk* insert_chunk = spatial_grid.ReserveEntriesInChunk(chunk, 1);
-	insert_chunk->data.AddEntry(aabb, identifier, layer, insert_chunk->count);
+	insert_chunk->data.Set({ aabb, identifier, layer }, insert_chunk->count);
 	insert_chunk->count++;
 	return insert_chunk;
 }
@@ -147,17 +147,14 @@ void FixedGrid::InsertEntry(unsigned int thread_id, World* world, unsigned int i
 
 void FixedGrid::InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBScalar aabb, CapacityStream<CollisionInfo>* collisions)
 {
-	spatial_grid.InsertAABB(aabb.min, aabb.max, [&](uint3 cell_indices, GridChunk* initial_chunk, GridChunkData* data, unsigned int count) {
+	spatial_grid.InsertAABB(aabb.min, aabb.max, { aabb, identifier, layer }, [&](uint3 cell_indices, GridChunk* initial_chunk) {
 		CheckCollisions(thread_id, world, initial_chunk, identifier, layer, aabb, collisions);
-		data->AddEntry(aabb, identifier, layer, count);
 	});
 }
 
 void FixedGrid::InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, AABBScalar aabb)
 {
-	GridChunk* chunk = spatial_grid.ReserveEntriesInCell(cell_indices, 1);
-	chunk->data.AddEntry(aabb, identifier, layer, chunk->count);
-	chunk->count++;
+	spatial_grid.InsertEntry(cell_indices, { aabb, identifier, layer });
 }
 
 void FixedGrid::StartFrame()

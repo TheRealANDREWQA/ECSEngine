@@ -25,7 +25,8 @@ namespace ECSEngine {
 		unsigned int next_chunk;
 	};
 
-	template<typename ChunkData, size_t chunk_entries, typename CellIndicesHash = SpatialGridDefaultCellIndicesHash, bool use_smaller_cell_size = false>
+	// The ChunkData struct must have a function void Set(ChunkDataEntry entry, unsigned int index) to add a new entry
+	template<typename ChunkData, typename ChunkDataEntry, size_t chunk_entries, typename CellIndicesHash = SpatialGridDefaultCellIndicesHash, bool use_smaller_cell_size = false>
 	struct SpatialGrid {
 		static_assert(chunk_entries < UCHAR_MAX, "SpatialGrid supports up to 255 per chunk entries");
 
@@ -104,7 +105,7 @@ namespace ECSEngine {
 		}
 
 		Chunk* GetChunk(uint3 indices) {
-			return (Chunk*)(((const SpatialGrid<ChunkData, chunk_entries, CellIndicesHash>*)this)->GetChunk(indices));
+			return (Chunk*)(((const SpatialGrid<ChunkData, ChunkDataEntry, chunk_entries, CellIndicesHash, use_smaller_cell_size>*)this)->GetChunk(indices));
 		}
 
 		// Returns nullptr if there is no next
@@ -134,6 +135,167 @@ namespace ECSEngine {
 			return chunk;
 		}
 
+		// Returns the initial chunk if there is one for the cell, else creates
+		// The cell and returns the chunk
+		Chunk* GetInitialChunk(uint3 cell) {
+			Chunk* chunk = GetChunk(cell);
+			if (chunk == nullptr) {
+				chunk = AddCell(cell);
+			}
+			return chunk;
+		}
+		
+		// Iterates the given range between the min and the max cell
+		// The functor receives as parameters (uint3 current_cell, SpatialGridChunk<>* initial_chunk)
+		// Initial chunk can be nullptr - should be able to handle it
+		// And must return true when to early exit, else false (in case it wants to early exit)
+		template<bool early_exit = false, typename Functor>
+		bool IterateRange(uint3 min_cell, uint3 max_cell, Functor&& functor) {
+			// Keep in mind that the max cell can have smaller values that the min
+			// In case it surpassed the cell threshold
+			uint3 iteration_count;
+			for (unsigned int index = 0; index < ECS_AXIS_COUNT; index++) {
+				iteration_count[index] = (min_cell[index] <= max_cell[index] ? max_cell[index] - min_cell[index] : max_cell[index] - min_cell[index] + dimensions[index]) + 1;
+			}
+
+			// Use the min cell as the current cell, and increment at each step
+			uint3 current_cell = min_cell;
+			for (unsigned int x = 0; x < iteration_count.x; x++) {
+				for (unsigned int y = 0; y < iteration_count.y; y++) {
+					for (unsigned int z = 0; z < iteration_count.z; z++) {
+						Chunk* initial_chunk = GetChunk(current_cell);
+						if constexpr (early_exit) {
+							bool should_exit = functor(current_cell, initial_chunk);
+							if (should_exit) {
+								return true;
+							}
+						}
+						else {
+							functor(current_cell, initial_chunk);
+						}
+						current_cell.z++;
+						current_cell.z = current_cell.z == dimensions.z ? 0 : current_cell.z;
+					}
+					current_cell.z = min_cell.z;
+					current_cell.y++;
+					current_cell.y = current_cell.y == dimensions.y ? 0 : current_cell.y;
+				}
+				current_cell.y = min_cell.y;
+				current_cell.x++;
+				current_cell.x = current_cell.x == dimensions.x ? 0 : current_cell.x;
+			}
+			return false;
+		}
+
+		// Iterates the given range between the min and the max cell
+		// Calls the functor and then insert the entry into each cell
+		// The functor receives as parameters (uint3 current_cell, SpatialGridChunk<>* initial_chunk>)
+		template<typename Functor>
+		void InsertRange(uint3 min_cell, uint3 max_cell, const ChunkDataEntry& data_entry, Functor&& functor) {
+			// Keep in mind that the max cell can have smaller values that the min
+			// In case it surpassed the cell threshold
+			uint3 iteration_count;
+			for (unsigned int index = 0; index < ECS_AXIS_COUNT; index++) {
+				iteration_count[index] = (min_cell[index] <= max_cell[index] ? max_cell[index] - min_cell[index] : max_cell[index] - min_cell[index] + dimensions[index]) + 1;
+			}
+
+			// Use the min cell as the current cell, and increment at each step
+			uint3 current_cell = min_cell;
+			for (unsigned int x = 0; x < iteration_count.x; x++) {
+				for (unsigned int y = 0; y < iteration_count.y; y++) {
+					for (unsigned int z = 0; z < iteration_count.z; z++) {
+						Chunk* initial_chunk = GetInitialChunk(current_cell);
+						functor(current_cell, initial_chunk);
+						// Do the reserve after the functor, such that we don't introduce a ghost
+						// Block with count 0 (even tho it should still be able to cope with it
+						// Since, when adding a new cell, will result in a count of 0)
+						Chunk* insert_chunk = ReserveEntriesInInitialChunk(initial_chunk, 1);
+						insert_chunk->data.Set(data_entry, insert_chunk->count);
+						insert_chunk->count++;
+						current_cell.z++;
+						current_cell.z = current_cell.z == dimensions.z ? 0 : current_cell.z;
+					}
+					current_cell.z = min_cell.z;
+					current_cell.y++;
+					current_cell.y = current_cell.y == dimensions.y ? 0 : current_cell.y;
+				}
+				current_cell.y = min_cell.y;
+				current_cell.x++;
+				current_cell.x = current_cell.x == dimensions.x ? 0 : current_cell.x;
+			}
+		}
+
+		// Iterates the given range between the min and the max cell
+		// And adds the entry to each cell
+		void InsertRange(uint3 min_cell, uint3 max_cell, const ChunkDataEntry& data_entry) {
+			// Use an empty functor
+			InsertRange(min_cell, max_cell, data_entry, [](uint3 cell, Chunk* initial_chunk) {});
+		}
+
+		// Iterates the given range between the min and the max cell
+		// The functor receives as parameters (uint3 current_cell, SpatialGridChunk<>* initial_chunk)
+		// Initial chunk can be nullptr - should be able to handle it
+		// And must return true when the entry should be skipped and not added, else false.
+		// This return true if the entry was skipped, else false
+		template<typename Functor>
+		bool InsertRangeLate(uint3 min_cell, uint3 max_cell, const ChunkDataEntry& data_entry, Functor&& functor) {
+			// This is basically a merge between IterateRange and InsertRange
+			// But we don't call them explicitely in order to avoid having to recalculate
+			// The iteration counts again
+
+			// Keep in mind that the max cell can have smaller values that the min
+			// In case it surpassed the cell threshold
+			uint3 iteration_count;
+			for (unsigned int index = 0; index < ECS_AXIS_COUNT; index++) {
+				iteration_count[index] = (min_cell[index] <= max_cell[index] ? max_cell[index] - min_cell[index] : max_cell[index] - min_cell[index] + dimensions[index]) + 1;
+			}
+
+			// Use the min cell as the current cell, and increment at each step
+			uint3 current_cell = min_cell;
+			for (unsigned int x = 0; x < iteration_count.x; x++) {
+				for (unsigned int y = 0; y < iteration_count.y; y++) {
+					for (unsigned int z = 0; z < iteration_count.z; z++) {
+						Chunk* initial_chunk = GetChunk(current_cell);
+						bool should_exit = functor(current_cell, initial_chunk);
+						if (should_exit) {
+							return true;
+						}
+						current_cell.z++;
+						current_cell.z = current_cell.z == dimensions.z ? 0 : current_cell.z;
+					}
+					current_cell.z = min_cell.z;
+					current_cell.y++;
+					current_cell.y = current_cell.y == dimensions.y ? 0 : current_cell.y;
+				}
+				current_cell.y = min_cell.y;
+				current_cell.x++;
+				current_cell.x = current_cell.x == dimensions.x ? 0 : current_cell.x;
+			}
+
+			// It passed the tests - we can now insert
+			current_cell = min_cell;
+			for (unsigned int x = 0; x < iteration_count.x; x++) {
+				for (unsigned int y = 0; y < iteration_count.y; y++) {
+					for (unsigned int z = 0; z < iteration_count.z; z++) {
+						Chunk* initial_chunk = GetInitialChunk(current_cell);
+						Chunk* insert_chunk = ReserveEntriesInInitialChunk(initial_chunk, 1);
+						insert_chunk->data.Set(data_entry, insert_chunk->count);
+						insert_chunk->count++;
+						current_cell.z++;
+						current_cell.z = current_cell.z == dimensions.z ? 0 : current_cell.z;
+					}
+					current_cell.z = min_cell.z;
+					current_cell.y++;
+					current_cell.y = current_cell.y == dimensions.y ? 0 : current_cell.y;
+				}
+				current_cell.y = min_cell.y;
+				current_cell.x++;
+				current_cell.x = current_cell.x == dimensions.x ? 0 : current_cell.x;
+			}
+
+			return false;
+		}
+
 		// The dimensions needs to be a power of two
 		void Initialize(
 			AllocatorPolymorphic _allocator,
@@ -154,99 +316,151 @@ namespace ECSEngine {
 			smaller_cell_size_factor = float3::Splat(1.0f);
 		}
 
-		// Returns the ChunkData where you can insert your value
-		// The count inside the chunk was incremented
-		// This is the same as reserving an entry and then incrementing the size
-		ChunkData* InsertEntry(uint3 cell) {
+		void InsertEntry(uint3 cell, const ChunkDataEntry& entry) {
 			Chunk* chunk = ReserveEntriesInCell(cell, 1);
+			chunk->data.Set(entry, chunk->count);
 			chunk->count++;
-			return &chunk->data;
 		}
 
-		// Returns the ChunkData where you can insert your value
-		ChunkData* InsertPoint(float3 point) {
-			uint3 cell = CalculateCell(point);
-			return InsertEntry(cell);
-		}
-
-		// The functor receives as parameters (uint3 cell_index, SpatialGridChunk* initial_chunk, ChunkData* data, unsigned int count)
-		// Such that it can write the value into the chunk or perform other operations
-		// The initial chunk can be used to traverse the all entries (the entry to be inserted won't appear in the iteration)
-		// The ChunkData is where the entry should be added
-		// The return value of the functor needs to be true if the entry is to be inserted, else false
-		// The return value of the function is the return of the functor
+		// The functor receives as parameters (uint3 cell_index, SpatialGridChunk* initial_chunk)
+		// And must return true if the value should be inserted, else false
 		template<typename Functor>
-		bool InsertPointTest(float3 point, Functor&& functor) {
+		bool InsertPointTest(float3 point, const ChunkDataEntry& data_entry, Functor&& functor) {
 			uint3 cell = CalculateCell(point);
-			Chunk* initial_chunk = GetChunk(cell);
-			Chunk* last_chunk = nullptr;
-			if (initial_chunk == nullptr) {
-				initial_chunk = AddCell(cell);
-				last_chunk = initial_chunk;
-			}
-			else {
-				last_chunk = GetLastChunk(initial_chunk);
-			}
-			Chunk* insert_chunk = ReserveEntriesInChunk(last_chunk, 1);
-			bool should_insert = functor(cell, initial_chunk, &insert_chunk->data, insert_chunk->count);
+			Chunk* initial_chunk = GetInitialChunk(cell);
+			bool should_insert = functor(cell, initial_chunk);
 			if (should_insert) {
+				Chunk* insert_chunk = ReserveEntriesInInitialChunk(initial_chunk, 1);
+				insert_chunk->data.Set(data_entry, insert_chunk->count);
 				insert_chunk->count++;
-			}
-			else {
-				// In case no insert is needed, we have a chunk that can potentially be allocated
-				// Without any entries in it. We can remove it by
-				if (last_chunk->count == chunk_entries) {
-					RemoveLastAllocatedChunk(last_chunk);
-				}
 			}
 			return should_insert;
 		}
 
-		// The functor will be called with a parameters of (uint3 cell_index, SpatialGridChunk* initial_chunk, ChunkData* data, unsigned int count)
-		// Such that it can write the value into the chunk or perform other operations
-		// The initial chunk can be used to traverse the all entries (the entry to be inserted won't appear in the iteration)
-		// The ChunkData is where the entry should be added
+		// The functor receives as parameters (uint3 cell_index, SpatialGridChunk* initial_chunk)
+		// Initial chunk can be nullptr - should be able to handle it
+		// And must return true when to early exit
+		template<bool early_exit = false, typename Functor>
+		bool IterateSphere(float3 center, float radius, Functor&& functor) {
+			// TODO: Improve this case? At the moment it is a bit inefficient
+			// Since we treat it as an enclosing AABB
+			if (radius == 0.0f) {
+				// Treat this as a point
+				uint3 cell = CalculateCell(center);
+				Chunk* initial_chunk = GetChunk(cell);
+				if constexpr (early_exit) {
+					return functor(cell, initial_chunk);
+				}
+				else {
+					functor(cell, initial_chunk);
+				}
+				return false;
+			}
+			else {
+				// We can treat the sphere case as an AABB case where we calculate the min and max
+				float3 min = center - float3::Splat(radius);
+				float3 max = center + float3::Splat(radius);
+				return IterateAABB<early_exit>(min, max, functor);
+			}
+		}
+
+		// The functor receives as parameters (uint3 current_cell, SpatialGridChunk<>* initial_chunk>)
 		template<typename Functor>
-		void InsertAABB(float3 min, float3 max, Functor&& functor) {
+		void InsertSphere(float3 center, float radius, const ChunkDataEntry& data_entry, Functor&& functor) {
+			// TODO: Improve this case? At the moment it is a bit inefficient
+			// Since we treat it as an enclosing AABB
+			if (radius == 0.0f) {
+				// Treat this as a point
+				uint3 cell = CalculateCell(center);
+				Chunk* initial_chunk = GetInitialChunk(cell);
+				functor(cell, initial_chunk);
+				Chunk* insert_chunk = ReserveEntriesInInitialChunk(initial_chunk, 1);
+				insert_chunk->data.Set(data_entry, insert_chunk->count);
+				insert_chunk->count++;
+			}
+			else {
+				// We can treat the sphere case as an AABB case where we calculate the min and max
+				float3 min = center - float3::Splat(radius);
+				float3 max = center + float3::Splat(radius);
+				return InsertAABB<early_exit>(min, max, data_entry, functor);
+			}
+		}
+
+		void InsertSphere(float3 center, float radius, const ChunkDataEntry& data_entry) {
+			InsertSphere(center, radius, data_entry, [](uint3 cell_indices, Chunk* initial_chunk) {});
+		}
+
+		// The functor receives as parameters (uint3 current_cell, SpatialGridChunk<>* initial_chunk)
+		// Initial chunk can be nullptr - should be able to handle it
+		// And must return true when the entry should be skipped and not added, else false.
+		// This return true if the entry was skipped, else false
+		template<typename Functor>
+		bool InsertSphereLate(float3 center, float radius, const ChunkDataEntry& data_entry, Functor&& functor) {
+			// TODO: Improve this case? At the moment it is a bit inefficient
+			// Since we treat it as an enclosing AABB
+			if (radius == 0.0f) {
+				// Treat this as a point
+				uint3 cell = CalculateCell(center);
+				Chunk* initial_chunk = GetChunk(cell);
+				if (functor(cell, initial_chunk)) {
+					Chunk* insert_chunk = ReserveEntriesInInitialChunk(initial_chunk, 1);
+					insert_chunk->data.Set(data_entry, insert_chunk->count);
+					insert_chunk->count++;
+					return true;
+				}
+				return false;
+			}
+			else {
+				// We can treat the sphere case as an AABB case where we calculate the min and max
+				float3 min = center - float3::Splat(radius);
+				float3 max = center + float3::Splat(radius);
+				return InsertAABBLate(min, max, data_entry, functor);
+			}
+		}
+
+		// The functor receives as parameters (uint3 cell_index, SpatialGridChunk* initial_chunk)
+		// Initial chunk can be nullptr - should be able to handle it
+		// And must return true when to early exit, else false
+		template<bool early_exit = false, typename Functor>
+		bool IterateAABB(float3 min, float3 max, Functor&& functor) {
 			// We are using min and max coordinates such that we don't have to include the AABB.h header
 			
 			// Determine the grid indices for the min and max points for the aabb
 			uint3 min_cell = CalculateCell(min);
 			uint3 max_cell = CalculateCell(max);
 
-			// Now insert the entry in all the cells that it collides with
-			// Keep in mind that the max cell can have smaller values that the min
-			// In case it surpassed the cell threshold
-			uint3 iteration_count;
-			for (unsigned int index = 0; index < ECS_AXIS_COUNT; index++) {
-				iteration_count[index] = (min_cell[index] <= max_cell[index] ? max_cell[index] - min_cell[index] : max_cell[index] - min_cell[index] + dimensions[index]) + 1;
-			}
+			return IterateRange<early_exit>(min_cell, max_cell, functor);
+		}
 
-			// For each cell that it collides with, test against the current entries
-			// And add the entity inside that cell
-			// Use the min cell as the current cell, and increment at each step
-			uint3 current_cell = min_cell;
-			for (unsigned int x = 0; x < iteration_count.x; x++) {
-				for (unsigned int y = 0; y < iteration_count.y; y++) {
-					for (unsigned int z = 0; z < iteration_count.z; z++) {
-						Chunk* initial_chunk = GetChunk(current_cell);
-						if (initial_chunk == nullptr) {
-							initial_chunk = AddCell(current_cell);
-						}
-						Chunk* insert_chunk = ReserveEntriesInInitialChunk(initial_chunk, 1);
-						functor(current_cell, initial_chunk, &insert_chunk->data, insert_chunk->count);
-						insert_chunk->count++;
-						current_cell.z++;
-						current_cell.z = current_cell.z == dimensions.z ? 0 : current_cell.z;
-					}
-					current_cell.z = min_cell.z;
-					current_cell.y++;
-					current_cell.y = current_cell.y == dimensions.y ? 0 : current_cell.y;
-				}
-				current_cell.y = min_cell.y;
-				current_cell.x++;
-				current_cell.x = current_cell.x == dimensions.x ? 0 : current_cell.x;
-			}
+		// The functor receives as parameters (uint3 current_cell, SpatialGridChunk<>* initial_chunk>)
+		template<typename Functor>
+		void InsertAABB(float3 min, float3 max, const ChunkDataEntry& data_entry, Functor&& functor) {
+			// We are using min and max coordinates such that we don't have to include the AABB.h header
+
+			// Determine the grid indices for the min and max points for the aabb
+			uint3 min_cell = CalculateCell(min);
+			uint3 max_cell = CalculateCell(max);
+
+			InsertRange(min_cell, max_cell, data_entry, functor);
+		}
+
+		void InsertAABB(float3 min, float3 max, const ChunkDataEntry& data_entry) {
+			InsertAABB(min, max, data_entry, [](uint3 cell, Chunk* initial_chunk) {});
+		}
+
+		// The functor receives as parameters (uint3 current_cell, SpatialGridChunk<>* initial_chunk)
+		// Initial chunk can be nullptr - should be able to handle it
+		// And must return true when the entry should be skipped and not added, else false.
+		// This return true if the entry was skipped, else false
+		template<typename Functor>
+		bool InsertAABBLate(float3 min, float3 max, const ChunkDataEntry& data_entry, Functor&& functor) {
+			// We are using min and max coordinates such that we don't have to include the AABB.h header
+
+			// Determine the grid indices for the min and max points for the aabb
+			uint3 min_cell = CalculateCell(min);
+			uint3 max_cell = CalculateCell(max);
+
+			return InsertRangeLate(min_cell, max_cell, data_entry, functor);
 		}
 
 		// The functor receives as arguments (ChunkData* data, unsigned int count)
@@ -337,7 +551,7 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < reserve_count; index++) {
 				chunk = ChainChunk(chunk);
 			}
-			if (initial_insert_chunk->count == chunk_entries) {
+			if (initial_insert_chunk->count + count > chunk_entries) {
 				return GetNextChunk(initial_insert_chunk);
 			}
 			return initial_insert_chunk;
@@ -353,10 +567,7 @@ namespace ECSEngine {
 		// Returns the chunk at which the elements can be inserted (the last
 		// chunk before reserving)
 		Chunk* ReserveEntriesInCell(uint3 cell_indices, unsigned int count) {
-			Chunk* chunk = GetChunk(cell_indices);
-			if (chunk == nullptr) {
-				chunk = AddCell(cell_indices);
-			}
+			Chunk* chunk = GetInitialChunk(cell_indices);
 			return ReserveEntriesInInitialChunk(chunk, count);
 		}
 

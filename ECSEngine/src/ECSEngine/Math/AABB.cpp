@@ -319,4 +319,51 @@ namespace ECSEngine {
 		GetAABBCornersImpl(aabb, corners);
 	}
 
+	template<typename ReturnType, typename AABB, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL AABBToPointSquaredDistanceImpl(AABB aabb, Vector point) {
+		// The squared distance is the excess positive distance outside
+		// The AABB extents
+		ReturnType zero = SingleZeroVector<ReturnType>();
+		ReturnType squared_distance = zero;
+		for (size_t index = 0; index < Vector::Count(); index++) {
+			ReturnType min_difference = aabb.min[index] - point[index];
+			min_difference = Max<ReturnType>(min_difference, zero);
+			squared_distance += min_difference * min_difference;
+
+			ReturnType max_difference = point[index] - aabb.max[index];
+			max_difference = Max<ReturnType>(max_difference, zero);
+			squared_distance += max_difference * max_difference;
+		}
+		return squared_distance;
+	}
+
+	float AABBToPointSquaredDistance(AABBScalar aabb, float3 point) {
+		return AABBToPointSquaredDistanceImpl<float>(aabb, point);
+	}
+
+	Vec8f ECS_VECTORCALL AABBToPointSquaredDistance(AABB aabb, Vector3 point) {
+		return AABBToPointSquaredDistanceImpl<Vec8f>(aabb, point);
+	}
+
+	template<typename SingleValue, typename AABB, typename Vector>
+	static ECS_INLINE Vector ECS_VECTORCALL AABBClosestPointImpl(AABB aabb, Vector point) {
+		// The closest point is found by clamping the point to the min and max of the AABB
+		Vector closest_point;
+		for (size_t index = 0; index < Vector::Count(); index++) {
+			SingleValue current_axis = point[index];
+			current_axis = Max<SingleValue>(current_axis, aabb.min[index]);
+			current_axis = Min<SingleValue>(current_axis, aabb.max[index]);
+			closest_point[index] = current_axis;
+		}
+		return closest_point;
+	}
+
+	float3 AABBClosestPoint(AABBScalar aabb, float3 point) {
+		return AABBClosestPointImpl<float>(aabb, point);
+	}
+
+	Vector3 ECS_VECTORCALL AABBClosestPoint(AABB aabb, Vector3 point) {
+		return AABBClosestPointImpl<Vec8f>(aabb, point);
+	}
+
 }

@@ -4402,7 +4402,16 @@ namespace ECSEngine {
 					case UIReflectionElement::UserDefined:
 					{
 						UIReflectionUserDefinedData* data = (UIReflectionUserDefinedData*)instance->data[index];
-						DestroyInstance(data->instance->name);
+						// Before, we had the call to DestroyInstance take the name overload
+						// That was problematic when doing bulk deletion where the nested instances
+						// Would get destroyed before this one, and it would result in an assert.
+						// A quick fix, although not great, is to do the deletion only if we find
+						// The instance. But this can open up bugs where the instance should have
+						// Been, and it is not. At the moment, maintain this
+						unsigned int instance_index = instances.Find(data->instance->name);
+						if (instance_index != -1) {
+							DestroyInstance(instance_index);
+						}
 					}
 					break;
 					}

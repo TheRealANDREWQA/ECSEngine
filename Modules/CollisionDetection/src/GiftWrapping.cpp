@@ -143,21 +143,26 @@ static size_t FindNextPointAroundTriangleEdge(
 TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic allocator) {
 	ECS_ASSERT(vertex_positions.size < UINT_MAX, "Gift wrapping for meshes with more than 4GB vertices is not available");
 
-	//WeldVertices(vertex_positions, float3::Splat(10.0f));
-	auto compare_mask = [](float3 a, float3 b) {
-		float3 absolute_difference = BasicTypeAbsoluteDifference(a, b);
-		return BasicTypeLessEqual(absolute_difference, float3::Splat(0.05f));
-	};
+	Timer timer;
+	WeldVertices(vertex_positions, float3::Splat(0.15f));
+	float float_duration = timer.GetDuration(ECS_TIMER_DURATION_MS);
+	ECS_FORMAT_TEMP_STRING(poggers, "Duration: {#}", float_duration);
+	OutputDebugStringA(poggers.buffer);
 
-	for (size_t index = 0; index < vertex_positions.size; index++) {
-		for (size_t subindex = index + 1; subindex < vertex_positions.size; subindex++) {
-			if (compare_mask(vertex_positions[index], vertex_positions[subindex])) {
-				// We can remove the subindex point
-				vertex_positions.RemoveSwapBack(subindex);
-				subindex--;
-			}
-		}
-	}
+	//auto compare_mask = [](float3 a, float3 b) {
+	//	float3 absolute_difference = BasicTypeAbsoluteDifference(a, b);
+	//	return BasicTypeLessEqual(absolute_difference, float3::Splat(0.055f));
+	//};
+
+	//for (size_t index = 0; index < vertex_positions.size; index++) {
+	//	for (size_t subindex = index + 1; subindex < vertex_positions.size; subindex++) {
+	//		if (compare_mask(vertex_positions[index], vertex_positions[subindex])) {
+	//			// We can remove the subindex point
+	//			vertex_positions.RemoveSwapBack(subindex);
+	//			subindex--;
+	//		}
+	//	}
+	//}
 
 	// TODO: Decide a better way of initializing the space for this triangle mesh
 	// Guesstimate

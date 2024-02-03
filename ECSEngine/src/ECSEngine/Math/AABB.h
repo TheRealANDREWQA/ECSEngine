@@ -186,4 +186,15 @@ namespace ECSEngine {
 	// 4 are for the "right" face
 	ECSENGINE_API void GetAABBCorners(AABB aabb, Vector3* corners);
 
+	// Returns the squared distance from the AABB to the point
+	ECSENGINE_API float AABBToPointSquaredDistance(AABBScalar aabb, float3 point);
+
+	// Returns the squared distance from the AABB to the point
+	ECSENGINE_API Vec8f ECS_VECTORCALL AABBToPointSquaredDistance(AABB aabb, Vector3 point);
+
+	// Returns the closest point from the given point to the AABB
+	ECSENGINE_API float3 AABBClosestPoint(AABBScalar aabb, float3 point);
+
+	// Returns the closest point from the given point to the AABB
+	ECSENGINE_API Vector3 ECS_VECTORCALL AABBClosestPoint(AABB aabb, Vector3 point);
 }
