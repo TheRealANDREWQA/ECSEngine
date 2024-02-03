@@ -245,9 +245,7 @@ namespace ECSEngine {
 
 	size_t WeldVertices(Stream<float3>& points, float3 epsilon) {
 		// In order to speed this up for a large number of entries, we can use a spatial grid
-		// And check values only inside a cell. This fails if the epsilon is large enough
-		// That some points close to the edges would actually have to be welded but they lie
-		// In different cells
+		// And check values only inside a cell
 
 		// We want to have a good amount of cells in each direction. Choosing 128x128x128
 		// Should be a reasonable default, we can take advantage of the fact that it is
@@ -259,6 +257,13 @@ namespace ECSEngine {
 		float3 points_max;
 		GetFloat3MinMax(points, &points_min, &points_max);
 		float3 points_span = points_max - points_min;
+		// We also need to take into account, that if the epsilon is really large
+		// With respect to the object span, we need to reduce the cell sizes even
+		// More such that the vertices don't spend a lot of time traversing many cells
+		points_span /= epsilon;
+		// Empirically, it seems to help to make this a little bit larger
+		points_span *= float3::Splat(2.0f);
+
 		float3 per_cell_size = points_span / float3(DIMENSIONS);
 		uint3 int_per_cell_size = per_cell_size;
 		uint3 int_per_cell_power_of_two = BasicTypeAction<uint3>(
@@ -285,7 +290,12 @@ namespace ECSEngine {
 		}
 
 		const size_t CHUNK_POINT_COUNT = 8;
+		typedef float3 ChunkDataEntry;
 		struct ChunkData {
+			ECS_INLINE void Set(ChunkDataEntry entry, unsigned int count) {
+				points[count] = entry;
+			}
+
 			float3 points[CHUNK_POINT_COUNT];
 		};
 
@@ -294,11 +304,9 @@ namespace ECSEngine {
 		auto perform_welding = [&](auto& spatial_grid) {
 			for (size_t index = 0; index < points.size; index++) {
 				float3 current_point = points[index];
-				bool was_inserted = spatial_grid.InsertPointTest(current_point, [&](
-					uint3 cell_indices, 
-					SpatialGridChunk<ChunkData>* initial_chunk, 
-					ChunkData* data, 
-					unsigned int count
+				bool was_welded = spatial_grid.InsertAABBLate(current_point - epsilon, current_point + epsilon, current_point, [&](
+					uint3 cell_indices,
+					SpatialGridChunk<ChunkData>* initial_chunk
 				) {
 					bool was_welded = spatial_grid.IterateChunks<true>(initial_chunk, [&](const ChunkData* data, unsigned int count) {
 						for (unsigned int index = 0; index < count; index++) {
@@ -310,13 +318,12 @@ namespace ECSEngine {
 						}
 						return false;
 					});
-					if (!was_welded) {
-						data->points[count] = current_point;
+					if (was_welded) {
 						return true;
 					}
 					return false;
 				});
-				if (!was_inserted) {
+				if (was_welded) {
 					points.RemoveSwapBack(index);
 					index--;
 				}
@@ -327,14 +334,14 @@ namespace ECSEngine {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 64);
 
 		if (has_smaller_factor) {
-			SpatialGrid<ChunkData, CHUNK_POINT_COUNT, SpatialGridDefaultCellIndicesHash, true> spatial_grid;
+			SpatialGrid<ChunkData, ChunkDataEntry, CHUNK_POINT_COUNT, SpatialGridDefaultCellIndicesHash, true> spatial_grid;
 			// Choose some sensible defaults
 			spatial_grid.Initialize(&stack_allocator, DIMENSIONS, int_per_cell_size, DECK_POWER_OF_TWO);
 			spatial_grid.SetSmallerCellSizeFactor(smaller_factor);
 			perform_welding(spatial_grid);
 		}
 		else {
-			SpatialGrid<ChunkData, CHUNK_POINT_COUNT> spatial_grid;
+			SpatialGrid<ChunkData, ChunkDataEntry, CHUNK_POINT_COUNT> spatial_grid;
 			// Choose some sensible defaults
 			spatial_grid.Initialize(&stack_allocator, DIMENSIONS, int_per_cell_size, DECK_POWER_OF_TWO);
 			perform_welding(spatial_grid);

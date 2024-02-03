@@ -219,7 +219,7 @@ namespace ECSEngine {
 
 		void AddSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {});
 
-		void AddPoint(float3 position, Color color, DebugDrawCallOptions options = {false});
+		void AddPoint(float3 position, float size, Color color, DebugDrawCallOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
 		void AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
@@ -276,7 +276,7 @@ namespace ECSEngine {
 
 		void AddSphereThread(unsigned int thread_index, float3 position, float radius, Color color, DebugDrawCallOptions options = {});
 
-		void AddPointThread(unsigned int thread_index, float3 position, Color color, DebugDrawCallOptions options = {false});
+		void AddPointThread(unsigned int thread_index, float3 position, float size, Color color, DebugDrawCallOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
 		void AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
@@ -351,7 +351,7 @@ namespace ECSEngine {
 
 		void DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {false});
 
-		void DrawPoint(float3 position, Color color, DebugDrawCallOptions options = {false});
+		void DrawPoint(float3 position, float size, Color color, DebugDrawCallOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
 		void DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});

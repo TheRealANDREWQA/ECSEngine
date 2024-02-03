@@ -211,6 +211,17 @@ struct BuildFunctionWrapperData {
 	Component locked_globals[8];
 };
 
+struct BuildFunctionWrapperEventData {
+	unsigned int sandbox_index;
+};
+
+static EDITOR_EVENT(BuildFunctionWrapperEvent) {
+	BuildFunctionWrapperEventData* data = (BuildFunctionWrapperEventData*)_data;
+	SetSandboxSceneDirty(editor_state, data->sandbox_index);
+	RenderSandboxViewports(editor_state, data->sandbox_index);
+	return false;
+}
+
 // We need this wrapper to set the finish flag once
 // It has finished and to eliminate the locked dependencies
 ECS_THREAD_TASK(BuildFunctionWrapper) {
@@ -244,6 +255,10 @@ ECS_THREAD_TASK(BuildFunctionWrapper) {
 	}
 	DecrementSandboxModuleComponentBuildCount(data->editor_state, data->sandbox_index);
 	DecrementModuleInfoLockCount(data->editor_state, data->module_index, data->module_configuration);
+	
+	// Add an event to re-render the sandbox and set the scene as dirty
+	BuildFunctionWrapperEventData event_data = { data->sandbox_index };
+	EditorAddEvent(data->editor_state, BuildFunctionWrapperEvent, &event_data, sizeof(event_data));
 }
 
 // Returns true if a background task was launched, else false

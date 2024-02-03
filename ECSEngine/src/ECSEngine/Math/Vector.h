@@ -239,6 +239,28 @@ namespace ECSEngine {
 	// The result is the same as a with the component selected
 	ECSENGINE_API Vector4 ECS_VECTORCALL Select(SIMDVectorMask mask, Vector4 a, Vector4 b, ECS_SIMD_VECTOR_COMPONENT component);
 
+	// We need a template to distinguish between the auto conversion of float to Vec8f
+	template<typename SingleValue>
+	ECS_INLINE SingleValue ECS_VECTORCALL Min(SingleValue a, SingleValue b) {
+		if constexpr (std::is_same_v<float, SingleValue>) {
+			return std::min(a, b);
+		}
+		else {
+			return min(a, b);
+		}
+	}
+
+	// We need a template to distinguish between the auto conversion of float to Vec8f
+	template<typename SingleValue>
+	ECS_INLINE SingleValue ECS_VECTORCALL Max(SingleValue a, SingleValue b) {
+		if constexpr (std::is_same_v<float, SingleValue>) {
+			return std::max(a, b);
+		}
+		else {
+			return max(a, b);
+		}
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API Vector3 ECS_VECTORCALL Min(Vector3 a, Vector3 b);

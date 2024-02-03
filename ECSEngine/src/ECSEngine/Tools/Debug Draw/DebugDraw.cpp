@@ -14,7 +14,7 @@
 
 #define LARGE_BUFFER_CAPACITY 100 * ECS_KB
 
-#define POINT_SIZE 0.05f
+#define POINT_SIZE 0.0175f
 #define CIRCLE_TESSELATION 32
 #define ARROW_HEAD_DARKEN_COLOR 1.0f
 #define AXES_X_SCALE 3.0f
@@ -1022,11 +1022,12 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddPoint(float3 position, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddPoint(float3 position, float size, Color color, DebugDrawCallOptions options)
 	{
 		// Make wireframe false
 		options.wireframe = false;
-		points.Add({ position, color, options });
+		AddSphere(position, POINT_SIZE * size, color, options);
+		//points.Add({ position, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1217,22 +1218,25 @@ namespace ECSEngine {
 		if (thread_spheres[thread_index].IsFull()) {
 			FlushSphere(thread_index);
 		}
-		thread_spheres[thread_index].Add({ position, radius, color });
+		thread_spheres[thread_index].Add({ position, radius, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddPointThread(unsigned int thread_index, float3 position, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddPointThread(unsigned int thread_index, float3 position, float size, Color color, DebugDrawCallOptions options)
 	{
+		// TODO: Make the point depth size independent? For a quick momentary fix, let the user specify the size
+
 		// Make wireframe false
 		options.wireframe = false;
+		AddSphereThread(thread_index, position, POINT_SIZE * size, color, options);
 
-		// Check to see if the queue is full
-		// If it is, then a flush is needed to clear the queue
-		if (thread_points[thread_index].IsFull()) {
-			FlushPoint(thread_index);
-		}
-		thread_points[thread_index].Add({ position, color, options });
+	//	// Check to see if the queue is full
+	//	// If it is, then a flush is needed to clear the queue
+	//	if (thread_points[thread_index].IsFull()) {
+	//		FlushPoint(thread_index);
+	//	}
+	//	thread_points[thread_index].Add({ position, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1642,19 +1646,20 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawPoint(float3 position, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawPoint(float3 position, float size, Color color, DebugDrawCallOptions options)
 	{
 		options.wireframe = false;
+		DrawSphere(position, POINT_SIZE * size, color, options);
 
-		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
-			this, 
-			1, 
-			(const DebugDrawerOutput*)&color, 
-			options, 
-			ECS_DEBUG_VERTEX_BUFFER_POINT, 
-			[&](unsigned int index) {
-			return PointMatrix(position, camera_matrix);
-		});
+		//DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
+		//	this, 
+		//	1, 
+		//	(const DebugDrawerOutput*)&color, 
+		//	options, 
+		//	ECS_DEBUG_VERTEX_BUFFER_POINT, 
+		//	[&](unsigned int index) {
+		//	return PointMatrix(position, camera_matrix);
+		//});
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2269,8 +2274,9 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::DrawPointDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugPoint>* custom_source) {
-		DeckPowerOfTwo<DebugPoint>* source = custom_source != nullptr ? custom_source : &points;
-		DrawTransformDeck(this, source, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, shader_output);
+		// Deactivate this for the time being - until we decide how the points should behave
+		//DeckPowerOfTwo<DebugPoint>* source = custom_source != nullptr ? custom_source : &points;
+		//DrawTransformDeck(this, source, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -3673,7 +3679,7 @@ namespace ECSEngine {
 		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, QuaternionFromEuler(float3(0.0f, 0.0f, 90.0f)), 1.0f, Color(100, 150, 200), debug_options);
 
 		drawer->AddCross({ 10.0f, 10.0f, 0.0f }, QuaternionFromEuler(float3(0.0f, 0.0f, 0.0f)), 1.0f, Color(200, 200, 200), debug_options);
-		drawer->AddPoint({ 0.0f, 0.0f, -10.0f }, Color(255, 255, 255), debug_options);
+		drawer->AddPoint({ 0.0f, 0.0f, -10.0f }, 1.0f, Color(255, 255, 255), debug_options);
 		drawer->AddTriangle({ 2.0f, 0.0f, 0.0f }, { 5.0f, 0.0f, 0.0f }, { 0.0f, 5.0f, 0.0f }, Color(10, 50, 200), debug_options);
 
 		drawer->AddString({ 0.0f, 10.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 1.0f, "Hey there fellas!\nNice to see this working!\nPogU", Color(255, 255, 255), debug_options);

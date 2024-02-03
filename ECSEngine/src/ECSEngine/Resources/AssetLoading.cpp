@@ -961,8 +961,8 @@ namespace ECSEngine {
 			control_block->miscs[index].different_handles.InitializeAndCopy(persistent_allocator, same_target.miscs[index].other_handles);
 		}
 
-		const size_t ALLOCATOR_SIZE = ECS_MB * 100;
-		const size_t ALLOCATOR_BACKUP = ECS_MB * 400;
+		const size_t ALLOCATOR_SIZE = ECS_MB * 200;
+		const size_t ALLOCATOR_BACKUP = ECS_MB * 500;
 
 		// Create the global allocators
 		control_block->global_managers = (GlobalMemoryManager*)Allocate(persistent_allocator, sizeof(GlobalMemoryManager) * thread_count);

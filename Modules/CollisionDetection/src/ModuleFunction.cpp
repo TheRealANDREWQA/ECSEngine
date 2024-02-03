@@ -149,7 +149,8 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	const ConvexCollider* collider = (const ConvexCollider*)data->component;
 	const Translation* translation = (const Translation*)data->dependency_components[0];
 	float3 translation_value = translation != nullptr ? translation->value : float3::Splat(0.0f);
-	translation_value = float3::Splat(0.0f);
+	translation_value += float3::Splat(0.0f);
+	//translation_value = float3::Splat(0.0f);
 	
 	size_t count = collider->mesh.triangles.size < collider->hull_size ? 0 : collider->mesh.triangles.size - collider->hull_size;
 	for (size_t index = 0; index < count; index++) {
@@ -162,9 +163,9 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 		options.wireframe = true;
 		data->debug_drawer->AddTriangleThread(data->thread_id, translation_value + a, translation_value + b, translation_value + c, ECS_COLOR_GREEN, options);
 	}
-	/*for (size_t index = 0; index < 10; index++) {
-		data->debug_drawer->AddPointThread(data->thread_id, collider->mesh.positions[index], ECS_COLOR_GREEN);
-	}*/
+	for (size_t index = 0; index < collider->mesh.positions.size; index++) {
+		data->debug_drawer->AddPointThread(data->thread_id, translation_value + collider->mesh.positions[index], 1.0f, ECS_COLOR_AQUA);
+	}
 }
 
 void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsData* data) {

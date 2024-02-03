@@ -7,11 +7,17 @@ using namespace ECSEngine;
 
 #define GRID_CHUNK_COUNT (8)
 
+struct GridChunkDataEntry {
+	AABBScalar aabb;
+	unsigned int identifier;
+	unsigned char layer;
+};
+
 struct GridChunkData {
-	void AddEntry(AABBScalar aabb, unsigned int identifier, unsigned char layer, unsigned int count) {
-		colliders[count] = aabb;
-		identifiers[count] = identifier;
-		layers[count] = layer;
+	void Set(GridChunkDataEntry entry, unsigned int count) {
+		colliders[count] = entry.aabb;
+		identifiers[count] = entry.identifier;
+		layers[count] = entry.layer;
 	}
 
 	AABBScalar colliders[GRID_CHUNK_COUNT];
@@ -125,7 +131,7 @@ struct FixedGrid {
 
 	void SetLayerMask(unsigned char layer_index, const CollisionLayer* layer_mask);
 
-	SpatialGrid<GridChunkData, GRID_CHUNK_COUNT> spatial_grid;
+	SpatialGrid<GridChunkData, GridChunkDataEntry, GRID_CHUNK_COUNT> spatial_grid;
 
 	// Record these values such that we can have a good approximation for the initial
 	// Allocations for the cells and chunks
