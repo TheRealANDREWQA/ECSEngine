@@ -113,14 +113,12 @@ namespace ECSEngine {
 		CapacityStream<unsigned int>* values
 	);
 
-	struct CPUInstanceFramebuffer {
-		// Can't inline this function since it will cause a crash on malloc
+	struct ECSENGINE_API CPUInstanceFramebuffer {
+		// Can't inline this function since it will cause a crash on Malloc
 		// if the allocation is made with TransferInstancesFramebufferToCPU
 		// that will cause an allocation to be made from the DLL and the deallocation
 		// in the exe
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
-			ECSEngine::DeallocateEx(allocator, values);
-		}
+		void Deallocate(AllocatorPolymorphic allocator) const;
 
 		unsigned int* values;
 		uint2 dimensions;

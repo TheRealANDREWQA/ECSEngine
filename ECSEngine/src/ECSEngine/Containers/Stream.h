@@ -301,7 +301,7 @@ namespace ECSEngine {
 
 			void* allocation = nullptr;
 			if (new_size > 0) {
-				allocation = Allocate(allocator, MemoryOf(new_size), alignof(T), debug_info);
+				allocation = AllocateEx(allocator, MemoryOf(new_size), alignof(T), debug_info);
 			}
 			if (copy_old_elements) {
 				size_t copy_size = new_size > size ? size : new_size;
@@ -309,7 +309,7 @@ namespace ECSEngine {
 			}
 
 			if (deallocate_old) {
-				Deallocate(allocator, debug_info);
+				DeallocateEx(allocator, debug_info);
 			}
 
 			InitializeFromBuffer(allocation, new_size);
@@ -434,7 +434,7 @@ namespace ECSEngine {
 		void InitializeEx(AllocatorPolymorphic allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(_size);
 			if (memory_size > 0) {
-				void* allocation = AllocateEx(allocator, memory_size, debug_info);
+				void* allocation = AllocateEx(allocator, memory_size, alignof(T), debug_info);
 				buffer = (T*)allocation;
 			}
 			else {
@@ -754,24 +754,39 @@ namespace ECSEngine {
 			AssertCapacity();
 		}
 
-		// The new_elements value will be added to the capacity, not to the current size
-		/*void Resize(AllocatorPolymorphic allocator, unsigned int new_elements) {
-			void* old_buffer = buffer;
+		void Resize(AllocatorPolymorphic allocator, unsigned int new_capacity) {
+			if (capacity > 0) {
+				void* allocation = ReallocateEx(allocator, buffer, MemoryOf(new_capacity), alignof(T));
+				if (allocation != buffer) {
+					unsigned int copy_size = std::min(size, new_capacity);
+					memcpy(allocation, buffer, MemoryOf(copy_size));
+					buffer = (T*)allocation;
+				}
+			}
+			else {
+				buffer = (T*)AllocateEx(allocator, MemoryOf(new_capacity), alignof(T));
+			}
 
-			void* allocation = Allocate(allocator, MemoryOf(capacity + new_elements));
-			CopyTo(allocation);
-			InitializeFromBuffer(allocation, size, capacity + new_elements);
-		
-			return old_buffer;
-		}*/
+			size = std::min(size, new_capacity);
+			capacity = new_capacity;
+		}
 
 		// Asserts that there is enough space and increments the size with the given count
 		// Returns the index of the first entry
-		ECS_INLINE unsigned int Reserve(unsigned int count = 1) {
+		ECS_INLINE unsigned int ReserveRange(unsigned int count = 1) {
 			ECS_ASSERT(size + count <= capacity);
 			unsigned int index = size;
 			size += count;
 			return index;
+		}
+
+		ECS_INLINE void Reserve(AllocatorPolymorphic allocator, unsigned int count = 1) {
+			if (size + count > capacity) {
+				unsigned int new_capacity = (float)capacity * 1.5f + 4;
+				// Clamp the new_capacity to cover the necessary count
+				new_capacity = new_capacity < size + count ? size + count : new_capacity;
+				Resize(allocator, new_capacity);
+			}
 		}
 
 		ECS_INLINE void Reset() {
@@ -910,7 +925,7 @@ namespace ECSEngine {
 		void InitializeEx(AllocatorPolymorphic allocator, unsigned int _size, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(_capacity);
 			if (memory_size > 0) {
-				void* allocation = AllocateEx(allocator, memory_size, debug_info);
+				void* allocation = AllocateEx(allocator, memory_size, alignof(T), debug_info);
 				InitializeFromBuffer(allocation, _size, _capacity);
 			}
 			else {
@@ -959,7 +974,7 @@ namespace ECSEngine {
 
 		// Returns the first index
 		unsigned int AddStream(Stream<T> other) {
-			unsigned int write_index = Reserve(other.size);
+			unsigned int write_index = ReserveRange(other.size);
 			CopySlice(write_index, other);
 			return write_index;
 		}
@@ -972,7 +987,9 @@ namespace ECSEngine {
 
 		// it will set the size
 		ECS_INLINE void CopyOther(const void* memory, unsigned int count) {
-			ResizeNoCopy(count);
+			if (count != size) {
+				ResizeNoCopy(count);
+			}
 			memcpy(buffer, memory, sizeof(T) * count);
 			size = count;
 		}
@@ -1067,7 +1084,7 @@ namespace ECSEngine {
 		}
 
 		void Insert(unsigned int index, T value) {
-			Reserve();
+			ReserveRange();
 			DisplaceElements(index, 1);
 			buffer[index] = value;
 		}
@@ -1091,7 +1108,7 @@ namespace ECSEngine {
 
 		// Makes sure there is enough space for extra count elements
 		// And increases the size with that count
-		ECS_INLINE unsigned int Reserve(unsigned int count = 1) {
+		ECS_INLINE unsigned int ReserveRange(unsigned int count = 1) {
 			unsigned int initial_size = size;
 			if (size + count > capacity) {
 				unsigned int new_capacity = ECS_RESIZABLE_STREAM_FACTOR * capacity + 1;
@@ -1102,6 +1119,16 @@ namespace ECSEngine {
 			return initial_size;
 		}
 
+		// Makes sure there is enough space for extra count elements
+		// Does not increment the size
+		ECS_INLINE void Reserve(unsigned int count = 1) {
+			if (size + count > capacity) {
+				unsigned int new_capacity = ECS_RESIZABLE_STREAM_FACTOR * capacity + 4;
+				unsigned int resize_count = new_capacity < capacity + count ? capacity + count : new_capacity;
+				Resize(resize_count);
+			}
+		}
+
 		private:
 			template<bool copy_old_data>
 			void ResizeImpl(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
@@ -1110,7 +1137,7 @@ namespace ECSEngine {
 				if (new_capacity != 0) {
 					if (buffer != nullptr && size > 0) {
 						unsigned int copy_size = size < new_capacity ? size : new_capacity;
-						new_buffer = ECSEngine::ReallocateEx(allocator, buffer, MemoryOf(new_capacity), debug_info);
+						new_buffer = ECSEngine::ReallocateEx(allocator, buffer, MemoryOf(new_capacity), alignof(T), debug_info);
 						ECS_ASSERT(new_buffer != nullptr);
 						if constexpr (copy_old_data) {
 							// When using realloc, the data is copied by default
@@ -1120,7 +1147,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						new_buffer = ECSEngine::AllocateEx(allocator, MemoryOf(new_capacity), debug_info);
+						new_buffer = ECSEngine::AllocateEx(allocator, MemoryOf(new_capacity), alignof(T), debug_info);
 					}
 				}
 				else {
@@ -1171,7 +1198,7 @@ namespace ECSEngine {
 
 				void* allocation = nullptr;
 				if (buffer != nullptr && elements_to_copy > 0) {
-					allocation = ReallocateEx(allocator, buffer, MemoryOf(elements_to_copy), debug_info);
+					allocation = ReallocateEx(allocator, buffer, MemoryOf(elements_to_copy), alignof(T), debug_info);
 					ECS_ASSERT(allocation != nullptr);
 
 					if (allocation != buffer) {
@@ -1401,7 +1428,7 @@ namespace ECSEngine {
 		template<typename Allocator>
 		ECS_INLINE void Initialize(Allocator* allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (_size > 0) {
-				buffer = allocator->Allocate(_size, debug_info);
+				buffer = allocator->Allocate(_size, alignof(void*), debug_info);
 			}
 			else {
 				buffer = nullptr;
@@ -1411,7 +1438,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Initialize(AllocatorPolymorphic allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (_size > 0) {
-				buffer = AllocateEx(allocator, _size, debug_info);
+				buffer = AllocateEx(allocator, _size, alignof(void*), debug_info);
 			}
 			else {
 				buffer = nullptr;
@@ -1725,12 +1752,13 @@ namespace ECSEngine {
 
 		void Resize(unsigned int new_capacity, unsigned int element_byte_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (new_capacity > 0) {
+				// Use a default of max element alignment
 				void* new_buffer = 0;
 				if (capacity > 0 && buffer != nullptr) {
-					new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, debug_info);
+					new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, alignof(void*), debug_info);
 				}
 				else {
-					new_buffer = AllocateEx(allocator, new_capacity * element_byte_size, debug_info);
+					new_buffer = AllocateEx(allocator, new_capacity * element_byte_size, alignof(void*), debug_info);
 				}
 				ECS_ASSERT(new_buffer != nullptr);
 
@@ -1756,14 +1784,14 @@ namespace ECSEngine {
 		void ResizeNoCopy(unsigned int new_capacity, unsigned int element_byte_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			void* new_buffer = nullptr;
 			if (new_capacity > 0 && size > 0) {
-				new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, debug_info);
+				new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, alignof(void*), debug_info);
 				ECS_ASSERT(new_buffer != nullptr);
 			}
 			else if (size > 0) {
 				DeallocateEx(allocator, buffer, debug_info);
 			}
 			else if (new_capacity > 0) {
-				new_buffer = AllocateEx(allocator, new_capacity * element_byte_size, debug_info);
+				new_buffer = AllocateEx(allocator, new_capacity * element_byte_size, alignof(void*), debug_info);
 				ECS_ASSERT(new_buffer != nullptr);
 			}
 
@@ -1864,7 +1892,7 @@ namespace ECSEngine {
 		result.Initialize(allocator, input.size, debug_info);
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
-			void* allocation = AllocateEx(allocator, copy_size, debug_info);
+			void* allocation = AllocateEx(allocator, copy_size, alignof(void*), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			result[index] = input[index].CopyTo(ptr);
 		}
@@ -1883,7 +1911,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			auto index_projection = projection(input[index]);
 			size_t copy_size = index_projection.CopySize();
-			void* allocation = AllocateEx(allocator, copy_size, debug_info);
+			void* allocation = AllocateEx(allocator, copy_size, alignof(void*), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			result[index] = index_projection.CopyTo(ptr);
 		}
@@ -1907,7 +1935,7 @@ namespace ECSEngine {
 	void StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
-			void* allocation = AllocateEx(allocator, copy_size, debug_info);
+			void* allocation = AllocateEx(allocator, copy_size, alignof(void*), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			input[index] = input[index].CopyTo(ptr);
 		}
@@ -1950,7 +1978,7 @@ namespace ECSEngine {
 				}
 			}
 
-			void* allocation = AllocateEx(allocator, total_size, debug_info);
+			void* allocation = AllocateEx(allocator, total_size, alignof(void*), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			new_stream.InitializeAndCopy(ptr, input);
 
@@ -2001,7 +2029,7 @@ namespace ECSEngine {
 				}
 			}
 
-			void* allocation = AllocateEx(allocator, total_size, debug_info);
+			void* allocation = AllocateEx(allocator, total_size, alignof(void*), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			new_stream.InitializeAndCopy(ptr, input);
 
@@ -2118,7 +2146,7 @@ namespace ECSEngine {
 	template<typename Stream>
 	void StreamCoalescedInplaceDeepCopy(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		size_t allocation_size = StreamCoalescedInplaceDeepCopySize(input);
-		void* allocation = AllocateEx(allocator, allocation_size, debug_info);
+		void* allocation = AllocateEx(allocator, allocation_size, alignof(void*), debug_info);
 		uintptr_t ptr = (uintptr_t)allocation;
 		return StreamCoalescedInplaceDeepCopy(input, ptr);
 	}
@@ -2209,8 +2237,6 @@ namespace ECSEngine {
 			}
 			else {
 				resizable_stream->Reserve(count);
-				// Here, we don't want to actually
-				resizable_stream->size -= count;
 			}
 		}
 
@@ -2225,12 +2251,13 @@ namespace ECSEngine {
 			capacity_stream->size = value;
 		}
 
+		// It increments the size and returns a pointer to the first entry
 		ECS_INLINE T* Reserve(unsigned int count = 1) {
 			if (is_capacity) {
-				return capacity_stream->buffer + capacity_stream->Reserve(count);
+				return capacity_stream->buffer + capacity_stream->ReserveRange(count);
 			}
 			else {
-				return resizable_stream->buffer + resizable_stream->Reserve(count);
+				return resizable_stream->buffer + resizable_stream->ReserveRange(count);
 			}
 		}
 

@@ -1,19 +1,19 @@
 #pragma once
 #include "../Core.h"
 #include "../Multithreading/ConcurrentPrimitives.h"
-#include "AllocatorTypes.h"
 #include "../Utilities/DebugInfo.h"
+#include "AllocatorBase.h"
 
 namespace ECSEngine {
 
 #define ECS_STACK_LINEAR_ALLOCATOR(name, capacity)	char allocator_bytes##name[capacity]; \
 													LinearAllocator name(allocator_bytes##name, capacity);
 
-	struct ECSENGINE_API LinearAllocator
+	struct ECSENGINE_API LinearAllocator : public AllocatorBase
 	{
-		ECS_INLINE LinearAllocator() : m_buffer(nullptr), m_capacity(0), m_top(0), m_marker(0), m_debug_mode(false) {}
-		ECS_INLINE LinearAllocator(void* buffer, size_t capacity) : m_buffer(buffer), m_capacity(capacity), m_top(0), 
-			m_marker(0), m_spin_lock(), m_debug_mode(false), m_profiling_mode(false) {}
+		ECS_INLINE LinearAllocator() : AllocatorBase(ECS_ALLOCATOR_LINEAR), m_buffer(nullptr), m_capacity(0), m_top(0), m_marker(0) {}
+		ECS_INLINE LinearAllocator(void* buffer, size_t capacity) : AllocatorBase(ECS_ALLOCATOR_LINEAR), m_buffer(buffer), m_capacity(capacity), m_top(0), 
+			m_marker(0) {}
 
 		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -37,25 +37,9 @@ namespace ECSEngine {
 			return m_top == 0;
 		}
 
-		ECS_INLINE void Lock() {
-			m_spin_lock.Lock();
-		}
-
-		ECS_INLINE void Unlock() {
-			m_spin_lock.Unlock();
-		}
-
 		ECS_INLINE size_t GetCurrentUsage() const {
 			return m_top;
 		}
-
-		void ExitDebugMode();
-		
-		void ExitProfilingMode();
-
-		void SetDebugMode(const char* name = nullptr, bool resizable = false);
-
-		void SetProfilingMode(const char* name);
 
 		// Region start and region size are parallel arrays. Returns the count of regions
 		// Pointer capacity must represent the count of valid entries for the given pointers
@@ -72,9 +56,6 @@ namespace ECSEngine {
 
 		void SetMarker_ts();
 
-		SpinLock m_spin_lock;
-		bool m_debug_mode;
-		bool m_profiling_mode;
 		void* m_buffer;
 		size_t m_capacity;
 		size_t m_marker;

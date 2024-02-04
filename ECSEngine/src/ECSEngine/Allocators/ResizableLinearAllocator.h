@@ -1,22 +1,22 @@
 #pragma once
-#include "AllocatorTypes.h"
 #include "../Core.h"
 #include "../Multithreading/ConcurrentPrimitives.h"
 #include "../Utilities/StackScope.h"
 #include "../Utilities/DebugInfo.h"
+#include "AllocatorBase.h"
 
 namespace ECSEngine {
 
-	// Allocates from the stack a buffer and then uses malloc to allocate bigger buffers
+	// Allocates from the stack a buffer and then uses Malloc to allocate bigger buffers
 	// It also creates a stack scope to release any heap allocations made 
 #define ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(name, stack_capacity, heap_capacity)	void* allocation##name = ECS_STACK_ALLOC(stack_capacity); \
 																					ResizableLinearAllocator name(allocation##name, stack_capacity, heap_capacity, {nullptr}); \
 																					StackScope<ResizableLinearAllocatorScopeDeallocator> scope##name({ &name });
 																					
 
-	struct ECSENGINE_API ResizableLinearAllocator
+	struct ECSENGINE_API ResizableLinearAllocator : public AllocatorBase
 	{
-		ECS_INLINE ResizableLinearAllocator() : m_initial_buffer(nullptr), m_initial_capacity(0), m_allocated_buffers(nullptr), m_debug_mode(false),
+		ECS_INLINE ResizableLinearAllocator() : AllocatorBase(ECS_ALLOCATOR_RESIZABLE_LINEAR), m_initial_buffer(nullptr), m_initial_capacity(0), m_allocated_buffers(nullptr),
 			m_allocated_buffer_capacity(0), m_allocated_buffer_size(0), m_top(0), m_marker(0), m_backup_size(0), m_backup({ nullptr }) {}
 		ResizableLinearAllocator(size_t capacity, size_t backup_size, AllocatorPolymorphic allocator);
 		ResizableLinearAllocator(void* buffer, size_t capacity, size_t backup_size, AllocatorPolymorphic allocator);
@@ -53,24 +53,8 @@ namespace ECSEngine {
 		// Returns true if the pointer was allocated from this allocator
 		bool Belongs(const void* buffer) const;
 
-		void ExitDebugMode();
-
-		void ExitProfilingMode();
-
-		void SetDebugMode(const char* name = nullptr, bool resizable = false);
-
-		void SetProfilingMode(const char* name);
-
 		ECS_INLINE bool IsEmpty() const {
 			return m_top == 0;
-		}
-
-		ECS_INLINE void Lock() {
-			m_spin_lock.Lock();
-		}
-
-		ECS_INLINE void Unlock() {
-			m_spin_lock.Unlock();
 		}
 
 		ECS_INLINE size_t GetCurrentUsage() const {
@@ -90,9 +74,6 @@ namespace ECSEngine {
 
 		void SetMarker_ts();
 
-		SpinLock m_spin_lock;
-		bool m_debug_mode;
-		bool m_profiling_mode;
 		// This is not the real buffer received in the constructor
 		// It is offsetted by a count of void* in order to keep the m_allocated_buffers
 		// inside the initial_allocation. So the buffer in the constructor is actually the

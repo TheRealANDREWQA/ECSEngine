@@ -208,7 +208,7 @@ namespace ECSEngine {
 #else
 		task.task.name = StringCopy(StaticTaskAllocator(this), task.task.name).buffer;
 #endif
-		unsigned int index = m_tasks.Reserve();
+		unsigned int index = m_tasks.ReserveRange();
 		m_tasks[index].task = task.task;
 		m_tasks[index].barrier.ClearCount();
 		m_tasks[index].barrier.SetTarget(task.barrier_task ? GetThreadCount() : 1);

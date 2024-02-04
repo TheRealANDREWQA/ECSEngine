@@ -223,7 +223,7 @@ namespace ECSEngine {
 		{
 			if (allocator.allocator == nullptr) {
 				if (position_x.capacity > 0) {
-					free(position_x.buffer);
+					Free(position_x.buffer);
 				}
 			}
 			else {

@@ -490,7 +490,7 @@ static void RecreateReflectionManagerForShaders(InspectorDrawMaterialFileData* d
 	InitializeReflectionManager(data);
 
 	for (size_t index = 0; index < data->cbuffers[VERTEX_ORDER].size; index++) {
-		ECS_ASSERT(!data->reflection_manager.type_definitions.Insert(data->cbuffers[VERTEX_ORDER][index], data->cbuffers[VERTEX_ORDER][index].name));
+		data->reflection_manager.type_definitions.Insert(data->cbuffers[VERTEX_ORDER][index], data->cbuffers[VERTEX_ORDER][index].name);
 	}
 
 	// For the rest of the shaders test before inserting to see that the types match
@@ -510,7 +510,7 @@ static void RecreateReflectionManagerForShaders(InspectorDrawMaterialFileData* d
 				}
 			}
 			else {
-				ECS_ASSERT(!data->reflection_manager.type_definitions.Insert(*reflection_type, reflection_type->name));
+				data->reflection_manager.type_definitions.Insert(*reflection_type, reflection_type->name);
 			}
 		}
 	}

@@ -529,7 +529,6 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
-		// Use malloc as allocator since these can get quite big
 		Stream<void> file_data = functor(file_path, data->control_block);
 		if (file_data.size == 0) {
 			LoadAssetFailure failure;

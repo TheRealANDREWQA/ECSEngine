@@ -1909,7 +1909,7 @@ namespace ECSEngine {
 			// Record the duration here such that it is consistent for the entire frame
 			unsigned int m_snapshot_mode_elapsed_time;
 			// This is used to make the allocations for the snapshots
-			// Using malloc can produce really noticeable slowdowns
+			// Using Malloc can produce really noticeable slowdowns
 			GlobalMemoryManager m_snapshot_allocator;
 			// This is used to keep track of the frame delta time
 			Timer m_frame_timer;

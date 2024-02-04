@@ -89,7 +89,7 @@ const char* DXGI_SINT_FORMAT_MAPPINGS[] = {
 namespace ECSEngine {
 
 #define ADD_TO_FORMAT_TABLE(name, format, table) identifier.ptr = #name; identifier.size = strlen(#name); \
-ECS_ASSERT(!table.Insert(format, identifier));
+table.Insert(format, identifier);
 
 #define ADD_TO_STRING_FORMAT_TABLE(format, table) ADD_TO_FORMAT_TABLE(format, format, table);
 
@@ -888,7 +888,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			file_contents[file_contents.size - 1] = '\0';
 			file_contents = PreprocessCFile(file_contents, external_macros);
 			bool status = functor(file_contents);
-			free(file_contents.buffer);
+			Free(file_contents.buffer);
 			return status;
 		}
 
@@ -1668,7 +1668,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	void ECSEngine::ShaderReflection::InitializeCBTypeMappingTable()
+	void ShaderReflection::InitializeCBTypeMappingTable()
 	{
 		ResourceIdentifier identifier;
 

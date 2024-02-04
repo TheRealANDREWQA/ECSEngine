@@ -29,8 +29,8 @@ namespace ECSEngine {
 	struct GLTFExportTexture {
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
 			texture_filename.Deallocate(allocator);
-			// The data buffer is always allocated with malloc
-			free(data.buffer);
+			// The data buffer is always allocated with Malloc
+			Free(data.buffer);
 		}
 
 		Stream<wchar_t> texture_filename;

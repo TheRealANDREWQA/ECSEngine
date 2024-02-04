@@ -58,7 +58,7 @@ namespace ECSEngine {
 		auto register_additions = [changes](ComponentSignature previous_components, ComponentSignature new_components, bool is_shared) {
 			for (unsigned char index = 0; index < new_components.count; index++) {
 				if (previous_components.Find(new_components[index]) == UCHAR_MAX) {
-					unsigned int change_index = changes->Reserve();
+					unsigned int change_index = changes->ReserveRange();
 					changes->buffer[change_index].type = ECS_ENTITY_CHANGE_ADD;
 					changes->buffer[change_index].is_shared = is_shared;
 					changes->buffer[change_index].component = new_components[index];
@@ -76,7 +76,7 @@ namespace ECSEngine {
 		auto register_removals = [changes](ComponentSignature previous_components, ComponentSignature new_components, bool is_shared) {
 			for (unsigned char index = 0; index < previous_components.count; index++) {
 				if (new_components.Find(previous_components[index]) == UCHAR_MAX) {
-					unsigned int change_index = changes->Reserve();
+					unsigned int change_index = changes->ReserveRange();
 					changes->buffer[change_index].type = ECS_ENTITY_CHANGE_REMOVE;
 					changes->buffer[change_index].is_shared = is_shared;
 					changes->buffer[change_index].component = previous_components[index];

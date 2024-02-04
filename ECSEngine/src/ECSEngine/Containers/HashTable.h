@@ -227,110 +227,161 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// the return value tells the caller if the hash table needs to grow or allocate another hash table
-		bool Insert(T value, Identifier identifier) {
-			unsigned int dummy;
-			return Insert(value, identifier, dummy);
-		}
-
-		// the return value tells the caller if the hash table needs to grow or allocate another hash table
-		bool Insert(T value, Identifier identifier, unsigned int& position) {
-			unsigned int key = ObjectHashFunction::Hash(identifier);
-			// Signal that the position has not yet been determined
-			position = -1;
-
-			// calculating the index at which the key wants to be
-			unsigned int index = m_function(key, m_capacity);
-			unsigned int hash = index;
-			unsigned int distance = 1;
-
-			unsigned char hash_key_bits = key;
-			hash_key_bits &= ECS_HASH_TABLE_HASH_BITS_MASK;
-
-			// probing the next slots
-			while (true) {
-				// getting the element's distance
-				unsigned int element_distance = GetElementDistance(index);
-
-				// if the element is "poorer" than us, we keep probing 
-				while (element_distance > distance) {
-					distance++;
-					index++;
-					element_distance = GetElementDistance(index);
+		private:
+			// Returns true if a resize needs to take place, else false.
+			// If the crash if_not_space is set to true, it will crash if there is not
+			// Enough space for the entry
+			template<bool crash_if_not_space>
+			bool InsertImpl(T value, Identifier identifier, unsigned int& position) {
+				if constexpr (crash_if_not_space) {
+					ECS_ASSERT(m_count * 100 / m_capacity <= ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR, "Hash table capacity exceeded");
 				}
 
-				// if the slot is empty, the key can be placed here
-				if (element_distance == 0) {
-					hash_key_bits |= distance << 3;
-					m_metadata[index] = hash_key_bits;
-					SetEntry(index, value, identifier);
-					m_count++;
-					position = position == -1 ? index : position;
-					break;
+				unsigned int key = ObjectHashFunction::Hash(identifier);
+				// Signal that the position has not yet been determined
+				position = -1;
+
+				// calculating the index at which the key wants to be
+				unsigned int index = m_function(key, m_capacity);
+				unsigned int hash = index;
+				unsigned int distance = 1;
+				unsigned int max_distance = 1;
+
+				unsigned char hash_key_bits = key;
+				hash_key_bits &= ECS_HASH_TABLE_HASH_BITS_MASK;
+
+				// probing the next slots
+				while (true) {
+					// getting the element's distance
+					unsigned int element_distance = GetElementDistance(index);
+
+					// if the element is "poorer" than us, we keep probing 
+					while (element_distance > distance) {
+						distance++;
+						index++;
+						element_distance = GetElementDistance(index);
+					}
+
+					// if the slot is empty, the key can be placed here
+					if (element_distance == 0) {
+						if constexpr (crash_if_not_space) {
+							ECS_ASSERT(distance <= 31, "Hash table capacity not enough (too many collisions)");
+						}
+						else {
+							max_distance = std::max(max_distance, distance);
+							// Clamp the distance to 31 in case it overflows to 32, and that can make the
+							// Metadata empty and lead to other inserts or erases thinking this slot is empty
+							// When it is not
+							distance = std::min(distance, (unsigned int)31);
+						}
+						hash_key_bits |= distance << 3;
+						m_metadata[index] = hash_key_bits;
+						SetEntry(index, value, identifier);
+						m_count++;
+						position = position == -1 ? index : position;
+						break;
+					}
+
+					// if it finds a richer slot than us, we swap the keys and keep searching to find 
+					// an empty slot for the richer slot
+					else {
+						unsigned char metadata_temp = m_metadata[index];
+
+						T current_value = value;
+						Identifier current_identifier = identifier;
+						GetEntry(index, value, identifier);
+						SetEntry(index, current_value, current_identifier);
+
+						if constexpr (crash_if_not_space) {
+							ECS_ASSERT(distance <= 31, "Hash table capacity not enough (too many collisions)");
+						}
+						else {
+							max_distance = std::max(max_distance, distance);
+							// Clamp the distance to 31 in case it overflows to 32, and that can make the
+							// Metadata empty and lead to other inserts or erases thinking this slot is empty
+							// When it is not
+							distance = std::min(distance, (unsigned int)31);
+						}
+						m_metadata[index] = hash_key_bits | (distance << 3);
+						distance = (metadata_temp >> 3) + 1;
+
+						hash_key_bits = metadata_temp & ECS_HASH_TABLE_HASH_BITS_MASK;
+						position = position == -1 ? index : position;
+						index++;
+					}
 				}
 
-				// if it finds a richer slot than us, we swap the keys and keep searching to find 
-				// an empty slot for the richer slot
+				if constexpr (crash_if_not_space) {
+					return false;
+				}
 				else {
-					unsigned char metadata_temp = m_metadata[index];
-					
-					T current_value = value;
-					Identifier current_identifier = identifier;
-					GetEntry(index, value, identifier);
-					SetEntry(index, current_value, current_identifier);
-
-					m_metadata[index] = hash_key_bits | (distance << 3);
-					distance = (metadata_temp >> 3) + 1;
-					
-					hash_key_bits = metadata_temp & ECS_HASH_TABLE_HASH_BITS_MASK;
-					position = position == -1 ? index : position;
-					index++;
+					if (max_distance >= 31 || (m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR)) {
+						return true;
+					}
+					return false;
 				}
 			}
-			if ((m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR) || distance >= 31)
-				return true;
-			return false;
+
+		public:
+
+		// It will assert if there is not enough space
+		void Insert(T value, Identifier identifier, unsigned int& position) {
+			InsertImpl<true>(value, identifier, position);
+		}
+
+		// It will assert if there is not enough space
+		void Insert(T value, Identifier identifier) {
+			unsigned int dummy;
+			Insert(value, identifier, dummy);
 		}
 
 		template<typename Allocator>
-		void InsertDynamic(Allocator* allocator, Value value, Identifier identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		bool InsertDynamic(Allocator* allocator, Value value, Identifier identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			auto grow = [&]() {
 				unsigned int old_capacity = GetCapacity();
 
 				unsigned int new_capacity = NextCapacity(GetCapacity());
 				void* new_allocation = allocator->Allocate(MemoryOf(new_capacity), alignof(void*), debug_info);
-				const void* old_allocation = Grow(new_allocation, new_capacity);
+				void* old_allocation = Grow(new_allocation, new_capacity);
 				if (old_capacity > 0) {
 					allocator->Deallocate(old_allocation, debug_info);
 				}
 			};
 
+			unsigned int initial_capacity = GetCapacity();
 			if (GetCapacity() == 0) {
 				grow();
 			}
-			if (Insert(value, identifier)) {
+			unsigned int insert_location;
+			if (InsertImpl<false>(value, identifier, insert_location)) {
 				grow();
 			}
+			return initial_capacity != GetCapacity();
 		}
 
-		void InsertDynamic(AllocatorPolymorphic allocator, Value value, Identifier identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		// It will grow the hash table to accomodate the new entry
+		// Returns true if it grew, else false
+		bool InsertDynamic(AllocatorPolymorphic allocator, Value value, Identifier identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			auto grow = [&]() {
 				unsigned int old_capacity = GetCapacity();
 
 				unsigned int new_capacity = NextCapacity(GetCapacity());
-				void* new_allocation = AllocateEx(allocator, MemoryOf(new_capacity), debug_info);
+				void* new_allocation = AllocateEx(allocator, MemoryOf(new_capacity), alignof(void*), debug_info);
 				void* old_allocation = Grow(new_allocation, new_capacity);
 				if (old_capacity > 0) {
 					DeallocateEx(allocator, old_allocation, debug_info);
 				}
 			};
 
+			unsigned int initial_capacity = GetCapacity();
 			if (GetCapacity() == 0) {
 				grow();
 			}
-			if (Insert(value, identifier)) {
+			unsigned int insert_location;
+			if (InsertImpl<false>(value, identifier, insert_location)) {
 				grow();
 			}
+			return initial_capacity != GetCapacity();
 		}
 
 		void Erase(Identifier identifier) {
@@ -678,7 +729,7 @@ namespace ECSEngine {
 		// Equivalent to memcpy'ing the data from the other table
 		void Copy(AllocatorPolymorphic allocator, const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>* table, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t table_size = MemoryOf(table->GetCapacity());
-			void* allocation = AllocateEx(allocator, table_size, debug_info);
+			void* allocation = AllocateEx(allocator, table_size, alignof(void*), debug_info);
 
 			InitializeFromBuffer(allocation, table->GetCapacity(), 0);
 			m_function = table->m_function;
@@ -748,7 +799,7 @@ namespace ECSEngine {
 		void Initialize(Allocator* allocator, unsigned int capacity, size_t additional_info = 0, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (capacity > 0) {
 				size_t memory_size = MemoryOf(capacity);
-				void* allocation = allocator->Allocate(memory_size, 8, debug_info);
+				void* allocation = allocator->Allocate(memory_size, alignof(void*), debug_info);
 				InitializeFromBuffer(allocation, capacity, additional_info);
 			}
 			else {
@@ -759,7 +810,7 @@ namespace ECSEngine {
 		void Initialize(AllocatorPolymorphic allocator, unsigned int capacity, size_t additional_info = 0, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (capacity > 0) {
 				size_t memory_size = MemoryOf(capacity);
-				void* allocation = Allocate(allocator, memory_size, 8, debug_info);
+				void* allocation = Allocate(allocator, memory_size, alignof(void*), debug_info);
 				InitializeFromBuffer(allocation, capacity, additional_info);
 			}
 			else {

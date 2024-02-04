@@ -149,19 +149,19 @@ namespace ECSEngine {
 
 	static void SetFunction(const SetWorldCrashHandlerDescriptor* descriptor, bool is_abort) {
 		if (WORLD_GLOBAL_DATA.descriptor.crash_directory.buffer != nullptr) {
-			free(WORLD_GLOBAL_DATA.descriptor.crash_directory.buffer);
+			Free(WORLD_GLOBAL_DATA.descriptor.crash_directory.buffer);
 		}
 		if (WORLD_GLOBAL_DATA.descriptor.pre_callback.data_size > 0) {
-			free(WORLD_GLOBAL_DATA.descriptor.pre_callback.data);
+			Free(WORLD_GLOBAL_DATA.descriptor.pre_callback.data);
 		}
 		if (WORLD_GLOBAL_DATA.descriptor.post_callback.data_size > 0) {
-			free(WORLD_GLOBAL_DATA.descriptor.post_callback.data);
+			Free(WORLD_GLOBAL_DATA.descriptor.post_callback.data);
 		}
 		if (!WORLD_GLOBAL_DATA.descriptor.infos_are_stable) {
 			// These are coalesced into a single allocation
-			free(WORLD_GLOBAL_DATA.descriptor.unique_infos.buffer);
-			free(WORLD_GLOBAL_DATA.descriptor.shared_infos.buffer);
-			free(WORLD_GLOBAL_DATA.descriptor.global_infos.buffer);
+			Free(WORLD_GLOBAL_DATA.descriptor.unique_infos.buffer);
+			Free(WORLD_GLOBAL_DATA.descriptor.shared_infos.buffer);
+			Free(WORLD_GLOBAL_DATA.descriptor.global_infos.buffer);
 		}
 
 		if (descriptor->module_search_paths.size > 0) {
@@ -170,9 +170,8 @@ namespace ECSEngine {
 		WORLD_GLOBAL_DATA.descriptor = *descriptor;
 		WORLD_GLOBAL_DATA.is_abort_handler = is_abort;
 		
-		wchar_t* allocation = (wchar_t*)malloc(descriptor->crash_directory.MemoryOf(descriptor->crash_directory.size));
-		uintptr_t allocation_ptr = (uintptr_t)allocation;
-		WORLD_GLOBAL_DATA.descriptor.crash_directory.InitializeAndCopy(allocation_ptr, descriptor->crash_directory);
+		WORLD_GLOBAL_DATA.descriptor.crash_directory.InitializeEx({ nullptr }, descriptor->crash_directory.size);
+		WORLD_GLOBAL_DATA.descriptor.crash_directory.CopyOther(descriptor->crash_directory);
 
 		WORLD_GLOBAL_DATA.descriptor.pre_callback.data = CopyNonZeroMalloc(descriptor->pre_callback.data, descriptor->pre_callback.data_size);
 		WORLD_GLOBAL_DATA.descriptor.post_callback.data = CopyNonZeroMalloc(descriptor->post_callback.data, descriptor->post_callback.data_size);

@@ -102,17 +102,17 @@ namespace ECSEngine {
 
 		bool was_acquired = true;
 		if constexpr (thread_safe) {
-			was_acquired = memory_manager->m_spin_lock.TryLock();
+			was_acquired = memory_manager->m_lock.TryLock();
 		}
 		if (was_acquired) {
 			memory_manager->CreateAllocator(memory_manager->m_backup_info);
 			if constexpr (thread_safe) {
-				memory_manager->m_spin_lock.Unlock();
+				memory_manager->m_lock.Unlock();
 			}
 		}
 		else {
 			if constexpr (thread_safe) {
-				memory_manager->m_spin_lock.WaitLocked();
+				memory_manager->m_lock.WaitLocked();
 			}
 		}
 		AllocatorPolymorphic last_allocator = memory_manager->GetAllocator(allocator_count);
@@ -242,13 +242,12 @@ namespace ECSEngine {
 		manager->m_allocators = allocation;
 		manager->m_backup_info = backup_info;
 		manager->m_base_allocator_byte_size = base_allocator_size;
-		manager->m_debug_mode = false;
-		manager->m_profiling_mode = false;
 		manager->CreateAllocator(initial_info);
 		manager->m_initial_allocator_size = BaseAllocatorBufferSize(initial_info);
 	}
 
-	MemoryManager::MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, AllocatorPolymorphic backup)
+	MemoryManager::MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, AllocatorPolymorphic backup) 
+		: AllocatorBase(ECS_ALLOCATOR_MANAGER)
 	{
 		CreateBaseAllocatorInfo initial_info;
 		initial_info.allocator_type = ECS_ALLOCATOR_MULTIPOOL;
@@ -259,7 +258,8 @@ namespace ECSEngine {
 		Init(this, initial_info, backup_info, backup);
 	}
 
-	MemoryManager::MemoryManager(CreateBaseAllocatorInfo initial_info, CreateBaseAllocatorInfo backup_info, AllocatorPolymorphic backup) {
+	MemoryManager::MemoryManager(CreateBaseAllocatorInfo initial_info, CreateBaseAllocatorInfo backup_info, AllocatorPolymorphic backup)
+		: AllocatorBase(ECS_ALLOCATOR_MANAGER) {
 		Init(this, initial_info, backup_info, backup);
 	}
 
@@ -369,28 +369,6 @@ namespace ECSEngine {
 		}
 
 		return false;
-	}
-
-	void MemoryManager::ExitDebugMode()
-	{
-		m_debug_mode = false;
-	}
-
-	void MemoryManager::ExitProfilingMode()
-	{
-		m_profiling_mode = false;
-	}
-
-	void MemoryManager::SetDebugMode(const char* name, bool resizable)
-	{
-		m_debug_mode = true;
-		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_MANAGER);
-	}
-
-	void MemoryManager::SetProfilingMode(const char* name)
-	{
-		m_profiling_mode = true;
-		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_MANAGER, name);
 	}
 
 	AllocatorPolymorphic MemoryManager::GetAllocator(size_t index) const

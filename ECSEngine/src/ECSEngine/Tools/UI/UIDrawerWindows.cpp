@@ -1526,7 +1526,7 @@ namespace ECSEngine {
 		{
 			draw_data->path.Deallocate(path_allocator);
 			if (draw_data->file_data.size > 0) {
-				free(draw_data->file_data.buffer);
+				Free(draw_data->file_data.buffer);
 			}
 		}
 
@@ -1600,13 +1600,13 @@ namespace ECSEngine {
 					// Having to redraw the window
 					if (contents != draw_data->file_data) {
 						if (draw_data->file_data.size > 0) {
-							free(draw_data->file_data.buffer);
+							Free(draw_data->file_data.buffer);
 						}
 						has_changed = true;
 						draw_data->file_data = contents;
 					}
 					else {
-						free(contents.buffer);
+						Free(contents.buffer);
 					}
 				}
 				draw_data->timer.SetNewStart();
@@ -2109,22 +2109,8 @@ namespace ECSEngine {
 
 						int message_index = data->unique_messages.Find(identifier);
 						if (message_index == -1) {
-							auto grow_unique_messages = [&](size_t new_capacity) {
-								void* new_allocation = drawer.GetMainAllocatorBuffer(data->unique_messages.MemoryOf(new_capacity));
-								const void* old_allocation = data->unique_messages.Grow(new_allocation, new_capacity);
-								if (old_allocation != nullptr) {
-									drawer.RemoveAllocation(old_allocation);
-								}
-							};
-							if (data->unique_messages.GetCapacity() == 0) {
-								grow_unique_messages(16);
-							}
-
-							bool grow = data->unique_messages.Insert({ data->console->messages[index], 1 }, identifier);
-							if (grow) {
-								size_t new_capacity = data->unique_messages.NextCapacity(data->unique_messages.GetCapacity());
-								grow_unique_messages(new_capacity);
-							}
+							UIDrawerAllocator drawer_allocator = { &drawer };
+							data->unique_messages.InsertDynamic(&drawer_allocator, { data->console->messages[index], 1 }, identifier);
 						}
 						else {
 							UniqueConsoleMessage* message_ptr = data->unique_messages.GetValuePtrFromIndex(message_index);
@@ -2367,7 +2353,7 @@ namespace ECSEngine {
 							}
 							else {
 								if (is_text_input) {
-									void* allocation = malloc(sizeof(CapacityStream<char>) + sizeof(char) * 128);
+									void* allocation = Malloc(sizeof(CapacityStream<char>) + sizeof(char) * 128);
 									UIReflectionBindTextInput bind;
 									bind.field_name = data->sections[index].elements[subindex].name;
 									bind.stream = (CapacityStream<char>*)allocation;
@@ -2382,7 +2368,7 @@ namespace ECSEngine {
 									data->ui_reflection->BindInstanceTextInput(instance, { &bind, 1 });
 								}
 								else {
-									void* allocation = malloc(sizeof(CapacityStream<wchar_t>) + sizeof(wchar_t) * 256);
+									void* allocation = Malloc(sizeof(CapacityStream<wchar_t>) + sizeof(wchar_t) * 256);
 									UIReflectionBindDirectoryInput bind;
 									bind.field_name = data->sections[index].elements[subindex].name;
 									bind.stream = (CapacityStream<wchar_t>*)allocation;

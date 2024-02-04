@@ -14,8 +14,8 @@ namespace ECSEngine {
 	ResizableLinearAllocator::ResizableLinearAllocator(size_t capacity, size_t backup_size, AllocatorPolymorphic allocator)
 		: ResizableLinearAllocator(ECSEngine::Allocate(allocator, capacity), capacity, backup_size, allocator) {}
 
-	ResizableLinearAllocator::ResizableLinearAllocator(void* buffer, size_t capacity, size_t backup_size, AllocatorPolymorphic allocator) 
-		: m_top(0), m_marker(0), m_backup_size(backup_size), m_backup(allocator), m_debug_mode(false), m_profiling_mode(false), m_current_usage(0)
+	ResizableLinearAllocator::ResizableLinearAllocator(void* buffer, size_t capacity, size_t backup_size, AllocatorPolymorphic allocator)
+		: AllocatorBase(ECS_ALLOCATOR_RESIZABLE_LINEAR), m_top(0), m_marker(0), m_backup_size(backup_size), m_backup(allocator), m_current_usage(0)
 	{
 		ECS_ASSERT(capacity > MAX_BACKUPS * sizeof(void*), "Too small of a capacity for ResizableLinearAllocator");
 
@@ -242,30 +242,6 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------
 
-	void ResizableLinearAllocator::ExitDebugMode()
-	{
-		m_debug_mode = false;
-	}
-
-	void ResizableLinearAllocator::ExitProfilingMode()
-	{
-		m_profiling_mode = false;
-	}
-
-	void ResizableLinearAllocator::SetDebugMode(const char* name, bool resizable)
-	{
-		m_debug_mode = true;
-		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_RESIZABLE_LINEAR);
-	}
-
-	void ResizableLinearAllocator::SetProfilingMode(const char* name)
-	{
-		m_profiling_mode = true;
-		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_RESIZABLE_LINEAR, name);
-	}
-
-	// ---------------------------------------------------------------------------------
-
 	size_t ResizableLinearAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
 	{
 		if (pointer_capacity >= (size_t)m_allocated_buffer_size + 1) {
@@ -283,7 +259,7 @@ namespace ECSEngine {
 
 	void* ResizableLinearAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info)
 	{
-		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+		return ThreadSafeFunctorReturn(&m_lock, [&]() {
 			return Allocate(size, alignment, debug_info);
 		});
 	}
@@ -302,7 +278,7 @@ namespace ECSEngine {
 
 	void ResizableLinearAllocator::SetMarker_ts()
 	{
-		return ThreadSafeFunctor(&m_spin_lock, [&]() {
+		return ThreadSafeFunctor(&m_lock, [&]() {
 			SetMarker();
 		});
 	}

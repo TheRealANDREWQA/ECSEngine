@@ -52,7 +52,7 @@ namespace ECSEngine {
 		));
 
 		if (channel_count == 3) {
-			free(converted_texture.buffer);
+			Free(converted_texture.buffer);
 		}
 		return success;
 	}

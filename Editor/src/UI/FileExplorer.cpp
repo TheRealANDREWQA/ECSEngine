@@ -597,7 +597,7 @@ static void FileExplorerSelectFromIndexNothing(FileExplorerData* data, unsigned 
 
 static void FileExplorerSelectFromIndexShift(FileExplorerData* data, unsigned int index, Stream<wchar_t> path) {
 	if (data->starting_shift_index <= index && index <= data->ending_shift_index) {
-		unsigned int index = data->selected_files.Reserve();
+		unsigned int index = data->selected_files.ReserveRange();
 		void* new_allocation = Allocate(data->selected_files.allocator, data->selected_files[index].MemoryOf(path.size));
 		data->selected_files[index].InitializeFromBuffer(new_allocation, path.size);
 		data->selected_files[index].CopyOther(path);
@@ -2120,7 +2120,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			unsigned int hash;
 
 #define ADD_FUNCTOR(action, string) identifier = ResourceIdentifier(string); \
-ECS_ASSERT(!data->file_functors.Insert(action, identifier));
+data->file_functors.Insert(action, identifier);
 
 			ADD_FUNCTOR(FileCDraw, L".c");
 			ADD_FUNCTOR(FileCppDraw, L".cpp");
@@ -2745,6 +2745,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 void InitializeFileExplorer(EditorState* editor_state)
 {
 	FileExplorerData* data = editor_state->file_explorer_data;
+	memset(data, 0, sizeof(*data));
 
 	AllocatorPolymorphic polymorphic_allocator = editor_state->EditorAllocator();
 	// Copied files must not be initialied since only Cut/Copy will set the appropriate stream

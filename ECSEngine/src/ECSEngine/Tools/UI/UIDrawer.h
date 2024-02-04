@@ -2089,6 +2089,8 @@ namespace ECSEngine {
 
 					// Has auto is a true/false flag that tells whether or not to add an action
 					auto draw_row = [&](unsigned int index, auto has_action) {
+						window_dependent_size_offsets.x += ARROW_SIZE.x + layout.element_indentation;
+
 						if (has_drag) {
 							arrow_transform.position.x = current_x;
 							// Indent the arrow position in order to align to row Y
@@ -2150,6 +2152,8 @@ namespace ECSEngine {
 						NextRow();
 						temp_name.size = base_name_size;
 						PopIdentifierStack();
+
+						window_dependent_size_offsets.x = 0.0f;
 					};
 
 					// If there is no drag, proceed normally
@@ -5008,6 +5012,7 @@ namespace ECSEngine {
 			float2 max_render_bounds;
 			float2 min_render_bounds;
 			float2 mouse_position;
+			float2 window_dependent_size_offsets;
 			float region_fit_space_horizontal_offset;
 			float region_fit_space_vertical_offset;
 			float next_row_offset;
@@ -5036,6 +5041,18 @@ namespace ECSEngine {
 		};
 
 		typedef void (*UIDrawerInitializeFunction)(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
+
+		struct UIDrawerAllocator {
+			ECS_INLINE void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+				return drawer->GetMainAllocatorBuffer(size, alignment);
+			}
+
+			ECS_INLINE void Deallocate(const void* allocation, DebugInfo debug_info = ECS_DEBUG_INFO) {
+				drawer->RemoveAllocation(allocation);
+			}
+
+			UIDrawer* drawer;
+		};
 
 		// --------------------------------------------------------------------------------------------------------------
 

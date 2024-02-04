@@ -395,18 +395,18 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 {
 	OS::InitializePhysicalMemoryPageSize();
 
-	GlobalMemoryManager* hub_allocator = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
+	GlobalMemoryManager* hub_allocator = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
 	*hub_allocator = CreateGlobalMemoryManager(ECS_KB * 16, 512, ECS_KB * 16);
 
-	HubData* hub_data = (HubData*)malloc(sizeof(HubData));
+	HubData* hub_data = (HubData*)Malloc(sizeof(HubData));
 	hub_data->projects.Initialize(hub_allocator, 0, EDITOR_HUB_PROJECT_CAPACITY);
 	hub_data->projects.size = 0;
 	hub_data->allocator = hub_allocator;
 	editor_state->hub_data = hub_data;
 
-	GlobalMemoryManager* console_global_memory = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
+	GlobalMemoryManager* console_global_memory = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
 	*console_global_memory = CreateGlobalMemoryManager(ECS_MB * 10, 64, ECS_MB * 5);
-	MemoryManager* console_memory_manager = (MemoryManager*)malloc(sizeof(MemoryManager));
+	MemoryManager* console_memory_manager = (MemoryManager*)Malloc(sizeof(MemoryManager));
 	*console_memory_manager = DefaultConsoleStableAllocator(console_global_memory);
 	AtomicStream<char> console_message_allocator = DefaultConsoleMessageAllocator(console_global_memory);
 	SetConsole(console_memory_manager, console_message_allocator, L"TempDump.txt");
@@ -428,9 +428,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->editor_tick = TickPendingTasks;
 	memset(editor_state->flags, 0, sizeof(editor_state->flags));
 
-	GlobalMemoryManager* global_memory_manager = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
+	GlobalMemoryManager* global_memory_manager = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
 	*global_memory_manager = CreateGlobalMemoryManager(GLOBAL_MEMORY_COUNT, 512, GLOBAL_MEMORY_RESERVE_COUNT);
-	Graphics* graphics = (Graphics*)malloc(sizeof(Graphics));
+	Graphics* graphics = (Graphics*)Malloc(sizeof(Graphics));
 	// Could have used the integrated GPU to render the UI but since the sandboxes
 	// will use the dedicated GPU then they will have to share the textures through CPU RAM
 	// and that will be slow. So instead we have to use the dedicated GPU for UI as well
@@ -449,24 +449,24 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	);
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
 
-	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
+	TaskManager* editor_task_manager = (TaskManager*)Malloc(sizeof(TaskManager));
 	new (editor_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1'000, 100);
 	editor_state->task_manager = editor_task_manager;
 	editor_task_manager->PushExceptionHandler(HandleAllSandboxPhysicalMemoryException, editor_state, 0);
 
-	TaskManager* render_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
+	TaskManager* render_task_manager = (TaskManager*)Malloc(sizeof(TaskManager));
 	new (render_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1'000, 100);
 	editor_state->render_task_manager = render_task_manager;
 	render_task_manager->PushExceptionHandler(HandleAllSandboxPhysicalMemoryException, editor_state, 0);
 
 	// Make a wrapper world that only references this task manager
-	World* task_manager_world = (World*)calloc(1, sizeof(World));
+	World* task_manager_world = (World*)Malloc(sizeof(World));
 	task_manager_world->task_manager = editor_task_manager;
 	editor_task_manager->m_world = task_manager_world;
 
-	MemoryManager* ui_resource_manager_allocator = (MemoryManager*)malloc(sizeof(MemoryManager));
+	MemoryManager* ui_resource_manager_allocator = (MemoryManager*)Malloc(sizeof(MemoryManager));
 	*ui_resource_manager_allocator = DefaultResourceManagerAllocator(global_memory_manager);
-	ResourceManager* ui_resource_manager = (ResourceManager*)malloc(sizeof(ResourceManager));
+	ResourceManager* ui_resource_manager = (ResourceManager*)Malloc(sizeof(ResourceManager));
 	*ui_resource_manager = ResourceManager(ui_resource_manager_allocator, graphics);
 
 	editor_state->ui_resource_manager = ui_resource_manager;
@@ -479,10 +479,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_LOW);
 	render_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_VERY_LOW);
 
-	ResizableMemoryArena* resizable_arena = (ResizableMemoryArena*)malloc(sizeof(ResizableMemoryArena));
+	ResizableMemoryArena* resizable_arena = (ResizableMemoryArena*)Malloc(sizeof(ResizableMemoryArena));
 	*resizable_arena = DefaultUISystemAllocator(global_memory_manager);
 
-	UISystem* ui = (UISystem*)malloc(sizeof(UISystem));
+	UISystem* ui = (UISystem*)Malloc(sizeof(UISystem));
 	new (ui) UISystem(
 		application,
 		resizable_arena,
@@ -497,7 +497,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	ui->BindWindowHandler(WindowHandler, WindowHandlerInitializer, sizeof(Tools::UIDefaultWindowHandler));
 	editor_state->ui_system = ui;
 
-	Reflection::ReflectionManager* editor_reflection_manager = (Reflection::ReflectionManager*)malloc(sizeof(Reflection::ReflectionManager));
+	Reflection::ReflectionManager* editor_reflection_manager = (Reflection::ReflectionManager*)Malloc(sizeof(Reflection::ReflectionManager));
 	*editor_reflection_manager = Reflection::ReflectionManager(editor_allocator);
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
@@ -514,7 +514,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	void* editor_component_allocator_buffer = editor_allocator->Allocate(editor_component_allocator_size);
 	editor_state->editor_components.Initialize(editor_component_allocator_buffer);
 
-	UIReflectionDrawer* editor_ui_reflection = (UIReflectionDrawer*)malloc(sizeof(UIReflectionDrawer));
+	UIReflectionDrawer* editor_ui_reflection = (UIReflectionDrawer*)Malloc(sizeof(UIReflectionDrawer));
 	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, editor_reflection_manager);
 	editor_state->ui_reflection = editor_ui_reflection;
 
@@ -534,7 +534,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	}
 	editor_state->editor_components.EmptyEventStream();
 
-	Reflection::ReflectionManager* module_reflection_manager = (Reflection::ReflectionManager*)malloc(sizeof(Reflection::ReflectionManager));
+	Reflection::ReflectionManager* module_reflection_manager = (Reflection::ReflectionManager*)Malloc(sizeof(Reflection::ReflectionManager));
 	*module_reflection_manager = Reflection::ReflectionManager(editor_allocator);
 
 	// Inherit the constants from the ui_reflection
@@ -543,7 +543,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	module_reflection_manager->AddEnumsFrom(editor_reflection_manager);
 	module_reflection_manager->AddTypesFrom(editor_reflection_manager);
 
-	UIReflectionDrawer* module_ui_reflection = (UIReflectionDrawer*)malloc(sizeof(UIReflectionDrawer));
+	UIReflectionDrawer* module_ui_reflection = (UIReflectionDrawer*)Malloc(sizeof(UIReflectionDrawer));
 	*module_ui_reflection = UIReflectionDrawer(resizable_arena, module_reflection_manager);
 	editor_state->module_reflection = module_ui_reflection;
 
@@ -558,7 +558,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 		editor_state->ui_reflection->SetFieldOverride(ui_asset_overrides.buffer + index);
 	}
 	
-	ProjectFile* project_file = (ProjectFile*)malloc(sizeof(ProjectFile));
+	ProjectFile* project_file = (ProjectFile*)Malloc(sizeof(ProjectFile));
 	project_file->project_name.Initialize(resizable_arena, 0, 64);
 	project_file->path.Initialize(resizable_arena, 0, 256);
 	editor_state->project_file = project_file;
@@ -569,11 +569,11 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	GetConsole()->AddSystemFilterString(EDITOR_CONSOLE_SYSTEM_NAME);
 
-	FileExplorerData* file_explorer_data = (FileExplorerData*)calloc(1, sizeof(FileExplorerData));
+	FileExplorerData* file_explorer_data = (FileExplorerData*)Malloc(sizeof(FileExplorerData));
 	editor_state->file_explorer_data = file_explorer_data;
 	InitializeFileExplorer(editor_state);
 
-	ProjectModules* project_modules = (ProjectModules*)malloc(sizeof(ProjectModules));
+	ProjectModules* project_modules = (ProjectModules*)Malloc(sizeof(ProjectModules));
 	project_modules->Initialize(polymorphic_editor_allocator, 0);
 	editor_state->project_modules = project_modules;
 
@@ -585,7 +585,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	InitializeInspectorManager(editor_state);
 	
 	// Allocate the lazy evaluation counters
-	editor_state->lazy_evaluation_counters = (unsigned short*)malloc(EDITOR_LAZY_EVALUATION_COUNTERS_COUNT * sizeof(unsigned short));
+	editor_state->lazy_evaluation_counters = (unsigned short*)Malloc(EDITOR_LAZY_EVALUATION_COUNTERS_COUNT * sizeof(unsigned short));
 	// Make all counters USHORT_MAX to trigger the lazy evaluation at first
 	memset(editor_state->lazy_evaluation_counters, 0xFF, sizeof(unsigned short) * EDITOR_LAZY_EVALUATION_COUNTERS_COUNT);
 
@@ -638,7 +638,7 @@ void EditorStateDestroy(EditorState* editor_state) {
 	DestroyGraphics(editor_state->ui_system->m_graphics);
 	FreeAllocator(editor_state->GlobalMemoryManager());
 
-	// If necessary, free all the malloc's for the individual allocations - but there are very small and insignificant
+	// If necessary, free all the Malloc's for the individual allocations - but there are very small and insignificant
 	// Not worth freeing them since EditorStateInitialize won't be called more than a couple of times during the runtime of 
 	// an instance of the process (at the moment only once)
 }

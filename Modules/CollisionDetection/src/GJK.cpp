@@ -29,6 +29,12 @@ static float3 SupportFunction(const ConvexHull* convex_hull, float3 point, float
 	return convex_point - point;
 }
 
+static float3 SupportFunction(const TriangleMesh* collider_a, const TriangleMesh* collider_b, float3 direction) {
+	float3 a_point = collider_a->FurthestFrom(direction);
+	float3 b_point = collider_b->FurthestFrom(-direction);
+	return a_point - b_point;
+}
+
 static bool LineSimplex(GJKSimplex* simplex, float3* new_direction) {
 	// The 2 points are B and A (A is the last one added)
 	// We need to check to see if we are in the AB region, or in the A region only
@@ -195,8 +201,8 @@ static bool HandleSimplex(GJKSimplex* simplex, float3* new_direction) {
 	return false;
 }
 
-template<typename SecondCollider>
-float GJKImpl(const ConvexHull* collider_a, SecondCollider collider_b) {
+template<typename FirstCollider, typename SecondCollider>
+float GJKImpl(const FirstCollider* collider_a, SecondCollider collider_b) {
 	// Initialize the simplex with a random point from the minkowski difference
 	GJKSimplex simplex;
 	simplex.points[0] = SupportFunction(collider_a, collider_b, float3{ 1.0f, 0.0f, 0.0f });
@@ -238,4 +244,9 @@ float GJK(const ConvexHull* collider_a, const ConvexHull* collider_b) {
 
 float GJKPoint(const ConvexHull* convex_hull, float3 point) {
 	return GJKImpl(convex_hull, point);
+}
+
+float GJK(const TriangleMesh* collider_a, const TriangleMesh* collider_b)
+{
+	return GJKImpl(collider_a, collider_b);
 }

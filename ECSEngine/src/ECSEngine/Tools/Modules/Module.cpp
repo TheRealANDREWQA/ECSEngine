@@ -71,7 +71,7 @@ namespace ECSEngine {
 				}
 			}
 
-			free(file.buffer);
+			Free(file.buffer);
 			if (dependencies.size > 0) {
 				result = StreamCoalescedDeepCopy(dependencies, allocator);
 			}

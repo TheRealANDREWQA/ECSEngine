@@ -177,12 +177,12 @@ namespace ECSEngine {
 		return reallocation;
 	}
 
-	MemoryArena::MemoryArena(void* buffer, size_t allocator_count, CreateBaseAllocatorInfo base_info)
+	MemoryArena::MemoryArena(void* buffer, size_t allocator_count, CreateBaseAllocatorInfo base_info) : AllocatorBase(ECS_ALLOCATOR_ARENA)
 	{
 		Init(this, buffer, allocator_count, base_info);
 	}
 
-	MemoryArena::MemoryArena(AllocatorPolymorphic buffer_allocator, size_t allocator_count, CreateBaseAllocatorInfo base_info)
+	MemoryArena::MemoryArena(AllocatorPolymorphic buffer_allocator, size_t allocator_count, CreateBaseAllocatorInfo base_info) : AllocatorBase(ECS_ALLOCATOR_ARENA)
 	{
 		ECS_ASSERT(allocator_count < UCHAR_MAX);
 
@@ -191,7 +191,7 @@ namespace ECSEngine {
 		Init(this, allocation, allocator_count, base_info);
 	}
 
-	MemoryArena::MemoryArena(void* buffer, size_t allocator_count, size_t arena_capacity, size_t blocks_per_allocator)
+	MemoryArena::MemoryArena(void* buffer, size_t allocator_count, size_t arena_capacity, size_t blocks_per_allocator) : AllocatorBase(ECS_ALLOCATOR_ARENA)
 	{
 		CreateBaseAllocatorInfo info;
 		info.allocator_type = ECS_ALLOCATOR_ARENA;
@@ -260,28 +260,6 @@ namespace ECSEngine {
 	void* MemoryArena::Reallocate(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
 		return ReallocateImpl<false>(this, block, new_size, alignment, debug_info);
-	}
-
-	void MemoryArena::ExitDebugMode()
-	{
-		m_debug_mode = false;
-	}
-
-	void MemoryArena::ExitProfilingMode()
-	{
-		m_profiling_mode = false;
-	}
-
-	void MemoryArena::SetDebugMode(const char* name, bool resizable)
-	{
-		m_debug_mode = true;
-		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_ARENA);
-	}
-
-	void MemoryArena::SetProfilingMode(const char* name)
-	{
-		m_profiling_mode = true;
-		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_ARENA, name);
 	}
 
 	size_t MemoryArena::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const

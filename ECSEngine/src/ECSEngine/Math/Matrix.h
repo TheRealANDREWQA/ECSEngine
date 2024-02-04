@@ -332,4 +332,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	// The points must be 3D, not 4D
+	ECSENGINE_API void ECS_VECTORCALL TransformPoints(Matrix matrix, const float* ECS_RESTRICT input_points_soa, size_t count, float* ECS_RESTRICT output_points_soa);
+
+	// --------------------------------------------------------------------------------------------------------------
+
 }

@@ -133,6 +133,35 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	float3 CalculateFloat3Midpoint(const float* values_x, const float* values_y, const float* values_z, size_t count)
+	{
+		Vec8f x_sum, y_sum, z_sum;
+		ApplySIMDConstexpr(count, Vec8f::size(), [&x_sum, &y_sum, &z_sum, values_x, values_y, values_z](auto is_full_iteration, size_t index, size_t count) {
+			Vec8f zero = ZeroVectorFloat();
+			Vec8f current_x = Vec8f().load(values_x + index);
+			Vec8f current_y = Vec8f().load(values_y + index);
+			Vec8f current_z = Vec8f().load(values_z + index);
+			if constexpr (!is_full_iteration) {
+				Vec8fb select_mask = SelectMaskLast<unsigned int>(Vec8f::size() - count);
+				current_x = select(select_mask, zero, current_x);
+				current_y = select(select_mask, zero, current_y);
+				current_z = select(select_mask, zero, current_z);
+			}
+
+			x_sum += current_x;
+			y_sum += current_y;
+			z_sum += current_z;
+		});
+
+		float x_value = VectorLow(HorizontalAdd8(x_sum));
+		float y_value = VectorLow(HorizontalAdd8(y_sum));
+		float z_value = VectorLow(HorizontalAdd8(z_sum));
+		float count_inverse = 1.0f / (float)count;
+		return { x_value * count_inverse, y_value * count_inverse, z_value * count_inverse };
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	void ApplyFloat3Addition(Stream<float3> values, float3 add_value)
 	{
 		size_t simd_count = GetSimdCount(values.size, 2);

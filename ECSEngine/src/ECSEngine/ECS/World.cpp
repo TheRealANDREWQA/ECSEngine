@@ -25,7 +25,7 @@ namespace ECSEngine {
 
 	World::World(const WorldDescriptor& descriptor) {
 		// first the global allocator
-		memory = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
+		memory = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
 		*memory = CreateGlobalMemoryManager(descriptor.global_memory_size, descriptor.global_memory_pool_count, descriptor.global_memory_new_allocation_size);
 		if (descriptor.graphics_descriptor) {
 			MemoryManager* graphics_allocator = (MemoryManager*)memory->Allocate(sizeof(MemoryManager) + sizeof(Graphics));
@@ -169,16 +169,15 @@ namespace ECSEngine {
 		world_descriptor.mouse = nullptr;
 		world_descriptor.keyboard = nullptr;
 
-		world_descriptor.entity_manager_memory_new_allocation_size = ECS_MB_10 * 250;
-		world_descriptor.entity_manager_memory_size = ECS_MB_10 * 600;
-		world_descriptor.entity_manager_memory_pool_count = ECS_KB_10 * 2;
-
+		world_descriptor.entity_manager_memory_new_allocation_size = ECS_GB_10 * 4;
+		world_descriptor.entity_manager_memory_size = ECS_GB_10 * 4;
+		world_descriptor.entity_manager_memory_pool_count = ECS_KB_10 * 4;
 		// 256 * ECS_KB entities per chunk
 		world_descriptor.entity_pool_power_of_two = 18;
 
-		world_descriptor.global_memory_new_allocation_size = ECS_GB_10;
+		world_descriptor.global_memory_new_allocation_size = ECS_GB_10 * 5;
 		world_descriptor.global_memory_pool_count = ECS_KB_10;
-		world_descriptor.global_memory_size = ECS_GB_10;
+		world_descriptor.global_memory_size = ECS_GB_10 * 5;
 
 		world_descriptor.per_thread_temporary_memory_size = ECS_TASK_MANAGER_THREAD_LINEAR_ALLOCATOR_SIZE;
 		world_descriptor.debug_drawer_allocator_size = DebugDrawer::DefaultAllocatorSize();
@@ -214,18 +213,16 @@ namespace ECSEngine {
 		WorldDescriptor descriptor;
 
 		descriptor.entity_pool_power_of_two = 25; // ECS_MB * 32 entities per chunk
-		descriptor.entity_manager_memory_size = ECS_GB * 4; // At the moment limit to 4GB. The block range uses unsigned ints
-															// and it is limited to 4GB
-
-		descriptor.entity_manager_memory_pool_count = ECS_KB * 16; // After 16k the performance will start to degrade for deallocations
-		descriptor.entity_manager_memory_new_allocation_size = ECS_GB * 4; // At the moment limit new allocations to 4GB. Block range limit
+		descriptor.entity_manager_memory_size = ECS_GB_10 * 100;
+		descriptor.entity_manager_memory_pool_count = ECS_KB_10 * 16; // After 16k the performance will start to degrade for deallocations
+		descriptor.entity_manager_memory_new_allocation_size = ECS_GB_10 * 25;
 		
-		descriptor.global_memory_size = ECS_GB * 4; // Block range limit
-		descriptor.global_memory_pool_count = ECS_KB * 16; // Same as entity manager
-		descriptor.global_memory_new_allocation_size = ECS_GB * 4; // Block range limit
+		descriptor.global_memory_size = ECS_GB_10 * 128;
+		descriptor.global_memory_pool_count = ECS_KB_10 * 16; // Same as entity manager
+		descriptor.global_memory_new_allocation_size = ECS_GB_10 * 128;
 
-		descriptor.per_thread_temporary_memory_size = ECS_GB; // At the moment a GB should be enough
-		descriptor.debug_drawer_allocator_size = ECS_GB; // One GB should be more than enough
+		descriptor.per_thread_temporary_memory_size = ECS_GB_10; // At the moment a GB should be enough
+		descriptor.debug_drawer_allocator_size = ECS_GB_10; // One GB should be more than enough
 
 		return descriptor;
 	}

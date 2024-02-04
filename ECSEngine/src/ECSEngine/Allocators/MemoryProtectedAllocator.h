@@ -2,11 +2,12 @@
 #include "../Core.h"
 #include "../Utilities/DebugInfo.h"
 #include "../Multithreading/ConcurrentPrimitives.h"
+#include "AllocatorBase.h"
 
 namespace ECSEngine {
 
-	struct ECSENGINE_API MemoryProtectedAllocator {
-		ECS_INLINE MemoryProtectedAllocator() {
+	struct ECSENGINE_API MemoryProtectedAllocator : AllocatorBase {
+		ECS_INLINE MemoryProtectedAllocator() : AllocatorBase(ECS_ALLOCATOR_MEMORY_PROTECTED) {
 			memset(this, 0, sizeof(*this));
 		}
 		
@@ -31,14 +32,6 @@ namespace ECSEngine {
 
 		bool IsEmpty() const;
 
-		ECS_INLINE void Lock() {
-			lock.Lock();
-		}
-
-		ECS_INLINE void Unlock() {
-			lock.Unlock();
-		}
-
 		// Disables write protection for all allocations which were made by this allocator
 		// Returns true if it succeeded, else false
 		bool DisableWriteProtection() const;
@@ -56,16 +49,6 @@ namespace ECSEngine {
 		// The block must have been allocated by this allocator, otherwise it will fail
 		// Returns true if it suceeded, else false. 
 		bool EnableWriteProtection(void* block) const;
-
-		void ExitDebugMode();
-
-		// This function is here to make the implementation of AllocatorPolymorphic easier
-		ECS_INLINE void ExitProfilingMode() {}
-
-		void SetDebugMode(const char* name = nullptr, bool resizable = false);
-
-		// This function is here to make the implementation of AllocatorPolymorphic easier
-		ECS_INLINE void SetProfilingMode(const char* name) {}
 
 		// This function is here to make the implementation of AllocatorPolymorphic easier
 		ECS_INLINE size_t GetCurrentUsage() const {
@@ -103,8 +86,6 @@ namespace ECSEngine {
 		// This is the capacity of allocators/allocations
 		unsigned int capacity;
 		size_t chunk_size;
-		bool debug_mode;
-		SpinLock lock;
 	};
 
 }

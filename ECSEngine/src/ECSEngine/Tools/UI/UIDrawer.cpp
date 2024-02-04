@@ -8638,7 +8638,7 @@ namespace ECSEngine {
 			UIElementDescriptor& _element_descriptor,
 			bool _initializer
 		) : color_theme(_color_theme), font(_font), layout(_layout), element_descriptor(_element_descriptor),
-			export_scale(nullptr), initializer(_initializer) {};
+			export_scale(nullptr), initializer(_initializer), window_dependent_size_offsets(0.0f, 0.0f) {}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -8652,7 +8652,7 @@ namespace ECSEngine {
 			window_data(_window_data), mouse_position(descriptor.mouse_position), color_theme(descriptor.color_theme),
 			font(descriptor.font), layout(descriptor.layout), element_descriptor(descriptor.element_descriptor),
 			export_scale(descriptor.export_scale), initializer(_initializer), record_actions(descriptor.record_handlers),
-			record_snapshot_runnables(descriptor.record_snapshot_runnables)
+			record_snapshot_runnables(descriptor.record_snapshot_runnables), window_dependent_size_offsets(0.0f, 0.0f)
 		{
 			if (record_snapshot_runnables) {
 				// In order to have an accurate snapshot, we need to record actions as well
@@ -11545,7 +11545,7 @@ namespace ECSEngine {
 			switch (type) {
 			case ECS_UI_WINDOW_DEPENDENT_HORIZONTAL:
 				scale = {
-					scale_factors.x * (region_limit.x - region_fit_space_horizontal_offset),
+					scale_factors.x * (region_limit.x - region_fit_space_horizontal_offset - window_dependent_size_offsets.x),
 					layout.default_element_y * scale_factors.y
 				};
 				scale.x = scale.x == 0.0f ? region_limit.x - current_x : scale.x;
@@ -11553,12 +11553,15 @@ namespace ECSEngine {
 			case ECS_UI_WINDOW_DEPENDENT_VERTICAL:
 				scale = {
 					scale_factors.x * layout.default_element_x,
-					scale_factors.y * (region_limit.y - region_fit_space_vertical_offset)
+					scale_factors.y * (region_limit.y - region_fit_space_vertical_offset - window_dependent_size_offsets.y)
 				};
 				scale.y = scale.y == 0.0f ? region_limit.y - current_y : scale.y;
 				break;
 			case ECS_UI_WINDOW_DEPENDENT_BOTH:
-				scale = { scale_factors.x * (region_limit.x - region_fit_space_horizontal_offset), scale_factors.y * (region_limit.y - region_fit_space_vertical_offset) };
+				scale = { 
+					scale_factors.x * (region_limit.x - region_fit_space_horizontal_offset - window_dependent_size_offsets.x),
+					scale_factors.y * (region_limit.y - region_fit_space_vertical_offset - window_dependent_size_offsets.y)
+				};
 				scale.x = scale.x == 0.0f ? region_limit.x - current_x : scale.x;
 				scale.y = scale.y == 0.0f ? region_limit.y - current_y : scale.y;
 				break;
@@ -12233,7 +12236,7 @@ namespace ECSEngine {
 				// check to see if it is inside the hash table; if it is, then 
 				// increase the activation count else introduce it
 				ResourceIdentifier identifier(label_stream);
-				ECS_ASSERT(!parent_hash_table.Insert(index + 1, identifier));
+				parent_hash_table.Insert(index + 1, identifier);
 				
 				unsigned int table_index = data->label_states.Find(identifier);
 
@@ -12256,7 +12259,7 @@ namespace ECSEngine {
 					current_data.activation_count = 5;
 					current_data.state = false;
 					label_states[index] = false;
-					ECS_ASSERT(!data->label_states.Insert(current_data, identifier));
+					data->label_states.Insert(current_data, identifier);
 				}
 				else {
 					UIDrawerFilesystemHierarchyLabelData* current_data = data->label_states.GetValuePtrFromIndex(table_index);

@@ -200,7 +200,7 @@ namespace ECSEngine {
 	);
 
 	// Serializes into a temporary memory buffer, then commits to the file
-	// SettingsAllocator nullptr means use malloc
+	// SettingsAllocator nullptr means use Malloc
 	ECSENGINE_API ECS_SERIALIZE_CODE Serialize(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
@@ -246,7 +246,7 @@ namespace ECSEngine {
 	// If the fields reference data from the file, then the file data will be kept alive
 	// To get the file pointer allocated, provide a file_data. It must be deallocated manually
 	// if it is not nullptr. If some data is referenced but no file_data is provided and no field allocator
-	// is specified, then the data will be deallocated and lost if allocated from malloc, from an allocator
+	// is specified, then the data will be deallocated and lost if allocated from Malloc, from an allocator
 	// it should still be valid
 	ECSENGINE_API ECS_DESERIALIZE_CODE Deserialize(
 		const Reflection::ReflectionManager* reflection_manager,

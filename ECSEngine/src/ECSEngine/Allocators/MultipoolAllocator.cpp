@@ -6,13 +6,26 @@
 
 namespace ECSEngine {
 	
-	MultipoolAllocator::MultipoolAllocator(void* buffer, size_t size, size_t pool_count)
-		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)OffsetPointer(buffer, size), pool_count, size),
-		m_debug_mode(false), m_profiling_mode(false) {}
+	static size_t CalculateBlockRangeSize(const MultipoolAllocator* allocator, size_t size) {
+		return AlignPointer(size, (size_t)1 << allocator->m_power_of_two_factor) >> allocator->m_power_of_two_factor;
+	}
+
+	MultipoolAllocator::MultipoolAllocator(void* buffer, size_t size, size_t pool_count) : MultipoolAllocator(buffer, OffsetPointer(buffer, size), size, pool_count) {}
 
 	MultipoolAllocator::MultipoolAllocator(void* buffer, void* block_range_buffer, size_t size, size_t pool_count)
-		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)block_range_buffer, pool_count, size),
-		m_debug_mode(false), m_profiling_mode(false) {}
+		: AllocatorBase(ECS_ALLOCATOR_MULTIPOOL), m_buffer((unsigned char*)buffer), m_size(size) {
+		// Determine the power of two factor necessary
+		size_t addressable_range = ECS_GB * 4;
+		m_power_of_two_factor = 0;
+		while (addressable_range < size) {
+			addressable_range <<= 1;
+			m_power_of_two_factor++;
+		}
+		// We need to cap the size according to the power of two size
+		size >>= m_power_of_two_factor;
+
+		m_range = BlockRange((unsigned int*)block_range_buffer, pool_count, size);
+	}
 	
 	void* MultipoolAllocator::Allocate(size_t size, size_t alignment, DebugInfo debug_info) {
 		ECS_ASSERT(alignment <= ECS_CACHE_LINE_SIZE);
@@ -23,15 +36,20 @@ namespace ECSEngine {
 
 		// To make sure that the allocation is aligned we are requesting a surplus of alignment from the block range.
 		// Then we are aligning the pointer like the stack one and placing the offset byte before the allocation
-		unsigned int index = m_range.Request(size + alignment);
+
+		size_t total_request_size = size + alignment;
+		// Use the power of two factor to determine how big the range request has to be
+		total_request_size = CalculateBlockRangeSize(this, total_request_size);
+
+		unsigned int index = m_range.Request(total_request_size);
 
 		if (index == 0xFFFFFFFF)
 			return nullptr;
 
-		uintptr_t allocation = AlignPointerStack((uintptr_t)m_buffer + index, alignment);
+		size_t actual_offset = (size_t)index << m_power_of_two_factor;
+		uintptr_t allocation = AlignPointerStack((uintptr_t)m_buffer + actual_offset, alignment);
 		size_t offset = allocation - (uintptr_t)m_buffer;
-		ECS_ASSERT(offset - index - 1 < alignment);
-		m_buffer[offset - 1] = offset - index - 1;
+		m_buffer[offset - 1] = offset - actual_offset - 1;
 
 		if (m_debug_mode) {
 			TrackedAllocation tracked;
@@ -62,7 +80,9 @@ namespace ECSEngine {
 				return false;
 			}
 		}
-		bool was_deallocated = m_range.Free<trigger_error_if_not_found>((unsigned int)(byte_offset_position - byte_offset));
+		// We need to take into account the power of two factor
+		size_t block_start = (byte_offset_position - byte_offset) >> m_power_of_two_factor;
+		bool was_deallocated = m_range.Free<trigger_error_if_not_found>(block_start);
 		if (was_deallocated) {
 			if (m_debug_mode) {
 				TrackedAllocation tracked;
@@ -84,14 +104,16 @@ namespace ECSEngine {
 	{
 		uintptr_t byte_offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
 		ECS_ASSERT(m_buffer[byte_offset_position] < ECS_CACHE_LINE_SIZE);
-		unsigned int previous_start = (unsigned int)(byte_offset_position - m_buffer[byte_offset_position]);
-		unsigned int new_start = m_range.ReallocateBlock(previous_start, new_size + alignment);
+		size_t block_start = (byte_offset_position - (size_t)m_buffer[byte_offset_position]) >> m_power_of_two_factor;
+		size_t new_request_size = CalculateBlockRangeSize(this, new_size + alignment);
+
+		unsigned int new_start = m_range.ReallocateBlock(block_start, new_request_size);
 		if (new_start != -1) {
-			uintptr_t allocation = AlignPointerStack((uintptr_t)m_buffer + new_start, alignment);
-			if (new_start != previous_start) {
+			size_t size_t_new_start = (size_t)new_start << m_power_of_two_factor;
+			uintptr_t allocation = AlignPointerStack((uintptr_t)m_buffer + size_t_new_start, alignment);
+			if (size_t_new_start != block_start) {
 				unsigned int offset = allocation - (uintptr_t)m_buffer;
-				ECS_ASSERT(offset - new_start - 1 < alignment);
-				m_buffer[offset - 1] = offset - new_start - 1;
+				m_buffer[offset - 1] = offset - size_t_new_start - 1;
 			}
 
 			if (m_debug_mode) {
@@ -139,42 +161,21 @@ namespace ECSEngine {
 		return ptr >= (uintptr_t)m_buffer && ptr < (uintptr_t)m_buffer + m_size;
 	}
 
-	void MultipoolAllocator::ExitDebugMode()
-	{
-		m_debug_mode = false;
-	}
-
-	void MultipoolAllocator::ExitProfilingMode()
-	{
-		m_profiling_mode = false;
-	}
-
-	void MultipoolAllocator::SetDebugMode(const char* name, bool resizable)
-	{
-		m_debug_mode = true;
-		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_MULTIPOOL);
-	}
-
-	void MultipoolAllocator::SetProfilingMode(const char* name)
-	{
-		m_profiling_mode = true;
-		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, name);
-	}
-
-	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count, unsigned int size) {
+	size_t MultipoolAllocator::MemoryOf(size_t pool_count, size_t size) {
 		return BlockRange::MemoryOf(pool_count) + size + 8;
 	}
 
-	size_t MultipoolAllocator::CapacityFromFixedSize(unsigned int fixed_size, unsigned int pool_count)
+	size_t MultipoolAllocator::CapacityFromFixedSize(size_t fixed_size, size_t pool_count)
 	{
 		size_t block_range_size = BlockRange::MemoryOf(pool_count);
 		if (fixed_size > block_range_size + 8) {
 			return fixed_size - block_range_size - 8;
 		}
+		ECS_ASSERT(false, "Multipool allocator size is too small - the block range occupies it all");
 		return 0;
 	}
 
-	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count) {
+	size_t MultipoolAllocator::MemoryOf(size_t pool_count) {
 		return BlockRange::MemoryOf(pool_count);
 	}
 
@@ -190,14 +191,14 @@ namespace ECSEngine {
 	// ---------------------- Thread safe variants -----------------------------
 
 	void* MultipoolAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+		return ThreadSafeFunctorReturn(&m_lock, [&]() {
 			return Allocate(size, alignment, debug_info);
 		});
 	}
 
 	template<bool trigger_error_if_not_found>
 	bool MultipoolAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+		return ThreadSafeFunctorReturn(&m_lock, [&]() {
 			return Deallocate<trigger_error_if_not_found>(block, debug_info);
 		});
 	}
@@ -206,7 +207,7 @@ namespace ECSEngine {
 
 	void* MultipoolAllocator::Reallocate_ts(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
-		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+		return ThreadSafeFunctorReturn(&m_lock, [&]() {
 			return Reallocate(block, new_size, alignment, debug_info);
 		});
 	}

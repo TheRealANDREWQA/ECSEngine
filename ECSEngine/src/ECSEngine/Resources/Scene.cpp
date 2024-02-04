@@ -64,7 +64,7 @@ namespace ECSEngine {
 					CloseFile(file_handle);
 				}
 				if (allocation != nullptr) {
-					free(allocation);
+					Free(allocation);
 				}
 			}
 
@@ -92,7 +92,7 @@ namespace ECSEngine {
 				return true;
 			}
 
-			void* file_allocation = malloc(file_byte_size);
+			void* file_allocation = Malloc(file_byte_size);
 			deallocate_malloc.deallocator.file_handle = file_handle;
 			deallocate_malloc.deallocator.allocation = file_allocation;
 
@@ -413,17 +413,17 @@ namespace ECSEngine {
 		AssetDatabase final_database;
 		size_t database_serialize_size = SerializeAssetDatabaseSize(save_data->asset_database);
 
-		void* asset_database_allocation = malloc(database_serialize_size);
+		void* asset_database_allocation = Malloc(database_serialize_size);
 		uintptr_t ptr = (uintptr_t)asset_database_allocation;
 
 		success = SerializeAssetDatabase(save_data->asset_database, ptr) == ECS_SERIALIZE_OK;
 		if (!success) {
-			free(asset_database_allocation);
+			Free(asset_database_allocation);
 			return false;
 		}
 
 		success = WriteFile(file_handle, { asset_database_allocation, database_serialize_size });
-		free(asset_database_allocation);
+		Free(asset_database_allocation);
 		if (!success) {
 			return false;
 		}

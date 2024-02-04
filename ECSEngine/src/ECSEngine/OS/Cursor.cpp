@@ -1,5 +1,6 @@
 #include "ecspch.h"
 #include "Cursor.h"
+#include "../Utilities/Assert.h"
 
 namespace ECSEngine {
 

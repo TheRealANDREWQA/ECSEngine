@@ -2,15 +2,15 @@
 #include "../Core.h"
 #include "../Multithreading/ConcurrentPrimitives.h"
 #include "../Utilities/DebugInfo.h"
-#include "AllocatorTypes.h"
+#include "AllocatorBase.h"
 
 #define ECS_MEMORY_ARENA_DEFAULT_STREAM_SIZE 4
 
 namespace ECSEngine {
 
-	struct ECSENGINE_API MemoryArena
+	struct ECSENGINE_API MemoryArena : public AllocatorBase
 	{
-		ECS_INLINE MemoryArena() {
+		ECS_INLINE MemoryArena() : AllocatorBase(ECS_ALLOCATOR_ARENA) {
 			memset(this, 0, sizeof(*this));
 		}
 
@@ -52,14 +52,6 @@ namespace ECSEngine {
 
 		bool IsEmpty() const;
 
-		ECS_INLINE void Lock() {
-			m_lock.Lock();
-		}
-
-		ECS_INLINE void Unlock() {
-			m_lock.Unlock();
-		}
-
 		ECS_INLINE size_t InitialArenaCapacity() const {
 			return m_size_per_allocator * (size_t)m_allocator_count;
 		}
@@ -74,14 +66,6 @@ namespace ECSEngine {
 		bool Deallocate(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		void* Reallocate(const void* block, size_t new_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		void ExitDebugMode();
-
-		void ExitProfilingMode();
-
-		void SetDebugMode(const char* name = nullptr, bool resizable = false);
-
-		void SetProfilingMode(const char* name);
 
 		// Region start and region size are parallel arrays. Returns the count of regions
 		// Pointer capacity must represent the count of valid entries for the given pointers
@@ -107,10 +91,7 @@ namespace ECSEngine {
 		// memory that the allocators start allocating from. Used by Belongs and Deallocate functions
 		void* m_data_buffer;
 		size_t m_size_per_allocator;
-		SpinLock m_lock;
 		unsigned char m_allocator_count;
-		bool m_debug_mode;
-		bool m_profiling_mode;
 		ECS_ALLOCATOR_TYPE m_base_allocator_type;
 		unsigned char m_current_index;
 		unsigned short m_base_allocator_byte_size;

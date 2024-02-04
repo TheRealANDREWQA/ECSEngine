@@ -119,7 +119,7 @@ namespace ECSEngine {
         float buffer_size = pow(options.buffer_step_jump, step_index);
         size_t int_size = (size_t)buffer_size;
         int_size *= options.element_size;
-        iteration_buffer = { malloc(int_size), int_size };
+        iteration_buffer = { Malloc(int_size), int_size };
         return iteration_buffer;
     }
 
@@ -341,7 +341,7 @@ namespace ECSEngine {
             options.iteration_index = 0;
             if (current_buffer.size > 0) {
                 // Allocate a new one such that is different
-                free(current_buffer.buffer);
+                Free(current_buffer.buffer);
                 current_buffer.size = 0;
             }
 
@@ -350,7 +350,7 @@ namespace ECSEngine {
             if (durations.size == durations.capacity) {
                 durations.size = 0;
                 if (iteration_buffer.size > 0) {
-                    free(iteration_buffer.buffer);
+                    Free(iteration_buffer.buffer);
                     iteration_buffer.size = 0;
                 }
             }
@@ -368,7 +368,7 @@ namespace ECSEngine {
     {
         if (current_buffer.size == 0) {
             // Allocate it
-            current_buffer.buffer = malloc(iteration_buffer.size);
+            current_buffer.buffer = Malloc(iteration_buffer.size);
             current_buffer.size = iteration_buffer.size;
             memcpy(current_buffer.buffer, iteration_buffer.buffer, iteration_buffer.size);
         }

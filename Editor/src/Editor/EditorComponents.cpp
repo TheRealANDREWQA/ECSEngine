@@ -391,7 +391,7 @@ void EditorComponents::RecoverData(
 
 	// Used when needing to move buffers of data from components
 	const size_t TEMPORARY_ALLOCATION_CAPACITY = ECS_MB * 500;
-	void* temporary_allocation = malloc(TEMPORARY_ALLOCATION_CAPACITY);
+	void* temporary_allocation = Malloc(TEMPORARY_ALLOCATION_CAPACITY);
 	//LinearAllocator temporary_allocator(temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
 	//AllocatorPolymorphic temporary_alloc = GetAllocatorPolymorphic(&temporary_allocator);
 
@@ -888,7 +888,7 @@ void EditorComponents::RecoverData(
 		}
 	}
 
-	free(temporary_allocation);
+	Free(temporary_allocation);
 }
 
 // ----------------------------------------------------------------------------------------------

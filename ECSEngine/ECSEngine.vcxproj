@@ -213,6 +213,7 @@
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="src\ECSEngine\Allocators\AllocatorBase.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorCallsDebug.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorPolymorphic.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorTypes.h" />
@@ -468,6 +469,7 @@
     <ClInclude Include="src\ECSEngine\Multithreading\TaskManager.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\ECSEngine\Allocators\AllocatorBase.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorCallsDebug.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp" />

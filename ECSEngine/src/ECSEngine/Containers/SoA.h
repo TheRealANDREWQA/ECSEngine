@@ -4,18 +4,14 @@
 
 namespace ECSEngine {
 
-	namespace internal {
+	template<typename FirstPointer, typename... Pointers>
+	size_t SoACalculateSize(size_t count, FirstPointer** first_parameter, Pointers... parameters) {
+		size_t byte_size = sizeof(FirstPointer) * count;
 
-		template<typename FirstPointer, typename... Pointers>
-		size_t SoACalculateSizeImpl(size_t count, FirstPointer** first_parameter, Pointers... parameters) {
-			size_t byte_size = sizeof(FirstPointer) * count;
-
-			if constexpr (sizeof...(Pointers) > 0) {
-				return byte_size + SoACalculateSizeImpl(count, parameters...);
-			}
-			return byte_size;
+		if constexpr (sizeof...(Pointers) > 0) {
+			return byte_size + SoACalculateSize(count, parameters...);
 		}
-
+		return byte_size;
 	}
 
 	template<typename FirstPointer, typename... Pointers>
@@ -33,7 +29,7 @@ namespace ECSEngine {
 	void SoAInitialize(AllocatorPolymorphic allocator, size_t count, FirstPointer** first_pointer, Pointers... pointers) {
 		void* allocation = nullptr;
 		if (count > 0) {
-			size_t allocation_size = internal::SoACalculateSizeImpl(count, first_pointer, pointers...);
+			size_t allocation_size = SoACalculateSize(count, first_pointer, pointers...);
 			allocation = AllocateEx(allocator, allocation_size);
 		}
 
@@ -75,7 +71,7 @@ namespace ECSEngine {
 	template<typename FirstPointer, typename... Pointers>
 	void SoACopy(AllocatorPolymorphic allocator, size_t size, size_t capacity, FirstPointer** first_pointer, Pointers... pointers) {
 		if (capacity > 0) {
-			size_t allocation_size = internal::SoACalculateSizeImpl(capacity, first_pointer, pointers...);
+			size_t allocation_size = SoACalculateSize(capacity, first_pointer, pointers...);
 
 			void* allocation = AllocateEx(allocator, allocation_size);
 			uintptr_t ptr = (uintptr_t)allocation;
@@ -93,7 +89,7 @@ namespace ECSEngine {
 	template<typename FirstPointer, typename... Pointers>
 	void SoACopyReallocate(AllocatorPolymorphic allocator, size_t size, size_t capacity, FirstPointer** first_pointer, Pointers... pointers) {
 		if (capacity > 0) {
-			size_t allocation_size = internal::SoACalculateSizeImpl(capacity, first_pointer, pointers...);
+			size_t allocation_size = SoACalculateSize(capacity, first_pointer, pointers...);
 			
 			// Unfortunately, we cannot use ReallocateEx because of the aliasing reason
 			// Since the buffers are coalesced, we would need to write the pointers in reverse
@@ -144,11 +140,24 @@ namespace ECSEngine {
 	}
 
 	template<typename CapacityInt, typename FirstPointer, typename... Pointers>
-	void SoAResizeIfFull(AllocatorPolymorphic allocator, CapacityInt size, CapacityInt& capacity, FirstPointer** first_pointer, Pointers... pointers) {
-		if (size == capacity) {
-			capacity = (CapacityInt)((float)capacity * 1.5f + 2);
+	void SoAReserve(
+		AllocatorPolymorphic allocator,
+		CapacityInt size,
+		CapacityInt& capacity,
+		CapacityInt reserve_count,
+		FirstPointer** first_pointer,
+		Pointers... pointers
+	) {
+		if (size + reserve_count > capacity) {
+			// Use a small additive factor to escape from low values
+			capacity = (CapacityInt)((float)capacity * 1.5f + 4);
 			SoAResize(allocator, size, capacity, first_pointer, pointers...);
 		}
+	}
+
+	template<typename CapacityInt, typename FirstPointer, typename... Pointers>
+	void SoAResizeIfFull(AllocatorPolymorphic allocator, CapacityInt size, CapacityInt& capacity, FirstPointer** first_pointer, Pointers... pointers) {
+		SoAReserve(allocator, size, capacity, (CapacityInt)1, first_pointer, pointers...);
 	}
 
 	template<typename FirstPointer, typename... Pointers>
