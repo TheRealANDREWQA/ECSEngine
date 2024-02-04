@@ -144,7 +144,7 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 	ECS_ASSERT(vertex_positions.size < UINT_MAX, "Gift wrapping for meshes with more than 4GB vertices is not available");
 
 	Timer timer;
-	WeldVertices(vertex_positions, float3::Splat(0.15f));
+	WeldVertices(vertex_positions, float3::Splat(0.125f));
 	float float_duration = timer.GetDuration(ECS_TIMER_DURATION_MS);
 	ECS_FORMAT_TEMP_STRING(poggers, "Duration: {#}", float_duration);
 	OutputDebugStringA(poggers.buffer);
@@ -260,7 +260,7 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 	}
 
 	// Calculate the triangle mesh center
-	float3 mesh_center = CalculateFloat3Midpoint(triangle_mesh.positions);
+	float3 mesh_center = CalculateFloat3Midpoint(triangle_mesh.position_x, triangle_mesh.position_y, triangle_mesh.position_z, triangle_mesh.position_size);
 	// Point all normals away from the center, by using the triangle winding order
 	triangle_mesh.RetargetNormals(mesh_center);
 

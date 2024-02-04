@@ -256,7 +256,7 @@ namespace ECSEngine {
 		}
 
 		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity) {
-			void* allocation = AllocateEx(MemoryOf(_capacity));
+			void* allocation = AllocateEx(allocator, MemoryOf(_capacity));
 			InitializeFromBuffer(allocation, _capacity);
 		}
 

@@ -671,7 +671,7 @@ void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbo
 // -----------------------------------------------------------------------------------------------------------------------------
 
 void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
-	unsigned int sandbox_index = editor_state->sandboxes.Reserve();
+	unsigned int sandbox_index = editor_state->sandboxes.ReserveRange();
 	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
 	// Zero out the memory since most fields require zero initialization
 	memset(sandbox, 0, sizeof(*sandbox));

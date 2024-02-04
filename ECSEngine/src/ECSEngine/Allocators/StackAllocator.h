@@ -2,13 +2,14 @@
 #include "../Core.h"
 #include "../Multithreading/ConcurrentPrimitives.h"
 #include "../Utilities/DebugInfo.h"
+#include "AllocatorBase.h"
 
 namespace ECSEngine {
 
-	struct ECSENGINE_API StackAllocator
+	struct ECSENGINE_API StackAllocator : public AllocatorBase
 	{
-		ECS_INLINE StackAllocator(void* buffer, size_t capacity) : m_buffer((unsigned char*)buffer), m_capacity(capacity), m_top(0), m_marker(0),
-			m_last_top(0), m_spin_lock(), m_debug_mode(false), m_profiling_mode(false) {}
+		ECS_INLINE StackAllocator(void* buffer, size_t capacity) : AllocatorBase(ECS_ALLOCATOR_STACK), m_buffer((unsigned char*)buffer), m_capacity(capacity), 
+			m_top(0), m_marker(0), m_last_top(0) {}
 
 		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
 		
@@ -35,25 +36,9 @@ namespace ECSEngine {
 			return m_top == 0;
 		}
 
-		ECS_INLINE void Lock() {
-			m_spin_lock.Lock();
-		}
-
-		ECS_INLINE void Unlock() {
-			m_spin_lock.Unlock();
-		}
-
 		ECS_INLINE size_t GetCurrentUsage() const {
 			return m_top;
 		}
-
-		void ExitDebugMode();
-
-		void ExitProfilingMode();
-
-		void SetDebugMode(const char* name = nullptr, bool resizable = false);
-
-		void SetProfilingMode(const char* name);
 
 		// Region start and region size are parallel arrays. Returns the count of regions
 		// Pointer capacity must represent the count of valid entries for the given pointers
@@ -74,9 +59,6 @@ namespace ECSEngine {
 		size_t m_top;
 		size_t m_marker;
 		size_t m_last_top;
-		SpinLock m_spin_lock;
-		bool m_debug_mode;
-		bool m_profiling_mode;
 	};
 }
 

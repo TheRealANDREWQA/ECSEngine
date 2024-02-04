@@ -34,7 +34,7 @@ namespace ECSEngine {
 		unsigned int entry_index = -1;
 		if (previous_region_index == -1 && next_region_index == -1) {
 			// No block is found, insert it as a new region
-			entry_index = regions.Reserve();
+			entry_index = regions.ReserveRange();
 			Stream<void>* entry_region = get_region(entry_index);
 			*entry_region = new_region;
 		}

@@ -155,16 +155,16 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	size_t count = collider->mesh.triangles.size < collider->hull_size ? 0 : collider->mesh.triangles.size - collider->hull_size;
 	for (size_t index = 0; index < count; index++) {
 		uint3 triangle = collider->mesh.triangles[index];
-		float3 a = collider->mesh.positions[triangle.x];
-		float3 b = collider->mesh.positions[triangle.y];
-		float3 c = collider->mesh.positions[triangle.z];
+		float3 a = collider->mesh.GetPoint(triangle.x);
+		float3 b = collider->mesh.GetPoint(triangle.y);
+		float3 c = collider->mesh.GetPoint(triangle.z);
 
 		DebugDrawCallOptions options;
 		options.wireframe = true;
 		data->debug_drawer->AddTriangleThread(data->thread_id, translation_value + a, translation_value + b, translation_value + c, ECS_COLOR_GREEN, options);
 	}
-	for (size_t index = 0; index < collider->mesh.positions.size; index++) {
-		data->debug_drawer->AddPointThread(data->thread_id, translation_value + collider->mesh.positions[index], 1.0f, ECS_COLOR_AQUA);
+	for (size_t index = 0; index < collider->mesh.position_size; index++) {
+		data->debug_drawer->AddPointThread(data->thread_id, translation_value + collider->mesh.GetPoint(index), 1.0f, ECS_COLOR_AQUA);
 	}
 }
 

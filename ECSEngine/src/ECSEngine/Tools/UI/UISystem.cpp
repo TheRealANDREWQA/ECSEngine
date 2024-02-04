@@ -7728,11 +7728,11 @@ namespace ECSEngine {
 		{
 			if (phase == ECS_UI_DRAW_SYSTEM) {
 				auto stream = &m_resources.system_draw.sprite_textures[(unsigned int)type];
-				return stream->buffer + stream->Reserve();
+				return stream->buffer + stream->ReserveRange();
 			}
 			else {
 				auto stream = &dockspace->borders[border_index].draw_resources.sprite_textures[(unsigned int)phase * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + (unsigned int)type];
-				return stream->buffer + stream->Reserve();
+				return stream->buffer + stream->ReserveRange();
 			}
 		}
 

@@ -347,7 +347,7 @@ void AddInspectorTableFunction(InspectorTable* table, InspectorFunctions functio
 	ResourceIdentifier identifier(_identifier);
 
 	ECS_ASSERT(table->Find(identifier) == -1);
-	ECS_ASSERT(!table->Insert(function, identifier));
+	table->Insert(function, identifier);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

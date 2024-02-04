@@ -31,7 +31,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 	const size_t BACKUP_CAPACITY = ECS_MB;
 	void* stack_allocation = ECS_STACK_ALLOC(STACK_ALLOCATION_CAPACITY);
 
-	// Use malloc for extra large allocations
+	// Use Malloc for extra large allocations
 	ResizableLinearAllocator linear_allocator(stack_allocation, STACK_ALLOCATION_CAPACITY, BACKUP_CAPACITY, { nullptr });
 	AllocatorPolymorphic allocator = &linear_allocator;
 	Stream<void> contents = ReadWholeFileBinary(sandbox_file_path, allocator);

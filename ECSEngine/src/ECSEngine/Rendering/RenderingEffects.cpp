@@ -461,4 +461,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void CPUInstanceFramebuffer::Deallocate(AllocatorPolymorphic allocator) const
+	{
+		ECSEngine::DeallocateEx(allocator, values);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

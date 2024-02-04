@@ -110,7 +110,7 @@ namespace ECSEngine {
 		Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping = { nullptr, 0 };
 
 		// This is the allocator used to allocate the scene module data and name
-		// This must not be malloc
+		// This must not be Malloc
 		AllocatorPolymorphic scene_modules_allocator = { nullptr };
 		// These are the settings for the scene (if it has any - some scene may want to skip this information)
 		AdditionStream<SceneModuleSetting> scene_modules = {};

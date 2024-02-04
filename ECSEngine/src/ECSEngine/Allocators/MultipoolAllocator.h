@@ -3,6 +3,7 @@
 #include "../Containers/BlockRange.h"
 #include "../Multithreading/ConcurrentPrimitives.h"
 #include "../Utilities/DebugInfo.h"
+#include "AllocatorBase.h"
 
 namespace ECSEngine {
 
@@ -11,9 +12,9 @@ namespace ECSEngine {
 	* allocations as low as possible. The parameter pool_count given to the constructor represents the maximum 
 	* number of pools that it can track of, including the ones occupied.
 	*/
-	struct ECSENGINE_API MultipoolAllocator
+	struct ECSENGINE_API MultipoolAllocator : public AllocatorBase
 	{
-		ECS_INLINE MultipoolAllocator() : m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0), m_debug_mode(false), m_profiling_mode(false) {}
+		ECS_INLINE MultipoolAllocator() : AllocatorBase(ECS_ALLOCATOR_MULTIPOOL), m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0), m_power_of_two_factor(0) {}
 		MultipoolAllocator(void* buffer, size_t size, size_t pool_count);
 		MultipoolAllocator(void* buffer, void* block_range_buffer, size_t size, size_t pool_count);
 		
@@ -43,22 +44,6 @@ namespace ECSEngine {
 
 		bool Belongs(const void* buffer) const;
 
-		void ExitDebugMode();
-
-		void ExitProfilingMode();
-
-		void SetDebugMode(const char* name = nullptr, bool resizable = false);
-
-		void SetProfilingMode(const char* name);
-
-		ECS_INLINE void Lock() {
-			m_spin_lock.Lock();
-		}
-
-		ECS_INLINE void Unlock() {
-			m_spin_lock.Unlock();
-		}
-
 		ECS_INLINE size_t GetCurrentUsage() const {
 			return m_range.GetCurrentUsage();
 		}
@@ -86,18 +71,21 @@ namespace ECSEngine {
 
 		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		static size_t MemoryOf(unsigned int pool_count);
-		static size_t MemoryOf(unsigned int pool_count, unsigned int size);
+		static size_t MemoryOf(size_t pool_count);
+		static size_t MemoryOf(size_t pool_count, size_t size);
 		// From a fixed size and a number of known block count, calculate the amount of memory it can reference
-		static size_t CapacityFromFixedSize(unsigned int fixed_size, unsigned int pool_count);
+		static size_t CapacityFromFixedSize(size_t fixed_size, size_t pool_count);
 
 		// We have this as unsigned char to make it easier to use the alignment stack trick
 		// where we write before the allocation a byte telling us the real offset of the allocation
 		unsigned char* m_buffer;
 		size_t m_size;
-		SpinLock m_spin_lock;
-		bool m_debug_mode;
-		bool m_profiling_mode;
+		// This factor is used to support allocations greater than
+		// The block range allows for. It represents the power of two
+		// Multiplicative factor of a single byte i.e. a range of x
+		// From the block range actually represents a range of x * power_of_two_factor
+		// Of allocation bytes. The default is 0, which means 1 to 1 mapping
+		size_t m_power_of_two_factor;
 		BlockRange m_range;
 	};
 

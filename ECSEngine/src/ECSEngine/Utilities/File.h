@@ -265,17 +265,17 @@ namespace ECSEngine {
 	ECSENGINE_API bool HideFolder(Stream<wchar_t> path);
 
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
-	// or from malloc if the allocator is nullptr
+	// or from Malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
 	ECSENGINE_API Stream<void> ReadWholeFile(Stream<wchar_t> path, bool binary, AllocatorPolymorphic allocator = { nullptr });
 
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
-	// or from malloc if the allocator is nullptr
+	// or from Malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
 	ECSENGINE_API Stream<void> ReadWholeFileBinary(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr });
 
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
-	// or from malloc if the allocator is nullptr
+	// or from Malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
 	ECSENGINE_API Stream<char> ReadWholeFileText(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr });
 

@@ -329,7 +329,12 @@ namespace ECSEngine {
 			create_info.arena_allocator_count = COMPONENT_ALLOCATOR_ARENA_COUNT;
 			create_info.arena_multipool_block_count = COMPONENT_ALLOCATOR_BLOCK_COUNT;
 			create_info.arena_nested_type = ECS_ALLOCATOR_MULTIPOOL;
-			create_info.arena_capacity = allocator_size;
+			// Here, the user specifies the allocator size for the entire allocator. Using
+			// Allocator_size directly would result in overshoot and unexpected crashes
+			create_info.arena_capacity = allocator_size / COMPONENT_ALLOCATOR_ARENA_COUNT;
+			// Clamp the arena capacity to at least ECS_KB * 128, otherwise it might not have enough space
+			// And it would all be the overhead of the block range
+			create_info.arena_capacity = std::max(create_info.arena_capacity, ECS_KB * 128);
 			size_t total_allocation_size = sizeof(MemoryArena) + MemoryArena::MemoryOf(COMPONENT_ALLOCATOR_ARENA_COUNT, create_info);
 			void* allocation = entity_manager->m_memory_manager->Allocate(total_allocation_size);
 			info.allocator = (MemoryArena*)allocation;

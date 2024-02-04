@@ -12,6 +12,7 @@ namespace ECSEngine {
 	*/
 	struct ECSENGINE_API BlockRange
 	{
+		ECS_INLINE BlockRange() {}
 		BlockRange(void* buffer, unsigned int capacity, unsigned int max_index);
 
 		BlockRange& operator = (const BlockRange& other) = default;
@@ -80,7 +81,7 @@ namespace ECSEngine {
 
 		void SetEnd(unsigned int index, unsigned int value);
 
-		ECS_INLINE static size_t MemoryOf(unsigned int number) {
+		ECS_INLINE static size_t MemoryOf(size_t number) {
 			return (sizeof(unsigned int) * number) * 2;
 		}
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "../Utilities/BasicTypes.h"
+#include "../Containers/Stream.h"
 
 namespace ECSEngine {
 
@@ -134,6 +135,9 @@ namespace ECSEngine {
 
 	// Uses SIMD operations
 	ECSENGINE_API float3 CalculateFloat3Midpoint(Stream<float3> values);
+
+	// Uses SIMD operations
+	ECSENGINE_API float3 CalculateFloat3Midpoint(const float* values_x, const float* values_y, const float* values_z, size_t count);
 
 	// Uses SIMD operations
 	ECSENGINE_API void ApplyFloat3Addition(Stream<float3> values, float3 add_value);

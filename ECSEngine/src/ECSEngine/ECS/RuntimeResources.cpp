@@ -106,7 +106,7 @@ namespace ECSEngine {
 	void SetEditorRuntimeSelectedEntities(SystemManager* system_manager, Stream<Entity> entities) {
 		void* allocated_data = CoalesceStreamWithData(system_manager->Allocator(), entities, entities.MemoryOf(1));
 		if (allocated_data == nullptr) {
-			// Allocate with malloc
+			// Allocate with Malloc
 			allocated_data = CoalesceStreamWithData({ nullptr }, entities, entities.MemoryOf(1));
 		}
 		system_manager->BindData(SELECTED_ENTITIES_IDENTIFIER, allocated_data);
@@ -114,9 +114,9 @@ namespace ECSEngine {
 
 	void RemoveEditorRuntimeSelectedEntities(SystemManager* system_manager) {
 		void* data = system_manager->GetData(SELECTED_ENTITIES_IDENTIFIER);
-		// If it doesn't belong to the allocator, it was allocated with malloc
+		// If it doesn't belong to the allocator, it was allocated with Malloc
 		if (!BelongsToAllocator(system_manager->Allocator(), data)) {
-			free(data);
+			Free(data);
 		}
 		system_manager->RemoveData(SELECTED_ENTITIES_IDENTIFIER);
 	}

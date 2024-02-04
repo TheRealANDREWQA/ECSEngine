@@ -3,10 +3,15 @@
 #include "AllocatorTypes.h"
 #include <malloc.h>
 #include "../Utilities/DebugInfo.h"
+#include "AllocatorBase.h"
 
 namespace DirectX {
 	class ScratchImage;
 }
+
+#define ECS_ALIGNED_MALLOC(size, alignment) _aligned_malloc(size, alignment)
+#define ECS_ALIGNED_FREE(allocation) _aligned_free(allocation)
+#define ECS_ALIGNED_REALLOC(allocation, size, alignment) _aligned_realloc(allocation, size, alignment)
 
 namespace ECSEngine {
 
@@ -40,16 +45,8 @@ namespace ECSEngine {
 
 	typedef bool (*IsAllocatorEmptyFunction)(const void* allocator);
 
-	typedef void (*LockAllocatorFunction)(void* allocator);
-
-	typedef void (*UnlockAllocatorFunction)(void* allocator);
-
 	// The current amount of bytes in use from the allocator
 	typedef size_t (*GetAllocatorCurrentUsageFunction)(const void* allocator);
-
-	typedef void (*ExitAllocatorProfilingModeFunction)(void* allocator);
-
-	typedef void (*SetAllocatorProfilingModeFunction)(void* allocator, const char* name);
 
 	typedef size_t (*GetAllocatorRegionsFunction)(const void* allocator, void** region_pointers, size_t* region_size, size_t pointer_capacity);
 
@@ -93,15 +90,7 @@ namespace ECSEngine {
 
 	ECSENGINE_API extern IsAllocatorEmptyFunction ECS_IS_ALLOCATOR_EMPTY_FUNCTIONS[];
 
-	ECSENGINE_API extern LockAllocatorFunction ECS_LOCK_ALLOCATOR_FUNCTIONS[];
-
-	ECSENGINE_API extern UnlockAllocatorFunction ECS_UNLOCK_ALLOCATOR_FUNCTIONS[];
-
 	ECSENGINE_API extern GetAllocatorCurrentUsageFunction ECS_ALLOCATOR_CURRENT_USAGE_FUNCTIONS[];
-
-	ECSENGINE_API extern ExitAllocatorProfilingModeFunction ECS_ALLOCATOR_EXIT_PROFILING_FUNCTIONS[];
-
-	ECSENGINE_API extern SetAllocatorProfilingModeFunction ECS_ALLOCATOR_SET_PROFILING_FUNCTIONS[];
 
 	ECSENGINE_API extern GetAllocatorRegionsFunction ECS_ALLOCATOR_GET_REGIONS_FUNCTIONS[];
 
@@ -133,23 +122,29 @@ namespace ECSEngine {
 	}
 
 	// Dynamic allocation type
-	ECS_INLINE void* Allocate(AllocatorPolymorphic allocator, size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	ECS_INLINE void* Allocate(AllocatorPolymorphic allocator, size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		return Allocate(allocator.allocator, allocator.allocator_type, allocator.allocation_type, size, alignment, debug_info);
 	}
 
-	// Dynamic allocation type
-	ECS_INLINE void* AllocateEx(AllocatorPolymorphic allocator, size_t size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	// Dynamic allocation type. This uses ECS_ALIGNED_MALLOC for the nullptr case! Can't deallocate with free!
+	ECS_INLINE void* AllocateEx(AllocatorPolymorphic allocator, size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (allocator.allocator == nullptr) {
-			return malloc(size);
+			return ECS_ALIGNED_MALLOC(size, alignment);
 		}
 		else {
-			return Allocate(allocator, size, 8, debug_info);
+			return Allocate(allocator, size, alignment, debug_info);
 		}
 	}
 
-	ECS_INLINE void* AllocateTsEx(AllocatorPolymorphic allocator, size_t size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	// This uses the same malloc as the one from AllocateEx
+	ECS_INLINE void* Malloc(size_t size, size_t alignment = alignof(void*)) {
+		return ECS_ALIGNED_MALLOC(size, alignment);
+	}
+
+	// This uses ECS_ALIGNED_MALLOC for the nullptr case!Can't deallocate with free!
+	ECS_INLINE void* AllocateTsEx(AllocatorPolymorphic allocator, size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (allocator.allocator == nullptr) {
-			return malloc(size);
+			return Malloc(size, alignment);
 		}
 		else {
 			return AllocateTs(allocator.allocator, allocator.allocator_type, size, 8, debug_info);
@@ -222,19 +217,26 @@ namespace ECSEngine {
 		return DeallocateNoAssert(allocator.allocator, allocator.allocator_type, buffer, allocator.allocation_type, debug_info);
 	}
 
-	// Dynamic allocation type - if allocator.allocator is nullptr then uses malloc
+	// This is a shortcut, it uses the correct free function to deallocate a block that was allocated
+	// With AllocateEx when the allocator was nullptr
+	ECS_INLINE void Free(void* buffer) {
+		ECS_ALIGNED_FREE(buffer);
+	}
+
+	// Dynamic allocation type - if allocator.allocator is nullptr, then uses ECS_ALIGNED_FREE
 	ECS_INLINE void DeallocateEx(AllocatorPolymorphic allocator, void* buffer, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (allocator.allocator == nullptr) {
-			free(buffer);
+			Free(buffer);
 		}
 		else {
 			Deallocate(allocator, buffer, debug_info);
 		}
 	}
 
+	// If allocator.allocator is nullptr, then uses ECS_ALIGNED_FREE
 	ECS_INLINE void DeallocateTsEx(AllocatorPolymorphic allocator, void* buffer, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (allocator.allocator == nullptr) {
-			free(buffer);
+			ECS_ALIGNED_FREE(buffer);
 		}
 		else {
 			DeallocateTs(allocator.allocator, allocator.allocator_type, buffer, debug_info);
@@ -280,7 +282,7 @@ namespace ECSEngine {
 		ECS_FREE_ALLOCATOR_FROM_FUNCTIONS[allocator_to_deallocate.allocator_type](allocator_to_deallocate.allocator, initial_allocator);
 	}
 
-	ECS_INLINE void* Reallocate(AllocatorPolymorphic allocator, const void* block, size_t new_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	ECS_INLINE void* Reallocate(AllocatorPolymorphic allocator, const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (allocator.allocation_type == ECS_ALLOCATION_SINGLE) {
 			return ECS_REALLOCATE_FUNCTIONS[allocator.allocator_type](allocator.allocator, block, new_size, alignment, debug_info);
 		}
@@ -289,13 +291,18 @@ namespace ECSEngine {
 		}
 	}
 
-	ECS_INLINE void* ReallocateEx(AllocatorPolymorphic allocator, const void* block, size_t new_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	// Uses the same realloc function as ReallocateEx
+	ECS_INLINE void* Realloc(void* block, size_t new_size, size_t alignment = alignof(void*)) {
+		return ECS_ALIGNED_REALLOC(block, new_size, alignment);
+	}
+
+	// Uses ECS_ALIGNED_REALLOC for allocator.allocator. To deallocate you need to use ECS_ALIGNED_FREE!
+	ECS_INLINE void* ReallocateEx(AllocatorPolymorphic allocator, void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (allocator.allocator == nullptr) {
-			// Can't align this pointer - since then we don't know when returning back what was the original allocated pointer
-			return realloc((void*)block, new_size);
+			return Realloc(block, new_size, alignment);
 		}
 		else {
-			return Reallocate(allocator, block, new_size, 8, debug_info);
+			return Reallocate(allocator, block, new_size, alignment, debug_info);
 		}
 	}
 
@@ -389,11 +396,13 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE void LockAllocator(AllocatorPolymorphic allocator) {
-		ECS_LOCK_ALLOCATOR_FUNCTIONS[allocator.allocator_type](allocator.allocator);
+		AllocatorBase* base_allocator = (AllocatorBase*)allocator.allocator;
+		base_allocator->Lock();
 	}
 
 	ECS_INLINE void UnlockAllocator(AllocatorPolymorphic allocator) {
-		ECS_UNLOCK_ALLOCATOR_FUNCTIONS[allocator.allocator_type](allocator.allocator);
+		AllocatorBase* base_allocator = (AllocatorBase*)allocator.allocator;
+		base_allocator->Unlock();
 	}
 
 	ECS_INLINE size_t GetAllocatorCurrentUsage(AllocatorPolymorphic allocator) {
@@ -401,11 +410,13 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE void ExitAllocatorProfilingMode(AllocatorPolymorphic allocator) {
-		return ECS_ALLOCATOR_EXIT_PROFILING_FUNCTIONS[allocator.allocator_type](allocator.allocator);
+		AllocatorBase* base_allocator = (AllocatorBase*)allocator.allocator;
+		base_allocator->ExitProfilingMode();
 	}
 
 	ECS_INLINE void SetAllocatorProfilingMode(AllocatorPolymorphic allocator, const char* name) {
-		return ECS_ALLOCATOR_SET_PROFILING_FUNCTIONS[allocator.allocator_type](allocator.allocator, name);
+		AllocatorBase* base_allocator = (AllocatorBase*)allocator.allocator;
+		base_allocator->SetProfilingMode(name);
 	}
 
 	ECS_INLINE size_t GetAllocatorRegions(AllocatorPolymorphic allocator, void** region_pointers, size_t* region_size, size_t pointer_capacity) {

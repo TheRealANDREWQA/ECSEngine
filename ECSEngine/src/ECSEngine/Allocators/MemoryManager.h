@@ -3,13 +3,13 @@
 #include "MultipoolAllocator.h"
 #include "../Multithreading/ConcurrentPrimitives.h"
 #include "../Utilities/DebugInfo.h"
-#include "AllocatorTypes.h"
+#include "AllocatorBase.h"
 
 namespace ECSEngine {
 	
-	struct ECSENGINE_API MemoryManager
+	struct ECSENGINE_API MemoryManager : public AllocatorBase
 	{
-		ECS_INLINE MemoryManager() : m_backup({ nullptr }), m_allocators(nullptr), m_allocator_count(0), m_debug_mode(false), m_profiling_mode(false) {}
+		ECS_INLINE MemoryManager() : AllocatorBase(ECS_ALLOCATOR_MANAGER), m_backup({ nullptr }), m_allocators(nullptr), m_allocator_count(0) {}
 		// This is a short hand for the multipool version
 		MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, AllocatorPolymorphic backup);
 		MemoryManager(CreateBaseAllocatorInfo initial_info, CreateBaseAllocatorInfo backup_info, AllocatorPolymorphic backup);
@@ -36,16 +36,6 @@ namespace ECSEngine {
 		// Deallocates all of its buffers
 		void Free(DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Locks the SpinLock
-		ECS_INLINE void Lock() {
-			m_spin_lock.Lock();
-		}
-
-		// Unlocks the SpinLock
-		ECS_INLINE void Unlock() {
-			m_spin_lock.Unlock();
-		}
-
 		size_t GetCurrentUsage() const;
 
 		bool IsEmpty() const;
@@ -54,14 +44,6 @@ namespace ECSEngine {
 		void Trim();
 
 		bool Belongs(const void* buffer) const;
-
-		void ExitDebugMode();
-
-		void ExitProfilingMode();
-
-		void SetDebugMode(const char* name = nullptr, bool resizable = false);
-
-		void SetProfilingMode(const char* name);
 
 		AllocatorPolymorphic GetAllocator(size_t index) const;
 
@@ -92,9 +74,6 @@ namespace ECSEngine {
 
 		bool DeallocateIfBelongs_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 	
-		SpinLock m_spin_lock;
-		bool m_debug_mode;
-		bool m_profiling_mode;
 		unsigned char m_allocator_count;
 		// Cache this value such that we don't have to query it every single time
 		unsigned short m_base_allocator_byte_size;

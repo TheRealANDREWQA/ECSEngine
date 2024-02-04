@@ -126,7 +126,7 @@ namespace ECSEngine {
 
 						// Deallocate the orm_texture data, if present
 						if (orm_texture.data.size > 0) {
-							free(orm_texture.data.buffer);
+							Free(orm_texture.data.buffer);
 						}
 					};
 
@@ -265,9 +265,9 @@ namespace ECSEngine {
 					}
 				}
 
-				free(single_channel_data.buffer);
+				Free(single_channel_data.buffer);
 				// Deallocate the texture name as well
-				free(texture_filename.buffer);
+				Free(texture_filename.buffer);
 			}
 		};
 
@@ -275,12 +275,12 @@ namespace ECSEngine {
 		write_texture(data->roughness_filename, 1);
 		write_texture(data->metallic_filename, 2);
 
-		free(decoded_texture.data.buffer);
+		Free(decoded_texture.data.buffer);
 
 		unsigned int exit_count = data->options.semaphore->ExitEx();
 		if (exit_count == 0) {
 			// Deallocate the directory
-			free(data->directory.buffer);
+			Free(data->directory.buffer);
 		}
 	}
 
@@ -306,11 +306,11 @@ namespace ECSEngine {
 		}
 
 		// Deallocate the texture filename - the encoded data comes from GLTF, we shouldn't free that
-		free(data->texture_filename.buffer);
+		Free(data->texture_filename.buffer);
 		unsigned int exit_count = data->options.semaphore->ExitEx();
 		if (exit_count == 0) {
 			// Deallocate the directory
-			free(data->directory.buffer);
+			Free(data->directory.buffer);
 		}
 	}
 
@@ -321,7 +321,7 @@ namespace ECSEngine {
 		ResizableStream<Stream<char>> tracked_materials;
 		tracked_materials.Initialize(&stack_allocator, 0);
 
-		wchar_t* stable_directory = (wchar_t*)malloc(directory.MemoryOf(directory.size));
+		wchar_t* stable_directory = (wchar_t*)Malloc(directory.MemoryOf(directory.size));
 		directory.CopyTo(stable_directory);
 		directory.buffer = stable_directory;
 
@@ -389,7 +389,7 @@ namespace ECSEngine {
 
 							Stream<wchar_t> texture_name = mappings[index].texture;
 							// Allocate the string large enough such that we cover the use standard name case
-							wchar_t* stable_texture_name = (wchar_t*)malloc(texture_name.MemoryOf(texture_name.size + standard_texture_names[pbr_index].size));
+							wchar_t* stable_texture_name = (wchar_t*)Malloc(texture_name.MemoryOf(texture_name.size + standard_texture_names[pbr_index].size));
 							if (options->use_standard_texture_names) {
 								if (prefix.size > 0) {
 									prefix.CopyTo(stable_texture_name);
@@ -465,7 +465,7 @@ namespace ECSEngine {
 		unsigned int exit_count = options->semaphore->ExitEx();
 		if (exit_count == 0) {
 			// Deallocate the directory
-			free(directory.buffer);
+			Free(directory.buffer);
 		}
 		
 		return at_least_one_export;

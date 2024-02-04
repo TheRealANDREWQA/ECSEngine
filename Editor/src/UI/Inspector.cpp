@@ -351,7 +351,7 @@ unsigned int CreateInspectorDockspace(EditorState* editor_state, unsigned int in
 // ----------------------------------------------------------------------------------------------------------------------------
 
 unsigned int CreateInspectorInstance(EditorState* editor_state) {
-	unsigned int inspector_index = editor_state->inspector_manager.data.Reserve();
+	unsigned int inspector_index = editor_state->inspector_manager.data.ReserveRange();
 	InitializeInspectorInstance(editor_state, inspector_index);
 	ChangeInspectorToNothing(editor_state, inspector_index, true);
 	return inspector_index;

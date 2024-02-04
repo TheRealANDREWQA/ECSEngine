@@ -15,13 +15,13 @@ namespace ECSEngine {
 	static void* AllocateBaseAllocator(const MemoryProtectedAllocator* allocator) {
 		void* virtual_allocation = OS::VirtualAllocation(allocator->chunk_size);
 		if (allocator->linear_allocators) {
-			LinearAllocator* initial_allocator = (LinearAllocator*)malloc(sizeof(LinearAllocator));
+			LinearAllocator* initial_allocator = (LinearAllocator*)Malloc(sizeof(LinearAllocator));
 			*initial_allocator = LinearAllocator(virtual_allocation, allocator->chunk_size);
 			return initial_allocator;
 		}
 		else {
-			MultipoolAllocator* initial_allocator = (MultipoolAllocator*)malloc(sizeof(MultipoolAllocator));
-			void* block_range_buffer = malloc(MultipoolAllocator::MemoryOf(MULTIPOOL_BLOCK_COUNT));
+			MultipoolAllocator* initial_allocator = (MultipoolAllocator*)Malloc(sizeof(MultipoolAllocator));
+			void* block_range_buffer = Malloc(MultipoolAllocator::MemoryOf(MULTIPOOL_BLOCK_COUNT));
 			*initial_allocator = MultipoolAllocator(virtual_allocation, block_range_buffer, allocator->chunk_size, MULTIPOOL_BLOCK_COUNT);
 			return initial_allocator;
 		}
@@ -51,11 +51,11 @@ namespace ECSEngine {
 
 	static void ResizeAllocators(MemoryProtectedAllocator* allocator) {
 		unsigned int new_capacity = (unsigned int)((float)allocator->capacity * 1.5f + 1);
-		void** new_pointers = (void**)malloc(sizeof(void*) * new_capacity);
+		void** new_pointers = (void**)Malloc(sizeof(void*) * new_capacity);
 		memcpy(new_pointers, allocator->allocators, sizeof(void*) * allocator->capacity);
 		
 		if (allocator->capacity > 0) {
-			free(allocator->allocators);
+			Free(allocator->allocators);
 		}
 
 		allocator->capacity = new_capacity;
@@ -64,11 +64,11 @@ namespace ECSEngine {
 
 	static void ResizeIndividualBlocks(MemoryProtectedAllocator* allocator) {
 		unsigned int new_capacity = (unsigned int)((float)allocator->capacity * 1.5f + 1);
-		void** new_pointers = (void**)malloc(sizeof(void*) * new_capacity);
+		void** new_pointers = (void**)Malloc(sizeof(void*) * new_capacity);
 		memcpy(new_pointers, allocator->allocation_pointers, sizeof(void*) * allocator->capacity);
 		
 		if (allocator->capacity > 0) {
-			free(allocator->allocation_pointers);
+			Free(allocator->allocation_pointers);
 		}
 
 		allocator->allocation_pointers = new_pointers;
@@ -99,12 +99,12 @@ namespace ECSEngine {
 		else {
 			MultipoolAllocator* current_allocator = (MultipoolAllocator*)allocator->allocators[index];
 			OS::VirtualDeallocation(current_allocator->GetAllocatedBuffer());
-			// We also need to normal free the block range buffer here
-			free((void*)current_allocator->m_range.GetAllocatedBuffer());
+			// We also need to normal Free the block range buffer here
+			Free((void*)current_allocator->m_range.GetAllocatedBuffer());
 		}
 	}
 
-	MemoryProtectedAllocator::MemoryProtectedAllocator(size_t _chunk_size, bool linear_chunks)
+	MemoryProtectedAllocator::MemoryProtectedAllocator(size_t _chunk_size, bool linear_chunks) : AllocatorBase(ECS_ALLOCATOR_MEMORY_PROTECTED)
 	{
 		count = 0;
 		capacity = 0;
@@ -112,7 +112,7 @@ namespace ECSEngine {
 		if (chunk_size > 0) {
 			linear_allocators = linear_chunks;
 
-			allocators = (void**)malloc(sizeof(void*) * 1);
+			allocators = (void**)Malloc(sizeof(void*) * 1);
 			allocators[0] = AllocateBaseAllocator(this);
 			count = 1;
 			capacity = 1;
@@ -154,7 +154,7 @@ namespace ECSEngine {
 			allocation = virtual_allocation;
 		}
 
-		if (debug_mode) {
+		if (m_debug_mode) {
 			TrackedAllocation tracked;
 			tracked.allocated_pointer = allocation;
 			tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
@@ -215,7 +215,7 @@ namespace ECSEngine {
 		}
 
 		if (was_deallocated) {
-			if (debug_mode) {
+			if (m_debug_mode) {
 				TrackedAllocation tracked;
 				tracked.allocated_pointer = block;
 				tracked.debug_info = debug_info;
@@ -237,10 +237,10 @@ namespace ECSEngine {
 			if (linear_allocators) {
 				// For linear allocators we just have to allocate a new block
 				// Make sure to disable the debug mode to not generate an allocate entry
-				bool previous_debug_mode = debug_mode;
-				debug_mode = false;
+				bool previous_debug_mode = m_debug_mode;
+				m_debug_mode = false;
 				new_allocation = Allocate(new_size, alignment);
-				debug_mode = previous_debug_mode;
+				m_debug_mode = previous_debug_mode;
 			}
 			else {
 				unsigned int index = 0;
@@ -251,10 +251,10 @@ namespace ECSEngine {
 						if (new_allocation == nullptr) {
 							// Allocate a new block and deallocate this one
 							// Make sure to disable the debug mode to not generate an allocate entry
-							bool previous_debug_mode = debug_mode;
-							debug_mode = false;
+							bool previous_debug_mode = m_debug_mode;
+							m_debug_mode = false;
 							new_allocation = Allocate(new_size, alignment);
-							debug_mode = previous_debug_mode;
+							m_debug_mode = previous_debug_mode;
 							allocator_pointer->Deallocate(block);
 						}
 						break;
@@ -268,16 +268,16 @@ namespace ECSEngine {
 			// Allocate a new block and deallocate the old one
 			// Make sure to disable the debug mode to not generate an allocate entry or a deallocate entry
 
-			bool previous_debug_mode = debug_mode;
-			debug_mode = false;
+			bool previous_debug_mode = m_debug_mode;
+			m_debug_mode = false;
 
 			new_allocation = Allocate(new_size, alignment);
 			Deallocate(block);
 
-			debug_mode = previous_debug_mode;
+			m_debug_mode = previous_debug_mode;
 		}
 
-		if (debug_mode) {
+		if (m_debug_mode) {
 			TrackedAllocation tracked;
 			tracked.allocated_pointer = block;
 			tracked.secondary_pointer = new_allocation;
@@ -342,7 +342,7 @@ namespace ECSEngine {
 			count = 0;
 		}
 
-		if (debug_mode) {
+		if (m_debug_mode) {
 			TrackedAllocation tracked;
 			tracked.debug_info = debug_info;
 			tracked.function_type = ECS_DEBUG_ALLOCATOR_CLEAR;
@@ -352,20 +352,20 @@ namespace ECSEngine {
 
 	void MemoryProtectedAllocator::Free(DebugInfo debug_info)
 	{
-		bool previous_debug_mode = debug_mode;
-		debug_mode = false;
+		bool previous_debug_mode = m_debug_mode;
+		m_debug_mode = false;
 		Clear();
-		debug_mode = previous_debug_mode;
+		m_debug_mode = previous_debug_mode;
 
 		if (chunk_size > 0) {
 			FreeAllocatorBase(this, 0);
-			free(allocators);
+			ECSEngine::Free(allocators);
 		}
 		else {
-			free(allocation_pointers);
+			ECSEngine::Free(allocation_pointers);
 		}
 
-		if (debug_mode) {
+		if (m_debug_mode) {
 			TrackedAllocation tracked;
 			tracked.debug_info = debug_info;
 			tracked.function_type = ECS_DEBUG_ALLOCATOR_FREE;
@@ -468,28 +468,17 @@ namespace ECSEngine {
 		return false;
 	}
 
-	void MemoryProtectedAllocator::ExitDebugMode()
-	{
-		debug_mode = false;
-	}
-
-	void MemoryProtectedAllocator::SetDebugMode(const char* name, bool resizable)
-	{
-		debug_mode = true;
-		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_MEMORY_PROTECTED);
-	}
-
 	// ----------------------------------------- Thread Safe functions -------------------------------------------------------
 
 	void* MemoryProtectedAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&lock, [&]() {
+		return ThreadSafeFunctorReturn(&m_lock, [&]() {
 			return Allocate(size, alignment, debug_info);
 		});
 	}
 
 	template<bool trigger_error_if_not_found>
 	bool MemoryProtectedAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&lock, [&]() {
+		return ThreadSafeFunctorReturn(&m_lock, [&]() {
 			return Deallocate<trigger_error_if_not_found>(block, debug_info);
 		});
 	}
@@ -498,7 +487,7 @@ namespace ECSEngine {
 
 	void* MemoryProtectedAllocator::Reallocate_ts(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
-		return ThreadSafeFunctorReturn(&lock , [&]() {
+		return ThreadSafeFunctorReturn(&m_lock , [&]() {
 			return Reallocate(block, new_size, alignment, debug_info);
 		});
 	}

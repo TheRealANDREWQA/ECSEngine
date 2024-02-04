@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "Mouse.h"
 #include "../OS/Cursor.h"
+#include "../Utilities/Assert.h"
 
 namespace ECSEngine {
 

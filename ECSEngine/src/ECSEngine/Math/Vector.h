@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "VCLExtensions.h"
 #include "BaseVector.h"
+#include "../Containers/Stream.h"
 
 #define ECS_SIMD_VECTOR_EPSILON_VALUE 0.00001f
 

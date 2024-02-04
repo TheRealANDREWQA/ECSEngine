@@ -83,28 +83,6 @@ namespace ECSEngine {
 		return IsPointerRange(m_buffer, m_top, buffer);
 	}
 
-	void LinearAllocator::ExitDebugMode()
-	{
-		m_debug_mode = false;
-	}
-
-	void LinearAllocator::ExitProfilingMode()
-	{
-		m_profiling_mode = false;
-	}
-
-	void LinearAllocator::SetDebugMode(const char* name, bool resizable)
-	{
-		m_debug_mode = true;
-		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_LINEAR);
-	}
-
-	void LinearAllocator::SetProfilingMode(const char* name)
-	{
-		m_profiling_mode = true;
-		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_LINEAR, name);
-	}
-
 	size_t LinearAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
 	{
 		if (pointer_capacity >= 1) {
@@ -125,7 +103,7 @@ namespace ECSEngine {
 		return_value.m_capacity = capacity;
 		return_value.m_top = 0;
 		return_value.m_marker = 0;
-		return_value.m_spin_lock.Clear();
+		return_value.m_lock.Clear();
 		return_value.m_debug_mode = false;
 		return_value.m_profiling_mode = false;
 
@@ -135,7 +113,7 @@ namespace ECSEngine {
 	// ---------------------- Thread safe variants -----------------------------
 
 	void* LinearAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+		return ThreadSafeFunctorReturn(&m_lock, [&]() {
 			return Allocate(size, alignment, debug_info);
 		});
 	}
@@ -146,7 +124,7 @@ namespace ECSEngine {
 	ECS_TEMPLATE_FUNCTION_BOOL(bool, LinearAllocator::Deallocate_ts, const void*, DebugInfo);
 
 	void LinearAllocator::SetMarker_ts() {
-		ThreadSafeFunctor(&m_spin_lock, [&]() {
+		ThreadSafeFunctor(&m_lock, [&]() {
 			SetMarker();
 		});
 	}

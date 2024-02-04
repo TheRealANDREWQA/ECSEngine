@@ -519,7 +519,7 @@ namespace ECSEngine {
 
 		cgltf_options options;
 		memset(&options, 0, sizeof(cgltf_options));
-		AllocatorPolymorphic* _allocator = (AllocatorPolymorphic*)malloc(sizeof(AllocatorPolymorphic));
+		AllocatorPolymorphic* _allocator = (AllocatorPolymorphic*)Malloc(sizeof(AllocatorPolymorphic));
 		memcpy(_allocator, &allocator, sizeof(allocator));
 		options.memory.user_data = _allocator;
 		
@@ -1637,7 +1637,7 @@ namespace ECSEngine {
 		// It has an allocator written into it
 		void* allocator_polymorphic = data.data->memory.user_data;
 		cgltf_free(data.data);
-		free(allocator_polymorphic);
+		Free(allocator_polymorphic);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------

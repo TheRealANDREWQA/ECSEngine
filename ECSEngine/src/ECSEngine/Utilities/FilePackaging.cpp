@@ -34,21 +34,21 @@ namespace ECSEngine {
 			return -2;
 		}
 
-		// Use malloc - the table might occupy a lot of space due to the
-		void* allocation = malloc(table_size);
+		// Use Malloc - the table might occupy a lot of space due to the
+		void* allocation = Malloc(table_size);
 		lookup_table.InitializeFromBuffer(allocation, table_capacity);
 
 		// We need an extra buffer in order to store the offsets and the sizes for each file
-		uint2* offsets = (uint2*)malloc(sizeof(uint2) * input.size);
+		uint2* offsets = (uint2*)Malloc(sizeof(uint2) * input.size);
 
-		void* temporary_buffer = malloc(TEMPORARY_BUFFER_SIZE);
+		void* temporary_buffer = Malloc(TEMPORARY_BUFFER_SIZE);
 
 		auto error_lambda = [=]() {
 			CloseFile(output_file);
 			RemoveFile(output);
-			free(offsets);
-			free(temporary_buffer);
-			free(allocation);
+			Free(offsets);
+			Free(temporary_buffer);
+			Free(allocation);
 		};
 
 		ECS_FILE_HANDLE current_file_handle = -1;
@@ -74,7 +74,7 @@ namespace ECSEngine {
 			unsigned int buffer_size = TEMPORARY_BUFFER_SIZE;
 
 			if (file_size >= TEMPORARY_BUFFER_SIZE) {
-				file_buffer = malloc(file_size);
+				file_buffer = Malloc(file_size);
 				buffer_size = file_size;
 			}
 
@@ -118,7 +118,7 @@ namespace ECSEngine {
 			}
 
 			if (file_size >= TEMPORARY_BUFFER_SIZE) {
-				free(file_buffer);	
+				Free(file_buffer);
 			}		
 
 			close_success = CloseFile(current_file_handle);
@@ -146,7 +146,7 @@ namespace ECSEngine {
 
 			// For the identifier - use it as a uint2 - the offset and the size of the string
 			unsigned int insert_position;
-			ECS_ASSERT(!lookup_table.Insert(offsets[index], input[index], insert_position));
+			lookup_table.Insert(offsets[index], input[index], insert_position);
 			ResourceIdentifier* identifier = lookup_table.GetIdentifierPtrFromIndex(insert_position);
 			identifier->ptr = (void*)((uintptr_t)string_bytes_written);
 
@@ -173,9 +173,9 @@ namespace ECSEngine {
 		}
 
 		CloseFile(output_file);
-		free(temporary_buffer);
-		free(allocation);
-		free(offsets);
+		Free(temporary_buffer);
+		Free(allocation);
+		Free(offsets);
 
 		return -1;
 	}
@@ -278,7 +278,7 @@ namespace ECSEngine {
 		if (data.size > 0) {
 			uintptr_t ptr = (uintptr_t)data.buffer;
 			MultiPackedFile result = LoadMultiPackedFile(&ptr, data.size, allocator);
-			free(data.buffer);
+			Free(data.buffer);
 			return result;
 		}
 		MultiPackedFile failed_file;
@@ -343,7 +343,7 @@ namespace ECSEngine {
 				Read<true>(file, current_name.buffer, name_size * sizeof(wchar_t));
 				current_name.size = name_size;
 				allocated_name = StringCopy(allocator, current_name);
-				ECS_ASSERT(!packed_file.lookup_table.Insert(index, allocated_name));
+				packed_file.lookup_table.Insert(index, allocated_name);
 			}
 		}
 
@@ -406,7 +406,7 @@ namespace ECSEngine {
 		}
 		// Use the heap
 		else {
-			buffer = malloc(allocation_size);
+			buffer = Malloc(allocation_size);
 		}
 
 		uintptr_t ptr = (uintptr_t)buffer;
@@ -415,7 +415,7 @@ namespace ECSEngine {
 		bool success = WriteBufferToFileBinary(file, { buffer, allocation_size }) ==  ECS_FILE_STATUS_OK;
 		if (allocation_size >= ECS_KB * 128) {
 			// Free the heap allocation
-			free(buffer);
+			Free(buffer);
 		}
 
 		return success;

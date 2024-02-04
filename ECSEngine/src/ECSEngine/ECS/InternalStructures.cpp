@@ -653,14 +653,14 @@ namespace ECSEngine {
 	bool SerializeEntityPool(const EntityPool* entity_pool, ECS_FILE_HANDLE file)
 	{
 		size_t serialize_size = SerializeEntityPoolSize(entity_pool);
-		void* buffering = malloc(serialize_size);
+		void* buffering = Malloc(serialize_size);
 
 		uintptr_t ptr = (uintptr_t)buffering;
 		SerializeEntityPool(entity_pool, ptr);
 
 		bool success = WriteFile(file, { buffering, serialize_size });
 
-		free(buffering);
+		Free(buffering);
 
 		return success;
 	}
@@ -730,7 +730,7 @@ namespace ECSEngine {
 		}
 		entity_pool->m_entity_infos.FreeBuffer();
 
-		SerializeEntityInfo* serialize_infos = (SerializeEntityInfo*)malloc(sizeof(SerializeEntityInfo) * header.entity_count);
+		SerializeEntityInfo* serialize_infos = (SerializeEntityInfo*)Malloc(sizeof(SerializeEntityInfo) * header.entity_count);
 		success = ReadFile(file, { serialize_infos, sizeof(SerializeEntityInfo) * header.entity_count });
 
 		if (success) {
@@ -767,7 +767,7 @@ namespace ECSEngine {
 			}
 		}
 
-		free(serialize_infos);
+		Free(serialize_infos);
 		return success;
 	}
 

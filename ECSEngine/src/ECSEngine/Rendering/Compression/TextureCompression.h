@@ -74,7 +74,7 @@ namespace ECSEngine {
 		DebugInfo debug_info = ECS_DEBUG_INFO
 	);
 
-	// It doesn't relly on the immediate context - if no allocator is specified, it will use malloc to generate the temporary data
+	// It doesn't relly on the immediate context - if no allocator is specified, it will use Malloc to generate the temporary data
 	// Data is a stream of data for each of the textures mip levels
 	// It returns a null texture if it fails
 	// In order to deallocate the received data, just deallocate the buffer of the first stream
@@ -88,7 +88,7 @@ namespace ECSEngine {
 		CompressTextureDescriptor descriptor = {}
 	);
 
-	// It doesn't relly on the immediate context - if no allocator is specified, it will use malloc to generate the temporary data
+	// It doesn't relly on the immediate context - if no allocator is specified, it will use Malloc to generate the temporary data
 	// Data is a stream of data for each of the textures mip levels
 	// It returns a null texture if it fails
 	// In order to deallocate the received data, just deallocate the buffer of the first stream

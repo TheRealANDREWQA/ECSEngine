@@ -596,7 +596,7 @@ namespace ECSEngine {
         void* temp_buffer = nullptr;
         size_t STACK_LIMIT = ECS_KB * 128;
         if (header.children_data_size > STACK_LIMIT) {
-            temp_buffer = malloc(header.children_data_size);
+            temp_buffer = Malloc(header.children_data_size);
         }
         else {
             temp_buffer = ECS_STACK_ALLOC(header.children_data_size);
@@ -605,7 +605,7 @@ namespace ECSEngine {
         success = ReadFile(file, { temp_buffer, header.children_data_size });
         if (!success) {
             if (header.children_data_size > STACK_LIMIT) {
-                free(temp_buffer);
+                Free(temp_buffer);
             }
             return false;
         }
@@ -613,7 +613,7 @@ namespace ECSEngine {
 
         success = DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, temp_ptr);
         if (header.children_data_size > STACK_LIMIT) {
-            free(temp_buffer);
+            Free(temp_buffer);
         }
         return success;
     }

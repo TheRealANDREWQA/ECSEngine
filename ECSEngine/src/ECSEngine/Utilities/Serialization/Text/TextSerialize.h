@@ -8,7 +8,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	// It will serialize into a memory buffer and then commit to the file
-	// SettingsAllocator nullptr means use malloc
+	// SettingsAllocator nullptr means use Malloc
 	ECSENGINE_API bool TextSerialize(
 		Reflection::ReflectionType type,
 		const void* data,

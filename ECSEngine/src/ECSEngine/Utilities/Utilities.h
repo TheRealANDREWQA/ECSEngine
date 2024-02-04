@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "BasicTypes.h"
+#include "../Containers/Stream.h"
 
 namespace ECSEngine {
 
@@ -308,7 +309,7 @@ namespace ECSEngine {
 
 	// If the data size is different from 0 and the data pointer is nullptr, it will only allocate, without copying anything
 	template<typename Allocator>
-	ECS_INLINE void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	ECS_INLINE void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		void* allocation = allocator->Allocate(data_size, alignment, debug_info);
 		if (data != nullptr) {
 			memcpy(allocation, data, data_size);
@@ -317,7 +318,7 @@ namespace ECSEngine {
 	}
 
 	// If the data size is different from 0 and the data pointer is nullptr, it will only allocate, without copying anything
-	ECS_INLINE Stream<void> Copy(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	ECS_INLINE Stream<void> Copy(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		void* allocation = Allocate(allocator, data.size, alignment, debug_info);
 		if (data.buffer != nullptr) {
 			memcpy(allocation, data.buffer, data.size);
@@ -325,12 +326,12 @@ namespace ECSEngine {
 		return { allocation, data.size };
 	}
 
-	ECS_INLINE void* Copy(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	ECS_INLINE void* Copy(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		return Copy(allocator, { data, data_size }, alignment, debug_info).buffer;
 	}
 
 	// If data size is 0, it will return the data back
-	ECS_INLINE void* CopyNonZero(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	ECS_INLINE void* CopyNonZero(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (data_size > 0) {
 			return Copy(allocator, data, data_size, alignment, debug_info);
 		}
@@ -338,16 +339,17 @@ namespace ECSEngine {
 	}
 
 	// If data size is 0, it will return the data back
-	ECS_INLINE Stream<void> CopyNonZero(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	ECS_INLINE Stream<void> CopyNonZero(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (data.size > 0) {
 			return Copy(allocator, data, alignment, debug_info);
 		}
 		return data;
 	}
 
-	ECS_INLINE void* CopyNonZeroMalloc(const void* data, size_t data_size) {
+	// It uses ECS_ALIGNED_MALLOC, it needs to be deallocated with Free
+	ECS_INLINE void* CopyNonZeroMalloc(const void* data, size_t data_size, size_t alignment = alignof(void*)) {
 		if (data_size > 0) {
-			void* allocation = malloc(data_size);
+			void* allocation = ECS_ALIGNED_MALLOC(data_size, alignment);
 			if (data != nullptr) {
 				memcpy(allocation, data, data_size);
 			}
@@ -357,19 +359,19 @@ namespace ECSEngine {
 	}
 
 	// This version can call when allocator is nullptr - the base one doesn't (but this allows the alignment to be specified)
-	ECS_INLINE void* CopyNonZeroEx(AllocatorPolymorphic allocator, const void* data, size_t data_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	ECS_INLINE void* CopyNonZeroEx(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (allocator.allocator == nullptr) {
-			return CopyNonZeroMalloc(data, data_size);
+			return CopyNonZeroMalloc(data, data_size, alignment);
 		}
 		else {
-			return CopyNonZero(allocator, data, data_size, 8, debug_info);
+			return CopyNonZero(allocator, data, data_size, alignment, debug_info);
 		}
 	}
 
 	// If data size is zero, it will return data, else it will make a copy and return that instead
 	// If the data pointer is nullptr but a data_size is specified, then it will only allocate, without copying anything
 	template<typename Allocator>
-	void* CopyNonZero(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	void* CopyNonZero(Allocator* allocator, const void* data, size_t data_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (data_size > 0) {
 			return Copy(allocator, data, data_size, alignment, debug_info);
 		}

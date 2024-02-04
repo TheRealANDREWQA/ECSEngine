@@ -139,12 +139,12 @@ namespace ECSEngine {
 		SerializeEntityManagerOptions* options
 	)
 	{
-		void* buffering = malloc(ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
+		void* buffering = Malloc(ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 		unsigned int buffering_size = 0;
 
 		struct DeallocateResources {
 			void operator() () const {
-				free(component_buffering);
+				Free(component_buffering);
 			}
 
 			void* component_buffering;
@@ -1745,7 +1745,7 @@ namespace ECSEngine {
 		DeserializeEntityManagerOptions* options
 	)
 	{
-		void* buffering = malloc(ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
+		void* buffering = Malloc(ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 		struct Functor {
 			ECS_INLINE bool ReadInto(void* ptr, size_t size) {
 				return ReadFile(file_handle, { ptr, size });
@@ -1765,7 +1765,7 @@ namespace ECSEngine {
 			}
 
 			ECS_INLINE void FreeBuffering() {
-				free(buffering);
+				Free(buffering);
 			}
 			
 			ECS_INLINE void MarkBufferingResetPoint() {
@@ -2431,7 +2431,7 @@ namespace ECSEngine {
 
 				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
-				ECS_ASSERT(!table.Insert(info, component));
+				table.Insert(info, component);
 			}
 		});
 	}
@@ -2541,7 +2541,7 @@ namespace ECSEngine {
 			ECS_ASSERT(evaluation != DBL_MAX);
 
 			Component component = { (short)evaluation };
-			ECS_ASSERT(!table.Insert(overrides[index], component));
+			table.Insert(overrides[index], component);
 		}
 	}
 
@@ -2803,7 +2803,7 @@ namespace ECSEngine {
 				}
 
 				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-				ECS_ASSERT(!table.Insert(info, component));
+				table.Insert(info, component);
 			}
 		});
 	}

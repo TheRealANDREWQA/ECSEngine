@@ -486,7 +486,7 @@ namespace ECSEngine {
 			const UIHandler* general_handler;
 			Stream<UIDockspaceBorderDrawSnapshotRunnable> runnables;
 
-			// This can be malloc as well
+			// This can be Malloc as well
 			AllocatorPolymorphic allocator;
 			// This is used to allocate the runnables
 			AllocatorPolymorphic runnable_allocator;

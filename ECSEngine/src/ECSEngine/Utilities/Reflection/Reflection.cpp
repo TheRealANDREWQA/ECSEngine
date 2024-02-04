@@ -1035,7 +1035,7 @@ namespace ECSEngine {
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
-					ECS_ASSERT(!enum_definitions.Insert(enum_, identifier));
+					enum_definitions.Insert(enum_, identifier);
 				}
 			}
 
@@ -1233,8 +1233,8 @@ namespace ECSEngine {
 							}
 						}
 					}
-
-					ECS_ASSERT(!type_definitions.Insert(type, identifier));
+					
+					type_definitions.Insert(type, identifier);
 				}
 			}
 
@@ -1616,7 +1616,7 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int ReflectionManager::CreateFolderHierarchy(Stream<wchar_t> root) {
-			unsigned int index = folders.Reserve();
+			unsigned int index = folders.ReserveRange();
 			folders[index] = { StringCopy(folders.allocator, root), nullptr };
 			folders[index].added_types.Initialize(Allocator(), 0);
 			return index;
@@ -1644,7 +1644,7 @@ namespace ECSEngine {
 
 		void ReflectionManager::DeallocateThreadTaskData(ReflectionManagerParseStructuresThreadTaskData& data)
 		{
-			free(data.thread_memory.buffer);
+			Free(data.thread_memory.buffer);
 			Deallocate(folders.allocator, data.types.buffer);
 			Deallocate(folders.allocator, data.enums.buffer);
 			Deallocate(folders.allocator, data.paths.buffer);
@@ -2122,7 +2122,7 @@ namespace ECSEngine {
 
 		void ReflectionManager::InheritConstants(const ReflectionManager* other)
 		{
-			unsigned int write_index = constants.Reserve(other->constants.size);
+			unsigned int write_index = constants.ReserveRange(other->constants.size);
 			Stream<ReflectionConstant> new_constants = StreamCoalescedDeepCopy(other->constants.ToStream(), folders.allocator);
 			// Set the folder hierarchy index for these constants to -1 such that they don't get bound to any
 			// folder index
@@ -2246,7 +2246,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.expressions.Initialize(folders.allocator, max_expressions);
 			data.embedded_array_size.Initialize(folders.allocator, 0, max_embedded_array_size);
 
-			void* thread_allocation = malloc(thread_memory);
+			void* thread_allocation = Malloc(thread_memory);
 			data.thread_memory.InitializeFromBuffer(thread_allocation, 0, thread_memory);
 			data.field_table = &field_table;
 			data.success = true;

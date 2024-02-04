@@ -1020,11 +1020,11 @@ namespace ECSEngine {
 			ECS_ASSERT(!FAILED(DirectX::ComputePitch(new_image.format, new_image.width, new_image.height, new_image.rowPitch, new_image.slicePitch)));
 
 			if (HasFlag(descriptor->misc_flags, ECS_GRAPHICS_MISC_GENERATE_MIPS) || descriptor->context != nullptr) {
-				void* new_allocation = malloc(new_image.slicePitch);
+				void* new_allocation = Malloc(new_image.slicePitch);
 				memcpy(new_allocation, new_image.pixels, new_image.slicePitch);
 				new_image.pixels = (uint8_t*)new_allocation;
 				HRESULT result = DirectX::GenerateMipMaps(new_image, DirectX::TEX_FILTER_LINEAR, 0, image);
-				free(new_allocation);
+				Free(new_allocation);
 				if (FAILED(result)) {
 					return nullptr;
 				}

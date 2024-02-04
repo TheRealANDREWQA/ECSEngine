@@ -4036,7 +4036,7 @@ namespace ECSEngine {
 				identifier = identifier_name;
 			}
 
-			ECS_ASSERT(!type_definition.Insert(type, identifier, inserted_position));
+			type_definition.Insert(type, identifier, inserted_position);
 			return type_definition.GetValuePtrFromIndex(inserted_position);
 		}
 
@@ -4126,7 +4126,7 @@ namespace ECSEngine {
 			memset(instance.grouping_open_state, 0, sizeof(instance.grouping_open_state));
 
 			unsigned int position = 0;
-			ECS_ASSERT(!instances.Insert(instance, identifier, position));
+			instances.Insert(instance, identifier, position);
 			return instances.GetValuePtrFromIndex(position);
 		}
 

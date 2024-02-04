@@ -148,7 +148,7 @@ namespace ECSEngine {
 	template<typename Allocator>
 	void FreeAllocatorFromOtherWithBuffer(void* _allocator, AllocatorPolymorphic initial_allocator) {
 		Allocator* allocator = (Allocator*)_allocator;
-		// The GetAllocatedBuffer returns a const void*, but free wants void* ...
+		// The GetAllocatedBuffer returns a const void*, but ECS_ALIGNED_FREE wants void* ...
 		DeallocateEx(initial_allocator, (void*)allocator->GetAllocatedBuffer());
 	}
 
@@ -183,33 +183,9 @@ namespace ECSEngine {
 	}
 
 	template<typename Allocator>
-	void LockAllocatorFunctionAllocator(void* _allocator) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Lock();
-	}
-
-	template<typename Allocator>
-	void UnlockAllocatorFunctionAllocator(void* _allocator) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Unlock();
-	}
-
-	template<typename Allocator>
 	size_t GetAllocatorCurrentUsageAllocator(const void* _allocator) {
 		const Allocator* allocator = (const Allocator*)_allocator;
 		return allocator->GetCurrentUsage();
-	}
-
-	template<typename Allocator>
-	void ExitAllocatorProfilingModeAllocator(void* _allocator) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->ExitProfilingMode();
-	}
-
-	template<typename Allocator>
-	void SetAllocatorProfilingModeAllocator(void* _allocator, const char* name) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->SetProfilingMode(name);
 	}
 
 	template<typename Allocator>
@@ -332,24 +308,8 @@ namespace ECSEngine {
 		ECS_JUMP_TABLE(IsAllocatorEmptyFunctionAllocator)
 	};
 
-	LockAllocatorFunction ECS_LOCK_ALLOCATOR_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(LockAllocatorFunctionAllocator)
-	};
-
-	UnlockAllocatorFunction ECS_UNLOCK_ALLOCATOR_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(UnlockAllocatorFunctionAllocator)
-	};
-
 	GetAllocatorCurrentUsageFunction ECS_ALLOCATOR_CURRENT_USAGE_FUNCTIONS[] = {
 		ECS_JUMP_TABLE(GetAllocatorCurrentUsageAllocator)
-	};
-
-	ExitAllocatorProfilingModeFunction ECS_ALLOCATOR_EXIT_PROFILING_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(ExitAllocatorProfilingModeAllocator)
-	};
-
-	SetAllocatorProfilingModeFunction ECS_ALLOCATOR_SET_PROFILING_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(SetAllocatorProfilingModeAllocator)
 	};
 
 	GetAllocatorRegionsFunction ECS_ALLOCATOR_GET_REGIONS_FUNCTIONS[] = {

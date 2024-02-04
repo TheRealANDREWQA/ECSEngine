@@ -3,7 +3,6 @@
 #include "../Core.h"
 #include <stdint.h>
 #include <malloc.h>
-#include "../Containers/Stream.h"
 #include "Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {

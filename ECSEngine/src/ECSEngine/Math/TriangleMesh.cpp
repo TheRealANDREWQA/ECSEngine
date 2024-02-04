@@ -2,6 +2,9 @@
 #include "TriangleMesh.h"
 #include "../Utilities/PointerUtilities.h"
 #include "MathHelpers.h"
+#include "Vector.h"
+#include "../Containers/SoA.h"
+#include "../Utilities/Utilities.h"
 
 namespace ECSEngine {
 
@@ -9,7 +12,7 @@ namespace ECSEngine {
 
 	void TriangleMesh::AddTriangleWithPoints(float3 point_a, float3 point_b, float3 point_c)
 	{
-		unsigned int point_index = positions.size;
+		unsigned int point_index = position_size;
 		AddPoint(point_a);
 		AddPoint(point_b);
 		AddPoint(point_c);
@@ -23,7 +26,7 @@ namespace ECSEngine {
 		AddPoint(point);
 		uint3 triangle = triangles[face_index];
 		triangles.RemoveSwapBack(face_index);
-		unsigned int last_position_index = positions.size - 1;
+		unsigned int last_position_index = position_size - 1;
 		AddTriangle({ triangle.x, triangle.y, last_position_index });
 		AddTriangle({ triangle.x, last_position_index, triangle.z });
 		AddTriangle({ last_position_index, triangle.y, triangle.z });
@@ -32,8 +35,8 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	void TriangleMesh::Copy(const TriangleMesh* other, AllocatorPolymorphic allocator, bool deallocate_existent) {
-		Initialize(allocator, other->positions.capacity, other->triangles.capacity);
-		positions.CopyOther(other->positions);
+		Initialize(allocator, other->position_capacity, other->triangles.capacity);
+		SoACopyDataOnly(other->position_size, position_x, other->position_x, position_y, other->position_y, position_z, other->position_z);
 		triangles.CopyOther(other->triangles);
 	}
 
@@ -41,8 +44,8 @@ namespace ECSEngine {
 
 	unsigned int TriangleMesh::FindPoint(float3 point) const
 	{
-		for (unsigned int index = 0; index < positions.size; index++) {
-			if (point == positions[index]) {
+		for (unsigned int index = 0; index < position_size; index++) {
+			if (point.x == position_x[index] && point.y == position_y[index] && point.z == position_z[index]) {
 				return index;
 			}
 		}
@@ -60,22 +63,52 @@ namespace ECSEngine {
 		return point_index;
 	}
 
+	float3 TriangleMesh::FurthestFrom(float3 direction) const
+	{
+		Vec8f max_distance = -FLT_MAX;
+		Vector3 max_points;
+		Vector3 vector_direction = Vector3().Splat(direction);
+
+		ApplySIMDConstexpr(position_size, Vector3::ElementCount(), [this, vector_direction, &max_distance, &max_points](auto is_full_iteration, size_t index, size_t count) {
+			Vector3 values = Vector3().LoadAdjacent(position_x, index, position_capacity);
+			Vec8f distance = Dot(values, vector_direction);
+			if constexpr (!is_full_iteration) {
+				Vec8fb select_mask = CastToFloat(SelectMaskLast<unsigned int>(Vec8f::size() - count));
+				distance = select(select_mask, Vec8f(-FLT_MAX), distance);
+			}
+			SIMDVectorMask is_greater = distance > max_distance;
+			max_distance = SelectSingle(is_greater, distance, max_distance);
+			max_points = Select(is_greater, values, max_points);
+		});
+
+		Vec8f max = HorizontalMax8(max_distance);
+		size_t index = HorizontalMax8Index(max_distance, max);
+		return max_points.At(index);
+	}
+
 	// --------------------------------------------------------------------------------------------------
 
 	void TriangleMesh::Initialize(AllocatorPolymorphic allocator, unsigned int _position_capacity, unsigned int _triangle_capacity) {
-		size_t allocation_size = positions.MemoryOf(_position_capacity) + triangles.MemoryOf(_triangle_capacity);
-		void* allocation = AllocateEx(allocator, allocation_size);
-		uintptr_t ptr = (uintptr_t)allocation;
-		positions.InitializeFromBuffer(ptr, 0, _position_capacity);
-		triangles.InitializeFromBuffer(ptr, 0, _triangle_capacity);
+		if (_position_capacity > 0) {
+			SoAInitialize(allocator, _position_capacity, &position_x, &position_y, &position_z);
+		}
+		else {
+			position_x = nullptr;
+			position_y = nullptr;
+			position_z = nullptr;
+		}
+		position_capacity = _position_capacity;
+		position_size = 0;
+		triangles.Initialize(allocator, 0, _triangle_capacity);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
 	void TriangleMesh::Deallocate(AllocatorPolymorphic allocator) {
-		if (positions.capacity > 0 || triangles.capacity > 0 && positions.buffer != nullptr) {
-			DeallocateEx(allocator, positions.buffer);
+		if (position_capacity > 0 && position_x != nullptr) {
+			DeallocateEx(allocator, position_x);
 		}
+		triangles.Deallocate(allocator);
 		memset(this, 0, sizeof(*this));
 	}
 
@@ -84,9 +117,9 @@ namespace ECSEngine {
 	void TriangleMesh::RetargetNormals(float3 center) {
 		for (unsigned int index = 0; index < triangles.size; index++) {
 			uint3 indices = triangles[index];
-			float3 a = positions[indices.x];
-			float3 b = positions[indices.y];
-			float3 c = positions[indices.z];
+			float3 a = GetPoint(indices.x);
+			float3 b = GetPoint(indices.y);
+			float3 c = GetPoint(indices.z);
 			if (IsTriangleFacing(a, b, c, center)) {
 				// Reverse the 1 and 2 indices
 				triangles[index] = { indices.x, indices.z, indices.y };
@@ -96,61 +129,51 @@ namespace ECSEngine {
 	
 	// --------------------------------------------------------------------------------------------------
 
-	void TriangleMesh::ReservePositions(AllocatorPolymorphic allocator, unsigned int count, bool resize_triangles) {
-		if (positions.size + count > positions.capacity) {
-			unsigned int resize_count = std::max((unsigned int)(positions.capacity * 1.5f), positions.size + count);
-			unsigned int new_triangle_capacity = triangles.capacity;
-			if (resize_triangles) {
-				new_triangle_capacity = triangles.capacity * 1.5f;
-			}
-			Resize(allocator, resize_count, new_triangle_capacity);
-		}
+	void TriangleMesh::ReservePositions(AllocatorPolymorphic allocator, unsigned int count) {
+		SoAReserve(allocator, position_size, position_capacity, count, &position_x, &position_y, &position_z);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	void TriangleMesh::ReserveTriangles(AllocatorPolymorphic allocator, unsigned int count, bool resize_positions) {
-		if (triangles.size + count > triangles.capacity) {
-			unsigned int resize_count = std::max((unsigned int)(triangles.capacity * 1.5f), triangles.size + count);
-			unsigned int new_position_capacity = positions.capacity;
-			if (resize_positions) {
-				new_position_capacity = positions.capacity * 1.5f;
-			}
-			Resize(allocator, new_position_capacity, resize_count);
-		}
+	void TriangleMesh::ReserveTriangles(AllocatorPolymorphic allocator, unsigned int count) {
+		triangles.Reserve(allocator, count);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
 	void TriangleMesh::Resize(AllocatorPolymorphic allocator, unsigned int new_position_capacity, unsigned int new_triangle_capacity) {
-		size_t new_size = positions.MemoryOf(new_position_capacity) + triangles.MemoryOf(new_triangle_capacity);
+		SoAResize(allocator, position_size, new_position_capacity, &position_x, &position_y, &position_z);
+		position_capacity = new_position_capacity;
+		position_size = std::min(position_size, new_position_capacity);
 
-		if (positions.capacity > 0 || triangles.capacity > 0) {
-			float3* new_positions = (float3*)ReallocateEx(allocator, positions.buffer, new_size);
-			uint3* new_triangles = (uint3*)OffsetPointer(new_positions, positions.MemoryOf(new_position_capacity));
-			
-			if (positions.buffer != new_positions) {
-				// Do this only if the buffer is changed
-				unsigned int copy_size = std::min(positions.size, new_position_capacity);
-				memcpy(new_positions, positions.buffer, positions.MemoryOf(copy_size));
-			}
+		triangles.Resize(allocator, new_triangle_capacity);
+	}
 
-			// We must use memmove here since if the block is resized, the triangles
-			// Can alias themselves
-			unsigned int copy_size = std::min(triangles.size, new_triangle_capacity);
-			memmove(new_triangles, triangles.buffer, triangles.MemoryOf(copy_size));
-			positions.buffer = new_positions;
-			triangles.buffer = new_triangles;
-		}
-		else {
-			positions.buffer = (float3*)AllocateEx(allocator, new_size);
-			triangles.buffer = (uint3*)OffsetPointer(positions.buffer, positions.MemoryOf(new_position_capacity));
-		}
+	// --------------------------------------------------------------------------------------------------
 
-		positions.capacity = new_position_capacity;
-		triangles.capacity = new_triangle_capacity;
-		positions.size = std::min(positions.size, new_position_capacity);
-		triangles.size = std::min(triangles.size, new_triangle_capacity);
+	void TriangleMesh::SetPositionsBuffer(float* buffer)
+	{
+		uintptr_t ptr = (uintptr_t)buffer;
+		SoAInitializeFromBuffer(position_capacity, ptr, &position_x, &position_y, &position_z);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	TriangleMesh ECS_VECTORCALL TriangleMesh::Transform(Matrix matrix, float* position_storage) const
+	{
+		TriangleMesh transformed_mesh;
+
+		transformed_mesh.SetPositionsBuffer(position_storage);
+		transformed_mesh.triangles = triangles;
+
+		TransformPoints(matrix, position_x, position_size, position_storage);
+		return transformed_mesh;
+	}
+
+	TriangleMesh ECS_VECTORCALL TriangleMesh::Transform(Matrix matrix, AllocatorPolymorphic allocator) const
+	{
+		float* position_storage = (float*)AllocateEx(allocator, sizeof(float3) * position_size);
+		return Transform(matrix, position_storage);
 	}
 
 	// --------------------------------------------------------------------------------------------------

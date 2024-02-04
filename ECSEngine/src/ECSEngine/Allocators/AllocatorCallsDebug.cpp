@@ -248,7 +248,7 @@ namespace ECSEngine {
 
 		// Use a simple manual file write
 		size_t file_write_size = FileWriteSize();
-		void* allocation = malloc(file_write_size);
+		void* allocation = Malloc(file_write_size);
 		CapacityStream<char> text_stream = { allocation, 0, (unsigned int)file_write_size };
 		
 		AllocatorManager.allocators.ForEachConst([&](const TrackedAllocator& allocator, const void* allocator_pointer) {
@@ -257,7 +257,7 @@ namespace ECSEngine {
 
 		ECS_HARD_ASSERT(WriteToFile(file_to_write_handle, text_stream.ToStream()) != -1);
 
-		free(allocation);
+		Free(allocation);
 		if (log_file) {
 			CloseFile(file_to_write_handle);
 		}
@@ -288,7 +288,7 @@ namespace ECSEngine {
 				if (tracked_allocator_ptr->queue_allocations.GetSize() == tracked_allocator_ptr->queue_allocations.GetCapacity()) {
 					if (AllocatorManager.write_to_file_on_fill) {
 						size_t allocation_size = AllocatorFileWriteSize(*tracked_allocator_ptr);
-						void* file_allocation = malloc(allocation_size);
+						void* file_allocation = Malloc(allocation_size);
 
 						CapacityStream<char> text = { file_allocation, 0, (unsigned int)allocation_size };
 						DebugAllocatorManagerWriteAllocatorState(&text, allocator, *tracked_allocator_ptr);
@@ -301,7 +301,7 @@ namespace ECSEngine {
 
 						// Deactivate the read exit
 						exit_read = false;
-						free(file_allocation);
+						Free(file_allocation);
 						// We can clear the allocations now
 						tracked_allocator_ptr->queue_allocations.Reset();
 						tracked_allocator_ptr->queue_allocations.PushNonAtomic(allocation);
