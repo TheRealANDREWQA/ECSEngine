@@ -586,6 +586,28 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		ECS_INT_TYPE BasicTypeToIntType(ReflectionBasicFieldType type)
+		{
+			switch (type) {
+			case ReflectionBasicFieldType::Int8:
+			case ReflectionBasicFieldType::UInt8:
+				return ECS_INT8;
+			case ReflectionBasicFieldType::Int16:
+			case ReflectionBasicFieldType::UInt16:
+				return ECS_INT16;
+			case ReflectionBasicFieldType::Int32:
+			case ReflectionBasicFieldType::UInt32:
+				return ECS_INT32;
+			case ReflectionBasicFieldType::Int64:
+			case ReflectionBasicFieldType::UInt64:
+				return ECS_INT64;
+			}
+
+			return ECS_INT_TYPE_COUNT;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionType::DeallocateCoalesced(AllocatorPolymorphic allocator) const
 		{
 			ECSEngine::Deallocate(allocator, name.buffer);

@@ -151,8 +151,11 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	void TriangleMesh::SetPositionsBuffer(float* buffer)
+	void TriangleMesh::SetPositionsBuffer(float* buffer, unsigned int size, unsigned int capacity)
 	{
+		position_size = size;
+		position_capacity = capacity;
+
 		uintptr_t ptr = (uintptr_t)buffer;
 		SoAInitializeFromBuffer(position_capacity, ptr, &position_x, &position_y, &position_z);
 	}
@@ -163,7 +166,7 @@ namespace ECSEngine {
 	{
 		TriangleMesh transformed_mesh;
 
-		transformed_mesh.SetPositionsBuffer(position_storage);
+		transformed_mesh.SetPositionsBuffer(position_storage, position_size, position_capacity);
 		transformed_mesh.triangles = triangles;
 
 		TransformPoints(matrix, position_x, position_size, position_storage);

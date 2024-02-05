@@ -576,6 +576,16 @@ namespace ECSEngine {
 		// Byte size of the size field
 		ECSENGINE_API void SetReflectionPointerSoASize(const ReflectionType* type, size_t soa_index, void* data, size_t value);
 
+		// Returns the offset from the current field info to the size field
+		ECS_INLINE short GetReflectionFieldPointerSoASizeRelativeOffset(const ReflectionFieldInfo& info) {
+			if (info.soa_size_pointer_offset > info.pointer_offset) {
+				return info.soa_size_pointer_offset - info.pointer_offset;
+			}
+			else {
+				return info.pointer_offset - info.soa_size_pointer_offset;
+			}
+		}
+
 		ECSENGINE_API ReflectionBasicFieldType ConvertBasicTypeMultiComponentToSingle(ReflectionBasicFieldType type);
 
 		// It will offset the data in order to reach the stream field

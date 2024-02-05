@@ -16,9 +16,12 @@ using namespace ECSEngine;
 // ----------------------------------------------------------------------------------------------
 
 #define PREFAB_CHUNK_INDEX 0
-#define PREFAB_CHUNK_VERSION 0
+#define PREFAB_CHUNK_VERSION 1
 
-// Immediately after the chunk header the path sizes are written (as ushorts)
+// Immediately after the chunk header the ids are written - we need those in case
+// There are gaps in between the ids or from the iteration order inside the entity manager
+// and we need to update the entities that are still referencing the previous id
+// After which the path sizes are written (as ushorts)
 // And then the paths themselves
 
 struct ScenePrefabChunkHeader {
@@ -56,6 +59,9 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 		prefab_components[prefab_component_count++] = (PrefabComponent*)data;
 	});
 
+	unsigned int* id_remapping = (unsigned int*)ptr;
+	ptr += sizeof(unsigned int) * header.id_count;
+
 	const unsigned short* path_sizes = (const unsigned short*)ptr;
 	ptr += sizeof(unsigned short) * header.id_count;
 
@@ -78,7 +84,7 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 		ptr += sizeof(wchar_t) * path_sizes[index];
 
 		unsigned int existing_id = AddPrefabID(editor_state, current_path);
-		update_id((unsigned int)index, existing_id);
+		update_id(id_remapping[index], existing_id);
 	}
 
 	// Make the deallocation
@@ -102,13 +108,16 @@ static bool SaveScenePrefabChunk(SaveSceneChunkFunctionData* function_data) {
 		}
 	});
 
-	size_t initial_header_allocation_size = sizeof(unsigned short) * prefabs_in_use.size + sizeof(ScenePrefabChunkHeader);
+	size_t initial_header_allocation_size = (sizeof(unsigned short) + sizeof(unsigned int)) * prefabs_in_use.size + sizeof(ScenePrefabChunkHeader);
 	void* initial_header_allocation = editor_state->editor_allocator->Allocate(initial_header_allocation_size);
 	ScenePrefabChunkHeader* header = (ScenePrefabChunkHeader*)initial_header_allocation;
 	header->version = PREFAB_CHUNK_VERSION;
 	header->id_count = prefabs_in_use.size;
 
-	unsigned short* path_sizes = (unsigned short*)OffsetPointer(header, sizeof(*header));
+	unsigned int* scene_ids = (unsigned int*)OffsetPointer(header, sizeof(*header));
+	prefabs_in_use.CopyTo(scene_ids);
+
+	unsigned short* path_sizes = (unsigned short*)OffsetPointer(scene_ids, sizeof(unsigned int) * prefabs_in_use.size);
 	size_t total_path_size = 0;
 	// We need to write the sizes first, and then the path characters
 	for (size_t index = 0; index < prefabs_in_use.size; index++) {

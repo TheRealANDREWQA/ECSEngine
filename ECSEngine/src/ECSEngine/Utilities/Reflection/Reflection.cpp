@@ -4990,7 +4990,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 			else if (info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 				return_value.buffer = *(void**)stream_field;
-				const void* original_data = OffsetPointer(data, -(int64_t)info.pointer_offset);
+				const void* original_data = OffsetPointer(stream_field, -(int64_t)info.pointer_offset);
 				return_value.size = GetReflectionFieldPointerSoASize(info, original_data);
 				return_value.capacity = return_value.size;
 				return_value.allocator = { nullptr };
@@ -5198,7 +5198,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			else if (info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 				void** pointer = (void**)stream_field;
 				*pointer = stream_data.buffer;
-				SetReflectionFieldPointerSoASize(info, OffsetPointer(data, -(int64_t)info.pointer_offset), stream_data.size);
+				SetReflectionFieldPointerSoASize(info, OffsetPointer(stream_field, -(int64_t)info.pointer_offset), stream_data.size);
 			}
 			if constexpr (basic_array) {
 				if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {

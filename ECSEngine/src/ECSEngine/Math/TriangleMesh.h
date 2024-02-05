@@ -57,7 +57,7 @@ namespace ECSEngine {
 		void Resize(AllocatorPolymorphic allocator, unsigned int new_position_capacity, unsigned int new_triangle_capacity);
 
 		// Changes the positions SoA buffer
-		void SetPositionsBuffer(float* buffer);
+		void SetPositionsBuffer(float* buffer, unsigned int size, unsigned int capacity);
 
 		// Only the positions are changed. The triangle indices will be referenced
 		TriangleMesh ECS_VECTORCALL Transform(Matrix matrix, float* position_storage) const;
@@ -71,6 +71,8 @@ namespace ECSEngine {
 		unsigned int position_size;
 		unsigned int position_capacity;
 		CapacityStream<uint3> triangles;
+
+		ECS_SOA_REFLECT(positions, position_size, position_capacity, position_x, position_y, position_z);
 	};
 
 	//ECSENGINE_API 

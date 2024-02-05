@@ -72,11 +72,11 @@ namespace ECSEngine {
 		// Copy the components now
 		for (size_t index = 0; index < m_components.count; index++) {
 			unsigned short component_byte_size = m_infos[m_components.indices[index].value].size;
-			memcpy(m_buffers[index], other->m_buffers[index], component_byte_size * other_size);
 			if (deep_copy) {
 				// If the component has buffers, we need to make a deep copy of them
 				bool has_copy_function = m_infos[m_components.indices[index]].copy_function != nullptr;
 				if (has_copy_function) {
+					// The copy function must copy everything
 					void* current_buffer = m_buffers[index];
 					size_t temporary_component_storage[256];
 					ECS_ASSERT(sizeof(temporary_component_storage) >= component_byte_size);
@@ -86,6 +86,12 @@ namespace ECSEngine {
 						m_infos[m_components.indices[index]].CallCopyFunction(current_component, temporary_component_storage, false);
 					}
 				}
+				else {
+					memcpy(m_buffers[index], other->m_buffers[index], component_byte_size * other_size);
+				}
+			}
+			else {
+				memcpy(m_buffers[index], other->m_buffers[index], component_byte_size * other_size);
 			}
 		}
 	}

@@ -11695,9 +11695,11 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UIDrawer::GetRenderZone() const {
+			// For the horizontal one, at the moment it seems that not subtracting the render_slider_vertical_size
+			// Produces better results in some edge cases
 			float horizontal_region_difference;
-			horizontal_region_difference = region_scale.x - 2 * layout.next_row_padding - system->m_descriptors.misc.render_slider_vertical_size + 0.001f;
-			horizontal_region_difference += no_padding_for_render_sliders ? system->m_descriptors.misc.render_slider_vertical_size : 0.0f;
+			horizontal_region_difference = region_scale.x - 2 * layout.next_row_padding + 0.001f;
+			//horizontal_region_difference += no_padding_for_render_sliders ? system->m_descriptors.misc.render_slider_vertical_size : 0.0f;
 			horizontal_region_difference += no_padding_render_region ? 2 * layout.next_row_padding : 0.0f;
 
 			float vertical_region_difference;

@@ -388,6 +388,22 @@ namespace ECSEngine {
 		// ------------- Structures for the draw part - They need to have as the first member a pointer to the field value ----------------
 
 		struct UIReflectionUserDefinedData {
+			ECS_INLINE Stream<char> GetTypeName() const {
+				Stream<char> separator = FindFirstToken(type_and_field_name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				ECS_ASSERT(separator.size > 0, "Invalid UIReflectionUserDefinedData type_and_field_name");
+				return separator.AdvanceReturn(strlen(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT));
+			}
+
+			ECS_INLINE Stream<char> GetFieldName() const {
+				Stream<char> separator = FindFirstToken(type_and_field_name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				ECS_ASSERT(separator.size > 0, "Invalid UIReflectionUserDefinedData type_and_field_name");
+				return type_and_field_name.StartDifference(separator);
+			}
+
+			ECS_INLINE UIReflectionType* GetType() const {
+				return ui_drawer->GetType(GetTypeName());
+			}
+
 			// We don't need this pointer, but we need to have one
 			// Since, when using BindInstancePtrs, the first field will always
 			void* field_pointer;
@@ -403,24 +419,27 @@ namespace ECSEngine {
 
 		// All the streams struct contain this as the first member variable
 		struct UIInstanceFieldStream {
+			// Call this only if has_size is true
+			size_t GetTargetSize() const {
+				return GetIntValueUnsigned(OffsetPointer(target_memory, size_offset), (ECS_INT_TYPE)target_size_type);
+			}
+
+			// Call this only if has_capacity is true
+			size_t GetTargetCapacity() const {
+				return GetIntValueUnsigned(OffsetPointer(target_memory, capacity_offset), (ECS_INT_TYPE)target_capacity_type);
+			}
+
 			// Mirrors the fields inside the stream into the target
 			// Needs to be used in conjunction with CopyTarget()
 			void WriteTarget() {
 				// It is ok to alias the resizable stream with the capacity stream
 				*target_memory = capacity->buffer;
 
-				if (target_size_t_size) {
-					size_t* size_ptr = (size_t*)OffsetPointer(target_memory, sizeof(void*));
-					*size_ptr = capacity->size;
+				if (has_size) {
+					SetIntValueUnsigned(OffsetPointer(target_memory, size_offset), (ECS_INT_TYPE)target_size_type, capacity->size);
 				}
-				else if (target_uint_size) {
-					unsigned int* size_ptr = (unsigned int*)OffsetPointer(target_memory, sizeof(void*));
-					*size_ptr = capacity->size;
-				}
-
-				if (target_capacity) {
-					unsigned int* capacity_ptr = (unsigned int*)OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
-					*capacity_ptr = capacity->capacity;
+				if (has_capacity) {
+					SetIntValueUnsigned(OffsetPointer(target_memory, capacity_offset), (ECS_INT_TYPE)target_capacity_type, capacity->capacity);
 				}
 
 				previous_size = capacity->size;
@@ -431,21 +450,17 @@ namespace ECSEngine {
 			void CopyTarget() {
 				if (!is_resizable) {
 					if (previous_size == capacity->size) {
-						if (target_size_t_size) {
-							capacity->size = *(size_t*)OffsetPointer(target_memory, sizeof(void*));
+						if (has_size) {
+							capacity->size = GetTargetSize();
 						}
-						else if (target_uint_size) {
-							capacity->size = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*));
-						}
-
-						if (target_capacity) {
-							capacity->capacity = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
+						if (has_capacity) {
+							capacity->capacity = GetTargetCapacity();
 						}
 					}
 				}
 				else {
-					if (target_capacity) {
-						unsigned int current_capacity = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
+					if (has_capacity) {
+						unsigned int current_capacity = GetTargetCapacity();
 						if (current_capacity != resizable->capacity) {
 							resizable->ResizeNoCopy(current_capacity, element_byte_size);
 							memcpy(resizable->buffer, *target_memory, current_capacity * element_byte_size);
@@ -454,11 +469,8 @@ namespace ECSEngine {
 
 					unsigned int size = resizable->size;
 					if (previous_size == capacity->size) {
-						if (target_size_t_size) {
-							size = *(size_t*)OffsetPointer(target_memory, sizeof(void*));
-						}
-						else if (target_uint_size) {
-							size = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*));
+						if (has_size) {
+							size = GetTargetSize();
 						}
 
 						if (size > resizable->capacity) {
@@ -473,13 +485,11 @@ namespace ECSEngine {
 			// Should be used when wanting to keep a separate UI stream from the targeted stream
 			void CopyTargetStandalone() {
 				unsigned int target_size = 0;
-				if (target_size_t_size) {
-					target_size = *(size_t*)OffsetPointer(target_memory, sizeof(void*));
-				}
-				else if (target_uint_size) {
-					target_size = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*));
+				if (has_size) {
+					target_size = GetTargetSize();
 				}
 
+				unsigned int unsigned_element_byte_size = element_byte_size;
 				if (previous_size == capacity->size) {
 					if (!is_resizable) {
 						target_size = std::min(target_size, capacity->capacity);
@@ -489,40 +499,40 @@ namespace ECSEngine {
 						if (standalone_data.size != target_size) {
 							// It changed
 							capacity->size = target_size;
-							memcpy(capacity->buffer, *target_memory, element_byte_size * target_size);
+							memcpy(capacity->buffer, *target_memory, unsigned_element_byte_size * target_size);
 							// Resize the standalone data
-							standalone_data.ResizeNoCopy(target_size, element_byte_size);
+							standalone_data.ResizeNoCopy(target_size, unsigned_element_byte_size);
 							standalone_data.size = target_size;
-							memcpy(standalone_data.buffer, *target_memory, element_byte_size * target_size);
+							memcpy(standalone_data.buffer, *target_memory, unsigned_element_byte_size * target_size);
 						}
 						else {
-							if (memcmp(standalone_data.buffer, *target_memory, element_byte_size * target_size) != 0) {
+							if (memcmp(standalone_data.buffer, *target_memory, unsigned_element_byte_size * target_size) != 0) {
 								// It changed
 								capacity->size = target_size;
-								memcpy(capacity->buffer, *target_memory, element_byte_size * target_size);
+								memcpy(capacity->buffer, *target_memory, unsigned_element_byte_size * target_size);
 
 								// Copy the new data
-								memcpy(standalone_data.buffer, *target_memory, element_byte_size * target_size);
+								memcpy(standalone_data.buffer, *target_memory, unsigned_element_byte_size * target_size);
 							}
 						}
 					}
 					else {
 						if (target_size != standalone_data.size) {
 							// It changed
-							resizable->ResizeNoCopy(target_size, element_byte_size);
-							memcpy(resizable->buffer, *target_memory, target_size * element_byte_size);
-							standalone_data.ResizeNoCopy(target_size, element_byte_size);
+							resizable->ResizeNoCopy(target_size, unsigned_element_byte_size);
+							resizable->size = target_size;
+							memcpy(resizable->buffer, *target_memory, target_size * unsigned_element_byte_size);
+							standalone_data.ResizeNoCopy(target_size, unsigned_element_byte_size);
 							standalone_data.size = target_size;
-							memcpy(standalone_data.buffer, *target_memory, target_size * element_byte_size);
+							memcpy(standalone_data.buffer, *target_memory, target_size * unsigned_element_byte_size);
 						}
 						else {
-							if (memcmp(standalone_data.buffer, *target_memory, element_byte_size * target_size) != 0) {
+							if (memcmp(standalone_data.buffer, *target_memory, unsigned_element_byte_size * target_size) != 0) {
 								// It changed
-								resizable->size = target_size;
-								memcpy(resizable->buffer, *target_memory, element_byte_size * target_size);
+								memcpy(resizable->buffer, *target_memory, unsigned_element_byte_size * target_size);
 
 								// Copy the new data
-								memcpy(standalone_data.buffer, *target_memory, element_byte_size * target_size);
+								memcpy(standalone_data.buffer, *target_memory, unsigned_element_byte_size * target_size);
 							}
 						}
 					}
@@ -541,10 +551,18 @@ namespace ECSEngine {
 			};
 			// This is the address of the field of the reflected type
 			void** target_memory;
-			bool target_size_t_size : 1;
-			bool target_uint_size : 1;
-			bool target_capacity : 1;
-			bool is_resizable : 1;
+			unsigned char target_size_type : 3;
+			unsigned char target_capacity_type : 3;
+			unsigned char is_resizable : 1;
+			unsigned char has_capacity : 1;
+			// This can be set to false by BasicArrayType, where there is no
+			// Inherent size
+			unsigned char has_size : 1;
+			unsigned char use_standalone_mode : 1;
+			// We need this size offset for the PointerSoA case
+			short size_offset;
+			// We need this size offset for the PointerSoA case
+			short capacity_offset;
 			unsigned short element_byte_size;
 			// This is the size of the resizable/capacity that was recorded before
 			// Calling Update(). It is used to determine if the change was done from the UI
@@ -715,6 +733,10 @@ namespace ECSEngine {
 
 		ECS_INLINE bool IsStreamInput(UIReflectionElement index) {
 			return index == UIReflectionElement::TextInput || index == UIReflectionElement::FileInput || index == UIReflectionElement::DirectoryInput;
+		}
+
+		ECS_INLINE bool IsEmbeddedUserDefined(const UIReflectionTypeField* field) {
+			return field->element_index == UIReflectionElement::UserDefined && field->stream_type == UIReflectionStreamType::None;
 		}
 
 		static size_t GetTypeByteSize(const UIReflectionType* type, unsigned int field_index) {
@@ -1063,11 +1085,18 @@ namespace ECSEngine {
 			}
 			else {
 				UIReflectionStreamBaseData* base_data = (UIReflectionStreamBaseData*)data;
-				base_data->stream.CopyTarget();
+				if (!base_data->stream.use_standalone_mode) {
+					base_data->stream.CopyTarget();
+				}
+				else {
+					base_data->stream.CopyTargetStandalone();
+				}
 
 				UI_REFLECTION_FIELD_STREAM_DRAW[(unsigned int)element_index](&draw_data);
 
-				base_data->stream.WriteTarget();
+				if (!base_data->stream.use_standalone_mode) {
+					base_data->stream.WriteTarget();
+				}
 				drawer.NextRow(-1.0f);
 			}
 		}
@@ -1431,11 +1460,8 @@ namespace ECSEngine {
 			UIReflectionUserDefinedData* data = (UIReflectionUserDefinedData*)draw_data->data;
 			UIReflectionInstance* instance = data->instance;
 
-			// The name is stored with a suffix in order to avoid hash table collisions.
-			Stream<char> string_pattern = FindFirstToken(instance->name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-
 			Stream<char> original_instance_name = instance->name;
-			instance->name = { instance->name.buffer, PointerDifference(string_pattern.buffer, instance->name.buffer) };
+			instance->name = data->GetFieldName();
 			UIReflectionDrawInstanceOptions options;
 			if (draw_data->draw_options) {
 				options = *draw_data->draw_options;
@@ -2078,14 +2104,14 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::AssignInstanceResizableAllocator(Stream<char> instance_name, AllocatorPolymorphic allocator, bool allocate_inputs)
+		void UIReflectionDrawer::AssignInstanceResizableAllocator(Stream<char> instance_name, AllocatorPolymorphic allocator, bool allocate_inputs, bool recurse)
 		{
-			AssignInstanceResizableAllocator(GetInstance(instance_name), allocator, allocate_inputs);
+			AssignInstanceResizableAllocator(GetInstance(instance_name), allocator, allocate_inputs, recurse);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::AssignInstanceResizableAllocator(UIReflectionInstance* instance, AllocatorPolymorphic allocator, bool allocate_inputs)
+		void UIReflectionDrawer::AssignInstanceResizableAllocator(UIReflectionInstance* instance, AllocatorPolymorphic allocator, bool allocate_inputs, bool recurse)
 		{
 			const size_t INPUTS_ALLOCATION_SIZE = 256;
 
@@ -2106,11 +2132,15 @@ namespace ECSEngine {
 						}
 						data->stream.resizable->allocator = allocator;
 						data->stream.is_resizable = true;
-						data->stream.WriteTarget();
+						if (!data->stream.use_standalone_mode) {
+							data->stream.WriteTarget();
+						}
 					}
 					else if (allocate_inputs) {
 						data->stream.capacity->Initialize(allocator, INPUTS_ALLOCATION_SIZE);
-						data->stream.WriteTarget();
+						if (!data->stream.use_standalone_mode) {
+							data->stream.WriteTarget();
+						}
 					}
 				}
 				else if (type->fields[index].stream_type == UIReflectionStreamType::Resizable) {
@@ -2126,7 +2156,17 @@ namespace ECSEngine {
 					}
 					data->stream.resizable->allocator = allocator;
 					data->stream.is_resizable = true;
-					data->stream.WriteTarget();
+					if (!data->stream.use_standalone_mode) {
+						data->stream.WriteTarget();
+					}
+				}
+				else {
+					if (recurse) {
+						if (IsEmbeddedUserDefined(&type->fields[index])) {
+							UIReflectionUserDefinedData* user_defined_data = (UIReflectionUserDefinedData*)instance->data[index];
+							AssignInstanceResizableAllocator(user_defined_data->instance, allocator, allocate_inputs, recurse);
+						}
+					}
 				}
 			}
 		}
@@ -2388,31 +2428,115 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		UIInstanceFieldStream UIReflectionDrawerCreateCapacityUIInstanceFieldStream(
-			UIReflectionDrawer* drawer, 
-			ReflectionStreamFieldType stream_type, 
+		static UIInstanceFieldStream UIReflectionDrawerCreateResizableUIInstanceFieldStream(
+			UIReflectionDrawer* drawer,
+			const ReflectionField& reflection_field,
 			uintptr_t ptr,
-			unsigned int basic_type_count,
 			unsigned int element_byte_size,
 			bool disable_writes
 		) {
+			ReflectionStreamFieldType stream_type = reflection_field.info.stream_type;
+
+			UIInstanceFieldStream field_value;
+
+			field_value.has_capacity = false;
+			field_value.has_size = false;
+			field_value.target_capacity_type = ECS_INT_TYPE_COUNT;
+			field_value.target_size_type = ECS_INT_TYPE_COUNT;
+			field_value.target_memory = (void**)ptr;
+			field_value.is_resizable = true;
+
+			// The resizable stream can be safely aliased
+			if (stream_type == ReflectionStreamFieldType::ResizableStream) {
+				field_value.resizable = (ResizableStream<void>*)ptr;
+				field_value.has_capacity = true;
+				field_value.has_size = true;
+				field_value.size_offset = offsetof(ResizableStream<void>, size);
+				field_value.capacity_offset = offsetof(ResizableStream<void>, capacity);
+				field_value.target_size_type = ECS_INT32;
+				field_value.target_capacity_type = ECS_INT32;
+			}
+			// Only pointers and streams can be used with this - basic type array doesn't make sense since
+			// its capacity is bound at compile time
+			else if (stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::Stream
+				|| stream_type == ReflectionStreamFieldType::PointerSoA) {
+				field_value.resizable = (ResizableStream<void>*)drawer->allocator->Allocate(sizeof(ResizableStream<void>));
+				field_value.resizable->buffer = nullptr;
+				field_value.resizable->size = 0;
+				field_value.resizable->capacity = 0;
+				field_value.resizable->allocator = { nullptr };
+
+				if (stream_type == ReflectionStreamFieldType::Stream) {
+					field_value.has_size = true;
+					field_value.target_size_type = ECS_INT64;
+					field_value.size_offset = offsetof(Stream<void>, size);
+				}
+				else if (stream_type == ReflectionStreamFieldType::CapacityStream) {
+					field_value.has_size = true;
+					field_value.target_size_type = ECS_INT32;
+					field_value.size_offset = offsetof(CapacityStream<void>, size);
+							  
+					field_value.has_capacity = true;
+					field_value.target_capacity_type = ECS_INT32;
+					field_value.capacity_offset = offsetof(CapacityStream<void>, capacity);
+				}
+				else if (stream_type == ReflectionStreamFieldType::PointerSoA) {
+					field_value.has_size = true;
+					field_value.target_size_type = BasicTypeToIntType(reflection_field.info.soa_size_basic_type);
+					field_value.size_offset = GetReflectionFieldPointerSoASizeRelativeOffset(reflection_field.info);
+				}
+				else {
+					ECS_ASSERT(false, "Unhandled reflection stream type for creating UI resizable stream");
+				}
+
+				// Write the stream now
+				//field_value.WriteTarget();
+			}
+
+			field_value.previous_size = 0;
+			field_value.element_byte_size = element_byte_size;
+			field_value.CopyTarget();
+			if (!disable_writes) {
+				field_value.standalone_data.Initialize({ nullptr }, 0);
+				field_value.use_standalone_mode = false;
+			}
+			else {
+				field_value.standalone_data.Initialize(drawer->allocator, 0);
+				field_value.use_standalone_mode = true;
+			}
+
+			return field_value;
+		}
+
+		static UIInstanceFieldStream UIReflectionDrawerCreateCapacityUIInstanceFieldStream(
+			UIReflectionDrawer* drawer, 
+			const ReflectionField& reflection_field, 
+			uintptr_t ptr,
+			unsigned int element_byte_size,
+			bool disable_writes
+		) {
+			ReflectionStreamFieldType stream_type = reflection_field.info.stream_type;
+
 			UIInstanceFieldStream field_value;
 
 			field_value.target_memory = (void**)ptr;
-			field_value.target_capacity = false;
-			field_value.target_size_t_size = false;
-			field_value.target_uint_size = false;
+			field_value.has_capacity = false;
 			field_value.is_resizable = false;
+			field_value.has_size = false;
+			field_value.target_size_type = ECS_INT_TYPE_COUNT;
+			field_value.target_capacity_type = ECS_INT_TYPE_COUNT;
 			// Resizable streams can be safely aliased with capacity streams since the layout is identical, except the resizable stream has an allocator at the end
 			if (stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream) {
 				field_value.capacity = (CapacityStream<void>*)ptr;
-				// The fields target capacity and target uint size should not be set because they will alias directly the memory. 
-				// No need to mirror
+				field_value.has_size = true;
+				field_value.has_capacity = true;
+				field_value.size_offset = offsetof(CapacityStream<void>, size);
+				field_value.capacity_offset = offsetof(CapacityStream<void>, capacity);
+				field_value.target_size_type = ECS_INT32;
+				field_value.target_capacity_type = ECS_INT32;
 			}
 			else {
-				if (stream_type == ReflectionStreamFieldType::Pointer || stream_type == ReflectionStreamFieldType::PointerSoA 
-					|| stream_type == ReflectionStreamFieldType::Stream)
-				{
+				if (stream_type == ReflectionStreamFieldType::PointerSoA || stream_type == ReflectionStreamFieldType::Stream) {
 					CapacityStream<void>* allocation = (CapacityStream<void>*)drawer->allocator->Allocate(sizeof(CapacityStream<void>));
 					field_value.capacity = allocation;
 
@@ -2420,7 +2544,15 @@ namespace ECSEngine {
 					allocation->size = 0;
 					allocation->capacity = 0;
 
-					field_value.target_size_t_size = stream_type == ReflectionStreamFieldType::Stream;
+					if (stream_type == ReflectionStreamFieldType::Stream) {
+						field_value.target_size_type = ECS_INT64;
+						field_value.size_offset = offsetof(Stream<void>, size);
+					}
+					else {
+						field_value.target_size_type = BasicTypeToIntType(reflection_field.info.soa_size_basic_type);
+						field_value.size_offset = GetReflectionFieldPointerSoASizeRelativeOffset(reflection_field.info);
+					}
+					field_value.has_size = true;
 				}
 				else if (stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 					CapacityStream<void>* allocation = (CapacityStream<void>*)drawer->allocator->Allocate(sizeof(CapacityStream<void>));
@@ -2428,7 +2560,10 @@ namespace ECSEngine {
 
 					allocation->buffer = *(void**)ptr;
 					allocation->size = 0;
-					allocation->capacity = basic_type_count;
+					allocation->capacity = reflection_field.info.basic_type_count;
+				}
+				else {
+					ECS_ASSERT(false, "Invalid stream type for UIReflectionCapacity stream");
 				}
 			}
 
@@ -2437,9 +2572,11 @@ namespace ECSEngine {
 			field_value.CopyTarget();
 			if (!disable_writes) {
 				field_value.standalone_data.Initialize({ nullptr }, 0);
+				field_value.use_standalone_mode = false;
 			}
 			else {
 				field_value.standalone_data.Initialize(drawer->allocator, 0);
+				field_value.use_standalone_mode = true;
 			}
 
 			return field_value;
@@ -2511,13 +2648,11 @@ namespace ECSEngine {
 						case UIReflectionElement::FileInput:
 						case UIReflectionElement::TextInput:
 						{
-							ReflectionStreamFieldType reflect_stream_type = reflect->fields[reflected_type_index].info.stream_type;
 							UIInstanceFieldStream* field_value = (UIInstanceFieldStream*)instance->data[index];
 							*field_value = UIReflectionDrawerCreateCapacityUIInstanceFieldStream(
 								this, 
-								reflect_stream_type,
+								reflect->fields[reflected_type_index],
 								ptr, 
-								reflect->fields[reflected_type_index].info.basic_type_count,
 								field_value->element_byte_size,
 								HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
 							);
@@ -2553,9 +2688,7 @@ namespace ECSEngine {
 
 							// In order to determine the type name, just look for the separator from the type
 							// and whatever its after it will be the type
-							Stream<char> type_name = FindFirstToken(data->type_and_field_name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-							type_name.buffer += ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT;
-							type_name.size -= ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT;
+							Stream<char> type_name = data->GetTypeName();
 
 							data->instance = CreateInstance(nested_instance_name, type_name);
 							BindInstancePtrs(data->instance, (void*)ptr);
@@ -2585,42 +2718,20 @@ namespace ECSEngine {
 					if (type->fields[index].stream_type == UIReflectionStreamType::Capacity) {
 						*field_value = UIReflectionDrawerCreateCapacityUIInstanceFieldStream(
 							this, 
-							reflect_stream_type,
-							ptr, 
-							reflect->fields[reflected_type_index].info.basic_type_count,
+							reflect->fields[reflected_type_index],
+							ptr,
 							field_value->element_byte_size,
 							HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
 						);
 					}
 					else {
-						field_value->target_capacity = false;
-						field_value->target_size_t_size = false;
-						field_value->target_uint_size = false;
-						field_value->target_memory = (void**)ptr;
-
-						// The resizable stream can be safely aliased
-						if (reflect_stream_type == ReflectionStreamFieldType::ResizableStream) {
-							field_value->resizable = (ResizableStream<void>*)ptr;
-							// No need to mirror the results, keep the boolean bit fields cleared
-						}
-						// Only pointers and streams can be used with this - basic type array doesn't make sense since
-						// its capacity is bound at compile time
-						else if (reflect_stream_type == ReflectionStreamFieldType::Pointer || reflect_stream_type == ReflectionStreamFieldType::CapacityStream
-							|| reflect_stream_type == ReflectionStreamFieldType::Stream || reflect_stream_type == ReflectionStreamFieldType::PointerSoA) {
-							field_value->resizable = (ResizableStream<void>*)allocator->Allocate(sizeof(ResizableStream<void>));
-							field_value->resizable->buffer = nullptr;
-							field_value->resizable->size = 0;
-							field_value->resizable->capacity = 0;
-							field_value->resizable->allocator = { nullptr };
-							
-							bool set_capacity = reflect_stream_type == ReflectionStreamFieldType::CapacityStream;
-							field_value->target_size_t_size = reflect_stream_type == ReflectionStreamFieldType::Stream;
-							field_value->target_uint_size = set_capacity;
-							field_value->target_capacity = set_capacity;
-
-							// Write the stream now
-							field_value->WriteTarget();
-						}
+						*field_value = UIReflectionDrawerCreateResizableUIInstanceFieldStream(
+							this,
+							reflect->fields[reflected_type_index],
+							ptr,
+							field_value->element_byte_size,
+							HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
+						);
 					}
 				}
 			}
@@ -2996,18 +3107,26 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::ConvertTypeStreamsToResizable(Stream<char> type_name)
+		void UIReflectionDrawer::ConvertTypeStreamsToResizable(Stream<char> type_name, bool recurse)
 		{
-			ConvertTypeStreamsToResizable(GetType(type_name));
+			ConvertTypeStreamsToResizable(GetType(type_name), recurse);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::ConvertTypeStreamsToResizable(UIReflectionType* type)
+		void UIReflectionDrawer::ConvertTypeStreamsToResizable(UIReflectionType* type, bool recurse)
 		{
 			for (size_t index = 0; index < type->fields.size; index++) {
 				if (type->fields[index].stream_type == UIReflectionStreamType::Capacity) {
 					type->fields[index].stream_type = UIReflectionStreamType::Resizable;
+				}
+				else {
+					if (recurse) {
+						if (IsEmbeddedUserDefined(&type->fields[index])) {
+							UIReflectionUserDefinedData* user_defined_data = (UIReflectionUserDefinedData*)type->fields[index].data;
+							ConvertTypeStreamsToResizable(user_defined_data->GetType(), recurse);
+						}
+					}
 				}
 			}
 		}
@@ -3912,9 +4031,12 @@ namespace ECSEngine {
 					if (field_info.stream_type == ReflectionStreamFieldType::Pointer) {
 						// The basic type count tells the indirection count: e.g void* - indirection 1; void** indirection 2
 						// Only reflect single indirection pointers
-						if (field_info.basic_type_count == 1) {
+
+						// TODO: Decide what should happen for these pointers. At the moment, we could consider them like
+						// In a base case, we have PointerSoA to indicate array pointers.
+						/*if (field_info.basic_type_count == 1) {
 							test_stream_type(index, field_info, value_written);
-						}
+						}*/
 					}
 					else if (field_info.stream_type != Reflection::ReflectionStreamFieldType::Basic && field_info.stream_type != Reflection::ReflectionStreamFieldType::Unknown) {
 						test_stream_type(index, field_info, value_written);
@@ -4314,10 +4436,18 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::DisableInputWrites(UIReflectionType* type, bool all_writes)
+		void UIReflectionDrawer::DisableInputWrites(UIReflectionType* type, bool all_writes, bool recurse)
 		{
 			for (size_t index = 0; index < type->fields.size; index++) {
 				UIReflectionElement element_index = type->fields[index].element_index;
+				if (recurse) {
+					if (IsEmbeddedUserDefined(&type->fields[index])) {
+						UIReflectionUserDefinedData* user_defined_data = (UIReflectionUserDefinedData*)type->fields[index].data;
+						DisableInputWrites(user_defined_data->GetType(), all_writes, recurse);
+						continue;
+					}
+				}
+
 				if (element_index == UIReflectionElement::TextInput || element_index == UIReflectionElement::DirectoryInput
 					|| element_index == UIReflectionElement::FileInput) {
 					type->fields[index].configuration |= UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM;

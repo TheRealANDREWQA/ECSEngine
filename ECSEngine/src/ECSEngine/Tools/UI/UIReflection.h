@@ -362,10 +362,10 @@ namespace ECSEngine {
 
 			// For every resizable stream, it will assign the allocator. If allocate inputs is true, it will allocate
 			// for every text input, directory input or file input a default sized buffer (256 element long)
-			void AssignInstanceResizableAllocator(Stream<char> instance_name, AllocatorPolymorphic allocator, bool allocate_inputs = true);
+			void AssignInstanceResizableAllocator(Stream<char> instance_name, AllocatorPolymorphic allocator, bool allocate_inputs = true, bool recurse = true);
 			// For every resizable stream, it will assign the allocator. If allocate inputs is true, it will allocate
 			// for every text input, directory input or file input a default sized buffer (256 element long)
-			void AssignInstanceResizableAllocator(UIReflectionInstance* instance, AllocatorPolymorphic allocator, bool allocate_inputs = true);
+			void AssignInstanceResizableAllocator(UIReflectionInstance* instance, AllocatorPolymorphic allocator, bool allocate_inputs = true, bool recurse = true);
 
 			void BindInstanceData(Stream<char> instance_name, Stream<char> field_name, void* field_data);
 			void BindInstanceData(UIReflectionInstance* instance, Stream<char> field_name, void* field_data);
@@ -451,8 +451,8 @@ namespace ECSEngine {
 			void ConvertTypeResizableStream(Stream<char> type_name, Stream<Stream<char>> field_names);
 			void ConvertTypeResizableStream(UIReflectionType* type, Stream<Stream<char>> field_names);
 
-			void ConvertTypeStreamsToResizable(Stream<char> type_name);
-			void ConvertTypeStreamsToResizable(UIReflectionType* type);
+			void ConvertTypeStreamsToResizable(Stream<char> type_name, bool recurse = true);
+			void ConvertTypeStreamsToResizable(UIReflectionType* type, bool recurse = true);
 
 			// It will fill in the count for each field. Does not work on inputs
 			void CopyInstanceStreams(Stream<char> instance_name, Stream<UIReflectionStreamCopy> data);
@@ -521,8 +521,9 @@ namespace ECSEngine {
 			// Useful if you want to have a callback do the actual job
 			// If all writes is set to true, then Stream inputs (aka array inputs)
 			// will also be disabled. If set to false only TextInput, FileInput and
-			// DirectoryInput will be disabled
-			void DisableInputWrites(UIReflectionType* type, bool all_writes = true);
+			// DirectoryInput will be disabled. If recurse is set to true, nested
+			// Types will also be modified
+			void DisableInputWrites(UIReflectionType* type, bool all_writes = true, bool recurse = true);
 			
 			// User facing method. If the allocator is left unspecified then it will use the
 			// allocator from the UIReflectionDrawer. Be careful what allocator you give (the same one

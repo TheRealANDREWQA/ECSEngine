@@ -473,6 +473,8 @@ namespace ECSEngine {
 		// If it is a 2, 3 or 4 type then it will return the basic one with a single component
 		ECSENGINE_API ReflectionBasicFieldType ReduceMultiComponentReflectionType(ReflectionBasicFieldType type);
 
+		ECSENGINE_API ECS_INT_TYPE BasicTypeToIntType(ReflectionBasicFieldType type);
+
 		ECS_INLINE bool IsBlittable(const ReflectionType* type) {
 			return type->is_blittable;
 		}

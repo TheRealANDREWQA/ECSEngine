@@ -21,6 +21,23 @@ namespace ECSEngine {
 		char padding[(sizeof(T) % ECS_CACHE_LINE_SIZE) == 0 ? 0 : ECS_CACHE_LINE_SIZE - (sizeof(T) % ECS_CACHE_LINE_SIZE)];
 	};
 
+	// These are unsigned or signed, depending on your use case
+	enum ECS_INT_TYPE : unsigned char {
+		ECS_INT8,
+		ECS_INT16,
+		ECS_INT32,
+		ECS_INT64,
+		ECS_INT_TYPE_COUNT
+	};
+
+	ECSENGINE_API size_t GetIntValueUnsigned(const void* ptr, ECS_INT_TYPE type);
+
+	ECSENGINE_API int64_t GetIntValueSigned(const void* ptr, ECS_INT_TYPE type);
+
+	ECSENGINE_API void SetIntValueUnsigned(void* ptr, ECS_INT_TYPE type, size_t value);
+
+	ECSENGINE_API void SetIntValueSigned(void* ptr, ECS_INT_TYPE type, int64_t value);
+
 	struct Date {
 		unsigned char month;
 		unsigned char day;
