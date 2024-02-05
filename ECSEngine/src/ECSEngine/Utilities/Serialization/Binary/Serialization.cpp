@@ -972,6 +972,7 @@ namespace ECSEngine {
 			nested_options->verify_dependent_types = false;
 			nested_options->omit_fields = omit_fields;
 			nested_options->version = options->version;
+			nested_options->default_initialize_missing_fields = default_initialize_missing_fields;
 		}
 
 		auto deserialize_incompatible_basic = [](uintptr_t& data, void* field_data, const DeserializeFieldInfo& file_info, const ReflectionFieldInfo& type_info) {
@@ -1048,7 +1049,6 @@ namespace ECSEngine {
 				}
 
 				DeserializeFieldInfo file_field_info = deserialize_table.types[type_index].fields[index];
-				Stream<char> field_definition = type->fields[subindex].definition;
 
 				// The field doesn't exist in the current type
 				if (subindex == type->fields.size) {
@@ -1064,6 +1064,7 @@ namespace ECSEngine {
 					continue;
 				}
 
+				Stream<char> field_definition = type->fields[subindex].definition;
 				void* field_data = OffsetPointer(address, type->fields[subindex].info.pointer_offset);
 
 				if (file_field_info.flags.user_defined_as_blittable) {

@@ -203,14 +203,24 @@ namespace ECSEngine {
 	typedef MemoryArena ComponentBufferAllocator;
 
 	// Both offsets (for the pointer and for the size) need to be specified relative to the base
-	// of the struct. Use the offsetof macro to help with that or create helper functions
-	// The size when not a data pointer need to be a unsigned int (it works for size_t's as well
-	// because if it fits in uint range the high 4 bytes are zero).
+	// of the struct
 	struct ComponentBuffer {
-		unsigned int pointer_offset : 10;
-		unsigned int size_offset : 10;
-		unsigned int element_byte_size : 11;
-		unsigned int is_data_pointer : 1;
+		// We need this field for the SoA pointers which can have
+		// Sizes of different byte width
+		unsigned char size_int_type : 2;
+		// This indicates whether or not this is a SoA pointer
+		unsigned char is_soa_pointer : 1;
+		// The owning pointer is the one doing the allocations
+		// And the copy
+		unsigned char is_soa_pointer_owning : 1;
+		unsigned char is_data_pointer : 1;
+		// This is used by the owning SoA pointer to know which
+		// Other pointers to update and what their element byte size is
+		// This value describes how many other entries after this one
+		unsigned char soa_group_count;
+		unsigned short pointer_offset;
+		unsigned short size_offset;
+		unsigned short element_byte_size;
 	};
 
 	ECSENGINE_API void ComponentBufferCopy(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);

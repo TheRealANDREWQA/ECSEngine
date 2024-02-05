@@ -15,6 +15,7 @@ namespace ECSEngine {
 		bool deallocate_previous;
 	};
 
+	// The function should copy all fields
 	typedef void (*ComponentCopyFunction)(ComponentCopyFunctionData* data);
 
 	struct ComponentDeallocateFunctionData {
@@ -24,6 +25,8 @@ namespace ECSEngine {
 		MemoryArena* allocator;
 	};
 
+	// The function should deallocate all fields and optionally invalidate the fields
+	// For further calls
 	typedef void (*ComponentDeallocateFunction)(ComponentDeallocateFunctionData* data);
 
 	struct SharedComponentCompareFunctionData {

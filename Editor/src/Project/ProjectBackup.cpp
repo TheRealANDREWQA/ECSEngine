@@ -367,7 +367,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 
 				bool current_success;
 				if (file_copy[index]) {
-					current_success = FileCopy(backup_file_or_folder_copy, parent_path);
+					current_success = FileCopy(backup_file_or_folder_copy, parent_path, true, true);
 				}
 				else {
 					current_success = FolderCopy(backup_file_or_folder_copy, parent_path);
@@ -420,7 +420,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 			backup_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
 			backup_assets_folder.AddStreamAssert(asset_files_paths[index]);
 
-			bool current_success = FileCopy(backup_assets_folder, project_assets_folder, false);
+			bool current_success = FileCopy(backup_assets_folder, project_assets_folder, false, true);
 			success &= current_success;
 			if (!current_success) {
 				ECS_FORMAT_TEMP_STRING(error_message, "An error occured when trying to recover the asset file {#} from the backup. "
@@ -460,7 +460,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 			project_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
 			project_assets_folder.AddStreamAssert(scene_files[index]);
 
-			bool current_success = FileCopy(backup_assets_folder, project_assets_folder, false);
+			bool current_success = FileCopy(backup_assets_folder, project_assets_folder, false, true);
 			success &= current_success;
 			if (!current_success) {
 				ECS_FORMAT_TEMP_STRING(error_message, "An error occured when trying to recover the scene file {#} from the backup. "

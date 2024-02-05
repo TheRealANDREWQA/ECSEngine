@@ -2963,8 +2963,7 @@ namespace ECSEngine {
 						// We must use temporary storage since the copy function should not
 						// Deal with aliased pointers
 						alignas(alignof(void*)) char temporary_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
-						// TODO: Should we use the new or the old copy function?
-						// At the moment, use the old function
+						// The copy function will call all fields
 						m_unique_components[component.value].CallCopyFunction(temporary_storage, data, false);
 						memcpy(data, temporary_storage, component_byte_size);
 						});
@@ -3022,6 +3021,7 @@ namespace ECSEngine {
 						// We must use temporary storage since the copy function should not
 						// Deal with aliased pointers
 						alignas(alignof(void*)) char temporary_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
+						// The copy function will copy all fields
 						m_shared_components[component.value].info.CallCopyFunction(temporary_storage, data, false);
 						memcpy(data, temporary_storage, component_byte_size);
 						});
