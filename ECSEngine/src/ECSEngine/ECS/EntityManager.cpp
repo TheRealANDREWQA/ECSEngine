@@ -2945,11 +2945,11 @@ namespace ECSEngine {
 			m_unique_components[component.value].copy_deallocate_data.Deallocate(SmallAllocator());
 		}
 
+		MemoryArena* previous_allocator = m_unique_components[component.value].allocator;
 		if (functions->copy_function != nullptr && functions->deallocate_function != nullptr && functions->allocator_size != 0) {
-			if (functions->allocator_size != 0 && m_unique_components[component.value].allocator != nullptr) {
-				if (functions->allocator_size != m_unique_components[component.value].allocator->InitialArenaCapacity()) {
+			if (functions->allocator_size != 0 && previous_allocator != nullptr) {
+				if (functions->allocator_size != previous_allocator->InitialArenaCapacity()) {
 					// We need to record the previous allocator, and move the data to the new location
-					MemoryArena* previous_allocator = m_unique_components[component.value].allocator;
 					CreateAllocatorForComponent(this, m_unique_components[component.value], functions->allocator_size);
 					// Here, we are setting the component functions to the new values.
 					// The reason is, that in the Editor case, when a module is reloaded,
@@ -2975,14 +2975,23 @@ namespace ECSEngine {
 			else if (functions->allocator_size != 0) {
 				CreateAllocatorForComponent(this, m_unique_components[component.value], functions->allocator_size);
 			}
-			else if (m_unique_components[component.value].allocator != nullptr) {
+			else if (previous_allocator != nullptr) {
 				// We can straight up deallocate it
-				DeallocateAllocatorForComponent(this, m_unique_components[component.value].allocator);
+				DeallocateAllocatorForComponent(this, previous_allocator);
 				m_unique_components[component.value].allocator = nullptr;
 			}
 			m_unique_components[component.value].SetComponentFunctions(functions, SmallAllocator());
 		}
 		else {
+			DeallocateAllocatorForComponent(this, previous_allocator);
+			if (m_unique_components[component.value].deallocate_function != nullptr) {
+				// This is the case where previously there was a deallocate function, and now it is no longer
+				// What we need to do is to through all archetypes that registered this as deallocate component
+				// And remove the entry
+				ForEachArchetype([component](Archetype* archetype) {
+					archetype->RemoveCopyDeallocateComponent(component);
+				});
+			}
 			m_unique_components[component.value].ResetComponentFunctions();
 		}
 	}
@@ -3002,11 +3011,11 @@ namespace ECSEngine {
 			m_shared_components[component.value].compare_entry.data.Deallocate(SmallAllocator());
 		}
 
+		MemoryArena* previous_allocator = m_shared_components[component.value].info.allocator;
 		if (functions->copy_function != nullptr && functions->deallocate_function != nullptr && functions->allocator_size != 0) {
-			if (functions->allocator_size != 0 && m_shared_components[component.value].info.allocator != nullptr) {
-				if (functions->allocator_size != m_shared_components[component.value].info.allocator->InitialArenaCapacity()) {
-					// We need to record the previous allocator, and move the data to the new location
-					MemoryArena* previous_allocator = m_shared_components[component.value].info.allocator;
+			if (functions->allocator_size != 0 && previous_allocator != nullptr) {
+				if (functions->allocator_size != previous_allocator->InitialArenaCapacity()) {
+					// We need to record the previous allocator, and move the data to the new location				
 					CreateAllocatorForComponent(this, m_shared_components[component.value].info, functions->allocator_size);
 					// Here, we are setting the component functions to the new values.
 					// The reason is, that in the Editor case, when a module is reloaded,
@@ -3033,14 +3042,15 @@ namespace ECSEngine {
 			else if (functions->allocator_size != 0) {
 				CreateAllocatorForComponent(this, m_shared_components[component.value].info, functions->allocator_size);
 			}
-			else if (m_shared_components[component.value].info.allocator != nullptr) {
+			else if (previous_allocator != nullptr) {
 				// We can straight up deallocate it
-				DeallocateAllocatorForComponent(this, m_shared_components[component.value].info.allocator);
+				DeallocateAllocatorForComponent(this, previous_allocator);
 				m_shared_components[component.value].info.allocator = nullptr;
 			}
 			m_shared_components[component.value].info.SetComponentFunctions(functions, SmallAllocator());
 		}
 		else {
+			DeallocateAllocatorForComponent(this, previous_allocator);
 			m_shared_components[component.value].info.ResetComponentFunctions();
 		}
 		m_shared_components[component.value].compare_entry = compare_entry;
@@ -3124,6 +3134,8 @@ namespace ECSEngine {
 				else {
 					m_unique_components[index].allocator = nullptr;
 				}
+				// We also need to copy the copy_deallocate_data, if there is such data
+				m_unique_components[index].copy_deallocate_data = CopyNonZero(SmallAllocator(), entity_manager->m_unique_components[index].copy_deallocate_data);
 			}
 		}
 
@@ -3144,6 +3156,12 @@ namespace ECSEngine {
 				// Allocate separetely the instances buffer
 				// The name also needs to be allocated
 				m_shared_components[index].info.name = entity_manager->m_shared_components[index].info.name.Copy(SmallAllocator());
+
+				// We also need to copy the copy_deallocate_data, if there is such data
+				m_shared_components[index].info.copy_deallocate_data = CopyNonZero(SmallAllocator(), entity_manager->m_shared_components[index].info.copy_deallocate_data);
+
+				// The same for the compare data
+				m_shared_components[index].compare_entry.data = CopyNonZero(SmallAllocator(), entity_manager->m_shared_components[index].compare_entry.data);
 
 				unsigned int other_capacity = entity_manager->m_shared_components[index].instances.stream.capacity;
 				m_shared_components[index].instances.Initialize(SmallAllocator(), other_capacity);
@@ -5485,55 +5503,64 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	template<bool shared = false>
-	MemoryArena* ResizeComponentAllocator(EntityManager* entity_manager, Component component, size_t new_allocation_size) {
+	template<ECS_COMPONENT_TYPE component_type>
+	static MemoryArena* ResizeComponentAllocatorImpl(EntityManager* entity_manager, Component component, size_t new_allocation_size) {
 		bool exists;
-		if constexpr (shared) {
+		const char* crash_string = nullptr;
+		if constexpr (component_type == ECS_COMPONENT_UNIQUE) {
+			exists = entity_manager->ExistsComponent(component);
+			crash_string = "EntityManager: There is no component {#} when trying to resize its allocator.";		
+		}
+		else if constexpr (component_type == ECS_COMPONENT_SHARED) {
 			exists = entity_manager->ExistsSharedComponent(component);
+			crash_string = "EntityManager: There is no shared component {#} when trying to resize its allocator.";
 		}
 		else {
-			exists = entity_manager->ExistsComponent(component);
+			exists = entity_manager->ExistsGlobalComponent(component);
+			crash_string = "EntityManager: There is no global component {#} when trying to resize its allocator.";
 		}
 
-		const char* crash_string = shared ? "EntityManager: There is no shared component {#} when trying to resize its allocator." :
-			"EntityManager: There is no component {#} when trying to resize its allocator.";
 		ECS_CRASH_CONDITION_RETURN(exists, nullptr, crash_string, component.value);
 
 		MemoryArena* previous_arena;
-		if constexpr (shared) {
+		ComponentInfo* info = nullptr;
+		if constexpr (component_type == ECS_COMPONENT_UNIQUE) {
+			previous_arena = entity_manager->GetComponentAllocator(component);
+			info = &entity_manager->m_unique_components[component.value];
+		}
+		else if constexpr (component_type == ECS_COMPONENT_SHARED) {
 			previous_arena = entity_manager->GetSharedComponentAllocator(component);
+			info = &entity_manager->m_shared_components[component.value].info;
 		}
 		else {
-			previous_arena = entity_manager->GetComponentAllocator(component);
+			previous_arena = entity_manager->GetGlobalComponentAllocator(component);
+			info = entity_manager->m_global_components_info + component.value;
 		}
 
 		if (previous_arena != nullptr) {
 			entity_manager->m_memory_manager->Deallocate(previous_arena);
 		}
 
-		MemoryArena* arena = nullptr;
-
-		ComponentInfo* info = nullptr;
-		if constexpr (shared) {
-			info = &entity_manager->m_shared_components[component.value].info;
-		}
-		else {
-			info = &entity_manager->m_unique_components[component.value];
-		}
 		CreateAllocatorForComponent(entity_manager, *info, new_allocation_size);
 		return info->allocator;
 	}
 
 	MemoryArena* EntityManager::ResizeComponentAllocator(Component component, size_t new_allocation_size)
 	{
-		return ECSEngine::ResizeComponentAllocator<false>(this, component, new_allocation_size);
+		return ResizeComponentAllocatorImpl<ECS_COMPONENT_UNIQUE>(this, component, new_allocation_size);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	MemoryArena* EntityManager::ResizeSharedComponentAllocator(Component component, size_t new_allocation_size)
 	{
-		return ECSEngine::ResizeComponentAllocator<true>(this, component, new_allocation_size);
+		return ResizeComponentAllocatorImpl<ECS_COMPONENT_SHARED>(this, component, new_allocation_size);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	MemoryArena* EntityManager::ResizeGlobalComponentAllocator(Component component, size_t new_allocation_size) {
+		return ResizeComponentAllocatorImpl<ECS_COMPONENT_GLOBAL>(this, component, new_allocation_size);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

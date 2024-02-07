@@ -841,69 +841,158 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferCopy(Stream<ComponentBuffer> component_buffers, size_t buffer_index, ComponentBufferAllocator* allocator, const void* source, void* destination)
-	{
-		if (component_buffers[buffer_index].is_data_pointer) {
-			ComponentBufferCopyDataPointer(component_buffers[buffer_index], allocator, source, destination);
+	unsigned short ComponentBufferPerEntryByteSize(const ComponentBuffer& component_buffer) {
+		if (component_buffer.is_soa_pointer) {
+			unsigned short total_size = component_buffer.element_byte_size;
+			for (unsigned int index = 0; index < component_buffer.soa_pointer_count; index++) {
+				total_size += component_buffer.soa_pointer_element_byte_sizes[index];
+			}
+			return total_size;
 		}
 		else {
-			ComponentBufferCopyStream(component_buffers, buffer_index, allocator, source, destination);
+			return component_buffer.element_byte_size;
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferCopyDataPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination)
+	void ComponentBufferSetSizeValue(const ComponentBuffer& component_buffer, void* target, size_t capacity)
+	{
+		SetIntValueUnsigned(OffsetPointer(target, component_buffer.size_offset), (ECS_INT_TYPE)component_buffer.size_int_type, capacity);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	size_t ComponentBufferGetSizeValue(const ComponentBuffer& component_buffer, const void* target)
+	{
+		return GetIntValueUnsigned(OffsetPointer(target, component_buffer.size_offset), (ECS_INT_TYPE)component_buffer.size_int_type);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	size_t ComponentBufferAlignment(const ComponentBuffer& component_buffer)
+	{
+		return std::min(PowerOfTwoGreater(ComponentBufferPerEntryByteSize(component_buffer)), alignof(void*));
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferSetSoAPointers(const ComponentBuffer& component_buffer, void* target, void* assign_pointer, size_t capacity) {
+		void** owning_pointer = (void**)OffsetPointer(target, component_buffer.pointer_offset);
+		*owning_pointer = assign_pointer;
+		ComponentBufferSetSizeValue(component_buffer, target, capacity);
+		
+		assign_pointer = OffsetPointer(assign_pointer, (size_t)component_buffer.element_byte_size * capacity);
+		for (unsigned int index = 0; index < component_buffer.soa_pointer_count; index++) {
+			void** soa_pointer = (void**)OffsetPointer(target, component_buffer.soa_pointer_offsets[index]);
+			*soa_pointer = assign_pointer;
+			assign_pointer = OffsetPointer(assign_pointer, (size_t)component_buffer.soa_pointer_element_byte_sizes[index] * capacity);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferSetAndCopySoAPointers(
+		const ComponentBuffer& component_buffer,
+		void* target,
+		void* assign_pointer,
+		size_t capacity,
+		const void* source_data,
+		size_t source_data_size,
+		size_t source_data_capacity
+	) {
+		size_t copy_count = std::min(capacity, source_data_size);
+
+		void** owning_pointer = (void**)OffsetPointer(target, component_buffer.pointer_offset);
+		*owning_pointer = assign_pointer;
+		if (assign_pointer != source_data) {
+			memmove(assign_pointer, source_data, (size_t)component_buffer.element_byte_size * copy_count);
+		}
+		ComponentBufferSetSizeValue(component_buffer, target, capacity);
+		assign_pointer = OffsetPointer(assign_pointer, (size_t)component_buffer.element_byte_size * capacity);
+		source_data = OffsetPointer(source_data, (size_t)component_buffer.element_byte_size * source_data_capacity);
+		
+		for (unsigned int index = 0; index < component_buffer.soa_pointer_count; index++) {
+			void** soa_pointer = (void**)OffsetPointer(target, component_buffer.soa_pointer_offsets[index]);
+			*soa_pointer = assign_pointer;
+			memmove(assign_pointer, source_data, (size_t)component_buffer.soa_pointer_element_byte_sizes[index] * copy_count);
+			
+			assign_pointer = OffsetPointer(assign_pointer, (size_t)component_buffer.element_byte_size * capacity);
+			source_data = OffsetPointer(source_data, (size_t)component_buffer.element_byte_size * source_data_capacity);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferCopy(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination)
+	{
+		if (component_buffer.is_data_pointer) {
+			ComponentBufferCopyDataPointer(component_buffer, allocator, source, destination);
+		}
+		else {
+			ComponentBufferCopyStream(component_buffer, allocator, source, destination);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferCopyDataPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination)
 	{
 		ComponentBufferCopyDataPointer(component_buffer, allocator, ComponentBufferGetStreamDataPointer(component_buffer, source), destination);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferCopyStream(Stream<ComponentBuffer> component_buffers, size_t buffer_index, ComponentBufferAllocator* allocator, const void* source, void* destination)
+	void ComponentBufferCopyStream(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination)
 	{
-		ComponentBufferCopyStream(component_buffers, buffer_index, allocator, ComponentBufferGetStreamNormalPointer(component_buffers[buffer_index], source), destination);
+		ComponentBufferCopyStream(component_buffer, allocator, ComponentBufferGetStreamNormalPointer(component_buffer, source), destination);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferCopy(Stream<ComponentBuffer> component_buffers, size_t buffer_index, ComponentBufferAllocator* allocator, Stream<void> data, void* destination)
+	void ComponentBufferCopy(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination)
 	{
-		if (component_buffers[buffer_index].is_data_pointer) {
-			ComponentBufferCopyDataPointer(component_buffers[buffer_index], allocator, data, destination);
+		if (component_buffer.is_data_pointer) {
+			ComponentBufferCopyDataPointer(component_buffer, allocator, data, destination);
 		}
 		else {
-			ComponentBufferCopyStream(component_buffers, buffer_index, allocator, data, destination);
+			ComponentBufferCopyStream(component_buffer, allocator, data, destination);
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferCopyStream(Stream<ComponentBuffer> component_buffers, size_t buffer_index, ComponentBufferAllocator* allocator, Stream<void> data, void* destination)
+	void ComponentBufferCopyStream(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination)
 	{
-		size_t copy_size = data.size * component_buffer.element_byte_size;
-
+		size_t per_entry_byte_size = (size_t)ComponentBufferPerEntryByteSize(component_buffer);
+		size_t copy_size = data.size * per_entry_byte_size;
 		void* allocation = nullptr;
 		if (copy_size > 0) {
-			allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
+			size_t alignment = ComponentBufferAlignment(component_buffer);
+			allocation = allocator->Allocate(copy_size, alignment);
+		}
+
+		if (!component_buffer.is_soa_pointer) {
 			memcpy(allocation, data.buffer, copy_size);
+			void** destination_pointer = (void**)OffsetPointer(destination, component_buffer.pointer_offset);
+			*destination_pointer = allocation;
+			ComponentBufferSetSizeValue(component_buffer, destination, data.size);
 		}
-
-		void** destination_pointer = (void**)OffsetPointer(destination, component_buffer.pointer_offset);
-		*destination_pointer = allocation;
-		unsigned int* destination_size = (unsigned int*)OffsetPointer(destination, component_buffer.size_offset);
-		*destination_size = data.size;
+		else {
+			ComponentBufferSetAndCopySoAPointers(component_buffer, destination, allocation, data.size, data.buffer, data.size, data.size);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferCopyDataPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination)
+	void ComponentBufferCopyDataPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination)
 	{
 		size_t copy_size = data.size * component_buffer.element_byte_size;
 
 		void* allocation = nullptr;
 		if (copy_size > 0) {
-			allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
+			size_t alignment = ComponentBufferAlignment(component_buffer);
+			allocation = allocator->Allocate(copy_size, alignment);
 			memcpy(allocation, data.buffer, copy_size);
 		}
 
@@ -914,10 +1003,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferCopyStreamChecked(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination)
+	void ComponentBufferCopyStreamChecked(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination)
 	{
 		Stream<void> destination_data = ComponentBufferGetStream(component_buffer, destination);
-		size_t check_size = destination_data.size * component_buffer.element_byte_size;
+		size_t check_size = destination_data.size * (size_t)ComponentBufferPerEntryByteSize(component_buffer);
 		if (data.size != destination_data.size || (memcmp(destination_data.buffer, data.buffer, check_size) != 0)) {
 			ComponentBufferDeallocate(component_buffer, allocator, destination);
 			ComponentBufferCopy(component_buffer, allocator, data, destination);
@@ -926,7 +1015,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferDeallocate(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source)
+	void ComponentBufferDeallocate(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, void* source)
 	{
 		if (component_buffer.is_data_pointer) {
 			ComponentBufferDeallocateDataPointer(component_buffer, allocator, source);
@@ -938,28 +1027,37 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferDeallocateDataPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source)
+	void ComponentBufferDeallocateDataPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, void* source)
 	{
-		const DataPointer* data_pointer = (const DataPointer*)OffsetPointer(source, component_buffer.pointer_offset);
+		DataPointer* data_pointer = (DataPointer*)OffsetPointer(source, component_buffer.pointer_offset);
 		const void* buffer = data_pointer->GetPointer();
 		if (buffer != nullptr) {
 			allocator->Deallocate(buffer);
 		}
+		// Set this to nullptr for safe measure
+		data_pointer->pointer = nullptr;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferDeallocateNormalPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source)
+	void ComponentBufferDeallocateNormalPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, void* source)
 	{
-		const void* buffer = *(void**)OffsetPointer(source, component_buffer.pointer_offset);
-		if (buffer != nullptr) {
-			allocator->Deallocate(buffer);
+		void** ptr_to_pointer = (void**)OffsetPointer(source, component_buffer.pointer_offset);
+		if (*ptr_to_pointer != nullptr) {
+			allocator->Deallocate(*ptr_to_pointer);
+		}
+		*ptr_to_pointer = nullptr;
+		// Set the size to 0 as well
+		ComponentBufferSetSizeValue(component_buffer, source, 0);
+		if (component_buffer.is_soa_pointer) {
+			// Make all pointers nullptr for safe measure
+			ComponentBufferSetSoAPointers(component_buffer, source, nullptr, 0);
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferReallocate(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination) {
+	void ComponentBufferReallocate(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination) {
 		if (component_buffer.is_data_pointer) {
 			ComponentBufferReallocateDataPointer(component_buffer, allocator, source, destination);
 		}
@@ -970,13 +1068,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferReallocateDataPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination) {
+	void ComponentBufferReallocateDataPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination) {
 		const DataPointer* source_pointer = (const DataPointer*)OffsetPointer(source, component_buffer.pointer_offset);
 		unsigned short element_count = source_pointer->GetData();
 		if (element_count > 0) {
 			DataPointer* destination_pointer = (DataPointer*)OffsetPointer(destination, component_buffer.pointer_offset);
 			size_t allocation_size = (size_t)element_count * (size_t)component_buffer.element_byte_size;
-			size_t alignment = std::min((size_t)component_buffer.element_byte_size, alignof(void*));
+			size_t alignment = ComponentBufferAlignment(component_buffer);
 
 			void* reallocation = nullptr;
 			if (destination_pointer->GetData() > 0) {
@@ -996,44 +1094,41 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferReallocateNormalPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination) {
-		if (!component_buffer.is_soa_pointer || component_buffer.is_soa_pointer_owning) {
-			Stream<void> data = ComponentBufferGetStreamNormalPointer(component_buffer, source);
-			if (data.size > 0) {
-				size_t element_byte_size = component_buffer.element_byte_size;
-				if (component_buffer.is_soa_pointer) {
-					// We need to determine the entire SoA group element byte size
-					for (unsigned int index = 0; index < component_buffer.soa_group_count) {
+	void ComponentBufferReallocateNormalPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination) {
+		Stream<void> data = ComponentBufferGetStreamNormalPointer(component_buffer, source);
+		if (data.size > 0) {
+			size_t element_byte_size = (size_t)ComponentBufferPerEntryByteSize(component_buffer);
 
-					}
-				}
+			size_t allocation_size = data.size * element_byte_size;
+			size_t alignment = ComponentBufferAlignment(component_buffer);
 
-				size_t allocation_size = data.size * element_byte_size;
-				size_t alignment = std::min(PowerOfTwoGreater(element_byte_size), alignof(void*));
+			void** pointer = (void**)OffsetPointer(destination, component_buffer.pointer_offset);
+			size_t size_value = GetIntValueUnsigned(OffsetPointer(destination, component_buffer.size_offset), (ECS_INT_TYPE)component_buffer.size_int_type);
+			if (size_value > 0) {
+				*pointer = allocator->Reallocate(*pointer, allocation_size, alignment);
+			}
+			else {
+				*pointer = allocator->Allocate(allocation_size, alignment);
+			}
 
-				void** pointer = (void**)OffsetPointer(destination, component_buffer.pointer_offset);
-				size_t size_value = GetIntValueUnsigned(OffsetPointer(destination, component_buffer.size_offset), (ECS_INT_TYPE)component_buffer.size_int_type);
-				if (size_value > 0) {
-					*pointer = allocator->Reallocate(*pointer, allocation_size, alignment);
-				}
-				else {
-					*pointer = allocator->Allocate(allocation_size, alignment);
-				}
-
+			if (!component_buffer.is_soa_pointer) {
 				const void* source_data_ptr = *(const void**)OffsetPointer(source, component_buffer.pointer_offset);
 				memcpy(*pointer, source_data_ptr, allocation_size);
 				SetIntValueUnsigned(OffsetPointer(destination, component_buffer.size_offset), (ECS_INT_TYPE)component_buffer.size_int_type, data.size);
 			}
 			else {
-				// Just deallocate
-				ComponentBufferDeallocateNormalPointer(component_buffer, allocator, destination);
+				ComponentBufferSetAndCopySoAPointers(component_buffer, destination, *pointer, data.size, data.buffer, data.size, data.size);
 			}
+		}
+		else {
+			// Just deallocate
+			ComponentBufferDeallocateNormalPointer(component_buffer, allocator, destination);
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Stream<void> ComponentBufferGetStream(ComponentBuffer component_buffer, const void* source)
+	Stream<void> ComponentBufferGetStream(const ComponentBuffer& component_buffer, const void* source)
 	{
 		if (component_buffer.is_data_pointer) {
 			return ComponentBufferGetStreamDataPointer(component_buffer, source);
@@ -1045,15 +1140,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Stream<void> ComponentBufferGetStreamNormalPointer(ComponentBuffer component_buffer, const void* source) {
+	Stream<void> ComponentBufferGetStreamNormalPointer(const ComponentBuffer& component_buffer, const void* source) {
 		const void** ptr = (const void**)OffsetPointer(source, component_buffer.pointer_offset);
-		unsigned int* size = (unsigned int*)OffsetPointer(source, component_buffer.size_offset);
-		return { *ptr, *size };
+		return { *ptr, ComponentBufferGetSizeValue(component_buffer, source) };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferSetStream(ComponentBuffer component_buffer, void* destination, Stream<void> data)
+	void ComponentBufferSetStream(const ComponentBuffer& component_buffer, void* destination, Stream<void> data)
 	{
 		if (component_buffer.is_data_pointer) {
 			ComponentBufferSetStreamDataPointer(component_buffer, destination, data);
@@ -1065,7 +1159,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferSetStreamDataPointer(ComponentBuffer component_buffer, void* destination, Stream<void> data)
+	void ComponentBufferSetStreamDataPointer(const ComponentBuffer& component_buffer, void* destination, Stream<void> data)
 	{
 		DataPointer* destination_pointer = (DataPointer*)OffsetPointer(destination, component_buffer.pointer_offset);
 		*destination_pointer = data;
@@ -1073,17 +1167,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentBufferSetStreamNormalPointer(ComponentBuffer component_buffer, void* destination, Stream<void> data)
+	void ComponentBufferSetStreamNormalPointer(const ComponentBuffer& component_buffer, void* destination, Stream<void> data)
 	{
 		void** destination_ptr = (void**)OffsetPointer(destination, component_buffer.pointer_offset);
-		unsigned int* size_ptr = (unsigned int*)OffsetPointer(destination, component_buffer.size_offset);
 		*destination_ptr = data.buffer;
-		*size_ptr = data.size;
+		ComponentBufferSetSizeValue(component_buffer, destination, data.size);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Stream<void> ComponentBufferGetStreamDataPointer(ComponentBuffer component_buffer, const void* source) {
+	Stream<void> ComponentBufferGetStreamDataPointer(const ComponentBuffer& component_buffer, const void* source) {
 		const DataPointer* data_pointer = (const DataPointer*)OffsetPointer(source, component_buffer.pointer_offset);
 		return { data_pointer->GetPointer(), data_pointer->GetData() };
 	}

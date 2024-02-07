@@ -20,7 +20,7 @@ static void ApplyMovementTask(
 		translation->value.x = 0.0f;
 	}
 	//if (for_each_data->world->mouse->IsPressed(ECS_MOUSE_LEFT)) {
-	//	translation->value.x = 0.0f;
+	//	translation->value.y = 0.0f;
 	//}
 	//translation->value.y -= 1.50f * for_each_data->world->delta_time;
 	//translation->value.x -= 5.50f * for_each_data->world->delta_time;

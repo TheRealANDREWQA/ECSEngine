@@ -33,7 +33,7 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 
 	if (new_scene.size == 0) {
 		// Setting the components needs to be done right before exiting
-		editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
+		editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		return true;
 	}
 
@@ -56,7 +56,7 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 	}
 
 	// If the load failed, the scene will be reset with an empty value
-	editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
+	editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	return success;
 }
 

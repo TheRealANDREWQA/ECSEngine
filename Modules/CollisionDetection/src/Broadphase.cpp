@@ -76,7 +76,7 @@ ECS_THREAD_TASK(CollisionBroadphaseDisplayDebugGrid) {
 	static size_t TEMPORARY_BUFFER[32];
 	grid.valid_cells = DeckPowerOfTwo<uint3>::InitializeTempReference(fixed_grid->spatial_grid.inserted_cells, TEMPORARY_BUFFER);
 	grid.has_valid_cells = true;
-	world->debug_drawer->AddGrid(&grid);
+	//world->debug_drawer->AddGrid(&grid);
 }
 
 void SetBroadphaseTasks(ECSEngine::ModuleTaskFunctionData* data) {

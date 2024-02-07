@@ -2495,8 +2495,8 @@ namespace ECSEngine {
 
 			field_value.previous_size = 0;
 			field_value.element_byte_size = element_byte_size;
-			field_value.CopyTarget();
 			if (!disable_writes) {
+				field_value.CopyTarget();
 				field_value.standalone_data.Initialize({ nullptr }, 0);
 				field_value.use_standalone_mode = false;
 			}
@@ -2569,8 +2569,8 @@ namespace ECSEngine {
 
 			field_value.previous_size = 0;
 			field_value.element_byte_size = element_byte_size;
-			field_value.CopyTarget();
 			if (!disable_writes) {
+				field_value.CopyTarget();
 				field_value.standalone_data.Initialize({ nullptr }, 0);
 				field_value.use_standalone_mode = false;
 			}
@@ -4758,7 +4758,12 @@ namespace ECSEngine {
 							if (is_instance_field_stream)
 							{
 								UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[index];
-								field_stream->CopyTarget();
+								if (field_stream->use_standalone_mode) {
+									field_stream->CopyTargetStandalone();
+								}
+								else {
+									field_stream->CopyTarget();
+								}
 							}
 
 							// Call the custom functor
@@ -4778,7 +4783,9 @@ namespace ECSEngine {
 							if (is_instance_field_stream) {
 								// Mirror the stream values
 								UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[index];
-								field_stream->WriteTarget();
+								if (!field_stream->use_standalone_mode) {
+									field_stream->WriteTarget();
+								}
 							}
 							// Go to the next field since it was overriden
 							continue;

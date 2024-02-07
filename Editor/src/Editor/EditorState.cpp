@@ -606,7 +606,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->pending_background_tasks.Initialize(editor_state->EditorAllocator(), 8);
 	editor_state->loading_assets.Initialize(editor_state->EditorAllocator(), 0);
 	editor_state->prefabs.Initialize(editor_state->EditorAllocator(), 16);
-	editor_state->prefabs_allocator = MemoryManager(ECS_KB * 32, ECS_KB * 4, ECS_KB * 32, editor_state->EditorAllocator());
+	editor_state->prefabs_allocator = MemoryManager(ECS_MB * 2, ECS_KB * 4, ECS_MB * 8, editor_state->EditorAllocator());
 
 	// This will be run asynchronously for the graphics object
 	InitializeRuntime(editor_state);

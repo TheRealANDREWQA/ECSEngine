@@ -1606,7 +1606,7 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 		// Recreate the world
 		sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 		sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
-		editor_state->editor_components.SetManagerComponents(sandbox->sandbox_world.entity_manager);
+		editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 }
 
@@ -1836,7 +1836,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 		sandbox->runtime_descriptor.entity_pool_power_of_two,
 		allocator
 	);
-	editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
+	editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
 	// Create the task manager that is going to be reused across runtime plays
 	TaskManager* task_manager = (TaskManager*)allocator->Allocate(sizeof(TaskManager));
@@ -1876,7 +1876,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 	sandbox->sandbox_world.speed_up_factor = sandbox->simulation_speed_up_factor;
 	sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
-	editor_state->editor_components.SetManagerComponents(sandbox->sandbox_world.entity_manager);
+	editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
 	// Initialize the selected entities
 	sandbox->selected_entities.Initialize(sandbox_allocator, 0);

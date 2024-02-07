@@ -3174,7 +3174,9 @@ namespace ECSEngine {
 					system->AddFrameHandler({ RightClickMenuReleaseResource, &release_data, sizeof(release_data) });
 				}
 
-				data->Deallocate(system->Allocator());
+				// Use deallocate if belongs in case this is called from other actions
+				// Without having being copied in the pressed call
+				data->DeallocateIfBelongs(system->Allocator());
 			}
 		}
 
