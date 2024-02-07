@@ -699,6 +699,11 @@ namespace ECSEngine {
 			ECSEngine::Deallocate(allocator, name.buffer);
 		}
 
+		void UIDrawerMenuRightClickData::DeallocateIfBelongs(AllocatorPolymorphic allocator)
+		{
+			ECSEngine::DeallocateIfBelongs(allocator, name.buffer);
+		}
+
 	}
 
 }

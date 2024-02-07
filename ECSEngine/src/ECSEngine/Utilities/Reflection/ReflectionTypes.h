@@ -228,6 +228,10 @@ namespace ECSEngine {
 				return name.CopySize();
 			}
 
+			ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+				name.Deallocate(allocator);
+			}
+
 			Stream<char> name;
 			unsigned char size_field;
 			unsigned char capacity_field;
@@ -235,42 +239,14 @@ namespace ECSEngine {
 			unsigned char parallel_streams[13];
 		};
 
-		struct ReflectionTypeMiscInfo {
-			ECS_INLINE ReflectionTypeMiscInfo Copy(AllocatorPolymorphic allocator) const {
-				switch (type) {
-				case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
-				{
-					return { type, soa.Copy(allocator) };
-				}
-				default:
-					ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
-				}
-				return {};
-			}
+		struct ECSENGINE_API ReflectionTypeMiscInfo {
+			ReflectionTypeMiscInfo Copy(AllocatorPolymorphic allocator) const;
 
-			ECS_INLINE ReflectionTypeMiscInfo CopyTo(uintptr_t& ptr) const {
-				switch (type) {
-				case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
-				{
-					return { type, soa.CopyTo(ptr) };
-				}
-				default:
-					ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
-				}
-				return {};
-			}
+			ReflectionTypeMiscInfo CopyTo(uintptr_t& ptr) const;
 
-			ECS_INLINE size_t CopySize() const {
-				switch (type) {
-				case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
-				{
-					return soa.CopySize();
-				}
-				default:
-					ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
-				}
-				return {};
-			}
+			size_t CopySize() const;
+
+			void Deallocate(AllocatorPolymorphic allocator) const;
 
 			ECS_REFLECTION_TYPE_MISC_INFO_TYPE type;
 			union {

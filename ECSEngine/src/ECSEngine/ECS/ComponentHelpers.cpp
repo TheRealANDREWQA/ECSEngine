@@ -4,7 +4,7 @@
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 
-#define MAX_COMPONENT_BUFFERS 15
+#define MAX_COMPONENT_BUFFERS 7
 #define MAX_COMPONENT_BLITTABLE_FIELDS 16
 
 namespace ECSEngine {
@@ -85,8 +85,7 @@ namespace ECSEngine {
 			component_buffer->element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[field_index].info);
 			component_buffer->is_data_pointer = false;
 			component_buffer->is_soa_pointer = false;
-			component_buffer->is_soa_pointer_owning = false;
-			component_buffer->soa_group_count = 0;
+			component_buffer->soa_pointer_count = 0;
 			component_buffer->pointer_offset = type->fields[field_index].info.pointer_offset;
 			component_buffer->size_offset = type->fields[field_index].info.pointer_offset + offsetof(Stream<void>, size);
 			if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Stream) {
@@ -100,32 +99,35 @@ namespace ECSEngine {
 		}
 		else if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::PointerSoA && 
 			type->fields[field_index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
-
-			size_t soa_index = GetReflectionTypeSoaIndex(type, field_index);
-			const ReflectionTypeMiscSoa* soa = &type->misc_info[soa_index].soa;
-			component_buffer->element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[field_index].info);
-			component_buffer->is_soa_pointer = true;
-			component_buffer->is_data_pointer = false;
-			component_buffer->pointer_offset = type->fields[field_index].info.pointer_offset;
-			component_buffer->size_offset = type->fields[field_index].info.soa_size_pointer_offset;
-			component_buffer->size_int_type = BasicTypeToIntType(type->fields[field_index].info.soa_size_basic_type);
 			if (IsReflectionPointerSoAAllocationHolder(type, field_index)) {
-				component_buffer->is_soa_pointer_owning = true;
-				component_buffer->soa_group_count = soa->parallel_stream_count - 1;
+				size_t soa_index = GetReflectionTypeSoaIndex(type, field_index);
+				const ReflectionTypeMiscSoa* soa = &type->misc_info[soa_index].soa;
+				component_buffer->element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[field_index].info);
+				component_buffer->is_soa_pointer = true;
+				component_buffer->is_data_pointer = false;
+				component_buffer->pointer_offset = type->fields[field_index].info.pointer_offset;
+				component_buffer->size_offset = type->fields[field_index].info.soa_size_pointer_offset;
+				component_buffer->size_int_type = BasicTypeToIntType(type->fields[field_index].info.soa_size_basic_type);
+				component_buffer->soa_pointer_count = soa->parallel_stream_count - 1;
+				ECS_ASSERT(component_buffer->soa_pointer_count <= std::size(component_buffer->soa_pointer_offsets));
+				for (unsigned int index = 1; index < soa->parallel_stream_count; index++) {
+					unsigned int soa_pointer_offset = type->fields[soa->parallel_streams[index]].info.pointer_offset;
+					ECS_ASSERT(soa_pointer_offset <= UCHAR_MAX);
+					unsigned int soa_pointer_element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[soa->parallel_streams[index]].info);
+					ECS_ASSERT(soa_pointer_element_byte_size <= UCHAR_MAX);
+					
+					component_buffer->soa_pointer_offsets[index - 1] = soa_pointer_offset;
+					component_buffer->soa_pointer_element_byte_sizes[index - 1] = soa_pointer_element_byte_size;
+				}
+				return true;
 			}
-			else {
-				component_buffer->is_soa_pointer_owning = false;
-				component_buffer->soa_group_count = 0;
-			}
-			return true;
 		}
 		else if (type->fields[field_index].definition == STRING(DataPointer)) {
 			// TODO: Add a reflection field tag such that it can specify the stream byte size
 			component_buffer->element_byte_size = 1;
 			component_buffer->is_data_pointer = true;
 			component_buffer->is_soa_pointer = false;
-			component_buffer->is_soa_pointer_owning = false;
-			component_buffer->soa_group_count = 0;
+			component_buffer->soa_pointer_count = 0;
 			component_buffer->pointer_offset = type->fields[field_index].info.pointer_offset;
 			component_buffer->size_offset = 0;
 			component_buffer->size_int_type = 0;
@@ -166,8 +168,14 @@ namespace ECSEngine {
 							);
 							if (nested_buffer_index.count > 0) {
 								// We need to offset the pointer offset and the size offset by the current's field offset
-								nested_buffer.pointer_offset += type->fields[index].info.pointer_offset;
-								nested_buffer.size_offset += type->fields[index].info.pointer_offset;
+								unsigned int offset = type->fields[index].info.pointer_offset;
+								nested_buffer.pointer_offset += offset;
+								nested_buffer.size_offset += offset;
+								if (nested_buffer.is_soa_pointer) {
+									for (unsigned int subindex = 0; subindex < nested_buffer.soa_pointer_count; subindex++) {
+										nested_buffer.soa_pointer_offsets[subindex] += offset;
+									}
+								}
 								// We can return now
 								if (field_index != nullptr) {
 									field_index->Append(nested_buffer_index);
@@ -206,25 +214,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < type->fields.size; index++) {
 			ComponentBuffer component_buffer;
 			if (ConvertFieldToComponentBuffer(type, index, &component_buffer)) {
-				// We need to do something more for the pointer SoA case
-				// Don't add non owning SoA pointers, they are added altogether
-				// With their owning pointer
-				if (!component_buffer.is_soa_pointer || component_buffer.is_soa_pointer_owning) {
-					component_buffers.AddAssert(component_buffer);
-				}
-				if (component_buffer.is_soa_pointer && component_buffer.is_soa_pointer_owning) {
-					component_buffer.is_soa_pointer_owning = false;
-					component_buffer.soa_group_count = 0;
-					size_t soa_index = GetReflectionTypeSoaIndex(type, index);
-					const ReflectionTypeMiscSoa* soa = &type->misc_info[soa_index].soa;
-					for (unsigned int parallel_index = 1; parallel_index < soa->parallel_stream_count; parallel_index++) {
-						unsigned int parallel_field_index = soa->parallel_streams[parallel_index];
-						const ReflectionFieldInfo& parallel_field_info = type->fields[parallel_field_index].info;
-						component_buffer.element_byte_size = GetReflectionFieldStreamElementByteSize(parallel_field_info);
-						component_buffer.pointer_offset = parallel_field_info.pointer_offset;
-						component_buffers.AddAssert(component_buffer);
-					}
-				}
+				component_buffers.AddAssert(component_buffer);
 			}
 			else {
 				// See if we need to recurse to user defined types
@@ -236,9 +226,15 @@ namespace ECSEngine {
 							unsigned int previous_buffer_count = component_buffers.size;
 							// We need to increase the offset for the pointers to reflect the offset inside this structure
 							GetReflectionTypeRuntimeBuffers(reflection_manager, &nested_type, component_buffers);
+							unsigned int offset = type->fields[index].info.pointer_offset;
 							for (unsigned int subindex = previous_buffer_count; subindex < component_buffers.size; subindex++) {
-								component_buffers[subindex].pointer_offset += type->fields[index].info.pointer_offset;
-								component_buffers[subindex].size_offset += type->fields[index].info.pointer_offset;
+								component_buffers[subindex].pointer_offset += offset;
+								component_buffers[subindex].size_offset += offset;
+								if (component_buffers[subindex].is_soa_pointer) {
+									for (unsigned int soa_index = 0; soa_index < component_buffers[subindex].soa_pointer_count; soa_index++) {
+										component_buffers[subindex].soa_pointer_offsets[soa_index] += offset;
+									}
+								}
 							}
 						}
 					}
@@ -297,6 +293,9 @@ namespace ECSEngine {
 			ECS_ASSERT(stack_memory->capacity - stack_memory->size >= sizeof(*function_data), "Insufficient reflection type runtime component functions stack memory");
 			stack_memory->size += sizeof(*function_data);
 			function_data->count = component_buffers.size;
+			size_t byte_size = GetReflectionTypeByteSize(type);
+			ECS_ASSERT(byte_size <= USHORT_MAX);
+			function_data->component_byte_size = byte_size;
 			component_buffers.CopyTo(function_data->component_buffers);
 			component_functions.data = { function_data, sizeof(*function_data) };
 		}
@@ -337,7 +336,8 @@ namespace ECSEngine {
 		for (unsigned char index = 0; index < function_data->component_buffer_count; index++) {
 			Stream<void> first_stream = ComponentBufferGetStream(function_data->component_buffers[index], data->first);
 			Stream<void> second_stream = ComponentBufferGetStream(function_data->component_buffers[index], data->second);
-			if (first_stream.size != second_stream.size || memcmp(first_stream.buffer, second_stream.buffer, first_stream.size) != 0) {
+			size_t size_per_entry = ComponentBufferPerEntryByteSize(function_data->component_buffers[index]);
+			if (first_stream.size != second_stream.size || memcmp(first_stream.buffer, second_stream.buffer, first_stream.size * size_per_entry) != 0) {
 				return false;
 			}
 		}

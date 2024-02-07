@@ -416,6 +416,8 @@ namespace ECSEngine {
 
 			void Deallocate(AllocatorPolymorphic allocator);
 
+			void DeallocateIfBelongs(AllocatorPolymorphic allocator);
+
 			Stream<char> name;
 			UIDrawerMenuState state;
 			Action action = nullptr;

@@ -1744,6 +1744,11 @@ namespace ECSEngine {
 		// one and returns it
 		MemoryArena* ResizeSharedComponentAllocator(Component component, size_t new_allocation_size);
 
+		// It does not copy any data stored previously. If the new allocation size is 0,
+		// then it will deallocate it and return nullptr. Else deallocates and reallocates a new
+		// one and returns it
+		MemoryArena* ResizeGlobalComponentAllocator(Component component, size_t new_allocation_size);
+
 		// ---------------------------------------------------------------------------------------------------
 		
 		// It returns to the state where nothing is allocated. As if it is newly created

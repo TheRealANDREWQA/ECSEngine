@@ -17,6 +17,8 @@
 #define ECS_SHARED_INSTANCE_MAX_VALUE SHORT_MAX
 #define ECS_COMPONENT_MAX_BYTE_SIZE 2048
 
+#define ECS_COMPONENT_BUFFER_SOA_COUNT 8
+
 namespace ECSEngine {
 
 #define ECS_ENTITY_MAX_COUNT (1 << 26)
@@ -210,66 +212,91 @@ namespace ECSEngine {
 		unsigned char size_int_type : 2;
 		// This indicates whether or not this is a SoA pointer
 		unsigned char is_soa_pointer : 1;
-		// The owning pointer is the one doing the allocations
-		// And the copy
-		unsigned char is_soa_pointer_owning : 1;
 		unsigned char is_data_pointer : 1;
-		// This is used by the owning SoA pointer to know which
-		// Other pointers to update and what their element byte size is
-		// This value describes how many other entries after this one
-		unsigned char soa_group_count;
+		// This entry details how many soa entries there are, excluding the current one
+		// So for an SoA of 3 pointers (x, y, z), this value will be 2
+		unsigned char soa_pointer_count;
+		// Embed the data for SoA pointers directly, such that we don't have to
+		// Reference some other ComponentBuffer's. This adds some extra storage
+		// For all the other cases, but we can aford it.
+		unsigned char soa_pointer_element_byte_sizes[ECS_COMPONENT_BUFFER_SOA_COUNT];
+		// The pointer offsets are relative from the beginning of the type. They are
+		// At the moment unsigned char to not waste too much space
+		unsigned char soa_pointer_offsets[ECS_COMPONENT_BUFFER_SOA_COUNT];
 		unsigned short pointer_offset;
 		unsigned short size_offset;
 		unsigned short element_byte_size;
 	};
 
-	ECSENGINE_API void ComponentBufferCopy(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
+	ECSENGINE_API unsigned short ComponentBufferPerEntryByteSize(const ComponentBuffer& component_buffer);
 
-	ECSENGINE_API void ComponentBufferCopyDataPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
+	// This works for all types except data pointers
+	ECSENGINE_API void ComponentBufferSetSizeValue(const ComponentBuffer& component_buffer, void* target, size_t capacity);
 
-	ECSENGINE_API void ComponentBufferCopyStream(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
+	ECSENGINE_API size_t ComponentBufferGetSizeValue(const ComponentBuffer& component_buffer, const void* target);
+
+	ECSENGINE_API size_t ComponentBufferAlignment(const ComponentBuffer& component_buffer);
+
+	ECSENGINE_API void ComponentBufferSetSoAPointers(const ComponentBuffer& component_buffer, void* target, void* assign_pointer, size_t capacity);
+
+	// It handles the case where the component buffers are aliased (as would be the case for reallocation)
+	ECSENGINE_API void ComponentBufferSetAndCopySoAPointers(
+		const ComponentBuffer& component_buffer, 
+		void* target, 
+		void* assign_pointer, 
+		size_t capacity, 
+		const void* source_data,
+		size_t source_data_size,
+		size_t source_data_capacity
+	);
+
+	ECSENGINE_API void ComponentBufferCopy(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
+
+	ECSENGINE_API void ComponentBufferCopyDataPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
+
+	ECSENGINE_API void ComponentBufferCopyStream(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
 
 	// The source will still be offsetted
-	ECSENGINE_API void ComponentBufferCopy(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
+	ECSENGINE_API void ComponentBufferCopy(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
 
 	// The source will still be offsetted
-	ECSENGINE_API void ComponentBufferCopyStream(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
+	ECSENGINE_API void ComponentBufferCopyStream(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
 
 	// The source will still be offsetted
-	ECSENGINE_API void ComponentBufferCopyDataPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
+	ECSENGINE_API void ComponentBufferCopyDataPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
 
 	// Only does the allocation and the copy if the current data is different from the given data
-	ECSENGINE_API void ComponentBufferCopyStreamChecked(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
+	ECSENGINE_API void ComponentBufferCopyStreamChecked(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
 
-	ECSENGINE_API void ComponentBufferDeallocate(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source);
+	ECSENGINE_API void ComponentBufferDeallocate(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, void* source);
 
-	ECSENGINE_API void ComponentBufferDeallocateDataPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source);
+	ECSENGINE_API void ComponentBufferDeallocateDataPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, void* source);
 
-	ECSENGINE_API void ComponentBufferDeallocateNormalPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source);
-
-	// If the destination already has data, it will use reallocation. If the source is empty, it will deallocate directly
-	ECSENGINE_API void ComponentBufferReallocate(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
+	ECSENGINE_API void ComponentBufferDeallocateNormalPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, void* source);
 
 	// If the destination already has data, it will use reallocation. If the source is empty, it will deallocate directly
-	ECSENGINE_API void ComponentBufferReallocateDataPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
+	ECSENGINE_API void ComponentBufferReallocate(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
 
 	// If the destination already has data, it will use reallocation. If the source is empty, it will deallocate directly
-	ECSENGINE_API void ComponentBufferReallocateNormalPointer(ComponentBuffer component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
+	ECSENGINE_API void ComponentBufferReallocateDataPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
 
-	ECSENGINE_API Stream<void> ComponentBufferGetStream(ComponentBuffer component_buffer, const void* source);
+	// If the destination already has data, it will use reallocation. If the source is empty, it will deallocate directly
+	ECSENGINE_API void ComponentBufferReallocateNormalPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
 
-	ECSENGINE_API Stream<void> ComponentBufferGetStreamDataPointer(ComponentBuffer component_buffer, const void* source);
+	ECSENGINE_API Stream<void> ComponentBufferGetStream(const ComponentBuffer& component_buffer, const void* source);
 
-	ECSENGINE_API Stream<void> ComponentBufferGetStreamNormalPointer(ComponentBuffer component_buffer, const void* source);
+	ECSENGINE_API Stream<void> ComponentBufferGetStreamDataPointer(const ComponentBuffer& component_buffer, const void* source);
 
-	// It will assigns, it does not allocate
-	ECSENGINE_API void ComponentBufferSetStream(ComponentBuffer component_buffer, void* destination, Stream<void> data);
-
-	// It will assigns, it does not allocate
-	ECSENGINE_API void ComponentBufferSetStreamDataPointer(ComponentBuffer component_buffer, void* destination, Stream<void> data);
+	ECSENGINE_API Stream<void> ComponentBufferGetStreamNormalPointer(const ComponentBuffer& component_buffer, const void* source);
 
 	// It will assigns, it does not allocate
-	ECSENGINE_API void ComponentBufferSetStreamNormalPointer(ComponentBuffer component_buffer, void* destination, Stream<void> data);
+	ECSENGINE_API void ComponentBufferSetStream(const ComponentBuffer& component_buffer, void* destination, Stream<void> data);
+
+	// It will assigns, it does not allocate
+	ECSENGINE_API void ComponentBufferSetStreamDataPointer(const ComponentBuffer& component_buffer, void* destination, Stream<void> data);
+
+	// It will assigns, it does not allocate
+	ECSENGINE_API void ComponentBufferSetStreamNormalPointer(const ComponentBuffer& component_buffer, void* destination, Stream<void> data);
 
 	struct ECSENGINE_API ComponentInfo {
 		ECS_INLINE ComponentInfo() : size(0) {}

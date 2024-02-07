@@ -608,6 +608,55 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		ECS_INLINE ReflectionTypeMiscInfo ReflectionTypeMiscInfo::Copy(AllocatorPolymorphic allocator) const {
+			switch (type) {
+			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
+			{
+				return { type, soa.Copy(allocator) };
+			}
+			default:
+				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
+			}
+			return {};
+		}
+
+		ECS_INLINE ReflectionTypeMiscInfo ReflectionTypeMiscInfo::CopyTo(uintptr_t& ptr) const {
+			switch (type) {
+			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
+			{
+				return { type, soa.CopyTo(ptr) };
+			}
+			default:
+				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
+			}
+			return {};
+		}
+
+		ECS_INLINE size_t ReflectionTypeMiscInfo::CopySize() const {
+			switch (type) {
+			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
+			{
+				return soa.CopySize();
+			}
+			default:
+				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
+			}
+			return {};
+		}
+
+		ECS_INLINE void ReflectionTypeMiscInfo::Deallocate(AllocatorPolymorphic allocator) const {
+			switch (type) {
+			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
+			{
+				return soa.Deallocate(allocator);
+			}
+			default:
+				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionType::DeallocateCoalesced(AllocatorPolymorphic allocator) const
 		{
 			ECSEngine::Deallocate(allocator, name.buffer);
@@ -627,6 +676,9 @@ namespace ECSEngine {
 			for (size_t index = 0; index < evaluations.size; index++) {
 				DeallocateIfBelongs(allocator, evaluations[index].name.buffer);
 			}
+			for (size_t index = 0; index < misc_info.size; index++) {
+				misc_info[index].Deallocate(allocator);
+			}
 			
 			if (tag.size > 0) {
 				DeallocateIfBelongs(allocator, tag.buffer);
@@ -634,6 +686,7 @@ namespace ECSEngine {
 			DeallocateIfBelongs(allocator, name.buffer);
 			DeallocateIfBelongs(allocator, fields.buffer);
 			DeallocateIfBelongs(allocator, evaluations.buffer);
+			DeallocateIfBelongs(allocator, misc_info.buffer);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -776,7 +829,8 @@ namespace ECSEngine {
 
 		size_t ReflectionType::CopySize() const
 		{
-			return name.CopySize() + tag.CopySize() + StreamCoalescedDeepCopySize(fields) + StreamCoalescedDeepCopySize(evaluations);
+			return name.CopySize() + tag.CopySize() + StreamCoalescedDeepCopySize(fields) + StreamCoalescedDeepCopySize(evaluations)
+				+ StreamCoalescedDeepCopySize(misc_info);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

@@ -78,12 +78,11 @@ namespace ECSEngine {
 				if (has_copy_function) {
 					// The copy function must copy everything
 					void* current_buffer = m_buffers[index];
-					size_t temporary_component_storage[256];
-					ECS_ASSERT(sizeof(temporary_component_storage) >= component_byte_size);
+					const void* other_current_buffer = other->m_buffers[index];
 					for (unsigned int entity_index = 0; entity_index < m_size; entity_index++) {
 						void* current_component = OffsetPointer(current_buffer, component_byte_size * entity_index);
-						memcpy(temporary_component_storage, current_component, component_byte_size);
-						m_infos[m_components.indices[index]].CallCopyFunction(current_component, temporary_component_storage, false);
+						const void* other_current_component = OffsetPointer(other_current_buffer, component_byte_size * entity_index);
+						m_infos[m_components.indices[index]].CallCopyFunction(current_component, other_current_component, false);
 					}
 				}
 				else {

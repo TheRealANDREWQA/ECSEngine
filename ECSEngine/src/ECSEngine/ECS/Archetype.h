@@ -155,6 +155,9 @@ namespace ECSEngine {
 		// Returns the total amount of entities in all base archetypes
 		unsigned int GetEntityCount() const;
 
+		// It will remove the component as a user defined copy/deallocate component, if it exists
+		void RemoveCopyDeallocateComponent(Component component);
+
 		struct InternalBase {
 			ArchetypeBase archetype;
 			SharedInstance* shared_instances;

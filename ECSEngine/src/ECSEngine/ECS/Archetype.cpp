@@ -453,4 +453,15 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void Archetype::RemoveCopyDeallocateComponent(Component component)
+	{
+		unsigned char index = FindCopyDeallocateComponentIndex(component);
+		if (index != UCHAR_MAX) {
+			m_user_defined_components.count--;
+			m_user_defined_components.signature_indices[index] = m_user_defined_components.signature_indices[m_user_defined_components.count];
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 }
