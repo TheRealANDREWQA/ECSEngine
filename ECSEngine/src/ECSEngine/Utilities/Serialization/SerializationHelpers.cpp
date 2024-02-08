@@ -495,7 +495,7 @@ namespace ECSEngine {
 								}
 
 								// The zero is for basic type arrays. Should not really happen
-								ReadOrReferenceFundamentalType<true, true>(field_info, element, *data->read_data->stream, 0, allocator);
+								ReadOrReferenceFundamentalType<true, true>(field_info, element, *data->read_data->stream, 0, allocator, true);
 							}
 						};
 
@@ -513,7 +513,7 @@ namespace ECSEngine {
 						void* element = OffsetPointer(*data->allocated_buffer, index * stream_size);
 
 						// The zero is for basic type arrays. Should not really happen
-						deserialize_size += ReadOrReferenceFundamentalType<false>(field_info, element, *data->read_data->stream, 0, allocator);
+						deserialize_size += ReadOrReferenceFundamentalType<false>(field_info, element, *data->read_data->stream, 0, allocator, true);
 					}
 				}
 			}

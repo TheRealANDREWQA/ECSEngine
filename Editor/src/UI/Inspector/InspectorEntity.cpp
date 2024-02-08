@@ -1009,7 +1009,15 @@ void InspectorComponentCallback(ActionData* action_data) {
 			}
 
 			for (unsigned int index = 0; index < runtime_buffers.size; index++) {
-				ComponentBufferCopyStreamChecked(runtime_buffers[index], arena, *data->draw_data->matching_inputs[matching_index].capacity_inputs[index], component_data);
+				// Use the size here for the capacity, since we are interested
+				// In allocating exactly the same size
+				ComponentBufferCopyStreamChecked(
+					runtime_buffers[index], 
+					arena, 
+					*data->draw_data->matching_inputs[matching_index].capacity_inputs[index],
+					data->draw_data->matching_inputs[matching_index].capacity_inputs[index]->size,
+					component_data
+				);
 			}
 		}
 	}

@@ -4460,6 +4460,32 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		size_t GetReflectionTypeSoaCapacityValue(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, const void* data) {
+			if (soa->capacity_field != UCHAR_MAX) {
+				return GetIntValueUnsigned(
+					OffsetPointer(data, type->fields[soa->capacity_field].info.pointer_offset), 
+					BasicTypeToIntType(type->fields[soa->capacity_field].info.basic_type)
+				);
+			}
+			else {
+				return -1;
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void SetReflectionTypeSoaCapacityValue(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, void* data, size_t value) {
+			if (soa->capacity_field != UCHAR_MAX) {
+				SetIntValueUnsigned(
+					OffsetPointer(data, type->fields[soa->capacity_field].info.pointer_offset),
+					BasicTypeToIntType(type->fields[soa->capacity_field].info.basic_type),
+					value
+				);
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		size_t SearchReflectionUserDefinedTypeByteSize(
 			const ReflectionManager* reflection_manager, 
 			Stream<char> definition

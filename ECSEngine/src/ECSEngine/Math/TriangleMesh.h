@@ -59,6 +59,12 @@ namespace ECSEngine {
 		// Changes the positions SoA buffer
 		void SetPositionsBuffer(float* buffer, unsigned int size, unsigned int capacity);
 
+		ECS_INLINE void SetPoint(unsigned int index, float3 point) {
+			position_x[index] = point.x;
+			position_y[index] = point.y;
+			position_z[index] = point.z;
+		}
+
 		// Only the positions are changed. The triangle indices will be referenced
 		TriangleMesh ECS_VECTORCALL Transform(Matrix matrix, float* position_storage) const;
 

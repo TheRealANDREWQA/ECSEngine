@@ -1037,23 +1037,31 @@ namespace ECSEngine {
 	
 	// --------------------------------------------------------------------------------------------------------------
 
-	void ECS_VECTORCALL TransformPoints(Matrix matrix, const float* ECS_RESTRICT input_points_soa, size_t count, float* ECS_RESTRICT output_points_soa)
+	void ECS_VECTORCALL TransformPoints(
+		Matrix matrix, 
+		const float* ECS_RESTRICT input_points_soa, 
+		size_t count, 
+		size_t capacity, 
+		float* ECS_RESTRICT output_points_soa,
+		size_t output_capacity
+	)
 	{
-		ApplySIMDConstexpr(count, Vector3::ElementCount(), [matrix, count, input_points_soa, output_points_soa](auto is_normal_iteration, size_t index, size_t current_count) {
+		ApplySIMDConstexpr(count, Vector3::ElementCount(), [matrix, capacity, input_points_soa, output_points_soa, output_capacity]
+		(auto is_normal_iteration, size_t index, size_t current_count) {
 			Vector3 elements;
 			if constexpr (is_normal_iteration) {
-				elements = Vector3().LoadAdjacent(input_points_soa, index, count);
+				elements = Vector3().LoadAdjacent(input_points_soa, index, capacity);
 			}
 			else {
-				elements = Vector3().LoadPartialAdjacent(input_points_soa, index, count, current_count);
+				elements = Vector3().LoadPartialAdjacent(input_points_soa, index, capacity, current_count);
 			}
 
 			Vector3 transformed_elements = TransformPoint(elements, matrix).AsVector3();
 			if constexpr (is_normal_iteration) {
-				transformed_elements.StoreAdjacent(output_points_soa, index, count);
+				transformed_elements.StoreAdjacent(output_points_soa, index, output_capacity);
 			}
 			else {
-				transformed_elements.StorePartialAdjacent(output_points_soa, index, count, current_count);
+				transformed_elements.StorePartialAdjacent(output_points_soa, index, output_capacity, current_count);
 			}
 		});
 	}
