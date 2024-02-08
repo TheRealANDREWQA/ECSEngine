@@ -213,6 +213,8 @@ namespace ECSEngine {
 		// This indicates whether or not this is a SoA pointer
 		unsigned char is_soa_pointer : 1;
 		unsigned char is_data_pointer : 1;
+		unsigned char capacity_int_type : 2;
+		unsigned char has_capacity_field : 1;
 		// This entry details how many soa entries there are, excluding the current one
 		// So for an SoA of 3 pointers (x, y, z), this value will be 2
 		unsigned char soa_pointer_count;
@@ -225,26 +227,42 @@ namespace ECSEngine {
 		unsigned char soa_pointer_offsets[ECS_COMPONENT_BUFFER_SOA_COUNT];
 		unsigned short pointer_offset;
 		unsigned short size_offset;
+		// This is relevant only for SoA pointers at the moment, since the copy depends
+		// On the capacity of the pointers
+		unsigned short capacity_offset;
 		unsigned short element_byte_size;
 	};
 
 	ECSENGINE_API unsigned short ComponentBufferPerEntryByteSize(const ComponentBuffer& component_buffer);
 
 	// This works for all types except data pointers
-	ECSENGINE_API void ComponentBufferSetSizeValue(const ComponentBuffer& component_buffer, void* target, size_t capacity);
+	ECSENGINE_API void ComponentBufferSetSizeValue(const ComponentBuffer& component_buffer, void* target, size_t size);
 
 	ECSENGINE_API size_t ComponentBufferGetSizeValue(const ComponentBuffer& component_buffer, const void* target);
+	
+	// This function assumes that there is a capacity field
+	ECSENGINE_API void ComponentBufferSetCapacityValue(const ComponentBuffer& component_buffer, void* target, size_t capacity);
+
+	// This function sets the capacity only if there is such a value
+	ECSENGINE_API void ComponentBufferSetCapacityValueSafe(const ComponentBuffer& component_buffer, void* target, size_t capacity);
+
+	// This function assumes that there is a capacity field
+	ECSENGINE_API size_t ComponentBufferGetCapacityValue(const ComponentBuffer& component_buffer, const void* target);
+
+	// Returns the missing_value parameter in case there is no capacity field
+	ECSENGINE_API size_t ComponentBufferGetCapacityValueSafe(const ComponentBuffer& component_buffer, const void* target, size_t missing_value);
 
 	ECSENGINE_API size_t ComponentBufferAlignment(const ComponentBuffer& component_buffer);
 
 	ECSENGINE_API void ComponentBufferSetSoAPointers(const ComponentBuffer& component_buffer, void* target, void* assign_pointer, size_t capacity);
 
 	// It handles the case where the component buffers are aliased (as would be the case for reallocation)
+	// It also assigns the size and the capacity fields
 	ECSENGINE_API void ComponentBufferSetAndCopySoAPointers(
 		const ComponentBuffer& component_buffer, 
 		void* target, 
-		void* assign_pointer, 
-		size_t capacity, 
+		void* assign_pointer,
+		size_t assign_pointer_size,
 		const void* source_data,
 		size_t source_data_size,
 		size_t source_data_capacity
@@ -256,17 +274,27 @@ namespace ECSEngine {
 
 	ECSENGINE_API void ComponentBufferCopyStream(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, const void* source, void* destination);
 
-	// The source will still be offsetted
-	ECSENGINE_API void ComponentBufferCopy(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
+	// The source will still be offsetted. The capacity is used for SoA pointers to know how to copy from them
+	// For the rest of the cases, it can be used to allocate more data
+	ECSENGINE_API void ComponentBufferCopy(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, size_t capacity, void* destination);
 
-	// The source will still be offsetted
-	ECSENGINE_API void ComponentBufferCopyStream(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
+	// The source will still be offsetted. The capacity is used for SoA pointers to know how to copy from them
+	// For the rest of the cases, it can be left at data.size
+	ECSENGINE_API void ComponentBufferCopyStream(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, size_t capacity, void* destination);
 
 	// The source will still be offsetted
 	ECSENGINE_API void ComponentBufferCopyDataPointer(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
 
 	// Only does the allocation and the copy if the current data is different from the given data
-	ECSENGINE_API void ComponentBufferCopyStreamChecked(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, Stream<void> data, void* destination);
+	// The capacity is used for SoA pointers to know how to copy from them
+	// For the rest of the cases, it can be used to allocate more data
+	ECSENGINE_API void ComponentBufferCopyStreamChecked(
+		const ComponentBuffer& component_buffer, 
+		ComponentBufferAllocator* allocator, 
+		Stream<void> data, 
+		size_t capacity, 
+		void* destination
+	);
 
 	ECSENGINE_API void ComponentBufferDeallocate(const ComponentBuffer& component_buffer, ComponentBufferAllocator* allocator, void* source);
 

@@ -527,14 +527,17 @@ namespace ECSEngine {
 	// If the allocator is nullptr, then it will just reference the data
 	// If the type is basic type array, the number elements to be read needs to be specified
 	// because if reading from a file and the number of elements has changed, then we need to adjust
-	// the reading aswell
+	// the reading as well. If the allocate_soa_pointer is set to true, then it will allocate
+	// All SoA pointers, else it will let you perform the allocation and assignment, and write directly
+	// Into it
 	template<bool read_data, bool force_allocation = false>
 	size_t ReadOrReferenceFundamentalType(
 		const Reflection::ReflectionFieldInfo& info,
 		void* data,
 		uintptr_t& stream,
 		unsigned short basic_type_array_count,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		bool allocate_soa_pointer
 	) {
 		if (info.stream_type == Reflection::ReflectionStreamFieldType::Basic) {
 			Read<read_data>(&stream, data, info.byte_size);
@@ -601,8 +604,49 @@ namespace ECSEngine {
 					ECS_ASSERT(false, "Cannot deserialize pointer with indirection greater than 1.");
 				}
 			}
+			else if (info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+				size_t byte_size = 0;
+
+				Read<true>(&stream, &byte_size, sizeof(byte_size));
+				if constexpr (read_data) {
+					if (allocate_soa_pointer) {
+						if (allocator.allocator != nullptr) {
+							void** pointer = (void**)data;
+							if (byte_size > 0) {
+								void* allocation = Allocate(allocator, byte_size);
+								Read<true>(&stream, allocation, byte_size);
+
+								*pointer = allocation;
+							}
+						}
+						else {
+							if constexpr (!force_allocation) {
+								ReferenceData<true>(&stream, (void**)data, byte_size);
+							}
+							else {
+								void** pointer = (void**)data;
+								if (byte_size > 0) {
+									void* allocation = AllocateEx(allocator, byte_size);
+									Read<true>(&stream, allocation, byte_size);
+
+									*pointer = allocation;
+								}
+							}
+						}
+					}
+					else {
+						// Read the data into the buffer
+						Read<true>(&stream, *(void**)data, byte_size);
+					}
+				}
+				else {
+					Ignore(&stream, byte_size);
+				}
+
+				return byte_size;
+			}
 			// We can put the PointerSoA in the same case as this
-			else if (IsStreamWithSoA(info.stream_type)) {
+			else if (IsStream(info.stream_type)) {
 				size_t byte_size = 0;
 				Read<true>(&stream, &byte_size, sizeof(byte_size));
 
@@ -678,7 +722,6 @@ namespace ECSEngine {
 						}
 					}
 				}
-				// The pointer SoA case doesn't need to be handled, since the size is read anyways afterwards
 				return byte_size;
 			}
 		}

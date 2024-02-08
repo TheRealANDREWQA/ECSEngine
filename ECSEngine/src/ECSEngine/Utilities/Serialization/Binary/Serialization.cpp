@@ -1090,6 +1090,50 @@ namespace ECSEngine {
 
 				// Verify the basic and the stream type
 				ReflectionFieldInfo type_field_info = type->fields[subindex].info;
+				// Returns the allocation, if we are reading the data
+				auto handle_soa_allocation = [&](size_t element_count) {
+					void* allocation = nullptr;
+					if constexpr (read_data) {
+						size_t soa_index = GetReflectionTypeSoaIndex(type, subindex);
+						// Verify we need to make the allocation or not
+						bool is_soa_initialized = soa_initialized_indices.Find(soa_index) != -1;
+						if (!is_soa_initialized) {
+							soa_initialized_indices.Add(soa_index);
+							// Gather all the pointer byte sizes to make a single allocation
+							const ReflectionTypeMiscSoa* soa = &type->misc_info[soa_index].soa;
+							size_t per_element_size = 0;
+							// At the same time, push the field indices into the initialized but not read data stream
+							for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
+								per_element_size += type->fields[soa->parallel_streams[soa_stream_index]].info.stream_byte_size;
+								if (soa->parallel_streams[soa_stream_index] != subindex) {
+									// Only if this index is different from ours
+									soa_initialized_but_not_read_indices.AddAssert(soa->parallel_streams[soa_stream_index]);
+								}
+							}
+
+							size_t allocation_size = per_element_size * element_count;
+							AllocatorPolymorphic allocator_to_use = field_allocator.allocator != nullptr ? field_allocator : options->backup_allocator;
+							allocation = Allocate(allocator_to_use, allocation_size);
+
+							// Now write the corresponding pointers in the address
+							for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
+								void** soa_ptr = (void**)OffsetPointer(address, type->fields[soa->parallel_streams[soa_stream_index]].info.pointer_offset);
+								*soa_ptr = allocation;
+								allocation = OffsetPointer(allocation, type->fields[soa->parallel_streams[soa_stream_index]].info.stream_byte_size * element_count);
+							}
+						}
+						else {
+							// We need to remove ourselves from the initialized_but_not_read_indices
+							unsigned int existing_index = soa_initialized_but_not_read_indices.Find(subindex);
+							ECS_ASSERT(existing_index != -1, "Critical error during deserialization");
+							soa_initialized_but_not_read_indices.RemoveSwapBack(existing_index);
+
+							// For this case, we need to return the correct pointer
+							allocation = *(void**)OffsetPointer(address, type->fields[subindex].info.pointer_offset);
+						}
+					}
+					return allocation;
+				};
 
 				// Both types are consistent, check for the same user defined type if there is one
 				if (file_field_info.basic_type == type_field_info.basic_type && file_field_info.stream_type == type_field_info.stream_type) {
@@ -1167,42 +1211,7 @@ namespace ECSEngine {
 
 								size_t nested_type_byte_size = GetReflectionTypeByteSize(nested_type);
 
-								void* allocation = nullptr;
-								if constexpr (read_data) {
-									size_t soa_index = GetReflectionTypeSoaIndex(type, subindex);
-									// Verify we need to make the allocation or not
-									bool is_soa_initialized = soa_initialized_indices.Find(soa_index) != -1;
-									if (!is_soa_initialized) {
-										// Gather all the pointer byte sizes to make a single allocation
-										const ReflectionTypeMiscSoa* soa = &type->misc_info[soa_index].soa;
-										size_t per_element_size = 0;
-										// At the same time, push the field indices into the initialized but not read data stream
-										for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
-											per_element_size += type->fields[soa->parallel_streams[soa_stream_index]].info.stream_byte_size;
-											if (soa->parallel_streams[soa_stream_index] != subindex) {
-												// Only if this index is different from ours
-												soa_initialized_but_not_read_indices.AddAssert(soa->parallel_streams[soa_stream_index]);
-											}
-										}
-
-										size_t allocation_size = per_element_size * element_count;
-										AllocatorPolymorphic allocator_to_use = field_allocator.allocator != nullptr ? field_allocator : options->backup_allocator;
-										allocation = Allocate(allocator_to_use, allocation_size);
-
-										// Now write the corresponding pointers in the address
-										for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
-											void** soa_ptr = (void**)OffsetPointer(address, type->fields[soa->parallel_streams[soa_stream_index]].info.pointer_offset);
-											*soa_ptr = allocation;
-											allocation = OffsetPointer(allocation, type->fields[soa->parallel_streams[soa_stream_index]].info.stream_byte_size * element_count);
-										}
-									}
-									else {
-										// We need to remove ourselves from the initialized_but_not_read_indices
-										unsigned int existing_index = soa_initialized_but_not_read_indices.Find(subindex);
-										ECS_ASSERT(existing_index != -1, "Critical error during deserialization");
-										soa_initialized_but_not_read_indices.RemoveSwapBack(existing_index);
-									}
-								}
+								void* allocation = handle_soa_allocation(element_count);								
 
 								// Now deserialize each instance
 								// If the read_data is false, then the offset here does nothing
@@ -1341,7 +1350,17 @@ namespace ECSEngine {
 							field_allocator = options->GetFieldAllocator(type_field_info.stream_type, field_data);
 						}
 
-						ReadOrReferenceFundamentalType<read_data>(type_field_info, field_data, stream, file_field_info.basic_type_count, field_allocator);
+						if (type_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+							size_t byte_size;
+							Read<true>(&stream, &byte_size, sizeof(byte_size));
+							// We don't want to advance this, as the read or reference fundamental type
+							// Will need that value
+							stream -= sizeof(byte_size);
+
+							size_t element_count = byte_size / file_field_info.stream_byte_size;
+							handle_soa_allocation(element_count);
+						}
+						ReadOrReferenceFundamentalType<read_data>(type_field_info, field_data, stream, file_field_info.basic_type_count, field_allocator, false);
 					}
 				}
 				// Mismatch - try to solve it
@@ -1576,6 +1595,18 @@ namespace ECSEngine {
 				}
 				else {
 					memset(*pointer, 0, pointer_size * element_byte_size);
+				}
+			}
+
+			// There is one more thing to do. For SoA streams that have a capacity assigned, we need to change the capacity
+			// To the size since that is the allocation capacity
+			for (size_t index = 0; index < type->misc_info.size; index++) {
+				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_SOA) {
+					const ReflectionTypeMiscSoa* soa = &type->misc_info[index].soa;
+					if (soa->capacity_field != UCHAR_MAX) {
+						size_t soa_size = GetReflectionPointerSoASize(type, index, address);
+						SetReflectionTypeSoaCapacityValue(type, soa, address, soa_size);
+					}
 				}
 			}
 

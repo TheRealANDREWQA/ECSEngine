@@ -80,12 +80,26 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
+	static void ComponentBufferOffsetFields(ComponentBuffer* component_buffer, unsigned int offset) {
+		component_buffer->pointer_offset += offset;
+		component_buffer->size_offset += offset;
+		if (component_buffer->is_soa_pointer) {
+			for (unsigned int subindex = 0; subindex < component_buffer->soa_pointer_count; subindex++) {
+				component_buffer->soa_pointer_offsets[subindex] += offset;
+			}
+		}
+		if (component_buffer->has_capacity_field) {
+			component_buffer->capacity_offset += offset;
+		}
+	}
+
 	static bool ConvertFieldToComponentBuffer(const ReflectionType* type, unsigned int field_index, ComponentBuffer* component_buffer) {
 		if (IsStream(type->fields[field_index].info.stream_type) && type->fields[field_index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
 			component_buffer->element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[field_index].info);
 			component_buffer->is_data_pointer = false;
 			component_buffer->is_soa_pointer = false;
 			component_buffer->soa_pointer_count = 0;
+			component_buffer->has_capacity_field = false;
 			component_buffer->pointer_offset = type->fields[field_index].info.pointer_offset;
 			component_buffer->size_offset = type->fields[field_index].info.pointer_offset + offsetof(Stream<void>, size);
 			if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Stream) {
@@ -94,6 +108,9 @@ namespace ECSEngine {
 			else if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::CapacityStream ||
 				type->fields[field_index].info.stream_type == ReflectionStreamFieldType::ResizableStream) {
 				component_buffer->size_int_type = ECS_INT32;
+				component_buffer->has_capacity_field = true;
+				component_buffer->capacity_offset = type->fields[field_index].info.pointer_offset + offsetof(CapacityStream<void>, capacity);
+				component_buffer->capacity_int_type = ECS_INT32;
 			}
 			return true;
 		}
@@ -119,6 +136,12 @@ namespace ECSEngine {
 					component_buffer->soa_pointer_offsets[index - 1] = soa_pointer_offset;
 					component_buffer->soa_pointer_element_byte_sizes[index - 1] = soa_pointer_element_byte_size;
 				}
+
+				component_buffer->has_capacity_field = soa->capacity_field != UCHAR_MAX;
+				if (component_buffer->has_capacity_field) {
+					component_buffer->capacity_int_type = BasicTypeToIntType(type->fields[soa->capacity_field].info.basic_type);
+					component_buffer->capacity_offset = type->fields[soa->capacity_field].info.pointer_offset;
+				}
 				return true;
 			}
 		}
@@ -127,6 +150,7 @@ namespace ECSEngine {
 			component_buffer->element_byte_size = 1;
 			component_buffer->is_data_pointer = true;
 			component_buffer->is_soa_pointer = false;
+			component_buffer->has_capacity_field = false;
 			component_buffer->soa_pointer_count = 0;
 			component_buffer->pointer_offset = type->fields[field_index].info.pointer_offset;
 			component_buffer->size_offset = 0;
@@ -169,13 +193,7 @@ namespace ECSEngine {
 							if (nested_buffer_index.count > 0) {
 								// We need to offset the pointer offset and the size offset by the current's field offset
 								unsigned int offset = type->fields[index].info.pointer_offset;
-								nested_buffer.pointer_offset += offset;
-								nested_buffer.size_offset += offset;
-								if (nested_buffer.is_soa_pointer) {
-									for (unsigned int subindex = 0; subindex < nested_buffer.soa_pointer_count; subindex++) {
-										nested_buffer.soa_pointer_offsets[subindex] += offset;
-									}
-								}
+								ComponentBufferOffsetFields(&nested_buffer, offset);
 								// We can return now
 								if (field_index != nullptr) {
 									field_index->Append(nested_buffer_index);
@@ -228,13 +246,7 @@ namespace ECSEngine {
 							GetReflectionTypeRuntimeBuffers(reflection_manager, &nested_type, component_buffers);
 							unsigned int offset = type->fields[index].info.pointer_offset;
 							for (unsigned int subindex = previous_buffer_count; subindex < component_buffers.size; subindex++) {
-								component_buffers[subindex].pointer_offset += offset;
-								component_buffers[subindex].size_offset += offset;
-								if (component_buffers[subindex].is_soa_pointer) {
-									for (unsigned int soa_index = 0; soa_index < component_buffers[subindex].soa_pointer_count; soa_index++) {
-										component_buffers[subindex].soa_pointer_offsets[soa_index] += offset;
-									}
-								}
+								ComponentBufferOffsetFields(&component_buffers[subindex], offset);
 							}
 						}
 					}

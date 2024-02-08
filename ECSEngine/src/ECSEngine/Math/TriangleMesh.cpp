@@ -166,10 +166,30 @@ namespace ECSEngine {
 	{
 		TriangleMesh transformed_mesh;
 
-		transformed_mesh.SetPositionsBuffer(position_storage, position_size, position_capacity);
+		transformed_mesh.SetPositionsBuffer(position_storage, position_size, position_size);
 		transformed_mesh.triangles = triangles;
 
-		TransformPoints(matrix, position_x, position_size, position_storage);
+		//ECS_STACK_CAPACITY_STREAM(float, temporary_storage, 1024);
+		//memcpy(temporary_storage.buffer, position_storage, sizeof(float3) * position_capacity);
+		TransformPoints(matrix, position_x, position_size, position_capacity, position_storage, position_size);
+
+		//Vector3 elements;
+		//elements = Vector3().LoadAdjacent(position_x, 0, position_capacity);
+
+		//Vector3 transformed_elements = TransformPoint(elements, matrix).AsVector3();
+		////transformed_elements.StoreAdjacent(output_points_soa, index, capacity);
+
+		//TriangleMesh tmp_mesh;
+		//tmp_mesh.SetPositionsBuffer(temporary_storage.buffer, position_size, position_capacity);
+		//for (unsigned int index = 0; index < position_size; index++) {
+		//	float3 point = GetPoint(index);
+		//	float3 transformed_point = TransformPoint(point, matrix).xyz();
+		//	tmp_mesh.SetPoint(index, transformed_point);
+		//}
+		//if (memcmp(temporary_storage.buffer, position_storage, sizeof(float3) * position_size) != 0) {
+		//	__debugbreak();
+		//}
+
 		return transformed_mesh;
 	}
 

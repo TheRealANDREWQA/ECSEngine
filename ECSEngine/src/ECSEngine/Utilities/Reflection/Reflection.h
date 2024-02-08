@@ -576,6 +576,12 @@ namespace ECSEngine {
 		// Byte size of the size field
 		ECSENGINE_API void SetReflectionPointerSoASize(const ReflectionType* type, size_t soa_index, void* data, size_t value);
 
+		// Returns -1 if there is no capacity field
+		ECSENGINE_API size_t GetReflectionTypeSoaCapacityValue(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, const void* data);
+
+		// It does nothing if there is no capacity field
+		ECSENGINE_API void SetReflectionTypeSoaCapacityValue(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, void* data, size_t value);
+
 		// Returns the offset from the current field info to the size field
 		ECS_INLINE short GetReflectionFieldPointerSoASizeRelativeOffset(const ReflectionFieldInfo& info) {
 			if (info.soa_size_pointer_offset > info.pointer_offset) {
