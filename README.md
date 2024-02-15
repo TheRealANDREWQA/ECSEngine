@@ -5,8 +5,8 @@
 This is a C++ Game Engine designed to be among the fastest and the most responsive game engine to use. It is in active development, all parts being highly volatile. It uses C++ scripting based on dlls, with hot reloading for editor iterations. This provides access to the native engine functions without any wrappers or marshalling. The design is highly modular, the functionality of the engine (Graphics, Collision Detection, Physics, and all others) being developed as modules, not as hard coded utilities in the engine.
 
 # Screenshots
-![Prefab](https://github.com/TheRealANDREWQA/ECSEngine/assets/68424250/2b2edbb3-7165-44d4-bd12-97f943732f80)
-<img width="1280" alt="Screenshot_276" src="https://github.com/TheRealANDREWQA/ECSEngine/assets/68424250/1eb48c12-7ba4-42d5-97c8-d1f0b21061d5">
+![Prefab](https://github.com/TheRealANDREWQA/ECSEngine/assets/68424250/1eb48c12-7ba4-42d5-97c8-d1f0b21061d5)
+<img width="1280" alt="Screenshot_276" src="https://github.com/TheRealANDREWQA/ECSEngine/assets/68424250/bc12bf7d-ebb6-4150-a3ee-b502d6d08d91">
 
 # Platforms
 - OS: Windows
