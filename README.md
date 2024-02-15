@@ -6,7 +6,7 @@ This is a C++ Game Engine designed to be among the fastest and the most responsi
 
 # Screenshots
 ![Prefab](https://github.com/TheRealANDREWQA/ECSEngine/assets/68424250/2b2edbb3-7165-44d4-bd12-97f943732f80)
-<img width="1280" alt="Screenshot_276" src="https://github.com/TheRealANDREWQA/ECSEngine/assets/68424250/7418ad2a-7a2b-4c53-b0ad-3ceeee97f35b">
+<img width="1280" alt="Screenshot_276" src="https://github.com/TheRealANDREWQA/ECSEngine/assets/68424250/1eb48c12-7ba4-42d5-97c8-d1f0b21061d5">
 
 # Platforms
 - OS: Windows
