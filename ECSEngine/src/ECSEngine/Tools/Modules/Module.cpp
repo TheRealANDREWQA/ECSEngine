@@ -827,8 +827,13 @@ namespace ECSEngine {
 				if (data->inherit_data == nullptr) {
 					Stream<char> inherit_name = { OffsetPointer(data, sizeof(*data)), data->inherit_data_name_size };
 					unsigned int task_index = world->task_manager->FindTask(inherit_name);
-					ECS_CRASH_CONDITION(task_index != -1, "Failed to find task {#} to reference data", inherit_name);
-					data->inherit_data = world->task_manager->GetTaskPtr(task_index)->data;
+					if (task_index != -1) {
+						data->inherit_data = world->task_manager->GetTaskPtr(task_index)->data;
+					}
+					else {
+						// TODO: The crash here might interfere with invalidated module
+						//ECS_CRASH_CONDITION(task_index != -1, "Failed to find task {#} to reference data", inherit_name);
+					}
 				}
 			}
 			void* function_data = data->inherit_data;

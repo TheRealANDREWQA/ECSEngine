@@ -275,6 +275,7 @@
     <ClInclude Include="src\ECSEngine\Math\TriangleMesh.h" />
     <ClInclude Include="src\ECSEngine\Math\SpatialGrid.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorBase.h" />
+    <ClInclude Include="src\ECSEngine\Math\Triangle.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -447,6 +448,7 @@
     <ClCompile Include="src\ECSEngine\Math\TriangleMesh.cpp" />
     <ClCompile Include="src\ECSEngine\Math\SpatialGrid.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorBase.cpp" />
+    <ClCompile Include="src\ECSEngine\Math\Triangle.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

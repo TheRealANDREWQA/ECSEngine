@@ -1328,7 +1328,9 @@ namespace ECSEngine {
 				}
 			}
 		}
-		__except (ThreadExceptionFilter(task_manager, thread_id, GetExceptionInformation())) {}
+		__except (ThreadExceptionFilter(task_manager, thread_id, GetExceptionInformation())) {
+			task_manager->ResetThreadToProcedure(thread_id, true);
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

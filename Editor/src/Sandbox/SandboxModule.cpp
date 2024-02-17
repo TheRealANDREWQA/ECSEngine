@@ -66,8 +66,7 @@ static void UpdateSandboxModuleEnabledDebugDrawTasks(
 		else {
 			// Remove it if it exists
 			if (existing_index != -1) {
-				sandbox_module->enabled_debug_tasks[existing_index].Deallocate(sandbox_module->EnabledDebugTasksAllocator());
-				sandbox_module->enabled_debug_tasks.RemoveSwapBack(existing_index);
+				RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name);
 				change_happened = true;
 			}
 		}

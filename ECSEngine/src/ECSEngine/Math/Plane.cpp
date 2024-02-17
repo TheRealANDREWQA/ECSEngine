@@ -175,6 +175,25 @@ namespace ECSEngine {
 		return IsAbovePlaneMaskImpl<SIMDVectorMask>(plane, point);
 	}
 
+	template<typename Mask, typename Plane, typename Vector>
+	static ECS_INLINE Mask ECS_VECTORCALL IsOnSamePlaneSideImpl(Plane plane, Vector point, Vector reference_point) {
+		auto point_distance = DistanceToPlane(plane, point);
+		auto reference_point_distance = DistanceToPlane(plane, reference_point);
+
+		auto zero = SingleZeroVector<Vector>();
+		// They are on the same side if the distance has the same sign
+		// We could test by multiplying and seeing if the value is positive
+		return (point_distance * reference_point_distance) > zero;
+	}
+
+	bool ArePointsSamePlaneSide(PlaneScalar plane, float3 point, float3 reference_point) {
+		return IsOnSamePlaneSideImpl<bool>(plane, point, reference_point);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL ArePointsSamePlaneSide(Plane plane, Vector3 point, Vector3 reference_point) {
+		return IsOnSamePlaneSideImpl<SIMDVectorMask>(plane, point, reference_point);
+	}
+
 	template<typename ReturnType, typename Plane>
 	static ECS_INLINE ReturnType ECS_VECTORCALL AngleBetweenPlanesRadImpl(Plane plane_a, Plane plane_b) {
 		return acos(PlanesDotProduct(plane_a, plane_b));
@@ -184,8 +203,83 @@ namespace ECSEngine {
 		return AngleBetweenPlanesRadImpl<float>(plane_b, plane_b);
 	}
 
-	Vec8f AngleBetweenPlanesRad(Plane plane_a, Plane plane_b) {
+	Vec8f ECS_VECTORCALL AngleBetweenPlanesRad(Plane plane_a, Plane plane_b) {
 		return AngleBetweenPlanesRadImpl<Vec8f>(plane_b, plane_b);
 	}
 
+	float3 ProjectPointOnPlane(PlaneScalar plane, float3 point) {
+		return point - plane.normal * DistanceToPlane(plane, point);
+	}
+
+	Vector3 ECS_VECTORCALL ProjectPointOnPlane(Plane plane, Vector3 point) {
+		return point - plane.normal * DistanceToPlane(plane, point);
+	}
+
+	float DistanceToPlane(PlaneScalar plane, float3 point) {
+		return Dot(point, plane.normal) - plane.dot;
+	}
+
+	Vec8f ECS_VECTORCALL DistanceToPlane(Plane plane, Vector3 point) {
+		return Dot(point, plane.normal) - plane.dot;
+	}
+
+	bool IsPointOnPlane(PlaneScalar plane, float3 point)
+	{
+		return CompareMaskSingle<float>(Dot(plane.normal, point), plane.dot);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL IsPointOnPlane(Plane plane, Vector3 point)
+	{
+		return CompareMaskSingle<Vec8f>(Dot(plane.normal, point), plane.dot);
+	}
+
+	bool ArePointsCoplanar(Stream<float3> points) {
+		if (points.size <= 3) {
+			return true;
+		}
+
+		// Make a plane out of the first 3 non-collinear points, and then test each other point that it lies
+		// In the same plane
+		size_t second_point_index = 1;
+		if (points[0] == points[1]) {
+			// Keep searching for the second point
+			while (points[0] == points[second_point_index] && second_point_index < points.size) {
+				second_point_index++;
+			}
+		}
+		size_t third_point_index = second_point_index + 1;
+		if (third_point_index >= points.size) {
+			// All points are equal
+			return true;
+		}
+
+		while (IsPointCollinear(points[0], points[second_point_index], points[third_point_index]) && third_point_index < points.size) {
+			third_point_index++;
+		}
+		if (third_point_index >= points.size - 1) {
+			// All points are collinear or all but one are collinear
+			return true;
+		}
+
+		PlaneScalar plane = ComputePlane(points[0], points[second_point_index], points[third_point_index]);
+		for (size_t index = third_point_index + 1; index < points.size; index++) {
+			// The points are on the same
+			if (!IsPointOnPlane(plane, points[index])) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	bool ArePointsCoplanar(float3 A, float3 B, float3 C, float3 D) {
+		// We have multiple ways of detecting this
+		// If the dot product of the normals formed by the triangle ABC and ABD is near 0,
+		// Then they are coplanar. Or we can create a plane out of ABC and verify that the distance
+		// To the plane is 0.0f. Probably the latter is a better choice, since if we go with 2 unnormalized
+		// Cross products, if they have large magnitudes, we could miss the coplanarity due to the relative
+		// High product value
+		PlaneScalar ABC_plane = ComputePlane(A, B, C);
+		return CompareMaskSingle<float>(DistanceToPlane(ABC_plane, D), 0.0f);
+	}
 }

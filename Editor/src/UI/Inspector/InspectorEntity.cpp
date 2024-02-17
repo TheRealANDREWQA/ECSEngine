@@ -11,6 +11,7 @@
 #include "../AssetOverrides.h"
 #include "../../Assets/Prefab.h"
 #include "../OpenPrefab.h"
+#include "../Common.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -795,7 +796,6 @@ struct AddComponentCallbackData {
 	EditorState* editor_state;
 	unsigned int sandbox_index;
 	Stream<char> component_name;
-	Entity entity;
 };
 
 void AddComponentCallback(ActionData* action_data) {
@@ -803,7 +803,7 @@ void AddComponentCallback(ActionData* action_data) {
 
 	AddComponentCallbackData* data = (AddComponentCallbackData*)_data;
 	Stream<char> link_target = data->editor_state->editor_components.GetComponentFromLink(data->component_name);
-	AddSandboxEntityComponentEx(data->editor_state, data->sandbox_index, data->entity, link_target.size > 0 ? link_target : data->component_name);
+	AddSandboxEntityComponentEx(data->editor_state, data->sandbox_index, data->draw_data->entity, link_target.size > 0 ? link_target : data->component_name);
 	// Re-render the sandbox as well
 	RenderSandboxViewports(data->editor_state, data->sandbox_index);
 
@@ -1540,152 +1540,59 @@ static void DrawAddComponentMenu(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	InspectorDrawEntityData* data, 
-	EntityManager* entity_manager,
 	UIDrawer* drawer,
 	ComponentSignature unique_signature,
 	SharedComponentSignature shared_signature
 ) {
-	unsigned int module_count = editor_state->editor_components.loaded_modules.size;
-	bool* is_submenu = (bool*)ECS_STACK_ALLOC(sizeof(bool) * module_count);
-	memset(is_submenu, 1, sizeof(bool) * module_count);
-
-	UIDrawerMenuState* submenues = (UIDrawerMenuState*)ECS_STACK_ALLOC(sizeof(UIDrawerMenuState) * module_count);
-	// These won't be used, but still need to be provided with data size 0
-	UIActionHandler* dummy_handlers = (UIActionHandler*)ECS_STACK_ALLOC(sizeof(UIActionHandler) * module_count);
-
-	UIDrawerMenuState add_menu_state;
-	add_menu_state.row_count = 0;
-	add_menu_state.row_has_submenu = is_submenu;
-	add_menu_state.submenues = submenues;
-	add_menu_state.submenu_index = 0;
-	add_menu_state.click_handlers = dummy_handlers;
-
-	ECS_STACK_CAPACITY_STREAM(char, add_menu_state_characters, 512);
-
-	for (unsigned int index = 0; index < module_count; index++) {
-		ECS_STACK_CAPACITY_STREAM(unsigned int, component_indices, 256);
-		ECS_STACK_CAPACITY_STREAM(unsigned int, shared_indices, 256);
-
-		editor_state->editor_components.GetModuleComponentIndices(index, &component_indices, true);
-		editor_state->editor_components.GetModuleSharedComponentIndices(index, &shared_indices, true);
-
-		ECS_STACK_CAPACITY_STREAM(unsigned int, valid_component_indices, 256);
-		ECS_STACK_CAPACITY_STREAM(unsigned int, valid_shared_indices, 256);
-
-		auto has_unique_component = [&](Component id) {
-			return entity_manager->HasComponent(data->entity, id);
-		};
-
-		auto has_shared_component = [&](Component id) {
-			return entity_manager->HasSharedComponent(data->entity, id);
-		};
-
-		auto get_valid_indices = [&](CapacityStream<unsigned int> component_indices, CapacityStream<unsigned int>& valid_indices, auto has_component) {
-			for (unsigned int component_index = 0; component_index < component_indices.size; component_index++) {
-				Stream<char> component_name = editor_state->editor_components.loaded_modules[index].types[component_indices[component_index]];
-				Stream<char> target_component = editor_state->editor_components.GetComponentFromLink(component_name);
-				if (target_component.size > 0) {
-					component_name = target_component;
-				}
-				Component id = editor_state->editor_components.GetComponentIDWithLink(component_name);
-				ECS_ASSERT(id.value != -1);
-				// Check to see if the reflection type is omitted or not from the UI
-				const Reflection::ReflectionType* reflection_type = editor_state->GlobalReflectionManager()->GetType(component_name);
-				if (!IsUIReflectionTypeOmitted(reflection_type)) {
-					if (!has_component(id)) {
-						valid_indices.Add(component_indices[component_index]);
-					}
-				}
-			}
-		};
-
-		get_valid_indices(component_indices, valid_component_indices, has_unique_component);
-		get_valid_indices(shared_indices, valid_shared_indices, has_shared_component);
-
-		// If the module doesn't have any more valid components left, eliminate it
-		if (valid_component_indices.size == 0 && valid_shared_indices.size == 0) {
-			continue;
+	struct DrawComponentMenuFunctor {
+		// Returns true if the component should appear in the menu
+		bool IsUniqueEnabled(Component component) const {
+			return unique_components.Find(component) == UCHAR_MAX;
 		}
 
-		// Increment the row count as we go
-		unsigned int valid_module_index = add_menu_state.row_count;
-
-		add_menu_state_characters.AddStream(editor_state->editor_components.loaded_modules[index].name);
-		add_menu_state_characters.Add('\n');
-		dummy_handlers[valid_module_index].data_size = 0;
-
-		component_indices = valid_component_indices;
-		shared_indices = valid_shared_indices;
-
-		unsigned int total_component_count = component_indices.size + shared_indices.size;
-
-		// The ECS_STACK_ALLOC references are going to be valid outside the scope of the for because _alloca is deallocated on function exit
-		UIActionHandler* handlers = (UIActionHandler*)ECS_STACK_ALLOC(sizeof(UIActionHandler) * total_component_count);
-		AddComponentCallbackData* handler_data = (AddComponentCallbackData*)ECS_STACK_ALLOC(sizeof(AddComponentCallbackData) * total_component_count);
-		submenues[valid_module_index].click_handlers = handlers;
-		submenues[valid_module_index].right_characters = { nullptr, 0 };
-		submenues[valid_module_index].row_has_submenu = nullptr;
-		submenues[valid_module_index].submenues = nullptr;
-		submenues[valid_module_index].separation_line_count = 0;
-
-		void* _left_character_allocation = ECS_STACK_ALLOC(sizeof(char) * 512);
-		CapacityStream<char> left_characters;
-		left_characters.InitializeFromBuffer(_left_character_allocation, 0, 512);
-
-		auto write_menu = [&](size_t module_index, Stream<unsigned int> indices, unsigned int write_offset) {
-			for (unsigned int subindex = 0; subindex < indices.size; subindex++) {
-				Stream<char> component_name = editor_state->editor_components.loaded_modules[module_index].types[indices[subindex]];
-				Stream<char> initial_name = component_name;
-				// If it is a link component, prettify it
-				if (editor_state->editor_components.IsLinkComponent(component_name)) {
-					component_name = GetReflectionTypeLinkNameBase(component_name);
-				}
-
-				left_characters.AddStream(component_name);
-				left_characters.AddAssert('\n');
-				handler_data[subindex + write_offset] = { data, editor_state, sandbox_index, initial_name, data->entity };
-				handlers[subindex + write_offset] = { AddComponentCallback, handler_data + subindex + write_offset, sizeof(AddComponentCallbackData), ECS_UI_DRAW_NORMAL };
-			}
-		};
-
-		write_menu(index, component_indices, 0);
-		write_menu(index, shared_indices, component_indices.size);
-
-		// Remove the last '\n'
-		left_characters.size--;
-
-		submenues[valid_module_index].left_characters = left_characters;
-		submenues[valid_module_index].row_count = total_component_count;
-		if (component_indices.size > 0 && shared_indices.size) {
-			submenues[valid_module_index].separation_lines[0] = component_indices.size;
-			submenues[valid_module_index].separation_line_count = 1;
+		// Returns true if the component should appear in the menu
+		bool IsSharedEnabled(Component component) const {
+			return shared_components.Find(component) == UCHAR_MAX;
 		}
-		submenues[valid_module_index].submenu_index = 1;
 
-		bool* is_unavailable = (bool*)ECS_STACK_ALLOC(sizeof(bool) * total_component_count);
-		bool can_have_unique = unique_signature.count < ECS_ARCHETYPE_MAX_COMPONENTS;
-		bool can_have_shared = shared_signature.count < ECS_ARCHETYPE_MAX_SHARED_COMPONENTS;
-		memset(is_unavailable, !can_have_unique, sizeof(bool) * component_indices.size);
-		memset(is_unavailable + component_indices.size, !can_have_shared, sizeof(bool) * shared_indices.size);
-		submenues[valid_module_index].unavailables = is_unavailable;
+		// Fills the data for a click handler
+		void Fill(void* callback_data_untyped, Stream<char> component_name) {
+			AddComponentCallbackData* callback_data = (AddComponentCallbackData*)callback_data_untyped;
+			*callback_data = { data, editor_state, sandbox_index, component_name };
+		}
 
-		add_menu_state.row_count++;
-	}
-	// Remove the last '\n'
-	if (add_menu_state_characters.size > 0) {
-		add_menu_state_characters.size--;
-	}
-	add_menu_state.left_characters = add_menu_state_characters;
+		// Return true if the unique entries should be made unavailable
+		bool LimitUnique() const {
+			return unique_components.count == ECS_ARCHETYPE_MAX_COMPONENTS;
+		}
+
+		// Return true if the shared entries should be made unavailable
+		bool LimitShared() const {
+			return shared_components.count == ECS_ARCHETYPE_MAX_SHARED_COMPONENTS;
+		}
+
+		EditorState* editor_state;
+		InspectorDrawEntityData* data;
+		unsigned int sandbox_index;
+		ComponentSignature unique_components;
+		SharedComponentSignature shared_components;
+	};
+	DrawComponentMenuFunctor draw_menu_functor = { editor_state, data, sandbox_index, unique_signature, shared_signature };
 
 	UIDrawConfig config;
 	UIConfigAlignElement align_element;
 	align_element.horizontal = ECS_UI_ALIGN_MIDDLE;
 	config.AddFlag(align_element);
 
-	UIConfigActiveState active_state;
-	active_state.state = add_menu_state.row_count > 0;
-	config.AddFlag(active_state);
-	drawer->Menu(UI_CONFIG_ALIGN_ELEMENT | UI_CONFIG_ACTIVE_STATE | UI_CONFIG_MENU_COPY_STATES, config, "Add Component", &add_menu_state);
+	DrawChooseComponentMenu(
+		editor_state,
+		*drawer,
+		UI_CONFIG_ALIGN_ELEMENT,
+		config,
+		"Add Component",
+		{ AddComponentCallback, nullptr, sizeof(AddComponentCallbackData), ECS_UI_DRAW_NORMAL },
+		draw_menu_functor
+	);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -1998,7 +1905,6 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			editor_state,
 			sandbox_index,
 			data,
-			entity_manager,
 			drawer,
 			unique_signature,
 			shared_signature

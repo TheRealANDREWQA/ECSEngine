@@ -6340,7 +6340,7 @@ namespace ECSEngine {
 							if (remainder_size > 0.0f) {
 								needed_rows += (size_t)(remainder_size / (region_limit.x - GetNextRowXPosition())) + 1;
 							}
-							FinalizeRectangle(0, position, { 0.0f, text_span.y * needed_rows });
+							FinalizeRectangle(0, position, { 0.0f, text_span.y * needed_rows + (needed_rows - 1) * layout.next_row_y_offset });
 
 						}
 						else {

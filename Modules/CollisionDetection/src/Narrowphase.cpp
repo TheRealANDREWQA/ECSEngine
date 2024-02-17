@@ -56,6 +56,32 @@ ECS_THREAD_TASK(NarrowphaseGridHandler) {
 				// Intersection
 				LogInfo("Collision");
 			}
+			else {
+				/*CameraCached camera = world->entity_manager->GetGlobalComponent<CameraComponent>()->value;
+				float3 camera_pos = camera.translation;
+				ECS_FORMAT_TEMP_STRING(duration_string, "{#}", distance);*/
+				//world->debug_drawer->AddStringThread(thread_id, camera_pos + camera.GetForwardVector() * 2.0f, camera.GetRightVector(), 0.5f, duration_string, ECS_COLOR_AQUA);
+
+				//float3 offset = second_translation != nullptr ? second_translation->value : float3::Splat(0.0f);
+				//world->debug_drawer->AddStringThread(thread_id, offset, float3{ 1.0f, 0.0f, 0.0f }, 0.5f, duration_string, ECS_COLOR_AQUA);
+				//world->debug_drawer->AddPointThread(thread_id, offset, 2.0f, ECS_COLOR_MAGENTA);
+
+				//size_t reduction = first_collider->hull_size + second_collider->hull_size;
+				///*size_t draw_count = reduction < GJK_MK_COUNT ? GJK_MK_COUNT - reduction : 0;
+				//for (size_t index = 0; index < draw_count; index++) {
+				//	world->debug_drawer->AddPointThread(thread_id, offset + GJK_MK[index], 3.0f, ECS_COLOR_PINK);
+				//}*/
+				//GJKSimplex simplex = GJK_SIMPLICES[reduction < 50 ? reduction : 49];
+				//GJK_SIMPLEX[0] = simplex.points[0];
+				//GJK_SIMPLEX[1] = simplex.points[1];
+				//GJK_SIMPLEX[2] = simplex.points[2];
+				//GJK_SIMPLEX[3] = simplex.points[3];
+				//GJK_SIMPLEX_COUNT = simplex.point_count;
+
+				//world->debug_drawer->AddPointThread(thread_id, GJK_A, 3.0f, ECS_COLOR_PINK);
+				//world->debug_drawer->AddPointThread(thread_id, GJK_B, 3.0f, ECS_COLOR_PINK);
+				//world->debug_drawer->AddLineThread(thread_id, GJK_A, GJK_B, ECS_COLOR_PURPLE);
+			}
 		}
 	}
 }

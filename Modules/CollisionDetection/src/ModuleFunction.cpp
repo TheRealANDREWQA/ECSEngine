@@ -110,7 +110,7 @@ void ModuleRegisterDebugDrawTaskElementsFunction(ECSEngine::ModuleRegisterDebugD
 
 static void BuildConvexColliderTaskBase(ModuleComponentBuildFunctionData* data) {
 	const RenderMesh* render_mesh = data->entity_manager->TryGetComponent<RenderMesh>(data->entity);
-	if (render_mesh != nullptr) {
+	if (render_mesh != nullptr && render_mesh->Validate()) {
 		AllocatorPolymorphic world_allocator = data->world_global_memory_manager;
 		// We need to make sure that we use multithreaded allocations here
 		world_allocator.allocation_type = ECS_ALLOCATION_MULTI;
@@ -146,25 +146,31 @@ static ThreadTask ModuleBuildConvexCollider(ModuleComponentBuildFunctionData* da
 }
 
 static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) {
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 	const ConvexCollider* collider = (const ConvexCollider*)data->component;
 	const Translation* translation = (const Translation*)data->dependency_components[0];
+	const Rotation* rotation = (const Rotation*)data->dependency_components[1];
+	const Scale* scale = (const Scale*)data->dependency_components[2];
 	float3 translation_value = translation != nullptr ? translation->value : float3::Splat(0.0f);
 	translation_value += float3::Splat(0.0f);
 	//translation_value = float3::Splat(0.0f);
+
+	Matrix entity_matrix = GetEntityTransformMatrix(translation, rotation, scale);
+	TriangleMesh transformed_mesh = collider->mesh.Transform(entity_matrix, &stack_allocator);
 	
-	size_t count = collider->mesh.triangles.size < collider->hull_size ? 0 : collider->mesh.triangles.size - collider->hull_size;
+	size_t count = transformed_mesh.triangles.size < collider->hull_size ? 0 : transformed_mesh.triangles.size - collider->hull_size;
 	for (size_t index = 0; index < count; index++) {
-		uint3 triangle = collider->mesh.triangles[index];
-		float3 a = collider->mesh.GetPoint(triangle.x);
-		float3 b = collider->mesh.GetPoint(triangle.y);
-		float3 c = collider->mesh.GetPoint(triangle.z);
+		uint3 triangle = transformed_mesh.triangles[index];
+		float3 a = transformed_mesh.GetPoint(triangle.x);
+		float3 b = transformed_mesh.GetPoint(triangle.y);
+		float3 c = transformed_mesh.GetPoint(triangle.z);
 
 		DebugDrawCallOptions options;
 		options.wireframe = true;
-		data->debug_drawer->AddTriangleThread(data->thread_id, translation_value + a, translation_value + b, translation_value + c, ECS_COLOR_GREEN, options);
+		data->debug_drawer->AddTriangleThread(data->thread_id, a, b, c, ECS_COLOR_GREEN, options);
 	}
-	for (size_t index = 0; index < collider->mesh.position_size; index++) {
-		data->debug_drawer->AddPointThread(data->thread_id, translation_value + collider->mesh.GetPoint(index), 1.0f, ECS_COLOR_AQUA);
+	for (size_t index = 0; index < transformed_mesh.position_size; index++) {
+		data->debug_drawer->AddPointThread(data->thread_id, transformed_mesh.GetPoint(index), 1.0f, ECS_COLOR_AQUA);
 	}
 }
 
@@ -177,6 +183,8 @@ void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsDa
 
 	convex_collider.debug_draw.draw_function = ConvexColliderDebugDraw;
 	convex_collider.debug_draw.AddDependency({ Translation::ID(), ECS_COMPONENT_UNIQUE });
+	convex_collider.debug_draw.AddDependency({ Rotation::ID(), ECS_COMPONENT_UNIQUE });
+	convex_collider.debug_draw.AddDependency({ Scale::ID(), ECS_COMPONENT_UNIQUE });
 
 	data->functions->AddAssert(convex_collider);
 }

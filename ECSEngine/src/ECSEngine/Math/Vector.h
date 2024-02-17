@@ -194,6 +194,46 @@ namespace ECSEngine {
 		}
 	}
 
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL VectorGenericLess(Vector a, Vector b) {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vector4> || std::is_same_v<Vector, Vec8f>) {
+			return a < b;
+		}
+		else {
+			return BasicTypeLess(a, b);
+		}
+	}
+
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL VectorGenericLessEqual(Vector a, Vector b) {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vector4> || std::is_same_v<Vector, Vec8f>) {
+			return a < b;
+		}
+		else {
+			return BasicTypeLessEqual(a, b);
+		}
+	}
+
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL VectorGenericGreater(Vector a, Vector b) {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vector4> || std::is_same_v<Vector, Vec8f>) {
+			return a > b;
+		}
+		else {
+			return BasicTypeGreater(a, b);
+		}
+	}
+
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL VectorGenericGreaterEqual(Vector a, Vector b) {
+		if constexpr (std::is_same_v<Vector, Vector3> || std::is_same_v<Vector, Vector4> || std::is_same_v<Vector, Vec8f>) {
+			return a > b;
+		}
+		else {
+			return BasicTypeGreaterEqual(a, b);
+		}
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	/*
@@ -411,6 +451,16 @@ namespace ECSEngine {
 	ECSENGINE_API float3 ECS_VECTORCALL ProjectPointOnLine(float3 line_a, float3 line_b, float3 point);
 
 	ECSENGINE_API Vector3 ECS_VECTORCALL ProjectPointOnLine(Vector3 line_a, Vector3 line_b, Vector3 point);
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// For a point that is on the line AB, it clamps the point to be inside the AB segment
+	ECSENGINE_API float3 ECS_VECTORCALL ClampPointToSegment(float3 line_a, float3 line_b, float3 point);
+
+
+	// At the moment, this function is not yet implemented
+	// For a point that is on the line AB, it clamps the point to be inside the AB segment
+	//ECSENGINE_API Vector3 ECS_VECTORCALL ClampPointToSegment(Vector3 line_a, Vector3 line_b, Vector3 point);
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -878,6 +928,30 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API float3 ECS_VECTORCALL ClosestPoint(Stream<float3> points, float3 origin);
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// Returns true if the test point is on the same side of the line AB as the reference point, else false
+	// All points must be coplanar
+	ECSENGINE_API bool PointSameLineHalfPlane(float3 line_a, float3 line_b, float3 reference_point, float3 test_point);
+
+	// Returns true if the test point is on the same side of the line AB as the reference point, else false
+	// All points must be coplanar
+	ECSENGINE_API bool PointSameLineHalfPlaneNormalized(float3 line_point, float3 line_direction_normalized, float3 reference_point, float3 test_point);
+
+	// Returns true if the test point is on the same side of the line AB as the reference point, else false
+	// All points must be coplanar. This version takes the projected test point as input
+	ECSENGINE_API bool PointSameLineHalfPlaneNormalizedEx(
+		float3 line_point,  
+		float3 reference_point, 
+		float3 test_point, 
+		float3 projected_test_point
+	);
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// Returns true if the point is on the same line AB
+	ECSENGINE_API bool IsPointCollinear(float3 line_a, float3 line_b, float3 point);
 
 	// --------------------------------------------------------------------------------------------------------------
 

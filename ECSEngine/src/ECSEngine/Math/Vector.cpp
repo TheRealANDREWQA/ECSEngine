@@ -386,6 +386,32 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	float3 ECS_VECTORCALL ClampPointToSegment(float3 line_a, float3 line_b, float3 point) {
+		float3 PA = point - line_a;
+		float3 PB = point - line_b;
+		float3 line = line_b - line_a;
+		float dot_PA = Dot(PA, line);
+		// If the dot product is negative, it belongs to that vertex voronoi region
+		if (dot_PA < 0.0f) {
+			return line_a;
+		}
+
+		float dot_PB = Dot(PB, line);
+		// If the dot product is positive, since we are still using AB as direction, then it belongs
+		// To the B vertex region
+		if (dot_PA > 0.0f) {
+			return line_b;
+		}
+
+		return ProjectPointOnLine(line_a, line_b, point);
+	}
+
+	//Vector3 ECS_VECTORCALL ClampPointToSegment(Vector3 line_a, Vector3 line_b, Vector3 point) {
+
+	//}
+
+	// --------------------------------------------------------------------------------------------------------------
+
 	template<typename Vector>
 	static ECS_INLINE Vector ECS_VECTORCALL CrossImpl(Vector a, Vector b) {
 		// a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
@@ -1290,6 +1316,40 @@ namespace ECSEngine {
 		}
 
 		return smallest_simd_index == -1 ? smallest_dist_point : closest_points.At(smallest_simd_index);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	bool PointSameLineHalfPlane(float3 line_a, float3 line_b, float3 reference_point, float3 test_point) {
+		return PointSameLineHalfPlaneNormalized(line_a, Normalize(line_b - line_a), reference_point, test_point);
+	}
+
+	bool PointSameLineHalfPlaneNormalized(float3 line_point, float3 line_direction_normalized, float3 reference_point, float3 test_point) {
+		// If multiple points were to be tested like this, an accelerated version can be used where the perpendicular line
+		// Is calculated and cached such that it doesn't have to be recalculated every time
+		float3 projected_point = ProjectPointOnLineDirectionNormalized(line_point, line_direction_normalized, test_point);
+		return PointSameLineHalfPlaneNormalizedEx(line_point, reference_point, test_point, projected_point);
+	}
+
+	bool PointSameLineHalfPlaneNormalizedEx(
+		float3 line_point,
+		float3 reference_point,
+		float3 test_point,
+		float3 projected_test_point
+	) {
+		// If the dot product between the perpendicular line from the test point and the vector from
+		// One point from the line to the reference point is negative, then the points are on opposite halfplanes
+		// To be on the same halfplane, they need to have the dot product positive. A dot product of zero means
+		// The test_point is the line
+		float3 perpendicular_line = test_point - projected_test_point;
+		return Dot(perpendicular_line, reference_point - line_point) > 0.0f;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	bool IsPointCollinear(float3 line_a, float3 line_b, float3 point) {
+		// If the absolute Dot product between 2 vectors is near 0, then they are collinear
+		return CompareMaskSingle<float>(Dot(line_a, line_b), Dot(line_a, point));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
