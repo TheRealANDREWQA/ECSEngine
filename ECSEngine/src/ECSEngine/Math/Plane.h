@@ -111,6 +111,12 @@ namespace ECSEngine {
 	// Returns true if the point is located on the same side as the normal of the plane
 	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsAbovePlaneMask(Plane plane, Vector3 point);
 
+	// Returns true if both the point and the reference point are on the same halfspace, else false
+	ECSENGINE_API bool ArePointsSamePlaneSide(PlaneScalar plane, float3 point, float3 reference_point);
+
+	// Returns true if both the point and the reference point are on the same halfspace, else false
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL ArePointsSamePlaneSide(Plane plane, Vector3 point, Vector3 reference_point);
+
 	// This returns a crude form of an angle estimation between 2 planes.
 	// It is basically the dot product between the 2 normals
 	ECS_INLINE float PlanesDotProduct(PlaneScalar plane_a, PlaneScalar plane_b) {
@@ -119,20 +125,43 @@ namespace ECSEngine {
 
 	// This returns a crude form of an angle estimation between 2 planes.
 	// It is basically the dot product between the 2 normals
-	ECS_INLINE Vec8f PlanesDotProduct(Plane plane_a, Plane plane_b) {
+	ECS_INLINE Vec8f ECS_VECTORCALL PlanesDotProduct(Plane plane_a, Plane plane_b) {
 		return Dot(plane_a.normal, plane_b.normal);
 	}
 
 	ECSENGINE_API float AngleBetweenPlanesRad(PlaneScalar plane_a, PlaneScalar plane_b);
 
-	ECSENGINE_API Vec8f AngleBetweenPlanesRad(Plane plane_a, Plane plane_b);
+	ECSENGINE_API Vec8f ECS_VECTORCALL AngleBetweenPlanesRad(Plane plane_a, Plane plane_b);
 
 	ECS_INLINE float AngleBetweenPlanes(PlaneScalar plane_a, PlaneScalar plane_b) {
 		return RadToDeg(AngleBetweenPlanesRad(plane_a, plane_b));
 	}
 
-	ECS_INLINE Vec8f AngleBetweenPlanes(Plane plane_a, Plane plane_b) {
+	ECS_INLINE Vec8f ECS_VECTORCALL AngleBetweenPlanes(Plane plane_a, Plane plane_b) {
 		return RadToDeg(AngleBetweenPlanesRad(plane_a, plane_b));
 	}
+
+	ECSENGINE_API float3 ProjectPointOnPlane(PlaneScalar plane, float3 point);
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL ProjectPointOnPlane(Plane plane, Vector3 point);
+
+	// There are not squared version of these, since they already produce the distance
+	// Optimally. If you want the squared, just perform a multiply on these
+
+	// This returns a value that can be negative. This value is the distance in the normal's direction
+	ECSENGINE_API float DistanceToPlane(PlaneScalar plane, float3 point);
+
+	// This returns a value that can be negative. This value is the distance in the normal's direction
+	ECSENGINE_API Vec8f ECS_VECTORCALL DistanceToPlane(Plane plane, Vector3 point);
+
+	ECSENGINE_API bool IsPointOnPlane(PlaneScalar plane, float3 point);
+
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsPointOnPlane(Plane plane, Vector3 point);
+
+	// Returns true if all points in the given array are coplanar, else false
+	ECSENGINE_API bool ArePointsCoplanar(Stream<float3> points);
+
+	// Returns true if the points are coplanar, else false
+	ECSENGINE_API bool ArePointsCoplanar(float3 A, float3 B, float3 C, float3 D);
 
 }

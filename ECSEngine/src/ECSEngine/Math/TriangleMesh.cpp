@@ -5,6 +5,7 @@
 #include "Vector.h"
 #include "../Containers/SoA.h"
 #include "../Utilities/Utilities.h"
+#include "Triangle.h"
 
 namespace ECSEngine {
 

@@ -6,6 +6,8 @@
 #include "../Utilities/Algorithms.h"
 #include "SpatialGrid.h"
 #include "../Allocators/ResizableLinearAllocator.h"
+#include "Triangle.h"
+#include "Plane.h"
 
 namespace ECSEngine {
 
@@ -381,43 +383,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	float3 TriangleNormal(float3 a, float3 b, float3 c)
-	{
-		return Cross(b - a, c - a);
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
-	float3 TriangleNormal(float3 a, float3 b, float3 c, float3 look_point)
-	{
-		// Calculate the normal as usual and if the dot product between the normal
-		// And the direction vector of the look point with one of the triangle corners
-		// Is negative, we need to flip it
-		float3 normal = TriangleNormal(a, b, c);
-		if (Dot(normal, look_point - c) < 0.0f) {
-			return -normal;
-		}
-		return normal;
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
-	bool IsTriangleFacing(float3 a, float3 b, float3 c, float3 d)
-	{
-		float3 normal = TriangleNormal(a, b, c);
-		return Dot(normal, d - c) >= 0.0f;
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
-	float TriangleArea(float3 point_a, float3 point_b, float3 point_c)
-	{
-		// length(a X b) / 2
-		return Length(Cross(point_a, point_b)) / 2;
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
 	float TetrahedronVolume(float3 point_a, float3 point_b, float3 point_c, float3 point_d) {
 		// (a X b * c) / 6 
 		// a, b, c are three co-terminal edges - they start from the same point
@@ -761,6 +726,174 @@ namespace ECSEngine {
 	unsigned int* CountSortFloat3Z(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator)
 	{
 		return CountSortFloat3Impl<2>(values, output_values, bucket_count, allocator);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	float3 ClosestPointToSegment(float3 segment_a, float3 segment_b, float3 point) {
+		float3 projection = ProjectPointOnLine(segment_a, segment_b, point);
+		return ClampPointToSegment(segment_a, segment_b, projection);
+	}
+
+	float3 ClosestPointToTriangle(float3 triangle_a, float3 triangle_b, float3 triangle_c, float3 point) {
+		return ProjectPointOnTriangleClamped(triangle_a, triangle_b, triangle_c, point);
+	}
+
+	float3 ClosestPointToTetrahedron(float3 A, float3 B, float3 C, float3 D, float3 point) {
+		// Use voronoi regions to determine what sort of feature we need to use
+		// We can verify faces, and then use the triangle case
+		
+		// For a point to belong to a face region, it must be on the other side
+		// Of the plane formed by the plane with the other tetrahedron point
+		// TODO: We could gain a little bit of speed if we pass the plane to
+		// The project function such that it doesn't have to recalculate it
+
+		if (!ArePointsSameTriangleSide(A, B, C, point, D)) {
+			return ClosestPointToTriangle(A, B, C, point);
+		}
+
+		if (!ArePointsSameTriangleSide(A, B, D, point, C)) {
+			return ClosestPointToTriangle(A, B, D, point);
+		}
+
+		if (!ArePointsSameTriangleSide(A, C, D, point, B)) {
+			return ClosestPointToTriangle(A, C, D, point);
+		}
+
+		if (!ArePointsSameTriangleSide(B, C, D, point, A)) {
+			return ClosestPointToTriangle(B, C, D, point);
+		}
+
+		// The point is contained in the tetrahedron
+		// Return it
+		return point;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+	
+	Simplex1DVoronoiRegion CalculateSimplex1DVoronoiRegion(float3 segment_a, float3 segment_b, float3 point) {
+		Simplex1DVoronoiRegion region;
+
+		// We must do something similar to the ClampPointToSegment
+		// Do not calculate the projection first, since we can skip
+		// That calculation if we are in the vertex region
+
+		float3 PA = point - segment_a;
+		float3 PB = point - segment_b;
+		float3 segment = segment_b - segment_a;
+		float dot_PA = Dot(PA, segment);
+		if (dot_PA < 0.0f) {
+			// It belongs to the A vertex region
+			region.type = ECS_SIMPLEX_VORONOI_VERTEX;
+			region.projection = segment_a;
+			region.points[0] = segment_a;
+			region.points[1] = segment_b;
+			return region;
+		}
+
+		float dot_PB = Dot(PB, segment);
+		if (dot_PB > 0.0f) {
+			// It belongs to the B vertex region
+			region.type = ECS_SIMPLEX_VORONOI_VERTEX;
+			region.projection = segment_b;
+			region.points[0] = segment_b;
+			region.points[1] = segment_a;
+			return region;
+		}
+
+		// We are in the edge case, just project
+		region.type = ECS_SIMPLEX_VORONOI_EDGE;
+		region.projection = ProjectPointOnLine(segment_a, segment_b, point);
+		region.points[0] = segment_a;
+		region.points[1] = segment_b;
+
+		return region;
+	}
+
+	Simplex2DVoronoiRegion CalculateSimplex2DVoronoiRegion(float3 triangle_a, float3 triangle_b, float3 triangle_c, float3 point) {
+		Simplex2DVoronoiRegion region;
+
+		// We must do something similar to the ProjectPointOnTriangleClamped
+
+		// Determine if the projection lies inside each of the triangle's edge. If it fails for one edge,
+		// Then we know we need to clamp the point to that edge
+		float3 projection = ProjectPointOnPlane(ComputePlane(triangle_a, triangle_b, triangle_c), point);
+		auto test_side = [&region, projection](float3 side_first, float3 side_second, float3 other) {
+			if (!PointSameLineHalfPlane(side_first, side_second, other, projection)) {
+				// Clamp the point to the AB edge
+				Simplex1DVoronoiRegion edge_region = CalculateSimplex1DVoronoiRegion(side_first, side_second, projection);
+				region.type = edge_region.type;
+				region.projection = edge_region.projection;
+				region.points[0] = edge_region.points[0];
+				region.points[1] = edge_region.points[1];
+				region.points[2] = other;
+				return true;
+			}
+			return false;
+		};
+
+		// AB edge
+		if (test_side(triangle_a, triangle_b, triangle_c)) {
+			return region;
+		}
+		// AC edge
+		if (test_side(triangle_a, triangle_c, triangle_b)) {
+			return region;
+		}
+		// BC edge
+		if (test_side(triangle_b, triangle_c, triangle_a)) {
+			return region;
+		}
+
+		// It is inside the triangle
+		region.type = ECS_SIMPLEX_VORONOI_FACE;
+		region.projection = projection;
+		region.points[0] = triangle_a;
+		region.points[1] = triangle_b;
+		region.points[2] = triangle_c;
+
+		return region;
+	}
+
+	Simplex3DVoronoiRegion CalculateSimplex3DVoronoiRegion(float3 A, float3 B, float3 C, float3 D, float3 point) {
+		Simplex3DVoronoiRegion region;
+
+		// PERFORMANCE TODO: Implement the slightly less intuitive version which computes all the common first?
+		auto handle_face = [&region, point](float3 triangle_first, float3 triangle_second, float3 triangle_third, float3 other) {
+			if (!ArePointsSameTriangleSide(triangle_first, triangle_second, triangle_third, point, other)) {
+				Simplex2DVoronoiRegion triangle_region = CalculateSimplex2DVoronoiRegion(triangle_first, triangle_second, triangle_third, point);
+				region.type = triangle_region.type;
+				region.projection = triangle_region.projection;
+				memcpy(region.points, triangle_region.points, sizeof(triangle_region.points));
+				region.points[3] = other;
+				return true;
+			}
+			return false;
+		};
+
+		// At the moment, just determine to what face it belongs and revert to that case
+		if (handle_face(A, B, C, D)) {
+			return region;
+		}
+		if (handle_face(A, B, D, C)) {
+			return region;
+		}
+		if (handle_face(A, C, D, B)) {
+			return region;
+		}
+		if (handle_face(B, C, D, A)) {
+			return region;
+		}
+
+		// We are inside the tetrahedron, then we can just return this point
+		region.type = ECS_SIMPLEX_VORONOI_TETRAHEDRON;
+		region.projection = point;
+		region.points[0] = A;
+		region.points[1] = B;
+		region.points[2] = C;
+		region.points[3] = D;
+
+		return region;
 	}
 
 	// --------------------------------------------------------------------------------------------------

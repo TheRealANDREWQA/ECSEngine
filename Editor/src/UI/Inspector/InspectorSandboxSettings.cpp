@@ -8,6 +8,8 @@
 #include "../../Sandbox/SandboxFile.h"
 #include "../../Sandbox/SandboxModule.h"
 #include "../../Sandbox/SandboxProfiling.h"
+#include "../../Sandbox/SandboxEntityOperations.h"
+#include "../Common.h"
 
 #include "../CreateScene.h"
 #include "../../Modules/Module.h"
@@ -36,6 +38,7 @@ struct DrawSandboxSettingsData {
 	EDITOR_SANDBOX_STATE run_state;
 
 	bool collapsing_module_state;
+	bool collapsing_components_state;
 	bool collapsing_runtime_state;
 	bool collapsing_modifiers_state;
 	bool collapsing_statistics_state;
@@ -623,6 +626,90 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		create_data.editor_state = editor_state;
 		create_data.sandbox_index = sandbox_index;
 		drawer->Button("Add Module", { CreateAddSandboxWindow, &create_data, sizeof(create_data), ECS_UI_DRAW_SYSTEM });
+	});
+
+	drawer->CollapsingHeader("Components", &data->collapsing_components_state, [&]() {
+		// At the moment, add some basic functions that operate on all entities
+		// Reset is the primary candidate, maybe Add/Remove for all? Questinable use tho
+		struct ComponentToAllActionData {
+			EditorState* editor_state;
+			unsigned int sandbox_index;
+			Stream<char> component_name;
+		};
+
+		auto reset_component_to_all = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			struct FunctorData {
+				EditorState* editor_state;
+				unsigned int sandbox_index;
+				Stream<char> component_name;
+			};
+
+			ComponentToAllActionData* data = (ComponentToAllActionData*)_data;
+			FunctorData functor_data = { data->editor_state, data->sandbox_index, data->component_name };
+			ArchetypeQueryDescriptor query_descriptor;
+			bool is_shared = data->editor_state->editor_components.IsSharedComponent(data->component_name);
+			Component component_id = data->editor_state->editor_components.GetComponentID(data->component_name);
+			if (is_shared) {
+				query_descriptor.shared = { &component_id, 1 };
+			}
+			else {
+				query_descriptor.unique = { &component_id, 1 };
+			}
+			SandboxForEachEntity(data->editor_state, data->sandbox_index, [](ForEachEntityUntypedFunctorData* for_each_data) {
+				FunctorData* data = (FunctorData*)for_each_data->data;
+				ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, for_each_data->entity, data->component_name);
+			}, &functor_data, query_descriptor);
+			RenderSandboxViewports(data->editor_state, data->sandbox_index);
+			SetSandboxSceneDirty(data->editor_state, data->sandbox_index);
+		};
+
+		struct DrawMenuFunctor {
+			// Returns true if the component should appear in the menu
+			bool IsUniqueEnabled(Component component) const {
+				return true;
+			}
+			
+			// Returns true if the component should appear in the menu
+			bool IsSharedEnabled(Component component) const {
+				return true;
+			}
+			 
+			// Fills the data for a click handler
+			void Fill(void* callback_untyped_data, Stream<char> component_name) {
+				ComponentToAllActionData* callback_data = (ComponentToAllActionData*)callback_untyped_data;
+				*callback_data = { editor_state, sandbox_index, component_name };
+			}
+			 
+			// Return true if the unique entries should be made unavailable
+			bool LimitUnique() const {
+				return false;
+			}
+			 
+			// Return true if the shared entries should be made unavailable
+			bool LimitShared() const {
+				return false;
+			}
+
+			EditorState* editor_state;
+			unsigned int sandbox_index;
+		};
+
+		DrawMenuFunctor draw_menu_functor = { editor_state, sandbox_index };
+
+		config.flag_count = 0;
+		UIConfigWindowDependentSize dependent_size;
+		config.AddFlag(dependent_size);
+		DrawChooseComponentMenu(
+			editor_state,
+			*drawer,
+			UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X,
+			config,
+			"Reset All",
+			{ reset_component_to_all, nullptr, sizeof(ComponentToAllActionData), ECS_UI_DRAW_NORMAL },
+			draw_menu_functor
+		);
 	});
 
 	drawer->CollapsingHeader("Runtime Settings", &data->collapsing_runtime_state, [&]() {

@@ -232,9 +232,9 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 									}
 									else {
 										for (size_t subindex = 0; subindex < snapshot_settings.size && !snapshot_has_changed; subindex++) {
-											size_t existing_setting = FindString(snapshot_settings[subindex].name, module_settings, [](EditorModuleReflectedSetting setting) {
+											unsigned int existing_setting = FindString(snapshot_settings[subindex].name, module_settings, [](EditorModuleReflectedSetting setting) {
 												return setting.name;
-												});
+											});
 											if (existing_setting == -1) {
 												snapshot_has_changed = true;
 											}
@@ -2124,7 +2124,6 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		// We need to record the query cache to restore it later
 		sandbox->sandbox_world.entity_manager->CopyQueryCache(&runtime_query_cache, &runtime_query_cache_allocator);
-
 		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
 		if (active_viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			viewport_entity_manager = &sandbox->scene_entities;

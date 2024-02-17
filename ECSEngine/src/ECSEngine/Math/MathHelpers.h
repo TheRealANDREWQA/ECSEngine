@@ -155,19 +155,6 @@ namespace ECSEngine {
 	// be very large)
 	ECSENGINE_API size_t WeldVertices(Stream<float3>& points, float3 epsilon = float3::Splat(0.0f));
 
-	// Returns the normal calculated as the cross product between AB and AC
-	// The normal is not normalized. You must do that manually
-	ECSENGINE_API float3 TriangleNormal(float3 a, float3 b, float3 c);
-
-	// Returns the normal of the triangle facing the given point
-	// The normal is not normalized. You must do that manually
-	ECSENGINE_API float3 TriangleNormal(float3 a, float3 b, float3 c, float3 look_point);
-
-	// Returns true if the triangle ABC is facing d using the TriangleNormal function
-	ECSENGINE_API bool IsTriangleFacing(float3 a, float3 b, float3 c, float3 d);
-
-	ECSENGINE_API float TriangleArea(float3 point_a, float3 point_b, float3 point_c);
-
 	ECSENGINE_API float TetrahedronVolume(float3 point_a, float3 point_b, float3 point_c, float3 point_d);
 
 	ECSENGINE_API float GetFloat3MinX(Stream<float3> values, size_t* index = nullptr);
@@ -214,4 +201,55 @@ namespace ECSEngine {
 	// Count sort requirement. The values are sorted ascending
 	ECSENGINE_API unsigned int* CountSortFloat3Z(Stream<float3> values, float3* output_values, size_t bucket_count, AllocatorPolymorphic allocator);
 
+	// Equivalent to a 1D simplex voronoi region detection
+	ECSENGINE_API float3 ClosestPointToSegment(float3 segment_a, float3 segment_b, float3 point);
+
+	// Equivalent to a 2D simplex voronoi region detection
+	ECSENGINE_API float3 ClosestPointToTriangle(float3 triangle_a, float3 triangle_b, float3 triangle_c, float3 point);
+
+	// Equivalent to a 3D simplex voronoi region detection
+	ECSENGINE_API float3 ClosestPointToTetrahedron(float3 A, float3 B, float3 C, float3 D, float3 point);
+
+	enum ECS_SIMPLEX_VORONOI_REGION_TYPE : unsigned char {
+		ECS_SIMPLEX_VORONOI_VERTEX,
+		ECS_SIMPLEX_VORONOI_EDGE,
+		ECS_SIMPLEX_VORONOI_FACE,
+		ECS_SIMPLEX_VORONOI_TETRAHEDRON
+	};
+
+	struct Simplex1DVoronoiRegion {
+		ECS_SIMPLEX_VORONOI_REGION_TYPE type;
+		// This is the point projection on the simplex
+		float3 projection;
+		// For the vertex case, it will return the point to which it belongs
+		// The other point is the second entry
+		float3 points[2];
+	};
+
+	struct Simplex2DVoronoiRegion {
+		ECS_SIMPLEX_VORONOI_REGION_TYPE type;
+		// This is the point projection on the simplex
+		float3 projection;
+		// For the vertex case, it will fill in the point to which it belongs
+		// For the edge case, the points that form the edge
+		// The remaining points are in the other entries
+		float3 points[3];
+	};
+
+	struct Simplex3DVoronoiRegion {
+		ECS_SIMPLEX_VORONOI_REGION_TYPE type;
+		// This is the point projection on the simplex
+		float3 projection;
+		// For the vertex case, it will fill in the point to which it belongs
+		// For the edge case, the points that form the edge
+		// For the triangle case, the points of the triangle
+		// The remaining points are in the other entries
+		float3 points[4];
+	};
+
+	ECSENGINE_API Simplex1DVoronoiRegion CalculateSimplex1DVoronoiRegion(float3 segment_a, float3 segment_b, float3 point);
+
+	ECSENGINE_API Simplex2DVoronoiRegion CalculateSimplex2DVoronoiRegion(float3 triangle_a, float3 triangle_b, float3 triangle_c, float3 point);
+
+	ECSENGINE_API Simplex3DVoronoiRegion CalculateSimplex3DVoronoiRegion(float3 A, float3 B, float3 C, float3 D, float3 point);
 }
