@@ -1652,9 +1652,11 @@ namespace ECSEngine {
 				else if (horizontal_alignment != ECS_UI_ALIGN_LEFT || vertical_alignment != ECS_UI_ALIGN_TOP) {
 					float x_translation = x_text_position - current_text[0].position.x;
 					float y_translation = y_text_position + current_text[0].position.y;
-					for (size_t index = 0; index < current_text.size; index++) {
-						current_text[index].position.x += x_translation;
-						current_text[index].position.y -= y_translation;
+					if (x_translation != 0.0f || y_translation != 0.0f) {
+						for (size_t index = 0; index < current_text.size; index++) {
+							current_text[index].position.x += x_translation;
+							current_text[index].position.y -= y_translation;
+						}
 					}
 				}
 
@@ -1861,9 +1863,25 @@ namespace ECSEngine {
 
 			bool horizontal = (configuration & UI_CONFIG_VERTICAL) == 0;
 			bool invert_order = (vertical_alignment == ECS_UI_ALIGN_BOTTOM) || (horizontal_alignment == ECS_UI_ALIGN_RIGHT);
+			float2 label_size = scale + element_descriptor.label_padd;
+			text_span = system->GetTextSpanLimited({ text.buffer, text_count }, font_size.x, font_size.y, character_spacing, label_size, &text_count, invert_order);
+			float x_text_position, y_text_position;
+			HandleTextLabelAlignment(
+				configuration,
+				config,
+				text_span,
+				scale,
+				position,
+				x_text_position,
+				y_text_position,
+				horizontal_alignment,
+				vertical_alignment
+			);
+			
+			Stream<char> characters = invert_order ? Stream<char>{ text.buffer + text.size - text_count, text_count } : Stream<char>{ text.buffer, text_count };
 			system->ConvertCharactersToTextSprites(
-				{ text.buffer, text_count },
-				position + element_descriptor.label_padd,
+				characters,
+				{ x_text_position, y_text_position },
 				text_sprites,
 				color,
 				*text_sprite_count,
@@ -1872,9 +1890,9 @@ namespace ECSEngine {
 				horizontal,
 				invert_order
 			);
-			text_span = GetTextSpan(current_text, horizontal, invert_order);
 
-			size_t vertex_count = 0;
+
+			/*size_t vertex_count = 0;
 			if (~configuration & UI_CONFIG_VERTICAL) {
 				if (*type == ECS_UI_WINDOW_DEPENDENT_BOTH && text_span.y > scale.y - 2 * element_descriptor.label_padd.y) {
 					vertex_count = 0;
@@ -1918,46 +1936,33 @@ namespace ECSEngine {
 						vertex_count = current_text.size;
 					}
 				}
-			}
+			}*/
 
-			float x_text_position, y_text_position;
-			HandleTextLabelAlignment(
-				configuration,
-				config,
-				text_span,
-				scale,
-				position,
-				x_text_position,
-				y_text_position,
-				horizontal_alignment,
-				vertical_alignment
-			);
+			//if (horizontal_alignment != ECS_UI_ALIGN_LEFT) {
+			//	float x_translation = x_text_position - position.x - element_descriptor.label_padd.x;
+			//	for (size_t index = 0; index < vertex_count; index++) {
+			//		current_text[index].position.x += x_translation;
+			//	}
+			//}
 
-			if (horizontal_alignment != ECS_UI_ALIGN_LEFT) {
-				float x_translation = x_text_position - position.x - element_descriptor.label_padd.x;
-				for (size_t index = 0; index < vertex_count; index++) {
-					current_text[index].position.x += x_translation;
-				}
-			}
-
-			if (vertical_alignment == ECS_UI_ALIGN_BOTTOM) {
-				float y_translation = y_text_position + (current_text[current_text.size - 3]).position.y;
-				for (size_t index = 0; index < vertex_count; index++) {
-					current_text[index].position.y -= y_translation;
-				}
-			}
-			else if (vertical_alignment == ECS_UI_ALIGN_MIDDLE) {
-				float y_translation = y_text_position - position.y - element_descriptor.label_padd.y;
-				for (size_t index = 0; index < vertex_count; index++) {
-					current_text[index].position.y -= y_translation;
-				}
-			}
+			//if (vertical_alignment == ECS_UI_ALIGN_BOTTOM) {
+			//	float y_translation = y_text_position + (current_text[current_text.size - 3]).position.y;
+			//	for (size_t index = 0; index < vertex_count; index++) {
+			//		current_text[index].position.y -= y_translation;
+			//	}
+			//}
+			//else if (vertical_alignment == ECS_UI_ALIGN_MIDDLE) {
+			//	float y_translation = y_text_position - position.y - element_descriptor.label_padd.y;
+			//	for (size_t index = 0; index < vertex_count; index++) {
+			//		current_text[index].position.y -= y_translation;
+			//	}
+			//}
 
 			if (configuration & UI_CONFIG_VERTICAL) {
 				AlignVerticalText(current_text);
 			}
 
-			*text_sprite_count += vertex_count;
+			*text_sprite_count += text_count * 6;
 			if (~configuration & UI_CONFIG_LABEL_TRANSPARENT) {
 				Color label_color = HandleColor(configuration, config);
 				SolidColorRectangle(

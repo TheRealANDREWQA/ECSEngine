@@ -3,17 +3,24 @@
 #include "ECSEngineContainers.h"
 #include "EditorStateTypes.h"
 
+void EditorEventLock(EditorState* editor_state);
+
+void EditorEventUnlock(EditorState* editor_state);
+
 // Can be called from multiple threads. It returns the pointer of data allocated or given if the event_data_size is 0
 void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, void* event_data, size_t event_data_size = 0);
 
-// Returns true if it finds an event with the given function
-bool EditorHasEvent(const EditorState* editor_state, EditorEventFunction function);
+// Returns true if it finds an event with the given function. You should leave thread safe on
+// For most use cases
+bool EditorHasEvent(EditorState* editor_state, EditorEventFunction function, bool thread_safe = true);
 
-// Returns the data for an event if it finds the given function else nullptr
-void* EditorGetEventData(const EditorState* editor_state, EditorEventFunction function);
+// Returns the data for an event if it finds the given function else nullptr. You should leave thread safe on
+// For most use cases
+void* EditorGetEventData(EditorState* editor_state, EditorEventFunction function, bool thread_safe = true);
 
-// Fills in the stream with the data pointers for all events currently stored with the given function
-void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction function, ECSEngine::CapacityStream<void*>* data);
+// Fills in the stream with the data pointers for all events currently stored with the given function.
+// You should leave thread safe on for most use cases
+void EditorGetEventTypeData(EditorState* editor_state, EditorEventFunction function, ECSEngine::CapacityStream<void*>* data, bool thread_safe = true);
 
 // Can be called from multiple threads.
 // It will execute the given event after a certain other event has finished executing
@@ -80,4 +87,18 @@ void EditorAddEventFunctorWaitFlag(EditorState* editor_state, EDITOR_STATE_FLAGS
 	event_data.flag = flag;
 	event_data.set = set;
 	EditorAddEvent(editor_state, EditorEventExecuteFunctorWaitFlag<Functor>, &event_data, sizeof(event_data));
+}
+
+// The functor receives the data as void* and must return true if a match is found
+template<typename Functor>
+bool EditorHasEventTest(EditorState* editor_state, EditorEventFunction event_function, Functor&& compare_functor) {
+	bool result = false;
+	EditorEventLock(editor_state);
+	ECS_STACK_CAPACITY_STREAM(void*, event_data, 512);
+	EditorGetEventTypeData(editor_state, event_function, &event_data, false);
+	for (unsigned int index = 0; index < event_data.size && !result; index++) {
+		result = compare_functor(event_data[index]);
+	}
+	EditorEventUnlock(editor_state);
+	return result;
 }

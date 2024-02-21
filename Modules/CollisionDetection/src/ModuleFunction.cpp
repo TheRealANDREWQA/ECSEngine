@@ -168,9 +168,22 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 		DebugDrawCallOptions options;
 		options.wireframe = true;
 		data->debug_drawer->AddTriangleThread(data->thread_id, a, b, c, ECS_COLOR_GREEN, options);
+		float3 center = (a + b + c) / float3::Splat(3.0f);
+		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+		//data->debug_drawer->AddStringThread(data->thread_id, center, float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
 	}
+	/*if (transformed_mesh.position_size > 13) {
+		uint3 triangle = { 12, 12, 1 };
+		float3 a = transformed_mesh.GetPoint(triangle.x);
+		float3 b = transformed_mesh.GetPoint(triangle.y);
+		float3 c = transformed_mesh.GetPoint(triangle.z);
+
+		DebugDrawCallOptions options;
+		options.wireframe = true;
+		data->debug_drawer->AddTriangleThread(data->thread_id, a, b, c, ECS_COLOR_GREEN, options);
+	}*/
 	for (size_t index = 0; index < transformed_mesh.position_size; index++) {
-		data->debug_drawer->AddPointThread(data->thread_id, transformed_mesh.GetPoint(index), 1.0f, ECS_COLOR_AQUA);
+		data->debug_drawer->AddPointThread(data->thread_id, transformed_mesh.GetPoint(index), 0.15f, ECS_COLOR_AQUA);
 	}
 }
 

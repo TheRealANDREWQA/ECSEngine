@@ -12,7 +12,9 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------
 
 	ResizableLinearAllocator::ResizableLinearAllocator(size_t capacity, size_t backup_size, AllocatorPolymorphic allocator)
-		: ResizableLinearAllocator(ECSEngine::Allocate(allocator, capacity), capacity, backup_size, allocator) {}
+		: ResizableLinearAllocator(ECSEngine::AllocateEx(allocator, capacity), capacity, backup_size, allocator) {
+		m_initial_allocation_from_backup = true;
+	}
 
 	ResizableLinearAllocator::ResizableLinearAllocator(void* buffer, size_t capacity, size_t backup_size, AllocatorPolymorphic allocator)
 		: AllocatorBase(ECS_ALLOCATOR_RESIZABLE_LINEAR), m_top(0), m_marker(0), m_backup_size(backup_size), m_backup(allocator), m_current_usage(0)
@@ -25,6 +27,8 @@ namespace ECSEngine {
 
 		m_initial_buffer = OffsetPointer(buffer, sizeof(void*) * MAX_BACKUPS);
 		m_initial_capacity = capacity - sizeof(void*) * MAX_BACKUPS;
+
+		m_initial_allocation_from_backup = false;
 	}
 
 	void* ResizableLinearAllocator::Allocate(size_t size, size_t alignment, DebugInfo debug_info)
@@ -167,7 +171,9 @@ namespace ECSEngine {
 	{
 		ClearBackupImpl<true>(this, debug_info);
 		// This is the buffer that was received in the constructor
-		DeallocateIfBelongs(m_backup, m_allocated_buffers);
+		if (m_initial_allocation_from_backup) {
+			DeallocateEx(m_backup, m_allocated_buffers);
+		}
 
 		if (m_debug_mode) {
 			TrackedAllocation tracked;

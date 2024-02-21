@@ -502,6 +502,7 @@ namespace ECSEngine {
 			return buffers[chunk_index][in_chunk_index];
 		}
 
+		// For power of two deck, miscellaneous is the power of two exponent
 		void Initialize(AllocatorPolymorphic _allocator, size_t _initial_chunk_count, size_t _chunk_size, size_t _miscellaneous = 0) {
 			chunk_size = _chunk_size;
 			miscellaneous = _miscellaneous;

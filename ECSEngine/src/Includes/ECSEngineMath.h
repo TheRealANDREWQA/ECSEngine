@@ -14,3 +14,4 @@
 #include "../ECSEngine/Math/TriangleMesh.h"
 #include "../ECSEngine/Math/SpatialGrid.h"
 #include "../ECSEngine/Math/Triangle.h"
+#include "../ECSEngine/Math/SphericalPartitioning.h"

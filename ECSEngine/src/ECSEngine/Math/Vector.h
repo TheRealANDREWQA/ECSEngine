@@ -661,11 +661,13 @@ namespace ECSEngine {
 	// produce different results
 
 	// Both directions need to be normalized beforehand - if you want consistent behaviour
-	ECSENGINE_API bool ECS_VECTORCALL IsParallelMask(float3 first_normalized, float3 second_normalized, float epsilon = ECS_SIMD_VECTOR_EPSILON_VALUE);
+	// The epsilon needs to be reasonable large
+	ECSENGINE_API bool ECS_VECTORCALL IsParallelMask(float3 first_normalized, float3 second_normalized, float epsilon = 0.001f);
 
 	// Both directions need to be normalized beforehand - if you want consistent behaviour
+	// The epsilon needs to be reasonable large
 	// Returns a SIMD mask that can be used to perform a selection
-	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsParallelMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f epsilon = VectorGlobals::EPSILON);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsParallelMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f epsilon = 0.001f);
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -937,21 +939,41 @@ namespace ECSEngine {
 
 	// Returns true if the test point is on the same side of the line AB as the reference point, else false
 	// All points must be coplanar
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL PointSameLineHalfPlane(Vector3 line_a, Vector3 line_b, Vector3 reference_point, Vector3 test_point);
+
+	// Returns true if the test point is on the same side of the line AB as the reference point, else false
+	// All points must be coplanar
 	ECSENGINE_API bool PointSameLineHalfPlaneNormalized(float3 line_point, float3 line_direction_normalized, float3 reference_point, float3 test_point);
 
 	// Returns true if the test point is on the same side of the line AB as the reference point, else false
-	// All points must be coplanar. This version takes the projected test point as input
-	ECSENGINE_API bool PointSameLineHalfPlaneNormalizedEx(
+	// All points must be coplanar
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL PointSameLineHalfPlaneNormalized(Vector3 line_point, Vector3 line_direction_normalized, Vector3 reference_point, Vector3 test_point);
+
+	// Returns true if the test point is on the same side of the line AB as the reference point, else false
+	// All points must be coplanar. This version takes the projected test point as input. The projected test
+	// Point must have been projected on the line before
+	ECSENGINE_API bool PointSameLineHalfPlaneProjected(
 		float3 line_point,  
 		float3 reference_point, 
 		float3 test_point, 
 		float3 projected_test_point
 	);
 
+	// Returns true if the test point is on the same side of the line AB as the reference point, else false
+	// All points must be coplanar. This version takes the projected test point as input. The projected test
+	// Point must have been projected on the line before
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL PointSameLineHalfPlaneProjected(
+		Vector3 line_point,
+		Vector3 reference_point,
+		Vector3 test_point,
+		Vector3 projected_test_point
+	);
+
 	// --------------------------------------------------------------------------------------------------------------
 
-	// Returns true if the point is on the same line AB
-	ECSENGINE_API bool IsPointCollinear(float3 line_a, float3 line_b, float3 point);
+	// Returns true if the point is on the same line AB. A relatively large epsilon should be used.
+	// It will normalize the distances such that the magnitude won't affect the comparison
+	ECSENGINE_API bool IsPointCollinear(float3 line_a, float3 line_b, float3 point, float epsilon = 0.001f);
 
 	// --------------------------------------------------------------------------------------------------------------
 

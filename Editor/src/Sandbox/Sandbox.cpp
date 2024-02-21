@@ -2071,15 +2071,28 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 	// Check for the prevent loading resource flag
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		// Push an event to wait for the resource loading
-		WaitResourceLoadingRenderSandboxEventData event_data;
-		event_data.sandbox_index = sandbox_index;
-		event_data.viewport = viewport;
-		event_data.new_texture_size = new_texture_size;
+		if (!EditorHasEventTest(editor_state, WaitResourceLoadingRenderSandboxEvent, [sandbox_index, viewport, new_texture_size](void* data) {
+			// Do not consider the texture size
+			WaitResourceLoadingRenderSandboxEventData* event_data = (WaitResourceLoadingRenderSandboxEventData*)data;
+			if (event_data->sandbox_index == sandbox_index && event_data->viewport == viewport) {
+				// We can change the texture size here directly
+				if (new_texture_size.x != 0 && new_texture_size.y != 0) {
+					event_data->new_texture_size = new_texture_size;
+				}
+				return true;
+			}
+			return false;
+		})) {
+			// Push an event to wait for the resource loading
+			WaitResourceLoadingRenderSandboxEventData event_data;
+			event_data.sandbox_index = sandbox_index;
+			event_data.viewport = viewport;
+			event_data.new_texture_size = new_texture_size;
 
-		// Lock the sandbox such that it cannot be destroyed while we try to render to it
-		LockSandbox(editor_state, sandbox_index);
-		EditorAddEvent(editor_state, WaitResourceLoadingRenderSandboxEvent, &event_data, sizeof(event_data));
+			// Lock the sandbox such that it cannot be destroyed while we try to render to it
+			LockSandbox(editor_state, sandbox_index);
+			EditorAddEvent(editor_state, WaitResourceLoadingRenderSandboxEvent, &event_data, sizeof(event_data));
+		}
 		return true;
 	}
 

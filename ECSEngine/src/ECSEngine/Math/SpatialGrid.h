@@ -6,23 +6,25 @@
 
 namespace ECSEngine {
 	
+	ECSENGINE_API unsigned int Cantor(unsigned int x, unsigned int y, unsigned int z);
+
 	ECSENGINE_API unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z);
 
 	ECS_INLINE unsigned int Djb2Hash(uint3 indices) {
 		return Djb2Hash(indices.x, indices.y, indices.z);
 	}
 
-	struct SpatialGridDefaultCellIndicesHash {
-		ECS_INLINE static unsigned int Hash(uint3 indices) {
-			return Djb2Hash(indices);
-		}
-	};
-
 	template<typename ChunkData>
 	struct SpatialGridChunk {
 		ChunkData data;
 		unsigned char count;
 		unsigned int next_chunk;
+	};
+
+	struct SpatialGridDefaultCellIndicesHash {
+		ECS_INLINE static unsigned int Hash(uint3 indices) {
+			return Cantor(indices.x, indices.y, indices.z);
+		}
 	};
 
 	// The ChunkData struct must have a function void Set(ChunkDataEntry entry, unsigned int index) to add a new entry
@@ -42,8 +44,7 @@ namespace ECSEngine {
 			chunk->count = 0;
 			chunk->next_chunk = -1;
 
-			unsigned int hash = CellIndicesHash::Hash(indices);
-			cells.InsertDynamic(allocator, cell, hash);
+			cells.InsertDynamic(allocator, cell, indices);
 			inserted_cells.Add(indices);
 			return chunk;
 		}
@@ -80,46 +81,35 @@ namespace ECSEngine {
 			inserted_cells.FreeBuffer();
 		}
 
-		bool ExistsCell(uint3 index) const {
-			unsigned int hash = CellIndicesHash::Hash(index);
-			return cells.Find(hash) != -1;
+		ECS_INLINE bool ExistsCell(uint3 index) const {
+			return cells.Find(index) != -1;
 		}
 
 		const Chunk* GetChunk(uint3 indices) const {
-			unsigned int cell_hash = CellIndicesHash::Hash(indices);
 			Cell cell;
-			if (cells.TryGetValue(cell_hash, cell)) {
+			if (cells.TryGetValue(indices, cell)) {
 				unsigned int chunk_index = cell;
-				const Chunk* current_chunk = &chunks[chunk_index];
-				if (current_chunk->next_chunk == -1) {
-					return current_chunk;
-				}
-
-				while (chunk_index != -1) {
-					current_chunk = &chunks[chunk_index];
-					chunk_index = current_chunk->next_chunk;
-				}
-				return current_chunk;
+				return &chunks[chunk_index];
 			}
 			return nullptr;
 		}
 
-		Chunk* GetChunk(uint3 indices) {
+		ECS_INLINE Chunk* GetChunk(uint3 indices) {
 			return (Chunk*)(((const SpatialGrid<ChunkData, ChunkDataEntry, chunk_entries, CellIndicesHash, use_smaller_cell_size>*)this)->GetChunk(indices));
 		}
 
 		// Returns nullptr if there is no next
-		const Chunk* GetNextChunk(const Chunk* current_chunk) const {
+		ECS_INLINE const Chunk* GetNextChunk(const Chunk* current_chunk) const {
 			return current_chunk->next_chunk == -1 ? nullptr : &chunks[current_chunk->next_chunk];
 		}
 
 		// Returns nullptr if there is no next
-		Chunk* GetNextChunk(const Chunk* current_chunk) {
+		ECS_INLINE Chunk* GetNextChunk(const Chunk* current_chunk) {
 			return current_chunk->next_chunk == -1 ? nullptr : &chunks[current_chunk->next_chunk];
 		}
 
 		// Returns the last chunk in the chain
-		const Chunk* GetLastChunk(const Chunk* current_chunk) const {
+		ECS_INLINE const Chunk* GetLastChunk(const Chunk* current_chunk) const {
 			while (current_chunk->next_chunk != -1) {
 				current_chunk = &chunks[current_chunk->next_chunk];
 			}
@@ -127,7 +117,7 @@ namespace ECSEngine {
 		}
 
 		// Returns the last chunk in the chain
-		Chunk* GetLastChunk(const Chunk* current_chunk) {
+		ECS_INLINE Chunk* GetLastChunk(const Chunk* current_chunk) {
 			Chunk* chunk = (Chunk*)current_chunk;
 			while (chunk->next_chunk != -1) {
 				chunk = &chunks[chunk->next_chunk];
@@ -589,7 +579,7 @@ namespace ECSEngine {
 		// We maintain the cells in a sparse hash table
 		// The unsigned int as resource identifier is the actual hash value
 		// The cell hash value must be computed by the user
-		HashTable<Cell, unsigned int, HashFunctionPowerOfTwo> cells;
+		HashTable<Cell, uint3, HashFunctionPowerOfTwo, CellIndicesHash> cells;
 		DeckPowerOfTwo<Chunk> chunks;
 		AllocatorPolymorphic allocator;
 		// This is the array with all the inserted cells

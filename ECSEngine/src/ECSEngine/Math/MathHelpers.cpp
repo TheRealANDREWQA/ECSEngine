@@ -274,7 +274,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	size_t WeldVertices(Stream<float3>& points, float3 epsilon) {
+	size_t WeldVertices(Stream<float3>& points, float3 epsilon, bool relative_epsilon) {
 		// In order to speed this up for a large number of entries, we can use a spatial grid
 		// And check values only inside a cell
 
@@ -288,12 +288,12 @@ namespace ECSEngine {
 		float3 points_max;
 		GetFloat3MinMax(points, &points_min, &points_max);
 		float3 points_span = points_max - points_min;
-		// We also need to take into account, that if the epsilon is really large
-		// With respect to the object span, we need to reduce the cell sizes even
-		// More such that the vertices don't spend a lot of time traversing many cells
-		points_span /= epsilon;
-		// Empirically, it seems to help to make this a little bit larger
+		// Empirically, it seems to help to increase the span by a bit
 		points_span *= float3::Splat(2.0f);
+
+		if (relative_epsilon) {
+			epsilon *= points_span * float3::Splat(1 / 10.0f);
+		}
 
 		float3 per_cell_size = points_span / float3(DIMENSIONS);
 		uint3 int_per_cell_size = per_cell_size;
@@ -374,7 +374,7 @@ namespace ECSEngine {
 		else {
 			SpatialGrid<ChunkData, ChunkDataEntry, CHUNK_POINT_COUNT> spatial_grid;
 			// Choose some sensible defaults
-			spatial_grid.Initialize(&stack_allocator, DIMENSIONS, int_per_cell_size, DECK_POWER_OF_TWO);
+			spatial_grid.Initialize(&stack_allocator, DIMENSIONS, int_per_cell_power_of_two, DECK_POWER_OF_TWO);
 			perform_welding(spatial_grid);
 		}
 

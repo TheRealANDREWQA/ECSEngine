@@ -1320,36 +1320,76 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	bool PointSameLineHalfPlane(float3 line_a, float3 line_b, float3 reference_point, float3 test_point) {
+	template<typename Mask, typename Vector>
+	ECS_INLINE Mask ECS_VECTORCALL PointSameLineHalfPlaneImpl(Vector line_a, Vector line_b, Vector reference_point, Vector test_point) {
 		return PointSameLineHalfPlaneNormalized(line_a, Normalize(line_b - line_a), reference_point, test_point);
 	}
 
-	bool PointSameLineHalfPlaneNormalized(float3 line_point, float3 line_direction_normalized, float3 reference_point, float3 test_point) {
-		// If multiple points were to be tested like this, an accelerated version can be used where the perpendicular line
-		// Is calculated and cached such that it doesn't have to be recalculated every time
-		float3 projected_point = ProjectPointOnLineDirectionNormalized(line_point, line_direction_normalized, test_point);
-		return PointSameLineHalfPlaneNormalizedEx(line_point, reference_point, test_point, projected_point);
+	bool PointSameLineHalfPlane(float3 line_a, float3 line_b, float3 reference_point, float3 test_point) {
+		return PointSameLineHalfPlaneImpl<bool>(line_a, line_b, reference_point, test_point);
 	}
 
-	bool PointSameLineHalfPlaneNormalizedEx(
-		float3 line_point,
-		float3 reference_point,
-		float3 test_point,
-		float3 projected_test_point
+	SIMDVectorMask ECS_VECTORCALL PointSameLineHalfPlane(Vector3 line_a, Vector3 line_b, Vector3 reference_point, Vector3 test_point) {
+		return PointSameLineHalfPlaneImpl<SIMDVectorMask>(line_a, line_b, reference_point, test_point);
+	}
+
+	template<typename Mask, typename Vector>
+	ECS_INLINE Mask ECS_VECTORCALL PointSameLineHalfPlaneNormalizedImpl(Vector line_point, Vector line_direction_normalized, Vector reference_point, Vector test_point) {
+		// If multiple points were to be tested like this, an accelerated version can be used where the perpendicular line
+		// Is calculated and cached such that it doesn't have to be recalculated every time
+		Vector projected_point = ProjectPointOnLineDirectionNormalized(line_point, line_direction_normalized, test_point);
+		return PointSameLineHalfPlaneProjected(line_point, reference_point, test_point, projected_point);
+	}
+
+	bool PointSameLineHalfPlaneNormalized(float3 line_point, float3 line_direction_normalized, float3 reference_point, float3 test_point) {
+		return PointSameLineHalfPlaneNormalizedImpl<bool>(line_point, line_direction_normalized, reference_point, test_point);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL PointSameLineHalfPlaneNormalized(Vector3 line_point, Vector3 line_direction_normalized, Vector3 reference_point, Vector3 test_point) {
+		return PointSameLineHalfPlaneNormalizedImpl<SIMDVectorMask>(line_point, line_direction_normalized, reference_point, test_point);
+	}
+
+	template<typename Mask, typename Vector>
+	ECS_INLINE Mask ECS_VECTORCALL PointSameLineHalfPlaneProjectedImpl(
+		Vector line_point,
+		Vector reference_point,
+		Vector test_point,
+		Vector projected_test_point
 	) {
 		// If the dot product between the perpendicular line from the test point and the vector from
 		// One point from the line to the reference point is negative, then the points are on opposite halfplanes
 		// To be on the same halfplane, they need to have the dot product positive. A dot product of zero means
 		// The test_point is the line
-		float3 perpendicular_line = test_point - projected_test_point;
-		return Dot(perpendicular_line, reference_point - line_point) > 0.0f;
+		Vector perpendicular_line = test_point - projected_test_point;
+		return Dot(perpendicular_line, reference_point - line_point) > SingleZeroVector<Vector>();
+	}
+
+	bool PointSameLineHalfPlaneProjected(
+		float3 line_point,
+		float3 reference_point,
+		float3 test_point,
+		float3 projected_test_point
+	) {
+		return PointSameLineHalfPlaneProjectedImpl<bool>(line_point, reference_point, test_point, projected_test_point);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL PointSameLineHalfPlaneProjected(
+		Vector3 line_point,
+		Vector3 reference_point,
+		Vector3 test_point,
+		Vector3 projected_test_point
+	) {
+		return PointSameLineHalfPlaneProjectedImpl<SIMDVectorMask>(line_point, reference_point, test_point, projected_test_point);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	bool IsPointCollinear(float3 line_a, float3 line_b, float3 point) {
-		// If the absolute Dot product between 2 vectors is near 0, then they are collinear
-		return CompareMaskSingle<float>(Dot(line_a, line_b), Dot(line_a, point));
+	bool IsPointCollinear(float3 line_a, float3 line_b, float3 point, float epsilon) {
+		// We can test this by seeing if the AB line is parallel to AP. 2 lines that are parallel
+		// And share a point are the same line. We can use the fastest normalization possible, since we
+		// Don't care about precise normalized value, just that it is in that ballpark. This costs about 8 cycles,
+		// Which is not that much
+		return IsParallelMask(Normalize<ECS_VECTOR_FAST>(line_b - line_a), Normalize<ECS_VECTOR_FAST>(point - line_a), epsilon);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
