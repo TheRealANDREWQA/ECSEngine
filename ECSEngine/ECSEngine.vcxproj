@@ -270,6 +270,7 @@
     <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
     <ClInclude Include="src\ECSEngine\Math\Plane.h" />
     <ClInclude Include="src\ECSEngine\Math\Quaternion.h" />
+    <ClInclude Include="src\ECSEngine\Math\SphericalPartitioning.h" />
     <ClInclude Include="src\ECSEngine\Math\Transform.h" />
     <ClInclude Include="src\ECSEngine\Math\Triangle.h" />
     <ClInclude Include="src\ECSEngine\Math\TriangleMesh.h" />

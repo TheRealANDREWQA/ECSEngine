@@ -7,15 +7,23 @@ ECS_TOOLS;
 
 #define WAIT_FOR_QUEUE_SPACE_SLEEP_TICK 5
 
-void AllocateMemory(EditorState* editor_state, EditorEvent& editor_event, void* data, size_t data_size) {
+static void AllocateMemory(EditorState* editor_state, EditorEvent& editor_event, void* data, size_t data_size) {
 	editor_event.data = CopyNonZero(editor_state->MultithreadedEditorAllocator(), data, data_size);
 	editor_event.data_size = data_size;
 }
 
-void DeallocateMemory(EditorState* editor_state, EditorEvent editor_event) {
+static void DeallocateMemory(EditorState* editor_state, EditorEvent editor_event) {
 	if (editor_event.data_size > 0) {
 		Deallocate(editor_state->MultithreadedEditorAllocator(), editor_event.data);
 	}
+}
+
+void EditorEventLock(EditorState* editor_state) {
+	editor_state->event_queue.Lock();
+}
+
+void EditorEventUnlock(EditorState* editor_state) {
+	editor_state->event_queue.Unlock();
 }
 
 void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, void* event_data, size_t event_data_size) {
@@ -28,15 +36,25 @@ void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, vo
 	return editor_event.data;
 }
 
-bool EditorHasEvent(const EditorState* editor_state, EditorEventFunction function)
+bool EditorHasEvent(EditorState* editor_state, EditorEventFunction function, bool thread_safe)
 {
-	return editor_state->event_queue.ForEach<true>([function](EditorEvent event_) {
+	if (thread_safe) {
+		EditorEventLock(editor_state);
+	}
+	bool result = editor_state->event_queue.ForEach<true>([function](EditorEvent event_) {
 		return event_.function == function;
 	});
+	if (thread_safe) {
+		EditorEventUnlock(editor_state);
+	}
+	return result;
 }
 
-void* EditorGetEventData(const EditorState* editor_state, EditorEventFunction function)
+void* EditorGetEventData(EditorState* editor_state, EditorEventFunction function, bool thread_safe)
 {
+	if (thread_safe) {
+		EditorEventLock(editor_state);
+	}
 	void* ptr = nullptr;
 	if (!editor_state->event_queue.ForEach<true>([&ptr, function](EditorEvent event_) {
 		if (event_.function == function) {
@@ -53,11 +71,17 @@ void* EditorGetEventData(const EditorState* editor_state, EditorEventFunction fu
 			}
 		}
 	}
+	if (thread_safe) {
+		EditorEventUnlock(editor_state);
+	}
 	return ptr;
 }
 
-void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction function, CapacityStream<void*>* data)
+void EditorGetEventTypeData(EditorState* editor_state, EditorEventFunction function, CapacityStream<void*>* data, bool thread_safe)
 {
+	if (thread_safe) {
+		EditorEventLock(editor_state);
+	}
 	editor_state->event_queue.ForEach([data, function](EditorEvent event_) {
 		if (event_.function == function) {
 			data->AddAssert(event_.data);
@@ -67,6 +91,9 @@ void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction
 		if (editor_state->readd_events[index].function == function) {
 			data->AddAssert(editor_state->readd_events[index].data);
 		}
+	}
+	if (thread_safe) {
+		EditorEventUnlock(editor_state);
 	}
 }
 

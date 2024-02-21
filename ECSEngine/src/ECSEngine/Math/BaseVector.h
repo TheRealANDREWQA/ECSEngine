@@ -344,6 +344,43 @@ namespace ECSEngine {
 			return value & (1 << index);
 		}
 
+		// Returns true if a range of consecutive bits are set
+		template<int count, int offset>
+		ECS_INLINE bool GetRange() const {
+			int mask = 0;
+			if constexpr (count == 1) {
+				mask = 1;
+			}
+			else if constexpr (count == 2) {
+				mask = 3;
+			}
+			else if constexpr (count == 3) {
+				mask = 7;
+			}
+			else if constexpr (count == 4) {
+				mask = 15;
+			}
+			else if constexpr (count == 5) {
+				mask = 31;
+			}
+			else if constexpr (count == 6) {
+				mask = 63;
+			}
+			else if constexpr (count == 7) {
+				mask = 127;
+			}
+			else if constexpr (count == 8) {
+				mask = 255;
+			}
+			else {
+				static_assert(false, "Invalid count for VectorMask GetRange");
+			}
+			static_assert(count <= Vector3::ElementCount(), "Invalid offset for VectorMask GetRange");
+
+			mask <<= offset;
+			return (value & mask) == mask;
+		}
+
 		ECS_INLINE void Set(int index, bool new_value) {
 			if (new_value) {
 				value |= 1 << index;

@@ -276,6 +276,7 @@
     <ClInclude Include="src\ECSEngine\Math\SpatialGrid.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorBase.h" />
     <ClInclude Include="src\ECSEngine\Math\Triangle.h" />
+    <ClInclude Include="src\ECSEngine\Math\SphericalPartitioning.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

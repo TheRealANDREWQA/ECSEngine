@@ -952,6 +952,17 @@ namespace ECSEngine {
 				float character_spacing
 			) const;
 
+			template<bool horizontal = true>
+			ECSENGINE_API float2 GetTextSpanLimited(
+				Stream<char> characters,
+				float font_size_x,
+				float font_size_y,
+				float character_spacing,
+				float2 scale_limit,
+				size_t* character_count,
+				bool invert_order
+			) const;
+
 			// It fills in the positions of the text sprites and their scale when positioned at the given translation
 			template<bool horizontal = true>
 			ECSENGINE_API void GetTextCharacterPositions(

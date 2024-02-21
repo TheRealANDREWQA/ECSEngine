@@ -66,6 +66,16 @@ namespace ECSEngine {
 
 	typedef StackScope<StackClearAllocator> ScopedClearAllocator;
 
+	struct StackFreeAllocator {
+		void operator() () {
+			FreeAllocator(allocator);
+		}
+
+		AllocatorPolymorphic allocator;
+	};
+
+	typedef StackScope<StackFreeAllocator> ScopedFreeAllocator;
+	
 	// Do a test before writing because for const char* from source code
 	// it will produce a SEG fault when trying to write
 #define NULL_TERMINATE(stream) char _null_terminator_before##stream = stream[stream.size]; \

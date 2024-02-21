@@ -83,8 +83,9 @@ namespace ECSEngine {
 
 		// Similar to a resizable stream
 		void** m_allocated_buffers;
-		unsigned int m_allocated_buffer_capacity;
-		unsigned int m_allocated_buffer_size;
+		unsigned short m_allocated_buffer_capacity;
+		unsigned short m_allocated_buffer_size;
+		bool m_initial_allocation_from_backup;
 
 		size_t m_top;
 		size_t m_marker;
@@ -94,6 +95,7 @@ namespace ECSEngine {
 		// In order to properly restore it
 		size_t m_marker_current_usage;
 		AllocatorPolymorphic m_backup;
+
 	};
 
 	struct ResizableLinearAllocatorScopeDeallocator {

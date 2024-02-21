@@ -6329,6 +6329,25 @@ namespace ECSEngine {
 			float font_size_y,
 			float character_spacing
 		) const {
+			size_t character_count;
+			return GetTextSpanLimited<horizontal>(characters, font_size_x, font_size_y, character_spacing, { FLT_MAX, FLT_MAX }, &character_count, false);
+		}
+
+		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpan, Stream<char>, float, float, float);
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		template<bool horizontal>
+		float2 UISystem::GetTextSpanLimited(
+			Stream<char> characters, 
+			float font_size_x, 
+			float font_size_y, 
+			float character_spacing, 
+			float2 scale_limit, 
+			size_t* character_count,
+			bool invert_order
+		) const
+		{
 			float2 text_span = { 0.0f, 0.0f };
 
 			float2 atlas_dimensions = m_font_character_uvs[m_descriptors.font.texture_dimensions];
@@ -6343,7 +6362,8 @@ namespace ECSEngine {
 				text_span.y = GetTextSpriteYScale(font_size_y);
 			}
 
-			for (size_t index = 0; index < characters.size; index++) {
+			int64_t index = invert_order ? characters.size - 1 : 0;
+			while (index < characters.size && index >= 0 && text_span.x < scale_limit.x && text_span.y < scale_limit.y) {
 				unsigned int character_uv_index = FindCharacterType(characters[index]);
 
 				size_t character_index = character_uv_index * 2;
@@ -6361,14 +6381,16 @@ namespace ECSEngine {
 					text_span.y += scale.y + new_character_spacing;
 					text_span.x = std::max(text_span.x, scale.x);
 				}
+				index = invert_order ? index - 1 : index + 1;
 			}
 			if constexpr (horizontal) {
 				text_span.x -= character_spacing;
 			}
+			*character_count = invert_order ? characters.size - index : index;
 			return text_span;
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpan, Stream<char>, float, float, float);
+		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpanLimited, Stream<char>, float, float, float, float2, size_t*, bool);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
