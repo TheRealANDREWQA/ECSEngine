@@ -24,7 +24,7 @@ namespace ECSEngine {
 		}
 
 		// If the alignment is less than 4, that of the reference count, clamp it to it
-		byte_size_alignment.y = std::max(alignof(unsigned int), byte_size_alignment.y);
+		byte_size_alignment.y = max(alignof(unsigned int), byte_size_alignment.y);
 		return { byte_size_alignment.x + byte_size_alignment.y, byte_size_alignment.y };
 	}
 

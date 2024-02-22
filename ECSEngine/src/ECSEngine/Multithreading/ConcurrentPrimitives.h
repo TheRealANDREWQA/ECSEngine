@@ -1,6 +1,6 @@
 #pragma once
-#include "ecspch.h"
 #include "../Core.h"
+#include <atomic>
 
 #define ECS_ACQUIRE std::memory_order_acquire
 #define ECS_RELEASE std::memory_order_release
@@ -9,6 +9,12 @@
 #define ECS_SEQ_CST std::memory_order_seq_cst
 
 namespace ECSEngine {
+
+	// Returns true if it could give the slice to another thread on the same processor
+	ECSENGINE_API bool GiveSliceToProcessorThread();
+
+	// Indicates to the operating system that this thread can give up its time slice
+	ECSENGINE_API void GiveSlice();
 
 	struct ECSENGINE_API SpinLock {
 		ECS_INLINE SpinLock() {
@@ -129,10 +135,7 @@ namespace ECSEngine {
 		}
 
 		// Release store and wakes up waiting threads
-		ECS_INLINE void SetCountEx(unsigned int value) {
-			count.store(value, ECS_RELEASE);
-			WakeByAddressAll(&count);
-		}
+		void SetCountEx(unsigned int value);
 
 		// Acquire load
 		ECS_INLINE unsigned int Target() const {
@@ -145,10 +148,7 @@ namespace ECSEngine {
 		}
 
 		// Release store and wakes up waiting threads
-		ECS_INLINE void SetTargetEx(unsigned int value) {
-			target.store(value, ECS_RELEASE);
-			WakeByAddressAll(&count);
-		}
+		void SetTargetEx(unsigned int value);
 
 		// Returns the previous count value
 		unsigned int Enter(unsigned int count = 1);
@@ -191,17 +191,17 @@ namespace ECSEngine {
 		// a futex call to wait for threads to exit
 		void SpinWaitEx(unsigned int count_value, unsigned int target_value);
 
-		// One of the parameters needs to be different from -1 and the other -1
-		// It can wait only on a single address at a time
-		// The difference between the two variants is that this uses
-		// a futex call to wait for threads to exit. It also has a custom
-		// Functor that can be used to exit before the value reaches the given
-		// count/target value. The functor should return true when it wants to exit,
-		// else false
-		template<typename Functor>
-		void SpinWaitEx(unsigned int count_value, unsigned int target_value, Functor&& functor) {
-			
-		}
+		//// One of the parameters needs to be different from -1 and the other -1
+		//// It can wait only on a single address at a time
+		//// The difference between the two variants is that this uses
+		//// a futex call to wait for threads to exit. It also has a custom
+		//// Functor that can be used to exit before the value reaches the given
+		//// count/target value. The functor should return true when it wants to exit,
+		//// else false
+		//template<typename Functor>
+		//void SpinWaitEx(unsigned int count_value, unsigned int target_value, Functor&& functor) {
+		//	
+		//}
 
 		// It will check a value at certain intervals. In between it will sleep.
 		// Default behaviour - wait until count is the same as target
@@ -356,10 +356,10 @@ namespace ECSEngine {
 					_mm_pause();
 				}
 				// Try to switch to another thread on the same hardware CPU
-				BOOL switched = SwitchToThread();
+				bool switched = GiveSliceToProcessorThread();
 				if (!switched) {
 					// If that failed, try to give the quantum to a thread on other CPU's aswell
-					Sleep(0);
+					GiveSlice();
 				}
 			}
 		};

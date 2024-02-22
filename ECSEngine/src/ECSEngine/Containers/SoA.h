@@ -131,7 +131,7 @@ namespace ECSEngine {
 		// We can use the copy function - we cannot use the ReallocateEx since we have to copy from the last pointer
 		// to the first one if we want to do that, and without some weird template magic (that I do not know yet), that cannot
 		// be done and is not worth wasting time on that
-		size_t copy_size = std::min(size, new_size);
+		size_t copy_size = min(size, new_size);
 		void* previous_allocation = *first_pointer;
 		SoACopy(allocator, copy_size, new_size, first_pointer, pointers...);
 		if (size > 0 && first_pointer != nullptr) {

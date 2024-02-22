@@ -411,7 +411,7 @@ namespace ECSEngine {
 	// Is valid before accesing it
 	struct ModuleDebugDrawElement {
 		ECS_INLINE void AddDependency(ComponentWithType component_with_type) {
-			ECS_ASSERT(dependency_component_count < std::size(dependency_components));
+			ECS_ASSERT(dependency_component_count < ECS_COUNTOF(dependency_components));
 			dependency_components[dependency_component_count++] = component_with_type;
 		}
 

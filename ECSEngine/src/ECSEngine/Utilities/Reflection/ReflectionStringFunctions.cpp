@@ -133,7 +133,7 @@ namespace ECSEngine {
 			FIELD_TYPE_STRING(Unknown)
 		};
 
-		static_assert(std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS) == (unsigned int)ReflectionBasicFieldType::COUNT);
+		static_assert(ECS_COUNTOF(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS) == (unsigned int)ReflectionBasicFieldType::COUNT);
 
 		// Jump table
 		Stream<char> ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS[] = {
@@ -147,7 +147,7 @@ namespace ECSEngine {
 			FIELD_TYPE_STRING(Unknown)
 		};
 
-		static_assert(std::size(ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS) == (unsigned int)ReflectionStreamFieldType::COUNT);
+		static_assert(ECS_COUNTOF(ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS) == (unsigned int)ReflectionStreamFieldType::COUNT);
 
 #undef FIELD_TYPE_STRING
 
@@ -288,7 +288,7 @@ namespace ECSEngine {
 			ConvertTypeCannotBeConvert
 		};
 
-		static_assert(std::size(REFLECT_CONVERT_FIELD_DATA_INTO_STRING) == (unsigned int)ReflectionBasicFieldType::COUNT);
+		static_assert(ECS_COUNTOF(REFLECT_CONVERT_FIELD_DATA_INTO_STRING) == (unsigned int)ReflectionBasicFieldType::COUNT);
 
 		typedef bool (*ParseFunction)(void* data, Stream<char> characters);
 
@@ -561,7 +561,7 @@ namespace ECSEngine {
 
 		ReflectionBasicFieldType ConvertStringToBasicFieldType(Stream<char> string)
 		{
-			for (size_t index = 0; index < std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS); index++) {
 				if (string == ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].string) {
 					return ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].type;
 				}
@@ -619,7 +619,7 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ReflectionBasicFieldType ConvertStringAliasToBasicFieldType(Stream<char> string) {
-			unsigned int index = FindString(string, Stream<Stream<char>>(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS, std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS)));
+			unsigned int index = FindString(string, Stream<Stream<char>>(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS, ECS_COUNTOF(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS)));
 			if (index != -1) {
 				return (ReflectionBasicFieldType)index;
 			}
@@ -629,7 +629,7 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ReflectionStreamFieldType ConvertStringToStreamFieldType(Stream<char> string) {
-			for (size_t index = 0; index < std::size(ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS); index++) {
 				if (ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS[index].size < string.size) {
 					if (memcmp(string.buffer, ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS[index].buffer, ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS[index].size) == 0) {
 						return (ReflectionStreamFieldType)index;

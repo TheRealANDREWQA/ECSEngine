@@ -608,6 +608,11 @@ namespace ECSEngine {
 		};
 	};
 
+	struct Line3D {
+		float3 A;
+		float3 B;
+	};
+
 	// Allow these functions to receive a specified return type
 	// such that we can do something like applying functors on floats
 	// and generate booleans

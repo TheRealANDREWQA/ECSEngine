@@ -63,7 +63,7 @@ namespace ECSEngine {
 			};
 
 			if (omit_system_dlls) {
-				for (unsigned int index = 0; index < std::size(system_dlls); index++) {
+				for (unsigned int index = 0; index < ECS_COUNTOF(system_dlls); index++) {
 					unsigned int dependency_index = FindString(system_dlls[index], dependencies);
 					if (dependency_index != -1) {
 						dependencies.RemoveSwapBack(dependency_index);
@@ -131,7 +131,7 @@ namespace ECSEngine {
 					};
 
 					if (omit_system_dlls) {
-						for (unsigned int index = 0; index < std::size(system_dlls); index++) {
+						for (unsigned int index = 0; index < ECS_COUNTOF(system_dlls); index++) {
 							unsigned int dependency_index = FindString(system_dlls[index], dependencies);
 							if (dependency_index != -1) {
 								dependencies.RemoveSwapBack(dependency_index);

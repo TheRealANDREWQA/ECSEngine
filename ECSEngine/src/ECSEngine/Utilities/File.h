@@ -1,9 +1,11 @@
 #pragma once
 #include "../Core.h"
-#include "ecspch.h"
 #include "../Containers/Stream.h"
 #include "../Allocators/AllocatorTypes.h"
 #include "../Utilities/StackScope.h"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <stdio.h>
 
 namespace ECSEngine {
 

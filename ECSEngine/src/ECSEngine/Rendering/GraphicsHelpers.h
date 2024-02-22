@@ -1,6 +1,5 @@
 #pragma once
 #include "../Core.h"
-#include "ecspch.h"
 #include "RenderingStructures.h"
 #include "../Allocators/AllocatorTypes.h"
 #include "../Math/Matrix.h"

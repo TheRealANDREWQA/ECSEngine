@@ -380,7 +380,7 @@ namespace ECSEngine {
 						return_val = loop(std::false_type{});
 					}
 					else {
-						return_val =loop(std::true_type{});
+						return_val = loop(std::true_type{});
 					}
 
 					data->read_data->was_allocated = previous_was_allocated;
@@ -397,8 +397,8 @@ namespace ECSEngine {
 			}
 			else {
 				bool previous_was_allocated = data->read_data->was_allocated;
-				data->read_data->was_allocated = true;
 				size_t iterate_count = single_instance ? 1 : data->element_count;
+				data->read_data->was_allocated = true;
 				for (size_t index = 0; index < iterate_count; index++) {
 					size_t byte_size = DeserializeSize(data->read_data->reflection_manager, data->reflection_type, *data->read_data->stream, &options);
 					if (byte_size == -1) {
@@ -661,18 +661,24 @@ namespace ECSEngine {
 
 		if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
 			string_offset = sizeof("Stream<") - 1;
-			size_t* stream_size = (size_t*)OffsetPointer(data->data, sizeof(void*));
-			*stream_size = buffer_count;
+			if (data->read_data) {
+				size_t* stream_size = (size_t*)OffsetPointer(data->data, sizeof(void*));
+				*stream_size = buffer_count;
+			}
 		}
 		else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
 			string_offset = sizeof("CapacityStream<") - 1;
-			unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
-			*stream_size = buffer_count;
+			if (data->read_data) {
+				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
+				*stream_size = buffer_count;
+			}
 		}
 		else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
 			string_offset = sizeof("ResizableStream<") - 1;
-			unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
-			*stream_size = buffer_count;
+			if (data->read_data) {
+				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
+				*stream_size = buffer_count;
+			}
 		}
 		else {
 			ECS_ASSERT(false);
@@ -936,7 +942,7 @@ namespace ECSEngine {
 	{
 		ReflectionCustomTypeMatchData match_data = { definition };
 
-		for (unsigned int index = 0; index < std::size(ECS_SERIALIZE_CUSTOM_TYPES); index++) {
+		for (unsigned int index = 0; index < ECS_COUNTOF(ECS_SERIALIZE_CUSTOM_TYPES); index++) {
 			if (ECS_REFLECTION_CUSTOM_TYPES[index]->Match(&match_data)) {
 				return index;
 			}
@@ -981,7 +987,7 @@ namespace ECSEngine {
 
 	unsigned int SerializeCustomTypeCount()
 	{
-		return std::size(ECS_SERIALIZE_CUSTOM_TYPES);
+		return ECS_COUNTOF(ECS_SERIALIZE_CUSTOM_TYPES);
 	}
 
 	// -----------------------------------------------------------------------------------------

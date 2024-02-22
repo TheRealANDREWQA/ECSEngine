@@ -328,7 +328,7 @@ namespace ECSEngine {
 			if (!isnan(current_difference) && current_difference < epsilon) {
 				return 0;
 			}
-			resulting_distance = std::min(current_distance, resulting_distance);
+			resulting_distance = min(current_distance, resulting_distance);
 			return is_smaller ? 1 : -1;
 		};
 

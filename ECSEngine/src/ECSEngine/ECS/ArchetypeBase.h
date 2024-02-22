@@ -1,5 +1,4 @@
 #pragma once
-#include "ecspch.h"
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "InternalStructures.h"

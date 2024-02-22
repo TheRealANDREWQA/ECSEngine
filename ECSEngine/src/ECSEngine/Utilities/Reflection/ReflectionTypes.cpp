@@ -242,9 +242,9 @@ namespace ECSEngine {
 			""
 		};
 
-		static_assert(std::size(ECS_BASIC_FIELD_TYPE_ALIGNMENT) == (unsigned int)ReflectionBasicFieldType::COUNT);
-		static_assert(std::size(ECS_STREAM_FIELD_TYPE_ALIGNMENT) == (unsigned int)ReflectionStreamFieldType::COUNT);
-		static_assert(std::size(ECS_BASIC_FIELD_TYPE_STRING) == (unsigned int)ReflectionBasicFieldType::COUNT);
+		static_assert(ECS_COUNTOF(ECS_BASIC_FIELD_TYPE_ALIGNMENT) == (unsigned int)ReflectionBasicFieldType::COUNT);
+		static_assert(ECS_COUNTOF(ECS_STREAM_FIELD_TYPE_ALIGNMENT) == (unsigned int)ReflectionStreamFieldType::COUNT);
+		static_assert(ECS_COUNTOF(ECS_BASIC_FIELD_TYPE_STRING) == (unsigned int)ReflectionBasicFieldType::COUNT);
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 

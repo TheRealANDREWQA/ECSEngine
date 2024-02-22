@@ -1744,7 +1744,7 @@ namespace ECSEngine {
 			constexpr size_t filter_menu_configuration = button_configuration | UI_CONFIG_FILTER_MENU_ALL | UI_CONFIG_FILTER_MENU_NOTIFY_ON_CHANGE;
 
 			Stream<char> filter_labels[] = { "Info", "Warn", "Error", "Trace", "Graphics" };
-			Stream<Stream<char>> filter_stream = Stream<Stream<char>>(filter_labels, std::size(filter_labels));
+			Stream<Stream<char>> filter_stream = Stream<Stream<char>>(filter_labels, ECS_COUNTOF(filter_labels));
 			UIConfigFilterMenuNotify menu_notify;
 			menu_notify.notifier = &data->filter_message_type_changed;
 			config.AddFlag(menu_notify);
@@ -1764,7 +1764,7 @@ namespace ECSEngine {
 			transform.scale = drawer.GetLabelScale("Verbosity");
 			config.AddFlag(transform);
 			Stream<char> verbosity_labels[] = { "Important", "Medium", "Detailed" };
-			Stream<Stream<char>> verbosity_label_stream = Stream<Stream<char>>(verbosity_labels, std::size(verbosity_labels));
+			Stream<Stream<char>> verbosity_label_stream = Stream<Stream<char>>(verbosity_labels, ECS_COUNTOF(verbosity_labels));
 
 			UIConfigComboBoxPrefix verbosity_prefix;
 			verbosity_prefix.prefix = "Verbosity: ";
@@ -1784,7 +1784,7 @@ namespace ECSEngine {
 			transform.scale = drawer.GetLabelScale("Dump");
 			config.AddFlag(transform);
 			Stream<char> dump_label_ptrs[] = { "Count Messages", "On Call", "None" };
-			Stream<Stream<char>> dump_labels = Stream<Stream<char>>(dump_label_ptrs, std::size(dump_label_ptrs));
+			Stream<Stream<char>> dump_labels = Stream<Stream<char>>(dump_label_ptrs, ECS_COUNTOF(dump_label_ptrs));
 
 			float2 get_position = { 0.0f, 0.0f }, get_scale = {0.0f, 0.0f};
 			UIConfigGetTransform get_transform;

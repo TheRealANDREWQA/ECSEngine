@@ -284,7 +284,7 @@ namespace ECSEngine {
 	template<typename SingleValue>
 	ECS_INLINE SingleValue ECS_VECTORCALL Min(SingleValue a, SingleValue b) {
 		if constexpr (std::is_same_v<float, SingleValue>) {
-			return std::min(a, b);
+			return min(a, b);
 		}
 		else {
 			return min(a, b);
@@ -295,7 +295,7 @@ namespace ECSEngine {
 	template<typename SingleValue>
 	ECS_INLINE SingleValue ECS_VECTORCALL Max(SingleValue a, SingleValue b) {
 		if constexpr (std::is_same_v<float, SingleValue>) {
-			return std::max(a, b);
+			return max(a, b);
 		}
 		else {
 			return max(a, b);

@@ -81,7 +81,7 @@ namespace ECSEngine {
 	};
 
 	ECS_INLINE bool IsAssetTypeReferenceable(ECS_ASSET_TYPE type) {
-		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_REFERENCEABLE); index++) {
+		for (size_t index = 0; index < ECS_COUNTOF(ECS_ASSET_TYPES_REFERENCEABLE); index++) {
 			if (type == ECS_ASSET_TYPES_REFERENCEABLE[index]) {
 				return true;
 			}
@@ -90,7 +90,7 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE bool IsAssetTypeWithDependencies(ECS_ASSET_TYPE type) {
-		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_WITH_DEPENDENCIES); index++) {
+		for (size_t index = 0; index < ECS_COUNTOF(ECS_ASSET_TYPES_WITH_DEPENDENCIES); index++) {
 			if (type == ECS_ASSET_TYPES_WITH_DEPENDENCIES[index]) {
 				return true;
 			}
@@ -99,7 +99,7 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE bool IsAssetTypeMetadataWithDependencies(ECS_ASSET_TYPE type) {
-		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY); index++) {
+		for (size_t index = 0; index < ECS_COUNTOF(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY); index++) {
 			if (type == ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].main_type) {
 				return true;
 			}
@@ -108,7 +108,7 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE bool IsAssetTypeDependencyForMetadataChange(ECS_ASSET_TYPE type) {
-		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY); index++) {
+		for (size_t index = 0; index < ECS_COUNTOF(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY); index++) {
 			if (type == ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].dependency_type) {
 				return true;
 			}
@@ -118,7 +118,7 @@ namespace ECSEngine {
 
 	// Fills in all the types which are metadata dependencies for the given main_type (for the moment only materials)
 	ECS_INLINE void FillAssetTypeMetadataWithDependencies(ECS_ASSET_TYPE main_type, CapacityStream<ECS_ASSET_TYPE>* types) {
-		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY); index++) {
+		for (size_t index = 0; index < ECS_COUNTOF(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY); index++) {
 			if (ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].main_type == main_type) {
 				types->AddAssert(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].dependency_type);
 			}
@@ -595,6 +595,17 @@ namespace ECSEngine {
 		Reflection::ReflectionManager* reflection_manager;
 	};
 
+	// We need this to be a differentiator type such
+	// That we don't force making this a blittable type
+	// In many reflection editor contexts
+	struct ECS_REFLECT MiscAssetData {
+		ECS_INLINE MiscAssetData() : data(nullptr, 0) {}
+		ECS_INLINE MiscAssetData(Stream<void> _data) : data(_data) {}
+		ECS_INLINE MiscAssetData(void* buffer, size_t size) : data(buffer, size) {}
+
+		Stream<void> data; ECS_SKIP_REFLECTION()
+	};
+
 	struct ECSENGINE_API ECS_REFLECT MiscAsset {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
@@ -620,26 +631,26 @@ namespace ECSEngine {
 		void RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator);
 
 		ECS_INLINE void* Pointer() const {
-			return data.buffer;
+			return data.data.buffer;
 		}
 
 		ECS_INLINE void** PtrToPointer() {
-			return (void**)&data;
+			return (void**)&data.data.buffer;
 		}
 
 		Stream<char> name;
 		Stream<wchar_t> file;
 
-		Stream<void> data; ECS_SKIP_REFLECTION()
+		MiscAssetData data;
 	};
 
 	constexpr size_t AssetMetadataMaxByteSize() {
 		// When using the initializer list the compiler will not evaluate this to a constant
-		constexpr size_t max1 = std::max(sizeof(MeshMetadata), sizeof(TextureMetadata));
-		constexpr size_t max2 = std::max(sizeof(GPUSamplerMetadata), sizeof(ShaderMetadata));
-		constexpr size_t max3 = std::max(sizeof(MaterialAsset), sizeof(MiscAsset));
-		constexpr size_t max4 = std::max(max1, max2);
-		return std::max(max3, max4);
+		constexpr size_t max1 = max(sizeof(MeshMetadata), sizeof(TextureMetadata));
+		constexpr size_t max2 = max(sizeof(GPUSamplerMetadata), sizeof(ShaderMetadata));
+		constexpr size_t max3 = max(sizeof(MaterialAsset), sizeof(MiscAsset));
+		constexpr size_t max4 = max(max1, max2);
+		return max(max3, max4);
 	}
 
 	constexpr size_t AssetMetadataMaxSizetSize() {

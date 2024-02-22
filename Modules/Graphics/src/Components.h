@@ -25,7 +25,7 @@ struct ECS_REFLECT_COMPONENT RenderEverything {
 	ECSEngine::VertexShader vertex_shader;
 	ECSEngine::PixelShader pixel_shader;
 	ECSEngine::Material* material;
-	ECSEngine::Stream<void> misc_data;
+	ECSEngine::MiscAssetData misc_data;
 };
 
 //struct ECS_REFLECT_COMPONENT Colorssss {

@@ -22,7 +22,7 @@ namespace ECSEngine {
 		L".misc3"
 	};
 
-	static_assert(std::size(FILE_STRINGS) == ECS_RUNTIME_CRASH_FILE_TYPE_COUNT);
+	static_assert(ECS_COUNTOF(FILE_STRINGS) == ECS_RUNTIME_CRASH_FILE_TYPE_COUNT);
 
 	static void WriteErrorMessage(const RuntimeCrashPersistenceWriteOptions* options, Stream<char> error_message) {
 		if (options->error_message) {

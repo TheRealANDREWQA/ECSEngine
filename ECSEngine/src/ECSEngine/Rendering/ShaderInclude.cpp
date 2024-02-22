@@ -56,7 +56,7 @@ namespace ECSEngine {
 		Stream<wchar_t> extension[1] = { L".hlsli" };
 		*byte_pointer = 0;
 		for (size_t index = 0; index < shader_directory.size && *byte_pointer == 0; index++) {
-			ForEachFileInDirectoryRecursiveWithExtension(shader_directory[index], { &extension, std::size(extension) }, &search_data, search_file);
+			ForEachFileInDirectoryRecursiveWithExtension(shader_directory[index], { &extension, ECS_COUNTOF(extension) }, &search_data, search_file);
 		}
 		if (*byte_pointer > 0) {
 			return S_OK;

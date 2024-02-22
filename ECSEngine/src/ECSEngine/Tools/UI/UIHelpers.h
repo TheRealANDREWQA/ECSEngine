@@ -1,6 +1,5 @@
 #pragma once
 #include "../../Core.h"
-#include "ecspch.h"
 #include "../../Rendering/RenderingStructures.h"
 #include "UIStructures.h"
 
@@ -543,8 +542,8 @@ namespace ECSEngine {
 					float smallest = 2.0f;
 					float biggest = -2.0f;
 					for (size_t index = 0; index < texts.size; index += 6) {
-						smallest = std::min(smallest, texts[index].position.x);
-						biggest = std::max(biggest, texts[index + 1].position.x);
+						smallest = min(smallest, texts[index].position.x);
+						biggest = max(biggest, texts[index + 1].position.x);
 					}
 					if (!invert_order) {
 						return {

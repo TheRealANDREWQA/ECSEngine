@@ -1,6 +1,6 @@
 #pragma once
 #include "../Core.h"
-#include "ecspch.h"
+#include <chrono>
 
 namespace ECSEngine {
 

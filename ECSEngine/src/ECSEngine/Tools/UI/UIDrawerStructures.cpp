@@ -35,28 +35,28 @@ namespace ECSEngine {
 
 		float UIDrawerTextElement::GetLowestX() const
 		{
-			float min = text_vertices[0].position.x;
+			float min_value = text_vertices[0].position.x;
 			for (size_t index = 6; index < text_vertices.size; index += 6) {
-				min = std::min(min, text_vertices[index].position.x);
+				min_value = min(min_value, text_vertices[index].position.x);
 			}
-			return min;
+			return min_value;
 		}
 
 		float UIDrawerTextElement::GetLowestY() const {
-			float min = text_vertices[0].position.y;
+			float min_value = text_vertices[0].position.y;
 			for (size_t index = 6; index < text_vertices.size; index += 6) {
-				min = std::min(min, text_vertices[index].position.y);
+				min_value = min(min_value, text_vertices[index].position.y);
 			}
-			return min;
+			return min_value;
 		}
 
 		float2 UIDrawerTextElement::GetLowest() const {
-			float2 min = { text_vertices[0].position.x, text_vertices[0].position.y };
+			float2 min_value = { text_vertices[0].position.x, text_vertices[0].position.y };
 			for (size_t index = 6; index < text_vertices.size; index += 6) {
-				min.x = std::min(min.x, text_vertices[index].position.x);
-				min.y = std::min(min.y, text_vertices[index].position.y);
+				min_value.x = min(min_value.x, text_vertices[index].position.x);
+				min_value.y = min(min_value.y, text_vertices[index].position.y);
 			}
-			return min;
+			return min_value;
 		}
 
 		float2 UIDrawerTextElement::GetZoom() const

@@ -3727,11 +3727,11 @@ namespace ECSEngine {
 			}
 
 			float old_x_scale = scale.x;
-			scale.x = std::max(scale.x, min_value);
+			scale.x = max(scale.x, min_value);
 			if (configuration & UI_CONFIG_COMBO_BOX_NAME_WITH_SCALE) {
 				float difference = scale.x - min_value;
 				if (difference > 0.0f) {
-					difference = std::min(difference, layout.element_indentation + data->name.scale.x);
+					difference = min(difference, layout.element_indentation + data->name.scale.x);
 					scale.x -= difference;
 				}
 			}
@@ -6345,7 +6345,17 @@ namespace ECSEngine {
 							if (remainder_size > 0.0f) {
 								needed_rows += (size_t)(remainder_size / (region_limit.x - GetNextRowXPosition())) + 1;
 							}
-							FinalizeRectangle(0, position, { 0.0f, text_span.y * needed_rows + (needed_rows - 1) * layout.next_row_y_offset });
+							float finalize_span = 0.0f;
+							if (configuration & UI_CONFIG_ALIGN_TO_ROW_Y) {
+								// Only the initial row will follow this span. The others will use the text span.y
+								float initial_row_scale = current_row_y_scale < text_span.y ? text_span.y : current_row_y_scale;
+								finalize_span = initial_row_scale + (float)(needed_rows - 1) * text_span.y;
+							}
+							else {
+								finalize_span = text_span.y * (float)needed_rows;
+							}
+							finalize_span += (float)(needed_rows - 1) * layout.next_row_y_offset;
+							FinalizeRectangle(0, position, { 0.0f, finalize_span });
 
 						}
 						else {
@@ -6917,8 +6927,8 @@ namespace ECSEngine {
 			int64_t min_sprite_count = static_cast<int64_t>((remaining_x_scale) / (right_span.x + element_descriptor.graph_x_axis_space));
 
 			int64_t min_copy = min_sprite_count;
-			min_sprite_count = std::min(min_sprite_count, max_sprite_count);
-			max_sprite_count = std::max(max_sprite_count, min_copy);
+			min_sprite_count = min(min_sprite_count, max_sprite_count);
+			max_sprite_count = max(max_sprite_count, min_copy);
 			int64_t index = min_sprite_count;
 			float total_sprite_length = 0.0f;
 
@@ -7024,10 +7034,10 @@ namespace ECSEngine {
 				}
 				for (size_t index = 0; index < samples.size; index++) {
 					if (~configuration & UI_CONFIG_GRAPH_MIN_Y) {
-						min_y = std::min(min_y, samples[index].y);
+						min_y = min(min_y, samples[index].y);
 					}
 					if (~configuration & UI_CONFIG_GRAPH_MAX_Y) {
-						max_y = std::max(max_y, samples[index].y);
+						max_y = max(max_y, samples[index].y);
 					}
 				}
 
@@ -7050,10 +7060,10 @@ namespace ECSEngine {
 				if ((configuration & UI_CONFIG_GRAPH_MIN_Y) == 0 || (configuration & UI_CONFIG_GRAPH_MAX_Y) == 0) {
 					for (size_t index = 0; index < samples.size; index++) {
 						if (~configuration & UI_CONFIG_GRAPH_MIN_Y) {
-							min_y = std::min(min_y, samples[index].y);
+							min_y = min(min_y, samples[index].y);
 						}
 						if (~configuration & UI_CONFIG_GRAPH_MAX_Y) {
-							max_y = std::max(max_y, samples[index].y);
+							max_y = max(max_y, samples[index].y);
 						}
 					}
 				}
@@ -7201,10 +7211,10 @@ namespace ECSEngine {
 				if ((~configuration & UI_CONFIG_GRAPH_MIN_Y) != 0 || (~configuration & UI_CONFIG_GRAPH_MAX_Y) != 0) {
 					for (size_t index = 0; index < samples.size; index++) {
 						if (~configuration & UI_CONFIG_GRAPH_MIN_Y) {
-							min_y = std::min(min_y, samples[index].y);
+							min_y = min(min_y, samples[index].y);
 						}
 						if (~configuration & UI_CONFIG_GRAPH_MAX_Y) {
-							max_y = std::max(max_y, samples[index].y);
+							max_y = max(max_y, samples[index].y);
 						}
 					}
 				}
@@ -8280,13 +8290,13 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::UpdateCurrentColumnScale(float value) {
-			current_column_x_scale = std::max(current_column_x_scale, value);
+			current_column_x_scale = max(current_column_x_scale, value);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::UpdateCurrentRowScale(float value) {
-			current_row_y_scale = std::max(current_row_y_scale, value);
+			current_row_y_scale = max(current_row_y_scale, value);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -8307,15 +8317,15 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::UpdateMaxRenderBoundsRectangle(float2 limits) {
-			max_render_bounds.x = std::max(max_render_bounds.x, limits.x);
-			max_render_bounds.y = std::max(max_render_bounds.y, limits.y);
+			max_render_bounds.x = max(max_render_bounds.x, limits.x);
+			max_render_bounds.y = max(max_render_bounds.y, limits.y);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::UpdateMinRenderBoundsRectangle(float2 position) {
-			min_render_bounds.x = std::min(min_render_bounds.x, position.x);
-			min_render_bounds.y = std::min(min_render_bounds.y, position.y);
+			min_render_bounds.x = min(min_render_bounds.x, position.x);
+			min_render_bounds.y = min(min_render_bounds.y, position.y);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9953,7 +9963,7 @@ namespace ECSEngine {
 		{
 			float maximum_label_scale = labels.size > 0 ? -1000.0f : 0.0f;
 			for (size_t index = 0; index < labels.size; index++) {
-				maximum_label_scale = std::max(maximum_label_scale, TextSpan(labels[index]).x);
+				maximum_label_scale = max(maximum_label_scale, TextSpan(labels[index]).x);
 			}
 
 			float size = maximum_label_scale + element_descriptor.label_padd.x * 2.0f;
@@ -12646,8 +12656,8 @@ namespace ECSEngine {
 			}
 
 			// The aggregate phase - the "latest" phase of them all. Can't satisfy different phases
-			ECS_UI_DRAW_PHASE click_action_phase = std::max(selectable_callback_phase, drag_phase);
-			click_action_phase = std::max(click_action_phase, double_click_phase);
+			ECS_UI_DRAW_PHASE click_action_phase = max(selectable_callback_phase, drag_phase);
+			click_action_phase = max(click_action_phase, double_click_phase);
 
 			// font size and character spacing are dummies, text color is the one that's needed for
 			// drop down triangle color
@@ -13795,7 +13805,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::NextRow(float count) {
-			min_render_bounds.y = std::min(min_render_bounds.y, current_y - region_render_offset.y);
+			min_render_bounds.y = min(min_render_bounds.y, current_y - region_render_offset.y);
 			current_y += count * layout.next_row_y_offset + current_row_y_scale;
 			current_x = GetNextRowXPosition();
 			current_row_y_scale = 0.0f;
@@ -13809,7 +13819,7 @@ namespace ECSEngine {
 
 		void UIDrawer::NextRowWindowSize(float percentage)
 		{
-			min_render_bounds.y = std::min(min_render_bounds.y, current_y - region_render_offset.y);
+			min_render_bounds.y = min(min_render_bounds.y, current_y - region_render_offset.y);
 			current_y += (region_limit.y - region_fit_space_vertical_offset) * percentage + current_row_y_scale;
 			current_x = GetNextRowXPosition();
 			current_row_y_scale = 0.0f;
@@ -17517,7 +17527,7 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < count; index++) {
 				float2 current_scale = GetScaleForElement(current_index - index - 1);
 				total_scale += current_scale.x;
-				max_y_scale = std::max(max_y_scale, current_scale.y);
+				max_y_scale = max(max_y_scale, current_scale.y);
 				if (index != 0 && keep_indents) {
 					total_scale += indentations[current_index - index];
 				}
@@ -17655,7 +17665,7 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < element_count; index++) {
 				float2 current_scale = GetScaleForElement(index);
 				scale.x += current_scale.x;
-				scale.y = std::max(scale.y, current_scale.y);
+				scale.y = max(scale.y, current_scale.y);
 				if (index < element_count - 1) {
 					scale.x += indentations[index + 1];
 				}

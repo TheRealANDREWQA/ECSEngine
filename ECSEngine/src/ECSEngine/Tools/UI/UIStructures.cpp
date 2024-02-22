@@ -641,10 +641,10 @@ namespace ECSEngine {
 		void UITooltipDrawData::FinalizeRectangle(float2 position, float2 scale)
 		{
 			position.x += scale.x;
-			max_bounds.x = std::max(max_bounds.x, position.x);
-			max_bounds.y = std::max(max_bounds.y, position.y);
+			max_bounds.x = max(max_bounds.x, position.x);
+			max_bounds.y = max(max_bounds.y, position.y);
 			current_scale.x = 0.0f;
-			current_scale.y = std::max(current_scale.y, scale.y);
+			current_scale.y = max(current_scale.y, scale.y);
 		}
 
 		void UIWindowDrawerDescriptor::UpdateZoom(float2 before_zoom, float2 current_zoom)
@@ -987,7 +987,7 @@ namespace ECSEngine {
 
 		bool UIDockspaceBorderDrawOutputSnapshot::ContainsTexture(UISpriteTexture texture) const
 		{
-			for (size_t index = 0; index < std::size(sprites); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(sprites); index++) {
 				for (size_t subindex = 0; subindex < sprites[index].size; subindex++) {
 					if (texture.Interface() == sprites[index][subindex].Interface()) {
 						return true;
@@ -1000,7 +1000,7 @@ namespace ECSEngine {
 		bool UIDockspaceBorderDrawOutputSnapshot::ReplaceTexture(UISpriteTexture old_texture, UISpriteTexture new_texture)
 		{
 			bool was_replaced = false;
-			for (size_t index = 0; index < std::size(sprites); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(sprites); index++) {
 				for (size_t subindex = 0; subindex < sprites[index].size; subindex++) {
 					if (sprites[index][subindex].Interface() == old_texture.Interface()) {
 						sprites[index][subindex] = new_texture;
@@ -1133,19 +1133,19 @@ namespace ECSEngine {
 
 		void UIDockspaceBorderDrawOutputSnapshot::Deallocate(AllocatorPolymorphic allocator, AllocatorPolymorphic runnable_allocator, bool deallocate_runnable_data)
 		{
-			for (size_t index = 0; index < std::size(counts); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(counts); index++) {
 				if (counts[index] != 0 && buffers[index] != nullptr) {
 					DeallocateEx(allocator, buffers[index]);
 				}
 			}
 
-			for (size_t index = 0; index < std::size(sprites); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(sprites); index++) {
 				if (sprites[index].size > 0 && sprites[index].buffer != nullptr) {
 					DeallocateEx(allocator, sprites[index].buffer);
 				}
 			}
 
-			for (size_t index = 0; index < std::size(cluster_sprite_counts); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(cluster_sprite_counts); index++) {
 				if (cluster_sprite_counts[index].size > 0 && cluster_sprite_counts[index].buffer != nullptr) {
 					DeallocateEx(allocator, cluster_sprite_counts[index].buffer);
 				}

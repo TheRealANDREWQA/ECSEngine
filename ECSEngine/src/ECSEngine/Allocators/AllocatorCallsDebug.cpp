@@ -338,7 +338,7 @@ namespace ECSEngine {
 		"ReturnToMarker"
 	};
 
-	static_assert(std::size(DEBUG_ALLOCATOR_FUNCTION_NAMES) == ECS_DEBUG_ALLOCATOR_FUNCTION_COUNT);
+	static_assert(ECS_COUNTOF(DEBUG_ALLOCATOR_FUNCTION_NAMES) == ECS_DEBUG_ALLOCATOR_FUNCTION_COUNT);
 
 	const char* DebugAllocatorFunctionName(ECS_DEBUG_ALLOCATOR_FUNCTION function)
 	{

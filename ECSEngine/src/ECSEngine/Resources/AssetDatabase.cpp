@@ -292,7 +292,7 @@ namespace ECSEngine {
 
 		// Now we need for all assets that have dependencies to include their dependencies here
 		// and change the mapping
-		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_WITH_DEPENDENCIES); index++) {
+		for (size_t index = 0; index < ECS_COUNTOF(ECS_ASSET_TYPES_WITH_DEPENDENCIES); index++) {
 			ECS_ASSET_TYPE current_type = ECS_ASSET_TYPES_WITH_DEPENDENCIES[index];
 			result.ForEachAsset(current_type, [&](unsigned int handle) {
 				void* asset = result.GetAsset(handle, current_type);
@@ -981,13 +981,13 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::GetMaxAssetCount() const
 	{
-		unsigned int max = 0;
+		unsigned int max_value = 0;
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			max = std::max(max, GetAssetCount((ECS_ASSET_TYPE)index));
+			max_value = max(max_value, GetAssetCount((ECS_ASSET_TYPE)index));
 		}
 
-		return max;
+		return max_value;
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -1181,7 +1181,7 @@ namespace ECSEngine {
 		bool include_itself
 	) const
 	{
-		return GetDependentAssetsForImpl(this, metadata, type, allocator, include_itself, std::size(ECS_ASSET_TYPES_WITH_DEPENDENCIES), [&](size_t index) {
+		return GetDependentAssetsForImpl(this, metadata, type, allocator, include_itself, ECS_COUNTOF(ECS_ASSET_TYPES_WITH_DEPENDENCIES), [&](size_t index) {
 			return ECS_ASSET_TYPES_WITH_DEPENDENCIES[index];
 		});
 	}
@@ -1195,7 +1195,7 @@ namespace ECSEngine {
 		bool include_itself
 	) const
 	{
-		return GetDependentAssetsForImpl(this, metadata, type, allocator, include_itself, std::size(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY), [&](size_t index) {
+		return GetDependentAssetsForImpl(this, metadata, type, allocator, include_itself, ECS_COUNTOF(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY), [&](size_t index) {
 			return ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].main_type;
 		});
 	}
@@ -1339,7 +1339,7 @@ namespace ECSEngine {
 		unsigned int max_count = 0;
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			unsigned int current_count = GetAssetCount((ECS_ASSET_TYPE)index);
-			max_count = std::max(current_count, max_count);
+			max_count = max(current_count, max_count);
 		}
 
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, randomized_values, max_count);
@@ -2651,11 +2651,11 @@ namespace ECSEngine {
 			STRING(name),
 			STRING(file)
 		};
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(MeshMetadata), { fields_to_keep, std::size(fields_to_keep) });
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(TextureMetadata), { fields_to_keep, std::size(fields_to_keep) });
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(GPUSamplerMetadata), { fields_to_keep, std::size(fields_to_keep) });
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(ShaderMetadata), { fields_to_keep, std::size(fields_to_keep) });
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(MiscAsset), { fields_to_keep, std::size(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(MeshMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(TextureMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(GPUSamplerMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(ShaderMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(MiscAsset), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
 		
 		// The material asset is not reflected - the omits must not be listed
 

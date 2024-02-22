@@ -737,7 +737,7 @@ namespace ECSEngine {
 			// Walk through the entities and determine the "biggest one" in order to preallocate the streams
 			Entity highest_entity = { 0 };
 			for (unsigned int index = 0; index < header.entity_count; index++) {
-				highest_entity.index = std::max(highest_entity.index, serialize_infos[index].entity.index);
+				highest_entity.index = max(highest_entity.index, serialize_infos[index].entity.index);
 			}
 
 			// Create the necessary pools - add a pool if the modulo is different from 0
@@ -795,7 +795,7 @@ namespace ECSEngine {
 		// Walk through the entities and determine the "biggest one" in order to preallocate the streams
 		Entity highest_entity = { 0 };
 		for (unsigned int index = 0; index < header.entity_count; index++) {
-			highest_entity.index = std::max(highest_entity.index, serialize_infos[index].entity.index);
+			highest_entity.index = max(highest_entity.index, serialize_infos[index].entity.index);
 		}
 
 		// Create the necessary pools - add a pool if the modulo is different from 0
@@ -903,7 +903,7 @@ namespace ECSEngine {
 
 	size_t ComponentBufferAlignment(const ComponentBuffer& component_buffer)
 	{
-		return std::min(PowerOfTwoGreater(ComponentBufferPerEntryByteSize(component_buffer)), alignof(void*));
+		return min(PowerOfTwoGreater(ComponentBufferPerEntryByteSize(component_buffer)), alignof(void*));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

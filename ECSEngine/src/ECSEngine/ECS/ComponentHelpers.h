@@ -29,7 +29,8 @@ namespace ECSEngine {
 	// Example struct { int, Stream<>, Stream<>, int, Stream<> }
 	// buffer_index: 0 -> 1; 1 -> 2, 2 -> 4
 	// If the reflection_manager is specified, it will search deeply into the user defined types
-	// That are referenced by this type
+	// That are referenced by this type. Streams of types that have buffers themselves are not
+	// Supported
 	ECSENGINE_API ComponentBuffer GetReflectionTypeRuntimeBufferIndex(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type, 
@@ -39,7 +40,8 @@ namespace ECSEngine {
 
 	// Determines all the buffers that the ECS runtime can use
 	// If the reflection_manager is specified, it will search deeply into the user defined types
-	// That are referenced by this type
+	// That are referenced by this type. Streams of types that have buffers themselves are not
+	// Supported
 	ECSENGINE_API void GetReflectionTypeRuntimeBuffers(
 		const Reflection::ReflectionManager* reflection_manager, 
 		const Reflection::ReflectionType* type, 

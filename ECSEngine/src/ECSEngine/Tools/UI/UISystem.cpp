@@ -4180,7 +4180,7 @@ namespace ECSEngine {
 			if (!snapshot_mode) {
 				size_t previous_system_counts[ECS_TOOLS_UI_MATERIALS];
 				if (has_snapshot_mode) {
-					for (size_t index = 0; index < std::size(previous_system_counts); index++) {
+					for (size_t index = 0; index < ECS_COUNTOF(previous_system_counts); index++) {
 						previous_system_counts[index] = data->system_count[index];
 					}
 
@@ -4266,7 +4266,7 @@ namespace ECSEngine {
 					system_sprite_texture.size = system_sprite_texture.capacity;
 					snapshot_info.system_sprite_textures = system_sprite_texture;
 					snapshot_info.hoverable_handler = &border.hoverable_handler;
-					snapshot_info.clickable_handlers = { border.clickable_handler, std::size(border.clickable_handler) };
+					snapshot_info.clickable_handlers = { border.clickable_handler, ECS_COUNTOF(border.clickable_handler) };
 					snapshot_info.general_handler = &border.general_handler;
 					snapshot_info.allocator = &m_snapshot_allocator;
 					snapshot_info.runnables = border.snapshot_runnables;
@@ -4290,7 +4290,7 @@ namespace ECSEngine {
 				restore_info.border_sprite_textures = border.draw_resources.sprite_textures;
 				restore_info.system_sprite_textures = m_resources.system_draw.sprite_textures;
 				restore_info.hoverable_handler = &border.hoverable_handler;
-				restore_info.clickable_handlers = { border.clickable_handler, std::size(border.clickable_handler) };
+				restore_info.clickable_handlers = { border.clickable_handler, ECS_COUNTOF(border.clickable_handler) };
 				restore_info.general_handler = &border.general_handler;
 				restore_info.handler_buffer_allocator = Allocator();
 				restore_info.handler_data_allocator = TemporaryAllocator(ECS_UI_DRAW_NORMAL);
@@ -4314,7 +4314,7 @@ namespace ECSEngine {
 				// Enough beforehand (like when a window is changed on a border)
 				Stream<Stream<UISpriteTexture>> snapshot_textures = {
 					border.snapshot.sprites,
-					std::size(border.snapshot.sprites)
+					ECS_COUNTOF(border.snapshot.sprites)
 				};
 
 				// Flatten the arrays into a single array such that we can do a single search inside
@@ -4992,14 +4992,14 @@ namespace ECSEngine {
 				}
 
 				while (temp_stream[index] == temp_stream[index + 1] - 1) {
-					max_bounds.x = std::max(max_bounds.x, position.x);
+					max_bounds.x = max(max_bounds.x, position.x);
 					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
-					max_bounds.y = std::max(max_bounds.y, position.y);
+					max_bounds.y = max(max_bounds.y, position.y);
 					index++;
 				}
 
 				// last character will cause a next row jump and invalidate last recorded position on the x axis
-				max_bounds.x = std::max(max_bounds.x, position.x);
+				max_bounds.x = max(max_bounds.x, position.x);
 				bool is_available = true;
 				if (data->unavailable_rows != nullptr && data->unavailable_rows[row_index] == true) {
 					current_color = data->unavailable_font_color;
@@ -5009,11 +5009,11 @@ namespace ECSEngine {
 					current_color = data->font_color;
 				}
 
-				max_bounds.x = std::max(max_bounds.x, position.x);
+				max_bounds.x = max(max_bounds.x, position.x);
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 				row_position = position;
 				row_index++;
-				max_bounds.y = std::max(max_bounds.y, position.y);
+				max_bounds.y = max(max_bounds.y, position.y);
 				word_start_index = temp_stream[index] + 1;
 			}
 
@@ -5140,7 +5140,7 @@ namespace ECSEngine {
 					);
 
 					text_span = ECSEngine::Tools::GetTextSpan(temp_vertex_stream);
-					max_left_scale = std::max(max_left_scale, text_span.x);
+					max_left_scale = max(max_left_scale, text_span.x);
 					position.x += text_span.x;
 					*count += temp_vertex_stream.size;
 				}
@@ -5155,7 +5155,7 @@ namespace ECSEngine {
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 				row_position = position;
 				row_index++;
-				max_bounds.y = std::max(max_bounds.y, position.y);
+				max_bounds.y = max(max_bounds.y, position.y);
 				word_start_index = left_new_lines[index] + 1;
 			}
 
@@ -5176,7 +5176,7 @@ namespace ECSEngine {
 						data->font_size.y,
 						data->character_spacing
 					);
-					max_scale = std::max(max_scale, text_span.x);
+					max_scale = max(max_scale, text_span.x);
 					text_x_scale = text_span.x;
 				}
 				else {
@@ -5298,16 +5298,16 @@ namespace ECSEngine {
 
 				while (index < temp_stream.size - 1 && temp_stream[index] == temp_stream[index + 1] - 1) {
 					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
-					max_bounds.x = std::max(max_bounds.x, position.x);
-					max_bounds.y = std::max(max_bounds.y, position.y);
+					max_bounds.x = max(max_bounds.x, position.x);
+					max_bounds.y = max(max_bounds.y, position.y);
 					index++;
 				}
 
 				// last character will cause a next row jump and invalidate last recorded position on the x axis
-				max_bounds.x = std::max(max_bounds.x, position.x);
+				max_bounds.x = max(max_bounds.x, position.x);
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
-				max_bounds.x = std::max(max_bounds.x, position.x);
-				max_bounds.y = std::max(max_bounds.y, position.y);
+				max_bounds.x = max(max_bounds.x, position.x);
+				max_bounds.y = max(max_bounds.y, position.y);
 				word_start_index = temp_stream[index] + 1;
 			}
 
@@ -5358,7 +5358,7 @@ namespace ECSEngine {
 					data->font_size.y,
 					data->character_spacing
 				);
-				max_left_scale = std::max(max_left_scale, text_span.x);
+				max_left_scale = max(max_left_scale, text_span.x);
 				current_position = left_new_lines[index] + 1;
 			}
 
@@ -5370,7 +5370,7 @@ namespace ECSEngine {
 					data->font_size.y,
 					data->character_spacing
 				);
-				max_right_scale = std::max(max_right_scale, text_span.x);
+				max_right_scale = max(max_right_scale, text_span.x);
 				current_position = right_new_lines[index] + 1;
 			}
 
@@ -6379,7 +6379,7 @@ namespace ECSEngine {
 				}
 				else {
 					text_span.y += scale.y + new_character_spacing;
-					text_span.x = std::max(text_span.x, scale.x);
+					text_span.x = max(text_span.x, scale.x);
 				}
 				index = invert_order ? index - 1 : index + 1;
 			}

@@ -993,7 +993,7 @@ table.Insert(format, identifier);
 						unsigned int modifier_index = 0;
 
 						// Look for float modifiers
-						for (size_t index = 0; index < std::size(DXGI_FLOAT_FORMAT_MAPPINGS); index++) {
+						for (size_t index = 0; index < ECS_COUNTOF(DXGI_FLOAT_FORMAT_MAPPINGS); index++) {
 							const char* modifier = strstr(colon_character, DXGI_FLOAT_FORMAT_MAPPINGS[index]);
 							if (modifier != nullptr) {
 								modifier_index = index + 1;
@@ -1015,7 +1015,7 @@ table.Insert(format, identifier);
 						const char* has_uint = strstr(type_start, "uint");
 						if (has_uint != nullptr) {
 							format = GetModifiedIntegerFormat(
-								Stream<const char*>(DXGI_UINT_FORMAT_MAPPINGS, std::size(DXGI_UINT_FORMAT_MAPPINGS)),
+								Stream<const char*>(DXGI_UINT_FORMAT_MAPPINGS, ECS_COUNTOF(DXGI_UINT_FORMAT_MAPPINGS)),
 								colon_character,
 								type_start,
 								basic_type_end,
@@ -1027,7 +1027,7 @@ table.Insert(format, identifier);
 							const char* has_sint = strstr(type_start, "int");
 							if (has_sint != nullptr) {
 								format = GetModifiedIntegerFormat(
-									Stream<const char*>(DXGI_UINT_FORMAT_MAPPINGS, std::size(DXGI_UINT_FORMAT_MAPPINGS)),
+									Stream<const char*>(DXGI_UINT_FORMAT_MAPPINGS, ECS_COUNTOF(DXGI_UINT_FORMAT_MAPPINGS)),
 									colon_character,
 									type_start,
 									basic_type_end,
@@ -1229,7 +1229,7 @@ table.Insert(format, identifier);
 
 		if (!options.only_constant_buffers) {
 			size_t constant_buffer_count = buffers.size;
-			for (size_t index = 1; index < std::size(BUFFER_KEYWORDS); index++) {
+			for (size_t index = 1; index < ECS_COUNTOF(BUFFER_KEYWORDS); index++) {
 				current_parse_range = source_code;
 				const char* current_buffer = strstr(current_parse_range.buffer, BUFFER_KEYWORDS[index]);
 				while (current_buffer != nullptr) {
@@ -1331,7 +1331,7 @@ table.Insert(format, identifier);
 
 	bool ShaderReflection::ReflectShaderTexturesSource(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const
 	{
-		return ReflectShaderBasicStructure(source_code, allocator, { TEXTURE_KEYWORDS, std::size(TEXTURE_KEYWORDS) },
+		return ReflectShaderBasicStructure(source_code, allocator, { TEXTURE_KEYWORDS, ECS_COUNTOF(TEXTURE_KEYWORDS) },
 			[&](size_t index, Stream<char> name, unsigned short register_index) {
 				textures.AddAssert({ name, (ECS_SHADER_TEXTURE_TYPE)index, register_index });
 			}
@@ -1356,7 +1356,7 @@ table.Insert(format, identifier);
 
 	bool ShaderReflection::ReflectShaderSamplersSource(Stream<char> source_code, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator) const 
 	{
-		return ReflectShaderBasicStructure(source_code, allocator, { SAMPLER_KEYWORDS, std::size(SAMPLER_KEYWORDS) },
+		return ReflectShaderBasicStructure(source_code, allocator, { SAMPLER_KEYWORDS, ECS_COUNTOF(SAMPLER_KEYWORDS) },
 			[&](size_t index, Stream<char> name, unsigned short register_index) {
 				samplers.AddAssert({ name, register_index });
 			}
@@ -1435,7 +1435,7 @@ table.Insert(format, identifier);
 					}
 
 					mapping[semicolon_count] = (ECS_MESH_INDEX)index;
-					mapping.size = std::max(mapping.size, (unsigned int)semicolon_count + 1);
+					mapping.size = max(mapping.size, (unsigned int)semicolon_count + 1);
 				}
 			}
 
@@ -1445,14 +1445,14 @@ table.Insert(format, identifier);
 
 		const char* struct_ptr = strstr(source_code.buffer, VERTEX_SHADER_INPUT_STRUCTURE_NAME);
 		// Linearly iterate through all keywords and add each mapping accordingly
-		bool success = KeywordLoop(struct_ptr, mapping, Stream<const char*>(VERTEX_BUFFER_MAPPINGS, std::size(VERTEX_BUFFER_MAPPINGS)));
+		bool success = KeywordLoop(struct_ptr, mapping, Stream<const char*>(VERTEX_BUFFER_MAPPINGS, ECS_COUNTOF(VERTEX_BUFFER_MAPPINGS)));
 
 		if (!success) {
 			return false;
 		}
 
 		// Check macros now
-		success = KeywordLoop(struct_ptr, mapping, Stream<const char*>((VERTEX_BUFFER_MACRO_MAPPINGS), std::size(VERTEX_BUFFER_MACRO_MAPPINGS)));
+		success = KeywordLoop(struct_ptr, mapping, Stream<const char*>((VERTEX_BUFFER_MACRO_MAPPINGS), ECS_COUNTOF(VERTEX_BUFFER_MACRO_MAPPINGS)));
 
 		return success;
 	}
@@ -1643,12 +1643,12 @@ table.Insert(format, identifier);
 	};
 
 	Stream<Stream<char>> SHADER_TYPE_KEYWORDS[] = {
-		{ VERTEX_SHADER_TYPE_KEYWORDS, std::size(VERTEX_SHADER_TYPE_KEYWORDS) },
-		{ PIXEL_SHADER_TYPE_KEYWORDS, std::size(PIXEL_SHADER_TYPE_KEYWORDS) },
-		{ DOMAIN_SHADER_TYPE_KEYWORDS, std::size(DOMAIN_SHADER_TYPE_KEYWORDS) },
-		{ HULL_SHADER_TYPE_KEYWORDS, std::size(HULL_SHADER_TYPE_KEYWORDS) },
-		{ GEOMETRY_SHADER_TYPE_KEYWORDS, std::size(GEOMETRY_SHADER_TYPE_KEYWORDS) },
-		{ COMPUTE_SHADER_TYPE_KEYWORDS, std::size(COMPUTE_SHADER_TYPE_KEYWORDS) }
+		{ VERTEX_SHADER_TYPE_KEYWORDS, ECS_COUNTOF(VERTEX_SHADER_TYPE_KEYWORDS) },
+		{ PIXEL_SHADER_TYPE_KEYWORDS, ECS_COUNTOF(PIXEL_SHADER_TYPE_KEYWORDS) },
+		{ DOMAIN_SHADER_TYPE_KEYWORDS, ECS_COUNTOF(DOMAIN_SHADER_TYPE_KEYWORDS) },
+		{ HULL_SHADER_TYPE_KEYWORDS, ECS_COUNTOF(HULL_SHADER_TYPE_KEYWORDS) },
+		{ GEOMETRY_SHADER_TYPE_KEYWORDS, ECS_COUNTOF(GEOMETRY_SHADER_TYPE_KEYWORDS) },
+		{ COMPUTE_SHADER_TYPE_KEYWORDS, ECS_COUNTOF(COMPUTE_SHADER_TYPE_KEYWORDS) }
 	};
 
 	ECS_SHADER_TYPE ShaderReflection::DetermineShaderType(Stream<char> source_code) const

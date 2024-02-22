@@ -1,10 +1,12 @@
+// ECS_REFLECT
 #pragma once
 #include "Vector.h"
 #include "Quaternion.h"
+#include "../Utilities/Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {
 
-	struct ECSENGINE_API PlaneScalar {
+	struct ECSENGINE_API ECS_REFLECT PlaneScalar {
 		ECS_INLINE PlaneScalar() {}
 		ECS_INLINE PlaneScalar(float3 _normal, float _dot) : normal(_normal), dot(_dot) {}
 		// It will perform a normalization, use FromNormalized() if you know the direction is normalized
@@ -49,13 +51,28 @@ namespace ECSEngine {
 		Vec8f dot;
 	};
 
+	// Returns true if the plane normal has the same direction as the one given.
+	// The direction needs to be given normalized. Quite considerable epsilon
+	// Values should be used
+	ECS_INLINE bool ComparePlaneDirections(PlaneScalar a, float3 normalized_direction, float epsilon = 0.001f) {
+		return IsParallelMask(a.normal, normalized_direction, epsilon);
+	}
+
 	// Given 3 non-collinear points A, B and C (ordered counter clockwise), 
 	// calculates the plane determined by them
 	ECSENGINE_API PlaneScalar ComputePlane(float3 a, float3 b, float3 c);
 
+	// Given 3 non-collinear points A, B and C,calculates the plane determined by them
+	// With the normal pointing away from the reference point
+	ECSENGINE_API PlaneScalar ComputePlaneAway(float3 a, float3 b, float3 c, float3 reference_point);
+
 	// Given 3 non-collinear points A, B and C (ordered counter clockwise), 
 	// calculates the plane determined by them
 	ECSENGINE_API Plane ECS_VECTORCALL ComputePlane(Vector3 a, Vector3 b, Vector3 c);
+
+	// Given 3 non-collinear points A, B and C,calculates the plane determined by them
+	// With the normal pointing away from the reference point
+	ECSENGINE_API Plane ECS_VECTORCALL ComputePlaneAway(Vector3 a, Vector3 b, Vector3 c, Vector3 reference_point);
 
 	ECSENGINE_API PlaneScalar PlaneXYScalar(float z_offset = 0.0f, bool invert_normal = false);
 

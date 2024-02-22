@@ -32,7 +32,7 @@ namespace ECSEngine {
 			{positive_span, positive_span, positive_span}
 		};
 
-		vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), std::size(vertex_position), vertex_position, temporary);
+		vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), ECS_COUNTOF(vertex_position), vertex_position, temporary);
 
 		unsigned int indices[] = {
 			0, 2, 1,    2, 3, 1,
@@ -43,7 +43,7 @@ namespace ECSEngine {
 			0, 1, 4,    1, 5, 4
 		};
 
-		index_buffer = graphics->CreateIndexBuffer(Stream<unsigned int>(indices, std::size(indices)), temporary);
+		index_buffer = graphics->CreateIndexBuffer(Stream<unsigned int>(indices, ECS_COUNTOF(indices)), temporary);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ namespace ECSEngine {
 			bottom_right,                                       // d
 			{top_left.x, bottom_right.y, top_left.z}            // c
 		};
-		return graphics->CreateVertexBuffer(sizeof(float3), std::size(positions), positions, temporary);
+		return graphics->CreateVertexBuffer(sizeof(float3), ECS_COUNTOF(positions), positions, temporary);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

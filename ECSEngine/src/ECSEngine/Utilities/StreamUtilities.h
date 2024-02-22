@@ -1,5 +1,4 @@
 #pragma once
-#include "ecspch.h"
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "PointerUtilities.h"
@@ -55,7 +54,7 @@ namespace ECSEngine {
 	void GetMinFromStream(const Stream& input, Value& value, Function&& function) {
 		for (size_t index = 0; index < input.size; index++) {
 			Value current_value = function(input[index]);
-			value = std::min(value, current_value);
+			value = min(value, current_value);
 		}
 	}
 
@@ -63,7 +62,7 @@ namespace ECSEngine {
 	void GetMaxFromStream(const Stream& input, Value& value, Function&& function) {
 		for (size_t index = 0; index < input.size; index++) {
 			Value current_value = function(input[index]);
-			value = std::max(value, current_value);
+			value = max(value, current_value);
 		}
 	}
 
@@ -71,8 +70,8 @@ namespace ECSEngine {
 	void GetExtremesFromStream(const Stream& input, Value& min, Value& max, Function&& accessor) {
 		for (size_t index = 0; index < input.size; index++) {
 			Value current_value = accessor(input[index]);
-			min = std::min(min, current_value);
-			max = std::max(max, current_value);
+			min = ECSEngine::min(min, current_value);
+			max = ECSEngine::max(max, current_value);
 		}
 	}
 

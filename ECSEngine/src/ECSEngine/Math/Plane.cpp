@@ -77,6 +77,25 @@ namespace ECSEngine {
 		return ComputePlaneImpl<Plane>(a, b, c);
 	}
 
+	template<typename Plane, typename Vector>
+	static ECS_INLINE Plane ECS_VECTORCALL ComputePlaneAwayImpl(Vector a, Vector b, Vector c, Vector reference_point) {
+		Plane plane = ComputePlane(a, b, c);
+		auto plane_distance = DistanceToPlane(plane, reference_point);
+		auto is_facing = plane_distance > SingleZeroVector<Vector>();
+		// Both the normal and the dot need to be negated when facing the reference point
+		plane.normal = Select(is_facing, -plane.normal, plane.normal);
+		plane.dot = SelectSingle(is_facing, -plane.dot, plane.dot);
+		return plane;
+	}
+
+	PlaneScalar ComputePlaneAway(float3 a, float3 b, float3 c, float3 reference_point) {
+		return ComputePlaneAwayImpl<PlaneScalar>(a, b, c, reference_point);
+	}
+
+	Plane ECS_VECTORCALL ComputePlaneAway(Vector3 a, Vector3 b, Vector3 c, Vector3 reference_point) {
+		return ComputePlaneAwayImpl<Plane>(a, b, c, reference_point);
+	}
+
 	template<typename Plane, typename Vector, typename OffsetType>
 	static ECS_INLINE Plane ECS_VECTORCALL PlaneFromAxisImpl(Vector normal, OffsetType offset, bool invert_normal) {
 		if (invert_normal) {

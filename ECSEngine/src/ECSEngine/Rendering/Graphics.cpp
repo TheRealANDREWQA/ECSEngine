@@ -37,7 +37,7 @@ namespace ECSEngine {
 		"cs_5_0",
 	};
 
-	static_assert(std::size(SHADER_COMPILE_TARGET) == (ECS_SHADER_TYPE_COUNT * ECS_SHADER_TARGET_COUNT));
+	static_assert(ECS_COUNTOF(SHADER_COMPILE_TARGET) == (ECS_SHADER_TYPE_COUNT * ECS_SHADER_TARGET_COUNT));
 
 	const wchar_t* SHADER_HELPERS_VERTEX[] = {
 		ECS_VERTEX_SHADER_SOURCE(EquirectangleToCube),
@@ -90,9 +90,9 @@ namespace ECSEngine {
 		ECS_COMPUTE_SHADER_SOURCE(VisualizeTexture), // Each shader will have a different macro annotation
 	};
 
-	static_assert(std::size(SHADER_HELPERS_VERTEX) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
-	static_assert(std::size(SHADER_HELPERS_PIXEL) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
-	static_assert(std::size(SHADER_HELPERS_COMPUTE) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
+	static_assert(ECS_COUNTOF(SHADER_HELPERS_VERTEX) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
+	static_assert(ECS_COUNTOF(SHADER_HELPERS_PIXEL) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
+	static_assert(ECS_COUNTOF(SHADER_HELPERS_COMPUTE) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
 
 	const char* ECS_GRAPHICS_RESOURCE_TYPE_STRING[] = {
 		"VertexShader",
@@ -128,7 +128,7 @@ namespace ECSEngine {
 		"DXResourceInterface"
 	};
 
-	static_assert(std::size(ECS_GRAPHICS_RESOURCE_TYPE_STRING) == ECS_GRAPHICS_RESOURCE_TYPE_COUNT);
+	static_assert(ECS_COUNTOF(ECS_GRAPHICS_RESOURCE_TYPE_STRING) == ECS_GRAPHICS_RESOURCE_TYPE_COUNT);
 
 #define GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT 1024
 	
@@ -337,7 +337,7 @@ namespace ECSEngine {
 		};
 		graphics->m_cached_resources.vertex_buffer[ECS_GRAPHICS_CACHED_VERTEX_BUFFER_QUAD] = graphics->CreateVertexBuffer(
 			sizeof(float3),
-			std::size(quad_positions),
+			ECS_COUNTOF(quad_positions),
 			quad_positions,
 			true
 		);
@@ -1142,7 +1142,7 @@ namespace ECSEngine {
 		D3D_SHADER_MACRO macros[64];
 		// For strings that are nullptr or of size 0, redirect them to this
 		char empty_string = '\0';
-		ECS_CRASH_CONDITION_RETURN(options.macros.size <= std::size(macros) - 1, nullptr, "Too many shaders");
+		ECS_CRASH_CONDITION_RETURN(options.macros.size <= ECS_COUNTOF(macros) - 1, nullptr, "Too many shaders");
 		ECS_STACK_CAPACITY_STREAM(char, null_terminated_strings, ECS_KB * 8);
 
 		for (size_t index = 0; index < options.macros.size; index++) {
@@ -3296,7 +3296,7 @@ namespace ECSEngine {
 			m_internal_resources.SpinWaitWrites();
 		}
 
-		last_index = std::min(last_index, (int32_t)m_internal_resources.capacity);
+		last_index = min(last_index, (int32_t)m_internal_resources.capacity);
 		for (int32_t index = 0; index < last_index; index++) {
 			if (m_internal_resources[index].is_deleted.load(ECS_RELAXED)) {
 				// The remove swap back must be done manually - the size might be incremented by other threads trying to write

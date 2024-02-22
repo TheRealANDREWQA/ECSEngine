@@ -2,6 +2,7 @@
 #include "../../Dependencies/VCL-version2/vectorclass.h"
 #include "../Core.h"
 #include "../Utilities/BasicTypes.h"
+#include <limits.h>
 
 namespace ECSEngine {
 
@@ -1106,7 +1107,7 @@ namespace ECSEngine {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)];
-#define LOOP_ITERATION(index) mask[index] = element_##index ? UCHAR_MAX : 0;
+#define LOOP_ITERATION(index) mask[index] = element_##index ? UINT8_MAX : 0;
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 4);
@@ -1127,7 +1128,7 @@ namespace ECSEngine {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)];
-#define LOOP_ITERATION(index) mask[index] = elements[index] ? UCHAR_MAX : 0;
+#define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT8_MAX : 0;
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 4);
@@ -1361,7 +1362,7 @@ namespace ECSEngine {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)] = { 0 };
-		mask[position] = USHORT_MAX;
+		mask[position] = UINT16_MAX;
 
 		__m256i vector_mask = _mm256_load_si256((const __m256i*)mask);
 		return _mm256_blendv_epi8(zeros, vector, vector_mask);
@@ -1373,7 +1374,7 @@ namespace ECSEngine {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
-		mask[position] = UCHAR_MAX;
+		mask[position] = UINT8_MAX;
 
 		__m256i vector_mask = _mm256_load_si256((const __m256i*)mask);
 		return _mm256_blendv_epi8(zeros, vector, vector_mask);
@@ -1500,14 +1501,14 @@ namespace ECSEngine {
 
 			// Create the mask for blendv
 			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
-			mask[0] = UCHAR_MAX;
-			mask[4] = UCHAR_MAX;
-			mask[8] = UCHAR_MAX;
-			mask[12] = UCHAR_MAX;
-			mask[16] = UCHAR_MAX;
-			mask[20] = UCHAR_MAX;
-			mask[24] = UCHAR_MAX;
-			mask[28] = UCHAR_MAX;
+			mask[0] = UINT8_MAX;
+			mask[4] = UINT8_MAX;
+			mask[8] = UINT8_MAX;
+			mask[12] = UINT8_MAX;
+			mask[16] = UINT8_MAX;
+			mask[20] = UINT8_MAX;
+			mask[24] = UINT8_MAX;
+			mask[28] = UINT8_MAX;
 
 			__m256i vector_mask = _mm256_load_si256((const __m256i*)mask);
 
@@ -1524,14 +1525,14 @@ namespace ECSEngine {
 
 			// Create the mask for blendv
 			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
-			mask[3] = UCHAR_MAX;
-			mask[7] = UCHAR_MAX;
-			mask[11] = UCHAR_MAX;
-			mask[15] = UCHAR_MAX;
-			mask[19] = UCHAR_MAX;
-			mask[23] = UCHAR_MAX;
-			mask[27] = UCHAR_MAX;
-			mask[31] = UCHAR_MAX;
+			mask[3] = UINT8_MAX;
+			mask[7] = UINT8_MAX;
+			mask[11] = UINT8_MAX;
+			mask[15] = UINT8_MAX;
+			mask[19] = UINT8_MAX;
+			mask[23] = UINT8_MAX;
+			mask[27] = UINT8_MAX;
+			mask[31] = UINT8_MAX;
 
 			__m256i vector_mask = _mm256_load_si256((const __m256i*)mask);
 
@@ -1553,7 +1554,7 @@ namespace ECSEngine {
 			// Create the mask for blendv
 			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
 			
-#define LOOP_ITERATION(index) mask[(index) * 4] = UCHAR_MAX; mask[(index) * 4 + 1] = UCHAR_MAX;
+#define LOOP_ITERATION(index) mask[(index) * 4] = UINT8_MAX; mask[(index) * 4 + 1] = UINT8_MAX;
 
 			LOOP_UNROLL(8, LOOP_ITERATION);
 
@@ -1575,7 +1576,7 @@ namespace ECSEngine {
 			// Create the mask for blendv
 			alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)] = { 0 };
 
-#define LOOP_ITERATION(index) mask[(index) * 4 + 2] = UCHAR_MAX; mask[(index) * 4 + 3] = UCHAR_MAX;
+#define LOOP_ITERATION(index) mask[(index) * 4 + 2] = UINT8_MAX; mask[(index) * 4 + 3] = UINT8_MAX;
 
 			LOOP_UNROLL(8, LOOP_ITERATION);
 

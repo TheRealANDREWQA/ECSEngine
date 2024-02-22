@@ -481,7 +481,7 @@ namespace ECSEngine {
 
 		ECS_STACK_CAPACITY_STREAM(uint2, external_references, 1024);
 		ResizableStream<unsigned int>* asset_streams = (ResizableStream<unsigned int>*)this;
-		for (size_t type = 0; type < std::size(ECS_ASSET_TYPES_REFERENCEABLE); type++) {
+		for (size_t type = 0; type < ECS_COUNTOF(ECS_ASSET_TYPES_REFERENCEABLE); type++) {
 			external_references.size = 0;
 			ECS_ASSET_TYPE current_type = ECS_ASSET_TYPES_REFERENCEABLE[type];
 			standalone_database->GetReferenceCountsStandalone(current_type, &external_references);

@@ -514,7 +514,7 @@ namespace ECSEngine {
 		ECS_JUMP_TABLE(DirectXTexAllocator)
 	};
 
-	static_assert(std::size(DIRECTX_ALLOCATE_FUNCTIONS) == ECS_ALLOCATOR_TYPE_COUNT);
+	static_assert(ECS_COUNTOF(DIRECTX_ALLOCATE_FUNCTIONS) == ECS_ALLOCATOR_TYPE_COUNT);
 
 	void SetInternalImageAllocator(DirectX::ScratchImage* image, AllocatorPolymorphic allocator)
     {
@@ -537,7 +537,7 @@ namespace ECSEngine {
 		"MemoryProtectet"
 	};
 
-	static_assert(std::size(ALLOCATOR_NAMES) == ECS_ALLOCATOR_TYPE_COUNT);
+	static_assert(ECS_COUNTOF(ALLOCATOR_NAMES) == ECS_ALLOCATOR_TYPE_COUNT);
 
 	const char* AllocatorTypeName(ECS_ALLOCATOR_TYPE type)
 	{

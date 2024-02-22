@@ -384,7 +384,7 @@ namespace ECSEngine {
 			Reflection::ReflectionManagerGetQuery get_query;
 			get_query.indices = &link_indices;
 			get_query.strict_compare = true;
-			get_query.tags = { tag, std::size(tag) };
+			get_query.tags = { tag, ECS_COUNTOF(tag) };
 			reflection_manager->GetHierarchyTypes(get_query);
 
 			for (unsigned int index = 0; index < link_indices.size; index++) {
@@ -859,7 +859,7 @@ namespace ECSEngine {
 		CapacityStream<Stream<void>>* field_data
 	)
 	{
-		constexpr size_t static_data_size = std::max(std::max(std::max(std::max(std::max(sizeof(MeshMetadata), sizeof(TextureMetadata)), 
+		constexpr size_t static_data_size = max(max(max(max(max(sizeof(MeshMetadata), sizeof(TextureMetadata)), 
 			sizeof(GPUSamplerMetadata)), sizeof(ShaderMetadata)), sizeof(MaterialAsset)), sizeof(MiscAsset));
 		static const char empty_metadata[static_data_size] = { 0 };
 
@@ -1018,7 +1018,7 @@ namespace ECSEngine {
 		Stream<char> tags[] = {
 			ECS_LINK_COMPONENT_TAG
 		};
-		query.tags = { tags, std::size(tags) };
+		query.tags = { tags, ECS_COUNTOF(tags) };
 		reflection_manager->GetHierarchyTypes(query);
 	}
 

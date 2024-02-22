@@ -268,11 +268,11 @@ namespace ECSEngine {
 							ECS_ASSERT(distance <= 31, "Hash table capacity not enough (too many collisions)");
 						}
 						else {
-							max_distance = std::max(max_distance, distance);
+							max_distance = max(max_distance, distance);
 							// Clamp the distance to 31 in case it overflows to 32, and that can make the
 							// Metadata empty and lead to other inserts or erases thinking this slot is empty
 							// When it is not
-							distance = std::min(distance, (unsigned int)31);
+							distance = min(distance, (unsigned int)31);
 						}
 						hash_key_bits |= distance << 3;
 						m_metadata[index] = hash_key_bits;
@@ -296,11 +296,11 @@ namespace ECSEngine {
 							ECS_ASSERT(distance <= 31, "Hash table capacity not enough (too many collisions)");
 						}
 						else {
-							max_distance = std::max(max_distance, distance);
+							max_distance = max(max_distance, distance);
 							// Clamp the distance to 31 in case it overflows to 32, and that can make the
 							// Metadata empty and lead to other inserts or erases thinking this slot is empty
 							// When it is not
-							distance = std::min(distance, (unsigned int)31);
+							distance = min(distance, (unsigned int)31);
 						}
 						m_metadata[index] = hash_key_bits | (distance << 3);
 						distance = (metadata_temp >> 3) + 1;

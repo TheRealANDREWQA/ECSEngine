@@ -13,6 +13,10 @@
 
 #pragma warning(disable:26812)
 
+#include <float.h>
+#include <limits.h>
+#include <stdint.h>
+
 constexpr float PI = 3.14159265358979323846f;
 constexpr float PI_INVERSE = 1.0f / PI;
 constexpr float DEG_TO_RAD_FACTOR = PI / 180.0f;
@@ -36,17 +40,7 @@ constexpr size_t ECS_TB_10 = 1'000'000'000'000;
 #define ECS_SIMD_BIT_SIZE 256
 #define ECS_SIMD_BYTE_SIZE 32
 
-namespace ECSEngine {
-
-	static inline float DegToRad(float angle) {
-		return angle * DEG_TO_RAD_FACTOR;
-	}
-
-	static inline float RadToDeg(float angle) {
-		return angle * RAD_TO_DEG_FACTOR;
-	}
-
-}
+#define ECS_COUNTOF(array_) _countof(array_)
 
 // This macro is used to give other macros that want a single argument
 // but the argument is actually a list of values
@@ -61,6 +55,28 @@ namespace ECSEngine {
 #define ECS_RESTRICT __restrict
 #define ECS_OPTIMIZE_START _Pragma("optimize(\"\", on )")
 #define ECS_OPTIMIZE_END _Pragma("optimize(\"\", off )")
+
+namespace ECSEngine {
+
+	static inline float DegToRad(float angle) {
+		return angle * DEG_TO_RAD_FACTOR;
+	}
+
+	static inline float RadToDeg(float angle) {
+		return angle * RAD_TO_DEG_FACTOR;
+	}
+
+	template<typename T>
+	ECS_INLINE constexpr T min(T a, T b) {
+		return a < b ? a : b;
+	}
+
+	template<typename T>
+	ECS_INLINE constexpr T max(T a, T b) {
+		return a > b ? a : b;
+	}
+
+}
 
 #define ECS_BIT(bit_index) (1 << bit_index)
 

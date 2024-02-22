@@ -585,13 +585,13 @@ namespace ECSEngine {
 				if constexpr (IsStreamType<FundamentalType, ContainerType>()) {
 					for (size_t subindex = entry_offset; subindex < entry_offset + current_chunk_count; subindex++) {
 						chunk_average += (double)container[subindex];
-						chunk_max = std::max(container[subindex], chunk_max);
+						chunk_max = max(container[subindex], chunk_max);
 					}
 				}
 				else {
 					container.ForEachRange(entry_offset, entry_offset + current_chunk_count, [&](FundamentalType current_value) {
 						chunk_average += (double)current_value;
-						chunk_max = std::max(current_value, chunk_max);
+						chunk_max = max(current_value, chunk_max);
 					});
 				}
 
