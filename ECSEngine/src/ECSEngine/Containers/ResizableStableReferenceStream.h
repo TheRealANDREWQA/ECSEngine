@@ -105,7 +105,7 @@ namespace ECSEngine {
 			// Get the last index in use. That is the threshold
 			unsigned int last_index = 0;
 			stream.ForEachIndex([&](unsigned int index) {
-				last_index = std::max(index, last_index);
+				last_index = max(index, last_index);
 			});
 
 			// The capacity to sustain the last index needs to be 1 more

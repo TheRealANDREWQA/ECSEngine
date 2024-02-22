@@ -406,14 +406,14 @@ namespace ECSEngine {
 							else {
 								// Try the second technique - search for the roughness/Roughness strings and use the part of the metallic name
 								// without the metallic suffix
-								for (size_t index = 0; index < std::size(roughness_roots) && roughness_root.size == 0; index++) {
+								for (size_t index = 0; index < ECS_COUNTOF(roughness_roots) && roughness_root.size == 0; index++) {
 									roughness_root = FindFirstToken(name, roughness_roots[index]);
 									roughness_root.size = roughness_root.size > 0 ? roughness_roots[index].size : 0;
 								}
 
 								if (roughness_root.size > 0) {
 									Stream<char> metallic_name = name.StartDifference(roughness_root);
-									for (size_t index = 0; index < std::size(metallic_roots) && metallic_root.size == 0; index++) {
+									for (size_t index = 0; index < ECS_COUNTOF(metallic_roots) && metallic_root.size == 0; index++) {
 										metallic_root = FindFirstToken(name, metallic_roots[index]);
 										metallic_root.size = metallic_root.size > 0 ? metallic_roots[index].size : 0;
 									}
@@ -437,7 +437,7 @@ namespace ECSEngine {
 									}
 								}
 								else {
-									for (size_t index = 0; index < std::size(metallic_roots) && metallic_root.size == 0; index++) {
+									for (size_t index = 0; index < ECS_COUNTOF(metallic_roots) && metallic_root.size == 0; index++) {
 										metallic_root = FindFirstToken(name, metallic_roots[index]);
 										metallic_root.size = metallic_root.size > 0 ? metallic_roots[index].size : 0;
 									}

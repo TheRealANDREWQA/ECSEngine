@@ -8,7 +8,7 @@ namespace ECSEngine {
 
 	void CopyStreamAndMemset(void* destination, size_t destination_capacity, Stream<void> data, int memset_value)
 	{
-		size_t copy_size = std::min(destination_capacity, data.size);
+		size_t copy_size = min(destination_capacity, data.size);
 		memcpy(destination, data.buffer, copy_size);
 		if (copy_size != destination_capacity) {
 			memset(OffsetPointer(destination, copy_size), memset_value, destination_capacity - copy_size);

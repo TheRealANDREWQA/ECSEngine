@@ -46,7 +46,7 @@ namespace ECSEngine {
 
 		bool success = true;
 		const char header_annotation[] = "**********************************************\n";
-		size_t annotation_size = std::size(header_annotation) - 1;
+		size_t annotation_size = ECS_COUNTOF(header_annotation) - 1;
 		success &= WriteFile(file, { header_annotation, annotation_size }, file_buffering);
 
 		char time_characters[256];
@@ -66,7 +66,7 @@ namespace ECSEngine {
 		ConvertIntToChars(time_stream, current_date.year);
 		time_stream.Add(' ');
 		const char description[] = "Console output\n";
-		time_stream.AddStream(Stream<char>(description, std::size(description) - 1));
+		time_stream.AddStream(Stream<char>(description, ECS_COUNTOF(description) - 1));
 
 		success &= WriteFile(file, { time_characters, time_stream.size }, file_buffering);
 		success &= WriteFile(file, { header_annotation, annotation_size }, file_buffering);

@@ -70,9 +70,9 @@ namespace ECSEngine {
 		entry_data[index].lock.Lock();
 		
 		__try {
-			entry_data[index].peak_memory_usage = std::max(entry_data[index].peak_memory_usage, current_usage);
-			entry_data[index].peak_block_count = std::max(entry_data[index].peak_block_count, block_count);
-			entry_data[index].peak_suballocator_count = std::max(entry_data[index].peak_suballocator_count, suballocator_count);
+			entry_data[index].peak_memory_usage = max(entry_data[index].peak_memory_usage, current_usage);
+			entry_data[index].peak_block_count = max(entry_data[index].peak_block_count, block_count);
+			entry_data[index].peak_suballocator_count = max(entry_data[index].peak_suballocator_count, suballocator_count);
 			entry_data[index].current_frame_allocations++;
 		}
 		__finally {

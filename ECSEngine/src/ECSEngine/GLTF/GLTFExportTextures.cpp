@@ -488,7 +488,7 @@ namespace ECSEngine {
 
 		while (write_path.size >= root_stop.size) {
 			unsigned int initial_size = write_path.size;
-			for (size_t index = 0; index < std::size(SEARCH_FOLDER_NAMES); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(SEARCH_FOLDER_NAMES); index++) {
 				write_path.Add(ECS_OS_PATH_SEPARATOR);
 				write_path.AddStreamAssert(SEARCH_FOLDER_NAMES[index]);
 				if (ExistsFileOrFolder(write_path)) {

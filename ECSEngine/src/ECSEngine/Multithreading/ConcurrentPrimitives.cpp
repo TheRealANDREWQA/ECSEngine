@@ -9,8 +9,16 @@ namespace ECSEngine {
 	// has its latency which can be critical to us)
 #define GLOBAL_SPIN_COUNT 500
 
-	ECS_INLINE bool IsBitUnlocked(unsigned char byte, unsigned char bit_index) {
+	ECS_INLINE static bool IsBitUnlocked(unsigned char byte, unsigned char bit_index) {
 		return (byte & ECS_BIT(bit_index)) == 0;
+	}
+
+	bool GiveSliceToProcessorThread() {
+		return SwitchToThread();
+	}
+
+	void GiveSlice() {
+		Sleep(0);
 	}
 
 	// ----------------------------------------------------------------------------------------------
@@ -202,6 +210,18 @@ namespace ECSEngine {
 		unsigned int value = count.fetch_sub(exit_count, ECS_RELEASE);
 		WakeByAddressAll(&count);
 		return value;
+	}
+
+	void Semaphore::SetCountEx(unsigned int value)
+	{
+		count.store(value, ECS_RELEASE);
+		WakeByAddressAll(&count);
+	}
+
+	void Semaphore::SetTargetEx(unsigned int value)
+	{
+		target.store(value, ECS_RELEASE);
+		WakeByAddressAll(&count);
 	}
 
 	unsigned int Semaphore::Enter(unsigned int enter_count) {

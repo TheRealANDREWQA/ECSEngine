@@ -3,8 +3,8 @@
 
 bool CompareConvexCollider(const ConvexCollider* first, const ConvexCollider* second)
 {
-	return first->hull.size == second->hull.size && SoACompare(
-		first->hull.size,
+	return first->hull.vertex_size == second->hull.vertex_size && SoACompare(
+		first->hull.vertex_size,
 		first->hull.vertices_x,
 		second->hull.vertices_x,
 		first->hull.vertices_y,
@@ -16,18 +16,14 @@ bool CompareConvexCollider(const ConvexCollider* first, const ConvexCollider* se
 
 void CopyConvexCollider(ConvexCollider* destination, const ConvexCollider* source, AllocatorPolymorphic allocator, bool deallocate_existing_destination) 
 {
-	if (deallocate_existing_destination) {
-		SoAResize(allocator, destination->hull.size, source->hull.size, &destination->hull.vertices_x, &destination->hull.vertices_y, &destination->hull.vertices_z);
-	}
-	else {
-		SoAInitialize(allocator, source->hull.size, &destination->hull.vertices_x, &destination->hull.vertices_y, &destination->hull.vertices_z);
-	}
+	destination->hull_size = source->hull_size;
+	destination->hull.Copy(&source->hull, allocator, deallocate_existing_destination);
+	destination->mesh.Copy(&source->mesh, allocator, deallocate_existing_destination);
 }
 
 void DeallocateConvexCollider(ConvexCollider* collider, AllocatorPolymorphic allocator) {
 	// Coalesced Allocation
-	if (collider->hull.size > 0 && collider->hull.vertices_x != nullptr) {
-		Deallocate(allocator, collider->hull.vertices_x);
-	}
-	memset(&collider->hull, 0, sizeof(collider->hull));
+	collider->hull.Deallocate(allocator);
+	collider->mesh.Deallocate(allocator);
+	collider->hull_size = 0;
 }

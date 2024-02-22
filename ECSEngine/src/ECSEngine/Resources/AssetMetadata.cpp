@@ -22,7 +22,7 @@ namespace ECSEngine {
 	};
 
 	size_t ECS_ASSET_METADATA_MACROS_SIZE() {
-		return std::size(ECS_ASSET_METADATA_MACROS);
+		return ECS_COUNTOF(ECS_ASSET_METADATA_MACROS);
 	}
 
 	AssetFieldTarget ECS_ASSET_TARGET_FIELD_NAMES[] = {
@@ -38,7 +38,7 @@ namespace ECSEngine {
 
 	size_t ECS_ASSET_TARGET_FIELD_NAMES_SIZE()
 	{
-		return std::size(ECS_ASSET_TARGET_FIELD_NAMES);
+		return ECS_COUNTOF(ECS_ASSET_TARGET_FIELD_NAMES);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -75,7 +75,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------
 
 	AssetTypeEx FindAssetMetadataMacro(Stream<char> string) {
-		size_t count = std::size(ECS_ASSET_METADATA_MACROS);
+		size_t count = ECS_COUNTOF(ECS_ASSET_METADATA_MACROS);
 		for (size_t index = 0; index < count; index++) {
 			if (string.size == ECS_ASSET_METADATA_MACROS[index].name.size && memcmp(
 					string.buffer, 
@@ -92,7 +92,7 @@ namespace ECSEngine {
 
 	AssetTypeEx FindAssetTargetField(Stream<char> string)
 	{
-		size_t count = std::size(ECS_ASSET_TARGET_FIELD_NAMES);
+		size_t count = ECS_COUNTOF(ECS_ASSET_TARGET_FIELD_NAMES);
 		for (size_t index = 0; index < count; index++) {
 			if (string.size == ECS_ASSET_TARGET_FIELD_NAMES[index].name.size &&
 				memcmp(string.buffer, ECS_ASSET_TARGET_FIELD_NAMES[index].name.buffer, ECS_ASSET_TARGET_FIELD_NAMES[index].name.size) == 0) {
@@ -113,7 +113,7 @@ namespace ECSEngine {
 		"Misc"
 	};
 
-	static_assert(std::size(ECS_ASSET_TYPE_CONVERSION) == ECS_ASSET_TYPE_COUNT);
+	static_assert(ECS_COUNTOF(ECS_ASSET_TYPE_CONVERSION) == ECS_ASSET_TYPE_COUNT);
 
 	const char* ConvertAssetTypeString(ECS_ASSET_TYPE type)
 	{
@@ -1316,7 +1316,7 @@ namespace ECSEngine {
 
 	bool MiscAsset::Compare(const MiscAsset* other) const
 	{
-		return name == other->name && file == other->file && data.Equals(other->data);
+		return name == other->name && file == other->file && data.data.Equals(other->data.data);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1768,7 +1768,7 @@ namespace ECSEngine {
 		case ECS_ASSET_MATERIAL:
 			return { ((MaterialAsset*)metadata)->material_pointer, 0 };
 		case ECS_ASSET_MISC:
-			return ((MiscAsset*)metadata)->data;
+			return ((MiscAsset*)metadata)->data.data;
 		default:
 			ECS_ASSERT(false, "Invalid asset type");
 		}

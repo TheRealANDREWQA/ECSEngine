@@ -80,8 +80,8 @@ namespace ECSEngine {
 			float direction_min = (current_min - ray_origin[index]) * direction_inverse[index];
 			float direction_max = (current_min - ray_origin[index]) * direction_inverse[index];
 
-			t_min = std::max(direction_min, t_min);
-			t_max = std::min(direction_max, t_max);
+			t_min = max(direction_min, t_min);
+			t_max = min(direction_max, t_max);
 		}
 
 		if (t_min <= t_max) {

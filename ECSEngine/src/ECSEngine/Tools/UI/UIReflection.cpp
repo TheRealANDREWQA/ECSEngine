@@ -89,7 +89,9 @@ namespace ECSEngine {
 		void UIReflectionStreamIntInputGroup(UIReflectionFieldDrawData* draw_data);
 
 		void UIReflectionStreamNotImplemented(UIReflectionFieldDrawData* draw_data) {
-			ECS_ASSERT(false, "This UIReflection stream field is invalid");
+			//ECS_ASSERT(false, "This UIReflection stream field is invalid");
+			// Add the moment, don't do anything
+			draw_data->drawer->NextRow();
 		}
 
 		// ------------------------------------------------------------ Stream ----------------------------------------------------------------------
@@ -171,7 +173,7 @@ namespace ECSEngine {
 			UIReflectionOverride
 		};
 
-		static_assert((unsigned int)UIReflectionElement::Count == std::size(UI_REFLECTION_FIELD_BASIC_DRAW));
+		static_assert((unsigned int)UIReflectionElement::Count == ECS_COUNTOF(UI_REFLECTION_FIELD_BASIC_DRAW));
 
 		UIReflectionFieldDraw UI_REFLECTION_FIELD_STREAM_DRAW[] = {
 			UIReflectionStreamFloatInput,
@@ -197,7 +199,7 @@ namespace ECSEngine {
 			UIReflectionStreamNotImplemented
 		};
 
-		static_assert((unsigned int)UIReflectionElement::Count == std::size(UI_REFLECTION_FIELD_STREAM_DRAW));
+		static_assert((unsigned int)UIReflectionElement::Count == ECS_COUNTOF(UI_REFLECTION_FIELD_STREAM_DRAW));
 
 		UIReflectionSetLowerBound UI_REFLECTION_SET_LOWER_BOUND[] = {
 			UIReflectionSetFloatLowerBound,
@@ -492,7 +494,7 @@ namespace ECSEngine {
 				unsigned int unsigned_element_byte_size = element_byte_size;
 				if (previous_size == capacity->size) {
 					if (!is_resizable) {
-						target_size = std::min(target_size, capacity->capacity);
+						target_size = min(target_size, capacity->capacity);
 
 						// The UI side hasn't changed
 						// Check the standalone data
@@ -864,7 +866,7 @@ namespace ECSEngine {
 					count_type = index;
 				}
 				ECS_ASSERT(count_type <= ui_config.size);
-				last_index = std::max(last_index, count_type);
+				last_index = max(last_index, count_type);
 				index++;
 
 				return count_type;
@@ -874,7 +876,7 @@ namespace ECSEngine {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::Count
 				};
-				size_t count_type = find_index({ indices, std::size(indices) });
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
 				ui_config[count_type].index[0] = UIReflectionElement::Count;
 				ui_config[count_type].index_count = 1;
 
@@ -899,7 +901,7 @@ namespace ECSEngine {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::Count
 				};
-				size_t count_type = find_index({ indices, std::size(indices) });
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
 				ui_config[count_type].index[0] = UIReflectionElement::Count;
 				ui_config[count_type].index_count = 1;
 
@@ -915,7 +917,7 @@ namespace ECSEngine {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::CheckBox
 				};
-				size_t count_type = find_index({ indices, std::size(indices) });
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
 				ui_config[count_type].index[0] = UIReflectionElement::CheckBox;
 				ui_config[count_type].index_count = 1;
 				
@@ -932,7 +934,7 @@ namespace ECSEngine {
 					UIReflectionElement::ColorFloat
 				};
 
-				size_t count_type = find_index({ indices, std::size(indices) });
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
 				ui_config[count_type].index[0] = UIReflectionElement::ColorFloat;
 				ui_config[count_type].index_count = 1;
 
@@ -948,7 +950,7 @@ namespace ECSEngine {
 					UIReflectionElement::Color
 				};
 
-				size_t count_type = find_index({ indices, std::size(indices) });
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
 				ui_config[count_type].index[0] = UIReflectionElement::Color;
 				ui_config[count_type].index_count = 1;
 
@@ -965,7 +967,7 @@ namespace ECSEngine {
 					UIReflectionElement::ComboBox
 				};
 
-				size_t count_type = find_index({ indices, std::size(indices) });
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
 				ui_config[count_type].index[0] = UIReflectionElement::ComboBox;
 				ui_config[count_type].index_count = 1;
 
@@ -987,8 +989,8 @@ namespace ECSEngine {
 					UIReflectionElement::DoubleInputGroup
 				};
 
-				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index_count = std::size(indices);
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
+				ui_config[count_type].index_count = ECS_COUNTOF(indices);
 				memcpy(ui_config[count_type].index, indices, sizeof(indices));
 
 				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
@@ -1010,8 +1012,8 @@ namespace ECSEngine {
 					UIReflectionElement::DoubleSliderGroup
 				};
 
-				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index_count = std::size(indices);
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
+				ui_config[count_type].index_count = ECS_COUNTOF(indices);
 				memcpy(ui_config[count_type].index, indices, sizeof(indices));
 
 				UIConfigSliderChangedValueCallback* callback = (UIConfigSliderChangedValueCallback*)stack_memory;
@@ -1028,8 +1030,8 @@ namespace ECSEngine {
 					UIReflectionElement::FileInput
 				};
 
-				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index_count = std::size(indices);
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
+				ui_config[count_type].index_count = ECS_COUNTOF(indices);
 				memcpy(ui_config[count_type].index, indices, sizeof(indices));
 
 				UIConfigPathInputCallback* callback = (UIConfigPathInputCallback*)stack_memory;
@@ -1046,8 +1048,8 @@ namespace ECSEngine {
 					UIReflectionElement::TextInput,
 				};
 
-				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index_count = std::size(indices);
+				size_t count_type = find_index({ indices, ECS_COUNTOF(indices) });
+				ui_config[count_type].index_count = ECS_COUNTOF(indices);
 				memcpy(ui_config[count_type].index, indices, sizeof(indices));
 
 				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
@@ -3392,7 +3394,7 @@ namespace ECSEngine {
 		void UIReflectionDrawer::BindTypeLowerBounds(UIReflectionType* type, const void* data) {
 			for (size_t index = 0; index < type->fields.size; index++) {
 				unsigned int int_index = (unsigned int)type->fields[index].element_index;
-				if (int_index < std::size(UI_REFLECTION_SET_LOWER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
+				if (int_index < ECS_COUNTOF(UI_REFLECTION_SET_LOWER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
 					UI_REFLECTION_SET_LOWER_BOUND[int_index](type->fields.buffer + index, OffsetPointer(data, type->fields[index].pointer_offset));
 				}
 			}
@@ -3421,7 +3423,7 @@ namespace ECSEngine {
 		void UIReflectionDrawer::BindTypeUpperBounds(UIReflectionType* type, const void* data) {
 			for (size_t index = 0; index < type->fields.size; index++) {
 				unsigned int int_index = (unsigned int)type->fields[index].element_index;
-				if (int_index < std::size(UI_REFLECTION_SET_UPPER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
+				if (int_index < ECS_COUNTOF(UI_REFLECTION_SET_UPPER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
 					UI_REFLECTION_SET_UPPER_BOUND[int_index](type->fields.buffer + index, OffsetPointer(data, type->fields[index].pointer_offset));
 				}
 			}
@@ -4109,7 +4111,7 @@ namespace ECSEngine {
 						};
 
 						if (range_tag.size > 0) {
-							if (element_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
+							if (element_index < ECS_COUNTOF(UI_REFLECTION_SET_LOWER_BOUND)) {
 								range_tag = FindFirstCharacter(range_tag, '(');
 								range_tag.Advance();
 								parse_lower_upper_bound(&range_tag);
@@ -4123,7 +4125,7 @@ namespace ECSEngine {
 								parameters_tag.Advance();
 
 								parse_default(&parameters_tag);
-								if (element_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
+								if (element_index < ECS_COUNTOF(UI_REFLECTION_SET_LOWER_BOUND)) {
 									parse_lower_upper_bound(&parameters_tag);
 								}
 							}

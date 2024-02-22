@@ -87,7 +87,7 @@ namespace ECSEngine {
 		graphics->EnableDepth();
 
 		// Now bind the mesh alongside the helper shaders
-		graphics->BindMesh(*mesh, { vertex_buffer_indices, std::size(vertex_buffer_indices) });
+		graphics->BindMesh(*mesh, { vertex_buffer_indices, ECS_COUNTOF(vertex_buffer_indices) });
 		graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_GLTF_THUMBNAIL);
 
 		// Now bind the vertex and pixel constant buffers
@@ -147,8 +147,8 @@ namespace ECSEngine {
 
 		// Determine the biggest side
 		float maximum_side = difference.x;
-		maximum_side = std::max(maximum_side, difference.y);
-		maximum_side = std::max(maximum_side, difference.z);
+		maximum_side = max(maximum_side, difference.y);
+		maximum_side = max(maximum_side, difference.z);
 
 		// Determine x and y offsets - if the object is off centered (i.e. spans more in the negative part than the positive part)
 		// Offset the object such that it appears centered

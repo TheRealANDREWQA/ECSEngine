@@ -27,6 +27,26 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	void ConvertASCIIToWide(wchar_t* wide_string, const char* pointer, size_t max_w_string_count) {
+		int result = MultiByteToWideChar(CP_ACP, 0, pointer, -1, wide_string, max_w_string_count);
+	}
+
+	void ConvertASCIIToWide(wchar_t* wide_string, Stream<char> pointer, size_t max_w_string_count) {
+		int result = MultiByteToWideChar(CP_ACP, 0, pointer.buffer, pointer.size, wide_string, max_w_string_count);
+	}
+
+	void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string) {
+		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
+		wide_string.size += ascii_string.size;
+	}
+
+	void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
+		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
+		wide_string.size += ascii_string.size;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	// returns the count of decoded numbers
 	size_t ParseNumbersFromCharString(Stream<char> characters, unsigned int* number_buffer) {
 		size_t count = 0, index = 0;
@@ -68,6 +88,45 @@ namespace ECSEngine {
 			number_buffer[count++] = is_negative ? -(int)number : (int)number;
 		}
 		return count;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	void ConvertWideCharsToASCII(
+		const wchar_t* wide_chars,
+		char* chars,
+		size_t wide_char_count,
+		size_t destination_size,
+		size_t max_char_count,
+		size_t& written_chars
+	) {
+		// counts the null terminator aswell
+		errno_t status = wcstombs_s(&written_chars, chars, destination_size, wide_chars, max_char_count);
+		if (written_chars > 0) {
+			written_chars--;
+		}
+		ECS_ASSERT(status == 0);
+	}
+
+	void ConvertWideCharsToASCII(
+		const wchar_t* wide_chars,
+		char* chars,
+		size_t wide_char_count,
+		size_t max_char_count
+	) {
+		size_t written_chars = 0;
+		errno_t status = wcstombs_s(&written_chars, chars, max_char_count, wide_chars, wide_char_count);
+		ECS_ASSERT(status == 0);
+	}
+
+	void ConvertWideCharsToASCII(
+		Stream<wchar_t> wide_chars,
+		CapacityStream<char>& ascii_chars
+	) {
+		size_t written_chars = 0;
+		errno_t status = wcstombs_s(&written_chars, ascii_chars.buffer + ascii_chars.size, ascii_chars.capacity - ascii_chars.size, wide_chars.buffer, wide_chars.size);
+		ECS_ASSERT(status == 0);
+		ascii_chars.size += written_chars - 1;
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -1566,7 +1625,7 @@ namespace ECSEngine {
 
 		size_t smallest_string_size = ULLONG_MAX;
 		for (size_t index = 0; index < strings.size; index++) {
-			smallest_string_size = std::min(smallest_string_size, strings[index].size);
+			smallest_string_size = min(smallest_string_size, strings[index].size);
 		}
 
 		for (size_t prefix_size = smallest_string_size; prefix_size > 0; prefix_size--) {

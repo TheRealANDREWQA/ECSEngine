@@ -28,7 +28,7 @@ namespace ECSEngine {
 			ECS_TOOLS_UI_TEXTURE_GRAPHICS_ICON
 		};
 
-		static_assert(std::size(CONSOLE_TEXTURE_ICONS) == ECS_CONSOLE_MESSAGE_COUNT);
+		static_assert(ECS_COUNTOF(CONSOLE_TEXTURE_ICONS) == ECS_CONSOLE_MESSAGE_COUNT);
 
 #define CONSOLE_INFO_COLOR Color(40, 170, 50)
 #define CONSOLE_WARN_COLOR Color(120, 130, 30)
@@ -44,7 +44,7 @@ namespace ECSEngine {
 			CONSOLE_GRAPHICS_COLOR
 		};
 
-		static_assert(std::size(CONSOLE_COLORS) == ECS_CONSOLE_MESSAGE_COUNT);
+		static_assert(ECS_COUNTOF(CONSOLE_COLORS) == ECS_CONSOLE_MESSAGE_COUNT);
 
 #pragma region General Additional Draw
 
@@ -110,7 +110,7 @@ namespace ECSEngine {
 		//	void* extra_data;
 
 		//	ECS_INLINE void AddDrawElement(UIAdditionalDrawElement element) {
-		//		if (draw_elements_count < std::size(draw_elements)) {
+		//		if (draw_elements_count < ECS_COUNTOF(draw_elements)) {
 		//			draw_elements[draw_elements_count++] = element;
 		//		}
 		//		else {
@@ -119,7 +119,7 @@ namespace ECSEngine {
 		//	}
 
 		//	ECS_INLINE void AddDrawOrder(UIAdditionalDrawOrder order) {
-		//		if (draw_order_count < std::size(draw_order)) {
+		//		if (draw_order_count < ECS_COUNTOF(draw_order)) {
 		//			draw_order[draw_order_count++] = order;
 		//		}
 		//		else {

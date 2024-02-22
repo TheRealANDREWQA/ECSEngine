@@ -42,7 +42,7 @@ namespace ECSEngine {
 			if (write_position < chunk_size) {
 				// Write as many elements as we can into this chunk
 				unsigned int write_element_count = chunk_size - write_position;
-				write_element_count = std::min(write_element_count, (unsigned int)elements.size);
+				write_element_count = min(write_element_count, (unsigned int)elements.size);
 				memcpy(stream[chunk_index].buffer + write_position, elements.buffer, write_element_count * sizeof(T));
 				// Finish with the entire count
 				stream[chunk_index].FinishRequest(elements.size);
@@ -358,7 +358,7 @@ namespace ECSEngine {
 		unsigned int Size() const {
 			unsigned int chunk_count = stream.size;
 			unsigned int current_last_chunk_size = stream[chunk_count - 1].size;
-			current_last_chunk_size = std::min(current_last_chunk_size, chunk_size);
+			current_last_chunk_size = min(current_last_chunk_size, chunk_size);
 			return current_last_chunk_size + (chunk_count - 1) * chunk_size;
 		}
 
@@ -368,7 +368,7 @@ namespace ECSEngine {
 
 			stream.Initialize(allocator, 0, max_chunk_count);
 			// Always have at least 1 chunk initialized
-			initial_chunks = std::max(initial_chunks, (unsigned int)1);
+			initial_chunks = max(initial_chunks, (unsigned int)1);
 
 			for (unsigned int index = 0; index < initial_chunks; index++) {
 				void* allocation = AllocateEx(allocator, ChunkByteSize(chunk_size));

@@ -157,7 +157,7 @@ namespace ECSEngine {
 			dimensions_copy.y >>= 1;
 		}
 
-		float inverse_roughness_step = 1.0f / (float)(std::max(max_mip_x, max_mip_y) - 1);
+		float inverse_roughness_step = 1.0f / (float)(max(max_mip_x, max_mip_y) - 1);
 		while (dimensions.x > 1 || dimensions.y > 1) {
 			// Bind a viewport equal to the dimensions
 			graphics->BindViewport(0.0f, 0.0f, dimensions.x, dimensions.y, 0.0f, 1.0f);
@@ -232,7 +232,7 @@ namespace ECSEngine {
 			{0.0f, 1.0f}
 		};
 
-		VertexBuffer uv_buffer = graphics->CreateVertexBuffer(sizeof(float2), std::size(uvs), uvs, true);
+		VertexBuffer uv_buffer = graphics->CreateVertexBuffer(sizeof(float2), ECS_COUNTOF(uvs), uvs, true);
 #endif
 		ConstantBuffer sample_buffer = graphics->CreateConstantBuffer(sizeof(unsigned int), &sample_count, true);
 

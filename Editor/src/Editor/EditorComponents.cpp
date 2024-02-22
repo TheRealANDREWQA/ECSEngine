@@ -512,6 +512,8 @@ void EditorComponents::RecoverData(
 
 			if (arena != nullptr) {
 				AllocatorPolymorphic component_allocator = arena;
+				// We need to use multithreaded allocations
+				component_allocator.allocation_type = ECS_ALLOCATION_MULTI;
 				deserialize_options.field_allocator = component_allocator;
 				deserialize_options.backup_allocator = component_allocator;
 			}
@@ -577,6 +579,8 @@ void EditorComponents::RecoverData(
 				
 				if (arena != nullptr) {
 					AllocatorPolymorphic alloc = arena;
+					// We need to use multithreaded allocations
+					alloc.allocation_type = ECS_ALLOCATION_MULTI;
 					deserialize_options.field_allocator = alloc;
 					deserialize_options.backup_allocator = alloc;
 				}
@@ -752,6 +756,8 @@ void EditorComponents::RecoverData(
 
 				if (arena != nullptr) {
 					AllocatorPolymorphic alloc = arena;
+					// We need to use multithreaded allocations
+					alloc.allocation_type = ECS_ALLOCATION_MULTI;
 					deserialize_options.field_allocator = alloc;
 					deserialize_options.backup_allocator = alloc;
 				}
@@ -824,6 +830,8 @@ void EditorComponents::RecoverData(
 
 				if (arena != nullptr) {
 					AllocatorPolymorphic alloc = arena;
+					// We need to use multithreaded allocations
+					alloc.allocation_type = ECS_ALLOCATION_MULTI;
 					deserialize_options.backup_allocator = alloc;
 					deserialize_options.field_allocator = alloc;
 				}
@@ -851,6 +859,8 @@ void EditorComponents::RecoverData(
 
 				if (arena != nullptr) {
 					AllocatorPolymorphic alloc = arena;
+					// We need to use multithreaded allocations
+					alloc.allocation_type = ECS_ALLOCATION_MULTI;
 					deserialize_options.backup_allocator = alloc;
 					deserialize_options.field_allocator = alloc;
 				}

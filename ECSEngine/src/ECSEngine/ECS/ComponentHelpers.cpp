@@ -93,8 +93,9 @@ namespace ECSEngine {
 		}
 	}
 
+	// At the moment, we cannot have deep buffers in a buffer type
 	static bool ConvertFieldToComponentBuffer(const ReflectionType* type, unsigned int field_index, ComponentBuffer* component_buffer) {
-		if (IsStream(type->fields[field_index].info.stream_type) && type->fields[field_index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
+		if (IsStream(type->fields[field_index].info.stream_type)) {
 			component_buffer->element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[field_index].info);
 			component_buffer->is_data_pointer = false;
 			component_buffer->is_soa_pointer = false;
@@ -114,8 +115,7 @@ namespace ECSEngine {
 			}
 			return true;
 		}
-		else if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::PointerSoA && 
-			type->fields[field_index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
+		else if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 			if (IsReflectionPointerSoAAllocationHolder(type, field_index)) {
 				size_t soa_index = GetReflectionTypeSoaIndex(type, field_index);
 				const ReflectionTypeMiscSoa* soa = &type->misc_info[soa_index].soa;
@@ -126,7 +126,7 @@ namespace ECSEngine {
 				component_buffer->size_offset = type->fields[field_index].info.soa_size_pointer_offset;
 				component_buffer->size_int_type = BasicTypeToIntType(type->fields[field_index].info.soa_size_basic_type);
 				component_buffer->soa_pointer_count = soa->parallel_stream_count - 1;
-				ECS_ASSERT(component_buffer->soa_pointer_count <= std::size(component_buffer->soa_pointer_offsets));
+				ECS_ASSERT(component_buffer->soa_pointer_count <= ECS_COUNTOF(component_buffer->soa_pointer_offsets));
 				for (unsigned int index = 1; index < soa->parallel_stream_count; index++) {
 					unsigned int soa_pointer_offset = type->fields[soa->parallel_streams[index]].info.pointer_offset;
 					ECS_ASSERT(soa_pointer_offset <= UCHAR_MAX);
@@ -147,6 +147,8 @@ namespace ECSEngine {
 		}
 		else if (type->fields[field_index].definition == STRING(DataPointer)) {
 			// TODO: Add a reflection field tag such that it can specify the stream byte size
+			// Or force all data pointers to be byte sized
+			ECS_ASSERT(false, "Unimplemented feature");
 			component_buffer->element_byte_size = 1;
 			component_buffer->is_data_pointer = true;
 			component_buffer->is_soa_pointer = false;
@@ -429,7 +431,7 @@ namespace ECSEngine {
 		};
 
 		ReflectionManagerGetQuery query_options;
-		query_options.tags = { tags, std::size(tags) };
+		query_options.tags = { tags, ECS_COUNTOF(tags) };
 		query_options.indices = &all_indices;
 		query_options.strict_compare = true;
 

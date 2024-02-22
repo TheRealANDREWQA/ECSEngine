@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "GiftWrapping.h"
 
+#define MAX_VERTICES 5000
+
 struct ActiveEdge {
 	// These are the indices in the points array
 	unsigned int point_a_index;
@@ -33,10 +35,6 @@ struct EdgeInformation {
 };
 
 typedef HashTable<EdgeInformation, EdgeTablePair, HashFunctionPowerOfTwo> ProcessedEdgeTable;
-
-// TODO: What axis to use here? There is not a definite answer for the time being,
-// So pick any of them
-typedef SphericalPartitioning<ECS_AXIS_Y, uint3> TrianglePartitioning;
 
 // Linked list of chunked connections such that we don't need to overallocate
 struct VertexConnections {
@@ -312,19 +310,24 @@ static size_t FindNextPointAroundTriangleEdge(
 	return point_index;
 }
 
-TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic allocator) {
-	// At first, I thought this algorithm is going to be easy. For the general case it works
-	// Reasonably, but for some input types it fails miserably. There are quite some tricky
-	// Degenerate cases that need to be handled
+// At first, I thought this algorithm is going to be easy. For the general case it works
+// Reasonably, but for some input types it fails miserably. There are quite some tricky
+// Degenerate cases that need to be handled
 
+// The functor must have as functions
+// unsigned int AddOrFindVertex(float3 value);
+// void AddTriangle(unsigned int triangle_A, unsigned int triangle_B, unsigned int triangle_C);
+// unsigned int GetVertexCount() const;
+// void SetMeshCenter(float3 center); This function is called before adding any vertex or triangle
+// The vertex positions at the end will be welded together
+template<typename Functor>
+void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 	ECS_ASSERT(vertex_positions.size < UINT_MAX, "Gift wrapping for meshes with more than 4GB vertices is not available");
-
-	const size_t MAX_VERTICES = 5000;
 
 	WeldVertices(vertex_positions, float3::Splat(0.15f), true);
 
-	TriangleMesh triangle_mesh;
-	triangle_mesh.Initialize(allocator, MAX_VERTICES, MAX_VERTICES * 2);
+	float3 mesh_center = CalculateFloat3Midpoint(vertex_positions);
+	functor.SetMeshCenter(mesh_center);
 
 	ResizableLinearAllocator function_allocator{ ECS_MB * 16, ECS_MB * 64, {nullptr} };
 	ScopedFreeAllocator scoped_free{ { &function_allocator } };
@@ -333,7 +336,7 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 	ResizableStream<ActiveEdge> active_edges;
 	// We most likely need a large number of entries
 	active_edges.Initialize(&function_allocator, 1000);
-	
+
 	// Find the a point which is extreme in one direction
 	// To determine the second point on the convex hull, use the FindInitialNextPoint
 	// With a fictional point that is different from the initial extreme
@@ -349,15 +352,19 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 	// Generate a third point, such that we can start with a triangle and add it to the triangle mesh
 	size_t initial_edge_c_index = FindInitialNextPoint(initial_edge_a, vertex_positions[initial_edge_b_index], y_min_index, initial_edge_b_index, vertex_positions);
 
+	// Add the initial triangle
 	unsigned int u_y_min_index = (unsigned int)y_min_index;
 	unsigned int u_initial_edge_b_index = (unsigned int)initial_edge_b_index;
 	unsigned int u_initial_edge_c_index = (unsigned int)initial_edge_c_index;
-	active_edges.Add({ u_y_min_index, u_initial_edge_b_index, u_initial_edge_c_index, 0, 1 });
-	active_edges.Add({ u_y_min_index, u_initial_edge_c_index, u_initial_edge_b_index, 0, 2 });
-	active_edges.Add({ u_initial_edge_b_index, u_initial_edge_c_index, u_y_min_index, 1, 2 });
 
-	// Add the triangle to the mesh
-	triangle_mesh.AddTriangleWithPoints(initial_edge_a, vertex_positions[initial_edge_b_index], vertex_positions[initial_edge_c_index]);
+	unsigned int functor_y_index = functor.AddOrFindVertex(y_min_value);
+	unsigned int functor_initial_b_index = functor.AddOrFindVertex(vertex_positions[initial_edge_b_index]);
+	unsigned int functor_initial_c_index = functor.AddOrFindVertex(vertex_positions[initial_edge_c_index]);
+	functor.AddTriangle(functor_y_index, functor_initial_b_index, functor_initial_c_index);
+
+	active_edges.Add({ u_y_min_index, u_initial_edge_b_index, u_initial_edge_c_index, functor_y_index, functor_initial_b_index });
+	active_edges.Add({ u_y_min_index, u_initial_edge_c_index, u_initial_edge_b_index, functor_y_index, functor_initial_c_index });
+	active_edges.Add({ u_initial_edge_b_index, u_initial_edge_c_index, u_y_min_index, functor_initial_b_index, functor_initial_c_index });
 
 	// PERFORMANCE TODO: 
 	// Improve this guesstimate?
@@ -386,35 +393,7 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 	add_edge_to_both_tables(initial_edge_information, { u_y_min_index, u_initial_edge_c_index });
 	add_edge_to_both_tables(initial_edge_information, { u_initial_edge_b_index, u_initial_edge_c_index });
 
-	// We need to keep track of some other information, and that is the normal for each triangle
-	// With this normal, we can detect the cases when a triangle would overlap another existing one
-	// We can accelerate this type of query by checking the neighbourhood of the normal. Since for
-	// Convex polyhedra we cannot have 2 identical normals. This will also help with collapsing
-	// Triangles into faces later on
-	// We can use Spherical/Direction Partitioning from the engine side to accelerate this
-	
-	TrianglePartitioning triangle_partitioning;
-	// Use a large partition size, such that we prune as much as possible
-	triangle_partitioning.Initialize(&function_allocator, ECS_KB * 32, 8, 1);
-
-	// Calculate the mesh center, such that we can use it to retarget normals away
-	// From the center
-	float3 mesh_center = CalculateFloat3Midpoint(vertex_positions);
-
-	// The indices must be those from the vertex positions
-	auto add_triangle_normal = [&](unsigned int triangle_a, unsigned int triangle_b, unsigned int triangle_c) {
-		float3 normal = TriangleNormalNormalized(vertex_positions[triangle_a], vertex_positions[triangle_b], vertex_positions[triangle_c]);
-		// Point the normal away from the center
-		if (IsTriangleFacing(normal, vertex_positions[triangle_a], mesh_center)) {
-			normal = -normal;
-			// Invert the point order as well to reflect this orientation
-			std::swap(triangle_b, triangle_c);
-		}
-		triangle_partitioning.Add(normal, { triangle_a, triangle_b, triangle_c });
-	};
-	add_triangle_normal(u_y_min_index, u_initial_edge_b_index, u_initial_edge_c_index);
-
-	while (active_edges.size > 0 && triangle_mesh.position_size < MAX_VERTICES) {
+	while (active_edges.size > 0 && functor.GetVertexCount() < MAX_VERTICES) {
 		// We can remove this edge since it will be matched at the end
 		active_edges.size--;
 		ActiveEdge active_edge = active_edges[active_edges.size];
@@ -479,7 +458,7 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 						edge_information.triangle.y = active_edge.point_b_index;
 						edge_information.triangle.z = existing_connection;
 						processed_edge_table.InsertDynamic(&function_allocator, edge_information, edge_reversed);
-						
+
 						// And there is one more thing to do
 						// In case the AB or AD edge is in the active edges, it needs to be removed
 						// Since we found a match for it
@@ -498,6 +477,10 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 								subindex--;
 							}
 						}
+						
+						// We also need to notify the functor
+						// The AddOrFind should always find the vertex
+						functor.AddTriangle(active_edge.point_a_mesh_index, active_edge.point_b_mesh_index, functor.AddOrFindVertex(vertex_positions[existing_connection]));
 					}
 				}
 				else {
@@ -516,26 +499,102 @@ TriangleMesh GiftWrapping(Stream<float3> vertex_positions, AllocatorPolymorphic 
 			}
 		};
 
-		triangle_mesh.ReservePositions(allocator);
-		unsigned int triangle_mesh_index = triangle_mesh.FindOrAddPoint(vertex_positions[new_point_index]);
+		unsigned int triangle_mesh_index = functor.AddOrFindVertex(vertex_positions[new_point_index]);
 		ActiveEdge first_active_edge = { active_edge.point_a_index, unew_point_index, active_edge.point_b_index, active_edge.point_a_mesh_index, triangle_mesh_index };
 		EdgeTablePair first_edge = { active_edge.point_a_index, unew_point_index };
 		add_edge(first_active_edge, first_edge);
- 
+
 		ActiveEdge second_active_edge = { active_edge.point_b_index, unew_point_index, active_edge.point_a_index, active_edge.point_b_mesh_index, triangle_mesh_index };
 		EdgeTablePair second_edge = { active_edge.point_b_index, unew_point_index };
 		add_edge(second_active_edge, second_edge);
 
-		// We can now add a new triangle entry to the triangle mesh
-		triangle_mesh.ReserveTriangles(allocator);
-		triangle_mesh.AddTriangle({ active_edge.point_a_mesh_index, active_edge.point_b_mesh_index, triangle_mesh_index });
-		// We need to add the triangle normal for all iterations
-		add_triangle_normal(active_edge.point_a_index, active_edge.point_b_index, unew_point_index);
+		// We can now add a new triangle entry
+		functor.AddTriangle(active_edge.point_a_mesh_index, active_edge.point_b_mesh_index, triangle_mesh_index);
 	}
+}
+
+TriangleMesh GiftWrappingTriangleMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator) {
+	TriangleMesh triangle_mesh;
+	triangle_mesh.Initialize(allocator, MAX_VERTICES, MAX_VERTICES * 2);
+
+	float3 mesh_center;
+	struct ImplFunctor {
+		unsigned int AddOrFindVertex(float3 position) {
+			triangle_mesh->ReservePositions(allocator);
+			return triangle_mesh->FindOrAddPoint(position);
+		}
+
+		void AddTriangle(unsigned int A_index, unsigned int B_index, unsigned int C_index) {
+			triangle_mesh->ReserveTriangles(allocator);
+			triangle_mesh->AddTriangle({ A_index, B_index, C_index });
+		}
+
+		ECS_INLINE unsigned int GetVertexCount() const {
+			return triangle_mesh->position_size;
+		}
+
+		ECS_INLINE void SetMeshCenter(float3 center) {
+			*mesh_center = center;
+		}
+
+		TriangleMesh* triangle_mesh;
+		AllocatorPolymorphic allocator;
+		float3* mesh_center;
+	};
+
+	GiftWrappingImpl(vertex_positions, ImplFunctor{ &triangle_mesh, allocator, &mesh_center });
+	
 	// Point all normals away from the center, by using the triangle winding order
 	triangle_mesh.RetargetNormals(mesh_center);
 	// Resize such that the buffers don't consume unnecessary memory
 	triangle_mesh.Resize(allocator, triangle_mesh.position_size, triangle_mesh.triangles.size);
 
 	return triangle_mesh;
+}
+
+ConvexHull GiftWrappingConvexHull(Stream<float3> vertex_positions, AllocatorPolymorphic allocator) {
+	ConvexHull convex_hull;
+	convex_hull.Initialize(allocator, MAX_VERTICES, MAX_VERTICES * 2, MAX_VERTICES);
+
+	struct ImplFunctor {
+		unsigned int AddOrFindVertex(float3 position) {
+			convex_hull->ReserveVertices(allocator);
+			return convex_hull->AddOrFindVertex(position);
+		}
+
+		void AddTriangle(unsigned int A_index, unsigned int B_index, unsigned int C_index) {
+			convex_hull->ReserveEdges(allocator, 2);
+			convex_hull->ReserveFaces(allocator);
+			unsigned int edge_index = convex_hull->FindEdge(A_index, B_index);
+			if (edge_index != -1) {
+				convex_hull->AddTriangleToEdge(edge_index, C_index, mesh_center);
+			}
+			else {
+				convex_hull->AddTriangle(A_index, B_index, C_index, mesh_center);
+			}
+		}
+
+		ECS_INLINE unsigned int GetVertexCount() const {
+			return convex_hull->vertex_size;
+		}
+
+		ECS_INLINE void SetMeshCenter(float3 center) {
+			mesh_center = center;
+		}
+
+		ConvexHull* convex_hull;
+		AllocatorPolymorphic allocator;
+		float3 mesh_center;
+	};
+
+	GiftWrappingImpl(vertex_positions, ImplFunctor{ &convex_hull, allocator, float3::Splat(FLT_MAX) });
+
+	// Calculate the mesh center, such that we can use it to retarget normals away
+	// From the center
+	float3 mesh_center = CalculateFloat3Midpoint(vertex_positions);
+
+	// Resize such that the buffers don't consume unnecessary memory
+	convex_hull.Resize(allocator, convex_hull.vertex_size, convex_hull.edges.size, convex_hull.faces.size);
+
+	return convex_hull;
 }

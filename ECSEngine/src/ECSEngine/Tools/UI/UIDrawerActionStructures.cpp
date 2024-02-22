@@ -173,7 +173,7 @@ namespace ECSEngine {
 				caret_position.x -= positions[sprite_render_offset].x - positions[0].x;
 			}
 
-			caret_position.x = std::min(caret_position.x, bound);
+			caret_position.x = min(caret_position.x, bound);
 			return caret_position;
 		}
 

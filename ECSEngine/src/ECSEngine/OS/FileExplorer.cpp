@@ -13,7 +13,7 @@ namespace ECSEngine {
 		bool LaunchFileExplorer(Stream<wchar_t> folder) {
 			wchar_t temp_characters[1024];
 			CapacityStream<wchar_t> temp_stream(temp_characters, 0, 1024);
-			temp_stream.AddStream(Stream<wchar_t>(L"explorer.exe /select,\"", std::size(L"explorer.exe /select,\"") - 1));
+			temp_stream.AddStream(Stream<wchar_t>(L"explorer.exe /select,\"", ECS_COUNTOF(L"explorer.exe /select,\"") - 1));
 			temp_stream.AddStream(folder);
 			temp_stream.Add(L'\"');
 			temp_stream.AddAssert(L'\0');

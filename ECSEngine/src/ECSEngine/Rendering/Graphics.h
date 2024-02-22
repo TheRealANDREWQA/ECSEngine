@@ -1,6 +1,5 @@
 #pragma once
 #include "../Core.h"
-#include "ecspch.h"
 #include "RenderingStructures.h"
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"

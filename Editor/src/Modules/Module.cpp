@@ -1777,6 +1777,10 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			for (unsigned int index = 0; index < type_indices.size; index++) {
 				UIReflectionType* type = editor_state->module_reflection->GetType(type_indices[index]);
 				editor_state->module_reflection->ConvertTypeStreamsToResizable(type);
+				// If this is a component, disable its stream writes
+				if (editor_state->editor_components.GetComponentType(type->name) != ECS_COMPONENT_TYPE_COUNT) {
+					editor_state->module_reflection->DisableInputWrites(type);
+				}
 			}
 
 			// Inform the inspectors about the change

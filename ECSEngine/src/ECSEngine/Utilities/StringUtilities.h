@@ -50,7 +50,7 @@ string_name.AssertCapacity();
 	}
 
 	ECS_INLINE int StringLexicographicCompare(Stream<char> left, Stream<char> right) {
-		size_t smaller_size = std::min(left.size, right.size);
+		size_t smaller_size = min(left.size, right.size);
 		int result = memcmp(left.buffer, right.buffer, smaller_size * sizeof(char));
 		if (result == 0) {
 			if (left.size < right.size) {
@@ -168,23 +168,13 @@ string_name.AssertCapacity();
 		return pointer;
 	}
 
-	ECS_INLINE void ConvertASCIIToWide(wchar_t* wide_string, const char* pointer, size_t max_w_string_count) {
-		int result = MultiByteToWideChar(CP_ACP, 0, pointer, -1, wide_string, max_w_string_count);
-	}
+	ECSENGINE_API void ConvertASCIIToWide(wchar_t* wide_string, const char* pointer, size_t max_w_string_count);
 
-	ECS_INLINE void ConvertASCIIToWide(wchar_t* wide_string, Stream<char> pointer, size_t max_w_string_count) {
-		int result = MultiByteToWideChar(CP_ACP, 0, pointer.buffer, pointer.size, wide_string, max_w_string_count);
-	}
+	ECSENGINE_API void ConvertASCIIToWide(wchar_t* wide_string, Stream<char> pointer, size_t max_w_string_count);
 
-	ECS_INLINE void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string) {
-		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
-		wide_string.size += ascii_string.size;
-	}
+	ECSENGINE_API void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string);
 
-	ECS_INLINE void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
-		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
-		wide_string.size += ascii_string.size;
-	}
+	ECSENGINE_API void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string);
 
 	// Can use the increment to go backwards by setting it to -1
 	ECS_INLINE const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
@@ -207,42 +197,26 @@ string_name.AssertCapacity();
 	// returns the count of decoded numbers
 	ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, int* number_buffer);
 
-	ECS_INLINE void ConvertWideCharsToASCII(
+	ECSENGINE_API void ConvertWideCharsToASCII(
 		const wchar_t* wide_chars,
 		char* chars,
 		size_t wide_char_count,
 		size_t destination_size,
 		size_t max_char_count,
 		size_t& written_chars
-	) {
-		// counts the null terminator aswell
-		errno_t status = wcstombs_s(&written_chars, chars, destination_size, wide_chars, max_char_count);
-		if (written_chars > 0) {
-			written_chars--;
-		}
-		ECS_ASSERT(status == 0);
-	}
+	);
 
-	ECS_INLINE void ConvertWideCharsToASCII(
+	ECSENGINE_API void ConvertWideCharsToASCII(
 		const wchar_t* wide_chars,
 		char* chars,
 		size_t wide_char_count,
 		size_t max_char_count
-	) {
-		size_t written_chars = 0;
-		errno_t status = wcstombs_s(&written_chars, chars, max_char_count, wide_chars, wide_char_count);
-		ECS_ASSERT(status == 0);
-	}
+	);
 
-	ECS_INLINE void ConvertWideCharsToASCII(
+	ECSENGINE_API void ConvertWideCharsToASCII(
 		Stream<wchar_t> wide_chars,
 		CapacityStream<char>& ascii_chars
-	) {
-		size_t written_chars = 0;
-		errno_t status = wcstombs_s(&written_chars, ascii_chars.buffer + ascii_chars.size, ascii_chars.capacity - ascii_chars.size, wide_chars.buffer, wide_chars.size);
-		ECS_ASSERT(status == 0);
-		ascii_chars.size += written_chars - 1;
-	}
+	);
 
 	template<typename CharacterType>
 	ECS_INLINE const CharacterType* SkipCharacter(const CharacterType* pointer, CharacterType character, int increment = 1) {

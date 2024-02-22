@@ -758,7 +758,7 @@ namespace ECSEngine {
 			if (capacity > 0) {
 				void* allocation = ReallocateEx(allocator, buffer, MemoryOf(new_capacity), alignof(T));
 				if (allocation != buffer) {
-					unsigned int copy_size = std::min(size, new_capacity);
+					unsigned int copy_size = min(size, new_capacity);
 					memcpy(allocation, buffer, MemoryOf(copy_size));
 					buffer = (T*)allocation;
 				}
@@ -767,7 +767,7 @@ namespace ECSEngine {
 				buffer = (T*)AllocateEx(allocator, MemoryOf(new_capacity), alignof(T));
 			}
 
-			size = std::min(size, new_capacity);
+			size = min(size, new_capacity);
 			capacity = new_capacity;
 		}
 

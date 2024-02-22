@@ -41,7 +41,7 @@ namespace ECSEngine {
 		L"Resources/DebugPrimitives/Cube.glb"
 	};
 
-	static_assert(std::size(ECS_DEBUG_PRIMITIVE_MESH_FILE) == ECS_DEBUG_VERTEX_BUFFER_COUNT);
+	static_assert(ECS_COUNTOF(ECS_DEBUG_PRIMITIVE_MESH_FILE) == ECS_DEBUG_VERTEX_BUFFER_COUNT);
 
 	const wchar_t* STRING_MESH_FILE = L"Resources/DebugPrimitives/Alphabet.glb";
 
@@ -84,7 +84,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE unsigned int GetMaximumCount(unsigned int* counts) {
-		return std::max(std::max(counts[WIREFRAME_DEPTH], counts[WIREFRAME_NO_DEPTH]), std::max(counts[SOLID_DEPTH], counts[SOLID_NO_DEPTH]));
+		return max(max(counts[WIREFRAME_DEPTH], counts[WIREFRAME_NO_DEPTH]), max(counts[SOLID_DEPTH], counts[SOLID_NO_DEPTH]));
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -313,7 +313,7 @@ namespace ECSEngine {
 					matrix_view,
 					instance_pixel_thickness_view
 				};
-				drawer->graphics->BindVertexResourceViews({ vertex_views, std::size(vertex_views) });
+				drawer->graphics->BindVertexResourceViews({ vertex_views, ECS_COUNTOF(vertex_views) });
 			}
 
 			Matrix gpu_camera = MatrixGPU(drawer->camera_matrix);
@@ -820,7 +820,7 @@ namespace ECSEngine {
 			drawer->output_instance_small_matrix_buffer,
 			drawer->output_instance_small_id_buffer
 		};
-		drawer->graphics->BindVertexBuffers({ buffers, std::size(buffers) }, 1);
+		drawer->graphics->BindVertexBuffers({ buffers, ECS_COUNTOF(buffers) }, 1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1339,6 +1339,8 @@ namespace ECSEngine {
 		QuaternionScalar rotation;
 		float length;
 		ArrowStartEndToRotation(start, end, &rotation, &length);
+		float3 direction = QuaternionVectorMultiply(rotation, GetRightVector());
+		float3 end_position = start + direction * float3::Splat(length);
 		thread_arrows[thread_index].Add({ start, rotation, length, size, color, options });
 	}
 
@@ -2104,7 +2106,7 @@ namespace ECSEngine {
 		VertexBuffer vertex_buffers[2];
 		vertex_buffers[0] = line_position_buffer;
 		vertex_buffers[1] = instanced_buffer;
-		graphics->BindVertexBuffers({ vertex_buffers, std::size(vertex_buffers) });
+		graphics->BindVertexBuffers({ vertex_buffers, ECS_COUNTOF(vertex_buffers) });
 
 		graphics->DrawInstanced(attribute.size * 2, world_matrices.size);
 
@@ -2364,7 +2366,7 @@ namespace ECSEngine {
 			size_t instance_count = 0;
 			for (size_t index = 0; index < strings.buffers.size; index++) {
 				for (size_t subindex = 0; subindex < strings.buffers[index].size; subindex++) {
-					instance_count = std::max(strings.buffers[index][subindex].text.size, instance_count);
+					instance_count = max(strings.buffers[index][subindex].text.size, instance_count);
 				}
 			}
 			// Sanity check
@@ -2725,7 +2727,7 @@ namespace ECSEngine {
 			};
 
 			DebugOOBB oobbs[3] = {};
-			for (size_t index = 0; index < std::size(oobbs); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(oobbs); index++) {
 				DebugDrawCallOptions current_option = options;
 				current_option.instance_thickness = instance_thickness_values[index];
 				oobbs[index] = {
@@ -2737,7 +2739,7 @@ namespace ECSEngine {
 				};
 			}
 
-			addition_stream->AddStream({ oobbs, std::size(oobbs) });
+			addition_stream->AddStream({ oobbs, ECS_COUNTOF(oobbs) });
 		}
 		else {
 			DebugDrawerOutput outputs[] = {
@@ -2750,7 +2752,7 @@ namespace ECSEngine {
 			// called multiple times and fold the calls into a single one (with optimizations for sure, in release
 			// I hope so)
 			Matrix matrices[3] = {};
-			for (size_t index = 0; index < std::size(matrices); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(matrices); index++) {
 				matrices[index] = OOBBCrossMatrix(
 					translations[index],
 					rotations[index],
@@ -2855,7 +2857,7 @@ namespace ECSEngine {
 				{ translation, AxesArrowZRotation(rotation), size, size, Color(), options_z }
 			};
 
-			addition_stream->AddStream({ arrows, std::size(arrows)});
+			addition_stream->AddStream({ arrows, ECS_COUNTOF(arrows)});
 		}
 		else {
 			DebugDrawerOutput outputs[] = {
@@ -3503,8 +3505,8 @@ namespace ECSEngine {
 			// Walk through the vertices and record the minimum and maximum for the X axis
 			for (size_t vertex_index = 0; vertex_index < string_mesh->submeshes[index].vertex_count; vertex_index++) {
 				size_t offset = string_mesh->submeshes[index].vertex_buffer_offset + vertex_index;
-				maximum = std::max(values[offset].x, maximum);
-				minimum = std::min(values[offset].x, minimum);
+				maximum = max(values[offset].x, maximum);
+				minimum = min(values[offset].x, minimum);
 			}
 
 			// The character span is the difference between maximum and minimum
@@ -3545,7 +3547,7 @@ namespace ECSEngine {
 		// Last point must be the same as the first
 		circle_positions[index] = circle_positions[0];
 
-		circle_buffer = graphics->CreateVertexBuffer(sizeof(float3), std::size(circle_positions), circle_positions);
+		circle_buffer = graphics->CreateVertexBuffer(sizeof(float3), ECS_COUNTOF(circle_positions), circle_positions);
 
 #pragma endregion
 

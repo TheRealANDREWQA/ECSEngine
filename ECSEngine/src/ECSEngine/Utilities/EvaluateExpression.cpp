@@ -219,22 +219,22 @@ namespace ECSEngine {
 	};
 
 	Stream<ECS_EVALUATE_EXPRESSION_OPERATORS> OPERATOR_ORDER[] = {
-		{ ORDER0, std::size(ORDER0) },
-		{ ORDER1, std::size(ORDER1) },
-		{ ORDER2, std::size(ORDER2) },
-		{ ORDER3, std::size(ORDER3) },
-		{ ORDER4, std::size(ORDER4) },
-		{ ORDER5, std::size(ORDER5) },
-		{ ORDER6, std::size(ORDER6) },
-		{ ORDER7, std::size(ORDER7) },
-		{ ORDER8, std::size(ORDER8) },
-		{ ORDER9, std::size(ORDER9) },
-		{ ORDER10, std::size(ORDER10) }
+		{ ORDER0, ECS_COUNTOF(ORDER0) },
+		{ ORDER1, ECS_COUNTOF(ORDER1) },
+		{ ORDER2, ECS_COUNTOF(ORDER2) },
+		{ ORDER3, ECS_COUNTOF(ORDER3) },
+		{ ORDER4, ECS_COUNTOF(ORDER4) },
+		{ ORDER5, ECS_COUNTOF(ORDER5) },
+		{ ORDER6, ECS_COUNTOF(ORDER6) },
+		{ ORDER7, ECS_COUNTOF(ORDER7) },
+		{ ORDER8, ECS_COUNTOF(ORDER8) },
+		{ ORDER9, ECS_COUNTOF(ORDER9) },
+		{ ORDER10, ECS_COUNTOF(ORDER10) }
 	};
 
 	void GetEvaluateExpressionOperatorOrder(Stream<EvaluateExpressionOperator> operators, CapacityStream<unsigned int>& order)
 	{
-		for (size_t precedence = 0; precedence < std::size(OPERATOR_ORDER); precedence++) {
+		for (size_t precedence = 0; precedence < ECS_COUNTOF(OPERATOR_ORDER); precedence++) {
 			for (size_t index = 0; index < operators.size; index++) {
 				for (size_t op_index = 0; op_index < OPERATOR_ORDER[precedence].size; op_index++) {
 					if (operators[index].operator_index == OPERATOR_ORDER[precedence][op_index]) {

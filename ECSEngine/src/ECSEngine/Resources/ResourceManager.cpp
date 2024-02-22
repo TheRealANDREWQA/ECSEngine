@@ -350,8 +350,8 @@ namespace ECSEngine {
 		UnloadTimeStamp
 	};
 
-	static_assert(std::size(DELETE_FUNCTIONS) == (unsigned int)ResourceType::TypeCount);
-	static_assert(std::size(UNLOAD_FUNCTIONS) == (unsigned int)ResourceType::TypeCount);
+	static_assert(ECS_COUNTOF(DELETE_FUNCTIONS) == (unsigned int)ResourceType::TypeCount);
+	static_assert(ECS_COUNTOF(UNLOAD_FUNCTIONS) == (unsigned int)ResourceType::TypeCount);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -2703,7 +2703,7 @@ namespace ECSEngine {
 
 		//size_t texture_count = mappings.size;
 		//FunctorData functor_data = { temporary_allocator, &mappings };
-		//ForEachFileInDirectoryRecursiveWithExtension(folder_to_search, { texture_extensions, std::size(texture_extensions) }, &functor_data, search_functor);
+		//ForEachFileInDirectoryRecursiveWithExtension(folder_to_search, { texture_extensions, ECS_COUNTOF(texture_extensions) }, &functor_data, search_functor);
 		//ECS_ASSERT(mappings.size == 0);
 		//if (mappings.size != 0) {
 		//	return false;

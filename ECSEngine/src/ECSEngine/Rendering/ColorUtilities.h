@@ -33,21 +33,21 @@ namespace ECSEngine {
 	struct ECSENGINE_API ColorFloat;
 
 	struct ECSENGINE_API Color {
-		Color();
-		Color(unsigned char red);
+		ECS_INLINE Color() : red(0), green(0), blue(0), alpha(255) {}
+		ECS_INLINE Color(unsigned char _red) : red(_red), green(0), blue(0), alpha(255) {}
 
-		Color(unsigned char red, unsigned char green);
+		ECS_INLINE Color(unsigned char _red, unsigned char _green) : red(_red), green(_green), blue(0), alpha(255) {}
 
-		Color(unsigned char red, unsigned char green, unsigned char blue);
+		ECS_INLINE Color(unsigned char _red, unsigned char _green, unsigned char _blue) : red(_red), green(_green), blue(_blue), alpha(255) {}
 
-		Color(unsigned char red, unsigned char green, unsigned char blue, unsigned char alpha);
+		ECS_INLINE Color(unsigned char _red, unsigned char _green, unsigned char _blue, unsigned char _alpha) : red(_red), green(_green), blue(_blue), alpha(_alpha) {}
 
 		// normalized values
 		Color(float red, float green, float blue, float alpha);
 
 		Color(ColorFloat color);
 
-		Color(const unsigned char* values);
+		ECS_INLINE Color(const unsigned char* values) : red(values[0]), green(values[1]), blue(values[2]), alpha(values[3]) {}
 
 		// Assumes the values are in the 0.0f - 1.0f range
 		Color(const float* values);
@@ -58,11 +58,17 @@ namespace ECSEngine {
 		Color(const Color& other) = default;
 		Color& operator = (const Color& other) = default;
 
-		bool operator == (const Color& other) const;
-		bool operator != (const Color& other) const;
+		ECS_INLINE bool operator == (const Color& other) const {
+			return red == other.red && green == other.green && blue == other.blue && alpha == other.alpha;
+		}
+		ECS_INLINE bool operator != (const Color& other) const {
+			return !(*this == other);
+		}
 
 		// these operators do not apply for alpha
-		Color operator + (const Color& other) const;
+		ECS_INLINE Color operator + (const Color& other) const {
+			return Color(red + other.red, green + other.green, blue + other.blue);
+		}
 		Color operator * (const Color& other) const;
 		Color operator * (float percentage) const;
 
@@ -88,19 +94,19 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API ColorFloat {
-		ColorFloat();
+		ECS_INLINE ColorFloat() : red(0.0f), green(0.0f), blue(0.0f), alpha(1.0f) {}
 
-		ColorFloat(float red);
+		ECS_INLINE ColorFloat(float _red) : red(_red), green(0.0f), blue(0.0f), alpha(1.0f) {}
 
-		ColorFloat(float red, float green);
+		ECS_INLINE ColorFloat(float _red, float _green) : red(_red), green(_green), blue(0.0f), alpha(1.0f) {}
 
-		ColorFloat(float red, float green, float blue);
+		ECS_INLINE ColorFloat(float _red, float _green, float _blue) : red(_red), green(_green), blue(_blue), alpha(1.0f) {}
 
-		ColorFloat(float red, float green, float blue, float alpha);
+		ECS_INLINE ColorFloat(float _red, float _green, float _blue, float _alpha) : red(_red), green(_green), blue(_blue), alpha(_alpha) {}
 
 		ColorFloat(Color color);
 
-		ColorFloat(const float* values);
+		ECS_INLINE ColorFloat(const float* values) : red(values[0]), green(values[1]), blue(values[2]), alpha(values[3]) {}
 
 		// Assumes the values are in the 0.0 - 1.0 range
 		ColorFloat(const double* values);
@@ -108,10 +114,18 @@ namespace ECSEngine {
 		ColorFloat(const ColorFloat& other) = default;
 		ColorFloat& operator = (const ColorFloat& other) = default;
 
-		ColorFloat operator * (const ColorFloat& other) const;
-		ColorFloat operator * (float percentage) const;
-		ColorFloat operator + (const ColorFloat& other) const;
-		ColorFloat operator - (const ColorFloat& other) const;
+		ECS_INLINE ColorFloat operator * (const ColorFloat& other) const {
+			return ColorFloat(red * other.red, green * other.green, blue * other.blue, alpha * other.alpha);
+		}
+		ECS_INLINE ColorFloat operator * (float percentage) const {
+			return ColorFloat(red * percentage, green * percentage, blue * percentage, alpha * percentage);
+		}
+		ECS_INLINE ColorFloat operator + (const ColorFloat& other) const {
+			return ColorFloat(red + other.red, green + other.green, blue + other.blue, alpha + other.alpha);
+		}
+		ECS_INLINE ColorFloat operator - (const ColorFloat& other) const {
+			return ColorFloat(red - other.red, green - other.green, blue - other.blue, alpha - other.alpha);
+		}
 
 		ECS_INLINE static constexpr float GetRange() {
 			return 1.0f;

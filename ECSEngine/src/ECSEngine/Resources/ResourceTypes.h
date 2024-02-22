@@ -1,5 +1,5 @@
 #pragma once
-#include "ecspch.h"
+#include "../Core.h"
 
 namespace ECSEngine {
 
@@ -27,7 +27,7 @@ namespace ECSEngine {
 		"Misc",
 		"TimeStamp"
 	};
-	static_assert(std::size(ECS_RESOURCE_TYPE_NAMES) == (unsigned int)ResourceType::TypeCount);
+	static_assert(ECS_COUNTOF(ECS_RESOURCE_TYPE_NAMES) == (unsigned int)ResourceType::TypeCount);
 
 	ECS_INLINE const char* ResourceTypeString(ResourceType type) {
 		return ECS_RESOURCE_TYPE_NAMES[(unsigned int)type];
@@ -52,7 +52,7 @@ namespace ECSEngine {
 		L".hdr"
 	};
 
-	static_assert(std::size(ECS_TEXTURE_EXTENSIONS) == ECS_TEXTURE_EXTENSION_COUNT);
+	static_assert(ECS_COUNTOF(ECS_TEXTURE_EXTENSIONS) == ECS_TEXTURE_EXTENSION_COUNT);
 
 	constexpr const char* ECS_TEXTURE_EXTENSIONS_ASCII[] = {
 		".jpg",
@@ -63,6 +63,6 @@ namespace ECSEngine {
 		".hdr"
 	};
 
-	static_assert(std::size(ECS_TEXTURE_EXTENSIONS_ASCII) == ECS_TEXTURE_EXTENSION_COUNT);
+	static_assert(ECS_COUNTOF(ECS_TEXTURE_EXTENSIONS_ASCII) == ECS_TEXTURE_EXTENSION_COUNT);
 
 }

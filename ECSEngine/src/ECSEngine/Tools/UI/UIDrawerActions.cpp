@@ -1613,7 +1613,7 @@ namespace ECSEngine {
 								index--;
 							}
 							input->current_sprite_position = index;
-							input->sprite_render_offset = std::min(input->sprite_render_offset, input->current_sprite_position);
+							input->sprite_render_offset = min(input->sprite_render_offset, input->current_sprite_position);
 						}
 						else {
 							if (input->current_sprite_position > 0) {

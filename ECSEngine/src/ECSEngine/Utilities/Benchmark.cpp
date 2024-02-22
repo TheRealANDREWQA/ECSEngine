@@ -235,8 +235,8 @@ namespace ECSEngine {
                     size_t highest_valid = 0;
                     for (size_t iteration = 0; iteration < iteration_values.size; iteration++) {
                         size_t value = get_value(step_index, iteration_values[iteration]);
-                        lowest_valid = std::min(lowest_valid, value);
-                        highest_valid = std::max(highest_valid, value);
+                        lowest_valid = min(lowest_valid, value);
+                        highest_valid = max(highest_valid, value);
                         median += value;
                     }
 

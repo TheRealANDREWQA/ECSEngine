@@ -397,13 +397,13 @@ namespace ECSEngine {
 		// Such that you can pinpoint the exact field
 		struct ReflectionNestedFieldIndex {
 			ECS_INLINE void Add(unsigned char field_index) {
-				ECS_ASSERT(count < std::size(indices));
+				ECS_ASSERT(count < ECS_COUNTOF(indices));
 				indices[count++] = field_index;
 			}
 
 			// Adds the values from other to this instance
 			ECS_INLINE void Append(ReflectionNestedFieldIndex other) {
-				ECS_ASSERT(count + other.count <= std::size(indices));
+				ECS_ASSERT(count + other.count <= ECS_COUNTOF(indices));
 				memcpy(indices + count, other.indices, other.count * sizeof(indices[0]));
 				count += other.count;
 			}

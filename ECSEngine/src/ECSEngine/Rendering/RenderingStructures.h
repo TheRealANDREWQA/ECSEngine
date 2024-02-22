@@ -1,13 +1,16 @@
 // ECS_REFLECT
 #pragma once
 #include "../Core.h"
-#include "ecspch.h"
 #include "../Containers/Stream.h"
 #include "../Math/AABB.h"
 #include "../Allocators/AllocatorTypes.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/StringUtilities.h"
 #include "ColorUtilities.h"
+
+#ifdef ECSENGINE_PLATFORM_WINDOWS
+#include <d3d11.h>
+#endif
 
 #define ECS_GRAPHICS_BUFFERS(function) /* Useful for macro expansion */ function(VertexBuffer); \
 function(IndexBuffer); \

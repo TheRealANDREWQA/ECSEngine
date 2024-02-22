@@ -4,26 +4,6 @@
 #include "GJK.h"
 #include "Components.h"
 
-static ConvexHull CreateCubeHull(float* storage) {
-	ConvexHull hull;
-
-	hull.vertices_x = storage;
-	hull.vertices_y = storage + 8;
-	hull.vertices_z = storage + 16;
-	hull.size = 8;
-
-	hull.SetPoint({ -1.0f, -1.0f, -1.0f }, 0);
-	hull.SetPoint({ 1.0f, -1.0f, -1.0f }, 1);
-	hull.SetPoint({ -1.0f, 1.0f, -1.0f }, 2);
-	hull.SetPoint({ -1.0f, -1.0f, 1.0f }, 3);
-	hull.SetPoint({ 1.0f, 1.0f, -1.0f }, 4);
-	hull.SetPoint({ 1.0f, -1.0f, 1.0f }, 5);
-	hull.SetPoint({ -1.0f, 1.0f, 1.0f }, 6);
-	hull.SetPoint({ 1.0f, 1.0f, 1.0f }, 7);
-
-	return hull;
-}
-
 ECS_THREAD_TASK(NarrowphaseGridHandler) {
 	FixedGridHandlerData* data = (FixedGridHandlerData*)_data;
 	EntityManager* entity_manager = world->entity_manager;

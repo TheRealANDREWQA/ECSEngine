@@ -4,17 +4,6 @@
 
 namespace ECSEngine {
 
-	Color::Color() : red(0), green(0), blue(0), alpha(255) {}
-
-	Color::Color(unsigned char _red) : red(_red), green(0), blue(0), alpha(255) {}
-
-	Color::Color(unsigned char _red, unsigned char _green) : red(_red), green(_green), blue(0), alpha(255) {}
-
-	Color::Color(unsigned char _red, unsigned char _green, unsigned char _blue) : red(_red), green(_green), blue(_blue), alpha(255) {}
-
-	Color::Color(unsigned char _red, unsigned char _green, unsigned char _blue, unsigned char _alpha)
-		: red(_red), green(_green), blue(_blue), alpha(_alpha) {}
-
 	constexpr float COLOR_RANGE = 255;
 
 	Color::Color(float _red, float _green, float _blue, float _alpha)
@@ -33,8 +22,6 @@ namespace ECSEngine {
 		alpha = color.alpha * COLOR_RANGE;
 	}
 
-	Color::Color(const unsigned char* values) : red(values[0]), green(values[1]), blue(values[2]), alpha(values[3]) {}
-
 	Color::Color(const float* values) : red(values[0] * COLOR_RANGE), green(values[1] * COLOR_RANGE), blue(values[2] * COLOR_RANGE), alpha(values[3] * COLOR_RANGE) {}
 
 	Color::Color(const double* values)
@@ -43,20 +30,6 @@ namespace ECSEngine {
 		green = (unsigned char)values[1];
 		blue = (unsigned char)values[2];
 		alpha = (unsigned char)values[3];
-	}
-
-	bool Color::operator==(const Color& other) const
-	{
-		return red == other.red && green == other.green && blue == other.blue && alpha == other.alpha;
-	}
-
-	bool Color::operator != (const Color& other) const {
-		return red != other.red || green != other.green || blue != other.blue || alpha != other.alpha;
-	}
-
-	Color Color::operator+(const Color& other) const
-	{
-		return Color(red + other.red, green + other.green, blue + other.blue);
 	}
 
 	Color Color::operator*(const Color& other) const
@@ -82,10 +55,10 @@ namespace ECSEngine {
 	Color Color::operator*(float percentage) const
 	{
 		Color new_color;
-		new_color.red = static_cast<float>(red) * percentage;
-		new_color.green = static_cast<float>(green) * percentage;
-		new_color.blue = static_cast<float>(blue) * percentage;
-		new_color.alpha = static_cast<float>(alpha) * percentage;
+		new_color.red = (float)(red) * percentage;
+		new_color.green = (float)(green) * percentage;
+		new_color.blue = (float)(blue) * percentage;
+		new_color.alpha = (float)(alpha) * percentage;
 		return new_color;
 	}
 
@@ -100,18 +73,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	ColorFloat::ColorFloat() : red(0.0f), green(0.0f), blue(0.0f), alpha(1.0f) {}
-
-	ColorFloat::ColorFloat(float _red) : red(_red), green(0.0f), blue(0.0f), alpha(1.0f) {}
-
-	ColorFloat::ColorFloat(float _red, float _green) : red(_red), green(_green), blue(0.0f), alpha(1.0f) {}
-
-	ColorFloat::ColorFloat(float _red, float _green, float _blue)
-		: red(_red), green(_green), blue(_blue), alpha(1.0f) {}
-
-	ColorFloat::ColorFloat(float _red, float _green, float _blue, float _alpha)
-		: red(_red), green(_green), blue(_blue), alpha(_alpha) {}
-
 	ColorFloat::ColorFloat(Color color)
 	{
 		constexpr float inverse_range = 1.0f / Color::GetRange();
@@ -121,34 +82,12 @@ namespace ECSEngine {
 		alpha = static_cast<float>(color.alpha) * inverse_range;
 	}
 
-	ColorFloat::ColorFloat(const float* values) : red(values[0]), green(values[1]), blue(values[2]), alpha(values[3]) {}
-
 	ColorFloat::ColorFloat(const double* values)
 	{
 		red = (float)values[0];
 		green = (float)values[1];
 		blue = (float)values[2];
 		alpha = (float)values[3];
-	}
-
-	ColorFloat ColorFloat::operator*(const ColorFloat& other) const
-	{
-		return ColorFloat(red * other.red, green * other.green, blue * other.blue, alpha * other.alpha);
-	}
-
-	ColorFloat ColorFloat::operator*(float percentage) const
-	{
-		return ColorFloat(red * percentage, green * percentage, blue * percentage, alpha * percentage);
-	}
-
-	ColorFloat ColorFloat::operator+(const ColorFloat& other) const
-	{
-		return ColorFloat(red + other.red, green + other.green, blue + other.blue, alpha + other.alpha);
-	}
-
-	ColorFloat ColorFloat::operator-(const ColorFloat& other) const
-	{
-		return ColorFloat(red - other.red, green - other.green, blue - other.blue, alpha - other.alpha);
 	}
 
 	void ColorFloat::Normalize(float* values) const
@@ -170,10 +109,10 @@ namespace ECSEngine {
 		float new_red = normalized_values[0];
 		float new_green = normalized_values[1];
 		float new_blue = normalized_values[2];
-		max = std::max(max, new_green);
-		max = std::max(max, new_blue);
-		min = std::min(min, new_green);
-		min = std::min(min, new_blue);
+		max = ECSEngine::max(max, new_green);
+		max = ECSEngine::max(max, new_blue);
+		min = ECSEngine::min(min, new_green);
+		min = ECSEngine::min(min, new_blue);
 		float delta = max - min;
 
 		Color new_color;
@@ -369,8 +308,8 @@ namespace ECSEngine {
 			sdr_color = color;
 		}
 		else {
-			float largest_component = std::max(color.red, color.blue);
-			largest_component = std::max(largest_component, color.green);
+			float largest_component = max(color.red, color.blue);
+			largest_component = max(largest_component, color.green);
 			float largest_component_inverse = 1.0f / largest_component;
 
 			sdr_color.red = color.red * largest_component_inverse * sdr_color.GetRange();

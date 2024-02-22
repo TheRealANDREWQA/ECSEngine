@@ -78,7 +78,7 @@ namespace ECSEngine {
 			"Unknown"
 		};
 
-		static_assert(std::size(OS_EXCEPTION_TO_STRING) == ECS_OS_EXCEPTION_ERROR_CODE_COUNT);
+		static_assert(ECS_COUNTOF(OS_EXCEPTION_TO_STRING) == ECS_OS_EXCEPTION_ERROR_CODE_COUNT);
 
 		void ExceptionCodeToString(ECS_OS_EXCEPTION_ERROR_CODE code, CapacityStream<char>& string)
 		{

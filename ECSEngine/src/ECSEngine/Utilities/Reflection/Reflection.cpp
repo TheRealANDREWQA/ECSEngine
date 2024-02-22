@@ -81,15 +81,16 @@ namespace ECSEngine {
 			size_t byte_size;
 		};
 
+		// All besides misc asset data are pointers
 		ReflectionRuntimeComponentKnownType ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE[] = {
-			{ STRING(CoalescedMesh), 8 },
-			{ STRING(ResourceView), 8 },
-			{ STRING(SamplerState), 8 },
-			{ STRING(VertexShader), 8 },
-			{ STRING(PixelShader), 8 },
-			{ STRING(ComputeShader), 8 },
-			{ STRING(Material), 8 },
-			{ STRING(Stream<void>), 8 }
+			{ STRING(CoalescedMesh), sizeof(void*) },
+			{ STRING(ResourceView), sizeof(void*) },
+			{ STRING(SamplerState), sizeof(void*) },
+			{ STRING(VertexShader), sizeof(void*) },
+			{ STRING(PixelShader), sizeof(void*) },
+			{ STRING(ComputeShader), sizeof(void*) },
+			{ STRING(Material), sizeof(void*) },
+			{ STRING(MiscAssetData), sizeof(Stream<void>) }
 		};
 
 		enum ReflectionTypeTagHandlerForFunctionAppendPosition : unsigned char {
@@ -131,7 +132,7 @@ namespace ECSEngine {
 		};
 
 		TYPE_TAG_HANDLER_FOR_FUNCTION(TypeTagComponent) {
-			for (size_t index = 0; index < std::size(ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_FUNCTIONS); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_FUNCTIONS); index++) {
 				if (data.function_name == ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_FUNCTIONS[index]) {
 					data.string_to_add->CopyOther(STRING(ECS_EVALUATE_FUNCTION_REFLECT) " ");
 					break;
@@ -141,7 +142,7 @@ namespace ECSEngine {
 		}
 
 		TYPE_TAG_HANDLER_FOR_FIELD(TypeTagComponent) {
-			for (size_t index = 0; index < std::size(ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE); index++) {
+			for (size_t index = 0; index < ECS_COUNTOF(ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE); index++) {
 				if (data.definition == ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE[index].string) {
 					data.string_to_add->CopyOther(STRING(ECS_GIVE_SIZE_REFLECTION));
 					data.string_to_add->Add('(');
@@ -835,7 +836,7 @@ namespace ECSEngine {
 		{
 			ReflectionCustomTypeMatchData match_data = { definition };
 
-			for (unsigned int index = 0; index < std::size(ECS_REFLECTION_CUSTOM_TYPES); index++) {
+			for (unsigned int index = 0; index < ECS_COUNTOF(ECS_REFLECTION_CUSTOM_TYPES); index++) {
 				if (ECS_REFLECTION_CUSTOM_TYPES[index]->Match(&match_data)) {
 					return index;
 				}
@@ -888,9 +889,6 @@ namespace ECSEngine {
 
 		void ReflectionManager::GetKnownBlittableExceptions(CapacityStream<BlittableType>* blittable_types, AllocatorPolymorphic allocator)
 		{
-			// Stream<void> is here for assets
-			blittable_types->AddAssert({ STRING(Stream<void>), sizeof(Stream<void>), alignof(Stream<void>), nullptr });
-			
 			void* color_default = Allocate(allocator, sizeof(unsigned char) * 4);
 			memset(color_default, UCHAR_MAX, sizeof(unsigned char) * 4);
 			// Don't add an additional include just for the Color and ColorFloat types
@@ -1309,20 +1307,20 @@ namespace ECSEngine {
 					size_t final_field_offset = type->fields[type->fields.size - 1].info.pointer_offset + type->fields[type->fields.size - 1].info.byte_size;
 
 					for (size_t skipped_index = 0; skipped_index < skipped_fields.size; skipped_index++) {
-						max_alignment = std::max(max_alignment, (size_t)skipped_fields[skipped_index].alignment);
+						max_alignment = max(max_alignment, (size_t)skipped_fields[skipped_index].alignment);
 						if (skipped_fields[skipped_index].field_after == type->fields.size - 1) {
 							// Update the byte size total
 							size_t aligned_offset = AlignPointer(final_field_offset, skipped_fields[skipped_index].alignment);
 							type->byte_size = AlignPointer(
 								aligned_offset + skipped_fields[skipped_index].byte_size, 
-								std::max(max_alignment, (size_t)type->alignment)
+								max(max_alignment, (size_t)type->alignment)
 							);
 
 							final_field_offset = aligned_offset + skipped_fields[skipped_index].byte_size;
 						}
 					}
 
-					type->alignment = std::max(type->alignment, (unsigned int)max_alignment);
+					type->alignment = max(type->alignment, (unsigned int)max_alignment);
 				}
 			};
 
@@ -1357,7 +1355,7 @@ namespace ECSEngine {
 							for (size_t field_index = 0; field_index < skipped_fields.size; field_index++) {
 								current_offset = AlignPointer(current_offset, skipped_fields[field_index].alignment);
 								current_offset += skipped_fields[field_index].byte_size;
-								max_alignment = std::max(max_alignment, (size_t)skipped_fields[field_index].alignment);
+								max_alignment = max(max_alignment, (size_t)skipped_fields[field_index].alignment);
 							}
 
 							type->byte_size = AlignPointer(current_offset, max_alignment);
@@ -2324,7 +2322,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
 			AdditionStream<Stream<wchar_t>> files = &files_storage;
-			bool status = GetDirectoryFilesWithExtensionRecursive(folders[index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
+			bool status = GetDirectoryFilesWithExtensionRecursive(folders[index].root, allocator, files, { c_file_extensions, ECS_COUNTOF(c_file_extensions) });
 			if (!status) {
 				return false;
 			}
@@ -2351,7 +2349,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
 			AdditionStream<Stream<wchar_t>> files = &files_storage;
-			bool status = GetDirectoryFilesWithExtensionRecursive(folders[folder_index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
+			bool status = GetDirectoryFilesWithExtensionRecursive(folders[folder_index].root, allocator, files, { c_file_extensions, ECS_COUNTOF(c_file_extensions) });
 			if (!status) {
 				return false;
 			}
@@ -2986,7 +2984,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								if (tag_name != nullptr) {
 									const char* end_tag_name = SkipCodeIdentifier(tag_name);
 									Stream<char> current_tag = { tag_name, PointerDifference(end_tag_name, tag_name) };
-									for (size_t handler_index = 0; handler_index < std::size(ECS_REFLECTION_TYPE_TAG_HANDLER); handler_index++) {
+									for (size_t handler_index = 0; handler_index < ECS_COUNTOF(ECS_REFLECTION_TYPE_TAG_HANDLER); handler_index++) {
 										if (ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].tag == current_tag) {
 											Stream<char> new_range = ProcessTypeTagHandler(data, handler_index, Stream<char>(
 												opening_parenthese,
@@ -4349,7 +4347,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					if (blittable_exception == -1) {
 						ReflectionType nested_type;
 						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-							alignment = std::max(alignment, CalculateReflectionTypeAlignment(reflection_manager, &nested_type));
+							alignment = max(alignment, CalculateReflectionTypeAlignment(reflection_manager, &nested_type));
 						}
 						else {
 							Stream<char> definition = type->fields[index].definition;
@@ -4362,7 +4360,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								byte_size_data.definition = definition;
 								ulong2 byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[container_index]->GetByteSize(&byte_size_data);
 
-								alignment = std::max(alignment, byte_size_alignment.y);
+								alignment = max(alignment, byte_size_alignment.y);
 							}
 							else {
 								// Check for pointers
@@ -4384,16 +4382,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 					}
 					else {
-						alignment = std::max(alignment, blittable_exception);
+						alignment = max(alignment, blittable_exception);
 					}
 				}
 				else {
 					if (type->fields[index].info.stream_type == ReflectionStreamFieldType::Basic ||
 						type->fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-						alignment = std::max(alignment, GetFieldTypeAlignment(type->fields[index].info.basic_type));
+						alignment = max(alignment, GetFieldTypeAlignment(type->fields[index].info.basic_type));
 					}
 					else {
-						alignment = std::max(alignment, GetFieldTypeAlignment(type->fields[index].info.stream_type));
+						alignment = max(alignment, GetFieldTypeAlignment(type->fields[index].info.stream_type));
 					}
 				}
 			}
@@ -5229,7 +5227,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			if constexpr (basic_array) {
 				if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 					size_t element_byte_size = info.byte_size / info.basic_type_count;
-					size_t elements_to_copy = std::min((size_t)stream_data.size, (size_t)info.basic_type_count);
+					size_t elements_to_copy = min((size_t)stream_data.size, (size_t)info.basic_type_count);
 					size_t copy_size = elements_to_copy * element_byte_size;
 					memcpy(stream_field, stream_data.buffer, copy_size);
 					if (elements_to_copy < (size_t)info.basic_type_count) {
@@ -5974,7 +5972,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 					}
 					else {
-						unsigned short copy_size = std::min(source_field->info.byte_size, destination_field->info.byte_size);
+						unsigned short copy_size = min(source_field->info.byte_size, destination_field->info.byte_size);
 						memcpy(
 							destination_data,
 							source_data,
@@ -6060,7 +6058,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 											size_t new_type_byte_size = GetReflectionTypeByteSize(&new_nested_type);
 
 											if (destination_field->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-												unsigned int copy_count = std::min(old_data.size, (unsigned int)destination_field->info.basic_type_count);
+												unsigned int copy_count = min(old_data.size, (unsigned int)destination_field->info.basic_type_count);
 												void* current_data = destination_data;
 												for (unsigned int index = 0; index < copy_count; index++) {
 													CopyReflectionTypeToNewVersion(
@@ -6195,7 +6193,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									SetReflectionFieldResizableStreamVoidEx(destination_field->info, destination_data, field, false);
 								}
 								else {
-									unsigned short copy_count = std::min(source_field->info.basic_type_count, destination_field->info.basic_type_count);
+									unsigned short copy_count = min(source_field->info.basic_type_count, destination_field->info.basic_type_count);
 									ConvertReflectionBasicField(
 										source_field->info.basic_type,
 										destination_field->info.basic_type,
@@ -6256,7 +6254,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								if (destination_field->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 									// No need to allocate, just to convert
 									void* write_buffer = destination_data;
-									unsigned int write_count = std::min(field.size, (unsigned int)destination_field->info.basic_type_count);
+									unsigned int write_count = min(field.size, (unsigned int)destination_field->info.basic_type_count);
 									ConvertReflectionBasicField(
 										source_field->info.basic_type,
 										destination_field->info.basic_type,
@@ -6858,7 +6856,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		static void TypeChangeAddIndex(ReflectionTypeChange* entry, unsigned int index) {
-			ECS_ASSERT(entry->indices_count < std::size(entry->indices));
+			ECS_ASSERT(entry->indices_count < ECS_COUNTOF(entry->indices));
 			entry->indices[entry->indices_count++] = index;
 		}
 

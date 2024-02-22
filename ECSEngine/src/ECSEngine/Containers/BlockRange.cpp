@@ -299,7 +299,7 @@ namespace ECSEngine {
 		unsigned int maximum_size = 0;
 		for (unsigned int index = 0; index < m_free_block_count + m_used_block_count; index++) {
 			unsigned int end = GetEnd(index);
-			maximum_size = std::max(end, maximum_size);
+			maximum_size = max(end, maximum_size);
 		}
 
 		m_free_block_count = 1;
@@ -326,7 +326,7 @@ namespace ECSEngine {
 		unsigned int highest_index = 0;
 		for (unsigned int index = m_free_block_count; index < m_free_block_count + m_used_block_count; index++) {
 			unsigned int block_end = GetEnd(index);
-			highest_index = std::max(highest_index, block_end - 1);
+			highest_index = max(highest_index, block_end - 1);
 		}
 		return highest_index;
 	}

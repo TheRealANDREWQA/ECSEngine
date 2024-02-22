@@ -1143,10 +1143,10 @@ namespace ECSEngine {
 							if (fail_if_mismatch) {
 								if (has_options) {
 									ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
-										" User defined field mismatch for {#}. In file found definition {#}, current type {#}.", 
+										" User defined field mismatch for {#}. In file found definition {#}, current type {#}.",
 										type_name,
-										type->fields[subindex].name, 
-										file_field_info.definition, 
+										type->fields[subindex].name,
+										file_field_info.definition,
 										field_definition
 									);
 								}
@@ -1326,6 +1326,28 @@ namespace ECSEngine {
 						}
 					}
 					else if (file_field_info.custom_serializer_index != -1) {
+						// TODO: At the moment, we are refusing type changes
+						// For custom serializers as it will complicate them a lot
+						// There might be a need for this in the future tho
+						if (field_definition != file_field_info.definition) {
+							if (fail_if_mismatch) {
+								if (has_options) {
+									ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
+										" User defined field mismatch for {#}. In file found definition {#}, current type {#}.",
+										type_name,
+										type->fields[subindex].name,
+										file_field_info.definition,
+										field_definition
+									);
+								}
+								return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
+							}
+
+							// Ignore the data
+							IgnoreTypeField(stream, deserialize_table, type_index, index, deserialized_manager);
+							continue;
+						}
+
 						// Verify that a serializer binds to it
 						unsigned int current_custom_serializer_index = FindSerializeCustomType(field_definition);
 						ECS_ASSERT(current_custom_serializer_index != -1, "No custom serializer was found when deserializing.");
@@ -1879,7 +1901,9 @@ namespace ECSEngine {
 
 		const size_t TO_BE_READ_USER_DEFINED_STORAGE_CAPACITY = 32;
 		Stream<char> _to_be_read_user_defined_types_storage[TO_BE_READ_USER_DEFINED_STORAGE_CAPACITY];
-		Queue<Stream<char>> to_be_read_user_defined_types(_to_be_read_user_defined_types_storage, TO_BE_READ_USER_DEFINED_STORAGE_CAPACITY);
+		// We need to use a stack. We must push the user defined types in the reversed order
+		// I.e. iterate from the last field towards the first one for a type
+		Stack<Stream<char>> to_be_read_user_defined_types(_to_be_read_user_defined_types_storage, TO_BE_READ_USER_DEFINED_STORAGE_CAPACITY);
 
 		auto has_user_defined_fields = [&](size_t index) {
 			bool is_user_defined = current_type->fields[index].basic_type == ReflectionBasicFieldType::UserDefined;
@@ -1931,7 +1955,7 @@ namespace ECSEngine {
 			}
 		};
 
-		for (size_t index = 0; index < current_type->fields.size; index++) {
+		for (int64_t index = (int64_t)current_type->fields.size - 1; index >= 0; index--) {
 			has_user_defined_fields(index);
 		}
 
@@ -1960,8 +1984,9 @@ namespace ECSEngine {
 				field_table.types.size++;
 				ECS_ASSERT(field_table.types.size <= DESERIALIZE_FIELD_TABLE_MAX_TYPES);
 
-				for (size_t index = 0; index < current_type->fields.size; index++) {
-					has_user_defined_fields(index);
+				// Must iterate in reverse order
+				for (int64_t field_index = (int64_t)current_type->fields.size - 1; field_index >= 0; field_index--) {
+					has_user_defined_fields(field_index);
 				}
 			}
 		}

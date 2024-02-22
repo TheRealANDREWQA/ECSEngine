@@ -577,8 +577,8 @@ namespace ECSEngine {
 			float left_x = vertices[0].position.x;
 			float right_x = vertices[1].position.x;
 			for (size_t index = 7; index < vertices.size; index += 6) {
-				//left_x = std::min(left_x, vertices[index - 1].position.x);
-				right_x = std::max(right_x, vertices[index].position.x);
+				//left_x = min(left_x, vertices[index - 1].position.x);
+				right_x = max(right_x, vertices[index].position.x);
 			}
 			float x_span = right_x - left_x;
 			for (size_t index = 0; index < vertices.size; index += 6) {
@@ -602,11 +602,11 @@ namespace ECSEngine {
 
 		template<typename Element>
 		float GetMinXRectangle(const Element* element, size_t size) {
-			float min = element[0].position.x;
+			float min_value = element[0].position.x;
 			for (size_t index = 6; index < size; index += 6) {
-				min = std::min(min, element[index].position.x);
+				min_value = min(min_value, element[index].position.x);
 			}
-			return min;
+			return min_value;
 		}
 
 		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, GetMinXRectangle, const UIVertexColor*, const UISpriteVertex*, size_t);
@@ -699,10 +699,10 @@ namespace ECSEngine {
 		void GetEncompassingRectangle(Stream<float2> values, float2* results) {
 			float min_x = 5.0f, min_y = 5.0f, max_x = -5.0f, max_y = -5.0f;
 			for (size_t index = 0; index < values.size; index++) {
-				min_x = std::min(min_x, values[index].x);
-				min_y = std::min(min_y, values[index].y);
-				max_x = std::max(max_x, values[index].x);
-				max_y = std::max(max_y, values[index].y);
+				min_x = min(min_x, values[index].x);
+				min_y = min(min_y, values[index].y);
+				max_x = max(max_x, values[index].x);
+				max_y = max(max_y, values[index].y);
 			}
 			results[0] = float2(min_x, min_y);
 			results[1] = float2(max_x - min_x, max_y - min_y);

@@ -160,7 +160,7 @@ namespace ECSEngine {
 		// have been written to the stream. Returns the size at that point
 		ECS_INLINE unsigned int SpinWaitCapacity() const {
 			unsigned int write_count = write_index.load(std::memory_order_relaxed);
-			unsigned int wait_count = std::min(write_count, capacity);
+			unsigned int wait_count = min(write_count, capacity);
 			SpinWait<'<'>(size, wait_count);
 			return wait_count;
 		}

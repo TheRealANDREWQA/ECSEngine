@@ -334,7 +334,7 @@ namespace ECSEngine {
 			create_info.arena_capacity = allocator_size / COMPONENT_ALLOCATOR_ARENA_COUNT;
 			// Clamp the arena capacity to at least ECS_KB * 128, otherwise it might not have enough space
 			// And it would all be the overhead of the block range
-			create_info.arena_capacity = std::max(create_info.arena_capacity, ECS_KB * 128);
+			create_info.arena_capacity = max(create_info.arena_capacity, ECS_KB * 128);
 			size_t total_allocation_size = sizeof(MemoryArena) + MemoryArena::MemoryOf(COMPONENT_ALLOCATOR_ARENA_COUNT, create_info);
 			void* allocation = entity_manager->m_memory_manager->Allocate(total_allocation_size);
 			info.allocator = (MemoryArena*)allocation;
@@ -1904,7 +1904,7 @@ namespace ECSEngine {
 		CommitChangeOrSetEntityParentHierarchy
 	};
 
-	static_assert(std::size(DEFERRED_CALLBACKS) == DEFERRED_CALLBACK_COUNT);
+	static_assert(ECS_COUNTOF(DEFERRED_CALLBACKS) == DEFERRED_CALLBACK_COUNT);
 
 #pragma endregion
 

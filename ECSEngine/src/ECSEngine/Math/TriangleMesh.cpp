@@ -145,7 +145,7 @@ namespace ECSEngine {
 	void TriangleMesh::Resize(AllocatorPolymorphic allocator, unsigned int new_position_capacity, unsigned int new_triangle_capacity) {
 		SoAResize(allocator, position_size, new_position_capacity, &position_x, &position_y, &position_z);
 		position_capacity = new_position_capacity;
-		position_size = std::min(position_size, new_position_capacity);
+		position_size = min(position_size, new_position_capacity);
 
 		triangles.Resize(allocator, new_triangle_capacity);
 	}
@@ -235,12 +235,12 @@ namespace ECSEngine {
 	//		return { nullptr, nullptr, 0, 0 };
 	//	}
 
-	//	initial_position_capacity = initial_position_capacity != 0 ? std::max(initial_position_capacity, (unsigned int)valid_count) : 0;
+	//	initial_position_capacity = initial_position_capacity != 0 ? max(initial_position_capacity, (unsigned int)valid_count) : 0;
 	//	unsigned int conservative_index_count = (unsigned int)valid_count * 2 * 3;
 	//	// For 3 points, there need to be 3 indices. For 4 points, there are 4 faces, so 12 indices
 	//	// For 5 points, there are 6 faces, so 18 indices. For 6 points, there are 8 faces, so 24 indices
 	//	// So, for all cases, we can cover them all with a conservative
-	//	initial_triangle_capacity = initial_triangle_capacity != 0 ? std::max(initial_triangle_capacity, conservative_index_count) : 0;
+	//	initial_triangle_capacity = initial_triangle_capacity != 0 ? max(initial_triangle_capacity, conservative_index_count) : 0;
 	//	triangle_mesh.Initialize(
 	//		allocator,
 	//		initial_position_capacity == 0 ? valid_count : initial_position_capacity,

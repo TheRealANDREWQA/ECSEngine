@@ -4,6 +4,8 @@
 
 namespace ECSEngine {
 
+	// TODO: Make a triangle struct?
+
 	// Returns the normal calculated as the cross product between AB and AC
 	// The normal is not normalized. You must do that manually or use the different function
 	ECSENGINE_API float3 TriangleNormal(float3 a, float3 b, float3 c);
@@ -53,12 +55,5 @@ namespace ECSEngine {
 	// Returns true if the ABC and DEF triangles are intersecting. It assumes that the triangles are
 	// Coplanar or close to being coplanar
 	ECSENGINE_API bool AreCoplanarTrianglesIntersecting(float3 A, float3 B, float3 C, float3 D, float3 E, float3 F);
-
-	// Returns true if the point is inside the triangle ABC. The point must be coplanar with the triangle
-	// You can use the other overload that takes as parameter 2 points, since the performance is the same
-	// Since it uses SIMD to speed it up
-	ECSENGINE_API bool TestCoplanarPointContainedInTriangle(float3 A, float3 B, float3 C, float3 point);
-
-	ECSENGINE_API bool TestCoplanarPointContainedInTriangle(float3 A, float3 B, float3 C, float3 point0, float3 point1);
 
 }

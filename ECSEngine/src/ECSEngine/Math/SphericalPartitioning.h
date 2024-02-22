@@ -66,7 +66,7 @@ namespace ECSEngine {
 
 		// Chunk must be the last chunk in a chain
 		void AddToChunk(Chunk* chunk, float3 normalized_direction, const Entry& entry) {
-			if (chunk->count < std::size(chunk->directions)) {
+			if (chunk->count < ECS_COUNTOF(chunk->directions)) {
 				chunk->directions[chunk->count] = normalized_direction;
 				chunk->entries[chunk->count] = entry;
 				chunk->count++;

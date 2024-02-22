@@ -118,12 +118,11 @@ static void BuildConvexColliderTaskBase(ModuleComponentBuildFunctionData* data) 
 		// Retrieve the mesh vertices from the GPU memory to the CPU side
 		Stream<float3> vertex_positions = GetMeshPositionsCPU(data->world_graphics, render_mesh->mesh->mesh, world_allocator);
 		ConvexCollider* collider = (ConvexCollider*)data->component;
-		if (collider->hull.size > 0) {
-			DeallocateConvexCollider(collider, data->component_allocator);
-		}
-		collider->hull = CreateConvexHullFromMesh(vertex_positions, data->component_allocator);
-		collider->hull_size = collider->hull.size;
-		collider->mesh = GiftWrapping(vertex_positions, data->component_allocator);
+		DeallocateConvexCollider(collider, data->component_allocator);
+		//collider->hull = CreateConvexHullFromMesh(vertex_positions, data->component_allocator);
+		collider->hull_size = 0;
+		//collider->mesh = GiftWrappingTriangleMesh(vertex_positions, data->component_allocator);
+		collider->hull = GiftWrappingConvexHull(vertex_positions, data->component_allocator);
 		vertex_positions.Deallocate(world_allocator);
 	}
 	else {
@@ -157,21 +156,51 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 
 	Matrix entity_matrix = GetEntityTransformMatrix(translation, rotation, scale);
 	TriangleMesh transformed_mesh = collider->mesh.Transform(entity_matrix, &stack_allocator);
+	ConvexHull transformed_hull = collider->hull.TransformToTemporary(entity_matrix, &stack_allocator);
 	
-	size_t count = transformed_mesh.triangles.size < collider->hull_size ? 0 : transformed_mesh.triangles.size - collider->hull_size;
-	for (size_t index = 0; index < count; index++) {
-		uint3 triangle = transformed_mesh.triangles[index];
-		float3 a = transformed_mesh.GetPoint(triangle.x);
-		float3 b = transformed_mesh.GetPoint(triangle.y);
-		float3 c = transformed_mesh.GetPoint(triangle.z);
+	//size_t count = transformed_mesh.triangles.size < collider->hull_size ? 0 : transformed_mesh.triangles.size - collider->hull_size;
+	//for (size_t index = 0; index < count; index++) {
+	//	uint3 triangle = transformed_mesh.triangles[index];
+	//	float3 a = transformed_mesh.GetPoint(triangle.x);
+	//	float3 b = transformed_mesh.GetPoint(triangle.y);
+	//	float3 c = transformed_mesh.GetPoint(triangle.z);
 
-		DebugDrawCallOptions options;
-		options.wireframe = true;
-		data->debug_drawer->AddTriangleThread(data->thread_id, a, b, c, ECS_COLOR_GREEN, options);
-		float3 center = (a + b + c) / float3::Splat(3.0f);
-		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
-		//data->debug_drawer->AddStringThread(data->thread_id, center, float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
+	//	DebugDrawCallOptions options;
+	//	options.wireframe = true;
+	//	data->debug_drawer->AddTriangleThread(data->thread_id, a, b, c, ECS_COLOR_GREEN, options);
+	//	float3 center = (a + b + c) / float3::Splat(3.0f);
+	//	ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+	//	//data->debug_drawer->AddStringThread(data->thread_id, center, float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
+	//}
+	for (size_t index = 0; index < transformed_hull.edges.size; index++) {
+		Line3D line = transformed_hull.GetEdgePoints(index);
+		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
 	}
+	for (size_t index = 0; index < transformed_hull.faces.size; index++) {
+		float3 face_total = float3::Splat(0.0f);
+		unsigned int count = 0;
+		for (size_t subindex = 0; subindex < transformed_hull.faces[index].point_count; subindex++) {
+			face_total += transformed_hull.GetPoint(transformed_hull.faces[index].points[subindex]);
+		}
+		face_total /= float3::Splat(transformed_hull.faces[index].point_count);
+		data->debug_drawer->AddArrowThread(data->thread_id, face_total, face_total + transformed_hull.faces[index].plane.normal * float3::Splat(1.0f), 0.25f, ECS_COLOR_MAGENTA);
+	
+		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+		data->debug_drawer->AddStringThread(data->thread_id, face_total, float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
+	}
+
+	if (transformed_hull.faces.size > 0) {
+		data->debug_drawer->AddArrowThread(data->thread_id, float3::Splat(0.0f), transformed_hull.faces[0].plane.normal, 0.2f, ECS_COLOR_AQUA);
+	}
+	if (transformed_hull.vertex_size > 0) {
+		float3 center = float3::Splat(0.0f);
+		for (size_t index = 0; index < transformed_hull.vertex_size; index++) {
+			center += transformed_hull.GetPoint(index);
+		}
+		center /= float3::Splat(transformed_hull.vertex_size);
+		data->debug_drawer->AddPointThread(data->thread_id, center, 1.0f, ECS_COLOR_WHITE);
+	}
+
 	/*if (transformed_mesh.position_size > 13) {
 		uint3 triangle = { 12, 12, 1 };
 		float3 a = transformed_mesh.GetPoint(triangle.x);
