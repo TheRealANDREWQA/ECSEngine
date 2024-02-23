@@ -229,3 +229,41 @@ void EditorStateSetDatabasePath(EditorState* editor_state);
 
 // This function should be called right before the application is about to exit
 void EditorStateBeforeExitCleanup(EditorState* editor_state);
+
+// We need these in order to know when an assert or crash is detected
+// To differentiate between threads
+void EditorRegisterMainThreadID();
+
+// We need these in order to know when an assert or crash is detected
+// To differentiate between threads
+void EditorRegisterBackgroundThreadsID(const EditorState* editor_state);
+
+void EditorClearMainThreadCrashHandlerIntercept();
+
+// When this is set, an assert or SEH from the main thread
+// Will be resolved, won't let the editor crash
+void EditorSetMainThreadCrashHandlerIntercept();
+
+// This can be used when you want to handle the error in a SEH block
+// But the assert redirects to the crash, and we want the crash handler
+// To produce a SEH error such that the block executes
+CrashHandler EditorInduceSEHCrashHandler();
+
+CrashHandler EditorGetSimulationThreadsCrashHandler();
+
+CrashHandler EditorGetBackgroundThreadsCrashHandler();
+
+// Returns the previous crash handler
+CrashHandler EditorSetSimulationThreadsCrashHandler(CrashHandler crash_handler);
+
+// Returns the previous crash handler. This is the handler that is
+// Going to be executed unless the background thread has a specific
+// Crash handler assigned
+CrashHandler EditorSetBackgroundThreadsCrashHandler(CrashHandler crash_handler);
+
+// Returns the previous crash handler. This is the handler that is going
+// To be executed for this thread if it is non null. You need to make
+// Sure that the crash handler data is valid for the duration of the set since
+// It is not copied
+// It will assign the crash handler to the current running thread
+CrashHandler EditorSetBackgroundThreadSpecificCrashHandler(CrashHandler crash_handler);

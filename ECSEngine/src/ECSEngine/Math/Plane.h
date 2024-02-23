@@ -58,6 +58,12 @@ namespace ECSEngine {
 		return IsParallelMask(a.normal, normalized_direction, epsilon);
 	}
 
+	// Returns true if the plane normal has the same direction as the one given with
+	// Some degree epsilon. The direction needs to be given normalized
+	ECS_INLINE bool ComparePlaneDirectionsByAngle(PlaneScalar a, float3 normalized_direction, float degrees) {
+		return IsParallelAngleMask(a.normal, normalized_direction, DegToRad(degrees));
+	}
+
 	// Given 3 non-collinear points A, B and C (ordered counter clockwise), 
 	// calculates the plane determined by them
 	ECSENGINE_API PlaneScalar ComputePlane(float3 a, float3 b, float3 c);

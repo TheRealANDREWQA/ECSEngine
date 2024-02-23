@@ -317,6 +317,19 @@ void ClearSandboxModulesInUse(EditorState* editor_state, unsigned int sandbox_in
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void ClearModuleDebugDrawComponentCrashStatus(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ComponentWithType component_type,
+	bool assert_not_found
+) {
+	EDITOR_MODULE_CONFIGURATION configuration;
+	unsigned int module_index = FindSandboxDebugDrawComponentModuleIndex(editor_state, sandbox_index, component_type, &configuration);
+	ClearModuleDebugDrawComponentCrashStatus(editor_state, module_index, configuration, component_type, assert_not_found);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void CopySandboxModulesFromAnother(EditorState* editor_state, unsigned int destination_index, unsigned int source_index)
 {
 	const EditorSandbox* source = GetSandbox(editor_state, source_index);
@@ -412,6 +425,29 @@ void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sa
 	if (!ExistsSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name)) {
 		AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, task_name);
 	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+unsigned int FindSandboxDebugDrawComponentModuleIndex(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ComponentWithType component_with_type,
+	EDITOR_MODULE_CONFIGURATION* configuration
+) {
+	ECS_STACK_CAPACITY_STREAM(unsigned int, module_indices, 512);
+	ECS_STACK_CAPACITY_STREAM(EDITOR_MODULE_CONFIGURATION, configurations, 512);
+	FindModuleDebugDrawComponentIndex(editor_state, component_with_type, &module_indices, &configurations);
+	
+	for (unsigned int index = 0; index < module_indices.size; index++) {
+		EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, sandbox_index, module_indices[index]);
+		if (sandbox_configuration == configurations[index]) {
+			*configuration = sandbox_configuration;
+			return module_indices[index];
+		}
+	}
+
+	return -1;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -819,6 +855,15 @@ bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 		return false;
 	}
 	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void SetModuleDebugDrawComponentCrashStatus(EditorState* editor_state, unsigned int sandbox_index, ComponentWithType component_type, bool assert_not_found)
+{
+	EDITOR_MODULE_CONFIGURATION configuration;
+	unsigned int module_index = FindSandboxDebugDrawComponentModuleIndex(editor_state, sandbox_index, component_type, &configuration);
+	SetModuleDebugDrawComponentCrashStatus(editor_state, module_index, configuration, component_type, assert_not_found);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

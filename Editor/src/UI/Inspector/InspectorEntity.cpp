@@ -762,16 +762,16 @@ ECS_INLINE static Stream<char> InspectorTargetName(
 static void DetermineDebugDrawStates(const EditorState* editor_state, unsigned int sandbox_index, InspectorDrawEntityData* draw_data) {
 	if (draw_data->is_global_component) {
 		// Just check for the single global component
-		draw_data->is_debug_draw_enabled[0] = IsSandboxDebugDrawEnabled(editor_state, sandbox_index, draw_data->global_component, ECS_COMPONENT_GLOBAL);
+		draw_data->is_debug_draw_enabled[0] = IsSandboxDebugDrawComponentEnabled(editor_state, sandbox_index, draw_data->global_component, ECS_COMPONENT_GLOBAL);
 	}
 	else {
 		ComponentSignature unique_signature = SandboxEntityUniqueComponents(editor_state, sandbox_index, draw_data->entity);
 		ComponentSignature shared_signature = SandboxEntitySharedComponents(editor_state, sandbox_index, draw_data->entity);
 		for (unsigned int index = 0; index < unique_signature.count; index++) {
-			draw_data->is_debug_draw_enabled[index] = IsSandboxDebugDrawEnabled(editor_state, sandbox_index, unique_signature[index], ECS_COMPONENT_UNIQUE);
+			draw_data->is_debug_draw_enabled[index] = IsSandboxDebugDrawComponentEnabled(editor_state, sandbox_index, unique_signature[index], ECS_COMPONENT_UNIQUE);
 		}
 		for (unsigned int index = 0; index < shared_signature.count; index++) {
-			draw_data->is_debug_draw_enabled[index + unique_signature.count] = IsSandboxDebugDrawEnabled(
+			draw_data->is_debug_draw_enabled[index + unique_signature.count] = IsSandboxDebugDrawComponentEnabled(
 				editor_state, 
 				sandbox_index, 
 				shared_signature[index], 

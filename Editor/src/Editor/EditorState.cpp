@@ -33,6 +33,61 @@ bool DISPLAY_LOCKED_FILES_SIZE = false;
 #define LAZY_EVALUATION_GRAPHICS_MODULE_STATUS 300
 #define LAZY_EVALUATION_TASK_ALLOCATOR_RESET 500
 
+// These are used to differentiate between the main thread, the background threads,
+// And the simulation threads
+static size_t MAIN_THREAD_ID;
+static Stream<size_t> BACKGROUND_THREADS_ID;
+static Stream<CrashHandler> BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER;
+
+static bool MAIN_THREAD_INTERCEPT_CRASH_HANDLER;
+static CrashHandler BACKGROUND_THREADS_CRASH_HANDLER = { DebugbreakCrashHandler, nullptr };
+static CrashHandler SIMULATION_THREADS_CRASH_HANDLER = { DebugbreakCrashHandler, nullptr };
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+// This is the crash handler that is set at the beginning and is not changed throughout the
+// Execution of the editor
+static void EditorCrashHandler(void* data, Stream<char> error_string) {
+	// Get the running thread ID
+	size_t running_thread_id = OS::GetCurrentThreadID();
+	// Compare it with the main thread and the background threads IDs
+	if (MAIN_THREAD_ID == running_thread_id) {
+		if (MAIN_THREAD_INTERCEPT_CRASH_HANDLER) {
+			// If we have the intercept crash handler set, cause an exception
+			// Through a memory violation such that the SEH handler is executed
+			int* invalid_ptr = (int*)0x0;
+			*invalid_ptr = 0;
+		}
+		else {
+			// Just debug break at the moment in the other case
+			__debugbreak();
+		}
+	}
+	else {
+		size_t index = 0;
+		for (; index < BACKGROUND_THREADS_ID.size; index++) {
+			if (BACKGROUND_THREADS_ID[index] == running_thread_id) {
+				// Run the background thread crash handler - the priority
+				// Being the specific one
+				if (BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER[index].function != nullptr) {
+					BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER[index].function(BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER[index].data, error_string);
+				}
+				else {
+					BACKGROUND_THREADS_CRASH_HANDLER.function(BACKGROUND_THREADS_CRASH_HANDLER.data, error_string);
+				}
+				break;
+			}
+		}
+
+		if (index == BACKGROUND_THREADS_ID.size) {
+			// Not the main thread or background thread - it must be a simulation thread
+			// Or a render scene thread, but we can use for both of them the simulation
+			// Crash handler
+			SIMULATION_THREADS_CRASH_HANDLER.function(SIMULATION_THREADS_CRASH_HANDLER.data, error_string);
+		}
+	}
+}
+
 // ----------------------------------------------------------------------------------------------------------------------------
 
 // This will be used by the UI for the runtime settings. Initialize it once
@@ -624,6 +679,13 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	if (!gpu_stats_success) {
 		EditorSetConsoleError("Failed to initialize GPU stats recording support");
 	}
+
+	EditorRegisterMainThreadID();
+	EditorRegisterBackgroundThreadsID(editor_state);
+
+	// Permanently redirect all asserts to the general crash handler
+	ECS_GLOBAL_ASSERT_CRASH = true;
+	SetCrashHandler(EditorCrashHandler, nullptr);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -741,5 +803,77 @@ void EditorStateBeforeExitCleanup(EditorState* editor_state)
 }
 
 // -----------------------------------------------------------------------------------------------------------------
+
+void EditorRegisterMainThreadID() {
+	MAIN_THREAD_ID = OS::GetCurrentThreadID();
+}
+
+void EditorRegisterBackgroundThreadsID(const EditorState* editor_state) {
+	unsigned int thread_count = editor_state->task_manager->GetThreadCount();
+	BACKGROUND_THREADS_ID.Resize({ nullptr }, thread_count);
+	BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER.Resize({ nullptr }, thread_count);
+	for (unsigned int index = 0; index < editor_state->task_manager->GetThreadCount(); index++) {
+		BACKGROUND_THREADS_ID[index] = OS::GetThreadID(editor_state->task_manager->m_thread_handles[index]);
+	}
+	memset(BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER.buffer, 0, BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER.MemoryOf(thread_count));
+}
+
+void EditorClearMainThreadCrashHandlerIntercept() {
+	MAIN_THREAD_INTERCEPT_CRASH_HANDLER = false;
+}
+
+void EditorSetMainThreadCrashHandlerIntercept() {
+	MAIN_THREAD_INTERCEPT_CRASH_HANDLER = true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+static void InduceSEHCrashHandler(void* data, Stream<char> error_string) {
+	// This guarantees a memory exception
+	int* invalid_ptr = (int*)0x0;
+	*invalid_ptr = 0;
+}
+
+CrashHandler EditorInduceSEHCrashHandler() {
+	return { InduceSEHCrashHandler, nullptr };
+}
+
+CrashHandler EditorGetSimulationThreadsCrashHandler() {
+	return SIMULATION_THREADS_CRASH_HANDLER;
+}
+
+CrashHandler EditorGetBackgroundThreadsCrashHandler() {
+	return BACKGROUND_THREADS_CRASH_HANDLER;
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+CrashHandler EditorSetSimulationThreadsCrashHandler(CrashHandler crash_handler) {
+	CrashHandler previous_handler = SIMULATION_THREADS_CRASH_HANDLER;
+	SIMULATION_THREADS_CRASH_HANDLER = crash_handler;
+	return previous_handler;
+}
+
+CrashHandler EditorSetBackgroundThreadsCrashHandler(CrashHandler crash_handler) {
+	CrashHandler previous_handler = BACKGROUND_THREADS_CRASH_HANDLER;
+	BACKGROUND_THREADS_CRASH_HANDLER = crash_handler;
+	return previous_handler;
+}
+
+CrashHandler EditorSetBackgroundThreadSpecificCrashHandler(CrashHandler crash_handler) {
+	size_t running_thread_id = OS::GetCurrentThreadID();
+	for (size_t index = 0; index < BACKGROUND_THREADS_ID.size; index++) {
+		if (BACKGROUND_THREADS_ID[index] == running_thread_id) {
+			CrashHandler previous_handler = BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER[index];
+			BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER[index] = crash_handler;
+			return previous_handler;
+		}
+	}
+
+	// Shouldn't happen
+	__debugbreak();
+	abort();
+	return {};
+}
 
 // -----------------------------------------------------------------------------------------------------------------

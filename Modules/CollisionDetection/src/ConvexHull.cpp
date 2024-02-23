@@ -53,7 +53,7 @@ void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_i
 	float3 normalized_normal = -TriangleNormalNormalized(edge_point_1, edge_point_2, triangle_point, hull_center);
 	if (edge.face_1_index != USHORT_MAX) {
 		PlaneScalar existing_face = faces[edge.face_1_index].plane;
-		if (ComparePlaneDirections(existing_face, normalized_normal)) {
+		if (ComparePlaneDirectionsByAngle(existing_face, normalized_normal, 3.0f)) {
 			// We can collapse this existing edge
 			remove_edge = true;
 			// The face to be assigned to the newly added edges should be this one
@@ -68,7 +68,7 @@ void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_i
 			faces[face_index].points[0] = edge.point_1;
 			faces[face_index].points[1] = edge.point_2;
 			faces[face_index].points[2] = point_index;
-			//ECS_ASSERT(edge.face_2_index == USHORT_MAX, "Invalid ConvexHull state");
+			ECS_ASSERT(edge.face_2_index == USHORT_MAX, "Invalid ConvexHull state");
 			// Need to assign to the edge this face index
 			edge.face_2_index = face_index;
 		}
@@ -290,7 +290,7 @@ void ConvexHullEdge::AddFaceAssert(unsigned int face_index)
 		face_1_index = face_index;
 	}
 	else {
-		//ECS_ASSERT(face_2_index == USHORT_MAX, "Invalid ConvexHull state");
+		ECS_ASSERT(face_2_index == USHORT_MAX, "Invalid ConvexHull state");
 		face_2_index = face_index;
 	}
 }

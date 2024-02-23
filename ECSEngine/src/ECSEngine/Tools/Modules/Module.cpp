@@ -203,7 +203,6 @@ namespace ECSEngine {
 		module.ui_function = (ModuleUIFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleUIFunction));
 		module.link_components = (ModuleRegisterLinkComponentFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterLinkComponentFunction));
 		module.serialize_function = (ModuleSerializeComponentFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleSerializeComponentFunction));
-		module.set_world = (ModuleSetCurrentWorld)OS::GetDLLSymbol(module_handle, STRING(ModuleSetCurrentWorld));
 		module.extra_information = (ModuleRegisterExtraInformationFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterExtraInformationFunction));
 		module.debug_draw_tasks = (ModuleRegisterDebugDrawTaskElementsFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterDebugDrawTaskElementsFunction));
 		module.component_functions = (ModuleRegisterComponentFunctionsFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterComponentFunctionsFunction));
@@ -926,13 +925,18 @@ namespace ECSEngine {
 		return nullptr;
 	}
 
-	ModuleComponentBuildEntry GetModuleComponentBuildEntry(const AppliedModule* applied_module, Stream<char> component_name)
+	ModuleComponentBuildEntry* GetModuleComponentBuildEntry(AppliedModule* applied_module, Stream<char> component_name)
+	{
+		return (ModuleComponentBuildEntry*)GetModuleComponentBuildEntry((const AppliedModule*)applied_module, component_name);
+	}
+
+	const ModuleComponentBuildEntry* GetModuleComponentBuildEntry(const AppliedModule* applied_module, Stream<char> component_name)
 	{
 		size_t index = applied_module->component_functions.Find(component_name, [](const ModuleComponentFunctions& element) {
 			return element.component_name;
 		});
 		if (index != -1) {
-			return applied_module->component_functions[index].build_entry;
+			return &applied_module->component_functions[index].build_entry;
 		}
 		return { nullptr };
 	}

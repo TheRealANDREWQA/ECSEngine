@@ -774,6 +774,12 @@ namespace ECSEngine {
 		m_exception_handlers.size--;
 	}
 
+	void TaskManager::PopExceptionHandlerThreadSafe() {
+		m_exception_handler_lock.Lock();
+		PopExceptionHandler();
+		m_exception_handler_lock.Unlock();
+	}
+
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::PushExceptionHandler(TaskManagerExceptionHandler handler, void* data, size_t data_size)
@@ -791,6 +797,14 @@ namespace ECSEngine {
 		}
 
 		m_exception_handlers.Add(&handler_element);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::PushExceptionHandlerThreadSafe(TaskManagerExceptionHandler handler, void* data, size_t data_size) {
+		m_exception_handler_lock.Lock();
+		PushExceptionHandler(handler, data, data_size);
+		m_exception_handler_lock.Unlock();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1238,6 +1252,8 @@ namespace ECSEngine {
 
 		// The unhandled case means that we should crash in case it it a critical exception
 		OS::ECS_OS_EXCEPTION_CONTINUE_STATUS continue_status = OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
+		// Lock this such that new handlers cannot be added or removed
+		task_manager->m_exception_handler_lock.Lock();
 		for (int64_t index = (int64_t)task_manager->m_exception_handlers.size - 1; index >= 0; index--) {
 			TaskManager::ExceptionHandler& current_handler = task_manager->m_exception_handlers[index];
 			handler_data.user_data = current_handler.is_data_ptr ? current_handler.data_ptr : current_handler.data;
@@ -1246,18 +1262,20 @@ namespace ECSEngine {
 				break;
 			}
 		}
+		task_manager->m_exception_handler_lock.Unlock();
 
 		if (continue_status == OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED) {
 			if (OS::IsExceptionCodeCritical(handler_data.exception_information.error_code)) {
 				ECS_FORMAT_TEMP_STRING(error_message, "Thread {#} has hard crashed with a ", thread_id);
 				OS::ExceptionCodeToString(handler_data.exception_information.error_code, error_message);
 				Crash(error_message);
-				return EXCEPTION_EXECUTE_HANDLER;
+				// We need to execute the crash block
+				return GetExceptionNativeContinueCode(OS::ECS_OS_EXCEPTION_CONTINUE_RESOLVED);
 			}
 		}
 		// We can reach this also from the unhandled case, and for both we want to continue the SEH search
 		// Only for the resolved we want to continue the execution
-		return continue_status == OS::ECS_OS_EXCEPTION_CONTINUE_RESOLVED ? EXCEPTION_CONTINUE_EXECUTION : EXCEPTION_CONTINUE_SEARCH;
+		return GetExceptionNativeContinueCode(continue_status);
 	}
 
 	void ThreadProcedure(

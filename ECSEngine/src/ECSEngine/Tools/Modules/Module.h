@@ -176,7 +176,9 @@ namespace ECSEngine {
 
 	ECSENGINE_API ModuleComponentBuildFunction GetModuleComponentBuildFunction(const AppliedModule* applied_module, Stream<char> component_name);
 
-	ECSENGINE_API ModuleComponentBuildEntry GetModuleComponentBuildEntry(const AppliedModule* applied_module, Stream<char> component_name);
+	ECSENGINE_API ModuleComponentBuildEntry* GetModuleComponentBuildEntry(AppliedModule* applied_module, Stream<char> component_name);
+
+	ECSENGINE_API const ModuleComponentBuildEntry* GetModuleComponentBuildEntry(const AppliedModule* applied_module, Stream<char> component_name);
 
 	ECSENGINE_API void AddModuleDebugDrawTaskElementsToScheduler(TaskScheduler* scheduler, Stream<ModuleDebugDrawTaskElement> elements, bool scene_order);
 

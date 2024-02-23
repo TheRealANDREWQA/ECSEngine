@@ -140,6 +140,10 @@ void AttachSandboxEntityName(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+// We record this thread id in case the thread running the function
+// Crashes and forgets to release the lock since we capture the crash
+static size_t BACKGROUND_TASK_GPU_LOCK_THREAD_ID = -1;
+
 static EDITOR_EVENT(BackgroundTaskGPULock) {
 	AtomicFlag* flag = (AtomicFlag*)_data;
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
@@ -159,11 +163,17 @@ static void EditorModuleComponentBuildGPULockLock(void* data) {
 	AtomicFlag atomic_flag;
 	EditorAddEvent(editor_state, BackgroundTaskGPULock, &atomic_flag, 0);
 	atomic_flag.Wait();
+	
+	// Set the background task gpu lock thread id such that
+	// We know, if we crash, to release the lock
+	BACKGROUND_TASK_GPU_LOCK_THREAD_ID = OS::GetCurrentThreadID();
 }
 
 static void EditorModuleComponentBuildGPULockUnlock(void* data) {
 	EditorState* editor_state = (EditorState*)data;
 	EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+	// Set this to -1 to indicate that it is unlocked
+	BACKGROUND_TASK_GPU_LOCK_THREAD_ID = -1;
 }
 
 static bool EditorModuleComponentBuildGPULockIsLocked(void* data) {
@@ -229,7 +239,32 @@ ECS_THREAD_TASK(BuildFunctionWrapper) {
 	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
 
 	void* task_data = data->task.data_size == 0 ? data->task.data : OffsetPointer(data, sizeof(*data));
-	data->task.function(thread_id, world, task_data);
+	CrashHandler previous_crash_handler = EditorSetBackgroundThreadSpecificCrashHandler(EditorInduceSEHCrashHandler());
+	// Need to handle the crashes and asserts
+	__try {
+		data->task.function(thread_id, world, task_data);
+	}
+	__except (OS::ExceptionHandlerFilterDefault(GetExceptionInformation())) {
+		Stream<char> component_name = data->editor_state->editor_components.ComponentFromID(data->component,
+			data->is_shared_component ? ECS_COMPONENT_SHARED : ECS_COMPONENT_UNIQUE);
+		ECS_FORMAT_TEMP_STRING(console_message, "Build function background task for component {#} has crashed in sandbox {#}", component_name, data->sandbox_index);
+		EditorSetConsoleError(console_message);
+		ModuleComponentBuildEntry* entry = GetModuleComponentBuildEntry(
+			data->editor_state,
+			data->module_index,
+			data->module_configuration,
+			component_name
+		);
+		entry->has_crashed = true;
+
+		// Check to see if the function acquire the GPU lock. If it did, release it
+		if (BACKGROUND_TASK_GPU_LOCK_THREAD_ID != -1) {
+			if (BACKGROUND_TASK_GPU_LOCK_THREAD_ID == OS::GetCurrentThreadID()) {
+				EditorModuleComponentBuildGPULockUnlock(data->editor_state);
+			}
+		}
+	}
+	EditorSetBackgroundThreadSpecificCrashHandler(previous_crash_handler);
 
 	// Acquire the component lock
 	if (data->locked_components_count > 0 || data->locked_global_count > 0) {
@@ -262,6 +297,7 @@ ECS_THREAD_TASK(BuildFunctionWrapper) {
 }
 
 // Returns true if a background task was launched, else false
+// This has to be run on the main thread
 static bool CallModuleComponentBuildFunctionBase(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
@@ -270,10 +306,15 @@ static bool CallModuleComponentBuildFunctionBase(
 	Component component,
 	bool is_shared,
 	Entity entity,
-	ModuleComponentBuildEntry build_entry,
+	ModuleComponentBuildEntry* build_entry,
 	ModuleComponentBuildFunctionData* build_data,
 	std::atomic<bool>* finish_flag
 ) {
+	// If the build entry has crashed, do not continue. Do not output an error message
+	if (build_entry->has_crashed) {
+		return false;
+	}
+
 	build_data->entity = entity;
 	build_data->component = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
 	build_data->component_allocator = GetSandboxComponentAllocatorEx(
@@ -284,7 +325,21 @@ static bool CallModuleComponentBuildFunctionBase(
 	);
 	build_data->component_allocator.allocation_type = ECS_ALLOCATION_MULTI;
 	build_data->stack_memory->size = 0;
-	ThreadTask task = build_entry.function(build_data);
+
+	// This is executed on the main thread only
+	EditorSetMainThreadCrashHandlerIntercept();
+	ThreadTask task;
+	__try {
+		 task = build_entry->function(build_data);
+	}
+	__except(OS::ExceptionHandlerFilterDefault(GetExceptionInformation())) {
+		Stream<char> component_name = editor_state->editor_components.ComponentFromID(component, is_shared ? ECS_COMPONENT_SHARED : ECS_COMPONENT_UNIQUE);
+		ECS_FORMAT_TEMP_STRING(console_message, "Build entry for component {#} has crashed", component_name);
+		EditorSetConsoleError(console_message);
+		build_entry->has_crashed = true;
+	}
+	EditorClearMainThreadCrashHandlerIntercept();
+
 	if (task.function != nullptr) {
 		size_t wrapper_data_storage[256];
 		BuildFunctionWrapperData* wrapper_data = (BuildFunctionWrapperData*)wrapper_data_storage;
@@ -296,9 +351,9 @@ static bool CallModuleComponentBuildFunctionBase(
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		sandbox->locked_components_lock.Lock();
 
-		for (size_t index = 0; index < build_entry.component_dependencies.size; index++) {
-			ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(build_entry.component_dependencies[index]);
-			Component component = editor_state->editor_components.GetComponentID(build_entry.component_dependencies[index]);
+		for (size_t index = 0; index < build_entry->component_dependencies.size; index++) {
+			ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(build_entry->component_dependencies[index]);
+			Component component = editor_state->editor_components.GetComponentID(build_entry->component_dependencies[index]);
 			if (component_type == ECS_COMPONENT_UNIQUE || component_type == ECS_COMPONENT_SHARED) {
 				EditorSandbox::LockedEntityComponent locked_entry = { entity, component, component_type == ECS_COMPONENT_SHARED };
 				sandbox->locked_entity_components.Add(locked_entry);
@@ -339,6 +394,7 @@ static bool CallModuleComponentBuildFunctionBase(
 		EditorStateAddBackgroundTask(editor_state, { BuildFunctionWrapper, wrapper_data, sizeof(*wrapper_data) + task.data_size });
 		return true;
 	}
+
 	return false;
 }
 
@@ -367,13 +423,21 @@ static ModuleComponentBuildFunctionData CreateBuildDataBase(EditorState* editor_
 void CallModuleComponentBuildFunctionUnique(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	ModuleComponentBuildEntry build_entry,
+	ModuleComponentBuildEntry* build_entry,
 	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION module_configuration,
 	Stream<Entity> entities,
 	Component component
 )
 {
+	// If the entry has crashed, do not continue
+	if (build_entry->has_crashed) {
+		Stream<char> component_name = editor_state->editor_components.ComponentFromID(component, ECS_COMPONENT_UNIQUE);
+		ECS_FORMAT_TEMP_STRING(console_message, "Build function for component {#} is crashed", component_name);
+		EditorSetConsoleWarn(console_message);
+		return;
+	}
+
 	ECS_STACK_VOID_STREAM(stack_memory, 512);
 
 	ModuleComponentBuildFunctionData build_data = CreateBuildDataBase(editor_state, sandbox_index, &stack_memory);
@@ -397,11 +461,11 @@ void CallModuleComponentBuildFunctionUnique(
 void CallModuleComponentBuildFunctionUnique(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	const EditorModuleComponentBuildEntry* build_entry,
+	EditorModuleComponentBuildEntry* build_entry,
 	Stream<Entity> entities,
 	Component component
 ) {
-	CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, build_entry->entry, build_entry->module_index, 
+	CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, &build_entry->entry, build_entry->module_index, 
 		build_entry->module_configuration, entities, component);
 }
 
@@ -419,7 +483,7 @@ struct SplitBuildSharedInstanceData {
 
 	Stream<Entity> entities_to_split;
 	size_t last_split_entity;
-	ModuleComponentBuildEntry build_entry;
+	ModuleComponentBuildEntry* build_entry;
 	unsigned int sandbox_index;
 	Component component;
 	SharedInstance original_instance;
@@ -569,15 +633,23 @@ static EDITOR_EVENT(SplitBuildSharedInstance) {
 void CallModuleComponentBuildFunctionShared(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	ModuleComponentBuildEntry build_entry,
+	ModuleComponentBuildEntry* build_entry,
 	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION module_configuration,
 	Component component,
 	SharedInstance build_instance,
 	Entity changed_entity
 ) {
+	// If the entry has crashed, do not continue
+	if (build_entry->has_crashed) {
+		Stream<char> component_name = editor_state->editor_components.ComponentFromID(component, ECS_COMPONENT_SHARED);
+		ECS_FORMAT_TEMP_STRING(console_message, "Build function for component {#} is crashed", component_name);
+		EditorSetConsoleWarn(console_message);
+		return;
+	}
+
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
-	if (build_entry.component_dependencies.size == 0) {
+	if (build_entry->component_dependencies.size == 0) {
 		ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 2);
 		ModuleComponentBuildFunctionData build_data = CreateBuildDataBase(editor_state, sandbox_index, &stack_memory);
 		// We can call the build function directly only for this instance
@@ -649,12 +721,12 @@ void CallModuleComponentBuildFunctionShared(
 void CallModuleComponentBuildFunctionShared(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	const EditorModuleComponentBuildEntry* build_entry,
+	EditorModuleComponentBuildEntry* build_entry,
 	Component component,
 	SharedInstance build_instance,
 	Entity changed_entity
 ) {
-	CallModuleComponentBuildFunctionShared(editor_state, sandbox_index, build_entry->entry, build_entry->module_index, 
+	CallModuleComponentBuildFunctionShared(editor_state, sandbox_index, &build_entry->entry, build_entry->module_index, 
 		build_entry->module_configuration, component, build_instance, changed_entity);
 }
 

@@ -75,6 +75,16 @@ void ClearSandboxModulesInUse(EditorState* editor_state, unsigned int sandbox_in
 
 // -------------------------------------------------------------------------------------------------------------
 
+// This is a helper function to clear this component for the sandbox's configuration
+void ClearModuleDebugDrawComponentCrashStatus(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::ComponentWithType component_type,
+	bool assert_not_found
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // It will clear any modules that are in the destination and add all modules from the source
 // This function does not add the module settings from the source
 void CopySandboxModulesFromAnother(EditorState* editor_state, unsigned int destination_index, unsigned int source_index);
@@ -107,6 +117,17 @@ void DisableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int s
 // -------------------------------------------------------------------------------------------------------------
 
 void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Helper function to help identify the module from where a sandbox use the debug draw component
+// Returns the module index inside the project modules array
+unsigned int FindSandboxDebugDrawComponentModuleIndex(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ComponentWithType component_with_type,
+	EDITOR_MODULE_CONFIGURATION* configuration
+);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -239,6 +260,16 @@ void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_in
 // It returns true if it succeeded, else false. (it can fail only if it cannot read the data from the file)
 // If it fails, it will set the default values
 bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// This is a helper function to clear this component for the sandbox's configuration
+void SetModuleDebugDrawComponentCrashStatus(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ComponentWithType component_type,
+	bool assert_not_found
+);
 
 // -------------------------------------------------------------------------------------------------------------
 
