@@ -108,6 +108,33 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------
 
+		int GetExceptionNativeContinueCode(ECS_OS_EXCEPTION_CONTINUE_STATUS continue_status) {
+			switch (continue_status) {
+			case ECS_OS_EXCEPTION_CONTINUE_IGNORE:
+				return EXCEPTION_CONTINUE_EXECUTION;
+			case ECS_OS_EXCEPTION_CONTINUE_RESOLVED:
+				return EXCEPTION_EXECUTE_HANDLER;
+			case ECS_OS_EXCEPTION_CONTINUE_UNHANDLED:
+				return EXCEPTION_CONTINUE_SEARCH;
+			}
+
+			// Shouldn't reach this
+			abort();
+			return -1;
+		}
+
+		// ----------------------------------------------------------------------------------------------------
+
+		int ExceptionHandlerFilterDefault(EXCEPTION_POINTERS* exception_pointers) {
+			ExceptionInformation information = GetExceptionInformationFromNative(exception_pointers);
+			if (IsExceptionCodeCritical(information.error_code)) {
+				return GetExceptionNativeContinueCode(ECS_OS_EXCEPTION_CONTINUE_RESOLVED);
+			}
+			return GetExceptionNativeContinueCode(ECS_OS_EXCEPTION_CONTINUE_UNHANDLED);
+		}
+
+		// ----------------------------------------------------------------------------------------------------
+
 	}
 
 }

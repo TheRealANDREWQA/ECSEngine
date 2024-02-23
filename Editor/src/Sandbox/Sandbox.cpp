@@ -410,6 +410,8 @@ void AddSandboxDebugDrawComponent(EditorState* editor_state, unsigned int sandbo
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->enabled_debug_draw.Add({ component, component_type });
+	// Clear the crashed flag for this component
+	ClearModuleDebugDrawComponentCrashStatus(editor_state, sandbox_index, { component, component_type }, true);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -646,7 +648,7 @@ void ChangeSandboxDebugDrawComponent(
 )
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	unsigned int index = sandbox->enabled_debug_draw.Find(ComponentWithType{ old_component, type }, [](ComponentWithType element) { return element; });
+	unsigned int index = sandbox->enabled_debug_draw.Find(ComponentWithType{ old_component, type });
 	if (index != -1) {
 		sandbox->enabled_debug_draw[index].component = new_component;
 	}
@@ -978,8 +980,12 @@ void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sand
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	if (sandbox->enabled_debug_draw.size > 0) {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-		ModuleDebugDrawElementTyped* debug_elements = (ModuleDebugDrawElementTyped*)stack_allocator.Allocate(sizeof(ModuleDebugDrawElementTyped) * sandbox->enabled_debug_draw.size);
-		for (unsigned int index = 0; index < sandbox->enabled_debug_draw.size; index++) {
+		CapacityStream<ComponentWithType> valid_debug_draws;
+		valid_debug_draws.Initialize(&stack_allocator, 0, sandbox->enabled_debug_draw.size);
+		GetSandboxDisplayDebugDrawComponents(editor_state, sandbox_index, &valid_debug_draws);
+
+		ModuleDebugDrawElementTyped* debug_elements = (ModuleDebugDrawElementTyped*)stack_allocator.Allocate(sizeof(ModuleDebugDrawElementTyped) * valid_debug_draws.size);
+		for (unsigned int index = 0; index < valid_debug_draws.size; index++) {
 			debug_elements[index].base.draw_function = nullptr;
 		}
 
@@ -989,120 +995,134 @@ void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sand
 				editor_state, 
 				sandbox->modules_in_use[index].module_index, 
 				sandbox->modules_in_use[index].module_configuration, 
-				sandbox->enabled_debug_draw, 
+				valid_debug_draws,
 				debug_elements
 			);
 		}
+
 		// Also take into account the ecs debug draws
-		ModuleMatchDebugDrawElements(editor_state, sandbox->enabled_debug_draw, editor_state->ecs_component_functions, debug_elements);
+		ModuleMatchDebugDrawElements(editor_state, valid_debug_draws, editor_state->ecs_component_functions, debug_elements);
+
+		EditorSetMainThreadCrashHandlerIntercept();
 
 		DebugDrawer* debug_drawer = sandbox->sandbox_world.debug_drawer;
 		const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-		for (unsigned int index = 0; index < sandbox->enabled_debug_draw.size; index++) {
-			// If for some reason it couldn't be matched, skip it
-			ModuleDebugDrawComponentFunction draw_function = debug_elements[index].base.draw_function;
-			if (draw_function != nullptr) {
-				ECS_COMPONENT_TYPE type = debug_elements[index].type.type;
-				Stream<ComponentWithType> dependencies = debug_elements[index].base.Dependencies();
 
-				auto draw_with_dependencies = [&]() {
-					// Use signature based
-					Component unique_optional_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-					Component shared_optional_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-					ArchetypeQueryDescriptor query_descriptor;
-					if (type == ECS_COMPONENT_UNIQUE) {
-						query_descriptor.unique = ComponentSignature{ &debug_elements[index].type.component, 1 };
-						query_descriptor.shared = ComponentSignature();
-					}
-					else {
-						query_descriptor.shared = ComponentSignature{ &debug_elements[index].type.component, 1 };
-						query_descriptor.unique = ComponentSignature();
-					}
+		for (unsigned int index = 0; index < valid_debug_draws.size; index++) {
+			__try {
+				// If for some reason it couldn't be matched, skip it
+				ModuleDebugDrawComponentFunction draw_function = debug_elements[index].base.draw_function;
+				if (draw_function != nullptr) {
+					ECS_COMPONENT_TYPE type = debug_elements[index].type.type;
+					Stream<ComponentWithType> dependencies = debug_elements[index].base.Dependencies();
 
-					query_descriptor.unique_optional = { unique_optional_components, 0 };
-					query_descriptor.shared_optional = { shared_optional_components, 0 };
-					for (size_t subindex = 0; subindex < dependencies.size; subindex++) {
-						if (dependencies[subindex].type == ECS_COMPONENT_SHARED) {
-							query_descriptor.shared_optional[query_descriptor.shared_optional.count++] = dependencies[subindex].component;
-						}
-						else {
-							query_descriptor.unique_optional[query_descriptor.unique_optional.count++] = dependencies[subindex].component;
-						}
-					}
-
-					ForEachEntityCommitFunctor(&sandbox->sandbox_world, query_descriptor, [&](ForEachEntityUntypedFunctorData* for_each_data) {
-						ModuleDebugDrawComponentFunctionData draw_data;
-						draw_data.thread_id = 0;
-						draw_data.debug_drawer = debug_drawer;
-
-						unsigned int unique_index = 0;
-						unsigned int shared_index = 0;
+					auto draw_with_dependencies = [&]() {
+						// Use signature based
+						Component unique_optional_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+						Component shared_optional_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+						ArchetypeQueryDescriptor query_descriptor;
 						if (type == ECS_COMPONENT_UNIQUE) {
-							draw_data.component = for_each_data->unique_components[0];
-							unique_index++;
+							query_descriptor.unique = ComponentSignature{ &debug_elements[index].type.component, 1 };
+							query_descriptor.shared = ComponentSignature();
 						}
 						else {
-							draw_data.component = for_each_data->shared_components[0];
-							shared_index++;
+							query_descriptor.shared = ComponentSignature{ &debug_elements[index].type.component, 1 };
+							query_descriptor.unique = ComponentSignature();
 						}
 
-						ECS_STACK_CAPACITY_STREAM(void*, dependency_components, ECS_ARCHETYPE_MAX_COMPONENTS);
-						draw_data.dependency_components = (const void**)dependency_components.buffer;
-						for (size_t index = 0; index < dependencies.size; index++) {
-							draw_data.dependency_components[index] = dependencies[index].type == ECS_COMPONENT_UNIQUE ?
-								for_each_data->unique_components[unique_index++] : for_each_data->shared_components[shared_index++];
+						query_descriptor.unique_optional = { unique_optional_components, 0 };
+						query_descriptor.shared_optional = { shared_optional_components, 0 };
+						for (size_t subindex = 0; subindex < dependencies.size; subindex++) {
+							if (dependencies[subindex].type == ECS_COMPONENT_SHARED) {
+								query_descriptor.shared_optional[query_descriptor.shared_optional.count++] = dependencies[subindex].component;
+							}
+							else {
+								query_descriptor.unique_optional[query_descriptor.unique_optional.count++] = dependencies[subindex].component;
+							}
 						}
+
+						ForEachEntityCommitFunctor(&sandbox->sandbox_world, query_descriptor, [&](ForEachEntityUntypedFunctorData* for_each_data) {
+							ModuleDebugDrawComponentFunctionData draw_data;
+							draw_data.thread_id = 0;
+							draw_data.debug_drawer = debug_drawer;
+
+							unsigned int unique_index = 0;
+							unsigned int shared_index = 0;
+							if (type == ECS_COMPONENT_UNIQUE) {
+								draw_data.component = for_each_data->unique_components[0];
+								unique_index++;
+							}
+							else {
+								draw_data.component = for_each_data->shared_components[0];
+								shared_index++;
+							}
+
+							ECS_STACK_CAPACITY_STREAM(void*, dependency_components, ECS_ARCHETYPE_MAX_COMPONENTS);
+							draw_data.dependency_components = (const void**)dependency_components.buffer;
+							for (size_t index = 0; index < dependencies.size; index++) {
+								draw_data.dependency_components[index] = dependencies[index].type == ECS_COMPONENT_UNIQUE ?
+									for_each_data->unique_components[unique_index++] : for_each_data->shared_components[shared_index++];
+							}
+							draw_function(&draw_data);
+							});
+					};
+
+					if (type == ECS_COMPONENT_UNIQUE) {
+						if (dependencies.size == 0) {
+							active_entity_manager->ForEachEntityComponent(debug_elements[index].type.component, [debug_drawer, draw_function](Entity entity, const void* data) {
+								// At the moment just give the thread_id 0 when running in a single thread
+								ModuleDebugDrawComponentFunctionData draw_data;
+								draw_data.debug_drawer = debug_drawer;
+								draw_data.component = data;
+								draw_data.dependency_components = nullptr;
+								draw_data.thread_id = 0;
+								draw_function(&draw_data);
+								});
+						}
+						else {
+							draw_with_dependencies();
+						}
+					}
+					else if (type == ECS_COMPONENT_SHARED) {
+						if (dependencies.size == 0) {
+							active_entity_manager->ForEachSharedInstance(debug_elements[index].type.component,
+								[=](SharedInstance instance) {
+									// At the moment just give the thread_id 0 when running in a single thread
+									ModuleDebugDrawComponentFunctionData draw_data;
+									draw_data.debug_drawer = debug_drawer;
+									draw_data.component = active_entity_manager->GetSharedData(debug_elements[index].type.component, instance);
+									draw_data.dependency_components = nullptr;
+									draw_data.thread_id = 0;
+									draw_function(&draw_data);
+								});
+						}
+						else {
+							draw_with_dependencies();
+						}
+					}
+					else if (type == ECS_COMPONENT_GLOBAL) {
+						// At the moment just give the thread_id 0 when running in a single thread
+						ModuleDebugDrawComponentFunctionData draw_data;
+						draw_data.debug_drawer = debug_drawer;
+						draw_data.component = active_entity_manager->GetGlobalComponent(debug_elements[index].type.component);
+						draw_data.dependency_components = nullptr;
+						draw_data.thread_id = 0;
 						draw_function(&draw_data);
-					});
-				};
-
-				if (type == ECS_COMPONENT_UNIQUE) {
-					if (dependencies.size == 0) {
-						active_entity_manager->ForEachEntityComponent(debug_elements[index].type.component, [debug_drawer, draw_function](Entity entity, const void* data) {
-							// At the moment just give the thread_id 0 when running in a single thread
-							ModuleDebugDrawComponentFunctionData draw_data;
-							draw_data.debug_drawer = debug_drawer;
-							draw_data.component = data;
-							draw_data.dependency_components = nullptr;
-							draw_data.thread_id = 0;
-							draw_function(&draw_data);
-						});
 					}
 					else {
-						draw_with_dependencies();
+						ECS_ASSERT(false, "Invalid component type");
 					}
-				}
-				else if (type == ECS_COMPONENT_SHARED) {
-					if (dependencies.size == 0) {
-						active_entity_manager->ForEachSharedInstance(debug_elements[index].type.component, 
-							[=](SharedInstance instance) {
-							// At the moment just give the thread_id 0 when running in a single thread
-							ModuleDebugDrawComponentFunctionData draw_data;
-							draw_data.debug_drawer = debug_drawer;
-							draw_data.component = active_entity_manager->GetSharedData(debug_elements[index].type.component, instance);
-							draw_data.dependency_components = nullptr;
-							draw_data.thread_id = 0;
-							draw_function(&draw_data);
-						});
-					}
-					else {
-						draw_with_dependencies();
-					}
-				}
-				else if (type == ECS_COMPONENT_GLOBAL) {
-					// At the moment just give the thread_id 0 when running in a single thread
-					ModuleDebugDrawComponentFunctionData draw_data;
-					draw_data.debug_drawer = debug_drawer;
-					draw_data.component = active_entity_manager->GetGlobalComponent(debug_elements[index].type.component);
-					draw_data.dependency_components = nullptr;
-					draw_data.thread_id = 0;
-					draw_function(&draw_data);
-				}
-				else {
-					ECS_ASSERT(false, "Invalid component type");
 				}
 			}
+			__except(OS::ExceptionHandlerFilterDefault(GetExceptionInformation())) {
+				ECS_FORMAT_TEMP_STRING(console_message, "Debug draw for component {#} has crashed", 
+					editor_state->editor_components.ComponentFromID(debug_elements[index].type.component, debug_elements[index].type.type));
+				EditorSetConsoleError(console_message);
+				SetModuleDebugDrawComponentCrashStatus(editor_state, sandbox_index, debug_elements[index].type, true);
+			}
 		}
+
+		EditorClearMainThreadCrashHandlerIntercept();
 	}
 }
 
@@ -1120,9 +1140,11 @@ void EnableSandboxDebugDrawAll(EditorState* editor_state, unsigned int sandbox_i
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->enabled_debug_draw.FreeBuffer();
-	// Get all the debug draw components for this sandbox
-	AdditionStream<ComponentWithType> addition_stream = &sandbox->enabled_debug_draw;
-	GetSandboxAllPossibleDebugDrawComponents(editor_state, sandbox_index, addition_stream);
+	// Retrieve all debug draws for this sandbox
+	GetSandboxAllPossibleDebugDrawComponents(editor_state, sandbox_index, &sandbox->enabled_debug_draw);
+	for (unsigned int index = 0; index < sandbox->enabled_debug_draw.size; index++) {
+		ClearModuleDebugDrawComponentCrashStatus(editor_state, sandbox_index, sandbox->enabled_debug_draw[index], true);
+	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1397,7 +1419,27 @@ void GetSandboxAllPossibleDebugDrawComponents(
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		GetModuleDebugDrawComponents(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration, components);
+		GetModuleDebugDrawComponents(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration, components, false);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxDisplayDebugDrawComponents(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	AdditionStream<ComponentWithType> components
+) {
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		ECS_STACK_CAPACITY_STREAM(ComponentWithType, module_components, ECS_KB);
+		GetModuleDebugDrawComponents(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration, &module_components, true);
+		for (unsigned int subindex = 0; subindex < module_components.size; subindex++) {
+			bool is_enabled = sandbox->enabled_debug_draw.Find(module_components[subindex]) != -1;
+			if (is_enabled) {
+				components.Add(module_components[subindex]);
+			}
+		}
 	}
 }
 
@@ -1619,7 +1661,7 @@ bool IsSandboxGizmoEntity(const EditorState* editor_state, unsigned int sandbox_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxDebugDrawEnabled(
+bool IsSandboxDebugDrawComponentEnabled(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Component component, 
@@ -1628,7 +1670,7 @@ bool IsSandboxDebugDrawEnabled(
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ComponentWithType component_with_type = { component, component_type };
-	return sandbox->enabled_debug_draw.Find(component_with_type, [](ComponentWithType element) { return element; }) != -1;
+	return sandbox->enabled_debug_draw.Find(component_with_type) != -1;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2190,7 +2232,12 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		// Draw the sandbox debug elements before the actual frame
 		DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
+		// Set the sandbox crash handler
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 4);
+		CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
 		DoFrame(&sandbox->sandbox_world);
+		SandboxRestorePreviousCrashHandler(previous_crash_handler);
+
 		if (active_viewport != EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			// Record the changes for the enabled flag
 			UpdateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_index, sandbox->sandbox_world.task_manager);
@@ -2399,7 +2446,7 @@ void RemoveSandboxDebugDrawComponent(
 )
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	unsigned int index = sandbox->enabled_debug_draw.Find(ComponentWithType{ component, component_type }, [](ComponentWithType element) { return element; });
+	unsigned int index = sandbox->enabled_debug_draw.Find(ComponentWithType{ component, component_type });
 	if (index != -1) {
 		sandbox->enabled_debug_draw.RemoveSwapBack(index);
 	}

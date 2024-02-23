@@ -104,6 +104,32 @@ void PrintConsoleMessageForBuildCommand(
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status
 );
 
+void ClearModuleDebugDrawComponentCrashStatus(
+	EditorState* editor_state, 
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	ECSEngine::ComponentWithType component_type, 
+	bool assert_not_found
+);
+
+void ClearModuleAllDebugDrawComponentCrashStatus(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration
+);
+
+void ClearModuleAllBuildEntriesCrashStatus(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration
+);
+
+void ClearModuleAllCrashStatuses(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration
+);
+
 void DecrementModuleInfoLockCount(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
 
 void DeleteModuleFlagFiles(EditorState* editor_state);
@@ -111,6 +137,28 @@ void DeleteModuleFlagFiles(EditorState* editor_state);
 bool ExistsModuleDebugDrawElementIn(
 	const EditorState* editor_state,
 	Stream<ModuleComponentFunctions> component_functions,
+	ComponentWithType component_type
+);
+
+// Fills in the modules and their respective configurations that have this debug draw component loaded
+void FindModuleDebugDrawComponentIndex(
+	const EditorState* editor_state, 
+	ComponentWithType component_type, 
+	CapacityStream<unsigned int>* module_indices,
+	CapacityStream<EDITOR_MODULE_CONFIGURATION>* configurations
+);
+
+ModuleDebugDrawElement* FindModuleDebugDrawComponentPtr(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	ComponentWithType component_type
+);
+
+const ModuleDebugDrawElement* FindModuleDebugDrawComponentPtr(
+	const EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
 	ComponentWithType component_type
 );
 
@@ -167,7 +215,7 @@ EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, u
 // If you want to know the actual configuration that was matched, you can fill in
 // The last parameter
 // Returns nullptr if there is no such function
-ModuleComponentBuildEntry GetModuleComponentBuildEntry(
+ModuleComponentBuildEntry* GetModuleComponentBuildEntry(
 	const EditorState* editor_state, 
 	unsigned int index, 
 	EDITOR_MODULE_CONFIGURATION configuration, 
@@ -254,7 +302,8 @@ void GetModuleDebugDrawComponents(
 	const EditorState* editor_state, 
 	unsigned int module_index, 
 	EDITOR_MODULE_CONFIGURATION configuration, 
-	AdditionStream<ComponentWithType> components
+	AdditionStream<ComponentWithType> components,
+	bool exclude_crashed
 );
 
 // Returns -1 if there is no module matched. If the configuration is COUNT, it will choose
@@ -279,6 +328,14 @@ bool IsModuleInfoLocked(const EditorState* editor_state, unsigned int module_ind
 
 // Returns true if any module info is locked, else false
 bool IsAnyModuleInfoLocked(const EditorState* editor_state);
+
+bool IsModuleDebugDrawComponentCrashed(
+	const EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	Component component,
+	ECS_COMPONENT_TYPE component_type
+);
 
 void IncrementModuleInfoLockCount(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
 
@@ -341,6 +398,14 @@ Stream<Stream<char>> RetrieveModuleComponentBuildDependentEntries(
 	const EditorState* editor_state,
 	Stream<char> component_name,
 	AllocatorPolymorphic allocator
+);
+
+void SetModuleDebugDrawComponentCrashStatus(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	ECSEngine::ComponentWithType component_type,
+	bool assert_not_found
 );
 
 void SetModuleLoadStatus(EditorState* editor_state, unsigned int module_index, bool is_failed, EDITOR_MODULE_CONFIGURATION configuration);

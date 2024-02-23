@@ -172,11 +172,27 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	//	ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
 	//	//data->debug_drawer->AddStringThread(data->thread_id, center, float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
 	//}
+	for (size_t index = 0; index < transformed_hull.vertex_size; index++) {
+		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+		data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.05f, nr.buffer, ECS_COLOR_ORANGE);
+	}
 	for (size_t index = 0; index < transformed_hull.edges.size; index++) {
 		Line3D line = transformed_hull.GetEdgePoints(index);
 		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
 	}
 	for (size_t index = 0; index < transformed_hull.faces.size; index++) {
+		float3 normal = transformed_hull.faces[index].plane.normal;
+		float3 center = float3::Splat(0.0f);
+		for (unsigned int subindex = 0; subindex < transformed_hull.faces[index].point_count; subindex++) {
+			center += transformed_hull.GetPoint(transformed_hull.faces[index].points[subindex]);
+		}
+		center /= float3::Splat(transformed_hull.faces[index].point_count);
+		//data->debug_drawer->AddLineThread(data->thread_id, center, center + normal * 1.0f, ECS_COLOR_AQUA);
+		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+		//data->debug_drawer->AddStringThread(data->thread_id, center, float3(0.0f, 0.0f, -1.0f), 0.025f, nr.buffer, ECS_COLOR_ORANGE);
+	}
+
+	/*for (size_t index = 0; index < transformed_hull.faces.size; index++) {
 		float3 face_total = float3::Splat(0.0f);
 		unsigned int count = 0;
 		for (size_t subindex = 0; subindex < transformed_hull.faces[index].point_count; subindex++) {
@@ -187,19 +203,7 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	
 		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
 		data->debug_drawer->AddStringThread(data->thread_id, face_total, float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
-	}
-
-	if (transformed_hull.faces.size > 0) {
-		data->debug_drawer->AddArrowThread(data->thread_id, float3::Splat(0.0f), transformed_hull.faces[0].plane.normal, 0.2f, ECS_COLOR_AQUA);
-	}
-	if (transformed_hull.vertex_size > 0) {
-		float3 center = float3::Splat(0.0f);
-		for (size_t index = 0; index < transformed_hull.vertex_size; index++) {
-			center += transformed_hull.GetPoint(index);
-		}
-		center /= float3::Splat(transformed_hull.vertex_size);
-		data->debug_drawer->AddPointThread(data->thread_id, center, 1.0f, ECS_COLOR_WHITE);
-	}
+	}*/
 
 	/*if (transformed_mesh.position_size > 13) {
 		uint3 triangle = { 12, 12, 1 };

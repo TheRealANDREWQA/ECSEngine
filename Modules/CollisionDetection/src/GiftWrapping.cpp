@@ -459,9 +459,8 @@ void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 						edge_information.triangle.z = existing_connection;
 						processed_edge_table.InsertDynamic(&function_allocator, edge_information, edge_reversed);
 
-						// And there is one more thing to do
-						// In case the AB or AD edge is in the active edges, it needs to be removed
-						// Since we found a match for it
+						// Because we completed a separate triangle, we must perform the
+						// Active edge reduction here again
 						for (unsigned int subindex = 0; subindex < active_edges.size; subindex++) {
 							bool is_AB = active_edges[subindex].point_a_index == active_edge.point_a_index &&
 								active_edges[subindex].point_b_index == existing_connection;
@@ -498,6 +497,26 @@ void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 				processed_edge_table.InsertDynamic(&function_allocator, edge_information, edge_reversed);
 			}
 		};
+
+		// There is one more thing to do. Because the order of execution of
+		// The active edges, we might find a triangle for before the active
+		// Edge gets a chance to run. So, when completing a triangle, we need
+		// To remove that active edge
+		for (unsigned int subindex = 0; subindex < active_edges.size; subindex++) {
+			bool is_AP = active_edges[subindex].point_a_index == active_edge.point_a_index &&
+				active_edges[subindex].point_b_index == unew_point_index;
+			bool is_PA = active_edges[subindex].point_a_index == unew_point_index &&
+				active_edges[subindex].point_b_index == active_edge.point_a_index;
+			bool is_BP = active_edges[subindex].point_a_index == active_edge.point_b_index &&
+				active_edges[subindex].point_b_index == unew_point_index;
+			bool is_PB = active_edges[subindex].point_a_index == unew_point_index &&
+				active_edges[subindex].point_b_index == active_edge.point_b_index;
+			if (is_AP || is_PA || is_BP || is_PB) {
+				// Remove it
+				active_edges.RemoveSwapBack(subindex);
+				subindex--;
+			}
+		}
 
 		unsigned int triangle_mesh_index = functor.AddOrFindVertex(vertex_positions[new_point_index]);
 		ActiveEdge first_active_edge = { active_edge.point_a_index, unew_point_index, active_edge.point_b_index, active_edge.point_a_mesh_index, triangle_mesh_index };

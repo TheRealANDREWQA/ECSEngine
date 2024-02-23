@@ -326,7 +326,13 @@ namespace ECSEngine {
 
 		void PopExceptionHandler();
 
+		// This can be called from multiple threads
+		void PopExceptionHandlerThreadSafe();
+
 		void PushExceptionHandler(TaskManagerExceptionHandler handler, void* data, size_t data_size);
+
+		// This can be called from multiple threads
+		void PushExceptionHandlerThreadSafe(TaskManagerExceptionHandler handler, void* data, size_t data_size);
 
 		void ReserveTasks(unsigned int count);
 
@@ -498,6 +504,7 @@ namespace ECSEngine {
 		// This works like a stack. The last added handler has priority above all the others
 		// And can handle the exception before those
 		ResizableStream<ExceptionHandler> m_exception_handlers;
+		SpinLock m_exception_handler_lock;
 
 #ifdef ECS_TASK_MANAGER_WRAPPER
 		// Embed the data directly here

@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "EntityManagerSerializeTypes.h"
+#include "../Utilities/Crash.h"
 
 namespace ECSEngine {
 
@@ -88,9 +89,23 @@ namespace ECSEngine {
 	ECSENGINE_API void SetWorldCrashHandlerThreadContext(const OS::ThreadContext* thread_context);
 
 	// The paths must be absolute paths, not relative ones
+	// It maintains some global variables inside, cannot have
+	// Multiple of these in parallel
+	ECSENGINE_API CrashHandler GetAbortWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor);
+
+	// The paths must be absolute paths, not relative ones
+	// It maintains some global variables inside, cannot have
+	// Multiple of these in parallel
+	ECSENGINE_API CrashHandler GetContinueWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor);
+
+	// The paths must be absolute paths, not relative ones
+	// It maintains some global variables inside, cannot have
+	// Multiple of these in parallel
 	ECSENGINE_API void SetAbortWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor);
 
 	// The paths must be absolute paths, not relative ones
+	// It maintains some global variables inside, cannot have
+	// Multiple of these in parallel
 	ECSENGINE_API void SetContinueWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor);
 
 	struct TaskManager;

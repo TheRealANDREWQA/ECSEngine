@@ -147,7 +147,7 @@ namespace ECSEngine {
 		}
 	}
 
-	static void SetFunction(const SetWorldCrashHandlerDescriptor* descriptor, bool is_abort) {
+	static CrashHandler GetFunction(const SetWorldCrashHandlerDescriptor* descriptor, bool is_abort) {
 		if (WORLD_GLOBAL_DATA.descriptor.crash_directory.buffer != nullptr) {
 			Free(WORLD_GLOBAL_DATA.descriptor.crash_directory.buffer);
 		}
@@ -169,7 +169,7 @@ namespace ECSEngine {
 		}
 		WORLD_GLOBAL_DATA.descriptor = *descriptor;
 		WORLD_GLOBAL_DATA.is_abort_handler = is_abort;
-		
+
 		WORLD_GLOBAL_DATA.descriptor.crash_directory.InitializeEx({ nullptr }, descriptor->crash_directory.size);
 		WORLD_GLOBAL_DATA.descriptor.crash_directory.CopyOther(descriptor->crash_directory);
 
@@ -182,13 +182,26 @@ namespace ECSEngine {
 			WORLD_GLOBAL_DATA.descriptor.global_infos = StreamCoalescedDeepCopy(descriptor->global_infos, { nullptr });
 		}
 
-		SetCrashHandler(WorldCrashHandlerFunction, nullptr);
+		return { WorldCrashHandlerFunction, nullptr };
+	}
+
+	static void SetFunction(const SetWorldCrashHandlerDescriptor* descriptor, bool is_abort) {
+		CrashHandler handler = GetFunction(descriptor, is_abort);
+		SetCrashHandler(handler);
 	}
 
 	void SetWorldCrashHandlerThreadContext(const OS::ThreadContext* thread_context)
 	{
 		memcpy(&ECS_WORLD_CRASH_HANDLER_THREAD_CONTEXT, thread_context, sizeof(*thread_context));
 		ECS_WORLD_CRASH_HANDLER_THREAD_CONTEXT_SET = true;
+	}
+
+	CrashHandler GetAbortWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor) {
+		return GetFunction(descriptor, true);
+	}
+
+	CrashHandler GetContinueWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor) {
+		return GetFunction(descriptor, false);
 	}
 
 	void SetAbortWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor) {

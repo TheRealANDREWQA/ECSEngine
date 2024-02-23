@@ -62,6 +62,12 @@ namespace ECSEngine {
 		// Memory violation or invalid instruction
 		ECSENGINE_API bool IsExceptionCodeCritical(ECS_OS_EXCEPTION_ERROR_CODE code);
 
+		ECSENGINE_API int GetExceptionNativeContinueCode(ECS_OS_EXCEPTION_CONTINUE_STATUS continue_status);
+
+		// This is a default exception filter that executes the handler in case a critical
+		// Exception has happened, else it continues the handler search
+		ECSENGINE_API int ExceptionHandlerFilterDefault(EXCEPTION_POINTERS* exception_pointers);
+
 	}
 
 }

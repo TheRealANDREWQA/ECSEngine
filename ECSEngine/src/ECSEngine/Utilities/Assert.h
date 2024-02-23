@@ -22,17 +22,17 @@ namespace ECSEngine {
 	ECSENGINE_API void HardAssert(bool condition, const char* filename, const char* function, unsigned int line, const char* error_message = nullptr);
 
 	// This type of assert can be diverted to a crash
-#define ECS_ASSERT(condition, ...) Assert(condition, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__);
+#define ECS_ASSERT(condition, ...) ECSEngine::Assert(condition, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__);
 #define ECS_ASSERT_FORMAT(condition, ...) if (!condition) { \
 	ECS_FORMAT_TEMP_STRING(__message, __VA_ARGS__);  \
-	Assert(condition, __FILE__, __FUNCTION__, __LINE__, __message.buffer); \
+	ECSEngine::Assert(condition, __FILE__, __FUNCTION__, __LINE__, __message.buffer); \
 }
 	
 	// This type of assert cannot be diverted to a crash
-#define ECS_HARD_ASSERT(condition, ...) HardAssert(condition, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__);
+#define ECS_HARD_ASSERT(condition, ...) ECSEngine::HardAssert(condition, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__);
 #define ECS_HARD_ASSERT_FORMAT(condition, ...) if (!condition) { \
 		ECS_FORMAT_TEMP_STRING(__message, __VA_ARGS__); \
-		HardAssert(condition, __FILE__, __FUNCTION__, __LINE, __message.buffer); \
+		ECSEngine::HardAssert(condition, __FILE__, __FUNCTION__, __LINE, __message.buffer); \
 	}
 
 }

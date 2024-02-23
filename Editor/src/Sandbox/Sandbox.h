@@ -248,6 +248,15 @@ void GetSandboxAllPossibleDebugDrawComponents(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// It will not fill in debug draw components that are enabled, but have crashed beforehand
+void GetSandboxDisplayDebugDrawComponents(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::AdditionStream<ECSEngine::ComponentWithType> components
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // This version will filter any virtual entities (unused entity slots) that appear here
 // The filtered entities must have a capacity equal or greater than the selected entities size
 // The rejected entities will be placed at the end after the filtered ones. To iterate over them,
@@ -340,7 +349,7 @@ bool IsSandboxGizmoEntity(
 
 // -------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxDebugDrawEnabled(
+bool IsSandboxDebugDrawComponentEnabled(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	ECSEngine::Component component,

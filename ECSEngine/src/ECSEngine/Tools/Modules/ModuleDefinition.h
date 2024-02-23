@@ -39,6 +39,8 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	// Not yet implemented
+
 	struct ModuleUIFunctionData {
 		CapacityStream<Tools::UIWindowDescriptor>* window_descriptors;
 		AllocatorPolymorphic allocator;
@@ -49,6 +51,8 @@ namespace ECSEngine {
 	typedef void (*ModuleUIFunction)(ModuleUIFunctionData* data);
 
 	// ----------------------------------------------------------------------------------------------------------------------
+
+	// Not yet implemented
 
 	// The reflection drawer can be used to draw the component
 	struct ModuleUIComponentDrawData {
@@ -310,11 +314,6 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	// With this function the module is informed about which world it is currently working in
-	typedef void (*ModuleSetCurrentWorld)(World* world);
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
 	struct ModuleMiscInfo {
 		ECS_INLINE size_t CopySize() const {
 			return key.CopySize() + StreamCoalescedDeepCopySize(value);
@@ -421,6 +420,7 @@ namespace ECSEngine {
 
 		ModuleDebugDrawComponentFunction draw_function = nullptr;
 		unsigned char dependency_component_count = 0;
+		bool has_crashed = false;
 		ComponentWithType dependency_components[4];
 	};
 
@@ -511,6 +511,7 @@ namespace ECSEngine {
 	struct ModuleComponentBuildEntry {
 		ModuleComponentBuildFunction function;
 		Stream<Stream<char>> component_dependencies;
+		bool has_crashed = false;
 	};
 
 	struct ModuleComponentFunctions {
@@ -599,7 +600,6 @@ namespace ECSEngine {
 		ModuleBuildFunctions build_functions;
 		ModuleSerializeComponentFunction serialize_function;
 		ModuleRegisterLinkComponentFunction link_components;
-		ModuleSetCurrentWorld set_world;
 		ModuleRegisterExtraInformationFunction extra_information;
 		ModuleRegisterDebugDrawTaskElementsFunction debug_draw_tasks;
 		ModuleRegisterComponentFunctionsFunction component_functions;

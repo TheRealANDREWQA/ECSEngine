@@ -28,6 +28,10 @@ namespace ECSEngine {
 	// This doesn't allocate the data - it will only reference it
 	ECSENGINE_API void SetCrashHandler(CrashHandlerFunction handler, void* data);
 
+	ECS_INLINE void SetCrashHandler(CrashHandler crash_handler) {
+		SetCrashHandler(crash_handler.function, crash_handler.data);
+	}
+
 	// It will __debugbreak() only
 	ECSENGINE_API void DebugbreakCrashHandler(void* data, Stream<char> error_string);
 

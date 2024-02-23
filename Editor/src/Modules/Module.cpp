@@ -1065,6 +1065,63 @@ void PrintConsoleMessageForBuildCommand(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+void ClearModuleDebugDrawComponentCrashStatus(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	ComponentWithType component_type,
+	bool assert_not_found
+) {
+	ModuleDebugDrawElement* element = FindModuleDebugDrawComponentPtr(editor_state, module_index, configuration, component_type);
+	if (element == nullptr) {
+		if (assert_not_found) {
+			ECS_ASSERT(false, "Clearing module debug draw component crash status failed");
+		}
+		return;
+	}
+
+	element->has_crashed = false;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void ClearModuleAllDebugDrawComponentCrashStatus(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration
+) {
+	EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
+	for (unsigned int index = 0; index < info->ecs_module.component_functions.size; index++) {
+		info->ecs_module.component_functions[index].debug_draw.has_crashed = false;
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void ClearModuleAllBuildEntriesCrashStatus(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration
+) {
+	EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
+	for (unsigned int index = 0; index < info->ecs_module.component_functions.size; index++) {
+		info->ecs_module.component_functions[index].build_entry.has_crashed = false;
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void ClearModuleAllCrashStatuses(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration
+) {
+	ClearModuleAllDebugDrawComponentCrashStatus(editor_state, module_index, configuration);
+	ClearModuleAllBuildEntriesCrashStatus(editor_state, module_index, configuration);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 void DecrementModuleInfoLockCount(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
 {
 	GetModuleInfo(editor_state, module_index, configuration)->lock_count.fetch_sub(1, ECS_RELAXED);
@@ -1124,6 +1181,62 @@ bool ExistsModuleDebugDrawElementIn(
 		}
 	});
 	return found_index != -1;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void FindModuleDebugDrawComponentIndex(
+	const EditorState* editor_state,
+	ComponentWithType component_type,
+	CapacityStream<unsigned int>* module_indices,
+	CapacityStream<EDITOR_MODULE_CONFIGURATION>* configurations
+) {
+	unsigned int module_count = editor_state->project_modules->size;
+	for (unsigned int index = 0; index < module_count; index++) {
+		for (size_t configuration = 0; configuration < EDITOR_MODULE_CONFIGURATION_COUNT; configuration++) {
+			const EditorModuleInfo* info = GetModuleInfo(editor_state, index, (EDITOR_MODULE_CONFIGURATION)configuration);
+			if (info->load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE || info->load_status == EDITOR_MODULE_LOAD_GOOD) {
+				for (unsigned int subindex = 0; subindex < info->ecs_module.component_functions.size; subindex++) {
+					Component component = editor_state->editor_components.GetComponentID(info->ecs_module.component_functions[subindex].component_name);
+					ECS_COMPONENT_TYPE type = editor_state->editor_components.GetComponentType(info->ecs_module.component_functions[subindex].component_name);
+					if (component == component_type.component && type == component_type.type) {
+						module_indices->AddAssert(index);
+						configurations->AddAssert((EDITOR_MODULE_CONFIGURATION)configuration);
+					}
+				}
+			}
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+ModuleDebugDrawElement* FindModuleDebugDrawComponentPtr(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	ComponentWithType component_type
+) {
+	return (ModuleDebugDrawElement*)FindModuleDebugDrawComponentPtr((const EditorState*)editor_state, module_index, configuration, component_type);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+const ModuleDebugDrawElement* FindModuleDebugDrawComponentPtr(
+	const EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	ComponentWithType component_type
+) {
+	const EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
+	for (unsigned int index = 0; index < info->ecs_module.component_functions.size; index++) {
+		Component component = editor_state->editor_components.GetComponentID(info->ecs_module.component_functions[index].component_name);
+		ECS_COMPONENT_TYPE type = editor_state->editor_components.GetComponentType(info->ecs_module.component_functions[index].component_name);
+		if (component == component_type.component && type == component_type.type) {
+			return &info->ecs_module.component_functions[index].debug_draw;
+		}
+	}
+	return nullptr;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1362,7 +1475,7 @@ EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, u
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-ModuleComponentBuildEntry GetModuleComponentBuildEntry(
+ModuleComponentBuildEntry* GetModuleComponentBuildEntry(
 	const EditorState* editor_state, 
 	unsigned int index, 
 	EDITOR_MODULE_CONFIGURATION configuration, 
@@ -1376,11 +1489,11 @@ ModuleComponentBuildEntry GetModuleComponentBuildEntry(
 			*matched_configuration = configuration;
 		}
 		if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
-			return { nullptr };
+			return nullptr;
 		}
 	}
 
-	const EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
+	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 	return GetModuleComponentBuildEntry(&info->ecs_module, component_name);
 }
 
@@ -1393,9 +1506,9 @@ EditorModuleComponentBuildEntry GetModuleComponentBuildEntry(
 	unsigned int module_count = editor_state->project_modules->size;
 	for (unsigned int index = 0; index < module_count; index++) {
 		EDITOR_MODULE_CONFIGURATION matched_configuration;
-		ModuleComponentBuildEntry entry = GetModuleComponentBuildEntry(editor_state, index, EDITOR_MODULE_CONFIGURATION_COUNT, component_name, &matched_configuration);
-		if (entry.function != nullptr) {
-			return { entry, index, matched_configuration };
+		ModuleComponentBuildEntry* entry = GetModuleComponentBuildEntry(editor_state, index, EDITOR_MODULE_CONFIGURATION_COUNT, component_name, &matched_configuration);
+		if (entry != nullptr && entry->function != nullptr) {
+			return { *entry, index, matched_configuration };
 		}
 	}
 	return { nullptr };
@@ -1695,6 +1808,8 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 				// We must update the sandboxes that reference this configuration
 				// To update their component functions
 				UpdateSandboxesComponentFunctionsForModule(editor_state, index, configuration);
+				// Clear the crash status for all functions
+				ClearModuleAllCrashStatuses(editor_state, index, configuration);
 
 				info->load_status = EDITOR_MODULE_LOAD_GOOD;
 				return true;
@@ -1898,16 +2013,23 @@ void GetModuleDebugDrawComponents(
 	const EditorState* editor_state, 
 	unsigned int module_index, 
 	EDITOR_MODULE_CONFIGURATION configuration, 
-	AdditionStream<ComponentWithType> components
+	AdditionStream<ComponentWithType> components,
+	bool exclude_crashed
 )
 {
 	const EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
 	Stream<ModuleComponentFunctions> elements = info->ecs_module.component_functions;
-	components.AssertNewItems(elements.size);
 	for (size_t index = 0; index < elements.size; index++) {
 		Component component = editor_state->editor_components.GetComponentID(elements[index].component_name);
 		ECS_COMPONENT_TYPE type = editor_state->editor_components.GetComponentType(elements[index].component_name);
-		components.Add({ component, type });
+		if (exclude_crashed) {
+			if (!elements[index].debug_draw.has_crashed) {
+				components.Add({ component, type });
+			}
+		}
+		else {
+			components.Add({ component, type });
+		}
 	}
 }
 
@@ -1965,6 +2087,19 @@ bool IsAnyModuleInfoLocked(const EditorState* editor_state)
 		}
 	}
 	return false;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool IsModuleDebugDrawComponentCrashed(
+	const EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	Component component,
+	ECS_COMPONENT_TYPE component_type
+) {
+	const ModuleDebugDrawElement* element = FindModuleDebugDrawComponentPtr(editor_state, module_index, configuration, { component, component_type });
+	return element->has_crashed;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -2262,6 +2397,26 @@ Stream<Stream<char>> RetrieveModuleComponentBuildDependentEntries(const EditorSt
 	ModulesToAppliedModules(editor_state, applied_modules);
 
 	return ModuleRetrieveComponentBuildDependentEntries(applied_modules, component_name, allocator);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void SetModuleDebugDrawComponentCrashStatus(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	ComponentWithType component_type,
+	bool assert_not_found
+) {
+	ModuleDebugDrawElement* element = FindModuleDebugDrawComponentPtr(editor_state, module_index, configuration, component_type);
+	if (element == nullptr) {
+		if (assert_not_found) {
+			ECS_ASSERT(false, "Setting module debug draw component crash status failed");
+		}
+		return;
+	}
+
+	element->has_crashed = true;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

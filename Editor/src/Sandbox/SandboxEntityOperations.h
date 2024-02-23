@@ -58,11 +58,11 @@ void AttachSandboxEntityName(
 
 // It will call the function with the appropriate lock and print handler. If it returned a thread task,
 // It will push it to run in background. Only a single build function can run at a time for a sandbox -
-// In order to not have the tasks be synchronized in any way
+// In order to not have the tasks be synchronized in any way.
 void CallModuleComponentBuildFunctionUnique(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	ModuleComponentBuildEntry build_entry,
+	ModuleComponentBuildEntry* build_entry,
 	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION configuration,
 	Stream<Entity> entities,
@@ -75,7 +75,7 @@ void CallModuleComponentBuildFunctionUnique(
 void CallModuleComponentBuildFunctionUnique(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	const EditorModuleComponentBuildEntry* build_entry,
+	EditorModuleComponentBuildEntry* build_entry,
 	Stream<Entity> entities,
 	Component component
 );
@@ -87,7 +87,7 @@ void CallModuleComponentBuildFunctionUnique(
 void CallModuleComponentBuildFunctionShared(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	const EditorModuleComponentBuildEntry* build_entry,
+	EditorModuleComponentBuildEntry* build_entry,
 	Component component,
 	SharedInstance build_instance,
 	Entity changed_entity

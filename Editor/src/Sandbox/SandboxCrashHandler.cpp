@@ -58,8 +58,6 @@ void SetSandboxCrashHandlerWrappers(EditorState* editor_state, unsigned int sand
 
 CrashHandler SandboxSetCrashHandler(EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator)
 {
-	CrashHandler current_crash_handler = ECS_GLOBAL_CRASH_HANDLER;
-
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	World* sandbox_world = &sandbox->sandbox_world;
 
@@ -86,6 +84,7 @@ CrashHandler SandboxSetCrashHandler(EditorState* editor_state, unsigned int sand
 	shared_infos.Initialize(temporary_allocator, 0, ECS_KB);
 	global_infos.Initialize(temporary_allocator, 0, ECS_KB);
 
+	CrashHandler previous_handler;
 	bool success = GetEditorSceneSerializeOverrides(
 		editor_state,
 		sandbox_index,
@@ -97,21 +96,21 @@ CrashHandler SandboxSetCrashHandler(EditorState* editor_state, unsigned int sand
 	if (!success) {
 		ECS_FORMAT_TEMP_STRING(message, "Failed to retrieve sandbox {#} component infos. The crash handler won't be set", sandbox_index);
 		EditorSetConsoleError(message);
+		previous_handler = EditorGetSimulationThreadsCrashHandler();
 	}
 	else {
 		descriptor.unique_infos = unique_infos;
 		descriptor.shared_infos = shared_infos;
 		descriptor.global_infos = global_infos;
 		descriptor.infos_are_stable = true;
-		SetContinueWorldCrashHandler(&descriptor);
+		previous_handler = EditorSetSimulationThreadsCrashHandler(GetContinueWorldCrashHandler(&descriptor));
 	}
-
-	return current_crash_handler;
+	return previous_handler;
 }
 
 void SandboxRestorePreviousCrashHandler(CrashHandler handler)
 {
-	SetCrashHandler(handler.function, handler.data);
+	EditorSetSimulationThreadsCrashHandler(handler);
 }
 
 bool SandboxValidateStateAfterCrash(EditorState* editor_state)
