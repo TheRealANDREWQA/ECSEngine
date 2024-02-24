@@ -32,7 +32,7 @@ unsigned int ConvexHull::AddOrFindEdge(unsigned int edge_point_1, unsigned int e
 	return existing_edge;
 }
 
-void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_index, float3 hull_center) {
+void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_index, float3 hull_center, AllocatorPolymorphic face_allocator) {
 	// Add or find the "new" triangle edges
 	ConvexHullEdge edge = edges[edge_index];
 
@@ -58,28 +58,36 @@ void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_i
 			remove_edge = true;
 			// The face to be assigned to the newly added edges should be this one
 			face_index = edge.face_1_index;
-			faces[face_index].points[faces[face_index].point_count++] = point_index;
-			ECS_ASSERT(faces[face_index].point_count <= ECS_COUNTOF(faces[face_index].points));
+			faces[face_index].AddPoint(point_index, face_allocator);
 		}
 		else {
 			// Create a new face
 			face_index = faces.AddAssert({ PlaneScalar::FromNormalized(normalized_normal, edge_point_1) });
-			faces[face_index].point_count = 3;
-			faces[face_index].points[0] = edge.point_1;
-			faces[face_index].points[1] = edge.point_2;
-			faces[face_index].points[2] = point_index;
-			ECS_ASSERT(edge.face_2_index == USHORT_MAX, "Invalid ConvexHull state");
+			faces[face_index].points.Initialize(face_allocator, 0, 4);
+			faces[face_index].AddPoint(edge.point_1, face_allocator);
+			faces[face_index].AddPoint(edge.point_2, face_allocator);
+			faces[face_index].AddPoint(point_index, face_allocator);
 			// Need to assign to the edge this face index
 			edge.face_2_index = face_index;
 		}
+
+		//// Create a new face
+		//face_index = faces.AddAssert({ PlaneScalar::FromNormalized(normalized_normal, edge_point_1) });
+		//faces[face_index].point_count = 3;
+		//faces[face_index].points[0] = edge.point_1;
+		//faces[face_index].points[1] = edge.point_2;
+		//faces[face_index].points[2] = point_index;
+		//ECS_ASSERT(edge.face_2_index == USHORT_MAX, "Invalid ConvexHull state");
+		//// Need to assign to the edge this face index
+		//edge.face_2_index = face_index;
 	}
 	else {
 		// Create a new face
 		face_index = faces.AddAssert({ PlaneScalar::FromNormalized(normalized_normal, edge_point_1) });
-		faces[face_index].point_count = 3;
-		faces[face_index].points[0] = edge.point_1;
-		faces[face_index].points[1] = edge.point_2;
-		faces[face_index].points[2] = point_index;
+		faces[face_index].points.Initialize(face_allocator, 0, 4);
+		faces[face_index].AddPoint(edge.point_1, face_allocator);
+		faces[face_index].AddPoint(edge.point_2, face_allocator);
+		faces[face_index].AddPoint(point_index, face_allocator);
 		// Need to assign the face to this first slot
 		edge.face_1_index = face_index;
 	}
@@ -93,17 +101,17 @@ void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_i
 	}
 }
 
-void ConvexHull::AddTriangle(unsigned int vertex_A, unsigned int vertex_B, unsigned int vertex_C, float3 hull_center)
+void ConvexHull::AddTriangle(unsigned int vertex_A, unsigned int vertex_B, unsigned int vertex_C, float3 hull_center, AllocatorPolymorphic face_allocator)
 {
 	float3 A = GetPoint(vertex_A);
 	float3 B = GetPoint(vertex_B);
 	float3 C = GetPoint(vertex_C);
 	PlaneScalar triangle_plane = ComputePlaneAway(A, B, C, hull_center);
 	unsigned short face_index = faces.AddAssert({ triangle_plane });
-	faces[face_index].points[0] = vertex_A;
-	faces[face_index].points[1] = vertex_B;
-	faces[face_index].points[2] = vertex_C;
-	faces[face_index].point_count = 3;
+	faces[face_index].points.Initialize(face_allocator, 0, 4);
+	faces[face_index].AddPoint(vertex_A, face_allocator);
+	faces[face_index].AddPoint(vertex_B, face_allocator);
+	faces[face_index].AddPoint(vertex_C, face_allocator);
 
 	auto add_edge = [this, face_index](unsigned int edge_1, unsigned int edge_2) {
 		unsigned int edge_index = AddOrFindEdge(edge_1, edge_2);
@@ -203,34 +211,81 @@ float3 ConvexHull::FurthestFrom(float3 direction) const
 	return max_points.At(index);
 }
 
-ConvexHull ECS_VECTORCALL ConvexHull::TransformToTemporary(Matrix matrix, AllocatorPolymorphic allocator) const
-{
-	ConvexHull hull;
+void ConvexHull::ReallocateFaces(AllocatorPolymorphic allocator) {
+	StreamCoalescedInplaceDeepCopy(faces, allocator);
+}
 
-	// Allocate the positions
-	hull.Initialize(allocator, vertex_size, 0, 0);
-	hull.vertex_size = vertex_size;
-	hull.edges = edges;
-	hull.faces = faces;
-	ApplySIMDConstexpr(vertex_size, Vector3::ElementCount(), [matrix, this, &hull](auto is_normal_iteration, size_t index, size_t count) {
-		Vector3 elements;
-		if constexpr (is_normal_iteration) {
-			elements = Vector3().LoadAdjacent(vertices_x, index, vertex_capacity);
-		}
-		else {
-			elements = Vector3().LoadPartialAdjacent(vertices_x, index, vertex_capacity, count);
-		}
+void ConvexHull::ReallocateFaces(AllocatorPolymorphic allocator, AllocatorPolymorphic face_allocator) {
+	StreamCoalescedInplaceDeepCopyWithDeallocate(faces, allocator, face_allocator);
+}
 
-		Vector3 transformed_elements = TransformPoint(elements, matrix).AsVector3();
-		if constexpr (is_normal_iteration) {
-			transformed_elements.StoreAdjacent(hull.vertices_x, index, vertex_capacity);
-		}
-		else {
-			transformed_elements.StorePartialAdjacent(hull.vertices_x, index, vertex_capacity, count);
-		}
-	});
+void ConvexHull::RemoveDegenerateEdges(AllocatorPolymorphic allocator) {
+	// Go through the vertices. If there is a single
+	// Edge that connects to it, we can remove that edge and that point as well
 
-	return hull;
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
+
+	// In order to perform this fast, create a parallel array to the vertices
+	// Where we hold this extra information
+	struct VertexConnection {
+		CapacityStream<unsigned short> edges;
+	};
+	Stream<VertexConnection> connections;
+	connections.Initialize(&stack_allocator, vertex_size);
+	for (unsigned int index = 0; index < vertex_size; index++) {
+		// Preallocate a small number of edge for each entry
+		connections[index].edges.Initialize(&stack_allocator, 0, 5);
+	}
+
+	for (unsigned int index = 0; index < edges.size; index++) {
+		const unsigned int GROWTH_FACTOR = 4;
+		connections[edges[index].point_1].edges.AddResize(index, &stack_allocator, GROWTH_FACTOR);
+		connections[edges[index].point_2].edges.AddResize(index, &stack_allocator, GROWTH_FACTOR);
+	}
+
+	for (unsigned int index = 0; index < vertex_size; index++) {
+		if (connections[index].edges.size <= 1) {
+			// Remove any edges that refer to this point
+			// Do this before removing the point
+			if (connections[index].edges.size == 1) {
+				unsigned int edge_to_be_removed = connections[index].edges[0];
+				edges.RemoveSwapBack(edge_to_be_removed);
+				unsigned int edge_to_be_restored = edges.size;
+
+				for (unsigned int subindex = 0; subindex < vertex_size; subindex++) {
+					for (unsigned int connection_index = 0; connection_index < connections[subindex].edges.size; connection_index++) {
+						if (connections[subindex].edges[connection_index] == edge_to_be_removed) {
+							connections[subindex].edges.RemoveSwapBack(connection_index);
+						}
+						else if (connections[subindex].edges[connection_index] == edge_to_be_restored) {
+							connections[subindex].edges[connection_index] = edge_to_be_removed;
+						}
+					}
+				}
+			}
+
+			// Remove this point
+			SoARemoveSwapBack(vertex_size, index, vertices_x, vertices_y, vertices_z);
+
+			// We need to restore the references for the edges that referenced the last point
+			unsigned int invalid_referenced_index = vertex_size;
+			for (unsigned int subindex = 0; subindex < connections[invalid_referenced_index].edges.size; subindex++) {
+				ConvexHullEdge& edge = edges[connections[invalid_referenced_index].edges[subindex]];
+				if (edge.point_1 == invalid_referenced_index) {
+					edge.point_1 = index;
+				}
+				else if (edge.point_2 == invalid_referenced_index) {
+					edge.point_2 = index;
+				}
+			}
+			connections.RemoveSwapBack(index);
+			index--;
+		}
+	}
+
+	if (allocator.allocator != nullptr) {
+		Resize(allocator, vertex_size, edges.size, faces.size);
+	}
 }
 
 void ConvexHull::Resize(AllocatorPolymorphic allocator, unsigned int new_vertex_capacity, unsigned int new_edge_capacity, unsigned int new_face_capacity) {
@@ -260,6 +315,36 @@ void ConvexHull::ReserveEdges(AllocatorPolymorphic allocator, unsigned int count
 
 void ConvexHull::ReserveFaces(AllocatorPolymorphic allocator, unsigned int count) {
 	faces.Reserve(allocator, count);
+}
+
+ConvexHull ECS_VECTORCALL ConvexHull::TransformToTemporary(Matrix matrix, AllocatorPolymorphic allocator) const
+{
+	ConvexHull hull;
+
+	// Allocate the positions
+	hull.Initialize(allocator, vertex_size, 0, 0);
+	hull.vertex_size = vertex_size;
+	hull.edges = edges;
+	hull.faces = faces;
+	ApplySIMDConstexpr(vertex_size, Vector3::ElementCount(), [matrix, this, &hull](auto is_normal_iteration, size_t index, size_t count) {
+		Vector3 elements;
+		if constexpr (is_normal_iteration) {
+			elements = Vector3().LoadAdjacent(vertices_x, index, vertex_capacity);
+		}
+		else {
+			elements = Vector3().LoadPartialAdjacent(vertices_x, index, vertex_capacity, count);
+		}
+
+		Vector3 transformed_elements = TransformPoint(elements, matrix).AsVector3();
+		if constexpr (is_normal_iteration) {
+			transformed_elements.StoreAdjacent(hull.vertices_x, index, vertex_capacity);
+		}
+		else {
+			transformed_elements.StorePartialAdjacent(hull.vertices_x, index, vertex_capacity, count);
+		}
+		});
+
+	return hull;
 }
 
 ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator)
@@ -293,4 +378,26 @@ void ConvexHullEdge::AddFaceAssert(unsigned int face_index)
 		ECS_ASSERT(face_2_index == USHORT_MAX, "Invalid ConvexHull state");
 		face_2_index = face_index;
 	}
+}
+
+unsigned int ConvexHullBuilder::AddOrFindVertex(float3 point)
+{
+	// Check first the remapped vertices. If we find it there, we can
+	// Return that index, else use the normal add or find
+	for (unsigned int index = 0; index < remapped_vertices.size; index++) {
+		if (remapped_vertices[index].previous_position == point) {
+			return remapped_vertices[index].index;
+		}
+	}
+	return hull.AddOrFindVertex(point);
+}
+
+void ConvexHullBuilder::DeallocateBuilderOnly() {
+	remapped_vertices.FreeBuffer();
+}
+
+void ConvexHullBuilder::Initialize(AllocatorPolymorphic allocator, unsigned int vertex_size, unsigned int edge_size, unsigned int face_size) {
+	hull.Initialize(allocator, vertex_size, edge_size, face_size);
+	// Initialize with a reasonable value such that we avoid many small resizes
+	remapped_vertices.Initialize(allocator, 128);
 }

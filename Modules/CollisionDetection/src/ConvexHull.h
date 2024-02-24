@@ -21,11 +21,35 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHullEdge {
 };
 
 struct ECS_REFLECT ConvexHullFace {
+	ECS_INLINE void AddPoint(unsigned short index, AllocatorPolymorphic allocator) {
+		// Grow with a small margin to not trigger many regrows
+		points.AddResize(index, allocator, 4);
+	}
+
+	ECS_INLINE size_t CopySize() const {
+		return points.CopySize();
+	}
+
+	ECS_INLINE ConvexHullFace CopyTo(uintptr_t& ptr) const {
+		ConvexHullFace copy;
+		copy.plane = plane;
+		copy.points.InitializeAndCopy(ptr, points);
+		return copy;
+	}
+
+	ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+		points.Deallocate(allocator);
+	}
+
 	PlaneScalar plane;
-	unsigned short points[32];
-	unsigned short point_count = 0;
+	// The points that make up this plane are listed here
+	// In the counter clockwise order
+	CapacityStream<unsigned short> points;
 };
 
+// The face buffers are meant to be temporary. After you finish creating
+// The hull, call ReallocateFaces such that the buffers are coalesced into a single
+// Allocation from a main allocator
 struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// It asserts that there is enough space
 	// Returns the index of the vertex
@@ -44,12 +68,13 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// It will perform edge collapses if it determines that the triangle
 	// Plane already exists in the hull. The hull center is used to point
 	// The normal in the opposite direction of the center. It will add the necessary
-	// Edges to the complete the triangle
-	void AddTriangleToEdge(unsigned int edge_index, unsigned int point_index, float3 hull_center);
+	// Edges to the complete the triangle. The allocator is used for the face
+	// Stream allocation, if needed
+	void AddTriangleToEdge(unsigned int edge_index, unsigned int point_index, float3 hull_center, AllocatorPolymorphic face_allocator);
 
 	// It will add the edges and the face for the triangle. It needs to have space for the edges
 	// And the face
-	void AddTriangle(unsigned int vertex_A, unsigned int vertex_B, unsigned int vertex_C, float3 hull_center);
+	void AddTriangle(unsigned int vertex_A, unsigned int vertex_B, unsigned int vertex_C, float3 hull_center, AllocatorPolymorphic face_allocator);
 
 	// Returns the index of the edge or -1 if it doesn't find it. The order of the vertices doesn't matter.
 	unsigned int FindEdge(unsigned int edge_point_1, unsigned int edge_point_2);
@@ -79,10 +104,22 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 
 	float3 FurthestFrom(float3 direction) const;
 
-	// Transform the current points by the given transform matrix and returns
-	// A new convex hull. The edges and faces will references the ones from here. 
-	// So don't modify them!
-	ConvexHull ECS_VECTORCALL TransformToTemporary(Matrix matrix, AllocatorPolymorphic allocator) const;
+	// Reallocates the face buffers into a single coalesced allocation
+	// Without deallocating the previous buffers (this can work for temporary
+	// Allocators)
+	void ReallocateFaces(AllocatorPolymorphic allocator);
+
+	// Reallocates the face buffers into a single coalesced allocation
+	// With deallocating the previous buffers
+	void ReallocateFaces(AllocatorPolymorphic allocator, AllocatorPolymorphic face_allocator);
+
+	// It will remove any edges that are considered degenerate
+	// At the moment, there can be cases where, because of edge
+	// Collapsing for close face planes, we can get to a case where
+	// We have a vertex with a single incoming edge in the middle
+	// Of a face. You can optionally pass an allocator to resize the
+	// Buffers to the new smaller size
+	void RemoveDegenerateEdges(AllocatorPolymorphic allocator = { nullptr });
 
 	// It will copy the existing data
 	void Resize(AllocatorPolymorphic allocator, unsigned int new_vertex_capacity, unsigned int new_edge_capacity, unsigned int new_face_capacity);
@@ -92,6 +129,11 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	void ReserveEdges(AllocatorPolymorphic allocator, unsigned int count = 1);
 
 	void ReserveFaces(AllocatorPolymorphic allocator, unsigned int count = 1);
+
+	// Transform the current points by the given transform matrix and returns
+	// A new convex hull. The edges and faces will references the ones from here. 
+	// So don't modify them!
+	ConvexHull ECS_VECTORCALL TransformToTemporary(Matrix matrix, AllocatorPolymorphic allocator) const;
 
 	// The representation contains the vertices stored in a SoA manner
 	// In order to use SIMD for support function calculation. The faces
@@ -108,6 +150,29 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	CapacityStream<ConvexHullFace> faces;
 
 	ECS_SOA_REFLECT(vertices, vertex_size, vertex_capacity, vertices_x, vertices_y, vertices_z);
+};
+
+struct ConvexHullRemappedVertex {
+	unsigned short index;
+	float3 previous_position;
+};
+
+// This is a helper structure that can help construct a convex hull
+// It contains some additional information to help construct it
+struct COLLISIONDETECTION_API ConvexHullBuilder {
+	unsigned int AddOrFindVertex(float3 point);
+
+	// It deallocates any buffers that are builder related only
+	void DeallocateBuilderOnly();
+
+	// It initializes the underlying hull as well
+	void Initialize(AllocatorPolymorphic allocator, unsigned int vertex_size, unsigned int edge_size, unsigned int face_size);
+
+	ConvexHull hull;
+	// When we encounter an edge that is collapsed, having 2 triangles
+	// Be merged, we need to shift down a vertex such that it matches
+	// The plane face
+	ResizableStream<ConvexHullRemappedVertex> remapped_vertices;
 };
 
 COLLISIONDETECTION_API ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator);

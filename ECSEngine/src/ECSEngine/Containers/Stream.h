@@ -1892,7 +1892,7 @@ namespace ECSEngine {
 		result.Initialize(allocator, input.size, debug_info);
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
-			void* allocation = AllocateEx(allocator, copy_size, alignof(void*), debug_info);
+			void* allocation = AllocateEx(allocator, copy_size, alignof(typename Stream::T), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			result[index] = input[index].CopyTo(ptr);
 		}
@@ -1911,7 +1911,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			auto index_projection = projection(input[index]);
 			size_t copy_size = index_projection.CopySize();
-			void* allocation = AllocateEx(allocator, copy_size, alignof(void*), debug_info);
+			void* allocation = AllocateEx(allocator, copy_size, alignof(ProjectedType), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			result[index] = index_projection.CopyTo(ptr);
 		}
@@ -1935,7 +1935,7 @@ namespace ECSEngine {
 	void StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
-			void* allocation = AllocateEx(allocator, copy_size, alignof(void*), debug_info);
+			void* allocation = AllocateEx(allocator, copy_size, alignof(typename Stream::T), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			input[index] = input[index].CopyTo(ptr);
 		}
@@ -1978,7 +1978,7 @@ namespace ECSEngine {
 				}
 			}
 
-			void* allocation = AllocateEx(allocator, total_size, alignof(void*), debug_info);
+			void* allocation = AllocateEx(allocator, total_size, alignof(typename Stream::T), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			new_stream.InitializeAndCopy(ptr, input);
 
@@ -2029,7 +2029,7 @@ namespace ECSEngine {
 				}
 			}
 
-			void* allocation = AllocateEx(allocator, total_size, alignof(void*), debug_info);
+			void* allocation = AllocateEx(allocator, total_size, alignof(ProjectedType), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			new_stream.InitializeAndCopy(ptr, input);
 
@@ -2146,9 +2146,32 @@ namespace ECSEngine {
 	template<typename Stream>
 	void StreamCoalescedInplaceDeepCopy(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		size_t allocation_size = StreamCoalescedInplaceDeepCopySize(input);
-		void* allocation = AllocateEx(allocator, allocation_size, alignof(void*), debug_info);
+		void* allocation = allocation_size > 0 ? AllocateEx(allocator, allocation_size, alignof(typename Stream::T), debug_info) : nullptr;
 		uintptr_t ptr = (uintptr_t)allocation;
 		return StreamCoalescedInplaceDeepCopy(input, ptr);
+	}
+
+	// It will write the elements in place
+	// For each entry it will create a temporary, deallocate the existing data
+	// And then assigning the copy
+	template<typename Stream>
+	void StreamCoalescedInplaceDeepCopyWithDeallocate(
+		Stream input,
+		AllocatorPolymorphic allocation_allocator,
+		AllocatorPolymorphic deallocation_allocator,
+		DebugInfo debug_info = ECS_DEBUG_INFO
+	) {
+		size_t allocation_size = StreamCoalescedInplaceDeepCopySize(input);
+		void* allocation = allocation_size > 0 ? AllocateEx(allocation_allocator, allocation_size, alignof(typename Stream::T), debug_info) : nullptr;
+		uintptr_t ptr = (uintptr_t)allocation;
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			size_t copy_size = input[index].CopySize();
+			if (copy_size > 0) {
+				auto copy = input[index].CopyTo(ptr);
+				input[index].Deallocate(deallocation_allocator);
+				input[index] = copy;
+			}
+		}
 	}
 
 	// The elements must have a void Deallocate(AllocatorPolymorphic allocator) function
@@ -2189,7 +2212,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < input.size; index++) {
 			input[index].ToString(string);
 			if (index < input.size - 1) {
-				string.AddStreamSafe(separator);
+				string.AddStreamAssert(separator);
 			}
 		}
 	}

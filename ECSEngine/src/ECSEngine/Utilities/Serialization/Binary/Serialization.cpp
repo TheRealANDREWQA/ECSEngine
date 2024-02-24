@@ -1113,7 +1113,7 @@ namespace ECSEngine {
 
 							size_t allocation_size = per_element_size * element_count;
 							AllocatorPolymorphic allocator_to_use = field_allocator.allocator != nullptr ? field_allocator : options->backup_allocator;
-							allocation = Allocate(allocator_to_use, allocation_size);
+							allocation = allocation_size == 0 ? nullptr : Allocate(allocator_to_use, allocation_size);
 
 							// Now write the corresponding pointers in the address
 							for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
@@ -2278,14 +2278,31 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						// Check user defined type
-						unsigned int nested_type_index = TypeIndex(field_definition);
-						// The nested type should be found
-						ECS_ASSERT(nested_type_index != -1);
+						// Check to see if the give size tag is specified
+						ulong2 given_size = GetReflectionTypeGivenFieldTag(field);
+						if (given_size.x != -1) {
+							// For this type of field, there is an extreme case that needs to be considered 
+							// When the field was changed, but it retained the same definition
+							// And the same byte size. If we don't return false here, we can potentially
+							// Have an incorrect return since the internal type might have changed its
+							// Internal representation but kept its byte size
 
-						const ReflectionType* nested_type = reflection_manager->GetType(field_definition);
-						if (!IsUnchanged(nested_type_index, reflection_manager, nested_type, name_remappings)) {
+							// TODO: Decide if we can skip the return false here. That would mean a
+							// Potentially faster load for deserializers, but it can result in missing
+							// A change for this extreme edge case
+							// For the time being, return false to be on the safer side
 							return false;
+						}
+						else {
+							// Check user defined type
+							unsigned int nested_type_index = TypeIndex(field_definition);
+							// The nested type should be found
+							ECS_ASSERT(nested_type_index != -1);
+
+							const ReflectionType* nested_type = reflection_manager->GetType(field_definition);
+							if (!IsUnchanged(nested_type_index, reflection_manager, nested_type, name_remappings)) {
+								return false;
+							}
 						}
 					}
 				}
@@ -2293,6 +2310,18 @@ namespace ECSEngine {
 		}
 
 		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	bool DeserializeFieldTable::IsBlittable(unsigned int type_index) const {
+		return types[type_index].is_blittable;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	size_t DeserializeFieldTable::TypeByteSize(unsigned int type_index) const {
+		return types[type_index].byte_size;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------

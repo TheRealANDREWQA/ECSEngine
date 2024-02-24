@@ -149,10 +149,17 @@ namespace ECSEngine {
 			if (data->write_data->write_data) {
 				// Hoist the indices check outside the for
 				if (data->indices.buffer == nullptr) {
-					for (size_t index = 0; index < element_count; index++) {
-						void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
-						// Use the serialize function now
-						Serialize(data->write_data->reflection_manager, data->reflection_type, element, *data->write_data->stream, &options);
+					// Use a fast path for blittable types
+					bool is_blittable = IsBlittable(data->reflection_type);
+					if (is_blittable) {
+						Write<true>(data->write_data->stream, data->data_to_write.buffer, element_count * data->element_byte_size);
+					}
+					else {
+						for (size_t index = 0; index < element_count; index++) {
+							void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
+							// Use the serialize function now
+							Serialize(data->write_data->reflection_manager, data->reflection_type, element, *data->write_data->stream, &options);
+						}
 					}
 				}
 				else {
@@ -163,42 +170,79 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				// Hoist the indices check outside the for
-				if (data->indices.buffer == nullptr) {
-					for (size_t index = 0; index < element_count; index++) {
-						void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
-						serialize_size += SerializeSize(data->write_data->reflection_manager, data->reflection_type, element, &options);
-					}
+				// Use a fast path for blittable types
+				bool is_blittable = IsBlittable(data->reflection_type);
+				if (is_blittable) {
+					serialize_size += element_count * data->element_byte_size;
 				}
 				else {
-					for (size_t index = 0; index < element_count; index++) {
-						void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
-						serialize_size += SerializeSize(data->write_data->reflection_manager, data->reflection_type, element, &options);
+					// Hoist the indices check outside the for
+					if (data->indices.buffer == nullptr) {
+						for (size_t index = 0; index < element_count; index++) {
+							void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
+							serialize_size += SerializeSize(data->write_data->reflection_manager, data->reflection_type, element, &options);
+						}
+					}
+					else {
+						for (size_t index = 0; index < element_count; index++) {
+							void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
+							serialize_size += SerializeSize(data->write_data->reflection_manager, data->reflection_type, element, &options);
+						}
 					}
 				}
 			}
 		}
 		// It has a custom serializer functor - use it
 		else if (data->custom_serializer_index != -1) {
+			// Use a fast path for blittable types
+			ReflectionCustomTypeIsBlittableData is_blittable_data;
+			is_blittable_data.definition = data->write_data->definition;
+			is_blittable_data.reflection_manager = data->write_data->reflection_manager;
+			bool is_blittable = ECS_REFLECTION_CUSTOM_TYPES[data->custom_serializer_index]->IsBlittable(&is_blittable_data);
 			// Hoist the indices check outside the for
 			if (data->indices.buffer == nullptr) {
-				for (size_t index = 0; index < element_count; index++) {
-					void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
-					data->write_data->data = element;
-					serialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].write(data->write_data);
+				if (!data->write_data->write_data && is_blittable) {
+					serialize_size += data->element_byte_size * element_count;
+				}
+				else {
+					if (is_blittable) {
+						if (data->write_data->write_data) {
+							// Memcpy directly
+							serialize_size += Write<true>(data->write_data->stream, data->data_to_write.buffer, element_count * data->element_byte_size);
+						}
+						else {
+							serialize_size += element_count * data->element_byte_size;
+						}
+					}
+					else {
+						for (size_t index = 0; index < element_count; index++) {
+							void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
+							data->write_data->data = element;
+							serialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].write(data->write_data);
+						}
+					}
 				}
 			}
 			else {
-				for (size_t index = 0; index < element_count; index++) {
-					void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
-					data->write_data->data = element;
-					serialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].write(data->write_data);
+				if (!data->write_data->write_data && is_blittable) {
+					serialize_size += data->element_byte_size * element_count;
+				}
+				else {
+					for (size_t index = 0; index < element_count; index++) {
+						void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
+						data->write_data->data = element;
+						serialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].write(data->write_data);
+					}
 				}
 			}
 		}
 		else {
 			if (data->stream_type != ReflectionStreamFieldType::Basic) {
 				// Serialize using known types - basic and stream based ones of primitive types
+				// PERFORMANCE TODO: Can we replace the loops with memcpys?
+				// If these are basic types, with no user defined ones and no nested streams,
+				// We can memcpy directly
+
 				ReflectionFieldInfo field_info;
 				field_info.basic_type = data->basic_type;
 				field_info.stream_type = data->stream_type;
@@ -359,16 +403,100 @@ namespace ECSEngine {
 					deserialize_size += data->elements_to_allocate * data->element_byte_size;
 
 					auto loop = [&](auto use_indices) {
-						for (size_t index = 0; index < data->element_count; index++) {
-							size_t offset = index;
-							if constexpr (use_indices) {
-								offset = data->indices[index];
+						// We need this separate case for the following reason
+						// Take this structure for example
+						// struct {
+						//   unsigned int a;
+						//	 unsigned short b;
+						// }
+						// It has a total byte size of 8, but if it were
+						// To be serialized using Serialize, it will write
+						// Only 6 bytes into the stream. If we are to use
+						// the bulk blittable with byte size of 8, then if
+						// We are to use the deserialize, it will be skipping
+						// Only 6 bytes per entry, instead of the full 8. So
+						// We need to account for this fact
+						unsigned int field_table_index = data->read_data->options->field_table->TypeIndex(data->reflection_type->name);
+						ECS_ASSERT(field_table_index != -1, "Corrupt deserialization file");
+						bool is_file_blittable = data->read_data->options->field_table->IsBlittable(field_table_index);
+						if (is_file_blittable) {
+							size_t file_blittable_size = data->read_data->options->field_table->TypeByteSize(field_table_index);
+							// Check to see if the type has changed. It hasn't changed, we can memcpy directly
+							// If we don't have any indices
+							bool is_unchanged = data->read_data->options->field_table->IsUnchanged(
+								field_table_index,
+								data->read_data->reflection_manager,
+								data->reflection_type
+							);
+
+							if constexpr (!use_indices) {
+								if (is_unchanged) {
+									// Can memcpy directly
+									Read<true>(data->read_data->stream, buffer, data->element_count * data->element_byte_size);
+								}
+								else {
+									// Need to deserialize every element
+									// But take into account the file deserialization byte size
+									// For the ptr stream offset
+									for (size_t index = 0; index < data->element_count; index++) {
+										uintptr_t initial_ptr = *data->read_data->stream;
+										void* element = OffsetPointer(buffer, data->element_byte_size * index);
+										ECS_DESERIALIZE_CODE code = Deserialize(
+											data->read_data->reflection_manager, 
+											data->reflection_type, 
+											element, 
+											*data->read_data->stream, 
+											&options
+										);
+										if (code != ECS_DESERIALIZE_OK) {
+											deallocate_buffer();
+											return -1;
+										}
+										*data->read_data->stream = initial_ptr + file_blittable_size;
+									}
+								}
 							}
-							void* element = OffsetPointer(buffer, data->element_byte_size * offset);
-							ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->reflection_type, element, *data->read_data->stream, &options);
-							if (code != ECS_DESERIALIZE_OK) {
-								deallocate_buffer();
-								return -1;
+							else {
+								if (is_unchanged) {
+									// Can memcpy into each index, but cannot as a whole
+									for (size_t index = 0; index < data->element_count; index++) {
+										void* element = OffsetPointer(buffer, data->element_byte_size * data->indices[index]);
+										Read<true>(data->read_data->stream, element, file_blittable_size);
+									}
+								}
+								else {
+									// Cannot memcpy directly
+									for (size_t index = 0; index < data->element_count; index++) {
+										uintptr_t initial_ptr = *data->read_data->stream;
+										void* element = OffsetPointer(buffer, data->element_byte_size * data->indices[index]);
+										ECS_DESERIALIZE_CODE code = Deserialize(
+											data->read_data->reflection_manager,
+											data->reflection_type,
+											element,
+											*data->read_data->stream,
+											&options
+										);
+										if (code != ECS_DESERIALIZE_OK) {
+											deallocate_buffer();
+											return -1;
+										}
+										*data->read_data->stream = initial_ptr + file_blittable_size;
+									}
+								}
+							}
+						}
+						else {
+							for (size_t index = 0; index < data->element_count; index++) {
+								size_t offset = index;
+								if constexpr (use_indices) {
+									offset = data->indices[index];
+								}
+								void* element = OffsetPointer(buffer, data->element_byte_size * offset);
+								ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->reflection_type, element, *data->read_data->stream, &options);
+								if (code != ECS_DESERIALIZE_OK) {
+									deallocate_buffer();
+									return -1;
+								}
 							}
 						}
 						return 0;
@@ -414,9 +542,10 @@ namespace ECSEngine {
 				bool previous_was_allocated = data->read_data->was_allocated;
 				data->read_data->was_allocated = true;
 				if (data->read_data->read_data) {
-					void* buffer = AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size);
+					size_t allocate_size = data->elements_to_allocate * data->element_byte_size;
+					void* buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size) : nullptr;
 					*data->allocated_buffer = buffer;
-					deserialize_size += data->elements_to_allocate * data->element_byte_size;
+					deserialize_size += allocate_size;
 				}
 
 				auto loop = [&](auto use_indices) {
@@ -521,10 +650,11 @@ namespace ECSEngine {
 				if (data->read_data->read_data) {
 					if (!single_instance) {
 						// No need to change the was_allocated field since we are reading blittable types
-						*data->allocated_buffer = AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size);
+						size_t allocate_size = data->elements_to_allocate * data->element_byte_size;
+						*data->allocated_buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size) : nullptr;
 
 						if (data->indices.buffer == nullptr) {
-							Read<true>(data->read_data->stream, *data->allocated_buffer, data->element_count * data->element_byte_size);
+							Read<true>(data->read_data->stream, *data->allocated_buffer, allocate_size);
 						}
 						else {
 							for (size_t index = 0; index < data->element_count; index++) {
@@ -670,14 +800,16 @@ namespace ECSEngine {
 			string_offset = sizeof("CapacityStream<") - 1;
 			if (data->read_data) {
 				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
-				*stream_size = buffer_count;
+				*stream_size = buffer_count; // This is the size field
+				stream_size[1] = buffer_count; // This is the capacity field
 			}
 		}
 		else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
 			string_offset = sizeof("ResizableStream<") - 1;
 			if (data->read_data) {
 				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
-				*stream_size = buffer_count;
+				*stream_size = buffer_count; // This is the size field
+				stream_size[1] = buffer_count; // This is the capacity field
 			}
 		}
 		else {
