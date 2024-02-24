@@ -575,6 +575,8 @@ ConvexHull GiftWrappingConvexHull(Stream<float3> vertex_positions, AllocatorPoly
 	ConvexHull convex_hull;
 	convex_hull.Initialize(allocator, MAX_VERTICES, MAX_VERTICES * 2, MAX_VERTICES);
 
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_temporary_allocator, ECS_KB * 64, ECS_MB * 4);
+
 	struct ImplFunctor {
 		unsigned int AddOrFindVertex(float3 position) {
 			convex_hull->ReserveVertices(allocator);
@@ -586,10 +588,10 @@ ConvexHull GiftWrappingConvexHull(Stream<float3> vertex_positions, AllocatorPoly
 			convex_hull->ReserveFaces(allocator);
 			unsigned int edge_index = convex_hull->FindEdge(A_index, B_index);
 			if (edge_index != -1) {
-				convex_hull->AddTriangleToEdge(edge_index, C_index, mesh_center);
+				convex_hull->AddTriangleToEdge(edge_index, C_index, mesh_center, temporary_allocator);
 			}
 			else {
-				convex_hull->AddTriangle(A_index, B_index, C_index, mesh_center);
+				convex_hull->AddTriangle(A_index, B_index, C_index, mesh_center, temporary_allocator);
 			}
 		}
 
@@ -603,17 +605,16 @@ ConvexHull GiftWrappingConvexHull(Stream<float3> vertex_positions, AllocatorPoly
 
 		ConvexHull* convex_hull;
 		AllocatorPolymorphic allocator;
+		AllocatorPolymorphic temporary_allocator;
 		float3 mesh_center;
 	};
 
-	GiftWrappingImpl(vertex_positions, ImplFunctor{ &convex_hull, allocator, float3::Splat(FLT_MAX) });
-
-	// Calculate the mesh center, such that we can use it to retarget normals away
-	// From the center
-	float3 mesh_center = CalculateFloat3Midpoint(vertex_positions);
+	GiftWrappingImpl(vertex_positions, ImplFunctor{ &convex_hull, allocator, &stack_temporary_allocator, float3::Splat(FLT_MAX) });
 
 	// Resize such that the buffers don't consume unnecessary memory
 	convex_hull.Resize(allocator, convex_hull.vertex_size, convex_hull.edges.size, convex_hull.faces.size);
+	convex_hull.RemoveDegenerateEdges(allocator);
+	convex_hull.ReallocateFaces(allocator);
 
 	return convex_hull;
 }

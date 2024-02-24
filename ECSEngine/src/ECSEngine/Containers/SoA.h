@@ -39,7 +39,7 @@ namespace ECSEngine {
 
 	template<typename CountSize, typename FirstPointer, typename... Pointers>
 	void SoARemoveSwapBack(CountSize& count, size_t index, FirstPointer first_pointer, Pointers... pointers) {
-		first_pointer[index] = first_pointer[count];
+		first_pointer[index] = first_pointer[count - 1];
 		
 		if constexpr (sizeof...(Pointers) > 0) {
 			SoARemoveSwapBack(count, index, pointers...);

@@ -68,6 +68,11 @@ namespace ECSEngine {
 			Stream<DeserializeTypeNameRemapping> name_remappings = { nullptr, 0 }
 		) const;
 
+		// Returns true if the reflected type from the serialization is blittable, else false
+		bool IsBlittable(unsigned int type_index) const;
+
+		size_t TypeByteSize(unsigned int type_index) const;
+
 		// Writes all types into the reflection manager. A stack allocator should be passed such that small allocations can be made
 		// Can optionally specify if the names and the definition for the fields are allocated from the given allocator
 		void ToNormalReflection(

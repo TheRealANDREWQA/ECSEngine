@@ -880,12 +880,16 @@ void SandboxApplyEntityChanges(
 	Stream<EntityChange> changes
 );
 
+// The boolean flag indicates whether or not it should delete
+// The previous instance if it is unreferenced. This should be left at true
+// Mostly, unless you have a specific reason to maintain the previous instance
 void SetSandboxEntitySharedInstance(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Entity entity, 
 	Component component, 
 	SharedInstance instance,
+	bool delete_previous_instance_if_unreferenced = true,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 

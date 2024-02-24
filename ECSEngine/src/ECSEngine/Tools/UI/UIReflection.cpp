@@ -88,10 +88,10 @@ namespace ECSEngine {
 
 		void UIReflectionStreamIntInputGroup(UIReflectionFieldDrawData* draw_data);
 
+		void UIReflectionStreamUserDefined(UIReflectionFieldDrawData* draw_data);
+
 		void UIReflectionStreamNotImplemented(UIReflectionFieldDrawData* draw_data) {
-			//ECS_ASSERT(false, "This UIReflection stream field is invalid");
-			// Add the moment, don't do anything
-			draw_data->drawer->NextRow();
+			ECS_ASSERT(false, "This UIReflection stream field is invalid");
 		}
 
 		// ------------------------------------------------------------ Stream ----------------------------------------------------------------------
@@ -195,7 +195,7 @@ namespace ECSEngine {
 			UIReflectionStreamComboBox,
 			UIReflectionStreamDirectoryInput,
 			UIReflectionStreamFileInput,
-			UIReflectionStreamNotImplemented,
+			UIReflectionStreamUserDefined,
 			UIReflectionStreamNotImplemented
 		};
 
@@ -1099,7 +1099,6 @@ namespace ECSEngine {
 				if (!base_data->stream.use_standalone_mode) {
 					base_data->stream.WriteTarget();
 				}
-				drawer.NextRow(-1.0f);
 			}
 		}
 
@@ -1808,6 +1807,25 @@ namespace ECSEngine {
 			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, GROUP);
 
 #undef GROUP
+		}
+
+		void UIReflectionStreamUserDefined(UIReflectionFieldDrawData* draw_data) {
+			// TODO: Properly handle this? We need to create a new instance for each
+			// Entry and must detect automatically when to create a new instance and
+			// Delete unreferenced ones
+			UIReflectionStreamUserDefinedData* data = (UIReflectionStreamUserDefinedData*)draw_data->data;
+			// Display just the size and capacity, if it has one
+			// But with the input disabled
+			UIConfigActiveState previous_active_state;
+			UIConfigActiveState active_state;
+			active_state.state = false;
+			SetConfigParameter(draw_data->configuration, *draw_data->config, active_state, previous_active_state);
+			// At the moment, don't draw anything for the rows
+			draw_data->drawer->Array<CapacityStream<bool>>(draw_data->configuration | UI_CONFIG_ACTIVE_STATE, 0, *draw_data->config, draw_data->config,
+				draw_data->name, (CapacityStream<bool>*)data->base_data.stream.capacity, nullptr, 
+				[](UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData data) {}
+			);
+			RemoveConfigParameter(draw_data->configuration, *draw_data->config, previous_active_state);
 		}
 
 		// ------------------------------------------------------------- Stream ----------------------------------------------------------

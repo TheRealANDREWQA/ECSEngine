@@ -1915,12 +1915,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	// Type punned with the unique data
-	struct ReflectionSerializeSharedComponentData {
-		const Reflection::ReflectionManager* reflection_manager;
-		const Reflection::ReflectionType* type;
-		bool is_trivially_copyable;
-	};
+	typedef ReflectionSerializeComponentData ReflectionSerializeSharedComponentData;
 
 	static_assert(sizeof(ReflectionSerializeSharedComponentData) == sizeof(ReflectionSerializeComponentData),
 		"Both reflection serialize structures must be the same");
@@ -1956,6 +1951,11 @@ namespace ECSEngine {
 		// This allocator is used for the field table
 		AllocatorPolymorphic allocator;
 		bool is_unchanged_and_blittable;
+		// We need this flag because we need a bit of special handling
+		// For the blittable case
+		bool is_file_blittable;
+		// This is used only by the is_file_blittable case
+		size_t file_byte_size;
 	};
 
 	bool ReflectionDeserializeEntityManagerComponent(DeserializeEntityManagerComponentData* data) {
@@ -1979,13 +1979,43 @@ namespace ECSEngine {
 
 			uintptr_t ptr = (uintptr_t)data->file_data;
 			void* current_component = data->components;
-			for (unsigned int index = 0; index < data->count; index++) {
-				ECS_DESERIALIZE_CODE code = Deserialize(functor_data->reflection_manager, functor_data->type, current_component, ptr, &options);
-				if (code != ECS_DESERIALIZE_OK) {
-					return false;
-				}
 
-				current_component = OffsetPointer(current_component, type_byte_size);
+			// Hoist the if outside the for
+			if (functor_data->is_file_blittable) {
+				// We need this separate case for the following reason
+				// Take this structure for example
+				// struct {
+				//   unsigned int a;
+				//	 unsigned short b;
+				// }
+				// It has a total byte size of 8, but if it were
+				// To be serialized using Serialize, it will write
+				// Only 6 bytes into the stream. If we are to use
+				// the bulk blittable with byte size of 8, then if
+				// We are to use the deserialize, it will be skipping
+				// Only 6 bytes per entry, instead of the full 8. So
+				// We need to account for this fact
+				for (unsigned int index = 0; index < data->count; index++) {
+					uintptr_t initial_ptr = ptr;
+					ECS_DESERIALIZE_CODE code = Deserialize(functor_data->reflection_manager, functor_data->type, current_component, ptr, &options);
+					if (code != ECS_DESERIALIZE_OK) {
+						return false;
+					}
+
+					current_component = OffsetPointer(current_component, type_byte_size);
+					// We can directly assign to it
+					ptr = initial_ptr + functor_data->file_byte_size;
+				}
+			}
+			else {
+				for (unsigned int index = 0; index < data->count; index++) {
+					ECS_DESERIALIZE_CODE code = Deserialize(functor_data->reflection_manager, functor_data->type, current_component, ptr, &options);
+					if (code != ECS_DESERIALIZE_OK) {
+						return false;
+					}
+
+					current_component = OffsetPointer(current_component, type_byte_size);
+				}
 			}
 			// This line is useful for linked components
 			data->file_data = (void*)ptr;
@@ -2031,6 +2061,9 @@ namespace ECSEngine {
 		else {
 			functor_data->is_unchanged_and_blittable = false;
 		}
+		functor_data->is_file_blittable = functor_data->field_table.IsBlittable(type_index);
+		functor_data->file_byte_size = functor_data->field_table.TypeByteSize(type_index);
+
 		return true;
 	}
 

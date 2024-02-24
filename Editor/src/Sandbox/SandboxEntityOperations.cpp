@@ -58,12 +58,17 @@ void AddSandboxEntitySharedComponent(
 	Component component = editor_state->editor_components.GetComponentID(component_name);
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
+			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
+
 			if (instance.value == -1) {
 				// If there is a build function, we must call the build function after finding this instance
 				// This instance should be valid only for this entity
 				instance = GetSandboxSharedComponentDefaultInstance(editor_state, sandbox_index, component, viewport);
 				EditorModuleComponentBuildEntry build_entry = GetModuleComponentBuildEntry(editor_state, component_name);
 				if (build_entry.entry.function != nullptr) {
+					// Need to add the component now or the build entry might fail if there
+					// Are no matching entities
+					entity_manager->AddSharedComponentCommit(entity, component, instance);
 					CallModuleComponentBuildFunctionShared(
 						editor_state, 
 						sandbox_index, 
@@ -73,13 +78,15 @@ void AddSandboxEntitySharedComponent(
 						entity
 					);
 				}
+				else {
+					entity_manager->AddSharedComponentCommit(entity, component, instance);
+				}
+			}
+			else {
+				entity_manager->AddSharedComponentCommit(entity, component, instance);
 			}
 
-			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
-
-			entity_manager->AddSharedComponentCommit(entity, component, instance);
 			entity_manager->DestroyArchetypeBaseEmptyCommit(previous_info.main_archetype, previous_info.base_archetype, true);
-
 			SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 		}
 	}
@@ -2649,13 +2656,19 @@ void SetSandboxEntitySharedInstance(
 	Entity entity, 
 	Component component, 
 	SharedInstance instance,
+	bool delete_previous_instance_if_unreferenced,
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity)) {
 		if (entity_manager->ExistsSharedInstance(component, instance)) {
-			entity_manager->ChangeEntitySharedInstanceCommit(entity, component, instance, false, true);
+			// It might be the same instance, in the case where a build function
+			// Is run when a new shared component is added to an entity
+			SharedInstance previous_instance = entity_manager->ChangeEntitySharedInstanceCommit(entity, component, instance, true, true);
+			if (delete_previous_instance_if_unreferenced && previous_instance != instance) {
+				entity_manager->UnregisterUnreferencedSharedInstanceCommit(component, previous_instance);
+			}
 		}
 	}
 }

@@ -1350,7 +1350,14 @@ static void DrawComponents(
 						);
 					}
 				}
-				ui_drawer->BindInstancePtrs(instance, current_component);
+				// There is a special case here. If this is a shared component without any link, we must
+				// Bind the pointers to the allocated pointer, not the component one
+				if (data->IsSharedComponentAndNoLink(editor_state, current_component_name)) {
+					ui_drawer->BindInstancePtrs(instance, data->created_instances[created_instance_index].pointer_bound);
+				}
+				else {
+					ui_drawer->BindInstancePtrs(instance, current_component);
+				}
 				if (link_component.size > 0) {
 					// We need a different modify value handler since we need to
 					// Not increment the reference count of the asset in runtime mode when it is already loaded
@@ -1435,7 +1442,10 @@ static void DrawComponents(
 
 			unsigned int instance_index = data->FindCreatedInstance(instance->name);
 			ECS_ASSERT(instance_index != -1);
-			if (data->created_instances[instance_index].pointer_bound != current_component) {
+			bool is_shared_no_link = data->IsSharedComponentAndNoLink(editor_state, current_component_name);
+			// If it is shared no link, we don't need to rebind since we use a wrapper component
+			// That modifies the actual shared instances using the callback
+			if (!is_shared_no_link && data->created_instances[instance_index].pointer_bound != current_component) {
 				data->created_instances[instance_index].pointer_bound = current_component;
 				ui_drawer->RebindInstancePtrs(instance, current_component);
 				set_instance_inputs();
@@ -1600,6 +1610,9 @@ static void DrawAddComponentMenu(
 void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
 	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
+
+	float previous_row_y_offset = drawer->layout.next_row_y_offset;
+	drawer->SetNextRowYOffset(previous_row_y_offset * 0.75f);
 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 	// Check to see if the entity or global component still exists - else revert to draw nothing
@@ -1910,6 +1923,8 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			shared_signature
 		);
 	}
+
+	drawer->SetNextRowYOffset(previous_row_y_offset);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

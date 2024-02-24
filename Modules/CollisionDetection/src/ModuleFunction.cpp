@@ -176,17 +176,18 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
 		data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.05f, nr.buffer, ECS_COLOR_ORANGE);
 	}
-	for (size_t index = 0; index < transformed_hull.edges.size; index++) {
+	unsigned int edge_count = collider->hull_size > transformed_hull.edges.size ? transformed_hull.edges.size : collider->hull_size;
+	for (size_t index = 0; index < edge_count; index++) {
 		Line3D line = transformed_hull.GetEdgePoints(index);
 		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
 	}
 	for (size_t index = 0; index < transformed_hull.faces.size; index++) {
 		float3 normal = transformed_hull.faces[index].plane.normal;
 		float3 center = float3::Splat(0.0f);
-		for (unsigned int subindex = 0; subindex < transformed_hull.faces[index].point_count; subindex++) {
+		/*for (unsigned int subindex = 0; subindex < transformed_hull.faces[index].point_count; subindex++) {
 			center += transformed_hull.GetPoint(transformed_hull.faces[index].points[subindex]);
 		}
-		center /= float3::Splat(transformed_hull.faces[index].point_count);
+		center /= float3::Splat(transformed_hull.faces[index].point_count);*/
 		//data->debug_drawer->AddLineThread(data->thread_id, center, center + normal * 1.0f, ECS_COLOR_AQUA);
 		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
 		//data->debug_drawer->AddStringThread(data->thread_id, center, float3(0.0f, 0.0f, -1.0f), 0.025f, nr.buffer, ECS_COLOR_ORANGE);

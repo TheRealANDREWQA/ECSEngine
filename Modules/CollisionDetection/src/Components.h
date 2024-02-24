@@ -78,7 +78,7 @@ struct ECS_REFLECT_COMPONENT ConvexCollider {
 	}
 
 	constexpr static ECS_INLINE bool IsShared() {
-		return false;
+		return true;
 	}
 
 	constexpr static ECS_INLINE size_t AllocatorSize() {
