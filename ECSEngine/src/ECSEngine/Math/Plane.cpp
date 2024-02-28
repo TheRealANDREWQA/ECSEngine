@@ -299,6 +299,6 @@ namespace ECSEngine {
 		// Cross products, if they have large magnitudes, we could miss the coplanarity due to the relative
 		// High product value
 		PlaneScalar ABC_plane = ComputePlane(A, B, C);
-		return CompareMaskSingle<float>(DistanceToPlane(ABC_plane, D), 0.0f);
+		return CompareMaskSingle<float>(DistanceToPlane(ABC_plane, D), 0.0f, 0.001f);
 	}
 }

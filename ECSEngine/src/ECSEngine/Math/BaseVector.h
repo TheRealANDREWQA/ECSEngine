@@ -13,6 +13,8 @@ namespace ECSEngine {
 	*/
 
 	struct ECSENGINE_API Vector3 {
+		typedef Vec8f T;
+
 		ECS_INLINE Vector3() {}
 		ECS_INLINE Vector3(Vec8f _x, Vec8f _y, Vec8f _z) : x(_x), y(_y), z(_z) {}
 
@@ -91,7 +93,7 @@ namespace ECSEngine {
 		void Set(float3 value, size_t index);
 
 		// The value will be replicated across all slots
-		Vector3& Splat(float3 value);
+		static Vector3 Splat(float3 value);
 
 		static Vector3 Splat(Vec8f value);
 
@@ -166,6 +168,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API Vector4 {
+		typedef Vec8f T;
+
 		ECS_INLINE Vector4() {}
 		ECS_INLINE Vector4(float4 single_value) : x(single_value.x), y(single_value.y), z(single_value.z), w(single_value.w) {}
 		ECS_INLINE Vector4(Vector3 xyz, Vec8f _w) : x(xyz.x), y(xyz.y), z(xyz.z), w(_w) {}
@@ -326,6 +330,14 @@ namespace ECSEngine {
 	
 	typedef Vec8fb SIMDVectorMask;
 
+	ECS_INLINE bool ECS_VECTORCALL IsAnySet(SIMDVectorMask mask) {
+		return horizontal_or(mask);
+	}
+
+	ECS_INLINE bool ECS_VECTORCALL AreAllSet(SIMDVectorMask mask) {
+		return horizontal_and(mask);
+	}
+
 	struct ECSENGINE_API VectorMask {
 		ECS_INLINE VectorMask() {}
 		ECS_INLINE VectorMask(int _value) : value(_value) {}
@@ -388,6 +400,14 @@ namespace ECSEngine {
 			else {
 				value &= ~(1 << index);
 			}
+		}
+
+		// Write the bits into bytes, for a given count
+		void WriteBooleans(bool* values, int count) const;
+		
+		// Writes all the bits as a compressed byte
+		ECS_INLINE void WriteCompressedMask(unsigned char* byte_value) const {
+			*byte_value = value;
 		}
 
 		int value;

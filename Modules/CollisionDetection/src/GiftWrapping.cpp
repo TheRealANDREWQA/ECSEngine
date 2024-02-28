@@ -72,6 +72,30 @@ static VertexConnections* GetVertexConnection(VertexConnectionTable* table, unsi
 }
 
 // If the last connections is specified, then it will return the last connection in the chain
+// Const variant
+template<bool early_exit = false, typename Functor>
+static bool ForEachVertexConnection(const VertexConnections* connections, Functor&& functor, const VertexConnections** last_connection = nullptr) {
+	if (last_connection != nullptr) {
+		*last_connection = connections;
+	}
+	while (connections != nullptr) {
+		if constexpr (early_exit) {
+			if (functor(connections)) {
+				return true;
+			}
+		}
+		else {
+			functor(connections);
+		}
+		if (last_connection != nullptr) {
+			*last_connection = connections;
+		}
+		connections = connections->next_connections;
+	}
+	return false;
+}
+
+// If the last connections is specified, then it will return the last connection in the chain
 template<bool early_exit = false, typename Functor>
 static bool ForEachVertexConnection(VertexConnections* connections, Functor&& functor, VertexConnections** last_connection = nullptr) {
 	if (last_connection != nullptr) {
@@ -136,14 +160,24 @@ static unsigned int FindPointThatEnclosesEdge(
 	unsigned int edge_1, 
 	unsigned int edge_2, 
 	unsigned int pivot_edge_other_point, 
-	AllocatorPolymorphic allocator
+	AllocatorPolymorphic allocator,
+	const ProcessedEdgeTable* processed_edges
 ) {
 	VertexConnections* edge_1_connection = GetVertexConnection(table, edge_1, allocator);
+	// Early exit if any of these do not have entries
+	if (edge_1_connection->entry_count == 0) {
+		return -1;
+	}
 	VertexConnections* edge_2_connection = GetVertexConnection(table, edge_2, allocator);
+	if (edge_2_connection->entry_count == 0) {
+		return -1;
+	}
+
 	unsigned int final_connection = -1;
 
-	float3 edge_normalized_direction = Normalize(points[edge_2] - points[edge_1]);
 	float3 edge_start = points[edge_1];
+	float3 edge_end = points[edge_2];
+	float3 edge_normalized_direction = Normalize(edge_end - edge_start);
 	float3 reference_point = points[pivot_edge_other_point];
 
 	// For each connection in edge 1, check to see if it appears in the edge_2
@@ -166,19 +200,58 @@ static unsigned int FindPointThatEnclosesEdge(
 				// We pivoted around AC from the ACD triangle and found B. We need to add ACD,
 				// And we see that it belongs to a point that is on the same side of the line AB
 				// As the C point. So reject it. We need to have points that are on different sides
-				bool is_same_side = PointSameLineHalfPlaneNormalized(edge_start, edge_normalized_direction, reference_point, points[current_connection]);
-				if (!is_same_side) {
-					bool exists_edge_2 = ForEachVertexConnection<true>(edge_2_connection, [&](VertexConnections* second_connection) {
-						for (unsigned int subindex = 0; subindex < second_connection->entry_count; subindex++) {
-							if (current_connection == second_connection->entries[subindex]) {
-								return true;
+
+				// There is another invalid case
+				// Take this example
+				//        C
+				//         \
+				// A        \
+				// | \ \     \
+				// |  \ \     B
+				// |   \  D  /
+				// |    \ | /
+				// |     \|/
+				// F ---- E
+				//
+				// We are pivoting around BC and we find A. AE already has 2 faces, ADE and AFE.
+				// When enclosing the AB edge, we would find the point E as a valid candidate
+				// For believing that we are enclosing another triangle, when in reality we are not
+				// What we need to do, is to see if the edges AE and AB face only 1 edges associated with them
+				// Since AE has 2 faces, it must appear 2 times in the edge table
+
+				// Verify the count first
+				unsigned int connection_edge_count_1 = 0;
+				unsigned int connection_edge_count_2 = 0;
+				
+				EdgeTablePair connection_edge = { edge_1, current_connection };
+				connection_edge_count_1 += processed_edges->Find(connection_edge) != -1;
+				EdgeTablePair reversed_connection_edge = { current_connection, edge_1 };
+				connection_edge_count_1 += processed_edges->Find(reversed_connection_edge) != -1;
+
+				if (connection_edge_count_1 > 1) {
+					continue;
+				}
+
+				EdgeTablePair second_connection_edge = { edge_2, current_connection };
+				connection_edge_count_2 += processed_edges->Find(second_connection_edge) != -1;
+				EdgeTablePair reversed_second_connection_edge = { current_connection, edge_2 };
+				connection_edge_count_2 += processed_edges->Find(reversed_second_connection_edge) != -1;
+
+				if (connection_edge_count_2 == 1) {
+					bool is_same_side = PointSameLineHalfPlaneNormalized(edge_start, edge_normalized_direction, reference_point, points[current_connection]);
+					if (!is_same_side) {
+						bool has_connection = ForEachVertexConnection<true>(edge_2_connection, [&](VertexConnections* second_connection) {
+							for (unsigned int subindex = 0; subindex < second_connection->entry_count; subindex++) {
+								if (current_connection == second_connection->entries[subindex]) {
+									return true;
+								}
 							}
+							return true;
+							});
+						if (has_connection) {
+							final_connection = current_connection;
+							return true;
 						}
-						return false;
-						});
-					if (exists_edge_2) {
-						final_connection = current_connection;
-						return true;
 					}
 				}
 			}
@@ -186,6 +259,67 @@ static unsigned int FindPointThatEnclosesEdge(
 		return false;
 	});
 	return final_connection;
+}
+
+// Calls the functor for each triangle that the vertex is part of
+// The functor should have as arguments (uint3 indices)
+// The x index is always going to be the vertex
+template<bool early_exit = false, typename Functor>
+static bool ForEachTriangleForPoint(const VertexConnectionTable* table, unsigned int vertex, Functor&& functor) {
+	const VertexConnections* connection;
+	if (table->TryGetValuePtr(vertex, connection)) {
+		if (connection->entry_count > 0) {
+			// Flatten the connections in a single array
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 8, ECS_MB);
+			unsigned int vertex_connection_count = 0;
+			ForEachVertexConnection(connection, [&vertex_connection_count](const VertexConnections* connection) {
+				vertex_connection_count += connection->entry_count;
+				});
+			unsigned int* vertex_connections = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * vertex_connection_count);
+			unsigned int offset = 0;
+			ForEachVertexConnection(connection, [&](const VertexConnections* connection) {
+				for (unsigned int index = 0; index < connection->entry_count; index++) {
+					vertex_connections[offset + index] = connection->entries[index];
+				}
+				offset += connection->entry_count;
+				});
+
+			// For each entry in the connections, verify if it has a paired connection
+			for (unsigned int index = 0; index < vertex_connection_count; index++) {
+				const VertexConnections* current_neighbour;
+				unsigned int neighbour = vertex_connections[index];
+				if (table->TryGetValuePtr(neighbour, current_neighbour)) {
+					if (current_neighbour->entry_count > 0) {
+						bool should_early_exit = ForEachVertexConnection<early_exit>(current_neighbour, [&](const VertexConnections* neighbour_connections) {
+							for (unsigned int neighbour_index = 0; neighbour_index < neighbour_connections->entry_count; neighbour_index++) {
+								// Check to see if it appears in the original vertex connection
+								unsigned int neighbour_connection_value = neighbour_connections->entries[neighbour_index];
+								for (unsigned int original_connection_index = 0; original_connection_index < vertex_connection_count; original_connection_index++) {
+									if (original_connection_index != index && vertex_connections[original_connection_index] == neighbour_connection_value) {
+										if constexpr (early_exit) {
+											if (functor({ vertex, neighbour, neighbour_connection_value })) {
+												return true;
+											}
+										}
+										else {
+											functor({ vertex, neighbour, neighbour_connection_value });
+										}
+									}
+								}
+							}
+							return false;
+						});
+						if constexpr (early_exit) {
+							if (should_early_exit) {
+								return true;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return false;
 }
 
 // Returns the index of the next edge
@@ -238,11 +372,14 @@ static size_t FindInitialNextPoint(float3 a, float3 b, size_t a_index, size_t b_
 
 // We need the processed edges in order to not consider points
 // Which already have edges with the current edge, in this case AB
+template<typename Functor>
 static size_t FindNextPointAroundTriangleEdge(
 	size_t a_index, 
 	size_t b_index, 
 	size_t c_index, 
-	Stream<float3> points
+	Stream<float3> points,
+	const VertexConnectionTable* connection_table,
+	Functor&& functor
 ) {
 	// Here, we record the point that forms the largest convex angle
 	// With the triangle edge
@@ -280,6 +417,7 @@ static size_t FindNextPointAroundTriangleEdge(
 			// Plane as ABC and on the same side of the edge BC). This is the desired behaviour. It works for
 			// Both points above and below the ABC plane.
 
+			// PERFORMANCE TODO: SIMD-ize this, since it is quite easy
 			
 			float3 d = points[index];
 			// Here, a - d was chosen instead of d - a since this version correctly detects
@@ -296,7 +434,7 @@ static size_t FindNextPointAroundTriangleEdge(
 			if (current_angle_dot > angle_dot || (angle_dot - current_angle_dot) < 0.0000001f) {
 				// Test for some degenerate cases where collinear points are chosen
 				// We need quite a significant epsilon value
-				bool is_collinear = IsPointCollinear(a, b, d, 0.0015f);
+				bool is_collinear = IsPointCollinearDirection(a, normalized_ab, d, 0.0015f);
 				if (!is_collinear) {
 					// We need to use max in case this value is slighly less. We want to keep
 					// The greater value as representative for the angle
@@ -324,7 +462,8 @@ template<typename Functor>
 void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 	ECS_ASSERT(vertex_positions.size < UINT_MAX, "Gift wrapping for meshes with more than 4GB vertices is not available");
 
-	WeldVertices(vertex_positions, float3::Splat(0.15f), true);
+	// TODO: Is averaging better than snapping?
+	WeldVertices<ECS_WELD_VERTICES_AVERAGE>(vertex_positions, float3::Splat(0.075f), true);
 
 	float3 mesh_center = CalculateFloat3Midpoint(vertex_positions);
 	functor.SetMeshCenter(mesh_center);
@@ -403,12 +542,14 @@ void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 			active_edge.point_a_index,
 			active_edge.point_b_index,
 			active_edge.point_c_index,
-			vertex_positions
+			vertex_positions,
+			&vertex_connection_table,
+			functor
 		);
 		if (new_point_index == -1) {
 			break;
 		}
-		ECS_ASSERT(new_point_index != -1, "Could not gift wrapp the given mesh");
+		//ECS_ASSERT(new_point_index != -1, "Could not gift wrapp the given mesh");
 		unsigned int unew_point_index = new_point_index;
 
 		// For each edge, we must check both versions (a, b) and (b, a) since the order matters
@@ -443,7 +584,8 @@ void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 						active_edge.point_a_index,
 						active_edge.point_b_index,
 						active_edge.point_c_index,
-						&function_allocator
+						&function_allocator,
+						&processed_edge_table
 					);
 					if (existing_connection == -1) {
 						active_edges.Add(active_edge);
@@ -608,13 +750,14 @@ ConvexHull GiftWrappingConvexHull(Stream<float3> vertex_positions, AllocatorPoly
 		AllocatorPolymorphic temporary_allocator;
 		float3 mesh_center;
 	};
-
+	
 	GiftWrappingImpl(vertex_positions, ImplFunctor{ &convex_hull, allocator, &stack_temporary_allocator, float3::Splat(FLT_MAX) });
 
 	// Resize such that the buffers don't consume unnecessary memory
 	convex_hull.Resize(allocator, convex_hull.vertex_size, convex_hull.edges.size, convex_hull.faces.size);
 	convex_hull.RemoveDegenerateEdges(allocator);
 	convex_hull.ReallocateFaces(allocator);
+	convex_hull.CalculateAndAssignCenter();
 
 	return convex_hull;
 }

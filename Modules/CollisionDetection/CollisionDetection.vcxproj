@@ -191,6 +191,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\Quickhull.cpp" />
+    <ClCompile Include="src\SAT.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Broadphase.h" />
@@ -205,6 +206,7 @@
     <ClInclude Include="src\Narrowphase.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\Quickhull.h" />
+    <ClInclude Include="src\SAT.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

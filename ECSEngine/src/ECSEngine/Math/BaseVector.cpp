@@ -223,12 +223,13 @@ namespace ECSEngine {
 		z = BlendSingleSwitch(z, broadcast_z, index);
 	}
 
-	Vector3& Vector3::Splat(float3 value)
+	Vector3 Vector3::Splat(float3 value)
 	{
-		x = value.x;
-		y = value.y;
-		z = value.z;
-		return *this;
+		Vector3 result;
+		result.x = value.x;
+		result.y = value.y;
+		result.z = value.z;
+		return result;
 	}
 
 	Vector3 Vector3::Splat(Vec8f value)
@@ -728,6 +729,14 @@ namespace ECSEngine {
 			}
 		}
 		return false;
+	}
+
+	void VectorMask::WriteBooleans(bool* values, int count) const {
+		int bit = 1;
+		for (int index = 0; index < count; index++) {
+			values[index] = (value & bit) != 0;
+			bit <<= 1;
+		}
 	}
 
 }

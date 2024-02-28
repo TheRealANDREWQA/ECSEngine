@@ -29,6 +29,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API float TriangleArea(float3 point_a, float3 point_b, float3 point_c);
 
+	// PERFORMANCE TODO:
+	// If you need to repeadetly to do, a new function that takes multiple points
+	// Should be implemented, since some information can be cached
+	
+	ECSENGINE_API float3 ProjectPointOnTriangle(float3 triangle_a, float3 triangle_b, float3 triangle_c, float3 point);
+
+	ECSENGINE_API Vector3 ECS_VECTORCALL ProjectPointOnTriangle(Vector3 triangle_a, Vector3 triangle_b, Vector3 triangle_c, Vector3 point);
+
 	// This function produces the distance fast by default. If you want the squared distance, just perform
 	// The multiply again with this value
 	ECSENGINE_API float DistanceToTriangle(float3 triangle_a, float3 triangle_b, float3 triangle_c, float3 point);
@@ -55,5 +63,39 @@ namespace ECSEngine {
 	// Returns true if the ABC and DEF triangles are intersecting. It assumes that the triangles are
 	// Coplanar or close to being coplanar
 	ECSENGINE_API bool AreCoplanarTrianglesIntersecting(float3 A, float3 B, float3 C, float3 D, float3 E, float3 F);
+
+	// Returns if the projected point is inside the triangle, else false
+	ECSENGINE_API bool IsPointContainedInTriangle(float3 A, float3 B, float3 C, float3 point);
+
+	// Returns true if the projected point is inside the triangle, else false
+	// The projected point needs to be coplanar with ABC
+	ECSENGINE_API bool IsProjectedPointContainedInTriangle(float3 A, float3 B, float3 C, float3 projected_point);
+
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL AreProjectedPointsContainedInTriangle(Vector3 A, Vector3 B, Vector3 C, Vector3 projected_point);
+
+	// The status pointer must have at least points.size entries
+	// This version is more efficient than the other one for multiple points
+	ECSENGINE_API void ArePointsContainedInTriangle(float3 A, float3 B, float3 C, Stream<float3> points, bool* status);
+
+	// The status pointer must have at least points.size entries
+	// This version is more efficient than the other one for multiple points
+	ECSENGINE_API void ArePointsContainedInTriangle(
+		float3 A,
+		float3 B,
+		float3 C,
+		size_t count,
+		const float* points_x,
+		const float* points_y,
+		const float* points_z,
+		bool* status
+	);
+
+	// Returns true if the line from the projection of line_point on the triangle to triangle_corner
+	// Is intersecting the triangle, else false
+	ECSENGINE_API bool IsPointToTriangleCornerIntersecting(float3 triangle_corner, float3 line_point, float3 triangle_B, float3 triangle_C);
+	
+	// Returns true if the line from the projection of line_point on the triangle to triangle_corner
+	// Is intersecting the triangle, else false
+	ECSENGINE_API bool IsProjectedPointToTriangleCornerIntersecting(float3 triangle_corner, float3 projected_line_point, float3 triangle_B, float3 triangle_C);
 
 }

@@ -274,14 +274,23 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	size_t WeldVertices(Stream<float3>& points, float3 epsilon, bool relative_epsilon) {
-		// In order to speed this up for a large number of entries, we can use a spatial grid
-		// And check values only inside a cell
+#define WELD_VERTICES_DIMENSIONS { 128, 128, 128 }
+
+	struct WeldVerticesGridInfo {
+		uint3 int_per_cell_size;
+		uint3 int_per_cell_size_power_of_two;
+		float3 smaller_factor;
+		float3 points_span;
+		bool has_smaller_factor;
+	};
+
+	static WeldVerticesGridInfo GetWeldVerticesInfo(Stream<float3> points) {
+		WeldVerticesGridInfo info;
 
 		// We want to have a good amount of cells in each direction. Choosing 128x128x128
 		// Should be a reasonable default, we can take advantage of the fact that it is
 		// a sparse grid, and the memory is allocated as needed
-		const uint3 DIMENSIONS = { 128, 128, 128 };
+		const uint3 DIMENSIONS = WELD_VERTICES_DIMENSIONS;
 
 		// Determine the min and max for the points in order to have sensible cell sizes
 		float3 points_min;
@@ -291,10 +300,6 @@ namespace ECSEngine {
 		// Empirically, it seems to help to increase the span by a bit
 		points_span *= float3::Splat(2.0f);
 
-		if (relative_epsilon) {
-			epsilon *= points_span * float3::Splat(1 / 10.0f);
-		}
-
 		float3 per_cell_size = points_span / float3(DIMENSIONS);
 		uint3 int_per_cell_size = per_cell_size;
 		uint3 int_per_cell_power_of_two = BasicTypeAction<uint3>(
@@ -303,7 +308,7 @@ namespace ECSEngine {
 				return PowerOfTwoGreaterEx(size).y;
 			}
 		);
-		
+
 		// Determine if we need a spatial grid with reduced cell sizes
 		bool has_smaller_factor = false;
 		float3 smaller_factor = float3::Splat(1.0f);
@@ -320,40 +325,54 @@ namespace ECSEngine {
 			has_smaller_factor = true;
 		}
 
-		const size_t CHUNK_POINT_COUNT = 8;
-		typedef float3 ChunkDataEntry;
-		struct ChunkData {
-			ECS_INLINE void Set(ChunkDataEntry entry, unsigned int count) {
-				points[count] = entry;
-			}
+		info.has_smaller_factor = has_smaller_factor;
+		info.int_per_cell_size = int_per_cell_size;
+		info.int_per_cell_size_power_of_two = int_per_cell_power_of_two;
+		info.points_span = points_span;
+		info.smaller_factor = smaller_factor;
+		return info;
+	}
 
-			float3 points[CHUNK_POINT_COUNT];
-		};
+	struct WeldVerticesChunkDataEntry {
+		float3 point;
+		unsigned int vertex_position_index;
+	};
+
+	// The ChunkData must have a float3 points[]; member
+	// And a function void Combine(Stream<float3> vertex_positions, float3 other_point, unsigned int count);
+	template<typename ChunkData, size_t ChunkPointCount>
+	static void ApplyWeldVertices(Stream<float3>& points, const WeldVerticesGridInfo* info, float3 epsilon) {
+		const size_t DECK_POWER_OF_TWO = 8; // 256
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 64);
+
+		float3 center = CalculateFloat3Midpoint(points);
 
 		// Use an auto lambda to receive the spatial grid as parameter in order to have
 		// The case with smaller factor compile time determined
 		auto perform_welding = [&](auto& spatial_grid) {
 			for (size_t index = 0; index < points.size; index++) {
 				float3 current_point = points[index];
-				bool was_welded = spatial_grid.InsertAABBLate(current_point - epsilon, current_point + epsilon, current_point, [&](
+				WeldVerticesChunkDataEntry data_entry = { current_point, (unsigned int)index };
+				bool was_welded = spatial_grid.InsertAABBLate(current_point - epsilon, current_point + epsilon, data_entry, [&](
 					uint3 cell_indices,
-					SpatialGridChunk<ChunkData>* initial_chunk
-				) {
-					bool was_welded = spatial_grid.IterateChunks<true>(initial_chunk, [&](const ChunkData* data, unsigned int count) {
-						for (unsigned int index = 0; index < count; index++) {
-							float3 absolute_difference = BasicTypeAbsoluteDifference(current_point, data->points[index]);
-							bool should_weld = BasicTypeLessEqual(absolute_difference, epsilon);
-							if (should_weld) {
-								return true;
+					auto* initial_chunk
+					) {
+						bool was_welded = spatial_grid.IterateChunks<true>(initial_chunk, [&](auto* data, unsigned int count) {
+							for (unsigned int index = 0; index < count; index++) {
+								float3 absolute_difference = BasicTypeAbsoluteDifference(current_point, data->points[index]);
+								bool should_weld = BasicTypeLessEqual(absolute_difference, epsilon);
+								if (should_weld) {
+									data->Combine(points, center, current_point, index);
+									return true;
+								}
 							}
+							return false;
+							});
+						if (was_welded) {
+							return true;
 						}
 						return false;
 					});
-					if (was_welded) {
-						return true;
-					}
-					return false;
-				});
 				if (was_welded) {
 					points.RemoveSwapBack(index);
 					index--;
@@ -361,25 +380,86 @@ namespace ECSEngine {
 			}
 		};
 
-		const size_t DECK_POWER_OF_TWO = 8; // 256
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 64);
-
-		if (has_smaller_factor) {
-			SpatialGrid<ChunkData, ChunkDataEntry, CHUNK_POINT_COUNT, SpatialGridDefaultCellIndicesHash, true> spatial_grid;
+		if (info->has_smaller_factor) {
+			SpatialGrid<ChunkData, WeldVerticesChunkDataEntry, ChunkPointCount, SpatialGridDefaultCellIndicesHash, true> spatial_grid;
 			// Choose some sensible defaults
-			spatial_grid.Initialize(&stack_allocator, DIMENSIONS, int_per_cell_size, DECK_POWER_OF_TWO);
-			spatial_grid.SetSmallerCellSizeFactor(smaller_factor);
+			spatial_grid.Initialize(&stack_allocator, WELD_VERTICES_DIMENSIONS, info->int_per_cell_size, DECK_POWER_OF_TWO);
+			spatial_grid.SetSmallerCellSizeFactor(info->smaller_factor);
 			perform_welding(spatial_grid);
 		}
 		else {
-			SpatialGrid<ChunkData, ChunkDataEntry, CHUNK_POINT_COUNT> spatial_grid;
+			SpatialGrid<ChunkData, WeldVerticesChunkDataEntry, ChunkPointCount> spatial_grid;
 			// Choose some sensible defaults
-			spatial_grid.Initialize(&stack_allocator, DIMENSIONS, int_per_cell_power_of_two, DECK_POWER_OF_TWO);
+			spatial_grid.Initialize(&stack_allocator, WELD_VERTICES_DIMENSIONS, info->int_per_cell_size_power_of_two, DECK_POWER_OF_TWO);
 			perform_welding(spatial_grid);
+		}
+	}
+
+	template<ECS_WELD_VERTICES_TYPE type>
+	size_t WeldVertices(Stream<float3>& points, float3 epsilon, bool relative_epsilon) {
+		// In order to speed this up for a large number of entries, we can use a spatial grid
+		// And check values only inside a cell
+
+		WeldVerticesGridInfo info = GetWeldVerticesInfo(points);
+		if (relative_epsilon) {
+			epsilon *= info.points_span * float3::Splat(1 / 10.0f);
+		}
+
+		const size_t CHUNK_POINT_COUNT = 8;
+		struct ChunkDataSnap {
+			ECS_INLINE void Set(WeldVerticesChunkDataEntry entry, unsigned int count) {
+				points[count] = entry.point;
+			}
+
+			void Combine(Stream<float3> vertex_positions, float3 center, float3 other_point, unsigned int count) {
+				float sq_length = SquareLength(points[count] - center);
+				float other_sq_length = SquareLength(other_point - center);
+				if (other_sq_length > sq_length) {
+					points[count] = other_point;
+				}
+			}
+
+			float3 points[CHUNK_POINT_COUNT];
+		};
+
+		struct ChunkDataAverage {
+			void Set(WeldVerticesChunkDataEntry entry, unsigned int count) {
+				points[count] = entry.point;
+				initial_point_index[count] = entry.vertex_position_index;
+				point_count[count] = 1;
+			}
+
+			void Combine(Stream<float3> vertex_positions, float3 center, float3 other_point, unsigned int count) {
+				// Make the average
+				float3 middle = points[count] * float3::Splat(point_count[count]);
+				middle += other_point;
+				point_count[count]++;
+				middle *= float3::Splat(1.0f / (float)point_count[count]);
+				points[count] = middle;
+				// Update the value from the vertex positions to reflect
+				// This new value
+				vertex_positions[initial_point_index[count]] = middle;
+			}
+
+			float3 points[CHUNK_POINT_COUNT];
+			unsigned short point_count[CHUNK_POINT_COUNT];
+			unsigned int initial_point_index[CHUNK_POINT_COUNT];
+		};
+
+		if constexpr (type == ECS_WELD_VERTICES_SNAP_FIRST) {
+			ApplyWeldVertices<ChunkDataSnap, CHUNK_POINT_COUNT>(points, &info, epsilon);
+		}
+		else if constexpr (type == ECS_WELD_VERTICES_AVERAGE) {
+			ApplyWeldVertices<ChunkDataAverage, CHUNK_POINT_COUNT>(points, &info, epsilon);
+		}
+		else {
+			static_assert(false, "Invalid weld type");
 		}
 
 		return points.size;
 	}
+
+	ECS_TEMPLATE_FUNCTION_TEMPLATE_PARAMETERS_2(size_t, WeldVertices, ECS_WELD_VERTICES_SNAP_FIRST, ECS_WELD_VERTICES_AVERAGE, Stream<float3>&, float3, bool);
 
 	// --------------------------------------------------------------------------------------------------
 

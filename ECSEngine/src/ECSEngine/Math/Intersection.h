@@ -71,4 +71,69 @@ namespace ECSEngine {
 		Vec8f& t_output
 	);
 
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL InitializeClipTMin() {
+		return SingleZeroVector<Vector>();
+	}
+
+	template<typename Vector>
+	ECS_INLINE auto ECS_VECTORCALL InitializeClipTMax() {
+		return OneVector<Vector>();
+	}
+
+	template<typename Vector>
+	ECS_INLINE typename Vector::T ECS_VECTORCALL InitializeClipTFactor(Vector segment_a, Vector segment_b) {
+		// We need the reciprocal length such that we can use the multiply more efficiently
+		// Inside multiple iterations
+		return ReciprocalLength(segment_b - segment_a);
+	}
+
+	// Segment_t_min and segment_t_max describe the actual points after the clipping
+	// If this is the first iteration, t_min and t_max need to be initialized using
+	// InitializeClipTMin/Max(). This can be used iteratively to clip these points
+	// Against multiple planes. The last argument is used to determine when a segment
+	// Is considered to be parallel to the plane to skip the t_update.
+	// The parameters are like this instead of a more clasical (segment_a, segment_b)
+	// In order to allow for a single code path to be implemented when using this in a loop
+	ECSENGINE_API void ClipSegmentAgainstPlane(
+		const Plane& plane,
+		const Vector3& segment_a,
+		const Vector3& normalized_direction,
+		const Vec8f& segment_t_factor,
+		Vec8f& segment_t_min,
+		Vec8f& segment_t_max,
+		float parallel_epsilon = 0.0001f
+	);
+
+	// Segment_t_min and segment_t_max describe the actual points after the clipping
+	// If this is the first iteration, t_min and t_max need to be initialized using
+	// InitializeClipTMin/Max(). This can be used iteratively to clip these points
+	// Against multiple planes. The last argument is used to determine when a segment
+	// Is considered to be parallel to the plane to skip the t_update.
+	// The parameters are like this instead of a more clasical (segment_a, segment_b)
+	// In order to allow for a single code path to be implemented when using this in a loop
+	// It returns true if the segment is still valid, else false (like when the segment
+	// Is completely clipped)
+	ECSENGINE_API bool ClipSegmentAgainstPlane(
+		const PlaneScalar& plane,
+		const float3& segment_a,
+		const float3& normalized_direction,
+		float segment_t_factor,
+		float& segment_t_min,
+		float& segment_t_max,
+		float parallel_epsilon = 0.0001f
+	);
+
+	// TType must be Vec8f or float
+	template<typename TType>
+	ECS_INLINE auto ECS_VECTORCALL ClipSegmentsValidStatus(TType segment_t_min, TType segment_t_max) {
+		return segment_t_min < segment_t_max;
+	}
+
+	// Calculates a point based on the t factor
+	template<typename Vector>
+	ECS_INLINE Vector ECS_VECTORCALL ClipSegmentCalculatePoint(Vector segment_a, Vector normalized_direction, typename Vector::T segment_t, typename Vector::T t_factor) {
+		return Fmadd(normalized_direction, Vector::Splat(segment_t * t_factor), segment_a);
+	}
+	
 }

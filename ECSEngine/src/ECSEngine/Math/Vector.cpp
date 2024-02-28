@@ -1325,7 +1325,7 @@ namespace ECSEngine {
 		return PointSameLineHalfPlaneNormalized(line_a, Normalize(line_b - line_a), reference_point, test_point);
 	}
 
-	bool PointSameLineHalfPlane(float3 line_a, float3 line_b, float3 reference_point, float3 test_point) {
+	bool ECS_VECTORCALL PointSameLineHalfPlane(float3 line_a, float3 line_b, float3 reference_point, float3 test_point) {
 		return PointSameLineHalfPlaneImpl<bool>(line_a, line_b, reference_point, test_point);
 	}
 
@@ -1341,7 +1341,7 @@ namespace ECSEngine {
 		return PointSameLineHalfPlaneProjected(line_point, reference_point, test_point, projected_point);
 	}
 
-	bool PointSameLineHalfPlaneNormalized(float3 line_point, float3 line_direction_normalized, float3 reference_point, float3 test_point) {
+	bool ECS_VECTORCALL PointSameLineHalfPlaneNormalized(float3 line_point, float3 line_direction_normalized, float3 reference_point, float3 test_point) {
 		return PointSameLineHalfPlaneNormalizedImpl<bool>(line_point, line_direction_normalized, reference_point, test_point);
 	}
 
@@ -1364,7 +1364,7 @@ namespace ECSEngine {
 		return Dot(perpendicular_line, reference_point - line_point) > SingleZeroVector<Vector>();
 	}
 
-	bool PointSameLineHalfPlaneProjected(
+	bool ECS_VECTORCALL PointSameLineHalfPlaneProjected(
 		float3 line_point,
 		float3 reference_point,
 		float3 test_point,
@@ -1384,12 +1384,23 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	bool IsPointCollinear(float3 line_a, float3 line_b, float3 point, float epsilon) {
-		// We can test this by seeing if the AB line is parallel to AP. 2 lines that are parallel
-		// And share a point are the same line. We can use the fastest normalization possible, since we
-		// Don't care about precise normalized value, just that it is in that ballpark. This costs about 8 cycles,
-		// Which is not that much
-		return IsParallelMask(Normalize<ECS_VECTOR_FAST>(line_b - line_a), Normalize<ECS_VECTOR_FAST>(point - line_a), epsilon);
+	// TODO: Should we keep the fast normalization? For the angle version probably yes, for the epsilon
+	// One, the difference between fast and precise can have an impact
+
+	bool ECS_VECTORCALL IsPointCollinear(float3 line_a, float3 line_b, float3 point, float epsilon) {
+		return IsPointCollinearDirection(line_a, Normalize<ECS_VECTOR_FAST>(line_b - line_a), point, epsilon);
+	}
+
+	bool ECS_VECTORCALL IsPointCollinearDirection(float3 line_start, float3 line_direction_normalized, float3 point, float epsilon) {
+		return IsParallelMask(line_direction_normalized, Normalize<ECS_VECTOR_FAST>(point - line_start), epsilon);
+	}
+
+	bool ECS_VECTORCALL IsPointCollinearByAngle(float3 line_a, float3 line_b, float3 point, float degrees) {
+		return IsPointCollinearDirectionByAngle(line_a, Normalize<ECS_VECTOR_FAST>(line_b - line_a), point, degrees);
+	}
+
+	bool ECS_VECTORCALL IsPointCollinearDirectionByAngle(float3 line_start, float3 line_direction_normalized, float3 point, float degrees) {
+		return IsParallelAngleMask(line_direction_normalized, Normalize<ECS_VECTOR_FAST>(point - line_start), DegToRad(degrees));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

@@ -173,8 +173,11 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	//	//data->debug_drawer->AddStringThread(data->thread_id, center, float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
 	//}
 	for (size_t index = 0; index < transformed_hull.vertex_size; index++) {
-		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
-		data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.05f, nr.buffer, ECS_COLOR_ORANGE);
+		//if (index == 2073 || index == 1985 || index == 2016 || index == 2015 || index == 1984) {
+		//if (index < 6) {
+			ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+			//data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.03f, nr.buffer, ECS_COLOR_ORANGE);
+		//}
 	}
 	unsigned int edge_count = collider->hull_size > transformed_hull.edges.size ? transformed_hull.edges.size : collider->hull_size;
 	for (size_t index = 0; index < edge_count; index++) {
