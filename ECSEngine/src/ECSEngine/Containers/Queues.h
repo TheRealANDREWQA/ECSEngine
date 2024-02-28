@@ -79,6 +79,15 @@ namespace ECSEngine {
 			return m_queue[final_index];
 		}
 
+		// The index is counted "normally" - that is, index 0 means the last pushed element
+		// while index 0 means the first element to be popped
+		T* PushPeekByIndexIntrusive(unsigned int index) {
+			unsigned int final_index = m_first_item + m_queue.size - 1 - index;
+			final_index = final_index >= m_queue.capacity ? final_index - m_queue.capacity : final_index;
+			return &m_queue[final_index];
+
+		}
+
 		bool Pop(T& element) {
 			if (m_queue.size > 0) {
 				unsigned int element_index = m_first_item;

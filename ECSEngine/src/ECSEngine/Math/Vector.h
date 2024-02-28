@@ -5,6 +5,7 @@
 #include "../Containers/Stream.h"
 
 #define ECS_SIMD_VECTOR_EPSILON_VALUE 0.00001f
+#define ECS_SIMD_VECTOR_PARALLEL_EPSILON_VALUE 0.0015f
 
 namespace ECSEngine {
 
@@ -191,6 +192,18 @@ namespace ECSEngine {
 		}
 		else {
 			return false;
+		}
+	}
+
+	template<typename Mask>
+	ECS_INLINE auto ECS_VECTORCALL NegateMask(Mask mask) {
+		if constexpr (std::is_same_v<Mask, SIMDVectorMask>) {
+			// The comment says that for masks it is more efficient
+			// To use ~ than !
+			return ~mask;
+		}
+		else {
+			return !mask;
 		}
 	}
 
@@ -662,12 +675,12 @@ namespace ECSEngine {
 
 	// Both directions need to be normalized beforehand - if you want consistent behaviour
 	// The epsilon needs to be reasonable large
-	ECSENGINE_API bool ECS_VECTORCALL IsParallelMask(float3 first_normalized, float3 second_normalized, float epsilon = 0.001f);
+	ECSENGINE_API bool ECS_VECTORCALL IsParallelMask(float3 first_normalized, float3 second_normalized, float epsilon = ECS_SIMD_VECTOR_PARALLEL_EPSILON_VALUE);
 
 	// Both directions need to be normalized beforehand - if you want consistent behaviour
 	// The epsilon needs to be reasonable large
 	// Returns a SIMD mask that can be used to perform a selection
-	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsParallelMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f epsilon = 0.001f);
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsParallelMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f epsilon = ECS_SIMD_VECTOR_PARALLEL_EPSILON_VALUE);
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -935,7 +948,7 @@ namespace ECSEngine {
 
 	// Returns true if the test point is on the same side of the line AB as the reference point, else false
 	// All points must be coplanar
-	ECSENGINE_API bool PointSameLineHalfPlane(float3 line_a, float3 line_b, float3 reference_point, float3 test_point);
+	ECSENGINE_API bool ECS_VECTORCALL PointSameLineHalfPlane(float3 line_a, float3 line_b, float3 reference_point, float3 test_point);
 
 	// Returns true if the test point is on the same side of the line AB as the reference point, else false
 	// All points must be coplanar
@@ -943,7 +956,7 @@ namespace ECSEngine {
 
 	// Returns true if the test point is on the same side of the line AB as the reference point, else false
 	// All points must be coplanar
-	ECSENGINE_API bool PointSameLineHalfPlaneNormalized(float3 line_point, float3 line_direction_normalized, float3 reference_point, float3 test_point);
+	ECSENGINE_API bool ECS_VECTORCALL PointSameLineHalfPlaneNormalized(float3 line_point, float3 line_direction_normalized, float3 reference_point, float3 test_point);
 
 	// Returns true if the test point is on the same side of the line AB as the reference point, else false
 	// All points must be coplanar
@@ -952,7 +965,7 @@ namespace ECSEngine {
 	// Returns true if the test point is on the same side of the line AB as the reference point, else false
 	// All points must be coplanar. This version takes the projected test point as input. The projected test
 	// Point must have been projected on the line before
-	ECSENGINE_API bool PointSameLineHalfPlaneProjected(
+	ECSENGINE_API bool ECS_VECTORCALL PointSameLineHalfPlaneProjected(
 		float3 line_point,  
 		float3 reference_point, 
 		float3 test_point, 
@@ -972,8 +985,22 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Returns true if the point is on the same line AB. A relatively large epsilon should be used.
-	// It will normalize the distances such that the magnitude won't affect the comparison
-	ECSENGINE_API bool IsPointCollinear(float3 line_a, float3 line_b, float3 point, float epsilon = 0.001f);
+	// It will normalize the distances such that the magnitude won't affect the comparison. This version
+	// Is quite fiddly with the epsilon, you could try to use the angle version which is much more consistent
+	// But slower
+	ECSENGINE_API bool ECS_VECTORCALL IsPointCollinear(float3 line_a, float3 line_b, float3 point, float epsilon = ECS_SIMD_VECTOR_PARALLEL_EPSILON_VALUE);
+
+	// Returns true if the point is on the same line AB. A relatively large epsilon should be used.
+	// It will normalize the distances such that the magnitude won't affect the comparison. This version
+	// Is quite fiddly with the epsilon, you could try to use the angle version which is much more consistent
+	// But slower
+	ECSENGINE_API bool ECS_VECTORCALL IsPointCollinearDirection(float3 line_start, float3 line_direction_normalized, float3 point, float epsilon = ECS_SIMD_VECTOR_PARALLEL_EPSILON_VALUE);
+
+	// This version is quite consistent
+	ECSENGINE_API bool ECS_VECTORCALL IsPointCollinearByAngle(float3 line_a, float3 line_b, float3 point, float degrees);
+
+	// This version is quite consistent
+	ECSENGINE_API bool ECS_VECTORCALL IsPointCollinearDirectionByAngle(float3 line_start, float3 line_direction_normalized, float3 point, float degrees);
 
 	// --------------------------------------------------------------------------------------------------------------
 

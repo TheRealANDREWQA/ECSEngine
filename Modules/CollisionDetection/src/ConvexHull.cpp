@@ -33,9 +33,9 @@ unsigned int ConvexHull::AddOrFindEdge(unsigned int edge_point_1, unsigned int e
 }
 
 void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_index, float3 hull_center, AllocatorPolymorphic face_allocator) {
-	// Add or find the "new" triangle edges
-	ConvexHullEdge edge = edges[edge_index];
+	ConvexHullEdge& edge = edges[edge_index];
 
+	// Add or find the "new" triangle edges
 	unsigned int first_new_edge = AddOrFindEdge(edge.point_1, point_index);
 	unsigned int second_new_edge = AddOrFindEdge(edge.point_2, point_index);
 	ConvexHullEdge* first_new_edge_ptr = &edges[first_new_edge];
@@ -52,34 +52,37 @@ void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_i
 	float3 triangle_point = GetPoint(point_index);
 	float3 normalized_normal = -TriangleNormalNormalized(edge_point_1, edge_point_2, triangle_point, hull_center);
 	if (edge.face_1_index != USHORT_MAX) {
-		PlaneScalar existing_face = faces[edge.face_1_index].plane;
-		if (ComparePlaneDirectionsByAngle(existing_face, normalized_normal, 3.0f)) {
-			// We can collapse this existing edge
-			remove_edge = true;
-			// The face to be assigned to the newly added edges should be this one
-			face_index = edge.face_1_index;
-			faces[face_index].AddPoint(point_index, face_allocator);
-		}
-		else {
-			// Create a new face
-			face_index = faces.AddAssert({ PlaneScalar::FromNormalized(normalized_normal, edge_point_1) });
-			faces[face_index].points.Initialize(face_allocator, 0, 4);
-			faces[face_index].AddPoint(edge.point_1, face_allocator);
-			faces[face_index].AddPoint(edge.point_2, face_allocator);
-			faces[face_index].AddPoint(point_index, face_allocator);
-			// Need to assign to the edge this face index
-			edge.face_2_index = face_index;
-		}
+		// TODO: Is it worth implementing the collapsing on the go
+		// For close enough edges?
 
-		//// Create a new face
-		//face_index = faces.AddAssert({ PlaneScalar::FromNormalized(normalized_normal, edge_point_1) });
-		//faces[face_index].point_count = 3;
-		//faces[face_index].points[0] = edge.point_1;
-		//faces[face_index].points[1] = edge.point_2;
-		//faces[face_index].points[2] = point_index;
-		//ECS_ASSERT(edge.face_2_index == USHORT_MAX, "Invalid ConvexHull state");
-		//// Need to assign to the edge this face index
-		//edge.face_2_index = face_index;
+		//PlaneScalar existing_face = faces[edge.face_1_index].plane;
+		//if (ComparePlaneDirectionsByAngle(existing_face, normalized_normal, 4.0f)) {
+		//	// We can collapse this existing edge
+		//	remove_edge = true;
+		//	// The face to be assigned to the newly added edges should be this one
+		//	face_index = edge.face_1_index;
+		//	faces[face_index].AddPoint(point_index, face_allocator);
+		//}
+		//else {
+		//	// Create a new face
+		//	face_index = faces.AddAssert({ PlaneScalar::FromNormalized(normalized_normal, edge_point_1) });
+		//	faces[face_index].points.Initialize(face_allocator, 0, 4);
+		//	faces[face_index].AddPoint(edge.point_1, face_allocator);
+		//	faces[face_index].AddPoint(edge.point_2, face_allocator);
+		//	faces[face_index].AddPoint(point_index, face_allocator);
+		//	// Need to assign to the edge this face index
+		//	edge.face_2_index = face_index;
+		//}
+
+		// Create a new face
+		face_index = faces.AddAssert({ PlaneScalar::FromNormalized(normalized_normal, edge_point_1) });
+		faces[face_index].points.Initialize(face_allocator, 0, 4);
+		faces[face_index].AddPoint(edge.point_1, face_allocator);
+		faces[face_index].AddPoint(edge.point_2, face_allocator);
+		faces[face_index].AddPoint(point_index, face_allocator);
+		ECS_ASSERT(edge.face_2_index == USHORT_MAX, "Invalid ConvexHull state");
+		// Need to assign to the edge this face index
+		edge.face_2_index = face_index;
 	}
 	else {
 		// Create a new face
@@ -124,6 +127,60 @@ void ConvexHull::AddTriangle(unsigned int vertex_A, unsigned int vertex_B, unsig
 	add_edge(vertex_B, vertex_C);
 }
 
+void ConvexHull::CalculateAndAssignCenter()
+{
+	center = float3::Splat(0.0f);
+	for (unsigned int index = 0; index < vertex_size; index++) {
+		center += GetPoint(index);
+	}
+	center *= float3::Splat(1.0f / (float)vertex_size);
+}
+
+void ConvexHull::ClipFace(
+	unsigned int face_index, 
+	const ConvexHull* incident_hull, 
+	unsigned int incident_hull_face_index, 
+	CapacityStream<float3>* points
+) const {
+	// To clip a face against another face, we need to construct the side
+	// Planes of the current face, and clip the other face against them
+	// The clipping is done using IntersectSegmentPlane and we can use
+	// SIMD to perform multiple of these tests at once
+	// There 2 ways to SIMDize this. Test a single segment against multiple
+	// Planes, or test a plane against multiple segments. At the moment, using
+	// The plane against multiple segments seems to be easier. There is also
+	// An engine function for this to help out
+
+	const ConvexHullFace& face = faces[face_index];
+	const ConvexHullFace& incident_face = incident_hull->faces[incident_hull_face_index];
+
+	// TODO: Delay the SIMD implementation until we have a better picture of the conditions
+
+	//// We need to preallocate some values for the incident face segments
+	//size_t incident_face_vector_count = SlotsFor(incident_face.points.size, Vector3::ElementCount());
+	//
+	//ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
+	//// We can use stack allocations for this
+	//Vector3* incident_point_start = (Vector3*)stack_allocator.Allocate(sizeof(Vector3) * incident_face_vector_count);
+	//Vector3* incident_normalized_directions = (Vector3*)stack_allocator.Allocate(sizeof(Vector3) * incident_face_vector_count);
+	//Vec8f* incident_t_factors = (Vec8f*)stack_allocator.Allocate(sizeof(Vec8f) * incident_face_vector_count);
+	//Vec8f* incident_t_min = (Vec8f*)stack_allocator.Allocate(sizeof(Vec8f) * incident_face_vector_count);
+	//Vec8f* incident_t_max = (Vec8f*)stack_allocator.Allocate(sizeof(Vec8f) * incident_face_vector_count);
+	//
+	//// Initialize these values
+	//// We can reinterpret these pointers to write the values
+	//// And then continue using them as SIMD
+	//float3* incident_point_start_scalar = (float3*)incident_point_start;
+	//float3* incident_normalized_directions_scalar = (float3*)incident_normalized_directions;
+	//for (unsigned int index = 0; index < incident_face.points.size; index++) {
+	//	
+	//}
+
+	//for (unsigned int edge_index = 0; edge_index < face.EdgeCount(); edge_index++) {
+	//	Plane current_side_plane = GetFaceSidePlane(face_index, )
+	//}
+}
+
 unsigned int ConvexHull::FindEdge(unsigned int edge_point_1, unsigned int edge_point_2)
 {
 	for (unsigned int index = 0; index < edges.size; index++) {
@@ -145,6 +202,32 @@ void ConvexHull::Initialize(AllocatorPolymorphic allocator, unsigned int _vertex
 	SoAInitialize(allocator, _vertex_size, &vertices_x, &vertices_y, &vertices_z);
 	edges.Initialize(allocator, 0, edge_size);
 	faces.Initialize(allocator, 0, face_size);
+	center = float3::Splat(0.0f);
+}
+
+float3 ConvexHull::GetFaceCenter(unsigned int face_index) const {
+	float3 center = float3::Splat(0.0f);
+	
+	const ConvexHullFace& face = faces[face_index];
+	for (unsigned int index = 0; index < face.points.size; index++) {
+		center += GetPoint(face.points[index]);
+	}
+
+	center *= float3::Splat(1.0f / (float)face.points.size);
+	return center;
+}
+
+PlaneScalar ConvexHull::GetFaceSidePlane(unsigned int face_index, unsigned int face_edge_index) const {
+	const ConvexHullFace& face = faces[face_index];
+	unsigned short first_point_index = face.points[face_edge_index];
+	unsigned short second_point_index = face_edge_index == face.points.size - 1 ? face.points[0] : face.points[face_edge_index + 1];
+	float3 first_point = GetPoint(first_point_index);
+	float3 second_point = GetPoint(second_point_index);
+
+	// To construct the normal for the side plane, we can cross the segment direction and the face normal
+	// And it should point towards the center of the mesh
+	float3 side_normal = Cross(second_point - first_point, face.plane.normal);
+	return PlaneScalar{ side_normal, first_point };
 }
 
 void ConvexHull::Copy(const ConvexHull* other, AllocatorPolymorphic allocator, bool deallocate_existent)
@@ -375,29 +458,43 @@ void ConvexHullEdge::AddFaceAssert(unsigned int face_index)
 		face_1_index = face_index;
 	}
 	else {
-		ECS_ASSERT(face_2_index == USHORT_MAX, "Invalid ConvexHull state");
-		face_2_index = face_index;
-	}
-}
-
-unsigned int ConvexHullBuilder::AddOrFindVertex(float3 point)
-{
-	// Check first the remapped vertices. If we find it there, we can
-	// Return that index, else use the normal add or find
-	for (unsigned int index = 0; index < remapped_vertices.size; index++) {
-		if (remapped_vertices[index].previous_position == point) {
-			return remapped_vertices[index].index;
+		//ECS_ASSERT(face_2_index == USHORT_MAX, "Invalid ConvexHull state");
+		// Here is a case
+		//    A - E
+		//   /|\  |
+		//  / D \ |
+		// / / \ \|
+		// B      C
+		// It can happen that the edge
+		// AC already has 2 faces attached to it
+		// But when we enclose BC by pivoting around AB,
+		// We would assign a new face to AC again. So to
+		// Account for this case, ignore edge that have both
+		// Of their faces set
+		if (face_2_index == USHORT_MAX) {
+			face_2_index = face_index;
 		}
 	}
-	return hull.AddOrFindVertex(point);
 }
 
-void ConvexHullBuilder::DeallocateBuilderOnly() {
-	remapped_vertices.FreeBuffer();
-}
-
-void ConvexHullBuilder::Initialize(AllocatorPolymorphic allocator, unsigned int vertex_size, unsigned int edge_size, unsigned int face_size) {
-	hull.Initialize(allocator, vertex_size, edge_size, face_size);
-	// Initialize with a reasonable value such that we avoid many small resizes
-	remapped_vertices.Initialize(allocator, 128);
-}
+//unsigned int ConvexHullBuilder::AddOrFindVertex(float3 point)
+//{
+//	// Check first the remapped vertices. If we find it there, we can
+//	// Return that index, else use the normal add or find
+//	for (unsigned int index = 0; index < remapped_vertices.size; index++) {
+//		if (remapped_vertices[index].previous_position == point) {
+//			return remapped_vertices[index].index;
+//		}
+//	}
+//	return hull.AddOrFindVertex(point);
+//}
+//
+//void ConvexHullBuilder::DeallocateBuilderOnly() {
+//	remapped_vertices.FreeBuffer();
+//}
+//
+//void ConvexHullBuilder::Initialize(AllocatorPolymorphic allocator, unsigned int vertex_size, unsigned int edge_size, unsigned int face_size) {
+//	hull.Initialize(allocator, vertex_size, edge_size, face_size);
+//	// Initialize with a reasonable value such that we avoid many small resizes
+//	remapped_vertices.Initialize(allocator, 128);
+//}

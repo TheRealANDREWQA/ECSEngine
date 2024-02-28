@@ -32,6 +32,10 @@ namespace ECSEngine {
 			normal = _normal;
 			dot = _dot;
 		}
+		ECS_INLINE Plane(PlaneScalar scalar_plane) {
+			normal = Vector3().Splat(scalar_plane.normal);
+			dot = scalar_plane.dot;
+		}
 		// It will perform a normalization, use FromNormalized() if you know the direction is normalized
 		Plane(Vector3 axis_direction, Vector3 point, size_t vector_count);
 

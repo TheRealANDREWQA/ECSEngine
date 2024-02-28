@@ -188,9 +188,9 @@ namespace ECSEngine {
 	* ==, !=, +, -, *, /
 	* [] for access ease
 	*/
-	template<typename Base>
+	template<typename T>
 	struct Base2 {
-		typedef Base Base;
+		typedef T T;
 		typedef Base2<bool> BooleanEquivalent;
 		ECS_INLINE constexpr static size_t Count() {
 			return 2;
@@ -199,13 +199,13 @@ namespace ECSEngine {
 
 		ECS_INLINE constexpr Base2() {}
 		/*constexpr Base2(Base _x) : x(_x) {}*/
-		ECS_INLINE constexpr Base2(Base _x, Base _y) : x(_x), y(_y) {}
+		ECS_INLINE constexpr Base2(T _x, T _y) : x(_x), y(_y) {}
 
 		template<typename OtherBase>
 		ECS_INLINE constexpr Base2(Base2<OtherBase> xy) : x(xy.x), y(xy.y) {}
 
 		// assumes all components
-		ECS_INLINE Base2(const Base* ptr) : x(*ptr), y(*(ptr + 1)) {}
+		ECS_INLINE Base2(const T* ptr) : x(*ptr), y(*(ptr + 1)) {}
 
 		ECS_INLINE Base2(const Base2& other) = default;
 		ECS_INLINE Base2& operator =(const Base2& other) = default;
@@ -276,20 +276,20 @@ namespace ECSEngine {
 			return { -x, -y };
 		}
 
-		ECS_INLINE Base& operator [](unsigned int index) {
-			return *((Base*)this + index);
+		ECS_INLINE T& operator [](unsigned int index) {
+			return *((T*)this + index);
 		}
 
-		ECS_INLINE const Base& operator [](unsigned int index) const {
-			return *((const Base*)this + index);
+		ECS_INLINE const T& operator [](unsigned int index) const {
+			return *((const T*)this + index);
 		}
 		
-		ECS_INLINE static Base2 Splat(Base value) {
+		ECS_INLINE static Base2 Splat(T value) {
 			return Base2(value, value);
 		}
 
-		Base x;
-		Base y;
+		T x;
+		T y;
 	};
 
 	/* Minimalist wrapper for simple structs composed of 3 fundamental types
@@ -297,9 +297,9 @@ namespace ECSEngine {
 	* ==, !=, +, -, *, /
 	* [] for access ease
 	*/
-	template<typename Base>
+	template<typename T>
 	struct Base3 {
-		typedef Base Base;
+		typedef T T;
 		typedef Base3<bool> BooleanEquivalent;
 		ECS_INLINE constexpr static size_t Count() {
 			return 3;
@@ -308,14 +308,14 @@ namespace ECSEngine {
 		ECS_INLINE constexpr Base3() {}
 		//constexpr Base3(Base _x) : x(_x) {}
 		//constexpr Base3(Base _x, Base _y) : x(_x), y(_y) {}
-		ECS_INLINE constexpr Base3(Base2<Base> xy, Base _z) : x(xy.x), y(xy.y), z(_z) {}
-		ECS_INLINE constexpr Base3(Base _x, Base _y, Base _z) : x(_x), y(_y), z(_z) {}
+		ECS_INLINE constexpr Base3(Base2<T> xy, T _z) : x(xy.x), y(xy.y), z(_z) {}
+		ECS_INLINE constexpr Base3(T _x, T _y, T _z) : x(_x), y(_y), z(_z) {}
 
 		template<typename OtherBase>
 		ECS_INLINE constexpr Base3(Base3<OtherBase> xyz) : x(xyz.x), y(xyz.y), z(xyz.z) {}
 
 		// assumes all components
-		ECS_INLINE Base3(const Base* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)) {}
+		ECS_INLINE Base3(const T* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)) {}
 
 		Base3(const Base3& other) = default;
 		Base3& operator =(const Base3& other) = default;
@@ -329,7 +329,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Base3 operator !() const {
-			return Base3<Base>(!x, !y, !z);
+			return Base3<T>(!x, !y, !z);
 		}
 
 		ECS_INLINE Base3 operator + (const Base3& other) const {
@@ -391,25 +391,25 @@ namespace ECSEngine {
 			return Base3(-x, -y, -z);
 		}
 
-		ECS_INLINE Base& operator [](unsigned int index) {
-			return *((Base*)this + index);
+		ECS_INLINE T& operator [](unsigned int index) {
+			return *((T*)this + index);
 		}
 
-		ECS_INLINE const Base& operator[](unsigned int index) const {
-			return *((const Base*)this + index);
+		ECS_INLINE const T& operator[](unsigned int index) const {
+			return *((const T*)this + index);
 		}
 
-		ECS_INLINE Base2<Base> xy() const {
-			return Base2<Base>(x, y);
+		ECS_INLINE Base2<T> xy() const {
+			return Base2<T>(x, y);
 		}
 
-		ECS_INLINE static Base3 Splat(Base value) {
+		ECS_INLINE static Base3 Splat(T value) {
 			return Base3(value, value, value);
 		}
 
-		Base x;
-		Base y;
-		Base z;
+		T x;
+		T y;
+		T z;
 	};
 
 	/* Minimalist wrapper for simple structs composed of 4 fundamental types
@@ -417,9 +417,9 @@ namespace ECSEngine {
 	* ==, !=, +, -, *, /
 	* [] for access ease
 	*/
-	template<class Base>
+	template<class T>
 	struct Base4 {
-		typedef Base Base;
+		typedef T T;
 		typedef Base4<bool> BooleanEquivalent;
 		ECS_INLINE constexpr static size_t Count() {
 			return 4;
@@ -429,15 +429,15 @@ namespace ECSEngine {
 		//constexpr Base4(Base _x) : x(_x) {}
 		//constexpr Base4(Base _x, Base _y) : x(_x), y(_y) {}
 		//constexpr Base4(Base _x, Base _y, Base _z) : x(_x), y(_y), z(_z) {}
-		ECS_INLINE constexpr Base4(Base2<Base> xy, Base2<Base> zw) : x(xy.x), y(xy.y), z(zw.x), w(zw.y) {}
-		ECS_INLINE constexpr Base4(Base3<Base> xyz, Base _w) : x(xyz.x), y(xyz.y), z(xyz.z), w(_w) {}
-		ECS_INLINE constexpr Base4(Base _x, Base _y, Base _z, Base _w) : x(_x), y(_y), z(_z), w(_w) {}
+		ECS_INLINE constexpr Base4(Base2<T> xy, Base2<T> zw) : x(xy.x), y(xy.y), z(zw.x), w(zw.y) {}
+		ECS_INLINE constexpr Base4(Base3<T> xyz, T _w) : x(xyz.x), y(xyz.y), z(xyz.z), w(_w) {}
+		ECS_INLINE constexpr Base4(T _x, T _y, T _z, T _w) : x(_x), y(_y), z(_z), w(_w) {}
 		
 		template<typename OtherBase>
 		ECS_INLINE constexpr Base4(Base4<OtherBase> xyzw) : x(xyzw.x), y(xyzw.y), z(xyzw.z), w(xyzw.w) {}
 
 		// assumes all components
-		ECS_INLINE Base4(const Base* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)), w(*(ptr + 3)) {}
+		ECS_INLINE Base4(const T* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)), w(*(ptr + 3)) {}
 
 		Base4(const Base4& other) = default;
 		Base4& operator =(const Base4& other) = default;
@@ -451,7 +451,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Base4 operator !() const {
-			return Base4<Base>(!x, !y, !z, !w);
+			return Base4<T>(!x, !y, !z, !w);
 		}
 
 		ECS_INLINE Base4 operator + (const Base4& other) const {
@@ -503,7 +503,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Base4 operator / (float factor) const {
-			return *this / Splat(factor);
+			return *this * Splat(1.0f / factor);
 		}
 
 		ECS_INLINE Base4 operator /= (float factor) {
@@ -530,34 +530,34 @@ namespace ECSEngine {
 			return { -x, -y, -z, -w };
 		}
 
-		ECS_INLINE Base& operator [](unsigned int index) {
-			return *((Base*)this + index);
+		ECS_INLINE T& operator [](unsigned int index) {
+			return *((T*)this + index);
 		}
 
-		ECS_INLINE const Base& operator[](unsigned int index) const {
-			return *((const Base*)this + index);
+		ECS_INLINE const T& operator[](unsigned int index) const {
+			return *((const T*)this + index);
 		}
 
-		ECS_INLINE Base2<Base> xy() const {
-			return Base2<Base>(x, y);
+		ECS_INLINE Base2<T> xy() const {
+			return Base2<T>(x, y);
 		}
 
-		ECS_INLINE Base2<Base> zw() const {
-			return Base2<Base>(z, w);
+		ECS_INLINE Base2<T> zw() const {
+			return Base2<T>(z, w);
 		}
 
-		ECS_INLINE Base3<Base> xyz() const {
-			return Base3<Base>(x, y, z);
+		ECS_INLINE Base3<T> xyz() const {
+			return Base3<T>(x, y, z);
 		}
 
-		ECS_INLINE static Base4 Splat(Base value) {
+		ECS_INLINE static Base4 Splat(T value) {
 			return Base4(value, value, value, value);
 		}
 
-		Base x;
-		Base y;
-		Base z;
-		Base w;
+		T x;
+		T y;
+		T z;
+		T w;
 	};
 
 	typedef Base2<bool> bool2;
@@ -619,21 +619,21 @@ namespace ECSEngine {
 
 	template<typename ReturnType, typename BasicType, typename Functor>
 	ECS_INLINE ReturnType BasicType2Action(BasicType type, Functor&& functor) {
-		return { (typename ReturnType::Base)functor(type.x), (typename ReturnType::Base)functor(type.y) };
+		return { (typename ReturnType::T)functor(type.x), (typename ReturnType::T)functor(type.y) };
 	}
 
 	template<typename ReturnType, typename BasicType, typename Functor>
 	ECS_INLINE ReturnType BasicType3Action(BasicType type, Functor&& functor) {
-		return { (typename ReturnType::Base)functor(type.x), (typename ReturnType::Base)functor(type.y), (typename ReturnType::Base)functor(type.z) };
+		return { (typename ReturnType::T)functor(type.x), (typename ReturnType::T)functor(type.y), (typename ReturnType::T)functor(type.z) };
 	}
 
 	template<typename ReturnType, typename BasicType, typename Functor>
 	ECS_INLINE ReturnType BasicType4Action(BasicType type, Functor&& functor) {
 		return {
-			(typename ReturnType::Base)functor(type.x),
-			(typename ReturnType::Base)functor(type.y),
-			(typename ReturnType::Base)functor(type.z),
-			(typename ReturnType::Base)functor(type.w)
+			(typename ReturnType::T)functor(type.x),
+			(typename ReturnType::T)functor(type.y),
+			(typename ReturnType::T)functor(type.z),
+			(typename ReturnType::T)functor(type.w)
 		};
 	}
 
@@ -666,16 +666,16 @@ namespace ECSEngine {
 	// Apply a pair-wise function on basic type with 2 components
 	template<typename ReturnType, typename BasicType, typename Functor>
 	ECS_INLINE ReturnType BasicType2Action(BasicType first, BasicType second, Functor&& functor) {
-		return { (typename ReturnType::Base)functor(first.x, second.x), (typename ReturnType::Base)functor(first.y, second.y) };
+		return { (typename ReturnType::T)functor(first.x, second.x), (typename ReturnType::T)functor(first.y, second.y) };
 	}
 
 	// Apply a pair-wise function on a baisc type with 3 components
 	template<typename ReturnType, typename BasicType, typename Functor>
 	ECS_INLINE ReturnType BasicType3Action(BasicType first, BasicType second, Functor&& functor) {
 		return { 
-			(typename ReturnType::Base)functor(first.x, second.x), 
-			(typename ReturnType::Base)functor(first.y, second.y), 
-			(typename ReturnType::Base)functor(first.z, second.z) 
+			(typename ReturnType::T)functor(first.x, second.x),
+			(typename ReturnType::T)functor(first.y, second.y),
+			(typename ReturnType::T)functor(first.z, second.z)
 		};
 	}
 
@@ -683,10 +683,10 @@ namespace ECSEngine {
 	template<typename ReturnType, typename BasicType, typename Functor>
 	ECS_INLINE ReturnType BasicType4Action(BasicType first, BasicType second, Functor&& functor) {
 		return { 
-			(typename ReturnType::Base)functor(first.x, second.x), 
-			(typename ReturnType::Base)functor(first.y, second.y), 
-			(typename ReturnType::Base)functor(first.z, second.z), 
-			(typename ReturnType::Base)functor(first.w, second.y)
+			(typename ReturnType::T)functor(first.x, second.x),
+			(typename ReturnType::T)functor(first.y, second.y),
+			(typename ReturnType::T)functor(first.z, second.z),
+			(typename ReturnType::T)functor(first.w, second.y)
 		};
 	}
 

@@ -150,10 +150,16 @@ namespace ECSEngine {
 	// They are filled in the X min, Y min, Z min, X max, Y max, Z max
 	ECSENGINE_API void DetermineExtremePoints(Stream<float3> points, float3* values);
 
+	enum ECS_WELD_VERTICES_TYPE : unsigned char {
+		ECS_WELD_VERTICES_SNAP_FIRST,
+		ECS_WELD_VERTICES_AVERAGE
+	};
+
 	// It will merge vertices which are close enough and return the new count.
 	// You can specify an epsilon to detect close enough vertices (should not
 	// be very large). If the relative epsilon is activated, the given epsilon
 	// Is multiplied by a factor based on the span for the given axis
+	template<ECS_WELD_VERTICES_TYPE type>
 	ECSENGINE_API size_t WeldVertices(Stream<float3>& points, float3 epsilon = float3::Splat(0.0f), bool relative_epsilon = false);
 
 	ECSENGINE_API float TetrahedronVolume(float3 point_a, float3 point_b, float3 point_c, float3 point_d);

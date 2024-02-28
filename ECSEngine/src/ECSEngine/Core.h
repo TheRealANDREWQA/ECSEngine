@@ -154,6 +154,18 @@ template return_type function_name<false, true>(__VA_ARGS__) const; template ret
 #define ECS_TEMPLATE_FUNCTION_INTEGER(function) function(char); function(int8_t); function(uint8_t); function(int16_t); function(uint16_t); \
 function(int32_t); function(uint32_t); function(int64_t); function(uint64_t);
 
+#define ECS_TEMPLATE_FUNCTION_TEMPLATE_PARAMETERS_2(return_type, function_name, template_1, template_2, ...) \
+template ECSENGINE_API return_type function_name<template_1>(__VA_ARGS__); \
+template ECSENGINE_API return_type function_name<template_2>(__VA_ARGS__);
+
+#define ECS_TEMPLATE_FUNCTION_TEMPLATE_PARAMETERS_3(return_type, function_name, template_1, template_2, template_3, ...) \
+ECS_TEMPLATE_FUNCTION_TEMPLATE_PARAMETERS_2(return_type, function_name, template_1, template_2, __VA_ARGS__); \
+template ECSENGINE_API return_type function_name<template_3>(__VA_ARGS__);
+
+#define ECS_TEMPLATE_FUNCTION_TEMPLATE_PARAMETERS_4(return_type, function_name, template_1, template_2, template_3, template_4, ...) \
+ECS_TEMPLATE_FUNCTION_TEMPLATE_PARAMETERS_3(return_type, function_name, template_1, template_2, template_3); \
+template ECSENGINE_API return_type function_name<template_4>(__VA_ARGS__);
+
 #define ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(type) type(const type& other) = default; type& operator = (const type& other) = default;
 
 #define ECS_ENUM_BITWISE_OPERATIONS(T) ECS_INLINE T operator~ (T a) { return (T)~(int)a; } \

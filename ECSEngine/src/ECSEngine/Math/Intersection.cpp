@@ -140,4 +140,82 @@ namespace ECSEngine {
 		return mask;
 	}
 
+	void ClipSegmentAgainstPlane(
+		const Plane& plane,
+		const Vector3& segment_a,
+		const Vector3& normalized_direction,
+		const Vec8f& segment_t_factor,
+		Vec8f& segment_t_min,
+		Vec8f& segment_t_max,
+		float parallel_epsilon
+	) {
+		Vec8f epsilon = parallel_epsilon;
+		
+		// Instead of using the IntersectSegmentPlane function, we can write
+		// The same function here but more efficiently since some parameters
+		// Can be shared or some calculations omitted
+
+		// t = (plane.dot - Dot(plane.normal, segment_a)) / Dot(plane.normal, segment_direction)
+		// The plane and the segment are parallel if the denominator is close to 0.0f
+		// We need to normalize the segment_direction tho
+		Vec8f denominator = Dot(plane.normal, normalized_direction);
+		Vec8f zero_vector = SingleZeroVector<Vec8f>();
+		// We will use this mask later on to mask the results
+		SIMDVectorMask is_parallel_mask = CompareMaskSingle<Vec8f>(denominator, zero_vector, epsilon);
+
+		Vec8f distance_to_plane = plane.dot - Dot(plane.normal, segment_a);
+		Vec8f t = distance_to_plane / denominator;
+		// Multiply by the factor in order to have the accurate value, otherwise
+		// We will have the t value according to the normalized magnitude
+		t *= segment_t_factor;
+		// If the denominator is less than 0.0f, the plane faces the segment and we must
+		// Update the t_min. Else we must update t_max
+
+		SIMDVectorMask is_negative = denominator < zero_vector;
+		segment_t_min = SelectSingle(is_negative, Max(segment_t_min, t), segment_t_min);
+		SIMDVectorMask is_positive = denominator > zero_vector;
+		segment_t_max = SelectSingle(is_positive, Min(segment_t_max, t), segment_t_max);
+
+		// There is one more thing to do. If the line is parallel, the segment
+		// Should be clipped, basically 0.0f. We can do this by setting segment_t_min
+		// To FLT_MAX or segment_t_max to -FLT_MAX
+		Vec8f flt_max = FLT_MAX;
+		segment_t_min = SelectSingle(is_parallel_mask, flt_max, segment_t_min);
+	}
+
+	bool ClipSegmentAgainstPlane(
+		const PlaneScalar& plane,
+		const float3& segment_a,
+		const float3& normalized_direction,
+		float segment_t_factor,
+		float& segment_t_min,
+		float& segment_t_max,
+		float parallel_epsilon
+	) {
+		// We have a different version from the SIMD one since we can ifs in this case
+		// For how this works, look at the SIMD version
+		float denominator = Dot(plane.normal, normalized_direction);
+		float distance = plane.dot - Dot(plane.normal, segment_a);
+
+		if (CompareMaskSingle(denominator, 0.0f, parallel_epsilon)) {
+			// If the line is not contained by the plane, we can exit
+			if (!CompareMaskSingle(distance, 0.0f, 0.00001f)) {
+				segment_t_min = FLT_MAX;
+				return false;
+			}
+		}
+		else {
+			float t = distance / denominator;
+			t *= segment_t_factor;
+			if (denominator < 0.0f) {
+				segment_t_min = max(segment_t_min, t);
+			}
+			else {
+				segment_t_max = min(segment_t_max, t);
+			}
+		}
+
+		return segment_t_min < segment_t_max;
+	}
+
 }

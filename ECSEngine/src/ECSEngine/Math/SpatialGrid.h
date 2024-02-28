@@ -28,6 +28,7 @@ namespace ECSEngine {
 	};
 
 	// The ChunkData struct must have a function void Set(ChunkDataEntry entry, unsigned int index) to add a new entry
+	// The ChunkData is memsetted to 0 when a new entry is created
 	template<typename ChunkData, typename ChunkDataEntry, size_t chunk_entries, typename CellIndicesHash = SpatialGridDefaultCellIndicesHash, bool use_smaller_cell_size = false>
 	struct SpatialGrid {
 		static_assert(chunk_entries < UCHAR_MAX, "SpatialGrid supports up to 255 per chunk entries");
@@ -44,6 +45,7 @@ namespace ECSEngine {
 			chunk->count = 0;
 			chunk->next_chunk = -1;
 
+			memset(&chunk->data, 0, sizeof(chunk->data));
 			cells.InsertDynamic(allocator, cell, indices);
 			inserted_cells.Add(indices);
 			return chunk;
