@@ -1876,6 +1876,33 @@ QuaternionScalar GetSandboxEntitiesRotationMidpoint(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void GetSandboxEntitiesMidpointWithGizmos(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Stream<Entity> entities, 
+	float3* translation_midpoint, 
+	QuaternionScalar* rotation_midpoint, 
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	// Determine the additional gizmo widgets
+	ECS_STACK_CAPACITY_STREAM(TransformGizmo, transform_gizmos, ECS_KB);
+	GetSandboxSelectedVirtualEntitiesTransformGizmos(editor_state, sandbox_index, &transform_gizmos);
+
+	GetSandboxEntitiesMidpoint(
+		editor_state,
+		sandbox_index,
+		entities,
+		translation_midpoint,
+		rotation_midpoint,
+		transform_gizmos,
+		false,
+		viewport
+	);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 void GetSandboxEntitiesMidpoint(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 

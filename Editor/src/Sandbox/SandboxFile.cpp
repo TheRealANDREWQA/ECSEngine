@@ -119,6 +119,9 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 			// Copy all the blittable information
 			Reflection::CopyReflectionTypeBlittableFields(reflection_manager, type, sandboxes + index, sandbox);
+			// The crash status needs to be set to false manually here
+			sandbox->is_crashed = false;
+			sandbox->is_scene_dirty = false;
 
 			// Set the runtime settings path - this will also create the runtime
 			// If it fails, default initialize the runtime

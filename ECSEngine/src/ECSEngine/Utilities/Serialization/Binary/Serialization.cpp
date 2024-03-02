@@ -1419,9 +1419,14 @@ namespace ECSEngine {
 								}
 								else {
 									size_t pointer_data_byte_size = 0;
-									Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
-
+									if (file_field_info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
+										Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
+									}
+									else {
+										pointer_data_byte_size = file_field_info.byte_size;
+									}
 									size_t element_count = pointer_data_byte_size / file_field_info.stream_byte_size;
+
 									if (type_field_info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 										size_t elements_to_read = ClampMin(element_count, (size_t)type_field_info.basic_type_count);
 										if (type_field_info.basic_type != file_field_info.basic_type) {

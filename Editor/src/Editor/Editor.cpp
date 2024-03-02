@@ -356,8 +356,6 @@ public:
 							// Refresh the graphics object since it might be changed
 							graphics = editor_state.UIGraphics();
 
-							//std::this_thread::sleep_for(std::chrono::milliseconds(30));
-
 							bool removed = graphics->SwapBuffers(0);
 							if (removed) {
 								__debugbreak();

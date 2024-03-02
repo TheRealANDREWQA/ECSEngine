@@ -108,6 +108,7 @@ namespace ECSEngine {
 	template<bool thread_safe, bool trigger_error_if_not_found>
 	bool DeallocateImpl(MemoryArena* arena, const void* block, DebugInfo debug_info) {
 		size_t arena_index = GetAllocatorIndex(arena, block);
+		ECS_ASSERT(arena_index < arena->m_allocator_count, "Invalid deallocate block for memory arena");
 		AllocatorPolymorphic current_allocator = arena->GetAllocator(arena_index);
 		if constexpr (thread_safe) {
 			current_allocator.allocation_type = ECS_ALLOCATION_MULTI;

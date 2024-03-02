@@ -17,7 +17,7 @@ static SATFaceQuery SATFace(const ConvexHull* first, const ConvexHull* second) {
 		float3 support_point = second->FurthestFrom(-face_plane.normal);
 		float distance = DistanceToPlane(face_plane, support_point);
 
-		if (distance > largest_distance) {
+		if (distance >= largest_distance) {
 			largest_distance = distance;
 			final_face_index = index;
 		}
@@ -66,24 +66,111 @@ static SATFaceQuery SATFace(const ConvexHull* first, const ConvexHull* second) {
 // Between the normals of 2 adjacent faces is actually the adjacent edge. So we can use a much simple
 // Subtraction to obtain the normals instead of using the cross product
 static SIMDVectorMask EdgeGaussMapTest(const Vector3& A, const Vector3& B, const Vector3& C, const Vector3& D, const Vector3& AB_normal, const Vector3& CD_normal) {
-	Vec8f zero_vector = SingleZeroVector<Vec8f>();
+	Vec8f zero_tolerance_vector = 0.0f;
 
-	//Vector3 N_ab = Cross(A, B);
-	//Vector3 N_cd = Cross(C, D);
-	
-	Vector3 N_ab = AB_normal;
-	Vector3 N_cd = CD_normal;
+	// This section of code is left as commented just in case some issues arise
+	// And the crossreferencing of values is desired
+	//Vector3 N_ab_cross = Normalize(Cross(A, B));
+	//Vector3 N_cd_cross = Normalize(Cross(C, D));
+	//SIMDVectorMask almost_parallel = IsParallelAngleMask(Normalize(A), Normalize(B), DegToRad(3.0f));
+	//SIMDVectorMask almost_parallel2 = IsParallelAngleMask(Normalize(C), Normalize(D), DegToRad(3.0f));
+	//if (horizontal_or(almost_parallel)) {
+	//	N_ab_cross = Select(almost_parallel, Normalize(AB_normal), N_ab_cross);
+	//}
+	//if (horizontal_or(almost_parallel2)) {
+	//	N_cd_cross = Select(almost_parallel2, Normalize(CD_normal), N_cd_cross);
+	//}
+	//
+	//Vec8f t1_1_cross = Dot(C, N_ab);
+	//Vec8f t1_2_cross = Dot(D, N_ab);
+	//Vec8f t2_1_cross = Dot(A, N_cd);
+	//Vec8f t2_2_cross = Dot(B, N_cd);
+
+	//Vec8f val0_cross = (t1_1_cross * t1_2_cross);
+	//Vec8f val1_cross = (t2_1_cross * t2_2_cross);
+	//Vec8f val2_cross = (t2_2_cross * t1_1_cross);
+
+	//SIMDVectorMask t1_mask_cross = val0_cross < zero_tolerance_vector;
+	//SIMDVectorMask t2_mask_cross = val1_cross < zero_tolerance_vector;
+	//SIMDVectorMask hemisphere_mask_cross = val2_cross > -zero_tolerance_vector;
+	//SIMDVectorMask result_cross = t1_mask_cross && t2_mask_cross && hemisphere_mask_cross;
+
+	// We still perform the normalization here since
+	// We can get some small values for the normals
+	// That would result in faulty values
+	Vector3 N_ab = Normalize(AB_normal);
+	Vector3 N_cd = Normalize(CD_normal);
 
 	Vec8f t1_1 = Dot(C, N_ab);
 	Vec8f t1_2 = Dot(D, N_ab);
 	Vec8f t2_1 = Dot(A, N_cd);
 	Vec8f t2_2 = Dot(B, N_cd);
 
-	SIMDVectorMask t1_mask = (t1_1 * t1_2) < zero_vector;
-	SIMDVectorMask t2_mask = (t2_1 * t2_2) < zero_vector;
-	SIMDVectorMask hemisphere_mask = (t2_2 * t1_1) > zero_vector;
+	Vec8f t1_val = t1_1 * t1_2;
+	Vec8f t2_val = t2_1 * t2_2;
+	Vec8f hemisphere_val = t2_2 * t1_1;
 
-	return t1_mask && t2_mask && hemisphere_mask;
+	SIMDVectorMask t1_mask = t1_val < zero_tolerance_vector;
+	SIMDVectorMask t2_mask = t2_val < zero_tolerance_vector;
+	SIMDVectorMask hemisphere_mask = hemisphere_val > -zero_tolerance_vector;
+
+	SIMDVectorMask result = t1_mask && t2_mask && hemisphere_mask;
+	return result;
+}
+
+// The distance between the 2 edges can be found out by constructing a plane through one of the edges
+// That has the normal as the cross product of the 2 edges. The distance is simply the distance
+// From one of the points of the second edge to that plane, since we know that the second edge is
+// A support edge
+static Vec8f EdgeDistance(
+	const Vector3& first_edge_1, 
+	const Vector3& first_edge_normalized_direction, 
+	const Vector3& second_edge_1, 
+	const Vector3& second_edge_2, 
+	const Vector3& first_hull_center
+) {
+	// Test parallel edges and "skip" them by assigning the distance
+	// -FLT_MAX such that they won't get considered
+	Vec8f parallel_value = -FLT_MAX;
+
+	// PERFORMANCE TODO: Use the angle version of is parallel? The epsilon based
+	// One is faster but it is hard to find a correct epsilon
+	Vector3 second_direction = second_edge_2 - second_edge_1;
+	Vector3 normalized_second_direction = Normalize(second_direction);
+
+	SIMDVectorMask is_parallel_mask = IsParallelMask(first_edge_normalized_direction, normalized_second_direction);
+
+	Vector3 plane_normal = Normalize(Cross(first_edge_normalized_direction, normalized_second_direction));
+	// Redirect the normal away from the first hull center
+	Vec8f dot_value = Dot(plane_normal, first_edge_1 - first_hull_center);
+	SIMDVectorMask is_facing_hull_center = Dot(plane_normal, first_edge_1 - first_hull_center) < SingleZeroVector<Vec8f>();
+	plane_normal = Select(is_facing_hull_center, -plane_normal, plane_normal);
+
+	Vec8f distance = Dot(plane_normal, second_edge_1 - first_edge_1);
+	return SelectSingle(is_parallel_mask, parallel_value, distance);
+}
+
+// Combines maximum update with the EdgeDistance call
+static void EdgeDistanceUpdate(
+	const Vector3& first_edge_1,
+	const Vector3& first_edge_normalized_direction,
+	const Vector3& second_edge_1,
+	const Vector3& second_edge_2,
+	const Vector3& first_hull_center,
+	const unsigned int* second_edge_indices,
+	float& maximum_distance,
+	unsigned int& maximum_distance_index
+) {
+	Vec8f current_distance = EdgeDistance(first_edge_1, first_edge_normalized_direction, second_edge_1, second_edge_2, first_hull_center);
+	
+	// We need to record the largest distance
+	Vec8f current_maximum_distance = HorizontalMax8(current_distance);
+	float current_maximum_distance_scalar = VectorLow(current_maximum_distance);
+	if (current_maximum_distance_scalar > maximum_distance) {
+		size_t current_maximum_distance_index = HorizontalMax8Index(current_distance, current_maximum_distance);
+		maximum_distance = current_maximum_distance_scalar;
+		maximum_distance_index = second_edge_indices[current_maximum_distance_index];
+	}
 }
 
 static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
@@ -98,19 +185,13 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 		second_simd_count += SIMD_COUNT;
 	}
 
-	// Preallocate these buffers such that we can write into them
-	// Using a scalar loop
-	float second_edge_face_1_normal_x[SIMD_COUNT];
-	float second_edge_face_1_normal_y[SIMD_COUNT];
-	float second_edge_face_1_normal_z[SIMD_COUNT];
+	// We write into these using a scalar loop
+	Vector3 second_edge_face_1_normal;
+	Vector3 second_edge_face_2_normal;
+	Vector3 second_edge_cross;
 
-	float second_edge_face_2_normal_x[SIMD_COUNT];
-	float second_edge_face_2_normal_y[SIMD_COUNT];
-	float second_edge_face_2_normal_z[SIMD_COUNT];
-
-	float second_edge_cross_x[SIMD_COUNT];
-	float second_edge_cross_y[SIMD_COUNT];
-	float second_edge_cross_z[SIMD_COUNT];
+	Vector3 second_edge_point_1;
+	Vector3 second_edge_point_2;
 	
 	// We can speed this up by using SIMD to test multiple edges at once
 	// What we can do is to run a loop where we generate a compressed
@@ -122,6 +203,11 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 	size_t bit_mask_size = SlotsFor(second_edge_count, 8);
 	unsigned char* bit_mask = (unsigned char*)stack_allocator.Allocate(sizeof(unsigned char) * bit_mask_size);
 
+	Vector3 first_hull_center = Vector3::Splat(first->center);
+
+	unsigned int global_first_max_index = -1;
+	unsigned int global_second_max_index = -1;
+	float global_max_distance = -FLT_MAX;
 	for (unsigned int first_index = 0; first_index < first_edge_count; first_index++) {
 		const ConvexHullEdge& first_edge = first->edges[first_index];
 		// Get the face normals for this first edge
@@ -140,27 +226,20 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 				// In the Minkowski sum. Negating the normals is like negating the
 				// Positions of a convex hull, since the normals represent locations
 				// On the unit sphere
-				float3 second_edge_face_1_normal = second->faces[second_edge.face_1_index].plane.normal;
-				second_edge_face_1_normal = -second_edge_face_1_normal;
-				second_edge_face_1_normal_x[write_simd_index] = second_edge_face_1_normal.x;
-				second_edge_face_1_normal_y[write_simd_index] = second_edge_face_1_normal.y;
-				second_edge_face_1_normal_z[write_simd_index] = second_edge_face_1_normal.z;
+				float3 second_edge_face_1_normal_scalar = second->faces[second_edge.face_1_index].plane.normal;
+				second_edge_face_1_normal_scalar = -second_edge_face_1_normal_scalar;
+				WriteToVector3StorageSoA(&second_edge_face_1_normal, second_edge_face_1_normal_scalar, write_simd_index);
 
-				float3 second_edge_face_2_normal = second->faces[second_edge.face_2_index].plane.normal;
-				second_edge_face_2_normal = -second_edge_face_2_normal;
-				second_edge_face_2_normal_x[write_simd_index] = second_edge_face_2_normal.x;
-				second_edge_face_2_normal_y[write_simd_index] = second_edge_face_2_normal.y;
-				second_edge_face_2_normal_z[write_simd_index] = second_edge_face_2_normal.z;
+				float3 second_edge_face_2_normal_scalar = second->faces[second_edge.face_2_index].plane.normal;
+				second_edge_face_2_normal_scalar = -second_edge_face_2_normal_scalar;
+				WriteToVector3StorageSoA(&second_edge_face_2_normal, second_edge_face_2_normal_scalar, write_simd_index);
 
-				float3 second_edge_cross = second->GetPoint(second_edge.point_2) - second->GetPoint(second_edge.point_1);
-				second_edge_cross_x[write_simd_index] = second_edge_cross.x;
-				second_edge_cross_y[write_simd_index] = second_edge_cross.y;
-				second_edge_cross_z[write_simd_index] = second_edge_cross.z;
+				// Here, we don't need to negate the cross since the cross of -C x -D = C x D, which
+				// Needs to be calibrated by the hull before this test is applied (at build time)
+				float3 second_edge_cross_scalar = second->GetPoint(second_edge.point_2) - second->GetPoint(second_edge.point_1);
+				WriteToVector3StorageSoA(&second_edge_cross, second_edge_cross_scalar, write_simd_index);
 			}
 
-			Vector3 second_edge_face_1_normal = Vector3().Load(second_edge_face_1_normal_x, second_edge_face_1_normal_y, second_edge_face_1_normal_z);
-			Vector3 second_edge_face_2_normal = Vector3().Load(second_edge_face_2_normal_x, second_edge_face_2_normal_y, second_edge_face_2_normal_z);
-			Vector3 second_edge_cross = Vector3().Load(second_edge_cross_x, second_edge_cross_y, second_edge_cross_z);
 			// Perform the gauss test
 			VectorMask mask = EdgeGaussMapTest(
 				first_edge_face_1_normal, 
@@ -172,11 +251,210 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 			);
 
 			// Write the compressed mask to the bit mask array
-			mask.WriteCompressedMask(bit_mask + second_index / 8);
+			mask.WriteCompressedMask(bit_mask + second_index / SIMD_COUNT);
+		}
+
+		// Cache the values for the edge 1
+		Vector3 first_edge_point_1 = Vector3::Splat(first->GetPoint(first_edge.point_1));
+		Vector3 first_edge_point_2 = Vector3::Splat(first->GetPoint(first_edge.point_2));
+		Vector3 first_edge_normalized_direction = Normalize(first_edge_point_2 - first_edge_point_1);
+
+		// We can check the masks now and construct the values that are actually needed
+		unsigned char mask_bit_index = 1 << 0;
+		unsigned int mask_byte_index = 0;
+		unsigned int current_count = 0;
+		float edge_maximum_separation = -FLT_MAX;
+		unsigned int edge_maximum_separation_index = -1;
+		unsigned int second_edge_indices[Vector3::ElementCount()];
+		for (unsigned int second_index = 0; second_index < second_edge_count; second_index++) {
+			bool perform_check = (bit_mask[mask_byte_index] & mask_bit_index) != 0;
+			if (perform_check) {
+				const ConvexHullEdge& second_edge = second->edges[second_index];
+				WriteToVector3StorageSoA(&second_edge_point_1, second->GetPoint(second_edge.point_1), current_count);
+				WriteToVector3StorageSoA(&second_edge_point_2, second->GetPoint(second_edge.point_2), current_count);
+				second_edge_indices[current_count] = second_index;
+				current_count++;
+				if (current_count == Vector3::ElementCount()) {
+					// We can make a call
+					EdgeDistanceUpdate(
+						first_edge_point_1, 
+						first_edge_normalized_direction, 
+						second_edge_point_1, 
+						second_edge_point_2, 
+						first_hull_center, 
+						second_edge_indices, 
+						edge_maximum_separation, 
+						edge_maximum_separation_index
+					);
+					current_count = 0;
+				}
+			}
+			if (mask_bit_index == ECS_BIT(7)) {
+				mask_bit_index = 1;
+				mask_byte_index++;
+			}
+			else {
+				mask_bit_index <<= 1;
+			}
+		}
+
+		// If we have remainder edges, we need to test them again
+		// Padd the remainder elements with edge 1 values such that it
+		// Will fail the test as parallel, which means they won't get considered
+		if (current_count > 0) {
+			Vec8fb padd_mask = CastToFloat(SelectMaskLast<unsigned int>(Vector3::ElementCount() - current_count));
+			second_edge_point_1 = Select(padd_mask, first_edge_point_1, second_edge_point_1);
+			second_edge_point_2 = Select(padd_mask, first_edge_point_2, second_edge_point_2);
+			EdgeDistanceUpdate(
+				first_edge_point_1,
+				first_edge_normalized_direction,
+				second_edge_point_1,
+				second_edge_point_2,
+				first_hull_center,
+				second_edge_indices,
+				edge_maximum_separation,
+				edge_maximum_separation_index
+			);
+		}
+
+		// Update the global if needed
+		if (edge_maximum_separation > global_max_distance) {
+			global_max_distance = edge_maximum_separation;
+			global_first_max_index = first_index;
+			global_second_max_index = edge_maximum_separation_index;
 		}
 	}
+
+	// No edge was found or parallel ones
+	return { global_max_distance, global_first_max_index, global_second_max_index };
 }
 
-SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
+// This the brute force method of finding out the edge separation values
+// for the SAT. It is left here as a tool for debugging in case there is
+// A doubt against the values generated by the other method to cross reference
+// Those values
+//static SATEdgeQuery SATEdgeProjection(
+//	const ConvexHull* first,
+//	const ConvexHull* second, 
+//	ResizableStream<ResizableStream<float4>>* projections, 
+//	AllocatorPolymorphic allocator
+//) {
+//	projections->ResizeNoCopy(first->edges.size);
+//	projections->size = 0;
+//
+//	float global_max_distance = -FLT_MAX;
+//	unsigned int global_first_index = -1;
+//	unsigned int global_second_index = -1;
+//	for (size_t index = 0; index < first->edges.size; index++) {
+//		projections->Add(ResizableStream<float4>{ allocator, second->edges.size * first->edges.size });
+//		
+//		Line3D first_line = first->GetEdgePoints(index);
+//		float3 edge = first_line.B - first_line.A;
+//		for (size_t subindex = 0; subindex < second->edges.size; subindex++) {
+//			Line3D second_line = second->GetEdgePoints(subindex);
+//			float3 second_edge = second_line.B - second_line.A;
+//
+//			float3 cross = Normalize(Cross(Normalize(edge), Normalize(second_edge)));
+//			if (!CompareMask(cross, float3::Splat(0.0f), float3::Splat(0.000001f))) {
+//				// Project first on the cross
+//				float2 first_projection_range = { FLT_MAX, -FLT_MAX };
+//				for (size_t first_index = 0; first_index < first->vertex_size; first_index++) {
+//					float dot = Dot(cross, first->GetPoint(first_index));
+//					first_projection_range.x = min(dot, first_projection_range.x);
+//					first_projection_range.y = max(dot, first_projection_range.y);
+//				}
+//
+//				float2 second_projection_range = { FLT_MAX, -FLT_MAX };
+//				for (size_t second_index = 0; second_index < second->vertex_size; second_index++) {
+//					float dot = Dot(cross, second->GetPoint(second_index));
+//					second_projection_range.x = min(dot, second_projection_range.x);
+//					second_projection_range.y = max(dot, second_projection_range.y);
+//				}
+//
+//				projections->buffer[index].Add({ first_projection_range, second_projection_range });
+//				float separation = -FLT_MAX;
+//				if (IsInRange(first_projection_range.x, second_projection_range.x, second_projection_range.y)) {
+//					if (IsInRange(first_projection_range.y, second_projection_range.y, second_projection_range.y)) {
+//						separation = -(first_projection_range.y - first_projection_range.x);
+//					}
+//					else {
+//						separation = -(second_projection_range.y - first_projection_range.x);
+//					}
+//				}
+//				else {
+//					if (IsInRange(second_projection_range.x, first_projection_range.x, first_projection_range.y)) {
+//						if (IsInRange(second_projection_range.y, first_projection_range.y, first_projection_range.y)) {
+//							separation = -(second_projection_range.y - second_projection_range.x);
+//						}
+//						else {
+//							separation = -(first_projection_range.y - second_projection_range.x);
+//						}
+//					}
+//					else {
+//						if (first_projection_range.y < second_projection_range.x) {
+//							separation = first_projection_range.y - second_projection_range.x;
+//						}
+//						else {
+//							separation = second_projection_range.y - first_projection_range.x;
+//						}
+//					}
+//				}
+//
+//				if (separation > global_max_distance) {
+//					global_max_distance = separation;
+//					global_first_index = index;
+//					global_second_index = subindex;
+//				}
+// 			}
+//		}
+//	}
+//
+//	return { global_max_distance, global_first_index, global_second_index };
+//}
 
+SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
+	SATFaceQuery first_face_query = SATFace(first, second);
+	// If we have a positive distance, it means that they are separated
+	if (first_face_query.distance > 0.0f) {
+		return { SAT_QUERY_NONE };
+	}
+
+	SATFaceQuery second_face_query = SATFace(second, first);
+	if (second_face_query.distance > 0.0f) {
+		return { SAT_QUERY_NONE };
+	}
+
+	SATEdgeQuery edge_query = SATEdge(first, second);
+	if (edge_query.distance > 0.0f) {
+		return { SAT_QUERY_NONE };
+	}
+
+	// No separation was found. It means that they are intersecting
+	// Prioritize face queries over edge ones
+	if (first_face_query.distance >= edge_query.distance) {
+		SATQuery query;
+		query.type = SAT_QUERY_FACE;
+		if (first_face_query.distance > second_face_query.distance) {
+			query.face = first_face_query;
+			query.face.first_collider = true;
+		}
+		else {
+			query.face = second_face_query;
+			query.face.first_collider = false;
+		}
+		return query;
+	}
+
+	if (second_face_query.distance >= edge_query.distance) {
+		SATQuery query;
+		query.type = SAT_QUERY_FACE;
+		query.face = second_face_query;
+		query.face.first_collider = false;
+		return query;
+	}
+
+	SATQuery query;
+	query.type = SAT_QUERY_EDGE;
+	query.edge = edge_query;
+	return query;
 }

@@ -144,8 +144,6 @@ void ConvexHull::ClipFace(
 ) const {
 	// To clip a face against another face, we need to construct the side
 	// Planes of the current face, and clip the other face against them
-	// The clipping is done using IntersectSegmentPlane and we can use
-	// SIMD to perform multiple of these tests at once
 	// There 2 ways to SIMDize this. Test a single segment against multiple
 	// Planes, or test a plane against multiple segments. At the moment, using
 	// The plane against multiple segments seems to be easier. There is also
@@ -155,6 +153,11 @@ void ConvexHull::ClipFace(
 	const ConvexHullFace& incident_face = incident_hull->faces[incident_hull_face_index];
 
 	// TODO: Delay the SIMD implementation until we have a better picture of the conditions
+	
+	// Clip each edge from the incident face against all side planes of the reference face
+	for (unsigned int index = 0; index < incident_face.EdgeCount(); index++) {
+
+	}
 
 	//// We need to preallocate some values for the incident face segments
 	//size_t incident_face_vector_count = SlotsFor(incident_face.points.size, Vector3::ElementCount());
@@ -302,6 +305,24 @@ void ConvexHull::ReallocateFaces(AllocatorPolymorphic allocator, AllocatorPolymo
 	StreamCoalescedInplaceDeepCopyWithDeallocate(faces, allocator, face_allocator);
 }
 
+void ConvexHull::RedirectEdges()
+{
+	for (unsigned int index = 0; index < edges.size; index++) {
+		ConvexHullEdge& edge = edges[index];
+		float3 first_normal = faces[edge.face_1_index].plane.normal;
+		float3 second_normal = faces[edge.face_2_index].plane.normal;
+		float3 cross_product = Cross(first_normal, second_normal);
+		float3 edge_direction = GetPoint(edge.point_2) - GetPoint(edge.point_1);
+		// Include the 0.0f case, that can happen when the cross poduct is close to 0.0f
+		// (for almost parallel normals. This should be a rare occurence, since that would
+		// Mean that we have nearly coplanar faces, and these should be merged)
+		bool same_direction = Dot(edge_direction, cross_product) >= 0.0f;
+		if (!same_direction) {
+			std::swap(edge.point_1, edge.point_2);
+		}
+	}
+}
+
 void ConvexHull::RemoveDegenerateEdges(AllocatorPolymorphic allocator) {
 	// Go through the vertices. If there is a single
 	// Edge that connects to it, we can remove that edge and that point as well
@@ -405,10 +426,9 @@ ConvexHull ECS_VECTORCALL ConvexHull::TransformToTemporary(Matrix matrix, Alloca
 	ConvexHull hull;
 
 	// Allocate the positions
-	hull.Initialize(allocator, vertex_size, 0, 0);
+	hull.Initialize(allocator, vertex_size, 0, faces.size);
 	hull.vertex_size = vertex_size;
 	hull.edges = edges;
-	hull.faces = faces;
 	ApplySIMDConstexpr(vertex_size, Vector3::ElementCount(), [matrix, this, &hull](auto is_normal_iteration, size_t index, size_t count) {
 		Vector3 elements;
 		if constexpr (is_normal_iteration) {
@@ -425,7 +445,17 @@ ConvexHull ECS_VECTORCALL ConvexHull::TransformToTemporary(Matrix matrix, Alloca
 		else {
 			transformed_elements.StorePartialAdjacent(hull.vertices_x, index, vertex_capacity, count);
 		}
-		});
+	});
+
+	float4 matrix_values[4];
+	matrix.Store(matrix_values);
+	float3 translation = matrix_values[3].xyz();
+	for (unsigned int index = 0; index < faces.size; index++) {
+		hull.faces[index] = faces[index];
+		hull.faces[index].plane.dot += Dot(faces[index].plane.normal, translation);
+	}
+	hull.faces.size = faces.size;
+	hull.center = center + translation;
 
 	return hull;
 }
