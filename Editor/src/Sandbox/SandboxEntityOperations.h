@@ -568,6 +568,16 @@ QuaternionScalar GetSandboxEntitiesRotationMidpoint(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// It will take into account the selected transform gizmos
+void GetSandboxEntitiesMidpointWithGizmos(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Stream<Entity> entities,
+	float3* translation_midpoint,
+	QuaternionScalar* rotation_midpoint,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 // You can optionally provide transform gizmos besides these entities
 // By default, it will add to the total count the given transform_gizmos.size
 // But you can disable that using the add_transform_gizmos_to_total_count flag

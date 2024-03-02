@@ -28,13 +28,9 @@ struct EdgeTablePair {
 	unsigned int b_index;
 };
 
-// For each edge, we store the triangle indices that make up this face
-// We need this for a rejection test
-struct EdgeInformation {
-	uint3 triangle;
-};
+struct EmptyStruct {};
 
-typedef HashTable<EdgeInformation, EdgeTablePair, HashFunctionPowerOfTwo> ProcessedEdgeTable;
+typedef HashTable<EmptyStruct, EdgeTablePair, HashFunctionPowerOfTwo> ProcessedEdgeTable;
 
 // Linked list of chunked connections such that we don't need to overallocate
 struct VertexConnections {
@@ -522,15 +518,18 @@ void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 
 	// This function will add the edge to both the processed edge table and to the
 	// Vertex connections table
-	auto add_edge_to_both_tables = [&](EdgeInformation edge_information, EdgeTablePair table_pair) {
+	auto add_edge_to_both_tables = [&](EdgeTablePair table_pair) {
 		add_edge_to_vertex_connections(table_pair);
-		processed_edge_table.InsertDynamic(&function_allocator, edge_information, table_pair);
+		processed_edge_table.InsertDynamic(&function_allocator, {}, table_pair);
 	};
 
-	EdgeInformation initial_edge_information = { {u_y_min_index, u_initial_edge_b_index, u_initial_edge_c_index} };
-	add_edge_to_both_tables(initial_edge_information, { u_y_min_index, u_initial_edge_b_index });
-	add_edge_to_both_tables(initial_edge_information, { u_y_min_index, u_initial_edge_c_index });
-	add_edge_to_both_tables(initial_edge_information, { u_initial_edge_b_index, u_initial_edge_c_index });
+	add_edge_to_both_tables({ u_y_min_index, u_initial_edge_b_index });
+	add_edge_to_both_tables({ u_y_min_index, u_initial_edge_c_index });
+	add_edge_to_both_tables({ u_initial_edge_b_index, u_initial_edge_c_index });
+	// We need to add the initial_edge_b_index and initial_edge_c_index again to the processed edge table
+	// Since this is the first edge that we are pivoting and the algorithm will not catch the fact
+	// That it has 2 faces attached after the first iteration
+	processed_edge_table.InsertDynamic(&function_allocator, {}, { u_initial_edge_c_index, u_initial_edge_b_index });
 
 	while (active_edges.size > 0 && functor.GetVertexCount() < MAX_VERTICES) {
 		// We can remove this edge since it will be matched at the end
@@ -558,8 +557,6 @@ void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 			// The original edge points are the active edge A and C
 			EdgeTablePair edge_reversed = { table_edge.b_index, table_edge.a_index };
 			if (processed_edge_table.Find(table_edge) == -1) {
-				EdgeInformation edge_information;
-				edge_information.triangle = { active_edge.point_a_index, active_edge.point_c_index, unew_point_index };
 				if (processed_edge_table.Find(edge_reversed) == -1) {
 					// There is one more case to detect here. Here is an example
 					// A -- B
@@ -590,16 +587,13 @@ void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 					if (existing_connection == -1) {
 						active_edges.Add(active_edge);
 						// We need to add the edge to both tables
-						add_edge_to_both_tables(edge_information, table_edge);
+						add_edge_to_both_tables(table_edge);
 					}
 					else {
 						// We need to add the edge to both tables
-						add_edge_to_both_tables(edge_information, table_edge);
+						add_edge_to_both_tables(table_edge);
 						// We also need to add the reverse edge
-						edge_information.triangle.x = active_edge.point_a_index;
-						edge_information.triangle.y = active_edge.point_b_index;
-						edge_information.triangle.z = existing_connection;
-						processed_edge_table.InsertDynamic(&function_allocator, edge_information, edge_reversed);
+						processed_edge_table.InsertDynamic(&function_allocator, {}, edge_reversed);
 
 						// Because we completed a separate triangle, we must perform the
 						// Active edge reduction here again
@@ -627,16 +621,14 @@ void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 				else {
 					// We don't need to add the edge to the vertex connections since the other entry
 					// Already did it
-					processed_edge_table.InsertDynamic(&function_allocator, edge_information, table_edge);
+					processed_edge_table.InsertDynamic(&function_allocator, {}, table_edge);
 				}
 			}
 			else if (processed_edge_table.Find(edge_reversed) == -1) {
 				// Here we don't need to add to the active edges since we know
 				// That there is an entry for this. We don't need to add the edge
 				// To the vertex connections since the other edge already did it
-				EdgeInformation edge_information;
-				edge_information.triangle = { active_edge.point_a_index, active_edge.point_c_index, unew_point_index };
-				processed_edge_table.InsertDynamic(&function_allocator, edge_information, edge_reversed);
+				processed_edge_table.InsertDynamic(&function_allocator, {}, edge_reversed);
 			}
 		};
 
@@ -758,6 +750,7 @@ ConvexHull GiftWrappingConvexHull(Stream<float3> vertex_positions, AllocatorPoly
 	convex_hull.RemoveDegenerateEdges(allocator);
 	convex_hull.ReallocateFaces(allocator);
 	convex_hull.CalculateAndAssignCenter();
+	convex_hull.RedirectEdges();
 
 	return convex_hull;
 }

@@ -3136,6 +3136,8 @@ namespace ECSEngine {
 				}
 				// We also need to copy the copy_deallocate_data, if there is such data
 				m_unique_components[index].copy_deallocate_data = CopyNonZero(SmallAllocator(), entity_manager->m_unique_components[index].copy_deallocate_data);
+				// Copy the name using the small allocator
+				m_unique_components[index].name = entity_manager->m_unique_components[index].name.Copy(SmallAllocator());
 			}
 		}
 
@@ -3153,6 +3155,12 @@ namespace ECSEngine {
 			// If the info is different from -1, it means that there is a component actually allocated there
 			unsigned int component_size = m_shared_components[index].info.size;
 			if (component_size != -1) {
+				// Allocate the allocator
+				if (entity_manager->m_shared_components[index].info.allocator != nullptr) {
+					size_t capacity = entity_manager->m_shared_components[index].info.allocator->m_size_per_allocator * COMPONENT_ALLOCATOR_ARENA_COUNT;
+					CreateAllocatorForComponent(this, m_shared_components[index].info, capacity);
+				}
+
 				// Allocate separetely the instances buffer
 				// The name also needs to be allocated
 				m_shared_components[index].info.name = entity_manager->m_shared_components[index].info.name.Copy(SmallAllocator());
@@ -3170,9 +3178,15 @@ namespace ECSEngine {
 					m_shared_components[index].instances.stream.Copy(entity_manager->m_shared_components[index].instances.stream);
 					
 					// For every value allocate the data
+					// And copy the buffers, if a copy function is provided
+					bool has_copy_function = m_shared_components[index].info.copy_function != nullptr;
 					m_shared_components[index].instances.stream.ForEachIndex([&](unsigned int subindex) {
-						void* new_data = Copy(SmallAllocator(), entity_manager->m_shared_components[index].instances[subindex], component_size);
+						const void* other_data = entity_manager->m_shared_components[index].instances[subindex];
+						void* new_data = Copy(SmallAllocator(), other_data, component_size);
 						m_shared_components[index].instances[subindex] = new_data;
+						if (has_copy_function) {
+							m_shared_components[index].info.CallCopyFunction(new_data, other_data, false);
+						}
 					});
 				}
 
@@ -3198,12 +3212,6 @@ namespace ECSEngine {
 				}
 				else {
 					m_shared_components[index].named_instances.Reset();
-				}
-
-				// Allocate the allocator
-				if (entity_manager->m_shared_components[index].info.allocator != nullptr) {
-					size_t capacity = entity_manager->m_shared_components[index].info.allocator->m_size_per_allocator * COMPONENT_ALLOCATOR_ARENA_COUNT;
-					CreateAllocatorForComponent(this, m_shared_components[index].info, capacity);
 				}
 			}
 		}

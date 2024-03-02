@@ -381,7 +381,7 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 								QuaternionIdentityScalar(),
 								float3::Splat(1.0f),
 								selection_bounds,
-								{ 1.5f, 0.0f }
+								{ 1.25f, 0.0f }
 							);
 							if (camera_position != float3::Splat(FLT_MAX)) {
 								float3 displacement = camera_position - scene_camera.translation;
@@ -485,7 +485,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 						// If this the rotation tool, we also need to recalculate the rotation midpoint
 						if (tool == ECS_TRANSFORM_ROTATION) {
 							Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-							GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
+							GetSandboxEntitiesMidpointWithGizmos(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
 						}
 					}
 					else {
@@ -536,7 +536,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 
 						// Get the rotation and translation midpoints for the selected entities
 						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-						GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
+						GetSandboxEntitiesMidpointWithGizmos(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
 						data->drag_tool.SetAxis(axis);
 						data->scale_delta = float3::Splat(0.0f);
 						data->original_translation_midpoint = data->translation_midpoint;
@@ -965,19 +965,13 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 						// If the entity is missing the corresponding component, add it
 						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
 
-						// Determine the additional gizmo widgets
-						ECS_STACK_CAPACITY_STREAM(TransformGizmo, transform_gizmos, ECS_KB);
-						GetSandboxSelectedVirtualEntitiesTransformGizmos(editor_state, sandbox_index, &transform_gizmos);
-
 						// Calculate the midpoint here such that it won't need to be calculated each frame
-						GetSandboxEntitiesMidpoint(
+						GetSandboxEntitiesMidpointWithGizmos(
 							editor_state, 
 							sandbox_index, 
 							selected_entities, 
 							&data->gizmo_translation_midpoint, 
-							&data->gizmo_rotation_midpoint, 
-							transform_gizmos,
-							false
+							&data->gizmo_rotation_midpoint
 						);
 					}
 				}

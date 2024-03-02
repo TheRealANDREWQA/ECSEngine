@@ -11564,127 +11564,95 @@ namespace ECSEngine {
 
 		void UISystem::UpdateDockspace(unsigned int index, DockspaceType type)
 		{
+			CapacityStream<UIDockspaceBorder>* borders = nullptr;
+			CapacityStream<UIDockspace>* child_dockspaces = nullptr;
+			const UIElementTransform* dockspace_transform = nullptr;
+			typedef UIElementTransform (*DetermineTransform)(
+				const UIElementTransform* dockspace_transform, 
+				const CapacityStream<UIDockspaceBorder>* borders, 
+				unsigned int border_index
+			);
+			DetermineTransform determine_transform = nullptr;
+			DockspaceType child_dockspace_type;
+
+			auto determine_horizontal_transform = [](
+				const UIElementTransform* dockspace_transform,
+				const CapacityStream<UIDockspaceBorder>* borders,
+				unsigned int border_index
+			) {
+				return UIElementTransform(
+					float2(
+						(dockspace_transform->position.x + borders->buffer[border_index].position),
+						dockspace_transform->position.y
+					),
+					float2(
+						(borders->buffer[border_index + 1].position - borders->buffer[border_index].position),
+						dockspace_transform->scale.y
+					)
+				);
+			};
+
+			auto determine_vertical_transform = [](
+				const UIElementTransform* dockspace_transform,
+				const CapacityStream<UIDockspaceBorder>* borders,
+				unsigned int border_index
+			) {
+				return UIElementTransform(
+					float2(
+						dockspace_transform->position.x,
+						(dockspace_transform->position.y + borders->buffer[border_index].position)
+					),
+					float2(
+						dockspace_transform->scale.x,
+						(borders->buffer[border_index + 1].position - borders->buffer[border_index].position)
+					)
+				);
+			};
+
 			if (type == DockspaceType::FloatingHorizontal) {
-				CapacityStream<UIDockspaceBorder>* borders = &m_floating_horizontal_dockspaces[index].borders;
-				for (size_t border_index = 0; border_index < borders->size - 1; border_index++) {
-					// element transform
-					// Position x: parent dockspace x + border offset
-					// Position y: parent dockspace y
-					// Scale    x: difference between next border offset and the current one
-					// Scale    y: parent dockspace x
-					UIElementTransform element_transform(
-						float2(
-							(m_floating_horizontal_dockspaces[index].transform.position.x + borders->buffer[border_index].position),
-							m_floating_horizontal_dockspaces[index].transform.position.y
-						),
-						float2(
-							(borders->buffer[border_index + 1].position - borders->buffer[border_index].position),
-							m_floating_horizontal_dockspaces[index].transform.scale.y
-						)
-					);
-					if (borders->buffer[border_index].is_dock) {
-						// since it is a floating horizontal dockspace, it cannot contain other horizontal dockspaces or floating ones
-						m_vertical_dockspaces[borders->buffer[border_index].window_indices[0]].transform = element_transform;
-						UpdateDockspace(borders->buffer[border_index].window_indices[0], DockspaceType::Vertical);
-					}
-					else {
-						// set window transform 
-						for (size_t window_index = 0; window_index < borders->buffer[border_index].window_indices.size; window_index++) {
-							m_windows[borders->buffer[border_index].window_indices[window_index]].transform = element_transform;
-						}
-					}
-				}
+				borders = &m_floating_horizontal_dockspaces[index].borders;
+				dockspace_transform = &m_floating_horizontal_dockspaces[index].transform;
+				determine_transform = determine_horizontal_transform;			
+				child_dockspaces = &m_vertical_dockspaces;
+				child_dockspace_type = DockspaceType::Vertical;
 			}
 			else if (type == DockspaceType::FloatingVertical) {
-				CapacityStream<UIDockspaceBorder>* borders = &m_floating_vertical_dockspaces[index].borders;
-				for (size_t border_index = 0; border_index < borders->size - 1; border_index++) {
-					// element transform
-					// Position x: parent dockspace x
-					// Position y: parent dockspace y + border offset
-					// Scale    x: parent dockspace x
-					// Scale    y: difference between next border offset and the current one
-					UIElementTransform element_transform(
-						float2(
-							m_floating_vertical_dockspaces[index].transform.position.x,
-							(m_floating_vertical_dockspaces[index].transform.position.y + borders->buffer[border_index].position)
-						),
-						float2(
-							m_floating_vertical_dockspaces[index].transform.scale.x,
-							(borders->buffer[border_index + 1].position - borders->buffer[border_index].position)
-						)
-					);
-					if (borders->buffer[border_index].is_dock) {
-						// since it is a floating vertical dockspace, it cannot contain other vertical dockspaces or floating one
-						m_horizontal_dockspaces[borders->buffer[border_index].window_indices[0]].transform = element_transform;
-						UpdateDockspace(borders->buffer[border_index].window_indices[0], DockspaceType::Horizontal);
-					}
-					else {
-						// set window transform 
-						for (size_t window_index = 0; window_index < borders->buffer[border_index].window_indices.size; window_index++) {
-							m_windows[borders->buffer[border_index].window_indices[window_index]].transform = element_transform;
-						}
-					}
-				}
+				borders = &m_floating_vertical_dockspaces[index].borders;
+				dockspace_transform = &m_floating_vertical_dockspaces[index].transform;
+				determine_transform = determine_vertical_transform;
+				child_dockspaces = &m_horizontal_dockspaces;
+				child_dockspace_type = DockspaceType::Horizontal;
 			}
 			else if (type == DockspaceType::Horizontal) {
-				CapacityStream<UIDockspaceBorder>* borders = &m_horizontal_dockspaces[index].borders;
-				for (size_t border_index = 0; border_index < borders->size - 1; border_index++) {
-					// element transform: parent dockspace means this current dockspace
-					// Position x: parent dockspace x + border offset
-					// Position y: parent dockspace y
-					// Scale    x: difference between next border offset and the current one
-					// Scale    y: parent dockspace y
-					UIElementTransform element_transform(
-						float2(
-							(m_horizontal_dockspaces[index].transform.position.x + borders->buffer[border_index].position),
-							m_horizontal_dockspaces[index].transform.position.y
-						),
-						float2(
-							(borders->buffer[border_index + 1].position - borders->buffer[border_index].position),
-							m_horizontal_dockspaces[index].transform.scale.y
-						)
-					);
-					if (borders->buffer[border_index].is_dock) {
-						// since it is a horizontal dockspace, it cannot contain other horizontal dockspaces
-						m_vertical_dockspaces[borders->buffer[border_index].window_indices[0]].transform = element_transform;
-						UpdateDockspace(borders->buffer[border_index].window_indices[0], DockspaceType::Vertical);
-					}
-					else {
-						// set window transform 
-						for (size_t window_index = 0; window_index < borders->buffer[border_index].window_indices.size; window_index++) {
-							m_windows[borders->buffer[border_index].window_indices[window_index]].transform = element_transform;
-						}
-					}
-				}
+				borders = &m_horizontal_dockspaces[index].borders;
+				dockspace_transform = &m_horizontal_dockspaces[index].transform;
+				determine_transform = determine_horizontal_transform;
+				child_dockspaces = &m_vertical_dockspaces;
+				child_dockspace_type = DockspaceType::Vertical;
 			}
 			else if (type == DockspaceType::Vertical) {
-				CapacityStream<UIDockspaceBorder>* borders = &m_vertical_dockspaces[index].borders;
-				for (size_t border_index = 0; border_index < borders->size - 1; border_index++) {
-					// element transform
-					// Position x: parent dockspace x
-					// Position y: parent dockspace y + border offset
-					// Scale    x: parent dockspace x
-					// Scale    y: difference between next border offset and the current one
-					UIElementTransform element_transform(
-						float2(
-							m_vertical_dockspaces[index].transform.position.x,
-							(m_vertical_dockspaces[index].transform.position.y + borders->buffer[border_index].position)
-						),
-						float2(
-							m_vertical_dockspaces[index].transform.scale.x,
-							(borders->buffer[border_index + 1].position - borders->buffer[border_index].position)
-						)
-					);
-					if (borders->buffer[border_index].is_dock) {
-						// since it is a floating vertical dockspace, it cannot contain other vertical dockspaces or floating one
-						m_horizontal_dockspaces[borders->buffer[border_index].window_indices[0]].transform = element_transform;
-						UpdateDockspace(borders->buffer[border_index].window_indices[0], DockspaceType::Horizontal);
-					}
-					else {
-						// set window transform 
-						for (size_t window_index = 0; window_index < borders->buffer[border_index].window_indices.size; window_index++) {
-							m_windows[borders->buffer[border_index].window_indices[window_index]].transform = element_transform;
+				borders = &m_vertical_dockspaces[index].borders;
+				dockspace_transform = &m_vertical_dockspaces[index].transform;
+				determine_transform = determine_vertical_transform;
+				child_dockspaces = &m_horizontal_dockspaces;
+				child_dockspace_type = DockspaceType::Horizontal;
+			}
+
+			for (size_t border_index = 0; border_index < borders->size - 1; border_index++) {
+				UIElementTransform element_transform = determine_transform(dockspace_transform, borders, border_index);
+				if (borders->buffer[border_index].is_dock) {
+					child_dockspaces->buffer[borders->buffer[border_index].window_indices[0]].transform = element_transform;
+					UpdateDockspace(borders->buffer[border_index].window_indices[0], child_dockspace_type);
+				}
+				else {
+					// set window transform 
+					for (size_t window_index = 0; window_index < borders->buffer[border_index].window_indices.size; window_index++) {
+						// If the scale has changed for the window and it has a snapshot, deallocate it
+						unsigned int current_window_index = borders->buffer[border_index].window_indices[window_index];
+						if (m_windows[current_window_index].transform.scale != element_transform.scale) {
+							DeallocateWindowSnapshot(current_window_index);
 						}
+						m_windows[current_window_index].transform = element_transform;
 					}
 				}
 			}

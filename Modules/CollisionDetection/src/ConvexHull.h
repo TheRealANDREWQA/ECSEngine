@@ -130,6 +130,13 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// With deallocating the previous buffers
 	void ReallocateFaces(AllocatorPolymorphic allocator, AllocatorPolymorphic face_allocator);
 
+	// This is function will redirect the orientation of the edges such that they correspond
+	// To the cross product of the face normals. This is mainly useful for SAT. We need this
+	// Step such that we can avoid some computations. The edge direction is parallel to that
+	// Cross product, but we need the edge to be in the same direction (aka positive dot product)
+	// Since it is necessary for some test, otherwise it would fail
+	void RedirectEdges();
+
 	// It will remove any edges that are considered degenerate
 	// At the moment, there can be cases where, because of edge
 	// Collapsing for close face planes, we can get to a case where
@@ -155,8 +162,10 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// The representation contains the vertices stored in a SoA manner
 	// In order to use SIMD for support function calculation. The faces
 	// Are stored in a per edge fashion and separately, to allow fast query 
-	// for the SAT test
+	// for the SAT test.
 	// All buffers are separate, they are not coalesced
+	// TODO: Separate the face normals into a separate SoA buffer?
+	// Both the contact manifold generation would benefit from this
 
 	float* vertices_x;
 	float* vertices_y;

@@ -167,6 +167,15 @@ namespace ECSEngine {
 		Vec8f z;
 	};
 
+	// For a memory based vector value, it will write the values from the float3 in a SoA
+	// Order such that you can use the vector as is in the calculations
+	ECS_INLINE void WriteToVector3StorageSoA(Vector3* vector_value, float3 value, size_t index) {
+		float* float_interpretation = (float*)vector_value;
+		float_interpretation[index] = value.x;
+		float_interpretation[index + Vector3::ElementCount()] = value.y;
+		float_interpretation[index + Vector3::ElementCount() * 2] = value.z;
+	}
+
 	struct ECSENGINE_API Vector4 {
 		typedef Vec8f T;
 
@@ -327,6 +336,16 @@ namespace ECSEngine {
 		Vec8f z;
 		Vec8f w;
 	};
+
+	// For a memory based vector value, it will write the values from the float3 in a SoA
+	// Order such that you can use the vector as is in the calculations
+	ECS_INLINE void WriteToVector4StorageSoA(Vector4* vector_value, float4 value, size_t index) {
+		float* float_interpretation = (float*)vector_value;
+		float_interpretation[index] = value.x;
+		float_interpretation[index + Vector4::ElementCount()] = value.y;
+		float_interpretation[index + Vector4::ElementCount() * 2] = value.z;
+		float_interpretation[index + Vector4::ElementCount() * 3] = value.w;
+	}
 	
 	typedef Vec8fb SIMDVectorMask;
 

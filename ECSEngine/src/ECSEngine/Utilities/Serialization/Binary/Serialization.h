@@ -5,6 +5,10 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------
 
+	// PERFORMANCE TODO: Make the serialize/deserialize functions take a count? This can greatly speed up
+	// Processing for buffers since some values can be cached outside the loop, resulting in a much tighter
+	// Inner loop
+
 	namespace Reflection {
 		struct ReflectionManager;
 	}
