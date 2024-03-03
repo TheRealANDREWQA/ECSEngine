@@ -1056,7 +1056,7 @@ namespace ECSEngine {
 				elements = Vector3().LoadPartialAdjacent(input_points_soa, index, capacity, current_count);
 			}
 
-			Vector3 transformed_elements = TransformPoint(elements, matrix).AsVector3();
+			Vector3 transformed_elements = TransformPoint(elements, matrix).xyz();
 			if constexpr (is_normal_iteration) {
 				transformed_elements.StoreAdjacent(output_points_soa, index, output_capacity);
 			}

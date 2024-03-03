@@ -3,10 +3,13 @@
 #include "Vector.h"
 #include "Quaternion.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
+#include "Matrix.h"
 
 namespace ECSEngine {
 
 	struct ECSENGINE_API ECS_REFLECT PlaneScalar {
+		typedef float3 Vector;
+
 		ECS_INLINE PlaneScalar() {}
 		ECS_INLINE PlaneScalar(float3 _normal, float _dot) : normal(_normal), dot(_dot) {}
 		// It will perform a normalization, use FromNormalized() if you know the direction is normalized
@@ -27,6 +30,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API Plane {
+		typedef Vector3 Vector;
+
 		ECS_INLINE Plane() {}
 		ECS_INLINE Plane(Vector3 _normal, Vec8f _dot) {
 			normal = _normal;
@@ -190,5 +195,9 @@ namespace ECSEngine {
 
 	// Returns true if the points are coplanar, else false
 	ECSENGINE_API bool ArePointsCoplanar(float3 A, float3 B, float3 C, float3 D);
+
+	ECSENGINE_API PlaneScalar ECS_VECTORCALL TransformPlane(PlaneScalar plane, Matrix matrix);
+
+	ECSENGINE_API Plane ECS_VECTORCALL TransformPlane(Plane plane, Matrix matrix);
 
 }

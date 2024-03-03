@@ -96,6 +96,8 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// Returns the index of the edge or -1 if it doesn't find it. The order of the vertices doesn't matter.
 	unsigned int FindEdge(unsigned int edge_point_1, unsigned int edge_point_2);
 
+	float3 FurthestFrom(float3 direction) const;
+
 	void Initialize(AllocatorPolymorphic allocator, unsigned int vertex_size, unsigned int edge_size, unsigned int face_size);
 
 	ECS_INLINE float3 GetPoint(unsigned int index) const {
@@ -113,13 +115,16 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// The plane is facing towards the center of the mesh
 	PlaneScalar GetFaceSidePlane(unsigned int face_index, unsigned int face_edge_index) const;
 
+	Line3D GetFaceEdge(unsigned int face_index, unsigned int face_edge_index) const;
+
 	ECS_INLINE void SetPoint(float3 point, unsigned int index) {
 		vertices_x[index] = point.x;
 		vertices_y[index] = point.y;
 		vertices_z[index] = point.z;
 	}
 
-	float3 FurthestFrom(float3 direction) const;
+	// Finds the face that is the closest to the given direction
+	unsigned int SupportFace(float3 direction) const;
 
 	// Reallocates the face buffers into a single coalesced allocation
 	// Without deallocating the previous buffers (this can work for temporary
