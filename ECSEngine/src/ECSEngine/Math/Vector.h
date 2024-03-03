@@ -1004,6 +1004,30 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	// The directions don't have to be necessarly normalized
+	// The lines here are infinite in both directions
+	ECSENGINE_API void ECS_VECTORCALL ClosestLinesPoints(
+		float3 first_line_point,
+		float3 first_line_direction,
+		float3 second_line_point,
+		float3 second_line_direction,
+		float3* first_closest_point,
+		float3* second_closest_point
+	);
+
+	// The directions don't have to be necessarly normalized
+	// The lines here are infinite in both directions
+	ECSENGINE_API void ECS_VECTORCALL ClosestLinesPoints(
+		Vector3 first_line_point,
+		Vector3 first_line_direction,
+		Vector3 second_line_point,
+		Vector3 second_line_direction,
+		Vector3* first_closest_point,
+		Vector3* second_closest_point
+	);
+
+	// --------------------------------------------------------------------------------------------------------------
+
 	// This assumes that both a and b are in the 360 range
 	ECSENGINE_API bool SameQuadrantRange360(float degrees_a, float degrees_b);
 

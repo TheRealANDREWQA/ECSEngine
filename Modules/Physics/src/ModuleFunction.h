@@ -4,47 +4,47 @@
 
 extern "C" {
 
-	Physics_API void ModuleTaskFunction(ECSEngine::ModuleTaskFunctionData* data);
+	PHYSICS_API void ModuleTaskFunction(ECSEngine::ModuleTaskFunctionData* data);
 
 #if 0
 
-	Physics_API void ModuleBuildFunctions(ECSEngine::ModuleBuildFunctionsData* data);
+	PHYSICS_API void ModuleBuildFunctions(ECSEngine::ModuleBuildFunctionsData* data);
 
 #endif
 
 #if 0
 
-	Physics_API void ModuleUIFunction(ECSEngine::ModuleUIFunctionData* data);
+	PHYSICS_API void ModuleUIFunction(ECSEngine::ModuleUIFunctionData* data);
 
 #endif
 
 #if 0
 
-	Physics_API void ModuleSerializeComponentFunction(ECSEngine::ModuleSerializeComponentFunctionData* data);
+	PHYSICS_API void ModuleSerializeComponentFunction(ECSEngine::ModuleSerializeComponentFunctionData* data);
 
 #endif
 
 #if 0
 
-	Physics_API void ModuleRegisterLinkComponentFunction(ECSEngine::ModuleRegisterLinkComponentFunctionData* data);
+	PHYSICS_API void ModuleRegisterLinkComponentFunction(ECSEngine::ModuleRegisterLinkComponentFunctionData* data);
 
 #endif
 
 #if 0
 
-	Physics_API void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data);
+	PHYSICS_API void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data);
 
 #endif
 
 #if 0
 
-	Physics_API void ModuleRegisterDebugDrawFunction(ECSEngine::ModuleRegisterDebugDrawFunctionData* data);
+	PHYSICS_API void ModuleRegisterDebugDrawFunction(ECSEngine::ModuleRegisterDebugDrawFunctionData* data);
 
 #endif
 
 #if 0
 
-	Physics_API void ModuleRegisterDebugDrawTaskElementsFunction(ECSEngine::ModuleRegisterDebugDrawTaskElementsData* data);
+	PHYSICS_API void ModuleRegisterDebugDrawTaskElementsFunction(ECSEngine::ModuleRegisterDebugDrawTaskElementsData* data);
 
 #endif
 

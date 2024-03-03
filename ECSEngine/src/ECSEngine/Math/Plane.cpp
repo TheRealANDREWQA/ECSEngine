@@ -177,13 +177,8 @@ namespace ECSEngine {
 
 	template<typename Mask, typename Plane, typename Vector>
 	static ECS_INLINE Mask ECS_VECTORCALL IsAbovePlaneMaskImpl(Plane plane, Vector point) {
-		// Get a point on the plane, calculate the direction to the original point
-		// If the cosine of the normal and the direction is positive, then the point
-		// is above. If the value is 0, then it's on the plane and negative means bellow the plane
-		Vector plane_point = plane.normal * plane.dot;
-		Vector direction = point - plane_point;
-		auto cosine = Dot(plane.normal, direction);
-		return cosine > SingleZeroVector<Vector>();
+		// If the distance to the plane is above 0.0f, it is above it
+		return DistanceToPlane(plane, point) > SingleZeroVector<Vector>();
 	}
 
 	bool IsAbovePlaneMask(PlaneScalar plane, float3 point) {
@@ -300,5 +295,25 @@ namespace ECSEngine {
 		// High product value
 		PlaneScalar ABC_plane = ComputePlane(A, B, C);
 		return CompareMaskSingle<float>(DistanceToPlane(ABC_plane, D), 0.0f, 0.001f);
+	}
+
+	template<typename Plane>
+	static ECS_INLINE Plane ECS_VECTORCALL TransformPlaneImpl(Plane plane, Matrix matrix) {
+		// Transforming a plane can be viewed as transforming the point plane.normal * plane.dot
+		// The final normal is the normalized vector, while the dot is the length of that vector
+		// This is quite cheap, since for normalization we need to compute the length anyway
+		auto plane_point = plane.normal * plane.dot;
+		auto transformed_point = TransformPoint(plane_point, matrix).xyz();
+		auto length = Length(transformed_point);
+		// We can perform the division once
+		return { transformed_point * (typename Plane::Vector)::Splat(1.0f / length), length };
+	}
+
+	PlaneScalar ECS_VECTORCALL TransformPlane(PlaneScalar plane, Matrix matrix) {
+		return TransformPlaneImpl(plane, matrix);
+	}
+
+	Plane ECS_VECTORCALL TransformPlane(Plane plane, Matrix matrix) {
+		return TransformPlaneImpl(plane, matrix);
 	}
 }

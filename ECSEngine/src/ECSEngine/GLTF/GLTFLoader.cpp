@@ -128,7 +128,7 @@ namespace ECSEngine {
 			if (ecs_matrix != MatrixIdentity()) {
 				ApplySIMD(mesh_positions, mesh_positions, Vector3::ElementCount(), Vector3::ElementCount(), [ecs_matrix](const float3* input, float3* output, size_t count) {
 					Vector3 positions = Vector3().Gather(input);
-					Vector3 transformed_positions = TransformPoint(positions, ecs_matrix).AsVector3();
+					Vector3 transformed_positions = TransformPoint(positions, ecs_matrix).xyz();
 					transformed_positions.Scatter(output);
 					return count;
 				});

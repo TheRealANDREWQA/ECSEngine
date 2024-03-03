@@ -225,7 +225,7 @@ namespace ECSEngine {
 
 		Vector4& operator /= (float _value);
 
-		ECS_INLINE Vector3 AsVector3() const {
+		ECS_INLINE Vector3 xyz() const {
 			return { x, y, z };
 		}
 

@@ -72,12 +72,12 @@ namespace ECSEngine {
 	);
 
 	template<typename Vector>
-	ECS_INLINE auto ECS_VECTORCALL InitializeClipTMin() {
+	ECS_INLINE typename Vector::T ECS_VECTORCALL InitializeClipTMin() {
 		return SingleZeroVector<Vector>();
 	}
 
 	template<typename Vector>
-	ECS_INLINE auto ECS_VECTORCALL InitializeClipTMax() {
+	ECS_INLINE typename Vector::T ECS_VECTORCALL InitializeClipTMax() {
 		return OneVector<Vector>();
 	}
 
@@ -95,6 +95,8 @@ namespace ECSEngine {
 	// Is considered to be parallel to the plane to skip the t_update.
 	// The parameters are like this instead of a more clasical (segment_a, segment_b)
 	// In order to allow for a single code path to be implemented when using this in a loop
+	// The direction needs to be normalized mostly for consistency parallel check. It is
+	// Not core to the algorithm otherwise
 	ECSENGINE_API void ClipSegmentAgainstPlane(
 		const Plane& plane,
 		const Vector3& segment_a,
@@ -113,7 +115,9 @@ namespace ECSEngine {
 	// The parameters are like this instead of a more clasical (segment_a, segment_b)
 	// In order to allow for a single code path to be implemented when using this in a loop
 	// It returns true if the segment is still valid, else false (like when the segment
-	// Is completely clipped)
+	// Is completely clipped).
+	// The direction needs to be normalized mostly for consistency parallel check. It is
+	// Not core to the algorithm otherwise
 	ECSENGINE_API bool ClipSegmentAgainstPlane(
 		const PlaneScalar& plane,
 		const float3& segment_a,

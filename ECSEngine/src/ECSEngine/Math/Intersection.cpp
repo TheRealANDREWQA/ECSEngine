@@ -157,7 +157,7 @@ namespace ECSEngine {
 
 		// t = (plane.dot - Dot(plane.normal, segment_a)) / Dot(plane.normal, segment_direction)
 		// The plane and the segment are parallel if the denominator is close to 0.0f
-		// We need to normalize the segment_direction tho
+		// We need to normalize the segment_direction tho for consistent checks
 		Vec8f denominator = Dot(plane.normal, normalized_direction);
 		Vec8f zero_vector = SingleZeroVector<Vec8f>();
 		// We will use this mask later on to mask the results

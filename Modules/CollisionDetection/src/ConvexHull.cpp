@@ -155,8 +155,34 @@ void ConvexHull::ClipFace(
 	// TODO: Delay the SIMD implementation until we have a better picture of the conditions
 	
 	// Clip each edge from the incident face against all side planes of the reference face
+	// We can early exit in case the line segment becomes degenerate (it is complitely clipped)
 	for (unsigned int index = 0; index < incident_face.EdgeCount(); index++) {
+		float t_min = InitializeClipTMin<float3>();
+		float t_max = InitializeClipTMax<float3>();
 
+		Line3D incident_edge = incident_hull->GetFaceEdge(incident_hull_face_index, index);
+		float3 incident_edge_normalized_direction = Normalize(incident_edge.B - incident_edge.A);
+		float t_factor = InitializeClipTFactor(incident_edge.A, incident_edge.B);
+
+		for (unsigned int side_plane_index = 0; side_plane_index < face.EdgeCount(); side_plane_index++) {
+			PlaneScalar side_plane = GetFaceSidePlane(face_index, side_plane_index);
+			if (!ClipSegmentAgainstPlane(side_plane, incident_edge.A, incident_edge_normalized_direction, t_factor, t_min, t_max)) {
+				// Early exit if the edge is completely culled
+				break;
+			}
+		}
+
+		// Check the t_min and t_max factors
+		if (ClipSegmentsValidStatus(t_min, t_max)) {
+			// The edge still has points, add them to the output
+			float3 first_point = ClipSegmentCalculatePoint(incident_edge.A, incident_edge_normalized_direction, t_min, t_factor);
+			float3 second_point = ClipSegmentCalculatePoint(incident_edge.A, incident_edge_normalized_direction, t_max, t_factor);
+			// If the points are close enough, weld them
+			points->AddAssert(first_point);
+			if (!CompareMask(first_point, second_point)) {
+				points->AddAssert(second_point);
+			}
+		}
 	}
 
 	//// We need to preallocate some values for the incident face segments
@@ -222,15 +248,21 @@ float3 ConvexHull::GetFaceCenter(unsigned int face_index) const {
 
 PlaneScalar ConvexHull::GetFaceSidePlane(unsigned int face_index, unsigned int face_edge_index) const {
 	const ConvexHullFace& face = faces[face_index];
+	Line3D line = GetFaceEdge(face_index, face_edge_index);
+
+	// To construct the normal for the side plane, we can cross the segment direction and the face normal
+	// And it should point towards the center of the mesh
+	float3 side_normal = Cross(line.B - line.A, face.plane.normal);
+	return PlaneScalar{ side_normal, line.A };
+}
+
+Line3D ConvexHull::GetFaceEdge(unsigned int face_index, unsigned int face_edge_index) const {
+	const ConvexHullFace& face = faces[face_index];
 	unsigned short first_point_index = face.points[face_edge_index];
 	unsigned short second_point_index = face_edge_index == face.points.size - 1 ? face.points[0] : face.points[face_edge_index + 1];
 	float3 first_point = GetPoint(first_point_index);
 	float3 second_point = GetPoint(second_point_index);
-
-	// To construct the normal for the side plane, we can cross the segment direction and the face normal
-	// And it should point towards the center of the mesh
-	float3 side_normal = Cross(second_point - first_point, face.plane.normal);
-	return PlaneScalar{ side_normal, first_point };
+	return { first_point, second_point };
 }
 
 void ConvexHull::Copy(const ConvexHull* other, AllocatorPolymorphic allocator, bool deallocate_existent)
@@ -295,6 +327,21 @@ float3 ConvexHull::FurthestFrom(float3 direction) const
 	Vec8f max = HorizontalMax8(max_distance);
 	size_t index = HorizontalMax8Index(max_distance, max);
 	return max_points.At(index);
+}
+
+unsigned int ConvexHull::SupportFace(float3 direction) const
+{
+	float dot = -FLT_MAX;
+	unsigned int face_index = -1;
+	for (unsigned int index = 0; index < faces.size; index++) {
+		float current_dot = Dot(faces[index].plane.normal, direction);
+		if (current_dot > dot) {
+			dot = current_dot;
+			face_index = index;
+		}
+	}
+
+	return face_index;
 }
 
 void ConvexHull::ReallocateFaces(AllocatorPolymorphic allocator) {
@@ -438,7 +485,7 @@ ConvexHull ECS_VECTORCALL ConvexHull::TransformToTemporary(Matrix matrix, Alloca
 			elements = Vector3().LoadPartialAdjacent(vertices_x, index, vertex_capacity, count);
 		}
 
-		Vector3 transformed_elements = TransformPoint(elements, matrix).AsVector3();
+		Vector3 transformed_elements = TransformPoint(elements, matrix).xyz();
 		if constexpr (is_normal_iteration) {
 			transformed_elements.StoreAdjacent(hull.vertices_x, index, vertex_capacity);
 		}

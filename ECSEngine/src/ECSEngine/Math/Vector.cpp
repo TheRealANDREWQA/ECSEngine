@@ -1405,6 +1405,101 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	template<typename Vector>
+	static ECS_INLINE void ECS_VECTORCALL ClosestLinesPointsImpl(
+		Vector first_line_point,
+		Vector first_line_direction,
+		Vector second_line_point,
+		Vector second_line_direction,
+		Vector* first_closest_point,
+		Vector* second_closest_point
+	) {
+		// The line between the closest points must be perpendicular to both lines
+		// Plugging this condition in the parametric representation of the line,
+		// We get (thanks to Real-time Collision Detection)
+		// s = (bf - ce) / d
+		// t = (af - bc) / d
+		// Where s is the interpolation factor for the first line, t for the second line
+		// r = second_line_point - first_line_point
+		// a = first_line_direction * first_line_direction
+		// b = first_line_direction * second_line_direction
+		// c = first_line_direction * r
+		// e = second_line_direction * second_line_direction
+		// f = second_line_direction * r
+		// d = ae - b^2
+		// If d is 0, then the lines are parallel, and this case needs to be handled separately
+	
+		auto epsilon = SingleValueVector<Vector>(ECS_SIMD_VECTOR_EPSILON_VALUE);
+
+		// For the scalar code, we could firstly calculate d, and branch if it is parallel
+		// But in order to keep a single code path, implement the SIMD version where we select
+		// The value at the end
+		auto a = Dot(first_line_direction, first_line_direction);
+		auto e = Dot(second_line_direction, second_line_direction);
+		auto b = Dot(first_line_direction, second_line_direction);
+		auto d = a * e - b * b;
+		// D technically needs to be >= 0.0f, but it can happen to have a small negative value
+		// Due to floating point inaccuracies
+		auto d_zero_mask = d < epsilon;
+
+		auto r = second_line_point - first_line_point;
+		auto c = Dot(first_line_direction, r);
+		auto f = Dot(second_line_direction, r);
+
+		// The general solution
+		auto one_over_d = OneDividedVector(d);
+		auto s = (b * f - c * e) * one_over_d;
+		auto t = (a * f - b * c) * one_over_d;
+		Vector first_general_closest_point = Fmadd(first_line_direction, Vector::Splat(s), first_line_point);
+		Vector second_general_closest_point = Fmadd(second_line_direction, Vector::Splat(t), second_line_point);
+
+		// The parallel solution
+		// Choose a point on one of the lines, and project it on the other line
+		Vector first_parallel_closest_point = first_line_point;
+		Vector second_parallel_closest_point = ProjectPointOnLineDirection(second_line_point, second_line_direction, first_parallel_closest_point);
+
+		*first_closest_point = Select(d_zero_mask, first_parallel_closest_point, first_general_closest_point);
+		*second_closest_point = Select(d_zero_mask, second_parallel_closest_point, second_general_closest_point);
+	}
+
+	void ECS_VECTORCALL ClosestLinesPoints(
+		float3 first_line_point,
+		float3 first_line_direction,
+		float3 second_line_point,
+		float3 second_line_direction,
+		float3* first_closest_point,
+		float3* second_closest_point
+	) {
+		ClosestLinesPointsImpl(
+			first_line_point,
+			first_line_direction,
+			second_line_point,
+			second_line_direction,
+			first_closest_point,
+			second_closest_point
+		);
+	}
+
+	void ECS_VECTORCALL ClosestLinesPoints(
+		Vector3 first_line_point,
+		Vector3 first_line_direction,
+		Vector3 second_line_point,
+		Vector3 second_line_direction,
+		Vector3* first_closest_point,
+		Vector3* second_closest_point
+	) {
+		ClosestLinesPointsImpl(
+			first_line_point,
+			first_line_direction,
+			second_line_point,
+			second_line_direction,
+			first_closest_point,
+			second_closest_point
+		);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
 	bool SameQuadrantRange360(float degrees_a, float degrees_b) {
 		degrees_a = degrees_a < 0.0f ? 360.0f + degrees_a : degrees_a;
 		degrees_b = degrees_b < 0.0f ? 360.0f + degrees_b : degrees_b;
