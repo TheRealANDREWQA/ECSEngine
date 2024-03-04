@@ -122,7 +122,12 @@ static SIMDVectorMask EdgeGaussMapTest(const Vector3& A, const Vector3& B, const
 // That has the normal as the cross product of the 2 edges. The distance is simply the distance
 // From one of the points of the second edge to that plane, since we know that the second edge is
 // A support edge
-static Vec8f EdgeDistance(
+struct EdgeDistanceResult {
+	Vec8f distance;
+	Vector3 separating_axis;
+};
+
+static EdgeDistanceResult ECS_VECTORCALL EdgeDistance(
 	const Vector3& first_edge_1, 
 	const Vector3& first_edge_normalized_direction, 
 	const Vector3& second_edge_1, 
@@ -147,7 +152,7 @@ static Vec8f EdgeDistance(
 	plane_normal = Select(is_facing_hull_center, -plane_normal, plane_normal);
 
 	Vec8f distance = Dot(plane_normal, second_edge_1 - first_edge_1);
-	return SelectSingle(is_parallel_mask, parallel_value, distance);
+	return { SelectSingle(is_parallel_mask, parallel_value, distance), plane_normal };
 }
 
 // Combines maximum update with the EdgeDistance call
@@ -159,17 +164,19 @@ static void EdgeDistanceUpdate(
 	const Vector3& first_hull_center,
 	const unsigned int* second_edge_indices,
 	float& maximum_distance,
-	unsigned int& maximum_distance_index
+	unsigned int& maximum_distance_index,
+	float3& maximum_separating_axis
 ) {
-	Vec8f current_distance = EdgeDistance(first_edge_1, first_edge_normalized_direction, second_edge_1, second_edge_2, first_hull_center);
+	EdgeDistanceResult result = EdgeDistance(first_edge_1, first_edge_normalized_direction, second_edge_1, second_edge_2, first_hull_center);
 	
 	// We need to record the largest distance
-	Vec8f current_maximum_distance = HorizontalMax8(current_distance);
+	Vec8f current_maximum_distance = HorizontalMax8(result.distance);
 	float current_maximum_distance_scalar = VectorLow(current_maximum_distance);
 	if (current_maximum_distance_scalar > maximum_distance) {
-		size_t current_maximum_distance_index = HorizontalMax8Index(current_distance, current_maximum_distance);
+		size_t current_maximum_distance_index = HorizontalMax8Index(result.distance, current_maximum_distance);
 		maximum_distance = current_maximum_distance_scalar;
 		maximum_distance_index = second_edge_indices[current_maximum_distance_index];
+		maximum_separating_axis = result.separating_axis.At(current_maximum_distance_index);
 	}
 }
 
@@ -208,6 +215,7 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 	unsigned int global_first_max_index = -1;
 	unsigned int global_second_max_index = -1;
 	float global_max_distance = -FLT_MAX;
+	float3 global_separation_axis = float3::Splat(0.0f);
 	for (unsigned int first_index = 0; first_index < first_edge_count; first_index++) {
 		const ConvexHullEdge& first_edge = first->edges[first_index];
 		// Get the face normals for this first edge
@@ -266,6 +274,7 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 		float edge_maximum_separation = -FLT_MAX;
 		unsigned int edge_maximum_separation_index = -1;
 		unsigned int second_edge_indices[Vector3::ElementCount()];
+		float3 edge_separation_axis;
 		for (unsigned int second_index = 0; second_index < second_edge_count; second_index++) {
 			bool perform_check = (bit_mask[mask_byte_index] & mask_bit_index) != 0;
 			if (perform_check) {
@@ -284,7 +293,8 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 						first_hull_center, 
 						second_edge_indices, 
 						edge_maximum_separation, 
-						edge_maximum_separation_index
+						edge_maximum_separation_index,
+						edge_separation_axis
 					);
 					current_count = 0;
 				}
@@ -313,7 +323,8 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 				first_hull_center,
 				second_edge_indices,
 				edge_maximum_separation,
-				edge_maximum_separation_index
+				edge_maximum_separation_index,
+				edge_separation_axis
 			);
 		}
 
@@ -322,11 +333,12 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 			global_max_distance = edge_maximum_separation;
 			global_first_max_index = first_index;
 			global_second_max_index = edge_maximum_separation_index;
+			global_separation_axis = edge_separation_axis;
 		}
 	}
 
 	// No edge was found or parallel ones
-	return { global_max_distance, global_first_max_index, global_second_max_index };
+	return { global_max_distance, global_first_max_index, global_second_max_index, global_separation_axis };
 }
 
 // This the brute force method of finding out the edge separation values
@@ -416,17 +428,17 @@ SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
 	SATFaceQuery first_face_query = SATFace(first, second);
 	// If we have a positive distance, it means that they are separated
 	if (first_face_query.distance > 0.0f) {
-		return { SAT_QUERY_NONE };
+		return {};
 	}
 
 	SATFaceQuery second_face_query = SATFace(second, first);
 	if (second_face_query.distance > 0.0f) {
-		return { SAT_QUERY_NONE };
+		return {};
 	}
 
 	SATEdgeQuery edge_query = SATEdge(first, second);
 	if (edge_query.distance > 0.0f) {
-		return { SAT_QUERY_NONE };
+		return {};
 	}
 
 	// No separation was found. It means that they are intersecting

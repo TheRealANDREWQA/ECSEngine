@@ -68,7 +68,7 @@ namespace ECSEngine {
 	}
 
 	// Returns a + b
-// If it overflows, it will set it to the maximum value for that integer
+	// If it overflows, it will set it to the maximum value for that integer
 	template<typename Integer>
 	ECS_INLINE Integer SaturateAdd(Integer a, Integer b) {
 		Integer new_value = a + b;
@@ -259,4 +259,13 @@ namespace ECSEngine {
 	ECSENGINE_API Simplex2DVoronoiRegion CalculateSimplex2DVoronoiRegion(float3 triangle_a, float3 triangle_b, float3 triangle_c, float3 point);
 
 	ECSENGINE_API Simplex3DVoronoiRegion CalculateSimplex3DVoronoiRegion(float3 A, float3 B, float3 C, float3 D, float3 point);
+
+	// This version does not use SIMD to compute the support point
+	// Returns the index of the point
+	ECSENGINE_API size_t ComputeSupportPointScalar(Stream<float3> points, float3 direction);
+
+	// This version does not use SIMD to compute the farthest point
+	// Returns the index of the point
+	ECSENGINE_API size_t ComputeFarthestPointFromScalar(Stream<float3> points, float3 point);
+
 }

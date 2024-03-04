@@ -306,7 +306,7 @@ namespace ECSEngine {
 		auto transformed_point = TransformPoint(plane_point, matrix).xyz();
 		auto length = Length(transformed_point);
 		// We can perform the division once
-		return { transformed_point * (typename Plane::Vector)::Splat(1.0f / length), length };
+		return { transformed_point * (1.0f / length), length };
 	}
 
 	PlaneScalar ECS_VECTORCALL TransformPlane(PlaneScalar plane, Matrix matrix) {

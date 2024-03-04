@@ -272,6 +272,15 @@ namespace ECSEngine {
 			return *this;
 		}
 
+		ECS_INLINE Base2 operator / (float factor) const {
+			return *this * (1.0f / factor);
+		}
+
+		ECS_INLINE Base2& operator /= (float factor) {
+			*this = *this / factor;
+			return *this;
+		}
+
 		ECS_INLINE Base2 operator -() const {
 			return { -x, -y };
 		}
@@ -369,7 +378,7 @@ namespace ECSEngine {
 			return *this * Splat(factor);
 		}
 
-		ECS_INLINE Base3 operator *= (float factor) {
+		ECS_INLINE Base3& operator *= (float factor) {
 			x *= factor;
 			y *= factor;
 			z *= factor;
@@ -384,6 +393,15 @@ namespace ECSEngine {
 			x /= other.x;
 			y /= other.y;
 			z /= other.z;
+			return *this;
+		}
+
+		ECS_INLINE Base3 operator / (float factor) const {
+			return *this * (1.0f / factor);
+		}
+
+		ECS_INLINE Base3& operator /= (float factor) {
+			*this = *this / factor;
 			return *this;
 		}
 
@@ -507,10 +525,11 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Base4 operator /= (float factor) {
-			x /= factor;
-			y /= factor;
-			z /= factor;
-			w /= factor;
+			float inverse_factor = 1.0f / factor;
+			x *= inverse_factor;
+			y *= inverse_factor;
+			z *= inverse_factor;
+			w *= inverse_factor;
 			return *this;
 		}
 

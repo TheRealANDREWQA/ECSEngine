@@ -6,6 +6,10 @@ struct SATEdgeQuery {
 	float distance;
 	unsigned int edge_1_index;
 	unsigned int edge_2_index;
+	// This axis points away from the first hull
+	// If the first hull is moved with a translation equal to that of
+	// Distance along this axis, it will result in non-penetration
+	float3 separation_axis;
 };
 
 // A negative distance means penetration, a positive value means separation
@@ -23,6 +27,8 @@ enum SAT_QUERY_TYPE : unsigned char {
 };
 
 struct SATQuery {
+	ECS_INLINE SATQuery() : type(SAT_QUERY_NONE) {}
+
 	SAT_QUERY_TYPE type;
 	union {
 		SATEdgeQuery edge;

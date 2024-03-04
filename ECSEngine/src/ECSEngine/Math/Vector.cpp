@@ -1,7 +1,6 @@
 #include "ecspch.h"
 #include "BaseVector.h"
 #include "Vector.h"
-#include "../OS/Thread.h"
 
 namespace ECSEngine {
 
@@ -347,7 +346,11 @@ namespace ECSEngine {
 	static ECS_INLINE Vector ECS_VECTORCALL ProjectPointOnLineDirectionImpl(Vector line_point, Vector line_direction, Vector point) {
 		// Formula A + (dot(AP,line_direction) / dot(line_direction, line_direction)) * line_direction
 		// Where A is a point on the line and P is the point that we want to project
-		return line_point + line_direction * (Dot(point - line_point, line_direction) / Dot(line_direction, line_direction));
+		// Add a pair of paranthesis such that the dot division is performed before the multiplication
+		// With line_direction. The overloaded operator does take this into account, but it is
+		// More efficient like this since we perform a single division with a splat of 3 multiplications,
+		// While the other order of operations would be 3 multiplications, 1 division and another 3 multiplications
+		return line_point + line_direction * ((Dot(point - line_point, line_direction) / Dot(line_direction, line_direction)));
 	}
 
 	template<typename Vector>
@@ -1456,7 +1459,10 @@ namespace ECSEngine {
 		// The parallel solution
 		// Choose a point on one of the lines, and project it on the other line
 		Vector first_parallel_closest_point = first_line_point;
-		Vector second_parallel_closest_point = ProjectPointOnLineDirection(second_line_point, second_line_direction, first_parallel_closest_point);
+		// We can save a Dot here, since the internal function here needs e
+		// So, write it inline
+		//Vector second_parallel_closest_point = ProjectPointOnLineDirection(second_line_point, second_line_direction, first_parallel_closest_point);
+		Vector second_parallel_closest_point = second_line_point + second_line_direction * (Dot(first_parallel_closest_point - second_line_point, second_line_direction) / e);
 
 		*first_closest_point = Select(d_zero_mask, first_parallel_closest_point, first_general_closest_point);
 		*second_closest_point = Select(d_zero_mask, second_parallel_closest_point, second_general_closest_point);
@@ -1496,6 +1502,99 @@ namespace ECSEngine {
 			first_closest_point,
 			second_closest_point
 		);
+	}
+
+	template<typename Vector>
+	static ECS_INLINE void ECS_VECTORCALL ClosestSegmentPointsImpl(
+		Vector first_line_A,
+		Vector first_line_B,
+		Vector second_line_A,
+		Vector second_line_B,
+		Vector* first_closest_point,
+		Vector* second_closest_point
+	) {
+		// The line of thought for this function is similar to that of the line case
+		// We compute the line closest points, and then we clamp those points to the
+		// Segments 2 times. Due to some simplications, the solutions are (thanks to
+		// Real-time Collision Detection)
+		// s = (bf - ce) / d; // This is from the general case
+		// s = (bt - c) / a;
+		// t = (bs + f) / e;
+		// a = d1 * d1; b = d1 * d2; c = d1 * r; d = ae - b^2; e = d2 * d2; f = d2 * r; r = second_line_A - first_line_A;
+		// Here, we don't handle the degenerate case where the pair of points of a segment
+		// Overlap each other
+		
+		auto d1 = first_line_B - first_line_A;
+		auto d2 = second_line_B - second_line_A;
+		auto r = second_line_A - first_line_A;
+		auto a = Dot(d1, d1);
+		auto b = Dot(d1, d2);
+		auto c = Dot(d1, r);
+		auto e = Dot(d2, d2);
+		auto f = Dot(d2, r);
+
+		auto epsilon = ECS_SIMD_VECTOR_EPSILON_VALUE;
+		auto d = a * e - b * b;
+		// Here we cannot branch on the d value, compute both branches and select
+		auto greater_than_zero = d > epsilon;
+
+		auto zero_value = SingleZeroVector<Vector>();
+		auto one_value = OneVector<Vector>();
+
+		// Use the first s formula
+		auto non_parallel_s_value = ClampSingle((b * f - c * e) / d, zero_value, one_value);
+		// For the parallel case, we can choose any s value we want. Here, 0.0f is the
+		// Most convenient since we are already using it inside the clamping
+		auto parallel_s_value = SingleZeroVector<Vector>();
+		auto s = SelectSingle(greater_than_zero, non_parallel_s_value, parallel_s_value);
+
+		// Now calculate t based on s and check to see if it is in the [0.0f, 1.0f] bounds
+		// If not, we need to clamp it and recalculate s based on the t formula
+		auto t = (b * s + f) / e;
+
+		// Use a separate code path for the scalar case, since it can branch
+		if constexpr (std::is_same_v<Vector, float3>) {
+			if (t < 0.0f) {
+				t = 0.0f;
+				s = ClampSingle(-c / a, 0.0f, 1.0f);
+			}
+			else if (t > 1.0f) {
+				t = 1.0f;
+				s = ClampSingle((b - c) / a, 0.0f, 1.0f);
+			}
+		}
+		else {
+			// We cannot branch here, just clamp t, and use the general s formula
+			// Unfortunately, we cannot skip calculations in the case that the
+			// t is already in the [0.0f, 1.0f] range
+			t = ClampSingle(t, zero_value, one_value);
+			s = ClampSingle((b * t - c) / a, zero_value, one_value);
+		}
+
+		*first_closest_point = Fmadd(d1, Vector::Splat(s), first_line_A);
+		*second_closest_point = Fmadd(d2, Vector::Splat(t), second_line_A);
+	}
+
+	void ECS_VECTORCALL ClosestSegmentPoints(
+		float3 first_line_A,
+		float3 first_line_B,
+		float3 second_line_A,
+		float3 second_line_B,
+		float3* first_closest_point,
+		float3* second_closest_point
+	) {
+		ClosestSegmentPointsImpl(first_line_A, first_line_B, second_line_A, second_line_B, first_closest_point, second_closest_point);
+	}
+
+	void ECS_VECTORCALL ClosestSegmentPoints(
+		Vector3 first_line_A,
+		Vector3 first_line_B,
+		Vector3 second_line_A,
+		Vector3 second_line_B,
+		Vector3* first_closest_point,
+		Vector3* second_closest_point
+	) {
+		ClosestSegmentPointsImpl(first_line_A, first_line_B, second_line_A, second_line_B, first_closest_point, second_closest_point);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

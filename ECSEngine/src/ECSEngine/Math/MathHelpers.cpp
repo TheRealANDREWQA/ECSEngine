@@ -978,4 +978,38 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	size_t ComputeSupportPointScalar(Stream<float3> points, float3 direction) {
+		float dot = -FLT_MAX;
+		size_t dot_index = -1;
+		for (size_t index = 0; index < points.size; index++) {
+			float current_dot = Dot(points[index], direction);
+			if (current_dot > dot) {
+				dot = current_dot;
+				dot_index = index;
+			}
+		}
+
+		return dot_index;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	size_t ComputeFarthestPointFromScalar(Stream<float3> points, float3 point)
+	{
+		// Use squared distances instead of real distances
+		float squared_distance = 0.0f;
+		size_t farthest_index = -1;
+		for (size_t index = 0; index < points.size; index++) {
+			float current_squared_distance = SquareLength(points[index] - point);
+			if (current_squared_distance > squared_distance) {
+				squared_distance = current_squared_distance;
+				farthest_index = index;
+			}
+		}
+
+		return farthest_index;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 }

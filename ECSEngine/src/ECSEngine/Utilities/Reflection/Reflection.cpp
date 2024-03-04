@@ -2313,16 +2313,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		bool ReflectionManager::ProcessFolderHierarchy(unsigned int index, CapacityStream<char>* error_message) {
 			AllocatorPolymorphic allocator = folders.allocator;
-			Stream<wchar_t> c_file_extensions[] = {
-				L".c",
-				L".cpp",
-				L".h",
-				L".hpp"
-			};
 
 			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
 			AdditionStream<Stream<wchar_t>> files = &files_storage;
-			bool status = GetDirectoryFilesWithExtensionRecursive(folders[index].root, allocator, files, { c_file_extensions, ECS_COUNTOF(c_file_extensions) });
+			bool status = GetDirectoryFilesWithExtensionRecursive(folders[index].root, allocator, files, GetCppSourceFilesExtensions());
 			if (!status) {
 				return false;
 			}
@@ -2340,16 +2334,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			unsigned int thread_count = task_manager->GetThreadCount();
 
 			AllocatorPolymorphic allocator = folders.allocator;
-			Stream<wchar_t> c_file_extensions[] = {
-				L".c",
-				L".cpp",
-				L".h",
-				L".hpp"
-			};
 
 			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
 			AdditionStream<Stream<wchar_t>> files = &files_storage;
-			bool status = GetDirectoryFilesWithExtensionRecursive(folders[folder_index].root, allocator, files, { c_file_extensions, ECS_COUNTOF(c_file_extensions) });
+			bool status = GetDirectoryFilesWithExtensionRecursive(folders[folder_index].root, allocator, files, GetCppSourceFilesExtensions());
 			if (!status) {
 				return false;
 			}
@@ -3466,14 +3454,25 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							field_end[0] = ';';
 
 							if (opened_paranthese == nullptr) {
-								ECS_REFLECTION_ADD_TYPE_FIELD_RESULT result = AddTypeField(data, type, pointer_offset, field_start, field_end);
-
-								if (result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
-									WriteErrorMessage(data, "An error occured during field type determination.", file_index);
-									return false;
+								// Now check to see if this line is a typedef. In such cases, simply ignore this line
+								bool is_typedef = false;
+								const char* first_line_character = SkipWhitespaceEx(field_start);
+								if (first_line_character != nullptr) {
+									const char* first_word_end = SkipCodeIdentifier(first_line_character);
+									Stream<char> first_word = { first_line_character, PointerDifference(first_word_end, first_line_character) / sizeof(char) };
+									is_typedef = first_word == "typedef";
 								}
-								else if (result == ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED) {
-									omitted_fields = true;
+
+								if (!is_typedef) {
+									ECS_REFLECTION_ADD_TYPE_FIELD_RESULT result = AddTypeField(data, type, pointer_offset, field_start, field_end);
+
+									if (result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
+										WriteErrorMessage(data, "An error occured during field type determination.", file_index);
+										return false;
+									}
+									else if (result == ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED) {
+										omitted_fields = true;
+									}
 								}
 							}
 							else {
@@ -4310,9 +4309,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ECS_FILE_STATUS_FLAGS status_flags = OpenFile(path, &file_handle, ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_READ_ONLY);
 			if (status_flags == ECS_FILE_STATUS_OK) {
 				// read the first line in order to check if there is something to be reflected
-				bool success = ReadFile(file_handle, { line_characters, max_line_characters });
+				bool success = ReadFile(file_handle, { line_characters, max_line_characters - 1 });
 				bool has_reflect = false;
 				if (success) {
+					line_characters[max_line_characters - 1] = '\0';
 					has_reflect = strstr(line_characters, STRING(ECS_REFLECT)) != nullptr;
 				}
 				CloseFile(file_handle);

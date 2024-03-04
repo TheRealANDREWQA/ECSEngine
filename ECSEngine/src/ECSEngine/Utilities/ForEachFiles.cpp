@@ -9,6 +9,13 @@
 
 namespace ECSEngine {
 
+	Stream<wchar_t> ECS_CPP_SOURCE_FILES_EXTENSIONS[4] = {
+		L".cpp",
+		L".c",
+		L".h",
+		L".hpp"
+	};
+
 	// --------------------------------------------------------------------------------------------------
 
 	bool IsFileWithExtension(Stream<wchar_t> path, Stream<wchar_t> extension, CapacityStream<wchar_t> filename) {

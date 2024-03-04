@@ -7,6 +7,7 @@
 #include "../../OS/DLL.h"
 #include "../../Multithreading/TaskScheduler.h"
 #include "../../Utilities/Crash.h"
+#include "../../Utilities/ForEachFiles.h"
 
 namespace ECSEngine {
 
@@ -162,18 +163,75 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void* GetModuleHandleFromPath(Stream<char> module_path)
-	{
-		NULL_TERMINATE(module_path);
-		return GetModuleHandleA(module_path.buffer);
-	}
+	Stream<Stream<char>> GetModuleDLLDependenciesFromSourceIncludes(
+		Stream<wchar_t> src_folder,
+		Stream<Stream<char>> existing_module_names,
+		AllocatorPolymorphic allocator
+	) {
+		Stream<Stream<wchar_t>> source_files_extensions = GetCppSourceFilesExtensions();
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, dependencies, 512);
+		
+		ForEachFileInDirectoryRecursiveWithExtension(src_folder, source_files_extensions, [&](Stream<wchar_t> path) {
+			// Read the first 2000 characters from a source file
+			// This should cover all reasonable cases, such that we don't
+			// Have to read the entire source file to see these includes
+			ECS_FILE_HANDLE file_handle = -1;
+			ECS_FILE_STATUS_FLAGS status = OpenFile(path, &file_handle);
 
-	// -----------------------------------------------------------------------------------------------------------
+			if (status == ECS_FILE_STATUS_OK) {
+				ECS_STACK_CAPACITY_STREAM(char, source_code, ECS_KB * 2);
+				source_code.size = source_code.capacity;
+				source_code.size = ReadFromFile(file_handle, source_code);
+				if (source_code.size != -1) {
+					// Determine all the includes
+					ECS_STACK_CAPACITY_STREAM(unsigned int, include_offsets, 512);
+					FindToken("#include", source_code, &include_offsets);
 
-	void* GetModuleHandleFromPath(Stream<wchar_t> module_path)
-	{
-		NULL_TERMINATE_WIDE(module_path);
-		return GetModuleHandleW(module_path.buffer);
+					size_t include_length = strlen("#include");
+					for (unsigned int index = 0; index < include_offsets.size; index++) {
+						Stream<char> include_tag = source_code.SliceAt(include_offsets[index]);
+						include_tag.size += include_length;
+
+						Stream<char> new_line = FindFirstCharacter(include_tag, '\n');
+						if (new_line.size == 0) {
+							new_line = { include_tag.buffer + include_tag.size, 0 };
+						}
+						include_tag = SkipWhitespace(include_tag);
+						if (include_tag.buffer < new_line.buffer) {
+							// Test to see if we have a specified string in quotations
+							if (include_tag.buffer[0] == '\"') {
+								include_tag.Advance();
+								Stream<char> string_end = FindFirstCharacter(include_tag, '\"');
+								if (string_end.size > 0 && string_end.buffer < new_line.buffer) {
+									// Get all subparts of the string except the last one, since it is
+									// The source file name
+									Stream<char> parse_string = include_tag.StartDifference(string_end);
+									ECS_STACK_CAPACITY_STREAM(Stream<char>, path_parts, 64);
+									PathSplit(parse_string, &path_parts);
+
+									for (unsigned int subindex = 0; subindex < path_parts.size - 1; subindex++) {
+										Stream<char> current_path_part = path_parts[subindex];
+										unsigned int module_name_index = FindString(current_path_part, existing_module_names);
+										if (module_name_index != -1) {
+											// Check to see if we added this module name already
+											bool was_added = FindString(current_path_part, dependencies) != -1;
+											if (!was_added) {
+												dependencies.AddAssert(current_path_part);
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+				CloseFile(file_handle);
+			}
+			return true;
+		});
+
+		return dependencies.size > 0 ? StreamCoalescedDeepCopy(dependencies, allocator) : Stream<Stream<char>>{};
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -186,7 +244,6 @@ namespace ECSEngine {
 		void* module_handle = OS::LoadDLL(path);
 
 		if (module_handle == nullptr) {
-			DWORD error = GetLastError();
 			module.code = ECS_GET_MODULE_FAULTY_PATH;
 			return module;
 		}

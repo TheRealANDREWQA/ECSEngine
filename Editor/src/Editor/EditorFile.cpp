@@ -116,7 +116,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 
 		unsigned short project_count = 0;
 		bool success = true;
-		success &= ReadFile(file, { &project_count, sizeof(project_count) });
+		success &= ReadFileExact(file, { &project_count, sizeof(project_count) });
 		if (project_count >= hub_data->projects.capacity) {
 			return false;
 		}
@@ -124,7 +124,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 		hub_data->projects.size = 0;
 		for (unsigned short index = 0; index < project_count && success; index++) {
 			unsigned short path_size = 0;
-			success &= ReadFile(file, { &path_size, sizeof(path_size) });
+			success &= ReadFileExact(file, { &path_size, sizeof(path_size) });
 
 			if (path_size == 0) {
 				return false;
@@ -132,7 +132,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 
 			// If the file doesn't exist, it means it has been destroyed beforehand in the OS
 			// So add it to the invalid stream
-			success &= ReadFile(file, { temp_path, sizeof(wchar_t) * path_size });
+			success &= ReadFileExact(file, { temp_path, sizeof(wchar_t) * path_size });
 			Path current_path(temp_path, path_size);
 			current_path[path_size] = L'\0';
 			if (!ValidateProjectPath(current_path)) {

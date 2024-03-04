@@ -246,7 +246,8 @@ void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name
 
 Stream<wchar_t> GetModuleLibraryName(const EditorState* editor_state, unsigned int module_index);
 
-// This will go through the .vcxproj file to read the imports
+// This will go through the .vcxproj file to read the imports and through
+// The source files to look for includes
 void GetModuleDLLImports(EditorState* editor_state, unsigned int index);
 
 // It will fill in all the indices of the modules that are being used by this module
