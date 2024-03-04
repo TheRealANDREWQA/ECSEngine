@@ -8976,9 +8976,9 @@ namespace ECSEngine {
 				ScopedFile scoped_file({ file });
 
 				unsigned int version = 0;
-				bool success = ReadFile(file, { &version, sizeof(version) });
+				bool success = ReadFileExact(file, { &version, sizeof(version) });
 				if (version == ECS_TOOLS_UI_DESCRIPTOR_FILE_VERSION) {
-					success &= ReadFile(file, { &m_descriptors, sizeof(UISystemDescriptors) });
+					success &= ReadFileExact(file, { &m_descriptors, sizeof(UISystemDescriptors) });
 				}
 				else {
 					success = false;

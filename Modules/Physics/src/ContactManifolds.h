@@ -26,4 +26,4 @@ struct ContactManifold {
 PHYSICS_API ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery query);
 
 // The points must be coplanar. Returns the count of valid entries
-PHYSICS_API size_t SimplifyContactManifoldPoints(Stream<float3> points);
+PHYSICS_API size_t SimplifyContactManifoldPoints(Stream<float3> points, float3 plane_normal);

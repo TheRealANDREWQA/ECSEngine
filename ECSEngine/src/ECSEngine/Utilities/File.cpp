@@ -189,8 +189,15 @@ namespace ECSEngine {
 
 	bool ReadFile(ECS_FILE_HANDLE handle, Stream<void> data)
 	{
-		unsigned int val = ReadFromFile(handle, data) ;
+		unsigned int val = ReadFromFile(handle, data);
 		return val != -1;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool ReadFileExact(ECS_FILE_HANDLE handle, Stream<void> data) {
+		unsigned int val = ReadFromFile(handle, data);
+		return val == (unsigned int)data.size;
 	}
 
 	// --------------------------------------------------------------------------------------------------

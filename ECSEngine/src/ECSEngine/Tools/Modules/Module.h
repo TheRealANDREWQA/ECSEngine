@@ -23,11 +23,14 @@ namespace ECSEngine {
 	// Can optionally tell the function to omit known system .dlls
 	ECSENGINE_API Stream<Stream<char>> GetModuleDLLDependenciesFromVCX(Stream<wchar_t> path, AllocatorPolymorphic allocator, bool omit_system_dlls = false);
 
-	// Returns nullptr if there is none loaded
-	ECSENGINE_API void* GetModuleHandleFromPath(Stream<char> module_path);
-
-	// Returns nullptr if there is none loaded
-	ECSENGINE_API void* GetModuleHandleFromPath(Stream<wchar_t> module_path);
+	// Retrieves the DLL dependencies from the source files #include directives
+	// An array of existing module names needs to be provided, otherwise the module
+	// Names cannot be identified
+	ECSENGINE_API Stream<Stream<char>> GetModuleDLLDependenciesFromSourceIncludes(
+		Stream<wchar_t> src_folder, 
+		Stream<Stream<char>> existing_module_names, 
+		AllocatorPolymorphic allocator
+	);
 
 	// It does not load any stream from the functions. Use the corresponding load functions for that
 	// The function LoadModuleTasks can be used to load them at a later time. If the boolean pointer

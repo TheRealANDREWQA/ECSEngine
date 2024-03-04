@@ -578,7 +578,7 @@ namespace ECSEngine {
     {
         // Firstly read the header
         SerializeEntityHierarchyHeader header;
-        bool success = ReadFile(file, { &header, sizeof(header) });
+        bool success = ReadFileExact(file, { &header, sizeof(header) });
         if (!success) {
             return false;
         }
@@ -587,7 +587,7 @@ namespace ECSEngine {
             return false;
         }
         
-        success = ReadFile(file, { hierarchy->roots.buffer, sizeof(Entity) * header.root_count });
+        success = ReadFileExact(file, { hierarchy->roots.buffer, sizeof(Entity) * header.root_count });
         hierarchy->roots.size = header.root_count;
         if (!success) {
             return false;
@@ -602,7 +602,7 @@ namespace ECSEngine {
             temp_buffer = ECS_STACK_ALLOC(header.children_data_size);
         }
 
-        success = ReadFile(file, { temp_buffer, header.children_data_size });
+        success = ReadFileExact(file, { temp_buffer, header.children_data_size });
         if (!success) {
             if (header.children_data_size > STACK_LIMIT) {
                 Free(temp_buffer);

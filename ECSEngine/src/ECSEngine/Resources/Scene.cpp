@@ -96,7 +96,7 @@ namespace ECSEngine {
 			deallocate_malloc.deallocator.file_handle = file_handle;
 			deallocate_malloc.deallocator.allocation = file_allocation;
 
-			bool success = ReadFile(file_handle, { file_allocation, file_byte_size });
+			bool success = ReadFileExact(file_handle, { file_allocation, file_byte_size });
 			if (!success) {
 				if (load_data->detailed_error_string) {
 					load_data->detailed_error_string->AddStreamAssert("Failed to read the scene file");

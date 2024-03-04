@@ -203,4 +203,14 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------
 
+	// It will split the path into subcomponents. It will take into account both relative and
+	// Absolute separators
+	ECSENGINE_API void PathSplit(ASCIIPath path, CapacityStream<ASCIIPath>* split_parts);
+
+	// It will split the path into subcomponents. It will take into account both relative and
+	// Absolute separators
+	ECSENGINE_API void PathSplit(Path path, CapacityStream<Path>* split_parts);
+
+	// -------------------------------------------------------------------------------------------------
+
 }

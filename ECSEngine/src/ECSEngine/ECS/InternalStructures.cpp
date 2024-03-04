@@ -718,7 +718,7 @@ namespace ECSEngine {
 	{
 		// Read the header first
 		SerializeEntityPoolHeader header;
-		bool success = ReadFile(file, { &header, sizeof(header) });
+		bool success = ReadFileExact(file, { &header, sizeof(header) });
 
 		if (!success || header.version != ENTITY_POOL_SERIALIZE_VERSION || (header.entity_count > ECS_MB * 100)) {
 			return false;
@@ -731,7 +731,7 @@ namespace ECSEngine {
 		entity_pool->m_entity_infos.FreeBuffer();
 
 		SerializeEntityInfo* serialize_infos = (SerializeEntityInfo*)Malloc(sizeof(SerializeEntityInfo) * header.entity_count);
-		success = ReadFile(file, { serialize_infos, sizeof(SerializeEntityInfo) * header.entity_count });
+		success = ReadFileExact(file, { serialize_infos, sizeof(SerializeEntityInfo) * header.entity_count });
 
 		if (success) {
 			// Walk through the entities and determine the "biggest one" in order to preallocate the streams

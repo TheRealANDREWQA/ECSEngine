@@ -128,8 +128,14 @@ namespace ECSEngine {
 	ECSENGINE_API unsigned int ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data);
 
 	// Unbuffered read from a file - the maximum amount of data that can be read is INT_MAX
-	// Reports if a failure has occured
+	// Reports if a failure has occured. This returns true even when the file doesn't have
+	// Data.size bytes, but the read was successful
 	ECSENGINE_API bool ReadFile(ECS_FILE_HANDLE handle, Stream<void> data);
+
+	// Unbuffered read from a file - the maximum amount of data that can be read is INT_MAX
+	// Reports if a failure has occured. This returns true only if the read size coincides
+	// With the data.size
+	ECSENGINE_API bool ReadFileExact(ECS_FILE_HANDLE handle, Stream<void> data);
 
 	// Buffered read from a file - the maximum amount of data that can be read is INT_MAX
 	// Returns the amount of bytes actually read from the file - it might be less for text files or if there are fewer bytes left

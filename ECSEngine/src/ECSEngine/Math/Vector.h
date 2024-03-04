@@ -707,6 +707,21 @@ namespace ECSEngine {
 	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsPerpendicularAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians);
 
 	// --------------------------------------------------------------------------------------------------------------
+	
+	// We already have a function in MathHelpers.h for normal floats, but to keep
+	// The same overload with the vector one, write one here
+	
+	ECS_INLINE float ClampSingle(float value, float min, float max) {
+		bool is_less = value < min;
+		bool is_greater = value > max;
+		return is_greater ? max : (is_less ? min : value);
+	}
+
+	ECS_INLINE Vec8f ECS_VECTORCALL ClampSingle(Vec8f value, Vec8f min, Vec8f max) {
+		SIMDVectorMask less_mask = value < min;
+		SIMDVectorMask greater_mask = value > max;
+		return SelectSingle(greater_mask, max, SelectSingle(less_mask, min, value));
+	}
 
 	ECSENGINE_API Vector3 ECS_VECTORCALL Clamp(Vector3 value, Vector3 min, Vector3 max);
 
@@ -1022,6 +1037,30 @@ namespace ECSEngine {
 		Vector3 first_line_direction,
 		Vector3 second_line_point,
 		Vector3 second_line_direction,
+		Vector3* first_closest_point,
+		Vector3* second_closest_point
+	);
+
+	// This functions returns the pair of points on the segments
+	// That are closest on those 2 segments. This function does not
+	// Handle degenerate cases where the 2 points of a segment overlap
+	ECSENGINE_API void ECS_VECTORCALL ClosestSegmentPoints(
+		float3 first_line_A,
+		float3 first_line_B,
+		float3 second_line_A,
+		float3 second_line_B,
+		float3* first_closest_point,
+		float3* second_closest_point
+	);
+
+	// This functions returns the pair of points on the segments
+	// That are closest on those 2 segments. This function does not
+	// Handle degenerate cases where the 2 points of a segment overlap
+	ECSENGINE_API void ECS_VECTORCALL ClosestLinesPoints(
+		Vector3 first_line_A,
+		Vector3 first_line_B,
+		Vector3 second_line_A,
+		Vector3 second_line_B,
 		Vector3* first_closest_point,
 		Vector3* second_closest_point
 	);

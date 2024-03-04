@@ -480,4 +480,65 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	template<typename CharacterType, typename PathType>
+	static void PathSplitImpl(PathType path, CapacityStream<PathType>* split_parts) {
+		PathType relative_separator = FindFirstCharacter(path, Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL));
+		PathType absolute_separator = FindFirstCharacter(path, Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII));
+
+		// Perform this loop while both separators exist
+		unsigned int current_offset = 0;
+		while (relative_separator.size > 0 && absolute_separator.size > 0) {
+			PathType current_path;
+			if (relative_separator.buffer < absolute_separator.buffer) {
+				current_path = { path.buffer + current_offset, (size_t)relative_separator.buffer - (size_t)path.buffer - current_offset };
+				relative_separator.Advance();
+				relative_separator = FindFirstCharacter(relative_separator, Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL));
+			}
+			else {
+				current_path = { path.buffer + current_offset, (size_t)absolute_separator.buffer - (size_t)path.buffer - current_offset };
+				absolute_separator.Advance();
+				absolute_separator = FindFirstCharacter(absolute_separator, Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII));
+			}
+			split_parts->AddAssert(current_path);
+			current_offset += current_path.size + 1;
+		}
+
+		if (relative_separator.size > 0) {
+			// Only relative separators are left
+			while (relative_separator.size > 0) {
+				PathType current_path = { path.buffer + current_offset, (size_t)relative_separator.buffer - (size_t)path.buffer - current_offset };
+				relative_separator.Advance();
+				relative_separator = FindFirstCharacter(relative_separator, Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL));
+				split_parts->AddAssert(current_path);
+				current_offset += current_path.size + 1;
+			}
+		}
+
+		if (absolute_separator.size > 0) {
+			// Only absolute seprators are left
+			while (absolute_separator.size > 0) {
+				PathType current_path = { path.buffer + current_offset, (size_t)absolute_separator.buffer - (size_t)path.buffer - current_offset };
+				absolute_separator.Advance();
+				absolute_separator = FindFirstCharacter(absolute_separator, Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII));
+				split_parts->AddAssert(current_path);
+				current_offset += current_path.size + 1;
+			}
+		}
+
+		if (current_offset < path.size) {
+			PathType last_part = { path.buffer + current_offset, path.size - current_offset };
+			split_parts->AddAssert(last_part);
+		}
+	}
+
+	void PathSplit(ASCIIPath path, CapacityStream<ASCIIPath>* split_parts) {
+		PathSplitImpl<char>(path, split_parts);
+	}
+
+	void PathSplit(Path path, CapacityStream<Path>* split_parts) {
+		PathSplitImpl<wchar_t>(path, split_parts);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 }

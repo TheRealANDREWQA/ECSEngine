@@ -1748,7 +1748,7 @@ namespace ECSEngine {
 		void* buffering = Malloc(ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 		struct Functor {
 			ECS_INLINE bool ReadInto(void* ptr, size_t size) {
-				return ReadFile(file_handle, { ptr, size });
+				return ReadFileExact(file_handle, { ptr, size });
 			}
 
 			void* AllocateAndRead(size_t size, bool* allocation_has_failed) {

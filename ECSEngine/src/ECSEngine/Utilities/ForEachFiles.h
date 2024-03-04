@@ -5,6 +5,13 @@
 
 namespace ECSEngine {
 
+	// Includes C source files as well
+	ECSENGINE_API extern Stream<wchar_t> ECS_CPP_SOURCE_FILES_EXTENSIONS[4];
+	
+	ECS_INLINE Stream<Stream<wchar_t>> GetCppSourceFilesExtensions() {
+		return { ECS_CPP_SOURCE_FILES_EXTENSIONS, ECS_COUNTOF(ECS_CPP_SOURCE_FILES_EXTENSIONS) };
+	}
+
 	ECSENGINE_API bool IsFileWithExtension(
 		Stream<wchar_t> path,
 		Stream<wchar_t> extension,
