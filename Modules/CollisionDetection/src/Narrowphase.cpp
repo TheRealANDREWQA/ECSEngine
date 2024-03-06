@@ -57,29 +57,25 @@ ECS_THREAD_TASK(NarrowphaseGridHandler) {
 					Line3D second_line = second_collider_transformed.GetEdgePoints(query.edge.edge_2_index);
 					world->debug_drawer->AddLineThread(thread_id, first_line.A, first_line.B, ECS_COLOR_ORANGE);
 					world->debug_drawer->AddLineThread(thread_id, second_line.A, second_line.B, ECS_COLOR_ORANGE);
-
-					const ConvexHullEdge& first_edge = first_collider_transformed.edges[query.edge.edge_1_index];
-					const ConvexHullEdge& second_edge = second_collider_transformed.edges[query.edge.edge_2_index];
-					float3 first_normal_1 = first_collider_transformed.faces[first_edge.face_1_index].plane.normal;
-					float3 first_normal_2 = first_collider_transformed.faces[first_edge.face_2_index].plane.normal;
-					float3 second_normal_1 = second_collider_transformed.faces[second_edge.face_1_index].plane.normal;
-					float3 second_normal_2 = second_collider_transformed.faces[second_edge.face_2_index].plane.normal;
-					world->debug_drawer->AddLineThread(thread_id, float3::Splat(0.0f), first_normal_1, ECS_COLOR_LIME);
-					world->debug_drawer->AddLineThread(thread_id, float3::Splat(0.0f), first_normal_2, ECS_COLOR_LIME);
-					world->debug_drawer->AddLineThread(thread_id, float3::Splat(0.0f), second_normal_1, ECS_COLOR_RED);
-					world->debug_drawer->AddLineThread(thread_id, float3::Splat(0.0f), second_normal_2, ECS_COLOR_RED);
-					world->debug_drawer->AddLineThread(thread_id, first_normal_1, first_normal_2, ECS_COLOR_AQUA);
-					world->debug_drawer->AddLineThread(thread_id, second_normal_1, second_normal_2, ECS_COLOR_WHITE);
 				}
 				else if (query.type == SAT_QUERY_FACE) {
 					world->debug_drawer->AddStringThread(thread_id, first_translation != nullptr ? first_translation->value : float3::Splat(0.0f),
 						float3::Splat(1.0f), 1.0f, "Face", ECS_COLOR_ORANGE);
 					const ConvexHull* convex_hull = query.face.first_collider ? &first_collider_transformed : &second_collider_transformed;
+					const ConvexHull* second_hull = query.face.first_collider ? &second_collider_transformed : &first_collider_transformed;
 					const ConvexHullFace& face_1 = convex_hull->faces[query.face.face_index];
 					for (unsigned int index = 0; index < face_1.points.size; index++) {
 						unsigned int next_index = index == face_1.points.size - 1 ? 0 : index + 1;
 						float3 A = convex_hull->GetPoint(face_1.points[index]);
 						float3 B = convex_hull->GetPoint(face_1.points[next_index]);
+						world->debug_drawer->AddLineThread(thread_id, A, B, ECS_COLOR_ORANGE);
+					}
+
+					const ConvexHullFace& face_2 = second_hull->faces[query.face.second_face_index];
+					for (unsigned int index = 0; index < face_2.points.size; index++) {
+						unsigned int next_index = index == face_2.points.size - 1 ? 0 : index + 1;
+						float3 A = second_hull->GetPoint(face_2.points[index]);
+						float3 B = second_hull->GetPoint(face_2.points[next_index]);
 						world->debug_drawer->AddLineThread(thread_id, A, B, ECS_COLOR_ORANGE);
 					}
 				}

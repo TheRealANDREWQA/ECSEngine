@@ -3,4 +3,4 @@
 
 ECS_THREAD_TASK(NarrowphaseGridHandler);
 
-void SetNarrowphaseTasks(ECSEngine::ModuleTaskFunctionData* data);
+void SetNarrowphaseTasks(ModuleTaskFunctionData* data);

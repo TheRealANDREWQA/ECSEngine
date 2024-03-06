@@ -888,7 +888,7 @@ namespace ECSEngine {
 					}
 					else {
 						// TODO: The crash here might interfere with invalidated module
-						//ECS_CRASH_CONDITION(task_index != -1, "Failed to find task {#} to reference data", inherit_name);
+						ECS_CRASH_CONDITION(task_index != -1, "Failed to find task {#} to reference data", inherit_name);
 					}
 				}
 			}

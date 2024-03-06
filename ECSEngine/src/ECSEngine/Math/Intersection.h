@@ -137,7 +137,7 @@ namespace ECSEngine {
 	// Calculates a point based on the t factor
 	template<typename Vector>
 	ECS_INLINE Vector ECS_VECTORCALL ClipSegmentCalculatePoint(Vector segment_a, Vector normalized_direction, typename Vector::T segment_t, typename Vector::T t_factor) {
-		return Fmadd(normalized_direction, Vector::Splat(segment_t * t_factor), segment_a);
+		return Fmadd(normalized_direction, Vector::Splat(segment_t / t_factor), segment_a);
 	}
 	
 }

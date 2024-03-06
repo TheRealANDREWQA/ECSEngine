@@ -616,12 +616,11 @@ namespace ECSEngine {
 		// Pops all the elements from the queue into the elements
 		// Basically combines a GetSizeAtomic() with PopRange
 		// Returns the number of entries popped
-		unsigned int PopRangeAll(CapacityStream<T>* elements) {
+		unsigned int PopRangeAll(AdditionStream<T> elements) {
 			Lock();
 			unsigned int size = GetSize();
-			ECS_ASSERT(size + elements->size <= elements->capacity);
-			PopRangeNonAtomic(elements->buffer, size);
-			elements->size += size;
+			T* elements_to_write = elements.Reserve(size);
+			PopRangeNonAtomic(elements_to_write, size);
 			Unlock();
 
 			return size;

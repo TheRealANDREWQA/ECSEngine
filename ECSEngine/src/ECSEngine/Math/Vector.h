@@ -1041,6 +1041,33 @@ namespace ECSEngine {
 		Vector3* second_closest_point
 	);
 
+
+	// This function determines the closest points between the lines
+	// And returns the squared distance between those 2 points
+	ECS_INLINE float ECS_VECTORCALL SquaredDistanceBetweenLinesPoints(
+		float3 first_line_point,
+		float3 first_line_direction,
+		float3 second_line_point,
+		float3 second_line_direction
+	) {
+		float3 first_closest_point, second_closest_point;
+		ClosestLinesPoints(first_line_point, first_line_direction, second_line_point, second_line_direction, &first_closest_point, &second_closest_point);
+		return SquareLength(first_closest_point - second_closest_point);
+	}
+
+	// This function determines the closest points between the lines
+	// And returns the squared distance between those 2 points
+	ECS_INLINE Vec8f ECS_VECTORCALL SquaredDistanceBetweenLinesPoints(
+		Vector3 first_line_point,
+		Vector3 first_line_direction,
+		Vector3 second_line_point,
+		Vector3 second_line_direction
+	) {
+		Vector3 first_closest_point, second_closest_point;
+		ClosestLinesPoints(first_line_point, first_line_direction, second_line_point, second_line_direction, &first_closest_point, &second_closest_point);
+		return SquareLength(first_closest_point - second_closest_point);
+	}
+
 	// This functions returns the pair of points on the segments
 	// That are closest on those 2 segments. This function does not
 	// Handle degenerate cases where the 2 points of a segment overlap
@@ -1056,7 +1083,7 @@ namespace ECSEngine {
 	// This functions returns the pair of points on the segments
 	// That are closest on those 2 segments. This function does not
 	// Handle degenerate cases where the 2 points of a segment overlap
-	ECSENGINE_API void ECS_VECTORCALL ClosestLinesPoints(
+	ECSENGINE_API void ECS_VECTORCALL ClosestSegmentPoints(
 		Vector3 first_line_A,
 		Vector3 first_line_B,
 		Vector3 second_line_A,
@@ -1064,6 +1091,32 @@ namespace ECSEngine {
 		Vector3* first_closest_point,
 		Vector3* second_closest_point
 	);
+
+	// This function determines the closest points between the segments
+	// And returns the squared distance between those 2 points
+	ECS_INLINE float ECS_VECTORCALL SquaredDistanceBetweenSegmentPoints(
+		float3 first_line_A,
+		float3 first_line_B,
+		float3 second_line_A,
+		float3 second_line_B
+	) {
+		float3 first_closest_point, second_closest_point;
+		ClosestSegmentPoints(first_line_A, first_line_B, second_line_A, second_line_B, &first_closest_point, &second_closest_point);
+		return SquareLength(first_closest_point - second_closest_point);
+	}
+
+	// This function determines the closest points between the segments
+	// And returns the squared distance between those 2 points
+	ECS_INLINE Vec8f ECS_VECTORCALL SquaredDistanceBetweenSegmentPoints(
+		Vector3 first_line_A,
+		Vector3 first_line_B,
+		Vector3 second_line_A,
+		Vector3 second_line_B
+	) {
+		Vector3 first_closest_point, second_closest_point;
+		ClosestSegmentPoints(first_line_A, first_line_B, second_line_A, second_line_B, &first_closest_point, &second_closest_point);
+		return SquareLength(first_closest_point - second_closest_point);
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 

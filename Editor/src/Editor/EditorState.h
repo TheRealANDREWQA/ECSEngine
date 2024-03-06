@@ -141,10 +141,15 @@ struct EditorState {
 	// These will be played back on the main thread. If multithreaded tasks are desired,
 	// use the AddBackgroundTask function. It is used in a multithreaded context
 	ECSEngine::ThreadSafeResizableQueue<EditorEvent> event_queue;
-	// When ticking the events, here the events that want to be pushed back
+	// When ticking the events, the events that want to be pushed back
 	// Will be placed here and if an action wants to check which events are still
 	// Active it can look here during event processing
 	ECSEngine::ResizableStream<EditorEvent> readd_events;
+	// These are the events that are being processed in a tick
+	// We keep them here such that events can query the state of other
+	// Events or the presence of certain other events
+	ECSEngine::ResizableStream<EditorEvent> tick_processing_events;
+	unsigned int tick_processing_events_index;
 
 	// We need to record globally all the prefabs
 	// Since they can be cross-referenced in multiple sandboxes

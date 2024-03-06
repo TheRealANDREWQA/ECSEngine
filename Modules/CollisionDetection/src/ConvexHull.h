@@ -117,6 +117,13 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 
 	Line3D GetFaceEdge(unsigned int face_index, unsigned int face_edge_index) const;
 
+	// It will merge coplanar or near coplanar faces
+	// If the previous face allocator is specified, it will deallocate
+	// The buffers of the faces that are collapsed
+	// The face buffers will be allocated individually from the allocator
+	// At the end, it will not resize the buffers. You must do that manually
+	void MergeCoplanarFaces(AllocatorPolymorphic allocator, AllocatorPolymorphic previous_face_allocator = { nullptr });
+
 	ECS_INLINE void SetPoint(float3 point, unsigned int index) {
 		vertices_x[index] = point.x;
 		vertices_y[index] = point.y;

@@ -534,17 +534,19 @@ void CommandLineString(
 // -------------------------------------------------------------------------------------------------------------------------
 
 struct ReloadModuleEventData {
-	bool allocated_finish_status;
+	bool is_allocated_finish_status;
 	EDITOR_MODULE_CONFIGURATION configuration;
 	// This is a single value - not an array
 	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* finish_status;
+	// This is a single value - not an array
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* allocated_finish_status;
 	// These are allocated inside the event
 	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* dependencies_finish_status;
 	Stream<unsigned int> dependencies;
 };
 
 // This is used to reload modules that have been unloaded during a build/reload/clean
-EDITOR_EVENT(ReloadModuleEvent) {
+static EDITOR_EVENT(ReloadModuleEvent) {
 	ReloadModuleEventData* data = (ReloadModuleEventData*)_data;
 
 	if (data->finish_status->load(ECS_RELAXED) != EDITOR_FINISH_BUILD_COMMAND_WAITING) {
@@ -574,8 +576,8 @@ EDITOR_EVENT(ReloadModuleEvent) {
 		if (data->dependencies.size > 0) {
 			editor_state->editor_allocator->Deallocate(data->dependencies.buffer);
 		}
-		if (data->allocated_finish_status) {
-			editor_state->editor_allocator->Deallocate(data->finish_status);
+		if (data->is_allocated_finish_status) {
+			editor_state->editor_allocator->Deallocate(data->allocated_finish_status);
 		}
 		return false;
 	}
@@ -695,18 +697,21 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 	return true;
 }
 
-
 struct RunCmdCommandAfterExternalDependencyData {
 	unsigned int module_index;
 	Stream<wchar_t> command;
 	EDITOR_MODULE_CONFIGURATION configuration;
 	bool disable_logging;
+	// This flag is used to indicate that the module
+	// Also has imports and that we shouldn't run
+	// The CMD command immediately after we finish
+	bool has_imports;
 	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status;
 	Stream<unsigned int> dependencies;
 	ResizableStream<unsigned int> unloaded_dependencies;
 };
 
-EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
+static EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 	RunCmdCommandAfterExternalDependencyData* data = (RunCmdCommandAfterExternalDependencyData*)_data;
 
 	// Determine if all the dependencies have finished their respective actions
@@ -743,7 +748,10 @@ EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 			data->report_status->store(EDITOR_FINISH_BUILD_COMMAND_WAITING, ECS_RELAXED);
 			allocated_report_status = true;
 		}
-		RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->report_status, data->disable_logging);
+
+		if (!data->has_imports) {
+			RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->report_status, data->disable_logging);
+		}
 
 		if (data->command != CLEAN_PROJECT_STRING_WIDE) {
 			if (data->unloaded_dependencies.size > 0) {
@@ -751,8 +759,32 @@ EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 				reload_data.configuration = data->configuration;
 				reload_data.dependencies = data->unloaded_dependencies.ToStream();
 				reload_data.finish_status = data->report_status;
-				reload_data.allocated_finish_status = allocated_report_status;
+				reload_data.allocated_finish_status = data->report_status;
+				reload_data.is_allocated_finish_status = allocated_report_status;
 				reload_data.dependencies_finish_status = nullptr;
+
+				if (data->has_imports) {
+					// In case it has imports, check to see if the import
+					// Event has finished
+					ECS_STACK_CAPACITY_STREAM(void*, import_data, ECS_KB);
+					EditorGetEventTypeDataWhileInsideEvent(editor_state, RunCmdCommandDLLImport, &import_data);
+					for (unsigned int index = 0; index < import_data.size; index++) {
+						RunCmdCommandDLLImportData* current_import_data = (RunCmdCommandDLLImportData*)import_data[index];
+						if (current_import_data->module_index == data->module_index && current_import_data->configuration == data->configuration) {
+							if (current_import_data->original_status != nullptr) {
+								// Inherit the finish status here, such that we get notified
+								// Correctly when this has finished
+								reload_data.finish_status = current_import_data->original_status;
+							}
+							else {
+								// Modify the import to signal our flag
+								current_import_data->original_status = reload_data.finish_status;
+							}
+							break;
+						}
+					}
+				}
+
 				EditorAddEvent(editor_state, ReloadModuleEvent, &reload_data, sizeof(reload_data));
 			}
 			else {
@@ -848,7 +880,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 
 // Returns whether or not the command actually will be executed. The command can be skipped if the module is in flight
 // running another command
-EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
+static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	EditorState* editor_state,
 	unsigned int index,
 	Stream<wchar_t> command,
@@ -913,6 +945,8 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	};
 
 	if (external_references.size > 0) {
+		bool executes_import = execute_import();
+
 		RunCmdCommandAfterExternalDependencyData wait_data;
 		wait_data.command = command;
 		wait_data.configuration = configuration;
@@ -921,10 +955,8 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 		wait_data.unloaded_dependencies.Initialize(editor_state->EditorAllocator(), 0);
 		wait_data.dependencies.InitializeAndCopy(editor_state->EditorAllocator(), external_references);
 		wait_data.disable_logging = disable_logging;
+		wait_data.has_imports = executes_import;
 		EditorAddEvent(editor_state, RunCmdCommandAfterExternalDependency, &wait_data, sizeof(wait_data));
-
-		execute_import();
-
 		return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
 	}
 	else if (execute_import()) {
@@ -1785,6 +1817,11 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 			// No need to verify if the symbols load failed or succeeded
 			bool load_debugging_symbols = false;
 			info->ecs_module.base_module = LoadModule(temporary_library, &load_debugging_symbols);
+			if (!load_debugging_symbols) {
+				ECS_FORMAT_TEMP_STRING(message, "Failed to load debugging symbols for module {#} with configuration {#}", library_name, MODULE_CONFIGURATIONS[configuration]);
+				EditorSetConsoleWarn(message);
+			}
+
 			// The load succeded, now try to retrieve the streams for this module
 			if (info->ecs_module.base_module.code == ECS_GET_MODULE_OK) {
 				AllocatorPolymorphic allocator = editor_state->EditorAllocator();

@@ -520,6 +520,9 @@ static void ScenePrivateAction(ActionData* action_data) {
 						trigger_rerender_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
 
 						// Reinitialize the drag tool
+						// The initialize will overwrite the previously set space,
+						// So, store it beforehand and re-apply it
+						ECS_TRANSFORM_SPACE transform_space = data->drag_tool.GetSpace();
 						switch (sandbox->transform_keyboard_tool) {
 						case ECS_TRANSFORM_TRANSLATION:
 							data->drag_tool.translation.Initialize();
@@ -533,6 +536,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 						default:
 							ECS_ASSERT(false, "Invalid keyboard transform tool");
 						}
+						data->drag_tool.SetSpace(transform_space);
 
 						// Get the rotation and translation midpoints for the selected entities
 						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);

@@ -745,9 +745,9 @@ ConvexHull GiftWrappingConvexHull(Stream<float3> vertex_positions, AllocatorPoly
 	
 	GiftWrappingImpl(vertex_positions, ImplFunctor{ &convex_hull, allocator, &stack_temporary_allocator, float3::Splat(FLT_MAX) });
 
+	convex_hull.MergeCoplanarFaces(&stack_temporary_allocator);
 	// Resize such that the buffers don't consume unnecessary memory
 	convex_hull.Resize(allocator, convex_hull.vertex_size, convex_hull.edges.size, convex_hull.faces.size);
-	convex_hull.RemoveDegenerateEdges(allocator);
 	convex_hull.ReallocateFaces(allocator);
 	convex_hull.CalculateAndAssignCenter();
 	convex_hull.RedirectEdges();

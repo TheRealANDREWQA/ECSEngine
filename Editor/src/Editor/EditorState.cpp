@@ -239,19 +239,23 @@ void TickModuleStatus(EditorState* editor_state) {
 void TickEvents(EditorState* editor_state) {
 	// Get the event count and do the events that are now in the queue. Because some events might push them back
 	// in the event queue and doing that will generate an infinite loop
-	ECS_STACK_CAPACITY_STREAM(EditorEvent, current_events, ECS_KB * 4);
 	editor_state->readd_events.Reset();
-	unsigned int event_count = editor_state->event_queue.PopRangeAll(&current_events);
-
+	editor_state->tick_processing_events.Reset();
+	unsigned int event_count = editor_state->event_queue.PopRangeAll(&editor_state->tick_processing_events);
+	editor_state->tick_processing_events_index = 0;
+	
 	for (unsigned int event_index = 0; event_index < event_count; event_index++) {
-		EditorEventFunction event_function = (EditorEventFunction)current_events[event_index].function;
-		bool needs_push = event_function(editor_state, current_events[event_index].data);
+		editor_state->tick_processing_events_index = event_index;
+
+		EditorEvent editor_event = editor_state->tick_processing_events[event_index];
+		EditorEventFunction event_function = (EditorEventFunction)editor_event.function;
+		bool needs_push = event_function(editor_state, editor_event.data);
 		if (needs_push) {
-			editor_state->readd_events.Add(current_events[event_index]);
+			editor_state->readd_events.Add(editor_event);
 		}
 		else {
-			if (current_events[event_index].data_size > 0) {
-				Deallocate(editor_state->MultithreadedEditorAllocator(), current_events[event_index].data);
+			if (editor_event.data_size > 0) {
+				Deallocate(editor_state->MultithreadedEditorAllocator(), editor_event.data);
 			}
 		}
 	}

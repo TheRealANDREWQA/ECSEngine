@@ -25,6 +25,14 @@ GridChunk* FixedGrid::AddToChunk(unsigned int identifier, unsigned char layer, A
 	return insert_chunk;
 }
 
+void FixedGrid::ChangeHandler(ThreadFunction _handler_function, void* _handler_data, size_t _handler_data_size)
+{
+	DeallocateIfBelongs(Allocator(), handler_data);
+
+	handler_function = _handler_function;
+	handler_data = CopyNonZero(Allocator(), _handler_data, _handler_data_size);
+}
+
 GridChunk* FixedGrid::CheckCollisions(
 	unsigned int thread_id, 
 	World* world, 

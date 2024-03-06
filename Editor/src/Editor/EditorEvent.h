@@ -22,6 +22,11 @@ void* EditorGetEventData(EditorState* editor_state, EditorEventFunction function
 // You should leave thread safe on for most use cases
 void EditorGetEventTypeData(EditorState* editor_state, EditorEventFunction function, ECSEngine::CapacityStream<void*>* data, bool thread_safe = true);
 
+// This function can be used while inside an event about other events
+// This function is necessary such that all relevants are taken into account
+// The other function will return invalid results in such a case
+void EditorGetEventTypeDataWhileInsideEvent(const EditorState* editor_state, EditorEventFunction function, ECSEngine::CapacityStream<void*>* data);
+
 // Can be called from multiple threads.
 // It will execute the given event after a certain other event has finished executing
 // It does a memcpy comparison between the data. Returns the data stored
