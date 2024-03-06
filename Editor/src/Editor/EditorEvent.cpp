@@ -97,6 +97,22 @@ void EditorGetEventTypeData(EditorState* editor_state, EditorEventFunction funct
 	}
 }
 
+void EditorGetEventTypeDataWhileInsideEvent(const EditorState* editor_state, EditorEventFunction function, CapacityStream<void*>* data)
+{
+	for (unsigned int index = editor_state->tick_processing_events_index + 1; index < editor_state->tick_processing_events.size; index++) {
+		if (editor_state->tick_processing_events[index].function == function) {
+			data->AddAssert(editor_state->tick_processing_events[index].data);
+		}
+	}
+
+	// Check the readd events as well
+	for (unsigned int index = 0; index < editor_state->readd_events.size; index++) {
+		if (editor_state->readd_events[index].function == function) {
+			data->AddAssert(editor_state->readd_events[index].data);
+		}
+	}
+}
+
 struct WaitEventWrapperData {
 	EditorEventFunction wait_function;
 	void* wait_function_data;

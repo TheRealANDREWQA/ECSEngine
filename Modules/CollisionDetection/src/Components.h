@@ -3,6 +3,7 @@
 #include "ECSEngineReflectionMacros.h"
 #include "ECSEngineBasics.h"
 #include "ConvexHull.h"
+#include "ECSEngineCamera.h"
 
 #define COLLISION_DETECTION_COMPONENT_BASE ECS_CONSTANT_REFLECT(200)
 

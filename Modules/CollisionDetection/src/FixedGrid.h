@@ -50,7 +50,7 @@ struct FixedGridHandlerData {
 
 // When a collision is detected, a collision handler will be called to perform the necessary action
 // The handler must take as parameter a FixedGridHandlerData* pointer and then it can cast its own data
-struct FixedGrid {
+struct COLLISIONDETECTION_API FixedGrid {
 	ECS_INLINE AllocatorPolymorphic Allocator() const {
 		return spatial_grid.allocator;
 	}
@@ -68,6 +68,12 @@ struct FixedGrid {
 	ECS_INLINE uint3 CalculateCell(float3 position) const {
 		return spatial_grid.CalculateCell(position);
 	}
+
+	void ChangeHandler(
+		ThreadFunction handler_function,
+		void* handler_data,
+		size_t handler_data_size
+	);
 
 	// Fills in the collisions that the given AABB has with a given cell. Returns the last chunk of the cell
 	// It does not call the handler in this case - it will report them directly to you

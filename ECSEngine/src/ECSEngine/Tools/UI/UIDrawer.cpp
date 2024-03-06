@@ -6346,7 +6346,7 @@ namespace ECSEngine {
 								needed_rows += (size_t)(remainder_size / (region_limit.x - GetNextRowXPosition())) + 1;
 							}
 							float finalize_span = 0.0f;
-							if (configuration & UI_CONFIG_ALIGN_TO_ROW_Y) {
+							if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
 								// Only the initial row will follow this span. The others will use the text span.y
 								float initial_row_scale = current_row_y_scale < text_span.y ? text_span.y : current_row_y_scale;
 								finalize_span = initial_row_scale + (float)(needed_rows - 1) * text_span.y;

@@ -251,7 +251,8 @@ PlaneScalar ConvexHull::GetFaceSidePlane(unsigned int face_index, unsigned int f
 	Line3D line = GetFaceEdge(face_index, face_edge_index);
 
 	// To construct the normal for the side plane, we can cross the segment direction and the face normal
-	// And it should point towards the center of the mesh
+	// Since the points are in counterclockwise order, the normal will always points towards the center
+	// Of the face
 	float3 side_normal = Cross(line.B - line.A, face.plane.normal);
 	return PlaneScalar{ side_normal, line.A };
 }
@@ -329,6 +330,294 @@ float3 ConvexHull::FurthestFrom(float3 direction) const
 	return max_points.At(index);
 }
 
+void ConvexHull::MergeCoplanarFaces(AllocatorPolymorphic allocator, AllocatorPolymorphic previous_face_allocator) {
+	// At first, create a temporary hash table that maps the vertex
+	// To the edges that it belongs to. In this way, we can update
+	// The normals of faces that have a vertex displaced
+	typedef HashTable<ResizableStream<unsigned int>, unsigned int, HashFunctionPowerOfTwo> VertexToEdgeTable;
+	VertexToEdgeTable vertex_to_edge_table;
+	vertex_to_edge_table.Initialize(allocator, PowerOfTwoGreater(vertex_size + 100));
+	for (unsigned int index = 0; index < vertex_size; index++) {
+		// Initialize each vertex entry with 6 basic entries
+		vertex_to_edge_table.Insert({ allocator, 6 }, index);
+	}
+
+	for (unsigned int index = 0; index < edges.size; index++) {
+		const ConvexHullEdge& edge = edges[index];
+		ResizableStream<unsigned int>* first_vertex_connections = vertex_to_edge_table.GetValuePtr(edge.point_1);
+		first_vertex_connections->Add(index);
+		ResizableStream<unsigned int>* second_vertex_connections = vertex_to_edge_table.GetValuePtr(edge.point_2);
+		second_vertex_connections->Add(index);
+	}
+
+	// Keep a stack of edges to be processed
+	// Initialize it with all the edges
+	ResizableStream<unsigned int> edges_to_be_processed(allocator, 0);
+	edges_to_be_processed.ReserveRange(edges.size);
+	for (unsigned int index = 0; index < edges_to_be_processed.size; index++) {
+		edges_to_be_processed[index] = index;
+	}
+
+	while (edges_to_be_processed.size > 0) {
+		edges_to_be_processed.size--;
+		unsigned int current_edge_index = edges_to_be_processed[edges_to_be_processed.size];
+		const ConvexHullEdge& edge = edges[current_edge_index];
+		// Get the face normals for this edge
+		float3 first_normal = faces[edge.face_1_index].plane.normal;
+		float3 second_normal = faces[edge.face_2_index].plane.normal;
+
+		// Merge all faces that have an angle less than 10 degrees, since it helps
+		// With the stability and with the performance
+		if (CompareAngleNormalizedRadMask(first_normal, second_normal, DegToRad(1.0f))) {
+			// We can collapse one of the faces
+			// For each face, compute the necessary displacement
+			// For the vertices to be a part of the plane and choose
+			// The face that needs the lowest displacement
+			float first_displacement = 0.0f;
+			float second_displacement = 0.0f;
+
+			unsigned int first_face_index = edge.face_1_index;
+			unsigned int second_face_index = edge.face_2_index;
+			ConvexHullFace& first_face = faces[first_face_index];
+			ConvexHullFace& second_face = faces[second_face_index];
+			
+			ECS_STACK_CAPACITY_STREAM(float, first_face_displacements, 64);
+			ECS_STACK_CAPACITY_STREAM(float, second_face_displacements, 64);
+
+			ECS_ASSERT(first_face.points.size <= first_face_displacements.capacity, "Convex hull face too many points!");
+			ECS_ASSERT(second_face.points.size <= second_face_displacements.capacity, "Convex hull face too many points!");
+
+			unsigned int edge_point_1 = edge.point_1;
+			unsigned int edge_point_2 = edge.point_2;
+
+			for (unsigned int index = 0; index < first_face.points.size; index++) {
+				if (first_face.points[index] != edge_point_1 && first_face.points[index] != edge_point_2) {
+					float displacement = DistanceToPlane(second_face.plane, GetPoint(first_face.points[index]));
+					first_displacement += fabsf(displacement);
+					first_face_displacements.Add(displacement);
+				}
+				else {
+					// Set 0.0f for the edge points, such that they don't get displaced
+					first_face_displacements.Add(0.0f);
+				}
+			}
+
+			for (unsigned int index = 0; index < second_face.points.size; index++) {
+				if (second_face.points[index] != edge_point_1 && second_face.points[index] != edge_point_2) {
+					float displacement = DistanceToPlane(first_face.plane, GetPoint(second_face.points[index]));
+					second_displacement += fabsf(displacement);
+					second_face_displacements.Add(displacement);
+				}
+				else {
+					// Set 0.0f for the edge points, such that they don't get displaced
+					second_face_displacements.Add(0.0f);
+				}
+			}
+
+			// Remove this shared edge
+			// Remove the edge from the vertex connections
+			ResizableStream<unsigned int>* first_point_connections = vertex_to_edge_table.GetValuePtr(edge_point_1);
+			unsigned int first_remove_index = first_point_connections->Find(current_edge_index);
+			ECS_ASSERT(first_remove_index != -1);
+			first_point_connections->RemoveSwapBack(first_remove_index);
+
+			ResizableStream<unsigned int>* second_point_connections = vertex_to_edge_table.GetValuePtr(edge_point_2);
+			unsigned int second_remove_index = second_point_connections->Find(current_edge_index);
+			ECS_ASSERT(second_remove_index != -1);
+			second_point_connections->RemoveSwapBack(second_remove_index);
+
+			auto update_connection_edge_index = [&](unsigned int point_index, unsigned int previous_index, unsigned int new_index) {
+				ResizableStream<unsigned int> connections = vertex_to_edge_table.GetValue(point_index);
+				unsigned int connection_index = connections.Find(previous_index);
+				ECS_ASSERT(connection_index != -1, "ConvexHull merging coplanar faces failed");
+				connections[connection_index] = new_index;
+			};
+
+			edges.RemoveSwapBack(current_edge_index);
+			unsigned int swapped_edge = edges.size;
+			// Check to see if the swapped edge appears in the edges_to_be_processed and remove it
+			size_t to_be_processed_swapped_edge = SearchBytes(edges_to_be_processed.ToStream(), swapped_edge);
+			if (to_be_processed_swapped_edge != -1) {
+				edges_to_be_processed.RemoveSwapBack(to_be_processed_swapped_edge);
+			}
+			// For the edge that was removed, we need to update the vertex connections
+			// For the vertices
+			update_connection_edge_index(edges[current_edge_index].point_1, swapped_edge, current_edge_index);
+			update_connection_edge_index(edges[current_edge_index].point_2, swapped_edge, current_edge_index);
+
+			first_displacement = second_displacement - 1.0f;
+			if (first_displacement < second_displacement) {
+				// We can remove the first face
+				// Project all of its points on the other plane
+				//for (unsigned int index = 0; index < first_face.points.size; index++) {
+				//	float3 current_point = GetPoint(first_face.points[index]);
+				//	SetPoint(current_point - second_normal * first_face_displacements[index], first_face.points[index]);
+
+				//	if (!CompareMaskSingle(first_face_displacements[index], 0.0f, 0.0000001f)) {
+				//		// If the displacement is really small, do not bother to update the normals
+				//		// For the connecting faces
+				//		ResizableStream<unsigned int> connections = vertex_to_edge_table.GetValue(first_face.points[index]);
+				//		for (unsigned int subindex = 0; subindex < connections.size; subindex++) {
+
+				//		}
+				//	}
+				//}
+				
+				// Add the other points to the second face
+				for (unsigned int index = 0; index < first_face.points.size; index++) {
+					if (first_face.points[index] != edge_point_1 && first_face.points[index] != edge_point_2) {
+						if (BelongsToAllocator(allocator, second_face.points.buffer)) {
+							second_face.points.Reserve(allocator);
+							second_face.points.Add(first_face.points[index]);
+						}
+						else {
+							CapacityStream<unsigned short> new_points;
+							new_points.Initialize(allocator, 0, second_face.points.size + 1);
+							new_points.CopyOther(second_face.points);
+							new_points.Add(first_face.points[index]);
+							if (previous_face_allocator.allocator != nullptr) {
+								second_face.points.Deallocate(previous_face_allocator);
+							}
+							second_face.points = new_points;
+						}
+					}
+				}
+
+				auto remove_degenerate_edge = [&](unsigned int edge_index) {
+					// Returns true if this point has a single connection, else false
+					auto remove_point = [&](unsigned int point_index) {
+						ResizableStream<unsigned int>* edge_first_point_connections = vertex_to_edge_table.GetValuePtr(point_index);
+						if (edge_first_point_connections->size == 1) {
+							edge_first_point_connections->FreeBuffer();
+							// We need to remove this point as well
+							SoARemoveSwapBack(vertex_size, point_index, vertices_x, vertices_y, vertices_z);
+
+							// We need to restore the references to the swapped vertex
+							unsigned int swapped_vertex_index = vertex_size;
+							if (swapped_vertex_index != point_index) {
+								// For the edges, we can use the connections to refer to the edges
+								ResizableStream<unsigned int> swapped_connections = vertex_to_edge_table.GetValue(swapped_vertex_index);
+								// Also update the connections to reflect these new values
+								*edge_first_point_connections = swapped_connections;
+								// Remove the swapped connections from the table
+								vertex_to_edge_table.Erase(swapped_vertex_index);
+
+								for (unsigned int index = 0; index < swapped_connections.size; index++) {
+									ConvexHullEdge& swapped_point_edge = edges[swapped_connections[index]];
+									if (swapped_point_edge.point_1 == swapped_vertex_index) {
+										swapped_point_edge.point_1 = point_index;
+									}
+									if (swapped_point_edge.point_2 == swapped_vertex_index) {
+										swapped_point_edge.point_2 = point_index;
+									}
+									// We need to update the vertex index for the faces that are connected 
+									// to these edges as well
+									ConvexHullFace& first_edge_face = faces[swapped_point_edge.face_1_index];
+									for (unsigned int subindex = 0; subindex < first_edge_face.points.size; subindex++) {
+										if (first_edge_face.points[subindex] == swapped_vertex_index) {
+											first_edge_face.points[subindex] = point_index;
+											break;
+										}
+									}
+
+									ConvexHullFace& second_edge_face = faces[swapped_point_edge.face_2_index];
+									for (unsigned int subindex = 0; subindex < second_edge_face.points.size; subindex++) {
+										if (second_edge_face.points[subindex] == swapped_vertex_index) {
+											second_edge_face.points[subindex] = point_index;
+											break;
+										}
+									}
+								}
+							}
+							else {
+								// We need to remove the point index from the vertex to edge table
+								vertex_to_edge_table.Erase(point_index);
+							}
+							return true;
+						}
+						return false;
+					};
+
+					// The edge is degenerate, it is inside completely inside
+					// The same face. It can be safely removed, along side the point
+					// That has only this edge as connection
+					if (!remove_point(edges[edge_index].point_1)) {
+						ECS_ASSERT(remove_point(edges[edge_index].point_2), "ConvexHull degenerate edge during merging coplanar faces could not be resolved!");
+					}
+
+					// At last, we need to remove this edge from the to be processed stack, if it exists
+					// And to remove it from the edges stream as well
+					edges.RemoveSwapBack(edge_index);
+					unsigned int swapped_edge = edges.size;
+					// Check to see if the swapped edge appears in the edges_to_be_processed and remove it
+					size_t to_be_processed_swapped_edge = SearchBytes(edges_to_be_processed.ToStream(), swapped_edge);
+					if (to_be_processed_swapped_edge != -1) {
+						edges_to_be_processed.RemoveSwapBack(to_be_processed_swapped_edge);
+					}
+					update_connection_edge_index(edges[edge_index].point_1, swapped_edge, edge_index);
+					update_connection_edge_index(edges[edge_index].point_2, swapped_edge, edge_index);
+				};
+
+				// Redirect the edges that referenced the collapsed face to the second face
+				for (unsigned int edge_index = 0; edge_index < edges.size; edge_index++) {
+					if (edges[edge_index].face_1_index == first_face_index) {
+						edges[edge_index].face_1_index = second_face_index;
+						if (edges[edge_index].face_1_index == edges[edge_index].face_2_index) {
+							remove_degenerate_edge(edge_index);
+							edge_index--;
+							continue;
+						}
+					}
+					if (edges[edge_index].face_2_index == first_face_index) {
+						edges[edge_index].face_2_index = second_face_index;
+						if (edges[edge_index].face_1_index == edges[edge_index].face_2_index) {
+							remove_degenerate_edge(edge_index);
+							edge_index--;
+							continue;
+						}
+					}
+				}
+
+				if (previous_face_allocator.allocator != nullptr) {
+					faces[first_face_index].points.Deallocate(previous_face_allocator);
+				}
+				faces.RemoveSwapBack(first_face_index);
+				unsigned int swapped_face = faces.size;
+				// Update the edges that reference the swapped edge
+				for (unsigned int edge_index = 0; edge_index < edges.size; edge_index++) {
+					if (edges[edge_index].face_1_index == swapped_face) {
+						edges[edge_index].face_1_index = first_face_index;
+						if (edges[edge_index].face_1_index == edges[edge_index].face_2_index) {
+							remove_degenerate_edge(edge_index);
+							edge_index--;
+							continue;
+						}
+					}
+					if (edges[edge_index].face_2_index == swapped_face) {
+						edges[edge_index].face_2_index = first_face_index;
+						if (edges[edge_index].face_1_index == edges[edge_index].face_2_index) {
+							remove_degenerate_edge(edge_index);
+							edge_index--;
+							continue;
+						}
+					}
+				}
+			}
+			else {
+				if (previous_face_allocator.allocator != nullptr) {
+					faces[second_face_index].points.Deallocate(previous_face_allocator);
+				}
+				faces.RemoveSwapBack(second_face_index);
+			}
+		}
+	}
+
+	vertex_to_edge_table.ForEachConst([](ResizableStream<unsigned int> connections, unsigned int vertex_index) {
+		connections.FreeBuffer();
+	});
+	vertex_to_edge_table.Deallocate(allocator);
+}
+
 unsigned int ConvexHull::SupportFace(float3 direction) const
 {
 	float dot = -FLT_MAX;
@@ -366,6 +655,21 @@ void ConvexHull::RedirectEdges()
 		bool same_direction = Dot(edge_direction, cross_product) >= 0.0f;
 		if (!same_direction) {
 			std::swap(edge.point_1, edge.point_2);
+		}
+	}
+
+	for (unsigned int index = 0; index < edges.size; index++) {
+		ConvexHullEdge& edge = edges[index];
+		float3 first_normal = faces[edge.face_1_index].plane.normal;
+		float3 second_normal = faces[edge.face_2_index].plane.normal;
+		float3 cross_product = Cross(first_normal, second_normal);
+		float3 edge_direction = GetPoint(edge.point_2) - GetPoint(edge.point_1);
+		// Include the 0.0f case, that can happen when the cross poduct is close to 0.0f
+		// (for almost parallel normals. This should be a rare occurence, since that would
+		// Mean that we have nearly coplanar faces, and these should be merged)
+		bool same_direction = Dot(edge_direction, cross_product) >= 0.0f;
+		if (!same_direction) {
+			ECS_ASSERT(false, "Redirecting edges failed!");
 		}
 	}
 }

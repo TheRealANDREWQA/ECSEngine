@@ -198,8 +198,9 @@ namespace ECSEngine {
 		float distance = plane.dot - Dot(plane.normal, segment_a);
 
 		if (CompareMaskSingle(denominator, 0.0f, parallel_epsilon)) {
-			// If the line is not contained by the plane, we can exit
-			if (!CompareMaskSingle(distance, 0.0f, 0.00001f)) {
+			// If the line is not contained by the plane and on the
+			// other side of the plane, we can exit
+			if (distance < -0.00000001f) {
 				segment_t_min = FLT_MAX;
 				return false;
 			}

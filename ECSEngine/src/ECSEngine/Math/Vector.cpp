@@ -1423,7 +1423,7 @@ namespace ECSEngine {
 		// s = (bf - ce) / d
 		// t = (af - bc) / d
 		// Where s is the interpolation factor for the first line, t for the second line
-		// r = second_line_point - first_line_point
+		// r = first_line_point - second_line_point
 		// a = first_line_direction * first_line_direction
 		// b = first_line_direction * second_line_direction
 		// c = first_line_direction * r
@@ -1445,7 +1445,7 @@ namespace ECSEngine {
 		// Due to floating point inaccuracies
 		auto d_zero_mask = d < epsilon;
 
-		auto r = second_line_point - first_line_point;
+		auto r = first_line_point - second_line_point;
 		auto c = Dot(first_line_direction, r);
 		auto f = Dot(second_line_direction, r);
 
@@ -1505,7 +1505,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE void ECS_VECTORCALL ClosestSegmentPointsImpl(
+	static void ECS_VECTORCALL ClosestSegmentPointsImpl(
 		Vector first_line_A,
 		Vector first_line_B,
 		Vector second_line_A,
@@ -1526,7 +1526,7 @@ namespace ECSEngine {
 		
 		auto d1 = first_line_B - first_line_A;
 		auto d2 = second_line_B - second_line_A;
-		auto r = second_line_A - first_line_A;
+		auto r = first_line_A - second_line_A;
 		auto a = Dot(d1, d1);
 		auto b = Dot(d1, d2);
 		auto c = Dot(d1, r);
