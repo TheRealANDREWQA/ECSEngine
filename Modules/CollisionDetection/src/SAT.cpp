@@ -459,9 +459,9 @@ SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
 	ResizableStream<ResizableStream<float4>> projections;
 	SATEdgeQuery projection_edge_query = SATEdgeProjection(first, second, &projections, &stack_allocator);
 	//edge_query.edge_2_index = 3;
-	edge_query.edge_1_index = projection_edge_query.edge_1_index;
-	edge_query.edge_2_index = projection_edge_query.edge_2_index;
-	edge_query.distance = projection_edge_query.distance;
+	//edge_query.edge_1_index = projection_edge_query.edge_1_index;
+	//edge_query.edge_2_index = projection_edge_query.edge_2_index;
+	//edge_query.distance = projection_edge_query.distance;
 	if (edge_query.distance > 0.0f) {
 		return {};
 	}

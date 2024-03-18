@@ -88,13 +88,33 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// And outputs the 3D points that compose the clipped face
 	void ClipFace(unsigned int face_index, const ConvexHull* incident_hull, unsigned int incident_hull_face_index, CapacityStream<float3>* points) const;
 
+	// Computes the edges for each vertex. This is a parallel array to the vertices
+	// Inside this instance. Changing the order of the vertices will have to be reflected here as well
+	// Each entry is separately allocated
+	Stream<CapacityStream<unsigned int>> ComputeVertexToEdgeTable(AllocatorPolymorphic allocator) const;
+
+	// Computes the connected vertices for each vertex. This is a parallel array to the vertices
+	// Inside this instance. Changing the order of the vertices will have to be reflected here as well
+	// Each entry is separately allocated
+	Stream<CapacityStream<unsigned int>> ComputeVertexToVertexTableFromEdges(AllocatorPolymorphic allocator) const;
+
+	// Computes the connected vertices for each vertex. This is a parallel array to the vertices
+	// Inside this instance. Changing the order of the vertices will have to be reflected here as well
+	// Each entry is separately allocated. For this function to work, it assumes that the vertices
+	// Are in CCW order
+	Stream<CapacityStream<unsigned int>> ComputeVertexToVertexTableFromFaces(AllocatorPolymorphic allocator) const;
+
 	// The other data should not be used afterwards if the deallocate existent is set to true
 	void Copy(const ConvexHull* other, AllocatorPolymorphic allocator, bool deallocate_existent);
 
 	void Deallocate(AllocatorPolymorphic allocator);
 
 	// Returns the index of the edge or -1 if it doesn't find it. The order of the vertices doesn't matter.
-	unsigned int FindEdge(unsigned int edge_point_1, unsigned int edge_point_2);
+	unsigned int FindEdge(unsigned int edge_point_1, unsigned int edge_point_2) const;
+
+	// Returns -1 if it doesn't find it. It will match a face regardless of the
+	// Order of the face_points
+	unsigned int FindFace(Stream<unsigned int> face_points) const;
 
 	float3 FurthestFrom(float3 direction) const;
 
@@ -117,12 +137,10 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 
 	Line3D GetFaceEdge(unsigned int face_index, unsigned int face_edge_index) const;
 
-	// It will merge coplanar or near coplanar faces
-	// If the previous face allocator is specified, it will deallocate
-	// The buffers of the faces that are collapsed
-	// The face buffers will be allocated individually from the allocator
-	// At the end, it will not resize the buffers. You must do that manually
-	void MergeCoplanarFaces(AllocatorPolymorphic allocator, AllocatorPolymorphic previous_face_allocator = { nullptr });
+	uint2 GetFaceEdgeIndices(unsigned int face_index, unsigned int face_edge_index) const;
+
+	// It merges coplanar triangles into quads. It does not merge quads further
+	void MergeCoplanarTriangles(float coplanarity_degrees, AllocatorPolymorphic allocator, AllocatorPolymorphic previous_face_allocator = { nullptr });
 
 	ECS_INLINE void SetPoint(float3 point, unsigned int index) {
 		vertices_x[index] = point.x;
@@ -130,8 +148,54 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 		vertices_z[index] = point.z;
 	}
 
+	// In case this convex hull is made of only triangles and quads, you can call this
+	// Function to simplify it. It will try to reduce the complexity while
+	// Minimizing the loss. It does not reallocate the buffers afterwards
+	// You can provide the allocator if you want the face buffers to be deallocated
+	// The reduction factor can be controlled to increase or decrease the area of the
+	// Triangles being considered. Increasing the area_factor will result in more
+	// Triangles being eliminated, while reducing it will result in fewer triangles
+	// Being collapsed. The center of the hull needs to be set beforehand!
+	void SimplifyTrianglesAndQuads(float area_factor = 1.0f, AllocatorPolymorphic allocator = { nullptr });
+
+	// Returns the support point for that face in the given direction
+	// It returns the index inside the face, not inside the vertex array!
+	unsigned int SupportFacePoint(unsigned int face_index, float3 direction) const;
+
 	// Finds the face that is the closest to the given direction
 	unsigned int SupportFace(float3 direction) const;
+
+	// It will maintain the reference integrity
+	void RemoveSwapBackVertex(unsigned int index);
+
+	void RemoveSwapBackEdge(unsigned int edge_index);
+
+	// It will maintain the reference integrity. It does not deallocate
+	// The face buffers
+	void RemoveSwapBackFace(unsigned int face_index);
+
+	// It will maintain the reference integrity. It will deallocate the
+	// Face buffers
+	void RemoveSwapBackFace(unsigned int face_index, AllocatorPolymorphic allocator);
+
+	// Reorders the points of the faces such that they respect
+	// The CCW order, otherwise the edges will be malformed
+	// The vertex to edge table should have the connections as
+	// Edge indices for each entry
+	void ReorderFacePointsByEdges(unsigned int face_index, Stream<CapacityStream<unsigned int>> vertex_to_edge_table);
+
+	// Reorders the points of the faces such that they respect
+	// The CCW order, otherwise the edges will be malformed
+	// The vertex to vertex table should have the connetions as
+	// Vertex indices for each entry
+	void ReorderFacePointsByVertices(unsigned int face_index, Stream<CapacityStream<unsigned int>> vertex_to_vertex_table);
+
+	// It will reoder the points based on the angle from the face center
+	void ReorderFacePointsByAngles(unsigned int face_index);
+
+	// Reorders the points of the faces such that they respect
+	// The CCW order, otherwise the edges will be malformed
+	void ReorderFacePoints();
 
 	// Reallocates the face buffers into a single coalesced allocation
 	// Without deallocating the previous buffers (this can work for temporary
@@ -157,6 +221,13 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// Buffers to the new smaller size
 	void RemoveDegenerateEdges(AllocatorPolymorphic allocator = { nullptr });
 
+	// In case some algorithm was applied to the faces that did not
+	// Correctly collapse the edges, this will recompletely construct
+	// The edges such that they match the face. If the allocator is specified,
+	// It will reallocate the buffer if the edge capacity is exceeded. Else, it
+	// Will assert that there are enough slots
+	void RegenerateEdges(AllocatorPolymorphic allocator = { nullptr });
+
 	// It will copy the existing data
 	void Resize(AllocatorPolymorphic allocator, unsigned int new_vertex_capacity, unsigned int new_edge_capacity, unsigned int new_face_capacity);
 
@@ -170,6 +241,9 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// A new convex hull. The edges and faces will references the ones from here. 
 	// So don't modify them!
 	ConvexHull ECS_VECTORCALL TransformToTemporary(Matrix matrix, AllocatorPolymorphic allocator) const;
+
+	// Returns true if the hull is valid, else false
+	bool Validate() const;
 
 	// The representation contains the vertices stored in a SoA manner
 	// In order to use SIMD for support function calculation. The faces

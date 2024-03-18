@@ -13,10 +13,6 @@
 
 namespace ECSEngine {
 
-	ECS_INLINE AllocatorPolymorphic GetPersistentAllocator(AssetDatabase* database) {
-		return database->Allocator();
-	}
-
 	// ------------------------------------------------------------------------------------------------------------
 
 	struct MeshLoadData {
@@ -124,6 +120,10 @@ namespace ECSEngine {
 		}
 
 		GlobalMemoryManager* global_managers;
+		// Instead of using the database allocator or the resource manager allocator
+		// That could be used at the same time, create a Malloc based allocator and make
+		// Our allocations from here
+		ResizableLinearAllocator persistent_allocator;
 
 		AssetDatabase* database;
 		ResourceManager* resource_manager;
@@ -801,68 +801,78 @@ namespace ECSEngine {
 			data->global_managers[index].Free();
 		}
 
-		AllocatorPolymorphic persistent_allocator = GetPersistentAllocator(data->database);
-		Deallocate(persistent_allocator, data->global_managers);
-		if (data->extra.dimension == CONTROL_BLOCK_PACKED) {
-			HashTableDeallocateIdentifiers(data->extra.packed_file->lookup_table, persistent_allocator);
-			Deallocate(persistent_allocator, data->extra.packed_file->lookup_table.GetAllocatedBuffer());
-			CloseFile(data->extra.packed_file->file_handle);
-		}
-		else if (data->extra.dimension == CONTROL_BLOCK_MULTI_PACKED) {
-			data->extra.multi_packed_file->Deallocate(persistent_allocator);
-			for (size_t index = 0; index < data->extra.multi_packed_inputs.size; index++) {
-				HashTableDeallocate<false, true>(data->extra.multi_packed_inputs[index].lookup_table, persistent_allocator);
-				CloseFile(data->extra.multi_packed_inputs[index].file_handle);
-			}
-		}
+		// We need to take these out from the data, since the data was allocated from
+		// The persistent allocator with Malloc, it will result in a crash since it
+		// Can unmap these memory regions
+		Semaphore* finish_semaphore = data->load_info.finish_semaphore;
+		ResizableLinearAllocator persistent_allocator = data->persistent_allocator;
 
-		// Now the control block itself and the its streams
-		for (size_t index = 0; index < data->meshes.size; index++) {
-			Deallocate(persistent_allocator, data->meshes[index].different_handles.buffer);
-			// The meshes and the cgltf data are automatically freed since the thread allocator is freed
-		}
+		// This is the code needed to deallocate every single allocation 
+		// But since it is a temporary allocator, we can simply deallocate the entire allocator
+		persistent_allocator.Free();
 
-		for (size_t index = 0; index < data->textures.size; index++) {
-			Deallocate(persistent_allocator, data->textures[index].different_handles.buffer);
-			// The texture data is automatically deallocated since the thread allocator is freed
-		}
+		// AllocatorPolymorphic persistent_allocator = &data->persistent_allocator;
+		//Deallocate(persistent_allocator, data->global_managers);
+		//if (data->extra.dimension == CONTROL_BLOCK_PACKED) {
+		//	HashTableDeallocateIdentifiers(data->extra.packed_file->lookup_table, persistent_allocator);
+		//	Deallocate(persistent_allocator, data->extra.packed_file->lookup_table.GetAllocatedBuffer());
+		//	CloseFile(data->extra.packed_file->file_handle);
+		//}
+		//else if (data->extra.dimension == CONTROL_BLOCK_MULTI_PACKED) {
+		//	data->extra.multi_packed_file->Deallocate(persistent_allocator);
+		//	for (size_t index = 0; index < data->extra.multi_packed_inputs.size; index++) {
+		//		HashTableDeallocate<false, true>(data->extra.multi_packed_inputs[index].lookup_table, persistent_allocator);
+		//		CloseFile(data->extra.multi_packed_inputs[index].file_handle);
+		//	}
+		//}
 
-		for (size_t index = 0; index < data->shaders.size; index++) {
-			Deallocate(persistent_allocator, data->shaders[index].different_handles.buffer);
-			// The shader source code is automatically deallocated since the thread allocator is freed
-		}
+		//// Now the control block itself and the its streams
+		//for (size_t index = 0; index < data->meshes.size; index++) {
+		//	Deallocate(persistent_allocator, data->meshes[index].different_handles.buffer);
+		//	// The meshes and the cgltf data are automatically freed since the thread allocator is freed
+		//}
 
-		for (size_t index = 0; index < data->miscs.size; index++) {
-			Deallocate(persistent_allocator, data->miscs[index].different_handles.buffer);
-			// The misc data doesn't need to be deallocated
-		}
+		//for (size_t index = 0; index < data->textures.size; index++) {
+		//	Deallocate(persistent_allocator, data->textures[index].different_handles.buffer);
+		//	// The texture data is automatically deallocated since the thread allocator is freed
+		//}
 
-		if (data->meshes.size > 0) {
-			Deallocate(persistent_allocator, data->meshes.buffer);
-		}
-		if (data->textures.size > 0) {
-			Deallocate(persistent_allocator, data->textures.buffer);
-		}
-		if (data->shaders.size > 0) {
-			Deallocate(persistent_allocator, data->shaders.buffer);
-		}
-		Deallocate(persistent_allocator, data);
+		//for (size_t index = 0; index < data->shaders.size; index++) {
+		//	Deallocate(persistent_allocator, data->shaders[index].different_handles.buffer);
+		//	// The shader source code is automatically deallocated since the thread allocator is freed
+		//}
 
-		// Deallocate the mount point if any
-		DeallocateIfBelongs(persistent_allocator, data->load_info.mount_point.buffer);
+		//for (size_t index = 0; index < data->miscs.size; index++) {
+		//	Deallocate(persistent_allocator, data->miscs[index].different_handles.buffer);
+		//	// The misc data doesn't need to be deallocated
+		//}
 
-		// Deallocate the thread task data
-		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			if (data->load_info.preload_on_success[index].function != nullptr && data->load_info.preload_on_success[index].data_size > 0) {
-				Deallocate(persistent_allocator, data->load_info.preload_on_success[index].data);
-			}
-			if (data->load_info.process_on_success[index].function != nullptr && data->load_info.process_on_success[index].data_size > 0) {
-				Deallocate(persistent_allocator, data->load_info.process_on_success[index].data);
-			}
-		}
+		//if (data->meshes.size > 0) {
+		//	Deallocate(persistent_allocator, data->meshes.buffer);
+		//}
+		//if (data->textures.size > 0) {
+		//	Deallocate(persistent_allocator, data->textures.buffer);
+		//}
+		//if (data->shaders.size > 0) {
+		//	Deallocate(persistent_allocator, data->shaders.buffer);
+		//}
+		//Deallocate(persistent_allocator, data);
+
+		//// Deallocate the mount point if any
+		//DeallocateIfBelongs(persistent_allocator, data->load_info.mount_point.buffer);
+
+		//// Deallocate the thread task data
+		//for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		//	if (data->load_info.preload_on_success[index].function != nullptr && data->load_info.preload_on_success[index].data_size > 0) {
+		//		Deallocate(persistent_allocator, data->load_info.preload_on_success[index].data);
+		//	}
+		//	if (data->load_info.process_on_success[index].function != nullptr && data->load_info.process_on_success[index].data_size > 0) {
+		//		Deallocate(persistent_allocator, data->load_info.process_on_success[index].data);
+		//	}
+		//}
 
 		// Exit from the semaphore
-		data->load_info.finish_semaphore->ExitEx(2);
+		finish_semaphore->ExitEx(2);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -878,6 +888,9 @@ namespace ECSEngine {
 		// Start by getting all the unique handles and preload them, then apply the processing upon that data
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 12);
 		AllocatorPolymorphic allocator = &stack_allocator;
+
+		// For the packed case, we need to copy the hash table and the packed file
+		ResizableLinearAllocator persistent_allocator{ ECS_MB, ECS_MB * 24, {nullptr} };
 
 		AssetDatabaseSameTargetAll same_target = database->SameTargetAll(allocator);
 		// Go through all current assets and check to see if they exist already in the resource manager
@@ -896,30 +909,29 @@ namespace ECSEngine {
 		remove_existing_assets(same_target.miscs, ECS_ASSET_MISC);
 
 		// Create the control block
-		// Allocate it from the database allocator or the resource manager allocator
-		AllocatorPolymorphic persistent_allocator = database->Allocator();
 
-		AssetLoadingControlBlock* control_block = (AssetLoadingControlBlock*)Allocate(persistent_allocator, sizeof(AssetLoadingControlBlock));
+		AssetLoadingControlBlock* control_block = (AssetLoadingControlBlock*)persistent_allocator.Allocate(sizeof(AssetLoadingControlBlock));
 		Stream<wchar_t> mount_point = load_info->mount_point;
 		if (mount_point.size > 0) {
-			mount_point = StringCopy(persistent_allocator, mount_point);
+			mount_point = StringCopy(&persistent_allocator, mount_point);
 		}
 
 		memcpy(&control_block->load_info, load_info, sizeof(*load_info));
 		control_block->load_info.mount_point = mount_point;
+		control_block->persistent_allocator = persistent_allocator;
 
 		// Copy the thread task data, if necessary
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			if (load_info->preload_on_success[index].function != nullptr) {
 				control_block->load_info.preload_on_success[index].data = CopyNonZero(
-					persistent_allocator, 
+					&persistent_allocator, 
 					load_info->preload_on_success[index].data, 
 					load_info->preload_on_success[index].data_size
 				);
 			}
 			if (load_info->process_on_success[index].function != nullptr) {
 				control_block->load_info.process_on_success[index].data = CopyNonZero(
-					persistent_allocator,
+					&persistent_allocator,
 					load_info->process_on_success[index].data,
 					load_info->process_on_success[index].data_size
 				);
@@ -932,39 +944,61 @@ namespace ECSEngine {
 		control_block->resource_manager = resource_manager;
 		control_block->extra = *extra;
 
+		if (extra->dimension == CONTROL_BLOCK_PACKED) {
+			PackedFile* allocated_packed_file = (PackedFile*)persistent_allocator.Allocate(sizeof(PackedFile));
+			HashTableCopy<false, true>(extra->packed_file->lookup_table, allocated_packed_file->lookup_table, &persistent_allocator);
+			allocated_packed_file->file_handle = extra->packed_file->file_handle;
+			control_block->extra.packed_file = allocated_packed_file;
+		}
+		// And for the multi packed case we need to make another allocation as well
+		else if (extra->dimension == CONTROL_BLOCK_MULTI_PACKED) {
+			// Copy the input multi packed file and its stream
+			MultiPackedFile* allocated_multi_packed_file = (MultiPackedFile*)persistent_allocator.Allocate(sizeof(MultiPackedFile));
+			*allocated_multi_packed_file = extra->multi_packed_file->Copy(&persistent_allocator);
+
+			PackedFile* allocated_packed_files = (PackedFile*)persistent_allocator.Allocate(sizeof(PackedFile) * extra->multi_packed_inputs.size);
+			for (size_t index = 0; index < extra->multi_packed_inputs.size; index++) {
+				HashTableCopy<false, true>(extra->multi_packed_inputs[index].lookup_table, allocated_packed_files[index].lookup_table, &persistent_allocator);
+				allocated_packed_files[index].file_handle = extra->multi_packed_inputs[index].file_handle;
+			}
+
+			control_block->extra.multi_packed_file = allocated_multi_packed_file;
+			control_block->extra.multi_packed_inputs = { allocated_packed_files, extra->multi_packed_inputs.size };
+		}
+
 		if (control_block->load_info.finish_semaphore->count.load(ECS_RELAXED) == 0) {
 			// Make it 1
 			control_block->load_info.finish_semaphore->count.store(1, ECS_RELAXED);
 		}
 		
-		control_block->meshes.Initialize(persistent_allocator, same_target.meshes.size);
-		control_block->textures.Initialize(persistent_allocator, same_target.textures.size);
-		control_block->shaders.Initialize(persistent_allocator, same_target.shaders.size);
-		control_block->miscs.Initialize(persistent_allocator, same_target.miscs.size);
+		control_block->meshes.Initialize(&persistent_allocator, same_target.meshes.size);
+		control_block->textures.Initialize(&persistent_allocator, same_target.textures.size);
+		control_block->shaders.Initialize(&persistent_allocator, same_target.shaders.size);
+		control_block->miscs.Initialize(&persistent_allocator, same_target.miscs.size);
 
 		for (size_t index = 0; index < same_target.meshes.size; index++) {
-			control_block->meshes[index].different_handles.InitializeAndCopy(persistent_allocator, same_target.meshes[index].other_handles);
+			control_block->meshes[index].different_handles.InitializeAndCopy(&persistent_allocator, same_target.meshes[index].other_handles);
 			control_block->meshes[index].submeshes = { nullptr, 0 };
 			control_block->meshes[index].coalesced_mesh.name = { nullptr, 0 };
 		}
 
 		for (size_t index = 0; index < same_target.textures.size; index++) {
-			control_block->textures[index].different_handles.InitializeAndCopy(persistent_allocator, same_target.textures[index].other_handles);
+			control_block->textures[index].different_handles.InitializeAndCopy(&persistent_allocator, same_target.textures[index].other_handles);
 		}
 
 		for (size_t index = 0; index < same_target.shaders.size; index++) {
-			control_block->shaders[index].different_handles.InitializeAndCopy(persistent_allocator, same_target.shaders[index].other_handles);
+			control_block->shaders[index].different_handles.InitializeAndCopy(&persistent_allocator, same_target.shaders[index].other_handles);
 		}
 
 		for (size_t index = 0; index < same_target.miscs.size; index++) {
-			control_block->miscs[index].different_handles.InitializeAndCopy(persistent_allocator, same_target.miscs[index].other_handles);
+			control_block->miscs[index].different_handles.InitializeAndCopy(&persistent_allocator, same_target.miscs[index].other_handles);
 		}
 
 		const size_t ALLOCATOR_SIZE = ECS_MB * 200;
 		const size_t ALLOCATOR_BACKUP = ECS_MB * 500;
 
 		// Create the global allocators
-		control_block->global_managers = (GlobalMemoryManager*)Allocate(persistent_allocator, sizeof(GlobalMemoryManager) * thread_count);
+		control_block->global_managers = (GlobalMemoryManager*)persistent_allocator.Allocate(sizeof(GlobalMemoryManager) * thread_count);
 		for (unsigned int index = 0; index < thread_count; index++) {
 			control_block->global_managers[index] = CreateGlobalMemoryManager(ALLOCATOR_SIZE, ECS_KB * 8, ALLOCATOR_BACKUP);
 		}
@@ -1066,13 +1100,9 @@ namespace ECSEngine {
 		preload_functions.shader_task = PreloadPackedShaderTask;
 		preload_functions.miscs_task = PreloadPackedMiscTask;
 
-		AllocatorPolymorphic allocator = GetPersistentAllocator(database);
-		PackedFile* allocated_packed_file = (PackedFile*)Allocate(allocator, sizeof(PackedFile));
-		HashTableCopy<false, true>(packed_file->lookup_table, allocated_packed_file->lookup_table, allocator);
-		allocated_packed_file->file_handle = packed_file->file_handle;
-
 		ControlBlockExtra extra;
-		extra.packed_file = allocated_packed_file;
+		// We will initialize a copy inside the load assets impl
+		extra.packed_file = (PackedFile*)packed_file;
 		extra.dimension = CONTROL_BLOCK_PACKED;
 
 		LoadAssetsImpl(database, resource_manager, task_manager, load_info, &extra, &preload_functions);
@@ -1096,21 +1126,10 @@ namespace ECSEngine {
 		preload_functions.shader_task = PreloadMultiPackedShaderTask;
 		preload_functions.miscs_task = PreloadMultiPackedMiscTask;
 
-		AllocatorPolymorphic allocator = GetPersistentAllocator(database);
-
-		// Copy the input multi packed file and its stream
-		MultiPackedFile* allocated_multi_packed_file = (MultiPackedFile*)Allocate(allocator, sizeof(MultiPackedFile));
-		*allocated_multi_packed_file = multi_packed_file->Copy(allocator);
-
-		PackedFile* allocated_packed_files = (PackedFile*)Allocate(allocator, sizeof(PackedFile) * packed_files.size);
-		for (size_t index = 0; index < packed_files.size; index++) {
-			HashTableCopy<false, true>(packed_files[index].lookup_table, allocated_packed_files[index].lookup_table, allocator);
-			allocated_packed_files[index].file_handle = packed_files[index].file_handle;
-		}
-
+		// These will be allocated from a persistent allocator inside the Load assets impl
 		ControlBlockExtra extra;
-		extra.multi_packed_file = allocated_multi_packed_file;
-		extra.multi_packed_inputs = { allocated_packed_files, packed_files.size };
+		extra.multi_packed_file = (MultiPackedFile*)multi_packed_file;
+		extra.multi_packed_inputs = packed_files;
 		extra.dimension = CONTROL_BLOCK_MULTI_PACKED;
 
 		LoadAssetsImpl(database, resource_manager, task_manager, load_info, &extra, &preload_functions);

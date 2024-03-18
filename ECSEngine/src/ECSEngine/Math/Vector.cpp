@@ -294,15 +294,9 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 	
 	template<typename ReturnType, typename Vector, typename SingleValue>
-	static ECS_INLINE ReturnType ECS_VECTORCALL CompareAngleNormalizedRadMaskImpl(Vector first_normalized, Vector second_normalized, SingleValue radians) {
-		SingleValue angle_cosine = cos(radians);
+	static ECS_INLINE ReturnType ECS_VECTORCALL CompareAngleNormalizedCosineMaskImpl(Vector first_normalized, Vector second_normalized, SingleValue cosine) {
 		SingleValue direction_cosine = AbsSingle(Dot(first_normalized, second_normalized));
-		return direction_cosine > angle_cosine;
-	}
-
-	bool ECS_VECTORCALL CompareAngleNormalizedRadMask(float3 first_normalized, float3 second_normalized, float radians)
-	{
-		return CompareAngleNormalizedRadMaskImpl<bool>(first_normalized, second_normalized, radians);
+		return direction_cosine > cosine;
 	}
 
 	bool ECS_VECTORCALL CompareAngleRadMask(float3 first, float3 second, float radians)
@@ -310,12 +304,16 @@ namespace ECSEngine {
 		return CompareAngleNormalizedRadMask(Normalize(first), Normalize(second), radians);
 	}
 
-	SIMDVectorMask ECS_VECTORCALL CompareAngleNormalizedRadMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
-		return CompareAngleNormalizedRadMaskImpl<SIMDVectorMask>(first_normalized, second_normalized, radians);
+	bool ECS_VECTORCALL CompareAngleNormalizedCosineMask(float3 first_normalized, float3 second_normalized, float cosine) {
+		return CompareAngleNormalizedCosineMaskImpl<bool>(first_normalized, second_normalized, cosine);
 	}
 
 	SIMDVectorMask ECS_VECTORCALL CompareAngleRadMask(Vector3 first, Vector3 second, Vec8f radians) {
 		return CompareAngleNormalizedRadMask(Normalize(first), Normalize(second), radians);
+	}
+
+	SIMDVectorMask ECS_VECTORCALL CompareAngleNormalizedCosineMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f cosine) {
+		return CompareAngleNormalizedCosineMaskImpl<SIMDVectorMask>(first_normalized, second_normalized, cosine);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -752,12 +750,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	bool ECS_VECTORCALL IsParallelAngleMask(float3 first_normalized, float3 second_normalized, float radians) {
-		return CompareAngleNormalizedRadMask(first_normalized, second_normalized, radians);
+	bool ECS_VECTORCALL IsParallelAngleCosineMask(float3 first_normalized, float3 second_normalized, float cosine) {
+		return CompareAngleNormalizedCosineMask(first_normalized, second_normalized, cosine);
 	}
 
-	SIMDVectorMask ECS_VECTORCALL IsParallelAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
-		return CompareAngleNormalizedRadMask(first_normalized, second_normalized, radians);
+	SIMDVectorMask ECS_VECTORCALL IsParallelAngleCosineMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f cosine) {
+		return CompareAngleNormalizedCosineMask(first_normalized, second_normalized, cosine);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -772,12 +770,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	bool ECS_VECTORCALL IsPerpendicularAngleMask(float3 first_normalized, float3 second_normalized, float radians) {
-		return !CompareAngleNormalizedRadMask(first_normalized, second_normalized, (PI / 2) - radians);
+	bool ECS_VECTORCALL IsPerpendicularAngleCosineMask(float3 first_normalized, float3 second_normalized, float radians) {
+		return !CompareAngleNormalizedCosineMask(first_normalized, second_normalized, cos((PI / 2) - radians));
 	}
 
-	SIMDVectorMask ECS_VECTORCALL IsPerpendicularAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
-		return !CompareAngleNormalizedRadMask(first_normalized, second_normalized, Vec8f(PI / 2) - radians);
+	SIMDVectorMask ECS_VECTORCALL IsPerpendicularAngleCosineMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
+		return !CompareAngleNormalizedCosineMask(first_normalized, second_normalized, cos(Vec8f(PI / 2) - radians));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -926,6 +924,9 @@ namespace ECSEngine {
 	static ECS_INLINE ReturnType ECS_VECTORCALL AngleBetweenVectorsNormalizedRadImpl(Vector a_normalized, Vector b_normalized) {
 		// Just take the cosine (dot) between them and return the acos result
 		ReturnType dot = Dot(a_normalized, b_normalized);
+		// We need to clamp the result in the [-1, 1] range. Because of floating point inaccuracies,
+		// It may go slightly above 1 or slightly below -1
+		dot = ClampSingle(dot, SingleValueVector<Vector>(-1.0f), SingleValueVector<Vector>(1.0f));
 		return acos(dot);
 	}
 
@@ -1398,12 +1399,12 @@ namespace ECSEngine {
 		return IsParallelMask(line_direction_normalized, Normalize<ECS_VECTOR_FAST>(point - line_start), epsilon);
 	}
 
-	bool ECS_VECTORCALL IsPointCollinearByAngle(float3 line_a, float3 line_b, float3 point, float degrees) {
-		return IsPointCollinearDirectionByAngle(line_a, Normalize<ECS_VECTOR_FAST>(line_b - line_a), point, degrees);
+	bool ECS_VECTORCALL IsPointCollinearByCosine(float3 line_a, float3 line_b, float3 point, float degrees) {
+		return IsPointCollinearDirectionByCosine(line_a, Normalize<ECS_VECTOR_FAST>(line_b - line_a), point, degrees);
 	}
 
-	bool ECS_VECTORCALL IsPointCollinearDirectionByAngle(float3 line_start, float3 line_direction_normalized, float3 point, float degrees) {
-		return IsParallelAngleMask(line_direction_normalized, Normalize<ECS_VECTOR_FAST>(point - line_start), DegToRad(degrees));
+	bool ECS_VECTORCALL IsPointCollinearDirectionByCosine(float3 line_start, float3 line_direction_normalized, float3 point, float cosine) {
+		return IsParallelAngleCosineMask(line_direction_normalized, Normalize<ECS_VECTOR_FAST>(point - line_start), cosine);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

@@ -1966,6 +1966,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	EntityManager& EntityManager::operator = (const EntityManager& other) {
+		memcpy(this, &other, sizeof(other));
+		m_query_cache->entity_manager = this;
+		return *this;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void* EntityManager::AllocateTemporaryBuffer(size_t size, size_t alignment)
 	{
 		return m_temporary_allocator.Allocate_ts(size, alignment);

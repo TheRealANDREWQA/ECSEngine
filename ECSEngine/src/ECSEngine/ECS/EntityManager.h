@@ -87,6 +87,8 @@ namespace ECSEngine {
 		EntityManager() {}
 		EntityManager(const EntityManagerDescriptor& descriptor);
 
+		EntityManager& operator = (const EntityManager& other);
+
 		ECS_INLINE AllocatorPolymorphic SmallAllocator() {
 			return &m_small_memory_manager;
 		}

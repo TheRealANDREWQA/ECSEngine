@@ -256,6 +256,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API Simplex1DVoronoiRegion CalculateSimplex1DVoronoiRegion(float3 segment_a, float3 segment_b, float3 point);
 
+	// It can compute the projection, if it is in the edge region faster than the other variant
+	ECSENGINE_API Simplex1DVoronoiRegion CalculateSimplex1DVoronoiRegionWithDirection(
+		float3 segment_a,
+		float3 segment_b,
+		float3 segment_normalized_direction,
+		float3 point
+	);
+
 	ECSENGINE_API Simplex2DVoronoiRegion CalculateSimplex2DVoronoiRegion(float3 triangle_a, float3 triangle_b, float3 triangle_c, float3 point);
 
 	ECSENGINE_API Simplex3DVoronoiRegion CalculateSimplex3DVoronoiRegion(float3 A, float3 B, float3 C, float3 D, float3 point);

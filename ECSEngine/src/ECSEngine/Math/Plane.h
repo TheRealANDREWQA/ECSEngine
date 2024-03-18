@@ -73,6 +73,10 @@ namespace ECSEngine {
 		return IsParallelAngleMask(a.normal, normalized_direction, DegToRad(degrees));
 	}
 
+	ECS_INLINE bool ComparePlaneDirectionsByCosine(PlaneScalar a, float3 normalized_direction, float cosine) {
+		return IsParallelAngleCosineMask(a.normal, normalized_direction, cosine);
+	}
+
 	// Given 3 non-collinear points A, B and C (ordered counter clockwise), 
 	// calculates the plane determined by them
 	ECSENGINE_API PlaneScalar ComputePlane(float3 a, float3 b, float3 c);
@@ -81,6 +85,11 @@ namespace ECSEngine {
 	// With the normal pointing away from the reference point
 	ECSENGINE_API PlaneScalar ComputePlaneAway(float3 a, float3 b, float3 c, float3 reference_point);
 
+	// Given 3 non-collinear points A, B and C,calculates the plane determined by them
+	// With the normal pointing away from the reference point. Sets the boolean to true
+	// If the normal of these points was already pointing away from the reference point
+	ECSENGINE_API PlaneScalar ComputePlaneAway(float3 a, float3 b, float3 c, float3 reference_point, bool* facing_away);
+
 	// Given 3 non-collinear points A, B and C (ordered counter clockwise), 
 	// calculates the plane determined by them
 	ECSENGINE_API Plane ECS_VECTORCALL ComputePlane(Vector3 a, Vector3 b, Vector3 c);
@@ -88,6 +97,10 @@ namespace ECSEngine {
 	// Given 3 non-collinear points A, B and C,calculates the plane determined by them
 	// With the normal pointing away from the reference point
 	ECSENGINE_API Plane ECS_VECTORCALL ComputePlaneAway(Vector3 a, Vector3 b, Vector3 c, Vector3 reference_point);
+
+	// Given 3 non-collinear points A, B and C,calculates the plane determined by them
+	// With the normal pointing away from the reference point
+	ECSENGINE_API Plane ECS_VECTORCALL ComputePlaneAway(Vector3 a, Vector3 b, Vector3 c, Vector3 reference_point, SIMDVectorMask* facing_away);
 
 	ECSENGINE_API PlaneScalar PlaneXYScalar(float z_offset = 0.0f, bool invert_normal = false);
 

@@ -5084,8 +5084,8 @@ namespace ECSEngine {
 		D3D11_TEXTURE2D_DESC descriptor;
 		texture.tex->GetDesc(&descriptor);
 
-		unsigned int x_count = DivideCount(descriptor.Width, compute_thread_sizes.x);
-		unsigned int y_count = DivideCount(descriptor.Height, compute_thread_sizes.y);
+		unsigned int x_count = SlotsFor(descriptor.Width, compute_thread_sizes.x);
+		unsigned int y_count = SlotsFor(descriptor.Height, compute_thread_sizes.y);
 
 		Dispatch({ x_count, y_count, 1 }, context);
 	}

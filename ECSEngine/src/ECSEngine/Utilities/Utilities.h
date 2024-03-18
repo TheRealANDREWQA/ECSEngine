@@ -165,21 +165,33 @@ namespace ECSEngine {
 		configuration.fetch_or(flag, std::memory_order_relaxed);
 	}
 
-	// Returns a / b + ((a % b) != 0)
-	// On x86, the divide also produces the remainder, so this is actually a single divide operation
-	template<typename T>
-	ECS_INLINE T DivideCount(T a, T b) {
-		return a / b + ((a % b) != 0);
-	}
-
-	template<typename T>
+	template<bool strict_compare = false, typename T>
 	ECS_INLINE bool IsInRange(T value, T low_bound, T high_bound) {
-		return low_bound <= value && value <= high_bound;
+		if constexpr (strict_compare) {
+			return low_bound < value && value < high_bound;
+		}
+		else {
+			return low_bound <= value && value <= high_bound;
+		}
 	}
 
-	template<typename T>
-	ECS_INLINE bool IsInRangeStrict(T value, T low_bound, T high_bound) {
-		return low_bound < value&& value < high_bound;
+	// Returns true if the internal [a0, b0] overlaps the [a1, b1]
+	// Internval. You can choose to make this comparison strict or not
+	template<bool strict_compare = false, typename T>
+	ECS_INLINE bool AreIntervalsOverlapping(T a0, T b0, T a1, T b1) {
+		if (IsInRange<strict_compare>(a0, a1, b1)) {
+			return true;
+		}
+		if (IsInRange<strict_compare>(b0, a1, b1)) {
+			return true;
+		}
+		if (IsInRange<strict_compare>(a1, a0, b0)) {
+			return true;
+		}
+		if (IsInRange<strict_compare>(b1, a0, b0)) {
+			return true;
+		}
+		return false;
 	}
 
 	ECS_INLINE bool FloatCompare(float a, float b, float epsilon = 0.00001f) {

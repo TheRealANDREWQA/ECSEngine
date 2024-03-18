@@ -3801,9 +3801,11 @@ namespace ECSEngine {
 								data->hierarchy->is_dragging = true;
 							}
 							else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
-								data->hierarchy->is_dragging = false;
-								// Call the drag handler now
-								data->hierarchy->TriggerDrag(action_data, true);
+								// Call the drag handler now, only if it was set previously
+								if (data->hierarchy->is_dragging) {
+									data->hierarchy->TriggerDrag(action_data, true);
+									data->hierarchy->is_dragging = false;
+								}
 							}
 						}
 					}
