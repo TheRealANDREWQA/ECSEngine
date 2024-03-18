@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "VCLExtensions.h"
+#include "../../Dependencies/VCL-version2/vectormath_trig.h"
 #include "BaseVector.h"
 #include "../Containers/Stream.h"
 
@@ -429,11 +430,21 @@ namespace ECSEngine {
 
 	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CompareMask(Vector4 first, Vector4 second, Vec8f epsilon = VectorGlobals::EPSILON);
 
-	ECSENGINE_API bool ECS_VECTORCALL CompareAngleNormalizedRadMask(float3 first_normalized, float3 second_normalized, float radians);
+	// This version allow for caching of the cosine value outside a loop and reusing it across calls
+	ECSENGINE_API bool ECS_VECTORCALL CompareAngleNormalizedCosineMask(float3 first_normalized, float3 second_normalized, float cosine);
+
+	// This version allow for caching of the cosine value outside a loop and reusing it across calls
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CompareAngleNormalizedCosineMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f cosine);
 
 	// Both directions need to be normalized beforehand
-	// The angle must be given in radians
-	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL CompareAngleNormalizedRadMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians);
+	ECS_INLINE bool ECS_VECTORCALL CompareAngleNormalizedRadMask(float3 first_normalized, float3 second_normalized, float radians) {
+		return CompareAngleNormalizedCosineMask(first_normalized, second_normalized, cos(radians));
+	}
+
+	// Both directions need to be normalized beforehand
+	ECS_INLINE SIMDVectorMask ECS_VECTORCALL CompareAngleNormalizedRadMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
+		return CompareAngleNormalizedCosineMask(first_normalized, second_normalized, cos(radians));
+	}
 
 	ECSENGINE_API bool ECS_VECTORCALL CompareAngleRadMask(float3 first, float3 second, float radians);
 
@@ -685,11 +696,22 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Both directions need to be normalized beforehand
-	ECSENGINE_API bool ECS_VECTORCALL IsParallelAngleMask(float3 first_normalized, float3 second_normalized, float radians);
+	// This version allows caching of the cosine value
+	ECSENGINE_API bool ECS_VECTORCALL IsParallelAngleCosineMask(float3 first_normalized, float3 second_normalized, float cosine);
 
 	// Both directions need to be normalized beforehand
-	// Returns a SIMD mask that can be used to perform a selection
-	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsParallelAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians);
+	// This version allows caching of the cosine value
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsParallelAngleCosineMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f cosine);
+
+	// Both directions need to be normalized beforehand
+	ECS_INLINE bool ECS_VECTORCALL IsParallelAngleMask(float3 first_normalized, float3 second_normalized, float radians) {
+		return IsParallelAngleCosineMask(first_normalized, second_normalized, cos(radians));
+	}
+
+	// Both directions need to be normalized beforehand
+	ECS_INLINE SIMDVectorMask ECS_VECTORCALL IsParallelAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
+		return IsParallelAngleCosineMask(first_normalized, second_normalized, cos(radians));
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -701,10 +723,19 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool ECS_VECTORCALL IsPerpendicularAngleMask(float3 first_normalized, float3 second_normalized, float radians);
+	ECSENGINE_API bool ECS_VECTORCALL IsPerpendicularAngleCosineMask(float3 first_normalized, float3 second_normalized, float cosine);
+
+	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsPerpendicularAngleCosineMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f cosine);
 
 	// The radians angle needs to be smaller than half pi
-	ECSENGINE_API SIMDVectorMask ECS_VECTORCALL IsPerpendicularAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians);
+	ECS_INLINE bool ECS_VECTORCALL IsPerpendicularAngleMask(float3 first_normalized, float3 second_normalized, float radians) {
+		return IsPerpendicularAngleCosineMask(first_normalized, second_normalized, cos(radians));
+	}
+
+	// The radians angle needs to be smaller than half pi
+	ECS_INLINE SIMDVectorMask ECS_VECTORCALL IsPerpendicularAngleMask(Vector3 first_normalized, Vector3 second_normalized, Vec8f radians) {
+		return IsPerpendicularAngleCosineMask(first_normalized, second_normalized, cos(radians));
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 	
@@ -1011,11 +1042,26 @@ namespace ECSEngine {
 	// But slower
 	ECSENGINE_API bool ECS_VECTORCALL IsPointCollinearDirection(float3 line_start, float3 line_direction_normalized, float3 point, float epsilon = ECS_SIMD_VECTOR_PARALLEL_EPSILON_VALUE);
 
-	// This version is quite consistent
-	ECSENGINE_API bool ECS_VECTORCALL IsPointCollinearByAngle(float3 line_a, float3 line_b, float3 point, float degrees);
+	// This version is quite consistent as opposed to the epsilon based one
+	ECSENGINE_API bool ECS_VECTORCALL IsPointCollinearByCosine(float3 line_a, float3 line_b, float3 point, float cosine);
 
-	// This version is quite consistent
-	ECSENGINE_API bool ECS_VECTORCALL IsPointCollinearDirectionByAngle(float3 line_start, float3 line_direction_normalized, float3 point, float degrees);
+	// This version is quite consistent as opposed to the epsilon based one
+	ECSENGINE_API bool ECS_VECTORCALL IsPointCollinearDirectionByCosine(float3 line_start, float3 line_direction_normalized, float3 point, float cosine);
+
+	// This version is quite consistent as opposed to the epsilon based one
+	ECS_INLINE bool ECS_VECTORCALL IsPointCollinearByAngle(float3 line_a, float3 line_b, float3 point, float degrees) {
+		return IsPointCollinearByCosine(line_a, line_b, point, cos(DegToRad(degrees)));
+	}
+
+	// This version is quite consistent as opposed to the epsilon based one
+	ECS_INLINE bool ECS_VECTORCALL IsPointCollinearDirectionByAngle(
+		float3 line_start, 
+		float3 line_direction_normalized, 
+		float3 point, 
+		float degrees
+	) {
+		return IsPointCollinearDirectionByCosine(line_start, line_direction_normalized, point, cos(DegToRad(degrees)));
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 

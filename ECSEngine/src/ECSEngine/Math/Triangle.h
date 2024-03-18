@@ -60,9 +60,41 @@ namespace ECSEngine {
 	// Returns true if both the point and the reference point are on the same triangle side
 	ECSENGINE_API bool ArePointsSameTriangleSide(float3 triangle_a, float3 triangle_b, float3 triangle_c, float3 point, float3 reference_point);
 
+	// This version is slightly faster since it doesn't need to compute
+	// The triangle normal. It returns true if the segment intersects the
+	// Triangle, considering all points to be coplanar
+	ECSENGINE_API bool IsCoplanarSegmentIntersectingTriangleWithNormal(
+		float3 triangle_a,
+		float3 triangle_b,
+		float3 triangle_c,
+		float3 triangle_normal,
+		float3 segment_0,
+		float3 segment_1
+	);
+
+	// It returns true if the segment intersects the
+	// Triangle, considering all points to be coplanar
+	ECS_INLINE bool IsCoplanarSegmentIntersectingTriangle(
+		float3 triangle_a,
+		float3 triangle_b,
+		float3 triangle_c,
+		float3 segment_0,
+		float3 segment_1
+	) {
+		return IsCoplanarSegmentIntersectingTriangleWithNormal(
+			triangle_a,
+			triangle_b,
+			triangle_c,
+			TriangleNormal(triangle_a, triangle_b, triangle_c),
+			segment_0,
+			segment_1
+		);
+	}
+
 	// Returns true if the ABC and DEF triangles are intersecting. It assumes that the triangles are
-	// Coplanar or close to being coplanar
-	ECSENGINE_API bool AreCoplanarTrianglesIntersecting(float3 A, float3 B, float3 C, float3 D, float3 E, float3 F);
+	// Coplanar or close to being coplanar. The enlargement factor is used to enlarge/shrink the triangles
+	// This is useful for the case when you want triangles that have collinear edges to be included or excluded
+	ECSENGINE_API bool AreCoplanarTrianglesIntersecting(float3 A, float3 B, float3 C, float3 D, float3 E, float3 F, float enlargement_factor = 1.0f);
 
 	// Returns if the projected point is inside the triangle, else false
 	ECSENGINE_API bool IsPointContainedInTriangle(float3 A, float3 B, float3 C, float3 point);
@@ -97,5 +129,26 @@ namespace ECSEngine {
 	// Returns true if the line from the projection of line_point on the triangle to triangle_corner
 	// Is intersecting the triangle, else false
 	ECSENGINE_API bool IsProjectedPointToTriangleCornerIntersecting(float3 triangle_corner, float3 projected_line_point, float3 triangle_B, float3 triangle_C);
+	
+	// It represents the edge that is sliver, i.e. the smallest
+	enum ECS_TRIANGLE_SLIVER_TYPE : unsigned char {
+		ECS_TRIANGLE_SLIVER_NONE,
+		ECS_TRIANGLE_SLIVER_AB,
+		ECS_TRIANGLE_SLIVER_AC,
+		ECS_TRIANGLE_SLIVER_BC
+	};
 
+	// For a triangle to be considered sliver, it needs to have an edge that by dividing the
+	// Other two by this edge squared length, it results in a ratio greater or equal to the one given
+	ECSENGINE_API ECS_TRIANGLE_SLIVER_TYPE IsTriangleSliver(float3 A, float3 B, float3 C, float squared_edge_ratio);
+
+	// For a triangle to be considered sliver, it needs to have an edge that by dividing the
+	// Other two by this edge squared length, it results in a ratio greater or equal to the one given
+	ECSENGINE_API Vec8ui ECS_VECTORCALL IsTriangleSliver(Vector3 A, Vector3 B, Vector3 C, Vec8f squared_edge_ratio);
+
+	// For a triangle to be considered sliver, it needs to have one of the angles smaller than the one given
+	ECSENGINE_API ECS_TRIANGLE_SLIVER_TYPE IsTriangleSliverByAngle(float3 A, float3 B, float3 C, float degrees);
+
+	// For a triangle to be considered sliver, it needs to have one of the angles smaller than the one given
+	ECSENGINE_API Vec8ui ECS_VECTORCALL IsTriangleSliverByAngle(Vector3 A, Vector3 B, Vector3 C, Vec8f degrees);
 }

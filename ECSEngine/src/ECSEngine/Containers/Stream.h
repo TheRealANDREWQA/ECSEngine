@@ -295,6 +295,20 @@ namespace ECSEngine {
 			buffer[index] = buffer[size];
 		}
 
+		// It will assert that the value exists
+		ECS_INLINE void RemoveSwapBackByValue(T value, const char* assert_message) {
+			size_t index = Find(value);
+			ECS_ASSERT(index != -1, assert_message);
+			RemoveSwapBack(index);
+		}
+
+		// It will assert that the value exists
+		ECS_INLINE void ReplaceByValue(T old_value, T new_value, const char* assert_message) {
+			size_t index = Find(old_value);
+			ECS_ASSERT(index != -1, assert_message);
+			buffer[index] = new_value;
+		}
+
 		// Returns the previous buffer (the size is also updated)
 		void* Resize(AllocatorPolymorphic allocator, size_t new_size, bool copy_old_elements = true, bool deallocate_old = false, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			void* old_buffer = buffer;
@@ -804,6 +818,20 @@ namespace ECSEngine {
 			buffer[index] = buffer[size];
 		}
 
+		// It will assert that the value exists
+		ECS_INLINE void RemoveSwapBackByValue(T value, const char* assert_message) {
+			unsigned int index = Find(value);
+			ECS_ASSERT(index != -1, assert_message);
+			RemoveSwapBack(index);
+		}
+
+		// It will assert that the value exists
+		ECS_INLINE void ReplaceByValue(T old_value, T new_value, const char* assert_message) {
+			unsigned int index = Find(old_value);
+			ECS_ASSERT(index != -1, assert_message);
+			buffer[index] = new_value;
+		}
+
 		// Returns the stream starting from the buffer up until the start of the subregion (even when the size of the subregion
 		// does not cover the end of the capacity stream)
 		ECS_INLINE CapacityStream<T> StartDifference(Stream<T> subregion) const {
@@ -1104,6 +1132,20 @@ namespace ECSEngine {
 		ECS_INLINE void RemoveSwapBack(unsigned int index) {
 			size--;
 			buffer[index] = buffer[size];
+		}
+
+		// It will assert that the value exists
+		ECS_INLINE void RemoveSwapBackByValue(T value, const char* assert_message) {
+			unsigned int index = Find(value);
+			ECS_ASSERT(index != -1, assert_message);
+			RemoveSwapBack(index);
+		}
+
+		// It will assert that the value exists
+		ECS_INLINE void ReplaceByValue(T old_value, T new_value, const char* assert_message) {
+			unsigned int index = Find(old_value);
+			ECS_ASSERT(index != -1, assert_message);
+			buffer[index] = new_value;
 		}
 
 		// Makes sure there is enough space for extra count elements

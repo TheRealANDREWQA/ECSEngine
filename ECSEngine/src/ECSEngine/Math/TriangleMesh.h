@@ -35,6 +35,11 @@ namespace ECSEngine {
 
 		unsigned int FindOrAddPoint(float3 point);
 
+		// Returns the index inside the array of the triangle. It will check for
+		// All permutations of the indices, not only this exact version. Returns -1
+		// If it doesn't find it
+		unsigned int FindTriangle(uint3 indices) const;
+
 		float3 FurthestFrom(float3 direction) const;
 
 		void Initialize(AllocatorPolymorphic allocator, unsigned int position_capacity, unsigned int triangle_capacity);
@@ -42,6 +47,10 @@ namespace ECSEngine {
 		ECS_INLINE float3 GetPoint(unsigned int index) const {
 			return { position_x[index], position_y[index], position_z[index] };
 		}
+
+		void RemoveSwapBackPosition(unsigned int index);
+
+		void RemoveSwapBackTriangle(unsigned int index);
 
 		// Changes the winding of the triangles such that they face away from the center (like a normal mesh)
 		void RetargetNormals(float3 center);

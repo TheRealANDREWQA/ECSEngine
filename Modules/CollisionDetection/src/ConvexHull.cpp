@@ -1,7 +1,6 @@
 #include "pch.h"
 #include "ConvexHull.h"
 #include "GJK.h"
-#include "Quickhull.h"
 
 unsigned int ConvexHull::AddVertex(float3 point) {
 	ECS_ASSERT(vertex_size < vertex_capacity, "Insufficient ConvexHull vertex capacity");
@@ -41,16 +40,23 @@ void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_i
 	ConvexHullEdge* first_new_edge_ptr = &edges[first_new_edge];
 	ConvexHullEdge* second_new_edge_ptr = &edges[second_new_edge];
 	
+	// This is needed only if we want collapsing faces on the go
 	// We defer the edge removal after we assign all values since the swap back
 	// Can interfer with one of the newly added edges
-	bool remove_edge = false;
+	//bool remove_edge = false;
+
 	unsigned short face_index = USHORT_MAX;
 	// Determine if the face on the other side of the edge has the same normal
 	// If they do, we can collapse the edge
 	float3 edge_point_1 = GetPoint(edge.point_1);
 	float3 edge_point_2 = GetPoint(edge.point_2);
 	float3 triangle_point = GetPoint(point_index);
-	float3 normalized_normal = -TriangleNormalNormalized(edge_point_1, edge_point_2, triangle_point, hull_center);
+	float3 normalized_normal = TriangleNormalNormalized(edge_point_1, edge_point_2, triangle_point);
+	ushort3 face_point_order = { edge.point_1, edge.point_2, (unsigned short)point_index };
+	if (Dot(normalized_normal, edge_point_1 - hull_center) < 0.0f) {
+		normalized_normal = -normalized_normal;
+		std::swap(face_point_order.y, face_point_order.z);
+	}
 	if (edge.face_1_index != USHORT_MAX) {
 		// TODO: Is it worth implementing the collapsing on the go
 		// For close enough edges?
@@ -77,9 +83,9 @@ void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_i
 		// Create a new face
 		face_index = faces.AddAssert({ PlaneScalar::FromNormalized(normalized_normal, edge_point_1) });
 		faces[face_index].points.Initialize(face_allocator, 0, 4);
-		faces[face_index].AddPoint(edge.point_1, face_allocator);
-		faces[face_index].AddPoint(edge.point_2, face_allocator);
-		faces[face_index].AddPoint(point_index, face_allocator);
+		faces[face_index].AddPoint(face_point_order.x, face_allocator);
+		faces[face_index].AddPoint(face_point_order.y, face_allocator);
+		faces[face_index].AddPoint(face_point_order.z, face_allocator);
 		ECS_ASSERT(edge.face_2_index == USHORT_MAX, "Invalid ConvexHull state");
 		// Need to assign to the edge this face index
 		edge.face_2_index = face_index;
@@ -88,9 +94,9 @@ void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_i
 		// Create a new face
 		face_index = faces.AddAssert({ PlaneScalar::FromNormalized(normalized_normal, edge_point_1) });
 		faces[face_index].points.Initialize(face_allocator, 0, 4);
-		faces[face_index].AddPoint(edge.point_1, face_allocator);
-		faces[face_index].AddPoint(edge.point_2, face_allocator);
-		faces[face_index].AddPoint(point_index, face_allocator);
+		faces[face_index].AddPoint(face_point_order.x, face_allocator);
+		faces[face_index].AddPoint(face_point_order.y, face_allocator);
+		faces[face_index].AddPoint(face_point_order.z, face_allocator);
 		// Need to assign the face to this first slot
 		edge.face_1_index = face_index;
 	}
@@ -99,9 +105,9 @@ void ConvexHull::AddTriangleToEdge(unsigned int edge_index, unsigned int point_i
 	first_new_edge_ptr->AddFaceAssert(face_index);
 	second_new_edge_ptr->AddFaceAssert(face_index);
 
-	if (remove_edge) {
-		edges.RemoveSwapBack(edge_index);
-	}
+	//if (remove_edge) {
+	//	edges.RemoveSwapBack(edge_index);
+	//}
 }
 
 void ConvexHull::AddTriangle(unsigned int vertex_A, unsigned int vertex_B, unsigned int vertex_C, float3 hull_center, AllocatorPolymorphic face_allocator)
@@ -109,12 +115,17 @@ void ConvexHull::AddTriangle(unsigned int vertex_A, unsigned int vertex_B, unsig
 	float3 A = GetPoint(vertex_A);
 	float3 B = GetPoint(vertex_B);
 	float3 C = GetPoint(vertex_C);
-	PlaneScalar triangle_plane = ComputePlaneAway(A, B, C, hull_center);
-	unsigned short face_index = faces.AddAssert({ triangle_plane });
+	bool is_facing_away = false;
+	PlaneScalar triangle_plane = ComputePlaneAway(A, B, C, hull_center, &is_facing_away);
+	ushort3 triangle_order = { (unsigned short)vertex_A, (unsigned short)vertex_B, (unsigned short)vertex_C };
+	if (!is_facing_away) {
+		std::swap(triangle_order.y, triangle_order.z);
+	}
+ 	unsigned short face_index = faces.AddAssert({ triangle_plane });
 	faces[face_index].points.Initialize(face_allocator, 0, 4);
-	faces[face_index].AddPoint(vertex_A, face_allocator);
-	faces[face_index].AddPoint(vertex_B, face_allocator);
-	faces[face_index].AddPoint(vertex_C, face_allocator);
+	faces[face_index].AddPoint(triangle_order.x, face_allocator);
+	faces[face_index].AddPoint(triangle_order.y, face_allocator);
+	faces[face_index].AddPoint(triangle_order.z, face_allocator);
 
 	auto add_edge = [this, face_index](unsigned int edge_1, unsigned int edge_2) {
 		unsigned int edge_index = AddOrFindEdge(edge_1, edge_2);
@@ -210,7 +221,67 @@ void ConvexHull::ClipFace(
 	//}
 }
 
-unsigned int ConvexHull::FindEdge(unsigned int edge_point_1, unsigned int edge_point_2)
+Stream<CapacityStream<unsigned int>> ConvexHull::ComputeVertexToEdgeTable(AllocatorPolymorphic allocator) const {
+	Stream<CapacityStream<unsigned int>> table;
+	table.Initialize(allocator, vertex_size);
+
+	for (unsigned int index = 0; index < vertex_size; index++) {
+		// Start with a small number of connections
+		table[index].Initialize(allocator, 0, 4);
+	}
+
+	for (unsigned int index = 0; index < edges.size; index++) {
+		const ConvexHullEdge& edge = edges[index];
+		CapacityStream<unsigned int>* first_mapping = &table[edge.point_1];
+		first_mapping->AddResize(index, allocator, 2);
+		CapacityStream<unsigned int>* second_mapping = &table[edge.point_2];
+		second_mapping->AddResize(index, allocator, 2);
+	}
+
+	return table;
+}
+
+Stream<CapacityStream<unsigned int>> ConvexHull::ComputeVertexToVertexTableFromEdges(AllocatorPolymorphic allocator) const {
+	Stream<CapacityStream<unsigned int>> table;
+	table.Initialize(allocator, vertex_size);
+
+	for (unsigned int index = 0; index < vertex_size; index++) {
+		// Start with a small number of connections
+		table[index].Initialize(allocator, 0, 4);
+	}
+
+	for (unsigned int index = 0; index < edges.size; index++) {
+		const ConvexHullEdge& edge = edges[index];
+		CapacityStream<unsigned int>* first_mapping = &table[edge.point_1];
+		first_mapping->AddResize(edge.point_2, allocator, 2);
+		CapacityStream<unsigned int>* second_mapping = &table[edge.point_2];
+		second_mapping->AddResize(edge.point_1, allocator, 2);
+	}
+	
+	return table;
+}
+
+Stream<CapacityStream<unsigned int>> ConvexHull::ComputeVertexToVertexTableFromFaces(AllocatorPolymorphic allocator) const {
+	Stream<CapacityStream<unsigned int>> table;
+	table.Initialize(allocator, vertex_size);
+
+	for (unsigned int index = 0; index < vertex_size; index++) {
+		// Start with a small number of connections
+		table[index].Initialize(allocator, 0, 4);
+	}
+
+	for (unsigned int index = 0; index < faces.size; index++) {
+		const ConvexHullFace& face = faces[index];
+		for (unsigned int point_index = 0; point_index < face.points.size; point_index++) {
+			unsigned int next_point_index = point_index == face.points.size - 1 ? 0 : point_index + 1;
+			table[face.points[point_index]].AddResize(face.points[next_point_index], allocator, 2);
+		}
+	}
+
+	return table;
+}
+
+unsigned int ConvexHull::FindEdge(unsigned int edge_point_1, unsigned int edge_point_2) const
 {
 	for (unsigned int index = 0; index < edges.size; index++) {
 		if ((edges[index].point_1 == edge_point_1 && edges[index].point_2 == edge_point_2)
@@ -218,6 +289,45 @@ unsigned int ConvexHull::FindEdge(unsigned int edge_point_1, unsigned int edge_p
 			return index;
 		}
 	}
+	return -1;
+}
+
+unsigned int ConvexHull::FindFace(Stream<unsigned int> face_points) const {
+	// We can speed this up by searching for an edge, and then checking
+	// The associated faces. It needs to be one of them
+	unsigned int edge_index = FindEdge(face_points[0], face_points[1]);
+	ECS_ASSERT(edge_index != -1);
+	const ConvexHullEdge& edge = edges[edge_index];
+
+	// Returns true if it matches the points
+	auto test_face = [&](unsigned int face_index) {
+		const ConvexHullFace& face = faces[face_index];
+		if (face.points.size != face_points.size) {
+			return false;
+		}
+		unsigned int index = 0;
+		for (; index < face.points.size; index++) {
+			if (face_points.Find(face.points[index]) == -1) {
+				break;
+			}
+		}
+		return index == face.points.size;
+	};
+
+	if (edge.face_1_index != USHORT_MAX) {
+		if (test_face(edge.face_1_index)) {
+			return edge.face_1_index;
+		}
+	}
+
+	if (edge.face_2_index != USHORT_MAX) {
+		if (test_face(edge.face_2_index)) {
+			return edge.face_2_index;
+		}
+	}
+
+	// This face could not be found or the edges are degenerate
+	// And do not properly represent the hull
 	return -1;
 }
 
@@ -258,11 +368,17 @@ PlaneScalar ConvexHull::GetFaceSidePlane(unsigned int face_index, unsigned int f
 }
 
 Line3D ConvexHull::GetFaceEdge(unsigned int face_index, unsigned int face_edge_index) const {
+	uint2 indices = GetFaceEdgeIndices(face_index, face_edge_index);
+	float3 first_point = GetPoint(indices.x);
+	float3 second_point = GetPoint(indices.y);
+	return { first_point, second_point };
+}
+
+uint2 ConvexHull::GetFaceEdgeIndices(unsigned int face_index, unsigned int face_edge_index) const
+{
 	const ConvexHullFace& face = faces[face_index];
-	unsigned short first_point_index = face.points[face_edge_index];
-	unsigned short second_point_index = face_edge_index == face.points.size - 1 ? face.points[0] : face.points[face_edge_index + 1];
-	float3 first_point = GetPoint(first_point_index);
-	float3 second_point = GetPoint(second_point_index);
+	unsigned short first_point = face.points[face_edge_index];
+	unsigned short second_point = face_edge_index == face.points.size - 1 ? face.points[0] : face.points[face_edge_index + 1];
 	return { first_point, second_point };
 }
 
@@ -330,292 +446,416 @@ float3 ConvexHull::FurthestFrom(float3 direction) const
 	return max_points.At(index);
 }
 
-void ConvexHull::MergeCoplanarFaces(AllocatorPolymorphic allocator, AllocatorPolymorphic previous_face_allocator) {
-	// At first, create a temporary hash table that maps the vertex
-	// To the edges that it belongs to. In this way, we can update
-	// The normals of faces that have a vertex displaced
-	typedef HashTable<ResizableStream<unsigned int>, unsigned int, HashFunctionPowerOfTwo> VertexToEdgeTable;
-	VertexToEdgeTable vertex_to_edge_table;
-	vertex_to_edge_table.Initialize(allocator, PowerOfTwoGreater(vertex_size + 100));
-	for (unsigned int index = 0; index < vertex_size; index++) {
-		// Initialize each vertex entry with 6 basic entries
-		vertex_to_edge_table.Insert({ allocator, 6 }, index);
-	}
-
+void ConvexHull::MergeCoplanarTriangles(float coplanarity_degrees, AllocatorPolymorphic allocator, AllocatorPolymorphic previous_face_allocator) {
+	float coplanarity_cosine = cos(DegToRad(coplanarity_degrees));
 	for (unsigned int index = 0; index < edges.size; index++) {
 		const ConvexHullEdge& edge = edges[index];
-		ResizableStream<unsigned int>* first_vertex_connections = vertex_to_edge_table.GetValuePtr(edge.point_1);
-		first_vertex_connections->Add(index);
-		ResizableStream<unsigned int>* second_vertex_connections = vertex_to_edge_table.GetValuePtr(edge.point_2);
-		second_vertex_connections->Add(index);
-	}
+		ConvexHullFace& first_face = faces[edge.face_1_index];
+		ConvexHullFace& second_face = faces[edge.face_2_index];
+		if (first_face.points.size == 3 && second_face.points.size == 3) {
+			// Both are triangles, test the angle
+			if (ComparePlaneDirectionsByCosine(first_face.plane, second_face.plane.normal, coplanarity_cosine)) {
+				// Merge these 2 together
+				unsigned int first_face_point_1_index = first_face.points.Find(edge.point_1);
+				unsigned int first_face_point_2_index = first_face.points.Find(edge.point_2);
+				unsigned int second_face_point_1_index = second_face.points.Find(edge.point_1);
+				unsigned int second_face_point_2_index = second_face.points.Find(edge.point_2);
 
-	// Keep a stack of edges to be processed
-	// Initialize it with all the edges
-	ResizableStream<unsigned int> edges_to_be_processed(allocator, 0);
-	edges_to_be_processed.ReserveRange(edges.size);
-	for (unsigned int index = 0; index < edges_to_be_processed.size; index++) {
-		edges_to_be_processed[index] = index;
-	}
+				unsigned int first_face_min_index = min(first_face_point_1_index, first_face_point_2_index);
+				unsigned int first_face_max_index = max(first_face_point_1_index, first_face_point_2_index);
+				unsigned int second_face_min_index = min(second_face_point_1_index, second_face_point_2_index);
+				unsigned int second_face_max_index = max(second_face_point_1_index, second_face_point_2_index);
 
-	while (edges_to_be_processed.size > 0) {
-		edges_to_be_processed.size--;
-		unsigned int current_edge_index = edges_to_be_processed[edges_to_be_processed.size];
-		const ConvexHullEdge& edge = edges[current_edge_index];
-		// Get the face normals for this edge
-		float3 first_normal = faces[edge.face_1_index].plane.normal;
-		float3 second_normal = faces[edge.face_2_index].plane.normal;
+				ECS_STACK_CAPACITY_STREAM(unsigned short, second_face_temporary_points, 3);
+				second_face_temporary_points.CopyOther(second_face.points);
 
-		// Merge all faces that have an angle less than 10 degrees, since it helps
-		// With the stability and with the performance
-		if (CompareAngleNormalizedRadMask(first_normal, second_normal, DegToRad(1.0f))) {
-			// We can collapse one of the faces
-			// For each face, compute the necessary displacement
-			// For the vertices to be a part of the plane and choose
-			// The face that needs the lowest displacement
-			float first_displacement = 0.0f;
-			float second_displacement = 0.0f;
+				if (previous_face_allocator.allocator != nullptr) {
+					ECS_STACK_CAPACITY_STREAM(unsigned short, first_face_temporary_points, 3);
+					first_face_temporary_points.CopyOther(first_face.points);
 
-			unsigned int first_face_index = edge.face_1_index;
-			unsigned int second_face_index = edge.face_2_index;
-			ConvexHullFace& first_face = faces[first_face_index];
-			ConvexHullFace& second_face = faces[second_face_index];
-			
-			ECS_STACK_CAPACITY_STREAM(float, first_face_displacements, 64);
-			ECS_STACK_CAPACITY_STREAM(float, second_face_displacements, 64);
+					first_face.points.Deallocate(previous_face_allocator);
+					second_face.points.Deallocate(previous_face_allocator);
 
-			ECS_ASSERT(first_face.points.size <= first_face_displacements.capacity, "Convex hull face too many points!");
-			ECS_ASSERT(second_face.points.size <= second_face_displacements.capacity, "Convex hull face too many points!");
-
-			unsigned int edge_point_1 = edge.point_1;
-			unsigned int edge_point_2 = edge.point_2;
-
-			for (unsigned int index = 0; index < first_face.points.size; index++) {
-				if (first_face.points[index] != edge_point_1 && first_face.points[index] != edge_point_2) {
-					float displacement = DistanceToPlane(second_face.plane, GetPoint(first_face.points[index]));
-					first_displacement += fabsf(displacement);
-					first_face_displacements.Add(displacement);
+					first_face.points.Initialize(allocator, 3, 4);
+					first_face.points.CopyOther(first_face_temporary_points);
 				}
 				else {
-					// Set 0.0f for the edge points, such that they don't get displaced
-					first_face_displacements.Add(0.0f);
+					first_face.points.Reserve(allocator);
+					second_face.points.DeallocateIfBelongs(allocator);
 				}
-			}
-
-			for (unsigned int index = 0; index < second_face.points.size; index++) {
-				if (second_face.points[index] != edge_point_1 && second_face.points[index] != edge_point_2) {
-					float displacement = DistanceToPlane(first_face.plane, GetPoint(second_face.points[index]));
-					second_displacement += fabsf(displacement);
-					second_face_displacements.Add(displacement);
+				// Add the next point from the second face after maximum between the first face
+				// The next point can be simply deduced as (second_face_max_index + 1
+				unsigned short point_to_add = -1;
+				if (second_face_min_index == 0) {
+					if (second_face_max_index == 2) {
+						point_to_add = second_face_temporary_points[1];
+					}
+					else {
+						// The second point must be 1
+						point_to_add = second_face_temporary_points[2];
+					}
 				}
 				else {
-					// Set 0.0f for the edge points, such that they don't get displaced
-					second_face_displacements.Add(0.0f);
-				}
-			}
-
-			// Remove this shared edge
-			// Remove the edge from the vertex connections
-			ResizableStream<unsigned int>* first_point_connections = vertex_to_edge_table.GetValuePtr(edge_point_1);
-			unsigned int first_remove_index = first_point_connections->Find(current_edge_index);
-			ECS_ASSERT(first_remove_index != -1);
-			first_point_connections->RemoveSwapBack(first_remove_index);
-
-			ResizableStream<unsigned int>* second_point_connections = vertex_to_edge_table.GetValuePtr(edge_point_2);
-			unsigned int second_remove_index = second_point_connections->Find(current_edge_index);
-			ECS_ASSERT(second_remove_index != -1);
-			second_point_connections->RemoveSwapBack(second_remove_index);
-
-			auto update_connection_edge_index = [&](unsigned int point_index, unsigned int previous_index, unsigned int new_index) {
-				ResizableStream<unsigned int> connections = vertex_to_edge_table.GetValue(point_index);
-				unsigned int connection_index = connections.Find(previous_index);
-				ECS_ASSERT(connection_index != -1, "ConvexHull merging coplanar faces failed");
-				connections[connection_index] = new_index;
-			};
-
-			edges.RemoveSwapBack(current_edge_index);
-			unsigned int swapped_edge = edges.size;
-			// Check to see if the swapped edge appears in the edges_to_be_processed and remove it
-			size_t to_be_processed_swapped_edge = SearchBytes(edges_to_be_processed.ToStream(), swapped_edge);
-			if (to_be_processed_swapped_edge != -1) {
-				edges_to_be_processed.RemoveSwapBack(to_be_processed_swapped_edge);
-			}
-			// For the edge that was removed, we need to update the vertex connections
-			// For the vertices
-			update_connection_edge_index(edges[current_edge_index].point_1, swapped_edge, current_edge_index);
-			update_connection_edge_index(edges[current_edge_index].point_2, swapped_edge, current_edge_index);
-
-			first_displacement = second_displacement - 1.0f;
-			if (first_displacement < second_displacement) {
-				// We can remove the first face
-				// Project all of its points on the other plane
-				//for (unsigned int index = 0; index < first_face.points.size; index++) {
-				//	float3 current_point = GetPoint(first_face.points[index]);
-				//	SetPoint(current_point - second_normal * first_face_displacements[index], first_face.points[index]);
-
-				//	if (!CompareMaskSingle(first_face_displacements[index], 0.0f, 0.0000001f)) {
-				//		// If the displacement is really small, do not bother to update the normals
-				//		// For the connecting faces
-				//		ResizableStream<unsigned int> connections = vertex_to_edge_table.GetValue(first_face.points[index]);
-				//		for (unsigned int subindex = 0; subindex < connections.size; subindex++) {
-
-				//		}
-				//	}
-				//}
-				
-				// Add the other points to the second face
-				for (unsigned int index = 0; index < first_face.points.size; index++) {
-					if (first_face.points[index] != edge_point_1 && first_face.points[index] != edge_point_2) {
-						if (BelongsToAllocator(allocator, second_face.points.buffer)) {
-							second_face.points.Reserve(allocator);
-							second_face.points.Add(first_face.points[index]);
-						}
-						else {
-							CapacityStream<unsigned short> new_points;
-							new_points.Initialize(allocator, 0, second_face.points.size + 1);
-							new_points.CopyOther(second_face.points);
-							new_points.Add(first_face.points[index]);
-							if (previous_face_allocator.allocator != nullptr) {
-								second_face.points.Deallocate(previous_face_allocator);
-							}
-							second_face.points = new_points;
-						}
-					}
+					// The min index is 1, the other index is 2
+					point_to_add = second_face_temporary_points[0];
 				}
 
-				auto remove_degenerate_edge = [&](unsigned int edge_index) {
-					// Returns true if this point has a single connection, else false
-					auto remove_point = [&](unsigned int point_index) {
-						ResizableStream<unsigned int>* edge_first_point_connections = vertex_to_edge_table.GetValuePtr(point_index);
-						if (edge_first_point_connections->size == 1) {
-							edge_first_point_connections->FreeBuffer();
-							// We need to remove this point as well
-							SoARemoveSwapBack(vertex_size, point_index, vertices_x, vertices_y, vertices_z);
-
-							// We need to restore the references to the swapped vertex
-							unsigned int swapped_vertex_index = vertex_size;
-							if (swapped_vertex_index != point_index) {
-								// For the edges, we can use the connections to refer to the edges
-								ResizableStream<unsigned int> swapped_connections = vertex_to_edge_table.GetValue(swapped_vertex_index);
-								// Also update the connections to reflect these new values
-								*edge_first_point_connections = swapped_connections;
-								// Remove the swapped connections from the table
-								vertex_to_edge_table.Erase(swapped_vertex_index);
-
-								for (unsigned int index = 0; index < swapped_connections.size; index++) {
-									ConvexHullEdge& swapped_point_edge = edges[swapped_connections[index]];
-									if (swapped_point_edge.point_1 == swapped_vertex_index) {
-										swapped_point_edge.point_1 = point_index;
-									}
-									if (swapped_point_edge.point_2 == swapped_vertex_index) {
-										swapped_point_edge.point_2 = point_index;
-									}
-									// We need to update the vertex index for the faces that are connected 
-									// to these edges as well
-									ConvexHullFace& first_edge_face = faces[swapped_point_edge.face_1_index];
-									for (unsigned int subindex = 0; subindex < first_edge_face.points.size; subindex++) {
-										if (first_edge_face.points[subindex] == swapped_vertex_index) {
-											first_edge_face.points[subindex] = point_index;
-											break;
-										}
-									}
-
-									ConvexHullFace& second_edge_face = faces[swapped_point_edge.face_2_index];
-									for (unsigned int subindex = 0; subindex < second_edge_face.points.size; subindex++) {
-										if (second_edge_face.points[subindex] == swapped_vertex_index) {
-											second_edge_face.points[subindex] = point_index;
-											break;
-										}
-									}
-								}
-							}
-							else {
-								// We need to remove the point index from the vertex to edge table
-								vertex_to_edge_table.Erase(point_index);
-							}
-							return true;
-						}
-						return false;
-					};
-
-					// The edge is degenerate, it is inside completely inside
-					// The same face. It can be safely removed, along side the point
-					// That has only this edge as connection
-					if (!remove_point(edges[edge_index].point_1)) {
-						ECS_ASSERT(remove_point(edges[edge_index].point_2), "ConvexHull degenerate edge during merging coplanar faces could not be resolved!");
+				unsigned int insert_position = -1;
+				if (first_face_min_index == 0) {
+					if (first_face_max_index == 2) {
+						insert_position = 3;
 					}
-
-					// At last, we need to remove this edge from the to be processed stack, if it exists
-					// And to remove it from the edges stream as well
-					edges.RemoveSwapBack(edge_index);
-					unsigned int swapped_edge = edges.size;
-					// Check to see if the swapped edge appears in the edges_to_be_processed and remove it
-					size_t to_be_processed_swapped_edge = SearchBytes(edges_to_be_processed.ToStream(), swapped_edge);
-					if (to_be_processed_swapped_edge != -1) {
-						edges_to_be_processed.RemoveSwapBack(to_be_processed_swapped_edge);
+					else {
+						insert_position = 1;
 					}
-					update_connection_edge_index(edges[edge_index].point_1, swapped_edge, edge_index);
-					update_connection_edge_index(edges[edge_index].point_2, swapped_edge, edge_index);
+				}
+				else {
+					insert_position = 2;
+				}
+				first_face.points.Insert(insert_position, point_to_add);
+
+				auto redirect_edge = [&](unsigned short edge_1, unsigned short edge_2) {
+					unsigned int edge_index = FindEdge(edge_1, edge_2);
+					ECS_ASSERT(edge_index != -1, "ConvexHull invalid state when trying to merge coplanar triangles");
+					if (edges[edge_index].face_1_index == edge.face_2_index) {
+						edges[edge_index].face_1_index = edge.face_1_index;
+					}
+					else {
+						ECS_ASSERT(edges[edge_index].face_2_index == edge.face_2_index, "ConvexHull invalid state when trying to merge coplanar triangles");
+						edges[edge_index].face_2_index = edge.face_1_index;
+					}
 				};
 
-				// Redirect the edges that referenced the collapsed face to the second face
-				for (unsigned int edge_index = 0; edge_index < edges.size; edge_index++) {
-					if (edges[edge_index].face_1_index == first_face_index) {
-						edges[edge_index].face_1_index = second_face_index;
-						if (edges[edge_index].face_1_index == edges[edge_index].face_2_index) {
-							remove_degenerate_edge(edge_index);
-							edge_index--;
-							continue;
-						}
-					}
-					if (edges[edge_index].face_2_index == first_face_index) {
-						edges[edge_index].face_2_index = second_face_index;
-						if (edges[edge_index].face_1_index == edges[edge_index].face_2_index) {
-							remove_degenerate_edge(edge_index);
-							edge_index--;
-							continue;
-						}
-					}
-				}
+				// Redirect the other edges of the triangle to the first face
+				redirect_edge(edge.point_1, point_to_add);
+				redirect_edge(edge.point_2, point_to_add);
 
-				if (previous_face_allocator.allocator != nullptr) {
-					faces[first_face_index].points.Deallocate(previous_face_allocator);
-				}
-				faces.RemoveSwapBack(first_face_index);
-				unsigned int swapped_face = faces.size;
-				// Update the edges that reference the swapped edge
-				for (unsigned int edge_index = 0; edge_index < edges.size; edge_index++) {
-					if (edges[edge_index].face_1_index == swapped_face) {
-						edges[edge_index].face_1_index = first_face_index;
-						if (edges[edge_index].face_1_index == edges[edge_index].face_2_index) {
-							remove_degenerate_edge(edge_index);
-							edge_index--;
-							continue;
-						}
-					}
-					if (edges[edge_index].face_2_index == swapped_face) {
-						edges[edge_index].face_2_index = first_face_index;
-						if (edges[edge_index].face_1_index == edges[edge_index].face_2_index) {
-							remove_degenerate_edge(edge_index);
-							edge_index--;
-							continue;
-						}
-					}
-				}
-			}
-			else {
-				if (previous_face_allocator.allocator != nullptr) {
-					faces[second_face_index].points.Deallocate(previous_face_allocator);
-				}
-				faces.RemoveSwapBack(second_face_index);
+				unsigned short second_face_index = edge.face_2_index;
+
+				// We can delete this current edge as well, before the face
+				RemoveSwapBackEdge(index);
+
+				// We need to remove the face after we remove the current edge
+				RemoveSwapBackFace(second_face_index);
+
+				index--;
 			}
 		}
 	}
+}
 
-	vertex_to_edge_table.ForEachConst([](ResizableStream<unsigned int> connections, unsigned int vertex_index) {
-		connections.FreeBuffer();
-	});
-	vertex_to_edge_table.Deallocate(allocator);
+void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorphic allocator) {
+	// At the moment, collapse small triangles. Sliver triangles are also possible candidates
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 32);
+
+	// We can create a parallel array for each vertex to hold the edges that are connected
+	Stream<CapacityStream<unsigned int>> vertex_connections = ComputeVertexToEdgeTable(&stack_allocator);
+	Stream<float> face_areas;
+	face_areas.Initialize(&stack_allocator, faces.size);
+
+	auto remove_swap_back_edge = [&](unsigned int edge_index) {
+		// Update the connections to exclude this edge
+		CapacityStream<unsigned int>* first_connections = &vertex_connections[edges[edge_index].point_1];
+		first_connections->RemoveSwapBackByValue(edge_index, "ConvexHull simplifying triangles inconsistent state");
+		CapacityStream<unsigned int>* second_connections = &vertex_connections[edges[edge_index].point_2];
+		second_connections->RemoveSwapBackByValue(edge_index, "ConvxHull simplifying triangles inconsistent state");
+
+		edges.RemoveSwapBack(edge_index);
+		if (edge_index != edges.size) {
+			// We need to repair the references to the edges inside the connections table
+			const ConvexHullEdge& swapped_edge = edges[edge_index];
+			CapacityStream<unsigned int>& swapped_edge_first_connections = vertex_connections[swapped_edge.point_1];
+			swapped_edge_first_connections.ReplaceByValue(edges.size, edge_index, "ConvexHull simplifying triangles invalid state");
+			CapacityStream<unsigned int>& swapped_edge_second_connections = vertex_connections[swapped_edge.point_2];
+			swapped_edge_second_connections.ReplaceByValue(edges.size, edge_index, "ConvexHull simplifying triangles invalid state");
+		}
+	};
+
+	auto repair_edge_face_reference = [&](unsigned int previous_face_index, unsigned int new_face_index) {
+		// Since we know that these are triangles, we can stop if the count hits 3
+		unsigned int count = 0;
+		for (unsigned int index = 0; index < edges.size && count < 3; index++) {
+			if (edges[index].face_1_index == previous_face_index) {
+				edges[index].face_1_index = new_face_index;
+				count++;
+			}
+			else if (edges[index].face_2_index == previous_face_index) {
+				edges[index].face_2_index = new_face_index;
+				count++;
+			}
+		}
+	};
+
+	// Makes use of the vertex connections to speed this up
+	// If the add connections is set to true, it will append
+	// The connections of the previous to the new, except the
+	// Identity connection and those that would be duplicates
+	auto repair_vertex_references = [&](unsigned int previous_index, unsigned int new_index, bool add_connections_and_recalculate_triangles) {
+		Stream<unsigned int> connections = vertex_connections[previous_index];
+		CapacityStream<unsigned int>& new_connections = vertex_connections[new_index];
+		ECS_STACK_CAPACITY_STREAM(unsigned short, processed_faces, 128);
+		ECS_ASSERT(processed_faces.capacity >= connections.size, "ConvexHull simplifying triangles insufficient stack space");
+
+		if (add_connections_and_recalculate_triangles) {
+			// We don't need to include the collapsed edge
+			new_connections.Reserve(&stack_allocator, connections.size - 1);
+		}
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, edges_to_be_removed, 512);
+
+		for (size_t index = 0; index < connections.size; index++) {
+			ConvexHullEdge& current_redirect_edge = edges[connections[index]];
+
+			ConvexHullFace& first_face = faces[current_redirect_edge.face_1_index];
+			for (unsigned int face_point_index = 0; face_point_index < first_face.points.size; face_point_index++) {
+				if (first_face.points[face_point_index] == previous_index) {
+					first_face.points[face_point_index] = new_index;
+					break;
+				}
+			}
+
+			ConvexHullFace& second_face = faces[current_redirect_edge.face_2_index];
+			for (unsigned int face_point_index = 0; face_point_index < second_face.points.size; face_point_index++) {
+				if (second_face.points[face_point_index] == previous_index) {
+					second_face.points[face_point_index] = new_index;
+					break;
+				}
+			}
+
+			bool is_edge_going_to_be_collapsed = false;
+			if (add_connections_and_recalculate_triangles) {
+				// A face may repeat itself since 2 edges will reference it
+				// Keep an array of the processed faces
+				auto update_face = [&](unsigned int face_index) {
+					bool was_processed = processed_faces.Find(face_index) != -1;
+					if (!was_processed) {
+						ConvexHullFace& face = faces[face_index];
+
+						float3 A = GetPoint(face.points[0]);
+						float3 B = GetPoint(face.points[1]);
+						float3 C = GetPoint(face.points[2]);
+
+						float3 cross = Cross(B - A, C - A);
+						// Redirect the normal outside the hull
+						if (Dot(cross, A - center) < 0.0f) {
+							cross = -cross;
+						}
+
+						float cross_length = Length(cross);
+						float new_area = cross_length * 0.5f;
+						PlaneScalar new_plane = PlaneScalar::FromNormalized(cross / cross_length, A);
+						face.plane = new_plane;
+						face_areas[face_index] = fabsf(new_area);
+						processed_faces.AddAssert(face_index);
+					}
+				};
+
+				// If the connection already exists in the new_connections, it means
+				// This is one of the edges of the triangles that get collapsed. We shouldn't add the
+				// Connection again, and we can skip the face update as well
+				unsigned short other_connection_point = current_redirect_edge.point_1 == previous_index ?
+					current_redirect_edge.point_2 : current_redirect_edge.point_1;
+				unsigned int target_remapped_edge_index = FindEdge(new_index, other_connection_point);
+				bool exists_connection = false;
+				if (target_remapped_edge_index != -1) {
+					exists_connection = new_connections.Find(target_remapped_edge_index) != -1;
+				}
+
+				if (!exists_connection) {
+					new_connections.Add(connections[index]);
+
+					update_face(current_redirect_edge.face_1_index);
+					update_face(current_redirect_edge.face_2_index);
+				}
+				else {
+					is_edge_going_to_be_collapsed = true;
+
+					// We need to remove this edge from existence, it means that the
+					// Edge is duplicate. Put these on a stack buffer to commit them
+					// At the end since this can cause interference with the loop
+					// connections
+					edges_to_be_removed.AddAssert(connections[index]);
+					// We need to update the target remapped edge with the face index
+					// Of the face on the other side of the collapsing edge
+					// Determine the face that is being collapsed, by checking to see if
+					// The new_index point is found 2 times in it. We have already remapped
+					// The previous index to the new index, and this is why we have to check
+					// For the new index 2 times
+					unsigned int remap_face_new_index = -1;
+					unsigned int remap_face_previous_index = -1;
+					unsigned int first_face_collapsed_count = first_face.points[0] == new_index
+						+ first_face.points[1] == new_index + first_face.points[2] == new_index;
+					if (first_face_collapsed_count == 2) {
+						remap_face_new_index = current_redirect_edge.face_2_index;
+						remap_face_previous_index = current_redirect_edge.face_1_index;
+					}
+					else {
+						remap_face_new_index = current_redirect_edge.face_1_index;
+						remap_face_previous_index = current_redirect_edge.face_2_index;
+					}
+
+					ConvexHullEdge& remap_edge_face = edges[target_remapped_edge_index];
+					if (remap_edge_face.face_1_index == remap_face_previous_index) {
+						remap_edge_face.face_1_index = remap_face_new_index;
+					}
+					else {
+						remap_edge_face.face_2_index = remap_face_new_index;
+					}
+				}
+			}
+
+			// For collapsing edges, don't do this
+			if (!is_edge_going_to_be_collapsed) {
+				if (current_redirect_edge.point_1 == previous_index) {
+					current_redirect_edge.point_1 = new_index;
+				}
+				else {
+					current_redirect_edge.point_2 = new_index;
+				}
+			}
+		}
+
+		for (unsigned int index = 0; index < edges_to_be_removed.size; index++) {
+			remove_swap_back_edge(edges_to_be_removed[index]);
+			// Update the index of the edges to be removed in case it is the last edge
+			for (unsigned int subindex = index + 1; subindex < edges_to_be_removed.size; subindex++) {
+				if (edges_to_be_removed[subindex] == edges.size) {
+					edges_to_be_removed[subindex] = edges_to_be_removed[index];
+					break;
+				}
+			}
+		}
+	};
+
+	// Collapsing the first point to the second point
+	auto collapse_edge = [&](unsigned short first_point, unsigned short second_point) {
+		// Find the edge that corresponds to these points
+		unsigned int edge_index = FindEdge(first_point, second_point);
+		ECS_ASSERT(edge_index != -1, "ConvexHull simplifying triangles failed");
+		ConvexHullEdge edge = edges[edge_index];
+
+		// Remove the edge right now, before the vertex removal
+		remove_swap_back_edge(edge_index);
+
+		// We can remove the current vertex
+		SoARemoveSwapBack(vertex_size, first_point, vertices_x, vertices_y, vertices_z);
+		// We could technically check that second point is different from the last vertex
+		// And that would give a speed up in that case. But I kept it like this to keep it simple
+
+		// Redirect the edges and the faces that referenced the first point to the second
+		repair_vertex_references(first_point, second_point, true);
+		// And for the last vertex to the first point index
+		if (vertex_size != first_point) {
+			repair_vertex_references(vertex_size, first_point, false);
+		}
+		// Remove the vertex connections now - we need to do this after the vertex repair
+		vertex_connections.RemoveSwapBack(first_point);
+
+		// We need to remove the faces that correspond to this edge
+		if (allocator.allocator != nullptr) {
+			faces[edge.face_1_index].points.Deallocate(allocator);
+			faces[edge.face_2_index].points.Deallocate(allocator);
+		}
+
+		// Remove the 2 faces - don't forget to update the triangle areas as well
+		faces.RemoveSwapBack(edge.face_1_index);
+		face_areas.RemoveSwapBack(edge.face_1_index);
+		repair_edge_face_reference(faces.size, edge.face_1_index);
+		if (edge.face_2_index != faces.size) {
+			faces.RemoveSwapBack(edge.face_2_index);
+			face_areas.RemoveSwapBack(edge.face_2_index);
+			repair_edge_face_reference(faces.size, edge.face_2_index);
+		}
+		else {
+			// The second face was swapped to the first index
+			faces.RemoveSwapBack(edge.face_1_index);
+			face_areas.RemoveSwapBack(edge.face_1_index);
+			repair_edge_face_reference(faces.size, edge.face_1_index);
+		}
+	};
+
+
+	// Create a parallel array for the triangle areas
+	// And record the total area
+	float total_mesh_area = 0.0f;
+	for (unsigned int index = 0; index < faces.size; index++) {
+		const ConvexHullFace& face = faces[index];
+		float3 a = GetPoint(face.points[0]);
+		float3 b = GetPoint(face.points[1]);
+		float3 c = GetPoint(face.points[2]);
+		face_areas[index] = TriangleArea(a, b, c);
+		total_mesh_area += face_areas[index];
+	}
+
+	// To determine the area threshold, we need to divide the total area by a certain factor
+	float triangle_threshold = total_mesh_area / 250.0f * area_factor;
+	// For each triangle that we find to have an area smaller than the theshold, collapse
+	// One of the edge. This ensures that we have points only on the hull, and it makes for
+	// A relatively easier implementation
+	for (unsigned int index = 0; index < faces.size; index++) {
+		if (face_areas[index] < triangle_threshold) {
+			unsigned int removed_edge_index = FindEdge(1, 150);
+			// We need to remove this triangle
+			// Choose the smallest edge to use as the collapsing edge
+			ConvexHullFace face = faces[index];
+			float3 a = GetPoint(face.points[0]);
+			float3 b = GetPoint(face.points[1]);
+			float3 c = GetPoint(face.points[2]);
+
+			float3 AB = b - a;
+			float3 AC = c - a;
+			float3 BC = c - b;
+
+			float AB_sq_length = SquareLength(AB);
+			float AC_sq_length = SquareLength(AC);
+			float BC_sq_length = SquareLength(BC);
+
+			bool ab_ac_smaller = AB_sq_length < AC_sq_length;
+			bool ab_bc_smaller = AB_sq_length < BC_sq_length;
+			bool ac_bc_smaller = AC_sq_length < BC_sq_length;
+
+			unsigned short collapse_edge_1 = USHORT_MAX;
+			unsigned short collapse_edge_2 = USHORT_MAX;
+			if (ab_ac_smaller && ab_bc_smaller) {
+				// We can collapse the AB edge
+				collapse_edge_1 = face.points[0];
+				collapse_edge_2 = face.points[1];
+			}
+			else if (!ab_ac_smaller && ac_bc_smaller) {
+				// We can collapse the AC edge
+				collapse_edge_1 = face.points[0];
+				collapse_edge_2 = face.points[2];
+			}
+			else {
+				// Collapse the BC edge
+				collapse_edge_1 = face.points[1];
+				collapse_edge_2 = face.points[2];
+			}
+
+			// There is one more thing to be decided, if we collapse from
+			// The edge 1 to 2, or from 2 to 1. At the moment, just collapse
+			// 1 to 2 until we come up with a metric to decide which direction
+			// Is better than the other
+			collapse_edge(collapse_edge_1, collapse_edge_2);
+			// Decrement the index since we know this face will be removed
+			// TODO: We might miss other faces tho, that get swapped before this index
+			// Think about a solution
+			index--;
+		}
+	}
+}
+
+unsigned int ConvexHull::SupportFacePoint(unsigned int face_index, float3 direction) const {
+	float dot = -FLT_MAX;
+	unsigned int vertex_index = -1;
+	for (unsigned int index = 0; index < faces[face_index].points.size; index++) {
+		float current_dot = Dot(GetPoint(faces[face_index].points[index]), direction);
+		if (current_dot > dot) {
+			dot = current_dot;
+			vertex_index = index;
+		}
+	}
+	return vertex_index;
 }
 
 unsigned int ConvexHull::SupportFace(float3 direction) const
@@ -631,6 +871,219 @@ unsigned int ConvexHull::SupportFace(float3 direction) const
 	}
 
 	return face_index;
+}
+
+
+void ConvexHull::RemoveSwapBackVertex(unsigned int index) {
+	SoARemoveSwapBack(vertex_size, index, vertices_x, vertices_y, vertices_z);
+	
+	// Repair the edge and face references for the swapped point
+	if (vertex_size != index) {
+		// We don't have to iterate the faces, since we know that
+		// The edges maintain references to the faces, when we find
+		// An edge to be modified, we modify the faces that it is
+		// Connected as well. It may result in rechecking of faces,
+		ECS_STACK_CAPACITY_STREAM(unsigned short, verified_faces, 128);
+
+		auto remap_face = [&](unsigned int face_index) {
+			if (verified_faces.Find(face_index) != -1) {
+				verified_faces.AddAssert(face_index);
+				ConvexHullFace& face = faces[face_index];
+				for (unsigned int subindex = 0; subindex < face.points.size; subindex++) {
+					if (face.points[subindex] == vertex_size) {
+						face.points[subindex] = index;
+						break;
+					}
+				}
+			}
+		};
+
+		for (unsigned int edge_index = 0; edge_index < edges.size; edge_index++) {
+			if (edges[edge_index].point_1 == vertex_size) {
+				edges[edge_index].point_1 = index;
+				remap_face(edges[edge_index].face_1_index);
+			}
+			if (edges[edge_index].point_2 == vertex_size) {
+				edges[edge_index].point_2 = index;
+				remap_face(edges[edge_index].face_2_index);
+			}
+		}
+	}
+}
+
+void ConvexHull::RemoveSwapBackEdge(unsigned int edge_index) {
+	edges.RemoveSwapBack(edge_index);
+}
+
+void ConvexHull::RemoveSwapBackFace(unsigned int face_index) {
+	faces.RemoveSwapBack(face_index);
+	// We need to repair the edge references
+	if (faces.size != face_index) {
+		unsigned int face_edge_count = faces[face_index].EdgeCount();
+		// We can exit once the count reaches edge_count
+		unsigned int count = 0;
+		for (unsigned int index = 0; index < edges.size; index++) {
+			if (edges[index].face_1_index == faces.size) {
+				edges[index].face_1_index = face_index;
+				count++;
+				if (count == face_edge_count) {
+					break;
+				}
+			}
+			else if (edges[index].face_2_index == faces.size) {
+				edges[index].face_2_index = face_index;
+				count++;
+				if (count == face_edge_count) {
+					break;
+				}
+			}
+		}
+	}
+}
+
+void ConvexHull::RemoveSwapBackFace(unsigned int face_index, AllocatorPolymorphic allocator) {
+	faces[face_index].Deallocate(allocator);
+	RemoveSwapBackFace(face_index);
+}
+
+template<typename Functor>
+void ReoderFacePointsImpl(ConvexHull* convex_hull, unsigned int face_index, Stream<CapacityStream<unsigned int>> table, Functor&& functor) {
+	// Calculate the center of the face
+	float3 face_center = convex_hull->GetFaceCenter(face_index);
+
+	ConvexHullFace& face = convex_hull->faces[face_index];
+	auto test_CCW = [convex_hull, face, face_center](unsigned int first_point_index, unsigned int second_point_index) {
+		// To test the CCW property, use the cross product of the edge with a displacement
+		// From the initial point. If the value is positive, they are in CCW
+		float3 first_point = convex_hull->GetPoint(first_point_index);
+		float3 second_point = convex_hull->GetPoint(second_point_index);
+		float3 cross_product = Cross(first_point - face_center, second_point - first_point);
+		float dot = Dot(cross_product, face.plane.normal);
+		return dot > 0.0f;
+	};
+
+	ECS_STACK_CAPACITY_STREAM(unsigned short, face_points, 512);
+	ECS_ASSERT(face.points.size <= face_points.capacity, "ConvexHull too many points for a face");
+	face_points.CopyOther(face.points);
+
+	// Choose a support point in a direction
+	float3 initial_direction = float3{ 1.0f, 0.0f, 0.0f };
+	unsigned int initial_face_vertex_index = convex_hull->SupportFacePoint(face_index, initial_direction);
+
+	unsigned int current_vertex_index = face.points[initial_face_vertex_index];
+	face.points[0] = current_vertex_index;
+	face.points.size = 1;
+	while (face.points.size < face_points.size) {
+		Stream<unsigned int> vertex_connections = table[current_vertex_index];
+		// Using the connections, determine the vertex that is CCW as this one
+		size_t subindex = 0;
+		for (; subindex < vertex_connections.size; subindex++) {
+			unsigned int other_edge_point = functor(current_vertex_index, vertex_connections[subindex]);
+			if (face_points.Find(other_edge_point) != -1 && test_CCW(current_vertex_index, other_edge_point)) {
+				face.points.Add(other_edge_point);
+				current_vertex_index = other_edge_point;
+				break;
+			}
+		}
+
+		/*if (subindex < vertex_connections.size) {
+			float3 a = GetPoint(face.points[0]);
+			float3 b = GetPoint(face.points[1]);
+			float3 c = GetPoint(face.points[2]);
+			float angle = AngleBetweenVectors(b - a, c - a);
+			__debugbreak();
+		}*/
+		//ECS_ASSERT(subindex < vertex_connections.size, "ConvexHull could not reorder faces");
+	}
+
+	face_points.CopyTo(face.points.buffer);
+}
+
+void ConvexHull::ReorderFacePointsByEdges(unsigned int face_index, Stream<CapacityStream<unsigned int>> vertex_to_edge_table)
+{
+	ReoderFacePointsImpl(this, face_index, vertex_to_edge_table, [&](unsigned int current_vertex_index, unsigned int entry) {
+		const ConvexHullEdge& edge = edges[entry];
+		return edge.point_1 == current_vertex_index ? edge.point_2 : edge.point_1;
+	});
+}
+
+void ConvexHull::ReorderFacePointsByVertices(unsigned int face_index, Stream<CapacityStream<unsigned int>> vertex_to_vertex_table) {
+	ReoderFacePointsImpl(this, face_index, vertex_to_vertex_table, [&](unsigned int current_vertex_index, unsigned int entry) {
+		return entry;
+	});
+}
+
+void ConvexHull::ReorderFacePointsByAngles(unsigned int face_index) {
+	float3 face_center = GetFaceCenter(face_index);
+	ConvexHullFace& face = faces[face_index];
+
+	// Choose a support point in a direction
+	float3 initial_direction = float3{ 1.0f, 0.0f, 0.0f };
+	unsigned int initial_face_vertex_index = SupportFacePoint(face_index, initial_direction);
+
+	unsigned int edge_count = face.EdgeCount();
+	ECS_STACK_CAPACITY_STREAM(unsigned short, remaining_points, 64);
+	remaining_points.CopyOther(face.points);
+	remaining_points.RemoveSwapBack(initial_face_vertex_index);
+	face.points.size = 1;
+	face.points[0] = face.points[initial_face_vertex_index];
+
+	// To determine the next point, iterate over all points and compute 2 dots products
+	// One is used to determine if the vertex is on the CCW or CW side, and the other
+	// To determine the closest point
+	unsigned int current_face_vertex_index = face.points[0];
+	for (unsigned int index = 0; index < edge_count - 2; index++) {
+		// Compute a "right direction", by using the cross product between the face normal
+		// And the center to point direction
+		float3 current_point = GetPoint(current_face_vertex_index);
+		float3 current_center_point_direction = current_point - face_center;
+		float3 right_direction = Cross(current_center_point_direction, face.plane.normal);
+		float max_dot = -FLT_MAX;
+		float max_distance = -FLT_MAX;
+		unsigned int candidate_point_index = -1;
+
+		for (unsigned int subindex = 0; subindex < remaining_points.size; subindex++) {
+			float3 candidate_point = GetPoint(remaining_points[subindex]);
+			float order_dot = Dot(right_direction, candidate_point - face_center);
+			if (order_dot >= 0.0f) {
+				// Compute the other dot product
+				float3 candidate_direction = candidate_point - current_point;
+				float candidate_point_length = Length(candidate_direction);
+				float distance_dot = Dot(candidate_direction / candidate_point_length, current_center_point_direction);
+				// If it is extremely close, consider them to be on the same line
+				if (FloatCompare(distance_dot, max_dot)) {
+					if (candidate_point_length < max_distance) {
+						max_dot = max(max_dot, distance_dot);
+						max_distance = candidate_point_length;
+						candidate_point_index = subindex;
+					}
+				}
+				else if (distance_dot > max_dot) {
+					max_dot = distance_dot;
+					max_distance = candidate_point_length;
+					candidate_point_index = subindex;
+				}
+			}
+		}
+
+		ECS_ASSERT(candidate_point_index != -1, "ConvexHull could not reorder face using angles");
+		current_face_vertex_index = remaining_points[candidate_point_index];
+		face.points.Add(current_face_vertex_index);
+		remaining_points.RemoveSwapBack(candidate_point_index);
+	}
+	// The last remaining point can be added directly
+	ECS_ASSERT(remaining_points.size == 1, "ConvexHull could not reorder face using angles");
+	face.points.Add(remaining_points[0]);
+}
+
+void ConvexHull::ReorderFacePoints() {
+	// Create a temporary hash table with the vertex connections
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
+	Stream<CapacityStream<unsigned int>> vertex_to_edge_table = ComputeVertexToEdgeTable(&stack_allocator);
+
+	for (unsigned int index = 0; index < faces.size; index++) {
+		ReorderFacePointsByEdges(index, vertex_to_edge_table);
+	}
 }
 
 void ConvexHull::ReallocateFaces(AllocatorPolymorphic allocator) {
@@ -658,20 +1111,21 @@ void ConvexHull::RedirectEdges()
 		}
 	}
 
-	for (unsigned int index = 0; index < edges.size; index++) {
-		ConvexHullEdge& edge = edges[index];
-		float3 first_normal = faces[edge.face_1_index].plane.normal;
-		float3 second_normal = faces[edge.face_2_index].plane.normal;
-		float3 cross_product = Cross(first_normal, second_normal);
-		float3 edge_direction = GetPoint(edge.point_2) - GetPoint(edge.point_1);
-		// Include the 0.0f case, that can happen when the cross poduct is close to 0.0f
-		// (for almost parallel normals. This should be a rare occurence, since that would
-		// Mean that we have nearly coplanar faces, and these should be merged)
-		bool same_direction = Dot(edge_direction, cross_product) >= 0.0f;
-		if (!same_direction) {
-			ECS_ASSERT(false, "Redirecting edges failed!");
-		}
-	}
+	//for (unsigned int index = 0; index < edges.size; index++) {
+	//	ConvexHullEdge& edge = edges[index];
+	//	float3 first_normal = faces[edge.face_1_index].plane.normal;
+	//	float3 second_normal = faces[edge.face_2_index].plane.normal;
+	//	float3 cross_product = Cross(first_normal, second_normal);
+	//	float3 edge_direction = GetPoint(edge.point_2) - GetPoint(edge.point_1);
+	//	// Include the 0.0f case, that can happen when the cross poduct is close to 0.0f
+	//	// (for almost parallel normals. This should be a rare occurence, since that would
+	//	// Mean that we have nearly coplanar faces, and these should be merged)
+	//	bool same_direction = Dot(edge_direction, cross_product) >= 0.0f;
+	//	if (!same_direction) {
+	//		//same_direction = !same_direction;
+	//		ECS_ASSERT(false, "Redirecting edges failed!");
+	//	}
+	//}
 }
 
 void ConvexHull::RemoveDegenerateEdges(AllocatorPolymorphic allocator) {
@@ -682,38 +1136,24 @@ void ConvexHull::RemoveDegenerateEdges(AllocatorPolymorphic allocator) {
 
 	// In order to perform this fast, create a parallel array to the vertices
 	// Where we hold this extra information
-	struct VertexConnection {
-		CapacityStream<unsigned short> edges;
-	};
-	Stream<VertexConnection> connections;
-	connections.Initialize(&stack_allocator, vertex_size);
-	for (unsigned int index = 0; index < vertex_size; index++) {
-		// Preallocate a small number of edge for each entry
-		connections[index].edges.Initialize(&stack_allocator, 0, 5);
-	}
-
-	for (unsigned int index = 0; index < edges.size; index++) {
-		const unsigned int GROWTH_FACTOR = 4;
-		connections[edges[index].point_1].edges.AddResize(index, &stack_allocator, GROWTH_FACTOR);
-		connections[edges[index].point_2].edges.AddResize(index, &stack_allocator, GROWTH_FACTOR);
-	}
+	Stream<CapacityStream<unsigned int>> connections = ComputeVertexToEdgeTable(&stack_allocator);
 
 	for (unsigned int index = 0; index < vertex_size; index++) {
-		if (connections[index].edges.size <= 1) {
+		if (connections[index].size <= 1) {
 			// Remove any edges that refer to this point
 			// Do this before removing the point
-			if (connections[index].edges.size == 1) {
-				unsigned int edge_to_be_removed = connections[index].edges[0];
+			if (connections[index].size == 1) {
+				unsigned int edge_to_be_removed = connections[index][0];
 				edges.RemoveSwapBack(edge_to_be_removed);
 				unsigned int edge_to_be_restored = edges.size;
 
 				for (unsigned int subindex = 0; subindex < vertex_size; subindex++) {
-					for (unsigned int connection_index = 0; connection_index < connections[subindex].edges.size; connection_index++) {
-						if (connections[subindex].edges[connection_index] == edge_to_be_removed) {
-							connections[subindex].edges.RemoveSwapBack(connection_index);
+					for (unsigned int connection_index = 0; connection_index < connections[subindex].size; connection_index++) {
+						if (connections[subindex][connection_index] == edge_to_be_removed) {
+							connections[subindex].RemoveSwapBack(connection_index);
 						}
-						else if (connections[subindex].edges[connection_index] == edge_to_be_restored) {
-							connections[subindex].edges[connection_index] = edge_to_be_removed;
+						else if (connections[subindex][connection_index] == edge_to_be_restored) {
+							connections[subindex][connection_index] = edge_to_be_removed;
 						}
 					}
 				}
@@ -724,8 +1164,8 @@ void ConvexHull::RemoveDegenerateEdges(AllocatorPolymorphic allocator) {
 
 			// We need to restore the references for the edges that referenced the last point
 			unsigned int invalid_referenced_index = vertex_size;
-			for (unsigned int subindex = 0; subindex < connections[invalid_referenced_index].edges.size; subindex++) {
-				ConvexHullEdge& edge = edges[connections[invalid_referenced_index].edges[subindex]];
+			for (unsigned int subindex = 0; subindex < connections[invalid_referenced_index].size; subindex++) {
+				ConvexHullEdge& edge = edges[connections[invalid_referenced_index][subindex]];
 				if (edge.point_1 == invalid_referenced_index) {
 					edge.point_1 = index;
 				}
@@ -740,6 +1180,35 @@ void ConvexHull::RemoveDegenerateEdges(AllocatorPolymorphic allocator) {
 
 	if (allocator.allocator != nullptr) {
 		Resize(allocator, vertex_size, edges.size, faces.size);
+	}
+}
+
+void ConvexHull::RegenerateEdges(AllocatorPolymorphic allocator)
+{
+	edges.size = 0;
+	// For each face, simply create/update the edge
+	for (unsigned int index = 0; index < faces.size; index++) {
+		const ConvexHullFace& face = faces[index];
+		for (unsigned int face_edge_index = 0; face_edge_index < face.EdgeCount(); face_edge_index++) {
+			uint2 point_indices = GetFaceEdgeIndices(index, face_edge_index);
+			unsigned int edge_index = FindEdge(point_indices.x, point_indices.y);
+			if (edge_index == -1) {
+				if (allocator.allocator != nullptr) {
+					ReserveEdges(allocator);
+				}
+				edge_index = AddEdge(point_indices.x, point_indices.y);
+				ConvexHullEdge& edge = edges[edge_index];
+				edge.face_1_index = index;
+			}
+			else {
+				ConvexHullEdge& edge = edges[edge_index];
+				// Assert that the second slot is empty
+				//ECS_ASSERT(edge.face_2_index == USHORT_MAX, "ConvexHull regenerating edges impossible because of degenerate faces");
+				if (edge.face_2_index == USHORT_MAX) {
+					edge.face_2_index = index;
+				}
+			}
+		}
 	}
 }
 
@@ -811,6 +1280,29 @@ ConvexHull ECS_VECTORCALL ConvexHull::TransformToTemporary(Matrix matrix, Alloca
 	return hull;
 }
 
+bool ConvexHull::Validate() const {
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+	unsigned char* face_reference_count = (unsigned char*)stack_allocator.Allocate(sizeof(unsigned char) * faces.size);
+	memset(face_reference_count, 0, sizeof(unsigned char) * faces.size);
+	// Verify that each edge has 2 faces
+	// Verify that each face is referenced as the number of edges it has
+	for (unsigned int index = 0; index < edges.size; index++) {
+		if (edges[index].face_1_index == USHORT_MAX || edges[index].face_2_index == USHORT_MAX) {
+			return false;
+		}
+		face_reference_count[edges[index].face_1_index]++;
+		face_reference_count[edges[index].face_2_index]++;
+	}
+
+	for (unsigned int index = 0; index < faces.size; index++) {
+		if (face_reference_count[index] != faces[index].EdgeCount()) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 ConvexHull CreateConvexHullFromMesh(Stream<float3> vertex_positions, AllocatorPolymorphic allocator)
 {
 	/*ConvexHull hull;
@@ -854,6 +1346,9 @@ void ConvexHullEdge::AddFaceAssert(unsigned int face_index)
 		// Of their faces set
 		if (face_2_index == USHORT_MAX) {
 			face_2_index = face_index;
+		}
+		else {
+			face_2_index = face_2_index;
 		}
 	}
 }

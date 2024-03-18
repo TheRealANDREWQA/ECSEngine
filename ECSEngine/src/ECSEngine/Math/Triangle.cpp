@@ -49,8 +49,8 @@ namespace ECSEngine {
 
 	float TriangleArea(float3 point_a, float3 point_b, float3 point_c)
 	{
-		// length(a X b) / 2
-		return Length(Cross(point_a, point_b)) / 2;
+		// length(AB X AC) / 2
+		return Length(Cross(point_b - point_a, point_c - point_a)) / 2;
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -161,105 +161,89 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool AreCoplanarTrianglesIntersecting(float3 A, float3 B, float3 C, float3 D, float3 E, float3 F) {
-		// We need to test each point to see if it is contained in the other triangle
-		// We can use SIMD to perform the 2 containment tests at once
-		float x_values[Vector3::ElementCount()];
-		float y_values[Vector3::ElementCount()];
-		float z_values[Vector3::ElementCount()];
+	bool IsCoplanarSegmentIntersectingTriangleWithNormal(
+		float3 triangle_a,
+		float3 triangle_b,
+		float3 triangle_c,
+		float3 triangle_normal,
+		float3 segment_0,
+		float3 segment_1
+	) {
+		// PERFORMANCE TODO: Internally SIMDize this?
 
-		auto set_value = [&](float3 value, unsigned int index) {
-			x_values[index] = value.x;
-			y_values[index] = value.y;
-			z_values[index] = value.z;
+		// We can treat this as a 2D SAT problem
+		// We can use the normals to the 3 sides of the triangle
+		// As separating axes
+
+		auto test_edge = [triangle_normal, segment_0, segment_1](float3 edge_0, float3 edge_1, float3 other_triangle_point) {
+			float3 edge_normal = Cross(edge_1 - edge_0, triangle_normal);
+			// Since ab_normal is perpendicular to ab, we don't have to do a dot
+			// For both endpoints since it will be the same
+			float dot0 = Dot(edge_0, edge_normal);
+			float min_T = dot0;
+			float max_T = dot0;
+			float other_point_dot = Dot(other_triangle_point, edge_normal);
+			min_T = min(min_T, other_point_dot);
+			max_T = max(max_T, other_point_dot);
+
+			float dot_segment_0 = Dot(segment_0, edge_normal);
+			float dot_segment_1 = Dot(segment_1, edge_normal);
+
+			float segment_min = min(dot_segment_0, dot_segment_1);
+			float segment_max = max(dot_segment_0, dot_segment_1);
+			return AreIntervalsOverlapping(min_T, max_T, segment_min, segment_max);
 		};
 
-		auto set_values = [&](float3 first, float3 second, float3 third, float3 fourth, float3 fifth, float3 sixth) {
-			set_value(first, 0);
-			set_value(second, 1);
-			set_value(third, 2);
-			set_value(fourth, 4);
-			set_value(fifth, 5);
-			set_value(sixth, 6);
-
-			return Vector3().Load(x_values, y_values, z_values);
-		};
-
-		// In order to catch the case that the triangles have collinear points, we need to enlarge the triangles
-		// By a bit such that a point will be caught as belonging to the interior of the other. The enlarged triangle
-		// Point values need to be used only for the line origin and reference point. Both triangles need to be enlarged
-		const float ENLARGEMENT_FACTOR = 1.0001f;
-		float3 enlargement_factor = float3::Splat(ENLARGEMENT_FACTOR);
-
-		float3 ABC_center = (A + B + C) * float3::Splat(1 / 3.0f);
-		float3 enlarged_A = ABC_center + (A - ABC_center) * enlargement_factor;
-		float3 enlarged_B = ABC_center + (B - ABC_center) * enlargement_factor;
-		float3 enlarged_C = ABC_center + (C - ABC_center) * enlargement_factor;
-
-		float3 DEF_center = (D + E + F) * float3::Splat(1 / 3.0f);
-		float3 enlarged_D = DEF_center + (D - DEF_center) * enlargement_factor;
-		float3 enlarged_E = DEF_center + (E - DEF_center) * enlargement_factor;
-		float3 enlarged_F = DEF_center + (F - DEF_center) * enlargement_factor;
-
-		// We need to use the function PointSameLineHalfPlaneNormalized
-		// Where we need a line point, the normalized line direction, the reference point and the test point
-		// Firstly, calculate the normalized line directions since we need it
-		// We need the AB, AC, BC, DE, DF and EF directions
-		Vector3 line_origin = set_values(enlarged_A, enlarged_A, enlarged_B, enlarged_D, enlarged_D, enlarged_E);
-		Vector3 line_target = set_values(enlarged_B, enlarged_C, enlarged_C, enlarged_E, enlarged_F, enlarged_F);
-		Vector3 direction = line_target - line_origin;
-		Vector3 normalized_direction = Normalize(direction);
-
-		// Test the A and B points against D, E and F
-		Vector3 ab_line_points = set_values(enlarged_D, enlarged_D, enlarged_E, enlarged_D, enlarged_D, enlarged_E);
-		// We can splat the lanes in order to use a more efficient permute
-		Vector3 def_line_direction = { SplatHighLane(normalized_direction.x), SplatHighLane(normalized_direction.y), SplatHighLane(normalized_direction.z) };
-		Vector3 ab_reference_points = set_values(enlarged_F, enlarged_E, enlarged_D, enlarged_F, enlarged_E, enlarged_D);
-		Vector3 ab_test_points = set_values(A, A, A, B, B, B);
-		VectorMask ab_are_contained = PointSameLineHalfPlaneNormalized(ab_line_points, def_line_direction, ab_reference_points, ab_test_points);
-		// Check to see if we have 3 bits set for each lane
-		bool a_contained = ab_are_contained.GetRange<3, 0>();
-		if (a_contained) {
-			return true;
+		if (!test_edge(triangle_a, triangle_b, triangle_c)) {
+			return false;
 		}
-		bool b_contained = ab_are_contained.GetRange<3, 4>();
-		if (b_contained) {
-			return true;
+		if (!test_edge(triangle_a, triangle_c, triangle_b)) {
+			return false;
 		}
+		if (!test_edge(triangle_b, triangle_c, triangle_a)) {
+			return false;
+		}
+
+		// At last, test the perpendicular to the edge
+		float3 edge_perpendicular = Cross(segment_1 - segment_0, triangle_normal);
+		// For the segment, we have a single value to compute
+		float segment_dot = Dot(segment_0, edge_perpendicular);
+		float a_dot = Dot(triangle_a, edge_perpendicular);
+		float b_dot = Dot(triangle_b, edge_perpendicular);
+		float c_dot = Dot(triangle_c, edge_perpendicular);
+
+		float triangle_min = min(a_dot, min(b_dot, c_dot));
+		float triangle_max = max(a_dot, max(b_dot, c_dot));
+		return IsInRange(segment_dot, triangle_min, triangle_max);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool AreCoplanarTrianglesIntersecting(float3 A, float3 B, float3 C, float3 D, float3 E, float3 F, float enlargement_factor) {
+		// This test can be summarized as testing the edges of one of the triangles
+		// Against the other to the intersection test
+		// HIGH PERFORMANCE TODO: This can be made massively faster by applying SIMD
+		// Instead of making 3 calls to the function, since we can cache some calculations
+		// As well. Use the normalized triangle normal in case the magnitude of this normal
+		// Is small and can introduce very small errors
+		float3 triangle_normal = TriangleNormalNormalized(A, B, C);
 		
-		// Test the C and D points. The C point will be in the high lane in order to use the normalized_direction as is
-		Vector3 cd_line_points = set_values(enlarged_A, enlarged_A, enlarged_B, enlarged_D, enlarged_D, enlarged_E); // It is equal to line_origin, but it unlikely to be kept
-		// In the registers to have any performance impact
-		Vector3 cd_line_direction = normalized_direction;
-		Vector3 cd_reference_points = set_values(enlarged_C, enlarged_B, enlarged_A, enlarged_F, enlarged_E, enlarged_D);
-		Vector3 cd_test_points = set_values(D, D, D, C, C, C);
-		VectorMask cd_are_contained = PointSameLineHalfPlaneNormalized(cd_line_points, cd_line_direction, cd_reference_points, cd_test_points);
-		bool d_contained = cd_are_contained.GetRange<3, 0>();
-		if (d_contained) {
-			return true;
-		}
-		bool c_contained = cd_are_contained.GetRange<3, 4>();
-		if (c_contained) {
-			return true;
+		if (enlargement_factor != 1.0f) {
+			float3 DEF_center = (D + E + F) * float3::Splat(1 / 3.0f);
+			D = DEF_center + (D - DEF_center) * enlargement_factor;
+			E = DEF_center + (E - DEF_center) * enlargement_factor;
+			F = DEF_center + (F - DEF_center) * enlargement_factor;
 		}
 
-		// Test the E and F points
-		Vector3 ef_line_points = { SplatLowLane(cd_line_points.x), SplatLowLane(cd_line_points.y), SplatLowLane(cd_line_points.z) };
-		Vector3 ef_line_direction = { SplatLowLane(normalized_direction.x), SplatLowLane(normalized_direction.y), SplatLowLane(normalized_direction.z) };
-		// We could splat the low lane again, but here use the memory operations since
-		// The splatting should use an execution port and we can interleave memory operations in the meantime
-		Vector3 ef_reference_points = set_values(enlarged_C, enlarged_B, enlarged_A, enlarged_C, enlarged_B, enlarged_A);
-		Vector3 ef_test_points = set_values(E, E, E, F, F, F);
-		VectorMask ef_are_contained = PointSameLineHalfPlaneNormalized(ef_line_points, ef_line_direction, ef_reference_points, ef_test_points);
-		bool e_contained = ef_are_contained.GetRange<3, 0>();
-		if (e_contained) {
+		if (IsCoplanarSegmentIntersectingTriangleWithNormal(A, B, C, triangle_normal, D, E)) {
 			return true;
 		}
-		bool f_contained = ef_are_contained.GetRange<3, 4>();
-		if (f_contained) {
+		if (IsCoplanarSegmentIntersectingTriangleWithNormal(A, B, C, triangle_normal, D, F)) {
 			return true;
 		}
-
+		if (IsCoplanarSegmentIntersectingTriangleWithNormal(A, B, C, triangle_normal, E, F)) {
+			return true;
+		}
 		return false;
 	}
 
@@ -387,6 +371,138 @@ namespace ECSEngine {
 		bool is_same_side_AB = PointSameLineHalfPlane(triangle_corner, triangle_B, triangle_C, projected_line_point);
 		bool is_same_side_AC = PointSameLineHalfPlane(triangle_corner, triangle_C, triangle_B, projected_line_point);
 		return is_same_side_AB && is_same_side_AC;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	// TODO: Handle the case of very obtuse triangles, for both sliver functions
+
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL IsTriangleSliverImpl(Vector A, Vector B, Vector C, typename Vector::T squared_edge_ratio) {
+		Vector AB = B - A;
+		Vector AC = C - A;
+		Vector BC = C - B;
+		
+		auto AB_sq_length = SquareLength(AB);
+		auto AC_sq_length = SquareLength(AC);
+		auto BC_sq_length = SquareLength(BC);
+
+		// Start with the AB edge
+		auto AB_sq_length_inverse = OneDividedVector(AB_sq_length);
+		auto AB_AC_ratio = AC_sq_length * AB_sq_length_inverse;
+		auto AB_BC_ratio = BC_sq_length * AB_sq_length_inverse;
+		auto AB_mask = AB_AC_ratio >= squared_edge_ratio && AB_BC_ratio >= squared_edge_ratio;
+		if constexpr (std::is_same_v<Vector, float3>) {
+			if (AB_mask) {
+				return ECS_TRIANGLE_SLIVER_AB;
+			}
+		}
+
+		auto AC_sq_length_inverse = OneDividedVector(AC_sq_length);
+		auto AC_AB_ratio = AB_sq_length * AC_sq_length_inverse;
+		auto AC_BC_ratio = BC_sq_length * AC_sq_length_inverse;
+		auto AC_mask = AC_AB_ratio >= squared_edge_ratio && AC_BC_ratio >= squared_edge_ratio;
+		if constexpr (std::is_same_v<Vector, float3>) {
+			if (AC_mask) {
+				return ECS_TRIANGLE_SLIVER_AC;
+			}
+		}
+
+		auto BC_sq_length_inverse = OneDividedVector(BC_sq_length);
+		auto BC_AB_ratio = AB_sq_length * BC_sq_length_inverse;
+		auto BC_AC_ratio = AC_sq_length * BC_sq_length_inverse;
+		auto BC_mask = BC_AB_ratio >= squared_edge_ratio && BC_AC_ratio >= squared_edge_ratio;
+		if constexpr (std::is_same_v<Vector, float3>) {
+			if (BC_mask) {
+				return ECS_TRIANGLE_SLIVER_BC;
+			}
+		}
+
+		if constexpr (std::is_same_v<Vector, float3>) {
+			return ECS_TRIANGLE_SLIVER_NONE;
+		}
+		else {
+			// Combine all the masks
+			Vec8ui none_splat = ECS_TRIANGLE_SLIVER_NONE;
+			Vec8ui AB_splat = ECS_TRIANGLE_SLIVER_AB;
+			Vec8ui AC_splat = ECS_TRIANGLE_SLIVER_AC;
+			Vec8ui BC_splat = ECS_TRIANGLE_SLIVER_BC;
+
+			Vec8ui none_ab_result = select(AB_mask, AB_splat, none_splat);
+			Vec8ui none_ab_ac_result = select(AC_mask, AC_splat, none_ab_result);
+			return select(BC_mask, BC_splat, none_ab_ac_result);
+		}
+	}
+
+	ECS_TRIANGLE_SLIVER_TYPE IsTriangleSliver(float3 A, float3 B, float3 C, float squared_edge_ratio) {
+		return IsTriangleSliverImpl<ECS_TRIANGLE_SLIVER_TYPE>(A, B, C, squared_edge_ratio);
+	}
+
+	Vec8ui ECS_VECTORCALL IsTriangleSliver(Vector3 A, Vector3 B, Vector3 C, Vec8f squared_edge_ratio) {
+		return IsTriangleSliverImpl<Vec8ui>(A, B, C, squared_edge_ratio);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	template<typename ReturnType, typename Vector>
+	static ECS_INLINE ReturnType ECS_VECTORCALL IsTriangleSliverByAngleImpl(Vector A, Vector B, Vector C, typename Vector::T degrees) {
+		// PERFORMANCE TODO: Should we use fast normalization? Probably worth
+
+		// In order to avoid using acos, we can calculate the degrees cos and then compare against it
+		// All cosines that are larger than this one signal a sliver triangle. It works for obtuse angles
+		// Also, have some early exists for the scalar version
+		auto degrees_cos = cos(degrees);
+
+		// In order to calculate the angles, we need to have the edges normalized
+		Vector AB_normalized = Normalize(B - A);
+		Vector AC_normalized = Normalize(C - A);
+		// Calculate the angle here
+		auto AB_AC_angle_cos = Dot(AB_normalized, AC_normalized);
+		auto BC_mask = AB_AC_angle_cos > degrees_cos;
+		if constexpr (std::is_same_v<Vector, float3>) {
+			if (BC_mask) {
+				return ECS_TRIANGLE_SLIVER_BC;
+			}
+		}
+
+		Vector BC_normalized = Normalize(C - B);
+		auto AB_BC_angle_cos = Dot(AB_normalized, BC_normalized);
+		auto AC_mask = AB_BC_angle_cos > degrees_cos;
+		if constexpr (std::is_same_v<Vector, float3>) {
+			if (AC_mask) {
+				return ECS_TRIANGLE_SLIVER_AC;
+			}
+		}
+
+		auto AC_BC_angle_cos = Dot(AC_normalized, BC_normalized);
+		auto AB_mask = AC_BC_angle_cos > degrees_cos;
+		if constexpr (std::is_same_v<Vector, float3>) {
+			if (AB_mask) {
+				return ECS_TRIANGLE_SLIVER_AB;
+			}
+			else {
+				return ECS_TRIANGLE_SLIVER_NONE;
+			}
+		}
+		else {
+			// Combine all the masks
+			Vec8ui none_splat = ECS_TRIANGLE_SLIVER_NONE;
+			Vec8ui AB_splat = ECS_TRIANGLE_SLIVER_AB;
+			Vec8ui AC_splat = ECS_TRIANGLE_SLIVER_AC;
+			Vec8ui BC_splat = ECS_TRIANGLE_SLIVER_BC;
+
+			Vec8ui none_ab_result = select(AB_mask, AB_splat, none_splat);
+			Vec8ui none_ab_ac_result = select(AC_mask, AC_splat, none_ab_result);
+			return select(BC_mask, BC_splat, none_ab_ac_result);
+		}
+	}
+
+	ECS_TRIANGLE_SLIVER_TYPE IsTriangleSliverByAngle(float3 A, float3 B, float3 C, float degrees) {
+		return IsTriangleSliverByAngleImpl<ECS_TRIANGLE_SLIVER_TYPE>(A, B, C, degrees);
+	}
+
+	Vec8ui ECS_VECTORCALL IsTriangleSliverByAngle(Vector3 A, Vector3 B, Vector3 C, Vec8f degrees) {
+		return IsTriangleSliverByAngleImpl<Vec8ui>(A, B, C, degrees);
 	}
 
 	// --------------------------------------------------------------------------------------------------

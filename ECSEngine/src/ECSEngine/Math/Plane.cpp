@@ -77,23 +77,33 @@ namespace ECSEngine {
 		return ComputePlaneImpl<Plane>(a, b, c);
 	}
 
-	template<typename Plane, typename Vector>
-	static ECS_INLINE Plane ECS_VECTORCALL ComputePlaneAwayImpl(Vector a, Vector b, Vector c, Vector reference_point) {
+	template<typename MaskType, typename Plane, typename Vector>
+	static ECS_INLINE Plane ECS_VECTORCALL ComputePlaneAwayImpl(Vector a, Vector b, Vector c, Vector reference_point, MaskType* facing_away) {
 		Plane plane = ComputePlane(a, b, c);
 		auto plane_distance = DistanceToPlane(plane, reference_point);
-		auto is_facing = plane_distance > SingleZeroVector<Vector>();
+		*facing_away = plane_distance < SingleZeroVector<Vector>();
 		// Both the normal and the dot need to be negated when facing the reference point
-		plane.normal = Select(is_facing, -plane.normal, plane.normal);
-		plane.dot = SelectSingle(is_facing, -plane.dot, plane.dot);
+		plane.normal = Select(*facing_away, plane.normal, -plane.normal);
+		plane.dot = SelectSingle(*facing_away, plane.dot, -plane.dot);
 		return plane;
 	}
-
+	
 	PlaneScalar ComputePlaneAway(float3 a, float3 b, float3 c, float3 reference_point) {
-		return ComputePlaneAwayImpl<PlaneScalar>(a, b, c, reference_point);
+		bool mask;
+		return ComputePlaneAway(a, b, c, reference_point, &mask);
+	}
+
+	PlaneScalar ComputePlaneAway(float3 a, float3 b, float3 c, float3 reference_point, bool* facing_away) {
+		return ComputePlaneAwayImpl<bool, PlaneScalar>(a, b, c, reference_point, facing_away);
 	}
 
 	Plane ECS_VECTORCALL ComputePlaneAway(Vector3 a, Vector3 b, Vector3 c, Vector3 reference_point) {
-		return ComputePlaneAwayImpl<Plane>(a, b, c, reference_point);
+		SIMDVectorMask facing_away;
+		return ComputePlaneAway(a, b, c, reference_point, &facing_away);
+	}
+
+	Plane ECS_VECTORCALL ComputePlaneAway(Vector3 a, Vector3 b, Vector3 c, Vector3 reference_point, SIMDVectorMask* facing_away) {
+		return ComputePlaneAwayImpl<SIMDVectorMask, Plane>(a, b, c, reference_point, facing_away);
 	}
 
 	template<typename Plane, typename Vector, typename OffsetType>
@@ -197,7 +207,7 @@ namespace ECSEngine {
 		auto zero = SingleZeroVector<Vector>();
 		// They are on the same side if the distance has the same sign
 		// We could test by multiplying and seeing if the value is positive
-		return (point_distance * reference_point_distance) > zero;
+		return (point_distance * reference_point_distance) >= zero;
 	}
 
 	bool ArePointsSamePlaneSide(PlaneScalar plane, float3 point, float3 reference_point) {

@@ -852,6 +852,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 	
 	Simplex1DVoronoiRegion CalculateSimplex1DVoronoiRegion(float3 segment_a, float3 segment_b, float3 point) {
+		// TODO: Templatize on the projection to have a common path with the other variant?
 		Simplex1DVoronoiRegion region;
 
 		// We must do something similar to the ClampPointToSegment
@@ -884,6 +885,49 @@ namespace ECSEngine {
 		// We are in the edge case, just project
 		region.type = ECS_SIMPLEX_VORONOI_EDGE;
 		region.projection = ProjectPointOnLine(segment_a, segment_b, point);
+		region.points[0] = segment_a;
+		region.points[1] = segment_b;
+
+		return region;
+	}
+
+	Simplex1DVoronoiRegion CalculateSimplex1DVoronoiRegionWithDirection(
+		float3 segment_a,
+		float3 segment_b,
+		float3 segment_normalized_direction,
+		float3 point
+	) {
+		Simplex1DVoronoiRegion region;
+
+		// We must do something similar to the ClampPointToSegment
+		// Do not calculate the projection first, since we can skip
+		// That calculation if we are in the vertex region
+
+		float3 PA = point - segment_a;
+		float3 PB = point - segment_b;
+		float dot_PA = Dot(PA, segment_normalized_direction);
+		if (dot_PA < 0.0f) {
+			// It belongs to the A vertex region
+			region.type = ECS_SIMPLEX_VORONOI_VERTEX;
+			region.projection = segment_a;
+			region.points[0] = segment_a;
+			region.points[1] = segment_b;
+			return region;
+		}
+
+		float dot_PB = Dot(PB, segment_normalized_direction);
+		if (dot_PB > 0.0f) {
+			// It belongs to the B vertex region
+			region.type = ECS_SIMPLEX_VORONOI_VERTEX;
+			region.projection = segment_b;
+			region.points[0] = segment_b;
+			region.points[1] = segment_a;
+			return region;
+		}
+
+		// We are in the edge case, just project
+		region.type = ECS_SIMPLEX_VORONOI_EDGE;
+		region.projection = ProjectPointOnLineDirectionNormalized(segment_a, segment_normalized_direction, point);
 		region.points[0] = segment_a;
 		region.points[1] = segment_b;
 
@@ -938,7 +982,7 @@ namespace ECSEngine {
 	Simplex3DVoronoiRegion CalculateSimplex3DVoronoiRegion(float3 A, float3 B, float3 C, float3 D, float3 point) {
 		Simplex3DVoronoiRegion region;
 
-		// PERFORMANCE TODO: Implement the slightly less intuitive version which computes all the common first?
+		// PERFORMANCE TODO: Implement the slightly less intuitive version which computes all the common factors first?
 		auto handle_face = [&region, point](float3 triangle_first, float3 triangle_second, float3 triangle_third, float3 other) {
 			if (!ArePointsSameTriangleSide(triangle_first, triangle_second, triangle_third, point, other)) {
 				Simplex2DVoronoiRegion triangle_region = CalculateSimplex2DVoronoiRegion(triangle_first, triangle_second, triangle_third, point);

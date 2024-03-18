@@ -50,10 +50,10 @@ ECS_THREAD_TASK(GridHandler) {
 				if (query.type == SAT_QUERY_NONE) {
 					world->debug_drawer->AddStringThread(thread_id, first_translation != nullptr ? first_translation->value : float3::Splat(0.0f),
 						float3::Splat(1.0f), 1.0f, "None", ECS_COLOR_ORANGE);
-					Line3D first_line = first_collider_transformed.GetEdgePoints(17);
+					/*Line3D first_line = first_collider_transformed.GetEdgePoints(17);
 					Line3D second_line = second_collider_transformed.GetEdgePoints(1);
 					world->debug_drawer->AddLineThread(thread_id, first_line.A, first_line.B, ECS_COLOR_ORANGE);
-					world->debug_drawer->AddLineThread(thread_id, second_line.A, second_line.B, ECS_COLOR_ORANGE);
+					world->debug_drawer->AddLineThread(thread_id, second_line.A, second_line.B, ECS_COLOR_ORANGE);*/
 				}
 				else if (query.type == SAT_QUERY_EDGE) {
 					world->debug_drawer->AddStringThread(thread_id, first_translation != nullptr ? first_translation->value : float3::Splat(0.0f),
@@ -66,8 +66,8 @@ ECS_THREAD_TASK(GridHandler) {
 					ContactManifold manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
 					world->debug_drawer->AddPointThread(thread_id, manifold.contact_points[0], 2.0f, ECS_COLOR_AQUA);
 
-					query.edge.edge_1_index = 97;
-					query.edge.edge_2_index = 1;
+					//query.edge.edge_1_index = 97;
+					//query.edge.edge_2_index = 1;
 					const ConvexHullEdge& first_edge = first_collider_transformed.edges[query.edge.edge_1_index];
 					const ConvexHullEdge& second_edge = second_collider_transformed.edges[query.edge.edge_2_index];
 					float3 first_normal_1 = first_collider_transformed.faces[first_edge.face_1_index].plane.normal;

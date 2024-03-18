@@ -145,7 +145,7 @@ static ThreadTask ModuleBuildConvexCollider(ModuleComponentBuildFunctionData* da
 }
 
 static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) {
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 20);
 	const ConvexCollider* collider = (const ConvexCollider*)data->component;
 	const Translation* translation = (const Translation*)data->dependency_components[0];
 	const Rotation* rotation = (const Rotation*)data->dependency_components[1];
@@ -159,34 +159,127 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	ConvexHull transformed_hull = collider->hull.TransformToTemporary(entity_matrix, &stack_allocator);
 	
 	for (size_t index = 0; index < transformed_hull.vertex_size; index++) {
-		//if (index == 2073 || index == 1985 || index == 2016 || index == 2015 || index == 1984) {
-		//if (index < 6) {
-			ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
-			//data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.3f, nr.buffer, ECS_COLOR_ORANGE);
-		//}
+		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+		data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.01f, nr.buffer, ECS_COLOR_ORANGE);
 	}
+	//if (transformed_hull.vertex_size > 273) {
+	//	ECS_FORMAT_TEMP_STRING(nr, "{#}", 259);
+	//	data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(259), float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
+	//	ECS_FORMAT_TEMP_STRING(nr2, "{#}", 273);
+	//	data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(273), float3(0.0f, 0.0f, -1.0f), 0.1f, nr2.buffer, ECS_COLOR_ORANGE);
+	//}
+
 	unsigned int edge_count = collider->hull_size > transformed_hull.edges.size ? transformed_hull.edges.size : collider->hull_size;
 	for (size_t index = 0; index < edge_count; index++) {
 		Line3D line = transformed_hull.GetEdgePoints(index);
 		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
 	}
+	//for (size_t index = 0; index < transformed_hull.faces.size; index++) {
+	//	const ConvexHullFace& face = transformed_hull.faces[index];
+	//	for (unsigned int subindex = 0; subindex < face.EdgeCount(); subindex++) {
+	//		Line3D line = transformed_hull.GetFaceEdge(index, subindex);
+	//		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
+	//	}
+	//}
+	//if (transformed_hull.faces.size > 0) {
+	//	unsigned int face_index = collider->hull_size >= transformed_hull.faces.size ? transformed_hull.faces.size - 1 : collider->hull_size;
+	//	const ConvexHullFace& face = transformed_hull.faces[face_index];
+	//	for (unsigned int subindex = 0; subindex < face.EdgeCount(); subindex++) {
+	//		Line3D line = transformed_hull.GetFaceEdge(face_index, subindex);
+	//		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_AQUA);
+	//	}
+	//}
 	/*for (size_t index = 0; index < transformed_hull.edges.size; index++) {
 		Line3D line = transformed_hull.GetEdgePoints(index);
 		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
 	}*/
+	if (transformed_hull.faces.size == 269) {
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+		//unsigned char* face_reference_count = (unsigned char*)stack_allocator.Allocate(sizeof(unsigned char) * transformed_hull.faces.size);
+		//memset(face_reference_count, 0, sizeof(unsigned char) * transformed_hull.faces.size);
+		//// Verify that each edge has 2 faces
+		//// Verify that each face is referenced as the number of edges it has
+		//for (unsigned int index = 0; index < transformed_hull.edges.size; index++) {
+		//	face_reference_count[transformed_hull.edges[index].face_1_index]++;
+		//	face_reference_count[transformed_hull.edges[index].face_2_index]++;
+		//}
 
-	/*for (size_t index = 0; index < transformed_hull.faces.size; index++) {
-		float3 face_total = float3::Splat(0.0f);
-		unsigned int count = 0;
-		for (size_t subindex = 0; subindex < transformed_hull.faces[index].point_count; subindex++) {
-			face_total += transformed_hull.GetPoint(transformed_hull.faces[index].points[subindex]);
-		}
-		face_total /= float3::Splat(transformed_hull.faces[index].point_count);
-		data->debug_drawer->AddArrowThread(data->thread_id, face_total, face_total + transformed_hull.faces[index].plane.normal * float3::Splat(1.0f), 0.25f, ECS_COLOR_MAGENTA);
-	
-		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
-		data->debug_drawer->AddStringThread(data->thread_id, face_total, float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
-	}*/
+		//for (unsigned int index = 0; index < transformed_hull.faces.size; index++) {
+		//	if (face_reference_count[index] != transformed_hull.faces[index].EdgeCount()) {
+		//		const ConvexHullFace* face = &transformed_hull.faces[index];
+		//		for (size_t edge_index = 0; edge_index < face->EdgeCount(); edge_index++) {
+		//			Line3D line = transformed_hull.GetFaceEdge(index, edge_index);
+		//			data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_ORANGE);
+		//		}
+		//	}
+		//}
+
+		//unsigned char* edge_reference_count = (unsigned char*)stack_allocator.Allocate(sizeof(unsigned char) * transformed_hull.edges.size);
+		//memset(edge_reference_count, 0, sizeof(unsigned char) * transformed_hull.edges.size);
+		//for (unsigned int index = 0; index < transformed_hull.faces.size; index++) {
+		//	for (unsigned int subindex = 0; subindex < transformed_hull.faces[index].EdgeCount(); subindex++) {
+		//		uint2 edge = transformed_hull.GetFaceEdgeIndices(index, subindex);
+		//		unsigned int edge_index = transformed_hull.FindEdge(edge.x, edge.y);
+		//		edge_reference_count[edge_index]++;
+		//	}
+		//}
+
+		//for (unsigned int index = 0; index < transformed_hull.edges.size; index++) {
+		//	if (edge_reference_count[index] > 2) {
+		//		Line3D line = transformed_hull.GetEdgePoints(index);
+		//		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_ORANGE);
+		//	}
+		//}
+
+		//const ConvexHullFace* face = &transformed_hull.faces[129];
+		//for (size_t index = 0; index < face->EdgeCount(); index++) {
+		//	Line3D line = transformed_hull.GetFaceEdge(129, index);
+		//	data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_ORANGE);
+		//}
+		//float3 face_center = transformed_hull.GetFaceCenter(5);
+		//float3 point = transformed_hull.GetPoint(35);
+		//float3 cross = Cross(transformed_hull.faces[5].plane.normal, point - face_center);
+		////float3 cross = transformed_hull.faces[5].plane.normal;
+		//float dot = Dot(cross, transformed_hull.GetPoint(22) - face_center);
+
+		//float angle = AngleBetweenVectorsNormalized(transformed_hull.faces[5].plane.normal, transformed_hull.faces[23].plane.normal);
+
+		//data->debug_drawer->AddLineThread(data->thread_id, face_center, face_center + cross * 1.0f, ECS_COLOR_AQUA);
+		////data->debug_drawer->AddLineThread(data->thread_id, face_center, face_center + (point - face_center) * 1.0f, ECS_COLOR_AQUA);
+		//data->debug_drawer->AddLineThread(data->thread_id, face_center, face_center + (transformed_hull.GetPoint(22) - face_center) * 1.0f, ECS_COLOR_AQUA);
+		//face = &transformed_hull.faces[88];
+		////for (size_t index = 0; index < face->EdgeCount(); index++) {
+		////	Line3D line = transformed_hull.GetFaceEdge(88, index);
+		////	data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_ORANGE);
+		////}
+		//face = &transformed_hull.faces[112];
+		//for (size_t index = 0; index < face->EdgeCount(); index++) {
+		//	Line3D line = transformed_hull.GetFaceEdge(112, index);
+		//	data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_AQUA);
+		//}
+	}
+
+	float total_area = 0.0f;
+	for (size_t index = 0; index < transformed_hull.faces.size; index++) {
+		const ConvexHullFace& face = transformed_hull.faces[index];
+		//if (face.points.size == 4) {
+			float3 face_total = float3::Splat(0.0f);
+			unsigned int count = 0;
+			for (size_t subindex = 0; subindex < face.points.size; subindex++) {
+				face_total += transformed_hull.GetPoint(face.points[subindex]);
+			}
+			face_total /= float3::Splat(face.points.size);
+			//data->debug_drawer->AddArrowThread(data->thread_id, face_total, face_total + transformed_hull.faces[index].plane.normal * float3::Splat(1.0f), 0.25f, ECS_COLOR_MAGENTA);
+			//float area = TriangleArea(transformed_hull.GetPoint(face.points[0]), transformed_hull.GetPoint(face.points[1]), transformed_hull.GetPoint(face.points[2]));
+
+			ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+			//data->debug_drawer->AddStringThread(data->thread_id, face_total, float3(0.0f, 0.0f, -1.0f), 0.01f, nr, ECS_COLOR_AQUA);
+			//total_area += area;
+		//}
+	}
+
+	ECS_FORMAT_TEMP_STRING(area_string, "{#}", total_area);
+	data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.center, float3(0.0f, 0.0f, -1.0f), 0.2f, area_string, ECS_COLOR_AQUA);
 }
 
 void ModuleRegisterComponentFunctionsFunction(ModuleRegisterComponentFunctionsData* data) {

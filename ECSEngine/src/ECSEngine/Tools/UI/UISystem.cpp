@@ -104,7 +104,7 @@ namespace ECSEngine {
 
 		UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager)
 		{
-			return CreateResizableMemoryArena(15'000'000, 8, ECS_KB * 2, global_manager, 5'000'000, 4, ECS_KB * 2);
+			return CreateResizableMemoryArena(20'000'000, 8, ECS_KB * 4, global_manager, 25'000'000, 4, ECS_KB * 4);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

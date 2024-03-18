@@ -64,6 +64,42 @@ namespace ECSEngine {
 		return point_index;
 	}
 
+	// --------------------------------------------------------------------------------------------------
+
+	unsigned int TriangleMesh::FindTriangle(uint3 indices) const {
+		auto test_combination = [](uint3 compare_value, uint3 combination) {
+			if (compare_value.x == combination.x) {
+				if (compare_value.y == combination.y) {
+					if (compare_value.z == combination.z) {
+						return true;
+					}
+				}
+				else if (compare_value.y == combination.z) {
+					if (compare_value.z == combination.y) {
+						return true;
+					}
+				}
+			}
+			return false;
+		};
+
+		for (unsigned int index = 0; index < triangles.size; index++) {
+			uint3 current_value = triangles[index];
+			if (test_combination(current_value, indices)) {
+				return index;
+			}
+			if (test_combination(current_value, { indices.y, indices.x, indices.z })) {
+				return index;
+			}
+			if (test_combination(current_value, { indices.z, indices.x, indices.y })) {
+				return index;
+			}
+		}
+		return -1;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	float3 TriangleMesh::FurthestFrom(float3 direction) const
 	{
 		Vec8f max_distance = -FLT_MAX;
@@ -111,6 +147,16 @@ namespace ECSEngine {
 		}
 		triangles.Deallocate(allocator);
 		memset(this, 0, sizeof(*this));
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	void TriangleMesh::RemoveSwapBackPosition(unsigned int index) {
+		SoARemoveSwapBack(position_size, index, position_x, position_y, position_z);
+	}
+
+	void TriangleMesh::RemoveSwapBackTriangle(unsigned int index) {
+		triangles.RemoveSwapBack(index);
 	}
 
 	// --------------------------------------------------------------------------------------------------

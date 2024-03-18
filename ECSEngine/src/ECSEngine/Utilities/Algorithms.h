@@ -160,7 +160,7 @@ namespace ECSEngine {
 				if (j >= size) {
 					return;
 				}
-				while (j - increment >= 0 && buffer[j] < buffer[j - increment]) {
+				while (j - increment >= 0 && buffer[j] > buffer[j - increment]) {
 					T temp = buffer[j];
 					buffer[j] = buffer[j - increment];
 					buffer[j - increment] = temp;
