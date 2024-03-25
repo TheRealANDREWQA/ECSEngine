@@ -806,9 +806,12 @@ bool ConstructSandboxSchedulingOrder(
 		}
 	}
 	for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
-		const EditorModuleInfo* current_info = GetSandboxModuleInfo(editor_state, sandbox_index, index);
-		if (current_info->load_status != EDITOR_MODULE_LOAD_FAILED && current_info->ecs_module.debug_draw_task_elements.size > 0) {
-			AddModuleDebugDrawTaskElementsToScheduler(sandbox->sandbox_world.task_scheduler, current_info->ecs_module.debug_draw_task_elements, scene_order);
+		unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, index);
+		if (in_stream_index != -1) {
+			const EditorModuleInfo* current_info = GetSandboxModuleInfo(editor_state, sandbox_index, in_stream_index);
+			if (current_info->load_status != EDITOR_MODULE_LOAD_FAILED && current_info->ecs_module.debug_draw_task_elements.size > 0) {
+				AddModuleDebugDrawTaskElementsToScheduler(sandbox->sandbox_world.task_scheduler, current_info->ecs_module.debug_draw_task_elements, scene_order);
+			}
 		}
 	}
 

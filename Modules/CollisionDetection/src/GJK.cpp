@@ -112,7 +112,7 @@ static bool TriangleSimplex(GJKSimplex* simplex, float3* new_direction, float3 t
 			// Remove B since it doesn't help
 			simplex->points[1] = A;
 			simplex->point_count = 2;
-			*new_direction = TripleProduct(AC, AO);
+			*new_direction = CrossTripleProduct(AC, AO);
 		}
 		else {
 			// Use the AB edge case

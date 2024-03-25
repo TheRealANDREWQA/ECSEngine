@@ -517,6 +517,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	new (editor_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1'000, 100);
 	editor_state->task_manager = editor_task_manager;
 	editor_task_manager->PushExceptionHandler(HandleAllSandboxPhysicalMemoryException, editor_state, 0);
+	editor_task_manager->SetWaitType(ECS_TASK_MANAGER_WAIT_SLEEP | ECS_TASK_MANAGER_WAIT_STEAL);
 
 	TaskManager* render_task_manager = (TaskManager*)Malloc(sizeof(TaskManager));
 	new (render_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1'000, 100);

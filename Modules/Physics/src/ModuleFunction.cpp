@@ -7,6 +7,7 @@
 #include "ECSEngineWorld.h"
 #include "ECSEngineComponents.h"
 #include "ECSEngineForEach.h"
+#include "Rigidbody.h"
 
 using namespace ECSEngine;
 
@@ -36,6 +37,14 @@ ECS_THREAD_TASK(GridHandler) {
 
 			Matrix second_matrix = GetEntityTransformMatrix(second_translation, second_rotation, second_scale);
 			ConvexHull second_collider_transformed = second_collider->hull.TransformToTemporary(second_matrix, &stack_allocator);
+
+			float3* coalesced_position = (float3*)malloc(sizeof(float3) * second_collider_transformed.vertex_size);
+			for (size_t index = 0; index < second_collider_transformed.vertex_size; index++) {
+				coalesced_position[index] = second_collider_transformed.GetPoint(index);
+			}
+
+			Matrix3x3 inertia_tesnor = ComputeInertiaTensor(&first_collider->hull);
+			free(coalesced_position);
 
 			float distance = GJK(&first_collider_transformed, &second_collider_transformed);
 			if (distance < 0.0f) {

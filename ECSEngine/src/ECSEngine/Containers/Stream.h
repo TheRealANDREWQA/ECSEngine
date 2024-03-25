@@ -309,6 +309,17 @@ namespace ECSEngine {
 			buffer[index] = new_value;
 		}
 
+
+		// Returns true if the previous value existed, else false
+		ECS_INLINE bool TryReplaceByValue(T old_value, T new_value) {
+			size_t index = Find(old_value);
+			if (index != -1) {
+				buffer[index] = new_value;
+				return true;
+			}
+			return false;
+		}
+
 		// Returns the previous buffer (the size is also updated)
 		void* Resize(AllocatorPolymorphic allocator, size_t new_size, bool copy_old_elements = true, bool deallocate_old = false, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			void* old_buffer = buffer;
@@ -832,6 +843,16 @@ namespace ECSEngine {
 			buffer[index] = new_value;
 		}
 
+		// Returns true if the previous value existed, else false
+		ECS_INLINE bool TryReplaceByValue(T old_value, T new_value) {
+			unsigned int index = Find(old_value);
+			if (index != -1) {
+				buffer[index] = new_value;
+				return true;
+			}
+			return false;
+		}
+
 		// Returns the stream starting from the buffer up until the start of the subregion (even when the size of the subregion
 		// does not cover the end of the capacity stream)
 		ECS_INLINE CapacityStream<T> StartDifference(Stream<T> subregion) const {
@@ -1146,6 +1167,16 @@ namespace ECSEngine {
 			unsigned int index = Find(old_value);
 			ECS_ASSERT(index != -1, assert_message);
 			buffer[index] = new_value;
+		}
+
+		// Returns true if the previous value existed, else false
+		ECS_INLINE bool TryReplaceByValue(T old_value, T new_value) {
+			unsigned int index = Find(old_value);
+			if (index != -1) {
+				buffer[index] = new_value;
+				return true;
+			}
+			return false;
 		}
 
 		// Makes sure there is enough space for extra count elements
