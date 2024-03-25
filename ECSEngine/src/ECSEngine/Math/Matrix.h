@@ -62,6 +62,28 @@ namespace ECSEngine {
 		Vec8f v[2];
 	};
 
+	struct ECSENGINE_API Matrix3x3 {
+		ECS_INLINE Matrix3x3() {
+			memset(values, 0, sizeof(values));
+		}
+		ECS_INLINE Matrix3x3(const float* _values) {
+			memcpy(values, _values, sizeof(values));
+		}
+		ECS_INLINE Matrix3x3(float a00, float a01, float a02, float a10, float a11, float a12, float a20, float a21, float a22) {
+			values[0][0] = a00;
+			values[0][1] = a01;
+			values[0][2] = a02;
+			values[1][0] = a10;
+			values[1][1] = a11;
+			values[1][2] = a12;
+			values[2][0] = a20;
+			values[2][1] = a21;
+			values[2][2] = a22;
+		}
+
+		float values[3][3];
+	};
+
 	// -----------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API void ScalarMatrixMultiply(const float* ECS_RESTRICT a, const float* ECS_RESTRICT b, float* ECS_RESTRICT destination);
@@ -70,13 +92,19 @@ namespace ECSEngine {
 
 	ECSENGINE_API Matrix ECS_VECTORCALL MatrixMultiply(Matrix a, Matrix b);
 
+	ECSENGINE_API Matrix3x3 MatrixMultiply(const Matrix3x3& a, const Matrix3x3& b);
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API Matrix ECS_VECTORCALL MatrixTranspose(Matrix matrix);
 
+	ECSENGINE_API Matrix3x3 MatrixTranspose(const Matrix3x3& matrix);
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API Matrix ECS_VECTORCALL MatrixIdentity();
+
+	ECSENGINE_API Matrix3x3 Matrix3x3Identity();
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -85,17 +113,17 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Returns the matrix with the last column and row set to 0.0f
-	ECSENGINE_API Matrix ECS_VECTORCALL Matrix3x3(Matrix matrix);
+	ECSENGINE_API Matrix3x3 ECS_VECTORCALL MatrixTo3x3(Matrix matrix);
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Returns the matrix with the last column set to 0.0f
-	ECSENGINE_API Matrix ECS_VECTORCALL Matrix4x3(Matrix matrix);
+	ECSENGINE_API Matrix ECS_VECTORCALL MatrixTo4x3(Matrix matrix);
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Returns the matrix with the last row set to 0.0f
-	ECSENGINE_API Matrix ECS_VECTORCALL Matrix3x4(Matrix matrix);
+	ECSENGINE_API Matrix ECS_VECTORCALL MatrixTo3x4(Matrix matrix);
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -105,10 +133,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API float ECS_VECTORCALL MatrixDeterminant(Matrix matrix);
 
+	ECSENGINE_API float Matrix3x3Determinant(const Matrix3x3& matrix);
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Register pressure present, many memory swaps are needed to keep permute indices into registers
 	ECSENGINE_API Matrix ECS_VECTORCALL MatrixInverse(Matrix matrix);
+
+	ECSENGINE_API Matrix3x3 Matrix3x3Inverse(const Matrix3x3& matrix);
 
 	// --------------------------------------------------------------------------------------------------------------
 

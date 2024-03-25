@@ -182,6 +182,18 @@ namespace ECSEngine {
 		return Matrix(MatrixTwoRowProduct(a.v[0], b.v[0], b.v[1]), MatrixTwoRowProduct(a.v[1], b.v[0], b.v[1]));
 	}
 
+	Matrix3x3 MatrixMultiply(const Matrix3x3& a, const Matrix3x3& b) {
+		Matrix3x3 multiplication;
+		for (size_t row = 0; row < 3; row++) {
+			for (size_t column = 0; column < 3; column++) {
+				for (size_t other_column = 0; other_column < 3; other_column++) {
+					multiplication.values[row][column] += a.values[row][other_column] * b.values[other_column][column];
+				}
+			}
+		}
+		return multiplication;
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	Matrix ECS_VECTORCALL MatrixTranspose(Matrix matrix) {
@@ -190,6 +202,14 @@ namespace ECSEngine {
 		first = blend8<0, 4, 8, 12, 1, 5, 9, 13>(matrix.v[0], matrix.v[1]);
 		second = blend8<2, 6, 10, 14, 3, 7, 11, 15>(matrix.v[0], matrix.v[1]);
 		return Matrix(first, second);
+	}
+
+	Matrix3x3 MatrixTranspose(const Matrix3x3& matrix) {
+		return {
+			matrix.values[0][0], matrix.values[1][0], matrix.values[2][0],
+			matrix.values[0][1], matrix.values[1][1], matrix.values[2][1],
+			matrix.values[0][2], matrix.values[1][2], matrix.values[2][2]
+		};
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -204,6 +224,14 @@ namespace ECSEngine {
 		};
 	}
 
+	Matrix3x3 Matrix3x3Identity() {
+		return {
+			1.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 1.0f
+		};
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	Matrix ECS_VECTORCALL MatrixNull() {
@@ -214,17 +242,21 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Returns the matrix with the last column and row set to 0.0f
-	Matrix ECS_VECTORCALL Matrix3x3(Matrix matrix) {
-		Vec8f zero_vector = ZeroVectorFloat();
-		matrix.v[0] = PerLaneBlend<0, 1, 2, 7>(matrix.v[0], zero_vector);
-		matrix.v[1] = blend8<0, 1, 2, 11, 12, 13, 14, 15>(matrix.v[1], zero_vector);
-		return matrix;
+	Matrix3x3 ECS_VECTORCALL MatrixTo3x3(Matrix matrix) {
+		alignas(alignof(Matrix)) float matrix_values[4][4];
+		matrix.StoreAligned(matrix_values);
+
+		return {
+			matrix_values[0][0], matrix_values[0][1], matrix_values[0][2],
+			matrix_values[1][0], matrix_values[1][1], matrix_values[1][2],
+			matrix_values[2][0], matrix_values[2][1], matrix_values[2][2]
+		};
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Returns the matrix with the last column set to 0.0f
-	Matrix ECS_VECTORCALL Matrix4x3(Matrix matrix) {
+	Matrix ECS_VECTORCALL MatrixTo4x3(Matrix matrix) {
 		Vec8f zero_vector = ZeroVectorFloat();
 		matrix.v[0] = PerLaneBlend<0, 1, 2, 7>(matrix.v[0], zero_vector);
 		matrix.v[1] = PerLaneBlend<0, 1, 2, 7>(matrix.v[1], zero_vector);
@@ -234,7 +266,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Returns the matrix with the last row set to 0.0f
-	Matrix ECS_VECTORCALL Matrix3x4(Matrix matrix) {
+	Matrix ECS_VECTORCALL MatrixTo3x4(Matrix matrix) {
 		Vec8f zero_vector = ZeroVectorFloat();
 		matrix.v[1] = BlendLowAndHigh(matrix.v[1], zero_vector);
 		return matrix;
@@ -338,6 +370,33 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	float Matrix3x3Determinant(const Matrix3x3& matrix) {
+		// a00 a01 a02
+		// a10 a11 a12
+		// a20 a21 a22
+
+		float a00 = matrix.values[0][0];
+		float a01 = matrix.values[0][1];
+		float a02 = matrix.values[0][2];
+		float a10 = matrix.values[1][0];
+		float a11 = matrix.values[1][1];
+		float a12 = matrix.values[1][2];
+		float a20 = matrix.values[2][0];
+		float a21 = matrix.values[2][1];
+		float a22 = matrix.values[2][2];
+
+		float value0 = a00 * a11 * a22;
+		float value1 = a10 * a21 * a02;
+		float value2 = a20 * a01 * a12;
+		float value3 = a02 * a11 * a20;
+		float value4 = a12 * a21 * a00;
+		float value5 = a22 * a01 * a10;
+		
+		return value0 + value1 + value2 - value3 - value4 - value5;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
 	// Register pressure present, many memory swaps are needed to keep permute indices into registers
 	Matrix ECS_VECTORCALL MatrixInverse(Matrix matrix) {
 		Vec8f positive_parts_top0 = permute8<2, 1, 1, 0, 0, 0, V_DC, V_DC>(matrix.v[0]);
@@ -434,6 +493,39 @@ namespace ECSEngine {
 		transposed_adjugate.v[0] *= inverse_determinant_value_8;
 		transposed_adjugate.v[1] *= inverse_determinant_value_8;
 		return transposed_adjugate;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	Matrix3x3 Matrix3x3Inverse(const Matrix3x3& matrix) {
+		float a00 = matrix.values[0][0];
+		float a01 = matrix.values[0][1];
+		float a02 = matrix.values[0][2];
+		float a10 = matrix.values[1][0];
+		float a11 = matrix.values[1][1];
+		float a12 = matrix.values[1][2];
+		float a20 = matrix.values[2][0];
+		float a21 = matrix.values[2][1];
+		float a22 = matrix.values[2][2];
+
+		float determinant = Matrix3x3Determinant(matrix);
+		float determinant_inverse = 1.0f / determinant;
+
+		float result00 = a21 * a12 - a11 * a22;
+		float result01 = a01 * a22 - a21 * a02;
+		float result02 = a11 * a02 - a01 * a12;
+		float result10 = a22 * a10 - a12 * a20;
+		float result11 = a02 * a20 - a00 * a22;
+		float result12 = a00 * a12 - a02 * a10;
+		float result20 = a11 * a20 - a10 * a21;
+		float result21 = a00 * a21 - a20 * a01;
+		float result22 = a01 * a10 - a00 * a11;
+
+		return {
+				result00 * determinant_inverse, result01 * determinant_inverse, result02 * determinant_inverse,
+				result01 * determinant_inverse, result11 * determinant_inverse, result12 * determinant_inverse,
+				result02 * determinant_inverse, result21 * determinant_inverse, result22 * determinant_inverse
+		};
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

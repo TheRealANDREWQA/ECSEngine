@@ -160,7 +160,9 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	
 	for (size_t index = 0; index < transformed_hull.vertex_size; index++) {
 		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
-		data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.01f, nr.buffer, ECS_COLOR_ORANGE);
+		//if (index == 29) {
+			data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
+		//}
 	}
 	//if (transformed_hull.vertex_size > 273) {
 	//	ECS_FORMAT_TEMP_STRING(nr, "{#}", 259);

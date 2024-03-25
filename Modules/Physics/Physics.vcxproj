@@ -176,6 +176,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\ContactManifolds.cpp" />
+    <ClCompile Include="src\ContantConstraint.cpp" />
     <ClCompile Include="src\Logging.cpp" />
     <ClCompile Include="src\ModuleFunction.cpp" />
     <ClCompile Include="src\pch.cpp">
@@ -183,14 +184,17 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\Rigidbody.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Components.h" />
+    <ClInclude Include="src\ContactConstraint.h" />
     <ClInclude Include="src\ContactManifolds.h" />
     <ClInclude Include="src\Export.h" />
     <ClInclude Include="src\Logging.h" />
     <ClInclude Include="src\ModuleFunction.h" />
     <ClInclude Include="src\pch.h" />
+    <ClInclude Include="src\Rigidbody.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

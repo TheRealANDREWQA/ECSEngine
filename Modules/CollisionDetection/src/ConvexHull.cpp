@@ -574,14 +574,20 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 	auto repair_edge_face_reference = [&](unsigned int previous_face_index, unsigned int new_face_index) {
 		// Since we know that these are triangles, we can stop if the count hits 3
 		unsigned int count = 0;
-		for (unsigned int index = 0; index < edges.size && count < 3; index++) {
+		for (unsigned int index = 0; index < edges.size; index++) {
 			if (edges[index].face_1_index == previous_face_index) {
 				edges[index].face_1_index = new_face_index;
 				count++;
+				if (count == 3) {
+					break;
+				}
 			}
 			else if (edges[index].face_2_index == previous_face_index) {
 				edges[index].face_2_index = new_face_index;
 				count++;
+				if (count == 3) {
+					break;
+				}
 			}
 		}
 	};
@@ -590,7 +596,14 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 	// If the add connections is set to true, it will append
 	// The connections of the previous to the new, except the
 	// Identity connection and those that would be duplicates
-	auto repair_vertex_references = [&](unsigned int previous_index, unsigned int new_index, bool add_connections_and_recalculate_triangles) {
+	// If the add connections is set to true, a capacity stream
+	// With extra faces to be collapsed will be filled in
+	auto repair_vertex_references = [&](
+		unsigned int previous_index, 
+		unsigned int new_index, 
+		bool add_connections_and_recalculate_triangles,
+		CapacityStream<unsigned int>* extra_faces_to_be_collapsed
+	) {
 		Stream<unsigned int> connections = vertex_connections[previous_index];
 		CapacityStream<unsigned int>& new_connections = vertex_connections[new_index];
 		ECS_STACK_CAPACITY_STREAM(unsigned short, processed_faces, 128);
@@ -607,20 +620,9 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 			ConvexHullEdge& current_redirect_edge = edges[connections[index]];
 
 			ConvexHullFace& first_face = faces[current_redirect_edge.face_1_index];
-			for (unsigned int face_point_index = 0; face_point_index < first_face.points.size; face_point_index++) {
-				if (first_face.points[face_point_index] == previous_index) {
-					first_face.points[face_point_index] = new_index;
-					break;
-				}
-			}
-
 			ConvexHullFace& second_face = faces[current_redirect_edge.face_2_index];
-			for (unsigned int face_point_index = 0; face_point_index < second_face.points.size; face_point_index++) {
-				if (second_face.points[face_point_index] == previous_index) {
-					second_face.points[face_point_index] = new_index;
-					break;
-				}
-			}
+			first_face.points.TryReplaceByValue(previous_index, new_index);
+			second_face.points.TryReplaceByValue(previous_index, new_index);
 
 			bool is_edge_going_to_be_collapsed = false;
 			if (add_connections_and_recalculate_triangles) {
@@ -683,8 +685,8 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 					// For the new index 2 times
 					unsigned int remap_face_new_index = -1;
 					unsigned int remap_face_previous_index = -1;
-					unsigned int first_face_collapsed_count = first_face.points[0] == new_index
-						+ first_face.points[1] == new_index + first_face.points[2] == new_index;
+					unsigned int first_face_collapsed_count = (first_face.points[0] == new_index)
+						+ (first_face.points[1] == new_index) + (first_face.points[2] == new_index);
 					if (first_face_collapsed_count == 2) {
 						remap_face_new_index = current_redirect_edge.face_2_index;
 						remap_face_previous_index = current_redirect_edge.face_1_index;
@@ -699,7 +701,17 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 						remap_edge_face.face_1_index = remap_face_new_index;
 					}
 					else {
-						remap_edge_face.face_2_index = remap_face_new_index;
+						if (remap_edge_face.face_2_index == remap_face_previous_index) {
+							// It can happen that this is an interior triangle
+							// And does not actually share an edge
+							remap_edge_face.face_2_index = remap_face_new_index;
+						}
+						else {
+							// This is the case that another extra edge is collapsed,
+							// And with it another face must be collapsed. That face is
+							// The remap face previous
+							extra_faces_to_be_collapsed->AddAssert(remap_face_previous_index);
+						}
 					}
 				}
 			}
@@ -743,10 +755,14 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 		// And that would give a speed up in that case. But I kept it like this to keep it simple
 
 		// Redirect the edges and the faces that referenced the first point to the second
-		repair_vertex_references(first_point, second_point, true);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, faces_to_be_collapsed, 8);
+		// Add the current 2 faces to be collapsed
+		faces_to_be_collapsed.Add(edge.face_1_index);
+		faces_to_be_collapsed.Add(edge.face_2_index);
+		repair_vertex_references(first_point, second_point, true, &faces_to_be_collapsed);
 		// And for the last vertex to the first point index
 		if (vertex_size != first_point) {
-			repair_vertex_references(vertex_size, first_point, false);
+			repair_vertex_references(vertex_size, first_point, false, nullptr);
 		}
 		// Remove the vertex connections now - we need to do this after the vertex repair
 		vertex_connections.RemoveSwapBack(first_point);
@@ -757,20 +773,17 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 			faces[edge.face_2_index].points.Deallocate(allocator);
 		}
 
-		// Remove the 2 faces - don't forget to update the triangle areas as well
-		faces.RemoveSwapBack(edge.face_1_index);
-		face_areas.RemoveSwapBack(edge.face_1_index);
-		repair_edge_face_reference(faces.size, edge.face_1_index);
-		if (edge.face_2_index != faces.size) {
-			faces.RemoveSwapBack(edge.face_2_index);
-			face_areas.RemoveSwapBack(edge.face_2_index);
-			repair_edge_face_reference(faces.size, edge.face_2_index);
-		}
-		else {
-			// The second face was swapped to the first index
-			faces.RemoveSwapBack(edge.face_1_index);
-			face_areas.RemoveSwapBack(edge.face_1_index);
-			repair_edge_face_reference(faces.size, edge.face_1_index);
+		// Remove the faces - don't forget to update the triangle areas as well
+		for (unsigned int index = 0; index < faces_to_be_collapsed.size; index++) {
+			faces.RemoveSwapBack(faces_to_be_collapsed[index]);
+			face_areas.RemoveSwapBack(faces_to_be_collapsed[index]);
+			repair_edge_face_reference(faces.size, faces_to_be_collapsed[index]);
+			for (unsigned int subindex = index + 1; subindex < faces_to_be_collapsed.size; subindex++) {
+				if (faces_to_be_collapsed[subindex] == faces.size) {
+					faces_to_be_collapsed[subindex] = faces_to_be_collapsed[index];
+					break;
+				}
+			}
 		}
 	};
 
@@ -787,14 +800,21 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 		total_mesh_area += face_areas[index];
 	}
 
+	const float THRESHOLD_CONSTANT_FACTOR = 1000.0f;
+
 	// To determine the area threshold, we need to divide the total area by a certain factor
-	float triangle_threshold = total_mesh_area / 250.0f * area_factor;
+	float triangle_threshold = total_mesh_area / THRESHOLD_CONSTANT_FACTOR * area_factor;
 	// For each triangle that we find to have an area smaller than the theshold, collapse
 	// One of the edge. This ensures that we have points only on the hull, and it makes for
 	// A relatively easier implementation
+	unsigned int iteration_count = 0;
 	for (unsigned int index = 0; index < faces.size; index++) {
 		if (face_areas[index] < triangle_threshold) {
-			unsigned int removed_edge_index = FindEdge(1, 150);
+			iteration_count++;
+			if (iteration_count == 60) {
+				break;
+			}
+
 			// We need to remove this triangle
 			// Choose the smallest edge to use as the collapsing edge
 			ConvexHullFace face = faces[index];
@@ -802,45 +822,192 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 			float3 b = GetPoint(face.points[1]);
 			float3 c = GetPoint(face.points[2]);
 
+			unsigned int ab_edge = FindEdge(face.points[0], face.points[1]);
+			unsigned int bc_edge = FindEdge(face.points[1], face.points[2]);
+			unsigned int ac_edge = FindEdge(face.points[2], face.points[0]);
+			const ConvexHullEdge& ab_edge_ = edges[ab_edge];
+			const ConvexHullEdge& bc_edge_ = edges[bc_edge];
+			const ConvexHullEdge& ac_edge_ = edges[ac_edge];
+
+			// Determine obtuse angles. Edges that face obtuse
+			// Angles should not be collapsed. We can detect them
+			// By a negative dot product between the edges
 			float3 AB = b - a;
 			float3 AC = c - a;
 			float3 BC = c - b;
 
-			float AB_sq_length = SquareLength(AB);
-			float AC_sq_length = SquareLength(AC);
-			float BC_sq_length = SquareLength(BC);
+			bool is_a_obtuse = Dot(AB, AC) < 0.0f;
+			bool is_b_obtuse = Dot(-AB, BC) < 0.0f;
+			bool is_c_obtuse = Dot(-AC, -BC) < 0.0f;
 
-			bool ab_ac_smaller = AB_sq_length < AC_sq_length;
-			bool ab_bc_smaller = AB_sq_length < BC_sq_length;
-			bool ac_bc_smaller = AC_sq_length < BC_sq_length;
+			// Determine the collapse distance for a point
+			// As the sum of the absolute distances of the target point 
+			// To the planes of the point to be collapsed
+			ECS_STACK_CAPACITY_STREAM(unsigned int, verified_planes, 64);
 
-			unsigned short collapse_edge_1 = USHORT_MAX;
-			unsigned short collapse_edge_2 = USHORT_MAX;
-			if (ab_ac_smaller && ab_bc_smaller) {
-				// We can collapse the AB edge
-				collapse_edge_1 = face.points[0];
-				collapse_edge_2 = face.points[1];
+			auto determine_points_errors = [&](Stream<unsigned int> connections, float3 first_point, float3 second_point) {
+				verified_planes.size = 0;
+				float first_distance = 0.0f;
+				float second_distance = 0.0f;
+
+				auto add_distances = [&](unsigned short face_index) {
+					verified_planes.AddAssert(face_index);
+					float current_first_distance = DistanceToPlane(faces[face_index].plane, first_point);
+					float squared_current_first_distance = current_first_distance * current_first_distance;
+					first_distance += squared_current_first_distance;
+					float current_second_distance = DistanceToPlane(faces[face_index].plane, second_point);
+					float squared_current_second_distance = current_second_distance * current_second_distance;
+					second_distance += squared_current_second_distance;
+				};
+
+				for (unsigned int connection_index = 0; connection_index < connections.size; connection_index++) {
+					const ConvexHullEdge& current_edge = edges[connections[connection_index]];
+					if (verified_planes.Find(current_edge.face_1_index) == -1) {
+						add_distances(current_edge.face_1_index);
+					}
+					if (verified_planes.Find(current_edge.face_2_index) == -1) {
+						add_distances(current_edge.face_2_index);
+					}
+				}
+				return float2{ first_distance, second_distance };
+			};
+
+			struct SortPoint {
+				ECS_INLINE bool operator < (SortPoint other) const {
+					return distance < other.distance;
+				}
+
+				ECS_INLINE bool operator <= (SortPoint other) const {
+					return distance <= other.distance;
+				}
+
+				float distance;
+				unsigned short collapse_point;
+				unsigned short collapse_target;
+			};
+
+			Stream<unsigned int> a_connections = vertex_connections[face.points[0]];
+			Stream<unsigned int> b_connections = vertex_connections[face.points[1]];
+			Stream<unsigned int> c_connections = vertex_connections[face.points[2]];
+			float2 a_distances = determine_points_errors(a_connections, b, c);
+			float2 b_distances = determine_points_errors(b_connections, a, c);
+			float2 c_distances = determine_points_errors(c_connections, a, b);
+			ECS_STACK_CAPACITY_STREAM(SortPoint, errors, 6);
+			if (!is_a_obtuse) {
+				errors.Add({ b_distances.y, face.points[1], face.points[2] });
+				errors.Add({ c_distances.y, face.points[2], face.points[1] });
 			}
-			else if (!ab_ac_smaller && ac_bc_smaller) {
-				// We can collapse the AC edge
-				collapse_edge_1 = face.points[0];
-				collapse_edge_2 = face.points[2];
+			if (!is_b_obtuse) {
+				errors.Add({ a_distances.y, face.points[0], face.points[2] });
+				errors.Add({ c_distances.x, face.points[2], face.points[0] });
 			}
-			else {
-				// Collapse the BC edge
-				collapse_edge_1 = face.points[1];
-				collapse_edge_2 = face.points[2];
+			if (!is_c_obtuse) {
+				errors.Add({ a_distances.x, face.points[0], face.points[1] });
+				errors.Add({ b_distances.x, face.points[1], face.points[0] });
 			}
+
+			unsigned short collapse_source = USHORT_MAX;
+			unsigned short collapse_target = USHORT_MAX;
+
+			// Determine the collapse point and the target
+			// It is the point with the least amount of error
+			InsertionSort(errors.buffer, errors.size);
+
+			collapse_source = errors[0].collapse_point;
+			collapse_target = errors[0].collapse_target;
+
+			// We must reject a pair that is opposite on the other side to an obtuse
+			// Angle. These can create overlapping faces that would be hard to detect
+			auto verify_edge = [&](unsigned short collapse_source, unsigned short collapse_target) {
+				unsigned int edge_index = FindEdge(collapse_source, collapse_target);
+				const ConvexHullEdge& edge = edges[edge_index];
+				unsigned short other_face_index = edge.face_1_index == index ? edge.face_2_index : edge.face_1_index;
+				const ConvexHullFace& other_face = faces[other_face_index];
+				unsigned short other_face_point_index = USHORT_MAX;
+				if (other_face.points[0] == collapse_source || other_face.points[0] == collapse_target) {
+					if (other_face.points[1] == collapse_source || other_face.points[1] == collapse_target) {
+						other_face_point_index = other_face.points[2];
+					}
+					else {
+						other_face_point_index = other_face.points[1];
+					}
+				}
+				else {
+					other_face_point_index = other_face.points[0];
+				}
+
+				float3 opposing_face_point = GetPoint(other_face_point_index);
+				float3 opposing_face_edge_0 = GetPoint(collapse_source) - opposing_face_point;
+				float3 opposing_face_edge_1 = GetPoint(collapse_target) - opposing_face_point;
+				return Dot(opposing_face_edge_0, opposing_face_edge_1) >= 0.0f;
+			};
+
+			unsigned int verified_collapse_index = 0;
+			if (!verify_edge(collapse_source, collapse_target)) {
+				verified_collapse_index++;
+				collapse_source = errors[verified_collapse_index].collapse_point;
+				collapse_target = errors[verified_collapse_index].collapse_target;
+				while (verified_collapse_index < errors.size && !verify_edge(collapse_source, collapse_target)) {
+					verified_collapse_index++;
+					collapse_source = errors[verified_collapse_index].collapse_point;
+					collapse_target = errors[verified_collapse_index].collapse_target;
+				}
+			}
+			if (verified_collapse_index == errors.size) {
+				// Skip this triangle. This shouldn't really happen, but just in case
+				continue;
+			}
+
+			//float3 AB = b - a;
+			//float3 AC = c - a;
+			//float3 BC = c - b;
+
+			//float AB_sq_length = SquareLength(AB);
+			//float AC_sq_length = SquareLength(AC);
+			//float BC_sq_length = SquareLength(BC);
+
+			//bool ab_ac_smaller = AB_sq_length < AC_sq_length;
+			//bool ab_bc_smaller = AB_sq_length < BC_sq_length;
+			//bool ac_bc_smaller = AC_sq_length < BC_sq_length;
+
+			//unsigned short collapse_edge_1 = USHORT_MAX;
+			//unsigned short collapse_edge_2 = USHORT_MAX;
+			//if (ab_ac_smaller && ab_bc_smaller) {
+			//	// We can collapse the AB edge
+			//	collapse_edge_1 = face.points[0];
+			//	collapse_edge_2 = face.points[1];
+			//}
+			//else if (!ab_ac_smaller && ac_bc_smaller) {
+			//	// We can collapse the AC edge
+			//	collapse_edge_1 = face.points[0];
+			//	collapse_edge_2 = face.points[2];
+			//}
+			//else {
+			//	// Collapse the BC edge
+			//	collapse_edge_1 = face.points[1];
+			//	collapse_edge_2 = face.points[2];
+			//}
+
+			//if (collapse_source == 5 && collapse_target == 82) {
+			//	//unsigned int face_points[3] = { 96, 115, 53 };
+			//	//unsigned int face_index = FindFace({ face_points, 3 });
+			//	break;
+			//}
 
 			// There is one more thing to be decided, if we collapse from
 			// The edge 1 to 2, or from 2 to 1. At the moment, just collapse
 			// 1 to 2 until we come up with a metric to decide which direction
 			// Is better than the other
-			collapse_edge(collapse_edge_1, collapse_edge_2);
+			collapse_edge(collapse_source, collapse_target);
 			// Decrement the index since we know this face will be removed
 			// TODO: We might miss other faces tho, that get swapped before this index
 			// Think about a solution
 			index--;
+
+			bool validate = Validate();
+			if (!validate) {
+				validate = validate;
+			}
 		}
 	}
 }
@@ -1296,6 +1463,12 @@ bool ConvexHull::Validate() const {
 
 	for (unsigned int index = 0; index < faces.size; index++) {
 		if (face_reference_count[index] != faces[index].EdgeCount()) {
+			uint2 edge_0 = GetFaceEdgeIndices(index, 0);
+			uint2 edge_1 = GetFaceEdgeIndices(index, 1);
+			uint2 edge_2 = GetFaceEdgeIndices(index, 2);
+			const ConvexHullEdge& edge_0_ = edges[FindEdge(edge_0.x, edge_0.y)];
+			const ConvexHullEdge& edge_1_ = edges[FindEdge(edge_1.x, edge_1.y)];
+			const ConvexHullEdge& edge_2_ = edges[FindEdge(edge_2.x, edge_2.y)];
 			return false;
 		}
 	}
