@@ -615,24 +615,16 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// Add a rotation with respect to the local axes of the object
-	ECS_INLINE QuaternionScalar AddLocalRotation(QuaternionScalar current_rotation, QuaternionScalar add_rotation) {
-		return current_rotation * add_rotation;
+	// Applies the rotation q2 after q1. q1 can be thought of as a parent rotation
+	// And q2 as a child rotation
+	ECS_INLINE QuaternionScalar RotateQuaternion(QuaternionScalar q1, QuaternionScalar q2) {
+		return q1 * q2;
 	}
 
-	// Add a rotation with respect to the local axes of the object
-	ECS_INLINE Quaternion ECS_VECTORCALL AddLocalRotation(Quaternion current_rotation, Quaternion add_rotation) {
-		return current_rotation * add_rotation;
-	}
-
-	// Add a rotation with respect to the global axes of the object
-	ECS_INLINE QuaternionScalar AddWorldRotation(QuaternionScalar current_rotation, QuaternionScalar add_rotation) {
-		return add_rotation * current_rotation;
-	}
-
-	// Add a rotation with respect to the global axes of the object
-	ECS_INLINE Quaternion ECS_VECTORCALL AddWorldRotation(Quaternion current_rotation, Quaternion add_rotation) {
-		return add_rotation * current_rotation;
+	// Applies the rotation q2 after q1. q1 can be thought of as a parent rotation
+	// And q2 as a child rotation
+	ECS_INLINE Quaternion RotateQuaternion(Quaternion q1, Quaternion q2) {
+		return q1 * q2;
 	}
 
 	// This computes the delta between a known operand and a final quaternion

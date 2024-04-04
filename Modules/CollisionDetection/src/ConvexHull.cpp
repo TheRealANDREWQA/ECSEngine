@@ -435,7 +435,9 @@ float3 ConvexHull::FurthestFrom(float3 direction) const
 		Vector3 values = Vector3().LoadAdjacent(vertices_x, simd_count, vertex_capacity);
 		Vec8f distance = Dot(values, vector_direction);
 		// Mask the distance such that we don't consider elements which are out of bounds
-		distance.cutoff(vertex_sizet - simd_count);
+		Vec8fb select_mask = SelectMaskLast<unsigned int>(vertex_sizet - simd_count);
+		Vec8f smallest_distance = -FLT_MAX;
+		distance = select(select_mask, smallest_distance, distance);
 		SIMDVectorMask is_greater = distance > max_distance;
 		max_distance = SelectSingle(is_greater, distance, max_distance);
 		max_points = Select(is_greater, values, max_points);

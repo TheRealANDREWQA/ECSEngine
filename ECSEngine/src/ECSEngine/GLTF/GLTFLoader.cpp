@@ -963,7 +963,11 @@ namespace ECSEngine {
 			}
 
 			if (options->center_object_midpoint) {
-				GLTFMeshOriginToCenter(mesh);
+				float3 translation = GLTFMeshOriginToCenter(mesh);
+				// Translate the aabb for each submesh as well
+				for (size_t index = 0; index < data.mesh_count; index++) {
+					submeshes[index].bounds = TranslateAABB(submeshes[index].bounds, -translation);
+				}
 			}
 		}
 		return success;
@@ -1692,10 +1696,11 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void GLTFMeshOriginToCenter(const GLTFMesh* mesh)
+	float3 GLTFMeshOriginToCenter(const GLTFMesh* mesh)
 	{
 		float3 midpoint = CalculateFloat3Midpoint(mesh->positions);
 		ApplyFloat3Subtraction(mesh->positions, midpoint);
+		return midpoint;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------

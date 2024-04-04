@@ -642,6 +642,14 @@ namespace ECSEngine {
 	schedule_element.task_name = STRING(thread_task_function); \
 	module_function_data->tasks->AddAssert(&schedule_element)
 
+	// This is a helper macro that eases the use of the schedule element
+	// The last parameter, dependencies, is a Stream<TaskDependency>
+#define ECS_REGISTER_SIMPLE_FOR_EACH_TASK(module_function_data, thread_task_function, task_group_value, dependencies)	\
+	ECSEngine::TaskSchedulerElement __task_element##thread_task_function; \
+	__task_element##thread_task_function.task_group = task_group_value; \
+	__task_element##thread_task_function.task_dependencies = module_function_data->AllocateAndSetDependencies(dependencies); \
+	ECS_REGISTER_FOR_EACH_TASK(__task_element##thread_task_function, thread_task_function, module_function_data)
+
 #define ECS_REGISTER_TASK(schedule_element, thread_task_function, module_function_data) \
 	schedule_element.task_function = thread_task_function; \
 	schedule_element.task_name = STRING(thread_task_function); \

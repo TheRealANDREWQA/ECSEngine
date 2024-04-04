@@ -75,6 +75,11 @@ namespace ECSEngine {
 			return delta_time / speed_up_factor;
 		}
 
+		ECS_INLINE void SetDeltaTime(float seconds) {
+			delta_time = seconds;
+			inverse_delta_time = 1.0f / delta_time;
+		}
+
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(World);
 
 		GlobalMemoryManager* memory;
@@ -93,6 +98,8 @@ namespace ECSEngine {
 		Timer timer;
 		// The delta time is expressed in seconds
 		float delta_time;
+		// The inverse of delta time
+		float inverse_delta_time;
 		// This factor is used to increase/decrease the simulation speed
 		// If the simulation speed is too high, things might start to brake
 		float speed_up_factor;

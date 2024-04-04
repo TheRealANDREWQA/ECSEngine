@@ -348,20 +348,13 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 // Those values
 static SATEdgeQuery SATEdgeProjection(
 	const ConvexHull* first,
-	const ConvexHull* second, 
-	ResizableStream<ResizableStream<float4>>* projections, 
-	AllocatorPolymorphic allocator
+	const ConvexHull* second
 ) {
-	projections->ResizeNoCopy(first->edges.size);
-	projections->size = 0;
-
 	float global_max_distance = -FLT_MAX;
 	float global_squared_edge_distance = FLT_MAX;
 	unsigned int global_first_index = -1;
 	unsigned int global_second_index = -1;
 	for (size_t index = 0; index < first->edges.size; index++) {
-		projections->Add(ResizableStream<float4>{ allocator, second->edges.size * first->edges.size });
-		
 		Line3D first_line = first->GetEdgePoints(index);
 		float3 edge = first_line.B - first_line.A;
 		for (size_t subindex = 0; subindex < second->edges.size; subindex++) {
@@ -386,7 +379,6 @@ static SATEdgeQuery SATEdgeProjection(
 					second_projection_range.y = max(dot, second_projection_range.y);
 				}
 
-				projections->buffer[index].Add({ first_projection_range, second_projection_range });
 				float separation = -FLT_MAX;
 				if (IsInRange(first_projection_range.x, second_projection_range.x, second_projection_range.y)) {
 					if (IsInRange(first_projection_range.y, second_projection_range.y, second_projection_range.y)) {
@@ -455,9 +447,7 @@ SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
 
 	SATEdgeQuery edge_query = SATEdge(first, second);
 	
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-	ResizableStream<ResizableStream<float4>> projections;
-	SATEdgeQuery projection_edge_query = SATEdgeProjection(first, second, &projections, &stack_allocator);
+	//SATEdgeQuery projection_edge_query = SATEdgeProjection(first, second);
 	//edge_query.edge_2_index = 3;
 	//edge_query.edge_1_index = projection_edge_query.edge_1_index;
 	//edge_query.edge_2_index = projection_edge_query.edge_2_index;
@@ -473,12 +463,10 @@ SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
 		query.type = SAT_QUERY_FACE;
 		if (first_face_query.distance > second_face_query.distance) {
 			query.face = first_face_query;
-			query.face.second_face_index = second_face_query.face_index;
 			query.face.first_collider = true;
 		}
 		else {
 			query.face = second_face_query;
-			query.face.second_face_index = first_face_query.face_index;
 			query.face.first_collider = false;
 		}
 		return query;

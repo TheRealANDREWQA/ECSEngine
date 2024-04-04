@@ -259,7 +259,8 @@ namespace ECSEngine {
 	ECSENGINE_API AABBScalar GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes);
 
 	// Updates the location of the vertices such that the origin is at the center of the object
-	ECSENGINE_API void GLTFMeshOriginToCenter(const GLTFMesh* mesh);
+	// Returns the translation that was performed (the center of the previous mesh)
+	ECSENGINE_API float3 GLTFMeshOriginToCenter(const GLTFMesh* mesh);
 
 	namespace internal {
 

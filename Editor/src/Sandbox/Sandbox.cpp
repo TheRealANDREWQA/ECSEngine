@@ -2259,7 +2259,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		editor_state->render_task_manager->ClearTemporaryAllocators();
 		editor_state->render_task_manager->ResetStaticTasks();
 
-		sandbox->sandbox_world.delta_time = previous_sandbox_delta_time;
+		sandbox->sandbox_world.SetDeltaTime(previous_sandbox_delta_time);
 
 		// Restore the resource manager first
 		editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot);
@@ -2550,7 +2550,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		// Check to see if we are in fixed time step mode
 		if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
 			// We need to change the delta time
-			sandbox->sandbox_world.delta_time = editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor;
+			sandbox->sandbox_world.SetDeltaTime(editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor);
 		}
 	}
 
@@ -2559,7 +2559,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		// We also need to update the delta time
 		float new_delta_time = (float)sandbox->sandbox_world.timer.GetDuration(ECS_TIMER_DURATION_US) / 1'000'000.0f;
 		if (new_delta_time <= ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD) {
-			sandbox->sandbox_world.delta_time = new_delta_time * sandbox->sandbox_world.speed_up_factor;
+			sandbox->sandbox_world.SetDeltaTime(new_delta_time * sandbox->sandbox_world.speed_up_factor);
 		}
 	}
 	sandbox->sandbox_world.timer.SetNewStart();

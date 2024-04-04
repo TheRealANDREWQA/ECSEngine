@@ -2282,7 +2282,7 @@ void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandb
 	auto apply_delta = [rotation_delta](QuaternionScalar* rotation_storage) {
 		// We need to use local rotation regardless of the transform space
 		// The transform tool takes care of the correct rotation delta
-		QuaternionScalar new_quaternion = AddLocalRotation(*rotation_storage, rotation_delta);
+		QuaternionScalar new_quaternion = RotateQuaternion(*rotation_storage, rotation_delta);
 		*rotation_storage = new_quaternion;
 	};
 

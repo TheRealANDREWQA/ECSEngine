@@ -132,7 +132,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 			RotateSandboxSelectedEntities(editor_state, sandbox_index, rotation_delta);
 
 			if (descriptor->rotation_delta != nullptr) {
-				*descriptor->rotation_delta = AddLocalRotation(*descriptor->rotation_delta, rotation_delta);
+				*descriptor->rotation_delta = (*descriptor->rotation_delta) * rotation_delta;
 			}
 			return true;
 		}

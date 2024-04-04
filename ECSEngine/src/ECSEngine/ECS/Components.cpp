@@ -18,10 +18,10 @@ namespace ECSEngine {
 		//	const Rotation* previous_rotation = (const Rotation*)data->previous_component;
 
 		//	Quaternion delta_quaternion = QuaternionFromEuler(rotation_link->value - previous_rotation_link->value);
-		//	rotation->value = AddLocalRotation(previous_rotation->value, delta_quaternion).StorageLow();
+		//	rotation->value = previous_rotation->value * delta_quaternion;
 		//}
 		//else {
-		//	rotation->value = QuaternionFromEuler(rotation_link->value).StorageLow();
+		//	rotation->value = QuaternionFromEuler(rotation_link->value);
 		//}
 		rotation->value = QuaternionFromEuler(rotation_link->value);
 	}
@@ -43,7 +43,7 @@ namespace ECSEngine {
 	//		const Rotation* previous_rotation = (const Rotation*)data->previous_component;
 
 	//		Quaternion delta_quaternion = QuaternionFromEuler(rotation_link->add_rotation - previous_rotation_link->add_rotation);
-	//		rotation->value = AddLocalRotation(previous_rotation->value, delta_quaternion).StorageLow();
+	//		rotation->value = previous_rotation->value * delta_quaternion;
 	//	}
 	//}
 

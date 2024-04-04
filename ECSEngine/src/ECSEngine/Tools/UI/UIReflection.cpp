@@ -4,6 +4,7 @@
 #include "../../Input/Keyboard.h"
 #include "../../Utilities/Reflection/ReflectionStringFunctions.h"
 #include "../../Utilities/ParsingUtilities.h"
+#include "../../Math/MathTypeSizes.h"
 
 #define UI_IGNORE_RANGE_OR_PARAMETERS_TAG "_"
 
@@ -4034,7 +4035,21 @@ namespace ECSEngine {
 			};
 
 			auto is_field_omitted = [&](unsigned int index) {
-				return SearchBytes(ignore_fields, index) != -1;
+				bool is_omitted = SearchBytes(ignore_fields, index) != -1;
+				if (is_omitted) {
+					return true;
+				}
+				
+				// TODO: Implement Visualization for Matrix, Quaternion, Matrix3x3, AABB?
+				// At the moment they are being ignored
+				// This is just a crutch to skip the implementation for the time being
+				for (size_t math_index = 0; math_index < ECS_MATH_STRUCTURE_TYPE_COUNT; math_index++) {
+					if (reflected_type->fields[index].definition == ECS_MATH_STRUCTURE_TYPE_INFOS[math_index].name) {
+						return true;
+					}
+				}
+
+				return false;
 			};
 
 			for (size_t index = 0; index < reflected_type->fields.size; index++) {

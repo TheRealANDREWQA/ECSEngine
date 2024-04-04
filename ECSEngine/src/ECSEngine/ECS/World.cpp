@@ -284,7 +284,7 @@ namespace ECSEngine {
 	{
 		world->entity_manager->ClearCache();
 		world->entity_manager->ClearFrame();
-		world->delta_time = 0.0f;
+		world->SetDeltaTime(0.0f);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
@@ -319,7 +319,7 @@ namespace ECSEngine {
 			world->debug_drawer->Clear();
 		}
 		world->timer.SetUninitialized();
-		world->delta_time = 0.0f;
+		world->SetDeltaTime(0.0f);
 
 		if (release_physical_memory) {
 			// We can release the memory for the entire global memory manager

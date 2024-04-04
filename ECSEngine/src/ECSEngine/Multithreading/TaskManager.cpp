@@ -809,6 +809,19 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void TaskManager::RemoveTask(unsigned int task_index) {
+		// The deallocation for the buffers at the moment is unnecessary since
+		// The allocator is linear, but do it anyway in case in the future we change
+		// The allocator
+		if (m_tasks[task_index].task.data_size > 0) {
+			Deallocate(StaticTaskAllocator(this), m_tasks[task_index].task.data);
+		}
+		m_tasks[task_index].task.name.Deallocate(StaticTaskAllocator(this));
+		m_tasks.Remove(task_index);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ReserveTasks(unsigned int count) {
 		m_tasks.Reserve(count);
 	}

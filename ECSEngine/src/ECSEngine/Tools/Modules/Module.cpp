@@ -1019,7 +1019,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void RetrieveModuleDebugDrawTaskElementsInitializeData(const TaskScheduler* scheduler, TaskManager* target_manager, const TaskManager* source_manager)
+	void RetrieveModuleDebugDrawTaskElementsInitializeData(TaskScheduler* scheduler, TaskManager* target_manager, const TaskManager* source_manager)
 	{
 		for (unsigned int index = 0; index < scheduler->elements.size; index++) {
 			if (scheduler->elements[index].initialize_data_task_name.size > 0) {
@@ -1031,6 +1031,14 @@ namespace ECSEngine {
 						ModuleDebugDrawWrapperData* wrapper_data = (ModuleDebugDrawWrapperData*)target_task->data;
 						ThreadTask source_task = source_manager->GetTask(source_index);
 						wrapper_data->inherit_data = source_task.data;
+					}
+					else {
+						// We must remove this entry since we cannot find its initialization
+						// Data and will most likely result in a crash
+						// This same task must be removed from the target task manager as well
+						target_manager->RemoveTask(task_index);
+						scheduler->Remove(scheduler->elements[index].task_name);
+						index--;
 					}
 				}
 			}
