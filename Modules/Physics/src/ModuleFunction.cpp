@@ -8,6 +8,7 @@
 #include "ECSEngineComponents.h"
 #include "ECSEngineForEach.h"
 #include "Rigidbody.h"
+#include "SolverCommon.h"
 
 using namespace ECSEngine;
 
@@ -104,14 +105,14 @@ ECS_THREAD_TASK(GridHandler) {
 						world->debug_drawer->AddLineThread(thread_id, A, B, ECS_COLOR_ORANGE);
 					}
 
-					query.face.second_face_index = 9;
+					/*query.face.second_face_index = 9;
 					const ConvexHullFace& face_2 = second_hull->faces[query.face.second_face_index];
 					for (unsigned int index = 0; index < face_2.points.size; index++) {
 						unsigned int next_index = index == face_2.points.size - 1 ? 0 : index + 1;
 						float3 A = second_hull->GetPoint(face_2.points[index]);
 						float3 B = second_hull->GetPoint(face_2.points[next_index]);
 						world->debug_drawer->AddLineThread(thread_id, A, B, ECS_COLOR_ORANGE);
-					}
+					}*/
 
 					ContactManifold manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
 					for (size_t index = 0; index < manifold.contact_point_count; index++) {
@@ -133,6 +134,8 @@ void ModuleTaskFunction(ModuleTaskFunctionData* data) {
 	change_handler.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
 	change_handler.initialize_data_task_name = STRING(CollisionBroadphase);
 	ECS_REGISTER_TASK(change_handler, ChangeHandler, data);
+
+	AddSolverCommonTasks(data);
 }
 
 #if 0

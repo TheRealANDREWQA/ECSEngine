@@ -334,6 +334,9 @@ namespace ECSEngine {
 		// This can be called from multiple threads
 		void PushExceptionHandlerThreadSafe(TaskManagerExceptionHandler handler, void* data, size_t data_size);
 
+		// Removes (not with swap back) a static task
+		void RemoveTask(unsigned int task_index);
+
 		void ReserveTasks(unsigned int count);
 
 		// Resets all the temporary allocators, frees the static tasks and puts the threads to sleep

@@ -54,20 +54,24 @@ static void UpdateSandboxModuleEnabledDebugDrawTasks(
 	Stream<ModuleDebugDrawTaskElement> debug_draw_elements = module_info->ecs_module.debug_draw_task_elements;
 	for (size_t index = 0; index < debug_draw_elements.size; index++) {
 		Stream<char> task_name = debug_draw_elements[index].base_element.task_name;
-		bool is_enabled = IsModuleDebugDrawTaskElementEnabled(task_manager, task_name);
-		unsigned int existing_index = FindString(task_name, sandbox_module->enabled_debug_tasks.ToStream());
-		if (is_enabled) {
-			// Insert it if it doesn't exist
-			if (existing_index == -1) {
-				AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, in_stream_module_index, task_name);
-				change_happened = true;
+		// Perform this operation just if the task exists in the task manager. It might not exist
+		// In the case that the task is removed due to missing initialization dependencies
+		if (task_manager->FindTask(task_name) != -1) {
+			bool is_enabled = IsModuleDebugDrawTaskElementEnabled(task_manager, task_name);
+			unsigned int existing_index = FindString(task_name, sandbox_module->enabled_debug_tasks.ToStream());
+			if (is_enabled) {
+				// Insert it if it doesn't exist
+				if (existing_index == -1) {
+					AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, in_stream_module_index, task_name);
+					change_happened = true;
+				}
 			}
-		}
-		else {
-			// Remove it if it exists
-			if (existing_index != -1) {
-				RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name);
-				change_happened = true;
+			else {
+				// Remove it if it exists
+				if (existing_index != -1) {
+					RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name);
+					change_happened = true;
+				}
 			}
 		}
 	}

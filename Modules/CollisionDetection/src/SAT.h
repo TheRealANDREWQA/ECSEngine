@@ -16,7 +16,6 @@ struct SATEdgeQuery {
 struct SATFaceQuery {
 	float distance;
 	unsigned int face_index;
-	unsigned int second_face_index;
 	// This is true if the face belongs to the first collider
 	bool first_collider;
 };

@@ -24,6 +24,16 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	struct ModuleTaskFunctionData {
+		ECS_INLINE Stream<TaskDependency> AllocateDependencies(size_t count) {
+			Stream<TaskDependency> dependencies;
+			dependencies.Initialize(allocator, count);
+			return dependencies;
+		}
+
+		ECS_INLINE Stream<TaskDependency> AllocateAndSetDependencies(Stream<TaskDependency> dependencies) {
+			return StreamCoalescedDeepCopy(dependencies, allocator);
+		}
+
 		CapacityStream<TaskSchedulerElement>* tasks;
 		AllocatorPolymorphic allocator;
 

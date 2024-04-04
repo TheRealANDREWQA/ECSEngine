@@ -8,26 +8,20 @@
 
 namespace ECSEngine {
 
-	Stream<char> ECS_MATH_STRUCTURE_TYPE_STRINGS[] = {
-		STRING(Vector3),
-		STRING(Matrix),
-		STRING(Quaternion),
-		STRING(Plane),
-		STRING(Transform),
-		STRING(AABB),
+#define ENTRY(type) { STRING(type), (unsigned int)sizeof(type), (unsigned int)alignof(type) }
+
+	MathStructureInfo ECS_MATH_STRUCTURE_TYPE_INFOS[] = {
+		ENTRY(Vector3),
+		ENTRY(Matrix),
+		ENTRY(Quaternion),
+		ENTRY(Plane),
+		ENTRY(Transform),
+		ENTRY(AABB),
+		ENTRY(Matrix3x3)
 	};
 
-	static_assert(ECS_MATH_STRUCTURE_TYPE_COUNT == ECS_COUNTOF(ECS_MATH_STRUCTURE_TYPE_STRINGS));
+	static_assert(ECS_MATH_STRUCTURE_TYPE_COUNT == ECS_COUNTOF(ECS_MATH_STRUCTURE_TYPE_INFOS));
 
-	size_t ECS_MATH_STRUCTURE_TYPE_BYTE_SIZES[] = {
-		sizeof(Vector3),
-		sizeof(Matrix),
-		sizeof(Quaternion),
-		sizeof(Plane),
-		sizeof(Transform),
-		sizeof(AABB),
-	};
-
-	static_assert(ECS_MATH_STRUCTURE_TYPE_COUNT == ECS_COUNTOF(ECS_MATH_STRUCTURE_TYPE_BYTE_SIZES));
+#undef ENTRY
 
 }

@@ -67,6 +67,17 @@ namespace ECSEngine {
 	// Example. A -> B, A is a dependency for B. At the moment this
 	// dependency is at the task level (not query).
 	struct TaskDependency {
+		ECS_INLINE TaskDependency() : name() {}
+		ECS_INLINE TaskDependency(Stream<char> _name) : name(_name) {}
+
+		ECS_INLINE size_t CopySize() const {
+			return name.CopySize();
+		}
+
+		ECS_INLINE TaskDependency CopyTo(uintptr_t& ptr) const {
+			return name.CopyTo(ptr);
+		}
+
 		ECS_INLINE void ToString(CapacityStream<char>& string) const {
 			string.AddStreamAssert(name);
 		}

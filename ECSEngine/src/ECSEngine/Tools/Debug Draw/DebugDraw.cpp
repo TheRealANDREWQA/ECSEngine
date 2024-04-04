@@ -935,7 +935,7 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE QuaternionScalar ECS_VECTORCALL AxesArrowYRotationSIMD(QuaternionScalar rotation) {
-		return AddWorldRotation(rotation, QuaternionAngleFromAxis(GetForwardVector(), 90.0f));
+		return QuaternionAngleFromAxis(GetForwardVector(), 90.0f) * rotation;
 	}
 
 	ECS_INLINE QuaternionScalar AxesArrowYRotation(QuaternionScalar rotation) {
@@ -943,7 +943,7 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE QuaternionScalar ECS_VECTORCALL AxesArrowZRotationSIMD(QuaternionScalar rotation) {
-		return AddWorldRotation(rotation, QuaternionAngleFromAxis(GetUpVector(), -90.0f));
+		return QuaternionAngleFromAxis(GetUpVector(), -90.0f) * rotation;
 	}
 
 	ECS_INLINE QuaternionScalar AxesArrowZRotation(QuaternionScalar rotation) {

@@ -8,6 +8,7 @@ struct VS_INPUT
     uint instance_index_thickness : COLOR; ECS_REFLECT_INSTANCE(1) ECS_REFLECT_INPUT_SLOT(2) 
 };
 
+
 struct VS_OUTPUT
 {
     uint instance_index_thickness : INSTANCE_INDEX_THICKNESS;

@@ -305,7 +305,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 								break;
 							case ECS_TRANSFORM_ROTATION:
 							{
-								QuaternionScalar x_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisZScalar(90.0f));
+								QuaternionScalar x_rotation = RotateQuaternion(QuaternionForAxisZScalar(90.0f), rotation_midpoint);
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_X]);
 								debug_drawer->AddCircle(
 									translation_midpoint,
@@ -326,7 +326,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 								);
 
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Z]);
-								QuaternionScalar z_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisXScalar(90.0f));
+								QuaternionScalar z_rotation = RotateQuaternion(QuaternionForAxisXScalar(90.0f), rotation_midpoint);
 								debug_drawer->AddCircle(
 									translation_midpoint,
 									z_rotation,

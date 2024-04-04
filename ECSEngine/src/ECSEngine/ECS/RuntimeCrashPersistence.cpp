@@ -387,6 +387,9 @@ namespace ECSEngine {
 			WriteErrorMessage(options, "Failed to read scene\n");
 		}
 
+		// This will update the inverse as well
+		world->SetDeltaTime(world->delta_time);
+
 		return success;
 	}
 

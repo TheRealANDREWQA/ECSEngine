@@ -903,7 +903,8 @@ namespace ECSEngine {
 			// Add the math types now
 			// Don't include the headers just for the byte sizes - use the MathTypeSizes.h
 			for (size_t index = 0; index < ECS_MATH_STRUCTURE_TYPE_COUNT; index++) {
-				blittable_types->AddAssert({ ECS_MATH_STRUCTURE_TYPE_STRINGS[index], ECS_MATH_STRUCTURE_TYPE_BYTE_SIZES[index], MathStructureAlignment(), nullptr });
+				MathStructureInfo structure_info = ECS_MATH_STRUCTURE_TYPE_INFOS[index];
+				blittable_types->AddAssert({ structure_info.name, structure_info.byte_size, structure_info.alignment, nullptr });
 			}
 		}
 

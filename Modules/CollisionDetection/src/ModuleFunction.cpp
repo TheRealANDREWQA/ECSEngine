@@ -161,7 +161,7 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	for (size_t index = 0; index < transformed_hull.vertex_size; index++) {
 		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
 		//if (index == 29) {
-			data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
+			//data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
 		//}
 	}
 	//if (transformed_hull.vertex_size > 273) {
@@ -178,9 +178,13 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	}
 	//for (size_t index = 0; index < transformed_hull.faces.size; index++) {
 	//	const ConvexHullFace& face = transformed_hull.faces[index];
-	//	for (unsigned int subindex = 0; subindex < face.EdgeCount(); subindex++) {
+	//	/*for (unsigned int subindex = 0; subindex < face.EdgeCount(); subindex++) {
 	//		Line3D line = transformed_hull.GetFaceEdge(index, subindex);
 	//		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
+	//	}*/
+	//	ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+	//	if (index == 5) {
+	//		data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetFaceCenter(index), float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
 	//	}
 	//}
 	//if (transformed_hull.faces.size > 0) {

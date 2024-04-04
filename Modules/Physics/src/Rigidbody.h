@@ -1,3 +1,4 @@
+// ECS_REFLECT
 #pragma once
 #include "ECSEngineBasics.h"
 #include "ECSEngineMath.h"
@@ -6,10 +7,18 @@
 
 using namespace ECSEngine;
 
-struct Rigidbody {
+struct ECS_REFLECT_COMPONENT Rigidbody {
+	constexpr inline static short ID() {
+		return 400;
+	}
+
+	constexpr inline static bool IsShared() {
+		return false;
+	}
+
 	float mass_inverse;
+	Matrix3x3 inertia_tensor_inverse;
 	float3 center_of_mass;
-	float speed;
 	float3 velocity;
 	float3 angular_velocity;
 };

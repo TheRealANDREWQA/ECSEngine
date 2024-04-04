@@ -186,7 +186,9 @@ namespace ECSEngine {
 	ECSENGINE_API void AddModuleDebugDrawTaskElementsToScheduler(TaskScheduler* scheduler, Stream<ModuleDebugDrawTaskElement> elements, bool scene_order);
 
 	// It will copy the initialize data from the source manager to the tasks that want it in the target manager
-	ECSENGINE_API void RetrieveModuleDebugDrawTaskElementsInitializeData(const TaskScheduler* scheduler, TaskManager* target_manager, const TaskManager* source_manager);
+	// Some elements from the scheduler and the target manager might be removed if the initialization data 
+	// cannot be found
+	ECSENGINE_API void RetrieveModuleDebugDrawTaskElementsInitializeData(TaskScheduler* scheduler, TaskManager* target_manager, const TaskManager* source_manager);
 
 	ECSENGINE_API void DisableModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name);
 

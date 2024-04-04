@@ -15,18 +15,17 @@ namespace ECSEngine {
 		ECS_MATH_STRUCTURE_PLANE,
 		ECS_MATH_STRUCTURE_VECTOR_TRANSFORM,
 		ECS_MATH_STRUCTURE_AABB,
+		ECS_MATH_STRUCTURE_MATRIX3x3,
 		ECS_MATH_STRUCTURE_TYPE_COUNT
 	};
 
-	// The number of entries is given by ECS_MATH_STRUCTURE_COUNT
-	ECSENGINE_API extern Stream<char> ECS_MATH_STRUCTURE_TYPE_STRINGS[];
+	struct MathStructureInfo {
+		Stream<char> name;
+		unsigned int byte_size;
+		unsigned int alignment;
+	};
 
 	// The number of entries is given by ECS_MATH_STRUCTURE_COUNT
-	ECSENGINE_API extern size_t ECS_MATH_STRUCTURE_TYPE_BYTE_SIZES[];
-
-	// At the moment, hardcode the value. The SIMD types appararently have an alignment of 16 bytes
-	ECS_INLINE size_t MathStructureAlignment() {
-		return 16;
-	}
+	ECSENGINE_API extern MathStructureInfo ECS_MATH_STRUCTURE_TYPE_INFOS[];
 
 }
