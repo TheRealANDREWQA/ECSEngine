@@ -3816,8 +3816,7 @@ namespace ECSEngine {
 				m_texture_evict_count = 0;
 			}
 			// For the evict outdated textures, use a a smaller evict target count such that changes will be displayed quickly
-			// Use every multiple of one sixth of the normal evict target count
-			if (m_texture_evict_count % (m_texture_evict_target / 6) == 0) {
+			if (m_texture_evict_count % (m_texture_evict_target / 2) == 0) {
 				EvictOutdatedTextures();
 			}
 

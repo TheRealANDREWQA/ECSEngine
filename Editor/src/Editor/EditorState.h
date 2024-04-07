@@ -177,6 +177,8 @@ struct EditorState {
 
 	// Lazy evaluation counters
 	unsigned short* lazy_evaluation_counters;
+	// The main value is used for the project backup, the marker is used
+	// For the evaluation counter
 	ECSEngine::Timer lazy_evalution_timer;
 };
 

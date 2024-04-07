@@ -115,7 +115,7 @@ namespace ECSEngine {
 		void StringifyScheduleOrder(AdditionStream<char> string) const;
 		
 		// Performs the initialization phase of the systems
-		void RunInitializeTasks(World* world) const;
+		//void RunInitializeTasks(World* world) const;
 
 		// Copies all the tasks and optionally calls the initialize task function
 		// You can give previous simulation transfer data in case you have it

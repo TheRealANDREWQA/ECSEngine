@@ -177,13 +177,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\Broadphase.cpp" />
-    <ClCompile Include="src\Components.cpp" />
+    <ClCompile Include="src\CollisionDetectionComponents.cpp" />
     <ClCompile Include="src\ConvexHull.cpp" />
     <ClCompile Include="src\FixedGrid.cpp" />
     <ClCompile Include="src\GiftWrapping.cpp" />
     <ClCompile Include="src\GJK.cpp" />
     <ClCompile Include="src\Logging.cpp" />
-    <ClCompile Include="src\ModuleFunction.cpp" />
+    <ClCompile Include="src\CollisionModuleFunction.cpp" />
     <ClCompile Include="src\Narrowphase.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -195,14 +195,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Broadphase.h" />
-    <ClInclude Include="src\Components.h" />
+    <ClInclude Include="src\CollisionDetectionComponents.h" />
     <ClInclude Include="src\ConvexHull.h" />
     <ClInclude Include="src\Export.h" />
     <ClInclude Include="src\FixedGrid.h" />
     <ClInclude Include="src\GiftWrapping.h" />
     <ClInclude Include="src\GJK.h" />
     <ClInclude Include="src\Logging.h" />
-    <ClInclude Include="src\ModuleFunction.h" />
+    <ClInclude Include="src\CollisionModuleFunction.h" />
     <ClInclude Include="src\Narrowphase.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\Quickhull.h" />

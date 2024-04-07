@@ -1,9 +1,9 @@
 #include "pch.h"
 #include "Narrowphase.h"
-#include "Graphics/src/Components.h"
+#include "Graphics/src/GraphicsComponents.h"
 #include "GJK.h"
 #include "SAT.h"
-#include "Components.h"
+#include "CollisionDetectionComponents.h"
 
 ECS_THREAD_TASK(NarrowphaseGridHandler) {
 	FixedGridHandlerData* data = (FixedGridHandlerData*)_data;

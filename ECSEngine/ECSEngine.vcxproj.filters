@@ -447,7 +447,6 @@
     <ClCompile Include="src\ECSEngine\Math\BaseVector.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Math\TriangleMesh.cpp" />
-    <ClCompile Include="src\ECSEngine\Math\SpatialGrid.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorBase.cpp" />
     <ClCompile Include="src\ECSEngine\Math\Triangle.cpp" />
   </ItemGroup>

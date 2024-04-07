@@ -1,14 +1,15 @@
 #include "pch.h"
-#include "ModuleFunction.h"
+#include "PhysicsModuleFunction.h"
 #include "ContactManifolds.h"
 #include "CollisionDetection/src/FixedGrid.h"
-#include "CollisionDetection/src/Components.h"
+#include "CollisionDetection/src/CollisionDetectionComponents.h"
 #include "CollisionDetection/src/GJK.h"
 #include "ECSEngineWorld.h"
 #include "ECSEngineComponents.h"
 #include "ECSEngineForEach.h"
 #include "Rigidbody.h"
 #include "SolverCommon.h"
+#include "ContactConstraint.h"
 
 using namespace ECSEngine;
 
@@ -134,8 +135,9 @@ void ModuleTaskFunction(ModuleTaskFunctionData* data) {
 	change_handler.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
 	change_handler.initialize_data_task_name = STRING(CollisionBroadphase);
 	ECS_REGISTER_TASK(change_handler, ChangeHandler, data);
-
+	
 	AddSolverCommonTasks(data);
+	AddSolverTasks(data);
 }
 
 #if 0

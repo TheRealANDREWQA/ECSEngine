@@ -1506,7 +1506,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static void ECS_VECTORCALL ClosestSegmentPointsImpl(
+	static ECS_INLINE void ECS_VECTORCALL ClosestSegmentPointsImpl(
 		Vector first_line_A,
 		Vector first_line_B,
 		Vector second_line_A,

@@ -46,12 +46,12 @@ ECS_THREAD_TASK(IntegrateVelocities) {
 
 void AddSolverCommonTasks(ModuleTaskFunctionData* data) {
 	TaskSchedulerElement integrate_position;
-	integrate_position.task_group = ECS_THREAD_TASK_SIMULATE_EARLY;
+	integrate_position.task_group = ECS_THREAD_TASK_SIMULATE_LATE;
 	TaskDependency position_dependencies[] = {
 		STRING(IntegrateVelocities)
 	};
 	integrate_position.task_dependencies = data->AllocateAndSetDependencies({ position_dependencies, ECS_COUNTOF(position_dependencies) });
 	ECS_REGISTER_FOR_EACH_TASK(integrate_position, IntegratePositions, data);
 
-	ECS_REGISTER_SIMPLE_FOR_EACH_TASK(data, IntegrateVelocities, ECS_THREAD_TASK_SIMULATE_EARLY, {});
+	ECS_REGISTER_SIMPLE_FOR_EACH_TASK(data, IntegrateVelocities, ECS_THREAD_TASK_SIMULATE_LATE, {});
 }

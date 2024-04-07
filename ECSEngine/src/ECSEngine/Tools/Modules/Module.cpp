@@ -900,18 +900,17 @@ namespace ECSEngine {
 	struct ModuleDebugDrawWrapperInitializeData {
 		Stream<char> initialize_task_name;
 		ThreadFunction run_function;
-		ThreadFunction initialize_function;
+		StaticThreadTaskInitializeFunction initialize_function;
 		InputMappingElement button_element;
 	};
 
-	static ECS_THREAD_TASK(ModuleDebugDrawWrapperInitialize) {
-		StaticThreadTaskInitializeInfo* initialize_info = (StaticThreadTaskInitializeInfo*)_data;
-		ModuleDebugDrawWrapperInitializeData* data = (ModuleDebugDrawWrapperInitializeData*)initialize_info->initialize_data;
+	void ModuleDebugDrawWrapperInitialize(World* world, StaticThreadTaskInitializeInfo* info) {
+		ModuleDebugDrawWrapperInitializeData* data = (ModuleDebugDrawWrapperInitializeData*)info->initialize_data;
 		if (data->initialize_function != nullptr) {
-			data->initialize_function(thread_id, world, initialize_info);
+			data->initialize_function(world, info);
 		}
 
-		ModuleDebugDrawWrapperData* function_data = (ModuleDebugDrawWrapperData*)initialize_info->frame_data->buffer;
+		ModuleDebugDrawWrapperData* function_data = (ModuleDebugDrawWrapperData*)info->frame_data->buffer;
 		function_data->function = data->run_function;
 		function_data->is_enabled = false;
 		function_data->inherit_data_name_size = data->initialize_task_name.size;
@@ -920,10 +919,11 @@ namespace ECSEngine {
 		unsigned int write_size = sizeof(*function_data);
 		if (data->initialize_task_name.size > 0) {
 			write_size += data->initialize_task_name.size;
-			ECS_ASSERT(write_size <= initialize_info->frame_data->capacity);
+			ECS_ASSERT(write_size <= info->frame_data->capacity, "Debug draw function exceeded initialize allocation buffer size");
 			data->initialize_task_name.CopyTo(OffsetPointer(function_data, sizeof(*function_data)));
 		}
-		initialize_info->frame_data->size = write_size;
+		ECS_ASSERT(write_size <= info->frame_data->capacity, "Debug draw function exceeded initialize allocation buffer size");
+		info->frame_data->size = write_size;
 	}
 
 	size_t ValidateModuleComponentFunctions(Stream<ModuleComponentFunctions>& elements, Stream<Stream<char>> names, CapacityStream<char>* error_message)

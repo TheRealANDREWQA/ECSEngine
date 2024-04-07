@@ -34,6 +34,8 @@ constexpr size_t TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT = 4;
 
 constexpr wchar_t* PATH = L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\Editor\\TEMPLATE.uit";
 
+// PERFORMANCE TODO: Make this retained mode
+
 // ------------------------------------------------------------------------------------------------
 
 struct ToolbarData {

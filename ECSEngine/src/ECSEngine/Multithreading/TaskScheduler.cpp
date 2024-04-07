@@ -561,14 +561,15 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void TaskScheduler::RunInitializeTasks(World* world) const
-	{
-		for (unsigned int index = 0; index < elements.size; index++) {
-			if (elements[index].initialize_task_function != nullptr) {
-				elements[index].initialize_task_function(0, world, nullptr);
-			}
-		}
-	}
+	// TODO: Decided how to pass the initialize info to this function
+	//void TaskScheduler::RunInitializeTasks(World* world) const
+	//{
+	//	for (unsigned int index = 0; index < elements.size; index++) {
+	//		if (elements[index].initialize_task_function != nullptr) {
+	//			elements[index].initialize_task_function(world, nullptr);
+	//		}
+	//	}
+	//}
 
 	// ------------------------------------------------------------------------------------------------------------
 
@@ -597,7 +598,7 @@ namespace ECSEngine {
 							initialize_info.previous_data = options->transfer_data[transfer_index].data;
 						}
 					}
-					elements[index].initialize_task_function(0, task_manager->m_world, &initialize_info);
+					elements[index].initialize_task_function(task_manager->m_world, &initialize_info);
 
 					frame_data.AssertCapacity();
 					// Check to see if there is any frame data

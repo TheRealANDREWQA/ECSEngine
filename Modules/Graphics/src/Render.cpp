@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "Render.h"
-#include "Components.h"
+#include "GraphicsComponents.h"
 #include "ECSEngineComponents.h"
 #include "ECSEngineRuntime.h"
 #include "ECSEngineShaderApplicationStage.h"

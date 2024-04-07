@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "../ECS/InternalStructures.h"
 #include "ThreadTask.h"
+#include "../Utilities/Crash.h"
 
 namespace ECSEngine {
 
@@ -15,12 +16,18 @@ namespace ECSEngine {
 	// Returns true if there is a read-write conflict between the two. Else false
 	ECSENGINE_API bool Conflicts(ECS_ACCESS_TYPE first, ECS_ACCESS_TYPE second);
 
+	// Most tasks should fall in the mid subphase of the groups
+	// The early and late can be used to easily schedule an action
+	// Before or after another mid action
 	enum ECS_THREAD_TASK_GROUP : unsigned char {
 		ECS_THREAD_TASK_INITIALIZE_EARLY,
+		ECS_THREAD_TASK_INITIALIZE_MID,
 		ECS_THREAD_TASK_INITIALIZE_LATE,
 		ECS_THREAD_TASK_SIMULATE_EARLY,
+		ECS_THREAD_TASK_SIMULATE_MID,
 		ECS_THREAD_TASK_SIMULATE_LATE,
 		ECS_THREAD_TASK_FINALIZE_EARLY,
+		ECS_THREAD_TASK_FINALIZE_MID,
 		ECS_THREAD_TASK_FINALIZE_LATE,
 		ECS_THREAD_TASK_GROUP_COUNT
 	};
@@ -237,11 +244,25 @@ namespace ECSEngine {
 	// Modifications you like to it, and also you need to deallocate it if
 	// you don't plan on using it otherwise it will be leaked
 	struct StaticThreadTaskInitializeInfo {
+		ECS_INLINE void* Allocate(size_t size) {
+			ECS_CRASH_CONDITION_RETURN(frame_data->size + size <= frame_data->capacity, nullptr, "Task initialize data not enough space");
+			void* data = OffsetPointer(frame_data->buffer, frame_data->size);
+			frame_data->size += size;
+			return data;
+		}
+
+		template<typename T>
+		ECS_INLINE T* Allocate() {
+			return (T*)Allocate(sizeof(T));
+		}
+
 		Stream<void> previous_data;
 		CapacityStream<void>* frame_data;
 		// This is the data that was passed in when setting up the task element
 		const void* initialize_data;
 	};
+
+	typedef void (*StaticThreadTaskInitializeFunction)(World* world, StaticThreadTaskInitializeInfo* data);
 
 	// This is the building block that the dependency solver and the scheduler will
 	// use in order to determine the order in which the tasks should run and how they
@@ -279,7 +300,7 @@ namespace ECSEngine {
 		// Task function. You need to set this as the name of the task that you want
 		// To inherit
 		Stream<char> initialize_data_task_name = {};
-		ThreadFunction initialize_task_function = nullptr;
+		StaticThreadTaskInitializeFunction initialize_task_function = nullptr;
 		// This is some small embedded data that you can pass to the initialize function
 		size_t initialize_task_function_data[6];
 		StaticThreadTaskInitializeCleanup cleanup_function = nullptr;
