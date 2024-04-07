@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\ModuleFunction.cpp">
+    <ClCompile Include="src\CollisionModuleFunction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\pch.cpp">
@@ -39,7 +39,7 @@
     <ClCompile Include="src\ConvexHull.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\Components.cpp">
+    <ClCompile Include="src\CollisionDetectionComponents.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\Quickhull.cpp">
@@ -53,10 +53,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\ModuleFunction.h">
+    <ClInclude Include="src\CollisionModuleFunction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Components.h">
+    <ClInclude Include="src\CollisionDetectionComponents.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\pch.h">

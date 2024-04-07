@@ -1,10 +1,10 @@
 #include "pch.h"
-#include "ModuleFunction.h"
-#include "Components.h"
+#include "CollisionModuleFunction.h"
+#include "CollisionDetectionComponents.h"
 #include "Broadphase.h"
 #include "ECSEngineRendering.h"
 
-#include "Graphics/src/Components.h"
+#include "Graphics/src/GraphicsComponents.h"
 
 #include "GiftWrapping.h"
 

@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "Components.h"
+#include "CollisionDetectionComponents.h"
 
 bool CompareConvexCollider(const ConvexCollider* first, const ConvexCollider* second)
 {

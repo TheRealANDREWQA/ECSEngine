@@ -17,6 +17,12 @@ struct ContactManifold {
 		contact_point_count += points.size;
 	}
 
+	ECS_INLINE PlaneScalar GetPlane() const {
+		// The manifold must have at least one point
+		return PlaneScalar::FromNormalized(separation_axis, contact_points[0]);
+	}
+
+	// This axis needs to be normalized
 	float3 separation_axis;
 	float separation_distance;
 	unsigned int contact_point_count = 0;

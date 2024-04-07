@@ -57,7 +57,7 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		float3 midpoint = (first_closest_point + second_closest_point) * 0.5f;
 
 		contact_manifold.AddContactPoint(midpoint);
-		contact_manifold.separation_axis = query.edge.separation_axis;
+		contact_manifold.separation_axis = Normalize(query.edge.separation_axis);
 		contact_manifold.separation_distance = -query.edge.distance;
 	}
 	else {

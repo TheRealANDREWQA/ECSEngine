@@ -611,9 +611,6 @@ static size_t FindNextPointAroundTriangleEdge(
 // At first, I thought this algorithm is going to be easy. For the general case it works
 // Reasonably, but for some input types it fails miserably. There are quite some tricky
 // Degenerate cases that need to be handled
-// TODO: The algorithm still produces sometimes interior vertices
-// Or interior edges. At the moment, these are cleaned up during
-// The simplication
 
 // The functor must have as functions
 // unsigned int AddOrFindVertex(float3 value);
@@ -1139,7 +1136,7 @@ ConvexHull GiftWrappingConvexHull(Stream<float3> vertex_positions, AllocatorPoly
 	//convex_hull.RegenerateEdges(&stack_temporary_allocator);
 	//convex_hull.MergeCoplanarFaces2(4.0f, &stack_temporary_allocator);
 	//bool is_hull_valid_merge_regenerate = convex_hull.Validate();
-	//convex_hull.SimplifyTrianglesAndQuads();
+	convex_hull.SimplifyTrianglesAndQuads();
 	convex_hull.MergeCoplanarTriangles(5.0f, &stack_temporary_allocator);
 	bool is_hull_valid_merge = convex_hull.Validate();
 

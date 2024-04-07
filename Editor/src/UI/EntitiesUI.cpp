@@ -651,6 +651,9 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 
 // -------------------------------------------------------------------------------------------------------------
 
+// PERFORMANCE TODO: Make this retained mode with a timed refresh such that the hierarchy is not redrawn
+// So many times
+
 void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize)
 {
 	UI_PREPARE_DRAWER(initialize);
@@ -661,7 +664,6 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 	UIDrawConfig config;
 
-	
 	drawer.SetRowPadding(0.0f);
 
 	if (initialize) {

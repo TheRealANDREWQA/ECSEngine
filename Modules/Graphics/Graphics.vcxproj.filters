@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\ModuleFunction.cpp">
+    <ClCompile Include="src\GraphicsModuleFunction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\pch.cpp">
@@ -29,10 +29,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\ModuleFunction.h">
+    <ClInclude Include="src\GraphicsModuleFunction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Components.h">
+    <ClInclude Include="src\GraphicsComponents.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\pch.h">

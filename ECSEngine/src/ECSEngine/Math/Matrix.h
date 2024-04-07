@@ -295,6 +295,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API Vector4 ECS_VECTORCALL MatrixVectorMultiply(Vector4 vector, Matrix matrix);
 
+	ECSENGINE_API float3 ECS_VECTORCALL MatrixVectorMultiply(float3 vector, const Matrix3x3& matrix);
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE float3 ECS_VECTORCALL RotateVector(float3 direction, Matrix rotation_matrix) {

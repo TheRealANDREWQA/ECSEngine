@@ -411,8 +411,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	ECS_OPTIMIZE_END;
-
 	// Unfortunately, cannot set the template to optimization, since probably it won't be taken into account
 	// correctly. Must put the optimization pragmas at the instantiation
 	template<bool reverse, typename VectorType, typename CharacterType>

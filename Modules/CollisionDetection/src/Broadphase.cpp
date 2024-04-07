@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "Broadphase.h"
-#include "Graphics/src/Components.h"
-#include "Components.h"
+#include "Graphics/src/GraphicsComponents.h"
+#include "CollisionDetectionComponents.h"
 #include "FixedGrid.h"
 #include "Narrowphase.h"
 
@@ -46,18 +46,15 @@ ECS_THREAD_TASK(CollisionBroadphase) {
 
 ECS_THREAD_TASK(EmptyGridHandler) {}
 
-ECS_THREAD_TASK(InitializeCollisionBroadphase) {
-	StaticThreadTaskInitializeInfo* initialize_info = (StaticThreadTaskInitializeInfo*)_data;
-
-	if (initialize_info->previous_data.size > 0) {
-		FixedGrid* previous_grid = (FixedGrid*)initialize_info->previous_data.buffer;
+void InitializeCollisionBroadphase(World* world, StaticThreadTaskInitializeInfo* info) {
+	if (info->previous_data.size > 0) {
+		FixedGrid* previous_grid = (FixedGrid*)info->previous_data.buffer;
 		previous_grid->Clear();
 	}
 
-	FixedGrid fixed_grid;
-	fixed_grid.Initialize(world->memory, { 128, 128, 128 }, { 2, 2, 2 }, 10, NarrowphaseGridHandler, nullptr, 0);
-	fixed_grid.EnableLayerCollisions(0, 0);
-	initialize_info->frame_data->CopyOther(&fixed_grid, sizeof(fixed_grid));
+	FixedGrid* fixed_grid = (FixedGrid*)info->Allocate(sizeof(FixedGrid));
+	fixed_grid->Initialize(world->memory, { 128, 128, 128 }, { 2, 2, 2 }, 10, NarrowphaseGridHandler, nullptr, 0);
+	fixed_grid->EnableLayerCollisions(0, 0);
 }
 
 ECS_THREAD_TASK(CollisionBroadphaseEndFrame) {

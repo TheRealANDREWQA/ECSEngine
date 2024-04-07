@@ -1111,6 +1111,16 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	float3 ECS_VECTORCALL MatrixVectorMultiply(float3 vector, const Matrix3x3& matrix) {
+		return {
+			vector.x * matrix.values[0][0] + vector.y * matrix.values[1][0] + vector.z * matrix.values[2][0],
+			vector.x * matrix.values[0][1] + vector.y * matrix.values[1][1] + vector.z * matrix.values[2][1],
+			vector.x * matrix.values[0][2] + vector.y * matrix.values[1][2] + vector.z * matrix.values[2][2]
+		};
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
 	Matrix ECS_VECTORCALL MatrixTransformRad(float3 translation, float3 rotation, float3 scale) {
 		return MatrixTRS(MatrixTranslation(translation), MatrixRotationRad(rotation), MatrixScale(scale));
 	}

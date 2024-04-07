@@ -499,4 +499,14 @@ namespace ECSEngine {
 		}
 	};
 
+	ECSENGINE_API unsigned int Cantor(unsigned int x, unsigned int y);
+
+	ECSENGINE_API unsigned int Cantor(unsigned int x, unsigned int y, unsigned int z);
+
+	ECSENGINE_API unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z);
+
+	ECS_INLINE unsigned int Djb2Hash(uint3 indices) {
+		return Djb2Hash(indices.x, indices.y, indices.z);
+	}
+
 }

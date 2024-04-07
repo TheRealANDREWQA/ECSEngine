@@ -1,7 +1,7 @@
 #include "pch.h"
-#include "ModuleFunction.h"
+#include "GraphicsModuleFunction.h"
 #include "Render.h"
-#include "Components.h"
+#include "GraphicsComponents.h"
 
 using namespace ECSEngine;
 

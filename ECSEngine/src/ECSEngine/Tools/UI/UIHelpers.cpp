@@ -524,8 +524,6 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		ECS_OPTIMIZE_START;
-
 		template<typename SimdVector>
 		bool ECS_VECTORCALL AVX2RectangleOverlapp(
 			SimdVector first_position_x,
@@ -567,8 +565,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION(int, AVX2IsPointInRectangle, Vec8f, Vec8f, Vec8f, Vec8f, Vec8f, Vec8f);
 		ECS_TEMPLATE_FUNCTION(int, AVX2IsPointInRectangle, Vec16us, Vec16us, Vec16us, Vec16us, Vec16us, Vec16us);
-
-		ECS_OPTIMIZE_END;
 
 		// -------------------------------------------------------------------------------------------------------
 

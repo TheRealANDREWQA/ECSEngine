@@ -64,7 +64,7 @@
     <TargetName>$(ProjectName)_$(Configuration)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LinkIncremental>false</LinkIncremental>
+    <LinkIncremental>true</LinkIncremental>
     <OutDir>$(ECSEngineModules)\</OutDir>
     <IntDir>bin-int\$(Configuration)\</IntDir>
     <TargetName>$(ProjectName)_$(Configuration)</TargetName>
@@ -128,6 +128,7 @@
       <StringPooling>true</StringPooling>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <FloatingPointModel>Fast</FloatingPointModel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -177,9 +178,9 @@
   <ItemGroup>
     <ClCompile Include="src\Contact.cpp" />
     <ClCompile Include="src\ContactManifolds.cpp" />
-    <ClCompile Include="src\ContantConstraint.cpp" />
+    <ClCompile Include="src\ContactConstraint.cpp" />
     <ClCompile Include="src\Logging.cpp" />
-    <ClCompile Include="src\ModuleFunction.cpp" />
+    <ClCompile Include="src\PhysicsModuleFunction.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Create</PrecompiledHeader>
@@ -189,13 +190,13 @@
     <ClCompile Include="src\SolverCommon.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\Components.h" />
+    <ClInclude Include="src\PhysicsComponents.h" />
     <ClInclude Include="src\Contact.h" />
     <ClInclude Include="src\ContactConstraint.h" />
     <ClInclude Include="src\ContactManifolds.h" />
     <ClInclude Include="src\Export.h" />
     <ClInclude Include="src\Logging.h" />
-    <ClInclude Include="src\ModuleFunction.h" />
+    <ClInclude Include="src\PhysicsModuleFunction.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\Rigidbody.h" />
     <ClInclude Include="src\SolverCommon.h" />

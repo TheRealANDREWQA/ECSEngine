@@ -175,7 +175,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\Logging.cpp" />
-    <ClCompile Include="src\ModuleFunction.cpp" />
+    <ClCompile Include="src\GraphicsModuleFunction.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">pch.h</PrecompiledHeaderFile>
@@ -187,10 +187,10 @@
     <ClCompile Include="src\Render.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\Components.h" />
+    <ClInclude Include="src\GraphicsComponents.h" />
     <ClInclude Include="src\Export.h" />
     <ClInclude Include="src\Logging.h" />
-    <ClInclude Include="src\ModuleFunction.h" />
+    <ClInclude Include="src\GraphicsModuleFunction.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\Render.h" />
   </ItemGroup>

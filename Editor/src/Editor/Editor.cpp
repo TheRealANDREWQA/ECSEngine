@@ -263,6 +263,7 @@ public:
 
 		while (true) {
 			auto run_application = [&](EDITOR_APPLICATION_QUIT_RESPONSE application_quit_value) {
+				unsigned int frame_pacing = 0;
 				while (result == 0 && application_quit == application_quit_value) {
 					while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
 						switch (message.message) {
@@ -273,8 +274,6 @@ public:
 						TranslateMessage(&message);
 						DispatchMessage(&message);
 					}
-
-					unsigned int frame_pacing = 0;
 
 					auto handle_physical_memory_guards = [&editor_state](EXCEPTION_POINTERS* exception_pointers) {
 						OS::ExceptionInformation exception_information = OS::GetExceptionInformationFromNative(exception_pointers);
