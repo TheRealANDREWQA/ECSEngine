@@ -250,8 +250,11 @@ void CreateEmptySceneActualCallback(ActionData* action_data) {
 	current_folder = PathRelativeToAbsolute(current_folder, assets_folder);
 	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 512);
 	wide_name.CopyOther(current_folder);
+	if (current_folder.size > 0) {
+		wide_name.AddAssert(ECS_OS_PATH_SEPARATOR);
+	}
 	ConvertASCIIToWide(wide_name, *name);
-	wide_name.AddStreamSafe(EDITOR_SCENE_EXTENSION);
+	wide_name.AddStreamAssert(EDITOR_SCENE_EXTENSION);
 
 	if (ExistScene(editor_state, wide_name)) {
 		CreateErrorMessageWindow(system, "The scene already exists");

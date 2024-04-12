@@ -39,8 +39,19 @@ static Stream<char> InspectorComponentNameFromUIInstanceName(Stream<char> instan
 // The name structure is embedded in the structure
 struct InspectorDrawEntityData {
 	struct MatchingInputs {
+		// This is a pointer in order to be stable - if we would have
+		// Used the address of CapacityStream<void> directly from
+		// The stream, the address could have changed. We also need
+		// To record the field name in order to know to update the buffers
+		// Later on. The field name needs to be the full name for nested fields
+		// For example capacity_inputs.field_name if there is a nested field
+		struct Input {
+			CapacityStream<void>* input;
+			Stream<char> field_name;
+		};
+
 		Stream<char> component_name;
-		Stream<CapacityStream<void>*> capacity_inputs;
+		Stream<Input> capacity_inputs;
 	};
 
 	// Keep the instance and its pointer. When the components shift around the archetype
@@ -145,16 +156,24 @@ struct InspectorDrawEntityData {
 	}
 
 	// Assumes that the set function was called first
-	CapacityStream<void>* AddComponentInput(EditorState* editor_state, Stream<char> component_name, size_t input_capacity, size_t element_byte_size) {
+	// The field name needs to be the full field name for nested fields
+	// Including the parents separated with a . in between like normal structs
+	CapacityStream<void>* AddComponentInput(
+		EditorState* editor_state, 
+		Stream<char> component_name, 
+		Stream<char> field_name, 
+		size_t input_capacity, 
+		size_t element_byte_size
+	) {
 		unsigned int index = FindMatchingInput(component_name);
 		ECS_ASSERT(index != -1);
-		void* allocation = allocator.Allocate(input_capacity * element_byte_size + sizeof(CapacityStream<void>));
+		void* allocation = allocator.Allocate(input_capacity * element_byte_size + sizeof(CapacityStream<void>) + field_name.CopySize());
 		CapacityStream<void>* new_input = (CapacityStream<void>*)allocation;
 		uintptr_t ptr = (uintptr_t)allocation;
 		ptr += sizeof(CapacityStream<void>);
 		new_input->InitializeFromBuffer(ptr, 0, input_capacity);
-		unsigned int insert_index = matching_inputs[index].capacity_inputs.Add(new_input);
-		return matching_inputs[index].capacity_inputs[insert_index];
+		unsigned int insert_index = matching_inputs[index].capacity_inputs.Add({ new_input, field_name.CopyTo(ptr) });
+		return matching_inputs[index].capacity_inputs[insert_index].input;
 	}
 
 	// Returns the index at which it can be found
@@ -198,6 +217,8 @@ struct InspectorDrawEntityData {
 
 	// Deallocates everything and deletes the UI instances
 	void Clear(EditorState* editor_state) {
+		// Determine if the sandbox scene has changed
+
 		if (created_instances.size > 0) {
 			for (size_t index = 0; index < created_instances.size; index++) {
 				if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
@@ -223,8 +244,8 @@ struct InspectorDrawEntityData {
 
 	void ClearComponent(EditorState* editor_state, unsigned int index) {
 		for (size_t buffer_index = 0; buffer_index < matching_inputs[index].capacity_inputs.size; buffer_index++) {
-			allocator.Deallocate(matching_inputs[index].capacity_inputs[buffer_index]);
-			matching_inputs[index].capacity_inputs[buffer_index]->size = 0;
+			allocator.Deallocate(matching_inputs[index].capacity_inputs[buffer_index].input);
+			matching_inputs[index].capacity_inputs[buffer_index].input->size = 0;
 		}
 		if (matching_inputs[index].capacity_inputs.size > 0) {
 			allocator.Deallocate(matching_inputs[index].capacity_inputs.buffer);
@@ -473,7 +494,7 @@ struct InspectorDrawEntityData {
 		}
 
 		for (size_t index = 0; index < matching_inputs[matching_index].capacity_inputs.size; index++) {
-			matching_inputs[matching_index].capacity_inputs[index]->size = 0;
+			matching_inputs[matching_index].capacity_inputs[index].input->size = 0;
 		}
 	}
 
@@ -646,7 +667,6 @@ struct InspectorDrawEntityData {
 				for (size_t blittable_index = 0; blittable_index < blittable_count; blittable_index++) {
 					blittable_types.AddAssert({ ECS_ASSET_TARGET_FIELD_NAMES[blittable_index].name, Reflection::ReflectionStreamFieldType::Pointer });
 				}
-				blittable_types.AddAssert({ STRING(Stream<void>), Reflection::ReflectionStreamFieldType::Stream });
 				Reflection::CompareReflectionTypeInstancesOptions compare_options;
 				compare_options.blittable_types = blittable_types;
 				if (!Reflection::CompareReflectionTypeInstances(editor_state->editor_components.internal_manager, target_name, target_data, current_data, 1, &compare_options)) {
@@ -741,6 +761,10 @@ struct InspectorDrawEntityData {
 
 	// All allocations for internal components need to be made from this allocator
 	MemoryManager allocator;
+
+	// Store this. We need to detect when the scene is changed
+	// Such that we can invalidate the entries from here
+	CapacityStream<wchar_t> scene_path;
 };
 
 ECS_INLINE static Stream<char> InspectorTargetName(
@@ -961,30 +985,6 @@ void InspectorComponentCallback(ActionData* action_data) {
 		// Check to see if it has buffers and copy them if they have changed
 		unsigned int ui_input_count = data->draw_data->matching_inputs[matching_index].capacity_inputs.size;
 		if (ui_input_count > 0) {
-			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, runtime_buffers, 64);
-			GetReflectionTypeRuntimeBuffers(data->editor_state->GlobalReflectionManager(), type, runtime_buffers);
-			if (runtime_buffers.size != ui_input_count) {
-				// Give a warning
-				ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
-
-				if (is_global_component) {
-					ECS_FORMAT_STRING(console_message, "Stream input mismatch between UI and underlying type. Global component {#}.", component_name);
-				}
-				else {
-					ECS_STACK_CAPACITY_STREAM(char, entity_string, 512);
-					EntityToString(entity, entity_string);
-					ECS_FORMAT_TEMP_STRING(
-						console_message, 
-						"Stream input mismatch between UI and underlying type. Entity {#}, component {#}.",
-						entity_string, 
-						component_name
-					);
-				}
-				
-				EditorSetConsoleWarn(console_message);
-				return;
-			}
-
 			MemoryArena* arena = nullptr;
 			void* component_data = nullptr;
 			if (data->draw_data->is_global_component) {
@@ -1008,15 +1008,25 @@ void InspectorComponentCallback(ActionData* action_data) {
 				}
 			}
 
-			for (unsigned int index = 0; index < runtime_buffers.size; index++) {
-				// Use the size here for the capacity, since we are interested
-				// In allocating exactly the same size
-				ComponentBufferCopyStreamChecked(
-					runtime_buffers[index], 
-					arena, 
-					*data->draw_data->matching_inputs[matching_index].capacity_inputs[index],
-					data->draw_data->matching_inputs[matching_index].capacity_inputs[index]->size,
-					component_data
+			// Use the module reflection manager
+			const Reflection::ReflectionManager* reflection_manager = editor_state->ModuleReflectionManager();
+			const Reflection::ReflectionType* component_type = reflection_manager->GetType(component_name);
+			Reflection::SetReflectionTypeInstanceBufferOptions set_buffer_options;
+			set_buffer_options.allocator = arena;
+			set_buffer_options.checked_copy = true;
+			set_buffer_options.deallocate_existing = true;
+
+			for (unsigned int index = 0; index < ui_input_count; index++) {
+				Reflection::ReflectionTypeFieldDeep deep_field = Reflection::FindReflectionTypeFieldDeep(
+					reflection_manager,
+					component_type,
+					data->draw_data->matching_inputs[matching_index].capacity_inputs[index].field_name
+				);
+				Reflection::SetReflectionTypeInstanceBuffer(
+					deep_field, 
+					component_data, 
+					*data->draw_data->matching_inputs[matching_index].capacity_inputs[index].input, 
+					&set_buffer_options
 				);
 			}
 		}
@@ -1224,11 +1234,12 @@ static void DrawComponents(
 					unsigned int capacity_stream_index = data->FindMatchingInput(current_component_name);
 
 					ui_drawer->AssignInstanceResizableAllocator(instance, component_allocator, false);
+					Allocate(component_allocator, 1);
 					// For every text input, directory input or file input, allocate a separate buffer
 					// such that we don't use the component allocator to hold that data
 					const UIReflectionType* ui_type = ui_drawer->GetType(instance->type_name);
 
-					ECS_STACK_CAPACITY_STREAM(unsigned int, input_indices, 64);
+					ECS_STACK_CAPACITY_STREAM(Reflection::ReflectionNestedFieldIndex, input_indices, 64);
 					ui_drawer->GetTypeMatchingFields(ui_type, UIReflectionElement::TextInput, input_indices);
 					unsigned int text_input_count = input_indices.size;
 					ui_drawer->GetTypeMatchingFields(ui_type, UIReflectionElement::DirectoryInput, input_indices);
@@ -1250,9 +1261,13 @@ static void DrawComponents(
 					};
 
 					auto create_input_stream = [&](unsigned int count, unsigned int base_offset, size_t element_size, auto bind_function) {
+						ECS_STACK_CAPACITY_STREAM(char, nested_field_name, 512);
 						for (unsigned int index = 0; index < count; index++) {
-							CapacityStream<void>* capacity_stream = data->AddComponentInput(editor_state, current_component_name, 256, element_size);
-							CapacityStream<void> current_stream = ui_drawer->GetInputStream(instance, input_indices[index + base_offset]);
+							nested_field_name.size = 0;
+							Stream<char> nested_name = ui_drawer->GetTypeFieldNestedName(ui_type, input_indices[index + base_offset], nested_field_name);
+
+							CapacityStream<void>* capacity_stream = data->AddComponentInput(editor_state, current_component_name, nested_name, 256, element_size);
+							CapacityStream<void> current_stream = ui_drawer->GetInputStreamNested(instance, input_indices[index + base_offset]);
 
 							unsigned int copy_size = current_stream.size <= capacity_stream->capacity ? current_stream.size : capacity_stream->capacity;
 							if (copy_size > 0) {

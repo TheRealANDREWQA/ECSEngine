@@ -24,30 +24,6 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool IsReflectionTypeComponentType(const Reflection::ReflectionType* type, ECS_COMPONENT_TYPE component_type);
 
-	// Walks through the fields and returns the component buffer and optionally the index of the field that
-	// corresponds to that buffer index
-	// Example struct { int, Stream<>, Stream<>, int, Stream<> }
-	// buffer_index: 0 -> 1; 1 -> 2, 2 -> 4
-	// If the reflection_manager is specified, it will search deeply into the user defined types
-	// That are referenced by this type. Streams of types that have buffers themselves are not
-	// Supported
-	ECSENGINE_API ComponentBuffer GetReflectionTypeRuntimeBufferIndex(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type, 
-		unsigned int buffer_index, 
-		Reflection::ReflectionNestedFieldIndex* field_index = nullptr
-	);
-
-	// Determines all the buffers that the ECS runtime can use
-	// If the reflection_manager is specified, it will search deeply into the user defined types
-	// That are referenced by this type. Streams of types that have buffers themselves are not
-	// Supported
-	ECSENGINE_API void GetReflectionTypeRuntimeBuffers(
-		const Reflection::ReflectionManager* reflection_manager, 
-		const Reflection::ReflectionType* type, 
-		CapacityStream<ComponentBuffer>& component_buffers
-	);
-
 	// It needs the stack memory to write some data
 	// It builds default functions to handle Streams and DataPointers
 	// If the reflection_manager is specified, it will search deeply into the user defined types
@@ -68,7 +44,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	);
 
-	// It needs the stack memory to write some data
+	// The data needs to be inherited from the copy deallocate function!!
 	// It builds default functions to handle reflectable types - in case it is
 	// Blittable, it won't return a function, it will let the runtime use the default memcmp
 	ECSENGINE_API SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
@@ -77,7 +53,7 @@ namespace ECSEngine {
 		CapacityStream<void>* stack_memory
 	);
 
-	// It needs the allocator to write some data for the function to use
+	// The data needs to be inherited from the copy deallocate function!!
 	// It builds default functions to handle reflectable types - in case it is
 	// Blittable, it won't return a function, it will let the runtime use the default memcmp
 	ECSENGINE_API SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(

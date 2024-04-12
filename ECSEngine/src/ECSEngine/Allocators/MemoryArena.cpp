@@ -218,6 +218,13 @@ namespace ECSEngine {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			ClearAllocator(GetAllocator(index));
 		}
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = nullptr;
+			tracked.debug_info = debug_info;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_CLEAR;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_ARENA, &tracked);
+		}
 	}
 
 	bool MemoryArena::IsEmpty() const

@@ -853,7 +853,7 @@ namespace ECSEngine {
 				Stream<char> result;
 				if (asterisk.size > 0) {
 					asterisk.buffer = (char*)SkipWhitespace(asterisk.buffer, -1);
-					result = { definition.buffer, PointerDifference(asterisk.buffer, definition.buffer) + 1 };
+					result = { definition.buffer, PointerDifference(asterisk.buffer, definition.buffer) / sizeof(char) + 1 };
 				}
 				else {
 					result = definition;
@@ -872,6 +872,8 @@ namespace ECSEngine {
 			{
 				const char* opened_bracket = FindFirstCharacter(definition, '<').buffer;
 				const char* closed_bracket = FindCharacterReverse(definition, '>').buffer;
+				opened_bracket++;
+				closed_bracket--;
 				opened_bracket = SkipWhitespace(opened_bracket);
 				closed_bracket = SkipWhitespace(closed_bracket, -1);
 

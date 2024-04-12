@@ -140,18 +140,20 @@ namespace ECSEngine {
 		TrackedAllocator* tracked_allocator;
 		if (AllocatorManager.allocators.TryGetValuePtr(allocator, tracked_allocator)) {
 			if (resizable) {
-				ECS_HARD_ASSERT(!tracked_allocator->is_resizable);
-				ThreadSafeQueue<TrackedAllocation> queue_allocations = tracked_allocator->queue_allocations;
-				unsigned int entries_count = queue_allocations.GetSize();
-				tracked_allocator->resizable_allocations.Initialize({ nullptr }, entries_count);
-				if (entries_count > 0) {
-					queue_allocations.CopyTo(tracked_allocator->resizable_allocations.stream.buffer);
-					tracked_allocator->resizable_allocations.stream.size = queue_allocations.GetSize();
+				//ECS_HARD_ASSERT(!tracked_allocator->is_resizable);
+				if (!tracked_allocator->is_resizable) {
+					ThreadSafeQueue<TrackedAllocation> queue_allocations = tracked_allocator->queue_allocations;
+					unsigned int entries_count = queue_allocations.GetSize();
+					tracked_allocator->resizable_allocations.Initialize({ nullptr }, entries_count);
+					if (entries_count > 0) {
+						queue_allocations.CopyTo(tracked_allocator->resizable_allocations.stream.buffer);
+						tracked_allocator->resizable_allocations.stream.size = queue_allocations.GetSize();
+					}
+					// We can use thread safe deallocate since there can be multiple readers
+					// The allocation which is made when an entry is pushed is made under write lock
+					// so it doesn't conflict with this one
+					AllocatorManager.global_allocator.Deallocate_ts(queue_allocations.GetQueue()->GetAllocatedBuffer());
 				}
-				// We can use thread safe deallocate since there can be multiple readers
-				// The allocation which is made when an entry is pushed is made under write lock
-				// so it doesn't conflict with this one
-				AllocatorManager.global_allocator.Deallocate_ts(queue_allocations.GetQueue()->GetAllocatedBuffer());
 			}
 			if (name) {
 				tracked_allocator->name = name;
@@ -203,7 +205,12 @@ namespace ECSEngine {
 	}
 
 	static void DebugAllocatorManagerWriteAllocatorState(CapacityStream<char>* characters, const void* allocator_pointer, const TrackedAllocator& allocator) {
-		ECS_FORMAT_STRING(*characters, "Allocator {#}\n", allocator_pointer);
+		if (allocator.name.size > 0) {
+			ECS_FORMAT_STRING(*characters, "Allocator {#} at {#}\n", allocator.name, allocator_pointer);
+		}
+		else {
+			ECS_FORMAT_STRING(*characters, "Allocator {#}\n", allocator_pointer);
+		}
 		allocator.ForEach([&](const TrackedAllocation& allocation) {
 			Stream<char> function_type_name = DebugAllocatorFunctionName(allocation.function_type);
 			if (allocation.function_type == ECS_DEBUG_ALLOCATOR_ALLOCATE || allocation.function_type == ECS_DEBUG_ALLOCATOR_DEALLOCATE) {

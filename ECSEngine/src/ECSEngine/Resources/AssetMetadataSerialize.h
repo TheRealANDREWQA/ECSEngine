@@ -25,6 +25,8 @@ namespace ECSEngine {
 		void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
 
 		bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+
+		void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) override;
 	};
 	
 	ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(MaterialAsset);

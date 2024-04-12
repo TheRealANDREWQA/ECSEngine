@@ -73,6 +73,11 @@ namespace ECSEngine {
 		return *first_reference_count == *second_reference_count;
 	}
 
+	void ReferenceCountedCustomTypeInterface::Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) {
+		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
+		DeallocateReflectionInstanceBuffers(data->reflection_manager, template_type, data->source, data->allocator, data->element_count, data->element_byte_size, data->reset_buffers);
+	}
+
 	// --------------------------------------------------------------------------------------
 	
 	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(ReferenceCounted) {

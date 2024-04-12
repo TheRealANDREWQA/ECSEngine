@@ -3,9 +3,11 @@
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Allocators/ResizableLinearAllocator.h"
+#include "../Resources/AssetMetadata.h"
 
 #define MAX_COMPONENT_BUFFERS 7
 #define MAX_COMPONENT_BLITTABLE_FIELDS 16
+#define MAX_NESTED_TYPES 7
 
 namespace ECSEngine {
 
@@ -80,238 +82,70 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
-	static void ComponentBufferOffsetFields(ComponentBuffer* component_buffer, unsigned int offset) {
-		component_buffer->pointer_offset += offset;
-		component_buffer->size_offset += offset;
-		if (component_buffer->is_soa_pointer) {
-			for (unsigned int subindex = 0; subindex < component_buffer->soa_pointer_count; subindex++) {
-				component_buffer->soa_pointer_offsets[subindex] += offset;
-			}
-		}
-		if (component_buffer->has_capacity_field) {
-			component_buffer->capacity_offset += offset;
-		}
-	}
-
-	// At the moment, we cannot have deep buffers in a buffer type
-	static bool ConvertFieldToComponentBuffer(const ReflectionType* type, unsigned int field_index, ComponentBuffer* component_buffer) {
-		if (IsStream(type->fields[field_index].info.stream_type)) {
-			component_buffer->element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[field_index].info);
-			component_buffer->is_data_pointer = false;
-			component_buffer->is_soa_pointer = false;
-			component_buffer->soa_pointer_count = 0;
-			component_buffer->has_capacity_field = false;
-			component_buffer->pointer_offset = type->fields[field_index].info.pointer_offset;
-			component_buffer->size_offset = type->fields[field_index].info.pointer_offset + offsetof(Stream<void>, size);
-			if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Stream) {
-				component_buffer->size_int_type = ECS_INT64;
-			}
-			else if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::CapacityStream ||
-				type->fields[field_index].info.stream_type == ReflectionStreamFieldType::ResizableStream) {
-				component_buffer->size_int_type = ECS_INT32;
-				component_buffer->has_capacity_field = true;
-				component_buffer->capacity_offset = type->fields[field_index].info.pointer_offset + offsetof(CapacityStream<void>, capacity);
-				component_buffer->capacity_int_type = ECS_INT32;
-			}
-			return true;
-		}
-		else if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::PointerSoA) {
-			if (IsReflectionPointerSoAAllocationHolder(type, field_index)) {
-				size_t soa_index = GetReflectionTypeSoaIndex(type, field_index);
-				const ReflectionTypeMiscSoa* soa = &type->misc_info[soa_index].soa;
-				component_buffer->element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[field_index].info);
-				component_buffer->is_soa_pointer = true;
-				component_buffer->is_data_pointer = false;
-				component_buffer->pointer_offset = type->fields[field_index].info.pointer_offset;
-				component_buffer->size_offset = type->fields[field_index].info.soa_size_pointer_offset;
-				component_buffer->size_int_type = BasicTypeToIntType(type->fields[field_index].info.soa_size_basic_type);
-				component_buffer->soa_pointer_count = soa->parallel_stream_count - 1;
-				ECS_ASSERT(component_buffer->soa_pointer_count <= ECS_COUNTOF(component_buffer->soa_pointer_offsets));
-				for (unsigned int index = 1; index < soa->parallel_stream_count; index++) {
-					unsigned int soa_pointer_offset = type->fields[soa->parallel_streams[index]].info.pointer_offset;
-					ECS_ASSERT(soa_pointer_offset <= UCHAR_MAX);
-					unsigned int soa_pointer_element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[soa->parallel_streams[index]].info);
-					ECS_ASSERT(soa_pointer_element_byte_size <= UCHAR_MAX);
-					
-					component_buffer->soa_pointer_offsets[index - 1] = soa_pointer_offset;
-					component_buffer->soa_pointer_element_byte_sizes[index - 1] = soa_pointer_element_byte_size;
-				}
-
-				component_buffer->has_capacity_field = soa->capacity_field != UCHAR_MAX;
-				if (component_buffer->has_capacity_field) {
-					component_buffer->capacity_int_type = BasicTypeToIntType(type->fields[soa->capacity_field].info.basic_type);
-					component_buffer->capacity_offset = type->fields[soa->capacity_field].info.pointer_offset;
-				}
-				return true;
-			}
-		}
-		else if (type->fields[field_index].definition == STRING(DataPointer)) {
-			// TODO: Add a reflection field tag such that it can specify the stream byte size
-			// Or force all data pointers to be byte sized
-			ECS_ASSERT(false, "Unimplemented feature");
-			component_buffer->element_byte_size = 1;
-			component_buffer->is_data_pointer = true;
-			component_buffer->is_soa_pointer = false;
-			component_buffer->has_capacity_field = false;
-			component_buffer->soa_pointer_count = 0;
-			component_buffer->pointer_offset = type->fields[field_index].info.pointer_offset;
-			component_buffer->size_offset = 0;
-			component_buffer->size_int_type = 0;
-			return true;
-		}
-		return false;
-	}
-
-	ComponentBuffer GetReflectionTypeRuntimeBufferIndex(
-		const ReflectionManager* reflection_manager, 
-		const ReflectionType* type, 
-		unsigned int buffer_index, 
-		ReflectionNestedFieldIndex* field_index
-	)
-	{
-		unsigned int index = 0;
-		unsigned int current_buffer_index = 0;
-		for (; index < type->fields.size && current_buffer_index <= buffer_index; index++) {
-			if (IsStreamWithSoA(type->fields[index].info.stream_type) && type->fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
-				current_buffer_index++;
-			}
-			else if (type->fields[index].definition == STRING(DataPointer)) {
-				current_buffer_index++;
-			}
-			else {
-				if (reflection_manager != nullptr) {
-					// See if this is a user defined type that we need to recurse to
-					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined && 
-						type->fields[index].info.stream_type == ReflectionStreamFieldType::Basic) {
-						ReflectionType nested_type;
-						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-							ReflectionNestedFieldIndex nested_buffer_index;
-							ComponentBuffer nested_buffer = GetReflectionTypeRuntimeBufferIndex(
-								reflection_manager,
-								&nested_type,
-								buffer_index - current_buffer_index,
-								&nested_buffer_index
-							);
-							if (nested_buffer_index.count > 0) {
-								// We need to offset the pointer offset and the size offset by the current's field offset
-								unsigned int offset = type->fields[index].info.pointer_offset;
-								ComponentBufferOffsetFields(&nested_buffer, offset);
-								// We can return now
-								if (field_index != nullptr) {
-									field_index->Append(nested_buffer_index);
-								}
-								return nested_buffer;
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if (current_buffer_index <= buffer_index) {
-			// Invalid buffer index
-			if (field_index != nullptr) {
-				field_index->count = 0;
-			}
-			return {};
-		}
-
-		bool is_entry;
-		ComponentBuffer component_buffer;
-		bool conversion_success = ConvertFieldToComponentBuffer(type, index, &component_buffer);
-		ECS_ASSERT_FORMAT(conversion_success, "Could not retrieve runtime component buffer while determining the {#} index of type {#}", buffer_index, type->name);
-		if (field_index != nullptr) {
-			field_index->Add(index);
-		}
-		return component_buffer;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------------
-
-	void GetReflectionTypeRuntimeBuffers(const ReflectionManager* reflection_manager, const ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers)
-	{
-		// Get the buffers and the data_pointers
-		for (size_t index = 0; index < type->fields.size; index++) {
-			ComponentBuffer component_buffer;
-			if (ConvertFieldToComponentBuffer(type, index, &component_buffer)) {
-				component_buffers.AddAssert(component_buffer);
-			}
-			else {
-				// See if we need to recurse to user defined types
-				if (reflection_manager != nullptr) {
-					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined &&
-						type->fields[index].info.stream_type == ReflectionStreamFieldType::Basic) {
-						ReflectionType nested_type;
-						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-							unsigned int previous_buffer_count = component_buffers.size;
-							// We need to increase the offset for the pointers to reflect the offset inside this structure
-							GetReflectionTypeRuntimeBuffers(reflection_manager, &nested_type, component_buffers);
-							unsigned int offset = type->fields[index].info.pointer_offset;
-							for (unsigned int subindex = previous_buffer_count; subindex < component_buffers.size; subindex++) {
-								ComponentBufferOffsetFields(&component_buffers[subindex], offset);
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------------
-
 	// TODO: Should we drop the component buffer representation and just use ReflectionTypes directly?
 	// This would require us storing all the nested types as well.
 
+	// The buffers are constructed such that they come from contiguous memory
+	// And can be copied with a single memcpy -  to satisfy the requirement
+	// Of the entity manager
 	struct RuntimeComponentCopyDeallocateData {
-		ComponentBuffer component_buffers[MAX_COMPONENT_BUFFERS];
-		unsigned char count;
-		// We need this to copy all fields
-		unsigned short component_byte_size;
+		ReflectionType type;
+		ReflectionManager reflection_manager;
 	};
+
+	// PERFORMANCE TODO: If the copy is too slow, we can determine
+	// The buffer fields when registering the function and have a
+	// Specialized function copy only those fields.
 
 	static void ReflectionTypeRuntimeComponentCopy(ComponentCopyFunctionData* copy_data) {
 		RuntimeComponentCopyDeallocateData* data = (RuntimeComponentCopyDeallocateData*)copy_data->function_data;
-		memcpy(copy_data->destination, copy_data->source, data->component_byte_size);
-		if (copy_data->deallocate_previous) {
-			for (unsigned char index = 0; index < data->count; index++) {
-				ComponentBufferReallocate(data->component_buffers[index], copy_data->allocator, copy_data->source, copy_data->destination);
-			}
-		}
-		else {
-			for (unsigned char index = 0; index < data->count; index++) {
-				ComponentBufferCopy(data->component_buffers[index], copy_data->allocator, copy_data->source, copy_data->destination);
-			}
-		}
+		//memcpy(copy_data->destination, copy_data->source, data->component_byte_size);
+		CopyReflectionDataOptions options;
+		options.allocator = copy_data->allocator;
+		options.deallocate_existing_buffers = copy_data->deallocate_previous;
+		options.always_allocate_for_buffers = true;
+		CopyReflectionTypeInstance(&data->reflection_manager, &data->type, copy_data->source, copy_data->destination, &options);
 	}
 
 	static void ReflectionTypeRuntimeComponentDeallocate(ComponentDeallocateFunctionData* deallocate_data) {
 		RuntimeComponentCopyDeallocateData* data = (RuntimeComponentCopyDeallocateData*)deallocate_data->function_data;
-		for (unsigned char index = 0; index < data->count; index++) {
-			ComponentBufferDeallocate(data->component_buffers[index], deallocate_data->allocator, deallocate_data->data);
-			// Set the stream or data pointer to empty for good measure - even tho it is not entirely necessary
-			ComponentBufferSetStream(data->component_buffers[index], deallocate_data->data, {});
-		}
+		DeallocateReflectionTypeInstanceBuffers(&data->reflection_manager, &data->type, deallocate_data->data, deallocate_data->allocator);
 	}
+
+	// TODO: Is it worth having each component store a reflection manager?
+	// At the moment, the reflection manager cannot be shared. We can take
+	// Advantage of small hash table optimization
 
 	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const ReflectionManager* reflection_manager, const ReflectionType* type, CapacityStream<void>* stack_memory)
 	{
 		ComponentFunctions component_functions;
-		ECS_STACK_CAPACITY_STREAM(ComponentBuffer, component_buffers, MAX_COMPONENT_BUFFERS);
-		GetReflectionTypeRuntimeBuffers(reflection_manager, type, component_buffers);
-		if (component_buffers.size > 0) {
+		if (!IsBlittableWithPointer(type)) {
 			component_functions.copy_function = ReflectionTypeRuntimeComponentCopy;
 			component_functions.deallocate_function = ReflectionTypeRuntimeComponentDeallocate;
 			component_functions.allocator_size = GetReflectionComponentAllocatorSize(type);
 
 			RuntimeComponentCopyDeallocateData* function_data = (RuntimeComponentCopyDeallocateData*)OffsetPointer(*stack_memory);
-			ECS_ASSERT(stack_memory->capacity - stack_memory->size >= sizeof(*function_data), "Insufficient reflection type runtime component functions stack memory");
 			stack_memory->size += sizeof(*function_data);
-			function_data->count = component_buffers.size;
-			size_t byte_size = GetReflectionTypeByteSize(type);
-			ECS_ASSERT(byte_size <= USHORT_MAX);
-			function_data->component_byte_size = byte_size;
-			component_buffers.CopyTo(function_data->component_buffers);
-			component_functions.data = { function_data, sizeof(*function_data) };
+			stack_memory->AssertCapacity("Insufficient reflection type runtime component functions stack memory size");
+
+			LinearAllocator linear_allocator(OffsetPointer(*stack_memory), stack_memory->capacity - stack_memory->size);
+			function_data->type = type->CopyCoalesced(&linear_allocator);
+			memset(&function_data->reflection_manager, 0, sizeof(function_data->reflection_manager));
+		
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 512);
+			GetReflectionTypeDependentTypes(reflection_manager, type, dependent_types);
+			if (dependent_types.size != 0) {
+				// Allocate the reflection manager hash table
+				function_data->reflection_manager.type_definitions.InitializeSmallFixed(&linear_allocator, dependent_types.size);
+				for (unsigned int index = 0; index < dependent_types.size; index++) {
+					const ReflectionType* current_type = reflection_manager->GetType(dependent_types[index]);
+					function_data->reflection_manager.AddType(current_type, &linear_allocator);
+				}
+			}
+			
+			// The linear allocator will trigger an error if the space is not enough
+			size_t total_allocation_size = sizeof(*function_data) + linear_allocator.GetCurrentUsage();
+			component_functions.data = { function_data, total_allocation_size };
 		}
 
 		return component_functions;
@@ -319,7 +153,7 @@ namespace ECSEngine {
 
 	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const ReflectionManager* reflection_manager, const ReflectionType* type, AllocatorPolymorphic allocator)
 	{
-		ECS_STACK_VOID_STREAM(stack_memory, 1024);
+		ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 32);
 		ComponentFunctions result = GetReflectionTypeRuntimeComponentFunctions(reflection_manager, type, &stack_memory);
 		if (result.data.size > 0) {
 			result.data = result.data.Copy(allocator);
@@ -329,34 +163,19 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
-	struct ReflectionTypeRuntimeCompareData {
-		// The x contains the pointers offset, the y the field byte size
-		ushort2 blittable_fields[MAX_COMPONENT_BLITTABLE_FIELDS];
-		ComponentBuffer component_buffers[MAX_COMPONENT_BUFFERS];
-		unsigned char blittable_field_count;
-		unsigned char component_buffer_count;
-	};
+	typedef RuntimeComponentCopyDeallocateData RuntimeComponentCompareData;
 
 	static bool ReflectionTypeRuntimeCompare(SharedComponentCompareFunctionData* data) {
-		const ReflectionTypeRuntimeCompareData* function_data = (const ReflectionTypeRuntimeCompareData*)data->function_data;
-		
-		for (unsigned char index = 0; index < function_data->blittable_field_count; index++) {
-			const void* first_field = OffsetPointer(data->first, function_data->blittable_fields[index].x);
-			const void* second_field = OffsetPointer(data->second, function_data->blittable_fields[index].x);
-			if (memcmp(first_field, second_field, function_data->blittable_fields[index].y) != 0) {
-				return false;
-			}
+		const RuntimeComponentCompareData* function_data = (const RuntimeComponentCompareData*)data->function_data;
+		ECS_STACK_CAPACITY_STREAM(Reflection::CompareReflectionTypeInstanceBlittableType, blittable_types, 32);
+		size_t blittable_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
+		// This will include the misc Stream<void> with a pointer but that is no problem, shouldn't really happen in code
+		for (size_t blittable_index = 0; blittable_index < blittable_count; blittable_index++) {
+			blittable_types.AddAssert({ ECS_ASSET_TARGET_FIELD_NAMES[blittable_index].name, Reflection::ReflectionStreamFieldType::Pointer });
 		}
-		for (unsigned char index = 0; index < function_data->component_buffer_count; index++) {
-			Stream<void> first_stream = ComponentBufferGetStream(function_data->component_buffers[index], data->first);
-			Stream<void> second_stream = ComponentBufferGetStream(function_data->component_buffers[index], data->second);
-			size_t size_per_entry = ComponentBufferPerEntryByteSize(function_data->component_buffers[index]);
-			if (first_stream.size != second_stream.size || memcmp(first_stream.buffer, second_stream.buffer, first_stream.size * size_per_entry) != 0) {
-				return false;
-			}
-		}
-
-		return true;
+		CompareReflectionTypeInstancesOptions options;
+		options.blittable_types = blittable_types;
+		return CompareReflectionTypeInstances(&function_data->reflection_manager, &function_data->type, data->first, data->second, &options);
 	}
 
 	SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
@@ -369,7 +188,7 @@ namespace ECSEngine {
 
 		if (!IsBlittableWithPointer(type)) {
 			entry.function = ReflectionTypeRuntimeCompare;
-			ECS_ASSERT(stack_memory->size + sizeof(ReflectionTypeRuntimeCompareData) <= stack_memory->capacity);
+			/*ECS_ASSERT(stack_memory->size + sizeof(ReflectionTypeRuntimeCompareData) <= stack_memory->capacity);
 			ReflectionTypeRuntimeCompareData* data = (ReflectionTypeRuntimeCompareData*)OffsetPointer(*stack_memory);
 			data->blittable_field_count = 0;
 			data->component_buffer_count = 0;
@@ -384,8 +203,9 @@ namespace ECSEngine {
 			GetReflectionTypeRuntimeBuffers(reflection_manager, type, runtime_buffers);
 			runtime_buffers.AssertCapacity();
 			data->component_buffer_count = runtime_buffers.size;
-			runtime_buffers.CopyTo(data->component_buffers);
-			entry.data = data;
+			runtime_buffers.CopyTo(data->component_buffers);*/
+			entry.data = {nullptr, 0};
+			entry.use_copy_deallocate_data = true;
 		}
 
 		return entry;

@@ -45,6 +45,7 @@ namespace ECSEngine {
 
 #define ECS_HASH_TABLE_DISTANCE_MASK 0xF8
 #define ECS_HASH_TABLE_HASH_BITS_MASK 0x07
+#define ECS_HASH_TABLE_PADDING_ELEMENT_COUNT 31
 
 		HashTable() : m_metadata(nullptr), m_buffer(nullptr), m_identifiers(nullptr), m_capacity(0), m_count(0), m_function(TableHashFunction(0)) {}
 		HashTable(void* buffer, unsigned int capacity, size_t additional_info = 0) {
@@ -56,7 +57,7 @@ namespace ECSEngine {
 
 		void Clear() {
 			if (m_capacity > 0) {
-				memset(m_metadata, 0, sizeof(unsigned char) * (m_capacity + 31));
+				memset(m_metadata, 0, sizeof(unsigned char) * (m_capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT));
 				m_count = 0;
 			}
 		}
@@ -265,14 +266,14 @@ namespace ECSEngine {
 					// if the slot is empty, the key can be placed here
 					if (element_distance == 0) {
 						if constexpr (crash_if_not_space) {
-							ECS_ASSERT(distance <= 31, "Hash table capacity not enough (too many collisions)");
+							ECS_ASSERT(distance <= ECS_HASH_TABLE_PADDING_ELEMENT_COUNT, "Hash table capacity not enough (too many collisions)");
 						}
 						else {
 							max_distance = max(max_distance, distance);
-							// Clamp the distance to 31 in case it overflows to 32, and that can make the
+							// Clamp the distance to ECS_HASH_TABLE_PADDING_ELEMENT_COUNT in case it overflows to 32, and that can make the
 							// Metadata empty and lead to other inserts or erases thinking this slot is empty
 							// When it is not
-							distance = min(distance, (unsigned int)31);
+							distance = min(distance, (unsigned int)ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
 						}
 						hash_key_bits |= distance << 3;
 						m_metadata[index] = hash_key_bits;
@@ -293,14 +294,14 @@ namespace ECSEngine {
 						SetEntry(index, current_value, current_identifier);
 
 						if constexpr (crash_if_not_space) {
-							ECS_ASSERT(distance <= 31, "Hash table capacity not enough (too many collisions)");
+							ECS_ASSERT(distance <= ECS_HASH_TABLE_PADDING_ELEMENT_COUNT, "Hash table capacity not enough (too many collisions)");
 						}
 						else {
 							max_distance = max(max_distance, distance);
-							// Clamp the distance to 31 in case it overflows to 32, and that can make the
+							// Clamp the distance to ECS_HASH_TABLE_PADDING_ELEMENT_COUNT in case it overflows to 32, and that can make the
 							// Metadata empty and lead to other inserts or erases thinking this slot is empty
 							// When it is not
-							distance = min(distance, (unsigned int)31);
+							distance = min(distance, (unsigned int)ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
 						}
 						m_metadata[index] = hash_key_bits | (distance << 3);
 						distance = (metadata_temp >> 3) + 1;
@@ -315,7 +316,7 @@ namespace ECSEngine {
 					return false;
 				}
 				else {
-					if (max_distance >= 31 || (m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR)) {
+					if (max_distance >= ECS_HASH_TABLE_PADDING_ELEMENT_COUNT || (m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR)) {
 						return true;
 					}
 					return false;
@@ -431,7 +432,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE unsigned int GetExtendedCapacity() const {
-			return m_capacity == 0 ? 0 : m_capacity + 31;
+			return m_capacity == 0 ? 0 : m_capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT;
 		}
 
 		ECS_INLINE unsigned int* GetMetadata() {
@@ -704,10 +705,10 @@ namespace ECSEngine {
 			}
 
 			if constexpr (SoA) {
-				return (sizeof(unsigned char) + sizeof(T) + sizeof(Identifier)) * (number + 31);
+				return (sizeof(unsigned char) + sizeof(T) + sizeof(Identifier)) * (number + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
 			}
 			else {
-				return (sizeof(unsigned char) + sizeof(Pair)) * (number + 31);
+				return (sizeof(unsigned char) + sizeof(Pair)) * (number + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
 			}
 		}
 
@@ -750,7 +751,7 @@ namespace ECSEngine {
 		// It will set the internal hash buffers accordingly to the new hash buffer. It does not modify anything
 		// This function is used mostly for serialization, deserialization purposes
 		void SetBuffers(void* buffer, unsigned int capacity) {
-			unsigned int extended_capacity = capacity + 31;
+			unsigned int extended_capacity = capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT;
 
 			uintptr_t ptr = (uintptr_t)buffer;
 			m_buffer = buffer;
@@ -780,7 +781,7 @@ namespace ECSEngine {
 		}
 
 		void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
-			unsigned int extended_capacity = capacity + 31;
+			unsigned int extended_capacity = capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT;
 			SetBuffers(buffer, capacity);
 
 			if (capacity > 0 && buffer != nullptr) {
@@ -812,6 +813,47 @@ namespace ECSEngine {
 				size_t memory_size = MemoryOf(capacity);
 				void* allocation = Allocate(allocator, memory_size, alignof(void*), debug_info);
 				InitializeFromBuffer(allocation, capacity, additional_info);
+			}
+			else {
+				InitializeFromBuffer(nullptr, 0, additional_info);
+			}
+		}
+
+		// This function is special. It will initialize a hash table that
+		// Has as padding elements at the end size - 1 entries (the metadata slots are still
+		// Allocated, but the space for the types and identifiers themselves is not allocated)
+		// Thus helping to reduce the memory consumption for small tables that have a known
+		// Element count that will not change. This function should not be used in other
+		// Contexts besides the one described!
+		void InitializeSmallFixed(
+			AllocatorPolymorphic allocator, 
+			unsigned int size,
+			size_t additional_info = 0, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		) {
+			if (size > 0) {
+				unsigned int capacity = NextCapacity(((float)size * 100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR) + 1);
+				unsigned int extended_capacity = capacity + size - 1;
+
+				size_t metadata_size = sizeof(*m_metadata) * (capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
+				size_t total_size = metadata_size;
+				if constexpr (SoA) {
+					total_size += (sizeof(T) + sizeof(Identifier)) * extended_capacity;
+				}
+				else {
+					total_size += sizeof(Pair) * extended_capacity;
+				}
+				void* allocation = Allocate(allocator, total_size);
+
+				m_buffer = allocation;
+				if (SoA) {
+					m_identifiers = (Identifier*)OffsetPointer(allocation, sizeof(T) * extended_capacity);
+				}
+				m_metadata = (unsigned char*)OffsetPointer(allocation, total_size - metadata_size);
+
+				m_count = 0;
+				m_capacity = capacity;
+				m_function = TableHashFunction(additional_info);
 			}
 			else {
 				InitializeFromBuffer(nullptr, 0, additional_info);

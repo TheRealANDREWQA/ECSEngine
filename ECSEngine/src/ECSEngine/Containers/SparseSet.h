@@ -64,7 +64,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
 			if (buffer != nullptr && capacity > 0) {
-				ECSEngine::Deallocate(allocator, buffer);
+				ECSEngine::DeallocateEx(allocator, buffer);
 				memset(this, 0, sizeof(*this));
 			}
 		}

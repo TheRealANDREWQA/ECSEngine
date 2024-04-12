@@ -1250,8 +1250,9 @@ namespace ECSEngine {
 						return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
 					}
 
-					// Commit the shared instance
-					entity_manager->RegisterSharedInstanceCommit(shared_component_pairs[index].component, component_storage.buffer);
+					// Commit the shared instance - we don't have to copy the buffers
+					// Since the data was read using the component allocator
+					entity_manager->RegisterSharedInstanceCommit(shared_component_pairs[index].component, component_storage.buffer, false);
 					current_instance_offset += instances_sizes[shared_instance];
 				}
 			}

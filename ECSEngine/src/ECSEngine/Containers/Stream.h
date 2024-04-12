@@ -1386,6 +1386,10 @@ namespace ECSEngine {
 			size++;
 		}
 
+		ECS_INLINE bool Compare(Stream<void> other) const {
+			return size == other.size && memcmp(buffer, other.buffer, size) == 0;
+		}
+
 		// Returns true if the other stream is fully contained in this one
 		bool Contains(Stream<void> other) const {
 			uintptr_t ptr = (uintptr_t)buffer;
@@ -1573,6 +1577,10 @@ namespace ECSEngine {
 
 		ECS_INLINE void AssertCapacity() const {
 			ECS_ASSERT(size <= capacity);
+		}
+
+		ECS_INLINE void AssertCapacity(const char* message) const {
+			ECS_ASSERT(size <= capacity, message);
 		}
 
 		// it will set the size

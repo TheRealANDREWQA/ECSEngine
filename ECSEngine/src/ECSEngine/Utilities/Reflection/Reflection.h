@@ -19,6 +19,7 @@ namespace ECSEngine {
 #define ECS_REFLECTION_MAX_TYPE_COUNT (128)
 #define ECS_REFLECTION_MAX_ENUM_COUNT (32)
 #define ECS_REFLECTION_TYPE_CHANGE_SET_MAX_INDICES (8)
+#define ECS_REFLECTION_TYPE_FIELD_DEEP_MAX_INDEX_COUNT (7)
 
 #pragma region Reflection Container Type functions
 
@@ -53,6 +54,8 @@ namespace ECSEngine {
 			void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
 
 			bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+
+			void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) override;
 		};
 
 		struct SparseSetCustomTypeInterface : public Reflection::ReflectionCustomTypeInterface {
@@ -67,6 +70,8 @@ namespace ECSEngine {
 			void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
 
 			bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+
+			void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) override;
 		};
 
 		struct DataPointerCustomTypeInterface : public Reflection::ReflectionCustomTypeInterface {
@@ -81,6 +86,8 @@ namespace ECSEngine {
 			void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
 
 			bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+
+			void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) override;
 		};
 
 		// ---------------------------------------------------------------------------------------------------------------------
@@ -426,6 +433,9 @@ namespace ECSEngine {
 		// Returns the index inside the misc_info of the SoA description that contains this field, else -1
 		ECSENGINE_API size_t GetReflectionTypeSoaIndex(const ReflectionType* type, unsigned int field_index);
 
+		// The soa_index must be the index from the misc info inside the type
+		ECSENGINE_API Stream<void> GetReflectionTypeSoaStream(const ReflectionType* type, const void* data, size_t soa_index);
+
 		// Returns { nullptr, 0 } if the field is not an SoA entry, else the stream with the size the actual
 		// Size from the given data (for a parallel stream entry). You must also pass a bool out parameter
 		// Such that you can distinguish between a missing entry and an empty stream
@@ -577,10 +587,16 @@ namespace ECSEngine {
 		ECSENGINE_API void SetReflectionPointerSoASize(const ReflectionType* type, size_t soa_index, void* data, size_t value);
 
 		// Returns -1 if there is no capacity field
-		ECSENGINE_API size_t GetReflectionTypeSoaCapacityValue(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, const void* data);
+		ECSENGINE_API size_t GetReflectionFieldSoaCapacityValue(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, const void* data);
 
 		// It does nothing if there is no capacity field
-		ECSENGINE_API void SetReflectionTypeSoaCapacityValue(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, void* data, size_t value);
+		ECSENGINE_API void SetReflectionFieldSoaCapacityValue(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, void* data, size_t value);
+
+		// It will assign as many fields as possible
+		// It will offset into the data pointer according to the stored offsets.
+		// This is the function to use when you want to change a pointer since
+		// It is mandatory to know the size of the new allocation
+		ECSENGINE_API void SetReflectionFieldSoaStream(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, void* data, ResizableStream<void> stream_data);
 
 		// Returns the offset from the current field info to the size field
 		ECS_INLINE short GetReflectionFieldPointerSoASizeRelativeOffset(const ReflectionFieldInfo& info) {
@@ -703,7 +719,7 @@ namespace ECSEngine {
 		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
 		// for buffers it will always allocate even when the type is the same
 		// The reflection manager can be made nullptr if you are sure there are no nested types or custom types. 
-		// By default, it will copy matching padding bytes between versions, but you can specify
+		// By default, it will copy matching padding bytes between instances, but you can specify
 		// The last boolean in order to ignore that and set the padding bytes to zero for the new type
 		ECSENGINE_API void CopyReflectionTypeInstance(
 			const ReflectionManager* reflection_manager,
@@ -716,7 +732,7 @@ namespace ECSEngine {
 		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
 		// for buffers it will always allocate even when the type is the same
 		// The reflection manager can be made nullptr if you are sure there are no nested types or custom types. 
-		// By default, it will copy matching padding bytes between versions, but you can specify
+		// By default, it will copy matching padding bytes between instances, but you can specify
 		// The last boolean in order to ignore that and set the padding bytes to zero for the new type
 		ECSENGINE_API void CopyReflectionTypeInstance(
 			const ReflectionManager* reflection_manager,
@@ -778,6 +794,34 @@ namespace ECSEngine {
 			const CopyReflectionDataOptions* options
 		);
 
+		// If the last boolean parameter is set to true, it will
+		// Reset the buffers (as it is by default). By default, it will deallocate
+		// A single element. But you can specify a contiguous array as well
+		// In order to increase the performance for buffers
+		ECSENGINE_API void DeallocateReflectionInstanceBuffers(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			void* source,
+			AllocatorPolymorphic allocator,
+			size_t element_count = 1,
+			size_t element_byte_size = 0,
+			bool reset_buffers = true
+		);
+
+		// If the last boolean parameter is set to true, it will
+		// Reset the buffers (as it is by default). By default, it will deallocate
+		// A single element. But you can specify a contiguous array as well
+		// In order to increase the performance for buffers
+		ECSENGINE_API void DeallocateReflectionTypeInstanceBuffers(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
+			void* source,
+			AllocatorPolymorphic allocator,
+			size_t element_count = 1,
+			size_t element_byte_size = 0,
+			bool reset_buffers = true
+		);
+
 		// Returns true if the type references in any of its fields the subtype
 		ECSENGINE_API bool DependsUpon(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<char> subtype);
 
@@ -818,12 +862,55 @@ namespace ECSEngine {
 				return type->GetField(OffsetPointer(data, type_offset_from_original), field_index);
 			}
 
+			// Returns the offset from the base of the initial type
+			// To reach the current nested type
+			ECS_INLINE unsigned short NestedTypeOffset() const {
+				return type_offset_from_original - type->fields[field_index].info.pointer_offset;
+			}
+
 			const ReflectionType* type;
 			unsigned int field_index;
 			// This is the offset needed to index this value
 			// From the original given type
 			unsigned short type_offset_from_original;
 		};
+
+		struct SetReflectionTypeInstanceBufferOptions {
+			AllocatorPolymorphic allocator = { nullptr };
+			// If this value is set, it will perform a copy operation
+			// Only if the data has changed
+			bool checked_copy = false;
+			// If this flag is set, it will deallocate the existing data
+			bool deallocate_existing = true;
+		};
+
+		// The pointer of the type references the type from the reflection manager
+		// Make sure no changes are made to the reflection manager's types while you
+		// Are using this deep field!
+		ECSENGINE_API ReflectionTypeFieldDeep ConvertReflectionNestedFieldIndexToDeep(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
+			ReflectionNestedFieldIndex field_index
+		);
+
+		// This will correctly work for SoA pointers as well. The capacity of compare_data 
+		// is needed only for SoA pointers
+		ECSENGINE_API bool CompareReflectionTypeBufferData(
+			ReflectionTypeFieldDeep deep_field,
+			const void* target,
+			CapacityStream<void> compare_data
+		);
+
+		// It will set a buffer in the given instance of a type.
+		// It accepts nested buffers as well. The capacity is used
+		// For those cases where it is appropriate (when there is
+		// A capacity field present)
+		ECSENGINE_API void SetReflectionTypeInstanceBuffer(
+			ReflectionTypeFieldDeep deep_field,
+			void* target,
+			CapacityStream<void> buffer_data,
+			const SetReflectionTypeInstanceBufferOptions* options
+		);
 
 		// The addressing is like for normal structs, with dots in between
 		// Nested type fields. If it doesn't find the field, it will return nullptr
