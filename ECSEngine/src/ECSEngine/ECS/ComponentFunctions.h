@@ -52,6 +52,8 @@ namespace ECSEngine {
 	struct SharedComponentCompareEntry {
 		SharedComponentCompareFunction function = nullptr;
 		Stream<void> data = {};
+		// If this flag is set, the function will use the same data as the copy deallocate
+		bool use_copy_deallocate_data = false;
 	};
 	
 }

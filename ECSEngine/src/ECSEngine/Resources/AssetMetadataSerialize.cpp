@@ -44,6 +44,14 @@ namespace ECSEngine {
 		return first->name == second->name && first->CompareOptions(second);
 	}
 
+	void MaterialAssetCustomTypeInterface::Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) {
+		for (size_t index = 0; index < data->element_count; index++) {
+			void* current_source = OffsetPointer(data->source, index * data->element_byte_size);
+			MaterialAsset* asset = (MaterialAsset*)current_source;
+			asset->DeallocateMemory(data->allocator);
+		}
+	}
+
 	// --------------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(MaterialAsset) {

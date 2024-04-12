@@ -569,7 +569,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void SetCompareEntryTo(SharedComponentCompareEntry* entry) const {
-			*entry = { compare_function, compare_function_data };
+			*entry = { compare_function, compare_function_data, compare_use_copy_deallocate_data };
 		}
 
 		ModuleComponentBuildEntry build_entry = { nullptr, {} };
@@ -581,6 +581,7 @@ namespace ECSEngine {
 		// Only valid for shared components
 		SharedComponentCompareFunction compare_function = nullptr;
 		Stream<void> compare_function_data = {};
+		bool compare_use_copy_deallocate_data = false;
 
 		ModuleDebugDrawElement debug_draw;
 	};

@@ -180,6 +180,11 @@ struct EditorState {
 	// The main value is used for the project backup, the marker is used
 	// For the evaluation counter
 	ECSEngine::Timer lazy_evalution_timer;
+
+	// TODO: Implement an "event" like system where functions can be subscribed to certain
+	// Actions? This is helpful for less coupling between systems. At the moment, the first
+	// Use case would be the entity inspector that needs to be notified when the scene is changed
+	// Or when en entity is deleted
 };
 
 void EditorSetConsoleError(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_IMPORTANT);

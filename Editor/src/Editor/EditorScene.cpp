@@ -168,7 +168,7 @@ bool ExistScene(const EditorState* editor_state, Stream<wchar_t> path)
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 	GetProjectAssetsFolder(editor_state, absolute_path);
 	absolute_path.Add(ECS_OS_PATH_SEPARATOR);
-	absolute_path.AddStreamSafe(path);
+	absolute_path.AddStreamAssert(path);
 
 	return ExistsFileOrFolder(absolute_path);
 }

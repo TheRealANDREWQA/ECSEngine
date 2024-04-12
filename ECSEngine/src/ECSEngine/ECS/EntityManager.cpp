@@ -3065,6 +3065,9 @@ namespace ECSEngine {
 		if (compare_entry.data.size > 0) {
 			m_shared_components[component.value].compare_entry.data = compare_entry.data.Copy(SmallAllocator());
 		}
+		if (compare_entry.use_copy_deallocate_data) {
+			m_shared_components[component.value].compare_entry.data = m_shared_components[component.value].info.copy_deallocate_data;
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5278,7 +5281,7 @@ namespace ECSEngine {
 
 		ECS_CRASH_CONDITION(
 			size <= ECS_COMPONENT_MAX_BYTE_SIZE,
-			"EntityManager: Component {#} is too large",
+			"EntityManager: Shared component {#} is too large",
 			component_name
 		);
 
@@ -5322,6 +5325,9 @@ namespace ECSEngine {
 			m_shared_components[component.value].compare_entry = compare_entry;
 			if (compare_entry.data.size != 0) {
 				m_shared_components[component.value].compare_entry.data = compare_entry.data.Copy(SmallAllocator());
+			}
+			if (compare_entry.use_copy_deallocate_data) {
+				m_shared_components[component.value].compare_entry.data = m_shared_components[component.value].info.copy_deallocate_data;
 			}
 		}
 		else {

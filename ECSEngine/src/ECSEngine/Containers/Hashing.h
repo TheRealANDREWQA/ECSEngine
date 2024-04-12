@@ -66,9 +66,9 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE static unsigned int Next(unsigned int capacity) {
-			// If the value is really small make it to 16
-			if (capacity < 16) {
-				return 16;
+			// If the value is really small make it to 8
+			if (capacity < 8) {
+				return 8;
 			}
 			unsigned long value = 0;
 			unsigned int index = _BitScanReverse(&value, capacity) == 0 ? -1 : value;

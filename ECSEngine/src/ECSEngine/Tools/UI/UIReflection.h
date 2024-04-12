@@ -87,6 +87,12 @@ namespace ECSEngine {
 		};
 
 		struct UIReflectionType {
+			ECS_INLINE unsigned int FindField(Stream<char> field_name) const {
+				return fields.Find(field_name, [](const UIReflectionTypeField& field) {
+					return field.name;
+				});
+			}
+
 			Stream<char> name;
 			CapacityStream<UIReflectionTypeField> fields;
 			bool has_overriden_identifier;
@@ -621,19 +627,49 @@ namespace ECSEngine {
 			unsigned int GetTypeCount() const;
 			unsigned int GetInstanceCount() const;
 
-			void GetTypeMatchingFields(const UIReflectionType* type, UIReflectionElement index, CapacityStream<unsigned int>& indices) const;
-			void GetTypeMatchingFields(const UIReflectionType* type, UIReflectionStreamType stream_type, CapacityStream<unsigned int>& indices) const;
+			// If the recurse flag is false, only top most fields are explored
+			void GetTypeMatchingFields(
+				const UIReflectionType* type, 
+				UIReflectionElement index, 
+				CapacityStream<Reflection::ReflectionNestedFieldIndex>& indices, 
+				bool recurse = true
+			) const;
+			// If the recurse flag is false, only top most fields are explored
+			void GetTypeMatchingFields(
+				const UIReflectionType* type,
+				UIReflectionStreamType stream_type, 
+				CapacityStream<Reflection::ReflectionNestedFieldIndex>& indices, 
+				bool recurse = true
+			) const;
 
 			// Returns the current bound stream for the TextInput/DirectoryInput/FileInput
 			CapacityStream<void> GetInputStream(const UIReflectionInstance* instance, unsigned int field_index) const;
-			
-			unsigned int GetTypeFieldIndex(const UIReflectionType* type, Stream<char> field_name) const;
-			unsigned int GetTypeFieldIndex(Stream<char> type_name, Stream<char> field_name);
+			// Returns the current bound stream for the TextInput/DirectoryInput/FileInput
+			// This works only for embedded types i.e. not the fields of user defined types
+			// That come from buffers
+			CapacityStream<void> GetInputStreamNested(const UIReflectionInstance* instance, Reflection::ReflectionNestedFieldIndex field_index) const;
+
+			// The field_name must respect the struct accessing naming rules
+			// i.e. first.second.third if you want to look for the field third
+			// Inside a struct second that belongs to a field first from the initial type
+			// By default, it will not consider fields of user defined types that belong
+			// To a stream field, but you can change the behaviour
+			Reflection::ReflectionNestedFieldIndex GetTypeFieldIndexNested(const UIReflectionType* type, Stream<char> field_name, bool include_stream_types = false) const;
+
+			// It fills in the name of the nested field such that it respects the addressing rules
+			Stream<char> GetTypeFieldNestedName(const UIReflectionType* type, Reflection::ReflectionNestedFieldIndex field_index, CapacityStream<char>& name) const;
 
 			// User facing method
 			// Can optionally give a user defined allocator to be used for allocations inside the user defined fields.
 			// By default it will pass on the allocator of this UIReflectionDrawer
 			void* InitializeFieldOverride(Stream<char> tag, Stream<char> name, AllocatorPolymorphic allocator = { nullptr });
+
+			// It will set the buffer of the standalone inputs to { nullptr, 0 }
+			// This is useful if you want to deactivate the deallocation for the field
+			void InvalidateStandaloneInstanceInputs(Stream<char> instance_name, bool recurse = true);
+			void InvalidateStandaloneInstanceInputs(UIReflectionInstance* instance, bool recurse = true);
+			// This function will be applied for each instance
+			void InvalidateStandaloneInstanceInputs(bool recurse = true);
 
 			void OmitTypeField(Stream<char> type_name, Stream<char> field_name);
 			void OmitTypeField(UIReflectionType* type, Stream<char> field_name);

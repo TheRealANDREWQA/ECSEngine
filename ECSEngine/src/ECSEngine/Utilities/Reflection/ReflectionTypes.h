@@ -14,6 +14,10 @@ namespace ECSEngine {
 
 		struct ReflectionManager;
 
+		// IMPORTANT TODO: Should we create separate flags for Custom Reflection Type,
+		// Blittable Exception? This would speed up some functions but it would require
+		// A bit of work to make it happen
+
 		enum class ReflectionBasicFieldType : unsigned char {
 			Int8,
 			UInt8,
@@ -232,6 +236,10 @@ namespace ECSEngine {
 				name.Deallocate(allocator);
 			}
 
+			ECS_INLINE bool HasCapacity() const {
+				return capacity_field != UCHAR_MAX;
+			}
+
 			Stream<char> name;
 			unsigned char size_field;
 			unsigned char capacity_field;
@@ -377,6 +385,16 @@ namespace ECSEngine {
 			const void* second;
 		};
 
+		struct ReflectionCustomTypeDeallocateData {
+			const Reflection::ReflectionManager* reflection_manager;
+			Stream<char> definition;
+			void* source;
+			AllocatorPolymorphic allocator;
+			size_t element_count = 1;
+			size_t element_byte_size = 0;
+			bool reset_buffers = true;
+		};
+
 		struct ReflectionCustomTypeInterface {
 			virtual bool Match(Reflection::ReflectionCustomTypeMatchData* data) = 0;
 
@@ -391,26 +409,67 @@ namespace ECSEngine {
 			virtual void Copy(Reflection::ReflectionCustomTypeCopyData* data) = 0;
 
 			virtual bool Compare(Reflection::ReflectionCustomTypeCompareData* data) = 0;
+
+			virtual void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) = 0;
 		};
 
 		// This structure can be used to reference fields from a type, including nested fields
 		// Such that you can pinpoint the exact field
 		struct ReflectionNestedFieldIndex {
-			ECS_INLINE void Add(unsigned char field_index) {
+			ECS_INLINE ReflectionNestedFieldIndex() {}
+			ECS_INLINE ReflectionNestedFieldIndex(unsigned char field_index) {
+				Add(field_index);
+			}
+
+			ECS_INLINE ReflectionNestedFieldIndex& Add(unsigned char field_index) {
 				ECS_ASSERT(count < ECS_COUNTOF(indices));
 				indices[count++] = field_index;
+				return *this;
 			}
 
 			// Adds the values from other to this instance
-			ECS_INLINE void Append(ReflectionNestedFieldIndex other) {
+			ECS_INLINE ReflectionNestedFieldIndex& Append(ReflectionNestedFieldIndex other) {
 				ECS_ASSERT(count + other.count <= ECS_COUNTOF(indices));
 				memcpy(indices + count, other.indices, other.count * sizeof(indices[0]));
 				count += other.count;
+				return *this;
 			}
 
 			unsigned char count = 0;
 			unsigned char indices[7];
 		};
+
+		// The functor receives as parameters (Stream<char> field_name) which represents
+		// The field name of a current type and must return unsigned int with the field
+		// Index or -1 if the field was not found
+		template<typename Functor>
+		ReflectionNestedFieldIndex FindNestedFieldIndex(Stream<char> field_name, Functor&& functor) {
+			ReflectionNestedFieldIndex field_index;
+
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, subfields, 32);
+			// Split the field by dots
+			SplitString(field_name, ".", subfields);
+
+			while (subfields.size > 1) {
+				unsigned int current_field_index = functor(subfields[0]);
+				if (current_field_index == -1) {
+					// Make the count 0 to signal an error
+					field_index.count = 0;
+					return field_index;
+				}
+
+				field_index.Add(current_field_index);
+				subfields.Advance();
+			}
+
+			unsigned int index = functor(field_name);
+			if (index == -1) {
+				field_index.count = 0;
+				return field_index;
+			}
+			field_index.Add(index);
+			return field_index;
+		}
 
 		// Uses a jump table
 		ECSENGINE_API size_t GetReflectionBasicFieldTypeByteSize(ReflectionBasicFieldType basic_type);

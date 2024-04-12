@@ -1632,7 +1632,7 @@ namespace ECSEngine {
 					const ReflectionTypeMiscSoa* soa = &type->misc_info[index].soa;
 					if (soa->capacity_field != UCHAR_MAX) {
 						size_t soa_size = GetReflectionPointerSoASize(type, index, address);
-						SetReflectionTypeSoaCapacityValue(type, soa, address, soa_size);
+						SetReflectionFieldSoaCapacityValue(type, soa, address, soa_size);
 					}
 				}
 			}

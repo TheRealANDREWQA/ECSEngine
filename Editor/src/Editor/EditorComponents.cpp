@@ -1041,7 +1041,7 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 	bool is_component = IsReflectionTypeComponent(internal_type);
 	
 	Component component = { (short)internal_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-	ECS_STACK_VOID_STREAM(stack_memory, 256);
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 32);
 	ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(internal_manager, internal_type, &stack_memory);
 
 	// Lock the small memory manager in order to commit the type
@@ -2053,7 +2053,7 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 			const ModuleComponentFunctions* module_component_functions = GetModuleComponentFunctionsForSandboxFor(data->editor_state, data->sandbox_index, type->name);
 			ComponentFunctions component_functions;
 
-			ECS_STACK_VOID_STREAM(stack_memory, 256);
+			ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 32);
 			if (module_component_functions != nullptr && module_component_functions->copy_function != nullptr && module_component_functions->deallocate_function != nullptr) {
 				module_component_functions->SetComponentFunctionsTo(&component_functions);
 			}
@@ -2080,8 +2080,8 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 			ComponentFunctions component_functions;
 			SharedComponentCompareEntry compare_entry;
 			
-			ECS_STACK_VOID_STREAM(stack_memory, 256);
-			ECS_STACK_VOID_STREAM(compare_stack_memory, 256);
+			ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 32);
+			ECS_STACK_VOID_STREAM(compare_stack_memory, ECS_KB * 32);
 			if (module_component_functions != nullptr && module_component_functions->copy_function != nullptr && module_component_functions->deallocate_function != nullptr) {
 				module_component_functions->SetComponentFunctionsTo(&component_functions);
 			}

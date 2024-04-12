@@ -61,6 +61,10 @@ static void EditorCrashHandler(void* data, Stream<char> error_string) {
 		else {
 			// Just debug break at the moment in the other case
 			__debugbreak();
+
+			if (ECS_GLOBAL_ASSERT_WRITE_DEBUG_ALLOCATOR_CALLS) {
+				DebugAllocatorManagerWriteState();
+			}
 		}
 	}
 	else {

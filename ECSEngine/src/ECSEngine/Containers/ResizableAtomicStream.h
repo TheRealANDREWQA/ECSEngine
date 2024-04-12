@@ -31,12 +31,12 @@ namespace ECSEngine {
 		unsigned int Add(T element) {
 			// Don't handle crashes here - it is too pedantic
 			unsigned int write_position = stream.RequestInt(1);
-			while (write_position > stream.capacity) {
+			while (write_position >= stream.capacity) {
 				// Try to acquire the resize lock
 				bool locked_by_us = lock.TryLock();
 				if (locked_by_us) {
 					// Wait for all writes to finish
-					unsigned int capacity = stream.SpinWaitWrites();
+					unsigned int capacity = stream.SpinWaitCapacity();
 					unsigned int new_capacity = (float)capacity * 1.5f + 16;
 					void* allocation = AllocateEx(allocator, sizeof(T) * new_capacity, alignof(T));
 					stream.CopyTo(allocation);
@@ -67,7 +67,7 @@ namespace ECSEngine {
 				bool locked_by_us = lock.TryLock();
 				if (locked_by_us) {
 					// Wait for all writes to finish
-					unsigned int capacity = stream.SpinWaitWrites();
+					unsigned int capacity = stream.SpinWaitCapacity();
 					unsigned int new_capacity = (float)capacity * 1.5f + 16;
 					new_capacity = new_capacity < capacity + elements.size ? capacity + elements.size + 16 : new_capacity;
 					void* allocation = AllocateEx(allocator, sizeof(T) * new_capacity, alignof(T));
@@ -203,6 +203,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {
 			stream.Initialize(_allocator, _capacity);
+			allocator = _allocator;
 			lock.Clear();
 		}
 
