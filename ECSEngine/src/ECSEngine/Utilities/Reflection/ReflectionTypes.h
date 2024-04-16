@@ -370,7 +370,7 @@ namespace ECSEngine {
 		};
 
 		struct ReflectionCustomTypeCopyData {
-			const Reflection::ReflectionManager* reflection_manager;
+			const ReflectionManager* reflection_manager;
 			Stream<char> definition;
 			const void* source;
 			void* destination;
@@ -379,14 +379,14 @@ namespace ECSEngine {
 		};
 
 		struct ReflectionCustomTypeCompareData {
-			const Reflection::ReflectionManager* reflection_manager;
+			const ReflectionManager* reflection_manager;
 			Stream<char> definition;
 			const void* first;
 			const void* second;
 		};
 
 		struct ReflectionCustomTypeDeallocateData {
-			const Reflection::ReflectionManager* reflection_manager;
+			const ReflectionManager* reflection_manager;
 			Stream<char> definition;
 			void* source;
 			AllocatorPolymorphic allocator;
@@ -396,21 +396,21 @@ namespace ECSEngine {
 		};
 
 		struct ReflectionCustomTypeInterface {
-			virtual bool Match(Reflection::ReflectionCustomTypeMatchData* data) = 0;
+			virtual bool Match(ReflectionCustomTypeMatchData* data) = 0;
 
 			// Return 0 if you cannot determine right now the byte size (e.g. you are template<typename T> struct { T data; ... })
 			// The x component is the byte size, the y component is the alignment
-			virtual ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) = 0;
+			virtual ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) = 0;
 
-			virtual void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) = 0;
+			virtual void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) = 0;
 
-			virtual bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) = 0;
+			virtual bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) = 0;
 
-			virtual void Copy(Reflection::ReflectionCustomTypeCopyData* data) = 0;
+			virtual void Copy(ReflectionCustomTypeCopyData* data) = 0;
 
-			virtual bool Compare(Reflection::ReflectionCustomTypeCompareData* data) = 0;
+			virtual bool Compare(ReflectionCustomTypeCompareData* data) = 0;
 
-			virtual void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) = 0;
+			virtual void Deallocate(ReflectionCustomTypeDeallocateData* data) = 0;
 		};
 
 		// This structure can be used to reference fields from a type, including nested fields

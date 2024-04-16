@@ -1022,6 +1022,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 					component_type,
 					data->draw_data->matching_inputs[matching_index].capacity_inputs[index].field_name
 				);
+				ECS_ASSERT_FORMAT(deep_field.field_index != -1, "Critical error - invalid reflection state. Missing deep field for type {#}", type->name);
 				Reflection::SetReflectionTypeInstanceBuffer(
 					deep_field, 
 					component_data, 
@@ -1234,7 +1235,6 @@ static void DrawComponents(
 					unsigned int capacity_stream_index = data->FindMatchingInput(current_component_name);
 
 					ui_drawer->AssignInstanceResizableAllocator(instance, component_allocator, false);
-					Allocate(component_allocator, 1);
 					// For every text input, directory input or file input, allocate a separate buffer
 					// such that we don't use the component allocator to hold that data
 					const UIReflectionType* ui_type = ui_drawer->GetType(instance->type_name);

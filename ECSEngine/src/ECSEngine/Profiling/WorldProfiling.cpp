@@ -156,6 +156,7 @@ namespace ECSEngine {
 		world->memory->SetProfilingMode("World Global");
 		world->entity_manager->m_memory_manager->SetProfilingMode("Entity Manager");
 		world->entity_manager->m_small_memory_manager.SetProfilingMode("Entity Manager Small");
+		world->entity_manager->m_component_memory_manager.SetProfilingMode("Entity Manager Component Copyable");
 		world->entity_manager->m_temporary_allocator.SetProfilingMode("Entity Manager Temporary");
 		world->entity_manager->m_entity_pool->m_memory_manager->SetProfilingMode("Entity Pool");
 		world->entity_manager->m_hierarchy_allocator->SetProfilingMode("Entity Hierarchy");

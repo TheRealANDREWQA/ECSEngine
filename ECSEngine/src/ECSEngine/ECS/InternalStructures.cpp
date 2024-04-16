@@ -847,17 +847,17 @@ namespace ECSEngine {
 		copy_data.allocator = allocator;
 		copy_data.destination = destination;
 		copy_data.source = source;
-		copy_data.function_data = copy_deallocate_data.buffer;
+		copy_data.function_data = data;
 		copy_data.deallocate_previous = deallocate_previous;
 		copy_function(&copy_data);
 	}
 
-	void ComponentInfo::CallDeallocateFunction(void* data) const
+	void ComponentInfo::CallDeallocateFunction(void* _data) const
 	{
 		ComponentDeallocateFunctionData deallocate_data;
 		deallocate_data.allocator = allocator;
-		deallocate_data.data = data;
-		deallocate_data.function_data = copy_deallocate_data.buffer;
+		deallocate_data.data = _data;
+		deallocate_data.function_data = data;
 		deallocate_function(&deallocate_data);
 	}
 

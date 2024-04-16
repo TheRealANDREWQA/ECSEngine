@@ -320,20 +320,20 @@ public:
 							timer.SetNewStart();
 							// Here write the Game/Scene windows to be focused, i.e. be drawn every single frame,
 							// While having all the other windows be drawn at a lesser frequency
-							ECS_STACK_CAPACITY_STREAM(char, focused_window_chars, ECS_KB * 2);
-							ECS_STACK_CAPACITY_STREAM(Stream<char>, focused_windows, 64);
-							unsigned int sandbox_count = GetSandboxCount(&editor_state, true);
-							for (unsigned int index = 0; index < sandbox_count; index++) {
-								unsigned int current_start = focused_window_chars.size;
-								GetSceneUIWindowName(index, focused_window_chars);
-								focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
+							//ECS_STACK_CAPACITY_STREAM(char, focused_window_chars, ECS_KB * 2);
+							//ECS_STACK_CAPACITY_STREAM(Stream<char>, focused_windows, 64);
+							//unsigned int sandbox_count = GetSandboxCount(&editor_state, true);
+							//for (unsigned int index = 0; index < sandbox_count; index++) {
+							//	unsigned int current_start = focused_window_chars.size;
+							//	GetSceneUIWindowName(index, focused_window_chars);
+							//	focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
 
-								current_start = focused_window_chars.size;
-								GetGameUIWindowName(index, focused_window_chars);
-								focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
-							}
-							// We also need to add the visualize texture window
-							focused_windows.AddAssert(VISUALIZE_TEXTURE_WINDOW_NAME);
+							//	current_start = focused_window_chars.size;
+							//	GetGameUIWindowName(index, focused_window_chars);
+							//	focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
+							//}
+							//// We also need to add the visualize texture window
+							//focused_windows.AddAssert(VISUALIZE_TEXTURE_WINDOW_NAME);
 
 							// At the moment use the classical drawing since some windows have problems
 							// TODO: Almost all windows are ready to use retained drawing or need slight
@@ -359,6 +359,19 @@ public:
 							if (removed) {
 								__debugbreak();
 							}
+
+							/*static double average_duration = 0.0f;
+							static size_t count = 0;
+
+							float duration = timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
+							timer.SetNewStart();
+							average_duration = average_duration * (double)count + (double)duration;
+							average_duration /= (double)count + 1.0f;
+							count += 1;
+
+							if (count == 10000) {
+								__debugbreak();
+							}*/
 						}
 
 						// Run the tick after the UI. At the moment, the mouse/keyboard sandbox

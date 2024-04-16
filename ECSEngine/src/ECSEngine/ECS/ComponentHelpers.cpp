@@ -81,14 +81,22 @@ namespace ECSEngine {
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
+	
+	// We use the copyable in order to copy the structures easier
+	struct RuntimeComponentCopyDeallocateData : public Copyable {
+		ECS_INLINE RuntimeComponentCopyDeallocateData() : Copyable(sizeof(*this)) {}
 
-	// TODO: Should we drop the component buffer representation and just use ReflectionTypes directly?
-	// This would require us storing all the nested types as well.
+		void CopyBuffers(const void* other, AllocatorPolymorphic allocator) override {
+			const RuntimeComponentCopyDeallocateData* other_data = (const RuntimeComponentCopyDeallocateData*)other;
+			type = other_data->type.CopyCoalesced(allocator);
+			reflection_manager.CreateStaticFrom(&other_data->reflection_manager, allocator);
+		}
 
-	// The buffers are constructed such that they come from contiguous memory
-	// And can be copied with a single memcpy -  to satisfy the requirement
-	// Of the entity manager
-	struct RuntimeComponentCopyDeallocateData {
+		void DeallocateBuffers(AllocatorPolymorphic allocator) override {
+			type.DeallocateCoalesced(allocator);
+			reflection_manager.DeallocateStatic(allocator);
+		}
+
 		ReflectionType type;
 		ReflectionManager reflection_manager;
 	};
@@ -116,7 +124,7 @@ namespace ECSEngine {
 	// At the moment, the reflection manager cannot be shared. We can take
 	// Advantage of small hash table optimization
 
-	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const ReflectionManager* reflection_manager, const ReflectionType* type, CapacityStream<void>* stack_memory)
+	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const ReflectionManager* reflection_manager, const ReflectionType* type, AllocatorPolymorphic allocator)
 	{
 		ComponentFunctions component_functions;
 		if (!IsBlittableWithPointer(type)) {
@@ -124,41 +132,27 @@ namespace ECSEngine {
 			component_functions.deallocate_function = ReflectionTypeRuntimeComponentDeallocate;
 			component_functions.allocator_size = GetReflectionComponentAllocatorSize(type);
 
-			RuntimeComponentCopyDeallocateData* function_data = (RuntimeComponentCopyDeallocateData*)OffsetPointer(*stack_memory);
-			stack_memory->size += sizeof(*function_data);
-			stack_memory->AssertCapacity("Insufficient reflection type runtime component functions stack memory size");
+			RuntimeComponentCopyDeallocateData* copyable = (RuntimeComponentCopyDeallocateData*)Allocate(allocator, sizeof(RuntimeComponentCopyDeallocateData));
+			new (copyable) RuntimeComponentCopyDeallocateData;
 
-			LinearAllocator linear_allocator(OffsetPointer(*stack_memory), stack_memory->capacity - stack_memory->size);
-			function_data->type = type->CopyCoalesced(&linear_allocator);
-			memset(&function_data->reflection_manager, 0, sizeof(function_data->reflection_manager));
-		
+			copyable->type = type->CopyCoalesced(allocator);
+			memset(&copyable->reflection_manager, 0, sizeof(copyable->reflection_manager));
+
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 512);
 			GetReflectionTypeDependentTypes(reflection_manager, type, dependent_types);
 			if (dependent_types.size != 0) {
 				// Allocate the reflection manager hash table
-				function_data->reflection_manager.type_definitions.InitializeSmallFixed(&linear_allocator, dependent_types.size);
+				copyable->reflection_manager.type_definitions.InitializeSmallFixed(allocator, dependent_types.size);
 				for (unsigned int index = 0; index < dependent_types.size; index++) {
 					const ReflectionType* current_type = reflection_manager->GetType(dependent_types[index]);
-					function_data->reflection_manager.AddType(current_type, &linear_allocator);
+					copyable->reflection_manager.AddType(current_type, allocator);
 				}
 			}
-			
-			// The linear allocator will trigger an error if the space is not enough
-			size_t total_allocation_size = sizeof(*function_data) + linear_allocator.GetCurrentUsage();
-			component_functions.data = { function_data, total_allocation_size };
+
+			component_functions.data = copyable;
 		}
 
 		return component_functions;
-	}
-
-	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const ReflectionManager* reflection_manager, const ReflectionType* type, AllocatorPolymorphic allocator)
-	{
-		ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 32);
-		ComponentFunctions result = GetReflectionTypeRuntimeComponentFunctions(reflection_manager, type, &stack_memory);
-		if (result.data.size > 0) {
-			result.data = result.data.Copy(allocator);
-		}
-		return result;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
@@ -179,49 +173,19 @@ namespace ECSEngine {
 	}
 
 	SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type, 
-		CapacityStream<void>* stack_memory
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type, 
+		AllocatorPolymorphic allocator
 	)
 	{
 		SharedComponentCompareEntry entry;
 
 		if (!IsBlittableWithPointer(type)) {
 			entry.function = ReflectionTypeRuntimeCompare;
-			/*ECS_ASSERT(stack_memory->size + sizeof(ReflectionTypeRuntimeCompareData) <= stack_memory->capacity);
-			ReflectionTypeRuntimeCompareData* data = (ReflectionTypeRuntimeCompareData*)OffsetPointer(*stack_memory);
-			data->blittable_field_count = 0;
-			data->component_buffer_count = 0;
-
-			for (size_t index = 0; index < type->fields.size; index++) {
-				if (SearchIsBlittableWithPointer(reflection_manager, type->fields[index].definition)) {
-					data->blittable_fields[data->blittable_field_count++] = { type->fields[index].info.pointer_offset, type->fields[index].info.byte_size };
-				}
-			}
-
-			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, runtime_buffers, MAX_COMPONENT_BUFFERS);
-			GetReflectionTypeRuntimeBuffers(reflection_manager, type, runtime_buffers);
-			runtime_buffers.AssertCapacity();
-			data->component_buffer_count = runtime_buffers.size;
-			runtime_buffers.CopyTo(data->component_buffers);*/
-			entry.data = {nullptr, 0};
+			entry.data = nullptr;
 			entry.use_copy_deallocate_data = true;
 		}
 
-		return entry;
-	}
-
-	SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type, 
-		AllocatorPolymorphic allocator
-	)
-	{
-		ECS_STACK_VOID_STREAM(stack_memory, 256);
-		SharedComponentCompareEntry entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, type, &stack_memory);
-		if (entry.data.size > 0) {
-			entry.data = entry.data.Copy(allocator);
-		}
 		return entry;
 	}
 

@@ -93,6 +93,12 @@ namespace ECSEngine {
 			return &m_small_memory_manager;
 		}
 
+		// This is an internal allocator that is used for the component infos
+		// This is not the allocator of a certain component
+		ECS_INLINE AllocatorPolymorphic ComponentAllocator() {
+			return &m_component_memory_manager;
+		}
+
 		ECS_INLINE AllocatorPolymorphic MainAllocator() {
 			return m_memory_manager;
 		}
@@ -1959,6 +1965,9 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------
 
 		MemoryManager m_small_memory_manager;
+		// This is as an allocator for allocations
+		// That regard the components
+		MemoryManager m_component_memory_manager;
 		
 		// Alongside this vector, the vector components will be kept in sync to allow
 		// Fast iteration of the components

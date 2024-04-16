@@ -5308,6 +5308,7 @@ namespace ECSEngine {
 							ConvertIntToChars(temp_stream, Clamp((Integer)0, data->min, data->max));
 							input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
 							temp_stream.size = 0;
+							data->number_data.external_value_change = true;
 
 							if (runnable_data->callback_on_release && !action_data->mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
@@ -5316,13 +5317,14 @@ namespace ECSEngine {
 						}
 
 						// If the value changed, update the input stream
-						bool dummy;
-						Integer current_value = ConvertCharactersToIntImpl<Integer, char, false>(*input->text, dummy);
 						if (!input->is_currently_selected) {
+							bool dummy;
+							Integer current_value = ConvertCharactersToIntImpl<Integer, char, false>(*input->text, dummy);
 							if (current_value != *data->number) {
 								input->DeleteAllCharacters();
 								ConvertIntToChars(temp_stream, (int64_t)*data->number);
 								input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
+								data->number_data.external_value_change = true;
 
 								if (runnable_data->callback_on_release && !action_data->mouse->IsReleased(ECS_MOUSE_LEFT)) {
 									input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;

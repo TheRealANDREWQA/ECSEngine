@@ -530,17 +530,15 @@ namespace ECSEngine {
 		}
 
 		size_t CopySize() const {
-			return component_name.CopySize() + copy_deallocate_data.CopySize() + compare_function_data.CopySize()
+			return component_name.CopySize() + CopyableCopySize(copy_deallocate_data) + CopyableCopySize(compare_data)
 				+ StreamCoalescedDeepCopySize(build_entry.component_dependencies);
 		}
 
 		ModuleComponentFunctions Copy(AllocatorPolymorphic allocator) const {
 			ModuleComponentFunctions copy = *this;
 			copy.component_name = component_name.Copy(allocator);
-			Stream<void> new_copy_deallocate_data = copy_deallocate_data.size == 0 ? copy_deallocate_data : copy_deallocate_data.Copy(allocator);
-			Stream<void> new_compare_data = compare_function_data.size == 0 ? compare_function_data : compare_function_data.Copy(allocator);
-			copy.copy_deallocate_data = new_copy_deallocate_data;
-			copy.compare_function_data = new_compare_data;
+			copy.copy_deallocate_data = CopyableCopy(copy_deallocate_data, allocator);
+			copy.compare_data = CopyableCopy(compare_data, allocator);
 			if (build_entry.component_dependencies.size > 0) {
 				copy.build_entry.component_dependencies = build_entry.component_dependencies.Copy(allocator);
 			}
@@ -551,10 +549,8 @@ namespace ECSEngine {
 		ModuleComponentFunctions CopyTo(uintptr_t& ptr) const {
 			ModuleComponentFunctions copy = *this;
 			copy.component_name = component_name.CopyTo(ptr);
-			Stream<void> new_copy_deallocate_data = copy_deallocate_data.size == 0 ? copy_deallocate_data : copy_deallocate_data.CopyTo(ptr);
-			Stream<void> new_compare_data = compare_function_data.size == 0 ? compare_function_data : compare_function_data.CopyTo(ptr);
-			copy.copy_deallocate_data = new_copy_deallocate_data;
-			copy.compare_function_data = new_compare_data;
+			copy.copy_deallocate_data = CopyableCopyTo(copy_deallocate_data, ptr);
+			copy.compare_data = CopyableCopyTo(compare_data, ptr);
 			if (build_entry.component_dependencies.size > 0) {
 				copy.build_entry.component_dependencies = StreamCoalescedDeepCopy(build_entry.component_dependencies, ptr);
 			}
@@ -569,18 +565,18 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void SetCompareEntryTo(SharedComponentCompareEntry* entry) const {
-			*entry = { compare_function, compare_function_data, compare_use_copy_deallocate_data };
+			*entry = { compare_function, copy_deallocate_data , compare_use_copy_deallocate_data };
 		}
 
 		ModuleComponentBuildEntry build_entry = { nullptr, {} };
 		ComponentCopyFunction copy_function = nullptr;
 		ComponentDeallocateFunction deallocate_function = nullptr;
-		Stream<void> copy_deallocate_data = {};
+		Copyable* copy_deallocate_data = nullptr;
 		Stream<char> component_name = {};
 
 		// Only valid for shared components
 		SharedComponentCompareFunction compare_function = nullptr;
-		Stream<void> compare_function_data = {};
+		Copyable* compare_data = nullptr;
 		bool compare_use_copy_deallocate_data = false;
 
 		ModuleDebugDrawElement debug_draw;
