@@ -45,13 +45,12 @@ namespace ECSEngine {
 		size_t allocator_size;
 		ComponentCopyFunction copy_function;
 		ComponentDeallocateFunction deallocate_function;
-		// If data size is 0, it will reference the data, else it will copy the data
-		Stream<void> data;
+		Copyable* data;
 	};
 
 	struct SharedComponentCompareEntry {
 		SharedComponentCompareFunction function = nullptr;
-		Stream<void> data = {};
+		Copyable* data;
 		// If this flag is set, the function will use the same data as the copy deallocate
 		bool use_copy_deallocate_data = false;
 	};

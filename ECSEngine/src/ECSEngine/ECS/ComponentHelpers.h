@@ -24,16 +24,6 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool IsReflectionTypeComponentType(const Reflection::ReflectionType* type, ECS_COMPONENT_TYPE component_type);
 
-	// It needs the stack memory to write some data
-	// It builds default functions to handle Streams and DataPointers
-	// If the reflection_manager is specified, it will search deeply into the user defined types
-	// That are referenced by this type
-	ECSENGINE_API ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(
-		const Reflection::ReflectionManager* reflection_manager, 
-		const Reflection::ReflectionType* type, 
-		CapacityStream<void>* stack_memory
-	);
-
 	// It needs the allocator to write some data for the functions to use
 	// It builds default functions to handle Streams and DataPointers
 	// If the reflection_manager is specified, it will search deeply into the user defined types
@@ -42,15 +32,6 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const Reflection::ReflectionType* type, 
 		AllocatorPolymorphic allocator
-	);
-
-	// The data needs to be inherited from the copy deallocate function!!
-	// It builds default functions to handle reflectable types - in case it is
-	// Blittable, it won't return a function, it will let the runtime use the default memcmp
-	ECSENGINE_API SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type, 
-		CapacityStream<void>* stack_memory
 	);
 
 	// The data needs to be inherited from the copy deallocate function!!

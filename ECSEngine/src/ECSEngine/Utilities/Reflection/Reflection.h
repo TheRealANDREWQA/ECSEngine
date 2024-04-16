@@ -193,9 +193,17 @@ namespace ECSEngine {
 			// Returns the current index; it may change if removals take place
 			unsigned int CreateFolderHierarchy(Stream<wchar_t> root);
 
+			// Given an allocator, it will create a hash table large enough to hold those entries
+			// And copy all the types from the other
+			void CreateStaticFrom(const ReflectionManager* other, AllocatorPolymorphic allocator);
+
 			void CopyEnums(ReflectionManager* other) const;
 
 			void CopyTypes(ReflectionManager* other) const;
+
+			// Deallocates this static reflection manager. It uses a fast path
+			// Compared to ClearTypesFromAllocator()
+			void DeallocateStatic(AllocatorPolymorphic allocator);
 
 			void DeallocateThreadTaskData(ReflectionManagerParseStructuresThreadTaskData& data);
 
@@ -579,12 +587,14 @@ namespace ECSEngine {
 		ECSENGINE_API bool DeallocateReflectionPointerSoAAllocation(const ReflectionType* type, unsigned int field_index, void* data, AllocatorPolymorphic allocator);
 
 		// Writes the size into the size field of the given SoA pointer. This function takes care of the
-		// Byte size of the size field
+		// Byte size of the size field. The info must be for a PointerSoA!
 		ECSENGINE_API void SetReflectionFieldPointerSoASize(const ReflectionFieldInfo& info, void* data, size_t value);
 
 		// Writes the size into the size field of the given SoA pointer. This function takes care of the
 		// Byte size of the size field
 		ECSENGINE_API void SetReflectionPointerSoASize(const ReflectionType* type, size_t soa_index, void* data, size_t value);
+
+		ECSENGINE_API void SetReflectionPointerSoASize(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, void* data, size_t value);
 
 		// Returns -1 if there is no capacity field
 		ECSENGINE_API size_t GetReflectionFieldSoaCapacityValue(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, const void* data);
@@ -969,7 +979,7 @@ namespace ECSEngine {
 
 		// Makes the data for the given destination fields the same as the source
 		// Ones specified from the change set. The allocator is used for the stream
-		// Allocations
+		// Allocations. Only UPDATE changes need to be in the given stream!
 		ECSENGINE_API void UpdateReflectionTypeInstanceFromChanges(
 			const ReflectionManager* reflection_manager,
 			const ReflectionType* type,
@@ -981,7 +991,7 @@ namespace ECSEngine {
 
 		// Makes the data for the given destination fields the same as the source
 		// Ones specified from the change set. The allocator is used for the stream
-		// Allocations
+		// Allocations. Only UPDATE changes need to be in the given stream!
 		ECSENGINE_API void UpdateReflectionTypeInstancesFromChanges(
 			const ReflectionManager* reflection_manager,
 			const ReflectionType* type,

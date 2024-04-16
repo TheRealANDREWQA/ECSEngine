@@ -833,7 +833,8 @@ namespace ECSEngine {
 		) {
 			if (size > 0) {
 				unsigned int capacity = NextCapacity(((float)size * 100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR) + 1);
-				unsigned int extended_capacity = capacity + size - 1;
+				unsigned int padding_elements = ClampMax<unsigned int>(size - 1, ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
+				unsigned int extended_capacity = capacity + padding_elements;
 
 				size_t metadata_size = sizeof(*m_metadata) * (capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
 				size_t total_size = metadata_size;
@@ -850,6 +851,7 @@ namespace ECSEngine {
 					m_identifiers = (Identifier*)OffsetPointer(allocation, sizeof(T) * extended_capacity);
 				}
 				m_metadata = (unsigned char*)OffsetPointer(allocation, total_size - metadata_size);
+				memset(m_metadata, 0, sizeof(*m_metadata) * metadata_size);
 
 				m_count = 0;
 				m_capacity = capacity;

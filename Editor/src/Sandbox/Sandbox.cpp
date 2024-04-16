@@ -2029,7 +2029,7 @@ struct WaitCompilationRenderSandboxEventData {
 	uint2 new_texture_size;
 };
 
-EDITOR_EVENT(WaitCompilationRenderSandboxEvent) {
+static EDITOR_EVENT(WaitCompilationRenderSandboxEvent) {
 	WaitCompilationRenderSandboxEventData* data = (WaitCompilationRenderSandboxEventData*)_data;
 
 	// We assume that the Graphics module won't modify any entities
@@ -2057,10 +2057,29 @@ struct WaitResourceLoadingRenderSandboxEventData {
 	uint2 new_texture_size;
 };
 
-EDITOR_EVENT(WaitResourceLoadingRenderSandboxEvent) {
+static EDITOR_EVENT(WaitResourceLoadingRenderSandboxEvent) {
 	WaitResourceLoadingRenderSandboxEventData* data = (WaitResourceLoadingRenderSandboxEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		RenderSandbox(editor_state, data->sandbox_index, data->viewport, data->new_texture_size);
+		// Unlock the sandbox
+		UnlockSandbox(editor_state, data->sandbox_index);
+		return false;
+	}
+	return true;
+}
+
+struct WaitDebugDrawComponentsBuildEventData {
+	unsigned int sandbox_index;
+	EDITOR_SANDBOX_VIEWPORT viewport;
+	uint2 new_texture_size;
+};
+
+static EDITOR_EVENT(WaitDebugDrawComponentsBuildEvent) {
+	// This event will wait for the background build entries to finish
+	// Such that we don't access data that is being constructed
+	WaitDebugDrawComponentsBuildEventData* data = (WaitDebugDrawComponentsBuildEventData*)_data;
+	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, data->sandbox_index) == 0) {
 		RenderSandbox(editor_state, data->sandbox_index, data->viewport, data->new_texture_size);
 		// Unlock the sandbox
 		UnlockSandbox(editor_state, data->sandbox_index);
@@ -2137,6 +2156,31 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			// Lock the sandbox such that it cannot be destroyed while we try to render to it
 			LockSandbox(editor_state, sandbox_index);
 			EditorAddEvent(editor_state, WaitResourceLoadingRenderSandboxEvent, &event_data, sizeof(event_data));
+		}
+		return true;
+	}
+
+	// Check background build functions. Even tho some might not affect the rendering,
+	// It is easier as a mental model to always wait for it to finish
+	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, sandbox_index) > 0) {
+		if (!EditorHasEventTest(editor_state, WaitDebugDrawComponentsBuildEvent, [&](void* _data) {
+			WaitDebugDrawComponentsBuildEventData* data = (WaitDebugDrawComponentsBuildEventData*)_data;
+			if (data->sandbox_index == sandbox_index && data->viewport == viewport) {
+				if (new_texture_size.x != 0 && new_texture_size.y != 0) {
+					data->new_texture_size = new_texture_size;
+				}
+				return true;
+			}
+			return false;
+			})) {
+			WaitDebugDrawComponentsBuildEventData event_data;
+			event_data.sandbox_index = sandbox_index;
+			event_data.viewport = viewport;
+			event_data.new_texture_size = new_texture_size;
+
+			// Lock the sandbox such that it cannot be destroyed while we try to render to it
+			LockSandbox(editor_state, sandbox_index);
+			EditorAddEvent(editor_state, WaitDebugDrawComponentsBuildEvent, &event_data, sizeof(event_data));
 		}
 		return true;
 	}

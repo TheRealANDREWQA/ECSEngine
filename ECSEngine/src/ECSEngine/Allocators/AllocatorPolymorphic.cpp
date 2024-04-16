@@ -545,4 +545,30 @@ namespace ECSEngine {
 		return ALLOCATOR_NAMES[type];
 	}
 
+	Copyable* Copyable::Copy(AllocatorPolymorphic allocator) const {
+		Copyable* allocation = (Copyable*)AllocateEx(allocator, CopySize());
+		// This will correctly copy the virtual table pointer
+		memcpy(allocation, this, sizeof(Copyable));
+		allocation->CopyBuffers(this, allocator);
+		return allocation;
+	}
+
+	Copyable* Copyable::CopyTo(uintptr_t& ptr) const {
+		// We can simulate an allocator as linear one
+		// Because the user should have enough pointer
+		// Data allocated for us, we set the capacity to maximum 64 bit value
+		LinearAllocator allocator((void*)ptr, ULLONG_MAX);
+		Copyable* copy = Copy(&allocator);
+		// Advance the pointer
+		ptr += allocator.GetCurrentUsage();
+		return copy;
+	}
+
+	void CopyableDeallocate(Copyable* copyable, AllocatorPolymorphic allocator) {
+		if (copyable != nullptr) {
+			copyable->DeallocateBuffers(allocator);
+			DeallocateEx(allocator, copyable);
+		}
+	}
+
 }

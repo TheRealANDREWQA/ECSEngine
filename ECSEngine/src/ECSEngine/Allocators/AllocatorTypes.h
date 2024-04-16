@@ -65,10 +65,64 @@ namespace ECSEngine {
 			allocation_type = ECS_ALLOCATION_MULTI;
 		}
 
+		ECS_INLINE AllocatorPolymorphic AsMulti() const {
+			return { allocator, allocator_type, ECS_ALLOCATION_MULTI };
+		}
+
 		void* allocator;
 		ECS_ALLOCATOR_TYPE allocator_type;
 		ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE;
 	};
+
+	struct Copyable {
+		ECS_INLINE Copyable(size_t _byte_size) : byte_size(_byte_size) {}
+
+		virtual void CopyBuffers(const void* other, AllocatorPolymorphic allocator) {
+
+		}
+
+		virtual void DeallocateBuffers(AllocatorPolymorphic allocator) {
+
+		}
+
+		ECS_INLINE void* GetChildData() const {
+			return (void*)((uintptr_t)this + sizeof(Copyable));
+		}
+
+		ECS_INLINE size_t CopySize() const {
+			return sizeof(Copyable) + byte_size;
+		}
+
+		// Implemented in AllocatorPolymorphic.cpp
+		// Allocates a data block and then initializes any buffers that are needed
+		Copyable* Copy(AllocatorPolymorphic allocator) const;
+
+		// Implemented in AllocatorPolymoprhic.cpp
+		// It assumes that the pointer data has enough space for all the buffers!
+		Copyable* CopyTo(uintptr_t& ptr) const;
+
+		size_t byte_size;
+	};
+
+	// Takes care of the nullptr case
+	ECS_INLINE size_t CopyableCopySize(const Copyable* copyable) {
+		return copyable != nullptr ? copyable->CopySize() : 0;
+	}
+
+	// Takes care of the nullptr case
+	ECS_INLINE Copyable* CopyableCopy(const Copyable* copyable, AllocatorPolymorphic allocator) {
+		return copyable != nullptr ? copyable->Copy(allocator) : nullptr;
+	}
+
+	// Takes care of the nullptr case
+	ECS_INLINE Copyable* CopyableCopyTo(const Copyable* copyable, uintptr_t& ptr) {
+		return copyable != nullptr ? copyable->CopyTo(ptr) : nullptr;
+	}
+
+	// Takes care of the nullptr case and also deallocates the pointer, if it is allocated
+	// Besides the allocated buffers
+	// Implemented in AllocatorPolymorphic.cpp
+	ECSENGINE_API void CopyableDeallocate(Copyable* copyable, AllocatorPolymorphic allocator);
 
 	// Only linear/stack/multipool/arena allocators can be created
 	// Using this. This is intentional

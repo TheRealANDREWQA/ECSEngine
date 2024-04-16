@@ -4590,9 +4590,7 @@ namespace ECSEngine {
 						UIInstanceFieldStream* data = (UIInstanceFieldStream*)instance->data[index];
 						// if a buffer is allocated, deallocate it only for non aliasing streams
 						if (type->fields[index].stream_type == UIReflectionStreamType::Resizable && data->resizable != (ResizableStream<void>*)data->target_memory) {
-							if (data->resizable->buffer != nullptr) {
-								data->resizable->FreeBuffer();
-							}
+							data->resizable->FreeBuffer();
 						}
 
 						if (data->capacity != (CapacityStream<void>*)data->target_memory) {
@@ -5433,7 +5431,7 @@ namespace ECSEngine {
 						// All the structs contain this as the first member variable
 						// Safe to alias with UIInstanceFieldStream
 						UIInstanceFieldStream* data = (UIInstanceFieldStream*)instance->data[index];
-						// if a buffer is allocated, deallocate it only for non aliasing streams
+						// if a buffer is allocated, invalidate it only for non aliasing streams
 						if (type->fields[index].stream_type == UIReflectionStreamType::Resizable && data->resizable != (ResizableStream<void>*)data->target_memory) {
 							data->resizable->buffer = nullptr;
 							data->resizable->size = 0;

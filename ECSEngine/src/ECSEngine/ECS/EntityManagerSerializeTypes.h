@@ -160,6 +160,18 @@ namespace ECSEngine {
 	};
 
 	struct DeserializeEntityManagerComponentFixup {
+		ECS_INLINE size_t CopySize() const {
+			return CopyableCopySize(component_functions.data) + CopyableCopySize(compare_entry.data);
+		}
+
+		ECS_INLINE DeserializeEntityManagerComponentFixup CopyTo(uintptr_t& ptr) const {
+			DeserializeEntityManagerComponentFixup copy;
+			memcpy(&copy, this, sizeof(copy));
+			copy.component_functions.data = CopyableCopyTo(component_functions.data, ptr);
+			copy.compare_entry.data = CopyableCopyTo(compare_entry.data, ptr);
+			return copy;
+		}
+
 		ComponentFunctions component_functions = {};
 		unsigned short component_byte_size = 0;
 
@@ -171,7 +183,7 @@ namespace ECSEngine {
 	struct DeserializeEntityManagerComponentInfo {
 		// The copy functions are used for stream deep copy
 		ECS_INLINE size_t CopySize() const {
-			return name.CopySize() + component_fixup.component_functions.data.CopySize();
+			return name.CopySize() + component_fixup.CopySize();
 		}
 
 		DeserializeEntityManagerComponentInfo CopyTo(uintptr_t& ptr) {
@@ -179,8 +191,7 @@ namespace ECSEngine {
 
 			memcpy(&info, this, sizeof(info));
 			info.name.InitializeAndCopy(ptr, name);
-			info.component_fixup.component_functions.data.InitializeFromBuffer(ptr, component_fixup.component_functions.data.size);
-			info.component_fixup.component_functions.data.CopyOther(component_fixup.component_functions.data.buffer, component_fixup.component_functions.data.size);
+			info.component_fixup = component_fixup.CopyTo(ptr);
 
 			return info;
 		}
@@ -196,7 +207,7 @@ namespace ECSEngine {
 	struct DeserializeEntityManagerSharedComponentInfo {
 		// The copy functions are used for stream deep copy
 		ECS_INLINE size_t CopySize() const {
-			return name.CopySize() + component_fixup.component_functions.data.CopySize();
+			return name.CopySize() + component_fixup.CopySize();
 		}
 
 		DeserializeEntityManagerSharedComponentInfo CopyTo(uintptr_t& ptr) {
@@ -204,9 +215,7 @@ namespace ECSEngine {
 
 			memcpy(&info, this, sizeof(info));
 			info.name.InitializeAndCopy(ptr, name);
-			info.component_fixup.component_functions.data.InitializeFromBuffer(ptr, component_fixup.component_functions.data.size);
-			info.component_fixup.component_functions.data.CopyOther(component_fixup.component_functions.data.buffer, component_fixup.component_functions.data.size);
-
+			info.component_fixup = component_fixup.CopyTo(ptr);
 			return info;
 		}
 

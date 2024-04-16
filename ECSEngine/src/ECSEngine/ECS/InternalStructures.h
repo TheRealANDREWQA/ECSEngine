@@ -230,7 +230,7 @@ namespace ECSEngine {
 			functions.copy_function = copy_function;
 			functions.deallocate_function = deallocate_function;
 			functions.allocator_size = allocator != nullptr ? allocator->InitialArenaCapacity() : 0;
-			functions.data = copy_deallocate_data;
+			functions.data = data;
 			return functions;
 		}
 
@@ -238,25 +238,20 @@ namespace ECSEngine {
 		ECS_INLINE void SetComponentFunctions(const ComponentFunctions* component_functions, AllocatorPolymorphic allocator) {
 			copy_function = component_functions->copy_function;
 			deallocate_function = component_functions->deallocate_function;
-			if (component_functions->data.size == 0) {
-				copy_deallocate_data = component_functions->data;
-			}
-			else {
-				copy_deallocate_data = component_functions->data.Copy(allocator);
-			}
+			data = CopyableCopy(component_functions->data, allocator);
 		}
 
 		ECS_INLINE void ResetComponentFunctions() {
 			copy_function = nullptr;
 			deallocate_function = nullptr;
-			copy_deallocate_data = {};
+			data = nullptr;
 		}
 
 		MemoryArena* allocator;
 		unsigned int size;
 		ComponentCopyFunction copy_function;
 		ComponentDeallocateFunction deallocate_function;
-		Stream<void> copy_deallocate_data;
+		Copyable* data;
 		Stream<char> name;
 	};
 

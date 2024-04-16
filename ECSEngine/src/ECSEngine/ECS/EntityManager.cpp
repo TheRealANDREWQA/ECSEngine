@@ -14,9 +14,15 @@
 #define ENTITY_MANAGER_SMALL_ALLOCATOR_CHUNKS ECS_KB * 2
 #define ENTITY_MANAGER_SMALL_ALLOCATOR_BACKUP_SIZE ECS_KB * 128
 
+// This is used for Copyables
+#define ENTITY_MANAGER_COMPONENT_ALLOCATOR_SIZE ECS_KB * 256
+#define ENTITY_MANAGER_COMPONENT_ALLOCATOR_CHUNKS ECS_KB * 4
+#define ENTITY_MANAGER_COMPONENT_ALLOCATOR_BACKUP_SIZE ECS_KB * 512
+
 // A default of 4 is a good start
 #define COMPONENT_ALLOCATOR_ARENA_COUNT 4
-#define COMPONENT_ALLOCATOR_BLOCK_COUNT 2048
+#define COMPONENT_ALLOCATOR_BLOCK_COUNT (ECS_KB * 4)
+#define COMPONENT_ALLOCATOR_MIN_ALLOCATOR_SIZE (ECS_KB * 100 * COMPONENT_ALLOCATOR_ARENA_COUNT)
 
 namespace ECSEngine {
 
@@ -331,10 +337,12 @@ namespace ECSEngine {
 			create_info.arena_nested_type = ECS_ALLOCATOR_MULTIPOOL;
 			// Here, the user specifies the allocator size for the entire allocator. Using
 			// Allocator_size directly would result in overshoot and unexpected crashes
+			// Clamp the allocator size such that the creation won't fail because
+			// The allocator size is too small
 			create_info.arena_capacity = allocator_size / COMPONENT_ALLOCATOR_ARENA_COUNT;
-			// Clamp the arena capacity to at least ECS_KB * 128, otherwise it might not have enough space
+			// Clamp the arena capacity to at least a value large enough, otherwise it might not have enough space
 			// And it would all be the overhead of the block range
-			create_info.arena_capacity = max(create_info.arena_capacity, ECS_KB * 128);
+			create_info.arena_capacity = max(create_info.arena_capacity, COMPONENT_ALLOCATOR_BLOCK_COUNT * 96);
 			size_t total_allocation_size = sizeof(MemoryArena) + MemoryArena::MemoryOf(COMPONENT_ALLOCATOR_ARENA_COUNT, create_info);
 			void* allocation = entity_manager->m_memory_manager->Allocate(total_allocation_size);
 			info.allocator = (MemoryArena*)allocation;
@@ -914,7 +922,7 @@ namespace ECSEngine {
 		uint2 archetype_indices = manager->FindOrCreateArchetypeBase(data->unique_components, data->shared_components);
 		ArchetypeBase* base_archetype = manager->GetBase(archetype_indices.x, archetype_indices.y);
 
-		const size_t MAX_ENTITY_INFOS_ON_STACK = ECS_KB * 64;
+		const size_t MAX_ENTITY_INFOS_ON_STACK = ECS_KB * 32;
 
 		Entity* entities = nullptr;
 
@@ -924,7 +932,7 @@ namespace ECSEngine {
 				entities = (Entity*)ECS_STACK_ALLOC(sizeof(Entity) * data->count);
 			}
 			else {
-				entities = (Entity*)manager->m_small_memory_manager.Allocate(sizeof(Entity) * data->count);
+				entities = (Entity*)manager->m_memory_manager->Allocate(sizeof(Entity) * data->count);
 			}
 		}
 		else {
@@ -950,7 +958,7 @@ namespace ECSEngine {
 		additional_data->archetype_indices = archetype_indices;
 		if constexpr (type != CREATE_ENTITIES_TEMPLATE_GET_ENTITIES) {
 			if (data->count >= MAX_ENTITY_INFOS_ON_STACK) {
-				manager->m_small_memory_manager.Deallocate(entities);
+				manager->m_memory_manager->Deallocate(entities);
 			}
 		}
 	}
@@ -1921,6 +1929,14 @@ namespace ECSEngine {
 			descriptor.memory_manager->m_backup
 		);
 
+		// The component allocator is used only for Copyable allocations
+		m_component_memory_manager = MemoryManager(
+			ENTITY_MANAGER_COMPONENT_ALLOCATOR_SIZE,
+			ENTITY_MANAGER_COMPONENT_ALLOCATOR_CHUNKS,
+			ENTITY_MANAGER_COMPONENT_ALLOCATOR_BACKUP_SIZE,
+			descriptor.memory_manager->m_backup
+		);
+
 		// Use the small memory manager in order to acquire the buffer for the vector component signatures
 		m_archetype_vector_signatures = (VectorComponentSignature*)m_small_memory_manager.Allocate(sizeof(VectorComponentSignature) * 2 * ENTITY_MANAGER_DEFAULT_ARCHETYPE_COUNT);
 
@@ -2479,7 +2495,7 @@ namespace ECSEngine {
 				component_functions.allocator_size = allocator_size;
 				component_functions.copy_function = component_info->copy_function;
 				component_functions.deallocate_function = component_info->deallocate_function;
-				component_functions.data = component_info->copy_deallocate_data;
+				component_functions.data = component_info->data;
 				RegisterComponentCommit(
 					component,
 					component_info->size,
@@ -2509,7 +2525,7 @@ namespace ECSEngine {
 				component_functions.allocator_size = allocator_size;
 				component_functions.copy_function = component_info->copy_function;
 				component_functions.deallocate_function = component_info->deallocate_function;
-				component_functions.data = component_info->copy_deallocate_data;
+				component_functions.data = component_info->data;
 				RegisterSharedComponentCommit(
 					component,
 					component_info->size,
@@ -2688,17 +2704,11 @@ namespace ECSEngine {
 			new_info->allocator = old_info->allocator;
 			new_info->copy_function = old_info->copy_function;
 			new_info->deallocate_function = old_info->deallocate_function;
-			if (old_info->copy_deallocate_data.size > 0) {
-				new_info->copy_deallocate_data = old_info->copy_deallocate_data.Copy(entity_manager->SmallAllocator());
-			}
-			else {
-				new_info->copy_deallocate_data = old_info->copy_deallocate_data;
-			}
+			new_info->data = old_info->data;
 			old_info->allocator = nullptr;
 			old_info->copy_function = nullptr;
 			old_info->deallocate_function = nullptr;
-			old_info->copy_deallocate_data.Deallocate(entity_manager->SmallAllocator());
-			old_info->copy_deallocate_data = {};
+			old_info->data = nullptr;
 		}
 	}
 
@@ -2949,9 +2959,7 @@ namespace ECSEngine {
 	{
 		ECS_CRASH_CONDITION(ExistsComponent(component), "EntityManager: The unique component {#} is not registered when trying to change functions", component.value);
 
-		if (m_unique_components[component.value].copy_deallocate_data.size > 0) {
-			m_unique_components[component.value].copy_deallocate_data.Deallocate(SmallAllocator());
-		}
+		CopyableDeallocate(m_unique_components[component.value].data, ComponentAllocator());
 
 		MemoryArena* previous_allocator = m_unique_components[component.value].allocator;
 		if (functions->copy_function != nullptr && functions->deallocate_function != nullptr && functions->allocator_size != 0) {
@@ -2963,7 +2971,7 @@ namespace ECSEngine {
 					// The reason is, that in the Editor case, when a module is reloaded,
 					// Its previous functions are not available anymore and using them
 					// Causes crashes. So, we must use the new function when calling the copy
-					m_unique_components[component.value].SetComponentFunctions(functions, SmallAllocator());
+					m_unique_components[component.value].SetComponentFunctions(functions, ComponentAllocator());
 
 					size_t component_byte_size = m_unique_components[component.value].size;
 					// For each component, we must copy the data to the new location
@@ -2974,7 +2982,7 @@ namespace ECSEngine {
 						// The copy function will call all fields
 						m_unique_components[component.value].CallCopyFunction(temporary_storage, data, false);
 						memcpy(data, temporary_storage, component_byte_size);
-						});
+					});
 
 					// We can now deallocate the previous allocator
 					DeallocateAllocatorForComponent(this, previous_allocator);
@@ -2988,7 +2996,7 @@ namespace ECSEngine {
 				DeallocateAllocatorForComponent(this, previous_allocator);
 				m_unique_components[component.value].allocator = nullptr;
 			}
-			m_unique_components[component.value].SetComponentFunctions(functions, SmallAllocator());
+			m_unique_components[component.value].SetComponentFunctions(functions, ComponentAllocator());
 		}
 		else {
 			DeallocateAllocatorForComponent(this, previous_allocator);
@@ -3012,11 +3020,9 @@ namespace ECSEngine {
 	{
 		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: The shared component {#} is not registered when trying to change functions", component.value);
 
-		if (m_shared_components[component.value].info.copy_deallocate_data.size > 0) {
-			m_shared_components[component.value].info.copy_deallocate_data.Deallocate(SmallAllocator());
-		}
-		if (m_shared_components[component.value].compare_entry.data.size > 0) {
-			m_shared_components[component.value].compare_entry.data.Deallocate(SmallAllocator());
+		CopyableDeallocate(m_shared_components[component.value].info.data, ComponentAllocator());
+		if (!m_shared_components[component.value].compare_entry.use_copy_deallocate_data) {
+			CopyableDeallocate(m_shared_components[component.value].compare_entry.data, ComponentAllocator());
 		}
 
 		MemoryArena* previous_allocator = m_shared_components[component.value].info.allocator;
@@ -3029,7 +3035,7 @@ namespace ECSEngine {
 					// The reason is, that in the Editor case, when a module is reloaded,
 					// Its previous functions are not available anymore and using them
 					// Causes crashes. So, we must use the new function when calling the copy
-					m_shared_components[component.value].info.SetComponentFunctions(functions, SmallAllocator());
+					m_shared_components[component.value].info.SetComponentFunctions(functions, ComponentAllocator());
 
 					size_t component_byte_size = m_shared_components[component.value].info.size;
 					// For each component, we must copy the data to the new location
@@ -3055,18 +3061,18 @@ namespace ECSEngine {
 				DeallocateAllocatorForComponent(this, previous_allocator);
 				m_shared_components[component.value].info.allocator = nullptr;
 			}
-			m_shared_components[component.value].info.SetComponentFunctions(functions, SmallAllocator());
+			m_shared_components[component.value].info.SetComponentFunctions(functions, ComponentAllocator());
 		}
 		else {
 			DeallocateAllocatorForComponent(this, previous_allocator);
 			m_shared_components[component.value].info.ResetComponentFunctions();
 		}
 		m_shared_components[component.value].compare_entry = compare_entry;
-		if (compare_entry.data.size > 0) {
-			m_shared_components[component.value].compare_entry.data = compare_entry.data.Copy(SmallAllocator());
-		}
 		if (compare_entry.use_copy_deallocate_data) {
-			m_shared_components[component.value].compare_entry.data = m_shared_components[component.value].info.copy_deallocate_data;
+			m_shared_components[component.value].compare_entry.data = m_shared_components[component.value].info.data;
+		}
+		else {
+			m_shared_components[component.value].compare_entry.data = CopyableCopy(compare_entry.data, ComponentAllocator());
 		}
 	}
 
@@ -3093,6 +3099,7 @@ namespace ECSEngine {
 	{
 		m_memory_manager->Clear();
 		m_small_memory_manager.Clear();
+		m_component_memory_manager.Clear();
 		m_temporary_allocator.Clear();
 		m_entity_pool->Reset();
 		m_query_cache->Reset();
@@ -3145,8 +3152,8 @@ namespace ECSEngine {
 				else {
 					m_unique_components[index].allocator = nullptr;
 				}
-				// We also need to copy the copy_deallocate_data, if there is such data
-				m_unique_components[index].copy_deallocate_data = CopyNonZero(SmallAllocator(), entity_manager->m_unique_components[index].copy_deallocate_data);
+				// We also need to copy the data, if there is such data
+				m_unique_components[index].data = CopyableCopy(entity_manager->m_unique_components[index].data, ComponentAllocator());
 				// Copy the name using the small allocator
 				m_unique_components[index].name = entity_manager->m_unique_components[index].name.Copy(SmallAllocator());
 			}
@@ -3176,11 +3183,17 @@ namespace ECSEngine {
 				// The name also needs to be allocated
 				m_shared_components[index].info.name = entity_manager->m_shared_components[index].info.name.Copy(SmallAllocator());
 
-				// We also need to copy the copy_deallocate_data, if there is such data
-				m_shared_components[index].info.copy_deallocate_data = CopyNonZero(SmallAllocator(), entity_manager->m_shared_components[index].info.copy_deallocate_data);
+				// We also need to copy the data, if there is such data
+				m_shared_components[index].info.data = CopyableCopy(entity_manager->m_shared_components[index].info.data, ComponentAllocator()); 
 
 				// The same for the compare data
-				m_shared_components[index].compare_entry.data = CopyNonZero(SmallAllocator(), entity_manager->m_shared_components[index].compare_entry.data);
+				m_shared_components[index].compare_entry = entity_manager->m_shared_components[index].compare_entry;
+				if (!m_shared_components[index].compare_entry.use_copy_deallocate_data) {
+					m_shared_components[index].compare_entry.data = CopyableCopy(entity_manager->m_shared_components[index].compare_entry.data, ComponentAllocator());
+				}
+				else {
+					m_shared_components[index].compare_entry.data = m_shared_components[index].info.data;
+				}
 
 				unsigned int other_capacity = entity_manager->m_shared_components[index].instances.stream.capacity;
 				m_shared_components[index].instances.Initialize(SmallAllocator(), other_capacity);
@@ -4789,7 +4802,7 @@ namespace ECSEngine {
 		// Check to see if we have a compare function. If we do, use that
 		if (m_shared_components[component.value].compare_entry.function != nullptr) {
 			SharedComponentCompareFunctionData compare_data;
-			compare_data.function_data = m_shared_components[component.value].compare_entry.data.buffer;
+			compare_data.function_data = m_shared_components[component.value].compare_entry.data;
 			compare_data.first = data;
 			m_shared_components[component.value].instances.stream.ForEachIndex<true>([&](unsigned int index) {
 				const void* current_data = m_shared_components[component.value].instances[index];
@@ -5221,9 +5234,9 @@ namespace ECSEngine {
 
 		if (m_unique_components.size <= component.value) {
 			size_t old_capacity = m_unique_components.size;
-			void* allocation = m_small_memory_manager.Allocate(sizeof(ComponentInfo) * (component.value + 1));
+			void* allocation = Allocate(SmallAllocator(), sizeof(ComponentInfo) * (component.value + 1));
 			m_unique_components.CopyTo(allocation);
-			m_small_memory_manager.Deallocate(m_unique_components.buffer);
+			Deallocate(SmallAllocator(), m_unique_components.buffer);
 
 			m_unique_components.InitializeFromBuffer(allocation, component.value + 1);
 			for (size_t index = old_capacity; index < m_unique_components.size; index++) {
@@ -5256,7 +5269,7 @@ namespace ECSEngine {
 				"EntityManager: Creating unique component {#} has invalid user defined functions. Make sure they are properly set", component_name);
 
 			CreateAllocatorForComponent(this, m_unique_components[component.value], functions->allocator_size);
-			m_unique_components[component.value].SetComponentFunctions(functions, SmallAllocator());
+			m_unique_components[component.value].SetComponentFunctions(functions, ComponentAllocator());
 		}
 		else {
 			m_unique_components[component.value].ResetComponentFunctions();
@@ -5315,7 +5328,7 @@ namespace ECSEngine {
 			ECS_CRASH_CONDITION((is_something_set && !is_something_not_set) || (!is_something_set && is_something_not_set),
 				"EntityManager: Trying to create shared component {#} with user defined functions but invalid. Check the allocator size or the assigned functions", component_name);
 			CreateAllocatorForComponent(this, m_shared_components[component.value].info, component_functions->allocator_size);
-			m_shared_components[component.value].info.SetComponentFunctions(component_functions, SmallAllocator());
+			m_shared_components[component.value].info.SetComponentFunctions(component_functions, ComponentAllocator());
 		}
 		else {
 			m_shared_components[component.value].info.ResetComponentFunctions();
@@ -5323,11 +5336,11 @@ namespace ECSEngine {
 
 		if (compare_entry.function != nullptr) {
 			m_shared_components[component.value].compare_entry = compare_entry;
-			if (compare_entry.data.size != 0) {
-				m_shared_components[component.value].compare_entry.data = compare_entry.data.Copy(SmallAllocator());
-			}
 			if (compare_entry.use_copy_deallocate_data) {
-				m_shared_components[component.value].compare_entry.data = m_shared_components[component.value].info.copy_deallocate_data;
+				m_shared_components[component.value].compare_entry.data = m_shared_components[component.value].info.data;
+			}
+			else {
+				m_shared_components[component.value].compare_entry.data = CopyableCopy(compare_entry.data, ComponentAllocator());
 			}
 		}
 		else {
@@ -5361,7 +5374,7 @@ namespace ECSEngine {
 		component_info->size = size;
 		component_info->copy_function = nullptr;
 		component_info->deallocate_function = nullptr;
-		component_info->copy_deallocate_data = {};
+		component_info->data = {};
 		component_info->name = StringCopy(SmallAllocator(), component_name);
 
 		CreateAllocatorForComponent(this, *component_info, allocator_size);
@@ -5768,7 +5781,7 @@ namespace ECSEngine {
 				const void* current_instance_data = GetSharedData(component, current_instance);
 				if (m_shared_components[component.value].compare_entry.function != nullptr) {
 					SharedComponentCompareFunctionData compare_data;
-					compare_data.function_data = m_shared_components[component.value].compare_entry.data.buffer;
+					compare_data.function_data = m_shared_components[component.value].compare_entry.data;
 					compare_data.first = instance_data;
 					compare_data.second = current_instance_data;
 					are_equal = m_shared_components[component.value].compare_entry.function(&compare_data);
@@ -5861,9 +5874,7 @@ namespace ECSEngine {
 		ECS_CRASH_CONDITION(ExistsComponent(component), "EntityManager: Trying to destroy component {#} when it doesn't exist.",
 			component.value);
 
-		if (m_unique_components[component.value].copy_deallocate_data.size > 0) {
-			m_unique_components[component.value].copy_deallocate_data.Deallocate(SmallAllocator());
-		}
+		CopyableDeallocate(m_unique_components[component.value].data, ComponentAllocator());
 
 		// If it has an allocator, deallocate it
 		DeallocateAllocatorForComponent(this, m_unique_components[component.value].allocator);
@@ -5891,12 +5902,10 @@ namespace ECSEngine {
 			Deallocate(SmallAllocator(), data);
 		});
 
-		if (m_shared_components[component.value].compare_entry.data.size > 0) {
-			m_shared_components[component.value].compare_entry.data.Deallocate(SmallAllocator());
+		if (!m_shared_components[component.value].compare_entry.use_copy_deallocate_data) {
+			CopyableDeallocate(m_shared_components[component.value].compare_entry.data, ComponentAllocator());
 		}
-		if (m_shared_components[component.value].info.copy_deallocate_data.size > 0) {
-			m_shared_components[component.value].info.copy_deallocate_data.Deallocate(SmallAllocator());
-		}
+		CopyableDeallocate(m_shared_components[component.value].info.data, ComponentAllocator());
 
 		m_shared_components[component.value].instances.FreeBuffer();
 		m_shared_components[component.value].info.size = -1;

@@ -18,12 +18,10 @@ void CopyConvexCollider(ConvexCollider* destination, const ConvexCollider* sourc
 {
 	destination->hull_size = source->hull_size;
 	destination->hull.Copy(&source->hull, allocator, deallocate_existing_destination);
-	destination->mesh.Copy(&source->mesh, allocator, deallocate_existing_destination);
 }
 
 void DeallocateConvexCollider(ConvexCollider* collider, AllocatorPolymorphic allocator) {
 	// Coalesced Allocation
 	collider->hull.Deallocate(allocator);
-	collider->mesh.Deallocate(allocator);
 	collider->hull_size = 0;
 }

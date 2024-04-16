@@ -1207,15 +1207,18 @@ namespace ECSEngine {
 						data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
 					}
 
+					bool is_different = *data->number != number;
 					*data->number = number;
+
+					if (is_different) {
+						if (data->number_data.user_action != nullptr) {
+							action_data->data = data->number_data.GetUserData();
+							data->number_data.user_action(action_data);
+						}
+					}
 				}
 				else {
 					data->number_data.external_value_change = false;
-				}
-
-				if (data->number_data.user_action != nullptr) {
-					action_data->data = data->number_data.GetUserData();
-					data->number_data.user_action(action_data);
 				}
 			}
 		}

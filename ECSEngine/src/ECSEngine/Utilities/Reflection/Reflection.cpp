@@ -481,14 +481,14 @@ namespace ECSEngine {
 			Stream<char> type_name = { opened_bracket.buffer + 1, PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 };
 			ReflectionBasicFieldType basic_field_type;
 			ReflectionStreamFieldType stream_field_type;
-			ConvertStringToPrimitiveType(type_name, basic_field_type, stream_field_type);
-			if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type == ReflectionBasicFieldType::UserDefined
-				|| stream_field_type == ReflectionStreamFieldType::Unknown) {
-				// One more exception here, void, treat it as a special case
-				if (type_name != "void") {
-					data->dependent_types.AddAssert(type_name);
-				}
-			}
+ConvertStringToPrimitiveType(type_name, basic_field_type, stream_field_type);
+if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type == ReflectionBasicFieldType::UserDefined
+	|| stream_field_type == ReflectionStreamFieldType::Unknown) {
+	// One more exception here, void, treat it as a special case
+	if (type_name != "void") {
+		data->dependent_types.AddAssert(type_name);
+	}
+}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -579,24 +579,39 @@ namespace ECSEngine {
 			size_t element_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
 			bool blittable = Reflection::SearchIsBlittable(data->reflection_manager, data->definition);
 
-			const Stream<char>* source = (const Stream<char>*)data->source;
-			Stream<char>* destination = (Stream<char>*)data->destination;
-			size_t allocation_size = element_size * source->size;
+			ECS_INT_TYPE size_type = ECS_INT_TYPE_COUNT;
+			if (data->definition.StartsWith("Stream<")) {
+				size_type = ECS_INT64;
+			}
+			else if (data->definition.StartsWith("CapacityStream<") || data->definition.StartsWith("ResizableStream<")) {
+				size_type = ECS_INT32;
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+
+			const void* source = *(const void**)data->source;
+			void** destination = (void**)data->destination;
+			size_t source_size = GetIntValueUnsigned(OffsetPointer(data->source, sizeof(void*)), size_type);
+
+			size_t allocation_size = element_size * source_size;
 			void* allocation = nullptr;
 			if (allocation_size > 0) {
 				allocation = Allocate(data->allocator, allocation_size);
-				memcpy(allocation, source->buffer, allocation_size);
+				memcpy(allocation, source, allocation_size);
 			}
 
 			if (data->deallocate_existing_data) {
-				destination->Deallocate(data->allocator);
+				if (*destination != nullptr) {
+					ECSEngine::Deallocate(data->allocator, *destination);
+				}
 			}
 
-			destination->buffer = (char*)allocation;
-			destination->size = source->size;
+			*destination = allocation;
+			SetIntValueUnsigned(OffsetPointer(data->destination, sizeof(void*)), size_type, source_size);
 
 			if (!blittable) {
-				size_t count = source->size;
+				size_t count = source_size;
 				ReflectionType nested_type;
 				CopyReflectionDataOptions copy_options;
 				copy_options.allocator = data->allocator;
@@ -608,7 +623,7 @@ namespace ECSEngine {
 						CopyReflectionTypeInstance(
 							data->reflection_manager,
 							&nested_type,
-							OffsetPointer(source->buffer, index * element_size),
+							OffsetPointer(source, index * element_size),
 							OffsetPointer(allocation, element_size * index),
 							&copy_options
 						);
@@ -620,7 +635,7 @@ namespace ECSEngine {
 					data->definition = template_type;
 
 					for (size_t index = 0; index < count; index++) {
-						data->source = OffsetPointer(source->buffer, index * element_size);
+						data->source = OffsetPointer(source, index * element_size);
 						data->destination = OffsetPointer(allocation, element_size * index);
 						ECS_REFLECTION_CUSTOM_TYPES[custom_type_index]->Copy(data);
 					}
@@ -655,59 +670,38 @@ namespace ECSEngine {
 		}
 
 		void StreamCustomTypeInterface::Deallocate(ReflectionCustomTypeDeallocateData* data) {
-			// The functor must return Stream<void> from (void*)
-			// The stream_byte_size is used to be reset, in case the flag
-			// Is set. For resizable streams, the size needs to be that without
-			// The allocator such as to not change the allocator
-			auto iterate = [&](auto functor, size_t stream_byte_size) {
-				// Deallocate firstly the elements, if they require deallocation
-				Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
+			// Deallocate firstly the elements, if they require deallocation
+			Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
+			// This is a special case. The given source and the given element count
+			// Reflect the actual Stream<void> data for this instance.
+			// So, we must not iterate
+			Stream<void> stream_data = { data->source, data->element_count };
 
-				for (size_t index = 0; index < data->element_count; index++) {
-					void* current_pointer = OffsetPointer(data->source, index * data->element_byte_size);
-					Stream<void> stream_data = functor(current_pointer);				
+			if (stream_data.size > 0) {
+				DeallocateReflectionInstanceBuffers(
+					data->reflection_manager,
+					template_type,
+					stream_data.buffer,
+					data->allocator,
+					stream_data.size,
+					data->element_byte_size,
+					data->reset_buffers
+				);
+			}
 
-					if (stream_data.size > 0) {
-						DeallocateReflectionInstanceBuffers(
-							data->reflection_manager,
-							template_type,
-							stream_data.buffer,
-							data->allocator,
-							stream_data.size,
-							SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type),
-							data->reset_buffers
-						);
-					}
+			// The main function will call the deallocate for this type
+			// Of streams as well. We cannot memset the correct pointer,
+			// So leave it to that function to perform the deallocation
+			// And the reset
 
-					if (stream_data.buffer != nullptr) {
-						DeallocateEx(data->allocator, stream_data.buffer);
-					}
-					if (data->reset_buffers) {
-						memset(current_pointer, 0, stream_byte_size);
-					}
-				}
-			};
-				
-			if (data->definition.StartsWith("Stream<")) {
-				iterate([](void* current_pointer) {
-					return *(Stream<void>*)current_pointer;
-				}, sizeof(Stream<void>));
-			}
-			else if (data->definition.StartsWith("CapacityStream<")) {
-				iterate([](void* current_pointer) {
-					CapacityStream<void>* capacity = (CapacityStream<void>*)current_pointer;
-					return Stream<void>{ capacity->buffer, capacity->size };
-				}, sizeof(CapacityStream<void>));
-			}
-			else if (data->definition.StartsWith("ResizableStream<")) {
-				// Special case here, the stream size must be limited to capacity stream
-				iterate([](void* current_pointer) {
-					return ((ResizableStream<void>*)current_pointer)->ToStream();
-				}, sizeof(CapacityStream<void>));
-			}
-			else {
-				ECS_ASSERT(false);
-			}
+			//if (stream_data.buffer != nullptr) {
+			//	DeallocateEx(data->allocator, stream_data.buffer);
+			//}
+			//// For the resizable stream, we need to memset only the first 3 fields
+			//static_assert(sizeof(Stream<void>) == sizeof(CapacityStream<void>));
+			//if (data->reset_buffers) {
+			//	memset(data->source, 0, sizeof(Stream<void>));
+			//}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1729,6 +1723,16 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void ReflectionManager::CreateStaticFrom(const ReflectionManager* other, AllocatorPolymorphic allocator)
+		{
+			type_definitions.InitializeSmallFixed(allocator, other->type_definitions.GetCount());
+			other->type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
+				AddType(&type, allocator);
+			});
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::CopyEnums(ReflectionManager* other) const
 		{
 			HashTableCopy<true, false>(enum_definitions, other->enum_definitions, other->Allocator(), [](const ReflectionEnum* enum_, ResourceIdentifier identifier) {
@@ -1743,6 +1747,16 @@ namespace ECSEngine {
 			HashTableCopy<true, false>(type_definitions, other->type_definitions, other->Allocator(), [](const ReflectionType* type, ResourceIdentifier identifier) {
 				return type->name;
 			});
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::DeallocateStatic(AllocatorPolymorphic allocator) {
+			type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
+				type.DeallocateCoalesced(allocator);
+			});
+			type_definitions.Deallocate(allocator);
+			type_definitions.Reset();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -4547,10 +4561,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		Stream<void> GetReflectionTypeSoaStream(const ReflectionType* type, const void* data, size_t soa_index) {
 			unsigned int field_index = type->misc_info[soa_index].soa.parallel_streams[0];
 			void** buffer = (void**)OffsetPointer(data, type->fields[field_index].info.pointer_offset);
-			size_t buffer_size = 0;
-			const void* buffer_size_ptr = OffsetPointer(data, type->fields[field_index].info.pointer_offset);
-			double4 double_buffer_size = ConvertToDouble4FromBasic(type->fields[field_index].info.basic_type, buffer_size_ptr);
-			buffer_size = double_buffer_size.x;
+			size_t buffer_size = GetReflectionPointerSoASize(type, soa_index, data);
 			return { *buffer, buffer_size };
 		}
 
@@ -4601,7 +4612,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		void SetReflectionFieldSoaStream(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, void* data, ResizableStream<void> stream_data) {
 			// TODO: If the soa is enhanced to have the allocator offset, we need to assign that as well
 			ECS_ASSERT(soa->size_field != UCHAR_MAX);
-			SetReflectionFieldPointerSoASize(type->fields[soa->size_field].info, data, stream_data.size);
+			SetReflectionPointerSoASize(type, soa, data, stream_data.size);
 			// Use the maximum between the 2 in case the capacity is not set
 			unsigned int stream_capacity = max(stream_data.capacity, stream_data.size);
 			SetReflectionFieldSoaCapacityValue(type, soa, data, stream_capacity);
@@ -5296,6 +5307,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void SetReflectionFieldPointerSoASize(const ReflectionFieldInfo& info, void* data, size_t value) {
+			ECS_ASSERT(info.stream_type == ReflectionStreamFieldType::PointerSoA, 
+				"Invalid stream field type for SetReflectionFieldPointerSoASize. It must be a PointerSoA!");
 			void* size_ptr = OffsetPointer(data, info.soa_size_pointer_offset);
 			ConvertFromSizetToBasic(info.soa_size_basic_type, value, size_ptr);
 		}
@@ -5303,7 +5316,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void SetReflectionPointerSoASize(const ReflectionType* type, size_t soa_index, void* data, size_t value) {
-			const ReflectionFieldInfo* info = &type->fields[type->misc_info[soa_index].soa.size_field].info;
+			SetReflectionPointerSoASize(type, &type->misc_info[soa_index].soa, data, value);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void SetReflectionPointerSoASize(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, void* data, size_t value) {
+			const ReflectionFieldInfo* info = &type->fields[soa->size_field].info;
 			void* size_ptr = OffsetPointer(data, info->pointer_offset);
 			ConvertFromSizetToBasic(info->basic_type, value, size_ptr);
 		}
@@ -5358,6 +5377,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				void** pointer = (void**)stream_field;
 				*pointer = stream_data.buffer;
 				SetReflectionFieldPointerSoASize(info, OffsetPointer(stream_field, -(int64_t)info.pointer_offset), stream_data.size);
+				// TODO: If the info is enhanced with the soa capacity offset, we need to set that here as well
 			}
 			if constexpr (basic_array) {
 				if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
@@ -6529,7 +6549,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 						previous_data.buffer = allocation;
 						previous_data.capacity = previous_data.size;
-						SetReflectionFieldResizableStreamVoid(field->info, destination, previous_data);
+						SetReflectionFieldResizableStreamVoid(field->info, destination, previous_data, false);
 					}
 					else {
 						memcpy(
@@ -6612,8 +6632,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										ReflectionCustomTypeCopyData copy_data;
 										copy_data.allocator = options->allocator;
 										copy_data.definition = field->definition;
-										copy_data.destination = OffsetPointer(destination, field->info.pointer_offset);
-										copy_data.source = OffsetPointer(source, field->info.pointer_offset);
+										copy_data.destination = destination;
+										copy_data.source = source;
 										copy_data.reflection_manager = reflection_manager;
 										copy_data.deallocate_existing_data = options->deallocate_existing_buffers;
 
@@ -6696,6 +6716,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			size_t element_byte_size,
 			bool reset_buffers
 		) {
+			// We can early exit in case this is a blittable type
+			if (IsBlittable(type)) {
+				return;
+			}
+
 			// Iterate over the fields in order to reduce the branching required
 			for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
 				if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
@@ -6755,24 +6780,30 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				// The SoA needs to be handled separately
 				if (IsStream(type->fields[field_index].info.stream_type)) {
-					ResizableStream<void> buffer_data = GetReflectionFieldResizableStreamVoid(type->fields[field_index].info, source);
-					if (buffer_data.allocator.allocator == nullptr) {
-						buffer_data.allocator = allocator;
-					}
-					buffer_data.FreeBuffer();
-					if (reset_buffers) {
-						SetReflectionFieldResizableStreamVoid(type->fields[field_index].info, source, buffer_data);
+					for (size_t index = 0; index < element_count; index++) {
+						void* current_source = OffsetPointer(source, index * element_byte_size);
+						ResizableStream<void> buffer_data = GetReflectionFieldResizableStreamVoid(type->fields[field_index].info, current_source);
+						if (type->fields[field_index].info.stream_type != ReflectionStreamFieldType::ResizableStream) {
+							buffer_data.allocator = allocator;
+						}
+						buffer_data.FreeBuffer();
+						if (reset_buffers) {
+							SetReflectionFieldResizableStreamVoid(type->fields[field_index].info, current_source, buffer_data);
+						}
 					}
 				}
 			}
 
-			for (size_t index = 0; index < type->misc_info.size; index++) {
-				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_SOA) {
-					Stream<void> buffer_data = GetReflectionTypeSoaStream(type, source, index);
-					buffer_data.Deallocate(allocator);
-					if (reset_buffers) {
-						ResizableStream<void> empty_data;
-						SetReflectionFieldSoaStream(type, &type->misc_info[index].soa, source, empty_data);
+			for (size_t misc_index = 0; misc_index < type->misc_info.size; misc_index++) {
+				if (type->misc_info[misc_index].type == ECS_REFLECTION_TYPE_MISC_INFO_SOA) {
+					for (size_t index = 0; index < element_count; index++) {
+						void* current_source = OffsetPointer(source, index * element_byte_size);
+						Stream<void> buffer_data = GetReflectionTypeSoaStream(type, current_source, misc_index);
+						buffer_data.Deallocate(allocator);
+						if (reset_buffers) {
+							ResizableStream<void> empty_data;
+							SetReflectionFieldSoaStream(type, &type->misc_info[misc_index].soa, current_source, empty_data);
+						}
 					}
 				}
 			}
@@ -6992,6 +7023,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// Normal find
 				deep_field.type = reflection_type;
 				deep_field.field_index = reflection_type->FindField(field);
+				if (deep_field.field_index != -1) {
+					deep_field.type_offset_from_original = reflection_type->fields[deep_field.field_index].info.pointer_offset;
+				}
 				return deep_field;
 			}
 			else {
