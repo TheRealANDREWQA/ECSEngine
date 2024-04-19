@@ -84,6 +84,7 @@ namespace ECSEngine {
 		Reflection::ReflectionBasicFieldType basic_type;
 		Reflection::ReflectionStreamFieldType stream_type;
 		size_t byte_size;
+		size_t alignment;
 	};
 
 	// Returns the byte size of the element in between the template parenthesis.
@@ -134,6 +135,7 @@ namespace ECSEngine {
 		// and no buffer will be allocated
 		size_t elements_to_allocate;
 		size_t element_byte_size;
+		size_t element_alignment;
 
 		union {
 			void** allocated_buffer;
@@ -563,7 +565,7 @@ namespace ECSEngine {
 							size_t allocate_size = byte_size + element_byte_size;
 							if (allocator.allocator != nullptr) {
 								if (byte_size > 0) {
-									void* allocation = Allocate(allocator, allocate_size);
+									void* allocation = Allocate(allocator, allocate_size, info.stream_alignment);
 									Read<true>(&stream, allocation, byte_size);
 
 									void* null_terminator = OffsetPointer(allocation, byte_size);
@@ -579,7 +581,7 @@ namespace ECSEngine {
 								}
 								else {
 									if (byte_size > 0) {
-										void* allocation = AllocateEx(allocator, allocate_size);
+										void* allocation = AllocateEx(allocator, allocate_size, info.stream_alignment);
 										Read<true>(&stream, allocation, byte_size);
 
 										void* null_terminator = OffsetPointer(allocation, byte_size);
@@ -613,7 +615,7 @@ namespace ECSEngine {
 						if (allocator.allocator != nullptr) {
 							void** pointer = (void**)data;
 							if (byte_size > 0) {
-								void* allocation = Allocate(allocator, byte_size);
+								void* allocation = Allocate(allocator, byte_size, info.stream_alignment);
 								Read<true>(&stream, allocation, byte_size);
 
 								*pointer = allocation;
@@ -626,7 +628,7 @@ namespace ECSEngine {
 							else {
 								void** pointer = (void**)data;
 								if (byte_size > 0) {
-									void* allocation = AllocateEx(allocator, byte_size);
+									void* allocation = AllocateEx(allocator, byte_size, info.stream_alignment);
 									Read<true>(&stream, allocation, byte_size);
 
 									*pointer = allocation;
@@ -655,7 +657,7 @@ namespace ECSEngine {
 					if (allocator.allocator != nullptr) {
 						void** pointer = (void**)data;
 						if (byte_size > 0) {
-							void* allocation = Allocate(allocator, byte_size);
+							void* allocation = Allocate(allocator, byte_size, info.stream_alignment);
 							Read<true>(&stream, allocation, byte_size);
 
 							*pointer = allocation;
@@ -669,7 +671,7 @@ namespace ECSEngine {
 						else {
 							void** pointer = (void**)data;
 							if (byte_size > 0) {
-								void* allocation = AllocateEx(allocator, byte_size);
+								void* allocation = AllocateEx(allocator, byte_size, info.stream_alignment);
 								Read<true>(&stream, allocation, byte_size);
 
 								*pointer = allocation;

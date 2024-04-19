@@ -131,6 +131,7 @@ namespace ECSEngine {
 				result.fields[index].info.basic_type = Reflection::ReflectionBasicFieldType::UInt32;
 				result.fields[index].info.basic_type_count = 1;
 				result.fields[index].info.stream_byte_size = 0;
+				result.fields[index].info.stream_alignment = 0;
 				result.fields[index].info.default_uint = -1;
 				result.fields[index].info.has_default_value = true;
 				result.fields[index].info.stream_type = Reflection::ReflectionStreamFieldType::Basic;

@@ -161,6 +161,7 @@ namespace ECSEngine {
 					flags.user_defined_as_blittable = blittable_user_defined;
 					total_size += Write<write_data>(&stream, &field->info.stream_type, sizeof(field->info.stream_type));
 					total_size += Write<write_data>(&stream, &field->info.stream_byte_size, sizeof(field->info.stream_byte_size));
+					total_size += Write<write_data>(&stream, &field->info.stream_alignment, sizeof(field->info.stream_alignment));
 					total_size += Write<write_data>(&stream, &field->info.basic_type, sizeof(field->info.basic_type));
 					total_size += Write<write_data>(&stream, &field->info.basic_type_count, sizeof(field->info.basic_type_count));
 					total_size += Write<write_data>(&stream, &field->info.byte_size, sizeof(field->info.byte_size));
@@ -702,8 +703,8 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------
 
 	void SerializeFieldTable(
-		const Reflection::ReflectionManager* reflection_manager, 
-		const Reflection::ReflectionType* type, 
+		const ReflectionManager* reflection_manager, 
+		const ReflectionType* type, 
 		uintptr_t& stream, 
 		Stream<SerializeOmitField> omit_fields,
 		bool write_tags
@@ -715,8 +716,8 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------
 
 	size_t SerializeFieldTableSize(
-		const Reflection::ReflectionManager* reflection_manager, 
-		const Reflection::ReflectionType* type, 
+		const ReflectionManager* reflection_manager, 
+		const ReflectionType* type, 
 		Stream<SerializeOmitField> omit_fields,
 		bool write_tags
 	)
@@ -743,7 +744,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------
 
 	// Forward declaration
-	void IgnoreType(
+	static void IgnoreType(
 		uintptr_t& stream,
 		DeserializeFieldTable deserialize_table,
 		unsigned int type_index,
@@ -1113,7 +1114,7 @@ namespace ECSEngine {
 
 							size_t allocation_size = per_element_size * element_count;
 							AllocatorPolymorphic allocator_to_use = field_allocator.allocator != nullptr ? field_allocator : options->backup_allocator;
-							allocation = allocation_size == 0 ? nullptr : Allocate(allocator_to_use, allocation_size);
+							allocation = allocation_size == 0 ? nullptr : Allocate(allocator_to_use, allocation_size, type->fields[soa->parallel_streams[0]].info.stream_alignment);
 
 							// Now write the corresponding pointers in the address
 							for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
@@ -1278,7 +1279,7 @@ namespace ECSEngine {
 									// Check resizable stream allocator
 									if (type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream && use_resizable_stream_allocator) {
 										ResizableStream<void>* resizable_stream = (ResizableStream<void>*)field_data;
-										allocation = Allocate(resizable_stream->allocator, allocation_size);
+										allocation = Allocate(resizable_stream->allocator, allocation_size, type_field_info.stream_alignment);
 
 										resizable_stream->buffer = allocation;
 										resizable_stream->capacity = element_count;
@@ -1286,7 +1287,7 @@ namespace ECSEngine {
 									}
 									else {
 										AllocatorPolymorphic allocator_to_use = field_allocator.allocator != nullptr ? field_allocator : options->backup_allocator;
-										allocation = Allocate(allocator_to_use, allocation_size);
+										allocation = Allocate(allocator_to_use, allocation_size, type_field_info.stream_alignment);
 
 										if (type_field_info.stream_type == ReflectionStreamFieldType::Stream) {
 											Stream<void>* normal_stream = (Stream<void>*)field_data;
@@ -1462,14 +1463,14 @@ namespace ECSEngine {
 												if (has_options) {
 													if (options->use_resizable_stream_allocator && type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
 														ResizableStream<void>* field_stream = (ResizableStream<void>*)field_data;
-														allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size);
+														allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
 													else if (options->field_allocator.allocator != nullptr) {
-														allocation = Allocate(options->field_allocator, element_count * type_field_info.stream_byte_size);
+														allocation = Allocate(options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
 												}
 												else {
-													allocation = Allocate(options->backup_allocator, element_count * type_field_info.stream_byte_size);
+													allocation = Allocate(options->backup_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 												}
 
 												for (size_t index = 0; index < element_count; index++) {
@@ -1484,10 +1485,10 @@ namespace ECSEngine {
 												else {
 													if (options->use_resizable_stream_allocator && type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
 														ResizableStream<void>* field_stream = (ResizableStream<void>*)field_data;
-														allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size);
+														allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
 													else if (options->field_allocator.allocator != nullptr) {
-														allocation = Allocate(options->field_allocator, element_count * type_field_info.stream_byte_size);
+														allocation = Allocate(options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
 													else {
 														// Just reference the data
@@ -1712,7 +1713,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		if (IsStream(field_info.stream_type) && field_info.stream_byte_size == 0) {
+		if (IsStream(field_info.stream_type) && (field_info.stream_byte_size == 0 || field_info.stream_alignment == 0)) {
 			return false;
 		}
 
@@ -1788,6 +1789,7 @@ namespace ECSEngine {
 
 			Read<true>(&data, &type->fields[index].stream_type, sizeof(type->fields[index].stream_type));
 			Read<true>(&data, &type->fields[index].stream_byte_size, sizeof(type->fields[index].stream_byte_size));
+			Read<true>(&data, &type->fields[index].stream_alignment, sizeof(type->fields[index].stream_alignment));
 			Read<true>(&data, &type->fields[index].basic_type, sizeof(type->fields[index].basic_type));
 			Read<true>(&data, &type->fields[index].basic_type_count, sizeof(type->fields[index].basic_type_count));
 			Read<true>(&data, &type->fields[index].byte_size, sizeof(type->fields[index].byte_size));
@@ -2250,6 +2252,10 @@ namespace ECSEngine {
 				return false;
 			}
 
+			if (field->info.stream_alignment != deserialized_field->stream_alignment) {
+				return false;
+			}
+
 			if (field->info.byte_size != deserialized_field->byte_size) {
 				return false;
 			}
@@ -2362,6 +2368,7 @@ namespace ECSEngine {
 				type.fields[field_index].info.byte_size = types[index].fields[field_index].byte_size;
 				type.fields[field_index].info.stream_type = types[index].fields[field_index].stream_type;
 				type.fields[field_index].info.stream_byte_size = types[index].fields[field_index].stream_byte_size;
+				type.fields[field_index].info.stream_alignment = types[index].fields[field_index].stream_alignment;
 				type.fields[field_index].info.pointer_offset = types[index].fields[field_index].pointer_offset;
 				type.fields[field_index].tag = types[index].fields[field_index].tag;
 

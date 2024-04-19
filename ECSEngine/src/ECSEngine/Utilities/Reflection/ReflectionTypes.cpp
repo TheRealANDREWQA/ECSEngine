@@ -248,22 +248,22 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type) {
+		size_t GetReflectionFieldTypeAlignment(ReflectionBasicFieldType field_type) {
 			return ECS_BASIC_FIELD_TYPE_ALIGNMENT[(unsigned int)field_type];
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type) {
+		size_t GetReflectionFieldTypeAlignment(ReflectionStreamFieldType stream_type) {
 			return ECS_STREAM_FIELD_TYPE_ALIGNMENT[(unsigned int)stream_type];
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t GetFieldTypeAlignment(const ReflectionFieldInfo* info)
+		size_t GetReflectionFieldTypeAlignment(const ReflectionFieldInfo* info)
 		{
 			return info->stream_type == ReflectionStreamFieldType::Basic || info->stream_type == ReflectionStreamFieldType::BasicTypeArray ?
-				GetFieldTypeAlignment(info->basic_type) : GetFieldTypeAlignment(info->stream_type);
+				GetReflectionFieldTypeAlignment(info->basic_type) : GetReflectionFieldTypeAlignment(info->stream_type);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

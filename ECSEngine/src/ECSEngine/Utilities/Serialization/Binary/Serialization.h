@@ -34,13 +34,14 @@ namespace ECSEngine {
 		Stream<char> name;
 		Stream<char> definition;
 		Stream<char> tag;
+		DeserializeFieldInfoFlags flags;
 		Reflection::ReflectionBasicFieldType basic_type;
 		Reflection::ReflectionStreamFieldType stream_type;
+		unsigned char stream_alignment;
 		unsigned short stream_byte_size;
 		unsigned short byte_size;
 		unsigned short basic_type_count;
 		unsigned int custom_serializer_index;
-		DeserializeFieldInfoFlags flags;
 		unsigned short pointer_offset;
 	};
 

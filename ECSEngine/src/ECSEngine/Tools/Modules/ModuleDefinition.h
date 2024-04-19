@@ -558,14 +558,15 @@ namespace ECSEngine {
 			return copy;
 		}
 
-		void SetComponentFunctionsTo(ComponentFunctions* functions) const {
+		void SetComponentFunctionsTo(ComponentFunctions* functions, size_t allocator_size) const {
 			functions->data = copy_deallocate_data;
 			functions->copy_function = copy_function;
 			functions->deallocate_function = deallocate_function;
+			functions->allocator_size = allocator_size;
 		}
 
 		ECS_INLINE void SetCompareEntryTo(SharedComponentCompareEntry* entry) const {
-			*entry = { compare_function, copy_deallocate_data , compare_use_copy_deallocate_data };
+			*entry = { compare_function, compare_data, compare_use_copy_deallocate_data };
 		}
 
 		ModuleComponentBuildEntry build_entry = { nullptr, {} };

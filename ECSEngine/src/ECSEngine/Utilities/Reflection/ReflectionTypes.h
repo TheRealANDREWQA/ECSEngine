@@ -140,8 +140,10 @@ namespace ECSEngine {
 			bool has_default_value;
 			ReflectionStreamFieldType stream_type;
 			ReflectionBasicFieldType basic_type;
-			unsigned short basic_type_count;
+			// The stream fields are valid only for stream_types different from basic
+			unsigned char stream_alignment;
 			unsigned short stream_byte_size;
+			unsigned short basic_type_count;
 			unsigned short byte_size;
 			unsigned short pointer_offset;
 			
@@ -475,12 +477,12 @@ namespace ECSEngine {
 		ECSENGINE_API size_t GetReflectionBasicFieldTypeByteSize(ReflectionBasicFieldType basic_type);
 
 		// Works only for non user-defined_types
-		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type);
+		ECSENGINE_API size_t GetReflectionFieldTypeAlignment(ReflectionBasicFieldType field_type);
 
-		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type);
+		ECSENGINE_API size_t GetReflectionFieldTypeAlignment(ReflectionStreamFieldType stream_type);
 
 		// Works only for non user-defined types
-		ECSENGINE_API size_t GetFieldTypeAlignment(const ReflectionFieldInfo* info);
+		ECSENGINE_API size_t GetReflectionFieldTypeAlignment(const ReflectionFieldInfo* info);
 
 		// Returns a stable value
 		ECSENGINE_API Stream<char> GetBasicFieldDefinition(ReflectionBasicFieldType basic_type);
@@ -509,6 +511,10 @@ namespace ECSEngine {
 		ECSENGINE_API ReflectionBasicFieldType ReduceMultiComponentReflectionType(ReflectionBasicFieldType type);
 
 		ECSENGINE_API ECS_INT_TYPE BasicTypeToIntType(ReflectionBasicFieldType type);
+
+		ECS_INLINE size_t GetReflectionTypeSoaAllocationAlignment(const ReflectionType* type, const ReflectionTypeMiscSoa* soa) {
+			return type->fields[soa->parallel_streams[0]].info.stream_alignment;
+		}
 
 		ECS_INLINE bool IsBlittable(const ReflectionType* type) {
 			return type->is_blittable;

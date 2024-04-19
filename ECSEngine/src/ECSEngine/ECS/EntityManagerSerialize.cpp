@@ -2771,7 +2771,10 @@ namespace ECSEngine {
 					info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(reflection_manager, target_type, allocator);
 				}
 				else {
-					module_component_functions[existing_fixup_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
+					module_component_functions[existing_fixup_index].SetComponentFunctionsTo(
+						&info.component_fixup.component_functions,
+						info.component_fixup.component_functions.allocator_size
+					);
 				}
 				if (module_component_functions[existing_fixup_index].compare_function == nullptr) {
 					info.component_fixup.compare_entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, target_type, allocator);
@@ -2826,7 +2829,10 @@ namespace ECSEngine {
 						info.component_fixup.component_functions = GetReflectionTypeRuntimeComponentFunctions(reflection_manager, type, allocator);
 					}
 					else {
-						module_component_functions[existing_component_functions_index].SetComponentFunctionsTo(&info.component_fixup.component_functions);
+						module_component_functions[existing_component_functions_index].SetComponentFunctionsTo(
+							&info.component_fixup.component_functions,
+							info.component_fixup.component_functions.allocator_size
+						);
 					}
 					if (module_component_functions[existing_component_functions_index].compare_function == nullptr) {
 						info.component_fixup.compare_entry = GetReflectionTypeRuntimeCompareEntry(reflection_manager, type, allocator);

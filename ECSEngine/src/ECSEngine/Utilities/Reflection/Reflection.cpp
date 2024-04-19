@@ -1430,7 +1430,7 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 				align_type(type, skipped_fields);
 				CalculateReflectionTypeCachedParameters(this, type);
 				// Determine the stream byte size as well
-				SetReflectionTypeFieldsStreamByteSize(this, type);
+				SetReflectionTypeFieldsStreamByteSizeAlignment(this, type);
 				finalize_type_byte_size(type, skipped_fields);
 			};
 
@@ -1506,13 +1506,13 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 										if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
 											ReflectionStreamFieldType stream_type = field->info.stream_type;
 
-											size_t byte_size = GetReflectionTypeGivenFieldTag(field).x;
-											if (byte_size == -1) {
+											ulong2 byte_size_alignment = GetReflectionTypeGivenFieldTag(field);
+											if (byte_size_alignment.x == -1 || byte_size_alignment.y == -1) {
 												// Check blittable exception
-												byte_size = FindBlittableException(field->definition).x;
+												byte_size_alignment = FindBlittableException(field->definition);
 											}
 
-											if (byte_size == -1) {
+											if (byte_size_alignment.x == -1 || byte_size_alignment.y == -1) {
 												// If its a stream type, we need to update its stream_byte_size
 												// Else we need to update the whole current structure
 												if (stream_type != ReflectionStreamFieldType::Basic) {
@@ -1525,7 +1525,7 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 
 														// If it is a void stream, don't do anything
 														if (memcmp(template_start.buffer + 1, STRING(void), sizeof(STRING(void)) - 1) == 0) {													
-															byte_size = sizeof(Stream<void>);
+															byte_size_alignment = { sizeof(Stream<void>), alignof(Stream<void>) };
 														}
 														else {
 															// This will get determined when using the container custom Stream
@@ -1535,7 +1535,7 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 														}
 													}
 													else if (IsPointerWithSoA(stream_type)) {
-														byte_size = sizeof(void*);
+														byte_size_alignment = { sizeof(void*), alignof(void*) };
 													}
 												}
 
@@ -1546,24 +1546,24 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 													ReflectionCustomTypeByteSizeData byte_size_data;
 													byte_size_data.definition = field_definition;
 													byte_size_data.reflection_manager = this;
-													ulong2 byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[container_type_index]->GetByteSize(&byte_size_data);
-													byte_size = byte_size_alignment.x;
+													ulong2 custom_byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[container_type_index]->GetByteSize(&byte_size_data);
+													byte_size_alignment = custom_byte_size_alignment;
 												}
 												else {
 													// Try to get the user defined type
 													ReflectionType nested_type;
 													if (TryGetType(field_definition, nested_type)) {
-														byte_size = GetReflectionTypeByteSize(&nested_type);
+														byte_size_alignment = { GetReflectionTypeByteSize(&nested_type), GetReflectionTypeAlignment(&nested_type) };
 													}
 												}
 											}
 
 											// It means it is not a container nor a user defined which could be referenced
-											if (byte_size == -1) {
+											if (byte_size_alignment.x == -1 || byte_size_alignment.y == -1) {
 												// There is a use case where there was nothing to be reflected on a row
 												// And the field was omitted but it is empty - in that case just set the byte size to 0
 												if (field->definition.size == 0 || field->name.size == 0) {
-													byte_size = 0;
+													byte_size_alignment = { 0, 0 };
 												}
 												else {
 													// Some error has happened
@@ -1575,19 +1575,22 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 												}
 											}
 
-											if (byte_size != 0) {
+											if (byte_size_alignment.x != 0 && byte_size_alignment.x != 0) {
 												if (stream_type == ReflectionStreamFieldType::Basic || stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 													if (stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 														// Update the byte size
-														type->fields[field_index].info.byte_size = type->fields[field_index].info.basic_type_count * byte_size;
+														type->fields[field_index].info.byte_size = type->fields[field_index].info.basic_type_count * byte_size_alignment.x;
+														type->fields[field_index].info.stream_alignment = byte_size_alignment.y;
+														type->fields[field_index].info.stream_byte_size = byte_size_alignment.x;
 													}
 													else {
-														type->fields[field_index].info.byte_size = byte_size;
+														type->fields[field_index].info.byte_size = byte_size_alignment.x;
 													}
 												}
 												else {
 													// For pointer and streams we need to update the stream byte size
-													type->fields[field_index].info.stream_byte_size = byte_size;
+													type->fields[field_index].info.stream_byte_size = byte_size_alignment.x;
+													type->fields[field_index].info.stream_alignment = byte_size_alignment.y;
 												}
 											}
 										}
@@ -3965,6 +3968,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				if (embedded_array_size > 0) {
 					info.stream_byte_size = info.byte_size;
+					info.stream_alignment = GetReflectionFieldTypeAlignment(info.basic_type);
 					info.basic_type_count = embedded_array_size;
 					pointer_offset -= info.byte_size;
 					info.byte_size *= embedded_array_size;
@@ -4155,6 +4159,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				field.info.basic_type_count = pointer_level;
 				field.info.stream_type = ReflectionStreamFieldType::Pointer;
 				field.info.stream_byte_size = field.info.byte_size;
+				field.info.stream_alignment = field.info.byte_size;
 				field.info.byte_size = sizeof(void*);
 				
 				pointer_offset = AlignPointer(before_pointer_offset, alignof(void*));
@@ -4232,6 +4237,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				field.info.pointer_offset = pointer_offset;
 				field.info.stream_type = stream_type;
 				field.info.stream_byte_size = field.info.byte_size;
+				field.info.stream_alignment = field.info.byte_size;
 				field.info.byte_size = byte_size;
 				field.definition = SkipWhitespace(new_line_character + 1);
 
@@ -4401,6 +4407,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			field = GetReflectionFieldInfo(reflection, basic_type);
 			field.info.stream_byte_size = field.info.byte_size;
+			field.info.stream_alignment = field.info.byte_size;
 			field.info.stream_type = stream_type;
 			if (stream_type == ReflectionStreamFieldType::Stream) {
 				field.info.byte_size = sizeof(Stream<void>);
@@ -4509,10 +4516,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				else {
 					if (type->fields[index].info.stream_type == ReflectionStreamFieldType::Basic ||
 						type->fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-						alignment = max(alignment, GetFieldTypeAlignment(type->fields[index].info.basic_type));
+						alignment = max(alignment, GetReflectionFieldTypeAlignment(type->fields[index].info.basic_type));
 					}
 					else {
-						alignment = max(alignment, GetFieldTypeAlignment(type->fields[index].info.stream_type));
+						alignment = max(alignment, GetReflectionFieldTypeAlignment(type->fields[index].info.stream_type));
 					}
 				}
 			}
@@ -4672,7 +4679,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Check fundamental type
 			ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
 			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
-				return { field.info.byte_size, GetFieldTypeAlignment(field.info.basic_type) };
+				return { field.info.byte_size, GetReflectionFieldTypeAlignment(field.info.basic_type) };
 			}
 
 			ReflectionType type;
@@ -4721,7 +4728,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			else {
 				ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
 				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
-					return GetFieldTypeAlignment(field.info.basic_type);
+					return GetReflectionFieldTypeAlignment(field.info.basic_type);
 				}
 			}
 
@@ -4904,7 +4911,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// -----------------------------------------------------------------------------------------
 
-		void SetReflectionTypeFieldsStreamByteSize(const ReflectionManager* reflection_manager, ReflectionType* reflection_type)
+		void SetReflectionTypeFieldsStreamByteSizeAlignment(const ReflectionManager* reflection_manager, ReflectionType* reflection_type)
 		{
 			for (size_t index = 0; index < reflection_type->fields.size; index++) {
 				if (IsStream(reflection_type->fields[index].info.stream_type)) {
@@ -4912,15 +4919,21 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					// Void streams are a special case - consider the element byte size as 1 since it's a byte stream
 					if (target_type == STRING(void)) {
 						reflection_type->fields[index].info.stream_byte_size = 1;
+						reflection_type->fields[index].info.stream_alignment = 1;
 					}
 					else {
-						size_t stream_byte_size = SearchReflectionUserDefinedTypeByteSize(reflection_manager, target_type);
-						reflection_type->fields[index].info.stream_byte_size = stream_byte_size;
+						ulong2 stream_byte_size_alignment = SearchReflectionUserDefinedTypeByteSizeAlignment(reflection_manager, target_type);
+						reflection_type->fields[index].info.stream_byte_size = stream_byte_size_alignment.x;
+						reflection_type->fields[index].info.stream_alignment = stream_byte_size_alignment.y;
 					}
 				}
 				else if (reflection_type->fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 					reflection_type->fields[index].info.stream_byte_size = reflection_type->fields[index].info.byte_size / 
 						reflection_type->fields[index].info.basic_type_count;
+					reflection_type->fields[index].info.stream_alignment = SearchReflectionUserDefinedTypeAlignment(
+						reflection_manager, 
+						reflection_type->fields[index].definition
+					);
 				}
 			}
 
@@ -4932,8 +4945,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					unsigned int size_field = soa->size_field;
 					for (unsigned char soa_index = 0; soa_index < soa->parallel_stream_count; soa_index++) {
 						Stream<char> target_type = GetReflectionFieldPointerTarget(reflection_type->fields[index]);
-						size_t stream_byte_size = SearchReflectionUserDefinedTypeByteSize(reflection_manager, target_type);
-						reflection_type->fields[soa->parallel_streams[soa_index]].info.stream_byte_size = stream_byte_size;
+						ulong2 stream_byte_size_alignment = SearchReflectionUserDefinedTypeByteSizeAlignment(reflection_manager, target_type);
+						reflection_type->fields[soa->parallel_streams[soa_index]].info.stream_byte_size = stream_byte_size_alignment.x;
+						reflection_type->fields[soa->parallel_streams[soa_index]].info.stream_alignment = stream_byte_size_alignment.y;
 						reflection_type->fields[soa->parallel_streams[soa_index]].info.soa_size_basic_type = reflection_type->fields[size_field].info.basic_type;
 						reflection_type->fields[soa->parallel_streams[soa_index]].info.soa_size_pointer_offset = reflection_type->fields[size_field].info.pointer_offset;
 					}
@@ -4965,10 +4979,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Check the give size macro
 			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined) {
 				if (field.info.stream_type == ReflectionStreamFieldType::Basic || field.info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-					return GetFieldTypeAlignment(field.info.basic_type);
+					return GetReflectionFieldTypeAlignment(field.info.basic_type);
 				}
 				else {
-					return GetFieldTypeAlignment(field.info.stream_type);
+					return GetReflectionFieldTypeAlignment(field.info.stream_type);
 				}
 			}
 			else {
@@ -5031,7 +5045,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					size_t copy_size = source_stream->size * GetReflectionFieldStreamElementByteSize(*info);
 					void* allocation = nullptr;
 					if (copy_size > 0) {
-						allocation = Allocate(allocator, copy_size);
+						allocation = Allocate(allocator, copy_size, info->stream_alignment);
 						memcpy(allocation, source_stream->buffer, copy_size);
 					}
 
@@ -5045,7 +5059,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					size_t copy_size = source_stream->capacity * GetReflectionFieldStreamElementByteSize(*info);
 					void* allocation = nullptr;
 					if (copy_size > 0) {
-						allocation = Allocate(allocator, copy_size);
+						allocation = Allocate(allocator, copy_size, info->stream_alignment);
 						memcpy(allocation, source_stream->buffer, copy_size);
 					}
 
@@ -5070,7 +5084,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					size_t copy_size = source_ptr_size * GetReflectionFieldStreamElementByteSize(*info);
 					void* allocation = nullptr;
 					if (copy_size > 0) {
-						allocation = Allocate(allocator, copy_size);
+						allocation = Allocate(allocator, copy_size, info->stream_alignment);
 						memcpy(allocation, *source_ptr, copy_size);
 					}
 
@@ -5260,7 +5274,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			size_t per_element_size = GetReflectionPointerSoAPerElementSize(type, soa_index);
 			size_t soa_size = GetReflectionPointerSoASize(type, soa_index, data);
 			size_t total_allocation_size = per_element_size * soa_size;
-			void* allocation = AllocateEx(allocator, total_allocation_size);
+			void* allocation = AllocateEx(allocator, total_allocation_size, GetReflectionTypeSoaAllocationAlignment(type, soa));
 			
 			for (unsigned int index = 0; index < soa->parallel_stream_count; index++) {
 				const ReflectionFieldInfo* current_field = &type->fields[soa->parallel_streams[index]].info;
@@ -6111,7 +6125,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							// Include SoA pointers as well. Let the main caller merge the SoA pointers
 							ResizableStream<void> previous_data = GetReflectionFieldResizableStreamVoid(source_field->info, source_data, false);
 							size_t allocation_size = (size_t)destination_field->info.stream_byte_size * previous_data.size;
-							void* allocation = Allocate(options->allocator, allocation_size);
+							void* allocation = Allocate(options->allocator, allocation_size, destination_field->info.stream_alignment);
 							memcpy(allocation, previous_data.buffer, allocation_size);
 
 							previous_data.buffer = allocation;
@@ -6193,7 +6207,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										// Check to see if we need to allocate
 										if (options->always_allocate_for_buffers) {
 											size_t allocation_size = GetReflectionFieldStreamElementByteSize(destination_field->info) * old_data.size;
-											void* allocation = Allocate(options->allocator, allocation_size);
+											void* allocation = Allocate(options->allocator, allocation_size, destination_field->info.stream_alignment);
 											memcpy(allocation, old_data.buffer, allocation_size);
 											old_data.buffer = allocation;
 											old_data.capacity = old_data.size;
@@ -6230,7 +6244,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 											else {
 												// SoA pointers are handled as well
 												size_t allocation_size = GetReflectionFieldStreamElementByteSize(destination_field->info) * old_data.size;
-												void* allocation = Allocate(options->allocator, allocation_size);
+												void* allocation = Allocate(options->allocator, allocation_size, destination_field->info.stream_alignment);
 												for (size_t index = 0; index < old_data.size; index++) {
 													CopyReflectionTypeToNewVersion(
 														first_reflection_manager,
@@ -6376,7 +6390,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									}
 								}
 								else {
-									void* allocation = Allocate(options->allocator, field.size * GetReflectionFieldStreamElementByteSize(destination_field->info));
+									void* allocation = Allocate(
+										options->allocator, 
+										field.size * GetReflectionFieldStreamElementByteSize(destination_field->info),
+										destination_field->info.stream_alignment
+									);
 									ConvertReflectionBasicField(
 										source_field->info.basic_type,
 										destination_field->info.basic_type,
@@ -6396,7 +6414,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// Check to see if we need to allocate always
 								if (options->always_allocate_for_buffers) {
 									size_t allocation_size = GetReflectionFieldStreamElementByteSize(destination_field->info) * field.size;
-									void* allocation = Allocate(options->allocator, allocation_size);
+									void* allocation = Allocate(options->allocator, allocation_size, destination_field->info.stream_alignment);
 									memcpy(allocation, field.buffer, allocation_size);
 									field.buffer = allocation;
 									field.capacity = field.size;
@@ -6442,7 +6460,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										}
 									}
 									else {
-										void* allocation = Allocate(options->allocator, field.size * GetReflectionFieldStreamElementByteSize(destination_field->info));
+										void* allocation = Allocate(
+											options->allocator, 
+											field.size * GetReflectionFieldStreamElementByteSize(destination_field->info),
+											destination_field->info.stream_alignment
+										);
 										ConvertReflectionBasicField(
 											source_field->info.basic_type,
 											destination_field->info.basic_type,
@@ -6544,7 +6566,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						// Merging of the SoA pointers
 						ResizableStream<void> previous_data = GetReflectionFieldResizableStreamVoid(field->info, source, false);
 						size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * previous_data.size;
-						void* allocation = Allocate(options->allocator, allocation_size);
+						void* allocation = Allocate(options->allocator, allocation_size, field->info.stream_alignment);
 						memcpy(allocation, previous_data.buffer, allocation_size);
 
 						previous_data.buffer = allocation;
@@ -6598,7 +6620,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							// Check to see if we need to allocate
 							if (options->always_allocate_for_buffers) {
 								size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * source_data.size;
-								void* allocation = Allocate(options->allocator, allocation_size);
+								void* allocation = Allocate(options->allocator, allocation_size, field->info.stream_alignment);
 								memcpy(allocation, source_data.buffer, allocation_size);
 								source_data.buffer = allocation;
 								source_data.capacity = source_data.size;
