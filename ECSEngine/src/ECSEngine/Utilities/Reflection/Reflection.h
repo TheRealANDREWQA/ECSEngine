@@ -508,7 +508,7 @@ namespace ECSEngine {
 		);
 
 		// For all fields which are streams it will determine the element byte size and fill it in inside the field
-		ECSENGINE_API void SetReflectionTypeFieldsStreamByteSize(
+		ECSENGINE_API void SetReflectionTypeFieldsStreamByteSizeAlignment(
 			const ReflectionManager* reflection_manager,
 			ReflectionType* reflection_type
 		);

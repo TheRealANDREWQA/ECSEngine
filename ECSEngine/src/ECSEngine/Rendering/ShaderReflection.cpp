@@ -501,6 +501,7 @@ table.Insert(format, identifier);
 			reflection_fields[0].info.has_default_value = false;
 		}
 		reflection_fields[0].info.stream_byte_size = 0;
+		reflection_fields[0].info.stream_alignment = 0;
 		if (shader_field->basic_type == Reflection::ReflectionBasicFieldType::UserDefined) {
 			if (shader_field->definition == "Color") {
 				reflection_fields[0].info.byte_size = sizeof(Color);

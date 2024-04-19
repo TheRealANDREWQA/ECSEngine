@@ -423,12 +423,12 @@ namespace ECSEngine {
 		// All the streams struct contain this as the first member variable
 		struct UIInstanceFieldStream {
 			// Call this only if has_size is true
-			size_t GetTargetSize() const {
+			ECS_INLINE size_t GetTargetSize() const {
 				return GetIntValueUnsigned(OffsetPointer(target_memory, size_offset), (ECS_INT_TYPE)target_size_type);
 			}
 
 			// Call this only if has_capacity is true
-			size_t GetTargetCapacity() const {
+			ECS_INLINE size_t GetTargetCapacity() const {
 				return GetIntValueUnsigned(OffsetPointer(target_memory, capacity_offset), (ECS_INT_TYPE)target_capacity_type);
 			}
 
@@ -446,6 +446,29 @@ namespace ECSEngine {
 				}
 
 				previous_size = capacity->size;
+			}
+
+			// This is not called every frame. This function is called when the user
+			// Wants to trigger it. It will use the allocator to allocate/deallocate
+			// The target memory, in case a new allocation is needed. The exact resize flag
+			// Is used for capacity buffers. If it is active, it will resize the capacity
+			// Stream no matter the size, else if the size is large enough it won't resize it
+			void WriteTargetStandalone(AllocatorPolymorphic allocator, bool exact_resize) const {
+				size_t size = 0;
+				if (has_size) {
+					size = GetTargetSize();
+				}
+
+				size_t capacity_value = size;
+				if (has_capacity) {
+					capacity_value = GetTargetCapacity();
+				}
+
+				if (size != standalone_data.size) {
+					if (*target_memory != nullptr) {
+						void* new_allocation = ReallocateEx(allocator, *target_memory, standalone_data.size * element_byte_size);
+					}
+				}
 			}
 
 			// Needs to be used in conjunction with the WriteTarget. If not using that function, call
@@ -567,6 +590,7 @@ namespace ECSEngine {
 			// We need this size offset for the PointerSoA case
 			short capacity_offset;
 			unsigned short element_byte_size;
+			unsigned short element_alignment;
 			// This is the size of the resizable/capacity that was recorded before
 			// Calling Update(). It is used to determine if the change was done from the UI
 			// or from the C++ side. In the CopyTarget and WriteTarget pair there is no need
@@ -3543,6 +3567,7 @@ namespace ECSEngine {
 			field.byte_size = sizeof(*data);
 
 			data->stream.element_byte_size = reflection_field.info.stream_byte_size;
+			data->stream.element_alignment = reflection_field.info.stream_alignment;
 			data->stream.is_resizable = false;
 
 			if (int_flags > 0) {
@@ -3570,6 +3595,7 @@ namespace ECSEngine {
 
 			data->basic_type_count = Reflection::BasicTypeComponentCount(reflection_field.info.basic_type);
 			data->base_data.stream.element_byte_size = reflection_field.info.stream_byte_size;
+			data->base_data.stream.element_alignment = reflection_field.info.stream_alignment;
 
 			data->int_flags = int_flags;
 
@@ -3874,6 +3900,7 @@ namespace ECSEngine {
 
 				data->ui_drawer = this;
 				data->base_data.stream.element_byte_size = reflection_field.info.stream_byte_size;
+				data->base_data.stream.element_alignment = reflection_field.info.stream_alignment;
 
 				Stream<char> user_defined_type = GetUserDefinedTypeFromStreamUserDefined(reflection_field.definition, reflection_field.info.stream_type);
 				Stream<char> allocated_type = StringCopy(allocator, user_defined_type);

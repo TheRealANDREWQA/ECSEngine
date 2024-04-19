@@ -63,13 +63,13 @@ namespace ECSEngine {
 		size_t min_size = sizeof("Stream<");
 		unsigned int string_offset = 0;
 
-		size_t current_type_byte_size = 0;
+		ulong2 current_type_byte_size_alignment = { 0, 0 };
 		result.stream_type = ReflectionStreamFieldType::Basic;
 
-		auto compare = [&](auto string, size_t byte_size, ReflectionStreamFieldType stream_type) {
+		auto compare = [&](auto string, size_t byte_size, size_t alignment, ReflectionStreamFieldType stream_type) {
 			if (memcmp(data->template_type->buffer, string, sizeof(string)) == 0) {
 				string_offset = sizeof(string) - 1;
-				current_type_byte_size = byte_size;
+				current_type_byte_size_alignment = { byte_size, alignment };
 				result.stream_type = stream_type;
 				return true;
 			}
@@ -79,9 +79,9 @@ namespace ECSEngine {
 		if (data->template_type->size < min_size) {
 			string_offset = 0;
 		}
-		else if (!compare("Stream<", sizeof(Stream<void>), ReflectionStreamFieldType::Stream)) {
-			if (!compare("CapacityStream<", sizeof(CapacityStream<void>), ReflectionStreamFieldType::CapacityStream)) {
-				compare("ResizableStream<", sizeof(ResizableStream<void>), ReflectionStreamFieldType::ResizableStream);
+		else if (!compare("Stream<", sizeof(Stream<void>), alignof(Stream<void>), ReflectionStreamFieldType::Stream)) {
+			if (!compare("CapacityStream<", sizeof(CapacityStream<void>), alignof(CapacityStream<void>), ReflectionStreamFieldType::CapacityStream)) {
+				compare("ResizableStream<", sizeof(ResizableStream<void>), alignof(ResizableStream<void>), ReflectionStreamFieldType::ResizableStream);
 			}
 		}
 		//else {
@@ -111,18 +111,19 @@ namespace ECSEngine {
 
 				// This should not fail
 				ECS_ASSERT(result.custom_serializer_index != -1, "Failed to serialize custom stream");
-				current_type_byte_size = ECS_REFLECTION_CUSTOM_TYPES[result.custom_serializer_index]->GetByteSize(&byte_data).x;
+				current_type_byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[result.custom_serializer_index]->GetByteSize(&byte_data);
 			}
 			else {
 				result.basic_type = ReflectionBasicFieldType::UserDefined;
-				current_type_byte_size = GetReflectionTypeByteSize(&result.type);
+				current_type_byte_size_alignment = { GetReflectionTypeByteSize(&result.type), GetReflectionTypeAlignment(&result.type) };
 			}
 		}
 		else {
-			current_type_byte_size = GetReflectionBasicFieldTypeByteSize(result.basic_type);
+			current_type_byte_size_alignment = { GetReflectionBasicFieldTypeByteSize(result.basic_type), GetReflectionFieldTypeAlignment(result.basic_type) };
 		}
 
-		result.byte_size = current_type_byte_size;
+		result.byte_size = current_type_byte_size_alignment.x;
+		result.alignment = current_type_byte_size_alignment.y;
 		return result;
 	}
 
@@ -398,7 +399,8 @@ namespace ECSEngine {
 					bool previous_was_allocated = data->read_data->was_allocated;
 					data->read_data->was_allocated = true;
 
-					void* buffer = data->elements_to_allocate > 0 ? AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size) : nullptr;
+					void* buffer = data->elements_to_allocate > 0 ? 
+						AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size, data->element_alignment) : nullptr;
 					*data->allocated_buffer = buffer;
 					deserialize_size += data->elements_to_allocate * data->element_byte_size;
 
@@ -543,7 +545,7 @@ namespace ECSEngine {
 				data->read_data->was_allocated = true;
 				if (data->read_data->read_data) {
 					size_t allocate_size = data->elements_to_allocate * data->element_byte_size;
-					void* buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size) : nullptr;
+					void* buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size, data->element_alignment) : nullptr;
 					*data->allocated_buffer = buffer;
 					deserialize_size += allocate_size;
 				}
@@ -594,6 +596,7 @@ namespace ECSEngine {
 				field_info.basic_type = data->basic_type;
 				field_info.stream_type = data->stream_type;
 				field_info.stream_byte_size = data->element_byte_size;
+				field_info.stream_alignment = data->element_alignment;
 
 				AllocatorPolymorphic allocator = { nullptr };
 				bool has_options = data->read_data->options != nullptr;
@@ -606,7 +609,8 @@ namespace ECSEngine {
 				if (data->read_data->read_data) {
 					if (!single_instance) {
 						// We don't need to modify the was_allocated field since we are reading fundamental types
-						*data->allocated_buffer = data->elements_to_allocate > 0 ? AllocateEx(backup_allocator, data->elements_to_allocate * stream_size) : nullptr;
+						*data->allocated_buffer = data->elements_to_allocate > 0 ? 
+							AllocateEx(backup_allocator, data->elements_to_allocate * stream_size, field_info.stream_alignment) : nullptr;
 						deserialize_size += data->elements_to_allocate * stream_size;
 
 						auto loop = [&](auto use_indices) {
@@ -651,7 +655,7 @@ namespace ECSEngine {
 					if (!single_instance) {
 						// No need to change the was_allocated field since we are reading blittable types
 						size_t allocate_size = data->elements_to_allocate * data->element_byte_size;
-						*data->allocated_buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size) : nullptr;
+						*data->allocated_buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size, data->element_alignment) : nullptr;
 
 						if (data->indices.buffer == nullptr) {
 							Read<true>(data->read_data->stream, *data->allocated_buffer, allocate_size);
@@ -685,6 +689,7 @@ namespace ECSEngine {
 		value.basic_type = result->basic_type;
 		value.custom_serializer_index = result->custom_serializer_index;
 		value.element_byte_size = result->byte_size;
+		value.element_alignment = result->alignment;
 		value.reflection_type = &result->type;
 		value.stream_type = result->stream_type;
 

@@ -125,6 +125,13 @@ const ReflectionType* EditorComponents::GetType(Component component, ECS_COMPONE
 
 // ----------------------------------------------------------------------------------------------
 
+size_t EditorComponents::GetComponentAllocatorSize(Component component, ECS_COMPONENT_TYPE type) const {
+	const ReflectionType* reflection_type = GetType(component, type);
+	return GetReflectionComponentAllocatorSize(reflection_type);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 void EditorComponents::GetUniqueLinkComponents(CapacityStream<const ReflectionType*>& link_types) const
 {
 	ECSEngine::GetUniqueLinkComponents(internal_manager, link_types);
@@ -2065,7 +2072,7 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 
 			ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
 			if (module_component_functions != nullptr && module_component_functions->copy_function != nullptr && module_component_functions->deallocate_function != nullptr) {
-				module_component_functions->SetComponentFunctionsTo(&component_functions);
+				module_component_functions->SetComponentFunctionsTo(&component_functions, GetReflectionComponentAllocatorSize(type));
 			}
 			else {
 				component_functions = GetReflectionTypeRuntimeComponentFunctions(data->reflection_manager, type, &stack_allocator);
@@ -2092,7 +2099,7 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 			
 			ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
 			if (module_component_functions != nullptr && module_component_functions->copy_function != nullptr && module_component_functions->deallocate_function != nullptr) {
-				module_component_functions->SetComponentFunctionsTo(&component_functions);
+				module_component_functions->SetComponentFunctionsTo(&component_functions, GetReflectionComponentAllocatorSize(type));
 			}
 			else {
 				component_functions = GetReflectionTypeRuntimeComponentFunctions(data->reflection_manager, type, &stack_allocator);

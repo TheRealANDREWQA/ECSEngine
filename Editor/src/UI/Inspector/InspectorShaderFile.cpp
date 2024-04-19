@@ -715,7 +715,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 
 	drawer->Array(UI_CONFIG_ARRAY_ADD_CALLBACK | UI_CONFIG_ARRAY_REMOVE_ANYWHERE | UI_CONFIG_ARRAY_REMOVE_CALLBACK
 		| UI_CONFIG_ARRAY_DISABLE_DRAG | UI_CONFIG_ARRAY_PRE_POST_DRAW, BASE_CONFIGURATION, config, &array_macro_config, "Macros", &data->shader_macros, &draw_shader_macro_data, DrawShaderMacro);
-
+	drawer->NextRow();
 	drawer->CrossLine();
 
 	InspectorCopyCurrentAssetSettingData copy_data;
