@@ -509,6 +509,7 @@ namespace ECSEngine {
 		}
 
 		BOOL success = CopyFile(from.buffer, to_path, !overwrite_existent);
+		DWORD error = GetLastError();
 		return success;
 	}
 

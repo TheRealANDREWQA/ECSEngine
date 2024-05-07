@@ -2665,7 +2665,10 @@ namespace ECSEngine {
 			float2 scale,
 			UIActionHandler handler,
 			bool call_previous_before,
-			UIHandlerCopyBuffers copy_function
+			UIHandlerCopyBuffers copy_function,
+			bool is_hoverable,
+			ECS_MOUSE_BUTTON is_clickable,
+			bool is_general
 		) {
 			int32_t index = dockspace_handler->position_x.size - 1;
 			for (; index >= 0; index--) {
@@ -2718,6 +2721,9 @@ namespace ECSEngine {
 						set_previous(1);
 					}
 					composed_data->current_phase = composed_data->draw_phase[0];
+					composed_data->is_hoverable = is_hoverable;
+					composed_data->is_clickable = is_clickable;
+					composed_data->is_general = is_general;
 
 					ECS_ASSERT(action_write_data - (uintptr_t)composed_data <= sizeof(composed_action_storage));
 					void* temporary_allocation = temporary_allocator->Allocate(composed_write_size);
@@ -2769,7 +2775,7 @@ namespace ECSEngine {
 		)
 		{
 			UIHandler* dockspace_handler = &dockspace->borders[border_index].hoverable_handler;
-			ComposeAction(this, allocator, dockspace_handler, position, scale, handler, call_previous_before, copy_function);
+			ComposeAction(this, allocator, dockspace_handler, position, scale, handler, call_previous_before, copy_function, true, ECS_MOUSE_BUTTON_COUNT, false);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2812,7 +2818,7 @@ namespace ECSEngine {
 		{
 			// Check to see if there is a previous handler on the same location
 			UIHandler* dockspace_handler = &dockspace->borders[border_index].clickable_handler[button_type];
-			ComposeAction(this, allocator, dockspace_handler, position, scale, handler, call_previous_before, copy_function);
+			ComposeAction(this, allocator, dockspace_handler, position, scale, handler, call_previous_before, copy_function, false, button_type, false);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2852,7 +2858,7 @@ namespace ECSEngine {
 		{
 			// Check to see if there is a previous handler on the same location
 			UIHandler* dockspace_handler = &dockspace->borders[border_index].general_handler;
-			ComposeAction(this, allocator, dockspace_handler, position, scale, handler, call_previous_before, copy_function);
+			ComposeAction(this, allocator, dockspace_handler, position, scale, handler, call_previous_before, copy_function, false, ECS_MOUSE_BUTTON_COUNT, true);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
