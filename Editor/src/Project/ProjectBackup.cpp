@@ -197,25 +197,33 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	assets_folder.size = asset_folder_size;
 	backup_assets_path.size = backup_asset_folder_base_size;
 
+	// In this array, we record the stem of the scenes that were already copied
+	// Such that we don't try to copy again the same scene
+	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, copied_sandbox_scenes, 512);
+
 	ECS_STACK_CAPACITY_STREAM(wchar_t, sandbox_scene_path, 512);
 	// Now copy the scenes in use by the sandboxes
 	// Exclude temporary sandboxes
 	unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 	for (unsigned int index = 0; index < sandbox_count; index++) {
 		sandbox_scene_path.size = 0;
-		GetSandboxScenePath(editor_state, index, sandbox_scene_path);
-		if (sandbox_scene_path.size > 0) {
-			// Copy the scene
-			Stream<wchar_t> relative_path = PathRelativeToAbsolute(sandbox_scene_path, assets_folder);
-			backup_assets_path.size = backup_asset_folder_base_size;
-			backup_assets_path.Add(ECS_OS_PATH_SEPARATOR);
-			backup_assets_path.AddStreamAssert(relative_path);
+		Stream<wchar_t> scene_path = GetSandbox(editor_state, index)->scene_path;
+		if (FindString(scene_path, copied_sandbox_scenes.ToStream()) == -1) {
+			copied_sandbox_scenes.AddAssert(scene_path);
+			GetSandboxScenePath(editor_state, index, sandbox_scene_path);
+			if (sandbox_scene_path.size > 0) {
+				// Copy the scene
+				Stream<wchar_t> relative_path = PathRelativeToAbsolute(sandbox_scene_path, assets_folder);
+				backup_assets_path.size = backup_asset_folder_base_size;
+				backup_assets_path.Add(ECS_OS_PATH_SEPARATOR);
+				backup_assets_path.AddStreamAssert(relative_path);
 
-			success = FileCopy(sandbox_scene_path, backup_assets_path, false);
-			if (!success) {
-				ECS_FORMAT_TEMP_STRING(error_message, "The project's scene {#} could not be copied.", relative_path);
-				error_lambda(error_message);
-				return false;
+				success = FileCopy(sandbox_scene_path, backup_assets_path, false);
+				if (!success) {
+					ECS_FORMAT_TEMP_STRING(error_message, "The project's scene {#} could not be copied.", relative_path);
+					error_lambda(error_message);
+					return false;
+				}
 			}
 		}
 	}

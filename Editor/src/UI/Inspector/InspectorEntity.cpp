@@ -1628,6 +1628,9 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	float previous_row_y_offset = drawer->layout.next_row_y_offset;
 	drawer->SetNextRowYOffset(previous_row_y_offset * 0.75f);
+	auto restore_previous_row_offset = StackScope([previous_row_y_offset, drawer]() {
+		drawer->SetNextRowYOffset(previous_row_y_offset);
+	});
 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 	// Check to see if the entity or global component still exists - else revert to draw nothing
@@ -1938,8 +1941,6 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			shared_signature
 		);
 	}
-
-	drawer->SetNextRowYOffset(previous_row_y_offset);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
