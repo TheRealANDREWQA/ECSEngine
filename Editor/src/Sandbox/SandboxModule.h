@@ -192,15 +192,19 @@ void GetSandboxNeededButMissingModules(
 // -------------------------------------------------------------------------------------------------------------
 
 // It will return the sandbox version of the component functions for the given component. Returns nullptr if it doesn't find it
-const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name);
+const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name);
 
 // It will return the sandbox version of the component functions for the given component. Returns nullptr if it doesn't find it
-const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(
+const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	unsigned int module_index,
 	Stream<char> component_name
 );
+
+// -------------------------------------------------------------------------------------------------------------
+
+bool HasSandboxModuleSettings(const EditorSandboxModule* sandbox_module);
 
 // -------------------------------------------------------------------------------------------------------------
 

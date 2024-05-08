@@ -1841,6 +1841,10 @@ namespace ECSEngine {
 
 			void AddAbsoluteTransformToConfigFromPoint(float2 initial_point, UIDrawConfig& config) const;
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void AddWindowDependentSizeUntilBorder(UIDrawConfig& config) const;
+
 #pragma region Array
 
 			// ------------------------------------------------------------------------------------------------------------------------------------

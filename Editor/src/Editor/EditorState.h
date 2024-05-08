@@ -181,6 +181,12 @@ struct EditorState {
 	// For the evaluation counter
 	ECSEngine::Timer lazy_evalution_timer;
 
+	// This boolean is used by a main function that calls other functions
+	// That would normally write the sandbox file. The main function can
+	// Basically disable that from happening multiple times and have it
+	// Be written explicitly by it
+	bool disable_editor_sandbox_write;
+
 	// TODO: Implement an "event" like system where functions can be subscribed to certain
 	// Actions? This is helpful for less coupling between systems. At the moment, the first
 	// Use case would be the entity inspector that needs to be notified when the scene is changed

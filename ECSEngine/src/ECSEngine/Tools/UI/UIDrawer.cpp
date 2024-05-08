@@ -9322,6 +9322,14 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		void UIDrawer::AddWindowDependentSizeUntilBorder(UIDrawConfig& config) const {
+			UIConfigWindowDependentSize transform;
+			transform.scale_factor = GetWindowSizeScaleUntilBorder();
+			config.AddFlag(transform);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		UIDrawerArrayData* UIDrawer::ArrayInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, size_t element_count) {
 			UIDrawerArrayData* data = nullptr;
 

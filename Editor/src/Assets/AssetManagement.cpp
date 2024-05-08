@@ -2046,6 +2046,12 @@ static void LoadEditorAssetsImpl(
 			LockSandbox(editor_state, optional_data->sandbox_index);
 		}
 	}
+	else {
+		// If there is a callback, can add it now
+		if (optional_data->callback != nullptr) {
+			EditorAddEvent(editor_state, optional_data->callback, optional_data->callback_data, optional_data->callback_data_size);
+		}
+	}
 }
 
 // ----------------------------------------------------------------------------------------------

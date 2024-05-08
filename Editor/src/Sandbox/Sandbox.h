@@ -74,6 +74,22 @@ void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbo
 
 // -------------------------------------------------------------------------------------------------------------
 
+void ClearSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// This function will copy any sandbox related settings that can be copied, like the simulation speed
+// Factor, the should_play flag, the enabled debug draw components and others
+void CopySandboxGeneralFields(EditorState* editor_state, unsigned int destination_index, unsigned int source_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// It will copy all the state of the source sandbox to the destination
+// It will re-render the viewport as well
+void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsigned int source_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Can delay the initialization of the runtime for later on. It must be done manually to a call with InitializeSandboxRuntime
 void CreateSandbox(EditorState* editor_state, bool initialize_runtime = true);
 

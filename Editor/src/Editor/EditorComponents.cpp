@@ -2067,7 +2067,7 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 		FunctorData* data = (FunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsComponent(component_id)) {
-			const ModuleComponentFunctions* module_component_functions = GetModuleComponentFunctionsForSandboxFor(data->editor_state, data->sandbox_index, type->name);
+			const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(data->editor_state, data->sandbox_index, type->name);
 			ComponentFunctions component_functions;
 
 			ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
@@ -2093,7 +2093,7 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 		SharedFunctorData* data = (SharedFunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsSharedComponent(component_id)) {
-			const ModuleComponentFunctions* module_component_functions = GetModuleComponentFunctionsForSandboxFor(data->editor_state, data->sandbox_index, type->name);
+			const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(data->editor_state, data->sandbox_index, type->name);
 			ComponentFunctions component_functions;
 			SharedComponentCompareEntry compare_entry;
 			
