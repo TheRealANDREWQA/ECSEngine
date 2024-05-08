@@ -25,6 +25,8 @@
 // From other input sources and this window might miss them
 #define RETAINED_MODE_REFRESH_MS 250
 
+#define MAX_SANDBOX_ENTRIES 32
+
 struct DrawSandboxSettingsData {
 	EditorState* editor_state;
 	Stream<char> ui_reflection_instance_name;
@@ -52,6 +54,9 @@ struct DrawSandboxSettingsData {
 	CapacityStream<AvailableModuleSettings> available_module_settings;
 
 	Timer retained_timer;
+
+	unsigned char sandbox_to_copy;
+	unsigned char sandbox_mappings[MAX_SANDBOX_ENTRIES];
 };
 
 void InspectorDrawSandboxSettingsClean(EditorState* editor_state, unsigned int inspector_index, void* _data) {
@@ -1025,6 +1030,53 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		drawer->OffsetNextRow(-drawer->layout.node_indentation);
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
 	});
+
+	unsigned int sandbox_count = GetSandboxCount(editor_state, true);
+	if (sandbox_count > 1) {
+		drawer->NextRow();
+
+		// Display the copy selection
+		UIConfigComboBoxMapping mapping;
+		mapping.mappings = data->sandbox_mappings;
+		mapping.byte_size = sizeof(data->sandbox_mappings[0]);
+		mapping.stable = true;
+		config.AddFlag(mapping);
+
+		UIConfigComboBoxPrefix prefix;
+		prefix.prefix = "Sandbox: ";
+		config.AddFlag(prefix);
+
+		ECS_STACK_CAPACITY_STREAM(char, label_buffer_storage, ECS_KB * 4);
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, labels, MAX_SANDBOX_ENTRIES);
+		ECS_ASSERT_FORMAT(sandbox_count <= MAX_SANDBOX_ENTRIES - 1, "Insufficient space for InspectorSandboxSettings. Max supported sandboxes are {#}. "
+			"Stick below that limit", MAX_SANDBOX_ENTRIES);
+		const size_t CHARACTERS_PER_LABEL = 3;
+		
+		unsigned int written_count = 0;
+		for (unsigned int index = 0; index < sandbox_count; index++) {
+			if (data->sandbox_index != index) {
+				labels[written_count].InitializeFromBuffer(label_buffer_storage.buffer + label_buffer_storage.size, CHARACTERS_PER_LABEL);
+				ConvertIntToChars(labels[written_count], index);
+				label_buffer_storage.size += CHARACTERS_PER_LABEL;
+				data->sandbox_mappings[written_count++] = index;
+			}
+		}
+		labels.size = written_count;
+		
+		drawer->ComboBox(UI_CONFIG_COMBO_BOX_MAPPING | UI_CONFIG_COMBO_BOX_PREFIX, config, "Sandbox to Copy", labels, labels.size, &data->sandbox_to_copy);
+
+		auto copy_sandbox_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
+			CopySandbox(data->editor_state, data->sandbox_index, data->sandbox_mappings[data->sandbox_to_copy]);
+		};
+
+		config.flag_count = 0;
+		drawer->AddWindowDependentSizeUntilBorder(config);
+		drawer->Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Copy", { copy_sandbox_action, data, 0 });
+		drawer->NextRow();
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

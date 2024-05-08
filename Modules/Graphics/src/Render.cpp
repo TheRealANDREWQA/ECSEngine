@@ -61,7 +61,8 @@ static void DrawMeshTask(
 			matrix_scale = MatrixScale(scale_value);
 		}
 		else {
-			matrix_scale = MatrixIdentity();
+			matrix_scale = MatrixScale(float3::Splat(0.99f));
+			//matrix_scale = MatrixIdentity();
 		}
 
 		Matrix object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
@@ -96,7 +97,7 @@ ECS_THREAD_TASK(DrawMeshes) {
 	>(thread_id, world);
 
 	if constexpr (!schedule_element) {
-		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.2f, 0.2f, 0.2f, 1.0f));
+		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.25f, 0.3f, 0.5f, 1.0f));
 		world->graphics->ClearDepth(world->graphics->GetBoundDepthStencil());
 
 		CameraCached camera;

@@ -4,6 +4,7 @@
 #include "SandboxModule.h"
 #include "SandboxCrashHandler.h"
 #include "SandboxProfiling.h"
+#include "SandboxFile.h"
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorEvent.h"
 #include "../Editor/EditorPalette.h"
@@ -668,6 +669,91 @@ void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbo
 	// We also need to reset the entity manager query cache
 	sandbox->sandbox_world.entity_manager->ClearCache();
 	sandbox->sandbox_world.system_manager->ClearSystemSettings();
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void ClearSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sandbox_index) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->enabled_debug_draw.Reset();
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void CopySandboxGeneralFields(EditorState* editor_state, unsigned int destination_index, unsigned int source_index) {
+	EditorSandbox* destination_sandbox = GetSandbox(editor_state, destination_index);
+	const EditorSandbox* source_sandbox = GetSandbox(editor_state, source_index);
+
+	bool disable_sandbox_file = DisableEditorSandboxFileSave(editor_state);
+
+	destination_sandbox->should_play = source_sandbox->should_play;
+	destination_sandbox->should_pause = source_sandbox->should_pause;
+	destination_sandbox->should_step = source_sandbox->should_step;
+	destination_sandbox->simulation_speed_up_factor = source_sandbox->simulation_speed_up_factor;
+
+	// Copy the camera positions as well
+	memcpy(destination_sandbox->camera_parameters, source_sandbox->camera_parameters, sizeof(destination_sandbox->camera_parameters));
+	memcpy(destination_sandbox->camera_saved_orientations, source_sandbox->camera_saved_orientations, sizeof(destination_sandbox->camera_saved_orientations));
+	destination_sandbox->camera_wasd_speed = source_sandbox->camera_wasd_speed;
+
+	// Copy the flags as well
+	destination_sandbox->flags = source_sandbox->flags;
+	
+	// The statistics related information must be copied
+	ChangeSandboxCPUStatisticsType(editor_state, destination_index, source_sandbox->cpu_statistics_type);
+	ChangeSandboxGPUStatisticsType(editor_state, destination_index, source_sandbox->gpu_statistics_type);
+	destination_sandbox->statistics_display = source_sandbox->statistics_display;
+	
+	ClearSandboxDebugDrawComponents(editor_state, destination_index);
+
+	RestoreAndSaveEditorSandboxFile(editor_state, disable_sandbox_file);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsigned int source_index)
+{
+	// First, the modules must be changed, while also copying their assigned settings
+	// Then the scene must be set, alongside the runtime settings
+	// At last, any scene related parameters must be copied as well, like the should_play
+	// Or the speed up factor
+
+	bool disable_sandbox_file = DisableEditorSandboxFileSave(editor_state);
+
+	ClearSandboxModulesInUse(editor_state, destination_index);
+	const EditorSandbox* source_sandbox = GetSandbox(editor_state, source_index);
+
+	unsigned int source_module_count = source_sandbox->modules_in_use.size;
+	for (unsigned int index = 0; index < source_module_count; index++) {
+		const EditorSandboxModule& sandbox_module = source_sandbox->modules_in_use[index];
+		AddSandboxModule(
+			editor_state, 
+			destination_index, 
+			sandbox_module.module_index,
+			sandbox_module.module_configuration
+		);
+
+		// This works even for the case where there are no assigned settings in the source
+		ChangeSandboxModuleSettings(editor_state, destination_index, sandbox_module.module_index, sandbox_module.settings_name);
+	}
+
+	bool scene_success = ChangeSandboxScenePath(editor_state, destination_index, source_sandbox->scene_path);
+	if (!scene_success) {
+		ECS_FORMAT_TEMP_STRING(message, "Could not load scene {#} during sandbox copy", source_sandbox->scene_path);
+		EditorSetConsoleError(message);
+	}
+
+	bool runtime_settings_success = ChangeSandboxRuntimeSettings(editor_state, destination_index, source_sandbox->runtime_settings);
+	if (!runtime_settings_success) {
+		ECS_FORMAT_TEMP_STRING(message, "Could not load runtime settings {#} during sandbox copy", source_sandbox->runtime_settings);
+		EditorSetConsoleError(message);
+	}
+
+	CopySandboxGeneralFields(editor_state, destination_index, source_index);
+	// Render the sandbox now again
+	RenderSandboxViewports(editor_state, destination_index);
+
+	RestoreAndSaveEditorSandboxFile(editor_state, disable_sandbox_file);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

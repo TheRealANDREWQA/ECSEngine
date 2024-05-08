@@ -239,7 +239,7 @@ void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_settings_path, 512);
 
-	if (sandbox_module->settings_name.size > 0) {
+	if (HasSandboxModuleSettings(sandbox_module)) {
 		sandbox_module->settings_allocator.Deallocate(sandbox_module->settings_name.buffer);
 		ClearSandboxModuleSettings(editor_state, sandbox_index, module_index);
 	}
@@ -603,7 +603,7 @@ void GetSandboxNeededButMissingModules(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name) {
+const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name) {
 	// At the moment, we don't need to consider the ECS components which are shipped from the engine
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
@@ -621,7 +621,7 @@ const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(const E
 	return nullptr;
 }
 
-const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(
+const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	unsigned int module_index, 
@@ -638,6 +638,12 @@ const ModuleComponentFunctions* GetModuleComponentFunctionsForSandboxFor(
 		return &component_functions[component_index];
 	}
 	return nullptr;
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+bool HasSandboxModuleSettings(const EditorSandboxModule* sandbox_module) {
+	return sandbox_module->settings_name.size > 0;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

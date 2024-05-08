@@ -20,6 +20,14 @@ struct SandboxFileHeader {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool DisableEditorSandboxFileSave(EditorState* editor_state) {
+	bool previous_value = editor_state->disable_editor_sandbox_write;
+	editor_state->disable_editor_sandbox_write = false;
+	return previous_value;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool LoadEditorSandboxFile(EditorState* editor_state)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, sandbox_file_path, 512);
@@ -174,8 +182,23 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool RestoreAndSaveEditorSandboxFile(EditorState* editor_state, bool previous_state)
+{
+	editor_state->disable_editor_sandbox_write = previous_state;
+	if (previous_state) {
+		return SaveEditorSandboxFile(editor_state);
+	}
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool SaveEditorSandboxFile(const EditorState* editor_state)
 {
+	if (editor_state->disable_editor_sandbox_write) {
+		return true;
+	}
+
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 	GetProjectSandboxFile(editor_state, absolute_path);
 
