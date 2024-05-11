@@ -32,6 +32,9 @@ using namespace ECSEngine;
 
 #define LAZY_EVALUATION_RUNTIME_SETTINGS 500
 
+#define SANDBOX_ALLOCATOR_EXTRA_CAPACITY ECS_MB * 20
+#define SANDBOX_ALLOCATOR_BACKUP_EXTRA_CAPACITY ECS_MB * 10
+
 Stream<char> EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY_STRINGS[] = {
 	"CPU Usage",
 	"GPU Usage",
@@ -1947,10 +1950,14 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	size_t profiling_reserve_size = ReserveSandboxProfilersAllocatorSize();
 	// Create a sandbox allocator - a global one - such that it can accomodate the default entity manager requirements
 	GlobalMemoryManager* allocator = (GlobalMemoryManager*)editor_state->editor_allocator->Allocate(sizeof(GlobalMemoryManager));
+
+	// The debug allocator size must be multiplied by 2 to account for the redirect allocator as well
 	*allocator = CreateGlobalMemoryManager(
-		sandbox->runtime_descriptor.entity_manager_memory_size + ECS_MB * 10 + profiling_reserve_size + DebugDrawer::DefaultAllocatorSize(),
+		sandbox->runtime_descriptor.entity_manager_memory_size + SANDBOX_ALLOCATOR_EXTRA_CAPACITY + profiling_reserve_size + 
+			DebugDrawer::DefaultAllocatorSize() * 2,
 		1024,
-		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size + ECS_MB * 5 + DebugDrawer::DefaultAllocatorSize()
+		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size + SANDBOX_ALLOCATOR_BACKUP_EXTRA_CAPACITY + 
+			DebugDrawer::DefaultAllocatorSize() * 2
 	);
 
 	AllocatorPolymorphic sandbox_allocator = allocator;
@@ -2022,6 +2029,12 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 
 	// Initialize the debug draw components
 	sandbox->enabled_debug_draw.Initialize(sandbox_allocator, 0);
+	// Initialize the redirect drawer
+	// Create a separate allocator for it, we don't need to store it
+	// Inside the sandbox
+	MemoryManager* redirect_drawer_allocator = (MemoryManager*)Allocate(sandbox_allocator, sizeof(MemoryManager));
+	*redirect_drawer_allocator = DebugDrawer::DefaultAllocator(allocator);
+	sandbox->redirect_drawer.InitializeRedirect(redirect_drawer_allocator, std::thread::hardware_concurrency());
 
 	// Initialize the runtime module snapshots and their allocator
 	sandbox->runtime_module_snapshot_allocator = MemoryManager(ECS_KB * 8, 1024, ECS_KB * 256, sandbox_allocator);
@@ -2372,6 +2385,22 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		// Draw the sandbox debug elements before the actual frame
 		DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
+		// Add all the redirected entries
+		// For the scene viewport, for both running and paused states
+		// For the game viewport, only for the paused state
+		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+		sandbox->sandbox_world.debug_drawer->redirect_drawer = nullptr;
+		if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+			if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
+				sandbox->redirect_drawer.AddTo(sandbox->sandbox_world.debug_drawer);
+			}
+		}
+		else if (viewport == EDITOR_SANDBOX_VIEWPORT_RUNTIME) {
+			if (sandbox_state == EDITOR_SANDBOX_PAUSED) {
+				sandbox->redirect_drawer.AddTo(sandbox->sandbox_world.debug_drawer);
+			}
+		}
+
 		// Set the sandbox crash handler
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 4);
 		CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
@@ -2669,6 +2698,11 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	// Add the sandbox debug elements
 	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
+
+	// Set the redirect drawer
+	// Also, clear the redirect drawer
+	sandbox->redirect_drawer.Clear();
+	sandbox->sandbox_world.debug_drawer->redirect_drawer = &sandbox->redirect_drawer;
 
 	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(&stack_allocator);

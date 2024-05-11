@@ -15,10 +15,10 @@ static void ApplyMovementTask(
 	static bool was_used = false;
 
 	//translation->value.x -= settings->factor * for_each_data->world->delta_time;
-	translation->value.x -= 5.5f * for_each_data->world->delta_time;
+	/*translation->value.x -= 5.5f * for_each_data->world->delta_time;
 	if (for_each_data->world->keyboard->IsPressed(ECS_KEY_P)) {
 		translation->value.x = 0.0f;
-	}
+	}*/
 	//if (for_each_data->world->mouse->IsPressed(ECS_MOUSE_LEFT)) {
 	//	translation->value.y = 0.0f;
 	//}

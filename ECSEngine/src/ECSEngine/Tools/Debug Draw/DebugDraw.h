@@ -789,9 +789,29 @@ namespace ECSEngine {
 
 #pragma endregion
 
-		AllocatorPolymorphic Allocator() const;
+		// Single Threaded
+		// This activates the redirect for the entire structure
+		// Returns true if the debug drawer was already in the redirect mode
+		// Do not use the thread redirects if this redirect was activated!
+		bool ActivateRedirect();
 
-		AllocatorPolymorphic AllocatorTs() const;
+		// Multi Threaded
+		// This activates the redirect for the specified thread
+		// Returns true if the debug drawer was already in the redirect mode
+		// For that thread. Do not use at the same time with the global redirect!
+		bool ActivateRedirectThread(unsigned int thread_index);
+
+		// Adds all stored entries to the other drawer
+		// This function is not const because it calls FlushAll internally
+		void AddTo(DebugDrawer* other);
+
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			return allocator;
+		}
+
+		ECS_INLINE AllocatorPolymorphic AllocatorTs() const {
+			return AllocatorPolymorphic{ allocator }.AsMulti();
+		}
 
 		void BindShaders(unsigned int index, DebugShaderOutput output);
 
@@ -800,8 +820,19 @@ namespace ECSEngine {
 		// It also bumps forward the buffer offset
 		void CopyCharacterSubmesh(IndexBuffer index_buffer, unsigned int& buffer_offset, unsigned int alphabet_index);
 
+		// Single Threaded
+		void DeactivateRedirect(bool previously_set);
+
+		// Multi Threaded
+		void DeactivateRedirectThread(unsigned int thread_index, bool previously_set);
+
 		// If creates with a default constructor or allocated
 		void Initialize(MemoryManager* allocator, ResourceManager* resource_manager, size_t thread_count);
+
+		// This is a special initialize, that will initialize only the memory buffers, without
+		// The GPU resources. This is intended for the case where this drawer will serve
+		// Only as storage for the redirections, without being used to draw anything
+		void InitializeRedirect(MemoryManager* allocator, size_t thread_count);
 
 		void UpdateCameraMatrix(Matrix new_matrix);
 
@@ -876,6 +907,27 @@ namespace ECSEngine {
 		InputLayout layout_shaders[ECS_DEBUG_SHADER_COUNT][ECS_DEBUG_SHADER_OUTPUT_COUNT];
 		Matrix camera_matrix;
 		float2* string_character_bounds;
+
+		// Important! The redirect works only for Add* class of functions
+		// Not for the Draw* ones! Also, do not perform a DrawAll call!
+		// We use counts for redirects such as to not force every Add*
+		// Call make a check to see if it needs to be redirected. That
+		// Would pessimize the common case, where there is no redirection
+		// It this way, there is no overhead when there is no redirection,
+		// And the entire overhead resides in the deactivate call, which 
+		// Is a small overhead
+
+		// This is a quick fix for the case that a module outputs to the game window
+		// Some elements and these are to be be replicated in the scene window
+		// These counts are used to know what elements to write to the redirect drawer
+		// This flag is used for the entire structure
+		bool is_redirect;
+		unsigned int redirect_counts[ECS_DEBUG_PRIMITIVE_COUNT];
+		// This is a base pointer, all the other entries for each thread are deduced
+		// Simply as thread_index * ECS_DEBUG_PRIMITVE_COUNT
+		unsigned int* redirect_thread_counts;
+		bool* is_redirect_thread_count;
+		DebugDrawer* redirect_drawer;
 	};
 
 	// Testing method that adds some primitives of each kind to see if they are displayed correctly

@@ -69,6 +69,14 @@ namespace ECSEngine {
 			}
 		}
 
+		void AddDeck(const Deck<T, RangeSelector>& deck) {
+			size_t deck_size = deck.GetElementCount();
+			ReserveNewElements(deck_size);
+			for (size_t index = 0; index < deck_size; index++) {
+				Add(deck[index]);
+			}
+		}
+
 		// Allocates memory for extra count chunks
 		void AllocateChunks(size_t count) {
 			if (buffers.size + count > buffers.capacity) {
@@ -83,7 +91,14 @@ namespace ECSEngine {
 			buffers.size += count;
 		}
 
-		void Copy(const void* memory, size_t count) {
+		Deck<T, RangeSelector> Copy(AllocatorPolymorphic allocator) const {
+			Deck<T, RangeSelector> copy;
+			copy.Initialize(allocator, 0, chunk_size, miscellaneous);
+			copy.AddDeck(*this);
+			return copy;
+		}
+
+		void CopyOther(const void* memory, size_t count) {
 			ResizeNoCopyElementCount(count);
 			size_t written_count = 0;
 			uintptr_t ptr = (uintptr_t)memory;
@@ -99,7 +114,7 @@ namespace ECSEngine {
 			chunks_with_space[0] = buffers.size - 1;
 		}
 
-		ECS_INLINE void Copy(Stream<T> other) {
+		ECS_INLINE void CopyOther(Stream<T> other) {
 			Copy(other.buffer, other.size);
 		}
 

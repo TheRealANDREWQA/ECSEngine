@@ -318,6 +318,8 @@ struct ECS_REFLECT EditorSandbox {
 
 	// These are all the components which have enabled debug drawing
 	ECSEngine::ResizableStream<ECSEngine::ComponentWithType> enabled_debug_draw;
+	// This drawer is used to redirect draws from the main game into the scene window
+	ECSEngine::DebugDrawer redirect_drawer;
 
 	ECSEngine::MemoryManager runtime_module_snapshot_allocator;
 	ECSEngine::ResizableStream<EditorSandboxModuleSnapshot> runtime_module_snapshots;
