@@ -61,7 +61,7 @@ static void DrawMeshTask(
 			matrix_scale = MatrixScale(scale_value);
 		}
 		else {
-			matrix_scale = MatrixScale(float3::Splat(0.99f));
+			matrix_scale = MatrixScale(float3::Splat(0.999f));
 			//matrix_scale = MatrixIdentity();
 		}
 

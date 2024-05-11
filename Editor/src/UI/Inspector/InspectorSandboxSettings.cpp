@@ -1035,13 +1035,6 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	if (sandbox_count > 1) {
 		drawer->NextRow();
 
-		// Display the copy selection
-		UIConfigComboBoxMapping mapping;
-		mapping.mappings = data->sandbox_mappings;
-		mapping.byte_size = sizeof(data->sandbox_mappings[0]);
-		mapping.stable = true;
-		config.AddFlag(mapping);
-
 		UIConfigComboBoxPrefix prefix;
 		prefix.prefix = "Sandbox: ";
 		config.AddFlag(prefix);
@@ -1056,6 +1049,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		for (unsigned int index = 0; index < sandbox_count; index++) {
 			if (data->sandbox_index != index) {
 				labels[written_count].InitializeFromBuffer(label_buffer_storage.buffer + label_buffer_storage.size, CHARACTERS_PER_LABEL);
+				labels[written_count].size = 0;
 				ConvertIntToChars(labels[written_count], index);
 				label_buffer_storage.size += CHARACTERS_PER_LABEL;
 				data->sandbox_mappings[written_count++] = index;
@@ -1063,7 +1057,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		}
 		labels.size = written_count;
 		
-		drawer->ComboBox(UI_CONFIG_COMBO_BOX_MAPPING | UI_CONFIG_COMBO_BOX_PREFIX, config, "Sandbox to Copy", labels, labels.size, &data->sandbox_to_copy);
+		drawer->ComboBox(UI_CONFIG_COMBO_BOX_PREFIX, config, "Sandbox to Copy", labels, labels.size, &data->sandbox_to_copy);
 
 		auto copy_sandbox_action = [](ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
