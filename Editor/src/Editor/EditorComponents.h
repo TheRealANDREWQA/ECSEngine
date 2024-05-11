@@ -277,6 +277,14 @@ struct EditorComponents {
 	// Returns true if it is a target of a link component
 	bool IsLinkComponentTarget(Stream<char> name) const;
 
+	// Returns true if the component belongs to the ones shipped by ECSEngine,
+	// And not by a module
+	bool IsECSEngineComponent(Stream<char> name) const;
+
+	// Returns true if the component belongs to the ones shipped by ECSEngine,
+	// And not by a module
+	bool IsECSEngineComponent(Component component, ECS_COMPONENT_TYPE type) const;
+
 	unsigned int ModuleComponentCount(Stream<char> name, ECS_COMPONENT_TYPE type) const;
 
 	unsigned int ModuleComponentCount(unsigned int index, ECS_COMPONENT_TYPE type) const;

@@ -1530,6 +1530,13 @@ void GetSandboxDisplayDebugDrawComponents(
 			}
 		}
 	}
+
+	// At the end, add all the ECSEngine components that are enabled, these cannot crash
+	for (unsigned int index = 0; index < sandbox->enabled_debug_draw.size; index++) {
+		if (editor_state->editor_components.IsECSEngineComponent(sandbox->enabled_debug_draw[index].component, sandbox->enabled_debug_draw[index].type)) {
+			components.Add(sandbox->enabled_debug_draw[index]);
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

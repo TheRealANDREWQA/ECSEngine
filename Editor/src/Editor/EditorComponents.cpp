@@ -247,9 +247,37 @@ bool EditorComponents::IsLinkComponent(Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
-bool EditorComponents::IsLinkComponentTarget(ECSEngine::Stream<char> name) const
+bool EditorComponents::IsLinkComponentTarget(Stream<char> name) const
 {
 	return GetLinkComponentForTarget(name).size > 0;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool EditorComponents::IsECSEngineComponent(Stream<char> name) const {
+	// The first module is the one containing the ECSEngine components
+	for (size_t index = 0; index < loaded_modules[0].types.size; index++) {
+		if (loaded_modules[0].types[index] == name) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool EditorComponents::IsECSEngineComponent(Component component, ECS_COMPONENT_TYPE type) const {
+	// The first module is the one containing the ECSEngine components
+	for (size_t index = 0; index < loaded_modules[0].types.size; index++) {
+		const ReflectionType* current_type = GetType(loaded_modules[0].types[index]);
+		Component current_component = GetReflectionTypeComponent(current_type);
+		if (current_component == component) {
+			if (type == GetReflectionTypeComponentType(current_type)) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 // ----------------------------------------------------------------------------------------------

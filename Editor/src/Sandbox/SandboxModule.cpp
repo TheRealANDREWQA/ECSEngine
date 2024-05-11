@@ -327,6 +327,11 @@ void ClearModuleDebugDrawComponentCrashStatus(
 	ComponentWithType component_type,
 	bool assert_not_found
 ) {
+	// If this is an ECS component, skip the call, since it can't crash
+	if (editor_state->editor_components.IsECSEngineComponent(component_type.component, component_type.type)) {
+		return;
+	}
+
 	EDITOR_MODULE_CONFIGURATION configuration;
 	unsigned int module_index = FindSandboxDebugDrawComponentModuleIndex(editor_state, sandbox_index, component_type, &configuration);
 	ClearModuleDebugDrawComponentCrashStatus(editor_state, module_index, configuration, component_type, assert_not_found);
@@ -871,6 +876,10 @@ bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 
 void SetModuleDebugDrawComponentCrashStatus(EditorState* editor_state, unsigned int sandbox_index, ComponentWithType component_type, bool assert_not_found)
 {
+	if (editor_state->editor_components.IsECSEngineComponent(component_type.component, component_type.type)) {
+		return;
+	}
+
 	EDITOR_MODULE_CONFIGURATION configuration;
 	unsigned int module_index = FindSandboxDebugDrawComponentModuleIndex(editor_state, sandbox_index, component_type, &configuration);
 	SetModuleDebugDrawComponentCrashStatus(editor_state, module_index, configuration, component_type, assert_not_found);

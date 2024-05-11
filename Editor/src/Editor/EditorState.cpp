@@ -494,6 +494,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	// Create every single member using new for easier class construction
 	editor_state->editor_tick = TickPendingTasks;
+	editor_state->disable_editor_sandbox_write = false;
 	memset(editor_state->flags, 0, sizeof(editor_state->flags));
 
 	GlobalMemoryManager* global_memory_manager = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
@@ -595,7 +596,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->ecs_extra_information = LoadModuleExtraInformation(RegisterECSModuleExtraInformation, editor_state->EditorAllocator());
 	editor_state->ecs_component_functions = LoadModuleComponentFunctions(RegisterECSComponentFunctions, editor_state->EditorAllocator());
 
-	// Update the editor components
+	// Update the editor components - these must be always the first "module" for the editor components
+	// A function which checks to see if the component is from ECSEngine or not uses this presumption
 	editor_state->editor_components.UpdateComponents(editor_state, editor_reflection_manager, 0, "ECSEngine");
 	// Finalize every event
 	for (unsigned int index = 0; index < editor_state->editor_components.events.size; index++) {
