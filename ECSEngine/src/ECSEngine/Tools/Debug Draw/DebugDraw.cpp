@@ -77,6 +77,145 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	ECS_INLINE unsigned int* GetThreadRedirectCount(DebugDrawer* debug_drawer, unsigned int thread_index) {
+		return debug_drawer->redirect_thread_counts + thread_index * ECS_DEBUG_PRIMITIVE_COUNT;
+	}
+
+	template<typename SizeExtractor, typename LINE, typename SPHERE, typename POINT, typename RECTANGLE, typename CROSS, typename CIRCLE,
+		typename ARROW, typename TRIANGLE, typename AABB_, typename OOBB, typename STRING, typename GRID>
+	static void SetRedirectCounts(unsigned int* counts, SizeExtractor&& extractor, const LINE& line, const SPHERE& sphere,
+			const POINT& point, const RECTANGLE& rectangle, const CROSS& cross, const CIRCLE& circle, const ARROW& arrow,
+			const TRIANGLE& triangle, const AABB_& aabb, const OOBB& oobb, const STRING& string, const GRID& grid)
+	{
+		static_assert(ECS_DEBUG_PRIMITIVE_COUNT == 12, "Update the AddRedirects code to account for the changes!");
+
+		counts[ECS_DEBUG_PRIMITIVE_AABB] = extractor(aabb);
+		counts[ECS_DEBUG_PRIMITIVE_ARROW] = extractor(arrow);
+		counts[ECS_DEBUG_PRIMITIVE_CIRCLE] = extractor(circle);
+		counts[ECS_DEBUG_PRIMITIVE_CROSS] = extractor(cross);
+		counts[ECS_DEBUG_PRIMITIVE_GRID] = extractor(grid);
+		counts[ECS_DEBUG_PRIMITIVE_LINE] = extractor(line);
+		counts[ECS_DEBUG_PRIMITIVE_OOBB] = extractor(oobb);
+		counts[ECS_DEBUG_PRIMITIVE_POINT] = extractor(point);
+		counts[ECS_DEBUG_PRIMITIVE_RECTANGLE] = extractor(rectangle);
+		counts[ECS_DEBUG_PRIMITIVE_SPHERE] = extractor(sphere);
+		counts[ECS_DEBUG_PRIMITIVE_STRING] = extractor(string);
+		counts[ECS_DEBUG_PRIMITIVE_TRIANGLE] = extractor(triangle);
+	}
+	
+	struct RedirectThreadSizeExtractor {
+		template<typename Parameter>
+		ECS_INLINE unsigned int operator()(const Parameter& parameter) const {
+			return parameter[thread_index].size;
+		}
+		
+		unsigned int thread_index;
+	};
+
+	struct RedirectGlobalSizeExtractor {
+		template<typename Parameter>
+		ECS_INLINE unsigned int operator()(const Parameter& parameter) const {
+			return parameter.GetElementCount();
+		}
+	};
+
+	// It will add all the redirects into the specified drawer
+	// For the global add, use thread_index of -1
+	template<typename SizeExtractor, typename ValueExtractor, typename LINE, typename SPHERE, typename POINT, typename RECTANGLE, 
+		typename CROSS, typename CIRCLE, typename ARROW, typename TRIANGLE, typename AABB_, typename OOBB, typename STRING, typename GRID>
+	static void AddRedirects(const unsigned int* counts, unsigned int thread_index, SizeExtractor&& size_extractor, ValueExtractor&& value_extractor, 
+		const LINE& line, const SPHERE& sphere, const POINT& point, const RECTANGLE& rectangle, const CROSS& cross, 
+		const CIRCLE& circle, const ARROW& arrow, const TRIANGLE& triangle, const AABB_& aabb, const OOBB& oobb, 
+		const STRING& string, const GRID& grid, DebugDrawer* redirect_drawer) 
+	{
+		static_assert(ECS_DEBUG_PRIMITIVE_COUNT == 12, "Update the AddRedirects code to account for the changes!");
+		
+		if (thread_index == -1) {
+			thread_index = 0;
+		}
+
+		// Use the AddThread
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_LINE]; index < size_extractor(line); index++) {
+			DebugLine value = value_extractor(line, index);
+			redirect_drawer->AddLineThread(thread_index, value.start, value.end, value.color, value.options);
+		}
+		
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_SPHERE]; index < size_extractor(sphere); index++) {
+			DebugSphere value = value_extractor(sphere, index);
+			redirect_drawer->AddSphereThread(thread_index, value.position, value.radius, value.color, value.options);
+		}
+
+		//for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_POINT]; index < size_extractor(point); index++) {
+		//	DebugPoint value = value_extractor(point, index);
+		//	redirect_drawer->AddPointThread(thread_index, value.position, value.size, value.color, value.options);
+		//}
+
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_RECTANGLE]; index < size_extractor(rectangle); index++) {
+			DebugRectangle value = value_extractor(rectangle, index);
+			redirect_drawer->AddRectangleThread(thread_index, value.corner0, value.corner1, value.color, value.options);
+		}
+
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_CROSS]; index < size_extractor(cross); index++) {
+			DebugCross value = value_extractor(cross, index);
+			redirect_drawer->AddCrossThread(thread_index, value.position, value.rotation, value.size, value.color, value.options);
+		}
+
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_CIRCLE]; index < size_extractor(circle); index++) {
+			DebugCircle value = value_extractor(circle, index);
+			redirect_drawer->AddCircleThread(thread_index, value.position, value.rotation, value.radius, value.color, value.options);
+		}
+
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_ARROW]; index < size_extractor(arrow); index++) {
+			DebugArrow value = value_extractor(arrow, index);
+			redirect_drawer->AddArrowRotationThread(thread_index, value.translation, value.rotation, value.length, value.size, value.color, value.options);
+		}
+
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_TRIANGLE]; index < size_extractor(triangle); index++) {
+			DebugTriangle value = value_extractor(triangle, index);
+			redirect_drawer->AddTriangleThread(thread_index, value.point0, value.point1, value.point2, value.color, value.options);
+		}
+
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_AABB]; index < size_extractor(aabb); index++) {
+			DebugAABB value = value_extractor(aabb, index);
+			redirect_drawer->AddAABBThread(thread_index, value.translation - value.scale * float3::Splat(0.5f), 
+				value.translation + value.scale * float3::Splat(0.5f), value.color, value.options);;
+		}
+
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_OOBB]; index < size_extractor(oobb); index++) {
+			DebugOOBB value = value_extractor(oobb, index);
+			redirect_drawer->AddOOBBThread(thread_index, value.translation, value.rotation, value.scale, value.color, value.options);
+		}
+
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_STRING]; index < size_extractor(string); index++) {
+			DebugString value = value_extractor(string, index);
+			redirect_drawer->AddStringThread(thread_index, value.position, value.direction, value.size, value.text, value.color, value.options);
+		}
+
+		for (unsigned int index = counts[ECS_DEBUG_PRIMITIVE_GRID]; index < size_extractor(grid); index++) {
+			DebugGrid value = value_extractor(grid, index);
+			// Retrieve the values if the has_valid_cells is set
+			redirect_drawer->AddGridThread(thread_index, &value, value.has_valid_cells);
+		}
+	}
+
+	struct RedirectThreadValueExtractor {
+		template<typename Parameter>
+		ECS_INLINE auto operator()(const Parameter& parameter, unsigned int index) const {
+			return parameter[thread_index][index];
+		}
+
+		unsigned int thread_index;
+	};
+
+	struct RedirectGlobalValueExtractor {
+		template<typename Parameter>
+		ECS_INLINE auto operator()(const Parameter& parameter, unsigned int index) const {
+			return parameter[index];
+		}
+	};
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	ECS_INLINE unsigned char GetMaskFromOptions(DebugDrawCallOptions options) {
 		return (unsigned char)options.ignore_depth | (((unsigned char)(!options.wireframe) << 1) & 2);
 	}
@@ -1024,6 +1163,8 @@ namespace ECSEngine {
 
 	void DebugDrawer::AddPoint(float3 position, float size, Color color, DebugDrawCallOptions options)
 	{
+		// If using points again, update the code at AddRedirect to consider points!!
+
 		// Make wireframe false
 		options.wireframe = false;
 		AddSphere(position, POINT_SIZE * size, color, options);
@@ -1226,6 +1367,7 @@ namespace ECSEngine {
 	void DebugDrawer::AddPointThread(unsigned int thread_index, float3 position, float size, Color color, DebugDrawCallOptions options)
 	{
 		// TODO: Make the point depth size independent? For a quick momentary fix, let the user specify the size
+		// If using points again, update the code at AddRedirect to consider points!!
 
 		// Make wireframe false
 		options.wireframe = false;
@@ -2537,6 +2679,10 @@ namespace ECSEngine {
 			DrawGrid(&grid, shader_output);
 			grid.options.duration -= time_delta;
 			if (grid.options.duration < 0.0f) {
+				// Deallocate the valid cells if they have been retrieved
+				if (grid.has_valid_cells) {
+					grid.valid_cells.Deallocate();
+				}
 				return true;
 			}
 			return false;
@@ -3100,6 +3246,18 @@ namespace ECSEngine {
 			}
 			auto* copy_position = &((*deck)[copy_index]);
 			thread_buffering[thread_index].CopyTo(copy_position);
+
+			// Before resetting the size, if the redirect is activated, we need to redirect
+			// The entries that were added
+			if (drawer->redirect_thread_counts[thread_index]) {
+				AddRedirects(GetThreadRedirectCount(drawer, thread_index), thread_index, RedirectThreadSizeExtractor{ thread_index },
+					RedirectThreadValueExtractor{ thread_index }, drawer->thread_lines, drawer->thread_spheres, drawer->thread_points,
+					drawer->thread_rectangles, drawer->thread_crosses, drawer->thread_circles, drawer->thread_arrows, drawer->thread_triangles,
+					drawer->thread_aabbs, drawer->thread_oobbs, drawer->thread_strings, drawer->thread_grids, drawer->redirect_drawer);
+				// Set the counts to 0, to indicate that these entries have been added
+				memset(GetThreadRedirectCount(drawer, thread_index), 0, sizeof(unsigned int) * ECS_DEBUG_PRIMITIVE_COUNT);
+			}
+
 			thread_buffering[thread_index].size = 0;
 			drawer->thread_locks[debug_primitive]->Unlock();
 		}
@@ -3241,6 +3399,122 @@ namespace ECSEngine {
 
 #pragma region Initialize
 
+	// It assumes that the allocator was set
+	static void InitializeMemoryResources(DebugDrawer* drawer, size_t thread_count) {
+		size_t total_memory = 0;
+		size_t thread_capacity_stream_size = sizeof(CapacityStream<void>) * thread_count;
+
+		total_memory += drawer->thread_lines->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_spheres->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_points->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_rectangles->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_crosses->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_circles->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_arrows->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_triangles->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_aabbs->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_oobbs->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_strings->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += drawer->thread_grids->MemoryOf(GRID_THREAD_CAPACITY) * thread_count;
+
+		// Add the actual capacity stream sizes
+		total_memory += thread_capacity_stream_size * ECS_DEBUG_PRIMITIVE_COUNT;
+
+		// The locks will be padded to different cache lines
+		total_memory += ECS_CACHE_LINE_SIZE * thread_count + sizeof(SpinLock*) * ECS_DEBUG_PRIMITIVE_COUNT;
+
+		// The string character bounds
+		total_memory += sizeof(float2) * (unsigned int)AlphabetIndex::Unknown;
+
+		void* allocation = drawer->allocator->Allocate(total_memory);
+		uintptr_t buffer = (uintptr_t)allocation;
+
+		drawer->thread_lines = (CapacityStream<DebugLine>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_spheres = (CapacityStream<DebugSphere>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_points = (CapacityStream<DebugPoint>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_rectangles = (CapacityStream<DebugRectangle>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_crosses = (CapacityStream<DebugCross>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_circles = (CapacityStream<DebugCircle>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_arrows = (CapacityStream<DebugArrow>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_triangles = (CapacityStream<DebugTriangle>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_aabbs = (CapacityStream<DebugAABB>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_oobbs = (CapacityStream<DebugOOBB>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_strings = (CapacityStream<DebugString>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		drawer->thread_grids = (CapacityStream<DebugGrid>*)buffer;
+		buffer += thread_capacity_stream_size;
+
+		for (size_t index = 0; index < thread_count; index++) {
+			drawer->thread_lines[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_spheres[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_points[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_rectangles[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_crosses[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_circles[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_arrows[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_triangles[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_aabbs[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_oobbs[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_strings[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			drawer->thread_grids[index].InitializeFromBuffer(buffer, 0, GRID_THREAD_CAPACITY);
+		}
+
+		drawer->thread_locks = (SpinLock**)buffer;
+		buffer += sizeof(SpinLock*) * ECS_DEBUG_PRIMITIVE_COUNT;
+
+		// Padd the locks to different cache lines
+		for (size_t index = 0; index < ECS_DEBUG_PRIMITIVE_COUNT; index++) {
+			drawer->thread_locks[index] = (SpinLock*)buffer;
+			drawer->thread_locks[index]->Clear();
+			buffer += ECS_CACHE_LINE_SIZE;
+		}
+		drawer->string_character_bounds = (float2*)buffer;
+
+		AllocatorPolymorphic polymorphic_allocator = drawer->allocator;
+
+		drawer->lines.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->spheres.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->points.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->rectangles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->crosses.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->circles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->arrows.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->triangles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->aabbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->oobbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->strings.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->grids.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+
+		drawer->is_redirect = false;
+		drawer->redirect_drawer = nullptr;
+		memset(drawer->redirect_counts, 0, sizeof(drawer->redirect_counts));
+		drawer->redirect_thread_counts = (unsigned int*)drawer->allocator->Allocate(sizeof(unsigned int) * ECS_DEBUG_PRIMITIVE_COUNT * thread_count);
+		memset(drawer->redirect_thread_counts, 0, sizeof(unsigned int) * ECS_DEBUG_PRIMITIVE_COUNT * thread_count);
+		drawer->is_redirect_thread_count = (bool*)drawer->allocator->Allocate(sizeof(bool) * thread_count);
+		memset(drawer->is_redirect_thread_count, false, sizeof(bool) * thread_count);
+	}
+
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::Initialize(MemoryManager* _allocator, ResourceManager* resource_manager, size_t _thread_count) {
@@ -3332,110 +3606,7 @@ namespace ECSEngine {
 		rasterizer_desc.CullMode = D3D11_CULL_BACK;
 		rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID_CULL] = graphics->CreateRasterizerState(rasterizer_desc);
 
-		size_t total_memory = 0;
-		size_t thread_capacity_stream_size = sizeof(CapacityStream<void>) * thread_count;
-
-		total_memory += thread_lines->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_spheres->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_points->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_rectangles->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_crosses->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_circles->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_arrows->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_triangles->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_aabbs->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_oobbs->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_strings->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
-		total_memory += thread_grids->MemoryOf(GRID_THREAD_CAPACITY) * thread_count;
-
-		// Add the actual capacity stream sizes
-		total_memory += thread_capacity_stream_size * ECS_DEBUG_PRIMITIVE_COUNT;
-
-		// The locks will be padded to different cache lines
-		total_memory += ECS_CACHE_LINE_SIZE * thread_count + sizeof(SpinLock*) * ECS_DEBUG_PRIMITIVE_COUNT;
-
-		// The string character bounds
-		total_memory += sizeof(float2) * (unsigned int)AlphabetIndex::Unknown;
-
-		void* allocation = allocator->Allocate(total_memory);
-		uintptr_t buffer = (uintptr_t)allocation;
-
-		thread_lines = (CapacityStream<DebugLine>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_spheres = (CapacityStream<DebugSphere>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_points = (CapacityStream<DebugPoint>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_rectangles = (CapacityStream<DebugRectangle>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_crosses = (CapacityStream<DebugCross>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_circles = (CapacityStream<DebugCircle>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_arrows = (CapacityStream<DebugArrow>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_triangles = (CapacityStream<DebugTriangle>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_aabbs = (CapacityStream<DebugAABB>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_oobbs = (CapacityStream<DebugOOBB>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_strings = (CapacityStream<DebugString>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		thread_grids = (CapacityStream<DebugGrid>*)buffer;
-		buffer += thread_capacity_stream_size;
-
-		for (size_t index = 0; index < thread_count; index++) {
-			thread_lines[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_spheres[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_points[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_rectangles[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_crosses[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_circles[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_arrows[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_triangles[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_aabbs[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_oobbs[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_strings[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
-			thread_grids[index].InitializeFromBuffer(buffer, 0, GRID_THREAD_CAPACITY);
-		}
-
-		thread_locks = (SpinLock**)buffer;
-		buffer += sizeof(SpinLock*) * ECS_DEBUG_PRIMITIVE_COUNT;
-		
-		// Padd the locks to different cache lines
-		for (size_t index = 0; index < ECS_DEBUG_PRIMITIVE_COUNT; index++) {
-			thread_locks[index] = (SpinLock*)buffer;
-			thread_locks[index]->Clear();
-			buffer += ECS_CACHE_LINE_SIZE;
-		}
-		string_character_bounds = (float2*)buffer;
-
-		AllocatorPolymorphic polymorphic_allocator = (allocator);
-
-		lines.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		spheres.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		points.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		rectangles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		crosses.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		circles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		arrows.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		triangles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		aabbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		oobbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		strings.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		grids.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		InitializeMemoryResources(this, thread_count);
 
 #pragma region Primitive buffers
 
@@ -3555,18 +3726,80 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	AllocatorPolymorphic DebugDrawer::Allocator() const
-	{
-		return allocator;
+	void DebugDrawer::InitializeRedirect(MemoryManager* _allocator, size_t _thread_count) {
+		memset(this, 0, sizeof(*this));
+		allocator = _allocator;
+		thread_count = _thread_count;
+
+		InitializeMemoryResources(this, thread_count);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	AllocatorPolymorphic DebugDrawer::AllocatorTs() const
-	{
-		AllocatorPolymorphic multi_allocator = allocator;
-		multi_allocator.allocation_type = ECS_ALLOCATION_MULTI;
-		return multi_allocator;
+	bool DebugDrawer::ActivateRedirect() {
+		// Don't do anything if the redirect drawer is not set
+		if (redirect_drawer == nullptr) {
+			return false;
+		}
+
+		bool has_redirect = is_redirect;
+		// Flush all the entries from the threads
+		FlushAll();
+		// Record the count of the main storage
+		SetRedirectCounts(redirect_counts, RedirectGlobalSizeExtractor{}, lines, spheres, points, rectangles, crosses, circles,
+			arrows, triangles, aabbs, oobbs, strings, grids);
+		is_redirect = true;
+		return has_redirect;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	bool DebugDrawer::ActivateRedirectThread(unsigned int thread_index) {
+		// Don't do anything if the redirect drawer is not set
+		if (redirect_drawer == nullptr) {
+			return false;
+		}
+
+		bool has_redirect = is_redirect_thread_count[thread_index];
+		is_redirect_thread_count[thread_index] = true;
+		// Record the counts for this thread
+		SetRedirectCounts(GetThreadRedirectCount(this, thread_index), RedirectThreadSizeExtractor{ thread_index }, thread_lines, thread_spheres, thread_points,
+			thread_rectangles, thread_crosses, thread_circles, thread_arrows, thread_triangles, thread_aabbs, 
+			thread_oobbs, thread_strings, thread_grids);
+		return has_redirect;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::AddTo(DebugDrawer* other) {
+		FlushAll();
+
+		// Add each deck to its correspondent
+		size_t initial_string_size = other->strings.GetElementCount();
+		size_t initial_grid_size = other->grids.GetElementCount();
+
+		other->lines.AddDeck(lines);
+		other->spheres.AddDeck(spheres);
+		other->points.AddDeck(points);
+		other->rectangles.AddDeck(rectangles);
+		other->crosses.AddDeck(crosses);
+		other->circles.AddDeck(circles);
+		other->arrows.AddDeck(arrows);
+		other->triangles.AddDeck(triangles);
+		other->aabbs.AddDeck(aabbs);
+		other->oobbs.AddDeck(oobbs);
+		other->strings.AddDeck(strings);
+		other->grids.AddDeck(grids);
+
+		// For the added strings and grids, we need to make sure that the allocations are carried over
+		for (size_t index = initial_string_size; index < other->strings.GetElementCount(); index++) {
+			other->strings[index].text = other->strings[index].text.Copy(other->Allocator());
+		}
+		for (size_t index = initial_grid_size; index < other->grids.GetElementCount(); index++) {
+			if (other->grids[index].has_valid_cells) {
+				other->grids[index].valid_cells = other->grids[index].valid_cells.Copy(other->Allocator());
+			}
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -3582,6 +3815,8 @@ namespace ECSEngine {
 
 	void DebugDrawer::Clear()
 	{
+		static_assert(ECS_DEBUG_PRIMITIVE_COUNT == 12, "Update the clear method for DebugDrawer!");
+
 		lines.Deallocate();
 		spheres.Deallocate();
 		points.Deallocate();
@@ -3593,6 +3828,14 @@ namespace ECSEngine {
 		aabbs.Deallocate();
 		oobbs.Deallocate();
 		strings.Deallocate();
+		// For the grids, there are some possible deallocation that need to be made
+		size_t grid_count = grids.GetElementCount();
+		for (size_t index = 0; index < grid_count; index++) {
+			if (grids[index].has_valid_cells) {
+				grids[index].valid_cells.Deallocate();
+			}
+		}
+		grids.Deallocate();
 
 		for (unsigned int index = 0; index < thread_count; index++) {
 			thread_lines[index].Clear();
@@ -3606,6 +3849,12 @@ namespace ECSEngine {
 			thread_aabbs[index].Clear();
 			thread_oobbs[index].Clear();
 			thread_strings[index].Clear();
+			for (unsigned int grid_index = 0; grid_index < thread_grids[index].size; grid_index++) {
+				if (thread_grids[index][grid_index].has_valid_cells) {
+					thread_grids[index][grid_index].valid_cells.Deallocate();
+				}
+			}
+			thread_grids[index].Clear();
 		}
 	}
 
@@ -3622,6 +3871,51 @@ namespace ECSEngine {
 		);
 
 		buffer_offset += string_mesh->submeshes[alphabet_index].index_count;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DeactivateRedirect(bool previously_set) {
+		// Don't do anything if the redirect drawer is not set
+		if (redirect_drawer == nullptr) {
+			return;
+		}
+
+		if (previously_set) {
+			return;
+		}
+
+		// Perform something only on the call where the boolean is false
+		// Flush everything again in the main storage and then use the counts
+		// To determine what has been added
+		FlushAll();
+
+		AddRedirects(redirect_counts, -1, RedirectGlobalSizeExtractor{}, RedirectGlobalValueExtractor{}, lines, spheres, points, rectangles, crosses,
+			circles, arrows, triangles, aabbs, oobbs, strings, grids, redirect_drawer);
+		// We don't need to clear these because the activate will set the counts to the appropriate values
+		is_redirect = false;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DeactivateRedirectThread(unsigned int thread_index, bool previously_set) {
+		// Don't do anything if the redirect drawer is not set
+		if (redirect_drawer == nullptr) {
+			return;
+		}
+
+		if (previously_set) {
+			return;
+		}
+
+		// Perform something only on the call where the boolean is false
+		// Here, the flush is not desired
+		AddRedirects(GetThreadRedirectCount(this, thread_index), thread_index, RedirectThreadSizeExtractor{ thread_index },
+			RedirectThreadValueExtractor{ thread_index }, thread_lines, thread_spheres, thread_points,
+			thread_rectangles, thread_crosses, thread_circles, thread_arrows, thread_triangles, thread_aabbs,
+			thread_oobbs, thread_strings, thread_grids, redirect_drawer);
+
+		is_redirect_thread_count[thread_index] = false;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

@@ -58,6 +58,7 @@ ECS_THREAD_TASK(GridHandler) {
 				//float duration = timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 				//ECS_FORMAT_TEMP_STRING(message, "{#}\n", duration);
 				//OutputDebugStringA(message.buffer);
+				bool redirect_value = world->debug_drawer->ActivateRedirectThread(thread_id);
 				if (query.type == SAT_QUERY_NONE) {
 					world->debug_drawer->AddStringThread(thread_id, first_translation != nullptr ? first_translation->value : float3::Splat(0.0f),
 						float3::Splat(1.0f), 1.0f, "None", ECS_COLOR_ORANGE);
@@ -120,6 +121,8 @@ ECS_THREAD_TASK(GridHandler) {
 						world->debug_drawer->AddPointThread(thread_id, manifold.contact_points[index], 2.0f, ECS_COLOR_AQUA);
 					}
 				}
+
+				world->debug_drawer->DeactivateRedirectThread(thread_id, redirect_value);
 			}
 		}
 	}
