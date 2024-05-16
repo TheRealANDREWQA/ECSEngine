@@ -1269,7 +1269,7 @@ void ConvexHull::RedirectEdges()
 		ConvexHullEdge& edge = edges[index];
 		float3 first_normal = faces[edge.face_1_index].plane.normal;
 		float3 second_normal = faces[edge.face_2_index].plane.normal;
-		float3 cross_product = Cross(first_normal, second_normal);
+		float3 cross_product = Cross(second_normal, first_normal);
 		float3 edge_direction = GetPoint(edge.point_2) - GetPoint(edge.point_1);
 		// Include the 0.0f case, that can happen when the cross poduct is close to 0.0f
 		// (for almost parallel normals. This should be a rare occurence, since that would

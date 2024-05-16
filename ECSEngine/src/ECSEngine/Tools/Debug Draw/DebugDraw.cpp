@@ -247,7 +247,7 @@ namespace ECSEngine {
 		ushort2* type_indices = (ushort2*)allocator->Allocate(sizeof(ushort2) * total_count * 4);
 		SetIndicesTypeMask(indices, type_indices, total_count);
 
-		auto for_each_lambda = [&](uint2 deck_indices, auto is_output_id) {
+		auto for_each_lambda = [&](ulong2 deck_indices, auto is_output_id) {
 			const auto* value = deck->GetValuePtr(deck_indices.x, deck_indices.y);
 			if constexpr (is_output_id) {
 				if (GetTypeInstanceThickness(value) == -1) {
@@ -260,12 +260,12 @@ namespace ECSEngine {
 		};
 
 		if (shader_output == ECS_DEBUG_SHADER_OUTPUT_ID) {
-			deck->ForEachIndex([&](uint2 deck_indices) {
+			deck->ForEachIndex([&](ulong2 deck_indices) {
 				for_each_lambda(deck_indices, std::true_type{});
 			});
 		}
 		else {
-			deck->ForEachIndex([&](uint2 deck_indices) {
+			deck->ForEachIndex([&](ulong2 deck_indices) {
 				for_each_lambda(deck_indices, std::false_type{});
 			});
 		}
@@ -323,31 +323,13 @@ namespace ECSEngine {
 
 	template<typename Element>
 	void UpdateElementDurations(DeckPowerOfTwo<Element>* deck, float time_delta) {
-		for (size_t index = 0; index < deck->buffers.size; index++) {
-			// Check to see if the chunk is completely full with durations less than
-			// Delta time. In that case, we can simply set the buffer size to 0
-			bool can_be_cleared = true;			
-			for (size_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
-				if (deck->buffers[index][subindex].options.duration > time_delta) {
-					can_be_cleared = false;
-					break;
-				}
+		deck->ForEach<false, true>([time_delta](auto& element) {
+			element.options.duration -= time_delta;
+			if (element.options.duration < 0.0f) {
+				return true;
 			}
-
-			if (can_be_cleared) {
-				deck->buffers[index].size = 0;
-			}
-			else {
-				for (int64_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
-					deck->buffers[index][subindex].options.duration -= time_delta;
-					if (deck->buffers[index][subindex].options.duration < 0.0f) {
-						deck->buffers[index].RemoveSwapBack(subindex);
-						subindex--;
-					}
-				}
-			}
-		}
-		deck->RecalculateFreeChunks();
+			return false;
+		});
 	}
 
 	template<typename DebugType>
@@ -2651,17 +2633,14 @@ namespace ECSEngine {
 
 			// Update the duration and remove those elements that expired;
 			// Also deallocate the string buffer
-			for (size_t index = 0; index < deck_pointer->buffers.size; index++) {
-				for (int64_t subindex = 0; subindex < deck_pointer->buffers[index].size; subindex++) {
-					deck_pointer->buffers[index][subindex].options.duration -= time_delta;
-					if (deck_pointer->buffers[index][subindex].options.duration < 0.0f) {
-						allocator->Deallocate(deck_pointer->buffers[index][subindex].text.buffer);
-						deck_pointer->buffers[index].RemoveSwapBack(subindex);
-						subindex--;
-					}
+			deck_pointer->ForEach<false, true>([this, time_delta](DebugString& string) {
+				string.options.duration -= time_delta;
+				if (string.options.duration < 0.0f) {
+					allocator->Deallocate(string.text.buffer);
+					return true;
 				}
-			}
-			deck_pointer->RecalculateFreeChunks();
+				return false;
+			});
 
 			// Release the temporary vertex buffers and the temporary allocation
 			instanced_buffer.Release();
@@ -3237,15 +3216,15 @@ namespace ECSEngine {
 	void FlushType(DebugDrawer* drawer, Deck* deck, ThreadStream* thread_buffering, DebugPrimitive debug_primitive, unsigned int thread_index) {
 		if (thread_buffering[thread_index].size > 0) {
 			drawer->thread_locks[debug_primitive]->Lock();
-			size_t copy_index = deck->ReserveIndices(thread_buffering[thread_index].size, false);
-			if (copy_index == -1) {
+			bool needs_allocator_lock = !deck->CanAddNoResize(thread_buffering[thread_index].size);
+			if (needs_allocator_lock) {
 				drawer->allocator->Lock();
-				deck->AllocateChunks(1);
-				drawer->allocator->Unlock();
-				copy_index = deck->ReserveIndices(thread_buffering[thread_index].size, false);
 			}
-			auto* copy_position = &((*deck)[copy_index]);
-			thread_buffering[thread_index].CopyTo(copy_position);
+			// This will take care of the reserve
+			deck->AddStream(thread_buffering[thread_index]);
+			if (needs_allocator_lock) {
+				drawer->allocator->Unlock();
+			}
 
 			// Before resetting the size, if the redirect is activated, we need to redirect
 			// The entries that were added

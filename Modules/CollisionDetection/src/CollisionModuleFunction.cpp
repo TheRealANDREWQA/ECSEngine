@@ -155,11 +155,13 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	Matrix entity_matrix = GetEntityTransformMatrix(translation, rotation, scale);
 	ConvexHull transformed_hull = collider->hull.TransformToTemporary(entity_matrix, &stack_allocator);
 	
-	for (size_t index = 0; index < transformed_hull.vertex_size; index++) {
-		ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
-		//if (index == 29) {
+	if (collider->hull_size > 0) {
+		for (size_t index = 0; index < transformed_hull.vertex_size; index++) {
+			//ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
+			//if (index == 29) {
 			//data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(index), float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
-		//}
+			//}
+		}
 	}
 	//if (transformed_hull.vertex_size > 273) {
 	//	ECS_FORMAT_TEMP_STRING(nr, "{#}", 259);
@@ -171,7 +173,7 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	unsigned int edge_count = collider->hull_size > transformed_hull.edges.size ? transformed_hull.edges.size : collider->hull_size;
 	for (size_t index = 0; index < edge_count; index++) {
 		Line3D line = transformed_hull.GetEdgePoints(index);
-		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
+		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN, DebugDrawCallOptions{ true, false, 1.0f });
 	}
 	//for (size_t index = 0; index < transformed_hull.faces.size; index++) {
 	//	const ConvexHullFace& face = transformed_hull.faces[index];

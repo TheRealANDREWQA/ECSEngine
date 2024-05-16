@@ -24,32 +24,14 @@ namespace ECSEngine {
 	private:
 		template<typename ElementType>
 		size_t AddImpl(ElementType element_type) {
-			// The available chunks are completely full
-			if (chunks_with_space.size == 0) {
-				// The deck is completely full, need to reallocate the buffer of buffers and the chunks with elements
-				if (buffers.size == buffers.capacity) {
-					if (buffers.capacity > 0) {
-						chunks_with_space.Deallocate(buffers.allocator);
-					}
-					buffers.Resize((size_t)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2.0f));
-					chunks_with_space.Initialize(buffers.allocator, buffers.capacity);
-					// Make the size 0
-					chunks_with_space.size = 0;
-				}
-
-				// A new chunk must be allocated
-				void* chunk_allocation = AllocateEx(buffers.allocator, sizeof(T) * chunk_size);
-				unsigned int add_position = buffers.Add({ chunk_allocation, 0, (unsigned int)chunk_size });
-				chunks_with_space.Add(add_position);
+			if (size == GetAllocatedElementCount()) {
+				Reserve();
 			}
-
-			unsigned int index = buffers[chunks_with_space[0]].Add(element_type);
-			size_t previous_elements_count = (size_t)chunks_with_space[0] * chunk_size;
-
-			if (buffers[chunks_with_space[0]].size == buffers[chunks_with_space[0]].capacity) {
-				chunks_with_space.Remove(0);
-			}
-			return previous_elements_count + (size_t)index;
+			
+			size_t chunk_to_add = RangeSelector::Chunk(size, chunk_size, miscellaneous);
+			buffers[chunk_to_add].Add(element_type);
+			size++;
+			return size - 1;
 		}
 
 	public:
@@ -62,33 +44,63 @@ namespace ECSEngine {
 			return AddImpl(element);
 		}
 
-		ECS_INLINE void AddStream(Stream<T> other) {
-			ReserveNewElements(other.size);
-			for (size_t index = 0; index < other.size; index++) {
-				Add(other[index]);
+		size_t AddStream(Stream<T> other) {
+			Reserve(other.size);
+			size_t initial_size = size;
+
+			// Use an efficient memcpy version, instead of the element
+			// By element add
+			size_t starting_chunk = RangeSelector::Chunk(size, chunk_size, miscellaneous);
+			size += other.size;
+			size_t chunk_index = starting_chunk;
+			while (other.size > 0) {
+				size_t current_chunk_space = chunk_size - buffers[chunk_index].size;
+				Stream<T> current_addition = other;
+				current_addition.size = ClampMax(current_addition.size, current_chunk_space);
+				buffers[chunk_index].AddStream(current_addition);
+				other.Advance(current_addition.size);
+				chunk_index++;
 			}
+
+			return initial_size;
 		}
 
-		void AddDeck(const Deck<T, RangeSelector>& deck) {
+		size_t AddDeck(const Deck<T, RangeSelector>& deck) {
 			size_t deck_size = deck.GetElementCount();
-			ReserveNewElements(deck_size);
-			for (size_t index = 0; index < deck_size; index++) {
-				Add(deck[index]);
+			size_t initial_size = size;
+			
+			Reserve(deck_size);
+			// We can use the chunk by chunk addition
+			size_t deck_chunks = SlotsFor(deck.size, deck.chunk_size);
+			for (size_t index = 0; index < deck_chunks; index++) {
+				AddStream(deck.buffers[index]);
 			}
+
+			return initial_size;
 		}
 
 		// Allocates memory for extra count chunks
 		void AllocateChunks(size_t count) {
+			unsigned int current_capacity = buffers.capacity;
+			unsigned int new_capacity = 0;
 			if (buffers.size + count > buffers.capacity) {
-				Resize((unsigned int)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2.0f));
+				new_capacity = (unsigned int)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2.0f);
+				buffers.Resize(new_capacity);	
+			}
+			else {
+				new_capacity = buffers.size + count;
 			}
 
-			for (size_t index = buffers.size; index < buffers.size + count; index++) {
-				void* allocation = AllocateEx(buffers.allocator, buffers[index].MemoryOf(chunk_size));
-				buffers[index].InitializeFromBuffer(allocation, 0, chunk_size);
-				chunks_with_space.Add(index);
+			for (unsigned int index = 0; index < count; index++) {
+				buffers[buffers.size + index].Initialize(buffers.allocator, 0, chunk_size);
 			}
 			buffers.size += count;
+		}
+
+		// Returns true if the elements can be added without having to allocate new chunks
+		bool CanAddNoResize(size_t count) const {
+			size_t allocated_elements = GetAllocatedElementCount();
+			return allocated_elements - size >= count;
 		}
 
 		Deck<T, RangeSelector> Copy(AllocatorPolymorphic allocator) const {
@@ -99,19 +111,8 @@ namespace ECSEngine {
 		}
 
 		void CopyOther(const void* memory, size_t count) {
-			ResizeNoCopyElementCount(count);
-			size_t written_count = 0;
-			uintptr_t ptr = (uintptr_t)memory;
-			for (size_t index = 0; index < buffers.size; index++) {
-				size_t writes_to_remain = count - written_count;
-				size_t write_count = chunk_size < writes_to_remain ? chunk_size : writes_to_remain;
-				memcpy(buffers[index].buffer, (void*)ptr, sizeof(T) * write_count);
-				buffers[index].size += write_count;
-				written_count += write_count;
-				ptr += sizeof(T) * write_count;
-			}
-			chunks_with_space.size = buffers[buffers.size - 1].size < buffers[buffers.size - 1].capacity;
-			chunks_with_space[0] = buffers.size - 1;
+			ResizeNoCopy(count);
+			AddStream(Stream<T>(memory, count));
 		}
 
 		ECS_INLINE void CopyOther(Stream<T> other) {
@@ -135,19 +136,7 @@ namespace ECSEngine {
 				ECSEngine::DeallocateEx(buffers.allocator, buffers[index].buffer);
 			}
 			buffers.FreeBuffer();
-			chunks_with_space.Deallocate(buffers.allocator);
-			chunks_with_space = {};
-		}
-
-		bool Exists(size_t index) const {
-			size_t chunk_index = RangeSelector::Chunk(index, chunk_size, miscellaneous);
-			size_t in_chunk_index = RangeSelector::Buffer(index, chunk_size, miscellaneous);
-			// Search for the chunk index inside the chunks_with_space
-			if (SearchBytes(chunks_with_space, (unsigned int)chunk_index) == -1) {
-				return false;
-			}
-
-			return in_chunk_index < buffers[chunk_index].size;
+			size = 0;
 		}
 
 		// The functor receives a uint2 which has in the x component
@@ -156,9 +145,9 @@ namespace ECSEngine {
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
 		bool ForEachIndex(Functor&& functor) const {
-			for (unsigned int index = 0; index < buffers.size; index++) {
+			for (size_t index = 0; index < buffers.size; index++) {
 				for (unsigned int subindex = 0; subindex < buffers[index].size; subindex++) {
-					uint2 indices = { index, subindex };
+					ulong2 indices = { index, subindex };
 					if constexpr (early_exit) {
 						if (functor(indices)) {
 							return true;
@@ -177,24 +166,76 @@ namespace ECSEngine {
 		// Return true when you want to delete an item, else false
 		// Don't perform the erase by yourself, this function will do it
 		// Returns true if it early exited, else false
-		template<typename Functor>
+		// If the many_erases is set to true, it will use a more efficient erasing
+		// Strategy, that will not involve swaps. The default one is with swaps,
+		// And if many elements will be removed, it can result in many unneeded swaps
+		template<bool early_exit = false, bool many_erases = false, typename Functor>
 		bool ForEachIndexWithErase(Functor&& functor) {
-			for (unsigned int index = 0; index < buffers.size; index++) {
+			static_assert((early_exit && !many_erases) || !early_exit, "Invalid ForEachIndexWithErase options - can't choose many erases with early exit");
+
+			bool* valid_mask = nullptr;
+			bool any_valid_mask = false;
+			size_t valid_mask_allocation_size = size * sizeof(bool);
+			if constexpr (many_erases) {
+				valid_mask = (bool*)ECS_MALLOCA_ALLOCATOR_DEFAULT(valid_mask_allocation_size, buffers.allocator);
+			}
+
+			for (size_t index = 0; index < buffers.size; index++) {
 				for (unsigned int subindex = 0; subindex < buffers[index].size; subindex++) {
-					uint2 indices = { index, subindex };
+					ulong2 indices = { index, subindex };
 					if constexpr (early_exit) {
 						if (functor(indices)) {
+							// Don't need to take care of MALLOCA, since it can't compile with both of them on
 							return true;
 						}
 					}
 					else {
 						if (functor(indices)) {
-							buffers[index].RemoveSwapBack(subindex);
-							subindex--;
+							if constexpr (!many_erases) {
+								RemoveSwapBack(index * chunk_size + subindex);
+								subindex--;
+							}
+							else {
+								valid_mask[index * chunk_size + subindex] = false;
+							}
+						}
+						else {
+							if constexpr (many_erases) {
+								valid_mask[index * chunk_size + subindex] = true;
+								any_valid_mask = true;
+							}
 						}
 					}
 				}
 			}
+
+			if constexpr (many_erases) {
+				if (any_valid_mask) {
+					// Iterate through the boolean mask and add the elements that are marked
+					size_t write_index = 0;
+					for (size_t index = 0; index < size; index++) {
+						if (valid_mask[index]) {
+							operator[](write_index) = operator[](index);
+							write_index++;
+						}
+					}
+					size = write_index;
+					for (size_t index = 0; index < buffers.size; index++) {
+						buffers[index].size = 0;
+					}
+					size_t chunks_with_elements = SlotsFor(size, chunk_size);
+					for (size_t index = 0; index < chunks_with_elements; index++) {
+						buffers[index].size = ClampMax(write_index, chunk_size);
+						write_index -= buffers[index].size;
+					}
+				}
+				else {
+					// Can reset
+					Reset();
+				}
+				ECS_FREEA_ALLOCATOR_DEFAULT(valid_mask, valid_mask_allocation_size, buffers.allocator);
+			}
+
 			return false;
 		}
 
@@ -203,25 +244,14 @@ namespace ECSEngine {
 		// in this mode you can erase elements while you are iterating - but don't
 		// remove the elements by yourself, this function will do it!)
 		// Returns true if it early exited, else false
-		template<bool early_exit = false, typename Functor>
+		// If the many_erases is set to true, it will use a more efficient erasing
+		// Strategy, that will not involve swaps. The default one is with swaps,
+		// And if many elements will be removed, it can result in many unneeded swaps
+		template<bool early_exit = false, bool many_erases = false, typename Functor>
 		bool ForEach(Functor&& functor) {
-			for (size_t index = 0; index < buffers.size; index++) {
-				for (unsigned int subindex = 0; subindex < buffers[index].size; subindex++) {
-					T* element = &buffers[index][subindex];
-					if constexpr (early_exit) {
-						if (functor(*element)) {
-							return true;
-						}
-					}
-					else {
-						if (functor(*element)) {
-							buffers[index].RemoveSwapBack(subindex);
-							subindex--;
-						}
-					}
-				}
-			}
-			return false;
+			return ForEachIndexWithErase<early_exit, many_erases>([&](ulong2 indices) {
+				return functor(buffers[indices.x][indices.y]);
+			});
 		}
 
 		// CONST VARIANT
@@ -262,252 +292,124 @@ namespace ECSEngine {
 			return buffers.size;
 		}
 
-		size_t GetElementCount() const {
-			size_t count = 0;
-			for (size_t index = 0; index < buffers.size; index++) {
-				count += buffers[index].size;
-			}
-			return count;
+		ECS_INLINE size_t GetElementCount() const {
+			return size;
 		}
 
-		void RecalculateFreeChunks() {
-			chunks_with_space.size = 0;
-			for (size_t index = 0; index < buffers.size; index++) {
-				if (buffers[index].size < buffers[index].capacity) {
-					chunks_with_space.Add(index);
+		// Returns the count of elements that the current chunks support
+		ECS_INLINE size_t GetAllocatedElementCount() const {
+			return buffers.size * chunk_size;
+		}
+
+		// If the boolean is set, it will deallocate the buffers as well
+		void Reset(bool deallocate_existing_chunks = false) {
+			if (deallocate_existing_chunks) {
+				Deallocate();
+			}
+			else {
+				size = 0;
+				for (size_t index = 0; index < buffers.size; index++) {
+					buffers[index].size = 0;
 				}
 			}
-		}
-
-		void Reset() {
-			for (size_t index = 0; index < buffers.size; index++) {
-				buffers[index].size = 0;
-				chunks_with_space[index] = index;
-			}
-			chunks_with_space.size = buffers.size;
 		}
 
 		void RemoveSwapBack(size_t index) {
+			// Remove swap back the last element in the whole deck with the current one
+			// Don't use remove swap back on the chunk since it will leave empty holes
 			size_t chunk_index = RangeSelector::Chunk(index, chunk_size, miscellaneous);
 			size_t in_chunk_index = RangeSelector::Buffer(index, chunk_size, miscellaneous);
-			buffers[chunk_index].RemoveSwapBack(in_chunk_index);
-		}
-
-		// Returns a new entry index. The boolean controls whether or not it will
-		// Make a new allocation in case there is not enough space. If it doesn't
-		// make an allocation and there is no empty entry, it will return -1
-		size_t ReserveIndex(bool allocate_if_not_present = true) {
-			return ReserveIndices(1, allocate_if_not_present);
-		}
-
-		// Returns the starting index for a range large enough for the count
-		// The boolean controls whether or not it will make an allocation in
-		// case there is no such range available. Returns -1 in that case
-		size_t ReserveIndices(size_t count, bool allocate_if_not_available) {
-			ECS_ASSERT(count <= chunk_size);
-
-			for (size_t index = 0; index < chunks_with_space.size; index++) {
-				unsigned int difference = buffers[chunks_with_space[index]].capacity - buffers[chunks_with_space[index]].size;
-				if (difference >= count) {
-					unsigned int offset = buffers[chunks_with_space[index]].size;
-					buffers[chunks_with_space[index]].size += count;
-					size_t final_index = chunks_with_space[index] * chunk_size + offset;
-					if (difference == count) {
-						chunks_with_space.RemoveSwapBack(index);
-					}
-					return final_index;
-				}
-			}
-
-			if (allocate_if_not_available) {
-				AllocateChunks(1);
-				T* pointer = buffers[buffers.size - 1].buffer;
-				buffers[buffers.size - 1].size += count;
-				// If a new chunk was requested and it is entirely occupated, remove it from the available chunks
-				chunks_with_space.size -= count == chunk_size;
-				return (buffers.size - 1) * chunk_size;
-			}
-			return -1;
-		}
-
-		// Makes sure there is enough space for extra count elements
-		// The new elements can be added using Add()
-		void ReserveNewElements(size_t count) {
-			size_t available_elements = 0;
-			for (size_t index = 0; index < buffers.size && available_elements < count; index++) {
-				available_elements += buffers[index].capacity - buffers[index].size;
-			}
-
-			// If there are more available elements than the count, do nothing
-			// More chunks need to be allocated only if the available elements are less
-			// than the count
-			if (available_elements < count) {
-				size_t difference = count - available_elements;
-				size_t new_chunks = difference / chunk_size + (difference % chunk_size != 0);
-				AllocateChunks(new_chunks);
-			}
-		}
-
-		void ResizeElementCount(unsigned int element_count) {
-			Resize(element_count / chunk_size + (element_count % chunk_size != 0));
-		}
-
-		void Resize(unsigned int new_chunk_count) {
-			// Get the chunk difference
-			unsigned int chunk_difference = new_chunk_count - buffers.size;
-
-			unsigned int old_count = buffers.size;
-
-			if (new_chunk_count > buffers.capacity) {
-				// Keep the old valid chunks and copy them later into the new buffer
-				unsigned int old_chunk_count = chunks_with_space.size;
-				unsigned int* old_counts = (unsigned int*)ECS_STACK_ALLOC(sizeof(unsigned int) * old_chunk_count);
-				for (size_t index = 0; index < old_chunk_count; index++) {
-					old_counts[index] = chunks_with_space[index];
-				}
-
-				bool should_deallocate_buffers = buffers.capacity > 0;
-				buffers.Resize(new_chunk_count);
-				if (should_deallocate_buffers) {
-					chunks_with_space.Deallocate(buffers.allocator);
-				}
-				chunks_with_space = { AllocateEx(buffers.allocator, sizeof(unsigned int) * new_chunk_count), old_chunk_count };
-				// Copy the old counts
-				for (size_t index = 0; index < old_chunk_count; index++) {
-					chunks_with_space[index] = old_counts[index];
-				}
-			}
-		}
-
-		void ResizeNoCopyElementCount(size_t element_count) {
-			ResizeNoCopy(element_count / chunk_size + (element_count % chunk_size != 0));
-		}
-
-		// It will not copy the elements, they will be lost
-		void ResizeNoCopy(size_t new_chunk_count) {
-			// Deallocate every chunk
-			for (size_t index = 0; index < buffers.size; index++) {
-				ECSEngine::DeallocateEx(buffers.allocator, buffers[index].buffer);
-			}
-
-			if (buffers.capacity > 0) {
-				// Deallocate the available chunks
-				chunks_with_space.Deallocate(buffers.allocator);
-			}
-
-			// Reallocate the available chunks
-			chunks_with_space = { AllocateEx(buffers.allocator, sizeof(unsigned int) * new_chunk_count), new_chunk_count };
-			for (size_t index = 0; index < new_chunk_count; index++) {
-				chunks_with_space[index] = index;
-			}
-
-			buffers.ResizeNoCopy(new_chunk_count);
-			// Allocate every chunk
-			for (size_t index = 0; index < new_chunk_count; index++) {
-				buffers[index].InitializeFromBuffer(AllocateEx(buffers.allocator, sizeof(T) * chunk_size), 0, chunk_size);
-			}
-			buffers.size = new_chunk_count;
-		}
-
-		void Swap(size_t first, size_t second) {
-			T copy = operator[](first);
-			operator[](first) = operator[](second);
-			operator[](second) = copy;
-		}
-
-		void Trim() {
-			// Get the current count of elements
-			size_t total_element_count = 0;
-			for (size_t index = 0; index < buffers.size; index++) {
-				total_element_count += buffers[index].size;
-			}
-
-			// Calculate the chunk count
-			size_t chunk_count = total_element_count / chunk_size + total_element_count % chunk_size != 0;
 			
-			// If the chunk count is smaller than the current count, release the appropriate chunks
-			for (size_t index = chunk_count; index < buffers.size; index++) {
-				ECSEngine::DeallocateEx(buffers.allocator, buffers[index].buffer);
+			size_t last_element_chunk_index = RangeSelector::Chunk(size - 1, chunk_size, miscellaneous);
+			size_t last_element_in_chunk_index = RangeSelector::Buffer(size - 1, chunk_size, miscellaneous);
 
-				size_t copied_count = 0;
-				// Shift elements from the upper chunks into the lower ones
-				for (size_t subindex = 0; subindex < chunk_count && copied_count < buffers[index].size; subindex++) {
-					size_t current_capacity = buffers[subindex].capacity - buffers[subindex].size;
-					if (current_capacity > 0) {
-						// Check the memcpy count
-						size_t upper_buffer_count = buffers[index].size - copied_count;
-						size_t copy_element_count = upper_buffer_count < current_capacity ? upper_buffer_count : current_capacity;
-
-						memcpy(buffers[subindex].buffer + buffers[subindex].size, buffers[index].buffer, copy_element_count * sizeof(T));
-						buffers[subindex].size += copy_element_count;
-						copied_count += copy_element_count;
-					}
-				}
-			}
-
-			// Reset the valid chunks stream
-			chunks_with_space.size = 0;
-			for (size_t index = 0; index < chunk_count; index++) {
-				if (buffers[index].size < buffers[index].capacity) {
-					chunks_with_space.Add(index);
-				}
-			}
-
-			buffers.capacity = chunk_count;
-			buffers.size = chunk_count;
+			buffers[chunk_index][in_chunk_index] = buffers[last_element_chunk_index][last_element_in_chunk_index];
+			buffers[last_element_chunk_index].size--;
+			size--;
 		}
 
-		// it will leave another additional_elements over the current size
-		void Trim(unsigned int additional_elements) {
-			// Get the current count of elements
-			size_t total_element_count = 0;
-			for (size_t index = 0; index < buffers.size; index++) {
-				total_element_count += buffers[index].size;
-			}
-			total_element_count += additional_elements;
+		// Makes sure that the given count of elements will be added without
+		// Any new allocations. It will not update the size!!!
+		void Reserve(size_t count = 1) {
+			size_t allocated_count = GetAllocatedElementCount();
+			size_t available_element_count = allocated_count - size;
 
-			// Calculate the chunk count
-			size_t total_chunk_count = total_element_count / chunk_size + total_element_count % chunk_size != 0;
-			total_element_count -= additional_elements;
-			size_t chunk_count = total_element_count / chunk_size + total_element_count % chunk_size != 0;
-
-			// If the total chunk count is smaller than the current count, release the appropriate chunks
-			for (size_t index = total_chunk_count; index < buffers.size; index++) {
-				ECSEngine::DeallocateEx(buffers.allocator, buffers[index].buffer);
+			if (count <= available_element_count) {
+				return;
 			}
 
-			for (size_t index = chunk_count; index < buffers.size; index++) {
-				size_t copied_count = 0;
-				// Shift elements from the upper chunks into the lower ones
-				for (size_t subindex = 0; subindex < chunk_count && copied_count < buffers[index].size; subindex++) {
-					size_t current_capacity = buffers[subindex].capacity - buffers[subindex].size;
-					if (current_capacity > 0) {
-						// Check the memcpy count
-						size_t upper_buffer_count = buffers[index].size - copied_count;
-						size_t copy_element_count = upper_buffer_count < current_capacity ? upper_buffer_count : current_capacity;
+			// Calculate the chunk count necessary to be allocated
+			size_t difference = count - available_element_count;
+			size_t new_chunks = SlotsFor(difference, chunk_size);
+			AllocateChunks(new_chunks);
+		}
 
-						memcpy(buffers[subindex].buffer + buffers[subindex].size, buffers[index].buffer, copy_element_count * sizeof(T));
-						buffers[subindex].size += copy_element_count;
-						copied_count += copy_element_count;
-					}
+		// Makes sure that the given count of elements will be added without
+		// Any new allocations. It will update the size
+		size_t ReserveAndUpdateSize(size_t count = 1) {
+			Reserve(count);
+			size_t initial_size = size;
+			size += count;
+
+			// We must update the size of the buffers
+			// For that individual buffer as well
+			size_t initial_chunk = RangeSelector::Chunk(initial_size, chunk_size, miscellaneous);
+			for (size_t index = initial_chunk; index < buffers.size; index++) {
+				size_t add_count = chunk_size - buffers[index].size;
+				add_count = ClampMax(add_count, count);
+				buffers[index].size += add_count;
+				count -= add_count;
+			}
+
+			return initial_size;
+		}
+
+		// It does not change the size, unless elements are trimmed
+		void Resize(size_t new_element_count) {
+			if (new_element_count < size) {
+				// Set the size of all chunks to 0, and then
+				// Set the size for those chunks that have elements
+				for (size_t index = 0; index < buffers.size; index++) {
+					buffers[index].size = 0;
 				}
-			}
-
-			// Reset the valid chunks stream
-			chunks_with_space.size = 0;
-			for (size_t index = 0; index < total_chunk_count; index++) {
-				if (buffers[index].size < buffers[index].capacity) {
-					chunks_with_space.Add(index);
+				size_t max_chunk_count = SlotsFor(new_element_count, chunk_size);
+				for (size_t index = 0; index < max_chunk_count; index++) {
+					buffers[index].size = ClampMax(new_element_count, chunk_size);
+					new_element_count -= buffers[index].size;
 				}
+				size = new_element_count;
 			}
+			else {
+				Reserve(new_element_count - size);
+			}
+		}
 
-			buffers.capacity = total_chunk_count;
-			buffers.size = total_chunk_count;
+		// It does not change the size, unless elements are trimmed
+		void ResizeNoCopy(size_t element_count) {
+			size_t initial_size = size;
+			Deallocate();
+			Initialize(buffers.allocator, SlotsFor(element_count, chunk_size), chunk_size, miscellaneous);
+			size = element_count < initial_size ? element_count : initial_size;
+		}
+
+		ECS_INLINE void Swap(size_t first, size_t second) {
+			swap(operator[](first), operator[](second));
+		}
+
+		// It will remove any unnecessary chunks taking into account any extra elements
+		void Trim(size_t additional_elements = 0) {
+			size_t required_chunks = SlotsFor(size + additional_elements, chunk_size);
+			if (required_chunks < buffers.size) {
+				for (size_t index = required_chunks; index < buffers.size; index++) {
+					buffers[index].Deallocate(buffers.allocator);
+				}
+				buffers.size = required_chunks;
+			}
 		}
 
 		ECS_INLINE T& operator [](size_t index) {
-			unsigned int chunk_index = RangeSelector::Chunk(index, chunk_size, miscellaneous);
-			unsigned int in_chunk_index = RangeSelector::Buffer(index, chunk_size, miscellaneous);
+			size_t chunk_index = RangeSelector::Chunk(index, chunk_size, miscellaneous);
+			size_t in_chunk_index = RangeSelector::Buffer(index, chunk_size, miscellaneous);
 			return buffers[chunk_index][in_chunk_index];
 		}
 
@@ -521,13 +423,11 @@ namespace ECSEngine {
 		void Initialize(AllocatorPolymorphic _allocator, size_t _initial_chunk_count, size_t _chunk_size, size_t _miscellaneous = 0) {
 			chunk_size = _chunk_size;
 			miscellaneous = _miscellaneous;
+			size = 0;
 			buffers.Initialize(_allocator, _initial_chunk_count);
 			buffers.size = _initial_chunk_count;
-			chunks_with_space = { AllocateEx(_allocator, sizeof(unsigned int) * _initial_chunk_count), 0 };
 			for (size_t index = 0; index < _initial_chunk_count; index++) {
-				void* chunk = AllocateEx(_allocator, sizeof(T) * chunk_size);
-				buffers[index] = { chunk, 0, (unsigned int)chunk_size };
-				chunks_with_space.Add((unsigned int)index);
+				buffers[index].Initialize(_allocator, 0, chunk_size);
 			}
 		}
 
@@ -547,16 +447,15 @@ namespace ECSEngine {
 				deck.buffers[0] = { data.buffer, (unsigned int)data.size, (unsigned int)data.size };
 				deck.chunk_size = next_capacity.x;
 				deck.miscellaneous = next_capacity.y;
-
-				deck.chunks_with_space.InitializeFromBuffer(temp_buffer, 1);
-				deck.chunks_with_space[0] = 0;
+				deck.size = data.size;
 			}
 
 			return deck;
 		}
 
 		ResizableStream<CapacityStream<T>> buffers;
-		Stream<unsigned int> chunks_with_space;
+		// This is the current element count
+		size_t size;
 		size_t chunk_size;
 		size_t miscellaneous;
 	};

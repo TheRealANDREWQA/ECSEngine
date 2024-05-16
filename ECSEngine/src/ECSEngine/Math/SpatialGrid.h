@@ -31,7 +31,7 @@ namespace ECSEngine {
 		// Adds a new cell. Make sure it doesn't exist previosuly!
 		// Returns the newly assigned chunk for it
 		Chunk* AddCell(uint3 indices) {
-			unsigned int chunk_index = chunks.ReserveIndex();
+			unsigned int chunk_index = chunks.ReserveAndUpdateSize();
 			Cell cell = chunk_index;
 			Chunk* chunk = &chunks[chunk_index];
 			chunk->count = 0;
@@ -61,7 +61,7 @@ namespace ECSEngine {
 		}
 
 		Chunk* ChainChunk(Chunk* current_chunk) {
-			unsigned int chunk_index = chunks.ReserveIndex();
+			unsigned int chunk_index = chunks.ReserveAndUpdateSize();
 			Chunk* new_chunk = &chunks[chunk_index];
 			new_chunk->count = 0;
 			new_chunk->next_chunk = -1;

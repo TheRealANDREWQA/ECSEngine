@@ -13,6 +13,19 @@ namespace DirectX {
 #define ECS_ALIGNED_FREE(allocation) _aligned_free(allocation)
 #define ECS_ALIGNED_REALLOC(allocation, size, alignment) _aligned_realloc(allocation, size, alignment)
 
+// It will allocate a buffer from the stack if it is bellow
+// The threshold, else it will use the allocator. You must deallocate
+// This using ECS_FREEA_ALLOCATOR in order to not leak the allocation
+#define ECS_MALLOCA_ALLOCATOR(size, stack_size, allocator) ((size) <= (stack_size) ? ECS_STACK_ALLOC(size) : ECSEngine::Allocate(allocator, size))
+#define ECS_FREEA_ALLOCATOR(allocation, size, stack_size, allocator) do { if ((size) > (stack_size)) { ECSEngine::Deallocate(allocator, allocation); } } while (0) 
+
+// It will allocate a buffer from the stack if it is bellow
+// The threshold, else it will use the allocator. You must deallocate
+// This using ECS_FREEA_ALLOCATOR in order to not leak the allocation
+// It uses a default stack value of 64 ECS_KB
+#define ECS_MALLOCA_ALLOCATOR_DEFAULT(size, allocator) ECS_MALLOCA_ALLOCATOR(size, ECS_KB * 64, allocator)
+#define ECS_FREEA_ALLOCATOR_DEFAULT(allocation, size, allocator) ECS_FREEA_ALLOCATOR(allocation, size, ECS_KB * 64, allocator)
+
 namespace ECSEngine {
 
 	typedef void* (*AllocateFunction)(void* allocator, size_t size, size_t alignment, DebugInfo debug_info);
