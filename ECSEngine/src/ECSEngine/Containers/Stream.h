@@ -1242,9 +1242,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void Swap(unsigned int first, unsigned int second) {
-			T copy = buffer[first];
-			buffer[first] = buffer[second];
-			buffer[second] = copy;
+			swap(buffer[first], buffer[second]);
 		}
 
 		void SwapContents() {

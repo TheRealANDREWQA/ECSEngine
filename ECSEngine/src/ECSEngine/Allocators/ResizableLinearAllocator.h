@@ -12,7 +12,12 @@ namespace ECSEngine {
 #define ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(name, stack_capacity, heap_capacity)	void* allocation##name = ECS_STACK_ALLOC(stack_capacity); \
 																					ResizableLinearAllocator name(allocation##name, stack_capacity, heap_capacity, {nullptr}); \
 																					StackScope<ResizableLinearAllocatorScopeDeallocator> scope##name({ &name });
-																					
+	
+	// The same as the other variant, but instead it uses a different backing allocator																		
+#define ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR_BACKUP(name, stack_capacity, heap_capacity, backup) \
+	/* We can simply use the other variant and change the backup allocator */ \
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(name, stack_capacity, heap_capacity); \
+	name.m_backup = backup;
 
 	struct ECSENGINE_API ResizableLinearAllocator : public AllocatorBase
 	{

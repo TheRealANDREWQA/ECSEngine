@@ -71,8 +71,8 @@ static SIMDVectorMask EdgeGaussMapTest(const Vector3& A, const Vector3& B, const
 
 	// This section of code is left as commented just in case some issues arise
 	// And the crossreferencing of values is desired
-	Vector3 N_ab_cross = Normalize(Cross(A, B));
-	Vector3 N_cd_cross = Normalize(Cross(C, D));
+	Vector3 N_ab_cross = Normalize(Cross(B, A));
+	Vector3 N_cd_cross = Normalize(Cross(D, C));
 	SIMDVectorMask almost_parallel = IsParallelAngleMask(Normalize(A), Normalize(B), DegToRad(3.0f));
 	SIMDVectorMask almost_parallel2 = IsParallelAngleMask(Normalize(C), Normalize(D), DegToRad(3.0f));
 	if (horizontal_or(almost_parallel)) {
@@ -95,27 +95,28 @@ static SIMDVectorMask EdgeGaussMapTest(const Vector3& A, const Vector3& B, const
 	SIMDVectorMask t2_mask_cross = val1_cross < zero_tolerance_vector;
 	SIMDVectorMask hemisphere_mask_cross = val2_cross > -zero_tolerance_vector;
 	SIMDVectorMask result_cross = t1_mask_cross && t2_mask_cross && hemisphere_mask_cross;
+	SIMDVectorMask result = result_cross;
 
-	// We still perform the normalization here since
-	// We can get some small values for the normals
-	// That would result in faulty values
-	Vector3 N_ab = Normalize(AB_normal);
-	Vector3 N_cd = Normalize(CD_normal);
+	//// We still perform the normalization here since
+	//// We can get some small values for the normals
+	//// That would result in faulty values
+	//Vector3 N_ab = Normalize(AB_normal);
+	//Vector3 N_cd = Normalize(CD_normal);
 
-	Vec8f t1_1 = Dot(C, N_ab);
-	Vec8f t1_2 = Dot(D, N_ab);
-	Vec8f t2_1 = Dot(A, N_cd);
-	Vec8f t2_2 = Dot(B, N_cd);
+	//Vec8f t1_1 = Dot(C, N_ab);
+	//Vec8f t1_2 = Dot(D, N_ab);
+	//Vec8f t2_1 = Dot(A, N_cd);
+	//Vec8f t2_2 = Dot(B, N_cd);
 
-	Vec8f t1_val = t1_1 * t1_2;
-	Vec8f t2_val = t2_1 * t2_2;
-	Vec8f hemisphere_val = t2_2 * t1_1;
+	//Vec8f t1_val = t1_1 * t1_2;
+	//Vec8f t2_val = t2_1 * t2_2;
+	//Vec8f hemisphere_val = t2_2 * t1_1;
 
-	SIMDVectorMask t1_mask = t1_val < zero_tolerance_vector;
-	SIMDVectorMask t2_mask = t2_val < zero_tolerance_vector;
-	SIMDVectorMask hemisphere_mask = hemisphere_val > -zero_tolerance_vector;
+	//SIMDVectorMask t1_mask = t1_val < zero_tolerance_vector;
+	//SIMDVectorMask t2_mask = t2_val < zero_tolerance_vector;
+	//SIMDVectorMask hemisphere_mask = hemisphere_val > -zero_tolerance_vector;
+	//SIMDVectorMask result = t1_mask && t2_mask && hemisphere_mask;
 
-	SIMDVectorMask result = t1_mask && t2_mask && hemisphere_mask;
 	return result;
 }
 
@@ -447,7 +448,7 @@ SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
 
 	SATEdgeQuery edge_query = SATEdge(first, second);
 	
-	//SATEdgeQuery projection_edge_query = SATEdgeProjection(first, second);
+	SATEdgeQuery projection_edge_query = SATEdgeProjection(first, second);
 	//edge_query.edge_2_index = 3;
 	//edge_query.edge_1_index = projection_edge_query.edge_1_index;
 	//edge_query.edge_2_index = projection_edge_query.edge_2_index;

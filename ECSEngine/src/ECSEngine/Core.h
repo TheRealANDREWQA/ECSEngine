@@ -76,6 +76,13 @@ namespace ECSEngine {
 		return a > b ? a : b;
 	}
 
+	template<typename T>
+	ECS_INLINE constexpr void swap(T& a, T& b) {
+		T copy = a;
+		a = b;
+		b = copy;
+	}
+
 }
 
 #define ECS_BIT(bit_index) (1 << bit_index)
