@@ -3,7 +3,7 @@
 
 bool CompareConvexCollider(const ConvexCollider* first, const ConvexCollider* second)
 {
-	return first->hull.vertex_size == second->hull.vertex_size && SoACompare(
+	return first->hull_size == second->hull_size && first->hull.vertex_size == second->hull.vertex_size && SoACompare(
 		first->hull.vertex_size,
 		first->hull.vertices_x,
 		second->hull.vertices_x,
