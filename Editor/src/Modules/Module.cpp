@@ -913,12 +913,35 @@ static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	// Get the external references. We need to unload these before trying to procede
 	GetModuleDLLExternalReferences(editor_state, index, external_references);
 
-	// Returns true if there are import to be made
-	auto execute_import = [&]() {
-		ECS_STACK_CAPACITY_STREAM(unsigned int, import_references, 512);
+	// It the module has imports, it will fill them in the stream
+	// If all the imports are in their good state, the imports will
+	// Be empty
+	auto has_imports = [&](CapacityStream<unsigned int>& import_references) {
 		GetModuleDLLImports(editor_state, index, import_references);
 
 		if (import_references.size > 0) {
+			// Determine if the imports are all in the good state
+			// If they are, then we can report that there are no imports
+			// Since they are all ready
+			bool all_are_compiled = true;
+			for (unsigned int index = 0; index < import_references.size; index++) {
+				if (GetModuleLoadStatus(editor_state, import_references[index], configuration) != EDITOR_MODULE_LOAD_GOOD) {
+					all_are_compiled = false;
+					break;
+				}
+			}
+
+			if (!all_are_compiled) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	// Returns true if there are import to be made
+	auto execute_import = [&]() {
+		ECS_STACK_CAPACITY_STREAM(unsigned int, import_references, 512);
+		if (has_imports(import_references)) {
 			// We also need the dll imports to be finished
 			RunCmdCommandDLLImportData import_data;
 			import_data.command = command;
@@ -945,7 +968,11 @@ static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	};
 
 	if (external_references.size > 0) {
-		bool executes_import = execute_import();
+		// We need to add this event before the import event in order to have
+		// This event remove the external dependencies, such that the import
+		// And the current module compilation succeeds
+		ECS_STACK_CAPACITY_STREAM(unsigned int, imports, 512);
+		bool has_imports_ = has_imports(imports);
 
 		RunCmdCommandAfterExternalDependencyData wait_data;
 		wait_data.command = command;
@@ -955,8 +982,10 @@ static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 		wait_data.unloaded_dependencies.Initialize(editor_state->EditorAllocator(), 0);
 		wait_data.dependencies.InitializeAndCopy(editor_state->EditorAllocator(), external_references);
 		wait_data.disable_logging = disable_logging;
-		wait_data.has_imports = executes_import;
+		wait_data.has_imports = has_imports_;
 		EditorAddEvent(editor_state, RunCmdCommandAfterExternalDependency, &wait_data, sizeof(wait_data));
+
+		execute_import();
 		return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
 	}
 	else if (execute_import()) {

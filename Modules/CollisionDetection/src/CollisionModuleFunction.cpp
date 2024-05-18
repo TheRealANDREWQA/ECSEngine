@@ -104,6 +104,7 @@ static void ModuleCopyConvexCollider(ComponentCopyFunctionData* data) {
 	ConvexCollider* destination = (ConvexCollider*)data->destination;
 	const ConvexCollider* source = (const ConvexCollider*)data->source;
 	destination->hull.Copy(&source->hull, data->allocator, data->deallocate_previous);
+	destination->hull_size = source->hull_size;
 }
 
 static void BuildConvexColliderTaskBase(ModuleComponentBuildFunctionData* data) {
