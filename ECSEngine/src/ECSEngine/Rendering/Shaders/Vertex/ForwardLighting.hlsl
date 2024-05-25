@@ -24,7 +24,7 @@ VS_OUTPUT main(in VS_INPUT input, out float4 position : SV_Position)
 {
     VS_OUTPUT output;
     
-    //The clip space position
+    // The clip space position
     position = mul(float4(input.position, 1.0f), world_view_projection_matrix);
     
     // World space normal

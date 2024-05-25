@@ -29,19 +29,25 @@ namespace ECSEngine {
 
 	void ConvertASCIIToWide(wchar_t* wide_string, const char* pointer, size_t max_w_string_count) {
 		int result = MultiByteToWideChar(CP_ACP, 0, pointer, -1, wide_string, max_w_string_count);
+		ECS_ASSERT(result != 0);
 	}
 
 	void ConvertASCIIToWide(wchar_t* wide_string, Stream<char> pointer, size_t max_w_string_count) {
 		int result = MultiByteToWideChar(CP_ACP, 0, pointer.buffer, pointer.size, wide_string, max_w_string_count);
+		ECS_ASSERT(result != 0);
 	}
 
 	void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string) {
-		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
+		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, 
+			wide_string.buffer + wide_string.size, wide_string.capacity - wide_string.size);
+		ECS_ASSERT(result != 0);
 		wide_string.size += ascii_string.size;
 	}
 
 	void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
-		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
+		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, 
+			wide_string.buffer + wide_string.size, wide_string.capacity - wide_string.size);
+		ECS_ASSERT(result != 0);
 		wide_string.size += ascii_string.size;
 	}
 
@@ -1528,59 +1534,59 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename CharacterType>
-	static void SplitStringImpl(Stream<CharacterType> string, CharacterType delimiter, CapacityStream<Stream<CharacterType>>& splits)
+	static void SplitStringImpl(Stream<CharacterType> string, CharacterType delimiter, AdditionStream<Stream<CharacterType>> splits)
 	{
 		Stream<CharacterType> found_delimiter = FindFirstCharacter(string, delimiter);
 		while (found_delimiter.size > 0) {
-			splits.AddAssert({ string.buffer, string.size - found_delimiter.size });
+			splits.Add({ string.buffer, string.size - found_delimiter.size });
 			found_delimiter.Advance();
 			string = found_delimiter;
 			found_delimiter = FindFirstCharacter(string, delimiter);
 		}
 
 		if (string.size > 0) {
-			splits.AddAssert(string);
+			splits.Add(string);
 		}
 	}
 
 	template<typename CharacterType>
-	static void SplitStringImpl(Stream<CharacterType> string, Stream<CharacterType> delimiter, CapacityStream<Stream<CharacterType>>& splits)
+	static void SplitStringImpl(Stream<CharacterType> string, Stream<CharacterType> delimiter, AdditionStream<Stream<CharacterType>> splits)
 	{
 		Stream<CharacterType> found_delimiter = FindFirstToken(string, delimiter);
 		while (found_delimiter.size > 0) {
-			splits.AddAssert({ string.buffer, string.size - found_delimiter.size });
+			splits.Add({ string.buffer, string.size - found_delimiter.size });
 			found_delimiter.Advance(delimiter.size);
 			string = found_delimiter;
 			found_delimiter = FindFirstToken(string, delimiter);
 		}
 
 		if (string.size > 0) {
-			splits.AddAssert(string);
+			splits.Add(string);
 		}
 	}
 
-	void SplitString(Stream<char> string, char delimiter, CapacityStream<Stream<char>>& splits)
+	void SplitString(Stream<char> string, char delimiter, AdditionStream<Stream<char>> splits)
 	{
 		SplitStringImpl<char>(string, delimiter, splits);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	void SplitString(Stream<wchar_t> string, wchar_t delimiter, CapacityStream<Stream<wchar_t>>& splits)
+	void SplitString(Stream<wchar_t> string, wchar_t delimiter, AdditionStream<Stream<wchar_t>> splits)
 	{
 		SplitStringImpl<wchar_t>(string, delimiter, splits);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	void SplitString(Stream<char> string, Stream<char> delimiter, CapacityStream<Stream<char>>& splits)
+	void SplitString(Stream<char> string, Stream<char> delimiter, AdditionStream<Stream<char>> splits)
 	{
 		SplitStringImpl<char>(string, delimiter, splits);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	void SplitString(Stream<wchar_t> string, Stream<wchar_t> delimiter, CapacityStream<Stream<wchar_t>>& splits)
+	void SplitString(Stream<wchar_t> string, Stream<wchar_t> delimiter, AdditionStream<Stream<wchar_t>> splits)
 	{
 		SplitStringImpl<wchar_t>(string, delimiter, splits);
 	}
@@ -2377,9 +2383,19 @@ namespace ECSEngine {
 		return ConvertCharactersToIntImpl<int64_t, char, true>(string, success);
 	}
 
+	int64_t ConvertCharactersToIntStrict(Stream<wchar_t> string, bool& success)
+	{
+		return ConvertCharactersToIntImpl<int64_t, wchar_t, true>(string, success);
+	}
+
 	// ----------------------------------------------------------------------------------------------------------
 
 	float ConvertCharactersToFloatStrict(Stream<char> string, bool& success)
+	{
+		return ConvertCharactersToFloatingPoint<float, true>(string, success);
+	}
+
+	float ConvertCharactersToFloatStrict(Stream<wchar_t> string, bool& success)
 	{
 		return ConvertCharactersToFloatingPoint<float, true>(string, success);
 	}
@@ -2391,6 +2407,11 @@ namespace ECSEngine {
 		return ConvertCharactersToFloatingPoint<double, true>(string, success);
 	}
 
+	double ConvertCharactersToDoubleStrict(Stream<wchar_t> string, bool& success)
+	{
+		return ConvertCharactersToFloatingPoint<double, true>(string, success);
+	}
+
 	// ----------------------------------------------------------------------------------------------------------
 
 	void* ConvertCharactersToPointerStrict(Stream<char> string, bool& success)
@@ -2398,10 +2419,15 @@ namespace ECSEngine {
 		return ConvertCharactersToPointerImpl<true>(string, success);
 	}
 
+	void* ConvertCharactersToPointerStrict(Stream<wchar_t> string, bool& success)
+	{
+		return ConvertCharactersToPointerImpl<true>(string, success);
+	}
+
 	// ----------------------------------------------------------------------------------------------------------
 
-	bool ConvertCharactersToBoolStrict(Stream<char> string, bool& success)
-	{
+	template<typename CharacterType>
+	bool ConvertCharactersToBoolStrictImpl(Stream<CharacterType> string, bool& success) {
 		char value = ConvertCharactersToBool(string);
 		if (value == -1) {
 			success = false;
@@ -2411,6 +2437,16 @@ namespace ECSEngine {
 			success = true;
 			return value == 0 ? false : true;
 		}
+	}
+
+	bool ConvertCharactersToBoolStrict(Stream<char> string, bool& success)
+	{
+		return ConvertCharactersToBoolStrictImpl(string, success);
+	}
+
+	bool ConvertCharactersToBoolStrict(Stream<wchar_t> string, bool& success)
+	{
+		return ConvertCharactersToBoolStrictImpl(string, success);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------

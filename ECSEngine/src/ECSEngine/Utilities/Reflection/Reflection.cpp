@@ -3613,7 +3613,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										Stream<char> argument_string = GetStringParameter(misc_macro);
 										if (argument_string.size > 0) {
 											ECS_STACK_CAPACITY_STREAM(Stream<char>, soa_parameters, 32);
-											SplitString(argument_string, ',', soa_parameters);
+											SplitString(argument_string, ',', &soa_parameters);
 											if (soa_parameters.size >= 5) {
 												// Eliminate leading or trailing whitespace
 												for (unsigned int soa_index = 0; soa_index < soa_parameters.size; soa_index++) {
@@ -7034,7 +7034,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		{
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, subfields, 32);
 			// Split the field by dots
-			SplitString(field, ".", subfields);
+			SplitString(field, ".", &subfields);
 
 			ReflectionTypeFieldDeep deep_field;
 			deep_field.type = nullptr;

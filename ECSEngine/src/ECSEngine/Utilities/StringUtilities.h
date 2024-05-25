@@ -485,16 +485,16 @@ string_name.AssertCapacity();
 	ECSENGINE_API void ReplaceOccurences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string = nullptr);
 
 	// These splits will only reference the content inside the string
-	ECSENGINE_API void SplitString(Stream<char> string, char delimiter, CapacityStream<Stream<char>>& splits);
+	ECSENGINE_API void SplitString(Stream<char> string, char delimiter, AdditionStream<Stream<char>> splits);
 
 	// These splits will only reference the content inside the string
-	ECSENGINE_API void SplitString(Stream<wchar_t> string, wchar_t delimiter, CapacityStream<Stream<wchar_t>>& splits);
+	ECSENGINE_API void SplitString(Stream<wchar_t> string, wchar_t delimiter, AdditionStream<Stream<wchar_t>> splits);
 
 	// These splits will only reference the content inside the string
-	ECSENGINE_API void SplitString(Stream<char> string, Stream<char> delimiter, CapacityStream<Stream<char>>& splits);
+	ECSENGINE_API void SplitString(Stream<char> string, Stream<char> delimiter, AdditionStream<Stream<char>> splits);
 
 	// These splits will only reference the content inside the string
-	ECSENGINE_API void SplitString(Stream<wchar_t> string, Stream<wchar_t> delimiter, CapacityStream<Stream<wchar_t>>& splits);
+	ECSENGINE_API void SplitString(Stream<wchar_t> string, Stream<wchar_t> delimiter, AdditionStream<Stream<wchar_t>> splits);
 
 	// Returns the string isolated from other strings delimited using the given delimiter
 	ECSENGINE_API Stream<char> IsolateString(Stream<char> string, Stream<char> token, Stream<char> delimiter);
@@ -641,23 +641,44 @@ string_name.AssertCapacity();
 
 	// It will try to convert the string into a number using strict verification
 	// It will write the success status in the given boolean
-	int64_t ConvertCharactersToIntStrict(Stream<char> string, bool& success);
+	ECSENGINE_API int64_t ConvertCharactersToIntStrict(Stream<char> string, bool& success);
+
+	// It will try to convert the string into a number using strict verification
+	// It will write the success status in the given boolean
+	ECSENGINE_API int64_t ConvertCharactersToIntStrict(Stream<wchar_t> string, bool& success);
 
 	// It will try to convert the string into a float using strict verification
 	// It will write the success status in the given boolean
-	float ConvertCharactersToFloatStrict(Stream<char> string, bool& success);
+	ECSENGINE_API float ConvertCharactersToFloatStrict(Stream<char> string, bool& success);
+
+	// It will try to convert the string into a float using strict verification
+	// It will write the success status in the given boolean
+	ECSENGINE_API float ConvertCharactersToFloatStrict(Stream<wchar_t> string, bool& success);
 
 	// It will try to convert the string into a double using strict verification
 	// It will write the success status in the given boolean
-	double ConvertCharactersToDoubleStrict(Stream<char> string, bool& success);
+	ECSENGINE_API double ConvertCharactersToDoubleStrict(Stream<char> string, bool& success);
+
+	// It will try to convert the string into a double using strict verification
+	// It will write the success status in the given boolean
+	ECSENGINE_API double ConvertCharactersToDoubleStrict(Stream<wchar_t> string, bool& success);
 
 	// It will try to convert the string into a pointer using strict verification
 	// It will write the success status in the given boolean
-	void* ConvertCharactersToPointerStrict(Stream<char> string, bool& success);
+	ECSENGINE_API void* ConvertCharactersToPointerStrict(Stream<char> string, bool& success);
+
+	// It will try to convert the string into a pointer using strict verification
+	// It will write the success status in the given boolean
+	ECSENGINE_API void* ConvertCharactersToPointerStrict(Stream<wchar_t> string, bool& success);
 
 	// It will try to convert the string into a bool using strict verification
 	// It will write the success status in the given boolean
-	bool ConvertCharactersToBoolStrict(Stream<char> string, bool& success);
+	ECSENGINE_API bool ConvertCharactersToBoolStrict(Stream<char> string, bool& success);
+
+	// It will try to convert the string into a bool using strict verification
+	// It will write the success status in the given boolean
+	ECSENGINE_API bool ConvertCharactersToBoolStrict(Stream<wchar_t> string, bool& success);
+
 
 #define ECS_CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X (1 << 0)
 #define ECS_CONVERT_INT_TO_HEX_ADD_NORMAL_VALUE_AFTER (1 << 1)

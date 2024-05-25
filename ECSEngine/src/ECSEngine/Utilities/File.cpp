@@ -710,13 +710,13 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	Stream<void> ReadWholeFile(Stream<wchar_t> path, bool binary, AllocatorPolymorphic allocator)
+	Stream<void> ReadWholeFile(Stream<wchar_t> path, bool binary, AllocatorPolymorphic allocator, bool* empty_file)
 	{
 		if (binary) {
-			return ReadWholeFileBinary(path, allocator);
+			return ReadWholeFileBinary(path, allocator, empty_file);
 		}
 		else {
-			return ReadWholeFileText(path, allocator);
+			return ReadWholeFileText(path, allocator, empty_file);
 		}
 	}
 
@@ -750,8 +750,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	Stream<void> ReadWholeFileBinary(Stream<wchar_t> path, AllocatorPolymorphic allocator)
+	Stream<void> ReadWholeFileBinary(Stream<wchar_t> path, AllocatorPolymorphic allocator, bool* empty_file)
 	{
+		if (empty_file) {
+			*empty_file = false;
+		}
+
 		ECS_FILE_HANDLE file_handle = 0;
 		ECS_FILE_ACCESS_FLAGS access = ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_BINARY;
 		ECS_FILE_STATUS_FLAGS status = OpenFile(path, &file_handle, access);
@@ -762,6 +766,9 @@ namespace ECSEngine {
 		ScopedFile scoped_file({ file_handle });
 		size_t file_size = GetFileByteSize(file_handle);
 		if (file_size == 0) {
+			if (empty_file) {
+				*empty_file = true;
+			}
 			return  { nullptr, 0 };
 		}
 
@@ -778,8 +785,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	Stream<char> ReadWholeFileText(Stream<wchar_t> path, AllocatorPolymorphic allocator)
+	Stream<char> ReadWholeFileText(Stream<wchar_t> path, AllocatorPolymorphic allocator, bool* empty_file)
 	{
+		if (empty_file) {
+			*empty_file = false;
+		}
+
 		ECS_FILE_HANDLE file_handle = 0;
 		ECS_FILE_ACCESS_FLAGS access = ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_TEXT;
 		ECS_FILE_STATUS_FLAGS status = OpenFile(path, &file_handle, access);
@@ -790,6 +801,9 @@ namespace ECSEngine {
 		ScopedFile scoped_file({ file_handle });
 		size_t file_size = GetFileByteSize(file_handle);
 		if (file_size == 0) {
+			if (empty_file) {
+				*empty_file = true;
+			}
 			return  { nullptr, 0 };
 		}
 

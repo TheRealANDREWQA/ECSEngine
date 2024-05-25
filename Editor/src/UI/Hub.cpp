@@ -185,6 +185,28 @@ void RestoreHubProjectAction(ActionData* action_data) {
 	}
 }
 
+static void AutoDetectCompilerAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	ECS_STACK_CAPACITY_STREAM(wchar_t, compiler_path, 512);
+	if (AutoDetectCompiler(&compiler_path)) {
+		editor_state->settings.compiler_path.Deallocate(editor_state->EditorAllocator());
+		editor_state->settings.compiler_path = compiler_path.Copy(editor_state->EditorAllocator());
+		if (!SaveEditorFile(editor_state)) {
+			CreateErrorMessageWindow(system, "Failed to write editor file after successfully auto detecting the compiler path");
+		}
+		else {
+			ECS_STACK_CAPACITY_STREAM(char, ascii_message, 1024);
+			ECS_FORMAT_STRING(ascii_message, "Successfully detected compiler as {#}", compiler_path);
+			CreateErrorMessageWindow(system, ascii_message);
+		}
+	}
+	else {
+		CreateErrorMessageWindow(system, "Failed to auto detect compiler path");
+	}
+}
+
 void SortHubProjects(EditorState* editor_state)
 {
 	HubData* data = editor_state->hub_data;
@@ -302,6 +324,7 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 	drawer.Button(BUTTON_CONFIGURATION, config, "Reload Projects", { ReloadHubProjectsAction, editor_state, 0 });
 
 	drawer.Button(BUTTON_CONFIGURATION, config, "Default Project UI", { CreateProjectUITemplatePreviewAction, editor_state, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(BUTTON_CONFIGURATION, config, "Auto Detect Compiler Path", { AutoDetectCompilerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM });
 
 #pragma endregion
 

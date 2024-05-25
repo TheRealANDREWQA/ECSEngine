@@ -450,7 +450,7 @@ namespace ECSEngine {
 
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, subfields, 32);
 			// Split the field by dots
-			SplitString(field_name, ".", subfields);
+			SplitString(field_name, ".", &subfields);
 
 			while (subfields.size > 1) {
 				unsigned int current_field_index = functor(subfields[0]);

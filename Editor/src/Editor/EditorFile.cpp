@@ -10,6 +10,9 @@ ECS_TOOLS;
 #define SAVE_FILE_ERROR_MESSAGE "Saving editor file failed."
 #define LOAD_FILE_ERROR_MESSAGE "Loading editor file failed."
 
+#define COMPILER_PATH_STRING "Compiler Path: "
+#define PROJECTS_STRING "Projects:"
+
 #define MISSING_PROJECTS_WINDOW_NAME "Missing Projects"
 
 #define MULTISECTION_COUNT 2
@@ -81,17 +84,24 @@ void CreateMissingProjectWindow(EditorState* editor_state, Stream<Stream<char>> 
 bool SaveEditorFile(EditorState* editor_state) {
 	HubData* hub_data = (HubData*)editor_state->hub_data;
 	ECS_FILE_HANDLE file = 0;
-	ECS_FILE_STATUS_FLAGS status = OpenFile(EDITOR_FILE, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_TRUNCATE_FILE);
+	//ECS_FILE_STATUS_FLAGS status = OpenFile(EDITOR_FILE, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE);
+	ECS_FILE_STATUS_FLAGS status = FileCreate(EDITOR_FILE, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE);
 
 	if (status == ECS_FILE_STATUS_OK) {
 		ScopedFile scoped_file({ file });
 
-		unsigned short project_count = hub_data->projects.size;
-		bool success = WriteFile(file, { &project_count, sizeof(project_count) });
-		for (size_t index = 0; index < hub_data->projects.size && success; index++) {
-			unsigned short project_path_size = (unsigned short)hub_data->projects[index].data.path.size;
-			success &= WriteFile(file, { &project_path_size, sizeof(project_path_size) });
-			success &= WriteFile(file, { hub_data->projects[index].data.path.buffer, sizeof(wchar_t) * project_path_size });
+		ECS_STACK_CAPACITY_STREAM(char, compiler_path_ascii, 512);
+		ConvertWideCharsToASCII(editor_state->settings.compiler_path, compiler_path_ascii);
+		compiler_path_ascii.AddAssert('\n');
+		bool success = WriteFile(file, Stream<char>(COMPILER_PATH_STRING));
+		success &= WriteFile(file, compiler_path_ascii);
+		success &= WriteFile(file, Stream<char>(PROJECTS_STRING "\n"));
+		for (size_t index = 0; index < hub_data->projects.size; index++) {
+			ECS_STACK_CAPACITY_STREAM(char, project_ascii_path, 512);
+			project_ascii_path.Add('\t');
+			ConvertWideCharsToASCII(hub_data->projects[index].data.path, project_ascii_path);
+			project_ascii_path.AddAssert('\n');
+			success &= WriteFile(file, project_ascii_path);
 		}
 
 		//success &= FlushFileToDisk(file);
@@ -103,46 +113,51 @@ bool SaveEditorFile(EditorState* editor_state) {
 bool LoadEditorFile(EditorState* editor_state) {
 	HubData* hub_data = (HubData*)editor_state->hub_data;
 
-	ECS_FILE_HANDLE file = 0;
-	ECS_FILE_STATUS_FLAGS status = OpenFile(EDITOR_FILE, &file, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_BINARY);
+	Stream<char> file_data = ReadWholeFileText(EDITOR_FILE, editor_state->EditorAllocator());
 
 	const char* _invalid_file_paths[64];
 	Stream<Stream<char>> invalid_file_paths(_invalid_file_paths, 0);
 
-	wchar_t temp_path[256];
+	if (file_data.size > 0) {
+		ResizableStream<Stream<char>> lines = { editor_state->EditorAllocator(), 8 };
+		SplitString(file_data, '\n', &lines);
 
-	if (status == ECS_FILE_STATUS_OK) {
-		ScopedFile scoped_file({ file });
+		auto scope_deallocator = StackScope([&]() {
+			file_data.Deallocate(editor_state->EditorAllocator());
+			lines.FreeBuffer();
+		});
 
-		unsigned short project_count = 0;
-		bool success = true;
-		success &= ReadFileExact(file, { &project_count, sizeof(project_count) });
-		if (project_count >= hub_data->projects.capacity) {
+		if (!lines[0].StartsWith(COMPILER_PATH_STRING)) {
 			return false;
 		}
-		
+
+		// Use ASCII paths, even tho we internally store them as wide
+		Stream<char> compiler_path_ascii = lines[0].AdvanceReturn(strlen(COMPILER_PATH_STRING));
+		compiler_path_ascii = SkipWhitespace(compiler_path_ascii);
+		compiler_path_ascii = SkipWhitespace(compiler_path_ascii, -1);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, compiler_path, 512);
+		ConvertASCIIToWide(compiler_path, compiler_path_ascii);
+		editor_state->settings.compiler_path = compiler_path.Copy(editor_state->EditorAllocator());
+
 		hub_data->projects.size = 0;
-		for (unsigned short index = 0; index < project_count && success; index++) {
-			unsigned short path_size = 0;
-			success &= ReadFileExact(file, { &path_size, sizeof(path_size) });
+		if (lines[1].StartsWith(PROJECTS_STRING)) {
+			for (size_t index = 2; index < lines.size; index++) {
+				Stream<char> line = SkipWhitespace(lines[index]);
+				line = SkipWhitespace(line, -1);
 
-			if (path_size == 0) {
-				return false;
-			}
-
-			// If the file doesn't exist, it means it has been destroyed beforehand in the OS
-			// So add it to the invalid stream
-			success &= ReadFileExact(file, { temp_path, sizeof(wchar_t) * path_size });
-			Path current_path(temp_path, path_size);
-			current_path[path_size] = L'\0';
-			if (!ValidateProjectPath(current_path)) {
-				void* allocation = Allocate(editor_state->EditorAllocator(), sizeof(char) * (current_path.size + 1), alignof(char));
-				CapacityStream<char> allocated_path(allocation, 0, current_path.size + 1);
-				ConvertWideCharsToASCII(current_path, allocated_path);
-				invalid_file_paths.Add(allocated_path.buffer);
-			}
-			else {
-				AddHubProject(editor_state, current_path);
+				ECS_STACK_CAPACITY_STREAM(wchar_t, wide_path, 512);
+				ConvertASCIIToWide(wide_path, line);
+				if (wide_path.size > 0) {
+					if (!ValidateProjectPath(wide_path)) {
+						void* allocation = Allocate(editor_state->EditorAllocator(), sizeof(char) * (wide_path.size + 1), alignof(char));
+						CapacityStream<char> allocated_path(allocation, 0, wide_path.size + 1);
+						ConvertWideCharsToASCII(wide_path, allocated_path);
+						invalid_file_paths.Add(allocated_path.buffer);
+					}
+					else {
+						AddHubProject(editor_state, wide_path);
+					}
+				}
 			}
 		}
 
@@ -155,7 +170,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 			SaveEditorFile(editor_state);
 		}
 
-		return success;
+		return true;
 	}
 	return false;
 }
