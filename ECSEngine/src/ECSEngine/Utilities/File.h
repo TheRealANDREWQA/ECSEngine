@@ -275,17 +275,23 @@ namespace ECSEngine {
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
 	// or from Malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
-	ECSENGINE_API Stream<void> ReadWholeFile(Stream<wchar_t> path, bool binary, AllocatorPolymorphic allocator = { nullptr });
+	// The bool* parameter can be used to discern when the return value is { nullptr, 0 } due to the file
+	// Being empty rather than an error
+	ECSENGINE_API Stream<void> ReadWholeFile(Stream<wchar_t> path, bool binary, AllocatorPolymorphic allocator = { nullptr }, bool* empty_file = nullptr);
 
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
 	// or from Malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
-	ECSENGINE_API Stream<void> ReadWholeFileBinary(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr });
+	// The bool* parameter can be used to discern when the return value is { nullptr, 0 } due to the file
+	// Being empty rather than an error
+	ECSENGINE_API Stream<void> ReadWholeFileBinary(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr }, bool* empty_file = nullptr);
 
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
 	// or from Malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
-	ECSENGINE_API Stream<char> ReadWholeFileText(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr });
+	// The bool* parameter can be used to discern when the return value is { nullptr, 0 } due to the file
+	// Being empty rather than an error
+	ECSENGINE_API Stream<char> ReadWholeFileText(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr }, bool* empty_file = nullptr);
 
 	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
 	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFileBinary(Stream<wchar_t> path, Stream<void> buffer, bool append_data = false);

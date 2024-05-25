@@ -6,7 +6,7 @@
 using namespace ECSEngine;
 ECS_TOOLS;
 
-constexpr const wchar_t* EDITOR_FILE = L"Resources/projects.ecseditor";
+constexpr const wchar_t* EDITOR_FILE = L"Resources/.ecseditor";
 
 struct EditorState;
 

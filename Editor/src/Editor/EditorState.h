@@ -13,6 +13,7 @@
 #include "EditorStateTypes.h"
 #include "ECSEngineInput.h"
 #include "EditorVisualizeTexture.h"
+#include "EditorSettings.h"
 #include "../Assets/Prefab.h"
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
@@ -88,6 +89,7 @@ struct EditorState {
 		return allocator;
 	}
 
+	EditorSettings settings;
 	EditorStateTick editor_tick;
 	ECSEngine::Tools::UISystem* ui_system;
 	ECSEngine::ResourceManager* ui_resource_manager;
