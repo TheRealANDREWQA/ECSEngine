@@ -188,22 +188,45 @@ void RestoreHubProjectAction(ActionData* action_data) {
 static void AutoDetectCompilerAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
+	const size_t MAX_COMPILERS = 64;
+
 	EditorState* editor_state = (EditorState*)_data;
 	ECS_STACK_CAPACITY_STREAM(wchar_t, compiler_path, 512);
-	if (AutoDetectCompiler(&compiler_path)) {
-		editor_state->settings.compiler_path.Deallocate(editor_state->EditorAllocator());
-		editor_state->settings.compiler_path = compiler_path.Copy(editor_state->EditorAllocator());
-		if (!SaveEditorFile(editor_state)) {
-			CreateErrorMessageWindow(system, "Failed to write editor file after successfully auto detecting the compiler path");
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 8);
+	ECS_STACK_CAPACITY_STREAM(CompilerVersion, versions, MAX_COMPILERS);
+	AutoDetectCompilers(&stack_allocator, &versions);
+
+	if (versions.size > 0) {
+		auto select_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			EditorState* editor_state = (EditorState*)_data;
+			ChooseElementCallbackData* callback_data = (ChooseElementCallbackData*)_additional_data;
+			if (!ChangeCompilerVersion(editor_state, callback_data->additional_data.As<wchar_t>())) {
+				CreateErrorMessageWindow(system, "Failed to save editor file after changing compiler version");
+			}
+		};
+		
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, version_display_names, MAX_COMPILERS);
+		ECS_STACK_CAPACITY_STREAM(Stream<void>, paths, MAX_COMPILERS);
+		for (size_t index = 0; index < versions.size; index++) {
+			version_display_names[index] = versions[index].aggregated;
+			paths[index] = versions[index].path;
 		}
-		else {
-			ECS_STACK_CAPACITY_STREAM(char, ascii_message, 1024);
-			ECS_FORMAT_STRING(ascii_message, "Successfully detected compiler as {#}", compiler_path);
-			CreateErrorMessageWindow(system, ascii_message);
-		}
+		version_display_names.size = versions.size;
+		paths.size = versions.size;
+
+		ChooseElementWindowData choose_data;
+		choose_data.element_labels = version_display_names;
+		choose_data.description = "Select the compiler version";
+		choose_data.window_name = "Select Compiler";
+		choose_data.select_handler = { select_action, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		choose_data.additional_data = paths;
+
+		CreateChooseElementWindow(system, choose_data);
 	}
 	else {
-		CreateErrorMessageWindow(system, "Failed to auto detect compiler path");
+		CreateErrorMessageWindow(system, "Failed to auto detect any compiler path");
 	}
 }
 

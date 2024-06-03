@@ -78,7 +78,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 				description.AssertCapacity();
 				ChooseOptionWindowData choose_data;
 
-				const char* button_names[2] = { "Keep", "Clean" };
+				Stream<char> button_names[2] = { "Keep", "Clean" };
 				choose_data.button_names = button_names;
 				choose_data.description = description;
 
@@ -897,7 +897,7 @@ void SaveCurrentProjectConfirmation(ActionData* action_data) {
 
 void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> description, UIActionHandler callback)
 {
-	const char* button_names[] = { "Save", "Don't Save" };
+	Stream<char> button_names[] = { "Save", "Don't Save" };
 	UIActionHandler handlers[2];
 	ChooseOptionWindowData choose_data;
 	choose_data.button_names = button_names;

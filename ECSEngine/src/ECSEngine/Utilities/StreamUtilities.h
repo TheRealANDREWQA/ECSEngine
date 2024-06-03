@@ -182,7 +182,7 @@ namespace ECSEngine {
 
 	template<typename FirstStream, typename... Streams>
 	void CoalesceStreams(AllocatorPolymorphic allocator, FirstStream* first_stream, Streams... streams) {
-		size_t total_size = stream0.MemoryOf(stream0.size) + stream1.MemoryOf(stream1.size);
+		size_t total_size = StreamsTotalSize(first_stream, streams...);
 		void* allocation = AllocateEx(allocator, total_size);
 
 		CoalesceStreamsImplementation(allocation, first_stream, streams...);

@@ -1,8 +1,17 @@
 #include "editorpch.h"
+#include "EditorSettings.h"
+#include "EditorState.h"
+#include "EditorFile.h"
 
 using namespace ECSEngine;
 
-bool AutoDetectCompiler(AdditionStream<wchar_t> path) {
+bool ChangeCompilerVersion(EditorState* editor_state, Stream<wchar_t> path) {
+	editor_state->settings.compiler_path.Deallocate(editor_state->EditorAllocator());
+	editor_state->settings.compiler_path = path.Copy(editor_state->EditorAllocator());
+	return SaveEditorFile(editor_state);
+}
+
+void AutoDetectCompilers(AllocatorPolymorphic allocator, AdditionStream<CompilerVersion> compiler_versions) {
 	// Use the default installation path
 	// Start with the latest version of MSVC, which is 2022
 	// And it is 64 bit only, located at C:\Program Files\Microsoft Visual Studio\2022
@@ -20,28 +29,27 @@ bool AutoDetectCompiler(AdditionStream<wchar_t> path) {
 		// Community, Professional and Enterprise at the current time
 		// Return true if it found a tier and adds it to the path
 		// Else false
-		auto determine_visual_studio_tier = [](CapacityStream<wchar_t>& path) {
-			const Stream<wchar_t> tiers[] = {
-				L"Enterprise",
-				L"Professional",
-				L"Community"
-			};
+		const Stream<wchar_t> tiers[] = {
+			L"Enterprise",
+			L"Professional",
+			L"Community"
+		};
 
-			if (path[path.size - 1] != ECS_OS_PATH_SEPARATOR) {
-				path.AddAssert(ECS_OS_PATH_SEPARATOR);
-			}
-
+		// Returns the available tier, 
+		auto determine_visual_studio_tier = [tiers](CapacityStream<wchar_t>& path, CapacityStream<Stream<wchar_t>>& available_tiers) {
 			unsigned int path_size = path.size;
 			for (size_t index = 0; index < ECS_COUNTOF(tiers); index++) {
 				path.size = path_size;
+				if (path[path.size - 1] != ECS_OS_PATH_SEPARATOR) {
+					path.AddAssert(ECS_OS_PATH_SEPARATOR);
+				}
 				path.AddStreamAssert(tiers[index]);
 				if (ExistsFileOrFolder(path)) {
-					return true;
+					available_tiers.AddAssert(tiers[index]);
 				}
 			}
 
 			path.size = path_size;
-			return false;
 		};
 
 		if (ExistsFileOrFolder(default_path)) {
@@ -49,7 +57,8 @@ bool AutoDetectCompiler(AdditionStream<wchar_t> path) {
 			options.relative_root = default_path;
 			bool success = GetDirectories(default_path, &stack_allocator, &folders, options);
 			if (success) {
-				unsigned int* folder_years = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * folders.size);
+				default_path.Add(ECS_OS_PATH_SEPARATOR);
+				unsigned int initial_path_size = default_path.size;
 				// Consider only the directories that are numbers
 				for (unsigned int index = 0; index < folders.size; index++) {
 					bool success = false;
@@ -57,48 +66,42 @@ bool AutoDetectCompiler(AdditionStream<wchar_t> path) {
 					if (success) {
 						// Sanity Clamp
 						if (year >= 2010 && year < 2100) {
-							folder_years[index] = year;
-						}
-						else {
-							folder_years[index] = 0;
-						}
-					}
-					else {
-						folder_years[index] = 0;
-					}
-				}
+							default_path.size = initial_path_size;
+							ConvertIntToChars(default_path, year);
+							default_path.Add(ECS_OS_PATH_SEPARATOR);
+							ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, available_tiers, 32);
+							determine_visual_studio_tier(default_path, available_tiers);
+							if (available_tiers.size > 0) {
+								for (size_t subindex = 0; subindex < available_tiers.size; subindex++) {
+									default_path.AddStreamAssert(available_tiers[subindex]);
+									default_path.AddStreamAssert(L"\\MSBuild\\Current\\Bin");
 
-				InsertionSort<false>(folder_years, folders.size);
+									CapacityStream<char> aggregated;
+									// use a small capacity
+									aggregated.Initialize(allocator, 0, sizeof(char) * 40);
+									ConvertWideCharsToASCII(available_tiers[subindex], aggregated);
+									Stream<char> tier = aggregated;
+									aggregated.AddAssert(' ');
+									size_t written_count = ConvertIntToChars(aggregated, year);
+									Stream<char> year = aggregated.SliceAt(aggregated.size - written_count);
 
-				if (folder_years[0] > 0) {
-					// Use this version over 32 bit ones
-					// Determine the tier after converting the int to chars
-					default_path.Add(ECS_OS_PATH_SEPARATOR);
-					unsigned int initial_path_size = default_path.size;
-					for (size_t index = 0; index < folders.size; index++) {
-						default_path.size = initial_path_size;
-						ConvertIntToChars(default_path, folder_years[index]);
-						if (determine_visual_studio_tier(default_path)) {
-							default_path.AddAssert(L"\\MSBuild\\Current\\Bin");
-							path.AddStream(default_path);
-							return true;
+									compiler_versions.Add({ aggregated, year, tier, default_path.Copy(allocator) });
+								}
+							};
 						}
 					}
 				}
 			}
 		}
-
-		return false;
 	};
 	
-	if (search_folder()) {
-		// x64 path was found
-		return true;
-	}
-
-	// Search x96 path
+	// Search the x64 path
+	search_folder();
+	
+	// Search the x96 path
 	stack_allocator.Clear();
 	folders.size = 0;
 	default_path.CopyOther(L"C:\\Program Files (x86)\\Microsoft Visual Studio");
-	return search_folder();
+	
+	search_folder();
 }
