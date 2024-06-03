@@ -1299,7 +1299,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		unsigned int CreateChooseOptionWindow(UISystem* system, ChooseOptionWindowData data)
+		unsigned int CreateChooseOptionWindow(UISystem* system, const ChooseOptionWindowData& data)
 		{
 			UIWindowDescriptor descriptor;
 			descriptor.draw = ChooseOptionWindowDraw;
@@ -1308,51 +1308,43 @@ namespace ECSEngine {
 			descriptor.initial_size_x = 10000.0f;
 			descriptor.initial_size_y = 10000.0f;
 
-			// coallesce allocation
+			// Coalesce the allocation
 			size_t total_size = sizeof(UIActionHandler) * data.handlers.size + data.description.size + 1 + sizeof(const char*) * data.handlers.size;
-			size_t button_sizes[128];
-			ECS_ASSERT(data.handlers.size < 128);
 
 			for (size_t index = 0; index < data.handlers.size; index++) {
-				button_sizes[index] = strlen(data.button_names[index]) + 1;
-				total_size += button_sizes[index];
+				total_size += data.button_names[index].size;
 			}
+
+			ChooseOptionWindowData allocated_data = data;
 
 			void* allocation = system->m_memory->Allocate(total_size);
 			uintptr_t ptr = (uintptr_t)allocation;
 			memcpy(allocation, data.handlers.buffer, data.handlers.size * sizeof(UIActionHandler));
+			allocated_data.handlers.buffer = (UIActionHandler*)allocation;
 			ptr += sizeof(UIActionHandler) * data.handlers.size;
 
+			Stream<char>* new_button_names = (Stream<char>*)ptr;
+			memcpy((void*)ptr, data.button_names, sizeof(*data.button_names) * data.handlers.size);
+			ptr += sizeof(*data.button_names) * data.handlers.size;
 			for (size_t index = 0; index < data.handlers.size; index++) {
-				memcpy((void*)ptr, data.button_names[index], button_sizes[index] * sizeof(char));
-				data.button_names[index] = (const char*)ptr;
-				ptr += sizeof(char) * button_sizes[index];
+				data.button_names[index] = data.button_names[index].CopyTo(ptr);
 			}
-			data.handlers.buffer = (UIActionHandler*)allocation;
-
-			memcpy((void*)ptr, data.button_names, sizeof(const char*) * data.handlers.size);
-			ptr += sizeof(const char*) * data.handlers.size;
+			allocated_data.button_names = new_button_names;
 
 			data.description.CopyTo((void*)ptr);
 			char* char_ptr = (char*)ptr;
 			char_ptr[data.description.size] = '\0';
-			data.description.buffer = char_ptr;
+			allocated_data.description.buffer = char_ptr;
 
-			descriptor.window_data = &data;
-			descriptor.window_data_size = sizeof(data);
-			descriptor.window_name =  data.window_name.size == 0 ? ECS_TOOLS_UI_CHOOSE_WINDOW_NAME : data.window_name;
+			descriptor.window_data = &allocated_data;
+			descriptor.window_data_size = sizeof(allocated_data);
+			descriptor.window_name = data.window_name.size == 0 ? ECS_TOOLS_UI_CHOOSE_WINDOW_NAME : data.window_name;
 
 			descriptor.destroy_action = ReleaseLockedWindow;
 
-			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_LOCK_WINDOW
-				| UI_DOCKSPACE_POP_UP_WINDOW | UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_DOCKSPACE_LOCK_WINDOW);
-			system->PopUpFrameHandler(ECS_TOOLS_UI_CHOOSE_WINDOW_NAME, false);
+			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL);
+			system->PopUpFrameHandler(descriptor.window_name, false);
 			system->AddWindowMemoryResource(allocation, window_index);
-
-			unsigned int border_index;
-			DockspaceType type;
-			UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, type);
-			system->SetPopUpWindowPosition(window_index, { AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.x), AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.y) });
 			return window_index;
 		}
 		
@@ -1401,6 +1393,136 @@ namespace ECSEngine {
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
 			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		static void ChooseElementWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
+			UI_PREPARE_DRAWER(initialize);
+
+			drawer.DisablePaddingForRenderSliders();
+
+			ChooseElementWindowData* data = (ChooseElementWindowData*)window_data;
+			drawer.Sentence(data->description.buffer);
+			drawer.NextRow();
+
+			const char* SELECTED_ELEMENT_RESOURCE = "__selected_element";
+			unsigned int* selected_element = nullptr;
+			if (initialize) {
+				selected_element = (unsigned int*)drawer.GetMainAllocatorBufferAndStoreAsResource(SELECTED_ELEMENT_RESOURCE, sizeof(unsigned int));
+				*selected_element = -1;
+			}
+			else {
+				selected_element = (unsigned int*)drawer.GetResource(SELECTED_ELEMENT_RESOURCE);
+			}
+
+			UIDrawConfig config;
+			UIConfigWindowDependentSize transform;
+			config.AddFlag(transform);
+
+			for (size_t index = 0; index < data->element_labels.size; index++) {
+				struct ChangeIndexData {
+					unsigned int* selected;
+					unsigned int index;
+				};
+
+				auto change_index = [](ActionData* action_data) {
+					UI_UNPACK_ACTION_DATA;
+
+					ChangeIndexData* data = (ChangeIndexData*)_data;
+					*data->selected = data->index;
+				};
+
+				ChangeIndexData change_index_data = { selected_element, (unsigned int)index };
+				size_t configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+				if (*selected_element != index) {
+					configuration |= UI_CONFIG_LABEL_TRANSPARENT;
+				}
+				drawer.Button(configuration, config, data->element_labels[index], { change_index, &change_index_data, sizeof(change_index_data) });
+				drawer.NextRow();
+			}
+
+			config.flag_count = 0;
+
+			UIConfigActiveState active_state;
+			active_state.state = *selected_element != -1;
+			config.AddFlag(active_state);
+
+			const Stream<char> OK_CHARS = "OK";
+			const Stream<char> CANCEL_CHARS = "Cancel";
+
+			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+			row_layout.AddLabel(OK_CHARS);
+			row_layout.AddLabel(CANCEL_CHARS, ECS_UI_ALIGN_RIGHT);
+
+			struct ConfirmActionData {
+				ChooseElementWindowData* window_data;
+				const unsigned int* selected_element;
+			};
+
+			auto confirm_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				ConfirmActionData* data = (ConfirmActionData*)_data;
+
+				ChooseElementCallbackData callback_data;
+				callback_data.index = *data->selected_element;
+				callback_data.label = data->window_data->element_labels[callback_data.index];
+				callback_data.additional_data = data->window_data->additional_data[callback_data.index];
+				action_data->additional_data = &callback_data;
+
+				action_data->data = data->window_data->select_handler.data;
+				data->window_data->select_handler.action(action_data);
+
+				DestroyCurrentActionWindow(action_data);
+			};
+
+			size_t configuration = UI_CONFIG_ACTIVE_STATE;
+			row_layout.GetTransform(config, configuration);
+			ConfirmActionData confirm_data = { data, selected_element };
+			drawer.Button(configuration, config, OK_CHARS, { confirm_action, &confirm_data, sizeof(confirm_data), ECS_UI_DRAW_SYSTEM });
+
+			config.flag_count = 0;
+			configuration = 0;
+			row_layout.GetTransform(config, configuration);
+			drawer.Button(configuration, config, CANCEL_CHARS, { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+		}
+
+		unsigned int CreateChooseElementWindow(UISystem* system, const ChooseElementWindowData& data) {
+			UIWindowDescriptor descriptor;
+			descriptor.draw = ChooseElementWindowDraw;
+			descriptor.initial_position_x = 0.0f;
+			descriptor.initial_position_y = 0.0f;
+			descriptor.initial_size_x = 10000.0f;
+			descriptor.initial_size_y = 10000.0f;
+
+			ChooseElementWindowData allocated_data = data;
+
+			allocated_data.element_labels = StreamCoalescedDeepCopy(data.element_labels, system->Allocator());
+			allocated_data.description = data.description.Copy(system->Allocator());
+			allocated_data.select_handler.data = CopyNonZero(system->Allocator(), data.select_handler.data, data.select_handler.data_size);
+			if (data.additional_data.size > 0) {
+				ECS_ASSERT(data.additional_data.size == data.element_labels.size);
+				allocated_data.additional_data = StreamCoalescedDeepCopy(data.additional_data, system->Allocator());
+			}
+				
+			descriptor.window_data = &allocated_data;
+			descriptor.window_data_size = sizeof(allocated_data);
+			descriptor.window_name = data.window_name.size == 0 ? ECS_TOOLS_UI_CHOOSE_WINDOW_NAME : data.window_name;
+			descriptor.destroy_action = ReleaseLockedWindow;
+
+			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL);
+
+			system->PopUpFrameHandler(descriptor.window_name, false);
+			system->AddWindowMemoryResource(allocated_data.element_labels.buffer, window_index);
+			system->AddWindowMemoryResource(allocated_data.description.buffer, window_index);
+			if (allocated_data.select_handler.data != data.select_handler.data) {
+				system->AddWindowMemoryResource(allocated_data.select_handler.data, window_index);
+			}
+			if (allocated_data.additional_data.size > 0) {
+				system->AddWindowMemoryResource(allocated_data.additional_data.buffer, window_index);
+			}
+			return window_index;
 		}
 
 		// -------------------------------------------------------------------------------------------------------

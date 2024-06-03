@@ -274,14 +274,43 @@ namespace ECSEngine {
 
 		struct ChooseOptionWindowData {
 			Stream<UIActionHandler> handlers;
-			const char** button_names;
+			// Handlers.size entries must be present
+			Stream<char>* button_names;
 			Stream<char> description;
+			// A default name will be assigned if left empty
 			Stream<char> window_name = { nullptr, 0 };
 		};
 
-		ECSENGINE_API unsigned int CreateChooseOptionWindow(UISystem* system, ChooseOptionWindowData data);
+		// The buttons are placed at the bottom edge
+		ECSENGINE_API unsigned int CreateChooseOptionWindow(UISystem* system, const ChooseOptionWindowData& data);
 
+		// The buttons are placed at the bottom edge
 		ECSENGINE_API void ChooseOptionWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		struct ChooseElementCallbackData {
+			Stream<char> label;
+			unsigned int index;
+			Stream<void> additional_data;
+		};
+
+		struct ChooseElementWindowData {
+			Stream<Stream<char>> element_labels;
+			Stream<char> description;
+			// A default name will be assigned if left empty
+			Stream<char> window_name = { nullptr, 0 };
+			// This handler will be triggered when the user
+			// Has selected ok. The callback receives in the
+			// Additional data field a struct of type ChooseElementCallbackData
+			UIActionHandler select_handler;
+
+			// This is additional data that can be passed to the select
+			// Callback which is allocated per element
+			Stream<Stream<void>> additional_data = {};
+		};
+
+		ECSENGINE_API unsigned int CreateChooseElementWindow(UISystem* system, const ChooseElementWindowData& data);
 
 		// --------------------------------------------------------------------------------------------------------------
 

@@ -5,4 +5,19 @@ struct EditorSettings {
 	ECSEngine::Stream<wchar_t> compiler_path;
 };
 
-bool AutoDetectCompiler(ECSEngine::AdditionStream<wchar_t> path);
+struct CompilerVersion {
+	ECSEngine::Stream<char> aggregated;
+	// This will reference inside the aggregated
+	ECSEngine::Stream<char> year;
+	// Type is related to Community, Professional and Enterprise
+	// This will reference inside the aggregated
+	ECSEngine::Stream<char> type;
+	ECSEngine::Stream<wchar_t> path;
+};
+
+struct EditorState;
+
+// Returns true if the editor file was successfully saved
+bool ChangeCompilerVersion(EditorState* editor_state, ECSEngine::Stream<wchar_t> path);
+
+void AutoDetectCompilers(ECSEngine::AllocatorPolymorphic allocator, ECSEngine::AdditionStream<CompilerVersion> compiler_versions);
