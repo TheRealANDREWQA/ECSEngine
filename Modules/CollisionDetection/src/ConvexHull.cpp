@@ -399,6 +399,9 @@ void ConvexHull::Copy(const ConvexHull* other, AllocatorPolymorphic allocator, b
 		SoACopy(allocator, other->vertex_size, other->vertex_size, &vertices_x, &vertices_y, &vertices_z);
 		edges = other->edges.Copy(allocator);
 		faces = other->faces.Copy(allocator);
+		// We also need to reallocate the faces, since these contain buffers, 
+		// such that there is a single allocation made - to conform for the deallocate
+		ReallocateFaces(allocator);
 	}
 
 	vertex_size = other->vertex_size;

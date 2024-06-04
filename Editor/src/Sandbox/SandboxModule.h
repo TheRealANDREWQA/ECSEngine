@@ -204,6 +204,11 @@ const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// It will return the component functions of the best fit module
+const ModuleComponentFunctions* GetModuleComponentFunctionsBestFit(const EditorState* editor_state, Stream<char> component_name);
+
+// -------------------------------------------------------------------------------------------------------------
+
 bool HasSandboxModuleSettings(const EditorSandboxModule* sandbox_module);
 
 // -------------------------------------------------------------------------------------------------------------
