@@ -224,7 +224,7 @@ ModuleComponentBuildEntry* GetModuleComponentBuildEntry(
 );
 
 struct EditorModuleComponentBuildEntry {
-	ModuleComponentBuildEntry entry;
+	ModuleComponentBuildEntry* entry;
 	unsigned int module_index;
 	EDITOR_MODULE_CONFIGURATION module_configuration;
 };

@@ -7,7 +7,8 @@ using namespace ECSEngine;
 
 bool ChangeCompilerVersion(EditorState* editor_state, Stream<wchar_t> path) {
 	editor_state->settings.compiler_path.Deallocate(editor_state->EditorAllocator());
-	editor_state->settings.compiler_path = path.Copy(editor_state->EditorAllocator());
+	// It needs to have an ending null terminator character
+	editor_state->settings.compiler_path = StringCopy(editor_state->EditorAllocator(), path);
 	return SaveEditorFile(editor_state);
 }
 
