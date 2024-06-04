@@ -29,7 +29,9 @@ struct EntitiesUIData {
 	}
 
 	EditorState* editor_state;
+	// These are chars because of the combo box
 	unsigned char sandbox_index;
+	unsigned char last_sandbox_index;
 	CapacityStream<char> filter_string;
 
 	// These are SoA streams
@@ -689,7 +691,8 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		// Get the count of global components and update the virtual mapping of the global components if the count is different
 		unsigned int global_component_count = entity_manager->GetGlobalComponentCount();
 		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
-		if (global_component_count != data->virtual_global_components_entities.size || ShouldSandboxRecomputeVirtualEntitySlots(editor_state, sandbox_index)) {
+		if (data->last_sandbox_index != data->sandbox_index || global_component_count != data->virtual_global_components_entities.size 
+			|| ShouldSandboxRecomputeVirtualEntitySlots(editor_state, sandbox_index)) {
 			// Reset the virtual entities first
 			// Check to see if there are any selected entities and update their value
 			struct RemapSelectedEntity {
@@ -950,6 +953,8 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		config.AddFlag(align_element);
 		drawer.Text(UI_CONFIG_ALIGN_ELEMENT, config, "There are no sandboxes.");
 	}
+	
+	data->last_sandbox_index = data->sandbox_index;
 }
 
 // -------------------------------------------------------------------------------------------------------------

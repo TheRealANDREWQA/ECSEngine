@@ -414,32 +414,20 @@ namespace ECSEngine {
 
 	void TaskGroupToString(ECS_THREAD_TASK_GROUP group, CapacityStream<char>& error_message)
 	{
-		Stream<char> string_to_add = { nullptr, 0 };
-
-		switch (group) {
-		case ECS_THREAD_TASK_INITIALIZE_EARLY:
-			string_to_add = "Initialize Early";
-			break;
-		case ECS_THREAD_TASK_INITIALIZE_LATE:
-			string_to_add = "Initialize Late";
-			break;
-		case ECS_THREAD_TASK_SIMULATE_EARLY:
-			string_to_add = "Simulate Early";
-			break;
-		case ECS_THREAD_TASK_SIMULATE_LATE:
-			string_to_add = "Simulate Late";
-			break;
-		case ECS_THREAD_TASK_FINALIZE_EARLY:
-			string_to_add = "Finalize Early";
-			break;
-		case ECS_THREAD_TASK_FINALIZE_LATE:
-			string_to_add = "Finalize Late";
-			break;
-		default:
-			ECS_ASSERT(false);
-		}
-
-		error_message.AddStreamAssert(string_to_add);
+		static Stream<char> GROUP_STRINGS[] = {
+			"Initialize Early",
+			"Initialize Mid",
+			"Initialize Late",
+			"Simulate Early",
+			"Simulate Mid",
+			"Simulate Late",
+			"Finalize Early",
+			"Finalize Mid",
+			"Finalize Late"
+		};
+		static_assert(ECS_COUNTOF(GROUP_STRINGS) == ECS_THREAD_TASK_GROUP_COUNT, "The TASK_GROUP enum needs to be matched with its string representation");
+		
+		error_message.AddStreamAssert(GROUP_STRINGS[group]);
 	}
 
 	// --------------------------------------------------------------------------------------

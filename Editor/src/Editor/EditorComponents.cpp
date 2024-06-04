@@ -1912,7 +1912,7 @@ void EditorComponents::ResetComponent(EditorState* editor_state, unsigned int sa
 	
 	// Call the deallocate for both cases
 	EditorModuleComponentBuildEntry build_entry = GetModuleComponentBuildEntry(editor_state, component_name);
-	if (build_entry.entry.function != nullptr) {
+	if (build_entry.entry != nullptr) {
 		if (type == ECS_COMPONENT_UNIQUE) {
 			CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, &build_entry, { &entity, 1 }, component);
 		}

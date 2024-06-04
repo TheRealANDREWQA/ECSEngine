@@ -1134,6 +1134,8 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			bool should_render_runtime = HandleSelectedEntitiesTransformUpdate(&update_descriptor);
 			if (should_render_runtime) {
 				RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+				// Also, set the sandbox as dirty
+				SetSandboxSceneDirty(editor_state, sandbox_index);
 			}
 		}
 

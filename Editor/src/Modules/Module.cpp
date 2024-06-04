@@ -847,7 +847,8 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		EditorSetConsoleInfoFocus(editor_state, console_string);
 	}
 #else
-	HINSTANCE value = ShellExecute(NULL, L"runas", L"C:\\Windows\\System32\\cmd.exe", command_string.buffer, L"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\MSBuild\\Current\\Bin", SW_HIDE);
+
+	HINSTANCE value = ShellExecute(NULL, L"runas", L"C:\\Windows\\System32\\cmd.exe", command_string.buffer, editor_state->settings.compiler_path.buffer, SW_HIDE);
 	if ((uint64_t)value < 32) {
 		if (!disable_logging) {
 			EditorSetConsoleError("An error occured when creating the command prompt that builds the module.");
@@ -1569,7 +1570,7 @@ EditorModuleComponentBuildEntry GetModuleComponentBuildEntry(
 		EDITOR_MODULE_CONFIGURATION matched_configuration;
 		ModuleComponentBuildEntry* entry = GetModuleComponentBuildEntry(editor_state, index, EDITOR_MODULE_CONFIGURATION_COUNT, component_name, &matched_configuration);
 		if (entry != nullptr && entry->function != nullptr) {
-			return { *entry, index, matched_configuration };
+			return { entry, index, matched_configuration };
 		}
 	}
 	return { nullptr };

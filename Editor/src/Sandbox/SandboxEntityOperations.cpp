@@ -65,7 +65,7 @@ void AddSandboxEntitySharedComponent(
 				// This instance should be valid only for this entity
 				instance = GetSandboxSharedComponentDefaultInstance(editor_state, sandbox_index, component, viewport);
 				EditorModuleComponentBuildEntry build_entry = GetModuleComponentBuildEntry(editor_state, component_name);
-				if (build_entry.entry.function != nullptr) {
+				if (build_entry.entry != nullptr) {
 					// Need to add the component now or the build entry might fail if there
 					// Are no matching entities
 					entity_manager->AddSharedComponentCommit(entity, component, instance);
@@ -472,7 +472,7 @@ void CallModuleComponentBuildFunctionUnique(
 	Stream<Entity> entities,
 	Component component
 ) {
-	CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, &build_entry->entry, build_entry->module_index, 
+	CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, build_entry->entry, build_entry->module_index, 
 		build_entry->module_configuration, entities, component);
 }
 
@@ -510,7 +510,7 @@ static EDITOR_EVENT(SplitBuildSharedInstance) {
 	const size_t PER_FRAME_ENTITY_PROCESS_COUNT = 500;
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, data->sandbox_index);
 
-	bool performed_background_processing = true;
+	bool performed_background_processing = false;
 	// Check firstly the background processing streams, to reduce the burden on the shared instance
 	// Count and the component allocator
 	if (data->background_processing.size > 0) {
@@ -733,7 +733,7 @@ void CallModuleComponentBuildFunctionShared(
 	SharedInstance build_instance,
 	Entity changed_entity
 ) {
-	CallModuleComponentBuildFunctionShared(editor_state, sandbox_index, &build_entry->entry, build_entry->module_index, 
+	CallModuleComponentBuildFunctionShared(editor_state, sandbox_index, build_entry->entry, build_entry->module_index, 
 		build_entry->module_configuration, component, build_instance, changed_entity);
 }
 
