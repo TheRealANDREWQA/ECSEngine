@@ -814,6 +814,9 @@ Entity CreateSandboxEntity(
 		if (!exists) {
 			// Register a shared instance and reset it later after we have the entity
 			char _component_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
+			// Memset this data just to be safe, in case there are buffers
+			// To be deallocated or sizes that are relevant
+			memset(_component_storage, 0, entity_manager->SharedComponentSize(shared.indices[index]));
 			entity_manager->RegisterSharedInstanceCommit(shared.indices[index], _component_storage);
 			shared_instance_that_needs_reset.Add(index);
 		}
@@ -822,6 +825,9 @@ Entity CreateSandboxEntity(
 	Entity entity = entity_manager->CreateEntityCommit(unique, shared);
 	for (size_t index = 0; index < unique.count; index++) {
 		void* component_data = entity_manager->GetComponent(entity, unique[index]);
+		// Memset the data since 0 is a good default in case there are buffers
+		// Or sizes in the data that would be relevant in the deallocation process
+		memset(component_data, 0, entity_manager->ComponentSize(unique[index]));
 		editor_state->editor_components.ResetComponent(
 			editor_state, 
 			sandbox_index, 

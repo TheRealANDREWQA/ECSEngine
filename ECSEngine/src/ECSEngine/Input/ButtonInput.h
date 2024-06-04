@@ -62,7 +62,17 @@ namespace ECSEngine {
 				m_states[(unsigned int)button] = current_state != ECS_BUTTON_RELEASED ? ECS_BUTTON_RELEASED : ECS_BUTTON_RAISED;
 			}
 			else {
-				m_states[(unsigned int)button] = current_state != ECS_BUTTON_PRESSED ? ECS_BUTTON_PRESSED : ECS_BUTTON_HELD;
+				// This was added as a special case for debugging
+				// When hitting a breakpoint during a hold action,
+				// The release event is not registered since the process
+				// Is being debugged. This results in very annoying situations
+				// Where the application is unusable. This is meant to fix it
+				if (current_state == ECS_BUTTON_HELD || current_state == ECS_BUTTON_PRESSED) {
+					m_states[(unsigned int)button] = ECS_BUTTON_RELEASED;
+				}
+				else {
+					m_states[(unsigned int)button] = current_state != ECS_BUTTON_PRESSED ? ECS_BUTTON_PRESSED : ECS_BUTTON_HELD;
+				}
 			}
 		}
 

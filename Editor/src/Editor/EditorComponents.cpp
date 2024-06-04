@@ -2122,6 +2122,11 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsSharedComponent(component_id)) {
 			const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(data->editor_state, data->sandbox_index, type->name);
+			if (module_component_functions == nullptr) {
+				// Try again with the best fit module, if the sandbox
+				// Does not have the module assigned to it
+				module_component_functions = GetModuleComponentFunctionsBestFit(data->editor_state, type->name);
+			}
 			ComponentFunctions component_functions;
 			SharedComponentCompareEntry compare_entry;
 			

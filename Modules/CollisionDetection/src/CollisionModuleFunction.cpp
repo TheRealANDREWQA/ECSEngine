@@ -174,7 +174,7 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 	unsigned int edge_count = collider->hull_size > transformed_hull.edges.size ? transformed_hull.edges.size : collider->hull_size;
 	for (size_t index = 0; index < edge_count; index++) {
 		Line3D line = transformed_hull.GetEdgePoints(index);
-		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN, DebugDrawCallOptions{ true, false, 1.0f });
+		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
 	}
 	//for (size_t index = 0; index < transformed_hull.faces.size; index++) {
 	//	const ConvexHullFace& face = transformed_hull.faces[index];

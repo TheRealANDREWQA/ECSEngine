@@ -608,18 +608,31 @@ void GetSandboxNeededButMissingModules(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+static const ModuleComponentFunctions* GetSandboxModuleComponentFunctionsImpl(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	unsigned int in_stream_module_index,
+	Stream<char> component_name
+) {
+	const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_index, in_stream_module_index);
+	Stream<ModuleComponentFunctions> component_functions = info->ecs_module.component_functions;
+	size_t component_index = component_functions.Find(component_name, [](const ModuleComponentFunctions& functions) {
+		return functions.component_name;
+		});
+	if (component_index != -1) {
+		return &component_functions[component_index];
+	}
+	return nullptr;
+}
+
 const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name) {
 	// At the moment, we don't need to consider the ECS components which are shipped from the engine
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated) {
-			const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_index, index);
-			Stream<ModuleComponentFunctions> component_functions = info->ecs_module.component_functions;
-			size_t component_index = component_functions.Find(component_name, [](const ModuleComponentFunctions& functions) {
-				return functions.component_name;
-			});
-			if (component_index != -1) {
-				return &component_functions[component_index];
+			const ModuleComponentFunctions* component_functions = GetSandboxModuleComponentFunctionsImpl(editor_state, sandbox_index, index, component_name);
+			if (component_functions != nullptr) {
+				return component_functions;
 			}
 		}
 	}
@@ -634,13 +647,25 @@ const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(
 )
 {
 	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_index, in_stream_index);
-	Stream<ModuleComponentFunctions> component_functions = info->ecs_module.component_functions;
-	size_t component_index = component_functions.Find(component_name, [](const ModuleComponentFunctions& functions) {
-		return functions.component_name;
-	});
-	if (component_index != -1) {
-		return &component_functions[component_index];
+	return GetSandboxModuleComponentFunctionsImpl(editor_state, sandbox_index, in_stream_index, component_name);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+const ModuleComponentFunctions* GetModuleComponentFunctionsBestFit(const EditorState* editor_state, Stream<char> component_name) {
+	unsigned int module_count = editor_state->project_modules->size;
+	for (unsigned int index = 0; index < module_count; index++) {
+		EDITOR_MODULE_CONFIGURATION configuration = GetModuleLoadedConfiguration(editor_state, index);
+		if (configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
+			const EditorModuleInfo* module_info = GetModuleInfo(editor_state, index, configuration);
+			Stream<ModuleComponentFunctions> component_functions = module_info->ecs_module.component_functions;
+			size_t component_index = component_functions.Find(component_name, [](const ModuleComponentFunctions& functions) {
+				return functions.component_name;
+			});
+			if (component_index != -1) {
+				return &component_functions[component_index];
+			}
+		}
 	}
 	return nullptr;
 }
