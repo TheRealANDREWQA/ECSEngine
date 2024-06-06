@@ -19,6 +19,12 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		ECS_STACK_CAPACITY_STREAM(float3, clipped_points, 64);
 		reference_hull->ClipFace(query.face.face_index, incident_hull, incident_face_index, &clipped_points);
 
+		// If there are no contact points found, inverse the faces
+		// And retry the process
+		if (clipped_points.size == 0) {
+			incident_hull->ClipFace(incident_face_index, reference_hull, query.face.face_index, &clipped_points);
+		}
+
 		// Discard point above the reference face
 		for (unsigned int index = 0; index < clipped_points.size; index++) {
 			if (IsAbovePlaneMask(reference_plane, clipped_points[index])) {
@@ -40,7 +46,7 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		contact_manifold.WriteContactPoints(clipped_points);
 		// The separation axis is the reference face axis
 		contact_manifold.separation_axis = reference_face_normal;
-		contact_manifold.separation_distance = -query.face.distance;
+		contact_manifold.separation_distance = query.face.distance;
 	}
 	else if (query.type == SAT_QUERY_EDGE) {
 		// For this case, compute the closest points between the 2 lines,
@@ -58,7 +64,7 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 
 		contact_manifold.AddContactPoint(midpoint);
 		contact_manifold.separation_axis = Normalize(query.edge.separation_axis);
-		contact_manifold.separation_distance = -query.edge.distance;
+		contact_manifold.separation_distance = query.edge.distance;
 	}
 	else {
 		// Don't do anyhting here

@@ -213,4 +213,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API Plane ECS_VECTORCALL TransformPlane(Plane plane, Matrix matrix);
 
+	ECSENGINE_API PlaneScalar ECS_VECTORCALL ScalePlane(PlaneScalar plane, float3 factor);
+
+	ECSENGINE_API Plane ECS_VECTORCALL ScalePlane(Plane plane, Vector3 factor);
+
 }

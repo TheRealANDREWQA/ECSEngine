@@ -68,6 +68,10 @@ namespace ECSEngine {
 		// It returns nullptr if it doesn't exist
 		void* TryGetTemporaryData(Stream<char> identifier) const;
 
+		// Remaps a pointer stored directly in the data table with another value, when the identifier
+		// Is not known
+		void RemapData(void* old_pointer, void* new_pointer);
+
 		// If the data_size was 0 when the data was bound and if the data was allocated using
 		// the allocator from here, then it will deallocate that automatically
 		void RemoveData(Stream<char> identifier);

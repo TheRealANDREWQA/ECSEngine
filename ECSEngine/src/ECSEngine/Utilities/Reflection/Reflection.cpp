@@ -7445,7 +7445,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						ReflectionType nested_type;
 						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
 							TypeChangeAddIndex(current_level, index);
-							DetermineReflectionTypeInstanceUpdatesImpl(reflection_manager, type, first_data, second_data, updates, current_level);
+							DetermineReflectionTypeInstanceUpdatesImpl(reflection_manager, &nested_type, first_data, second_data, updates, current_level);
 							current_level->indices_count--;
 						}
 						else {

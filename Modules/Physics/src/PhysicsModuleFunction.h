@@ -48,4 +48,10 @@ extern "C" {
 
 #endif
 
+#if 1
+
+	PHYSICS_API void ModuleRegisterComponentFunctionsFunction(ECSEngine::ModuleRegisterComponentFunctionsData* data);
+
+#endif
+
 }

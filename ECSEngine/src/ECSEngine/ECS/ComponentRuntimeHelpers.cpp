@@ -5,14 +5,18 @@
 
 namespace ECSEngine {
 
-	void GetEntityTransform(const EntityManager* entity_manager, Entity entity, TransformScalar* transform) {
+	TransformScalar GetEntityTransform(const EntityManager* entity_manager, Entity entity) {
+		TransformScalar transform;
+
 		const Translation* translation = entity_manager->TryGetComponent<Translation>(entity);
 		const Rotation* rotation = entity_manager->TryGetComponent<Rotation>(entity);
 		const Scale* scale = entity_manager->TryGetComponent<Scale>(entity);
 		
-		transform->position = translation != nullptr ? translation->value : float3::Splat(0.0f);
-		transform->rotation = rotation != nullptr ? rotation->value : QuaternionIdentityScalar();
-		transform->scale = scale != nullptr ? scale->value : float3::Splat(1.0f);
+		transform.position = GetTranslation(translation);
+		transform.rotation = GetRotation(rotation);
+		transform.scale = GetScale(scale);
+	
+		return transform;
 	}
 
 	void GetEntityTransform(EntityManager* entity_manager, Entity entity, Translation** translation, Rotation** rotation, Scale** scale) {
@@ -27,29 +31,9 @@ namespace ECSEngine {
 	}
 
 	Matrix ECS_VECTORCALL GetEntityTransformMatrix(const Translation* translation, const Rotation* rotation, const Scale* scale) {
-		float3 translation_value;
-		if (translation != nullptr) {
-			translation_value = translation->value;
-		}
-		else {
-			translation_value = float3::Splat(0.0f);
-		}
-
-		QuaternionScalar rotation_value;
-		if (rotation != nullptr) {
-			rotation_value = rotation->value;
-		}
-		else {
-			rotation_value = QuaternionIdentityScalar();
-		}
-
-		float3 scale_value;
-		if (scale != nullptr) {
-			scale_value = scale->value;
-		}
-		else {
-			scale_value = float3::Splat(1.0f);
-		}
+		float3 translation_value = GetTranslation(translation);
+		QuaternionScalar rotation_value = GetRotation(rotation);
+		float3 scale_value = GetScale(scale);
 
 		return MatrixTRS(MatrixTranslation(translation_value), QuaternionToMatrix(rotation_value), MatrixScale(scale_value));
 	}

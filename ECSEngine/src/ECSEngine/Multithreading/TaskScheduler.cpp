@@ -622,6 +622,17 @@ namespace ECSEngine {
 				}
 			}
 			task_manager->AddTask({ { elements[index].task_function, task_data, task_data_size, elements[index].task_name }, elements[index].barrier_task });
+
+			// Some tasks might want to allocate some data as static data
+			// And be passed directly to other tasks, while at the same time
+			// Recording that data as a pointer in the system manager. That fails
+			// Since the allocator used for the initialize function is a stack allocator,
+			// Whose pointer cannot be stored in the system manager. In order to remedy this,
+			// We can remap the stack pointer to the added value
+			if (task_data != nullptr && task_data_size > 0) {
+				void* task_allocated_data = task_manager->GetTask(task_manager->GetTaskCount() - 1).data;
+				task_manager->m_world->system_manager->RemapData(task_data, task_allocated_data);
+			}
 		}
 
 		// At the end, bind the initialize data from other tasks

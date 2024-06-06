@@ -7,7 +7,7 @@ namespace ECSEngine {
 	struct EntityManager;
 	struct TransformScalar;
 	
-	ECSENGINE_API void GetEntityTransform(const EntityManager* entity_manager, Entity entity, TransformScalar* transform);
+	ECSENGINE_API TransformScalar GetEntityTransform(const EntityManager* entity_manager, Entity entity);
 
 	ECSENGINE_API void GetEntityTransform(EntityManager* entity_manager, Entity entity, Translation** translation, Rotation** rotation, Scale** scale);
 

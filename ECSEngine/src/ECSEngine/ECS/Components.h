@@ -127,6 +127,21 @@ namespace ECSEngine {
 	// But the drawback is that you can reference at most one name since otherwise it might get overwritten
 	ECSENGINE_API Stream<char> GetEntityNameIndexOnlyTempStorage(const EntityManager* entity_manager, Entity entity);
 
+	// Verifies for nullptr and returns 0.0f if it is
+	ECS_INLINE float3 GetTranslation(const Translation* translation) {
+		return translation != nullptr ? translation->value : float3::Splat(0.0f);
+	}
+
+	// Returns an identity rotation if it is nullptr
+	ECS_INLINE QuaternionScalar GetRotation(const Rotation* rotation) {
+		return rotation != nullptr ? rotation->value : QuaternionIdentityScalar();
+	}
+
+	// Verifies for nullptr and returns 1.0f if it is
+	ECS_INLINE float3 GetScale(const Scale* scale) {
+		return scale != nullptr ? scale->value : float3::Splat(1.0f);
+	}
+
 	// ------------------------------------ Link Components -----------------------------------------------------------
 
 	struct ECS_REFLECT_LINK_COMPONENT(Rotation) RotationLink {

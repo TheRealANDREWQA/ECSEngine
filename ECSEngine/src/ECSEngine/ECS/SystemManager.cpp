@@ -336,6 +336,18 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
+	void SystemManager::RemapData(void* old_pointer, void* new_pointer) {
+		data_table.ForEach<true>([=](DataPointer& data_pointer, ResourceIdentifier identifier) {
+			if (data_pointer.GetPointer() == old_pointer) {
+				data_pointer.SetPointer(new_pointer);
+				return true;
+			}
+			return false;
+		});
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------------
+
 	void SystemManager::RemoveData(Stream<char> identifier)
 	{
 		unsigned int index = data_table.Find(identifier);

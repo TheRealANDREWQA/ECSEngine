@@ -82,7 +82,7 @@ static void DrawMeshTask(
 		graphics->BindMesh(render_mesh->mesh->mesh);
 		graphics->BindMaterial(*render_mesh->material);
 
-		//graphics->DrawCoalescedMeshCommand(*render_mesh->mesh);
+		graphics->DrawCoalescedMeshCommand(*render_mesh->mesh);
 	}
 }
 

@@ -16,37 +16,21 @@ using namespace ECSEngine;
 ECS_THREAD_TASK(GridHandler) {
 	FixedGridHandlerData* data = (FixedGridHandlerData*)_data;
 	EntityManager* entity_manager = world->entity_manager;
-	// Retrieve the meshes and check the collisions
-	//const RenderMesh* first_mesh = entity_manager->TryGetComponent<RenderMesh>(data->first_identifier);
 	const ConvexCollider* first_collider = entity_manager->TryGetComponent<ConvexCollider>(data->first_identifier);
-	if (first_collider != nullptr && first_collider->hull.vertex_size > 0) {
-		//const RenderMesh* second_mesh = entity_manager->TryGetComponent<RenderMesh>(data->second_identifier);
+	const Rigidbody* first_rigidbody = entity_manager->TryGetComponent<Rigidbody>(data->first_identifier);
+	if (first_collider != nullptr && first_collider->hull.vertex_size > 0 && first_rigidbody != nullptr) {
 		const ConvexCollider* second_collider = entity_manager->TryGetComponent<ConvexCollider>(data->second_identifier);
-		if (second_collider != nullptr && second_collider->hull.vertex_size > 0) {
-			Translation* first_translation;
-			Rotation* first_rotation;
-			Scale* first_scale;
-			GetEntityTransform(entity_manager, data->first_identifier, &first_translation, &first_rotation, &first_scale);
-
-			Translation* second_translation;
-			Rotation* second_rotation;
-			Scale* second_scale;
-			GetEntityTransform(entity_manager, data->second_identifier, &second_translation, &second_rotation, &second_scale);
+		const Rigidbody* second_rigidbody = entity_manager->TryGetComponent<Rigidbody>(data->second_identifier);
+		if (second_collider != nullptr && second_collider->hull.vertex_size > 0 && second_rigidbody != nullptr) {
+			TransformScalar first_transform = GetEntityTransform(entity_manager, data->first_identifier);
+			TransformScalar second_transform = GetEntityTransform(entity_manager, data->second_identifier);
 
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-			Matrix first_matrix = GetEntityTransformMatrix(first_translation, first_rotation, first_scale);
+			Matrix first_matrix = TransformToMatrix(&first_transform);
 			ConvexHull first_collider_transformed = first_collider->hull.TransformToTemporary(first_matrix, &stack_allocator);
 
-			Matrix second_matrix = GetEntityTransformMatrix(second_translation, second_rotation, second_scale);
+			Matrix second_matrix = TransformToMatrix(&second_transform);
 			ConvexHull second_collider_transformed = second_collider->hull.TransformToTemporary(second_matrix, &stack_allocator);
-
-			float3* coalesced_position = (float3*)malloc(sizeof(float3) * second_collider_transformed.vertex_size);
-			for (size_t index = 0; index < second_collider_transformed.vertex_size; index++) {
-				coalesced_position[index] = second_collider_transformed.GetPoint(index);
-			}
-
-			Matrix3x3 inertia_tesnor = ComputeInertiaTensor(&first_collider->hull);
-			free(coalesced_position);
 
 			float distance = GJK(&first_collider_transformed, &second_collider_transformed);
 			if (distance < 0.0f) {
@@ -60,7 +44,7 @@ ECS_THREAD_TASK(GridHandler) {
 				//OutputDebugStringA(message.buffer);
 				bool redirect_value = world->debug_drawer->ActivateRedirectThread(thread_id);
 				if (query.type == SAT_QUERY_NONE) {
-					world->debug_drawer->AddStringThread(thread_id, first_translation != nullptr ? first_translation->value : float3::Splat(0.0f),
+					world->debug_drawer->AddStringThread(thread_id, first_transform.position,
 						float3::Splat(1.0f), 1.0f, "None", ECS_COLOR_ORANGE);
 					/*Line3D first_line = first_collider_transformed.GetEdgePoints(17);
 					Line3D second_line = second_collider_transformed.GetEdgePoints(1);
@@ -68,7 +52,7 @@ ECS_THREAD_TASK(GridHandler) {
 					world->debug_drawer->AddLineThread(thread_id, second_line.A, second_line.B, ECS_COLOR_ORANGE);*/
 				}
 				else if (query.type == SAT_QUERY_EDGE) {
-					world->debug_drawer->AddStringThread(thread_id, first_translation != nullptr ? first_translation->value : float3::Splat(0.0f),
+					world->debug_drawer->AddStringThread(thread_id, first_transform.position,
 						float3::Splat(1.0f), 1.0f, "Edge", ECS_COLOR_ORANGE);
 					Line3D first_line = first_collider_transformed.GetEdgePoints(query.edge.edge_1_index);
 					Line3D second_line = second_collider_transformed.GetEdgePoints(query.edge.edge_2_index);
@@ -95,7 +79,7 @@ ECS_THREAD_TASK(GridHandler) {
 					world->debug_drawer->AddLineThread(thread_id, second_normal_1, second_normal_2, ECS_COLOR_WHITE);
 				}
 				else if (query.type == SAT_QUERY_FACE) {
-					world->debug_drawer->AddStringThread(thread_id, first_translation != nullptr ? first_translation->value : float3::Splat(0.0f),
+					world->debug_drawer->AddStringThread(thread_id, first_transform.position,
 						float3::Splat(1.0f), 1.0f, "Face", ECS_COLOR_ORANGE);
 					const ConvexHull* convex_hull = query.face.first_collider ? &first_collider_transformed : &second_collider_transformed;
 					const ConvexHull* second_hull = query.face.first_collider ? &second_collider_transformed : &first_collider_transformed;
@@ -120,6 +104,21 @@ ECS_THREAD_TASK(GridHandler) {
 					for (size_t index = 0; index < manifold.contact_point_count; index++) {
 						world->debug_drawer->AddPointThread(thread_id, manifold.contact_points[index], 2.0f, ECS_COLOR_AQUA);
 					}
+				}
+
+				if (query.type != SAT_QUERY_NONE) {
+					EntityContact contact;
+					contact.entity_A = data->first_identifier;
+					contact.entity_B = data->second_identifier;
+					contact.friction = 0.0f;
+					contact.restitution = 0.0f;
+					contact.manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
+					AddContactConstraint(
+						world, 
+						&contact, 
+						first_rigidbody->center_of_mass + first_transform.position,
+						second_rigidbody->center_of_mass + second_transform.position
+					);
 				}
 
 				world->debug_drawer->DeactivateRedirectThread(thread_id, redirect_value);
@@ -195,6 +194,14 @@ void ModuleRegisterDebugDrawFunction(ECSEngine::ModuleRegisterDebugDrawFunctionD
 
 void ModuleRegisterDebugDrawTaskElementsFunction(ECSEngine::ModuleRegisterDebugDrawTaskElementsData* data) {
 
+}
+
+#endif
+
+#if 1
+
+void ModuleRegisterComponentFunctionsFunction(ECSEngine::ModuleRegisterComponentFunctionsData* data) {
+	AddRigidbodyBuildEntry(data);
 }
 
 #endif

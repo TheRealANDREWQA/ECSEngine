@@ -1452,6 +1452,21 @@ ConvexHull ECS_VECTORCALL ConvexHull::TransformToTemporary(Matrix matrix, Alloca
 	return hull;
 }
 
+void ConvexHull::Scale(float3 factor)
+{
+	// The points must be scaled
+	for (unsigned int index = 0; index < vertex_size; index++) {
+		float3 point = GetPoint(index);
+		point *= factor;
+		SetPoint(point, index);
+	}
+
+	// The plane offsets for the faces need to be updated as well
+	for (unsigned int index = 0; index < faces.size; index++) {
+		faces[index].plane = ScalePlane(faces[index].plane, factor);
+	}
+}
+
 bool ConvexHull::Validate() const {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 	unsigned char* face_reference_count = (unsigned char*)stack_allocator.Allocate(sizeof(unsigned char) * faces.size);
