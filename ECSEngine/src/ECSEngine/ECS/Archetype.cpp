@@ -184,7 +184,7 @@ namespace ECSEngine {
 		SharedInstance* shared_instances_allocation = (SharedInstance*)m_small_memory_manager->Allocate(sizeof(SharedInstance) * components.count, alignof(SharedInstance));
 		for (size_t index = 0; index < components.count; index++) {
 			unsigned char component_index = FindSharedComponentIndex(components.indices[index]);
-			ECS_CRASH_CONDITION_RETURN(component_index != -1, -1, "Incorrect components when creating a base archetype. The component {#} could not be found.",
+			ECS_CRASH_CONDITION_RETURN(component_index != UCHAR_MAX, -1, "Incorrect components when creating a base archetype. The component {#} could not be found.",
 				components.indices[index]);
 			shared_instances_allocation[component_index] = components.instances[index];
 		}

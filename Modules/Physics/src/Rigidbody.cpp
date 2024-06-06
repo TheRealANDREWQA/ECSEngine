@@ -202,8 +202,9 @@ static ThreadTask RigidbodyBuildFunction(ModuleComponentBuildFunctionData* data)
         float mass = 0.0f;
         float3 center_of_mass = float3::Splat(0.0f);
         Matrix3x3 inertia_tensor = ComputeInertiaTensor(&hull, 1.0f, &mass, &center_of_mass);
-        rigidbody->inertia_tensor_inverse = Matrix3x3Inverse(inertia_tensor);
-        rigidbody->mass_inverse = 1.0f / mass;
+        //rigidbody->inertia_tensor_inverse = Matrix3x3Inverse(inertia_tensor);
+        rigidbody->inertia_tensor_inverse = inertia_tensor;
+        rigidbody->mass_inverse = rigidbody->is_static ? 0.0f : 1.0f / mass;
         rigidbody->center_of_mass = center_of_mass;
         rigidbody->velocity = float3::Splat(0.0f);
         rigidbody->angular_velocity = float3::Splat(0.0f);

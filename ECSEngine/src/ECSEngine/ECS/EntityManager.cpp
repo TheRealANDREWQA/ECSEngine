@@ -2604,7 +2604,7 @@ namespace ECSEngine {
 					unsigned char other_component_index = other_archetype->FindCopyDeallocateComponentIndex(
 						current_archetype->m_unique_components[current_archetype->m_user_defined_components[copy_index]]
 					);
-					ECS_ASSERT(other_component_index != -1);
+					ECS_ASSERT(other_component_index != UCHAR_MAX);
 					for (unsigned int other_entity_index = 0; other_entity_index < other_archetype_base->EntityCount(); other_entity_index++) {
 						// For this, do not deallocate the previous since it is copied from another entity manager
 						current_archetype->CallEntityCopy(

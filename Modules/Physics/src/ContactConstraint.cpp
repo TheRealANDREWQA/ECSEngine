@@ -384,6 +384,7 @@ void AddContactConstraint(
 
 	ContactConstraint* constraint = data->constraints.buffer + data->constraints.ReserveRange();
 	constraint->contact = allocated_contact;
+	//allocated_contact->manifold.separation_axis = -contact->manifold.separation_axis;
 	constraint->center_of_mass_A = center_of_mass_A;
 	constraint->center_of_mass_B = center_of_mass_B;
 }

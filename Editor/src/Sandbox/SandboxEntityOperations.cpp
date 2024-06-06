@@ -22,7 +22,7 @@ void AddSandboxEntityComponent(
 {
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	Component component = editor_state->editor_components.GetComponentID(component_name);
-	if (component.value != -1) {
+	if (component.Valid()) {
 		if (entity_manager->ExistsEntity(entity)) {
 			unsigned short byte_size = entity_manager->ComponentSize(component);
 			// Default initialize the component with zeroes
@@ -56,7 +56,7 @@ void AddSandboxEntitySharedComponent(
 {
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	Component component = editor_state->editor_components.GetComponentID(component_name);
-	if (component.value != -1) {
+	if (component.Valid()) {
 		if (entity_manager->ExistsEntity(entity)) {
 			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
 
