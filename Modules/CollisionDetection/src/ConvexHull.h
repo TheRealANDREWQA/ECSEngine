@@ -120,6 +120,9 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 
 	void Initialize(AllocatorPolymorphic allocator, unsigned int vertex_size, unsigned int edge_size, unsigned int face_size);
 
+	// Returns true if all of its faces are triangles
+	bool IsTriangular() const;
+
 	ECS_INLINE float3 GetPoint(unsigned int index) const {
 		return { vertices_x[index], vertices_y[index], vertices_z[index] };
 	}
@@ -236,6 +239,11 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	void ReserveEdges(AllocatorPolymorphic allocator, unsigned int count = 1);
 
 	void ReserveFaces(AllocatorPolymorphic allocator, unsigned int count = 1);
+
+	// Fills the buffer with the triangles that would make up this hull
+	// It does not create full connectivity, it is helpful in case only
+	// The triangles are needed, without associated connectivity information
+	void RetrieveTriangulatedFaces(AdditionStream<ushort3> triangles) const;
 
 	// Transform the current points by the given transform matrix and returns
 	// A new convex hull. The edges and faces will references the ones from here. 

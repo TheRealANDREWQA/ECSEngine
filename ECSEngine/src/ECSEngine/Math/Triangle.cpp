@@ -507,4 +507,66 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	template<typename Integer, typename Integer3>
+	static void TriangulateFaceImpl(Stream<Integer> point_indices, AdditionStream<Integer3> triangle_indices) {
+		//    4 - 3      |       5 - 4      |       4 - 3
+		//   /     \     |      /      \    |      /     \
+ 		//  5       2    |     6        3   |     5       \
+		//   \     /     |     |        |   |     |        2
+		//    0 - 1      |     7        2   |     6       /
+		//						\      /    |      \     /
+		//                        0 - 1     |       0 - 1
+		// An easy way to triangulate any planar face is by creating a face
+		// for each 3 consecutive points in the original array. The first and
+		// Last points are added to a new candidate list from which additional
+		// Triangles will be later on generated
+		// For the hexagon, the algorithm will generate the triangle
+		// 012, then 234 and then 450, finishing the triangulation
+		// For the octagon, the algorithm will generate 012, 234,
+		// 456, 670, then a parallelogram formed by 0246 will remain
+		// In the center. This shape will be recursively triangulated
+		// For the septagon, the triangles are 012, 234, 456 and then 460,
+		// which is a special case. The remaining zone, 024, will be recursively
+		// Triangulated like in octagon case
+
+		// Use special cases for 3, 4 and 5 points, since it is faster
+		// Than a general algorithm
+		if (point_indices.size == 3) {
+			triangle_indices.Add({ point_indices[0], point_indices[1], point_indices[2] });
+		}
+		else if (point_indices.size == 4) {
+			triangle_indices.Add({ point_indices[0], point_indices[1], point_indices[2] });
+			triangle_indices.Add({ point_indices[2], point_indices[3], point_indices[0] });
+		}
+		else if (point_indices.size == 5) {
+			triangle_indices.Add({ point_indices[0], point_indices[1], point_indices[2] });
+			triangle_indices.Add({ point_indices[2], point_indices[3], point_indices[4] });
+			triangle_indices.Add({ point_indices[4], point_indices[0], point_indices[2] });
+		}
+		else if (point_indices.size > 5) {
+			ECS_STACK_CAPACITY_STREAM(Integer, internal_points, 512);
+			for (size_t index = 2; index < point_indices.size; index += 2) {
+				triangle_indices.Add({ point_indices[index - 2], point_indices[index - 1], point_indices[index] });
+				internal_points.Add(point_indices[index - 2]);
+			}
+			if (point_indices.size % 2 == 1) {
+				// There is an extra triangle to be added
+				size_t count = point_indices.size;
+				triangle_indices.Add({ point_indices[count - 3], point_indices[count - 1], point_indices[0] });
+			}
+			// Internal points is going to be larger than 3, since for the hexagon we have 3 internal points
+			TriangulateFaceImpl<Integer>(internal_points, triangle_indices);
+		}
+	}
+
+	void TriangulateFace(Stream<unsigned int> point_indices, AdditionStream<uint3> triangle_indices) {
+		return TriangulateFaceImpl(point_indices, triangle_indices);
+	}
+
+	void TriangulateFace(Stream<unsigned short> point_indices, AdditionStream<ushort3> triangle_indices) {
+		return TriangulateFaceImpl(point_indices, triangle_indices);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 }

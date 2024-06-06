@@ -344,6 +344,15 @@ void ConvexHull::Initialize(AllocatorPolymorphic allocator, unsigned int _vertex
 	center = float3::Splat(0.0f);
 }
 
+bool ConvexHull::IsTriangular() const {
+	for (size_t index = 0; index < faces.size; index++) {
+		if (faces[index].points.size != 3) {
+			return false;
+		}
+	}
+	return true;
+}
+
 float3 ConvexHull::GetFaceCenter(unsigned int face_index) const {
 	float3 center = float3::Splat(0.0f);
 	
@@ -1411,6 +1420,12 @@ void ConvexHull::ReserveEdges(AllocatorPolymorphic allocator, unsigned int count
 
 void ConvexHull::ReserveFaces(AllocatorPolymorphic allocator, unsigned int count) {
 	faces.Reserve(allocator, count);
+}
+
+void ConvexHull::RetrieveTriangulatedFaces(AdditionStream<ushort3> triangles) const {
+	for (size_t index = 0; index < faces.size; index++) {
+		TriangulateFace(faces[index].points, triangles);
+	}
 }
 
 ConvexHull ECS_VECTORCALL ConvexHull::TransformToTemporary(Matrix matrix, AllocatorPolymorphic allocator) const
