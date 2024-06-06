@@ -1137,7 +1137,7 @@ ConvexHull GiftWrappingConvexHull(Stream<float3> vertex_positions, AllocatorPoly
 	//convex_hull.MergeCoplanarFaces2(4.0f, &stack_temporary_allocator);
 	//bool is_hull_valid_merge_regenerate = convex_hull.Validate();
 	//convex_hull.SimplifyTrianglesAndQuads();
-	//convex_hull.MergeCoplanarTriangles(0.3f, &stack_temporary_allocator);
+	convex_hull.MergeCoplanarTriangles(0.3f, &stack_temporary_allocator);
 	bool is_hull_valid_merge = convex_hull.Validate();
 
 	convex_hull.center = mesh_center;

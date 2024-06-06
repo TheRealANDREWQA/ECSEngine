@@ -7,6 +7,12 @@
 
 using namespace ECSEngine;
 
+namespace ECSEngine {
+
+	struct ModuleRegisterComponentFunctionsData;
+
+}
+
 struct ECS_REFLECT_COMPONENT Rigidbody {
 	constexpr inline static short ID() {
 		return 400;
@@ -21,6 +27,7 @@ struct ECS_REFLECT_COMPONENT Rigidbody {
 	float3 center_of_mass;
 	float3 velocity;
 	float3 angular_velocity;
+	bool is_static;
 };
 
 // The triangles must respect the CCW winding order
@@ -72,3 +79,5 @@ PHYSICS_API Matrix3x3 ComputeInertiaTensor(
 	float* output_mass = nullptr,
 	float3* output_center_of_mass = nullptr
 );
+
+void AddRigidbodyBuildEntry(ECSEngine::ModuleRegisterComponentFunctionsData* data);

@@ -242,6 +242,9 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// So don't modify them!
 	ConvexHull ECS_VECTORCALL TransformToTemporary(Matrix matrix, AllocatorPolymorphic allocator) const;
 
+	// It will scale the convex hull with the given factor
+	void Scale(float3 factor);
+
 	// Returns true if the hull is valid, else false
 	bool Validate() const;
 

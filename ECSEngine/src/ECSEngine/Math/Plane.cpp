@@ -326,4 +326,23 @@ namespace ECSEngine {
 	Plane ECS_VECTORCALL TransformPlane(Plane plane, Matrix matrix) {
 		return TransformPlaneImpl(plane, matrix);
 	}
+
+	template<typename Plane, typename Vector>
+	static ECS_INLINE Plane ECS_VECTORCALL ScalePlaneImpl(Plane plane, Vector factor) {
+		// The same principle as the Transform. But this case can be handled
+		// More efficiently. Simply scale the dot by the Dot product
+		// Of the normal and the factor
+		Plane scaled_plane = plane;
+		auto multiply_factor = Dot(factor, scaled_plane.normal);
+		scaled_plane.dot *= multiply_factor;
+		return scaled_plane;
+	}
+
+	PlaneScalar ECS_VECTORCALL ScalePlane(PlaneScalar plane, float3 factor) {
+		return ScalePlaneImpl(plane, factor);
+	}
+
+	Plane ECS_VECTORCALL ScalePlane(Plane plane, Vector3 factor) {
+		return ScalePlaneImpl(plane, factor);
+	}
 }

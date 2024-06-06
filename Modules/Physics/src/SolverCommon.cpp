@@ -36,7 +36,9 @@ static void IntegrateVelocities_Impl(
 	Rigidbody* rigidbody
 ) {
 	// At the moment, just use a constant gravity force to update the translation velocity
-	//rigidbody->velocity -= GetUpVector() * 9.8f * 0.001f;
+	if (!rigidbody->is_static) {
+		rigidbody->velocity -= GetUpVector() * 9.8f * 0.001f;
+	}
 }
 
 template<bool schedule_element>

@@ -164,29 +164,12 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 			//}
 		}
 	}
-	//if (transformed_hull.vertex_size > 273) {
-	//	ECS_FORMAT_TEMP_STRING(nr, "{#}", 259);
-	//	data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(259), float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
-	//	ECS_FORMAT_TEMP_STRING(nr2, "{#}", 273);
-	//	data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetPoint(273), float3(0.0f, 0.0f, -1.0f), 0.1f, nr2.buffer, ECS_COLOR_ORANGE);
-	//}
 
 	unsigned int edge_count = collider->hull_size > transformed_hull.edges.size ? transformed_hull.edges.size : collider->hull_size;
 	for (size_t index = 0; index < edge_count; index++) {
 		Line3D line = transformed_hull.GetEdgePoints(index);
 		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
 	}
-	//for (size_t index = 0; index < transformed_hull.faces.size; index++) {
-	//	const ConvexHullFace& face = transformed_hull.faces[index];
-	//	/*for (unsigned int subindex = 0; subindex < face.EdgeCount(); subindex++) {
-	//		Line3D line = transformed_hull.GetFaceEdge(index, subindex);
-	//		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
-	//	}*/
-	//	ECS_FORMAT_TEMP_STRING(nr, "{#}", index);
-	//	if (index == 5) {
-	//		data->debug_drawer->AddStringThread(data->thread_id, transformed_hull.GetFaceCenter(index), float3(0.0f, 0.0f, -1.0f), 0.1f, nr.buffer, ECS_COLOR_ORANGE);
-	//	}
-	//}
 	//if (transformed_hull.faces.size > 0) {
 	//	unsigned int face_index = collider->hull_size >= transformed_hull.faces.size ? transformed_hull.faces.size - 1 : collider->hull_size;
 	//	const ConvexHullFace& face = transformed_hull.faces[face_index];
@@ -199,71 +182,6 @@ static void ConvexColliderDebugDraw(ModuleDebugDrawComponentFunctionData* data) 
 		Line3D line = transformed_hull.GetEdgePoints(index);
 		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_GREEN);
 	}*/
-	if (transformed_hull.faces.size == 269) {
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
-		//unsigned char* face_reference_count = (unsigned char*)stack_allocator.Allocate(sizeof(unsigned char) * transformed_hull.faces.size);
-		//memset(face_reference_count, 0, sizeof(unsigned char) * transformed_hull.faces.size);
-		//// Verify that each edge has 2 faces
-		//// Verify that each face is referenced as the number of edges it has
-		//for (unsigned int index = 0; index < transformed_hull.edges.size; index++) {
-		//	face_reference_count[transformed_hull.edges[index].face_1_index]++;
-		//	face_reference_count[transformed_hull.edges[index].face_2_index]++;
-		//}
-
-		//for (unsigned int index = 0; index < transformed_hull.faces.size; index++) {
-		//	if (face_reference_count[index] != transformed_hull.faces[index].EdgeCount()) {
-		//		const ConvexHullFace* face = &transformed_hull.faces[index];
-		//		for (size_t edge_index = 0; edge_index < face->EdgeCount(); edge_index++) {
-		//			Line3D line = transformed_hull.GetFaceEdge(index, edge_index);
-		//			data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_ORANGE);
-		//		}
-		//	}
-		//}
-
-		//unsigned char* edge_reference_count = (unsigned char*)stack_allocator.Allocate(sizeof(unsigned char) * transformed_hull.edges.size);
-		//memset(edge_reference_count, 0, sizeof(unsigned char) * transformed_hull.edges.size);
-		//for (unsigned int index = 0; index < transformed_hull.faces.size; index++) {
-		//	for (unsigned int subindex = 0; subindex < transformed_hull.faces[index].EdgeCount(); subindex++) {
-		//		uint2 edge = transformed_hull.GetFaceEdgeIndices(index, subindex);
-		//		unsigned int edge_index = transformed_hull.FindEdge(edge.x, edge.y);
-		//		edge_reference_count[edge_index]++;
-		//	}
-		//}
-
-		//for (unsigned int index = 0; index < transformed_hull.edges.size; index++) {
-		//	if (edge_reference_count[index] > 2) {
-		//		Line3D line = transformed_hull.GetEdgePoints(index);
-		//		data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_ORANGE);
-		//	}
-		//}
-
-		//const ConvexHullFace* face = &transformed_hull.faces[129];
-		//for (size_t index = 0; index < face->EdgeCount(); index++) {
-		//	Line3D line = transformed_hull.GetFaceEdge(129, index);
-		//	data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_ORANGE);
-		//}
-		//float3 face_center = transformed_hull.GetFaceCenter(5);
-		//float3 point = transformed_hull.GetPoint(35);
-		//float3 cross = Cross(transformed_hull.faces[5].plane.normal, point - face_center);
-		////float3 cross = transformed_hull.faces[5].plane.normal;
-		//float dot = Dot(cross, transformed_hull.GetPoint(22) - face_center);
-
-		//float angle = AngleBetweenVectorsNormalized(transformed_hull.faces[5].plane.normal, transformed_hull.faces[23].plane.normal);
-
-		//data->debug_drawer->AddLineThread(data->thread_id, face_center, face_center + cross * 1.0f, ECS_COLOR_AQUA);
-		////data->debug_drawer->AddLineThread(data->thread_id, face_center, face_center + (point - face_center) * 1.0f, ECS_COLOR_AQUA);
-		//data->debug_drawer->AddLineThread(data->thread_id, face_center, face_center + (transformed_hull.GetPoint(22) - face_center) * 1.0f, ECS_COLOR_AQUA);
-		//face = &transformed_hull.faces[88];
-		////for (size_t index = 0; index < face->EdgeCount(); index++) {
-		////	Line3D line = transformed_hull.GetFaceEdge(88, index);
-		////	data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_ORANGE);
-		////}
-		//face = &transformed_hull.faces[112];
-		//for (size_t index = 0; index < face->EdgeCount(); index++) {
-		//	Line3D line = transformed_hull.GetFaceEdge(112, index);
-		//	data->debug_drawer->AddLineThread(data->thread_id, line.A, line.B, ECS_COLOR_AQUA);
-		//}
-	}
 
 	float total_area = 0.0f;
 	for (size_t index = 0; index < transformed_hull.faces.size; index++) {

@@ -1,5 +1,8 @@
 #include "pch.h"
 #include "Rigidbody.h"
+#include "ECSEngineWorld.h"
+#include "ECSEngineComponents.h"
+#include "CollisionDetection/src/CollisionDetectionComponents.h"
 
 // This code is based upon the code from https://github.com/blackedout01/simkn
 // Credit to the git user blackedout01 for the implementation and explanation!
@@ -180,4 +183,46 @@ Matrix3x3 ComputeInertiaTensor(
     }
 
     return inertia_tensor;
+}
+
+static ThreadTask RigidbodyBuildFunction(ModuleComponentBuildFunctionData* data) {
+    if (data->entity_manager->HasComponent<ConvexCollider>(data->entity)) {
+        const ConvexCollider* collider = data->entity_manager->GetComponent<ConvexCollider>(data->entity);
+        ConvexHull hull = collider->hull;
+        // The scale is the only transform that can affect the inertia tensor
+        float3 scale = GetScale(data->entity_manager->GetComponent<Scale>(data->entity));
+        if (scale != float3::Splat(1.0f)) {
+            // We can scale directly the hull, such that to not use
+            // Temporary memory and then rescale it back after the
+            // Computation is finished
+            hull.Scale(scale);
+        }
+
+        Rigidbody* rigidbody = (Rigidbody*)data->component;
+        float mass = 0.0f;
+        float3 center_of_mass = float3::Splat(0.0f);
+        Matrix3x3 inertia_tensor = ComputeInertiaTensor(&hull, 1.0f, &mass, &center_of_mass);
+        rigidbody->inertia_tensor_inverse = Matrix3x3Inverse(inertia_tensor);
+        rigidbody->mass_inverse = 1.0f / mass;
+        rigidbody->center_of_mass = center_of_mass;
+        rigidbody->velocity = float3::Splat(0.0f);
+        rigidbody->angular_velocity = float3::Splat(0.0f);
+
+        if (scale != float3::Splat(1.0f)) {
+            // Scale it back to its initial size
+            hull.Scale(float3::Splat(1.0f) / scale);
+        }
+    }
+    return {};
+}
+
+void AddRigidbodyBuildEntry(ModuleRegisterComponentFunctionsData* data) {
+    ModuleComponentFunctions rigidbody;
+
+    rigidbody.build_entry.function = RigidbodyBuildFunction;
+    rigidbody.build_entry.component_dependencies.Initialize(data->allocator, 1);
+    rigidbody.build_entry.component_dependencies[0] = STRING(ConvexCollider);
+    rigidbody.component_name = STRING(Rigidbody);
+
+    data->functions->AddAssert(&rigidbody);
 }

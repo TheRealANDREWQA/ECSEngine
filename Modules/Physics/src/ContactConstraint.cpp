@@ -90,7 +90,7 @@ static void PrepareContactConstraintsData(World* world, SolverData* solver_data)
 		constraint.rigidbody_B = rigidbody_B;
 
 		// We need to compute the tangent directions. What we can do, in order
-		// To align the pair of tangents with the relative velocity is to project the relative
+		// To align the pair of tangents with the relative velocity, is to project the relative
 		// Velocity in the manifold plane. That is one of the tangents and the other one is the
 		// Cross product between the manifold normal and the other tangent
 		PlaneScalar manifold_plane = constraint.contact->manifold.GetPlane();
@@ -171,7 +171,7 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 				float adjusted_separation = point.separation + solver_data->linear_slop;
 				adjusted_separation = ClampMax(adjusted_separation, 0.0f);
 				bias = delta_time_inverse * adjusted_separation * solver_data->baumgarte_factor;
-				bias = ClampMin(bias, MAX_BAUMGARTE_BIAS);
+				bias = ClampMax(bias, MAX_BAUMGARTE_BIAS);
 			}
 
 			float3 anchor_A = point.local_anchor_A;
@@ -264,6 +264,7 @@ static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInit
 	data->constraints.Initialize(&data->allocator, 32);
 	data->iterations = 4;
 	data->baumgarte_factor = 0.2f;
+	data->linear_slop = 0.0f;
 
 	// Bind this so we can access the data from outside the main function
 	world->system_manager->BindData(SOLVER_DATA_STRING, data);
@@ -276,71 +277,110 @@ void AddSolverTasks(ModuleTaskFunctionData* data) {
 	ECS_REGISTER_TASK(solve_element, SolveContactConstraints, data);
 }
 
-void AddContactConstraint(
-	World* world, 
-	const Contact* contact,
-	Rigidbody* rigidbody_A,
-	Rigidbody* rigidbody_B,
-	float3 center_of_mass_A, 
-	float3 center_of_mass_B
-) {
-	// At the moment, allocate the contact directly now
-	SolverData* data = (SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
-	Contact* allocated_contact = (Contact*)data->allocator.Allocate(sizeof(Contact));
-	*allocated_contact = *contact;
-
-	// Reserve the constraint, and compute the constraint points from the manifold points
-	// But before that, we need to compute the tangent directions. What we can do, in order
-	// To align the pair of tangents with the relative velocity is to project the relative
-	// Velocity in the manifold plane. That is one of the tangents and the other one is the
-	// Cross product between the manifold normal and the other tangent
-	PlaneScalar manifold_plane = contact->manifold.GetPlane();
-	float3 manifold_point = contact->manifold.contact_points[0];
-	float3 projected_point_A = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_A->velocity);
-	float3 projected_point_B = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_B->velocity);
-	float3 projected_speed = projected_point_B - projected_point_A;
-
-	// In case the projected speed is close to 0.0f, choose an arbitrary other direction
-	// Like the projected velocity of body A
-	float3 tangent_1;
-	if (CompareMask(projected_speed, float3::Splat(0.0f))) {
-		tangent_1 = Normalize(projected_point_A - manifold_point);
-	}
-	else {
-		tangent_1 = Normalize(projected_speed);
-	}
-	float3 tangent_2 = Cross(contact->manifold.separation_axis, tangent_1);
-
-	ContactConstraint* constraint = data->constraints.buffer + data->constraints.ReserveRange();
-	constraint->contact = allocated_contact;
-
-	ComputeConstraintPointInfo compute_info;
-	compute_info.center_of_mass_A = center_of_mass_A;
-	compute_info.center_of_mass_B = center_of_mass_B;
-	compute_info.rigidbody_A = rigidbody_A;
-	compute_info.rigidbody_B = rigidbody_B;
-	compute_info.separation = contact->manifold.separation_distance;
-	compute_info.separation_axis = contact->manifold.separation_axis;
-	compute_info.tangent_1 = tangent_1;
-	compute_info.tangent_2 = tangent_2;
-	for (unsigned int index = 0; index < contact->manifold.contact_point_count; index++) {
-		compute_info.point = contact->manifold.contact_points[index];
-		constraint->points[index] = ComputeConstraintPointFromManifold(&compute_info);
-	}
-}
+//void AddContactConstraint(
+//	World* world, 
+//	const Contact* contact,
+//	Rigidbody* rigidbody_A,
+//	Rigidbody* rigidbody_B,
+//	float3 center_of_mass_A, 
+//	float3 center_of_mass_B
+//) {
+//	// At the moment, allocate the contact directly now
+//	SolverData* data = (SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
+//	Contact* allocated_contact = (Contact*)data->allocator.Allocate(sizeof(Contact));
+//	*allocated_contact = *contact;
+//
+//	// Reserve the constraint, and compute the constraint points from the manifold points
+//	// But before that, we need to compute the tangent directions. What we can do, in order
+//	// To align the pair of tangents with the relative velocity is to project the relative
+//	// Velocity in the manifold plane. That is one of the tangents and the other one is the
+//	// Cross product between the manifold normal and the other tangent
+//	PlaneScalar manifold_plane = contact->manifold.GetPlane();
+//	float3 manifold_point = contact->manifold.contact_points[0];
+//	float3 projected_point_A = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_A->velocity);
+//	float3 projected_point_B = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_B->velocity);
+//	float3 projected_speed = projected_point_B - projected_point_A;
+//
+//	// In case the projected speed is close to 0.0f, choose an arbitrary other direction
+//	// Like the projected velocity of body A
+//	float3 tangent_1;
+//	if (CompareMask(projected_speed, float3::Splat(0.0f))) {
+//		tangent_1 = Normalize(projected_point_A - manifold_point);
+//	}
+//	else {
+//		tangent_1 = Normalize(projected_speed);
+//	}
+//	float3 tangent_2 = Cross(contact->manifold.separation_axis, tangent_1);
+//
+//	ContactConstraint* constraint = data->constraints.buffer + data->constraints.ReserveRange();
+//	constraint->contact = allocated_contact;
+//
+//	ComputeConstraintPointInfo compute_info;
+//	compute_info.center_of_mass_A = center_of_mass_A;
+//	compute_info.center_of_mass_B = center_of_mass_B;
+//	compute_info.rigidbody_A = rigidbody_A;
+//	compute_info.rigidbody_B = rigidbody_B;
+//	compute_info.separation = contact->manifold.separation_distance;
+//	compute_info.separation_axis = contact->manifold.separation_axis;
+//	compute_info.tangent_1 = tangent_1;
+//	compute_info.tangent_2 = tangent_2;
+//	for (unsigned int index = 0; index < contact->manifold.contact_point_count; index++) {
+//		compute_info.point = contact->manifold.contact_points[index];
+//		constraint->points[index] = ComputeConstraintPointFromManifold(&compute_info);
+//	}
+//}
 
 void AddContactConstraint(
 	World* world,
-	const Contact* contact,
-	Entity entity_A,
-	Entity entity_B,
+	const EntityContact* contact,
 	float3 center_of_mass_A,
 	float3 center_of_mass_B
 ) {
 	// At the moment, allocate the contact directly now
 	SolverData* data = (SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
 	Contact* allocated_contact = (Contact*)data->allocator.Allocate(sizeof(Contact));
-	*allocated_contact = *contact;
+	*((EntityContact*)allocated_contact) = *contact;
+	
+	// TODO: Decide which tangent computation form we should use
+	// Aligning the tangents with the initial projected relative velocity
+	// Should provide more consistent results
+	// Reserve the constraint, and compute the constraint points from the manifold points
+	//// But before that, we need to compute the tangent directions. What we can do, in order
+	//// To align the pair of tangents with the relative velocity is to project the relative
+	//// Velocity in the manifold plane. That is one of the tangents and the other one is the
+	//// Cross product between the manifold normal and the other tangent
+	//PlaneScalar manifold_plane = contact->manifold.GetPlane();
+	//float3 manifold_point = contact->manifold.contact_points[0];
+	//float3 projected_point_A = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_A->velocity);
+	//float3 projected_point_B = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_B->velocity);
+	//float3 projected_speed = projected_point_B - projected_point_A;
+	//
+	//// In case the projected speed is close to 0.0f, choose an arbitrary other direction
+	//// Like the projected velocity of body A
+	//float3 tangent_1;
+	//if (CompareMask(projected_speed, float3::Splat(0.0f))) {
+	//	tangent_1 = Normalize(projected_point_A - manifold_point);
+	//}
+	//else {
+	//	tangent_1 = Normalize(projected_speed);
+	//}
+	//float3 tangent_2 = Cross(contact->manifold.separation_axis, tangent_1);
+
+	// Compute the tangents, at the moment, as the 2 arbitrary perpendicular directions
+	// In the manifold plane
+	if (contact->manifold.contact_point_count <= 1) {
+		// We cannot compute the tangets, we require at least 2 points
+		// To obtain a direction inside the plane
+		// So, make the tangents 0, which is the same as disabling friction
+		allocated_contact->tangent_1 = float3::Splat(0.0f);
+		allocated_contact->tangent_2 = float3::Splat(0.0f);
+	}
+	else {
+		float3 plane_direction = contact->manifold.contact_points[1] - contact->manifold.contact_points[0];
+		plane_direction = Normalize(plane_direction);
+		allocated_contact->tangent_1 = plane_direction;
+		allocated_contact->tangent_2 = Normalize(Cross(plane_direction, contact->manifold.separation_axis));
+	}
 
 	ContactConstraint* constraint = data->constraints.buffer + data->constraints.ReserveRange();
 	constraint->contact = allocated_contact;
