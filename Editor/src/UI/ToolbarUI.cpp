@@ -32,7 +32,7 @@ constexpr size_t TOOLBAR_DATA_EDIT_ROW_COUNT = 4;
 constexpr size_t TOOLBAR_DATA_LAYOUT_ROW_COUNT = 9;
 constexpr size_t TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT = 4;
 
-constexpr wchar_t* PATH = L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\Editor\\TEMPLATE.uit";
+constexpr wchar_t* PATH = L"TEMPLATE.uit";
 
 // PERFORMANCE TODO: Make this retained mode
 

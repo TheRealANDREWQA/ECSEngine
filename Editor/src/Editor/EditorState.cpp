@@ -569,8 +569,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	Reflection::ReflectionManager* editor_reflection_manager = (Reflection::ReflectionManager*)Malloc(sizeof(Reflection::ReflectionManager));
 	*editor_reflection_manager = Reflection::ReflectionManager(editor_allocator);
-	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
-	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
+	editor_reflection_manager->CreateFolderHierarchy(L"ECSEngine/src");
+	editor_reflection_manager->CreateFolderHierarchy(L"Editor/src");
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 	bool success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)0, editor_task_manager, &error_message);
 	ECS_ASSERT(success);

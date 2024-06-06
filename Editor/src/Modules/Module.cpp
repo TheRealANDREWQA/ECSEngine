@@ -38,12 +38,12 @@ constexpr const wchar_t* MODULE_SOURCE_FILES[] = {
 };
 
 const wchar_t* ECS_RUNTIME_PDB_PATHS[] = {
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Debug\\ECSEngine",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Debug\\Editor",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Release\\ECSEngine",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Release\\Editor",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Distribution\\ECSEngine",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Distribution\\Editor"
+	L"ECSEngine\\bin\\Debug\\ECSEngine",
+	L"ECSEngine\\bin\\Debug\\Editor",
+	L"ECSEngine\\bin\\Release\\ECSEngine",
+	L"ECSEngine\\bin\\Release\\Editor",
+	L"ECSEngine\\bin\\Distribution\\ECSEngine",
+	L"ECSEngine\\bin\\Distribution\\Editor"
 };
 
 constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;

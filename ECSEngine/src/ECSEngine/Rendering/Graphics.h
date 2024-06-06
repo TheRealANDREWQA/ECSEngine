@@ -8,10 +8,10 @@
 #include "../Containers/AtomicStream.h"
 #include "../Utilities/ByteUnits.h"
 
-#define ECS_PIXEL_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Pixel\\" TEXT(STRING(name.hlsl))
-#define ECS_VERTEX_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\" TEXT(STRING(name.hlsl))
-#define ECS_COMPUTE_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Compute\\" TEXT(STRING(name.hlsl))
-#define ECS_SHADER_DIRECTORY L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders"
+#define ECS_PIXEL_SHADER_SOURCE(name) L"Resources/Shaders/Pixel" TEXT(STRING(name.hlsl))
+#define ECS_VERTEX_SHADER_SOURCE(name) L"Resources/Shaders/Vertex" TEXT(STRING(name.hlsl))
+#define ECS_COMPUTE_SHADER_SOURCE(name) L"Resources/Shaders/Compute" TEXT(STRING(name.hlsl))
+#define ECS_SHADER_DIRECTORY L"Resources/Shaders"
 
 namespace ECSEngine {
 
