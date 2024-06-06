@@ -90,16 +90,29 @@ Matrix3x3 ComputeInertiaTensor(
     float* output_mass,
     float3* output_center_of_mass
 ) {
+    // We need the convex hull to be triangulated
+    ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 16);
+    // Initialize the array with a decent starting size
+    ResizableStream<ushort3> triangles(&stack_allocator, convex_hull->faces.size * 2);
+    convex_hull->RetrieveTriangulatedFaces(&triangles);
+
+    struct FunctorData {
+        Stream<ushort3> triangles;
+        const ConvexHull* hull;
+    };
+
+    FunctorData functor_data = { triangles, convex_hull };
+
     return ComputeInertiaTensor(
-        convex_hull->faces.size,
-        (void*)convex_hull,
-        [](void* _convex_hull, unsigned int index) {
-            const ConvexHull* convex_hull = (const ConvexHull*)_convex_hull;
-            return convex_hull->GetPoint(index);
+        triangles.size,
+        &functor_data,
+        [](void* _data, unsigned int index) {
+            FunctorData* data = (FunctorData*)_data;
+            return data->hull->GetPoint(index);
         },
-        [](void* _convex_hull, unsigned int index) {
-            const ConvexHull* convex_hull = (const ConvexHull*)_convex_hull;
-            return uint3{ convex_hull->faces[index].points[0], convex_hull->faces[index].points[1], convex_hull->faces[index].points[2] };
+        [](void* _data, unsigned int index) {
+            FunctorData* data = (FunctorData*)_data;
+            return uint3{ data->triangles[index] };
         },
         density,
         output_mass,
@@ -190,7 +203,7 @@ static ThreadTask RigidbodyBuildFunction(ModuleComponentBuildFunctionData* data)
         const ConvexCollider* collider = data->entity_manager->GetComponent<ConvexCollider>(data->entity);
         ConvexHull hull = collider->hull;
         // The scale is the only transform that can affect the inertia tensor
-        float3 scale = GetScale(data->entity_manager->GetComponent<Scale>(data->entity));
+        float3 scale = GetScale(data->entity_manager->TryGetComponent<Scale>(data->entity));
         if (scale != float3::Splat(1.0f)) {
             // We can scale directly the hull, such that to not use
             // Temporary memory and then rescale it back after the
@@ -202,7 +215,7 @@ static ThreadTask RigidbodyBuildFunction(ModuleComponentBuildFunctionData* data)
         float mass = 0.0f;
         float3 center_of_mass = float3::Splat(0.0f);
         Matrix3x3 inertia_tensor = ComputeInertiaTensor(&hull, 1.0f, &mass, &center_of_mass);
-        //rigidbody->inertia_tensor_inverse = Matrix3x3Inverse(inertia_tensor);
+        rigidbody->inertia_tensor_inverse = Matrix3x3Inverse(inertia_tensor);
         rigidbody->inertia_tensor_inverse = inertia_tensor;
         rigidbody->mass_inverse = rigidbody->is_static ? 0.0f : 1.0f / mass;
         rigidbody->center_of_mass = center_of_mass;

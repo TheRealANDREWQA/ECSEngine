@@ -151,4 +151,17 @@ namespace ECSEngine {
 
 	// For a triangle to be considered sliver, it needs to have one of the angles smaller than the one given
 	ECSENGINE_API Vec8ui ECS_VECTORCALL IsTriangleSliverByAngle(Vector3 A, Vector3 B, Vector3 C, Vec8f degrees);
+
+	// TODO: Does this work for CW order?
+	// It will fill in the indices of the triangles that make up one triangulation
+	// Of the face. The points must be given in CCW order
+	// The output triangles will have the vertices in CCW order
+	ECSENGINE_API void TriangulateFace(Stream<unsigned int> point_indices, AdditionStream<uint3> triangle_indices);
+
+	// TODO: Does this work for CW order?
+	// It will fill in the indices of the triangles that make up one triangulation
+	// Of the face. The points must be given in CCW order
+	// The output triangles will have the vertices in CCW order
+	ECSENGINE_API void TriangulateFace(Stream<unsigned short> point_indices, AdditionStream<ushort3> triangle_indices);
+
 }
