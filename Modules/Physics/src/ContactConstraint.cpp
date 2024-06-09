@@ -63,9 +63,13 @@ static ContactConstraintPoint ComputeConstraintPointFromManifold(const ComputeCo
 	auto compute_effective_mass = [&](float3 direction) {
 		float3 perpendicular_A = Cross(constraint_point.local_anchor_A, direction);
 		float3 perpendicular_B = Cross(constraint_point.local_anchor_B, direction);
+
+		float3 rotated_A = MatrixVectorMultiply(perpendicular_A, info->rigidbody_A->inertia_tensor_inverse);
+		float3 rotated_B = MatrixVectorMultiply(perpendicular_B, info->rigidbody_B->inertia_tensor_inverse);
+
 		float value = info->rigidbody_A->mass_inverse + info->rigidbody_B->mass_inverse
-			+ Dot(perpendicular_A, MatrixVectorMultiply(perpendicular_A, info->rigidbody_A->inertia_tensor_inverse))
-			+ Dot(perpendicular_B, MatrixVectorMultiply(perpendicular_B, info->rigidbody_B->inertia_tensor_inverse));
+			+ Dot(direction, Cross(rotated_A, perpendicular_A))
+			+ Dot(direction, Cross(rotated_B, perpendicular_B));
 		// Sanity check. This values should be above 0.0f, if it is not, set it to 0.0f
 		return value > 0.0f ? 1.0f / value : 0.0f;
 	};
@@ -109,6 +113,9 @@ static void PrepareContactConstraintsData(World* world, SolverData* solver_data)
 			tangent_1 = Normalize(projected_speed);
 		}
 		float3 tangent_2 = Cross(constraint.contact->manifold.separation_axis, tangent_1);
+
+		tangent_1 = float3::Splat(0.0f);
+		tangent_2 = float3::Splat(0.0f);
 
 		ComputeConstraintPointInfo compute_info;
 		compute_info.center_of_mass_A = constraint.center_of_mass_A;
@@ -244,6 +251,10 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 ECS_THREAD_TASK(SolveContactConstraints) {
 	SolverData* data = (SolverData*)_data;
 	
+	//if (data->constraints.size > 0) {
+	//	StopSimulation(world);
+	//}
+
 	// Prepare the contact data
 	PrepareContactConstraintsData(world, data);
 
@@ -264,7 +275,7 @@ static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInit
 	data->constraints.Initialize(&data->allocator, 32);
 	data->iterations = 4;
 	data->baumgarte_factor = 0.2f;
-	data->linear_slop = 0.0f;
+	data->linear_slop = 0.025f;
 
 	// Bind this so we can access the data from outside the main function
 	world->system_manager->BindData(SOLVER_DATA_STRING, data);

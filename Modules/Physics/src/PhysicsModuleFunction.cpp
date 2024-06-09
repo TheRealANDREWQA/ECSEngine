@@ -110,14 +110,22 @@ ECS_THREAD_TASK(GridHandler) {
 					EntityContact contact;
 					contact.entity_A = data->first_identifier;
 					contact.entity_B = data->second_identifier;
+					float3 first_center_of_mass = first_rigidbody->center_of_mass + first_transform.position;
+					float3 second_center_of_mass = second_rigidbody->center_of_mass + second_transform.position;
+					if (query.type == SAT_QUERY_FACE) {
+						if (!query.face.first_collider) {
+							swap(contact.entity_A, contact.entity_B);
+							swap(first_center_of_mass, second_center_of_mass);
+						}
+					}
 					contact.friction = 0.0f;
 					contact.restitution = 0.0f;
 					contact.manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
 					AddContactConstraint(
 						world, 
 						&contact, 
-						first_rigidbody->center_of_mass + first_transform.position,
-						second_rigidbody->center_of_mass + second_transform.position
+						first_center_of_mass,
+						second_center_of_mass
 					);
 				}
 

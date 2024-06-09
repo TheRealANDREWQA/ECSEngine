@@ -2725,6 +2725,9 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		}
 	}
 
+	// Lastly, prepare the simulation stop flag for the Runtime
+	SetStopSimulationStatus(sandbox->sandbox_world.system_manager, false);
+
 	DoFrame(&sandbox->sandbox_world);
 	if (!keep_delta_time) {
 		// We also need to update the delta time
@@ -2793,6 +2796,11 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	if (!is_step) {
 		// Disable this irrespective if it was enabled here or not
 		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	}
+
+	// At last, verify if the runtime stop simulation flag was set
+	if (GetStopSimulationStatus(sandbox->sandbox_world.system_manager)) {
+		PauseSandboxWorld(editor_state, sandbox_index);
 	}
 
 	return graphics_snapshot_success && resource_snapshot_success;

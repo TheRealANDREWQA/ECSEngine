@@ -511,15 +511,15 @@ namespace ECSEngine {
 		float determinant = Matrix3x3Determinant(matrix);
 		float determinant_inverse = 1.0f / determinant;
 
-		float result00 = a21 * a12 - a11 * a22;
-		float result01 = a01 * a22 - a21 * a02;
-		float result02 = a11 * a02 - a01 * a12;
-		float result10 = a22 * a10 - a12 * a20;
-		float result11 = a02 * a20 - a00 * a22;
-		float result12 = a00 * a12 - a02 * a10;
-		float result20 = a11 * a20 - a10 * a21;
-		float result21 = a00 * a21 - a20 * a01;
-		float result22 = a01 * a10 - a00 * a11;
+		float result00 = a11 * a22 - a21 * a12;
+		float result01 = -(a01 * a22 - a21 * a02);
+		float result02 = a01 * a12 - a11 * a02;
+		float result10 = -(a22 * a10 - a12 * a20);
+		float result11 = a00 * a22 - a02 * a20;
+		float result12 = -(a00 * a12 - a02 * a10);
+		float result20 = a10 * a21 - a11 * a20;
+		float result21 = -(a00 * a21 - a20 * a01);
+		float result22 = a00 * a11 - a01 * a10;
 
 		return {
 				result00 * determinant_inverse, result01 * determinant_inverse, result02 * determinant_inverse,
