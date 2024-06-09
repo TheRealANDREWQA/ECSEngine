@@ -150,5 +150,16 @@ namespace ECSEngine {
 	// It will wait to finish all the current dynamic tasks in flight
 	ECSENGINE_API void PauseWorld(World* world);
 
+	// These are functions that can be used from C++ to tell the editor to stop
+	// The simulation
+	
+	ECSENGINE_API void StopSimulation(SystemManager* system_manager);
+
+	ECSENGINE_API void StopSimulation(World* world);
+
+	ECSENGINE_API bool GetStopSimulationStatus(const SystemManager* system_manager);
+
+	ECSENGINE_API void SetStopSimulationStatus(SystemManager* system_manager, bool status);
+
 }
 

@@ -338,8 +338,8 @@ static SATEdgeQuery SATEdge(const ConvexHull* first, const ConvexHull* second) {
 			global_separation_axis = edge_separation_axis;
 		}
 	}
-
-	// No edge was found or parallel ones
+	
+	// The global separation axis should already be pointing away from the first hull
 	return { global_max_distance, global_first_max_index, global_second_max_index, global_separation_axis };
 }
 

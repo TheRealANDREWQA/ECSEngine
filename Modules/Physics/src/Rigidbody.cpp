@@ -3,6 +3,7 @@
 #include "ECSEngineWorld.h"
 #include "ECSEngineComponents.h"
 #include "CollisionDetection/src/CollisionDetectionComponents.h"
+#include "ECSEngineMath.h"
 
 // This code is based upon the code from https://github.com/blackedout01/simkn
 // Credit to the git user blackedout01 for the implementation and explanation!
@@ -212,13 +213,20 @@ static ThreadTask RigidbodyBuildFunction(ModuleComponentBuildFunctionData* data)
         }
 
         Rigidbody* rigidbody = (Rigidbody*)data->component;
-        float mass = 0.0f;
-        float3 center_of_mass = float3::Splat(0.0f);
-        Matrix3x3 inertia_tensor = ComputeInertiaTensor(&hull, 1.0f, &mass, &center_of_mass);
-        rigidbody->inertia_tensor_inverse = Matrix3x3Inverse(inertia_tensor);
-        rigidbody->inertia_tensor_inverse = inertia_tensor;
-        rigidbody->mass_inverse = rigidbody->is_static ? 0.0f : 1.0f / mass;
-        rigidbody->center_of_mass = center_of_mass;
+        if (rigidbody->is_static) {
+            rigidbody->center_of_mass = hull.center;
+            rigidbody->inertia_tensor_inverse = Matrix3x3();
+            rigidbody->mass_inverse = 0.0f;
+        }
+        else {
+            float mass = 0.0f;
+            float3 center_of_mass = float3::Splat(0.0f);
+            Matrix3x3 inertia_tensor = ComputeInertiaTensor(&hull, 1.0f, &mass, &center_of_mass);
+            rigidbody->inertia_tensor_inverse = Matrix3x3Inverse(inertia_tensor);
+            rigidbody->mass_inverse = 1.0f / mass;
+            // The center of mass should coincide with the center of the hull
+            rigidbody->center_of_mass = center_of_mass;
+        }
         rigidbody->velocity = float3::Splat(0.0f);
         rigidbody->angular_velocity = float3::Splat(0.0f);
 

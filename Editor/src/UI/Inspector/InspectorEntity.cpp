@@ -765,6 +765,13 @@ struct InspectorDrawEntityData {
 	// Store this. We need to detect when the scene is changed
 	// Such that we can invalidate the entries from here
 	CapacityStream<wchar_t> scene_path;
+
+	// This is used to determine when the inspector displays
+	// Data from another entity manager to not trigger a
+	// Set dirty call when it shouldn't. We need multiple
+	// Of these since text field inputs can trigger the action
+	// After 2 frames instead of the frame immediately after
+	const EntityManager* last_entity_manager[3];
 };
 
 ECS_INLINE static Stream<char> InspectorTargetName(
@@ -933,6 +940,7 @@ void ResetComponentCallback(ActionData* action_data) {
 	}
 	// Re-render the sandbox as well
 	RenderSandboxViewports(data->editor_state, data->sandbox_index);
+	SetSandboxSceneDirty(data->editor_state, data->sandbox_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -958,7 +966,9 @@ void InspectorComponentCallback(ActionData* action_data) {
 	bool is_global_component = data->draw_data->is_global_component;
 	Component global_component = data->draw_data->global_component;
 
-	SetSandboxSceneDirty(editor_state, sandbox_index);
+	if (data->draw_data->last_entity_manager[0] == active_manager) {
+		SetSandboxSceneDirty(editor_state, sandbox_index);
+	}
 
 	Stream<char> component_name = data->component_name;
 	const Reflection::ReflectionType* type = editor_state->editor_components.GetType(component_name);
@@ -1633,6 +1643,11 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	});
 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	for (size_t index = 0; index < ECS_COUNTOF(data->last_entity_manager) - 1; index++) {
+		data->last_entity_manager[index] = data->last_entity_manager[index + 1];
+	}
+	data->last_entity_manager[ECS_COUNTOF(data->last_entity_manager) - 1] = entity_manager;
+
 	// Check to see if the entity or global component still exists - else revert to draw nothing
 	if (!data->is_global_component) {
 		if (!entity_manager->ExistsEntity(data->entity)) {
@@ -1991,6 +2006,7 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	draw_data->created_instances.size = 0;
 	draw_data->link_components.size = 0;
 	draw_data->is_initialized = false;
+	memset(draw_data->last_entity_manager, 0, sizeof(draw_data->last_entity_manager));
 
 	memset(draw_data->header_state, 1, sizeof(bool) * (ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS));
 

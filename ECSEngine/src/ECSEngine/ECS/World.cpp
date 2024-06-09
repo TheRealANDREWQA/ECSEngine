@@ -5,6 +5,8 @@
 
 namespace ECSEngine {
 
+#define STOP_SIMULATION_IDENTIFIER "__StopSimulation"
+
 	// ---------------------------------------------------------------------------------------------------------------------
 
 	World::World() : memory(nullptr), entity_manager(nullptr), task_manager(nullptr), resource_manager(nullptr) {};
@@ -349,6 +351,25 @@ namespace ECSEngine {
 
 	void PauseWorld(World* world) {
 		world->task_manager->SleepThreads(true);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------
+
+	void StopSimulation(SystemManager* system_manager) {
+		bool* status = (bool*)system_manager->GetData(STOP_SIMULATION_IDENTIFIER);
+		*status = true;
+	}
+
+	void StopSimulation(World* world) {
+		StopSimulation(world->system_manager);
+	}
+
+	bool GetStopSimulationStatus(const SystemManager* system_manager) {
+		return *(bool*)system_manager->GetData(STOP_SIMULATION_IDENTIFIER);
+	}
+
+	void SetStopSimulationStatus(SystemManager* system_manager, bool status) {
+		system_manager->BindData(STOP_SIMULATION_IDENTIFIER, &status, sizeof(status));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
