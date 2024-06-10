@@ -83,7 +83,7 @@ struct ECS_REFLECT_COMPONENT ConvexCollider {
 	}
 
 	constexpr static ECS_INLINE size_t AllocatorSize() {
-		return ECS_MB_R * 128;
+		return ECS_MB_R * 256;
 	}
 
 	unsigned int hull_size;
