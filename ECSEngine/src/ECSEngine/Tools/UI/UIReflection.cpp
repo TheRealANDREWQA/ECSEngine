@@ -448,29 +448,6 @@ namespace ECSEngine {
 				previous_size = capacity->size;
 			}
 
-			// This is not called every frame. This function is called when the user
-			// Wants to trigger it. It will use the allocator to allocate/deallocate
-			// The target memory, in case a new allocation is needed. The exact resize flag
-			// Is used for capacity buffers. If it is active, it will resize the capacity
-			// Stream no matter the size, else if the size is large enough it won't resize it
-			void WriteTargetStandalone(AllocatorPolymorphic allocator, bool exact_resize) const {
-				size_t size = 0;
-				if (has_size) {
-					size = GetTargetSize();
-				}
-
-				size_t capacity_value = size;
-				if (has_capacity) {
-					capacity_value = GetTargetCapacity();
-				}
-
-				if (size != standalone_data.size) {
-					if (*target_memory != nullptr) {
-						void* new_allocation = ReallocateEx(allocator, *target_memory, standalone_data.size * element_byte_size);
-					}
-				}
-			}
-
 			// Needs to be used in conjunction with the WriteTarget. If not using that function, call
 			// CopyTargetStandalone()
 			void CopyTarget() {

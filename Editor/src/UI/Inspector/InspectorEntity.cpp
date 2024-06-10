@@ -60,6 +60,10 @@ struct InspectorDrawEntityData {
 	struct CreatedInstance {
 		Stream<char> name;
 		void* pointer_bound;
+
+		// This pointer is used to determine when the allocator for the component
+		// Has changed, to update the resizable buffers
+		void* allocator_pointer;
 	};
 
 	// If a component has a link component, we need to create it and have it live multiple frames
@@ -107,7 +111,7 @@ struct InspectorDrawEntityData {
 		return false;
 	}
 
-	unsigned int AddCreatedInstance(EditorState* editor_state, Stream<char> name, void* pointer_bound) {
+	unsigned int AddCreatedInstance(EditorState* editor_state, Stream<char> name, void* pointer_bound, void* allocator_pointer) {
 		name = StringCopy(Allocator(), name);
 
 		void* old_buffer = created_instances.buffer;
@@ -130,7 +134,7 @@ struct InspectorDrawEntityData {
 			pointer_bound = component_allocation;
 		}
 
-		unsigned int index = created_instances.Add({ name, pointer_bound });
+		unsigned int index = created_instances.Add({ name, pointer_bound, allocator_pointer });
 		if (previous_size > 0) {
 			allocator.Deallocate(old_buffer);
 		}
@@ -190,9 +194,9 @@ struct InspectorDrawEntityData {
 			allocator.Deallocate(link_components.buffer);
 		}
 		link_components.InitializeAndCopy(ptr, link_components);
-		link_components[write_index].name = name;
 
 		// We need to allocate the link component twice and the target data once
+		link_components[write_index].name = name.Copy(&allocator);
 		unsigned short byte_size = editor_state->editor_components.GetComponentByteSize(name);
 		link_components[write_index].data = allocator.Allocate(byte_size);
 		link_components[write_index].previous_data = allocator.Allocate(byte_size);
@@ -217,8 +221,6 @@ struct InspectorDrawEntityData {
 
 	// Deallocates everything and deletes the UI instances
 	void Clear(EditorState* editor_state) {
-		// Determine if the sandbox scene has changed
-
 		if (created_instances.size > 0) {
 			for (size_t index = 0; index < created_instances.size; index++) {
 				if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
@@ -471,9 +473,9 @@ struct InspectorDrawEntityData {
 		RemoveCreatedInstance(editor_state, component_name);
 	}
 
-	void RemoveLinkComponent(EditorState* editor_state, Stream<char> name) {
-		unsigned int index = FindLinkComponent(name);
-		ECS_ASSERT(index != -1);
+	void RemoveLinkComponent(EditorState* editor_state, unsigned int index) {
+		Stream<char> component_name = link_components[index].name;
+		link_components[index].name.Deallocate(&allocator);
 		allocator.Deallocate(link_components[index].data);
 		allocator.Deallocate(link_components[index].previous_data);
 		allocator.Deallocate(link_components[index].target_data_copy);
@@ -483,8 +485,15 @@ struct InspectorDrawEntityData {
 		}
 		link_components.RemoveSwapBack(index);
 
-		// Also remove it from the matching inputs
-		RemoveComponent(editor_state, name);
+		// Also remove it from the matching inputs, we can safely use the name
+		// Since deallocating it won't overwrite its data
+		RemoveComponent(editor_state, component_name);
+	}
+
+	void RemoveLinkComponent(EditorState* editor_state, Stream<char> name) {
+		unsigned int index = FindLinkComponent(name);
+		ECS_ASSERT(index != -1);
+		RemoveLinkComponent(editor_state, index);
 	}
 
 	void ResetComponent(EditorState* editor_state, unsigned int matching_index) {
@@ -739,6 +748,31 @@ struct InspectorDrawEntityData {
 		}
 	}
 
+	void UpdateComponentAllocators(EditorState* editor_state, unsigned int sandbox_index) {
+		for (size_t index = 0; index < created_instances.size; index++) {
+			UIReflectionDrawer* ui_drawer = editor_state->module_reflection;
+			UIReflectionInstance* instance = ui_drawer->GetInstance(created_instances[index].name);
+			if (instance == nullptr) {
+				ui_drawer = editor_state->ui_reflection;
+				instance = ui_drawer->GetInstance(created_instances[index].name);
+				ECS_ASSERT(instance != nullptr);
+			}
+
+			Stream<char> component_name = CreatedInstanceComponentName(index);
+			if (editor_state->editor_components.IsLinkComponent(component_name)) {
+				component_name = editor_state->editor_components.GetComponentFromLink(component_name);
+			}
+			Component component = editor_state->editor_components.GetComponentID(component_name);
+			ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(component_name);
+			AllocatorPolymorphic component_allocator = ActiveEntityManager(editor_state, sandbox_index)->GetComponentAllocatorFromType(component, component_type);
+			if (component_allocator.allocator != created_instances[index].allocator_pointer) {
+				// Reassign the allocator
+				ui_drawer->AssignInstanceResizableAllocator(instance, component_allocator, false);
+				created_instances[index].allocator_pointer = component_allocator.allocator;
+			}
+		}
+	}
+
 	// Use the same implementation for global components and entities - global components
 	// can be treated like entities with a single unique component
 	bool header_state[ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
@@ -766,12 +800,11 @@ struct InspectorDrawEntityData {
 	// Such that we can invalidate the entries from here
 	CapacityStream<wchar_t> scene_path;
 
-	// This is used to determine when the inspector displays
-	// Data from another entity manager to not trigger a
-	// Set dirty call when it shouldn't. We need multiple
-	// Of these since text field inputs can trigger the action
-	// After 2 frames instead of the frame immediately after
-	const EntityManager* last_entity_manager[3];
+	// This is used for the callback to not set the scene as dirty
+	// When transitioning from runtime data to scene data. We need
+	// 3 entries because number inputs trigger 1 frame later after
+	// The transition, so we need the state from 2 frames ago
+	EDITOR_SANDBOX_VIEWPORT last_frames_data_source[3];
 };
 
 ECS_INLINE static Stream<char> InspectorTargetName(
@@ -966,7 +999,9 @@ void InspectorComponentCallback(ActionData* action_data) {
 	bool is_global_component = data->draw_data->is_global_component;
 	Component global_component = data->draw_data->global_component;
 
-	if (data->draw_data->last_entity_manager[0] == active_manager) {
+	// Number inputs trigger one frame later after the change, that's why we are using
+	// The data source from 2 frames ago
+	if (data->draw_data->last_frames_data_source[0] == GetSandboxActiveViewport(editor_state, sandbox_index)) {
 		SetSandboxSceneDirty(editor_state, sandbox_index);
 	}
 
@@ -1301,7 +1336,8 @@ static void DrawComponents(
 				// from the created instance stream resulting in a duplicate
 				unsigned int created_instance_index = data->FindCreatedInstance(instance_name);
 				if (created_instance_index == -1) {
-					created_instance_index = data->AddCreatedInstance(editor_state, instance_name, current_component);
+					AllocatorPolymorphic component_allocator = entity_manager->GetComponentAllocatorFromType(signature[index], component_type);
+					created_instance_index = data->AddCreatedInstance(editor_state, instance_name, current_component, component_allocator.allocator);
 				}
 				else {
 					// If it exists, only set the pointer to the same value
@@ -1643,10 +1679,50 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	});
 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-	for (size_t index = 0; index < ECS_COUNTOF(data->last_entity_manager) - 1; index++) {
-		data->last_entity_manager[index] = data->last_entity_manager[index + 1];
+	EDITOR_SANDBOX_VIEWPORT viewport_source = GetSandboxActiveViewport(editor_state, sandbox_index);
+	EDITOR_SANDBOX_VIEWPORT last_data_source = data->last_frames_data_source[ECS_COUNTOF(data->last_frames_data_source) - 1];
+	if (viewport_source != last_data_source) {
+		// Destroy all the instances that were created
+		// When transitioning from runtime to scene, we have to invalidate
+		// All buffers that the components might have because the runtime world
+		// Was cleared already
+		if (viewport_source == EDITOR_SANDBOX_VIEWPORT_SCENE && last_data_source == EDITOR_SANDBOX_VIEWPORT_RUNTIME) {
+			// Invalidate the buffers
+			for (size_t index = 0; index < data->created_instances.size; index++) {
+				UIReflectionDrawer* ui_drawer = editor_state->module_reflection;
+				UIReflectionInstance* instance = ui_drawer->GetInstance(data->created_instances[index].name);
+				if (instance == nullptr) {
+					ui_drawer = editor_state->ui_reflection;
+					instance = ui_drawer->GetInstance(data->created_instances[index].name);
+					ECS_ASSERT(instance != nullptr);
+				}
+
+				ui_drawer->InvalidateStandaloneInstanceInputs(instance);
+			}
+		}
+
+		size_t link_component_count = data->link_components.size;
+		for (size_t index = 0; index < link_component_count; index++) {
+			data->RemoveLinkComponent(editor_state, 0);
+		}
+		size_t matching_input_count = data->matching_inputs.size;
+		for (size_t index = 0; index < matching_input_count; index++) {
+			data->RemoveComponent(editor_state, data->matching_inputs[0].component_name);
+		}
+		size_t created_instance_count = data->created_instances.size;
+		for (size_t index = 0; index < created_instance_count; index++) {
+			data->RemoveCreatedInstance(editor_state, 0);
+		}
+
+		data->link_components = {};
+		data->matching_inputs = {};
+		data->created_instances = {};
+		data->allocator.Clear();
 	}
-	data->last_entity_manager[ECS_COUNTOF(data->last_entity_manager) - 1] = entity_manager;
+	for (size_t index = 0; index < ECS_COUNTOF(data->last_frames_data_source) - 1; index++) {
+		data->last_frames_data_source[index] = data->last_frames_data_source[index + 1];
+	}
+	data->last_frames_data_source[ECS_COUNTOF(data->last_frames_data_source) - 1] = viewport_source;
 
 	// Check to see if the entity or global component still exists - else revert to draw nothing
 	if (!data->is_global_component) {
@@ -1684,6 +1760,9 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		// This needs to be done only for the entity case
 		data->UpdateStoredComponents(editor_state, sandbox_index);
 	}
+
+	// We should update the component allocators before actually drawing
+	data->UpdateComponentAllocators(editor_state, sandbox_index);
 
 	// Before drawing the components, go through the link components and deallocate the apply modifiers data
 	data->UpdateLinkComponentsApplyModifier(editor_state);
@@ -2006,7 +2085,7 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	draw_data->created_instances.size = 0;
 	draw_data->link_components.size = 0;
 	draw_data->is_initialized = false;
-	memset(draw_data->last_entity_manager, 0, sizeof(draw_data->last_entity_manager));
+	memset(draw_data->last_frames_data_source, EDITOR_SANDBOX_VIEWPORT_COUNT, sizeof(draw_data->last_frames_data_source));
 
 	memset(draw_data->header_state, 1, sizeof(bool) * (ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS));
 

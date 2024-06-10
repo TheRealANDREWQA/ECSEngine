@@ -3097,7 +3097,7 @@ namespace ECSEngine {
 
 	void EntityManager::ClearEntitiesAndAllocator()
 	{
-		m_memory_manager->Clear();
+		m_memory_manager->Clear();		
 		m_small_memory_manager.Clear();
 		m_component_memory_manager.Clear();
 		m_temporary_allocator.Clear();

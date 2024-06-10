@@ -176,5 +176,7 @@ size_t SimplifyContactManifoldPoints(Stream<float3> points, float3 plane_normal)
 	points[1] = second_point;
 	points[2] = third_point;
 	points[3] = fourth_point;
+
+	swap(points[1], points[2]);
 	return 4;
 }

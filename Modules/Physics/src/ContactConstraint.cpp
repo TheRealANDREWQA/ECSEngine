@@ -160,8 +160,10 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 
 			// The change in angular velocity is the cross product of the impulse with the anchor
 			// divided by the inertia tensor or conversely, multiplied with the inverse
-			angular_A -= MatrixVectorMultiply(Cross(anchor_A, impulse), constraint.rigidbody_A->inertia_tensor_inverse);
-			angular_B += MatrixVectorMultiply(Cross(anchor_B, impulse), constraint.rigidbody_B->inertia_tensor_inverse);
+			float3 cross_A = Cross(anchor_A, impulse);
+			float3 cross_B = Cross(anchor_B, impulse);
+			angular_A -= MatrixVectorMultiply(cross_A, constraint.rigidbody_A->inertia_tensor_inverse);
+			angular_B += MatrixVectorMultiply(cross_B, constraint.rigidbody_B->inertia_tensor_inverse);
 		};
 
 		// Solve the normal impulse first, then apply the friction impulse
@@ -236,8 +238,8 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 			// Apply the impulse now
 			float3 tangent_impulse_1 = constraint.contact->tangent_1 * tangent_impulse_1;
 			float3 tangent_impulse_2 = constraint.contact->tangent_2 * tangent_impulse_2;
-			apply_impulse(anchor_A, anchor_B, tangent_impulse_1);
-			apply_impulse(anchor_A, anchor_B, tangent_impulse_2);
+			//apply_impulse(anchor_A, anchor_B, tangent_impulse_1);
+			//apply_impulse(anchor_A, anchor_B, tangent_impulse_2);
 		}
 
 		// Write the accumulated values now
@@ -275,7 +277,7 @@ static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInit
 	data->constraints.Initialize(&data->allocator, 32);
 	data->iterations = 4;
 	data->baumgarte_factor = 0.2f;
-	data->linear_slop = 0.025f;
+	data->linear_slop = 0.0f;
 
 	// Bind this so we can access the data from outside the main function
 	world->system_manager->BindData(SOLVER_DATA_STRING, data);
