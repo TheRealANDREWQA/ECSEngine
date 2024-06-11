@@ -312,11 +312,28 @@ namespace ECSEngine {
 		// Transforming a plane can be viewed as transforming the point plane.normal * plane.dot
 		// The final normal is the normalized vector, while the dot is the length of that vector
 		// This is quite cheap, since for normalization we need to compute the length anyway
+		// One other thing, the translation of the matrix needs to be dotted with the plane normal,
+		// Otherwise shearing will occur resulting in an invalid transformation. In order to do this,
+		// get the scalar translation from the matrix, remove the translation from the matrix and apply
+		// The translation offset to the dot manually
+		float3 translation = MatrixGetTranslation(matrix);
+		matrix = MatrixChangeTranslation(matrix, float3::Splat(0.0f));
+
 		auto plane_point = plane.normal * plane.dot;
 		auto transformed_point = TransformPoint(plane_point, matrix).xyz();
 		auto length = Length(transformed_point);
+
+		decltype(length) translation_offset;
+		if constexpr (std::is_same_v<Plane, PlaneScalar>) {
+			translation_offset = Dot(translation, plane.normal);
+		}
+		else {
+			Vector3 splatted_translation = Vector3::Splat(translation);
+			translation_offset = Dot(splatted_translation, plane.normal);
+		}
+
 		// We can perform the division once
-		return { transformed_point * (1.0f / length), length };
+		return { transformed_point * OneDividedVector(length), length + translation_offset };
 	}
 
 	PlaneScalar ECS_VECTORCALL TransformPlane(PlaneScalar plane, Matrix matrix) {

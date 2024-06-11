@@ -153,6 +153,10 @@ namespace ECSEngine {
 
 	ECSENGINE_API Matrix ECS_VECTORCALL MatrixTranslation(float3 translation);
 
+	ECSENGINE_API float3 ECS_VECTORCALL MatrixGetTranslation(Matrix matrix);
+
+	ECSENGINE_API Matrix ECS_VECTORCALL MatrixChangeTranslation(Matrix matrix, float3 new_translation);
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API Matrix ECS_VECTORCALL MatrixScale(float x, float y, float z);

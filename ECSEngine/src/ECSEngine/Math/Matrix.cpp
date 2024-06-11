@@ -680,6 +680,27 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	float3 ECS_VECTORCALL MatrixGetTranslation(Matrix matrix) {
+		float4 values[2];
+		matrix.v[1].store((float*)values);
+		return values[1].xyz();
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	Matrix ECS_VECTORCALL MatrixChangeTranslation(Matrix matrix, float3 new_translation) {
+		Vec8f new_translation_register = { 
+			new_translation.x, new_translation.y, new_translation.z, 0.0f, 
+			new_translation.x, new_translation.y, new_translation.z, 0.0f 
+		};
+
+		Matrix result = matrix;
+		result.v[1] = blend8<0, 1, 2, 3, 12, 13, 14, 7>(matrix.v[1], new_translation_register);
+		return result;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
 	Matrix ECS_VECTORCALL MatrixScale(float x, float y, float z) {
 		Matrix result;
 

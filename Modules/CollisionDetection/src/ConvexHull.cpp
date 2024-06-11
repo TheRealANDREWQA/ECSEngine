@@ -1459,7 +1459,7 @@ ConvexHull ECS_VECTORCALL ConvexHull::TransformToTemporary(Matrix matrix, Alloca
 	float3 translation = matrix_values[3].xyz();
 	for (unsigned int index = 0; index < faces.size; index++) {
 		hull.faces[index] = faces[index];
-		hull.faces[index].plane.dot += Dot(faces[index].plane.normal, translation);
+		hull.faces[index].plane = TransformPlane(faces[index].plane, matrix);;
 	}
 	hull.faces.size = faces.size;
 	hull.center = center + translation;
