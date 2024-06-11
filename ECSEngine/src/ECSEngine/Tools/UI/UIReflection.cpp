@@ -2998,6 +2998,7 @@ namespace ECSEngine {
 				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
 				if (field_stream->resizable->allocator.allocator != nullptr) {
 					field_stream->resizable->FreeBuffer();
+					field_stream->standalone_data.FreeBuffer();
 				}
 				else {
 					field_stream->resizable->buffer = nullptr;

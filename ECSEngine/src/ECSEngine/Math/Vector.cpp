@@ -694,7 +694,7 @@ namespace ECSEngine {
 	template<VectorOperationPrecision precision>
 	Vec8f ECS_VECTORCALL OneDividedVector(Vec8f value) {
 		if constexpr (precision == ECS_VECTOR_PRECISE) {
-			return 1.0f / value;
+			return VectorGlobals::ONE / value;
 		}
 		else {
 			return value * approx_recipr(value);
