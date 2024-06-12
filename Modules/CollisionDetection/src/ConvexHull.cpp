@@ -188,10 +188,16 @@ void ConvexHull::ClipFace(
 			// The edge still has points, add them to the output
 			float3 first_point = ClipSegmentCalculatePoint(incident_edge.A, incident_edge_normalized_direction, t_min, t_factor);
 			float3 second_point = ClipSegmentCalculatePoint(incident_edge.A, incident_edge_normalized_direction, t_max, t_factor);
+			// When adding a point, we need to check if it already exists in the points array
+			// Such that the same point is not added multiple times
+			if (!ExistsCloseFloat3(*points,  first_point)) {
+				points->AddAssert(first_point);
+			}
 			// If the points are close enough, weld them
-			points->AddAssert(first_point);
 			if (!CompareMask(first_point, second_point)) {
-				points->AddAssert(second_point);
+				if (!ExistsCloseFloat3(*points, second_point)) {
+					points->AddAssert(second_point);
+				}
 			}
 		}
 	}

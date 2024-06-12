@@ -5,6 +5,9 @@
 using namespace ECSEngine;
 
 template<bool schedule_element>
+ECS_THREAD_TASK(UpdateWorldSpaceInertiaTensors);
+
+template<bool schedule_element>
 ECS_THREAD_TASK(IntegratePositions);
 
 template<bool schedule_element>

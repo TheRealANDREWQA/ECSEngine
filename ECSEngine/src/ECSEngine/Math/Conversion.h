@@ -8,6 +8,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API Matrix ECS_VECTORCALL QuaternionToMatrix(QuaternionScalar quaternion);
 
+	ECSENGINE_API Matrix3x3 ECS_VECTORCALL QuaternionToMatrix3x3(QuaternionScalar quaternion);
+
 	// Converts the quaternion at the given index to a matrix
 	ECSENGINE_API Matrix ECS_VECTORCALL QuaternionToMatrix(Quaternion quaternion, size_t index);
 

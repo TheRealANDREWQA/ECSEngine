@@ -210,12 +210,12 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECS_INLINE QuaternionScalar QuaternionNormalize(QuaternionScalar quaternion) {
 		return Normalize<precision>(quaternion);
 	}
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNormalize(Quaternion quaternion) {
 		return Normalize<precision>(quaternion);
 	}

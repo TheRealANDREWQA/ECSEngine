@@ -2151,16 +2151,18 @@ void RemoveSandboxEntityComponentEx(
 void RemoveSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbox_index, Component component, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-	ECS_ASSERT(entity_manager->ExistsGlobalComponent(component));
+	
+	// The runtime entity manager might not have the component
+	if (entity_manager->ExistsGlobalComponent(component)) {
+		// We only need to remove the sandbox references in scene mode
+		if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
+			const void* component_data = entity_manager->GetGlobalComponent(component);
+			RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, ECS_COMPONENT_GLOBAL);
+		}
 
-	// We only need to remove the sandbox references in scene mode
-	if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
-		const void* component_data = entity_manager->GetGlobalComponent(component);
-		RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, ECS_COMPONENT_GLOBAL);
+		entity_manager->UnregisterGlobalComponentCommit(component);
+		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	}
-
-	entity_manager->UnregisterGlobalComponentCommit(component);
-	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

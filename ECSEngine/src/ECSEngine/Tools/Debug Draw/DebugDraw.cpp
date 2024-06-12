@@ -3806,6 +3806,10 @@ namespace ECSEngine {
 		triangles.Deallocate();
 		aabbs.Deallocate();
 		oobbs.Deallocate();
+		// For strings, we need to deallocate their text
+		for (size_t index = 0; index < strings.size; index++) {
+			strings[index].text.Deallocate(allocator);
+		}
 		strings.Deallocate();
 		// For the grids, there are some possible deallocation that need to be made
 		size_t grid_count = grids.GetElementCount();
@@ -3827,6 +3831,9 @@ namespace ECSEngine {
 			thread_triangles[index].Clear();
 			thread_aabbs[index].Clear();
 			thread_oobbs[index].Clear();
+			for (unsigned int subindex = 0; subindex < thread_strings[index].size; subindex++) {
+				thread_strings[index][subindex].text.Deallocate(allocator);
+			}
 			thread_strings[index].Clear();
 			for (unsigned int grid_index = 0; grid_index < thread_grids[index].size; grid_index++) {
 				if (thread_grids[index][grid_index].has_valid_cells) {

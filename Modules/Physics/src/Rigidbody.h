@@ -4,6 +4,7 @@
 #include "ECSEngineMath.h"
 #include "Export.h"
 #include "CollisionDetection/src/ConvexHull.h"
+#include "PhysicsComponents.h"
 
 using namespace ECSEngine;
 
@@ -15,7 +16,7 @@ namespace ECSEngine {
 
 struct ECS_REFLECT_COMPONENT Rigidbody {
 	constexpr inline static short ID() {
-		return 400;
+		return PHYSICS_COMPONENT_BASE + 0;
 	}
 
 	constexpr inline static bool IsShared() {
@@ -24,6 +25,7 @@ struct ECS_REFLECT_COMPONENT Rigidbody {
 
 	float mass_inverse;
 	Matrix3x3 inertia_tensor_inverse;
+	Matrix3x3 world_space_inertia_tensor_inverse; ECS_SERIALIZATION_OMIT_FIELD
 	float3 center_of_mass;
 	float3 velocity;
 	float3 angular_velocity;

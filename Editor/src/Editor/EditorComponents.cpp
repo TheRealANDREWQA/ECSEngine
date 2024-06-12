@@ -1737,64 +1737,70 @@ void EditorComponents::RemoveTypeFromManager(
 	ComponentSignature signature = { &component, 1 };
 	ArchetypeQuery query;
 	if (component_type == ECS_COMPONENT_SHARED) {
-		// Get all archetypes with that component and remove it from them
-		query.shared.ConvertComponents(signature);
-		entity_manager->GetArchetypes(query, archetype_indices);
+		// The runtime entity manager might not have all the components
+		if (entity_manager->ExistsSharedComponent(component)) {
+			// Get all archetypes with that component and remove it from them
+			query.shared.ConvertComponents(signature);
+			entity_manager->GetArchetypes(query, archetype_indices);
 
-		for (unsigned int index = 0; index < archetype_indices.size; index++) {
-			const Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
-			unsigned int base_count = archetype->GetBaseCount();
-			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-				const ArchetypeBase* base = archetype->GetBase(base_index);
-				unsigned int entity_count = base->EntityCount();
-				const Entity* entities = base->m_entities;
-				entity_manager->RemoveSharedComponentCommit({ entities, entity_count }, signature);
+			for (unsigned int index = 0; index < archetype_indices.size; index++) {
+				const Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
+				unsigned int base_count = archetype->GetBaseCount();
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					const ArchetypeBase* base = archetype->GetBase(base_index);
+					unsigned int entity_count = base->EntityCount();
+					const Entity* entities = base->m_entities;
+					entity_manager->RemoveSharedComponentCommit({ entities, entity_count }, signature);
+				}
 			}
+
+			// Destroy all the matched archetypes now - since they will be empty
+			entity_manager->DestroyArchetypesCommit(archetype_indices);
+
+			// Check to see if the component has assets that we should remove
+			if (has_assets) {
+				// Now for each shared component remove the asset handles
+				entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
+					const void* instance_data = entity_manager->GetSharedData(component, instance);
+					RemoveSandboxComponentAssets(editor_state, sandbox_index, component, instance_data, component_type);
+				});
+			}
+
+			entity_manager->UnregisterSharedComponentCommit(component);
 		}
-
-		// Destroy all the matched archetypes now - since they will be empty
-		entity_manager->DestroyArchetypesCommit(archetype_indices);
-
-		// Check to see if the component has assets that we should remove
-		if (has_assets) {
-			// Now for each shared component remove the asset handles
-			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
-				const void* instance_data = entity_manager->GetSharedData(component, instance);
-				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, instance_data, component_type);
-			});
-		}
-
-		entity_manager->UnregisterSharedComponentCommit(component);
 	}
 	else if (component_type == ECS_COMPONENT_UNIQUE) {
-		// Get all archetypes with that component and remove it from them
-		query.unique.ConvertComponents(signature);
-		entity_manager->GetArchetypes(query, archetype_indices);
+		// The runtime entity manager might not have all components
+		if (entity_manager->ExistsComponent(component)) {
+			// Get all archetypes with that component and remove it from them
+			query.unique.ConvertComponents(signature);
+			entity_manager->GetArchetypes(query, archetype_indices);
 
-		for (unsigned int index = 0; index < archetype_indices.size; index++) {
-			const Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
-			unsigned int base_count = archetype->GetBaseCount();
-			unsigned char component_index = archetype->FindUniqueComponentIndex(component);
+			for (unsigned int index = 0; index < archetype_indices.size; index++) {
+				const Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
+				unsigned int base_count = archetype->GetBaseCount();
+				unsigned char component_index = archetype->FindUniqueComponentIndex(component);
 
-			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-				const ArchetypeBase* base = archetype->GetBase(base_index);
-				unsigned int entity_count = base->EntityCount();
-				const Entity* entities = base->m_entities;
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					const ArchetypeBase* base = archetype->GetBase(base_index);
+					unsigned int entity_count = base->EntityCount();
+					const Entity* entities = base->m_entities;
 
-				// Determine if we need to remove assets
-				if (has_assets) {
-					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
-						RemoveSandboxComponentAssets(editor_state, sandbox_index, component, base->GetComponentByIndex(entity_index, component_index), component_type);
+					// Determine if we need to remove assets
+					if (has_assets) {
+						for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
+							RemoveSandboxComponentAssets(editor_state, sandbox_index, component, base->GetComponentByIndex(entity_index, component_index), component_type);
+						}
 					}
+
+					entity_manager->RemoveComponentCommit({ entities, entity_count }, signature);
 				}
-
-				entity_manager->RemoveComponentCommit({ entities, entity_count }, signature);
 			}
-		}
 
-		// Destroy all matched archetypes now - since they will be empty
-		entity_manager->DestroyArchetypesCommit(archetype_indices);
-		entity_manager->UnregisterComponentCommit(component);
+			// Destroy all matched archetypes now - since they will be empty
+			entity_manager->DestroyArchetypesCommit(archetype_indices);
+			entity_manager->UnregisterComponentCommit(component);
+		}
 	}
 	else if (component_type == ECS_COMPONENT_GLOBAL) {
 		// Here we simply just need to remove the global component, nothing else to do
@@ -1839,17 +1845,9 @@ void EditorComponents::RemoveModuleFromManager(
 	for (size_t index = 0; index < loaded_modules[loaded_module_index].types.size; index++) {
 		const ReflectionType* type = GetType(loaded_modules[loaded_module_index].types[index]);
 		Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-		if (IsReflectionTypeComponent(type)) {
-			// Unique component		
-			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, ECS_COMPONENT_UNIQUE);
-		}
-		else if (IsReflectionTypeSharedComponent(type)) {
-			// Shared component
-			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, ECS_COMPONENT_UNIQUE);
-		}
-		else if (IsReflectionTypeGlobalComponent(type)) {
-			// Global component
-			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, ECS_COMPONENT_GLOBAL);
+		ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(type);
+		if (component_type != ECS_COMPONENT_TYPE_COUNT) {
+			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, component_type);
 		}
 	}
 }

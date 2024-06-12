@@ -69,6 +69,8 @@ namespace ECSEngine {
 		ECS_INLINE Matrix3x3(const float* _values) {
 			memcpy(values, _values, sizeof(values));
 		}
+		ECS_INLINE Matrix3x3(float3 row0, float3 row1, float3 row2) 
+			: Matrix3x3(row0.x, row0.y, row0.z, row1.x, row1.y, row1.z, row2.x, row2.y, row2.z) {}
 		ECS_INLINE Matrix3x3(float a00, float a01, float a02, float a10, float a11, float a12, float a20, float a21, float a22) {
 			values[0][0] = a00;
 			values[0][1] = a01;
