@@ -481,7 +481,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<typename ReturnValue, VectorOperationPrecision precision, typename Vector>
+	template<typename ReturnValue, ECS_VECTOR_PRECISION precision, typename Vector>
 	static ECS_INLINE ReturnValue ECS_VECTORCALL ReciprocalLengthImpl(Vector vector) {
 		auto square_length = SquareLength(vector);
 		if constexpr (precision == ECS_VECTOR_PRECISE) {
@@ -498,28 +498,28 @@ namespace ECSEngine {
 		}
 	}
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	float ECS_VECTORCALL ReciprocalLength(float3 vector) {
 		return ReciprocalLengthImpl<float, precision>(vector);
 	}
 
 	EXPORT_TEMPLATE_PRECISION(float, ReciprocalLength, float3);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	float ECS_VECTORCALL ReciprocalLength(float4 vector) {
 		return ReciprocalLengthImpl<float, precision>(vector);
 	}
 
 	EXPORT_TEMPLATE_PRECISION(float, ReciprocalLength, float4);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	Vec8f ECS_VECTORCALL ReciprocalLength(Vector3 vector) {
 		return ReciprocalLengthImpl<Vec8f, precision>(vector);
 	}
 
 	EXPORT_TEMPLATE_PRECISION(Vec8f, ReciprocalLength, Vector3);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	Vec8f ECS_VECTORCALL ReciprocalLength(Vector4 vector)
 	{
 		return ReciprocalLengthImpl<Vec8f, precision>(vector);
@@ -567,7 +567,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<VectorOperationPrecision precision, typename Vector>
+	template<ECS_VECTOR_PRECISION precision, typename Vector>
 	static ECS_INLINE Vector ECS_VECTORCALL NormalizeImpl(Vector vector) {
 		//if constexpr (precision == ECS_VECTOR_PRECISE) {
 		//	// Don't use reciprocal length so as to not add an extra read to the
@@ -584,28 +584,28 @@ namespace ECSEngine {
 		return vector * divisor;
 	}
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	float3 ECS_VECTORCALL Normalize(float3 vector) {
 		return NormalizeImpl<precision>(vector);
 	}
 
 	EXPORT_TEMPLATE_PRECISION_VECTORCALL(float3, Normalize, float3);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	float4 ECS_VECTORCALL Normalize(float4 vector) {
 		return NormalizeImpl<precision>(vector);
 	}
 
 	EXPORT_TEMPLATE_PRECISION_VECTORCALL(float4, Normalize, float4);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	Vector3 ECS_VECTORCALL Normalize(Vector3 vector) {
 		return NormalizeImpl<precision>(vector);
 	}
 
 	EXPORT_TEMPLATE_PRECISION_VECTORCALL(Vector3, Normalize, Vector3);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	Vector4 ECS_VECTORCALL Normalize(Vector4 vector) {
 		return NormalizeImpl<precision>(vector);
 	}
@@ -626,7 +626,7 @@ namespace ECSEngine {
 		return CompareMaskSingle(length, one);
 	}
 
-	template<VectorOperationPrecision precision, typename Vector>
+	template<ECS_VECTOR_PRECISION precision, typename Vector>
 	static ECS_INLINE Vector ECS_VECTORCALL NormalizeIfNotImpl(Vector vector, size_t vector_count) {
 		if constexpr (precision == ECS_VECTOR_PRECISE || precision == ECS_VECTOR_ACCURATE) {
 			auto square_length = SquareLength(vector);
@@ -649,7 +649,7 @@ namespace ECSEngine {
 		}
 	}
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	float3 ECS_VECTORCALL NormalizeIfNot(float3 vector) {
 		// The count is not used
 		return NormalizeIfNotImpl<precision>(vector, 1);
@@ -657,7 +657,7 @@ namespace ECSEngine {
 
 	EXPORT_TEMPLATE_PRECISION(float3, NormalizeIfNot, float3);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	float4 ECS_VECTORCALL NormalizeIfNot(float4 vector) {
 		// The count is not used
 		return NormalizeIfNotImpl<precision>(vector, 1);
@@ -665,21 +665,21 @@ namespace ECSEngine {
 
 	EXPORT_TEMPLATE_PRECISION(float4, NormalizeIfNot, float4);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	Vector3 ECS_VECTORCALL NormalizeIfNot(Vector3 vector, size_t vector_count) {
 		return NormalizeIfNotImpl<precision>(vector, vector_count);
 	}
 
 	EXPORT_TEMPLATE_PRECISION(Vector3, NormalizeIfNot, Vector3, size_t);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	Vector4 ECS_VECTORCALL NormalizeIfNot(Vector4 vector, size_t vector_count) {
 		return NormalizeIfNotImpl<precision>(vector, vector_count);
 	}
 
 	EXPORT_TEMPLATE_PRECISION(Vector4, NormalizeIfNot, Vector4, size_t);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	float OneDividedVector(float value) {
 		if constexpr (precision == ECS_VECTOR_PRECISE) {
 			return 1.0f / value;
@@ -691,7 +691,7 @@ namespace ECSEngine {
 
 	EXPORT_TEMPLATE_PRECISION(float, OneDividedVector, float);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	Vec8f ECS_VECTORCALL OneDividedVector(Vec8f value) {
 		if constexpr (precision == ECS_VECTOR_PRECISE) {
 			return VectorGlobals::ONE / value;
@@ -703,7 +703,7 @@ namespace ECSEngine {
 
 	EXPORT_TEMPLATE_PRECISION(Vec8f, OneDividedVector, Vec8f);
 
-	template<VectorOperationPrecision precision, typename Vector>
+	template<ECS_VECTOR_PRECISION precision, typename Vector>
 	Vector ECS_VECTORCALL OneDividedVectorImpl(Vector value) {
 		if constexpr (precision == ECS_VECTOR_PRECISE) {
 			if constexpr (std::is_same_v<Vector, Vector3>) {
@@ -722,14 +722,14 @@ namespace ECSEngine {
 		}
 	}
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	float3 ECS_VECTORCALL OneDividedVector(float3 value) {
 		return OneDividedVectorImpl<precision>(value);
 	}
 
 	EXPORT_TEMPLATE_PRECISION(float3, OneDividedVector, float3);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	Vector3 ECS_VECTORCALL OneDividedVector(Vector3 value) {
 		return OneDividedVectorImpl<precision>(value);
 	}
@@ -938,19 +938,19 @@ namespace ECSEngine {
 		return AngleBetweenVectorsNormalizedRadImpl<Vec8f>(a_normalized, b_normalized);
 	}
 
-	template<typename ReturnType, VectorOperationPrecision precision, typename Vector>
+	template<typename ReturnType, ECS_VECTOR_PRECISION precision, typename Vector>
 	static ECS_INLINE ReturnType ECS_VECTORCALL AngleBetweenVectorsRadImpl(Vector a, Vector b) {
 		return AngleBetweenVectorsNormalizedRad(Normalize<precision>(a), Normalize<precision>(b));
 	}
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	float ECS_VECTORCALL AngleBetweenVectorsRad(float3 a, float3 b) {
 		return AngleBetweenVectorsRadImpl<float, precision>(a, b);
 	}
 
 	EXPORT_TEMPLATE_PRECISION(float, AngleBetweenVectorsRad, float3, float3);
 
-	template<VectorOperationPrecision precision>
+	template<ECS_VECTOR_PRECISION precision>
 	Vec8f ECS_VECTORCALL AngleBetweenVectorsRad(Vector3 a, Vector3 b) {
 		return AngleBetweenVectorsRadImpl<Vec8f, precision>(a, b);
 	}
@@ -1633,6 +1633,17 @@ namespace ECSEngine {
 			return SameQuadrantRange360(degrees_a, degrees_b);
 		}
 		return SameQuadrantRange360(fmodf(degrees_a, 360.0f), fmodf(degrees_b, 360.0f));
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	size_t FindFirstCloseFloat3(Stream<float3> values, float3 search_value, float3 epsilon) {
+		for (size_t index = 0; index < values.size; index++) {
+			if (CompareMask(values[index], search_value, epsilon)) {
+				return index;
+			}
+		}
+		return -1;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

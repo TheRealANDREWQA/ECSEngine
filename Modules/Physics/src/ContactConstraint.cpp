@@ -6,7 +6,7 @@
 #include "ECSEngineWorld.h"
 
 #define SOLVER_DATA_STRING "SolverData"
-#define MAX_BAUMGARTE_BIAS 10000.0f
+#define MAX_BAUMGARTE_BIAS 1000.0f
 
 struct ContactPair {
 	ECS_INLINE unsigned int Hash() const {
@@ -58,18 +58,18 @@ static ContactConstraintPoint ComputeConstraintPointFromManifold(const ComputeCo
 	// The masses and the inertia tensors are the inverse
 	// pA = rA x d (rA is the displacement vector - the local anchor)
 	// pB = rB x d (rB is the displacement vector - the local anchor)
-	// effective_mass = 1.0f / (mA + mB + IA * pA * pA + IB * pB * pB)
+	// effective_mass = 1.0f / (mA + mB + Dot(IA * pA, pA) + Dot(IB * pB, pB))
 	// The * for the inertia tensor is matrix multiplication
 	auto compute_effective_mass = [&](float3 direction) {
 		float3 perpendicular_A = Cross(constraint_point.local_anchor_A, direction);
 		float3 perpendicular_B = Cross(constraint_point.local_anchor_B, direction);
 
-		float3 rotated_A = MatrixVectorMultiply(perpendicular_A, info->rigidbody_A->inertia_tensor_inverse);
-		float3 rotated_B = MatrixVectorMultiply(perpendicular_B, info->rigidbody_B->inertia_tensor_inverse);
+		float3 rotated_A = MatrixVectorMultiply(perpendicular_A, info->rigidbody_A->world_space_inertia_tensor_inverse);
+		float3 rotated_B = MatrixVectorMultiply(perpendicular_B, info->rigidbody_B->world_space_inertia_tensor_inverse);
 
 		float value = info->rigidbody_A->mass_inverse + info->rigidbody_B->mass_inverse
-			+ Dot(direction, Cross(rotated_A, perpendicular_A))
-			+ Dot(direction, Cross(rotated_B, perpendicular_B));
+			+ Dot(perpendicular_A, rotated_A)
+			+ Dot(perpendicular_B, rotated_B);
 		// Sanity check. This values should be above 0.0f, if it is not, set it to 0.0f
 		return value > 0.0f ? 1.0f / value : 0.0f;
 	};
@@ -162,8 +162,8 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 			// divided by the inertia tensor or conversely, multiplied with the inverse
 			float3 cross_A = Cross(anchor_A, impulse);
 			float3 cross_B = Cross(anchor_B, impulse);
-			angular_A -= MatrixVectorMultiply(cross_A, constraint.rigidbody_A->inertia_tensor_inverse);
-			angular_B += MatrixVectorMultiply(cross_B, constraint.rigidbody_B->inertia_tensor_inverse);
+			angular_A -= MatrixVectorMultiply(cross_A, constraint.rigidbody_A->world_space_inertia_tensor_inverse);
+			angular_B += MatrixVectorMultiply(cross_B, constraint.rigidbody_B->world_space_inertia_tensor_inverse);
 		};
 
 		// Solve the normal impulse first, then apply the friction impulse
@@ -180,7 +180,7 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 				float adjusted_separation = point.separation + solver_data->linear_slop;
 				adjusted_separation = ClampMax(adjusted_separation, 0.0f);
 				bias = delta_time_inverse * adjusted_separation * solver_data->baumgarte_factor;
-				bias = ClampMax(bias, MAX_BAUMGARTE_BIAS);
+				bias = ClampMin(bias, -MAX_BAUMGARTE_BIAS);
 			}
 
 			float3 anchor_A = point.local_anchor_A;
@@ -276,8 +276,8 @@ static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInit
 	data->allocator = MemoryManager(ECS_MB, ECS_KB * 4, ECS_MB * 20, world->memory);
 	data->constraints.Initialize(&data->allocator, 32);
 	data->iterations = 4;
-	data->baumgarte_factor = 0.2f;
-	data->linear_slop = 0.0f;
+	data->baumgarte_factor = 0.15f;
+	data->linear_slop = 0.01f;
 
 	// Bind this so we can access the data from outside the main function
 	world->system_manager->BindData(SOLVER_DATA_STRING, data);
@@ -353,47 +353,6 @@ void AddContactConstraint(
 	SolverData* data = (SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
 	Contact* allocated_contact = (Contact*)data->allocator.Allocate(sizeof(Contact));
 	*((EntityContact*)allocated_contact) = *contact;
-	
-	// TODO: Decide which tangent computation form we should use
-	// Aligning the tangents with the initial projected relative velocity
-	// Should provide more consistent results
-	// Reserve the constraint, and compute the constraint points from the manifold points
-	//// But before that, we need to compute the tangent directions. What we can do, in order
-	//// To align the pair of tangents with the relative velocity is to project the relative
-	//// Velocity in the manifold plane. That is one of the tangents and the other one is the
-	//// Cross product between the manifold normal and the other tangent
-	//PlaneScalar manifold_plane = contact->manifold.GetPlane();
-	//float3 manifold_point = contact->manifold.contact_points[0];
-	//float3 projected_point_A = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_A->velocity);
-	//float3 projected_point_B = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_B->velocity);
-	//float3 projected_speed = projected_point_B - projected_point_A;
-	//
-	//// In case the projected speed is close to 0.0f, choose an arbitrary other direction
-	//// Like the projected velocity of body A
-	//float3 tangent_1;
-	//if (CompareMask(projected_speed, float3::Splat(0.0f))) {
-	//	tangent_1 = Normalize(projected_point_A - manifold_point);
-	//}
-	//else {
-	//	tangent_1 = Normalize(projected_speed);
-	//}
-	//float3 tangent_2 = Cross(contact->manifold.separation_axis, tangent_1);
-
-	// Compute the tangents, at the moment, as the 2 arbitrary perpendicular directions
-	// In the manifold plane
-	if (contact->manifold.contact_point_count <= 1) {
-		// We cannot compute the tangets, we require at least 2 points
-		// To obtain a direction inside the plane
-		// So, make the tangents 0, which is the same as disabling friction
-		allocated_contact->tangent_1 = float3::Splat(0.0f);
-		allocated_contact->tangent_2 = float3::Splat(0.0f);
-	}
-	else {
-		float3 plane_direction = contact->manifold.contact_points[1] - contact->manifold.contact_points[0];
-		plane_direction = Normalize(plane_direction);
-		allocated_contact->tangent_1 = plane_direction;
-		allocated_contact->tangent_2 = Normalize(Cross(plane_direction, contact->manifold.separation_axis));
-	}
 
 	ContactConstraint* constraint = data->constraints.buffer + data->constraints.ReserveRange();
 	constraint->contact = allocated_contact;

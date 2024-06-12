@@ -5,14 +5,13 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------
 
-	Matrix ECS_VECTORCALL QuaternionToMatrix(QuaternionScalar quaternion) {
+	void ECS_VECTORCALL QuaternionToMatrixImpl(QuaternionScalar quaternion, float4 values[4]) {
 		// The formula is this one (on the internet the values are provided in column major format, here they are row major)
 		// w * w + x * x - y * y - z * z          2 w * z + 2 x * y               2 x * z - 2 y * w         0
 		//       2 x * y - 2 z * w          w * w + y * y - x * x - z * z         2 x * w + 2 y * z         0
 		//       2 w * y + 2 x * z                2 y * z - 2 x * w         w * w + z * z - x * x - y * y   0
 		//               0                                0                               0                 1
 
-		alignas(ECS_SIMD_BYTE_SIZE) float4 values[sizeof(Matrix) / sizeof(float4)];
 		float two = 2.0f;
 		float x_squared = quaternion.x * quaternion.x;
 		float y_squared = quaternion.y * quaternion.y;
@@ -28,8 +27,18 @@ namespace ECSEngine {
 		values[1] = { two_xy - two_wz, w_squared + y_squared - x_squared - z_squared, two_xw + two_yz, 0.0f };
 		values[2] = { two_yw + two_xz, two_yz - two_xw, w_squared + z_squared - x_squared - y_squared, 0.0f };
 		values[3] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	}
 
+	Matrix ECS_VECTORCALL QuaternionToMatrix(QuaternionScalar quaternion) {
+		alignas(ECS_SIMD_BYTE_SIZE) float4 values[sizeof(Matrix) / sizeof(float4)];
+		QuaternionToMatrixImpl(quaternion, values);
 		return Matrix().LoadAligned(values);
+	}
+
+	Matrix3x3 ECS_VECTORCALL QuaternionToMatrix3x3(QuaternionScalar quaternion) {
+		float4 values[sizeof(Matrix) / sizeof(float4)];
+		QuaternionToMatrixImpl(quaternion, values);
+		return Matrix3x3(values[0].xyz(), values[1].xyz(), values[2].xyz());
 	}
 
 	void ECS_VECTORCALL QuaternionToMatrix(Quaternion quaternion, Matrix* matrices, size_t write_count) {

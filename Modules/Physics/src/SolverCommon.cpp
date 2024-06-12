@@ -3,6 +3,22 @@
 #include "Rigidbody.h"
 #include "ECSEngineWorld.h"
 
+static void UpdateWorldSpaceInertiaTensors_Impl(
+	const ForEachEntityData* for_each_data,
+	const Rotation* rotation,
+	Rigidbody* rigidbody
+) {
+	// PERFORMANCE TODO: Check for rotation different from Identity?
+	Matrix3x3 rotation_matrix = QuaternionToMatrix3x3(rotation->value);
+	rigidbody->world_space_inertia_tensor_inverse = MatrixMultiply(rigidbody->inertia_tensor_inverse, rotation_matrix);
+}
+
+template<bool schedule_element>
+ECS_THREAD_TASK(UpdateWorldSpaceInertiaTensors) {
+	ForEachEntityCommit<schedule_element, QueryRead<Rotation>, QueryReadWrite<Rigidbody>>(thread_id, world)
+		.Function(UpdateWorldSpaceInertiaTensors_Impl);
+}
+
 // For integration of the positions and velocity, we are using the Semi Implicit Euler method
 // Since it provides the best speed to accuracy balance
 
@@ -47,6 +63,8 @@ ECS_THREAD_TASK(IntegrateVelocities) {
 }
 
 void AddSolverCommonTasks(ModuleTaskFunctionData* data) {
+	ECS_REGISTER_SIMPLE_FOR_EACH_TASK(data, UpdateWorldSpaceInertiaTensors, ECS_THREAD_TASK_SIMULATE_EARLY, {});
+
 	TaskSchedulerElement integrate_position;
 	integrate_position.task_group = ECS_THREAD_TASK_SIMULATE_LATE;
 	TaskDependency position_dependencies[] = {

@@ -1,14 +1,15 @@
+// ECS_REFLECT
 #pragma once
 #include "ECSEngineReflectionMacros.h"
 #include "ECSEngineBasics.h"
 #include "ECSEngineAssetMacros.h"
 #include "ECSEngineResourceTypes.h"
 
-#define Physics_COMPONENT_BASE ECS_CONSTANT_REFLECT(value)
+#define PHYSICS_COMPONENT_BASE ECS_CONSTANT_REFLECT(400)
 
-#define Physics_SHARED_COMPONENT_BASE ECS_CONSTANT_REFLECT(value)
+#define PHYSICS_SHARED_COMPONENT_BASE ECS_CONSTANT_REFLECT(400)
 
-#define Physics_GLOBAL_COMPONENT_BASE ECS_CONSTANT_REFLECT(value)
+#define PHYSICS_GLOBAL_COMPONENT_BASE ECS_CONSTANT_REFLECT(400)
 
 // ------------------------ Copy Paste Helpers ------------------------------
 

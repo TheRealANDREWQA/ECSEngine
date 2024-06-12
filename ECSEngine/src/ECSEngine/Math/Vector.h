@@ -10,7 +10,7 @@
 
 namespace ECSEngine {
 
-	enum VectorOperationPrecision {
+	enum ECS_VECTOR_PRECISION {
 		ECS_VECTOR_PRECISE,
 		ECS_VECTOR_ACCURATE,
 		ECS_VECTOR_FAST
@@ -554,16 +554,16 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API float ECS_VECTORCALL ReciprocalLength(float3 vector);
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API float ECS_VECTORCALL ReciprocalLength(float4 vector);
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API Vec8f ECS_VECTORCALL ReciprocalLength(Vector3 vector);
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API Vec8f ECS_VECTORCALL ReciprocalLength(Vector4 vector);
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -598,16 +598,16 @@ namespace ECSEngine {
 
 	ECSENGINE_API float2 ECS_VECTORCALL Normalize(float2 vector);
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API float3 ECS_VECTORCALL Normalize(float3 vector);
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API float4 ECS_VECTORCALL Normalize(float4 vector);
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API Vector3 ECS_VECTORCALL Normalize(Vector3 vector);
 
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API Vector4 ECS_VECTORCALL Normalize(Vector4 vector);
 
 	// Returns true if a vector's squared length is already normalized
@@ -629,19 +629,19 @@ namespace ECSEngine {
 	// This only performs the square root and the division if the vector is not normalized already
 	// This only applies for the precise and the accurate versions (the fast version already produces
 	// a value that can be used to multiply directly)
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API float3 ECS_VECTORCALL NormalizeIfNot(float3 vector);
 
 	// This only performs the square root and the division if the vector is not normalized already
 	// This only applies for the precise and the accurate versions (the fast version already produces
 	// a value that can be used to multiply directly)
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API float4 ECS_VECTORCALL NormalizeIfNot(float4 vector);
 
 	// This only performs the square root and the division if the vector is not normalized already
 	// This only applies for the precise and the accurate versions (the fast version already produces
 	// a value that can be used to multiply directly). It exists only to match the SIMD function
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECS_INLINE float3 ECS_VECTORCALL NormalizeIfNot(float3 vector, size_t vector_count) {
 		return NormalizeIfNot<precision>(vector);
 	}
@@ -649,7 +649,7 @@ namespace ECSEngine {
 	// This only performs the square root and the division if the vector is not normalized already
 	// This only applies for the precise and the accurate versions (the fast version already produces
 	// a value that can be used to multiply directly). It exists only to match the SIMD function
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECS_INLINE float4 ECS_VECTORCALL NormalizeIfNot(float4 vector, size_t vector_count) {
 		return NormalizeIfNot<precision>(vector);
 	}
@@ -658,34 +658,34 @@ namespace ECSEngine {
 	// This only applies for the precise and the accurate versions (the fast version already produces
 	// a value that can be used to multiply directly). The vector count is used to determine whether
 	// Or not a normalization is needed or not
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API Vector3 ECS_VECTORCALL NormalizeIfNot(Vector3 vector, size_t vector_count);
 
 	// This only performs the square root and the division if the vector is not normalized already
 	// This only applies for the precise and the accurate versions (the fast version already produces
 	// a value that can be used to multiply directly). The vector count is used to determine whether
 	// Or not a normalization is needed or not
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API Vector4 ECS_VECTORCALL NormalizeIfNot(Vector4 vector, size_t vector_count);
 
 	// Returns 1.0f / value when using precise mode
 	// And an approximate version when using ACCURATE/FAST
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API float OneDividedVector(float value);
 
 	// Returns 1.0f / value when using precise mode
 	// And an approximate version when using ACCURATE/FAST
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API float3 ECS_VECTORCALL OneDividedVector(float3 value);
 
 	// Returns 1.0f / value when using precise mode
 	// And an approximate version when using ACCURATE/FAST
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API Vec8f ECS_VECTORCALL OneDividedVector(Vec8f value);
 
 	// Returns 1.0f / value when using precise mode
 	// And an approximate version when using ACCURATE/FAST
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API Vector3 ECS_VECTORCALL OneDividedVector(Vector3 value);
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -831,11 +831,11 @@ namespace ECSEngine {
 	ECSENGINE_API Vec8f ECS_VECTORCALL AngleBetweenVectorsNormalizedRad(Vector3 a_normalized, Vector3 b_normalized);
 
 	// Returns the value of the angle between the 2 vectors in radians
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API float ECS_VECTORCALL AngleBetweenVectorsRad(float3 a, float3 b);
 		
 	// Returns the value of the angle between the 2 vectors in radians
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECSENGINE_API Vec8f ECS_VECTORCALL AngleBetweenVectorsRad(Vector3 a, Vector3 b);
 	
 	// Return the value of the angle between the 2 vectors in degrees
@@ -849,13 +849,13 @@ namespace ECSEngine {
 	}
 
 	// Return the value of the angle between the 2 vectors in degrees
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECS_INLINE float ECS_VECTORCALL AngleBetweenVectors(float3 a, float3 b) {
 		return RadToDeg(AngleBetweenVectorsRad<precision>(a, b));
 	}
 
 	// Return the value of the angle between the 2 vectors in degrees
-	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	template<ECS_VECTOR_PRECISION precision = ECS_VECTOR_PRECISE>
 	ECS_INLINE Vec8f ECS_VECTORCALL AngleBetweenVectors(Vector3 a, Vector3 b) {
 		return RadToDeg(AngleBetweenVectorsRad<precision>(a, b));
 	}
@@ -1180,6 +1180,14 @@ namespace ECSEngine {
 	ECSENGINE_API bool SameQuadrantRange360(float degrees_a, float degrees_b);
 
 	ECSENGINE_API bool SameQuadrant(float degrees_a, float degrees_b);
+
+	// Returns -1 if there is no float3 in the given epsilon, else the index of the first float3 inside that epsilon
+	ECSENGINE_API size_t FindFirstCloseFloat3(Stream<float3> values, float3 search_value, float3 epsilon = float3::Splat(ECS_SIMD_VECTOR_EPSILON_VALUE));
+	
+	// Returns true if there is a float3 in the given epsilon, else false
+	ECS_INLINE bool ExistsCloseFloat3(Stream<float3> values, float3 search_value, float3 epsilon = float3::Splat(ECS_SIMD_VECTOR_EPSILON_VALUE)) {
+		return FindFirstCloseFloat3(values, search_value, epsilon) != -1;
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
