@@ -147,7 +147,7 @@ enum EDITOR_SANDBOX_FLAG : size_t {
 	// When the sandbox was started. It can happen that one of the modules is not
 	// ready and when the sandbox finally resumes it is already in the run state
 	// and it needs to know whether or not this initialization was performed or not
-	EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS = 1 << 3,
+	EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED = 1 << 3,
 	// This flag is used by the shared component build function to indicate
 	// That there is a pending event where build functions are considered and
 	// The sandbox should wait them

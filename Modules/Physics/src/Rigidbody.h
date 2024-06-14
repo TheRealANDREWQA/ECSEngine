@@ -32,6 +32,22 @@ struct ECS_REFLECT_COMPONENT Rigidbody {
 	bool is_static;
 };
 
+ECS_INLINE float3 ComputeVelocity(float3 linear_velocity, float3 angular_velocity, float3 local_anchor) {
+	return linear_velocity + Cross(angular_velocity, local_anchor);
+}
+
+ECS_INLINE float3 ComputeVelocity(const Rigidbody* rigidbody, float3 local_anchor) {
+	return ComputeVelocity(rigidbody->velocity, rigidbody->angular_velocity, local_anchor);
+}
+
+// Applies the modifications to the given values, instead of the ones from the rigidbody
+PHYSICS_API void ApplyImpulse(float3& velocity, float3& angular_velocity, const Rigidbody* rigidbody, float3 local_anchor, float3 impulse);
+
+ECS_INLINE void ApplyImpulse(Rigidbody* rigidbody, float3 local_anchor, float3 impulse) {
+	ApplyImpulse(rigidbody->velocity, rigidbody->angular_velocity, rigidbody, local_anchor, impulse);
+}
+
+
 // The triangles must respect the CCW winding order
 // The mass and the center of mass can be computed as well, 
 // but these are optional out parameters. The mass is computed

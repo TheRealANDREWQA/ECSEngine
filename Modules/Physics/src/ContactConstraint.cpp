@@ -37,6 +37,8 @@ struct ComputeConstraintPointInfo {
 	Rigidbody* rigidbody_B;
 	float3 center_of_mass_A;
 	float3 center_of_mass_B;
+	PlaneScalar friction_plane_A;
+	PlaneScalar friction_plane_B;
 };
 
 static ContactConstraintPoint ComputeConstraintPointFromManifold(const ComputeConstraintPointInfo* info) {
@@ -48,9 +50,6 @@ static ContactConstraintPoint ComputeConstraintPointFromManifold(const ComputeCo
 	constraint_point.separation = info->separation;
 	constraint_point.local_anchor_A = info->point - info->center_of_mass_A;
 	constraint_point.local_anchor_B = info->point - info->center_of_mass_B;
-
-	//constraint_point.world_anchor_A = point;
-	//constraint_point.world_anchor_B = point;
 
 	// Calculate the normal and tangent effective mass
 	// The effective mass along the direction d 
@@ -75,8 +74,12 @@ static ContactConstraintPoint ComputeConstraintPointFromManifold(const ComputeCo
 	};
 
 	constraint_point.normal_mass = compute_effective_mass(info->separation_axis);
-	constraint_point.tangent_impulse_1 = compute_effective_mass(info->tangent_1);
-	constraint_point.tangent_impulse_2 = compute_effective_mass(info->tangent_2);
+	constraint_point.tangent_mass_1 = compute_effective_mass(info->tangent_1);
+	constraint_point.tangent_mass_2 = compute_effective_mass(info->tangent_2);
+
+	// Project the local anchor on the friction plane
+	constraint_point.friction_local_anchor_A = ProjectPointOnPlane(info->friction_plane_A, info->point) - info->center_of_mass_A;
+	constraint_point.friction_local_anchor_B = ProjectPointOnPlane(info->friction_plane_B, info->point) - info->center_of_mass_B;
 
 	return constraint_point;
 }
@@ -97,25 +100,63 @@ static void PrepareContactConstraintsData(World* world, SolverData* solver_data)
 		// To align the pair of tangents with the relative velocity, is to project the relative
 		// Velocity in the manifold plane. That is one of the tangents and the other one is the
 		// Cross product between the manifold normal and the other tangent
-		PlaneScalar manifold_plane = constraint.contact->manifold.GetPlane();
-		float3 manifold_point = constraint.contact->manifold.contact_points[0];
-		float3 projected_point_A = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_A->velocity);
-		float3 projected_point_B = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_B->velocity);
-		float3 projected_speed = projected_point_B - projected_point_A;
+		//PlaneScalar manifold_plane = constraint.contact->manifold.GetPlane();
+		//float3 manifold_point = constraint.contact->manifold.points[0];
+		//float3 projected_point_A = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_A->velocity);
+		//float3 projected_point_B = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_B->velocity);
+		//float3 projected_speed = projected_point_B - projected_point_A;
 
-		// In case the projected speed is close to 0.0f, choose an arbitrary other direction
-		// Like the projected velocity of body A
+		//// In case the projected speed is close to 0.0f, choose an arbitrary other direction
+		//// Like the projected velocity of body A
+		//float3 tangent_1;
+		//float3 tangent_2;
+		//if (CompareMask(projected_speed, float3::Splat(0.0f))) {
+		//	// There is no relative speed, we can make the tangents 0
+		//	tangent_1 = float3::Splat(0.0f);
+		//	tangent_2 = float3::Splat(0.0f);
+		//}
+		//else {
+		//	tangent_1 = Normalize(projected_speed);
+		//	tangent_2 = Cross(constraint.contact->manifold.separation_axis, tangent_1);
+		//}
+
+		//tangent_1 = float3::Splat(0.0f);
+		//tangent_2 = float3::Splat(0.0f);
+
+		// To compute the tangents, we need the relative velocity
+		// But there are cases where the objects have no relative velocity
+		// From translation, but have relative velocity from angular velocity
+		// As such, to perform a crude approximation of this, compute the relative
+		// Velocity of the first manifold point, and then compute the tangents
+		// From that velocity. Technically, in this way, the tangents are aligned
+		// For one point and not for the others, but it is the best approximation
+		float3 manifold_point = constraint.contact->manifold.points[0];
+		float3 local_anchor_A = manifold_point - constraint.center_of_mass_A;
+		float3 local_anchor_B = manifold_point - constraint.center_of_mass_B;
+		float3 velocity_A = ComputeVelocity(constraint.rigidbody_A, local_anchor_A);
+		float3 velocity_B = ComputeVelocity(constraint.rigidbody_B, local_anchor_B);
+		float3 relative_speed = velocity_A - velocity_B;
+
+		// Project the relative speed on the manifold plane
+		PlaneScalar manifold_plane = constraint.contact->manifold.GetPlane();
+		float3 projected_point = ProjectPointOnPlane(manifold_plane, manifold_point + relative_speed);
+
+		float3 projected_speed = projected_point - manifold_point;
 		float3 tangent_1;
+		float3 tangent_2;
 		if (CompareMask(projected_speed, float3::Splat(0.0f))) {
-			tangent_1 = Normalize(projected_point_A - manifold_point);
+			tangent_1 = float3::Splat(0.0f);
+			tangent_2 = float3::Splat(0.0f);
 		}
 		else {
 			tangent_1 = Normalize(projected_speed);
+			tangent_2 = Normalize(Cross(constraint.contact->manifold.separation_axis, tangent_1));
 		}
-		float3 tangent_2 = Cross(constraint.contact->manifold.separation_axis, tangent_1);
+		constraint.contact->tangent_1 = tangent_1;
+		constraint.contact->tangent_2 = tangent_2;
 
-		tangent_1 = float3::Splat(0.0f);
-		tangent_2 = float3::Splat(0.0f);
+		float body_distance_A = DistanceToPlane(manifold_plane, constraint.center_of_mass_A);
+		float body_distance_B = DistanceToPlane(manifold_plane, constraint.center_of_mass_B);
 
 		ComputeConstraintPointInfo compute_info;
 		compute_info.center_of_mass_A = constraint.center_of_mass_A;
@@ -126,8 +167,10 @@ static void PrepareContactConstraintsData(World* world, SolverData* solver_data)
 		compute_info.separation_axis = constraint.contact->manifold.separation_axis;
 		compute_info.tangent_1 = tangent_1;
 		compute_info.tangent_2 = tangent_2;
-		for (unsigned int index = 0; index < constraint.contact->manifold.contact_point_count; index++) {
-			compute_info.point = constraint.contact->manifold.contact_points[index];
+		compute_info.friction_plane_A = { manifold_plane.normal, manifold_plane.dot + body_distance_A };
+		compute_info.friction_plane_B = { manifold_plane.normal, manifold_plane.dot + body_distance_B };
+		for (unsigned int index = 0; index < constraint.contact->manifold.point_count; index++) {
+			compute_info.point = constraint.contact->manifold.points[index];
 			constraint.points[index] = ComputeConstraintPointFromManifold(&compute_info);
 		}
 	}
@@ -147,27 +190,20 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 		auto compute_relative_velocity = [&](float3 anchor_A, float3 anchor_B) {
 			// Formula: v + omega x r where v is the linear velocity, omega the angular velocity and r the local anchor
 			// Choose the relative velocity to be from A to B
-			float3 relative_velocity_A = velocity_A + Cross(angular_A, anchor_A);
-			float3 relative_velocity_B = velocity_B + Cross(angular_B, anchor_B);
+			float3 relative_velocity_A = ComputeVelocity(velocity_A, angular_A, anchor_A);
+			float3 relative_velocity_B = ComputeVelocity(velocity_B, angular_B, anchor_B);
 			return relative_velocity_B - relative_velocity_A;
 		};
 
 		auto apply_impulse = [&](float3 anchor_A, float3 anchor_B, float3 impulse) {
 			// The change in linear velocity is the impulse divided by mass
 			// For the B body we must add the impulse
-			velocity_A -= impulse * constraint.rigidbody_A->mass_inverse;
-			velocity_B += impulse * constraint.rigidbody_B->mass_inverse;
-
-			// The change in angular velocity is the cross product of the impulse with the anchor
-			// divided by the inertia tensor or conversely, multiplied with the inverse
-			float3 cross_A = Cross(anchor_A, impulse);
-			float3 cross_B = Cross(anchor_B, impulse);
-			angular_A -= MatrixVectorMultiply(cross_A, constraint.rigidbody_A->world_space_inertia_tensor_inverse);
-			angular_B += MatrixVectorMultiply(cross_B, constraint.rigidbody_B->world_space_inertia_tensor_inverse);
+			ApplyImpulse(velocity_A, angular_A, constraint.rigidbody_A, anchor_A, -impulse);
+			ApplyImpulse(velocity_B, angular_B, constraint.rigidbody_B, anchor_B, impulse);
 		};
 
 		// Solve the normal impulse first, then apply the friction impulse
-		unsigned int point_count = constraint.contact->manifold.contact_point_count;
+		unsigned int point_count = constraint.contact->manifold.point_count;
 		for (unsigned int point_index = 0; point_index < point_count; point_index++) {
 			ContactConstraintPoint& point = constraint.points[point_index];
 			
@@ -206,6 +242,7 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 		for (unsigned int point_index = 0; point_index < point_count; point_index++) {
 			ContactConstraintPoint& point = constraint.points[point_index];
 
+			// Use the normal anchors to determine the velocity
 			float3 anchor_A = point.local_anchor_A;
 			float3 anchor_B = point.local_anchor_B;
 
@@ -226,20 +263,26 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 			float impulse_2 = -point.tangent_mass_2 * relative_velocity_tangent_2;
 
 			float max_impulse = constraint.contact->friction * point.normal_impulse;
-			float max_impulse_squared = max_impulse * max_impulse;
-			float component_impulse_squared = impulse_1 * impulse_1 + impulse_2 * impulse_2;
-			if (component_impulse_squared > max_impulse_squared) {
-				float component_impulse = sqrt(component_impulse_squared);
-				float reduction_factor = component_impulse / max_impulse;
-				impulse_1 *= reduction_factor;
-				impulse_2 *= reduction_factor;
-			}
+			if (max_impulse > 0.0f) {
+				float max_impulse_squared = max_impulse * max_impulse;
+				float component_impulse_squared = impulse_1 * impulse_1 + impulse_2 * impulse_2;
+				if (component_impulse_squared > max_impulse_squared) {
+					float component_impulse = sqrt(component_impulse_squared);
+					// Divide the max impulse by the component impulse to determine
+					// By how much to reduce the individual impulses
+					float reduction_factor = max_impulse / component_impulse;
+					impulse_1 *= reduction_factor;
+					impulse_2 *= reduction_factor;
+				}
 
-			// Apply the impulse now
-			float3 tangent_impulse_1 = constraint.contact->tangent_1 * tangent_impulse_1;
-			float3 tangent_impulse_2 = constraint.contact->tangent_2 * tangent_impulse_2;
-			//apply_impulse(anchor_A, anchor_B, tangent_impulse_1);
-			//apply_impulse(anchor_A, anchor_B, tangent_impulse_2);
+				// Apply the impulse now
+				float3 tangent_impulse_1 = constraint.contact->tangent_1 * impulse_1;
+				float3 tangent_impulse_2 = constraint.contact->tangent_2 * impulse_2;
+
+				// Use the friction anchors to apply the impulse at
+				apply_impulse(point.friction_local_anchor_A, point.friction_local_anchor_B, tangent_impulse_1);
+				apply_impulse(point.friction_local_anchor_A, point.friction_local_anchor_B, tangent_impulse_2);
+			}
 		}
 
 		// Write the accumulated values now
@@ -276,7 +319,7 @@ static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInit
 	data->allocator = MemoryManager(ECS_MB, ECS_KB * 4, ECS_MB * 20, world->memory);
 	data->constraints.Initialize(&data->allocator, 32);
 	data->iterations = 4;
-	data->baumgarte_factor = 0.15f;
+	data->baumgarte_factor = 0.05f;
 	data->linear_slop = 0.01f;
 
 	// Bind this so we can access the data from outside the main function
@@ -309,7 +352,7 @@ void AddSolverTasks(ModuleTaskFunctionData* data) {
 //	// Velocity in the manifold plane. That is one of the tangents and the other one is the
 //	// Cross product between the manifold normal and the other tangent
 //	PlaneScalar manifold_plane = contact->manifold.GetPlane();
-//	float3 manifold_point = contact->manifold.contact_points[0];
+//	float3 manifold_point = contact->manifold.points[0];
 //	float3 projected_point_A = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_A->velocity);
 //	float3 projected_point_B = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_B->velocity);
 //	float3 projected_speed = projected_point_B - projected_point_A;
@@ -337,8 +380,8 @@ void AddSolverTasks(ModuleTaskFunctionData* data) {
 //	compute_info.separation_axis = contact->manifold.separation_axis;
 //	compute_info.tangent_1 = tangent_1;
 //	compute_info.tangent_2 = tangent_2;
-//	for (unsigned int index = 0; index < contact->manifold.contact_point_count; index++) {
-//		compute_info.point = contact->manifold.contact_points[index];
+//	for (unsigned int index = 0; index < contact->manifold.point_count; index++) {
+//		compute_info.point = contact->manifold.points[index];
 //		constraint->points[index] = ComputeConstraintPointFromManifold(&compute_info);
 //	}
 //}
