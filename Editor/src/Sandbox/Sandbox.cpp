@@ -476,7 +476,7 @@ bool AreSandboxesBeingRun(const EditorState* editor_state)
 
 bool AreSandboxRuntimeTasksInitialized(const EditorState* editor_state, unsigned int sandbox_index)
 {
-	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
+	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1307,7 +1307,7 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	ClearWorld(&sandbox->sandbox_world);
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	// Clear the waiting compilation flag
-	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
+	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
 	// Clear the crashed status as well
 	sandbox->is_crashed = false;
 	// We can also clear the transfer data since it is no longer needed
@@ -1923,7 +1923,7 @@ bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sand
 			// In this case, we also need to copy the entities from the scene to the
 			// Runtime entities since that did not happen
 			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
-			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
+			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
 		}
 		
 		// We can now clear the transfer data
@@ -2194,6 +2194,28 @@ static EDITOR_EVENT(WaitDebugDrawComponentsBuildEvent) {
 	return true;
 }
 
+struct WaitInitializeWorldRenderEventData {
+	unsigned int sandbox_index;
+	uint2 new_texture_size;
+};
+
+static EDITOR_EVENT(WaitInitializeWorldRenderEvent) {
+	WaitInitializeWorldRenderEventData* data = (WaitInitializeWorldRenderEventData*)_data;
+	// If it has been initialized, render the sandbox
+	if (AreSandboxRuntimeTasksInitialized(editor_state, data->sandbox_index)) {
+		RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, data->new_texture_size);
+		// Unlock the sandbox
+		UnlockSandbox(editor_state, data->sandbox_index);
+		return false;
+	}
+
+	// If the sandbox was removed from the runtime state, remove this call
+	if (GetSandboxState(editor_state, data->sandbox_index) == EDITOR_SANDBOX_SCENE) {
+		return false;
+	}
+	return true;
+}
+
 bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, uint2 new_texture_size, bool disable_logging)
 {
 	// TODO: The messages are kinda annoying since they are called many times. Is this fine to always disable them?
@@ -2223,6 +2245,34 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			sandbox->viewport_pending_resize[viewport] = new_texture_size;
 		}
 		return false;
+	}
+
+	// If the data source is the runtime one, while the viewport is the scene one 
+	// and the world was not initialized, add a pending render call
+	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+		if (GetSandboxActiveViewport(editor_state, sandbox_index) == EDITOR_SANDBOX_VIEWPORT_RUNTIME &&
+			!AreSandboxRuntimeTasksInitialized(editor_state, sandbox_index)) {
+			if (!EditorHasEventTest(editor_state, WaitInitializeWorldRenderEvent, [sandbox_index, new_texture_size](void* data) {
+				WaitInitializeWorldRenderEventData* event_data = (WaitInitializeWorldRenderEventData*)data;
+				if (event_data->sandbox_index == sandbox_index) {
+					if (new_texture_size.x != 0 && new_texture_size.y != 0) {
+						event_data->new_texture_size = new_texture_size;
+					}
+					return true;
+				}
+				return false;
+			})) {
+				WaitInitializeWorldRenderEventData event_data;
+				event_data.sandbox_index = sandbox_index;
+				event_data.new_texture_size = new_texture_size;
+
+				// Lock the sandbox, such that we don't have it be removed underneath us
+				LockSandbox(editor_state, sandbox_index);
+				EditorAddEvent(editor_state, WaitInitializeWorldRenderEvent, &event_data, sizeof(event_data));
+			}
+
+			return true;
+		}
 	}
 
 	// Check to see if we already have a pending event - if we do, skip the call
@@ -3014,7 +3064,7 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 				// Prepare the sandbox world
 				PrepareWorld(&sandbox->sandbox_world);
 				// Set the initialize task flag
-				sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
+				sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
 			}
 			else {
 				// Only prepare the base world

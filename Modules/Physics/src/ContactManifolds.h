@@ -7,26 +7,31 @@ struct ConvexHull;
 
 struct ContactManifold {
 	ECS_INLINE void AddContactPoint(float3 point) {
-		ECS_ASSERT(contact_point_count < ECS_COUNTOF(contact_points), "ContactManifold too many contact points!");
-		contact_points[contact_point_count++] = point;
+		ECS_ASSERT(point_count < ECS_COUNTOF(points), "ContactManifold too many contact points!");
+		points[point_count++] = point;
 	}
 
-	ECS_INLINE void WriteContactPoints(Stream<float3> points) {
-		ECS_ASSERT(contact_point_count + points.size <= ECS_COUNTOF(contact_points), "ContactManifold too many contact points!");
-		points.CopyTo(contact_points + contact_point_count);
-		contact_point_count += points.size;
+	ECS_INLINE void WriteContactPoints(Stream<float3> write_points) {
+		ECS_ASSERT(point_count + write_points.size <= ECS_COUNTOF(points), "ContactManifold too many contact points!");
+		write_points.CopyTo(points + point_count);
+		point_count += write_points.size;
 	}
 
 	ECS_INLINE PlaneScalar GetPlane() const {
 		// The manifold must have at least one point
-		return PlaneScalar::FromNormalized(separation_axis, contact_points[0]);
+		return PlaneScalar::FromNormalized(separation_axis, points[0]);
 	}
 
 	// This axis needs to be normalized
 	float3 separation_axis;
 	float separation_distance;
-	unsigned int contact_point_count = 0;
-	float3 contact_points[4];
+	unsigned int point_count = 0;
+	float3 points[4];
+};
+
+struct ContactManifoldFeatures {
+
+	
 };
 
 PHYSICS_API ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery query);

@@ -21,6 +21,10 @@ struct ContactConstraintPoint {
 	float normal_mass;
 	float tangent_mass_1;
 	float tangent_mass_2;
+
+	float3 friction_local_anchor_A;
+	float3 friction_local_anchor_B;
+
 	//float mass_coefficient;
 	//float bias_coefficient;
 	//float impulse_coefficient;
@@ -43,7 +47,7 @@ struct Contact : public EntityContact {
 struct Rigidbody;
 
 struct ContactConstraint {
-	const Contact* contact;
+	Contact* contact;
 	ContactConstraintPoint points[4];
 	// These 2 are in world space
 	float3 center_of_mass_A;

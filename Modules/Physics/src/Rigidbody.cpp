@@ -20,6 +20,15 @@ static float TetrahedronInertiaProduct(float3 point_0, float3 point_1, float3 po
         + 2.0f * point_2[offset_i] * point_2[offset_j] + point_0[offset_i] * point_1[offset_j] + point_1[offset_i] * point_0[offset_j];
 }
 
+void ApplyImpulse(float3& velocity, float3& angular_velocity, const Rigidbody* rigidbody, float3 local_anchor, float3 impulse) {
+    velocity += impulse * rigidbody->mass_inverse;
+
+    // The change in angular velocity is the cross product of the impulse with the anchor
+    // divided by the inertia tensor or conversely, multiplied with the inverse
+    float3 cross = Cross(local_anchor, impulse);
+    angular_velocity += MatrixVectorMultiply(cross, rigidbody->world_space_inertia_tensor_inverse);
+}
+
 Matrix3x3 ComputeInertiaTensor(
     Stream<float3> points,
     Stream<uint3> triangle_indices,
@@ -221,7 +230,7 @@ static ThreadTask RigidbodyBuildFunction(ModuleComponentBuildFunctionData* data)
         else {
             float mass = 0.0f;
             float3 center_of_mass = float3::Splat(0.0f);
-            Matrix3x3 inertia_tensor = ComputeInertiaTensor(&hull, 1.0f, &mass, &center_of_mass);
+            Matrix3x3 inertia_tensor = ComputeInertiaTensor(&hull, rigidbody->mass_inverse, &mass, &center_of_mass);
             rigidbody->inertia_tensor_inverse = Matrix3x3Inverse(inertia_tensor);
             rigidbody->mass_inverse = 1.0f / mass;
             // The center of mass should coincide with the center of the hull

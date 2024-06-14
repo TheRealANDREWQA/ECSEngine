@@ -10,7 +10,8 @@ static void UpdateWorldSpaceInertiaTensors_Impl(
 ) {
 	// PERFORMANCE TODO: Check for rotation different from Identity?
 	Matrix3x3 rotation_matrix = QuaternionToMatrix3x3(rotation->value);
-	rigidbody->world_space_inertia_tensor_inverse = MatrixMultiply(rigidbody->inertia_tensor_inverse, rotation_matrix);
+	Matrix3x3 transpose_rotation_matrix = MatrixTranspose(rotation_matrix);
+	rigidbody->world_space_inertia_tensor_inverse = MatrixMultiply(MatrixMultiply(rotation_matrix, rigidbody->inertia_tensor_inverse), transpose_rotation_matrix);
 }
 
 template<bool schedule_element>
@@ -36,7 +37,7 @@ static void IntegratePositions_Impl(
 		// Determine the axis
 		float angular_speed = Length(rigidbody->angular_velocity);
 		float3 rotation_axis = rigidbody->angular_velocity / angular_speed;
-		QuaternionScalar delta_rotation = QuaternionAngleFromAxis(rotation_axis, angular_speed * for_each_data->world->delta_time);
+		QuaternionScalar delta_rotation = QuaternionAngleFromAxisRad(rotation_axis, angular_speed * for_each_data->world->delta_time);
 		rotation->value = RotateQuaternion(rotation->value, delta_rotation);
 	}
 }
@@ -53,7 +54,7 @@ static void IntegrateVelocities_Impl(
 ) {
 	// At the moment, just use a constant gravity force to update the translation velocity
 	if (!rigidbody->is_static) {
-		rigidbody->velocity -= GetUpVector() * 9.8f * 0.001f;
+		rigidbody->velocity -= GetUpVector() * 25.8f * 0.001f;
 	}
 }
 

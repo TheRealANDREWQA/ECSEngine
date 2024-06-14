@@ -322,18 +322,19 @@ namespace ECSEngine {
 		auto plane_point = plane.normal * plane.dot;
 		auto transformed_point = TransformPoint(plane_point, matrix).xyz();
 		auto length = Length(transformed_point);
+		auto new_normal = transformed_point * OneDividedVector(length);
 
 		decltype(length) translation_offset;
 		if constexpr (std::is_same_v<Plane, PlaneScalar>) {
-			translation_offset = Dot(translation, plane.normal);
+			translation_offset = Dot(translation, new_normal);
 		}
 		else {
 			Vector3 splatted_translation = Vector3::Splat(translation);
-			translation_offset = Dot(splatted_translation, plane.normal);
+			translation_offset = Dot(splatted_translation, new_normal);
 		}
 
 		// We can perform the division once
-		return { transformed_point * OneDividedVector(length), length + translation_offset };
+		return { new_normal, length + translation_offset };
 	}
 
 	PlaneScalar ECS_VECTORCALL TransformPlane(PlaneScalar plane, Matrix matrix) {

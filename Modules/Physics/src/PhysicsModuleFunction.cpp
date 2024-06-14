@@ -60,7 +60,7 @@ ECS_THREAD_TASK(GridHandler) {
 					world->debug_drawer->AddLineThread(thread_id, second_line.A, second_line.B, ECS_COLOR_ORANGE);
 
 					ContactManifold manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
-					world->debug_drawer->AddPointThread(thread_id, manifold.contact_points[0], 2.0f, ECS_COLOR_AQUA);
+					world->debug_drawer->AddPointThread(thread_id, manifold.points[0], 2.0f, ECS_COLOR_AQUA);
 
 					//query.edge.edge_1_index = 97;
 					//query.edge.edge_2_index = 1;
@@ -101,8 +101,8 @@ ECS_THREAD_TASK(GridHandler) {
 					}*/
 
 					ContactManifold manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
-					for (size_t index = 0; index < manifold.contact_point_count; index++) {
-						world->debug_drawer->AddPointThread(thread_id, manifold.contact_points[index], 2.0f, ECS_COLOR_AQUA);
+					for (size_t index = 0; index < manifold.point_count; index++) {
+						world->debug_drawer->AddPointThread(thread_id, manifold.points[index], 2.0f, ECS_COLOR_AQUA);
 					}
 				}
 
@@ -118,7 +118,7 @@ ECS_THREAD_TASK(GridHandler) {
 							swap(first_center_of_mass, second_center_of_mass);
 						}
 					}
-					contact.friction = 0.0f;
+					contact.friction = 0.7f;
 					contact.restitution = 0.0f;
 					contact.manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
 					AddContactConstraint(

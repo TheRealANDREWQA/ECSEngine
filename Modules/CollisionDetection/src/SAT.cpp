@@ -448,9 +448,8 @@ SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
 
 	SATEdgeQuery edge_query = SATEdge(first, second);
 	
-	//SATEdgeQuery projection_edge_query = SATEdgeProjection(first, second);
-	//edge_query.edge_2_index = 3;
-	//edge_query.edge_1_index = projection_edge_query.edge_1_index;
+	SATEdgeQuery projection_edge_query = SATEdgeProjection(first, second);
+	//.edge_1_index = projection_edge_query.edge_1_index;
 	//edge_query.edge_2_index = projection_edge_query.edge_2_index;
 	//edge_query.distance = projection_edge_query.distance;
 	//edge_query = projection_edge_query;
@@ -474,14 +473,13 @@ SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
 		return query;
 	}
 
-	/*if (second_face_query.distance >= edge_query.distance) {
+	if (second_face_query.distance >= edge_query.distance) {
 		SATQuery query;
 		query.type = SAT_QUERY_FACE;
 		query.face = second_face_query;
-		query.face.second_face_index = first_face_query.face_index;
 		query.face.first_collider = false;
 		return query;
-	}*/
+	}
 
 	SATQuery query;
 	query.type = SAT_QUERY_EDGE;
