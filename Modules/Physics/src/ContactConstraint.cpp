@@ -239,49 +239,60 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 		}
 
 		// The friction loop
-		for (unsigned int point_index = 0; point_index < point_count; point_index++) {
-			ContactConstraintPoint& point = constraint.points[point_index];
+		if (constraint.contact->friction > 0.0f) {
+			for (unsigned int point_index = 0; point_index < point_count; point_index++) {
+				ContactConstraintPoint& point = constraint.points[point_index];
 
-			// Use the normal anchors to determine the velocity
-			float3 anchor_A = point.local_anchor_A;
-			float3 anchor_B = point.local_anchor_B;
+				float max_impulse = constraint.contact->friction * point.normal_impulse;
+				if (max_impulse > 0.0f) {
+					// Use the normal anchors to determine the velocity
+					float3 anchor_A = point.local_anchor_A;
+					float3 anchor_B = point.local_anchor_B;
 
-			// Recalculate the relative velocity at the point
-			// We can't use the value from the normal loop since it
-			// Has changed because of the applied impulse
-			float3 relative_velocity = compute_relative_velocity(anchor_A, anchor_B);
+					// Recalculate the relative velocity at the point
+					// We can't use the value from the normal loop since it
+					// Has changed because of the applied impulse
+					float3 relative_velocity = compute_relative_velocity(anchor_A, anchor_B);
 
-			// We need to calculate 2 separate impulses. One for each tangent direction
-			float relative_velocity_tangent_1 = Dot(relative_velocity, constraint.contact->tangent_1);
-			float relative_velocity_tangent_2 = Dot(relative_velocity, constraint.contact->tangent_2);
+					// We need to calculate 2 separate impulses. One for each tangent direction
+					float relative_velocity_tangent_1 = Dot(relative_velocity, constraint.contact->tangent_1);
+					float relative_velocity_tangent_2 = Dot(relative_velocity, constraint.contact->tangent_2);
 
-			// The clamping needs to be modified a bit
-			// The squared sum of the impulses needs to be smaller or equal to the squared
-			// Of the normal friction force. So the clamping means to scale down both components
-			// By a reduction factor
-			float impulse_1 = -point.tangent_mass_1 * relative_velocity_tangent_1;
-			float impulse_2 = -point.tangent_mass_2 * relative_velocity_tangent_2;
+					// The clamping needs to be modified a bit
+					// The squared sum of the impulses needs to be smaller or equal to the squared
+					// Of the normal friction force. So the clamping means to scale down both components
+					// By a reduction factor
+					float impulse_1 = -point.tangent_mass_1 * relative_velocity_tangent_1;
+					float impulse_2 = -point.tangent_mass_2 * relative_velocity_tangent_2;
 
-			float max_impulse = constraint.contact->friction * point.normal_impulse;
-			if (max_impulse > 0.0f) {
-				float max_impulse_squared = max_impulse * max_impulse;
-				float component_impulse_squared = impulse_1 * impulse_1 + impulse_2 * impulse_2;
-				if (component_impulse_squared > max_impulse_squared) {
-					float component_impulse = sqrt(component_impulse_squared);
-					// Divide the max impulse by the component impulse to determine
-					// By how much to reduce the individual impulses
-					float reduction_factor = max_impulse / component_impulse;
-					impulse_1 *= reduction_factor;
-					impulse_2 *= reduction_factor;
+					// TODO: Do we need circular clamping for better "realism"?
+					//float max_impulse_squared = max_impulse * max_impulse;
+					//float component_impulse_squared = impulse_1 * impulse_1 + impulse_2 * impulse_2;
+					//if (component_impulse_squared > max_impulse_squared) {
+					//	float component_impulse = sqrt(component_impulse_squared);
+					//	// Divide the max impulse by the component impulse to determine
+					//	// By how much to reduce the individual impulses
+					//	float reduction_factor = max_impulse / component_impulse;
+					//	impulse_1 *= reduction_factor;
+					//	impulse_2 *= reduction_factor;
+					//}
+
+					float clamped_impulse_1 = Clamp(point.tangent_impulse_1 + impulse_1, -max_impulse, max_impulse);
+					impulse_1 = clamped_impulse_1 - point.tangent_impulse_1;
+					point.tangent_impulse_1 = clamped_impulse_1;
+
+					float clamped_impulse_2 = Clamp(point.tangent_impulse_2 + impulse_2, -max_impulse, max_impulse);
+					impulse_2 = clamped_impulse_2 - point.tangent_impulse_2;
+					point.tangent_impulse_2 = clamped_impulse_2;
+
+					// Apply the impulse now
+					float3 tangent_impulse_1 = constraint.contact->tangent_1 * impulse_1;
+					float3 tangent_impulse_2 = constraint.contact->tangent_2 * impulse_2;
+
+					// Use the friction anchors to apply the impulse at
+					apply_impulse(point.friction_local_anchor_A, point.friction_local_anchor_B, tangent_impulse_1);
+					apply_impulse(point.friction_local_anchor_A, point.friction_local_anchor_B, tangent_impulse_2);
 				}
-
-				// Apply the impulse now
-				float3 tangent_impulse_1 = constraint.contact->tangent_1 * impulse_1;
-				float3 tangent_impulse_2 = constraint.contact->tangent_2 * impulse_2;
-
-				// Use the friction anchors to apply the impulse at
-				apply_impulse(point.friction_local_anchor_A, point.friction_local_anchor_B, tangent_impulse_1);
-				apply_impulse(point.friction_local_anchor_A, point.friction_local_anchor_B, tangent_impulse_2);
 			}
 		}
 

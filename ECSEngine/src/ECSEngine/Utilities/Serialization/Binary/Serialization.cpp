@@ -6,6 +6,7 @@
 #include "../../../Containers/Stacks.h"
 #include "../../../Allocators/ResizableLinearAllocator.h"
 #include "../../../Math/MathHelpers.h"
+#include "SerializationMacro.h"
 
 #define DESERIALIZE_FIELD_TABLE_MAX_TYPES (32)
 
@@ -2226,15 +2227,30 @@ namespace ECSEngine {
 		Stream<DeserializeTypeNameRemapping> name_remappings
 	) const
 	{
+		size_t omitted_count = 0;
+		for (size_t index = 0; index < type->fields.size; index++) {
+			if (type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD))) {
+				omitted_count++;
+			}
+		}
+
 		// If different field count, they are different
-		if (type->fields.size != types[type_index].fields.size) {
+		size_t field_count = types[type_index].fields.size;
+		if (type->fields.size - omitted_count != field_count) {
+			// Check to see if the give reflection type has omitted fields
+			// It might be the case that
+
 			return false;
 		}
 
 		// Go through all fields. All recursive user defined types need to be unchanged for the whole struct to be unchanged
-		for (size_t index = 0; index < type->fields.size; index++) {
-			const ReflectionField* field = &type->fields[index];
+		for (size_t index = 0; index < field_count; index++) {
 			const DeserializeFieldInfo* deserialized_field = &types[type_index].fields[index];
+			unsigned int field_index = type->FindField(deserialized_field->name);
+			if (field_index == -1) {
+				return false;
+			}
+			const ReflectionField* field = &type->fields[field_index];
 
 			if (field->info.basic_type != deserialized_field->basic_type) {
 				return false;
@@ -2278,7 +2294,7 @@ namespace ECSEngine {
 				}
 				else {
 					// If not a custom serializer, check here in the field table that the type is unchanged
-					unsigned int serializer_index = types[type_index].fields[index].custom_serializer_index;
+					unsigned int serializer_index = deserialized_field->custom_serializer_index;
 					if (serializer_index != -1) {
 						serializer_index = FindSerializeCustomType(field_definition);
 						ECS_ASSERT(serializer_index != -1);
