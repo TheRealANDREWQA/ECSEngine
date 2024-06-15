@@ -118,7 +118,7 @@ ECS_THREAD_TASK(GridHandler) {
 							swap(first_center_of_mass, second_center_of_mass);
 						}
 					}
-					contact.friction = 0.7f;
+					contact.friction = 0.3f;
 					contact.restitution = 0.0f;
 					contact.manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
 					AddContactConstraint(
