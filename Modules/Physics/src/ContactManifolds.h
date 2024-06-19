@@ -27,11 +27,11 @@ struct ContactManifold {
 	float separation_distance;
 	unsigned int point_count = 0;
 	float3 points[4];
-};
 
-struct ContactManifoldFeatures {
-
-	
+	// These describe the features that produced this contact manifold
+	unsigned int feature_index_A;
+	unsigned int feature_index_B;
+	bool is_face_contact;
 };
 
 PHYSICS_API ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery query);

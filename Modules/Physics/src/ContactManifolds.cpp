@@ -3,15 +3,17 @@
 
 ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery query) {
 	ContactManifold contact_manifold;
-	
+
 	// Start by branching on the edge vs face case
 	if (query.type == SAT_QUERY_FACE) {
 		// Determine the incident face for this reference face
 		const ConvexHull* reference_hull = query.face.first_collider ? first_hull : second_hull;
 		const ConvexHull* incident_hull = query.face.first_collider ? second_hull : first_hull;
-		
+
+		unsigned int reference_face_index = query.face.face_index;
+
 		// The incident face is simply the support face along the negated reference face normal
-		PlaneScalar reference_plane = reference_hull->faces[query.face.face_index].plane;
+		PlaneScalar reference_plane = reference_hull->faces[reference_face_index].plane;
 		float3 reference_face_normal = reference_plane.normal;
 		unsigned int incident_face_index = incident_hull->SupportFace(-reference_face_normal);
 
@@ -22,7 +24,7 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		// If there are no contact points found, inverse the faces
 		// And retry the process
 		if (clipped_points.size == 0) {
-			incident_hull->ClipFace(incident_face_index, reference_hull, query.face.face_index, &clipped_points);
+			incident_hull->ClipFace(incident_face_index, reference_hull, reference_face_index, &clipped_points);
 		}
 
 		// Discard point above the reference face
@@ -47,6 +49,9 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		// The separation axis is the reference face axis
 		contact_manifold.separation_axis = reference_face_normal;
 		contact_manifold.separation_distance = query.face.distance;
+		contact_manifold.feature_index_A = reference_face_index;
+		contact_manifold.feature_index_B = incident_face_index;
+		contact_manifold.is_face_contact = true;
 	}
 	else if (query.type == SAT_QUERY_EDGE) {
 		// For this case, compute the closest points between the 2 lines,
@@ -65,11 +70,14 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		contact_manifold.AddContactPoint(midpoint);
 		contact_manifold.separation_axis = Normalize(query.edge.separation_axis);
 		contact_manifold.separation_distance = query.edge.distance;
+		contact_manifold.feature_index_A = query.edge.edge_1_index;
+		contact_manifold.feature_index_B = query.edge.edge_2_index;
+		contact_manifold.is_face_contact = false;
 	}
 	else {
 		// Don't do anyhting here
 	}
-	
+
 	return contact_manifold;
 }
 

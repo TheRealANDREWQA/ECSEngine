@@ -5,7 +5,7 @@
 // It returns the face with the minimum amount of penetration when
 // The objects are overlapping, and a positive value if they are separated
 static SATFaceQuery SATFace(const ConvexHull* first, const ConvexHull* second) {
-	unsigned int final_face_index = -1;
+	unsigned int reference_face_index = -1;
 	float largest_distance = -FLT_MAX;
 
 	// We could theoretically SIMDize this (which would require the faces to be SoA), but it is not worth the effort
@@ -17,13 +17,13 @@ static SATFaceQuery SATFace(const ConvexHull* first, const ConvexHull* second) {
 		float3 support_point = second->FurthestFrom(-face_plane.normal);
 		float distance = DistanceToPlane(face_plane, support_point);
 
-		if (distance >= largest_distance) {
+		if (distance > largest_distance) {
 			largest_distance = distance;
-			final_face_index = index;
+			reference_face_index = index;
 		}
 	}
 
-	return { largest_distance, final_face_index };
+	return { largest_distance, reference_face_index };
 }
 
 // Tests the all combinations of edges from the first with the second
