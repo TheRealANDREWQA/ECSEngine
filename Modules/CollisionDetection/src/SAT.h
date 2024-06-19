@@ -15,8 +15,9 @@ struct SATEdgeQuery {
 // A negative distance means penetration, a positive value means separation
 struct SATFaceQuery {
 	float distance;
+	// This is the reference face
 	unsigned int face_index;
-	// This is true if the face belongs to the first collider
+	// This is true if the reference face belongs to the first collider
 	bool first_collider;
 };
 

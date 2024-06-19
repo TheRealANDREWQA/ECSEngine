@@ -503,6 +503,12 @@ namespace ECSEngine {
 
 	ECSENGINE_API unsigned int Cantor(unsigned int x, unsigned int y, unsigned int z);
 
+	// It will give the same hash for x-y and y-x, but it can
+	// result in more collisions than normal
+	ECS_INLINE unsigned int CantorPair(unsigned int x, unsigned int y) {
+		return Cantor(x, y) + Cantor(y, x);
+	}
+
 	ECSENGINE_API unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z);
 
 	ECS_INLINE unsigned int Djb2Hash(uint3 indices) {

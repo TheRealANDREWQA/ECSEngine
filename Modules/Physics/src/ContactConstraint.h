@@ -39,22 +39,30 @@ struct EntityContact {
 	float restitution;
 };
 
-struct Contact : public EntityContact {
+// The contact contains all the information about the contact
+// Of two entities that is indepndent of data from those entities
+// And that needs to be persisted across frames
+struct Contact {
+	EntityContact base;
 	float3 tangent_1;
 	float3 tangent_2;
+	ContactConstraintPoint points[4];
 };
 
 struct Rigidbody;
 
 struct ContactConstraint {
-	Contact* contact;
-	ContactConstraintPoint points[4];
+	Contact contact;
 	// These 2 are in world space
 	float3 center_of_mass_A;
 	float3 center_of_mass_B;
 	// These are cached during a precompute step
 	Rigidbody* rigidbody_A;
 	Rigidbody* rigidbody_B;
+
+	// This is used to determine when to remove the contact
+	// If this reaches 0, it means that the contact needs to be removed
+	unsigned char reference_count;
 };
 
 ECS_THREAD_TASK(SolveContactConstraints);

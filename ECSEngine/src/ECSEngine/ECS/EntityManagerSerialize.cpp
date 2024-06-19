@@ -2390,7 +2390,7 @@ namespace ECSEngine {
 		}
 		else {
 			void* new_buffer = Allocate(allocator, table.MemoryOf(total_count));
-			const void* old_buffer = table.Grow(new_buffer, total_count);
+			const void* old_buffer = table.Resize(new_buffer, total_count);
 			Deallocate(allocator, old_buffer);
 		}
 

@@ -94,7 +94,7 @@ namespace ECSEngine {
 
 		// It will be called with a single argument - the index of the element
 		// For the early exit it must return true when to exit, else false.
-		// For non early exit it must return true if the current element is being deleted, else false.
+		// For non early exit it must return true if the current element is being deleted (you must do this!), else false.
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
 		bool ForEachIndex(Functor&& functor) {
@@ -343,7 +343,7 @@ namespace ECSEngine {
 
 				unsigned int new_capacity = NextCapacity(GetCapacity());
 				void* new_allocation = allocator->Allocate(MemoryOf(new_capacity), alignof(void*), debug_info);
-				void* old_allocation = Grow(new_allocation, new_capacity);
+				void* old_allocation = Resize(new_allocation, new_capacity);
 				if (old_capacity > 0) {
 					allocator->Deallocate(old_allocation, debug_info);
 				}
@@ -368,7 +368,7 @@ namespace ECSEngine {
 
 				unsigned int new_capacity = NextCapacity(GetCapacity());
 				void* new_allocation = AllocateEx(allocator, MemoryOf(new_capacity), alignof(void*), debug_info);
-				void* old_allocation = Grow(new_allocation, new_capacity);
+				void* old_allocation = Resize(new_allocation, new_capacity);
 				if (old_capacity > 0) {
 					DeallocateEx(allocator, old_allocation, debug_info);
 				}
@@ -780,6 +780,23 @@ namespace ECSEngine {
 			m_capacity = 0;
 		}
 
+		bool CanTrim() const {
+			// If the next capacity for the current size is different from the current capacity,
+			// It means that we can trim the table
+			unsigned int next_capacity = NextCapacity(GetCount());
+			return next_capacity != GetCapacity();
+		}
+
+		void Trim(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			unsigned int new_capacity = NextCapacity(GetCount());
+			if (new_capacity < GetCapacity()) {
+				// We can't use reallocate since it interferes with the process of adding the new values
+				void* new_allocation = AllocateEx(allocator, MemoryOf(new_capacity), alignof(void*), debug_info);
+				void* old_allocation = Resize(new_allocation, new_capacity);
+				DeallocateEx(allocator, old_allocation, debug_info);
+			}
+		}
+
 		void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
 			unsigned int extended_capacity = capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT;
 			SetBuffers(buffer, capacity);
@@ -863,7 +880,7 @@ namespace ECSEngine {
 		}
 
 		// The buffer given must be allocated with MemoryOf
-		void* Grow(void* buffer, unsigned int new_capacity) {
+		void* Resize(void* buffer, unsigned int new_capacity) {
 			const unsigned char* old_metadata = m_metadata;
 			void* old_buffer = m_buffer;
 			const Identifier* old_identifiers = m_identifiers;
