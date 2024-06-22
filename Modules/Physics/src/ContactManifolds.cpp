@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "ContactManifolds.h"
 
-ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery query) {
-	ContactManifold contact_manifold;
+ContactManifoldFeatures ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery query) {
+	ContactManifoldFeatures contact_manifold;
 
 	// Start by branching on the edge vs face case
 	if (query.type == SAT_QUERY_FACE) {
@@ -18,7 +18,7 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		unsigned int incident_face_index = incident_hull->SupportFace(-reference_face_normal);
 
 		// Clip the incident face against the reference face
-		ECS_STACK_CAPACITY_STREAM(float3, clipped_points, 64);
+		ECS_STACK_CAPACITY_STREAM(ConvexHullClippedPoint, clipped_points, 64);
 		reference_hull->ClipFace(query.face.face_index, incident_hull, incident_face_index, &clipped_points);
 
 		// If there are no contact points found, inverse the faces
@@ -29,7 +29,7 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 
 		// Discard point above the reference face
 		for (unsigned int index = 0; index < clipped_points.size; index++) {
-			if (IsAbovePlaneMask(reference_plane, clipped_points[index])) {
+			if (IsAbovePlaneMask(reference_plane, clipped_points[index].position)) {
 				clipped_points.RemoveSwapBack(index);
 				index--;
 			}
@@ -37,7 +37,7 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 
 		// Project points below the plane on the reference plane
 		for (unsigned int index = 0; index < clipped_points.size; index++) {
-			clipped_points[index] = ProjectPointOnPlane(reference_plane, clipped_points[index]);
+			clipped_points[index].position = ProjectPointOnPlane(reference_plane, clipped_points[index].position);
 		}
 
 		// This function will check internally that there are at least 5 points
@@ -45,7 +45,13 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		clipped_points.size = SimplifyContactManifoldPoints(clipped_points, reference_face_normal);
 
 		// We can write the manifold now
-		contact_manifold.WriteContactPoints(clipped_points);
+		unsigned int write_index = ContactManifoldWritePoints(contact_manifold, clipped_points);
+		// Complete the manifold information
+		for (unsigned int index = 0; index < clipped_points.size; index++) {
+			contact_manifold.point_indices[write_index + index] = clipped_points[index].point_index;
+			contact_manifold.point_edge_indices[write_index + index] = clipped_points[index].incident_edge_index;
+		}
+
 		// The separation axis is the reference face axis
 		contact_manifold.separation_axis = reference_face_normal;
 		contact_manifold.separation_distance = query.face.distance;
@@ -67,7 +73,9 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		ClosestSegmentPoints(first_edge.A, first_edge.B, second_edge.A, second_edge.B, &first_closest_point, &second_closest_point);
 		float3 midpoint = (first_closest_point + second_closest_point) * 0.5f;
 
-		contact_manifold.AddContactPoint(midpoint);
+		// Set the point index and edge indices as -1, 
+		// since there is no "physical" point for the edge case
+		ContactManifoldFeaturesAddPoint(contact_manifold, midpoint, -1, { (unsigned int)-1, (unsigned int)-1 });
 		contact_manifold.separation_axis = Normalize(query.edge.separation_axis);
 		contact_manifold.separation_distance = query.edge.distance;
 		contact_manifold.feature_index_A = query.edge.edge_1_index;
@@ -75,7 +83,7 @@ ContactManifold ComputeContactManifold(const ConvexHull* first_hull, const Conve
 		contact_manifold.is_face_contact = false;
 	}
 	else {
-		// Don't do anyhting here
+		// Don't do anything here
 	}
 
 	return contact_manifold;
@@ -187,4 +195,40 @@ size_t SimplifyContactManifoldPoints(Stream<float3> points, float3 plane_normal)
 
 	swap(points[1], points[2]);
 	return 4;
+}
+
+size_t SimplifyContactManifoldPoints(Stream<ConvexHullClippedPoint> points, float3 plane_normal) {
+	// Use the normal float3 version and match the results at the end
+	if (points.size < 4) {
+		return points.size;
+	}
+
+	ECS_STACK_CAPACITY_STREAM(float3, position_points, 32);
+	ECS_ASSERT(position_points.capacity >= points.size, "Too many points to simplify for contact manifold!");
+	for (size_t index = 0; index < points.size; index++) {
+		position_points.Add(points[index].position);
+	}
+
+	size_t count = SimplifyContactManifoldPoints(position_points, plane_normal);
+	for (size_t index = 0; index < count; index++) {
+		size_t subindex = index;
+		for (; subindex < points.size; subindex++) {
+			if (position_points[index] == points[subindex].position) {
+				break;
+			}
+		}
+
+		points.Swap(index, subindex);
+	}
+	return count;
+}
+
+void ContactManifoldFeatures::RemoveSwapBack(unsigned int index)
+{
+	point_count--;
+	if (index != point_count) {
+		points[index] = points[point_count];
+		point_indices[index] = point_indices[point_count];
+		point_edge_indices[index] = point_edge_indices[point_count];
+	}
 }

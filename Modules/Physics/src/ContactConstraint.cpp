@@ -4,6 +4,8 @@
 #include "Rigidbody.h"
 #include "ECSEngineComponents.h"
 #include "ECSEngineWorld.h"
+#include "CollisionDetection/src/CollisionDetectionComponents.h"
+#include "CollisionDetection/src/GJK.h"
 
 #define SOLVER_DATA_STRING "SolverData"
 #define MAX_BAUMGARTE_BIAS 1000.0f
@@ -143,7 +145,7 @@ static void PrepareContactConstraintsData(World* world, SolverData* solver_data,
 		float3 relative_speed = velocity_A - velocity_B;
 
 		// Project the relative speed on the manifold plane
-		PlaneScalar manifold_plane = constraint.contact.base.manifold.GetPlane();
+		PlaneScalar manifold_plane = ContactManifoldGetPlane(constraint.contact.base.manifold);
 		float3 projected_point = ProjectPointOnPlane(manifold_plane, manifold_point + relative_speed);
 
 		float3 projected_speed = projected_point - manifold_point;
@@ -369,6 +371,20 @@ void AddSolverTasks(ModuleTaskFunctionData* data) {
 	ECS_REGISTER_TASK(solve_element, SolveContactConstraints, data);
 }
 
+static void DiscardContactConstraintPoint(ContactConstraintPoint& point) {
+	// The information to be discarded are the accumulated impulses
+	point.normal_impulse = 0.0f;
+	point.tangent_impulse_1 = 0.0f;
+	point.tangent_impulse_2 = 0.0f;
+}
+
+static void DiscardContactConstraintWarmStarting(ContactConstraint& constraint) {
+	// Each discard can happen individually for each point
+	for (size_t index = 0; index < constraint.contact.base.manifold.point_count; index++) {
+		DiscardContactConstraintPoint(constraint.contact.points[index]);
+	}
+}
+
 // It will modify the constraint such that the new contact is accounted for,
 // While preserving existing points, if they are the same
 static void MatchContactConstraint(const EntityContact* contact, float3 center_of_mass_A, float3 center_of_mass_B, ContactConstraint& constraint) {
@@ -376,22 +392,74 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 	// Or vice versa
 	if (contact->manifold.is_face_contact == constraint.contact.base.manifold.is_face_contact) {
 		// Check the order of entities
+		bool same_features = false;
 		if (contact->entity_A == constraint.contact.base.entity_A) {
-
+			same_features = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_A
+				&& contact->manifold.feature_index_B == constraint.contact.base.manifold.feature_index_B;
 		}
 		else {
-
+			same_features = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_B
+				&& contact->manifold.feature_index_B == constraint.contact.base.manifold.feature_index_A;
 		}
-		
-		//constraint.contact.base.manifold.separation_axis = contact->manifold.separation_axis;
-		//constraint.contact.base.manifold.separation_distance = contact->manifold.separation_distance;
-		constraint.contact.base.manifold = contact->manifold;
+
+		// If they have the same features, try to match the points
+		if (same_features) {
+			constraint.contact.base.manifold.separation_axis = contact->manifold.separation_axis;
+			constraint.contact.base.manifold.separation_distance = contact->manifold.separation_distance;
+
+			ECS_STACK_CAPACITY_STREAM(unsigned int, contact_add_indices, ECS_COUNTOF(ContactManifold::points));
+			contact_add_indices.size = contact->manifold.point_count;
+			MakeSequence(contact_add_indices);
+
+			for (unsigned int index = 0; index < constraint.contact.base.manifold.point_count; index++) {
+				unsigned int contact_index = ContactManifoldFeaturesFind(
+					contact->manifold, 
+					constraint.contact.base.manifold.point_indices[index],
+					constraint.contact.base.manifold.point_edge_indices[index]
+				);
+				if (contact_index != -1) {
+					// If we find the contact point in the new manifold, discard its addition
+					unsigned int indices_index = contact_add_indices.Find(contact_index);
+					contact_add_indices.RemoveSwapBack(indices_index);
+
+					// Update the location of the point
+					constraint.contact.base.manifold.points[index] = contact->manifold.points[contact_index];
+				}
+				else {
+					// The constraint point no longer appears in the new contact manifold
+					// This constraint point needs to be discarded with a remove swap back
+					constraint.contact.base.manifold.RemoveSwapBack(index);
+					// We also need to remove swap back the point extra information
+					constraint.contact.points[index] = constraint.contact.points[constraint.contact.base.manifold.point_count];
+					index--;
+				}
+			}
+
+			ECS_CRASH_CONDITION(constraint.contact.base.manifold.point_count + contact_add_indices.size <= ECS_COUNTOF(ContactManifold::points), 
+				"Contact Manifold matching for warm starting produced too many values!");
+
+			// Add any remaining points
+			for (unsigned int index = 0; index < contact_add_indices.size; index++) {
+				unsigned int add_index = contact_add_indices[index];
+				DiscardContactConstraintPoint(constraint.contact.points[constraint.contact.base.manifold.point_count]);
+				ContactManifoldFeaturesAddPoint(
+					constraint.contact.base.manifold,
+					contact->manifold.points[add_index],
+					contact->manifold.point_indices[add_index],
+					contact->manifold.point_edge_indices[add_index]
+				);
+			}
+		}
+		else {
+			// Can discard all the data, since the contact features have changed
+			DiscardContactConstraintWarmStarting(constraint);
+			constraint.contact.base.manifold = contact->manifold;
+		}
 	}
 	else {
 		// Discard all the information
+		DiscardContactConstraintWarmStarting(constraint);
 		constraint.contact.base.manifold = contact->manifold;
-		// Zero out the entire constraint points. Technically, it 
-		memset(constraint.contact.points, 0, sizeof(constraint.contact.points));
 	}
 
 	// Update the remaining data as is
@@ -430,5 +498,137 @@ void AddContactConstraint(
 		ContactConstraint& constraint = *data->contact_table.GetValuePtrFromIndex(pair_index);
 		// Match the constraint
 		MatchContactConstraint(contact, center_of_mass_A, center_of_mass_B, constraint);
+	}
+}
+
+void AddContactPair(
+	World* world,
+	Entity entity_A,
+	Entity entity_B
+) {
+	EntityManager* entity_manager = world->entity_manager;
+
+	// PERFORMANCE TODO: Multiple try get components result in multiple repeated safety checks
+	// Eliminate them by hoisting the component
+	const ConvexCollider* first_collider = entity_manager->TryGetComponent<ConvexCollider>(entity_A);
+	if (first_collider != nullptr && first_collider->hull.vertex_size > 0) {
+		const Rigidbody* first_rigidbody = entity_manager->TryGetComponent<Rigidbody>(entity_A);
+		if (first_rigidbody != nullptr) {
+			const ConvexCollider* second_collider = entity_manager->TryGetComponent<ConvexCollider>(entity_B);
+			if (second_collider != nullptr && second_collider->hull.vertex_size > 0) {
+				const Rigidbody* second_rigidbody = entity_manager->TryGetComponent<Rigidbody>(entity_B);
+				if (second_rigidbody != nullptr) {
+					TransformScalar first_transform = GetEntityTransform(entity_manager, entity_B);
+					TransformScalar second_transform = GetEntityTransform(entity_manager, entity_B);
+
+					ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+					Matrix first_matrix = TransformToMatrix(&first_transform);
+					ConvexHull first_collider_transformed = first_collider->hull.TransformToTemporary(first_matrix, &stack_allocator);
+
+					Matrix second_matrix = TransformToMatrix(&second_transform);
+					ConvexHull second_collider_transformed = second_collider->hull.TransformToTemporary(second_matrix, &stack_allocator);
+
+					float distance = GJK(&first_collider_transformed, &second_collider_transformed);
+					if (distance < 0.0f) {
+						// Intersection
+						//LogInfo("Collision");
+						// Call the SAT to determine the contacting features
+						//Timer timer;
+						SATQuery query = SAT(&first_collider_transformed, &second_collider_transformed);
+						//float duration = timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
+						//ECS_FORMAT_TEMP_STRING(message, "{#}\n", duration);
+						//OutputDebugStringA(message.buffer);
+						//bool redirect_value = world->debug_drawer->ActivateRedirectThread(thread_id);
+						//if (query.type == SAT_QUERY_NONE) {
+						//	world->debug_drawer->AddStringThread(thread_id, first_transform.position,
+						//		float3::Splat(1.0f), 1.0f, "None", ECS_COLOR_ORANGE);
+						//	/*Line3D first_line = first_collider_transformed.GetEdgePoints(17);
+						//	Line3D second_line = second_collider_transformed.GetEdgePoints(1);
+						//	world->debug_drawer->AddLineThread(thread_id, first_line.A, first_line.B, ECS_COLOR_ORANGE);
+						//	world->debug_drawer->AddLineThread(thread_id, second_line.A, second_line.B, ECS_COLOR_ORANGE);*/
+						//}
+						//else if (query.type == SAT_QUERY_EDGE) {
+						//	world->debug_drawer->AddStringThread(thread_id, first_transform.position,
+						//		float3::Splat(1.0f), 1.0f, "Edge", ECS_COLOR_ORANGE);
+						//	Line3D first_line = first_collider_transformed.GetEdgePoints(query.edge.edge_1_index);
+						//	Line3D second_line = second_collider_transformed.GetEdgePoints(query.edge.edge_2_index);
+						//	world->debug_drawer->AddLineThread(thread_id, first_line.A, first_line.B, ECS_COLOR_ORANGE);
+						//	world->debug_drawer->AddLineThread(thread_id, second_line.A, second_line.B, ECS_COLOR_ORANGE);
+
+						//	ContactManifold manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
+						//	world->debug_drawer->AddPointThread(thread_id, manifold.points[0], 2.0f, ECS_COLOR_AQUA);
+
+						//	//query.edge.edge_1_index = 97;
+						//	//query.edge.edge_2_index = 1;
+						//	const ConvexHullEdge& first_edge = first_collider_transformed.edges[query.edge.edge_1_index];
+						//	const ConvexHullEdge& second_edge = second_collider_transformed.edges[query.edge.edge_2_index];
+						//	float3 first_normal_1 = first_collider_transformed.faces[first_edge.face_1_index].plane.normal;
+						//	float3 first_normal_2 = first_collider_transformed.faces[first_edge.face_2_index].plane.normal;
+						//	float3 second_normal_1 = second_collider_transformed.faces[second_edge.face_1_index].plane.normal;
+						//	float3 second_normal_2 = second_collider_transformed.faces[second_edge.face_2_index].plane.normal;
+						//	world->debug_drawer->AddLineThread(thread_id, float3::Splat(0.0f), first_normal_1, ECS_COLOR_LIME);
+						//	world->debug_drawer->AddLineThread(thread_id, float3::Splat(0.0f), first_normal_2, ECS_COLOR_LIME);
+						//	world->debug_drawer->AddLineThread(thread_id, float3::Splat(0.0f), second_normal_1, ECS_COLOR_RED);
+						//	world->debug_drawer->AddLineThread(thread_id, float3::Splat(0.0f), second_normal_2, ECS_COLOR_RED);
+						//	world->debug_drawer->AddLineThread(thread_id, float3::Splat(0.0f), -second_normal_2, ECS_COLOR_BROWN);
+						//	world->debug_drawer->AddLineThread(thread_id, first_normal_1, first_normal_2, ECS_COLOR_AQUA);
+						//	world->debug_drawer->AddLineThread(thread_id, second_normal_1, second_normal_2, ECS_COLOR_WHITE);
+						//}
+						//else if (query.type == SAT_QUERY_FACE) {
+						//	world->debug_drawer->AddStringThread(thread_id, first_transform.position,
+						//		float3::Splat(1.0f), 1.0f, "Face", ECS_COLOR_ORANGE);
+						//	const ConvexHull* convex_hull = query.face.first_collider ? &first_collider_transformed : &second_collider_transformed;
+						//	const ConvexHull* second_hull = query.face.first_collider ? &second_collider_transformed : &first_collider_transformed;
+						//	const ConvexHullFace& face_1 = convex_hull->faces[query.face.face_index];
+						//	for (unsigned int index = 0; index < face_1.points.size; index++) {
+						//		unsigned int next_index = index == face_1.points.size - 1 ? 0 : index + 1;
+						//		float3 A = convex_hull->GetPoint(face_1.points[index]);
+						//		float3 B = convex_hull->GetPoint(face_1.points[next_index]);
+						//		world->debug_drawer->AddLineThread(thread_id, A, B, ECS_COLOR_ORANGE);
+						//	}
+
+						//	/*query.face.second_face_index = 9;
+						//	const ConvexHullFace& face_2 = second_hull->faces[query.face.second_face_index];
+						//	for (unsigned int index = 0; index < face_2.points.size; index++) {
+						//		unsigned int next_index = index == face_2.points.size - 1 ? 0 : index + 1;
+						//		float3 A = second_hull->GetPoint(face_2.points[index]);
+						//		float3 B = second_hull->GetPoint(face_2.points[next_index]);
+						//		world->debug_drawer->AddLineThread(thread_id, A, B, ECS_COLOR_ORANGE);
+						//	}*/
+
+						//	ContactManifold manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
+						//	for (size_t index = 0; index < manifold.point_count; index++) {
+						//		world->debug_drawer->AddPointThread(thread_id, manifold.points[index], 2.0f, ECS_COLOR_AQUA);
+						//	}
+						//}
+
+						if (query.type != SAT_QUERY_NONE) {
+							EntityContact contact;
+							contact.entity_A = entity_A;
+							contact.entity_B = entity_B;
+							float3 first_center_of_mass = first_rigidbody->center_of_mass + first_transform.position;
+							float3 second_center_of_mass = second_rigidbody->center_of_mass + second_transform.position;
+							if (query.type == SAT_QUERY_FACE) {
+								if (!query.face.first_collider) {
+									swap(contact.entity_A, contact.entity_B);
+									swap(first_center_of_mass, second_center_of_mass);
+								}
+							}
+							contact.friction = 0.3f;
+							contact.restitution = 0.0f;
+							contact.manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
+							AddContactConstraint(
+								world,
+								&contact,
+								first_center_of_mass,
+								second_center_of_mass
+							);
+						}
+
+						//world->debug_drawer->DeactivateRedirectThread(thread_id, redirect_value);
+					}
+				}
+			}
+		}
 	}
 }

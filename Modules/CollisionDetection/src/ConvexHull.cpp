@@ -153,6 +153,21 @@ void ConvexHull::ClipFace(
 	unsigned int incident_hull_face_index, 
 	CapacityStream<float3>* points
 ) const {
+	ECS_STACK_CAPACITY_STREAM(ConvexHullClippedPoint, clipped_points, 128);
+	ClipFace(face_index, incident_hull, incident_hull_face_index, &clipped_points);
+
+	ECS_ASSERT(points->size + clipped_points.size <= points->capacity, "Insufficient capacity for ConvexHull ClipFace!");
+	for (unsigned int index = 0; index < clipped_points.size; index++) {
+		points->Add(clipped_points[index].position);
+	}
+}
+
+void ConvexHull::ClipFace(
+	unsigned int face_index, 
+	const ConvexHull* incident_hull, 
+	unsigned int incident_hull_face_index, 
+	CapacityStream<ConvexHullClippedPoint>* points
+) const {
 	// To clip a face against another face, we need to construct the side
 	// Planes of the current face, and clip the other face against them
 	// There 2 ways to SIMDize this. Test a single segment against multiple
@@ -165,8 +180,18 @@ void ConvexHull::ClipFace(
 
 	// TODO: Delay the SIMD implementation until we have a better picture of the conditions
 	
+	// Returns the index of the point if it exists, else -1
+	auto find_point = [points](float3 value, float3 epsilon = float3::Splat(ECS_SIMD_VECTOR_EPSILON_VALUE)) {
+		for (unsigned int index = 0; index < points->size; index++) {
+			if (CompareMask(points->buffer[index].position, value, epsilon)) {
+				return index;
+			}
+		}
+		return (unsigned int)-1;
+	};
+
 	// Clip each edge from the incident face against all side planes of the reference face
-	// We can early exit in case the line segment becomes degenerate (it is complitely clipped)
+	// We can early exit in case the line segment becomes degenerate (it is completely clipped)
 	for (unsigned int index = 0; index < incident_face.EdgeCount(); index++) {
 		float t_min = InitializeClipTMin<float3>();
 		float t_max = InitializeClipTMax<float3>();
@@ -190,13 +215,27 @@ void ConvexHull::ClipFace(
 			float3 second_point = ClipSegmentCalculatePoint(incident_edge.A, incident_edge_normalized_direction, t_max, t_factor);
 			// When adding a point, we need to check if it already exists in the points array
 			// Such that the same point is not added multiple times
-			if (!ExistsCloseFloat3(*points,  first_point)) {
-				points->AddAssert(first_point);
+			unsigned int first_point_index = find_point(first_point);
+			unsigned int edge_index = incident_hull->GetFaceEdgeIndex(incident_hull_face_index, index);
+			uint2 edge_point_indices = incident_hull->GetFaceEdgeIndices(incident_hull_face_index, index);
+
+			if (first_point_index != -1) {
+				ECS_ASSERT(points->buffer[first_point_index].incident_edge_index.y == -1, "Clip convex hull face internal error");
+				points->buffer[first_point_index].incident_edge_index.y = edge_index;
 			}
+			else {
+				points->AddAssert({ first_point, edge_point_indices.x, { edge_index, (unsigned int)-1 } });
+			}
+
 			// If the points are close enough, weld them
 			if (!CompareMask(first_point, second_point)) {
-				if (!ExistsCloseFloat3(*points, second_point)) {
-					points->AddAssert(second_point);
+				unsigned int second_point_index = find_point(second_point);
+				if (second_point_index != -1) {
+					ECS_ASSERT(points->buffer[second_point_index].incident_edge_index.y == -1, "Clip convex hull face internal error");
+					points->buffer[second_point_index].incident_edge_index.y = edge_index;
+				}
+				else {
+					points->AddAssert({ second_point, edge_point_indices.y, { edge_index, (unsigned int)-1 } });
 				}
 			}
 		}
@@ -395,6 +434,11 @@ uint2 ConvexHull::GetFaceEdgeIndices(unsigned int face_index, unsigned int face_
 	unsigned short first_point = face.points[face_edge_index];
 	unsigned short second_point = face_edge_index == face.points.size - 1 ? face.points[0] : face.points[face_edge_index + 1];
 	return { first_point, second_point };
+}
+
+unsigned int ConvexHull::GetFaceEdgeIndex(unsigned int face_index, unsigned int face_edge_index) const {
+	uint2 indices = GetFaceEdgeIndices(face_index, face_edge_index);
+	return FindEdge(indices.x, indices.y);
 }
 
 void ConvexHull::Copy(const ConvexHull* other, AllocatorPolymorphic allocator, bool deallocate_existent)
