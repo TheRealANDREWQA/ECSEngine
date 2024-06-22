@@ -22,6 +22,10 @@ struct ContactConstraintPoint {
 	float tangent_mass_1;
 	float tangent_mass_2;
 
+	// The friction anchors are used to produce slightly
+	// More stable simulations. If the normal anchors are used,
+	// They will produce small perturbations which in complex
+	// Scenarios produce small twists that should not be present
 	float3 friction_local_anchor_A;
 	float3 friction_local_anchor_B;
 
@@ -34,7 +38,7 @@ struct ContactConstraintPoint {
 struct EntityContact {
 	Entity entity_A;
 	Entity entity_B;
-	ContactManifold manifold;
+	ContactManifoldFeatures manifold;
 	float friction;
 	float restitution;
 };
@@ -75,4 +79,14 @@ PHYSICS_API void AddContactConstraint(
 	const EntityContact* entity_contact,
 	float3 center_of_mass_A,
 	float3 center_of_mass_B
+);
+
+// It will perform a narrowphase check to determine
+// If the shapes are colliding or not. It will also
+// Check to see that the entities have contact shapes
+// And a rigidbody attached to it, otherwise it won't continue
+PHYSICS_API void AddContactPair(
+	World* world,
+	Entity entity_A,
+	Entity entity_B
 );

@@ -51,6 +51,17 @@ struct ECS_REFLECT ConvexHullFace {
 	CapacityStream<unsigned short> points;
 };
 
+struct ConvexHullClippedPoint {
+	float3 position;
+	// This is the point's index inside the incident hull
+	unsigned int point_index;
+	// There are 2 indices here because a point can belong to 2
+	// Edges. If a point gets selected from both edges, the indices
+	// Will be different from -1. If one of the edges does not make
+	// It through, the second value will be -1
+	uint2 incident_edge_index;
+};
+
 // The face buffers are meant to be temporary. After you finish creating
 // The hull, call ReallocateFaces such that the buffers are coalesced into a single
 // Allocation from a main allocator
@@ -87,6 +98,11 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// Clips the face referenced by face_index with the incident face from the other hull
 	// And outputs the 3D points that compose the clipped face
 	void ClipFace(unsigned int face_index, const ConvexHull* incident_hull, unsigned int incident_hull_face_index, CapacityStream<float3>* points) const;
+
+	// Clips the face referenced by face_index with the incident face from the other hull
+	// And outputs the 3D points that compose the clipped face, alongside the edge index/indices
+	// From which the point belongs to
+	void ClipFace(unsigned int face_index, const ConvexHull* incident_hull, unsigned int incident_hull_face_index, CapacityStream<ConvexHullClippedPoint>* points) const;
 
 	// Computes the edges for each vertex. This is a parallel array to the vertices
 	// Inside this instance. Changing the order of the vertices will have to be reflected here as well
@@ -140,7 +156,12 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 
 	Line3D GetFaceEdge(unsigned int face_index, unsigned int face_edge_index) const;
 
+	// Returns the indices of the points that compose the edge
 	uint2 GetFaceEdgeIndices(unsigned int face_index, unsigned int face_edge_index) const;
+
+	// Returns the index of the edge that corresponds to the edge of the face
+	// Returns -1 if it doesn't find it
+	unsigned int GetFaceEdgeIndex(unsigned int face_index, unsigned int face_edge_index) const;
 
 	// It merges coplanar triangles into quads. It does not merge quads further
 	void MergeCoplanarTriangles(float coplanarity_degrees, AllocatorPolymorphic allocator, AllocatorPolymorphic previous_face_allocator = { nullptr });
