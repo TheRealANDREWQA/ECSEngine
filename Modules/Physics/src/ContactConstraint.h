@@ -69,6 +69,10 @@ struct ContactConstraint {
 	unsigned char reference_count;
 };
 
+ECS_INLINE size_t ContactConstraintPointCount(const ContactConstraint& constraint) {
+	return constraint.contact.base.manifold.point_count;
+}
+
 ECS_THREAD_TASK(SolveContactConstraints);
 
 void AddSolverTasks(ModuleTaskFunctionData* data);

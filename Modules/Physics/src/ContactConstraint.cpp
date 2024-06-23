@@ -32,6 +32,7 @@ struct SolverData {
 	float linear_slop;
 	MemoryManager allocator;
 	ContactTable contact_table;
+	bool use_warm_starting;
 };
 
 struct ComputeConstraintPointInfo {
@@ -48,12 +49,7 @@ struct ComputeConstraintPointInfo {
 	PlaneScalar friction_plane_B;
 };
 
-static ContactConstraintPoint ComputeConstraintPointFromManifold(const ComputeConstraintPointInfo* info) {
-	ContactConstraintPoint constraint_point;
-
-	constraint_point.normal_impulse = 0.0f;
-	constraint_point.tangent_impulse_1 = 0.0f;
-	constraint_point.tangent_impulse_2 = 0.0f;
+static void ComputeConstraintPointFromManifold(const ComputeConstraintPointInfo* info, ContactConstraintPoint& constraint_point) {
 	constraint_point.separation = info->separation;
 	constraint_point.local_anchor_A = info->point - info->center_of_mass_A;
 	constraint_point.local_anchor_B = info->point - info->center_of_mass_B;
@@ -87,8 +83,34 @@ static ContactConstraintPoint ComputeConstraintPointFromManifold(const ComputeCo
 	// Project the local anchor on the friction plane
 	constraint_point.friction_local_anchor_A = ProjectPointOnPlane(info->friction_plane_A, info->point) - info->center_of_mass_A;
 	constraint_point.friction_local_anchor_B = ProjectPointOnPlane(info->friction_plane_B, info->point) - info->center_of_mass_B;
+}
 
-	return constraint_point;
+static void WarmStartConstraint(ContactConstraint& constraint) {
+	float3 velocity_A = constraint.rigidbody_A->velocity;
+	float3 velocity_B = constraint.rigidbody_B->velocity;
+	float3 angular_A = constraint.rigidbody_A->angular_velocity;
+	float3 angular_B = constraint.rigidbody_B->angular_velocity;
+
+	size_t point_count = ContactConstraintPointCount(constraint);
+	for (size_t index = 0; index < point_count; index++) {
+		const ContactConstraintPoint& point = constraint.contact.points[index];
+
+		float3 normal_impulse = constraint.contact.base.manifold.separation_axis * point.normal_impulse;
+		ApplyImpulse(constraint.rigidbody_A, point.local_anchor_A, -normal_impulse);
+		ApplyImpulse(constraint.rigidbody_B, point.local_anchor_B, normal_impulse);
+	
+		float3 tangent_impulse_1 = constraint.contact.tangent_1 * point.tangent_impulse_1;
+		float3 tangent_impulse_2 = constraint.contact.tangent_2 * point.tangent_impulse_2;
+		ApplyImpulse(constraint.rigidbody_A, point.friction_local_anchor_A, -tangent_impulse_1);
+		ApplyImpulse(constraint.rigidbody_B, point.friction_local_anchor_B, tangent_impulse_1);
+		ApplyImpulse(constraint.rigidbody_A, point.friction_local_anchor_A, -tangent_impulse_2);
+		ApplyImpulse(constraint.rigidbody_B, point.friction_local_anchor_B, tangent_impulse_2);
+	}
+
+	constraint.rigidbody_A->velocity = velocity_A;
+	constraint.rigidbody_A->angular_velocity = angular_A;
+	constraint.rigidbody_B->velocity = velocity_B;
+	constraint.rigidbody_B->angular_velocity = angular_B;
 }
 
 // It will update the constraints with data that can be precomputed
@@ -102,33 +124,6 @@ static void PrepareContactConstraintsData(World* world, SolverData* solver_data,
 		Rigidbody* rigidbody_B = world->entity_manager->GetComponent<Rigidbody>(constraint.contact.base.entity_B);
 		constraint.rigidbody_A = rigidbody_A;
 		constraint.rigidbody_B = rigidbody_B;
-
-		// We need to compute the tangent directions. What we can do, in order
-		// To align the pair of tangents with the relative velocity, is to project the relative
-		// Velocity in the manifold plane. That is one of the tangents and the other one is the
-		// Cross product between the manifold normal and the other tangent
-		//PlaneScalar manifold_plane = constraint.contact->manifold.GetPlane();
-		//float3 manifold_point = constraint.contact->manifold.points[0];
-		//float3 projected_point_A = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_A->velocity);
-		//float3 projected_point_B = ProjectPointOnPlane(manifold_plane, manifold_point + rigidbody_B->velocity);
-		//float3 projected_speed = projected_point_B - projected_point_A;
-
-		//// In case the projected speed is close to 0.0f, choose an arbitrary other direction
-		//// Like the projected velocity of body A
-		//float3 tangent_1;
-		//float3 tangent_2;
-		//if (CompareMask(projected_speed, float3::Splat(0.0f))) {
-		//	// There is no relative speed, we can make the tangents 0
-		//	tangent_1 = float3::Splat(0.0f);
-		//	tangent_2 = float3::Splat(0.0f);
-		//}
-		//else {
-		//	tangent_1 = Normalize(projected_speed);
-		//	tangent_2 = Cross(constraint.contact->manifold.separation_axis, tangent_1);
-		//}
-
-		//tangent_1 = float3::Splat(0.0f);
-		//tangent_2 = float3::Splat(0.0f);
 
 		// To compute the tangents, we need the relative velocity
 		// But there are cases where the objects have no relative velocity
@@ -176,10 +171,15 @@ static void PrepareContactConstraintsData(World* world, SolverData* solver_data,
 		compute_info.tangent_2 = tangent_2;
 		compute_info.friction_plane_A = { manifold_plane.normal, manifold_plane.dot + body_distance_A };
 		compute_info.friction_plane_B = { manifold_plane.normal, manifold_plane.dot + body_distance_B };
-		for (unsigned int index = 0; index < constraint.contact.base.manifold.point_count; index++) {
-			compute_info.point = constraint.contact.base.manifold.points[index];
-			constraint.contact.points[index] = ComputeConstraintPointFromManifold(&compute_info);
+		size_t point_count = ContactConstraintPointCount(constraint);
+		for (size_t point_index = 0; point_index < point_count; point_index++) {
+			compute_info.point = constraint.contact.base.manifold.points[point_index];
+			ComputeConstraintPointFromManifold(&compute_info, constraint.contact.points[point_index]);
 		}
+
+		// After computing the manifold points, warm start them in order to
+		// Not perform an additional iteration
+
 	}
 }
 
@@ -210,8 +210,8 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 		};
 
 		// Solve the normal impulse first, then apply the friction impulse
-		unsigned int point_count = constraint.contact.base.manifold.point_count;
-		for (unsigned int point_index = 0; point_index < point_count; point_index++) {
+		size_t point_count = ContactConstraintPointCount(constraint);
+		for (size_t point_index = 0; point_index < point_count; point_index++) {
 			ContactConstraintPoint& point = constraint.contact.points[point_index];
 			
 			// Compute the Baumgarte bias factor
@@ -247,7 +247,7 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 
 		// The friction loop
 		if (constraint.contact.base.friction > 0.0f) {
-			for (unsigned int point_index = 0; point_index < point_count; point_index++) {
+			for (size_t point_index = 0; point_index < point_count; point_index++) {
 				ContactConstraintPoint& point = constraint.contact.points[point_index];
 
 				float max_impulse = constraint.contact.base.friction * point.normal_impulse;
@@ -296,9 +296,11 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 					float3 tangent_impulse_1 = constraint.contact.tangent_1 * impulse_1;
 					float3 tangent_impulse_2 = constraint.contact.tangent_2 * impulse_2;
 
+					// We can compose the 2 impulses into a single value and apply it just once
+					float3 tangent_impulse = tangent_impulse_1 + tangent_impulse_2;
+					
 					// Use the friction anchors to apply the impulse at
-					apply_impulse(point.friction_local_anchor_A, point.friction_local_anchor_B, tangent_impulse_1);
-					apply_impulse(point.friction_local_anchor_A, point.friction_local_anchor_B, tangent_impulse_2);
+					apply_impulse(point.friction_local_anchor_A, point.friction_local_anchor_B, tangent_impulse);
 				}
 			}
 		}
@@ -322,7 +324,20 @@ ECS_THREAD_TASK(SolveContactConstraints) {
 		CapacityStream<unsigned int> iteration_indices;
 		iteration_indices.Initialize(&data->allocator, 0, data->contact_table.GetCount());
 
-		data->contact_table.GetElementIndices(iteration_indices);
+		// Iterate the table and retrieve the indices where items are alive, while
+		// Reducing the reference count and removing the elements that have a reference
+		// Count of 0
+		data->contact_table.ForEachIndex([&iteration_indices, data](unsigned int index) {
+			ContactConstraint& constraint = *data->contact_table.GetValuePtrFromIndex(index);
+			constraint.reference_count--;
+
+			if (constraint.reference_count == 0) {
+				data->contact_table.EraseFromIndex(index);
+				return true;
+			}
+			iteration_indices.Add(index);
+			return false;
+		});
 
 		// Prepare the contact data
 		PrepareContactConstraintsData(world, data, iteration_indices);
@@ -331,20 +346,6 @@ ECS_THREAD_TASK(SolveContactConstraints) {
 		for (unsigned int index = 0; index < data->iterations; index++) {
 			SolveContactConstraintsIteration(data, world->inverse_delta_time, iteration_indices);
 		}
-
-		// Reduce the reference counts and remove those that are not needed anymore
-		// Unfortunately, we cannot use the iteration indices for this, since the iteration
-		// Will remove the values as it goes
-		data->contact_table.ForEachIndex([&](unsigned int index) {
-			ContactConstraint& constraint = *data->contact_table.GetValuePtrFromIndex(index);
-			constraint.reference_count--;
-			
-			if (constraint.reference_count == 0) {
-				data->contact_table.EraseFromIndex(index);
-				return true;
-			}
-			return false;
-		});
 
 		data->allocator.Deallocate(iteration_indices.buffer);
 		// Trim the contact table, such that it doesn't occupy too much memory
@@ -359,6 +360,7 @@ static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInit
 	data->iterations = 4;
 	data->baumgarte_factor = 0.05f;
 	data->linear_slop = 0.01f;
+	data->use_warm_starting = true;
 
 	// Bind this so we can access the data from outside the main function
 	world->system_manager->BindData(SOLVER_DATA_STRING, data);
@@ -380,7 +382,7 @@ static void DiscardContactConstraintPoint(ContactConstraintPoint& point) {
 
 static void DiscardContactConstraintWarmStarting(ContactConstraint& constraint) {
 	// Each discard can happen individually for each point
-	for (size_t index = 0; index < constraint.contact.base.manifold.point_count; index++) {
+	for (size_t index = 0; index < ContactConstraintPointCount(constraint); index++) {
 		DiscardContactConstraintPoint(constraint.contact.points[index]);
 	}
 }
@@ -393,25 +395,25 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 	if (contact->manifold.is_face_contact == constraint.contact.base.manifold.is_face_contact) {
 		// Check the order of entities
 		bool same_features = false;
-		if (contact->entity_A == constraint.contact.base.entity_A) {
+		/*if (contact->entity_A == constraint.contact.base.entity_A) {
 			same_features = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_A
 				&& contact->manifold.feature_index_B == constraint.contact.base.manifold.feature_index_B;
 		}
 		else {
 			same_features = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_B
 				&& contact->manifold.feature_index_B == constraint.contact.base.manifold.feature_index_A;
-		}
+		}*/
+		same_features = contact->entity_A == constraint.contact.base.entity_A &&
+			contact->entity_B == constraint.contact.base.entity_B;
 
 		// If they have the same features, try to match the points
 		if (same_features) {
-			constraint.contact.base.manifold.separation_axis = contact->manifold.separation_axis;
-			constraint.contact.base.manifold.separation_distance = contact->manifold.separation_distance;
-
 			ECS_STACK_CAPACITY_STREAM(unsigned int, contact_add_indices, ECS_COUNTOF(ContactManifold::points));
 			contact_add_indices.size = contact->manifold.point_count;
 			MakeSequence(contact_add_indices);
 
-			for (unsigned int index = 0; index < constraint.contact.base.manifold.point_count; index++) {
+			size_t point_count = ContactConstraintPointCount(constraint);
+			for (size_t index = 0; index < point_count; index++) {
 				unsigned int contact_index = ContactManifoldFeaturesFind(
 					contact->manifold, 
 					constraint.contact.base.manifold.point_indices[index],
@@ -449,6 +451,13 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 					contact->manifold.point_edge_indices[add_index]
 				);
 			}
+
+			// TODO: At the moment, use the new separation axis values
+			// Determine if it is worth it when adding a new contact pair
+			// To firstly try to see if a contact already exists, and if it does,
+			// To keep the entity order, since that will preserve the separation axis
+			constraint.contact.base.manifold.separation_axis = contact->manifold.separation_axis;
+			constraint.contact.base.manifold.separation_distance = contact->manifold.separation_distance;
 		}
 		else {
 			// Can discard all the data, since the contact features have changed
@@ -467,9 +476,33 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 	constraint.center_of_mass_B = center_of_mass_B;
 	constraint.contact.base.friction = contact->friction;
 	constraint.contact.base.restitution = contact->restitution;
+	// We also need to update the entities
+	constraint.contact.base.entity_A = contact->entity_A;
+	constraint.contact.base.entity_B = contact->entity_B;
 
 	// Increment the reference count such that it won't get discarded
 	constraint.reference_count++;
+}
+
+// Returns the hash table index of the contact constraint
+static unsigned int GetContactConstraintIndex(SolverData* solver_data, Entity entity_A, Entity entity_B) {
+	ContactPair contact_pair = { entity_A, entity_B };
+	return solver_data->contact_table.Find(contact_pair);
+}
+
+static void InsertContactConstraint(SolverData* solver_data, const EntityContact* contact, float3 center_of_mass_A, float3 center_of_mass_B) {
+	ContactConstraint constraint;
+	constraint.contact.base = *contact;
+	// Insert the constraint with the reference count of 2, such that
+	// It survives the first decrement and will get evicted the 2nd time,
+	// Unless it is added again
+	constraint.reference_count = 2;
+	constraint.center_of_mass_A = center_of_mass_A;
+	constraint.center_of_mass_B = center_of_mass_B;
+
+	// This will discard the impulses, such that they don't have junk values
+	DiscardContactConstraintWarmStarting(constraint);
+	solver_data->contact_table.InsertDynamic(&solver_data->allocator, constraint, { contact->entity_A, contact->entity_B });
 }
 
 void AddContactConstraint(
@@ -481,23 +514,22 @@ void AddContactConstraint(
 	// At the moment, allocate the contact directly now
 	SolverData* data = (SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
 
-	// Check to see if the pair already exists
-	ContactPair contact_pair = { contact->entity_A, contact->entity_B };
-	unsigned int pair_index = data->contact_table.Find(contact_pair);
-	
+	// Try to retrieve the existing pair
+	unsigned int pair_index = GetContactConstraintIndex(data, contact->entity_A, contact->entity_B);
 	if (pair_index == -1) {
-		ContactConstraint constraint;
-		constraint.contact.base = *contact;
-		constraint.reference_count = 1;
-		constraint.center_of_mass_A = center_of_mass_A;
-		constraint.center_of_mass_B = center_of_mass_B;
-
-		data->contact_table.InsertDynamic(&data->allocator, constraint, contact_pair);
+		InsertContactConstraint(data, contact, center_of_mass_A, center_of_mass_B);
 	}
 	else {
+		//InsertContactConstraint(data, contact, center_of_mass_A, center_of_mass_B);
+
+		//// Match the constraint
 		ContactConstraint& constraint = *data->contact_table.GetValuePtrFromIndex(pair_index);
-		// Match the constraint
-		MatchContactConstraint(contact, center_of_mass_A, center_of_mass_B, constraint);
+		if (data->use_warm_starting) {
+			MatchContactConstraint(contact, center_of_mass_A, center_of_mass_B, constraint);
+		}
+		else {
+			DiscardContactConstraintWarmStarting(constraint);
+		}
 	}
 }
 
@@ -518,7 +550,7 @@ void AddContactPair(
 			if (second_collider != nullptr && second_collider->hull.vertex_size > 0) {
 				const Rigidbody* second_rigidbody = entity_manager->TryGetComponent<Rigidbody>(entity_B);
 				if (second_rigidbody != nullptr) {
-					TransformScalar first_transform = GetEntityTransform(entity_manager, entity_B);
+					TransformScalar first_transform = GetEntityTransform(entity_manager, entity_A);
 					TransformScalar second_transform = GetEntityTransform(entity_manager, entity_B);
 
 					ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
@@ -534,6 +566,10 @@ void AddContactPair(
 						//LogInfo("Collision");
 						// Call the SAT to determine the contacting features
 						//Timer timer;
+
+						// Try to retrieve the contact constraint. If we successfully find it,
+						// Then we can see what the order of the entities is, in order to match
+						// The separation axis
 						SATQuery query = SAT(&first_collider_transformed, &second_collider_transformed);
 						//float duration = timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 						//ECS_FORMAT_TEMP_STRING(message, "{#}\n", duration);
