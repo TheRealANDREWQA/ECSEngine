@@ -199,6 +199,7 @@
     <ClInclude Include="src\PhysicsModuleFunction.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\Rigidbody.h" />
+    <ClInclude Include="src\Settings.h" />
     <ClInclude Include="src\SolverCommon.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

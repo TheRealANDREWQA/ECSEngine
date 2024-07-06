@@ -92,6 +92,12 @@ namespace ECSEngine {
 			memory += sizeof(T) * current_size;
 		}
 
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+			if (buffer != nullptr && capacity > 0) {
+				DeallocateEx(allocator, buffer);
+			}
+		}
+
 		ECS_INLINE void FinishRequest(unsigned int count) {
 			size.fetch_add(count, std::memory_order_release);
 		}

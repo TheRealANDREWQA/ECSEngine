@@ -6,6 +6,7 @@
 #include "ECSEngineWorld.h"
 #include "CollisionDetection/src/CollisionDetectionComponents.h"
 #include "CollisionDetection/src/GJK.h"
+#include "Settings.h"
 
 #define SOLVER_DATA_STRING "SolverData"
 #define MAX_BAUMGARTE_BIAS 1000.0f
@@ -321,6 +322,12 @@ ECS_THREAD_TASK(SolveContactConstraints) {
 	//}
 
 	if (data->contact_table.GetCount() > 0) {
+		if (world->entity_manager->ExistsGlobalComponent(PhysicsSettings::ID())) {
+			PhysicsSettings* settings = world->entity_manager->GetGlobalComponent<PhysicsSettings>();
+			data->iterations = settings->iterations;
+			data->baumgarte_factor = settings->baumgarte_factor;
+		}
+
 		CapacityStream<unsigned int> iteration_indices;
 		iteration_indices.Initialize(&data->allocator, 0, data->contact_table.GetCount());
 
@@ -412,8 +419,7 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 			contact_add_indices.size = contact->manifold.point_count;
 			MakeSequence(contact_add_indices);
 
-			size_t point_count = ContactConstraintPointCount(constraint);
-			for (size_t index = 0; index < point_count; index++) {
+			for (size_t index = 0; index < constraint.contact.base.manifold.point_count; index++) {
 				unsigned int contact_index = ContactManifoldFeaturesFind(
 					contact->manifold, 
 					constraint.contact.base.manifold.point_indices[index],
@@ -431,6 +437,7 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 					// The constraint point no longer appears in the new contact manifold
 					// This constraint point needs to be discarded with a remove swap back
 					constraint.contact.base.manifold.RemoveSwapBack(index);
+
 					// We also need to remove swap back the point extra information
 					constraint.contact.points[index] = constraint.contact.points[constraint.contact.base.manifold.point_count];
 					index--;
@@ -650,7 +657,7 @@ void AddContactPair(
 									swap(first_center_of_mass, second_center_of_mass);
 								}
 							}
-							contact.friction = 0.3f;
+							contact.friction = first_rigidbody->is_static ? second_rigidbody->friction : first_rigidbody->friction;
 							contact.restitution = 0.0f;
 							contact.manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
 							AddContactConstraint(

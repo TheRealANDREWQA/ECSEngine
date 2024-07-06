@@ -185,6 +185,12 @@ size_t SimplifyContactManifoldPoints(Stream<float3> points, float3 plane_normal)
 
 	// At the moment, assert that the 4th point is found. It shouldn't happen
 	// To not be found
+	//if (fourth_point_index == -1) {
+	//	points[0] = first_point;
+	//	points[1] = second_point;
+	//	points[2] = third_point;
+	//	return 3;
+	//}
 	ECS_CRASH_CONDITION_RETURN(fourth_point_index != -1, -1, "ContactManifold reduction could not find 4th point");
 	float3 fourth_point = points[fourth_point_index];
 

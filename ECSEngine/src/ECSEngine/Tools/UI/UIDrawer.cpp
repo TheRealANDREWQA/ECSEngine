@@ -934,18 +934,22 @@ namespace ECSEngine {
 
 		void UIDrawer::HandleRectangleActions(size_t configuration, const UIDrawConfig& config, float2 position, float2 scale) {
 			if (configuration & UI_CONFIG_RECTANGLE_HOVERABLE_ACTION) {
-				const UIActionHandler* handler = (const UIActionHandler*)config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-				AddHoverable(configuration, position, scale, *handler);
+				const UIConfigRectangleHoverable* handler = (const UIConfigRectangleHoverable*)config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
+				AddHoverable(configuration, position, scale, handler->handler);
 			}
 
 			if (configuration & UI_CONFIG_RECTANGLE_CLICKABLE_ACTION) {
-				const UIActionHandler* handler = (const UIActionHandler*)config.GetParameter(UI_CONFIG_RECTANGLE_CLICKABLE_ACTION);
-				AddClickable(configuration, position, scale, *handler);
+				const UIConfigRectangleClickable* handler = (const UIConfigRectangleClickable*)config.GetParameter(UI_CONFIG_RECTANGLE_CLICKABLE_ACTION);
+				for (size_t index = 0; index < ECS_COUNTOF(handler->handlers); index++) {
+					if (handler->handlers[index].action != nullptr) {
+						AddClickable(configuration, position, scale, handler->handlers[index], handler->button_types[index]);
+					}
+				}
 			}
 
 			if (configuration & UI_CONFIG_RECTANGLE_GENERAL_ACTION) {
-				const UIActionHandler* handler = (const UIActionHandler*)config.GetParameter(UI_CONFIG_RECTANGLE_GENERAL_ACTION);
-				AddGeneral(configuration, position, scale, *handler);
+				const UIConfigRectangleGeneral* handler = (const UIConfigRectangleGeneral*)config.GetParameter(UI_CONFIG_RECTANGLE_GENERAL_ACTION);
+				AddGeneral(configuration, position, scale, handler->handler);
 			}
 		}
 
@@ -14369,18 +14373,7 @@ namespace ECSEngine {
 
 			float2 total_scale = { position.x - initial_position.x, position.y - initial_position.y };
 			if (~configuration & UI_CONFIG_RECTANGLES_INDIVIDUAL_ACTIONS) {
-				if (configuration & UI_CONFIG_RECTANGLE_HOVERABLE_ACTION) {
-					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-					AddHoverable(configuration, initial_position, total_scale, *handler);
-				}
-				if (configuration & UI_CONFIG_RECTANGLE_CLICKABLE_ACTION) {
-					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-					AddClickable(configuration, initial_position, total_scale, *handler);
-				}
-				if (configuration & UI_CONFIG_RECTANGLE_GENERAL_ACTION) {
-					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-					AddGeneral(configuration, initial_position, total_scale, *handler);
-				}
+				HandleRectangleActions(configuration, overall_config, initial_position, total_scale);
 			}
 
 			FinalizeRectangle(configuration, initial_position, total_scale);
@@ -14406,18 +14399,7 @@ namespace ECSEngine {
 
 			float2 total_scale = { position.x - initial_position.x, position.y - initial_position.y };
 			if (~configuration & UI_CONFIG_RECTANGLES_INDIVIDUAL_ACTIONS) {
-				if (configuration & UI_CONFIG_RECTANGLE_HOVERABLE_ACTION) {
-					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-					AddHoverable(configuration, initial_position, total_scale, *handler);
-				}
-				if (configuration & UI_CONFIG_RECTANGLE_CLICKABLE_ACTION) {
-					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_CLICKABLE_ACTION);
-					AddClickable(configuration, initial_position, total_scale, *handler);
-				}
-				if (configuration & UI_CONFIG_RECTANGLE_GENERAL_ACTION) {
-					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_GENERAL_ACTION);
-					AddGeneral(configuration, initial_position, total_scale, *handler);
-				}
+				HandleRectangleActions(configuration, overall_config, initial_position, total_scale);
 			}
 
 			FinalizeRectangle(configuration, initial_position, total_scale);
