@@ -30,6 +30,7 @@ struct ECS_REFLECT_COMPONENT Rigidbody {
 	float3 velocity;
 	float3 angular_velocity;
 	bool is_static;
+	float friction;
 };
 
 ECS_INLINE float3 ComputeVelocity(float3 linear_velocity, float3 angular_velocity, float3 local_anchor) {

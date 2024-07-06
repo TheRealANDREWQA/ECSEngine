@@ -678,12 +678,12 @@ static void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, Select
 
 	config->flag_count -= 2;
 
-	UIConfigGeneralAction general_action;
+	UIConfigRectangleGeneral general_action;
 	general_action.handler = { FileExplorerLabelRenameCallback, _data, sizeof(*_data), ECS_UI_DRAW_SYSTEM };
 	config->AddFlag(general_action);
 
 	drawer->Rectangle(
-		UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_RECTANGLE_GENERAL_ACTION | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION,
+		UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_RECTANGLE_GENERAL_ACTION | UI_CONFIG_DO_NOT_FIT_SPACE,
 		*config, 
 		drawer->GetCurrentPosition(), 
 		{ label_horizontal_scale, drawer->layout.default_element_y }
@@ -2348,10 +2348,6 @@ data->file_functors.Insert(action, identifier);
 		transform.scale = drawer.GetRelativeTransformFactors(drawer.GetSquareScaleScaled(THUMBNAIL_SIZE));
 		config.AddFlag(transform);
 
-		UIConfigClickableAction drag_click;
-		drag_click = { FileExplorerDrag, editor_state, 0, ECS_UI_DRAW_SYSTEM };
-		config.AddFlag(drag_click);
-
 		ForEachData for_each_data;
 		for_each_data.config = &config;
 		for_each_data.editor_state = editor_state;
@@ -2370,6 +2366,8 @@ data->file_functors.Insert(action, identifier);
 			FileExplorerData* data = _data->editor_state->file_explorer_data;
 			UIDrawConfig* config = _data->config;
 			UIDrawer* drawer = _data->drawer;
+
+			size_t config_size = config->flag_count;
 
 			Path stream_path = StringCopy(&data->temporary_allocator, path);
 
@@ -2394,7 +2392,7 @@ data->file_functors.Insert(action, identifier);
 				white_color.alpha = color_alpha;
 				drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, *config, ECS_TOOLS_UI_TEXTURE_FOLDER, white_color);
 
-				UIConfigGeneralAction general_action;
+				UIConfigRectangleGeneral general_action;
 				general_action.handler = { FileExplorerDirectorySelectable, &selectable_data, sizeof(selectable_data) };
 				config->AddFlag(general_action);
 
@@ -2423,11 +2421,13 @@ data->file_functors.Insert(action, identifier);
 				right_click_data.state.row_count = FOLDER_RIGHT_CLICK_ROW_COUNT;
 				right_click_data.state.submenu_index = 0;
 
-				UIConfigHoverableAction hoverable_action;
-				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_SYSTEM };
-				config->AddFlag(hoverable_action);
+				UIConfigRectangleClickable clickable_actions;
+				clickable_actions.handlers[0] = { FileExplorerDrag, _data->editor_state, 0, ECS_UI_DRAW_SYSTEM };
+				clickable_actions.handlers[1] = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_SYSTEM };
+				clickable_actions.button_types[1] = ECS_MOUSE_RIGHT;
+				config->AddFlag(clickable_actions);
 
-				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_RECTANGLE_HOVERABLE_ACTION
+				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_VALIDATE_POSITION
 					| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_RECTANGLE_GENERAL_ACTION | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION | UI_CONFIG_GET_TRANSFORM;
 
 				float2 rectangle_position;
@@ -2451,8 +2451,6 @@ data->file_functors.Insert(action, identifier);
 					config->AddFlag(border);
 
 					drawer->Rectangle(RECTANGLE_CONFIGURATION | UI_CONFIG_COLOR | UI_CONFIG_BORDER, *config);
-
-					config->flag_count -= 2;
 				}
 				else {
 					drawer->Rectangle(RECTANGLE_CONFIGURATION, *config);
@@ -2463,11 +2461,14 @@ data->file_functors.Insert(action, identifier);
 					_data->mouse_element_path->CopyOther(stream_path);
 				}
 
-				config->flag_count -= 3;
+				// Eliminate the config additions
+				// It must be done before the label draw
+				config->flag_count = config_size;
 
 				FileExplorerLabelDraw(drawer, config, &selectable_data, is_selected, true);
 				_data->element_count++;
 			}
+
 
 			return true;
 		};
@@ -2478,6 +2479,8 @@ data->file_functors.Insert(action, identifier);
 			FileExplorerData* data = _data->editor_state->file_explorer_data;
 			UIDrawConfig* config = _data->config;
 			UIDrawer* drawer = _data->drawer;
+
+			size_t config_size = config->flag_count;
 
 			Path stream_path = StringCopy(&data->temporary_allocator, path);
 
@@ -2545,8 +2548,6 @@ data->file_functors.Insert(action, identifier);
 				}
 				functor(&action_data);
 
-				UIConfigHoverableAction hoverable_action;
-
 				UIDrawerMenuState nested_state[MESH_FILE_RIGHT_CLICK_ROW_COUNT];
 				UIDrawerMenuState main_state;
 
@@ -2600,13 +2601,16 @@ data->file_functors.Insert(action, identifier);
 					}
 				};
 				
-				hoverable_action.handler = drawer->PrepareRightClickMenuHandler(
+				UIConfigRectangleClickable clickable_actions;
+				clickable_actions.handlers[0] = { FileExplorerDrag, _data->editor_state, 0, ECS_UI_DRAW_SYSTEM };
+				clickable_actions.handlers[1] = drawer->PrepareRightClickMenuHandler(
 					right_click_menu_name, 
 					&main_state, 
 					{ OnRightClickAction, &action_data, sizeof(action_data) },
 					drawer->SnapshotRunnableAllocator()
 				);
-				config->AddFlag(hoverable_action);
+				clickable_actions.button_types[1] = ECS_MOUSE_RIGHT;
+				config->AddFlag(clickable_actions);
 
 				float2 rectangle_position;
 				float2 rectangle_scale;
@@ -2615,7 +2619,7 @@ data->file_functors.Insert(action, identifier);
 				get_transform.scale = &rectangle_scale;
 				config->AddFlag(get_transform);
 
-				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_GET_TRANSFORM | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_RECTANGLE_HOVERABLE_ACTION |
+				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_GET_TRANSFORM | UI_CONFIG_RELATIVE_TRANSFORM |
 					UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION;
 
 				if (is_selected) {
@@ -2652,12 +2656,14 @@ data->file_functors.Insert(action, identifier);
 					_data->element_count
 				);
 
-				config->flag_count -= 2;
+				// Eliminate the config additions
+				// It must be done before the label draw
+				config->flag_count = config_size;
 
 				FileExplorerLabelDraw(drawer, config, &selectable_data, is_selected, false);
 				_data->element_count++;
-			}
 
+			}
 
 			return true;
 		};

@@ -50,7 +50,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigAbsoluteTransform {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_ABSOLUTE_TRANSFORM;
 			}
 
@@ -59,7 +59,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigRelativeTransform {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_RELATIVE_TRANSFORM;
 			}
 
@@ -68,7 +68,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigWindowDependentSize {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_WINDOW_DEPENDENT_SIZE;
 			}
 
@@ -78,7 +78,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigTextParameters {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_PARAMETERS;
 			}
 
@@ -88,7 +88,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigTextAlignment {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_ALIGNMENT;
 			}
 
@@ -97,25 +97,40 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigColor {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_COLOR;
 			}
 
 			Color color = ECS_TOOLS_UI_THEME_COLOR;
 		};
 
-		struct UIConfigDoNotAdvance {
-			static ECS_INLINE size_t GetAssociatedBit() {
-				return UI_CONFIG_DO_NOT_ADVANCE;
+		struct UIConfigRectangleHoverable {
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_RECTANGLE_HOVERABLE_ACTION;
 			}
 
-			bool update_render_bounds = true;
-			bool update_current_scale = true;
-			bool handle_draw_mode = true;
+			UIActionHandler handler;
+		};
+
+		struct UIConfigRectangleClickable {
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_RECTANGLE_CLICKABLE_ACTION;
+			}
+
+			UIActionHandler handlers[3] = { {} };
+			ECS_MOUSE_BUTTON button_types[ECS_COUNTOF(handlers)] = { ECS_MOUSE_LEFT };
+		};
+
+		struct UIConfigRectangleGeneral {
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_RECTANGLE_GENERAL_ACTION;
+			}
+
+			UIActionHandler handler;
 		};
 
 		struct UIConfigButtonHoverable {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_BUTTON_HOVERABLE;
 			}
 
@@ -123,7 +138,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigSliderColor {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_COLOR;
 			}
 
@@ -131,7 +146,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigSliderShrink {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_SHRINK;
 			}
 
@@ -139,7 +154,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigSliderPadding {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_PADDING;
 			}
 
@@ -147,7 +162,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigSliderLength {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_LENGTH;
 			}
 
@@ -155,7 +170,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigBorder {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_BORDER;
 			}
 
@@ -277,7 +292,7 @@ namespace ECSEngine {
 		ECSENGINE_API UIDrawerSliderFunctions UIDrawerGetDoubleSliderFunctions(unsigned int& precision);
 
 		struct UIConfigTextInputHint {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_INPUT_HINT;
 			}
 
@@ -285,7 +300,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigTextInputCallback {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_INPUT_CALLBACK;
 			}
 
@@ -295,7 +310,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigSliderChangedValueCallback {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 			}
 
@@ -303,32 +318,8 @@ namespace ECSEngine {
 			bool copy_on_initialization = false;
 		};
 
-		struct UIConfigHoverableAction {
-			static ECS_INLINE size_t GetAssociatedBit() {
-				return UI_CONFIG_RECTANGLE_HOVERABLE_ACTION;
-			}
-
-			UIActionHandler handler;
-		};
-
-		struct UIConfigClickableAction {
-			static ECS_INLINE size_t GetAssociatedBit() {
-				return UI_CONFIG_RECTANGLE_CLICKABLE_ACTION;
-			}
-
-			UIActionHandler handler;
-		};
-
-		struct UIConfigGeneralAction {
-			static ECS_INLINE size_t GetAssociatedBit() {
-				return UI_CONFIG_RECTANGLE_GENERAL_ACTION;
-			}
-
-			UIActionHandler handler;
-		};
-
 		struct UIConfigRectangleVertexColor {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_RECTANGLE_VERTEX_COLOR;
 			}
 
@@ -336,7 +327,7 @@ namespace ECSEngine {
 		};
 
 		struct UIConfigSpriteGradient {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_SPRITE_GRADIENT;
 			}
 
@@ -373,7 +364,7 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerSentenceFitSpaceToken {
-			static ECS_INLINE size_t GetAssociatedBit() {
+			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_SENTENCE_FIT_SPACE_TOKEN;
 			}
 

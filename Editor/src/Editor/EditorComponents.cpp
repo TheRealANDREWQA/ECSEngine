@@ -2677,8 +2677,10 @@ EDITOR_EVENT(FinalExecuteComponentEvent) {
 		}
 	}
 	
-	data->handled_events->FreeBuffer();
 	editor_state->editor_components.events.AddStream(data->unhandled_events->ToStream());
+	
+	data->unhandled_events->Deallocate(editor_state->editor_components.allocator);
+	data->handled_events->FreeBuffer();
 	Deallocate(editor_state->editor_components.allocator, data->handled_events);
 	Deallocate(editor_state->editor_components.allocator, data->unhandled_events);
 
@@ -2920,6 +2922,9 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 			sizeof(AtomicStream<EditorComponentEvent>)
 		);
 		unhandled_events->Initialize(editor_state->editor_components.allocator, editor_state->editor_components.events.size * sandbox_count);
+		if (unhandled_events->buffer == nullptr) {
+			__debugbreak();
+		}
 		ResizableStream<EditorComponentEvent>* handled_events = (ResizableStream<EditorComponentEvent>*)Allocate(
 			editor_state->editor_components.allocator,
 			sizeof(ResizableStream<EditorComponentEvent>)

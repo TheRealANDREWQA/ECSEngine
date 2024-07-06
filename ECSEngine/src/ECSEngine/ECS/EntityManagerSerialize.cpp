@@ -2399,7 +2399,7 @@ namespace ECSEngine {
 		if (overrides.size > 0) {
 			for (unsigned int index = 0; index < type_indices.size; index++) {
 				const Reflection::ReflectionType* type = reflection_manager->GetType(type_indices[index]);
-				if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
+				if (GetReflectionTypeComponentType(type) != ECS_COMPONENT_TYPE_COUNT) {
 					// Check to see if it is overwritten
 					if (override_components != nullptr) {
 						// Check the component
@@ -2428,7 +2428,7 @@ namespace ECSEngine {
 			// No overrides, can add these directly
 			for (unsigned int index = 0; index < type_indices.size; index++) {
 				const Reflection::ReflectionType* type = reflection_manager->GetType(type_indices[index]);
-				if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
+				if (GetReflectionTypeComponentType(type) != ECS_COMPONENT_TYPE_COUNT) {
 					functor(type);
 				}
 			}

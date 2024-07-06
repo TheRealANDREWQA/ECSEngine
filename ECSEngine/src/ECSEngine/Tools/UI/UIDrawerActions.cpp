@@ -2075,7 +2075,7 @@ namespace ECSEngine {
 			float2 drag_triangle_size = drawer.GetSquareScale(0.03f);
 			float2 circle_size = drawer.GetSquareScale(0.07f);
 
-			auto triangle_lambda = [&](float2 position, float2 scale, float2 triangle_size, float percentage, UIConfigClickableAction action) {
+			auto triangle_lambda = [&](float2 position, float2 scale, float2 triangle_size, float percentage, UIConfigRectangleClickable action) {
 				UIDrawConfig triangle1_config;
 				UIConfigAbsoluteTransform triangle1_transform;
 				triangle1_transform.position = { position.x - triangle_size.x * 0.5f, Lerp<true>(position.y, scale.y, percentage) - triangle_size.y * 0.5f };
@@ -2177,10 +2177,8 @@ namespace ECSEngine {
 			UIColorInputHSVGradientInfo h_info;
 			h_info.input = input;
 
-			UIConfigClickableAction sv_clickable_action;
-			sv_clickable_action.handler.action = ColorInputSVRectangleClickableAction;
-			sv_clickable_action.handler.data = &h_info;
-			sv_clickable_action.handler.data_size = sizeof(h_info);
+			UIConfigRectangleClickable sv_clickable_action;
+			sv_clickable_action.handlers[0] = { ColorInputSVRectangleClickableAction, &h_info, sizeof(h_info) };
 
 			Color sv_colors[4];
 			sv_colors[0] = ECS_COLOR_WHITE;
@@ -2224,10 +2222,8 @@ namespace ECSEngine {
 
 			h_info.gradient_position = h_gradient_position;
 			h_info.gradient_scale = gradient_scale;
-			UIConfigClickableAction h_action;
-			h_action.handler.action = ColorInputHRectangleClickableAction;
-			h_action.handler.data = &h_info;
-			h_action.handler.data_size = sizeof(h_info);
+			UIConfigRectangleClickable h_action;
+			h_action.handlers[0] = { ColorInputHRectangleClickableAction, &h_info, sizeof(h_info) };
 
 			h_config.AddFlags(h_size, h_action);
 
@@ -2250,10 +2246,8 @@ namespace ECSEngine {
 			a_gradient_info.gradient_scale = gradient_scale;
 			a_gradient_info.input = input;
 
-			UIConfigClickableAction a_action;
-			a_action.handler.action = ColorInputARectangleClickableAction;
-			a_action.handler.data = &a_gradient_info;
-			a_action.handler.data_size = sizeof(a_gradient_info);
+			UIConfigRectangleClickable a_action;
+			a_action.handlers[0] = { ColorInputARectangleClickableAction, &a_gradient_info, sizeof(a_gradient_info) };
 
 			Color a_colors[6];
 			a_colors[0] = HSVToRGB(hsv_color);
@@ -2322,10 +2316,8 @@ namespace ECSEngine {
 			solid_color_transform.offset.y = text_span.y + text_offset;
 			solid_color_transform.scale_factor = { current_color_scale, solid_color_y_scale };
 
-			UIConfigClickableAction previous_action;
-			previous_action.handler.action = ColorInputPreviousRectangleClickableAction;
-			previous_action.handler.data = input;
-			previous_action.handler.data_size = 0;
+			UIConfigRectangleClickable previous_action;
+			previous_action.handlers[0] = { ColorInputPreviousRectangleClickableAction, input, 0 };
 
 			previous_config.AddFlags(solid_color_transform, previous_action);
 
@@ -2560,12 +2552,12 @@ namespace ECSEngine {
 				// Must be replicated inside lambdas
 				const size_t configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_ADVANCE;
 
-				UIConfigHoverableAction hoverable;
+				UIConfigRectangleHoverable hoverable;
 				UIDrawerSubmenuHoverable hover_data;
 				memcpy(&hover_data.draw_data, data, sizeof(*data));
 				hoverable.handler = { MenuSubmenuHoverable, &hover_data, sizeof(hover_data), ECS_UI_DRAW_SYSTEM };
 
-				UIConfigGeneralAction general;
+				UIConfigRectangleGeneral general;
 				UIDrawerMenuGeneralData general_data;
 				general_data.menu = data->menu;
 				general_data.destroy_state = state;
@@ -2575,7 +2567,7 @@ namespace ECSEngine {
 
 #pragma endregion
 
-				UIConfigClickableAction clickable;
+				UIConfigRectangleClickable clickable;
 
 				unsigned int current_word_start = 0;
 				size_t LABEL_CONFIGURATION = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y 
@@ -2647,21 +2639,18 @@ namespace ECSEngine {
 					if (state->unavailables == nullptr || (state->unavailables != nullptr && !state->unavailables[index])) {
 						// Embed the data into the wrapper
 						size_t _wrapper_data[256];
-						if (state->row_has_submenu != nullptr && state->row_has_submenu[index] == true) {
-							clickable.handler = { SkipAction, nullptr, 0 };
-						}
-						else {
+						if (state->row_has_submenu == nullptr || state->row_has_submenu[index] == false) {
 							ClickableWrapperData* wrapper_data = (ClickableWrapperData*)_wrapper_data;
 							wrapper_data->drawer_data = data;
 							wrapper_data->row_index = index;
 							if (state->click_handlers[index].data_size > 0) {
 								memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), state->click_handlers[index].data, state->click_handlers[index].data_size);
 							}
-							clickable.handler = { 
-								clickable_wrapper, 
-								wrapper_data, 
-								(unsigned int)(sizeof(*wrapper_data) + state->click_handlers[index].data_size), 
-								state->click_handlers[index].phase 
+							clickable.handlers[0] = {
+								clickable_wrapper,
+								wrapper_data,
+								(unsigned int)(sizeof(*wrapper_data) + state->click_handlers[index].data_size),
+								state->click_handlers[index].phase
 							};
 						}
 

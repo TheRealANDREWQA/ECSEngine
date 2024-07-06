@@ -1856,81 +1856,83 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 			drawer->current_row_y_scale = drawer->GetSquareScale().y;
 			PrefabComponent* prefab = entity_manager->GetComponent<PrefabComponent>(data->entity);
-			Stream<wchar_t> prefab_path = GetPrefabPath(editor_state, prefab->id);
-			ECS_FORMAT_TEMP_STRING(prefab_string, "Prefab: {#}", prefab_path);		
-			drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, prefab_string);
+			//if (ExistsPrefabID(editor_state, prefab->id)) {
+				Stream<wchar_t> prefab_path = GetPrefabPath(editor_state, prefab->id);
+				ECS_FORMAT_TEMP_STRING(prefab_string, "Prefab: {#}", prefab_path);
+				drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, prefab_string);
 
-			struct DetachEntityCallbackData {
-				EditorState* editor_state;
-				unsigned int index;
-			};
+				struct DetachEntityCallbackData {
+					EditorState* editor_state;
+					unsigned int index;
+				};
 
-			auto detach_entity_callback = [](ActionData* action_data) {
-				UI_UNPACK_ACTION_DATA;
-				DetachEntityCallbackData* data = (DetachEntityCallbackData*)_data;
-				SetSandboxSceneDirty(data->editor_state, data->index);
-			};
+				auto detach_entity_callback = [](ActionData* action_data) {
+					UI_UNPACK_ACTION_DATA;
+					DetachEntityCallbackData* data = (DetachEntityCallbackData*)_data;
+					SetSandboxSceneDirty(data->editor_state, data->index);
+				};
 
-			DetachEntityCallbackData detach_data = { editor_state, sandbox_index };
-			UIConfigCheckBoxCallback detach_check_box_callback;
-			detach_check_box_callback.handler = { detach_entity_callback, &detach_data, sizeof(detach_data) };
-			config.AddFlag(detach_check_box_callback);
+				DetachEntityCallbackData detach_data = { editor_state, sandbox_index };
+				UIConfigCheckBoxCallback detach_check_box_callback;
+				detach_check_box_callback.handler = { detach_entity_callback, &detach_data, sizeof(detach_data) };
+				config.AddFlag(detach_check_box_callback);
 
-			UIConfigCheckBoxDefault detach_default;
-			detach_default.value = true;
-			config.AddFlag(detach_default);
+				UIConfigCheckBoxDefault detach_default;
+				detach_default.value = true;
+				config.AddFlag(detach_default);
 
-			UIConfigAlignElement align_check_box;
-			align_check_box.horizontal = ECS_UI_ALIGN_RIGHT;
-			config.AddFlag(align_check_box);
-			drawer->CheckBox(UI_CONFIG_CHECK_BOX_CALLBACK | UI_CONFIG_CHECK_BOX_DEFAULT | UI_CONFIG_ALIGN_ELEMENT, config, "Detached", &prefab->detached);
-			drawer->NextRow();
+				UIConfigAlignElement align_check_box;
+				align_check_box.horizontal = ECS_UI_ALIGN_RIGHT;
+				config.AddFlag(align_check_box);
+				drawer->CheckBox(UI_CONFIG_CHECK_BOX_CALLBACK | UI_CONFIG_CHECK_BOX_DEFAULT | UI_CONFIG_ALIGN_ELEMENT, config, "Detached", &prefab->detached);
+				drawer->NextRow();
 
-			UIDrawerRowLayout row_layout = drawer->GenerateRowLayout();
-			row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
-			row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
-			size_t button_configuration = 0;
-			row_layout.GetTransform(config, button_configuration);
+				UIDrawerRowLayout row_layout = drawer->GenerateRowLayout();
+				row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+				row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+				size_t button_configuration = 0;
+				row_layout.GetTransform(config, button_configuration);
 
-			OpenPrefabActionData open_prefab_data;
-			open_prefab_data.editor_state = editor_state;
-			open_prefab_data.inspector_index = inspector_index;
-			open_prefab_data.launching_sandbox = sandbox_index;
-			open_prefab_data.prefab_id = prefab->id;
-			drawer->Button(
-				button_configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, 
-				config, 
-				"Edit", 
-				{ OpenPrefabAction, &open_prefab_data, sizeof(open_prefab_data), ECS_UI_DRAW_SYSTEM }
-			);
+				OpenPrefabActionData open_prefab_data;
+				open_prefab_data.editor_state = editor_state;
+				open_prefab_data.inspector_index = inspector_index;
+				open_prefab_data.launching_sandbox = sandbox_index;
+				open_prefab_data.prefab_id = prefab->id;
+				drawer->Button(
+					button_configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X,
+					config,
+					"Edit",
+					{ OpenPrefabAction, &open_prefab_data, sizeof(open_prefab_data), ECS_UI_DRAW_SYSTEM }
+				);
 
-			button_configuration = 0;
-			config.flag_count = 0;
-			row_layout.GetTransform(config, button_configuration);
-			struct HighlightPrefabPathData {
-				EditorState* editor_state;
-				unsigned int prefab_id;
-			};
-			auto highlight_prefab_path = [](ActionData* action_data) {
-				UI_UNPACK_ACTION_DATA;
+				button_configuration = 0;
+				config.flag_count = 0;
+				row_layout.GetTransform(config, button_configuration);
+				struct HighlightPrefabPathData {
+					EditorState* editor_state;
+					unsigned int prefab_id;
+				};
+				auto highlight_prefab_path = [](ActionData* action_data) {
+					UI_UNPACK_ACTION_DATA;
 
-				HighlightPrefabPathData* data = (HighlightPrefabPathData*)_data;
-				ECS_STACK_CAPACITY_STREAM(wchar_t, prefab_absolute_path_storage, 512);
-				Stream<wchar_t> prefab_absolute_path = GetPrefabAbsolutePath(data->editor_state, data->prefab_id, prefab_absolute_path_storage);
-				ChangeFileExplorerFile(data->editor_state, prefab_absolute_path);
-				system->SetActiveWindow(FILE_EXPLORER_WINDOW_NAME);
-			};
-			HighlightPrefabPathData highlight_prefab_data = { editor_state, prefab->id };
-			drawer->Button(
-				button_configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, 
-				config, 
-				"Highlight", 
-				{ highlight_prefab_path, &highlight_prefab_data, sizeof(highlight_prefab_data) }
-			);
-			drawer->NextRow();
+					HighlightPrefabPathData* data = (HighlightPrefabPathData*)_data;
+					ECS_STACK_CAPACITY_STREAM(wchar_t, prefab_absolute_path_storage, 512);
+					Stream<wchar_t> prefab_absolute_path = GetPrefabAbsolutePath(data->editor_state, data->prefab_id, prefab_absolute_path_storage);
+					ChangeFileExplorerFile(data->editor_state, prefab_absolute_path);
+					system->SetActiveWindow(FILE_EXPLORER_WINDOW_NAME);
+				};
+				HighlightPrefabPathData highlight_prefab_data = { editor_state, prefab->id };
+				drawer->Button(
+					button_configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X,
+					config,
+					"Highlight",
+					{ highlight_prefab_path, &highlight_prefab_data, sizeof(highlight_prefab_data) }
+				);
+				drawer->NextRow();
 
-			drawer->CrossLine();
-			config.flag_count = 0;
+				drawer->CrossLine();
+				config.flag_count = 0;
+			//}
 		}
 	}
 
@@ -2051,7 +2053,7 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	if (inspector_index != -1) {
 		if (editor_state->inspector_manager.data[inspector_index].draw_function == InspectorDrawEntity) {
 			InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
-			if (compare_functor(draw_data)) {
+			if (compare_functor(inspector_index, draw_data)) {
 				// Don't do anything if it is the same entity, just highlight it
 				ECS_STACK_CAPACITY_STREAM(char, inspector_name, 64);
 				GetInspectorName(inspector_index, inspector_name);
@@ -2065,7 +2067,7 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 		FindInspectorWithDrawFunction(editor_state, InspectorDrawEntity, &inspector_entity_target, sandbox_index);
 		for (unsigned int index = 0; index < inspector_entity_target.size; index++) {
 			InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_entity_target[index]);
-			if (compare_functor(draw_data)) {
+			if (compare_functor(inspector_entity_target[index], draw_data)) {
 				// Highlight this inspector
 				ECS_STACK_CAPACITY_STREAM(char, inspector_name, 64);
 				GetInspectorName(inspector_entity_target[index], inspector_name);
@@ -2111,8 +2113,9 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index)
 {
 	ChangeInspectorToEntityOrGlobalComponentImpl(editor_state, sandbox_index, inspector_index,
-		[=](const InspectorDrawEntityData* draw_data) {
-			return !draw_data->is_global_component && draw_data->entity == entity;
+		[=](unsigned int inspector_index, const InspectorDrawEntityData* draw_data) {
+			return sandbox_index == GetInspectorTargetSandbox(editor_state, inspector_index) && 
+				!draw_data->is_global_component && draw_data->entity == entity;
 		},
 		[=](InspectorDrawEntityData* draw_data) {
 			draw_data->is_global_component = false;
@@ -2124,8 +2127,9 @@ void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_ind
 
 void ChangeInspectorToGlobalComponent(EditorState* editor_state, unsigned int sandbox_index, Component component, unsigned int inspector_index) {
 	ChangeInspectorToEntityOrGlobalComponentImpl(editor_state, sandbox_index, inspector_index,
-		[=](const InspectorDrawEntityData* draw_data) {
-			return draw_data->is_global_component && draw_data->global_component == component;
+		[=](unsigned int inspector_index, const InspectorDrawEntityData* draw_data) {
+			return sandbox_index == GetInspectorTargetSandbox(editor_state, inspector_index) &&
+				draw_data->is_global_component && draw_data->global_component == component;
 		},
 		[=](InspectorDrawEntityData* draw_data) {
 			draw_data->is_global_component = true;

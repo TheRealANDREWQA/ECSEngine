@@ -868,7 +868,7 @@ void InitializeInspectorInstance(EditorState* editor_state, unsigned int index)
 	data->data_size = 0;
 	data->draw_data = nullptr;
 	data->flags = 0;
-	data->matching_sandbox = 0;
+	data->matching_sandbox = -1;
 	data->target_sandbox = 0;
 	data->table = &editor_state->inspector_manager.function_table;
 	data->target_allocator = MemoryManager(INSPECTOR_TARGET_ALLOCATOR_CAPACITY, ECS_KB, INSPECTOR_TARGET_ALLOCATOR_CAPACITY, editor_state->EditorAllocator());
