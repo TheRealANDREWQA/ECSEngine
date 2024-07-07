@@ -3588,14 +3588,42 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								}
 
 								if (!is_typedef) {
-									ECS_REFLECTION_ADD_TYPE_FIELD_RESULT result = AddTypeField(data, type, pointer_offset, field_start, field_end);
+									// Check to see if this line contains only const and possibly a semicolon
+									// If this is all that there is on the line, consider this to be a const from a method
+									bool is_const_method_line = false;
+									Stream<char> line = { field_start, PointerDifference(field_end, field_start) / sizeof(*field_start) };
+									Stream<char> const_line_start = FindFirstToken(line, "const");
+									if (const_line_start.size > 0) {
+										const char* const_start = const_line_start.buffer;
+										const_start--;
+										while (const_start > field_start && (*const_start == '(' || *const_start == ')' || *const_start == '{' ||
+											*const_start == '}' || IsWhitespaceEx(*const_start))) {
+											const_start--;
+										}
 
-									if (result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
-										WriteErrorMessage(data, "An error occured during field type determination.", file_index);
-										return false;
+										if (const_start == field_start) {
+											const char* const_end = const_line_start.buffer + strlen("const");
+											const_end++;
+											while (const_end < field_end && (*const_end == '(' || *const_end == ')' || *const_end == '{' ||
+												*const_end == '}' || IsWhitespaceEx(*const_end))) {
+												const_end++;
+											}
+
+											// Greater or equal in case const is at the very end of the line, before the semicolon
+											is_const_method_line = const_end >= field_end;
+										}
 									}
-									else if (result == ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED) {
-										omitted_fields = true;
+
+									if (!is_const_method_line) {
+										ECS_REFLECTION_ADD_TYPE_FIELD_RESULT result = AddTypeField(data, type, pointer_offset, field_start, field_end);
+
+										if (result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
+											WriteErrorMessage(data, "An error occured during field type determination.", file_index);
+											return false;
+										}
+										else if (result == ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED) {
+											omitted_fields = true;
+										}
 									}
 								}
 							}
@@ -3621,7 +3649,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 													soa_parameters[soa_index] = SkipWhitespace(soa_parameters[soa_index], -1);
 												}
 												
-												if (soa_parameters.size <= _countof(ReflectionTypeMiscNamedSoa::parallel_streams)) {
+												if (soa_parameters.size <= ECS_COUNTOF(ReflectionTypeMiscNamedSoa::parallel_streams)) {
 													// Add a new entry. We don't need to allocate anything since the
 													// Names are all stable
 													ReflectionTypeMiscNamedSoa named_soa;

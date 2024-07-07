@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "ContactManifolds.h"
 
-ContactManifoldFeatures ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery query) {
+ContactManifoldFeatures ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery& query) {
 	ContactManifoldFeatures contact_manifold;
 
 	// Start by branching on the edge vs face case
@@ -19,13 +19,17 @@ ContactManifoldFeatures ComputeContactManifold(const ConvexHull* first_hull, con
 
 		// Clip the incident face against the reference face
 		ECS_STACK_CAPACITY_STREAM(ConvexHullClippedPoint, clipped_points, 64);
-		reference_hull->ClipFace(query.face.face_index, incident_hull, incident_face_index, &clipped_points);
+		reference_hull->ClipFace(query.face.face_index, incident_hull, incident_face_index, &clipped_points, false);
+
+		ECS_CRASH_CONDITION(clipped_points.size == 0, "Computing Contact Manifold failed because clipping of a face query results in 0 points!");
 
 		// If there are no contact points found, inverse the faces
 		// And retry the process
-		if (clipped_points.size == 0) {
-			incident_hull->ClipFace(incident_face_index, reference_hull, reference_face_index, &clipped_points);
-		}
+		//if (clipped_points.size == 0) {
+			//incident_hull->ClipFace(incident_face_index, reference_hull, reference_face_index, &clipped_points);
+			// Flip the query order
+			//query.face.first_collider = !query.face.first_collider;
+		//}
 
 		// Discard point above the reference face
 		for (unsigned int index = 0; index < clipped_points.size; index++) {

@@ -96,13 +96,31 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	void CalculateAndAssignCenter();
 
 	// Clips the face referenced by face_index with the incident face from the other hull
-	// And outputs the 3D points that compose the clipped face
-	void ClipFace(unsigned int face_index, const ConvexHull* incident_hull, unsigned int incident_hull_face_index, CapacityStream<float3>* points) const;
+	// And outputs the 3D points that compose the clipped face. The rigid mode flag is used
+	// For the case when there are parallel edges to planes - if the flag is set to true and the
+	// edge lies outside the plane, it will cull the edge away, else it will bring the edge at the
+	// Plane level
+	void ClipFace(
+		unsigned int face_index, 
+		const ConvexHull* incident_hull, 
+		unsigned int incident_hull_face_index, 
+		CapacityStream<float3>* points,
+		bool rigid_mode
+	) const;
 
 	// Clips the face referenced by face_index with the incident face from the other hull
 	// And outputs the 3D points that compose the clipped face, alongside the edge index/indices
-	// From which the point belongs to
-	void ClipFace(unsigned int face_index, const ConvexHull* incident_hull, unsigned int incident_hull_face_index, CapacityStream<ConvexHullClippedPoint>* points) const;
+	// From which the point belongs to. The rigid mode flag is used
+	// For the case when there are parallel edges to planes - if the flag is set to true and the
+	// edge lies outside the plane, it will cull the edge away, else it will bring the edge at the
+	// Plane level
+	void ClipFace(
+		unsigned int face_index, 
+		const ConvexHull* incident_hull, 
+		unsigned int incident_hull_face_index, 
+		CapacityStream<ConvexHullClippedPoint>* points,
+		bool rigid_mode
+	) const;
 
 	// Computes the edges for each vertex. This is a parallel array to the vertices
 	// Inside this instance. Changing the order of the vertices will have to be reflected here as well

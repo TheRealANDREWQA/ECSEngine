@@ -151,10 +151,11 @@ void ConvexHull::ClipFace(
 	unsigned int face_index, 
 	const ConvexHull* incident_hull, 
 	unsigned int incident_hull_face_index, 
-	CapacityStream<float3>* points
+	CapacityStream<float3>* points,
+	bool rigid_mode
 ) const {
 	ECS_STACK_CAPACITY_STREAM(ConvexHullClippedPoint, clipped_points, 128);
-	ClipFace(face_index, incident_hull, incident_hull_face_index, &clipped_points);
+	ClipFace(face_index, incident_hull, incident_hull_face_index, &clipped_points, rigid_mode);
 
 	ECS_ASSERT(points->size + clipped_points.size <= points->capacity, "Insufficient capacity for ConvexHull ClipFace!");
 	for (unsigned int index = 0; index < clipped_points.size; index++) {
@@ -166,7 +167,8 @@ void ConvexHull::ClipFace(
 	unsigned int face_index, 
 	const ConvexHull* incident_hull, 
 	unsigned int incident_hull_face_index, 
-	CapacityStream<ConvexHullClippedPoint>* points
+	CapacityStream<ConvexHullClippedPoint>* points,
+	bool rigid_mode
 ) const {
 	// To clip a face against another face, we need to construct the side
 	// Planes of the current face, and clip the other face against them
@@ -200,11 +202,23 @@ void ConvexHull::ClipFace(
 		float3 incident_edge_normalized_direction = Normalize(incident_edge.B - incident_edge.A);
 		float t_factor = InitializeClipTFactor(incident_edge.A, incident_edge.B);
 
-		for (unsigned int side_plane_index = 0; side_plane_index < face.EdgeCount(); side_plane_index++) {
-			PlaneScalar side_plane = GetFaceSidePlane(face_index, side_plane_index);
-			if (!ClipSegmentAgainstPlane(side_plane, incident_edge.A, incident_edge_normalized_direction, t_factor, t_min, t_max)) {
-				// Early exit if the edge is completely culled
-				break;
+		// Hoist the rigid mode check outside the for loop
+		if (rigid_mode) {
+			for (unsigned int side_plane_index = 0; side_plane_index < face.EdgeCount(); side_plane_index++) {
+				PlaneScalar side_plane = GetFaceSidePlane(face_index, side_plane_index);
+				if (!ClipSegmentAgainstPlaneRigid(side_plane, incident_edge.A, incident_edge_normalized_direction, t_factor, t_min, t_max)) {
+					// Early exit if the edge is completely culled
+					break;
+				}
+			}
+		}
+		else {
+			for (unsigned int side_plane_index = 0; side_plane_index < face.EdgeCount(); side_plane_index++) {
+				PlaneScalar side_plane = GetFaceSidePlane(face_index, side_plane_index);
+				if (!ClipSegmentAgainstPlane(side_plane, incident_edge.A, incident_edge_normalized_direction, t_factor, t_min, t_max)) {
+					// Early exit if the edge is completely culled
+					break;
+				}
 			}
 		}
 

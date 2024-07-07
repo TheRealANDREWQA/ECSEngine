@@ -140,9 +140,10 @@ namespace ECSEngine {
 		return mask;
 	}
 
-	void ClipSegmentAgainstPlane(
+	template<bool rigid_mode>
+	static void ClipSegmentAgainstPlaneImpl(
 		const Plane& plane,
-		const Vector3& segment_a,
+		Vector3& segment_a,
 		const Vector3& normalized_direction,
 		const Vec8f& segment_t_factor,
 		Vec8f& segment_t_min,
@@ -150,7 +151,7 @@ namespace ECSEngine {
 		float parallel_epsilon
 	) {
 		Vec8f epsilon = parallel_epsilon;
-		
+
 		// Instead of using the IntersectSegmentPlane function, we can write
 		// The same function here but more efficiently since some parameters
 		// Can be shared or some calculations omitted
@@ -176,16 +177,71 @@ namespace ECSEngine {
 		SIMDVectorMask is_positive = denominator > zero_vector;
 		segment_t_max = SelectSingle(is_positive, Min(segment_t_max, t), segment_t_max);
 
-		// There is one more thing to do. If the line is parallel, the segment
-		// Should be clipped, basically 0.0f. We can do this by setting segment_t_min
-		// To FLT_MAX or segment_t_max to -FLT_MAX
-		Vec8f flt_max = FLT_MAX;
-		segment_t_min = SelectSingle(is_parallel_mask, flt_max, segment_t_min);
+		if constexpr (rigid_mode) {
+			// There is one more thing to do. If the line is parallel, the segment
+			// Should be clipped, basically 0.0f. We can do this by setting segment_t_min
+			// To FLT_MAX or segment_t_max to -FLT_MAX
+			Vec8f flt_max = FLT_MAX;
+			segment_t_min = SelectSingle(is_parallel_mask, flt_max, segment_t_min);
+		}
+		else {
+			// Bring the edge starting point on the plane. This can be achieved by projecting
+			// The point on the plane. Use a pre-check to skip this calculation, since it has
+			// Some noticeable overhead
+			SIMDVectorMask distance_to_plane_mask = distance_to_plane < zero_vector;
+			SIMDVectorMask project_segment_mask = is_parallel_mask & distance_to_plane_mask;
+			if (horizontal_or(project_segment_mask)) {
+				Vector3 projected_edge_point = ProjectPointOnPlane(plane, segment_a);
+				segment_a = Select(project_segment_mask, projected_edge_point, segment_a);
+			}
+		}
 	}
 
-	bool ClipSegmentAgainstPlane(
+	void ClipSegmentAgainstPlaneRigid(
+		const Plane& plane,
+		const Vector3& segment_a,
+		const Vector3& normalized_direction,
+		const Vec8f& segment_t_factor,
+		Vec8f& segment_t_min,
+		Vec8f& segment_t_max,
+		float parallel_epsilon
+	) {
+		Vector3 segment_a_copy = segment_a;
+		ClipSegmentAgainstPlaneImpl<true>(
+			plane,
+			segment_a_copy,
+			normalized_direction,
+			segment_t_factor,
+			segment_t_min,
+			segment_t_max,
+			parallel_epsilon
+		);
+	}
+
+	void ClipSegmentAgainstPlane(
+		const Plane& plane,
+		Vector3& segment_a,
+		const Vector3& normalized_direction,
+		const Vec8f& segment_t_factor,
+		Vec8f& segment_t_min,
+		Vec8f& segment_t_max,
+		float parallel_epsilon
+	) {
+		ClipSegmentAgainstPlaneImpl<false>(
+			plane,
+			segment_a,
+			normalized_direction,
+			segment_t_factor,
+			segment_t_min,
+			segment_t_max,
+			parallel_epsilon
+		);
+	}
+
+	template<bool rigid_mode>
+	static bool ClipSegmentAgainstPlaneImpl(
 		const PlaneScalar& plane,
-		const float3& segment_a,
+		float3& segment_a,
 		const float3& normalized_direction,
 		float segment_t_factor,
 		float& segment_t_min,
@@ -199,10 +255,16 @@ namespace ECSEngine {
 
 		if (CompareMaskSingle(denominator, 0.0f, parallel_epsilon)) {
 			// If the line is not contained by the plane and on the
-			// other side of the plane, we can exit
+			// other side of the plane, we can apply the special handling case
 			if (distance < -0.00000001f) {
-				segment_t_min = FLT_MAX;
-				return false;
+				if constexpr (rigid_mode) {
+					segment_t_min = FLT_MAX;
+					return false;
+				}
+				else {
+					// Project the edge point on the plane
+					segment_a = ProjectPointOnPlane(plane, segment_a);
+				}
 			}
 		}
 		else {
@@ -218,5 +280,47 @@ namespace ECSEngine {
 
 		return segment_t_min < segment_t_max;
 	}
+
+	bool ClipSegmentAgainstPlaneRigid(
+		const PlaneScalar& plane,
+		const float3& segment_a,
+		const float3& normalized_direction,
+		float segment_t_factor,
+		float& segment_t_min,
+		float& segment_t_max,
+		float parallel_epsilon
+	) {
+		float3 segment_a_copy = segment_a;
+		return ClipSegmentAgainstPlaneImpl<true>(
+			plane,
+			segment_a_copy,
+			normalized_direction,
+			segment_t_factor,
+			segment_t_min,
+			segment_t_max,
+			parallel_epsilon
+		);
+	}
+
+	bool ClipSegmentAgainstPlane(
+		const PlaneScalar& plane,
+		float3& segment_a,
+		const float3& normalized_direction,
+		float segment_t_factor,
+		float& segment_t_min,
+		float& segment_t_max,
+		float parallel_epsilon
+	) {
+		return ClipSegmentAgainstPlaneImpl<false>(
+			plane,
+			segment_a,
+			normalized_direction,
+			segment_t_factor,
+			segment_t_min,
+			segment_t_max,
+			parallel_epsilon
+		);
+	}
+
 
 }

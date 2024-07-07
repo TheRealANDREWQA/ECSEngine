@@ -531,6 +531,14 @@ namespace ECSEngine {
 						}
 						else {
 							if (memcmp(standalone_data.buffer, *target_memory, unsigned_element_byte_size * target_size) != 0) {
+								// Normally, the resizable buffer should already have the same size as the standalone
+								// But it can have a different size in some rare cases, like when reassigning the allocator
+								// Which would wipe the resizable data. For this reason, perform another check here
+								// To ensure that the resizable has enough space
+								if (resizable->capacity < target_size) {
+									resizable->ResizeNoCopy(target_size, unsigned_element_byte_size);
+								}
+								
 								// It changed
 								memcpy(resizable->buffer, *target_memory, unsigned_element_byte_size * target_size);
 
