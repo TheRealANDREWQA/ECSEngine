@@ -87,7 +87,13 @@ ECS_INLINE unsigned int ContactManifoldFeaturesFind(const ContactManifoldFeature
 	return -1;
 }
 
-PHYSICS_API ContactManifoldFeatures ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery query);
+// It takes the query as a reference because it will reverse the order of the
+// Query in case the manifold cannot be computed from the initial order for the face case
+PHYSICS_API ContactManifoldFeatures ComputeContactManifold(
+	const ConvexHull* first_hull, 
+	const ConvexHull* second_hull, 
+	SATQuery& query
+);
 
 // The points must be coplanar. Returns the count of valid entries
 PHYSICS_API size_t SimplifyContactManifoldPoints(Stream<float3> points, float3 plane_normal);

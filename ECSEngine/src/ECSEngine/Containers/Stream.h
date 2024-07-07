@@ -929,8 +929,8 @@ namespace ECSEngine {
 		}
 
 		// Helpful for temp memory copy and initialization
-		CapacityStream<T> InitializeAndCopy(uintptr_t& buffer, Stream<T> other) {
-			InitializeFromBuffer(buffer, other.size, other.size);
+		CapacityStream<T> InitializeAndCopy(uintptr_t& _buffer, Stream<T> other) {
+			InitializeFromBuffer(_buffer, other.size, other.size);
 			CopyOther(other);
 
 			return *this;
@@ -1238,7 +1238,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void ResizeNoCopy(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			ResizeImpl<false>(new_capacity);
+			ResizeImpl<false>(new_capacity, debug_info);
 		}
 
 		ECS_INLINE void Swap(unsigned int first, unsigned int second) {

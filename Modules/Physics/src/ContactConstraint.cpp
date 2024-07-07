@@ -172,15 +172,45 @@ static void PrepareContactConstraintsData(World* world, SolverData* solver_data,
 		compute_info.tangent_2 = tangent_2;
 		compute_info.friction_plane_A = { manifold_plane.normal, manifold_plane.dot + body_distance_A };
 		compute_info.friction_plane_B = { manifold_plane.normal, manifold_plane.dot + body_distance_B };
-		size_t point_count = ContactConstraintPointCount(constraint);
-		for (size_t point_index = 0; point_index < point_count; point_index++) {
-			compute_info.point = constraint.contact.base.manifold.points[point_index];
-			ComputeConstraintPointFromManifold(&compute_info, constraint.contact.points[point_index]);
+
+		auto initialize_points = [&](auto use_warm_starting) {
+			size_t point_count = ContactConstraintPointCount(constraint);
+
+			for (size_t point_index = 0; point_index < point_count; point_index++) {
+				compute_info.point = constraint.contact.base.manifold.points[point_index];
+				ContactConstraintPoint& point = constraint.contact.points[point_index];
+				ComputeConstraintPointFromManifold(&compute_info, point);
+
+				// Warm start the points here as well
+				// This will help to remove another loop iteration
+				// And have better temporal coherence, although
+				// The accessed data set is small and probably won't
+				// Make too much of a difference
+				if constexpr (use_warm_starting) {
+					float3 normal = constraint.contact.base.manifold.separation_axis;
+					float3 normal_impulse = normal * point.normal_impulse;
+
+					float3 tangent_1_impulse = tangent_1 * point.tangent_impulse_1;
+					float3 tangent_2_impulse = tangent_2 * point.tangent_impulse_2;
+					float3 tangent_impulse = tangent_1_impulse + tangent_2_impulse;
+
+					// Apply the impulses at the 2 separate local anchors: the normal
+					// Anchor and the friction anchor
+					ApplyImpulse(rigidbody_A, point.local_anchor_A, -normal_impulse);
+					ApplyImpulse(rigidbody_B, point.local_anchor_B, normal_impulse);
+					
+					ApplyImpulse(rigidbody_A, point.friction_local_anchor_A, -tangent_impulse);
+					ApplyImpulse(rigidbody_B, point.friction_local_anchor_B, tangent_impulse);
+				}
+			}
+		};
+
+		if (solver_data->use_warm_starting) {
+			initialize_points(std::true_type{});
 		}
-
-		// After computing the manifold points, warm start them in order to
-		// Not perform an additional iteration
-
+		else {
+			initialize_points(std::false_type{});
+		}
 	}
 }
 
@@ -389,7 +419,8 @@ static void DiscardContactConstraintPoint(ContactConstraintPoint& point) {
 
 static void DiscardContactConstraintWarmStarting(ContactConstraint& constraint) {
 	// Each discard can happen individually for each point
-	for (size_t index = 0; index < ContactConstraintPointCount(constraint); index++) {
+	size_t point_count = ContactConstraintPointCount(constraint);
+	for (size_t index = 0; index < point_count; index++) {
 		DiscardContactConstraintPoint(constraint.contact.points[index]);
 	}
 }
@@ -468,14 +499,14 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 		}
 		else {
 			// Can discard all the data, since the contact features have changed
-			DiscardContactConstraintWarmStarting(constraint);
 			constraint.contact.base.manifold = contact->manifold;
+			DiscardContactConstraintWarmStarting(constraint);
 		}
 	}
 	else {
 		// Discard all the information
-		DiscardContactConstraintWarmStarting(constraint);
 		constraint.contact.base.manifold = contact->manifold;
+		DiscardContactConstraintWarmStarting(constraint);
 	}
 
 	// Update the remaining data as is
@@ -527,9 +558,7 @@ void AddContactConstraint(
 		InsertContactConstraint(data, contact, center_of_mass_A, center_of_mass_B);
 	}
 	else {
-		//InsertContactConstraint(data, contact, center_of_mass_A, center_of_mass_B);
-
-		//// Match the constraint
+		// Match the constraint
 		ContactConstraint& constraint = *data->contact_table.GetValuePtrFromIndex(pair_index);
 		if (data->use_warm_starting) {
 			MatchContactConstraint(contact, center_of_mass_A, center_of_mass_B, constraint);
@@ -649,17 +678,21 @@ void AddContactPair(
 							EntityContact contact;
 							contact.entity_A = entity_A;
 							contact.entity_B = entity_B;
+							contact.friction = first_rigidbody->is_static ? second_rigidbody->friction : first_rigidbody->friction;
+							contact.restitution = 0.0f;
+							contact.manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
+
 							float3 first_center_of_mass = first_rigidbody->center_of_mass + first_transform.position;
 							float3 second_center_of_mass = second_rigidbody->center_of_mass + second_transform.position;
+							// Perform the swap after the manifold computation because it can
+							// Modify the query order
 							if (query.type == SAT_QUERY_FACE) {
 								if (!query.face.first_collider) {
 									swap(contact.entity_A, contact.entity_B);
 									swap(first_center_of_mass, second_center_of_mass);
 								}
 							}
-							contact.friction = first_rigidbody->is_static ? second_rigidbody->friction : first_rigidbody->friction;
-							contact.restitution = 0.0f;
-							contact.manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
+							
 							AddContactConstraint(
 								world,
 								&contact,
