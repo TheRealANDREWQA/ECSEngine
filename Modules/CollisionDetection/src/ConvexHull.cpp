@@ -491,6 +491,18 @@ void ConvexHull::Deallocate(AllocatorPolymorphic allocator)
 	memset(this, 0, sizeof(*this));
 }
 
+void ConvexHull::DebugDrawFace(World* world, unsigned int face_index, bool display_points) const {
+	const ConvexHullFace& face = faces[face_index];
+	for (unsigned int index = 0; index < face.EdgeCount(); index++) {
+		Line3D edge = GetFaceEdge(face_index, index);
+		world->debug_drawer->DispatchLine(edge.A, edge.B, ECS_COLOR_ORANGE);
+		if (display_points) {
+			world->debug_drawer->DispatchPoint(edge.A, 0.05f, ECS_COLOR_AQUA);
+			world->debug_drawer->DispatchPoint(edge.B, 0.05f, ECS_COLOR_AQUA);
+		}
+	}
+}
+
 float3 ConvexHull::FurthestFrom(float3 direction) const
 {
 	Vec8f max_distance = -FLT_MAX;

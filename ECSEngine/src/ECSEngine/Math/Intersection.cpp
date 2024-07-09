@@ -3,6 +3,8 @@
 
 #define INTERSECT_INTERPOLATION_THRESHOLD 1000000.0f
 
+ECS_OPTIMIZE_END;
+
 namespace ECSEngine {
 
 	// Can be used for line tests, ray tests (semi-lines) or segment tests
@@ -253,7 +255,10 @@ namespace ECSEngine {
 		float denominator = Dot(plane.normal, normalized_direction);
 		float distance = plane.dot - Dot(plane.normal, segment_a);
 
-		if (CompareMaskSingle(denominator, 0.0f, parallel_epsilon)) {
+		float3 normalized_normal = Normalize(plane.normal);
+		float denominator2 = Dot(normalized_normal, normalized_direction);
+
+		if (CompareMaskSingle(denominator, 0.0f, parallel_epsilon) || CompareMaskSingle(denominator2, 0.0f, parallel_epsilon)) {
 			// If the line is not contained by the plane and on the
 			// other side of the plane, we can apply the special handling case
 			if (distance < -0.00000001f) {

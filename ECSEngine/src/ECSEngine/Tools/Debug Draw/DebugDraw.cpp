@@ -216,7 +216,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE unsigned char GetMaskFromOptions(DebugDrawCallOptions options) {
+	ECS_INLINE unsigned char GetMaskFromOptions(DebugDrawOptions options) {
 		return (unsigned char)options.ignore_depth | (((unsigned char)(!options.wireframe) << 1) & 2);
 	}
 
@@ -446,7 +446,7 @@ namespace ECSEngine {
 			Matrix* matrix_data = nullptr;
 			unsigned int* instance_pixel_thickness_data = nullptr;
 
-			auto draw_call = [&](DebugDrawCallOptions options, ElementType element_type) {
+			auto draw_call = [&](DebugDrawOptions options, ElementType element_type) {
 				unsigned int current_count = per_type_counts[element_type];
 				bool exit_dynamic_loop = false;
 				unsigned int overall_dynamic_count = 0;
@@ -668,7 +668,7 @@ namespace ECSEngine {
 
 			unsigned int mesh_index_count = BindTransformVertexBuffers<flags>(drawer, debug_vertex_buffer);
 
-			auto draw_call = [&](DebugDrawCallOptions options, ElementType element_type) {
+			auto draw_call = [&](DebugDrawOptions options, ElementType element_type) {
 				unsigned int current_count = per_type_counts[element_type];
 				bool exit_dynamic_loop = false;
 				unsigned int overall_dynamic_count = 0;
@@ -913,7 +913,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void HandleOptions(DebugDrawer* drawer, DebugDrawCallOptions options) {
+	void HandleOptions(DebugDrawer* drawer, DebugDrawOptions options) {
 		drawer->graphics->BindRasterizerState(drawer->rasterizer_states[options.wireframe]);
 		if (options.ignore_depth) {
 			drawer->graphics->DisableDepth();
@@ -1100,7 +1100,7 @@ namespace ECSEngine {
 		end = translation + float3::Splat(size) * direction;
 	}
 
-	DebugLine ConvertTranslationLineIntoStartEnd(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options) {
+	DebugLine ConvertTranslationLineIntoStartEnd(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options) {
 		DebugLine debug_line;
 
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, debug_line.start, debug_line.end);
@@ -1120,14 +1120,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLine(float3 start, float3 end, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLine(float3 start, float3 end, Color color, DebugDrawOptions options)
 	{
 		lines.Add({ start, end, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
@@ -1136,14 +1136,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddSphere(float3 position, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddSphere(float3 position, float radius, Color color, DebugDrawOptions options)
 	{
 		spheres.Add({ position, radius, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddPoint(float3 position, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddPoint(float3 position, float size, Color color, DebugDrawOptions options)
 	{
 		// If using points again, update the code at AddRedirect to consider points!!
 
@@ -1155,14 +1155,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawOptions options)
 	{
 		rectangles.Add({ corner0, corner1, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options)
 	{
 		crosses.Add({ position, rotation, size, color, options });
 	}
@@ -1176,7 +1176,7 @@ namespace ECSEngine {
 		float size, 
 		bool start_from_same_point, 
 		const DebugOOBBCrossInfo* info,
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	)
 	{
 		QuaternionScalar rotation_quaternion = rotation;
@@ -1184,9 +1184,9 @@ namespace ECSEngine {
 		float3 complete_size_y = OOBBCrossSize(length, size, info->size_override_y);
 		float3 complete_size_z = OOBBCrossSize(length, size, info->size_override_z);
 
-		DebugDrawCallOptions options_x = options;
-		DebugDrawCallOptions options_y = options;
-		DebugDrawCallOptions options_z = options;
+		DebugDrawOptions options_x = options;
+		DebugDrawOptions options_y = options;
+		DebugDrawOptions options_z = options;
 
 		options_x.instance_thickness = info->instance_thickness_x;
 		options_y.instance_thickness = info->instance_thickness_y;
@@ -1217,14 +1217,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawOptions options)
 	{
 		circles.Add({ position, rotation, radius, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrow(float3 start, float3 end, float size, Color color, DebugDrawOptions options)
 	{
 		QuaternionScalar rotation;
 		float length;
@@ -1234,18 +1234,18 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawOptions options)
 	{
 		arrows.Add({ translation, rotation, length, size, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAxes(float3 translation, QuaternionScalar rotation, float size, const DebugAxesInfo* info, DebugDrawCallOptions options)
+	void DebugDrawer::AddAxes(float3 translation, QuaternionScalar rotation, float size, const DebugAxesInfo* info, DebugDrawOptions options)
 	{
-		DebugDrawCallOptions options_x = options;
-		DebugDrawCallOptions options_y = options;
-		DebugDrawCallOptions options_z = options;
+		DebugDrawOptions options_x = options;
+		DebugDrawOptions options_y = options;
+		DebugDrawOptions options_z = options;
 
 		options_x.instance_thickness = info->instance_thickness_x;
 		options_y.instance_thickness = info->instance_thickness_y;
@@ -1259,28 +1259,28 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawOptions options)
 	{
 		triangles.Add({ point0, point1, point2, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAABB(float3 min_coordinates, float3 max_coordinates, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddAABB(float3 min_coordinates, float3 max_coordinates, Color color, DebugDrawOptions options)
 	{
 		aabbs.Add({ min_coordinates, max_coordinates, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawOptions options)
 	{
 		oobbs.Add({ translation, rotation, scale, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawOptions options)
 	{
 		Stream<char> text_copy = StringCopy(Allocator(), text);
 		strings.Add({ position, direction, size, text_copy, color, options });
@@ -1288,7 +1288,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringRotation(float3 position, QuaternionScalar rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringRotation(float3 position, QuaternionScalar rotation, float size, Stream<char> text, Color color, DebugDrawOptions options)
 	{
 		Stream<char> text_copy = StringCopy(Allocator(), text);
 		float3 direction = RotateVector(GetRightVector(), rotation);
@@ -1313,7 +1313,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 start, float3 end, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 start, float3 end, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1325,7 +1325,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
@@ -1334,7 +1334,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddSphereThread(unsigned int thread_index, float3 position, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddSphereThread(unsigned int thread_index, float3 position, float radius, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1346,7 +1346,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddPointThread(unsigned int thread_index, float3 position, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddPointThread(unsigned int thread_index, float3 position, float size, Color color, DebugDrawOptions options)
 	{
 		// TODO: Make the point depth size independent? For a quick momentary fix, let the user specify the size
 		// If using points again, update the code at AddRedirect to consider points!!
@@ -1365,7 +1365,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1377,7 +1377,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCrossThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCrossThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1397,7 +1397,7 @@ namespace ECSEngine {
 		float size, 
 		bool start_from_same_point, 
 		const DebugOOBBCrossInfo* info,
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	)
 	{
 		QuaternionScalar rotation_quaternion = rotation;
@@ -1405,9 +1405,9 @@ namespace ECSEngine {
 		float3 complete_size_y = OOBBCrossSize(length, size, info->size_override_y);
 		float3 complete_size_z = OOBBCrossSize(length, size, info->size_override_z);
 
-		DebugDrawCallOptions options_x = options;
-		DebugDrawCallOptions options_y = options;
-		DebugDrawCallOptions options_z = options;
+		DebugDrawOptions options_x = options;
+		DebugDrawOptions options_y = options;
+		DebugDrawOptions options_z = options;
 
 		options_x.instance_thickness = info->instance_thickness_x;
 		options_y.instance_thickness = info->instance_thickness_y;
@@ -1441,7 +1441,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCircleThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCircleThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1453,7 +1453,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1470,7 +1470,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowRotationThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowRotationThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1482,7 +1482,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAxesThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float size, const DebugAxesInfo* info, DebugDrawCallOptions options)
+	void DebugDrawer::AddAxesThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float size, const DebugAxesInfo* info, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1490,9 +1490,9 @@ namespace ECSEngine {
 			FlushArrow(thread_index);
 		}
 
-		DebugDrawCallOptions options_x = options;
-		DebugDrawCallOptions options_y = options;
-		DebugDrawCallOptions options_z = options;
+		DebugDrawOptions options_x = options;
+		DebugDrawOptions options_y = options;
+		DebugDrawOptions options_z = options;
 
 		options_x.instance_thickness = info->instance_thickness_x;
 		options_y.instance_thickness = info->instance_thickness_y;
@@ -1505,7 +1505,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1517,7 +1517,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAABBThread(unsigned int thread_index, float3 min_coordinates, float3 max_coordinates, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddAABBThread(unsigned int thread_index, float3 min_coordinates, float3 max_coordinates, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1529,7 +1529,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddOOBBThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddOOBBThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1541,7 +1541,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringThread(unsigned int thread_index, float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringThread(unsigned int thread_index, float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1554,7 +1554,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringRotationThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringRotationThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float size, Stream<char> text, Color color, DebugDrawOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -1581,6 +1581,132 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Dynamic call types
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+#define DISPATCH_DYNAMIC_CALL(primitive_name, ...) switch (call_type.type) { \
+		case ECS_DEBUG_DRAWER_CALL_IMMEDIATE: \
+			Draw##primitive_name(__VA_ARGS__); \
+			break; \
+		case ECS_DEBUG_DRAWER_CALL_DEFERRED: \
+			Add##primitive_name(__VA_ARGS__); \
+			break; \
+		case ECS_DEBUG_DRAWER_CALL_DEFERRED_THREAD: \
+			Add##primitive_name##Thread(call_type.thread_index, __VA_ARGS__); \
+			break; \
+		default: \
+			ECS_ASSERT(false, "Debug drawer invalid call type!"); \
+	}
+
+	void DebugDrawer::CallLine(DebugDrawCallType call_type, float3 start, float3 end, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(Line, start, end, color, options);
+	}
+
+	void DebugDrawer::CallLine(DebugDrawCallType call_type, float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(Line, translation, rotation, size, color, options);
+	}
+
+	void DebugDrawer::CallSphere(DebugDrawCallType call_type, float3 position, float radius, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(Sphere, position, radius, color, options);
+	}
+
+	void DebugDrawer::CallPoint(DebugDrawCallType call_type, float3 position, float size, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(Point, position, size, color, options);
+	}
+
+	void DebugDrawer::CallRectangle(DebugDrawCallType call_type, float3 corner0, float3 corner1, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(Rectangle, corner0, corner1, color, options);
+	}
+
+	void DebugDrawer::CallCross(DebugDrawCallType call_type, float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(Cross, position, rotation, size, color, options);
+	}
+
+	void DebugDrawer::CallOOBBCross(
+		DebugDrawCallType call_type,
+		float3 position,
+		QuaternionScalar rotation,
+		float length,
+		float size,
+		bool start_from_same_point,
+		const DebugOOBBCrossInfo* info,
+		DebugDrawOptions options
+	) {
+		DISPATCH_DYNAMIC_CALL(OOBBCross, position, rotation, length, size, start_from_same_point, info, options);
+	}
+
+	void DebugDrawer::CallCircle(DebugDrawCallType call_type, float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(Circle, position, rotation, radius, color, options);
+	}
+
+	void DebugDrawer::CallArrow(DebugDrawCallType call_type, float3 start, float3 end, float size, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(Arrow, start, end, size, color, options);
+	}
+
+	void DebugDrawer::CallArrowRotation(
+		DebugDrawCallType call_type,
+		float3 translation,
+		QuaternionScalar rotation,
+		float length,
+		float size,
+		Color color,
+		DebugDrawOptions options
+	) {
+		DISPATCH_DYNAMIC_CALL(ArrowRotation, translation, rotation, length, size, color, options);
+	}
+
+	void DebugDrawer::CallAxes(
+		DebugDrawCallType call_type,
+		float3 translation,
+		QuaternionScalar rotation,
+		float size,
+		const DebugAxesInfo* info,
+		DebugDrawOptions options
+	) {
+		DISPATCH_DYNAMIC_CALL(Axes, translation, rotation, size, info, options);
+	}
+
+	void DebugDrawer::CallTriangle(DebugDrawCallType call_type, float3 point0, float3 point1, float3 point2, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(Triangle, point0, point1, point2, color, options);
+	}
+
+	void DebugDrawer::CallAABB(DebugDrawCallType call_type, float3 translation, float3 scale, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(AABB, translation, scale, color, options);
+	}
+
+	void DebugDrawer::CallOOBB(DebugDrawCallType call_type, float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawOptions options) {
+		DISPATCH_DYNAMIC_CALL(OOBB, translation, rotation, scale, color, options);
+	}
+
+	void DebugDrawer::CallString(
+		DebugDrawCallType call_type,
+		float3 translation,
+		float3 direction,
+		float size,
+		Stream<char> text,
+		Color color,
+		DebugDrawOptions options
+	) {
+		DISPATCH_DYNAMIC_CALL(String, translation, direction, size, text, color, options);
+	}
+
+	void DebugDrawer::CallStringRotation(
+		DebugDrawCallType call_type,
+		float3 translation,
+		QuaternionScalar rotation,
+		float size,
+		Stream<char> text,
+		Color color,
+		DebugDrawOptions options
+	) {
+		DISPATCH_DYNAMIC_CALL(StringRotation, translation, rotation, size, text, color, options);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
 #pragma region Draw immediately
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1589,7 +1715,7 @@ namespace ECSEngine {
 #define DRAW_TRANSFORM_CIRCLE_BUFFER (1 << 0)
 
 	template<size_t flags>
-	void BindStructuredShaderState(DebugDrawer* drawer, DebugDrawCallOptions options, DebugShaderOutput output = ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+	void BindStructuredShaderState(DebugDrawer* drawer, DebugDrawOptions options, DebugShaderOutput output = ECS_DEBUG_SHADER_OUTPUT_COLOR) {
 		drawer->SetStructuredShaderState(options, output);
 		if constexpr (flags & DRAW_STRUCTURED_LINE_TOPOLOGY) {
 			drawer->graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
@@ -1628,7 +1754,7 @@ namespace ECSEngine {
 		DebugDrawer* drawer, 
 		unsigned int instance_count,
 		const DebugDrawerOutput* outputs, 
-		DebugDrawCallOptions options, 
+		DebugDrawOptions options, 
 		unsigned int vertex_count, 
 		SetPositionFunctor&& set_position_functor
 	) {
@@ -1683,7 +1809,7 @@ namespace ECSEngine {
 		DebugDrawer* drawer, 
 		unsigned int instance_count,
 		const DebugDrawerOutput* outputs,
-		DebugDrawCallOptions options, 
+		DebugDrawOptions options, 
 		DebugVertexBuffers debug_vertex_buffer, 
 		SetMatrixFunctor&& set_matrix_functor
 	) {
@@ -1733,7 +1859,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawLine(float3 start, float3 end, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawLine(float3 start, float3 end, Color color, DebugDrawOptions options)
 	{
 		DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR, DRAW_STRUCTURED_LINE_TOPOLOGY>(
 			this, 
@@ -1748,7 +1874,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
@@ -1757,7 +1883,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawSphere(float3 position, float radius, Color color, DebugDrawOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1772,7 +1898,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawPoint(float3 position, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawPoint(float3 position, float size, Color color, DebugDrawOptions options)
 	{
 		options.wireframe = false;
 		DrawSphere(position, POINT_SIZE * size, color, options);
@@ -1791,7 +1917,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// Draw it double sided, so it appears on both sides
-	void DebugDrawer::DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawOptions options)
 	{
 		DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1806,7 +1932,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1828,7 +1954,7 @@ namespace ECSEngine {
 		float size, 
 		bool start_from_same_point, 
 		const DebugOOBBCrossInfo* info,
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	)
 	{
 		// The same as drawing 3 arrows for each axis
@@ -1883,7 +2009,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawOptions options)
 	{
 		options.wireframe = false;
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR, DRAW_TRANSFORM_CIRCLE_BUFFER>(
@@ -1899,7 +2025,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawOptions options)
 	{
 		QuaternionScalar rotation;
 		float length;
@@ -1907,7 +2033,7 @@ namespace ECSEngine {
 		DrawArrowRotation(start, rotation, length, size, color, options);
 	}
 
-	void DebugDrawer::DrawArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1922,13 +2048,13 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawAxes(float3 translation, QuaternionScalar rotation, float size, Color color_x, Color color_y, Color color_z, DebugDrawCallOptions options)
+	void DebugDrawer::DrawAxes(float3 translation, QuaternionScalar rotation, float size, const DebugAxesInfo* info, DebugDrawOptions options)
 	{
 		// The same as drawing 3 arrows for each axis
 		DebugDrawerOutput colors[] = {
-			color_x,
-			color_y,
-			color_z
+			info->color_x,
+			info->color_y,
+			info->color_z
 		};
 
 		// Hopefully since the function is marked as inline the compiler will notice the same function being
@@ -1953,7 +2079,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawOptions options)
 	{
 		DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1969,14 +2095,14 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// It uses a scaled cube to draw it
-	void DebugDrawer::DrawAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawAABB(float3 translation, float3 scale, Color color, DebugDrawOptions options)
 	{
 		DrawOOBB(translation, QuaternionIdentityScalar(), scale, color, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1991,7 +2117,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawOptions options)
 	{
 		ECS_ASSERT(text.size < 10'000);
 
@@ -2104,7 +2230,7 @@ namespace ECSEngine {
 		float size,
 		Stream<char> text,
 		Color color,
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	) {
 		DrawString(translation, RotateVector(GetRightVector(), rotation), size, text, color, options);
 	}
@@ -2119,7 +2245,7 @@ namespace ECSEngine {
 		float size, 
 		Color color,
 		Matrix world_matrix, 
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	) {
 		// Draw them as lines
 		Graphics* graphics = drawer->graphics;
@@ -2182,7 +2308,7 @@ namespace ECSEngine {
 		float size,
 		Color color,
 		Stream<Matrix> world_matrices,
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	) {
 		// Draw them as lines
 		Graphics* graphics = drawer->graphics;
@@ -2247,7 +2373,7 @@ namespace ECSEngine {
 		float size,
 		Color color, 
 		Matrix world_matrix,
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	)
 	{
 		DrawDebugVertexLine(this, model_position, model_normals, 3, size, color, world_matrix, options);
@@ -2261,7 +2387,7 @@ namespace ECSEngine {
 		float size,
 		Color color,
 		Stream<Matrix> world_matrices,
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	) {
 		DrawDebugVertexLine(this, model_position, model_normals, 3, size, color, world_matrices, options);
 	}
@@ -2274,7 +2400,7 @@ namespace ECSEngine {
 		float size, 
 		Color color, 
 		Matrix world_matrix, 
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	)
 	{
 		DrawDebugVertexLine(this, model_position, model_tangents, 4, size, color, world_matrix, options);
@@ -2288,7 +2414,7 @@ namespace ECSEngine {
 		float size,
 		Color color,
 		Stream<Matrix> world_matrices,
-		DebugDrawCallOptions options
+		DebugDrawOptions options
 	)
 	{
 		DrawDebugVertexLine(this, model_position, model_tangents, 4, size, color, world_matrices, options);
@@ -2603,7 +2729,7 @@ namespace ECSEngine {
 			ECS_MESH_INDEX mesh_position = ECS_MESH_POSITION;
 			graphics->BindMesh(string_mesh->mesh, Stream<ECS_MESH_INDEX>(&mesh_position, 1));
 
-			auto draw_call = [&](DebugDrawCallOptions options) {
+			auto draw_call = [&](DebugDrawOptions options) {
 				if (current_count > 0) {
 					// Set the state
 					SetTransformShaderState(options, ECS_DEBUG_SHADER_OUTPUT_COLOR);
@@ -2672,6 +2798,17 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawAll(float time_delta, DebugShaderOutput shader_output)
 	{
+		if (is_redirect) {
+			DeactivateRedirect(false);
+			is_redirect = true;
+		}
+		for (unsigned int index = 0; index < thread_count; index++) {
+			if (is_redirect_thread_count[index]) {
+				DeactivateRedirect(false);
+				is_redirect_thread_count[index] = true;
+			}
+		}
+
 		FlushAll();
 		DrawLineDeck(time_delta, shader_output);
 		DrawSphereDeck(time_delta, shader_output);
@@ -2695,14 +2832,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE const DebugDrawerOutput* ToDrawerOutput(const DebugDrawCallOptions* options) {
+	ECS_INLINE const DebugDrawerOutput* ToDrawerOutput(const DebugDrawOptions* options) {
 		return (const DebugDrawerOutput*)&options->instance_thickness;
 	}
 
 	void DebugDrawer::OutputInstanceIndexLine(
 		float3 start, 
 		float3 end, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugLine>* addition_stream
 	)
 	{
@@ -2728,7 +2865,7 @@ namespace ECSEngine {
 		float3 translation, 
 		QuaternionScalar rotation, 
 		float size, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugLine>* addition_stream
 	)
 	{
@@ -2742,7 +2879,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexSphere(
 		float3 translation, 
 		float radius, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugSphere>* addition_stream
 	)
 	{
@@ -2760,11 +2897,11 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexPoint(
 		float3 translation, 
-		DebugDrawCallOptions options, 
+		DebugDrawOptions options, 
 		AdditionStreamAtomic<DebugPoint>* addition_stream
 	)
 	{
-		DebugDrawCallOptions temp_options = options;
+		DebugDrawOptions temp_options = options;
 		temp_options.wireframe = false;
 
 		if (addition_stream != nullptr) {
@@ -2782,7 +2919,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexRectangle(
 		float3 corner0, 
 		float3 corner1, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugRectangle>* addition_stream
 	)
 	{
@@ -2802,7 +2939,7 @@ namespace ECSEngine {
 		float3 position, 
 		QuaternionScalar rotation, 
 		float size, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugCross>* addition_stream
 	)
 	{
@@ -2823,7 +2960,7 @@ namespace ECSEngine {
 		float size, 
 		bool start_from_same_point, 
 		const DebugOOBBCrossInfo* info,
-		DebugDrawCallOptions options, 
+		DebugDrawOptions options, 
 		AdditionStreamAtomic<DebugOOBB>* addition_stream
 	)
 	{
@@ -2853,7 +2990,7 @@ namespace ECSEngine {
 
 			DebugOOBB oobbs[3] = {};
 			for (size_t index = 0; index < ECS_COUNTOF(oobbs); index++) {
-				DebugDrawCallOptions current_option = options;
+				DebugDrawOptions current_option = options;
 				current_option.instance_thickness = instance_thickness_values[index];
 				oobbs[index] = {
 					translations[index],
@@ -2900,7 +3037,7 @@ namespace ECSEngine {
 		float3 position, 
 		QuaternionScalar rotation, 
 		float radius, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugCircle>* addition_stream
 	)
 	{
@@ -2921,7 +3058,7 @@ namespace ECSEngine {
 		float3 start, 
 		float3 end, 
 		float size, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugArrow>* addition_stream
 	)
 	{
@@ -2938,7 +3075,7 @@ namespace ECSEngine {
 		QuaternionScalar rotation, 
 		float length, 
 		float size, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugArrow>* addition_stream
 	)
 	{
@@ -2962,18 +3099,18 @@ namespace ECSEngine {
 		unsigned int instance_thickness_x,
 		unsigned int instance_thickness_y,
 		unsigned int instance_thickness_z,
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugArrow>* addition_stream
 	)
 	{
 		if (addition_stream != nullptr) {
-			DebugDrawCallOptions options_x = options;
+			DebugDrawOptions options_x = options;
 			options_x.instance_thickness = instance_thickness_x;
 
-			DebugDrawCallOptions options_y = options;
+			DebugDrawOptions options_y = options;
 			options_y.instance_thickness = instance_thickness_y;
 
-			DebugDrawCallOptions options_z = options;
+			DebugDrawOptions options_z = options;
 			options_z.instance_thickness = instance_thickness_z;
 
 			DebugArrow arrows[] = {
@@ -3012,7 +3149,7 @@ namespace ECSEngine {
 		float3 point0, 
 		float3 point1, 
 		float3 point2, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugTriangle>* addition_stream
 	)
 	{
@@ -3031,7 +3168,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexAABB(
 		float3 translation, 
 		float3 scale, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugAABB>* addition_stream
 	)
 	{
@@ -3051,7 +3188,7 @@ namespace ECSEngine {
 		float3 translation, 
 		QuaternionScalar rotation, 
 		float3 scale, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugOOBB>* addition_stream
 	)
 	{
@@ -3072,7 +3209,7 @@ namespace ECSEngine {
 		float3 direction, 
 		float size, 
 		Stream<char> text, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugString>* addition_stream, 
 		AllocatorPolymorphic allocator
 	)
@@ -3087,7 +3224,7 @@ namespace ECSEngine {
 		QuaternionScalar rotation, 
 		float size, 
 		Stream<char> text, 
-		DebugDrawCallOptions options,
+		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugString>* addition_stream, 
 		AllocatorPolymorphic allocator
 	)
@@ -3354,7 +3491,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::SetTransformShaderState(DebugDrawCallOptions options, DebugShaderOutput output)
+	void DebugDrawer::SetTransformShaderState(DebugDrawOptions options, DebugShaderOutput output)
 	{
 		unsigned int shader_type = ECS_DEBUG_SHADER_TRANSFORM;
 		BindShaders(shader_type, output);
@@ -3364,7 +3501,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::SetStructuredShaderState(DebugDrawCallOptions options, DebugShaderOutput output)
+	void DebugDrawer::SetStructuredShaderState(DebugDrawOptions options, DebugShaderOutput output)
 	{
 		unsigned int shader_type = ECS_DEBUG_SHADER_STRUCTURED_INSTANCED_DATA;
 		BindShaders(shader_type, output);
@@ -3946,7 +4083,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 	
 	void DebugDrawerAddToDrawShapes(DebugDrawer* drawer) {
-		DebugDrawCallOptions debug_options;
+		DebugDrawOptions debug_options;
 		debug_options.ignore_depth = true;
 		debug_options.wireframe = true;
 		drawer->AddAABB({ 0.0f, 0.0f, 0.0f }, float3::Splat(1.0f), AxisXColor(), debug_options);
@@ -3991,21 +4128,21 @@ namespace ECSEngine {
 		functor(frustum.near_plane.bottom_right, frustum.far_plane.bottom_right);
 	}
 
-	void DrawDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawCallOptions options)
+	void DrawDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawOptions options)
 	{
 		DrawDebugFrustumImpl(frustum, [&](float3 start, float3 end) {
 			drawer->DrawLine(start, end, color, options);
 		});
 	}
 
-	void AddDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawCallOptions options)
+	void AddDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawOptions options)
 	{
 		DrawDebugFrustumImpl(frustum, [&](float3 start, float3 end) {
 			drawer->AddLine(start, end, color, options);
 		});
 	}
 
-	void AddDebugFrustumThread(const FrustumPoints& frustum, DebugDrawer* drawer, unsigned int thread_id, Color color, DebugDrawCallOptions options)
+	void AddDebugFrustumThread(const FrustumPoints& frustum, DebugDrawer* drawer, unsigned int thread_id, Color color, DebugDrawOptions options)
 	{
 		DrawDebugFrustumImpl(frustum, [&](float3 start, float3 end) {
 			drawer->AddLineThread(thread_id, start, end, color, options);
@@ -4015,7 +4152,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	static void DrawDebugGridImpl(const DebugGrid* grid, DebugDrawCallOptions options, Functor&& functor) {
+	static void DrawDebugGridImpl(const DebugGrid* grid, DebugDrawOptions options, Functor&& functor) {
 		options.wireframe = true;
 		auto iterate = [&](auto has_residency_function) {
 			for (unsigned int x = 0; x < grid->dimensions.x; x++) {

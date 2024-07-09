@@ -243,7 +243,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 						float constant_viewport_size = GetConstantObjectSizeInPerspective(camera.fov, distance, 0.25f);
 
 						// Now display the aggregate tool
-						DebugDrawCallOptions debug_options;
+						DebugDrawOptions debug_options;
 						debug_options.ignore_depth = true;
 						debug_options.wireframe = false;
 

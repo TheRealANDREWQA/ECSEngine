@@ -107,7 +107,7 @@ namespace ECSEngine {
 		const Vec8f& segment_t_factor,
 		Vec8f& segment_t_min,
 		Vec8f& segment_t_max,
-		float parallel_epsilon = 0.0001f
+		float parallel_epsilon = cos(DegToRad(87.0f))
 	);
 
 	// Segment_t_min and segment_t_max describe the actual points after the clipping
@@ -129,7 +129,7 @@ namespace ECSEngine {
 		const Vec8f& segment_t_factor,
 		Vec8f& segment_t_min,
 		Vec8f& segment_t_max,
-		float parallel_epsilon = 0.0001f
+		float parallel_epsilon = cos(DegToRad(87.0f))
 	);
 
 	// Segment_t_min and segment_t_max describe the actual points after the clipping
@@ -151,7 +151,7 @@ namespace ECSEngine {
 		float segment_t_factor,
 		float& segment_t_min,
 		float& segment_t_max,
-		float parallel_epsilon = 0.0001f
+		float parallel_epsilon = cos(DegToRad(87.0f))
 	);
 
 	// Segment_t_min and segment_t_max describe the actual points after the clipping
@@ -173,7 +173,7 @@ namespace ECSEngine {
 		float segment_t_factor,
 		float& segment_t_min,
 		float& segment_t_max,
-		float parallel_epsilon = 0.0001f
+		float parallel_epsilon = cos(DegToRad(87.0f))
 	);
 
 	// TType must be Vec8f or float
