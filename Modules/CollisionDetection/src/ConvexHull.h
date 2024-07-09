@@ -6,6 +6,10 @@
 
 using namespace ECSEngine;
 
+namespace ECSEngine {
+	struct World;
+}
+
 // Use shorts as index size to reduce memory footprint
 // And bandwidth requirements since we won't have hulls
 // With more vertices. Even thousands of vertices are quite
@@ -142,6 +146,11 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	void Copy(const ConvexHull* other, AllocatorPolymorphic allocator, bool deallocate_existent);
 
 	void Deallocate(AllocatorPolymorphic allocator);
+
+	// By default, it will not display the points, only the edges.
+	// You can change the flag to tell the function to display the points
+	// You must set the state of the debug drawer, it will dispatch based upon it
+	void DebugDrawFace(World* world, unsigned int face_index, bool display_points = false) const;
 
 	// Returns the index of the edge or -1 if it doesn't find it. The order of the vertices doesn't matter.
 	unsigned int FindEdge(unsigned int edge_point_1, unsigned int edge_point_2) const;

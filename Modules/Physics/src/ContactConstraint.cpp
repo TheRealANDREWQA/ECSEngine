@@ -674,13 +674,45 @@ void AddContactPair(
 						//	}
 						//}
 
+						//if (query.type == SAT_QUERY_EDGE) {
+						//	StopSimulation(world);
+						//	Line3D first_line = first_collider_transformed.GetEdgePoints(query.edge.edge_1_index);
+						//	Line3D second_line = second_collider_transformed.GetEdgePoints(query.edge.edge_2_index);
+						//	world->debug_drawer->AddLine(first_line.A, first_line.B, ECS_COLOR_ORANGE);
+						//	world->debug_drawer->AddLine(second_line.A, second_line.B, ECS_COLOR_ORANGE);
+						//	world->debug_drawer->AddLine(first_collider_transformed.center, second_collider_transformed.center, ECS_COLOR_ORANGE);
+						//	return;
+						//}
+
 						if (query.type != SAT_QUERY_NONE) {
+							SolverData* data = (SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
+							unsigned int first_hull_face_hint = -1;
+							unsigned int second_hull_face_hint = -1;
+							unsigned int constraint_index = GetContactConstraintIndex(data, entity_A, entity_B);
+							if (constraint_index != -1) {
+								const ContactConstraint* constraint = data->contact_table.GetValuePtrFromIndex(constraint_index);
+								if (constraint->contact.base.manifold.is_face_contact) {
+									first_hull_face_hint = constraint->contact.base.manifold.feature_index_A;
+									second_hull_face_hint = constraint->contact.base.manifold.feature_index_B;
+									if (!constraint->contact.base.entity_A == entity_A) {
+										swap(first_hull_face_hint, second_hull_face_hint);
+									}
+								}
+							}
+
 							EntityContact contact;
 							contact.entity_A = entity_A;
 							contact.entity_B = entity_B;
 							contact.friction = first_rigidbody->is_static ? second_rigidbody->friction : first_rigidbody->friction;
 							contact.restitution = 0.0f;
-							contact.manifold = ComputeContactManifold(&first_collider_transformed, &second_collider_transformed, query);
+							contact.manifold = ComputeContactManifold(
+								world,
+								&first_collider_transformed, 
+								&second_collider_transformed, 
+								query, 
+								first_hull_face_hint, 
+								second_hull_face_hint
+							);
 
 							float3 first_center_of_mass = first_rigidbody->center_of_mass + first_transform.position;
 							float3 second_center_of_mass = second_rigidbody->center_of_mass + second_transform.position;

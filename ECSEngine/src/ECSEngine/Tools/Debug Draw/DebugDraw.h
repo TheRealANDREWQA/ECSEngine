@@ -30,7 +30,7 @@ namespace ECSEngine {
 	}
 
 	// If you don't want thickness, just assign the instance index directly
-	struct DebugDrawCallOptions {
+	struct DebugDrawOptions {
 		bool wireframe = true;
 		bool ignore_depth = false;
 		float duration = 0.0f;
@@ -41,7 +41,7 @@ namespace ECSEngine {
 		float3 start;
 		float3 end;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct ECSENGINE_API DebugSphere {
@@ -50,7 +50,7 @@ namespace ECSEngine {
 		float3 position;
 		float radius;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct ECSENGINE_API DebugPoint {
@@ -58,14 +58,14 @@ namespace ECSEngine {
 		
 		float3 position;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct DebugRectangle {
 		float3 corner0;
 		float3 corner1;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct ECSENGINE_API DebugCross {
@@ -75,7 +75,7 @@ namespace ECSEngine {
 		QuaternionScalar rotation;
 		float size;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct ECSENGINE_API DebugCircle {
@@ -85,7 +85,7 @@ namespace ECSEngine {
 		QuaternionScalar rotation;
 		float radius;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct ECSENGINE_API DebugArrow {
@@ -96,7 +96,7 @@ namespace ECSEngine {
 		float length;
 		float size;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct DebugTriangle {
@@ -104,7 +104,7 @@ namespace ECSEngine {
 		float3 point1;
 		float3 point2;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct ECSENGINE_API DebugAABB {
@@ -113,7 +113,7 @@ namespace ECSEngine {
 		float3 translation;
 		float3 scale;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct ECSENGINE_API DebugOOBB {
@@ -123,7 +123,7 @@ namespace ECSEngine {
 		QuaternionScalar rotation;
 		float3 scale;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	struct DebugString {
@@ -132,7 +132,7 @@ namespace ECSEngine {
 		float size;
 		Stream<char> text;
 		Color color;
-		DebugDrawCallOptions options;
+		DebugDrawOptions options;
 	};
 
 	// If you don't want thickness, just assign the index directly
@@ -194,7 +194,7 @@ namespace ECSEngine {
 		float3 cell_size;
 		float3 translation;
 		Color color;
-		DebugDrawCallOptions options = {};
+		DebugDrawOptions options = {};
 		// The residency function is used to iterate through all cells and draw
 		// Only those that are considered to be resident
 		DrawDebugGridResidencyFunction residency_function = nullptr;
@@ -204,8 +204,20 @@ namespace ECSEngine {
 		bool has_valid_cells = false;
 	};
 
+	enum ECS_DEBUG_DRAWER_CALL_TYPE : unsigned char {
+		ECS_DEBUG_DRAWER_CALL_IMMEDIATE,
+		ECS_DEBUG_DRAWER_CALL_DEFERRED,
+		ECS_DEBUG_DRAWER_CALL_DEFERRED_THREAD,
+		ECS_DEBUG_DRAWER_CALL_TYPE_COUNT
+	};
+
+	struct DebugDrawCallType {
+		ECS_DEBUG_DRAWER_CALL_TYPE type = ECS_DEBUG_DRAWER_CALL_IMMEDIATE;
+		unsigned int thread_index = (unsigned int)-1;
+	};
+
 	struct ECSENGINE_API DebugDrawer {
-		DebugDrawer() : allocator(nullptr), graphics(nullptr) {}
+		ECS_INLINE DebugDrawer() : allocator(nullptr), graphics(nullptr) {}
 		DebugDrawer(MemoryManager* allocator, ResourceManager* manager, size_t thread_count);
 
 		DebugDrawer(const DebugDrawer& other) = default;
@@ -213,18 +225,18 @@ namespace ECSEngine {
 
 #pragma region Add to the draw queue - single threaded
 
-		void AddLine(float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
+		void AddLine(float3 start, float3 end, Color color, DebugDrawOptions options = {});
 
-		void AddLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void AddLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = {});
 
-		void AddSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {});
+		void AddSphere(float3 position, float radius, Color color, DebugDrawOptions options = {});
 
-		void AddPoint(float3 position, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddPoint(float3 position, float size, Color color, DebugDrawOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
+		void AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawOptions options = {});
 
-		void AddCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = {false});
 
 		// If the start_from_same_point is set to true, it will mimick the Axes call, where the
 		// arrows start from the same point. Else, it will draw like the normal cross
@@ -235,32 +247,32 @@ namespace ECSEngine {
 			float size, 
 			bool start_from_same_point, 
 			const DebugOOBBCrossInfo* info = {},
-			DebugDrawCallOptions options = { false }
+			DebugDrawOptions options = { false }
 		);
 
-		void AddCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawCallOptions options = {});
+		void AddCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawOptions options = {});
 
-		void AddArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddArrow(float3 start, float3 end, float size, Color color, DebugDrawOptions options = {false});
 		
-		void AddArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawOptions options = {false});
 
 		void AddAxes(
 			float3 translation, 
 			QuaternionScalar rotation, 
 			float size, 
 			const DebugAxesInfo* info = {},
-			DebugDrawCallOptions options = {false}
+			DebugDrawOptions options = {false}
 		);
 
-		void AddTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options = {});
+		void AddTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawOptions options = {});
 
-		void AddAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void AddAABB(float3 translation, float3 scale, Color color, DebugDrawOptions options = {});
 
-		void AddOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void AddOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawOptions options = {});
 
-		void AddString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options = { false });
+		void AddString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawOptions options = { false });
 
-		void AddStringRotation(float3 position, QuaternionScalar rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options = { false });
+		void AddStringRotation(float3 position, QuaternionScalar rotation, float size, Stream<char> text, Color color, DebugDrawOptions options = { false });
 
 		// If the retrieve entries now is set, it will get all the resident cells now
 		// Instead of delaying the deduction and using the function
@@ -270,18 +282,18 @@ namespace ECSEngine {
 
 #pragma region Add to the draw queue - multi threaded
 
-		void AddLineThread(unsigned int thread_index, float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
+		void AddLineThread(unsigned int thread_index, float3 start, float3 end, Color color, DebugDrawOptions options = {});
 
-		void AddLineThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void AddLineThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = {});
 
-		void AddSphereThread(unsigned int thread_index, float3 position, float radius, Color color, DebugDrawCallOptions options = {});
+		void AddSphereThread(unsigned int thread_index, float3 position, float radius, Color color, DebugDrawOptions options = {});
 
-		void AddPointThread(unsigned int thread_index, float3 position, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddPointThread(unsigned int thread_index, float3 position, float size, Color color, DebugDrawOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
+		void AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, Color color, DebugDrawOptions options = {});
 
-		void AddCrossThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddCrossThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = {false});
 
 		void AddOOBBCrossThread(
 			unsigned int thread_index,
@@ -291,14 +303,14 @@ namespace ECSEngine {
 			float size,
 			bool start_from_same_point,
 			const DebugOOBBCrossInfo* info = {},
-			DebugDrawCallOptions options = { false }
+			DebugDrawOptions options = { false }
 		);
 
-		void AddCircleThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawCallOptions options = {});
+		void AddCircleThread(unsigned int thread_index, float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawOptions options = {});
 
-		void AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, Color color, DebugDrawOptions options = {false});
 
-		void AddArrowRotationThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddArrowRotationThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawOptions options = {false});
 
 		void AddAxesThread(
 			unsigned int thread_index, 
@@ -306,14 +318,14 @@ namespace ECSEngine {
 			QuaternionScalar rotation, 
 			float size, 
 			const DebugAxesInfo* info = {},
-			DebugDrawCallOptions options = {false}
+			DebugDrawOptions options = {false}
 		);
 
-		void AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options = {});
+		void AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, Color color, DebugDrawOptions options = {});
 
-		void AddAABBThread(unsigned int thread_index, float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void AddAABBThread(unsigned int thread_index, float3 translation, float3 scale, Color color, DebugDrawOptions options = {});
 
-		void AddOOBBThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void AddOOBBThread(unsigned int thread_index, float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawOptions options = {});
 
 		// It must do an allocation from the memory manager under lock - possible expensive operation
 		void AddStringThread(
@@ -323,7 +335,7 @@ namespace ECSEngine {
 			float size,
 			Stream<char> text,
 			Color color, 
-			DebugDrawCallOptions options = { false }
+			DebugDrawOptions options = { false }
 		);
 
 		// It must do an allocation from the memory manager under lock - possible expensive operation
@@ -334,7 +346,7 @@ namespace ECSEngine {
 			float size,
 			Stream<char> text,
 			Color color,
-			DebugDrawCallOptions options = { false }
+			DebugDrawOptions options = { false }
 		);
 
 		// If the retrieve entries now is set, it will get all the resident cells now
@@ -343,20 +355,209 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region Draw immediately
+#pragma region Dynamic Type Calls
 
-		void DrawLine(float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
+		void CallLine(DebugDrawCallType call_type, float3 start, float3 end, Color color, DebugDrawOptions options = {});
 
-		void DrawLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void CallLine(DebugDrawCallType call_type, float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = {});
 
-		void DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {false});
+		void CallSphere(DebugDrawCallType call_type, float3 position, float radius, Color color, DebugDrawOptions options = { false });
 
-		void DrawPoint(float3 position, float size, Color color, DebugDrawCallOptions options = {false});
+		void CallPoint(DebugDrawCallType call_type, float3 position, float size, Color color, DebugDrawOptions options = { false });
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
+		void CallRectangle(DebugDrawCallType call_type, float3 corner0, float3 corner1, Color color, DebugDrawOptions options = {});
+		
+		void CallCross(DebugDrawCallType call_type, float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = { false });
 
-		void DrawCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawCallOptions options = {false});
+		void CallOOBBCross(
+			DebugDrawCallType call_type,
+			float3 position,
+			QuaternionScalar rotation,
+			float length,
+			float size,
+			bool start_from_same_point,
+			const DebugOOBBCrossInfo* info = {},
+			DebugDrawOptions options = { false }
+		);
+
+		void CallCircle(DebugDrawCallType call_type, float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawOptions options = {});
+
+		void CallArrow(DebugDrawCallType call_type, float3 start, float3 end, float size, Color color, DebugDrawOptions options = { false });
+
+		// Rotation expressed as radians
+		void CallArrowRotation(
+			DebugDrawCallType call_type, 
+			float3 translation, 
+			QuaternionScalar rotation, 
+			float length, 
+			float size, 
+			Color color, 
+			DebugDrawOptions options = { false }
+		);
+
+		void CallAxes(
+			DebugDrawCallType call_type,
+			float3 translation,
+			QuaternionScalar rotation,
+			float size,
+			const DebugAxesInfo* info = {},
+			DebugDrawOptions options = { false }
+		);
+
+		void CallTriangle(DebugDrawCallType call_type, float3 point0, float3 point1, float3 point2, Color color, DebugDrawOptions options = {});
+
+		void CallAABB(DebugDrawCallType call_type, float3 translation, float3 scale, Color color, DebugDrawOptions options = {});
+
+		void CallOOBB(DebugDrawCallType call_type, float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawOptions options = {});
+
+		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
+		void CallString(
+			DebugDrawCallType call_type,
+			float3 translation,
+			float3 direction,
+			float size,
+			Stream<char> text,
+			Color color,
+			DebugDrawOptions options = { false }
+		);
+
+		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
+		// The direction is specified as rotation in angles as degrees
+		void CallStringRotation(
+			DebugDrawCallType call_type,
+			float3 translation,
+			QuaternionScalar rotation,
+			float size,
+			Stream<char> text,
+			Color color,
+			DebugDrawOptions options = { false }
+		);
+
+#pragma endregion
+
+#pragma region Dispatch Type Calls
+
+		ECS_INLINE void DispatchLine(float3 start, float3 end, Color color, DebugDrawOptions options = {}) {
+			CallLine(dispatch_call_type, start, end, color, options);
+		}
+
+		ECS_INLINE void DispatchLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = {}) {
+			CallLine(dispatch_call_type, translation, rotation, size, color, options);
+		}
+
+		ECS_INLINE void DispatchSphere(float3 position, float radius, Color color, DebugDrawOptions options = { false }) {
+			CallSphere(dispatch_call_type, position, radius, color, options);
+		}
+
+		ECS_INLINE void DispatchPoint(float3 position, float size, Color color, DebugDrawOptions options = { false }) {
+			CallPoint(dispatch_call_type, position, size, color, options);
+		}
+
+		// Corner0 is the top left corner, corner1 is the bottom right corner
+		ECS_INLINE void DispatchRectangle(float3 corner0, float3 corner1, Color color, DebugDrawOptions options = {}) {
+			CallRectangle(dispatch_call_type, corner0, corner1, color, options);
+		}
+
+		ECS_INLINE void DispatchCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = { false }) {
+			CallCross(dispatch_call_type, position, rotation, size, color, options);
+		}
+
+		ECS_INLINE void DispatchOOBBCross(
+			float3 position,
+			QuaternionScalar rotation,
+			float length,
+			float size,
+			bool start_from_same_point,
+			const DebugOOBBCrossInfo* info = {},
+			DebugDrawOptions options = { false }
+		) {
+			CallOOBBCross(dispatch_call_type, position, rotation, length, size, start_from_same_point, info, options);
+		}
+
+		ECS_INLINE void DispatchCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawOptions options = {}) {
+			CallCircle(dispatch_call_type, position, rotation, radius, color, options);
+		}
+
+		ECS_INLINE void DispatchArrow(float3 start, float3 end, float size, Color color, DebugDrawOptions options = { false }) {
+			CallArrow(dispatch_call_type, start, end, size, color, options);
+		}
+
+		// Rotation expressed as radians
+		ECS_INLINE void DispatchArrowRotation(
+			float3 translation,
+			QuaternionScalar rotation,
+			float length,
+			float size,
+			Color color,
+			DebugDrawOptions options = { false }
+		) {
+			CallArrowRotation(dispatch_call_type, translation, rotation, length, size, color, options);
+		}
+
+		ECS_INLINE void DispatchAxes(
+			float3 translation,
+			QuaternionScalar rotation,
+			float size,
+			const DebugAxesInfo* info = {},
+			DebugDrawOptions options = { false }
+		) {
+			CallAxes(dispatch_call_type, translation, rotation, size, info, options);
+		}
+
+		ECS_INLINE void DispatchTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawOptions options = {}) {
+			CallTriangle(dispatch_call_type, point0, point1, point2, color, options);
+		}
+
+		ECS_INLINE void DispatchAABB(float3 translation, float3 scale, Color color, DebugDrawOptions options = {}) {
+			CallAABB(dispatch_call_type, translation, scale, color, options);
+		}
+
+		ECS_INLINE void DispatchOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawOptions options = {}) {
+			CallOOBB(dispatch_call_type, translation, rotation, scale, color, options);
+		}
+
+		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
+		ECS_INLINE void DispatchString(
+			float3 translation,
+			float3 direction,
+			float size,
+			Stream<char> text,
+			Color color,
+			DebugDrawOptions options = { false }
+		) {
+			CallString(dispatch_call_type, translation, direction, size, text, color, options);
+		}
+
+		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
+		// The direction is specified as rotation in angles as degrees
+		ECS_INLINE void DispatchStringRotation(
+			float3 translation,
+			QuaternionScalar rotation,
+			float size,
+			Stream<char> text,
+			Color color,
+			DebugDrawOptions options = { false }
+		) {
+			CallStringRotation(dispatch_call_type, translation, rotation, size, text, color, options);
+		}
+
+#pragma endregion
+
+#pragma region Draw immediately
+
+		void DrawLine(float3 start, float3 end, Color color, DebugDrawOptions options = {});
+
+		void DrawLine(float3 translation, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = {});
+
+		void DrawSphere(float3 position, float radius, Color color, DebugDrawOptions options = {false});
+
+		void DrawPoint(float3 position, float size, Color color, DebugDrawOptions options = {false});
+
+		// Corner0 is the top left corner, corner1 is the bottom right corner
+		void DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawOptions options = {});
+
+		void DrawCross(float3 position, QuaternionScalar rotation, float size, Color color, DebugDrawOptions options = {false});
 
 		void DrawOOBBCross(
 			float3 position, 
@@ -365,31 +566,29 @@ namespace ECSEngine {
 			float size, 
 			bool start_from_same_point, 
 			const DebugOOBBCrossInfo* info = {},
-			DebugDrawCallOptions options = {false}
+			DebugDrawOptions options = {false}
 		);
 
-		void DrawCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawCallOptions options = {});
+		void DrawCircle(float3 position, QuaternionScalar rotation, float radius, Color color, DebugDrawOptions options = {});
 
-		void DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {false});
+		void DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawOptions options = {false});
 
 		// Rotation expressed as radians
-		void DrawArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
+		void DrawArrowRotation(float3 translation, QuaternionScalar rotation, float length, float size, Color color, DebugDrawOptions options = {false});
 
 		void DrawAxes(
 			float3 translation, 
 			QuaternionScalar rotation, 
 			float size, 
-			Color color_x = AxisXColor(), 
-			Color color_y = AxisYColor(), 
-			Color color_z = AxisZColor(), 
-			DebugDrawCallOptions options = {false}
+			const DebugAxesInfo* info = {},
+			DebugDrawOptions options = {false}
 		);
 
-		void DrawTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options = {});
+		void DrawTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawOptions options = {});
 
-		void DrawAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void DrawAABB(float3 translation, float3 scale, Color color, DebugDrawOptions options = {});
 
-		void DrawOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void DrawOOBB(float3 translation, QuaternionScalar rotation, float3 scale, Color color, DebugDrawOptions options = {});
 
 		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
 		void DrawString(
@@ -398,7 +597,7 @@ namespace ECSEngine {
 			float size, 
 			Stream<char> text,
 			Color color, 
-			DebugDrawCallOptions options = {false}
+			DebugDrawOptions options = {false}
 		);
 
 		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
@@ -409,7 +608,7 @@ namespace ECSEngine {
 			float size, 
 			Stream<char> text, 
 			Color color, 
-			DebugDrawCallOptions options = {false}
+			DebugDrawOptions options = {false}
 		);
 
 		// Draws the normals for an object
@@ -419,7 +618,7 @@ namespace ECSEngine {
 			float size, 
 			Color color, 
 			Matrix world_matrix,
-			DebugDrawCallOptions options = {}
+			DebugDrawOptions options = {}
 		);
 
 		// Draws the normals for multiple objects of the same type
@@ -429,7 +628,7 @@ namespace ECSEngine {
 			float size,
 			Color color,
 			Stream<Matrix> world_matrices,
-			DebugDrawCallOptions options = {}
+			DebugDrawOptions options = {}
 		);
 
 		// Draws the tangents for an object
@@ -439,7 +638,7 @@ namespace ECSEngine {
 			float size,
 			Color color,
 			Matrix world_matrix,
-			DebugDrawCallOptions options = {}
+			DebugDrawOptions options = {}
 		);
 
 		// Draws the tangents for multiple objects of the same type
@@ -449,7 +648,7 @@ namespace ECSEngine {
 			float size,
 			Color color,
 			Stream<Matrix> world_matrices,
-			DebugDrawCallOptions options = {}
+			DebugDrawOptions options = {}
 		);
 
 		void DrawGrid(const DebugGrid* grid, DebugShaderOutput shader_output);
@@ -535,7 +734,7 @@ namespace ECSEngine {
 		void OutputInstanceIndexLine(
 			float3 start, 
 			float3 end, 
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugLine>* addition_stream
 		);
 
@@ -543,27 +742,27 @@ namespace ECSEngine {
 			float3 translation,
 			QuaternionScalar rotation,
 			float size,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugLine>* addition_stream
 		);
 
 		void OutputInstanceIndexSphere(
 			float3 translation,
 			float radius,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugSphere>* addition_stream
 		);
 
 		void OutputInstanceIndexPoint(
 			float3 translation,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugPoint>* addition_stream
 		);
 
 		void OutputInstanceIndexRectangle(
 			float3 corner0, 
 			float3 corner1,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugRectangle>* addition_stream
 		);
 
@@ -571,7 +770,7 @@ namespace ECSEngine {
 			float3 position, 
 			QuaternionScalar rotation, 
 			float size,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugCross>* addition_stream
 		);
 
@@ -582,7 +781,7 @@ namespace ECSEngine {
 			float size,
 			bool start_from_same_point,
 			const DebugOOBBCrossInfo* info,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugOOBB>* addition_stream
 		);
 
@@ -590,7 +789,7 @@ namespace ECSEngine {
 			float3 position, 
 			QuaternionScalar rotation, 
 			float radius,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugCircle>* addition_stream
 		);
 
@@ -598,7 +797,7 @@ namespace ECSEngine {
 			float3 start, 
 			float3 end, 
 			float size,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugArrow>* addition_stream
 		);
 
@@ -607,7 +806,7 @@ namespace ECSEngine {
 			QuaternionScalar rotation,
 			float length,
 			float size,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugArrow>* addition_stream
 		);
 
@@ -618,7 +817,7 @@ namespace ECSEngine {
 			unsigned int instance_thickness_x,
 			unsigned int instance_thickness_y,
 			unsigned int instance_thickness_z,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugArrow>* addition_stream
 		);
 
@@ -626,14 +825,14 @@ namespace ECSEngine {
 			float3 point0, 
 			float3 point1, 
 			float3 point2,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugTriangle>* addition_stream
 		);
 
 		void OutputInstanceIndexAABB(
 			float3 translation, 
 			float3 scale,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugAABB>* addition_stream
 		);
 
@@ -641,7 +840,7 @@ namespace ECSEngine {
 			float3 translation, 
 			QuaternionScalar rotation, 
 			float3 scale,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugOOBB>* addition_stream
 		);
 
@@ -651,7 +850,7 @@ namespace ECSEngine {
 			float3 direction,
 			float size,
 			Stream<char> text,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugString>* addition_stream,
 			AllocatorPolymorphic allocator
 		);
@@ -662,7 +861,7 @@ namespace ECSEngine {
 			QuaternionScalar rotation,
 			float size,
 			Stream<char> text,
-			DebugDrawCallOptions options,
+			DebugDrawOptions options,
 			AdditionStreamAtomic<DebugString>* addition_stream,
 			AllocatorPolymorphic allocator
 		);
@@ -774,10 +973,10 @@ namespace ECSEngine {
 #pragma region Set state
 
 		// It does not set the vertex buffers. The topology is TRIANGLELIST
-		void SetTransformShaderState(DebugDrawCallOptions options, DebugShaderOutput output);
+		void SetTransformShaderState(DebugDrawOptions options, DebugShaderOutput output);
 
 		// It does not set the vertex buffers. The topology is TRIANGLELIST
-		void SetStructuredShaderState(DebugDrawCallOptions options, DebugShaderOutput output);
+		void SetStructuredShaderState(DebugDrawOptions options, DebugShaderOutput output);
 
 #pragma endregion
 
@@ -839,6 +1038,10 @@ namespace ECSEngine {
 		GraphicsPipelineRenderState GetPreviousRenderState() const;
 
 		void RestorePreviousRenderState(const GraphicsPipelineRenderState* state);
+
+		ECS_INLINE void SetCallType(DebugDrawCallType call_type) {
+			dispatch_call_type = call_type;
+		}
 
 		ECS_INLINE static MemoryManager DefaultAllocator(GlobalMemoryManager* global_memory) {
 			return MemoryManager(DefaultAllocatorSize(), ECS_KB * 16, DefaultAllocatorSize(), global_memory);
@@ -908,6 +1111,13 @@ namespace ECSEngine {
 		Matrix camera_matrix;
 		float2* string_character_bounds;
 
+		// Can be set by an external source such that functions
+		// That are being called can use the debug drawer without
+		// Knowing the type of the call it should use. This does not
+		// Work with multithreading tho, since this is a global resource
+		// But for single threading, which is the intended use case, it works
+		DebugDrawCallType dispatch_call_type = {};
+
 		// Important! The redirect works only for Add* class of functions
 		// Not for the Draw* ones! Also, do not perform a DrawAll call!
 		// We use counts for redirects such as to not force every Add*
@@ -936,21 +1146,21 @@ namespace ECSEngine {
 	struct FrustumPoints;
 	
 	// Draws immediately
-	ECSENGINE_API void DrawDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawCallOptions options = {});
+	ECSENGINE_API void DrawDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawOptions options = {});
 
 	// Adds it to the main deck
-	ECSENGINE_API void AddDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawCallOptions options = {});
+	ECSENGINE_API void AddDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawOptions options = {});
 
 	// Adds to the per thread draws
-	ECSENGINE_API void AddDebugFrustumThread(const FrustumPoints& frustum, DebugDrawer* drawer, unsigned int thread_id, Color color, DebugDrawCallOptions options = {});
+	ECSENGINE_API void AddDebugFrustumThread(const FrustumPoints& frustum, DebugDrawer* drawer, unsigned int thread_id, Color color, DebugDrawOptions options = {});
 
 	// Draws immediately
 	// The grid is assumed to be axis aligned
-	ECSENGINE_API void DrawDebugGrid(const DebugGrid* grid, DebugDrawer* drawer, Color color, DebugDrawCallOptions options = {});
+	ECSENGINE_API void DrawDebugGrid(const DebugGrid* grid, DebugDrawer* drawer, Color color, DebugDrawOptions options = {});
 
 	// Adds the calls to the main deck
 	// The grid is assumed to be axis aligned
-	ECSENGINE_API void AddDebugGrid(const DebugGrid* grid, DebugDrawer* drawer, Color color, DebugDrawCallOptions options = {});
+	ECSENGINE_API void AddDebugGrid(const DebugGrid* grid, DebugDrawer* drawer, Color color, DebugDrawOptions options = {});
 
 	// Adds to the per thread draws
 	// The grid is assumed to be axis aligned
@@ -959,7 +1169,7 @@ namespace ECSEngine {
 		DebugDrawer* drawer, 
 		unsigned int thread_id, 
 		Color color, 
-		DebugDrawCallOptions options = {}
+		DebugDrawOptions options = {}
 	);
 	
 }

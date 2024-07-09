@@ -1,14 +1,37 @@
 #include "pch.h"
 #include "ContactManifolds.h"
+#include "ECSEngineWorld.h"
 
-ContactManifoldFeatures ComputeContactManifold(const ConvexHull* first_hull, const ConvexHull* second_hull, SATQuery& query) {
+ContactManifoldFeatures ComputeContactManifold(
+	World* world,
+	const ConvexHull* first_hull,
+	const ConvexHull* second_hull,
+	SATQuery& query
+) {
+	return ComputeContactManifold(world, first_hull, second_hull, query, -1, -1);
+}
+
+ContactManifoldFeatures ComputeContactManifold(
+	World* world,
+	const ConvexHull* first_hull, 
+	const ConvexHull* second_hull, 
+	SATQuery& query,
+	unsigned int first_hull_face_hint,
+	unsigned int second_hull_face_hint
+) {
 	ContactManifoldFeatures contact_manifold;
 
 	// Start by branching on the edge vs face case
 	if (query.type == SAT_QUERY_FACE) {
 		// Determine the incident face for this reference face
-		const ConvexHull* reference_hull = query.face.first_collider ? first_hull : second_hull;
-		const ConvexHull* incident_hull = query.face.first_collider ? second_hull : first_hull;
+		const ConvexHull* reference_hull = first_hull;
+		const ConvexHull* incident_hull = second_hull;
+		unsigned int reference_hull_face_hint = first_hull_face_hint;
+		unsigned int incident_hull_face_hint = second_hull_face_hint;
+		if (!query.face.first_collider) {
+			swap(reference_hull, incident_hull);
+			swap(first_hull_face_hint, incident_hull_face_hint);
+		}
 
 		unsigned int reference_face_index = query.face.face_index;
 
@@ -17,11 +40,31 @@ ContactManifoldFeatures ComputeContactManifold(const ConvexHull* first_hull, con
 		float3 reference_face_normal = reference_plane.normal;
 		unsigned int incident_face_index = incident_hull->SupportFace(-reference_face_normal);
 
+		// Verify the hint faces
+		if (incident_face_index == reference_hull_face_hint && reference_face_index == incident_hull_face_hint) {
+			// Swap the order
+			swap(reference_hull, incident_hull);
+			swap(reference_face_index, incident_face_index);
+			// Update the other local variables
+			reference_plane = reference_hull->faces[reference_face_index].plane;
+			reference_face_normal = reference_plane.normal;
+			query.face.first_collider = !query.face.first_collider;
+		}
+
 		// Clip the incident face against the reference face
 		ECS_STACK_CAPACITY_STREAM(ConvexHullClippedPoint, clipped_points, 64);
-		reference_hull->ClipFace(query.face.face_index, incident_hull, incident_face_index, &clipped_points, false);
+		reference_hull->ClipFace(reference_face_index, incident_hull, incident_face_index, &clipped_points, false);
 
-		ECS_CRASH_CONDITION(clipped_points.size == 0, "Computing Contact Manifold failed because clipping of a face query results in 0 points!");
+		if (clipped_points.size == 0) {
+			StopSimulation(world);
+			world->debug_drawer->ActivateRedirect();
+			world->debug_drawer->SetCallType({ ECS_DEBUG_DRAWER_CALL_DEFERRED });
+			reference_hull->DebugDrawFace(world, reference_face_index);
+			incident_hull->DebugDrawFace(world, incident_face_index);
+			world->debug_drawer->DeactivateRedirect(false);
+			return contact_manifold;
+		}
+		ECS_CRASH_CONDITION(clipped_points.size > 0, "Computing Contact Manifold failed because clipping of a face query results in 0 points!");
 
 		// If there are no contact points found, inverse the faces
 		// And retry the process
@@ -46,7 +89,7 @@ ContactManifoldFeatures ComputeContactManifold(const ConvexHull* first_hull, con
 
 		// This function will check internally that there are at least 5 points
 		// To proceed with the simplification
-		clipped_points.size = SimplifyContactManifoldPoints(clipped_points, reference_face_normal);
+		clipped_points.size = SimplifyContactManifoldPoints(world, clipped_points, reference_face_normal);
 
 		// We can write the manifold now
 		unsigned int write_index = ContactManifoldWritePoints(contact_manifold, clipped_points);
@@ -93,7 +136,7 @@ ContactManifoldFeatures ComputeContactManifold(const ConvexHull* first_hull, con
 	return contact_manifold;
 }
 
-size_t SimplifyContactManifoldPoints(Stream<float3> points, float3 plane_normal) {
+size_t SimplifyContactManifoldPoints(World* world, Stream<float3> points, float3 plane_normal) {
 	// For less than 5 points, don't do anything
 	if (points.size < 5) {
 		return points.size;
@@ -195,6 +238,23 @@ size_t SimplifyContactManifoldPoints(Stream<float3> points, float3 plane_normal)
 	//	points[2] = third_point;
 	//	return 3;
 	//}
+
+	if (fourth_point_index == -1) {
+		StopSimulation(world);
+		world->debug_drawer->AddPoint(first_point, 10.05f, ECS_COLOR_AQUA);
+		world->debug_drawer->AddPoint(second_point, 10.05f, ECS_COLOR_AQUA);
+		world->debug_drawer->AddPoint(third_point, 10.05f, ECS_COLOR_AQUA);
+		for (size_t index = 0; index < points.size; index++) {
+			world->debug_drawer->AddPoint(points[index], 10.05f, ECS_COLOR_ORANGE);
+		}
+	
+		points[0] = first_point;
+		points[1] = second_point;
+		points[2] = third_point;
+
+		return 3;
+	}
+
 	ECS_CRASH_CONDITION_RETURN(fourth_point_index != -1, -1, "ContactManifold reduction could not find 4th point");
 	float3 fourth_point = points[fourth_point_index];
 
@@ -207,7 +267,7 @@ size_t SimplifyContactManifoldPoints(Stream<float3> points, float3 plane_normal)
 	return 4;
 }
 
-size_t SimplifyContactManifoldPoints(Stream<ConvexHullClippedPoint> points, float3 plane_normal) {
+size_t SimplifyContactManifoldPoints(World* world, Stream<ConvexHullClippedPoint> points, float3 plane_normal) {
 	// Use the normal float3 version and match the results at the end
 	if (points.size < 4) {
 		return points.size;
@@ -219,7 +279,7 @@ size_t SimplifyContactManifoldPoints(Stream<ConvexHullClippedPoint> points, floa
 		position_points.Add(points[index].position);
 	}
 
-	size_t count = SimplifyContactManifoldPoints(position_points, plane_normal);
+	size_t count = SimplifyContactManifoldPoints(world, position_points, plane_normal);
 	for (size_t index = 0; index < count; index++) {
 		size_t subindex = index;
 		for (; subindex < points.size; subindex++) {

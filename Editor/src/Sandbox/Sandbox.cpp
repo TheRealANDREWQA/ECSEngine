@@ -2753,6 +2753,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	// Also, clear the redirect drawer
 	sandbox->redirect_drawer.Clear();
 	sandbox->sandbox_world.debug_drawer->redirect_drawer = &sandbox->redirect_drawer;
+	sandbox->sandbox_world.debug_drawer->ActivateRedirect();
 
 	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(&stack_allocator);
@@ -2849,7 +2850,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 
 	// At last, verify if the runtime stop simulation flag was set
-	if (GetStopSimulationStatus(sandbox->sandbox_world.system_manager)) {
+	if (GetStopSimulationStatus(sandbox->sandbox_world.system_manager) && !is_step) {
 		PauseSandboxWorld(editor_state, sandbox_index);
 	}
 

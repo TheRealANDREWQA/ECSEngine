@@ -3,6 +3,10 @@
 #include "Export.h"
 #include "CollisionDetection/src/SAT.h"
 
+namespace ECSEngine {
+	struct World;
+}
+
 struct ConvexHull;
 
 struct ContactManifold {
@@ -90,13 +94,27 @@ ECS_INLINE unsigned int ContactManifoldFeaturesFind(const ContactManifoldFeature
 // It takes the query as a reference because it will reverse the order of the
 // Query in case the manifold cannot be computed from the initial order for the face case
 PHYSICS_API ContactManifoldFeatures ComputeContactManifold(
+	World* world,
 	const ConvexHull* first_hull, 
 	const ConvexHull* second_hull, 
 	SATQuery& query
 );
 
-// The points must be coplanar. Returns the count of valid entries
-PHYSICS_API size_t SimplifyContactManifoldPoints(Stream<float3> points, float3 plane_normal);
+// It takes the query as a reference because it will reverse the order of the
+// Query in case the manifold cannot be computed from the initial order for the face case
+// The hints are used to reverse the order of the manifold computation, which would output
+// Feature values that can be compared with another manifold
+PHYSICS_API ContactManifoldFeatures ComputeContactManifold(
+	World*,
+	const ConvexHull* first_hull,
+	const ConvexHull* second_hull,
+	SATQuery& query,
+	unsigned int first_hull_face_hint,
+	unsigned int second_hull_face_hint
+);
 
 // The points must be coplanar. Returns the count of valid entries
-PHYSICS_API size_t SimplifyContactManifoldPoints(Stream<ConvexHullClippedPoint> points, float3 plane_normal);
+PHYSICS_API size_t SimplifyContactManifoldPoints(World* world, Stream<float3> points, float3 plane_normal);
+
+// The points must be coplanar. Returns the count of valid entries
+PHYSICS_API size_t SimplifyContactManifoldPoints(World* world, Stream<ConvexHullClippedPoint> points, float3 plane_normal);
