@@ -9,7 +9,7 @@
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
-constexpr size_t LINEAR_ALLOCATOR_SIZE = 5'000;
+constexpr size_t LINEAR_ALLOCATOR_SIZE = 10'000;
 constexpr size_t POINTER_CAPACITY = 256;
 constexpr size_t RIGHT_CLICK_ROW_COUNT = 5;
 constexpr const char* RIGHT_CLICK_LEFT_CHARACTERS = "Show in Explorer\nCreate\nDelete\nRename\nCopy Path";

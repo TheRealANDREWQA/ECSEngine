@@ -4,20 +4,9 @@
 
 ContactManifoldFeatures ComputeContactManifold(
 	World* world,
-	const ConvexHull* first_hull,
-	const ConvexHull* second_hull,
-	SATQuery& query
-) {
-	return ComputeContactManifold(world, first_hull, second_hull, query, -1, -1);
-}
-
-ContactManifoldFeatures ComputeContactManifold(
-	World* world,
 	const ConvexHull* first_hull, 
 	const ConvexHull* second_hull, 
-	SATQuery& query,
-	unsigned int first_hull_face_hint,
-	unsigned int second_hull_face_hint
+	SATQuery& query
 ) {
 	ContactManifoldFeatures contact_manifold;
 
@@ -26,11 +15,8 @@ ContactManifoldFeatures ComputeContactManifold(
 		// Determine the incident face for this reference face
 		const ConvexHull* reference_hull = first_hull;
 		const ConvexHull* incident_hull = second_hull;
-		unsigned int reference_hull_face_hint = first_hull_face_hint;
-		unsigned int incident_hull_face_hint = second_hull_face_hint;
 		if (!query.face.first_collider) {
 			swap(reference_hull, incident_hull);
-			swap(first_hull_face_hint, incident_hull_face_hint);
 		}
 
 		unsigned int reference_face_index = query.face.face_index;
@@ -40,39 +26,25 @@ ContactManifoldFeatures ComputeContactManifold(
 		float3 reference_face_normal = reference_plane.normal;
 		unsigned int incident_face_index = incident_hull->SupportFace(-reference_face_normal);
 
-		// Verify the hint faces
-		if (incident_face_index == reference_hull_face_hint && reference_face_index == incident_hull_face_hint) {
-			// Swap the order
-			swap(reference_hull, incident_hull);
-			swap(reference_face_index, incident_face_index);
-			// Update the other local variables
-			reference_plane = reference_hull->faces[reference_face_index].plane;
-			reference_face_normal = reference_plane.normal;
-			query.face.first_collider = !query.face.first_collider;
-		}
-
 		// Clip the incident face against the reference face
 		ECS_STACK_CAPACITY_STREAM(ConvexHullClippedPoint, clipped_points, 64);
 		reference_hull->ClipFace(reference_face_index, incident_hull, incident_face_index, &clipped_points, false);
 
-		if (clipped_points.size == 0) {
-			StopSimulation(world);
-			world->debug_drawer->ActivateRedirect();
-			world->debug_drawer->SetCallType({ ECS_DEBUG_DRAWER_CALL_DEFERRED });
-			reference_hull->DebugDrawFace(world, reference_face_index);
-			incident_hull->DebugDrawFace(world, incident_face_index);
-			world->debug_drawer->DeactivateRedirect(false);
-			return contact_manifold;
-		}
-		ECS_CRASH_CONDITION(clipped_points.size > 0, "Computing Contact Manifold failed because clipping of a face query results in 0 points!");
-
-		// If there are no contact points found, inverse the faces
+		// If there are no contact points are found, invert the faces
 		// And retry the process
-		//if (clipped_points.size == 0) {
-			//incident_hull->ClipFace(incident_face_index, reference_hull, reference_face_index, &clipped_points);
+		if (clipped_points.size == 0) {
 			// Flip the query order
-			//query.face.first_collider = !query.face.first_collider;
-		//}
+			query.face.first_collider = !query.face.first_collider;
+			// Swap all the necessary local variables
+			swap(incident_hull, reference_hull);
+			swap(incident_face_index, reference_face_index);
+			reference_plane = reference_hull->faces[reference_face_index].plane;
+			reference_face_normal = reference_plane.normal;
+
+			// Retry again with the swapped variables
+			reference_hull->ClipFace(reference_face_index, incident_hull, incident_face_index, &clipped_points, false);
+			ECS_CRASH_CONDITION(clipped_points.size > 0, "Creating contact manifold from faces failed! No points could be obtained!");
+		}
 
 		// Discard point above the reference face
 		for (unsigned int index = 0; index < clipped_points.size; index++) {

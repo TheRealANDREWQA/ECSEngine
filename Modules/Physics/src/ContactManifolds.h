@@ -91,6 +91,45 @@ ECS_INLINE unsigned int ContactManifoldFeaturesFind(const ContactManifoldFeature
 	return -1;
 }
 
+// The indices mask is used to search only those points
+// Searches a point by its index and ensures that the edge indices are respected. Returns -1 if it doesn't find it
+ECS_INLINE unsigned int ContactManifoldFeaturesFind(
+	const ContactManifoldFeatures& manifold, 
+	unsigned int point_index, 
+	uint2 edge_indices, 
+	Stream<unsigned int> indices_mask
+) {
+	for (size_t index = 0; index < indices_mask.size; index++) {
+		if (manifold.point_indices[indices_mask[index]] == point_index) {
+			if (manifold.point_edge_indices[indices_mask[index]] == edge_indices) {
+				return indices_mask[index];
+			}
+		}
+	}
+	return -1;
+}
+
+// Searches a point given a position, using a provided epsilon. Returns -1 if it doesn't find it
+ECS_INLINE unsigned int ContactManifoldFindByPosition(const ContactManifold& manifold, float3 position, float3 epsilon) {
+	for (unsigned int index = 0; index < manifold.point_count; index++) {
+		if (CompareMask(manifold.points[index], position, epsilon)) {
+			return index;
+		}
+	}
+	return -1;
+}
+
+// The indices mask is used to search only those points
+// Searches a point given a position, using a provided epsilon. Returns -1 if it doesn't find it
+ECS_INLINE unsigned int ContactManifoldFindByPosition(const ContactManifold& manifold, float3 position, float3 epsilon, Stream<unsigned int> indices_mask) {
+	for (size_t index = 0; index < indices_mask.size; index++) {
+		if (CompareMask(manifold.points[indices_mask[index]], position, epsilon)) {
+			return indices_mask[index];
+		}
+	}
+	return -1;
+}
+
 // It takes the query as a reference because it will reverse the order of the
 // Query in case the manifold cannot be computed from the initial order for the face case
 PHYSICS_API ContactManifoldFeatures ComputeContactManifold(
@@ -98,19 +137,6 @@ PHYSICS_API ContactManifoldFeatures ComputeContactManifold(
 	const ConvexHull* first_hull, 
 	const ConvexHull* second_hull, 
 	SATQuery& query
-);
-
-// It takes the query as a reference because it will reverse the order of the
-// Query in case the manifold cannot be computed from the initial order for the face case
-// The hints are used to reverse the order of the manifold computation, which would output
-// Feature values that can be compared with another manifold
-PHYSICS_API ContactManifoldFeatures ComputeContactManifold(
-	World*,
-	const ConvexHull* first_hull,
-	const ConvexHull* second_hull,
-	SATQuery& query,
-	unsigned int first_hull_face_hint,
-	unsigned int second_hull_face_hint
 );
 
 // The points must be coplanar. Returns the count of valid entries
