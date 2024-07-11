@@ -421,12 +421,18 @@ ECS_INLINE void LockSandbox(EditorState* editor_state, unsigned int sandbox_inde
 
 // -------------------------------------------------------------------------------------------------------------
 
-void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_for_pause = true);
+void PauseSandboxWorld(EditorState* editor_state, unsigned int index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Pauses all sandboxes that want to be paused using the general button
 void PauseSandboxWorlds(EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Pauses any running sandbox that wants to be paused using the general button
+// And starts any sandbox that is currently paused
+void PauseUnpauseSandboxWorlds(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -647,6 +653,12 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 // And starts it if it is in accordance. Can optionally allow the start to start those sandboxes
 // That are paused only
 bool StartSandboxWorlds(EditorState* editor_state, bool only_paused = false);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// This function will start any sandbox that respond to the run button and are in the scene
+// And will stop any sandbox that is in the running or paused state
+bool StartEndSandboxWorld(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 

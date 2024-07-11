@@ -1872,14 +1872,12 @@ bool LoadRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_for_pause)
+void PauseSandboxWorld(EditorState* editor_state, unsigned int index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, index);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_RUNNING);
 
-	if (wait_for_pause) {
-		PauseWorld(&sandbox->sandbox_world);
-	}
+	PauseWorld(&sandbox->sandbox_world);
 
 	// Clear the sandbox waiting compilation flag - since it might be still on
 	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
@@ -1898,8 +1896,23 @@ void PauseSandboxWorlds(EditorState* editor_state)
 	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-			// We don't need to wait for the pause
-			PauseSandboxWorld(editor_state, sandbox_index, false);
+			PauseSandboxWorld(editor_state, sandbox_index);
+		}
+	}, true);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void PauseUnpauseSandboxWorlds(EditorState* editor_state) {
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		if (sandbox->should_pause) {
+			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+				PauseSandboxWorld(editor_state, sandbox_index);
+			}
+			else if (sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
+				StartSandboxWorld(editor_state, sandbox_index);
+			}
 		}
 	}, true);
 }
@@ -3033,6 +3046,10 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 
 	// Check to see if the sandbox is crashed, if it is, we shouldn't let the start commence
 	if (sandbox->is_crashed) {
+		if (!disable_error_messages) {
+			ECS_FORMAT_TEMP_STRING(message, "Cannot start sandbox {#} because it is crashed", sandbox_index);
+			EditorSetConsoleError(message);
+		}
 		return false;
 	}
 
@@ -3128,6 +3145,26 @@ bool StartSandboxWorlds(EditorState* editor_state, bool paused_only)
 		else {
 			if (sandbox->should_play && (sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE)) {
 				success &= StartSandboxWorld(editor_state, sandbox_index);
+			}
+		}
+	}, true);
+	return success;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool StartEndSandboxWorld(EditorState* editor_state) {
+	bool success = true;
+	// Exclude temporary sandboxes
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		if (sandbox->should_play) {
+			EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
+			if (state == EDITOR_SANDBOX_SCENE) {
+				success &= StartSandboxWorld(editor_state, sandbox_index);
+			}
+			else {
+				EndSandboxWorldSimulation(editor_state, sandbox_index);
 			}
 		}
 	}, true);
@@ -3276,8 +3313,7 @@ void TickSandboxRuntimes(EditorState* editor_state)
 				if (!simulation_success) {
 					for (unsigned int subindex = 0; subindex < sandbox_count; subindex++) {
 						if (GetSandboxState(editor_state, subindex) == EDITOR_SANDBOX_RUNNING) {
-							// Don't wait for each one to wait. The threads will simply stop when they are finished
-							PauseSandboxWorld(editor_state, subindex, false);
+							PauseSandboxWorld(editor_state, subindex);
 						}
 					}
 					// We can exit the loop now
@@ -3322,9 +3358,14 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 		}
 	}
 	else {
-		bool is_any_running = IsAnyDefaultSandboxRunning(editor_state);
-		if (is_any_running) {
-			EndSandboxWorldSimulations(editor_state, false, true);
+		if (are_all_default_running) {
+			EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+		}
+		else {
+			bool is_any_running = IsAnyDefaultSandboxRunning(editor_state);
+			if (is_any_running) {
+				EndSandboxWorldSimulations(editor_state, false, true);
+			}
 		}
 	}
 
@@ -3352,9 +3393,14 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 		}
 	}
 	else {
-		bool is_any_paused = IsAnyDefaultSandboxPaused(editor_state);
-		if (is_any_paused) {
-			EndSandboxWorldSimulations(editor_state, true);
+		if (are_all_default_paused) {
+			EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+		}
+		else {
+			bool is_any_paused = IsAnyDefaultSandboxPaused(editor_state);
+			if (is_any_paused) {
+				EndSandboxWorldSimulations(editor_state, true);
+			}
 		}
 	}
 }

@@ -5,9 +5,12 @@
 #include "../UI/CreateScene.h"
 #include "../Sandbox/SandboxAccessor.h"
 #include "../Sandbox/SandboxScene.h"
+#include "../Sandbox/Sandbox.h"
 
 void TickEditorGeneralInput(EditorState* editor_state) {
-	if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_SAVE_PROJECT)) {
+	const InputMapping& input_mapping = editor_state->input_mapping;
+
+	if (input_mapping.IsTriggered(EDITOR_INPUT_SAVE_PROJECT)) {
 		// Determine which sandboxes are dirty. If there is a single one dirty,
 		// Then save it directly without a prompt. Otherwise use the SaveScenePopUp
 		// to inform the user about which sandbox to save
@@ -32,6 +35,51 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 		}
 		else {
 			CreateSaveScenePopUp(editor_state, dirty_sandboxes);
+		}
+	}
+
+	if (input_mapping.IsTriggered(EDITOR_INPUT_PLAY_SIMULATIONS)) {
+		StartEndSandboxWorld(editor_state);
+	}
+
+	if (input_mapping.IsTriggered(EDITOR_INPUT_PAUSE_SIMULATIONS)) {
+		PauseUnpauseSandboxWorlds(editor_state);
+	}
+
+	if (input_mapping.IsTriggered(EDITOR_INPUT_STEP_SIMULATIONS)) {
+		RunSandboxWorlds(editor_state, true);
+	}
+
+	if (input_mapping.IsTriggered(EDITOR_INPUT_PLAY_CURRENT_SANDBOX)) {
+		unsigned int active_sandbox = GetActiveSandbox(editor_state);
+		if (active_sandbox != -1) {
+			if (GetSandboxState(editor_state, active_sandbox) == EDITOR_SANDBOX_SCENE) {
+				StartSandboxWorld(editor_state, active_sandbox);
+			}
+			else {
+				EndSandboxWorldSimulation(editor_state, active_sandbox);
+			}
+		}
+	}
+
+	if (input_mapping.IsTriggered(EDITOR_INPUT_PAUSE_CURRENT_SANDBOX)) {
+		unsigned int active_sandbox = GetActiveSandbox(editor_state);
+		if (active_sandbox != -1) {
+			if (GetSandboxState(editor_state, active_sandbox) == EDITOR_SANDBOX_RUNNING) {
+				PauseSandboxWorld(editor_state, active_sandbox);
+			}
+			else if (GetSandboxState(editor_state, active_sandbox) == EDITOR_SANDBOX_PAUSED) {
+				StartSandboxWorld(editor_state, active_sandbox);
+			}
+		}
+	}
+
+	if (input_mapping.IsTriggered(EDITOR_INPUT_STEP_CURRENT_SANDBOX)) {
+		unsigned int active_sandbox = GetActiveSandbox(editor_state);
+		if (active_sandbox != -1) {
+			if (GetSandboxState(editor_state, active_sandbox) == EDITOR_SANDBOX_PAUSED) {
+				RunSandboxWorld(editor_state, active_sandbox, true);
+			}
 		}
 	}
 }
