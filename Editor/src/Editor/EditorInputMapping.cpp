@@ -63,5 +63,13 @@ void InitializeInputMapping(EditorState* editor_state) {
 	mappings[EDITOR_INPUT_INSPECTOR_PREVIOUS_TARGET].SetCtrlWith(ECS_KEY_LEFT, ECS_BUTTON_PRESSED);
 	mappings[EDITOR_INPUT_INSPECTOR_NEXT_TARGET].SetCtrlWith(ECS_KEY_RIGHT, ECS_BUTTON_PRESSED);
 
+	mappings[EDITOR_INPUT_PLAY_SIMULATIONS].SetFirstKeyPressed(ECS_KEY_F5).SetExcludeCtrl();
+	mappings[EDITOR_INPUT_PAUSE_SIMULATIONS].SetFirstKeyPressed(ECS_KEY_F6).SetExcludeCtrl();
+	mappings[EDITOR_INPUT_STEP_SIMULATIONS].SetFirstKeyPressed(ECS_KEY_F7).SetExcludeCtrl();
+
+	mappings[EDITOR_INPUT_PLAY_CURRENT_SANDBOX].SetCtrlWith(ECS_KEY_F5, ECS_BUTTON_PRESSED);
+	mappings[EDITOR_INPUT_PAUSE_CURRENT_SANDBOX].SetCtrlWith(ECS_KEY_F6, ECS_BUTTON_PRESSED);
+	mappings[EDITOR_INPUT_STEP_CURRENT_SANDBOX].SetCtrlWith(ECS_KEY_F7, ECS_BUTTON_PRESSED);
+
 	editor_state->input_mapping.ChangeMapping(mappings);
 }
