@@ -60,60 +60,87 @@ namespace ECSEngine {
 			first.SetKey(key, state, exclude);
 		}
 
-		ECS_INLINE void SetFirstKeyPressed(ECS_KEY key) {
+		ECS_INLINE InputMappingElement& SetFirstKeyPressed(ECS_KEY key) {
 			SetFirstKey(key, ECS_BUTTON_PRESSED);
+			return *this;
 		}
 
-		ECS_INLINE void SetSecondKey(ECS_KEY key, ECS_BUTTON_STATE state, bool exclude = false) {
+		ECS_INLINE InputMappingElement& SetSecondKey(ECS_KEY key, ECS_BUTTON_STATE state, bool exclude = false) {
 			second.SetKey(key, state, exclude);
+			return *this;
 		}
 
-		ECS_INLINE void SetThirdKey(ECS_KEY key, ECS_BUTTON_STATE state, bool exclude = false) {
+		ECS_INLINE InputMappingElement& SetThirdKey(ECS_KEY key, ECS_BUTTON_STATE state, bool exclude = false) {
 			third.SetKey(key, state, exclude);
+			return *this;
 		}
 
-		ECS_INLINE void SetFirstMouse(ECS_MOUSE_BUTTON button, ECS_BUTTON_STATE state, bool exclude = false) {
+		ECS_INLINE InputMappingElement& SetFirstMouse(ECS_MOUSE_BUTTON button, ECS_BUTTON_STATE state, bool exclude = false) {
 			first.SetMouse(button, state, exclude);
+			return *this;
 		}
 
-		ECS_INLINE void SetFirstMousePressed(ECS_MOUSE_BUTTON button) {
+		ECS_INLINE InputMappingElement& SetFirstMousePressed(ECS_MOUSE_BUTTON button) {
 			SetFirstMouse(button, ECS_BUTTON_PRESSED);
+			return *this;
 		}
 
-		ECS_INLINE void SetSecondMouse(ECS_MOUSE_BUTTON button, ECS_BUTTON_STATE state, bool exclude = false) {
+		ECS_INLINE InputMappingElement& SetSecondMouse(ECS_MOUSE_BUTTON button, ECS_BUTTON_STATE state, bool exclude = false) {
 			second.SetMouse(button, state, exclude);
+			return *this;
 		}
 
-		ECS_INLINE void SetThirdMouse(ECS_MOUSE_BUTTON button, ECS_BUTTON_STATE state, bool exclude = false) {
+		ECS_INLINE InputMappingElement& SetThirdMouse(ECS_MOUSE_BUTTON button, ECS_BUTTON_STATE state, bool exclude = false) {
 			third.SetMouse(button, state, exclude);
+			return *this;
 		}
 
-		ECS_INLINE void SetExcludeCtrl() {
+		ECS_INLINE InputMappingElement& SetExcludeCtrl() {
 			if (second.state == ECS_BUTTON_STATE_COUNT) {
 				SetSecondKey(ECS_KEY_LEFT_CTRL, ECS_BUTTON_HELD, true);
 			}
 			else {
 				SetThirdKey(ECS_KEY_LEFT_CTRL, ECS_BUTTON_HELD, true);
 			}
+			return *this;
 		}
 
-		ECS_INLINE void SetExcludeShift() {
+		ECS_INLINE InputMappingElement& SetExcludeShift() {
 			if (second.state == ECS_BUTTON_STATE_COUNT) {
 				SetSecondKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_HELD, true);
 			}
 			else {
 				SetThirdKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_HELD, true);
 			}
+			return *this;
 		}
 
-		ECS_INLINE void SetCtrlWith(ECS_KEY key, ECS_BUTTON_STATE state) {
+		ECS_INLINE InputMappingElement& SetExcludeAlt() {
+			if (second.state == ECS_BUTTON_STATE_COUNT) {
+				SetSecondKey(ECS_KEY_LEFT_ALT, ECS_BUTTON_HELD, true);
+			}
+			else {
+				SetThirdKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_HELD, true);
+			}
+			return *this;
+		}
+
+		ECS_INLINE InputMappingElement& SetCtrlWith(ECS_KEY key, ECS_BUTTON_STATE state) {
 			SetFirstKey(ECS_KEY_LEFT_CTRL, ECS_BUTTON_HELD);
 			SetSecondKey(key, state);
+			return *this;
 		}
 
-		ECS_INLINE void SetShiftWith(ECS_KEY key, ECS_BUTTON_STATE state) {
+		ECS_INLINE InputMappingElement& SetShiftWith(ECS_KEY key, ECS_BUTTON_STATE state) {
 			SetFirstKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_HELD);
 			SetSecondKey(key, state);
+			return *this;
+		}
+
+		ECS_INLINE InputMappingElement& SetAltWith(ECS_KEY key, ECS_BUTTON_STATE state) {
+			SetFirstKey(ECS_KEY_LEFT_ALT, ECS_BUTTON_HELD);
+			SetSecondKey(key, state);
+			return *this;
 		}
 
 		InputMappingButton first;
