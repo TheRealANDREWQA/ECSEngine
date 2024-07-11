@@ -1,5 +1,6 @@
 #include "editorpch.h"
 #include "SandboxAccessor.h"
+#include "../UI/Game.h"
 
 using namespace ECSEngine;
 
@@ -27,6 +28,13 @@ EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandb
 	}
 	return sandbox->sandbox_world.entity_manager;
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+unsigned int GetActiveSandbox(const EditorState* editor_state) {
+	return GameUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------
 
 EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned int sandbox_index)
