@@ -432,33 +432,39 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 	// Or vice versa
 	if (contact->manifold.is_face_contact == constraint.contact.base.manifold.is_face_contact) {
 		// Check the order of entities
-		bool same_features = false;
-		/*if (contact->entity_A == constraint.contact.base.entity_A) {
-			same_features = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_A
+		bool same_features_and_order = false;
+		bool same_features_inverted_order = false;
+		if (contact->entity_A == constraint.contact.base.entity_A) {
+			same_features_and_order = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_A
 				&& contact->manifold.feature_index_B == constraint.contact.base.manifold.feature_index_B;
+			same_features_inverted_order = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_B
+				&& contact->manifold.feature_index_B == constraint.contact.base.manifold.feature_index_A;
 		}
 		else {
-			same_features = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_B
+			same_features_and_order = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_B
 				&& contact->manifold.feature_index_B == constraint.contact.base.manifold.feature_index_A;
-		}*/
-		same_features = contact->entity_A == constraint.contact.base.entity_A &&
-			contact->entity_B == constraint.contact.base.entity_B;
+			same_features_inverted_order = contact->manifold.feature_index_A == constraint.contact.base.manifold.feature_index_A
+				&& contact->manifold.feature_index_B == constraint.contact.base.manifold.feature_index_B;
+		}
+		/*same_features_and_order = contact->entity_A == constraint.contact.base.entity_A &&
+			contact->entity_B == constraint.contact.base.entity_B;*/
 
-		// If they have the same features, try to match the points
-		if (same_features) {
+		// The matching function receives as value the index of the constraint point
+		auto match_points = [&](auto matching_function) {
 			ECS_STACK_CAPACITY_STREAM(unsigned int, contact_add_indices, ECS_COUNTOF(ContactManifold::points));
 			contact_add_indices.size = contact->manifold.point_count;
 			MakeSequence(contact_add_indices);
 
-			for (size_t index = 0; index < constraint.contact.base.manifold.point_count; index++) {
-				unsigned int contact_index = ContactManifoldFeaturesFind(
-					contact->manifold, 
-					constraint.contact.base.manifold.point_indices[index],
-					constraint.contact.base.manifold.point_edge_indices[index]
-				);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, matched_indices, 64);
+
+			// Must reference the point directly since we are removing swap back
+			// Which modifies its value
+			for (unsigned int index = 0; index < constraint.contact.base.manifold.point_count; index++) {
+				unsigned int contact_index = matching_function(contact->manifold, index, contact_add_indices);
 				if (contact_index != -1) {
 					// If we find the contact point in the new manifold, discard its addition
 					unsigned int indices_index = contact_add_indices.Find(contact_index);
+					matched_indices.Add(contact_index);
 					contact_add_indices.RemoveSwapBack(indices_index);
 
 					// Update the location of the point
@@ -475,7 +481,7 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 				}
 			}
 
-			ECS_CRASH_CONDITION(constraint.contact.base.manifold.point_count + contact_add_indices.size <= ECS_COUNTOF(ContactManifold::points), 
+			ECS_CRASH_CONDITION(constraint.contact.base.manifold.point_count + contact_add_indices.size <= ECS_COUNTOF(ContactManifold::points),
 				"Contact Manifold matching for warm starting produced too many values!");
 
 			// Add any remaining points
@@ -490,17 +496,43 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 				);
 			}
 
-			// TODO: At the moment, use the new separation axis values
-			// Determine if it is worth it when adding a new contact pair
-			// To firstly try to see if a contact already exists, and if it does,
-			// To keep the entity order, since that will preserve the separation axis
+			// Update the separation axis and distance
 			constraint.contact.base.manifold.separation_axis = contact->manifold.separation_axis;
 			constraint.contact.base.manifold.separation_distance = contact->manifold.separation_distance;
+		};
+
+		// If they have the same features and in the same order, try to match the points by their IDs
+		if (same_features_and_order) {
+			match_points([&](const ContactManifoldFeatures& manifold, unsigned int index, Stream<unsigned int> manifold_indices) {
+				return ContactManifoldFeaturesFind(
+					manifold,
+					constraint.contact.base.manifold.point_indices[index],
+					constraint.contact.base.manifold.point_edge_indices[index],
+					manifold_indices
+				);
+			});
 		}
 		else {
-			// Can discard all the data, since the contact features have changed
-			constraint.contact.base.manifold = contact->manifold;
-			DiscardContactConstraintWarmStarting(constraint);
+			// If the features are the same but inverted, try to match them based upon the distance
+			// TODO: Determine what is the best epsilon value for matching points based upon distance
+			// And if using a small Lerp factor in case it is outside the epsilon but close to it is a
+			// Good idea
+			if (same_features_inverted_order) {
+				match_points([&](const ContactManifoldFeatures& manifold, unsigned int index, Stream<unsigned int> manifold_indices) {
+					const float DISTANCE_EPSILON = 0.001f;
+					return ContactManifoldFindByPosition(
+						manifold, 
+						constraint.contact.base.manifold.points[index], 
+						float3::Splat(DISTANCE_EPSILON), 
+						manifold_indices
+					);
+				});
+			}
+			else {
+				// Can discard all the data, since the contact features have changed
+				constraint.contact.base.manifold = contact->manifold;
+				DiscardContactConstraintWarmStarting(constraint);
+			}
 		}
 	}
 	else {
@@ -685,21 +717,6 @@ void AddContactPair(
 						//}
 
 						if (query.type != SAT_QUERY_NONE) {
-							SolverData* data = (SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
-							unsigned int first_hull_face_hint = -1;
-							unsigned int second_hull_face_hint = -1;
-							unsigned int constraint_index = GetContactConstraintIndex(data, entity_A, entity_B);
-							if (constraint_index != -1) {
-								const ContactConstraint* constraint = data->contact_table.GetValuePtrFromIndex(constraint_index);
-								if (constraint->contact.base.manifold.is_face_contact) {
-									first_hull_face_hint = constraint->contact.base.manifold.feature_index_A;
-									second_hull_face_hint = constraint->contact.base.manifold.feature_index_B;
-									if (!constraint->contact.base.entity_A == entity_A) {
-										swap(first_hull_face_hint, second_hull_face_hint);
-									}
-								}
-							}
-
 							EntityContact contact;
 							contact.entity_A = entity_A;
 							contact.entity_B = entity_B;
@@ -709,9 +726,7 @@ void AddContactPair(
 								world,
 								&first_collider_transformed, 
 								&second_collider_transformed, 
-								query, 
-								first_hull_face_hint, 
-								second_hull_face_hint
+								query
 							);
 
 							float3 first_center_of_mass = first_rigidbody->center_of_mass + first_transform.position;

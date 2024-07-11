@@ -456,6 +456,9 @@ SATQuery SAT(const ConvexHull* first, const ConvexHull* second) {
 	if (edge_query.distance > 0.0f) {
 		return {};
 	}
+
+	// Reduce the distance of the edge query by a bit to favor face contacts over edges
+	edge_query.distance -= 0.00001f;
 	
 	// No separation was found. It means that they are intersecting
 	// Prioritize face queries over edge ones
