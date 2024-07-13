@@ -187,6 +187,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\Rigidbody.cpp" />
+    <ClCompile Include="src\Scripting.cpp" />
     <ClCompile Include="src\SolverCommon.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -199,6 +200,7 @@
     <ClInclude Include="src\PhysicsModuleFunction.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\Rigidbody.h" />
+    <ClInclude Include="src\Scripting.h" />
     <ClInclude Include="src\Settings.h" />
     <ClInclude Include="src\SolverCommon.h" />
   </ItemGroup>

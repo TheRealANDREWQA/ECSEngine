@@ -66,6 +66,11 @@ struct ConvexHullClippedPoint {
 	uint2 incident_edge_index;
 };
 
+struct ConvexHullClipFaceOptions {
+	bool rigid_mode = true;
+	float3 weld_epsilon = float3::Splat(ECS_SIMD_VECTOR_EPSILON_VALUE);
+};
+
 // The face buffers are meant to be temporary. After you finish creating
 // The hull, call ReallocateFaces such that the buffers are coalesced into a single
 // Allocation from a main allocator
@@ -109,7 +114,7 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 		const ConvexHull* incident_hull, 
 		unsigned int incident_hull_face_index, 
 		CapacityStream<float3>* points,
-		bool rigid_mode
+		const ConvexHullClipFaceOptions* options = nullptr
 	) const;
 
 	// Clips the face referenced by face_index with the incident face from the other hull
@@ -123,7 +128,7 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 		const ConvexHull* incident_hull, 
 		unsigned int incident_hull_face_index, 
 		CapacityStream<ConvexHullClippedPoint>* points,
-		bool rigid_mode
+		const ConvexHullClipFaceOptions* options = nullptr
 	) const;
 
 	// Computes the edges for each vertex. This is a parallel array to the vertices

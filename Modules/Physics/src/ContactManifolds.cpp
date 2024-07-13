@@ -26,9 +26,13 @@ ContactManifoldFeatures ComputeContactManifold(
 		float3 reference_face_normal = reference_plane.normal;
 		unsigned int incident_face_index = incident_hull->SupportFace(-reference_face_normal);
 
+		// Choose a higher epsilon value, since points that are too close don't help with the manifold stability
+		// And confuse the simplifier
+		ConvexHullClipFaceOptions clip_options = { false, float3::Splat(0.005f) };
+
 		// Clip the incident face against the reference face
 		ECS_STACK_CAPACITY_STREAM(ConvexHullClippedPoint, clipped_points, 64);
-		reference_hull->ClipFace(reference_face_index, incident_hull, incident_face_index, &clipped_points, false);
+		reference_hull->ClipFace(reference_face_index, incident_hull, incident_face_index, &clipped_points, &clip_options);
 
 		// If there are no contact points are found, invert the faces
 		// And retry the process
@@ -42,7 +46,7 @@ ContactManifoldFeatures ComputeContactManifold(
 			reference_face_normal = reference_plane.normal;
 
 			// Retry again with the swapped variables
-			reference_hull->ClipFace(reference_face_index, incident_hull, incident_face_index, &clipped_points, false);
+			reference_hull->ClipFace(reference_face_index, incident_hull, incident_face_index, &clipped_points, &clip_options);
 			ECS_CRASH_CONDITION(clipped_points.size > 0, "Creating contact manifold from faces failed! No points could be obtained!");
 		}
 

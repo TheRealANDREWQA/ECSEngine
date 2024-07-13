@@ -152,10 +152,10 @@ void ConvexHull::ClipFace(
 	const ConvexHull* incident_hull, 
 	unsigned int incident_hull_face_index, 
 	CapacityStream<float3>* points,
-	bool rigid_mode
+	const ConvexHullClipFaceOptions* options
 ) const {
 	ECS_STACK_CAPACITY_STREAM(ConvexHullClippedPoint, clipped_points, 128);
-	ClipFace(face_index, incident_hull, incident_hull_face_index, &clipped_points, rigid_mode);
+	ClipFace(face_index, incident_hull, incident_hull_face_index, &clipped_points, options);
 
 	ECS_ASSERT(points->size + clipped_points.size <= points->capacity, "Insufficient capacity for ConvexHull ClipFace!");
 	for (unsigned int index = 0; index < clipped_points.size; index++) {
@@ -168,8 +168,13 @@ void ConvexHull::ClipFace(
 	const ConvexHull* incident_hull, 
 	unsigned int incident_hull_face_index, 
 	CapacityStream<ConvexHullClippedPoint>* points,
-	bool rigid_mode
+	const ConvexHullClipFaceOptions* options
 ) const {
+	ConvexHullClipFaceOptions default_options;
+	if (options == nullptr) {
+		options = &default_options;
+	}
+
 	// To clip a face against another face, we need to construct the side
 	// Planes of the current face, and clip the other face against them
 	// There 2 ways to SIMDize this. Test a single segment against multiple
@@ -183,9 +188,9 @@ void ConvexHull::ClipFace(
 	// TODO: Delay the SIMD implementation until we have a better picture of the conditions
 	
 	// Returns the index of the point if it exists, else -1
-	auto find_point = [points](float3 value, float3 epsilon = float3::Splat(ECS_SIMD_VECTOR_EPSILON_VALUE)) {
+	auto find_point = [points, options](float3 value) {
 		for (unsigned int index = 0; index < points->size; index++) {
-			if (CompareMask(points->buffer[index].position, value, epsilon)) {
+			if (CompareMask(points->buffer[index].position, value, options->weld_epsilon)) {
 				return index;
 			}
 		}
@@ -203,7 +208,7 @@ void ConvexHull::ClipFace(
 		float t_factor = InitializeClipTFactor(incident_edge.A, incident_edge.B);
 
 		// Hoist the rigid mode check outside the for loop
-		if (rigid_mode) {
+		if (options->rigid_mode) {
 			for (unsigned int side_plane_index = 0; side_plane_index < face.EdgeCount(); side_plane_index++) {
 				PlaneScalar side_plane = GetFaceSidePlane(face_index, side_plane_index);
 				if (!ClipSegmentAgainstPlaneRigid(side_plane, incident_edge.A, incident_edge_normalized_direction, t_factor, t_min, t_max)) {
@@ -242,7 +247,7 @@ void ConvexHull::ClipFace(
 			}
 
 			// If the points are close enough, weld them
-			if (!CompareMask(first_point, second_point)) {
+			if (!CompareMask(first_point, second_point, options->weld_epsilon)) {
 				unsigned int second_point_index = find_point(second_point);
 				if (second_point_index != -1) {
 					ECS_ASSERT(points->buffer[second_point_index].incident_edge_index.y == -1, "Clip convex hull face internal error");

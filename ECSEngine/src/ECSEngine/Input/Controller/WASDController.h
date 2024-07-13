@@ -9,7 +9,7 @@ namespace ECSEngine {
 	// The directions need to be normalized
 	ECSENGINE_API float3 WASDController(
 		bool w, 
-		bool a, 
+		bool a,
 		bool s, 
 		bool d, 
 		float movement_factor, 
@@ -17,6 +17,7 @@ namespace ECSEngine {
 		float3 right_direction_normalized
 	);
 
+	// The w, a, s, d are the button mappings
 	ECSENGINE_API float3 WASDController(
 		const InputMapping* mapping,
 		unsigned int w,
