@@ -83,6 +83,10 @@ namespace ECSEngine {
 			return m_wrap_position;
 		}
 
+		ECS_INLINE bool IsVisible() const {
+			return m_is_visible;
+		}
+
 		ECS_INLINE bool HasWrapped() const {
 			return m_has_wrapped;
 		}
@@ -115,6 +119,8 @@ namespace ECSEngine {
 			Tick();
 			SetPreviousPositionAndScroll();
 		}
+
+		void UpdateFromOther(const Mouse* other_mouse);
 
 		void Procedure(const MouseProcedureInfo& info);
 

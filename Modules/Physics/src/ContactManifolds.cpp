@@ -206,40 +206,20 @@ size_t SimplifyContactManifoldPoints(World* world, Stream<float3> points, float3
 		}
 	}
 
-	// At the moment, assert that the 4th point is found. It shouldn't happen
-	// To not be found
-	//if (fourth_point_index == -1) {
-	//	points[0] = first_point;
-	//	points[1] = second_point;
-	//	points[2] = third_point;
-	//	return 3;
-	//}
-
+	// It can happen that the fourth point is not found because there are manifold points
+	// That are close together and they fail to produce a fourth point
 	if (fourth_point_index == -1) {
-		StopSimulation(world);
-		world->debug_drawer->AddPoint(first_point, 10.05f, ECS_COLOR_AQUA);
-		world->debug_drawer->AddPoint(second_point, 10.05f, ECS_COLOR_AQUA);
-		world->debug_drawer->AddPoint(third_point, 10.05f, ECS_COLOR_AQUA);
-		for (size_t index = 0; index < points.size; index++) {
-			world->debug_drawer->AddPoint(points[index], 10.05f, ECS_COLOR_ORANGE);
-		}
-	
 		points[0] = first_point;
 		points[1] = second_point;
 		points[2] = third_point;
-
 		return 3;
 	}
 
-	ECS_CRASH_CONDITION_RETURN(fourth_point_index != -1, -1, "ContactManifold reduction could not find 4th point");
 	float3 fourth_point = points[fourth_point_index];
-
 	points[0] = first_point;
 	points[1] = second_point;
 	points[2] = third_point;
 	points[3] = fourth_point;
-
-	swap(points[1], points[2]);
 	return 4;
 }
 

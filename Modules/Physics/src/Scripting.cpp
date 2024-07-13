@@ -4,11 +4,16 @@
 #include "ECSEngineInputControllers.h"
 #include "ECSEngineWorld.h"
 #include "ECSEngineComponents.h"
+#include "Logging.h"
 
 static ECS_THREAD_TASK(CameraController) {
 	EntityManager* entity_manager = world->entity_manager;
 	CameraComponent* camera = entity_manager->TryGetGlobalComponent<CameraComponent>();
 	if (camera != nullptr) {
+		if (world->mouse->IsVisible()) {
+			world->mouse->SetCursorVisibility(false);
+		}
+
 		const Keyboard* keyboard = world->keyboard;
 		FirstPersonWASDController(
 			keyboard->IsDown(ECS_KEY_W),
@@ -16,8 +21,8 @@ static ECS_THREAD_TASK(CameraController) {
 			keyboard->IsDown(ECS_KEY_S),
 			keyboard->IsDown(ECS_KEY_D),
 			world->mouse->GetPositionDelta(),
-			1.0f,
-			1.0f,
+			0.1f,
+			0.1f,
 			camera->value.translation,
 			camera->value.rotation
 		);

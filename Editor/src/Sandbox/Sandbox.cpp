@@ -1308,6 +1308,9 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	// Clear the waiting compilation flag
 	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
+	// Reset the mouse and set again the window handle
+	sandbox->sandbox_world.mouse->Reset();
+	sandbox->sandbox_world.mouse->m_window_handle = editor_state->Mouse()->m_window_handle;
 	// Clear the crashed status as well
 	sandbox->is_crashed = false;
 	// We can also clear the transfer data since it is no longer needed
@@ -1904,17 +1907,41 @@ void PauseSandboxWorlds(EditorState* editor_state)
 // -----------------------------------------------------------------------------------------------------------------------------
 
 void PauseUnpauseSandboxWorlds(EditorState* editor_state) {
+	bool all_are_paused = true;
+	bool all_are_running = true;
 	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		if (sandbox->should_pause) {
 			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 				PauseSandboxWorld(editor_state, sandbox_index);
+				all_are_paused = false;
 			}
 			else if (sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
 				StartSandboxWorld(editor_state, sandbox_index);
+				all_are_running = false;
 			}
 		}
 	}, true);
+
+	// Perform one additional step: the mouse visibility handling
+	if (all_are_paused) {
+		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN)) {
+			editor_state->Mouse()->SetCursorVisibility(false);
+		}
+	}
+	else {
+		if (!editor_state->Mouse()->IsVisible()) {
+			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN)) {
+				EditorStateSetFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN);
+			}
+			editor_state->Mouse()->SetCursorVisibility(true);
+		}
+		else {
+			if (EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN)) {
+				EditorStateClearFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN);
+			}
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2026,6 +2053,9 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	*sandbox_keyboard = Keyboard(allocator);
 	sandbox->runtime_descriptor.mouse = sandbox_mouse;
 	sandbox->runtime_descriptor.keyboard = sandbox_keyboard;
+
+	// Set the mouse OS window handle
+	sandbox_mouse->m_window_handle = editor_state->Mouse()->m_window_handle;
 
 	// Wait until the graphics initialization is finished, otherwise the debug drawer can fail
 	EditorStateWaitFlag(50, editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED);
@@ -2790,7 +2820,9 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 
 	// Lastly, prepare the simulation stop flag for the Runtime
+	// And record the mouse visibility
 	SetStopSimulationStatus(sandbox->sandbox_world.system_manager, false);
+	bool mouse_was_visible = sandbox->sandbox_world.mouse->IsVisible();
 
 	DoFrame(&sandbox->sandbox_world);
 	if (!keep_delta_time) {
@@ -2805,6 +2837,11 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	EndSandboxFrameProfiling(editor_state, sandbox_index);
 
 	SandboxRestorePreviousCrashHandler(previous_crash_handler);
+	
+	// Check to see if the visibility status of the mouse has changed
+	if (mouse_was_visible != sandbox->sandbox_world.mouse->IsVisible()) {
+		editor_state->Mouse()->SetCursorVisibility(sandbox->sandbox_world.mouse->IsVisible(), sandbox->sandbox_world.mouse->m_pin_mouse);
+	}
 
 	// Print any graphics messages that have accumulated
 	sandbox->sandbox_world.graphics->PrintRuntimeMessagesToConsole();
@@ -3155,6 +3192,8 @@ bool StartSandboxWorlds(EditorState* editor_state, bool paused_only)
 
 bool StartEndSandboxWorld(EditorState* editor_state) {
 	bool success = true;
+	bool all_are_stopped = true;
+
 	// Exclude temporary sandboxes
 	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -3162,12 +3201,21 @@ bool StartEndSandboxWorld(EditorState* editor_state) {
 			EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
 			if (state == EDITOR_SANDBOX_SCENE) {
 				success &= StartSandboxWorld(editor_state, sandbox_index);
+				all_are_stopped = false;
 			}
 			else {
 				EndSandboxWorldSimulation(editor_state, sandbox_index);
 			}
 		}
 	}, true);
+
+	// Handle the mouse visibility
+	if (all_are_stopped) {
+		if (!editor_state->Mouse()->IsVisible()) {
+			editor_state->Mouse()->SetCursorVisibility(true);
+		}
+	}
+
 	return success;
 }
 
@@ -3411,8 +3459,10 @@ void TickSandboxHIDInputs(EditorState* editor_state)
 {
 	SandboxAction(editor_state, -1, [editor_state](unsigned int sandbox_index) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		sandbox->sandbox_world.mouse->Tick();
-		sandbox->sandbox_world.keyboard->Tick();
+		// Deactivate the mouse pin, it is handlded by the editor state mouse
+		sandbox->sandbox_world.mouse->m_pin_mouse = false;
+		sandbox->sandbox_world.mouse->Update();
+		sandbox->sandbox_world.keyboard->Update();
 	});
 }
 
