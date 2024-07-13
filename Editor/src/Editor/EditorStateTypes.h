@@ -38,6 +38,10 @@ enum EDITOR_STATE_FLAGS : unsigned char {
 	// usually takes 1 second and if the user doesn't open up a project quicker than
 	// this then there should be no problem.
 	EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED,
+	// This flag is used to know whether or not the mouse was visible
+	// When the pause/unpause action was performed to restore it when the
+	// Simulation is replayed
+	EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN,
 	EDITOR_STATE_FLAG_COUNT
 };
 

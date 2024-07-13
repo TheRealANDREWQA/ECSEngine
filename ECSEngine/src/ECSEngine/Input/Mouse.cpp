@@ -100,6 +100,13 @@ namespace ECSEngine {
 		}
 	}
 
+	void Mouse::UpdateFromOther(const Mouse* other_mouse) {
+		ButtonInput<ECS_MOUSE_BUTTON, ECS_MOUSE_BUTTON_COUNT>::UpdateFromOther(other_mouse);
+		// Update the position and the scroll value as is for the moment
+		m_current_position = other_mouse->m_current_position;
+		m_current_scroll = other_mouse->m_current_scroll;
+	}
+
 	void Mouse::Procedure(const MouseProcedureInfo& info) {
 		// Raw input handled separately
 		if (info.message == WM_INPUT && m_get_raw_input) {
