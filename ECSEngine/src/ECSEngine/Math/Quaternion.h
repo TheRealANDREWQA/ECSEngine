@@ -688,7 +688,7 @@ namespace ECSEngine {
 	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionAverageFromCumulator(Quaternion cumulator, unsigned int count);
 
 	// The reference quaternion is used to changed the sign of the current quaternion if they are in different hyperplanes
-	ECSENGINE_API QuaternionScalar QuaternionAddToAverage(QuaternionScalar* cumulator, float4 current_quaternion, unsigned int count);
+	ECSENGINE_API QuaternionScalar QuaternionAddToAverage(QuaternionScalar* cumulator, QuaternionScalar current_quaternion, unsigned int count);
 
 	// The reference quaternion is used to changed the sign of the current quaternion if they are in different hyperplanes
 	ECSENGINE_API Quaternion ECS_VECTORCALL QuaternionAddToAverage(Quaternion* cumulator, Quaternion current_quaternion, unsigned int count);

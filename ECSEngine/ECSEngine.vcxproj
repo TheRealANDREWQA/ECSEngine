@@ -257,6 +257,7 @@
     <ClInclude Include="src\ECSEngine\ECS\EntityManagerSerializeTypes.h" />
     <ClInclude Include="src\ECSEngine\ECS\ForEach.h" />
     <ClInclude Include="src\ECSEngine\ECS\LinkComponents.h" />
+    <ClInclude Include="src\ECSEngine\Input\Controller\FirstPerson.h" />
     <ClInclude Include="src\ECSEngine\Input\Controller\WASDController.h" />
     <ClInclude Include="src\ECSEngine\Math\AABB.h" />
     <ClInclude Include="src\ECSEngine\Math\BaseVector.h" />
@@ -411,6 +412,7 @@
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineForEach.h" />
     <ClInclude Include="src\Includes\ECSEngineInput.h" />
+    <ClInclude Include="src\Includes\ECSEngineInputControllers.h" />
     <ClInclude Include="src\Includes\ECSEngineOS.h" />
     <ClInclude Include="src\Includes\ECSEngineResourceTypes.h" />
     <ClInclude Include="src\Includes\ECSEngineRuntimeCrash.h" />
@@ -515,6 +517,7 @@
     <ClCompile Include="src\ECSEngine\ECS\EntityManagerSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ForEach.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\LinkComponents.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\Controller\FirstPerson.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Controller\WASDController.cpp" />
     <ClCompile Include="src\ECSEngine\Math\AABB.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>

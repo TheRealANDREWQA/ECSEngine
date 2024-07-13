@@ -11,6 +11,8 @@
 #include "SolverCommon.h"
 #include "ContactConstraint.h"
 
+#include "Scripting.h"
+
 using namespace ECSEngine;
 
 ECS_THREAD_TASK(GridHandler) {
@@ -31,6 +33,7 @@ void ModuleTaskFunction(ModuleTaskFunctionData* data) {
 	
 	AddSolverCommonTasks(data);
 	AddSolverTasks(data);
+	AddScripts(data);
 }
 
 #if 0

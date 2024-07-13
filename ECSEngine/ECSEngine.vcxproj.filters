@@ -277,6 +277,8 @@
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorBase.h" />
     <ClInclude Include="src\ECSEngine\Math\Triangle.h" />
     <ClInclude Include="src\ECSEngine\Math\SphericalPartitioning.h" />
+    <ClInclude Include="src\ECSEngine\Input\Controller\FirstPerson.h" />
+    <ClInclude Include="src\Includes\ECSEngineInputControllers.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -449,6 +451,7 @@
     <ClCompile Include="src\ECSEngine\Math\TriangleMesh.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorBase.cpp" />
     <ClCompile Include="src\ECSEngine\Math\Triangle.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\Controller\FirstPerson.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

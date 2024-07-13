@@ -4,4 +4,4 @@
 #include "../ECSEngine/Input/Keyboard.h"
 #include "../ECSEngine/Input/InputMapping.h"
 #include "../ECSEngine/Input/InputSerialization.h"
-#include "../ECSEngine/Input/Controller/WASDController.h"
+#include "ECSEngineInputControllers.h"

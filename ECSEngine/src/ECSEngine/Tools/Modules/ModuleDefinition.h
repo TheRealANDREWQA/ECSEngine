@@ -47,6 +47,11 @@ namespace ECSEngine {
 	// use the allocator given for that.
 	typedef void (*ModuleTaskFunction)(ModuleTaskFunctionData* data);
 
+#define ECS_REGISTER_TASK(schedule_element, thread_task_function, module_function_data) \
+	schedule_element.task_function = thread_task_function; \
+	schedule_element.task_name = STRING(thread_task_function); \
+	module_function_data->tasks->AddAssert(&schedule_element);
+
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// Not yet implemented
