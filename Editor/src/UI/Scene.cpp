@@ -294,7 +294,8 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 		EDITOR_INPUT_WASD_A, 
 		EDITOR_INPUT_WASD_S,
 		EDITOR_INPUT_WASD_D, 
-		sandbox->camera_wasd_speed * editor_state->ui_system->GetFrameDeltaTime() * 0.0002f,
+		sandbox->camera_wasd_speed * 0.0002f,
+		editor_state->ui_system->GetFrameDeltaTime(),
 		camera_forward, 
 		camera_right
 	);

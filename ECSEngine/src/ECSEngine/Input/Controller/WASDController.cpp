@@ -1,9 +1,10 @@
 #include "ecspch.h"
 #include "WASDController.h"
+#include "../Keyboard.h"
 
 namespace ECSEngine {
 
-    float3 WASDController(bool w, bool a, bool s, bool d, float movement_factor, float3 forward_direction_normalized, float3 right_direction_normalized)
+    float3 WASDController(bool w, bool a, bool s, bool d, float movement_factor, float delta_time, float3 forward_direction_normalized, float3 right_direction_normalized)
     {
         float forward_factor = 0.0f;
         float right_factor = 0.0f;
@@ -23,12 +24,26 @@ namespace ECSEngine {
         
         float3 delta = float3::Splat(0.0f);
         if (forward_factor != 0.0f) {
-            delta += float3::Splat(forward_factor * movement_factor) * forward_direction_normalized;
+            delta += float3::Splat(forward_factor * (movement_factor * delta_time)) * forward_direction_normalized;
         }
         if (right_factor != 0.0f) {
-            delta += float3::Splat(right_factor * movement_factor) * right_direction_normalized;
+            delta += float3::Splat(right_factor * (movement_factor * delta_time)) * right_direction_normalized;
         }
         return delta;
+    }
+
+    float3 WASDController(const Keyboard* keyboard, float movement_factor, float delta_time, float3 forward_direction_normalized, float3 right_direction_normalized)
+    {
+        return WASDController(
+            keyboard->IsDown(ECS_KEY_W),
+            keyboard->IsDown(ECS_KEY_A),
+            keyboard->IsDown(ECS_KEY_S),
+            keyboard->IsDown(ECS_KEY_D),
+            movement_factor,
+            delta_time,
+            forward_direction_normalized,
+            right_direction_normalized
+        );
     }
 
     float3 WASDController(
@@ -37,7 +52,8 @@ namespace ECSEngine {
         unsigned int a, 
         unsigned int s, 
         unsigned int d, 
-        float movement_factor, 
+        float movement_factor,
+        float delta_time,
         float3 forward_direction_normalized, 
         float3 right_direction_normalized
     )
@@ -48,6 +64,7 @@ namespace ECSEngine {
             mapping->IsTriggered(s),
             mapping->IsTriggered(d),
             movement_factor,
+            delta_time,
             forward_direction_normalized,
             right_direction_normalized
         );

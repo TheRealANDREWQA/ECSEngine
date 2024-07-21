@@ -22,6 +22,13 @@ void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int
 
 // -------------------------------------------------------------------------------------------------------------
 
+// It will change the UI focus on the Game window first. If the window does not exist,
+// It will try to select the scene window and if that one does not exist as well, then
+// It will do nothing. It returns true if the focus was changed, else false
+bool FocusUIOnSandbox(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Fills in the absolute path of the scene given the filename
 void GetScenePath(const EditorState* editor_state, ECSEngine::Stream<wchar_t> scene_path, ECSEngine::CapacityStream<wchar_t>& absolute_path);
 

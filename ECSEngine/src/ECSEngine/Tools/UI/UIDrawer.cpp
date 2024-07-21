@@ -1867,8 +1867,17 @@ namespace ECSEngine {
 
 			bool horizontal = (configuration & UI_CONFIG_VERTICAL) == 0;
 			bool invert_order = (vertical_alignment == ECS_UI_ALIGN_BOTTOM) || (horizontal_alignment == ECS_UI_ALIGN_RIGHT);
-			float2 label_size = scale + element_descriptor.label_padd;
-			text_span = system->GetTextSpanLimited({ text.buffer, text_count }, font_size.x, font_size.y, character_spacing, label_size, &text_count, invert_order);
+			float2 text_max_size = scale;
+			if (*type == ECS_UI_WINDOW_DEPENDENT_HORIZONTAL) {
+				text_max_size.x -= element_descriptor.label_padd.x * 2.0f;
+			}
+			else if (*type == ECS_UI_WINDOW_DEPENDENT_VERTICAL) {
+				text_max_size.y -= element_descriptor.label_padd.y * 2.0f;
+			}
+			else {
+				text_max_size -= element_descriptor.label_padd * 2.0f;
+			}
+			text_span = system->GetTextSpanLimited({ text.buffer, text_count }, font_size.x, font_size.y, character_spacing, text_max_size, &text_count, invert_order);
 			float x_text_position, y_text_position;
 			HandleTextLabelAlignment(
 				configuration,
@@ -1894,7 +1903,6 @@ namespace ECSEngine {
 				horizontal,
 				invert_order
 			);
-
 
 			/*size_t vertex_count = 0;
 			if (~configuration & UI_CONFIG_VERTICAL) {
@@ -1940,27 +1948,27 @@ namespace ECSEngine {
 						vertex_count = current_text.size;
 					}
 				}
+			}
+
+			if (horizontal_alignment != ECS_UI_ALIGN_LEFT) {
+				float x_translation = x_text_position - position.x - element_descriptor.label_padd.x;
+				for (size_t index = 0; index < vertex_count; index++) {
+					current_text[index].position.x += x_translation;
+				}
+			}
+
+			if (vertical_alignment == ECS_UI_ALIGN_BOTTOM) {
+				float y_translation = y_text_position + (current_text[current_text.size - 3]).position.y;
+				for (size_t index = 0; index < vertex_count; index++) {
+					current_text[index].position.y -= y_translation;
+				}
+			}
+			else if (vertical_alignment == ECS_UI_ALIGN_MIDDLE) {
+				float y_translation = y_text_position - position.y - element_descriptor.label_padd.y;
+				for (size_t index = 0; index < vertex_count; index++) {
+					current_text[index].position.y -= y_translation;
+				}
 			}*/
-
-			//if (horizontal_alignment != ECS_UI_ALIGN_LEFT) {
-			//	float x_translation = x_text_position - position.x - element_descriptor.label_padd.x;
-			//	for (size_t index = 0; index < vertex_count; index++) {
-			//		current_text[index].position.x += x_translation;
-			//	}
-			//}
-
-			//if (vertical_alignment == ECS_UI_ALIGN_BOTTOM) {
-			//	float y_translation = y_text_position + (current_text[current_text.size - 3]).position.y;
-			//	for (size_t index = 0; index < vertex_count; index++) {
-			//		current_text[index].position.y -= y_translation;
-			//	}
-			//}
-			//else if (vertical_alignment == ECS_UI_ALIGN_MIDDLE) {
-			//	float y_translation = y_text_position - position.y - element_descriptor.label_padd.y;
-			//	for (size_t index = 0; index < vertex_count; index++) {
-			//		current_text[index].position.y -= y_translation;
-			//	}
-			//}
 
 			if (configuration & UI_CONFIG_VERTICAL) {
 				AlignVerticalText(current_text);
@@ -8483,24 +8491,19 @@ namespace ECSEngine {
 
 				name_padding_total_length = scale.x;
 
+				float2 text_scale;
 				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
-					if (text->TextScale()->x >= scale.x - 2.0f * drawer->element_descriptor.label_padd.x) {
-						// Make it a window dependent size such that it gets culled
-						label_configuration |= UI_CONFIG_WINDOW_DEPENDENT_SIZE;
-						UIConfigWindowDependentSize dependent_size;
-						dependent_size.scale_factor.x = drawer->GetWindowSizeFactors(dependent_size.type, scale).x;
-						label_config.AddFlag(dependent_size);
-					}
+					text_scale = *text->TextScale();
 				}
 				else {
-					float2 text_scale = drawer->GetLabelScale(text);
-					if (text_scale.x >= scale.x - 2.0f * drawer->element_descriptor.label_padd.x) {
-						// Make it a window dependent size such that it gets culled
-						label_configuration |= UI_CONFIG_WINDOW_DEPENDENT_SIZE;
-						UIConfigWindowDependentSize dependent_size;
-						dependent_size.scale_factor.x = drawer->GetWindowSizeFactors(dependent_size.type, scale).x;
-						label_config.AddFlag(dependent_size);
-					}
+					text_scale = drawer->GetLabelScale(text);
+				}
+				if (text_scale.x >= scale.x - 2.0f * drawer->element_descriptor.label_padd.x) {
+					// Make it a window dependent size such that it gets culled
+					label_configuration |= UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+					UIConfigWindowDependentSize dependent_size;
+					dependent_size.scale_factor.x = drawer->GetWindowSizeFactors(dependent_size.type, scale).x;
+					label_config.AddFlag(dependent_size);
 				}
 			}
 

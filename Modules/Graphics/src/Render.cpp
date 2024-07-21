@@ -135,7 +135,10 @@ ECS_THREAD_TASK(DrawSelectables) {
 					// Highlight the entities - if they have meshes
 					size_t valid_entities = 0;
 					for (size_t index = 0; index < selected_entities.size; index++) {
-						const RenderMesh* render_mesh = entity_manager->TryGetComponent<RenderMesh>(selected_entities[index]);
+						const RenderMesh* render_mesh = nullptr;
+						if (entity_manager->ExistsEntity(selected_entities[index])) {
+							render_mesh = entity_manager->TryGetComponent<RenderMesh>(selected_entities[index]);
+						}
 						valid_entities += render_mesh != nullptr && render_mesh->Validate();
 					}
 

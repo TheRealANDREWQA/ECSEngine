@@ -28,12 +28,23 @@ struct ContactPair {
 typedef HashTable<ContactConstraint, ContactPair, HashFunctionPowerOfTwo> ContactTable;
 
 struct SolverData {
+	ECS_INLINE void SetTimeStepTick(float value) {
+		time_step_tick = value;
+		inverse_time_step_tick = 1.0f / time_step_tick;
+	}
+
 	unsigned int iterations;
 	float baumgarte_factor;
 	float linear_slop;
+	// Expressed in seconds, it tells the simulation
+	// At which rate to update itself
+	float time_step_tick;
+	float inverse_time_step_tick;
+	float previous_time_step_remainder;
+	bool use_warm_starting;
+	
 	MemoryManager allocator;
 	ContactTable contact_table;
-	bool use_warm_starting;
 };
 
 struct ComputeConstraintPointInfo {
@@ -356,6 +367,7 @@ ECS_THREAD_TASK(SolveContactConstraints) {
 			PhysicsSettings* settings = world->entity_manager->GetGlobalComponent<PhysicsSettings>();
 			data->iterations = settings->iterations;
 			data->baumgarte_factor = settings->baumgarte_factor;
+			data->use_warm_starting = settings->use_warm_starting;
 		}
 
 		CapacityStream<unsigned int> iteration_indices;
@@ -376,17 +388,28 @@ ECS_THREAD_TASK(SolveContactConstraints) {
 			return false;
 		});
 
-		// Prepare the contact data
-		PrepareContactConstraintsData(world, data, iteration_indices);
+		// Determine if a simulation time step should be performed
+		float elapsed_time = data->previous_time_step_remainder + world->delta_time;
+		while (elapsed_time > data->time_step_tick) {
+			// Prepare the contact data
+			PrepareContactConstraintsData(world, data, iteration_indices);
 
-		// Repeat the solve step for the number of iterations
-		for (unsigned int index = 0; index < data->iterations; index++) {
-			SolveContactConstraintsIteration(data, world->inverse_delta_time, iteration_indices);
+			// Repeat the solve step for the number of iterations
+			for (unsigned int index = 0; index < data->iterations; index++) {
+				SolveContactConstraintsIteration(data, data->inverse_time_step_tick, iteration_indices);
+			}
+
+			// Decrement the elapsed time
+			elapsed_time -= data->time_step_tick;
 		}
 
 		data->allocator.Deallocate(iteration_indices.buffer);
+
 		// Trim the contact table, such that it doesn't occupy too much memory
 		data->contact_table.Trim(&data->allocator);
+
+		// Update the simulation remainder
+		data->previous_time_step_remainder = elapsed_time;
 	}
 }
 
@@ -398,6 +421,9 @@ static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInit
 	data->baumgarte_factor = 0.05f;
 	data->linear_slop = 0.01f;
 	data->use_warm_starting = true;
+	data->previous_time_step_remainder = 0.0f;
+	// Use a default of 60Hz update rate
+	data->SetTimeStepTick(1.0f / 60.0f);
 
 	// Bind this so we can access the data from outside the main function
 	world->system_manager->BindData(SOLVER_DATA_STRING, data);
@@ -596,6 +622,10 @@ void AddContactConstraint(
 			MatchContactConstraint(contact, center_of_mass_A, center_of_mass_B, constraint);
 		}
 		else {
+			constraint.contact.base = *contact;
+			constraint.center_of_mass_A = center_of_mass_A;
+			constraint.center_of_mass_B = center_of_mass_B;
+			constraint.reference_count++;
 			DiscardContactConstraintWarmStarting(constraint);
 		}
 	}

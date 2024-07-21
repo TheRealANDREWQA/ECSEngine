@@ -82,4 +82,15 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 			}
 		}
 	}
+
+	const Keyboard* keyboard = editor_state->Keyboard();
+	// Handle sandbox keyboard focus
+	if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+		SandboxAction(editor_state, -1, [editor_state, keyboard](unsigned int sandbox_index) {
+			if (keyboard->IsPressed((ECS_KEY)(ECS_KEY_1 + sandbox_index))) {
+				// Change the focus to this sandbox
+				FocusUIOnSandbox(editor_state, sandbox_index);
+			}
+		});
+	}
 }

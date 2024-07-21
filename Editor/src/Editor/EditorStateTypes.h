@@ -42,6 +42,8 @@ enum EDITOR_STATE_FLAGS : unsigned char {
 	// When the pause/unpause action was performed to restore it when the
 	// Simulation is replayed
 	EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN,
+	// This flag is similar to the one above, but for the raw input state
+	EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_RAW_INPUT,
 	EDITOR_STATE_FLAG_COUNT
 };
 

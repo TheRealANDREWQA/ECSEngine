@@ -1733,7 +1733,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	}
 	else {
 		if (entity_manager->TryGetGlobalComponent(data->global_component) == nullptr) {
-			ChangeInspectorToNothing(editor_state, sandbox_index);
+			ChangeInspectorToNothing(editor_state, inspector_index);
 			return;
 		}
 	}

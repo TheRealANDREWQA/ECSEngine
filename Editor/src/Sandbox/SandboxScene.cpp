@@ -7,6 +7,8 @@
 #include "../Project/ProjectFolders.h"
 #include "../Editor/EditorScene.h"
 #include "../Editor/EditorState.h"
+#include "../UI/Game.h"
+#include "../UI/Scene.h"
 
 using namespace ECSEngine;
 
@@ -78,6 +80,25 @@ void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->sandbox_world.entity_manager->CopyOther(&sandbox->scene_entities);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool FocusUIOnSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+	unsigned int game_ui_index = GetGameUIWindowIndex(editor_state, sandbox_index);
+	if (game_ui_index != -1) {
+		editor_state->ui_system->SetActiveWindow(game_ui_index);
+		return true;
+	}
+	else {
+		// Check the scene window
+		unsigned int scene_ui_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
+		if (scene_ui_index != -1) {
+			editor_state->ui_system->SetActiveWindow(scene_ui_index);
+		}
+		return true;
+	}
+	return false;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
