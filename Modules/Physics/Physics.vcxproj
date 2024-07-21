@@ -83,7 +83,7 @@
       <ConformanceMode>Default</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalIncludeDirectories>$(ECSEngineInclude);include;$(ECSEngineModuleBaseInclude)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ECSEngineInclude);$(ECSEngineModuleBaseInclude)</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -114,7 +114,7 @@
       <ConformanceMode>Default</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalIncludeDirectories>$(ECSEngineInclude);include;$(ECSEngineModuleBaseInclude)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ECSEngineInclude);$(ECSEngineModuleBaseInclude)</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -151,7 +151,7 @@
       <ConformanceMode>Default</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalIncludeDirectories>$(ECSEngineInclude);include;$(ECSEngineModuleBaseInclude)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ECSEngineInclude);$(ECSEngineModuleBaseInclude)</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -179,6 +179,7 @@
     <ClCompile Include="src\Contact.cpp" />
     <ClCompile Include="src\ContactManifolds.cpp" />
     <ClCompile Include="src\ContactConstraint.cpp" />
+    <ClCompile Include="src\Islands.cpp" />
     <ClCompile Include="src\Logging.cpp" />
     <ClCompile Include="src\PhysicsModuleFunction.cpp" />
     <ClCompile Include="src\pch.cpp">
@@ -191,6 +192,7 @@
     <ClCompile Include="src\SolverCommon.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Islands.h" />
     <ClInclude Include="src\PhysicsComponents.h" />
     <ClInclude Include="src\Contact.h" />
     <ClInclude Include="src\ContactConstraint.h" />
@@ -203,6 +205,7 @@
     <ClInclude Include="src\Scripting.h" />
     <ClInclude Include="src\Settings.h" />
     <ClInclude Include="src\SolverCommon.h" />
+    <ClInclude Include="src\SolverData.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
