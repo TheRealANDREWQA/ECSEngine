@@ -57,6 +57,31 @@ namespace ECSEngine {
 		};
 	};
 
+	struct EntityPair {
+		ECS_INLINE EntityPair() {}
+		ECS_INLINE EntityPair(Entity _first, Entity _second) : first(_first), second(_second) {}
+
+		ECS_INLINE bool operator == (EntityPair other) const {
+			return (first == other.first && second == other.second) || (first == other.second && second == other.first);
+		}
+
+		ECS_INLINE unsigned int Hash() const {
+			// Use CantorPair hashing such that reversed pairs will be considered the same
+			return CantorPair(first.value, second.value);
+		}
+
+		union {
+			struct {
+				Entity first;
+				Entity second;
+			};
+			struct {
+				Entity parent;
+				Entity child;
+			};
+		};
+	};
+
 	// If the extended string is specified, it will write the value and in parentheses the index and generation count
 	// Else just the value
 	ECSENGINE_API void EntityToString(Entity entity, CapacityStream<char>& string, bool extended_string = false);

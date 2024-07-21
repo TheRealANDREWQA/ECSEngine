@@ -6,21 +6,7 @@
 
 #define SOLVER_DATA_STRING "SolverData"
 
-struct ContactPair {
-	ECS_INLINE bool operator == (ContactPair other) const {
-		return (first == other.first && second == other.second) || (first == other.second && second == other.first);
-	}
-
-	ECS_INLINE unsigned int Hash() const {
-		// Use CantorPair hashing such that reversed pairs will be considered the same
-		return ECSEngine::CantorPair(first.value, second.value);
-	}
-
-	ECSEngine::Entity first;
-	ECSEngine::Entity second;
-};
-
-typedef ECSEngine::HashTable<ContactConstraint, ContactPair, ECSEngine::HashFunctionPowerOfTwo> ContactTable;
+typedef ECSEngine::HashTable<ContactConstraint, ECSEngine::EntityPair, ECSEngine::HashFunctionPowerOfTwo> ContactTable;
 
 struct SolverData {
 	ECS_INLINE void SetTimeStepTick(float value) {

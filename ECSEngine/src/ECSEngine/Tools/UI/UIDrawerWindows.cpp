@@ -191,7 +191,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_descriptors.window_layout;
 			button_data.descriptor_size = sizeof(UILayoutDescriptor);
-			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT;
 			button_data.is_system_theme = false;
 			button_data.window_descriptor = descriptor;
 			drawer.Button("Default values##1", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -504,7 +504,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.window_layout;
 			button_data.descriptor_size = sizeof(UILayoutDescriptor);
-			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT;
 			button_data.is_system_theme = true;
 			button_data.system_descriptor = layout;
 			drawer.Button("Default values##1", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -1831,7 +1831,7 @@ namespace ECSEngine {
 
 			config.AddFlag(border);
 			transform.position = drawer.GetRegionPosition() + float2(0.0f, drawer.region_render_offset.y);
-			transform.position.y += drawer.system->m_descriptors.misc.title_y_scale + ECS_TOOLS_UI_ONE_PIXEL_Y;
+			transform.position.y += drawer.system->m_descriptors.misc.title_y_scale + drawer.GetPixelSizeY();
 			// small offset to move it out from the border
 			transform.position.x += 0.0015f;
 
@@ -2046,9 +2046,9 @@ namespace ECSEngine {
 			// if the counter rectangle passes this bound, abort the rendering and redoit with an offset
 			float counter_bound = transform.position.x + border_thickness.x + COUNTER_BOUND_PADD;
 			
-			transform.position.x = drawer.region_position.x + drawer.region_scale.x + drawer.region_render_offset.x - ECS_TOOLS_UI_ONE_PIXEL_X;
+			transform.position.x = drawer.region_position.x + drawer.region_scale.x + drawer.region_render_offset.x - drawer.GetPixelSizeX();
 			if (drawer.system->m_windows[drawer.window_index].is_vertical_render_slider) {
-				transform.position.x -= drawer.system->m_descriptors.misc.render_slider_vertical_size + ECS_TOOLS_UI_ONE_PIXEL_X;
+				transform.position.x -= drawer.system->m_descriptors.misc.render_slider_vertical_size + drawer.GetPixelSizeX();
 			}
 
 			size_t initial_text_sprite_count = *drawer.HandleTextSpriteCount(UI_CONFIG_LATE_DRAW);

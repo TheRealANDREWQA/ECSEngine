@@ -112,11 +112,11 @@ namespace ECSEngine {
 			// If highlight element is given, it will set it to true if it should highlight, else to false
 			// The drag action will be called in case there is a match
 			void AcquireDragDrop(
-				float2 position, 
-				float2 scale, 
+				float2 position,
+				float2 scale,
 				Stream<char> region_name,
 				unsigned int window_index,
-				Stream<Stream<char>> matching_names, 
+				Stream<Stream<char>> matching_names,
 				bool* highlight_element = nullptr
 			);
 
@@ -234,7 +234,7 @@ namespace ECSEngine {
 				UIHandlerCopyBuffers copy_function,
 				unsigned int add_index
 			);
-			
+
 			// this is triggered when the element is placed over the center of the Docking gizmo
 			void AddWindowToDockspaceRegion(
 				unsigned int window_index,
@@ -381,7 +381,7 @@ namespace ECSEngine {
 			) const;
 
 			void ChangeBorderFlags(UIDockspace* dockspace, unsigned int border_index, size_t flags);
-			
+
 			void ChangeBorderFlags(unsigned int window_index, size_t flags);
 
 			void ChangeFocusedWindowHoverable(UIActionHandler handler, float2 mouse_position = { -2.0f, -2.0f });
@@ -458,7 +458,7 @@ namespace ECSEngine {
 					vertex_buffer,
 					color,
 					buffer_offset,
-					{font_size * ECS_TOOLS_UI_FONT_X_FACTOR, font_size},
+					{ font_size * ECS_TOOLS_UI_FONT_X_FACTOR, font_size },
 					character_spacing,
 					horizontal,
 					invert_order
@@ -535,9 +535,9 @@ namespace ECSEngine {
 			void CreateSpriteTexture(Stream<wchar_t> filename, UISpriteTexture* sprite_view);
 
 			void CreateDockspaceBorder(
-				UIDockspace* dockspace, 
+				UIDockspace* dockspace,
 				unsigned int border_index,
-				float position, 
+				float position,
 				unsigned char element,
 				bool is_dock,
 				size_t border_flags = 0
@@ -746,12 +746,12 @@ namespace ECSEngine {
 			bool DetectHoverables(
 				size_t* counts,
 				void** buffers,
-				UIDockspace* dockspace, 
-				unsigned int border_index, 
+				UIDockspace* dockspace,
+				unsigned int border_index,
 				DockspaceType type,
 				float2 mouse_position,
 				unsigned int offset
-			); 
+			);
 
 			bool DetectClickables(
 				size_t* counts,
@@ -881,7 +881,7 @@ namespace ECSEngine {
 				UITooltipBaseData* data,
 				unsigned int row_count = 0
 			);
-			
+
 			// Aligned to left and right text characters pointers should have different rows separated by \n
 			// If the row_count is left at 0, then it will parse the entire
 			// String. Else it will stop at the row given by that parameter
@@ -897,7 +897,7 @@ namespace ECSEngine {
 			bool ExistsWindowMemoryResource(unsigned int window_index, const void* pointer) const;
 
 			void EvictOutdatedTextures();
-			
+
 			// Removes the given drag drop and deallocates everything used
 			void EndDragDrop(Stream<char> name);
 
@@ -943,6 +943,18 @@ namespace ECSEngine {
 			void FixFixedDockspace(UIDockspaceLayer old, UIDockspaceLayer new_layer);
 
 			void FixBackgroundDockspace(UIDockspaceLayer old, UIDockspaceLayer new_layer);
+
+			ECS_INLINE float GetPixelSizeX() const {
+				return m_pixel_size.x;
+			}
+
+			ECS_INLINE float GetPixelSizeY() const {
+				return m_pixel_size.y;
+			}
+
+			ECS_INLINE float2 GetPixelSize() const {
+				return m_pixel_size;
+			}
 
 			template<bool horizontal = true>
 			ECSENGINE_API float2 GetTextSpan(
@@ -1916,6 +1928,8 @@ namespace ECSEngine {
 			// Useful for calculating the normalized mouse value when scaling is being applied
 			// at the OS level and try to remedy it
 			uint2 m_window_os_size;
+			// Describes how large a pixel is. Basically, 2.0f / m_window_os_size;
+			float2 m_pixel_size;
 			Timer m_snapshot_mode_timer;
 			// Record the duration here such that it is consistent for the entire frame
 			unsigned int m_snapshot_mode_elapsed_time;

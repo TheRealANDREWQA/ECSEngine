@@ -279,6 +279,9 @@
     <ClInclude Include="src\ECSEngine\Math\SphericalPartitioning.h" />
     <ClInclude Include="src\ECSEngine\Input\Controller\FirstPerson.h" />
     <ClInclude Include="src\Includes\ECSEngineInputControllers.h" />
+    <ClInclude Include="src\Includes\ECSEngineContainersCommon.h" />
+    <ClInclude Include="src\ECSEngine\OS\Monitor.h" />
+    <ClInclude Include="src\Includes\ECSEngineOSMonitor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -452,6 +455,7 @@
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorBase.cpp" />
     <ClCompile Include="src\ECSEngine\Math\Triangle.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Controller\FirstPerson.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Monitor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

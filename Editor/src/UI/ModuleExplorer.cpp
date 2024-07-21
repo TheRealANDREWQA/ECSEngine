@@ -589,8 +589,8 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 
 	float next_row_padding = drawer.layout.next_row_padding;
 	float row_y_offset = drawer.layout.next_row_y_offset;
-	drawer.SetRowPadding(ECS_TOOLS_UI_ONE_PIXEL_X * 2.0f);
-	drawer.SetNextRowYOffset(ECS_TOOLS_UI_ONE_PIXEL_Y);
+	drawer.SetRowPadding(drawer.GetPixelSizeY() * 2.0f);
+	drawer.SetNextRowYOffset(drawer.GetPixelSizeY());
 
 	drawer.SetDrawMode(ECS_UI_DRAWER_NOTHING);
 	UIConfigAbsoluteTransform header_transform;
