@@ -13,6 +13,7 @@
 #include "../Sandbox/Sandbox.h"
 #include "../UI/VisualizeTexture.h"
 #include "ECSEngineBenchmark.h"
+#include "ECSEngineOSMonitor.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -28,7 +29,7 @@ int ExceptionFilter(EXCEPTION_POINTERS* pointers) {
 
 class Editor : public ECSEngine::Application {
 public:
-	Editor(int width, int height, const wchar_t* name);
+	Editor(const wchar_t* name);
 	Editor() {}
 	~Editor();
 	Editor(const Editor&) = delete;
@@ -329,19 +330,22 @@ LPCWSTR Editor::EditorClass::GetName() noexcept {
 	return editorClassName;
 }
 
-Editor::Editor(int _width, int _height, const wchar_t* name)
+Editor::Editor(const wchar_t* name)
 {
 	timer.SetUninitialized();
 	timer.SetNewStart();
 	application_quit = EDITOR_APPLICATION_QUIT_APPROVED;
 
 	// calculate window size based on desired client region
-	RECT windowRegion;
-	windowRegion.left = 0;
-	windowRegion.right = _width;
-	windowRegion.bottom = _height;
-	windowRegion.top = 0;
-	AdjustWindowRect(&windowRegion, WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU, FALSE);
+	RECT window_region;
+	window_region.left = 0;
+	window_region.right = 0;
+	window_region.bottom = 0;
+	window_region.top = 0;
+	AdjustWindowRect(&window_region, WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU, FALSE);
+
+	void* monitor_handle = OS::GetMonitorFromCursor();
+	OS::MonitorInfo monitor_info = OS::RetrieveMonitorInfo(monitor_handle);
 
 	//width = _width;
 	//height = _height;
@@ -372,8 +376,8 @@ Editor::Editor(int _width, int _height, const wchar_t* name)
 		WS_OVERLAPPEDWINDOW /*^ WS_THICKFRAME*/,
 		CW_USEDEFAULT,
 		CW_USEDEFAULT,
-		windowRegion.right - windowRegion.left,
-		windowRegion.bottom - windowRegion.top,
+		window_region.right - window_region.left,
+		window_region.bottom - window_region.top,
 		nullptr,
 		nullptr,
 		EditorClass::GetInstance(),
@@ -401,7 +405,7 @@ Editor::Editor(int _width, int _height, const wchar_t* name)
 	UpdateWindow(hWnd);
 
 	ECS_ASSERT(SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE));
-	GetWindowRect(hWnd, &windowRegion);
+	GetWindowRect(hWnd, &window_region);
 }
 
 Editor::~Editor() {
@@ -489,8 +493,8 @@ LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 }
 
 ECSEngine::Application* ECSEngine::CreateApplication(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow ) {
-	return new Editor(ECS_TOOLS_UI_DESIGNED_WIDTH, ECS_TOOLS_UI_DESIGNED_HEIGHT, L"ECSEngine Editor");
+	return new Editor(L"ECSEngine Editor");
 }
 ECSEngine::Application* ECSEngine::CreateApplication() {
-	return new Editor(ECS_TOOLS_UI_DESIGNED_WIDTH, ECS_TOOLS_UI_DESIGNED_HEIGHT, L"ECSEngine Editor");
+	return new Editor(L"ECSEngine Editor");
 }

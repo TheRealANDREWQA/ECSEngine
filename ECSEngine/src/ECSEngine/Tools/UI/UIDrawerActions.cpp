@@ -2693,7 +2693,7 @@ namespace ECSEngine {
 							UIDrawConfig line_config;
 							UIConfigAbsoluteTransform transform;
 							transform.scale.x = drawer.region_scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x;
-							transform.scale.y = ECS_TOOLS_UI_ONE_PIXEL_Y;
+							transform.scale.y = system->GetPixelSizeY();
 							transform.position = drawer.GetCurrentPosition();
 							transform.position.x += system->m_descriptors.misc.tool_tip_padding.x;
 
@@ -2945,7 +2945,7 @@ namespace ECSEngine {
 							if (line_position == data->row_index - 1) {
 								SetSolidColorRectangle(
 									{ position.x + system->m_descriptors.misc.tool_tip_padding.x, position.y },
-									{ scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x, ECS_TOOLS_UI_ONE_PIXEL_Y },
+									{ scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x, system->GetPixelSizeY() },
 									system->m_descriptors.color_theme.borders,
 									(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
 									counts[ECS_TOOLS_UI_SOLID_COLOR]
@@ -2954,7 +2954,7 @@ namespace ECSEngine {
 							if (line_position == data->row_index) {
 								SetSolidColorRectangle(
 									{ position.x + system->m_descriptors.misc.tool_tip_padding.x, position.y + scale.y },
-									{ scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x, ECS_TOOLS_UI_ONE_PIXEL_Y },
+									{ scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x, system->GetPixelSizeY() },
 									system->m_descriptors.color_theme.borders,
 									(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
 									counts[ECS_TOOLS_UI_SOLID_COLOR]

@@ -152,7 +152,7 @@ void CreateNotificationBarAction(ActionData* action_data) {
 unsigned int CreateNotificationBarWindow(EditorState* editor_state) {
 	UISystem* ui_system = editor_state->ui_system;
 
-	float2 window_size = { 2.0f - ECS_TOOLS_UI_ONE_PIXEL_X, NOTIFICATION_BAR_WINDOW_SIZE };
+	float2 window_size = { 2.0f - editor_state->ui_system->GetPixelSizeX(), NOTIFICATION_BAR_WINDOW_SIZE };
 	UIWindowDescriptor descriptor;
 	descriptor.initial_position_x = -1.0f;
 	descriptor.initial_position_y = 1.0f - NOTIFICATION_BAR_WINDOW_SIZE;

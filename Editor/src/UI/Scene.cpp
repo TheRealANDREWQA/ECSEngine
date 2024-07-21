@@ -1073,7 +1073,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 						ECS_UI_DRAW_LATE
 					);
 
-					float2 border_scale = { ECS_TOOLS_UI_ONE_PIXEL_X * 2, ECS_TOOLS_UI_ONE_PIXEL_Y * 2 };
+					float2 border_scale = system->GetPixelSize() * 2.0f;
 					CreateSolidColorRectangleBorder<false>(
 						selection_top_left,
 						selection_scale,

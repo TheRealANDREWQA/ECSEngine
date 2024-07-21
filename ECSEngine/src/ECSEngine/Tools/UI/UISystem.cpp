@@ -123,7 +123,11 @@ namespace ECSEngine {
 			m_memory(memory), m_resource_manager(resource), m_task_manager(task_manager), m_application(application), m_frame_index(0),
 			m_texture_evict_count(0), m_texture_evict_target(60), m_window_os_size(window_os_size)
 		{
-			// initializing default m_descriptors and materials
+			// Set the pixel size early on, since the descriptors will reference it
+			m_pixel_size.x = 2.0f / (float)m_window_os_size.x;
+			m_pixel_size.y = 2.0f / (float)m_window_os_size.y;
+
+			// Initializing default m_descriptors and materials
 			InitializeDefaultDescriptors();
 			InitializeMaterials();
 
@@ -3991,7 +3995,7 @@ namespace ECSEngine {
 			float2 half_scale = { central_rectangle_scale.x * 0.5f, central_rectangle_scale.y * 0.5f };
 			float2 scale = { central_rectangle_scale.x, central_rectangle_scale.y };
 
-			float gizmo_line_width = ECS_TOOLS_UI_DOCKING_GIZMO_LINE_WIDTH;
+			float gizmo_line_width = m_pixel_size.y;
 			float normalized_values[] = { gizmo_line_width, gizmo_line_width };
 			NormalizeHorizontalToWindowDimensions(normalized_values, 2);
 			float normalized_width = normalized_values[0];
@@ -4036,7 +4040,7 @@ namespace ECSEngine {
 			SetSolidColorRectangle(bottom_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, solid_color, counts[ECS_TOOLS_UI_SOLID_COLOR]);
 			SetSolidColorRectangle(top_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, solid_color, counts[ECS_TOOLS_UI_SOLID_COLOR]);
 
-			float2 border_scale = ECS_TOOLS_UI_DOCKING_GIZMO_BORDER_SCALE;
+			float2 border_scale = m_pixel_size;
 			if (draw_central_rectangle)
 				CreateSolidColorRectangleBorder<false>(central_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, counts, buffers);
 
@@ -5651,7 +5655,7 @@ namespace ECSEngine {
 
 		void UISystem::FinalizeElementDescriptor() {
 			for (size_t index = 0; index < m_windows.size; index++) {
-				if (!m_windows[index].descriptors->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT]) {
+				if (!m_windows[index].descriptors->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT]) {
 					memcpy(&m_windows[index].descriptors->element_descriptor, &m_descriptors.element_descriptor, sizeof(UIElementDescriptor));
 				}
 			}
@@ -5661,7 +5665,7 @@ namespace ECSEngine {
 
 		void UISystem::FinalizeFont() {
 			for (size_t index = 0; index < m_windows.size; index++) {
-				if (!m_windows[index].descriptors->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_FONT]) {
+				if (!m_windows[index].descriptors->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_FONT]) {
 					memcpy(&m_windows[index].descriptors->font, &m_descriptors.font, sizeof(UIFontDescriptor));
 				}
 			}
@@ -5671,7 +5675,7 @@ namespace ECSEngine {
 
 		void UISystem::FinalizeLayout() {
 			for (size_t index = 0; index < m_windows.size; index++) {
-				if (!m_windows[index].descriptors->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT]) {
+				if (!m_windows[index].descriptors->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT]) {
 					memcpy(&m_windows[index].descriptors->layout, &m_descriptors.window_layout, sizeof(UILayoutDescriptor));
 				}
 			}

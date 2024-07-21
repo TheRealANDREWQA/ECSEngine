@@ -288,6 +288,7 @@
     <ClInclude Include="src\ECSEngine\OS\FileOS.h" />
     <ClInclude Include="src\ECSEngine\OS\Memory.h" />
     <ClInclude Include="src\ECSEngine\OS\Misc.h" />
+    <ClInclude Include="src\ECSEngine\OS\Monitor.h" />
     <ClInclude Include="src\ECSEngine\OS\PhysicalMemory.h" />
     <ClInclude Include="src\ECSEngine\OS\Thread.h" />
     <ClInclude Include="src\ECSEngine\OS\WithError.h" />
@@ -405,6 +406,7 @@
     <ClInclude Include="src\Includes\ECSEngineConcurrentPrimitives.h" />
     <ClInclude Include="src\Includes\ECSEngineConsole.h" />
     <ClInclude Include="src\Includes\ECSEngineContainers.h" />
+    <ClInclude Include="src\Includes\ECSEngineContainersCommon.h" />
     <ClInclude Include="src\Includes\ECSEngineCrash.h" />
     <ClInclude Include="src\Includes\ECSEngineDebugDrawer.h" />
     <ClInclude Include="src\Includes\ECSEngineECSRuntimeResources.h" />
@@ -414,6 +416,7 @@
     <ClInclude Include="src\Includes\ECSEngineInput.h" />
     <ClInclude Include="src\Includes\ECSEngineInputControllers.h" />
     <ClInclude Include="src\Includes\ECSEngineOS.h" />
+    <ClInclude Include="src\Includes\ECSEngineOSMonitor.h" />
     <ClInclude Include="src\Includes\ECSEngineResourceTypes.h" />
     <ClInclude Include="src\Includes\ECSEngineRuntimeCrash.h" />
     <ClInclude Include="src\Includes\ECSEngineSampleTexture.h" />
@@ -596,6 +599,7 @@
     <ClCompile Include="src\ECSEngine\OS\FileOS.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Memory.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Misc.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Monitor.cpp" />
     <ClCompile Include="src\ECSEngine\OS\PhysicalMemory.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Thread.cpp" />
     <ClCompile Include="src\ECSEngine\OS\WithError.cpp" />

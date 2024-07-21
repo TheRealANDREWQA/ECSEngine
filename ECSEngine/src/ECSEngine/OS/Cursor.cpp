@@ -8,6 +8,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+		int2 GetCursorPosition()
+		{
+			POINT point;
+			ECS_ASSERT(GetCursorPos(&point));
+			return { point.x, point.y };
+		}
+
 		uint2 GetCursorPosition(void* window_handle) {
 			POINT point;
 			ECS_ASSERT(GetCursorPos(&point));

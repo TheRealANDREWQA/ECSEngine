@@ -116,7 +116,7 @@ void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 	
 	descriptor.initial_position_x = -1.0f;
 	descriptor.initial_position_y = -1.0f + TOOLBAR_SIZE_Y;
-	descriptor.initial_size_x = 2.0f - ECS_TOOLS_UI_ONE_PIXEL_X;
+	descriptor.initial_size_x = 2.0f - editor_state->ui_system->GetPixelSizeX();
 	descriptor.initial_size_y = MISCELLANEOUS_BAR_SIZE_Y;
 	descriptor.window_data = nullptr;
 	descriptor.window_data_size = 0;
@@ -333,7 +333,7 @@ void CreateToolbarUIPlaceholder(EditorState* editor_state) {
 
 	descriptor.initial_position_x = -1.0f;
 	descriptor.initial_position_y = -1.0f;
-	descriptor.initial_size_x = 2.0f - ECS_TOOLS_UI_ONE_PIXEL_X;
+	descriptor.initial_size_x = 2.0f - editor_state->ui_system->GetPixelSizeX();
 	descriptor.initial_size_y = TOOLBAR_SIZE_Y;
 
 	ToolbarPlaceholderData data;

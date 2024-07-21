@@ -1534,6 +1534,7 @@ namespace ECSEngine {
 		{
 			if (acquire_drag_drop.names.size > 0) {
 				struct RunnableData {
+					UISystem* system;
 					Stream<char> region_name;
 					Stream<Stream<char>> names;
 					float2 position;
@@ -1549,7 +1550,7 @@ namespace ECSEngine {
 					bool should_highlight = false;
 					action_data->system->AcquireDragDrop(data->position, data->scale, data->region_name, action_data->window_index, data->names, &should_highlight);
 					if (should_highlight && data->highlight_border) {
-						float2 border_scale = { ECS_TOOLS_UI_ONE_PIXEL_X * data->border_thickness, ECS_TOOLS_UI_ONE_PIXEL_Y * data->border_thickness };
+						float2 border_scale = { data->system->GetPixelSizeX() * data->border_thickness, data->system->GetPixelSizeY() * data->border_thickness };
 						CreateSolidColorRectangleBorder<true>(data->position, data->scale, border_scale, data->border_color, action_data->counts, action_data->buffers);
 					}
 					return false;
@@ -1572,6 +1573,7 @@ namespace ECSEngine {
 				runnable_data.border_thickness = acquire_drag_drop.highlight_thickness;
 				runnable_data.position = position;
 				runnable_data.scale = scale;
+				runnable_data.system = system;
 				SnapshotRunnable({ border_runnable, &runnable_data, sizeof(runnable_data), phase });
 			}
 		}

@@ -70,11 +70,6 @@ namespace ECSEngine {
 		bool entities_are_stable = false;
 	};
 
-	struct EntityPair {
-		Entity parent;
-		Entity child;
-	};
-
 	struct ChangeSharedComponentElement {
 		Entity entity;
 		Component component;
