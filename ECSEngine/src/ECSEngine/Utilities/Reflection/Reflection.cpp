@@ -2262,11 +2262,23 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 			void* allocation = Allocate(folders.allocator, ReflectionFieldTable::MemoryOf(table_size));
 			field_table.InitializeFromBuffer(allocation, table_size);
 
+			ReflectionFieldInfo field_info;
+			memset(&field_info, 0, sizeof(field_info));
+			field_info.basic_type_count = 1;
+
 			// Initialize all values, helped by macros
 			ResourceIdentifier identifier;
-#define BASIC_TYPE(type, basic_type, stream_type) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionFieldInfo(basic_type, stream_type, sizeof(type), 1), identifier);
+#define BASIC_TYPE(type, _basic_type, _stream_type) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); \
+			field_info.basic_type = _basic_type; \
+			field_info.stream_type = _stream_type; \
+			field_info.byte_size = sizeof(type); \
+			field_table.Insert(field_info, identifier);
 #define INT_TYPE(type, val) BASIC_TYPE(type, ReflectionBasicFieldType::val, ReflectionStreamFieldType::Basic)
-#define COMPLEX_TYPE(type, basic_type, stream_type, byte_size) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionFieldInfo(basic_type, stream_type, byte_size, 1), identifier);
+#define COMPLEX_TYPE(type, _basic_type, _stream_type, _byte_size) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); \
+			field_info.basic_type = _basic_type; \
+			field_info.stream_type = _stream_type; \
+			field_info.byte_size = _byte_size; \
+			field_table.Insert(field_info, identifier);
 
 #define TYPE_234(base, reflection_type) COMPLEX_TYPE(base##2, ReflectionBasicFieldType::reflection_type##2, ReflectionStreamFieldType::Basic, sizeof(base) * 2); \
 COMPLEX_TYPE(base##3, ReflectionBasicFieldType::reflection_type##3, ReflectionStreamFieldType::Basic, sizeof(base) * 3); \

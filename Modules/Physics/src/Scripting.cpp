@@ -5,28 +5,30 @@
 #include "ECSEngineWorld.h"
 #include "ECSEngineComponents.h"
 #include "Logging.h"
+#include "Settings.h"
 
 static ECS_THREAD_TASK(CameraController) {
 	EntityManager* entity_manager = world->entity_manager;
 	CameraComponent* camera = entity_manager->TryGetGlobalComponent<CameraComponent>();
 	if (camera != nullptr) {
-		if (world->mouse->IsVisible()) {
-			world->mouse->SetCursorVisibility(false);
-		}
+		//const PhysicsSettings* settings = entity_manager->TryGetGlobalComponent<PhysicsSettings>();
+		//if (settings != nullptr && settings->first_person) {
+			if (world->mouse->IsVisible()) {
+				world->mouse->SetCursorVisibility(false);
+				world->mouse->EnableRawInput();
+			}
 
-		const Keyboard* keyboard = world->keyboard;
-		FirstPersonWASDController(
-			keyboard->IsDown(ECS_KEY_W),
-			keyboard->IsDown(ECS_KEY_A),
-			keyboard->IsDown(ECS_KEY_S),
-			keyboard->IsDown(ECS_KEY_D),
-			world->mouse->GetPositionDelta(),
-			0.1f,
-			0.1f,
-			camera->value.translation,
-			camera->value.rotation
-		);
-		camera->value.Recalculate();
+			FirstPersonWASDControllerModifiers(
+				world->mouse,
+				world->keyboard,
+				5.0f,
+				5.0f,
+				world->delta_time,
+				camera->value.translation,
+				camera->value.rotation
+			);
+			camera->value.Recalculate();
+		//}
 	}
 }
 

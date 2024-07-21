@@ -16,6 +16,8 @@ namespace ECSEngine {
 
 		ECSENGINE_API uint2 GetOSWindowPosition(void* window_handle);
 
+		ECSENGINE_API uint2 GetOSWindowSize(void* window_handle);
+
 	}
 
 }

@@ -189,6 +189,12 @@ struct EditorState {
 	// Be written explicitly by it
 	bool disable_editor_sandbox_write;
 
+	// This is the entire delta time for a frame
+	// While the simulations are running. We use a central
+	// Value such that all sandboxes receive the same input
+	ECSEngine::Timer frame_timer;
+	float frame_delta_time;
+
 	// TODO: Implement an "event" like system where functions can be subscribed to certain
 	// Actions? This is helpful for less coupling between systems. At the moment, the first
 	// Use case would be the entity inspector that needs to be notified when the scene is changed

@@ -1311,12 +1311,14 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	// Reset the mouse and set again the window handle
 	sandbox->sandbox_world.mouse->Reset();
 	sandbox->sandbox_world.mouse->m_window_handle = editor_state->Mouse()->m_window_handle;
+	// Reset the keyboard as well
+	sandbox->sandbox_world.keyboard->Reset();
 	// Clear the crashed status as well
 	sandbox->is_crashed = false;
 	// We can also clear the transfer data since it is no longer needed
 	// There shouldn't be any, but just in case
 	ClearSandboxRuntimeTransferData(editor_state, sandbox_index);
-
+	
 	if (EnableSceneUIRendering(editor_state, sandbox_index, false)) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
@@ -1928,6 +1930,9 @@ void PauseUnpauseSandboxWorlds(EditorState* editor_state) {
 		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN)) {
 			editor_state->Mouse()->SetCursorVisibility(false);
 		}
+		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_RAW_INPUT)) {
+			editor_state->Mouse()->EnableRawInput();
+		}
 	}
 	else {
 		if (!editor_state->Mouse()->IsVisible()) {
@@ -1935,10 +1940,18 @@ void PauseUnpauseSandboxWorlds(EditorState* editor_state) {
 				EditorStateSetFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN);
 			}
 			editor_state->Mouse()->SetCursorVisibility(true);
+
+			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_RAW_INPUT)) {
+				EditorStateSetFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_RAW_INPUT);
+			}
+			editor_state->Mouse()->DisableRawInput();
 		}
 		else {
 			if (EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN)) {
 				EditorStateClearFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN);
+			}
+			if (EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_RAW_INPUT)) {
+				EditorStateClearFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_RAW_INPUT);
 			}
 		}
 	}
@@ -2804,35 +2817,47 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
 	StartSandboxFrameProfiling(editor_state, sandbox_index);
 
-	if (sandbox->sandbox_world.delta_time == 0.0f) {
-		sandbox->sandbox_world.timer.SetNewStart();
-	}
-	// In case we are stepping, we need to restore the delta time
-	// In both cases, for fixed step for and the dynamic default mode
-	bool keep_delta_time = false;
+	//if (sandbox->sandbox_world.delta_time == 0.0f) {
+	//	sandbox->sandbox_world.timer.SetNewStart();
+	//}
+	//// In case we are stepping, we need to restore the delta time
+	//// In both cases, for fixed step for and the dynamic default mode
+	//bool keep_delta_time = false;
+	//if (is_step) {
+	//	keep_delta_time = true;
+	//	// Check to see if we are in fixed time step mode
+	//	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
+	//		// We need to change the delta time
+	//		sandbox->sandbox_world.SetDeltaTime(editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor);
+	//	}
+	//}
+
 	if (is_step) {
-		keep_delta_time = true;
-		// Check to see if we are in fixed time step mode
 		if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
-			// We need to change the delta time
 			sandbox->sandbox_world.SetDeltaTime(editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor);
 		}
+		// In the other case, just use the previous delta time
+	}
+	else {
+		// Use the editor delta time
+		sandbox->sandbox_world.SetDeltaTime(editor_state->frame_delta_time * sandbox->sandbox_world.speed_up_factor);
 	}
 
 	// Lastly, prepare the simulation stop flag for the Runtime
 	// And record the mouse visibility
 	SetStopSimulationStatus(sandbox->sandbox_world.system_manager, false);
 	bool mouse_was_visible = sandbox->sandbox_world.mouse->IsVisible();
+	bool mouse_had_raw_input = sandbox->sandbox_world.mouse->GetRawInputStatus();
 
 	DoFrame(&sandbox->sandbox_world);
-	if (!keep_delta_time) {
-		// We also need to update the delta time
-		float new_delta_time = (float)sandbox->sandbox_world.timer.GetDuration(ECS_TIMER_DURATION_US) / 1'000'000.0f;
-		if (new_delta_time <= ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD) {
-			sandbox->sandbox_world.SetDeltaTime(new_delta_time * sandbox->sandbox_world.speed_up_factor);
-		}
-	}
-	sandbox->sandbox_world.timer.SetNewStart();
+	//if (!keep_delta_time) {
+	//	// We also need to update the delta time
+	//	float new_delta_time = sandbox->sandbox_world.timer.GetDurationFloat(ECS_TIMER_DURATION_S);
+	//	if (new_delta_time <= ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD) {
+	//		sandbox->sandbox_world.SetDeltaTime(new_delta_time * sandbox->sandbox_world.speed_up_factor);
+	//	}
+	//}
+	//sandbox->sandbox_world.timer.SetNewStart();
 
 	EndSandboxFrameProfiling(editor_state, sandbox_index);
 
@@ -2840,7 +2865,20 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	
 	// Check to see if the visibility status of the mouse has changed
 	if (mouse_was_visible != sandbox->sandbox_world.mouse->IsVisible()) {
-		editor_state->Mouse()->SetCursorVisibility(sandbox->sandbox_world.mouse->IsVisible(), sandbox->sandbox_world.mouse->m_pin_mouse);
+		editor_state->Mouse()->SetCursorVisibility(sandbox->sandbox_world.mouse->IsVisible());
+		// If this is the only sandbox, then focus on it
+		FocusUIOnSandbox(editor_state, sandbox_index);
+	}
+	// Check to see if the raw input status of the mouse has changed
+	if (mouse_had_raw_input != sandbox->sandbox_world.mouse->GetRawInputStatus()) {
+		if (sandbox->sandbox_world.mouse->GetRawInputStatus()) {
+			editor_state->Mouse()->EnableRawInput();
+		}
+		else {
+			editor_state->Mouse()->DisableRawInput();
+		}
+		// If this is the only sandbox, then focus on it
+		FocusUIOnSandbox(editor_state, sandbox_index);
 	}
 
 	// Print any graphics messages that have accumulated
@@ -2889,7 +2927,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	if (!is_step) {
 		// Render the scene if it is visible - the runtime is rendered by the game now		
-		EnableSceneUIRendering(editor_state, sandbox_index, true);
+		EnableSceneUIRendering(editor_state, sandbox_index, false);
 	}
 
 	RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
@@ -3209,10 +3247,13 @@ bool StartEndSandboxWorld(EditorState* editor_state) {
 		}
 	}, true);
 
-	// Handle the mouse visibility
+	// Handle the mouse visibility and raw input
 	if (all_are_stopped) {
 		if (!editor_state->Mouse()->IsVisible()) {
 			editor_state->Mouse()->SetCursorVisibility(true);
+		}
+		if (editor_state->Mouse()->GetRawInputStatus()) {
+			editor_state->Mouse()->DisableRawInput();
 		}
 	}
 
@@ -3347,6 +3388,10 @@ void TickSandboxes(EditorState* editor_state)
 
 void TickSandboxRuntimes(EditorState* editor_state)
 {
+	// Update the frame timer
+	editor_state->frame_delta_time = editor_state->frame_timer.GetDurationFloat(ECS_TIMER_DURATION_S);
+	editor_state->frame_timer.SetNewStart();
+
 	// Allow temporary sandboxes here since they might want to enter the play state
 	// Through some of their actions
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
@@ -3459,8 +3504,6 @@ void TickSandboxHIDInputs(EditorState* editor_state)
 {
 	SandboxAction(editor_state, -1, [editor_state](unsigned int sandbox_index) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		// Deactivate the mouse pin, it is handlded by the editor state mouse
-		sandbox->sandbox_world.mouse->m_pin_mouse = false;
 		sandbox->sandbox_world.mouse->Update();
 		sandbox->sandbox_world.keyboard->Update();
 	});

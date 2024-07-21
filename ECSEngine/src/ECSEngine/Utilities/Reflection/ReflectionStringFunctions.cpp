@@ -357,16 +357,30 @@ namespace ECSEngine {
 		bool ParseBool(void* data, Stream<char> characters) {
 			bool* ptr = (bool*)data;
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
-			if (trimmed_characters.size > 1) {
-				return false;
-			}
-			if (trimmed_characters[0] != '1' && trimmed_characters[0] != '0') {
-				return false;
-			}
-			bool value = trimmed_characters[0] == '1';
-			*ptr = value;
+			if (trimmed_characters.size == 1) {
+				if (trimmed_characters[0] != '1' && trimmed_characters[0] != '0') {
+					return false;
+				}
+				bool value = trimmed_characters[0] == '1';
+				*ptr = value;
 
-			return true;
+				return true;
+			}
+			if (trimmed_characters.size == 4) {
+				if (characters != "true") {
+					return false;
+				}
+				*ptr = true;
+				return true;
+			}
+			if (trimmed_characters.size == 5) {
+				if (characters != "false") {
+					return false;
+				}
+				*ptr = false;
+				return true;
+			}		
+			return false;
 		}
 
 		// For enum, user defined or unknown

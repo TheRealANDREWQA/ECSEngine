@@ -405,8 +405,8 @@ void EditorComponents::RecoverData(
 
 	Component component = { (short)old_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
-	size_t new_allocator_size = (size_t)current_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-	size_t old_allocator_size = (size_t)old_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+	size_t new_allocator_size = GetReflectionComponentAllocatorSize(current_type);
+	size_t old_allocator_size = GetReflectionComponentAllocatorSize(old_type);
 
 	// Use a stack allocation in order to write the field table
 	// It is a bit inefficient to write the table to then read it again
@@ -464,7 +464,8 @@ void EditorComponents::RecoverData(
 	size_t old_size = GetReflectionTypeByteSize(old_type);
 	size_t new_size = GetReflectionTypeByteSize(current_type);
 
-	if (IsReflectionTypeComponent(old_type)) {
+	ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(old_type);
+	if (component_type == ECS_COMPONENT_UNIQUE) {
 		ArchetypeQuery query;
 		query.unique.ConvertComponents(component_signature);
 		entity_manager->GetArchetypes(query, matching_archetypes);
@@ -827,7 +828,7 @@ void EditorComponents::RecoverData(
 			}
 		}
 	}
-	else {
+	else if (component_type == ECS_COMPONENT_SHARED) {
 		// If it has missing asset fields, do a prepass and unregister them
 		if (missing_asset_fields.size > 0) {
 			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
@@ -941,6 +942,33 @@ void EditorComponents::RecoverData(
 				ECS_ASSERT(code == ECS_DESERIALIZE_OK);
 			});
 		}
+	}
+	// Global component
+	else {
+		const void* data = entity_manager->GetGlobalComponent(component);
+		ptr = (uintptr_t)temporary_allocation;
+		Serialize(internal_manager, old_type, data, ptr, &serialize_options);
+		entity_manager->UnregisterGlobalComponentCommit(component);
+
+		ECS_STACK_VOID_STREAM(stack_allocation, 4096);
+		ECS_ASSERT(new_size < stack_allocation.capacity);
+
+		// Register the component first, such that we have a valid allocator
+		entity_manager->RegisterGlobalComponentCommit(component, new_size, stack_allocation.buffer, current_type->name, new_allocator_size);
+
+		if (new_allocator_size != -1) {
+			MemoryArena* arena = entity_manager->GetGlobalComponentAllocator(component);	
+			AllocatorPolymorphic alloc = arena;
+			// We need to use multithreaded allocations
+			alloc.allocation_type = ECS_ALLOCATION_MULTI;
+			deserialize_options.backup_allocator = alloc;
+			deserialize_options.field_allocator = alloc;
+		}
+
+		ptr = (uintptr_t)temporary_allocation;
+		void* current_component_data = entity_manager->GetGlobalComponent(component);
+		ECS_DESERIALIZE_CODE code = Deserialize(internal_manager, current_type, current_component_data, ptr, &deserialize_options);
+		ECS_ASSERT(code == ECS_DESERIALIZE_OK, "Failed to recover global component data after change");
 	}
 
 	Free(temporary_allocation);

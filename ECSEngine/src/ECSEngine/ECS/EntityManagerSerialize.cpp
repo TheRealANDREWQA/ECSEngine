@@ -2438,7 +2438,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Table, typename SerializeInfo, typename CheckFunctor>
-	static void CreateSerializeEntityManagerSharedComponentTableImpl(
+	static void CreateSerializeEntityManagerComponentTableImpl(
 		Table& table,
 		const Reflection::ReflectionManager* reflection_manager,
 		AllocatorPolymorphic allocator,
@@ -2543,7 +2543,7 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices
 	)
 	{
-		CreateSerializeEntityManagerSharedComponentTableImpl(
+		CreateSerializeEntityManagerComponentTableImpl(
 			table,
 			reflection_manager,
 			allocator,
@@ -2622,7 +2622,7 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices
 	)
 	{
-		CreateSerializeEntityManagerSharedComponentTableImpl(
+		CreateSerializeEntityManagerComponentTableImpl(
 			table,
 			reflection_manager,
 			allocator,
@@ -2678,7 +2678,7 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices
 	)
 	{
-		CreateSerializeEntityManagerSharedComponentTableImpl(
+		CreateSerializeEntityManagerComponentTableImpl(
 			table,
 			reflection_manager,
 			allocator,

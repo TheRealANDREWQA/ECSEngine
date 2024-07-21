@@ -239,8 +239,13 @@ void ConvexHull::ClipFace(
 			uint2 edge_point_indices = incident_hull->GetFaceEdgeIndices(incident_hull_face_index, index);
 
 			if (first_point_index != -1) {
-				ECS_ASSERT(points->buffer[first_point_index].incident_edge_index.y == -1, "Clip convex hull face internal error");
-				points->buffer[first_point_index].incident_edge_index.y = edge_index;
+				// It can happen that the points get merged because they are close enough
+				// when they belong to different edges.
+				// TODO: Discard the new edge, or should we keep more than 2?
+				//ECS_ASSERT(points->buffer[first_point_index].incident_edge_index.y == -1, "Clip convex hull face internal error");
+				if (points->buffer[first_point_index].incident_edge_index.y == -1) {
+					points->buffer[first_point_index].incident_edge_index.y = edge_index;
+				}
 			}
 			else {
 				points->AddAssert({ first_point, edge_point_indices.x, { edge_index, (unsigned int)-1 } });
@@ -250,8 +255,13 @@ void ConvexHull::ClipFace(
 			if (!CompareMask(first_point, second_point, options->weld_epsilon)) {
 				unsigned int second_point_index = find_point(second_point);
 				if (second_point_index != -1) {
-					ECS_ASSERT(points->buffer[second_point_index].incident_edge_index.y == -1, "Clip convex hull face internal error");
-					points->buffer[second_point_index].incident_edge_index.y = edge_index;
+					// It can happen that the points get merged because they are close enough
+					// when they belong to different edges.
+					// TODO: Discard the new edge, or should we keep more than 2?
+					//ECS_ASSERT(points->buffer[second_point_index].incident_edge_index.y == -1, "Clip convex hull face internal error");
+					if (points->buffer[second_point_index].incident_edge_index.y == -1) {
+						points->buffer[second_point_index].incident_edge_index.y = edge_index;
+					}
 				}
 				else {
 					points->AddAssert({ second_point, edge_point_indices.y, { edge_index, (unsigned int)-1 } });

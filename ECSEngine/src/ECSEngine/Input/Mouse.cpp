@@ -25,10 +25,9 @@ namespace ECSEngine {
 		m_wrap_position = false;
 		m_has_wrapped = false;
 		m_window_handle = nullptr;
-		m_pin_mouse = false;
 	}
 
-	void Mouse::SetCursorVisibility(bool visible, bool pin_mouse_on_invisibility) {
+	void Mouse::SetCursorVisibility(bool visible) {
 		CURSORINFO info = { sizeof(CURSORINFO), 0, nullptr, {} };
 		if (!GetCursorInfo(&info))
 		{
@@ -42,26 +41,22 @@ namespace ECSEngine {
 			m_is_visible = visible;
 		}
 
-		if (visible) {
-			if (pin_mouse_on_invisibility) {
-				m_pin_mouse = false;
+		if (!visible) {
+			uint2 bounds = OS::GetOSWindowSize(m_window_handle);
+			// Reduce the y bounds by a bit since it will show the cursor for some reason
+			if (bounds.y >= 10) {
+				bounds.y -= 10;
 			}
+			ActivateWrap(bounds);
 		}
 		else {
-			if (pin_mouse_on_invisibility) {
-				m_pin_mouse = true;
-			}
+			DeactivateWrap();
 		}
 	}
 
 	void Mouse::SetPreviousPositionAndScroll()
 	{
-		if (!m_pin_mouse) {
-			m_previous_position = m_current_position;
-		}
-		else {
-			SetPosition(m_previous_position.x, m_previous_position.y);
-		}
+		m_previous_position = m_current_position;
 		m_previous_scroll = m_current_scroll;
 		m_has_wrapped = false;
 	}
@@ -72,12 +67,13 @@ namespace ECSEngine {
 
 	static void HandleWrapping(Mouse* mouse) {
 		// When it hits the end of the client region it will be 1 less smaller than the value
-		uint2 window_size = mouse->m_wrap_pixel_bounds;
+		// Use ints everywhere because that is the same the native API
+		int2 window_size = mouse->m_wrap_pixel_bounds;
 		window_size.x--;
 		window_size.y--;
 
-		uint2 new_position = mouse->m_current_position;;
-		uint2 current_position = mouse->m_current_position;
+		int2 new_position = mouse->m_current_position;;
+		int2 current_position = mouse->m_current_position;
 		// Take into account that the raw input might offset these over the boundaries
 		if (current_position.x >= window_size.x) {
 			new_position = { current_position.x - window_size.x + 1, current_position.y };
@@ -103,8 +99,14 @@ namespace ECSEngine {
 	void Mouse::UpdateFromOther(const Mouse* other_mouse) {
 		ButtonInput<ECS_MOUSE_BUTTON, ECS_MOUSE_BUTTON_COUNT>::UpdateFromOther(other_mouse);
 		// Update the position and the scroll value as is for the moment
+		// And for the previous value, since those are used for computing
+		// The delta. Also, the wrapper state needs to be carried across
 		m_current_position = other_mouse->m_current_position;
 		m_current_scroll = other_mouse->m_current_scroll;
+		m_previous_position = other_mouse->m_previous_position;
+		m_previous_scroll = other_mouse->m_previous_scroll;
+		m_has_wrapped = other_mouse->m_has_wrapped;
+		m_before_wrap_position = other_mouse->m_before_wrap_position;
 	}
 
 	void Mouse::Procedure(const MouseProcedureInfo& info) {

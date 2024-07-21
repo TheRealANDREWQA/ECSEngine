@@ -91,7 +91,7 @@ namespace ECSEngine {
 			return m_has_wrapped;
 		}
 
-		void SetCursorVisibility(bool visible, bool pin_mouse_on_invisible = true);
+		void SetCursorVisibility(bool visible);
 
 		void SetPreviousPositionAndScroll();
 
@@ -130,6 +130,7 @@ namespace ECSEngine {
 		int2 m_previous_position;
 		int m_previous_scroll;
 		int2 m_current_position;
+		int2 m_position_delta;
 		int m_current_scroll;
 		uint2 m_wrap_pixel_bounds;
 		// This is set to true when the mouse has wrapped in order to not
@@ -139,7 +140,6 @@ namespace ECSEngine {
 		bool m_is_visible;
 		bool m_wrap_position;
 		bool m_has_wrapped;
-		bool m_pin_mouse;
 	};
 
 }
