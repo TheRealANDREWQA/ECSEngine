@@ -2,10 +2,6 @@
 #include "ContactManifolds.h"
 
 struct ContactConstraintPoint {
-	// Initial anchor vectors in world space
-	//float3 world_anchor_A;
-	//float3 world_anchor_B;
-
 	// Local anchor relative to the center of mass
 	float3 local_anchor_A;
 	float3 local_anchor_B;
@@ -28,11 +24,6 @@ struct ContactConstraintPoint {
 	// Scenarios produce small twists that should not be present
 	float3 friction_local_anchor_A;
 	float3 friction_local_anchor_B;
-
-	//float mass_coefficient;
-	//float bias_coefficient;
-	//float impulse_coefficient;
-	//bool friction_valid;
 };
 
 struct EntityContact {

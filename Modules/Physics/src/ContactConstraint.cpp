@@ -7,45 +7,9 @@
 #include "CollisionDetection/src/CollisionDetectionComponents.h"
 #include "CollisionDetection/src/GJK.h"
 #include "Settings.h"
+#include "SolverData.h"
 
-#define SOLVER_DATA_STRING "SolverData"
 #define MAX_BAUMGARTE_BIAS 1000.0f
-
-struct ContactPair {
-	ECS_INLINE bool operator == (ContactPair other) const {
-		return (first == other.first && second == other.second) || (first == other.second && second == other.first);
-	}
-	
-	ECS_INLINE unsigned int Hash() const {
-		// Use CantorPair hashing such that reversed pairs will be considered the same
-		return CantorPair(first.value, second.value);
-	}
-
-	Entity first;
-	Entity second;
-};
-
-typedef HashTable<ContactConstraint, ContactPair, HashFunctionPowerOfTwo> ContactTable;
-
-struct SolverData {
-	ECS_INLINE void SetTimeStepTick(float value) {
-		time_step_tick = value;
-		inverse_time_step_tick = 1.0f / time_step_tick;
-	}
-
-	unsigned int iterations;
-	float baumgarte_factor;
-	float linear_slop;
-	// Expressed in seconds, it tells the simulation
-	// At which rate to update itself
-	float time_step_tick;
-	float inverse_time_step_tick;
-	float previous_time_step_remainder;
-	bool use_warm_starting;
-	
-	MemoryManager allocator;
-	ContactTable contact_table;
-};
 
 struct ComputeConstraintPointInfo {
 	float3 point;
