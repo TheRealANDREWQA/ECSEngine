@@ -65,11 +65,14 @@ namespace ECSEngine {
 	BasicType InterpolateBezier(const BezierBase<BasicType>& curve, float percentage) {
 		ECS_ASSERT(percentage >= 0.0f && percentage <= 1.0f);
 
+		float one_minus_percentage = 1.0f - percentage;
+		float one_minus_percentage_squared = one_minus_percentage * one_minus_percentage;
+		float percentage_squared = percentage * percentage;
+
 		// Point1 ((1-percentage)^3) + control1 (3(1-percentage^2)percentage) +
 		// control2 (3(1-percentage)percentage ^ 2) + point2 * (percentage ^ 3)
-		float one_minus = 1.0f - percentage;
-		return curve.point1 * one_minus * one_minus * one_minus + curve.control1 * (3.0f * one_minus * one_minus * percentage) +
-			curve.control2 * (3.0f * one_minus * percentage * percentage) + curve.point2 * percentage * percentage * percentage;
+		return curve.point1 * one_minus_percentage_squared * one_minus + curve.control1 * (3.0f * one_minus_percentage_squared * percentage) +
+			curve.control2 * (3.0f * one_minus_percentage * percentage_squared) + curve.point2 * percentage_squared * percentage;
 	}
 
 	ECSENGINE_API float ECS_VECTORCALL InterpolateBezier(BezierFloat curve, Vector3 percentage);

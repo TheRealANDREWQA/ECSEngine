@@ -336,16 +336,16 @@ Editor::Editor(const wchar_t* name)
 	timer.SetNewStart();
 	application_quit = EDITOR_APPLICATION_QUIT_APPROVED;
 
-	// calculate window size based on desired client region
-	RECT window_region;
-	window_region.left = 0;
-	window_region.right = 0;
-	window_region.bottom = 0;
-	window_region.top = 0;
-	AdjustWindowRect(&window_region, WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU, FALSE);
-
 	void* monitor_handle = OS::GetMonitorFromCursor();
 	OS::MonitorInfo monitor_info = OS::RetrieveMonitorInfo(monitor_handle);
+
+	// calculate window size based on desired client region
+	RECT window_region;
+	window_region.left = monitor_info.origin.x;
+	window_region.right = monitor_info.origin.x + monitor_info.size.x;
+	window_region.bottom = monitor_info.origin.y + monitor_info.size.y;
+	window_region.top = monitor_info.origin.y;
+	AdjustWindowRect(&window_region, WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU, FALSE);
 
 	//width = _width;
 	//height = _height;

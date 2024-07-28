@@ -65,10 +65,14 @@ namespace ECSEngine {
 	BasicType InterpolateHermite(const HermiteBase<BasicType>& curve, float percentage) {
 		ECS_ASSERT(percentage >= 0.0f && percentage <= 1.0f);
 
+		float one_minus_percentage = 1.0f - percentage;
+		float one_minus_percentage_squared = one_minus_percentage * one_minus_percentage;
+		float percentage_squared = percentage * percentage;
+
 		// Point1 ((1 + 2 * percentage)(1-percentage)^2) + slope1 ((1-percentage) ^ 2 * percentage) +
 		// point2 ((3 - 2 * percentage)percentage ^ 2) + slope2 * (percentage ^ 2 (percentage - 1))
-		return curve.point1 * (1.0f + 2.0f * percentage)(1.0f - percentage)(1.0f - percentage) + curve.slope1 * ((1.0f - percentage) * (1.0f - percentage) * percentage)
-			+ curve.point2 * (3.0f - 2 * percentage)(percentage * percentage) + curve.slope2 * (percentage * percentage * (percentage - 1.0f));
+		return curve.point1 * (1.0f + 2.0f * percentage) * one_minus_percentage_squared + curve.slope1 * (one_minus_percentage_squared * percentage)
+			+ curve.point2 * (3.0f - 2.0f * percentage) * percentage_squared + curve.slope2 * (percentage_squared * (percentage - 1.0f));
 	}
 
 	ECSENGINE_API float ECS_VECTORCALL InterpolateHermite(HermiteFloat curve, Vector3 percentage);
