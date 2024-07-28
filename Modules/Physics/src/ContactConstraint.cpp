@@ -546,7 +546,7 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 
 // Returns the hash table index of the contact constraint
 static unsigned int GetContactConstraintIndex(SolverData* solver_data, Entity entity_A, Entity entity_B) {
-	ContactPair contact_pair = { entity_A, entity_B };
+	EntityPair contact_pair = { entity_A, entity_B };
 	return solver_data->contact_table.Find(contact_pair);
 }
 
