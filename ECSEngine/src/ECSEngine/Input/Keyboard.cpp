@@ -448,6 +448,17 @@ namespace ECSEngine {
 			}
 		}
 
+		// If the key is repeated, ignore the message
+		bool is_key_repeatead = (HIWORD(info.lParam) & KF_REPEAT) == KF_REPEAT;
+		if (is_key_repeatead) {
+			if (down && IsDown(ecs_key)) {
+				return;
+			}
+			else if (!down && IsUp(ecs_key)) {
+				return;
+			}
+		}
+
 		bool is_alphanumeric = IsAlphanumeric(ecs_key);
 		if (!is_alphanumeric || !m_process_characters) {
 			UpdateButton(ecs_key, !down);
