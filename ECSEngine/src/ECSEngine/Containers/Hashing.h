@@ -12,6 +12,10 @@ namespace ECSEngine {
 
 	ECSENGINE_API Vec32cb ECS_VECTORCALL HashTableFindSIMDKernel(unsigned int index, unsigned char* m_metadata, unsigned char key_hash_bits, unsigned char hash_bits_mask);
 
+	// An empty struct that is used in a hash table to indicate that the table is a pure lookup for existence,
+	// It does need to store anything. MUST be used in conjuction with SoA to benefit from 0 storage overhead!
+	struct HashTableEmptyValue {};
+
 	// filename can be used as a general purpose pointer if other identifier than the filename is used
 	// Compare function uses AVX2 32 byte SIMD char compare
 	struct ECSENGINE_API ResourceIdentifier {

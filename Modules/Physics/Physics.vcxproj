@@ -176,7 +176,6 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\Contact.cpp" />
     <ClCompile Include="src\ContactManifolds.cpp" />
     <ClCompile Include="src\ContactConstraint.cpp" />
     <ClCompile Include="src\Islands.cpp" />
@@ -194,7 +193,6 @@
   <ItemGroup>
     <ClInclude Include="src\Islands.h" />
     <ClInclude Include="src\PhysicsComponents.h" />
-    <ClInclude Include="src\Contact.h" />
     <ClInclude Include="src\ContactConstraint.h" />
     <ClInclude Include="src\ContactManifolds.h" />
     <ClInclude Include="src\Export.h" />

@@ -11,4 +11,5 @@
 #include "../ECSEngine/Containers/AtomicStream.h"
 #include "../ECSEngine/Containers/ConcurrentHashTableSmall.h"
 #include "../ECSEngine/Containers/ConcurrentHashTable.h"
+#include "../ECSEngine/Containers/SparseSet.h"
 #include "../ECSEngine/Containers/SoA.h"

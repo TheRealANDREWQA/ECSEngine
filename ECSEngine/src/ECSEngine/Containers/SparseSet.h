@@ -57,8 +57,18 @@ namespace ECSEngine {
 			return handle;
 		}
 
+		// Returns the element at the given index, not handle value
+		ECS_INLINE T& At(unsigned int index) {
+			return buffer[index];
+		}
+
+		// Returns the element at the given index, not handle value
+		ECS_INLINE const T& At(unsigned int index) const {
+			return buffer[index];
+		}
+
 		// Resets the set, the same as initializing the buffer again with the same capacity but 0 elements
-		void Clear() {
+		ECS_INLINE void Clear() {
 			InitializeFromBuffer(buffer, capacity);
 		}
 
@@ -317,6 +327,14 @@ namespace ECSEngine {
 		}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ResizableSparseSet);
+
+		ECS_INLINE T& At(unsigned int index) {
+			return set.At(index);
+		}
+
+		ECS_INLINE const T& At(unsigned int index) const {
+			return set.At(index);
+		}
 
 		// Returns the handle to the element that was added
 		ECS_INLINE unsigned int Add(T element) {

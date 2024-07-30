@@ -31,9 +31,7 @@ struct EdgeTablePair {
 	unsigned int b_index;
 };
 
-struct EmptyStruct {};
-
-typedef HashTable<EmptyStruct, EdgeTablePair, HashFunctionPowerOfTwo> ProcessedEdgeTable;
+typedef HashTableEmpty<EdgeTablePair, HashFunctionPowerOfTwo> ProcessedEdgeTable;
 
 // Linked list of chunked connections such that we don't need to overallocate
 struct VertexConnections {

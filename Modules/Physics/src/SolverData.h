@@ -6,7 +6,9 @@
 
 #define SOLVER_DATA_STRING "SolverData"
 
-typedef ECSEngine::HashTable<ContactConstraint, ECSEngine::EntityPair, ECSEngine::HashFunctionPowerOfTwo> ContactTable;
+// Store pointers, since this will reduce the table size, which helps with resizings,
+// But also to have referential stability, which can be used to accelerate other structures
+typedef HashTable<ContactConstraint*, EntityPair, HashFunctionPowerOfTwo> ContactTable;
 
 struct SolverData {
 	ECS_INLINE void SetTimeStepTick(float value) {
@@ -24,6 +26,6 @@ struct SolverData {
 	float previous_time_step_remainder;
 	bool use_warm_starting;
 
-	ECSEngine::MemoryManager allocator;
+	MemoryManager allocator;
 	ContactTable contact_table;
 };
