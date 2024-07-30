@@ -47,6 +47,18 @@ struct Contact {
 struct Rigidbody;
 
 struct ContactConstraint {
+	ECS_INLINE size_t PointCount() const {
+		return contact.base.manifold.point_count;
+	}
+
+	ECS_INLINE Entity FirstEntity() const {
+		return contact.base.entity_A;
+	}
+
+	ECS_INLINE Entity SecondEntity() const {
+		return contact.base.entity_B;
+	}
+
 	Contact contact;
 	// These 2 are in world space
 	float3 center_of_mass_A;
@@ -59,10 +71,6 @@ struct ContactConstraint {
 	// If this reaches 0, it means that the contact needs to be removed
 	unsigned char reference_count;
 };
-
-ECS_INLINE size_t ContactConstraintPointCount(const ContactConstraint& constraint) {
-	return constraint.contact.base.manifold.point_count;
-}
 
 ECS_THREAD_TASK(SolveContactConstraints);
 

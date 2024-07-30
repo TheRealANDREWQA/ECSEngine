@@ -55,6 +55,18 @@ namespace ECSEngine {
 		HashTable(const HashTable& other) = default;
 		HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>& operator = (const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>& other) = default;
 
+	private:
+		template<typename = std::enable_if_t<SoA == true>>
+		static size_t GetValueSize() {
+			size_t value = sizeof(T);
+			if constexpr (std::is_same_v<T, HashTableEmptyValue>) {
+				value = 0;
+			}
+			return value;
+		}
+
+	public:
+
 		void Clear() {
 			if (m_capacity > 0) {
 				memset(m_metadata, 0, sizeof(unsigned char) * (m_capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT));
@@ -456,12 +468,18 @@ namespace ECSEngine {
 		// Only valid in SoA type
 		template<typename = std::enable_if_t<SoA == true>>
 		ECS_INLINE T* GetValues() {
+			if constexpr (std::is_same_v<T, HashTableEmptyValue>) {
+				return nullptr;
+			}
 			return (T*)m_buffer;
 		}
 
 		// Only valid in SoA type
 		template<typename = std::enable_if_t<SoA == true>>
 		ECS_INLINE const T* GetValues() const {
+			if constexpr (std::is_same_v<T, HashTableEmptyValue>) {
+				return nullptr;
+			}
 			return (const T*)m_buffer;
 		}
 
@@ -498,6 +516,9 @@ namespace ECSEngine {
 		// The extended capacity is used to check bounds validity
 		ECS_INLINE T GetValueFromIndex(unsigned int index) const {
 			if constexpr (SoA) {
+				if constexpr (std::is_same_v<T, HashTableEmptyValue>) {
+					return {};
+				}
 				const T* values = GetValues();
 				return values[index];
 			}
@@ -510,6 +531,9 @@ namespace ECSEngine {
 		// The extended capacity is used to check bounds validity
 		ECS_INLINE T* GetValuePtrFromIndex(unsigned int index) {
 			if constexpr (SoA) {
+				if constexpr (std::is_same_v<T, HashTableEmptyValue>) {
+					return nullptr;
+				}
 				T* values = GetValues();
 				return values + index;
 			}
@@ -563,18 +587,21 @@ namespace ECSEngine {
 			}
 		}
 
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		T GetValue(Identifier identifier) const {
 			unsigned int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			return GetValueFromIndex(index);
 		}
 
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		T* GetValuePtr(Identifier identifier) {
 			unsigned int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			return GetValuePtrFromIndex(index);
 		}
 
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		const T* GetValuePtr(Identifier identifier) const {
 			unsigned int index = Find(identifier);
 			ECS_ASSERT(index != -1);
@@ -589,8 +616,9 @@ namespace ECSEngine {
 			}
 		}
 
-		// If you have a pointer to a value from the table and wants to get its index
-		// use this function
+		// If you have a pointer to a value from the table and want to get its index,
+		// Use this function
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		ECS_INLINE unsigned int ValuePtrIndex(const T* ptr) const {
 			if constexpr (SoA) {
 				return ptr - GetValues();
@@ -601,6 +629,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// If you have a pointer to an identifier from the table and want to get its index,
+		// Use this function
 		ECS_INLINE unsigned int IdentifierPtrIndex(const Identifier* identifier) const {
 			if constexpr (SoA) {
 				return identifier - GetIdentifiers();
@@ -611,16 +641,20 @@ namespace ECSEngine {
 			}
 		}
 
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		ECS_INLINE void GetEntry(unsigned int index, T& value, Identifier& identifier) const {
 			value = GetValueFromIndex(index);
 			identifier = GetIdentifierFromIndex(index);
 		}
 
 		ECS_INLINE void SetEntry(unsigned int index, T value, Identifier identifier) {
-			*GetValuePtrFromIndex(index) = value;
+			if constexpr (!std::is_same_v<T, HashTableEmptyValue>) {
+				*GetValuePtrFromIndex(index) = value;
+			}
 			*GetIdentifierPtrFromIndex(index) = identifier;
 		}
 
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		void SetValue(T value, Identifier identifier) {
 			int index = Find(identifier);
 			ECS_ASSERT(index != -1);
@@ -628,10 +662,12 @@ namespace ECSEngine {
 		}
 
 		// The extended capacity is used to check bounds validity
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		ECS_INLINE void SetValueByIndex(unsigned int index, T value) {
 			*GetValuePtrFromIndex(index) = value;
 		}
 
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		bool TryGetValue(Identifier identifier, T& value) const {
 			if (GetCount() == 0) {
 				return false;
@@ -647,6 +683,7 @@ namespace ECSEngine {
 			}
 		}
 
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		bool TryGetValuePtr(Identifier identifier, T*& pointer) {
 			if (GetCount() == 0) {
 				return false;
@@ -664,6 +701,7 @@ namespace ECSEngine {
 
 		// This is provided for some edge cases when you use templates and you know
 		// That the target type is fine and just wanna retrieve the pointer
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		bool TryGetValuePtrUntyped(Identifier identifier, void*& pointer) {
 			T* ptr = nullptr;
 			if (TryGetValuePtr(identifier, ptr)) {
@@ -673,6 +711,7 @@ namespace ECSEngine {
 			return false;
 		}
 
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		bool TryGetValuePtr(Identifier identifier, const T*& pointer) const {
 			if (GetCount() == 0) {
 				return false;
@@ -690,6 +729,7 @@ namespace ECSEngine {
 
 		// This is provided for some edge cases when you use templates and you know
 		// That the target type is fine and just wanna retrieve the pointer
+		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		bool TryGetValuePtrUntyped(Identifier identifier, const void*& pointer) const {
 			const T* ptr = nullptr;
 			if (TryGetValuePtr(identifier, ptr)) {
@@ -705,7 +745,7 @@ namespace ECSEngine {
 			}
 
 			if constexpr (SoA) {
-				return (sizeof(unsigned char) + sizeof(T) + sizeof(Identifier)) * (number + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
+				return (sizeof(unsigned char) + GetValueSize() + sizeof(Identifier)) * (number + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
 			}
 			else {
 				return (sizeof(unsigned char) + sizeof(Pair)) * (number + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
@@ -756,7 +796,7 @@ namespace ECSEngine {
 			uintptr_t ptr = (uintptr_t)buffer;
 			m_buffer = buffer;
 			if constexpr (SoA) {
-				ptr += sizeof(T)* extended_capacity;
+				ptr += GetValueSize() * extended_capacity;
 				m_identifiers = (Identifier*)ptr;
 				ptr += sizeof(Identifier) * extended_capacity;
 			}
@@ -856,7 +896,7 @@ namespace ECSEngine {
 				size_t metadata_size = sizeof(*m_metadata) * (capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
 				size_t total_size = metadata_size;
 				if constexpr (SoA) {
-					total_size += (sizeof(T) + sizeof(Identifier)) * extended_capacity;
+					total_size += (GetValueSize() + sizeof(Identifier)) * extended_capacity;
 				}
 				else {
 					total_size += sizeof(Pair) * extended_capacity;
@@ -927,6 +967,9 @@ namespace ECSEngine {
 
 	template<typename T>
 	using HashTableDefault = HashTable<T, ResourceIdentifier, HashFunctionPowerOfTwo>;
+
+	template<typename Identifier, typename TableHashFunction, typename ObjectHashFunction = ObjectHashFallthrough>
+	using HashTableEmpty = HashTable<HashTableEmptyValue, Identifier, TableHashFunction, ObjectHashFunction, true>;
 
 	// The identifier must have the function Identifier Copy(AllocatorPolymorphic allocator) const;
 	template<typename Table>

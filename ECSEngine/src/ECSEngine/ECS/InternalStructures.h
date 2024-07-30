@@ -48,6 +48,11 @@ namespace ECSEngine {
 			return value;
 		}
 
+		ECS_INLINE unsigned int Hash() const {
+			// A use case must be found to warrant a more advanced hash function
+			return value;
+		}
+
 		union {
 			struct {
 				unsigned int index : 26;
