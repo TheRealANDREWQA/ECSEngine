@@ -102,9 +102,10 @@ public:
 		using namespace ECSEngine;
 		using namespace ECSEngine::Tools;
 
-		EditorState editor_state;
 		EditorStateBaseInitialize(&editor_state, hWnd, &mouse, &keyboard);
-		EditorStateInitialize(this, &editor_state, hWnd, &mouse, &keyboard);
+		EditorStateInitialize(this, &editor_state, hWnd, &mouse, &keyboard, monitor_size);
+
+		is_editor_state_initialized = true;
 
 		ResourceManager* resource_manager = editor_state.ui_resource_manager;
 		Graphics* graphics = editor_state.UIGraphics();
@@ -135,7 +136,7 @@ public:
 						DispatchMessage(&message);
 					}
 
-					auto handle_physical_memory_guards = [&editor_state](EXCEPTION_POINTERS* exception_pointers) {
+					auto handle_physical_memory_guards = [this](EXCEPTION_POINTERS* exception_pointers) {
 						OS::ExceptionInformation exception_information = OS::GetExceptionInformationFromNative(exception_pointers);
 						if (exception_information.error_code == OS::ECS_OS_EXCEPTION_PAGE_GUARD) {
 							// We are not interested in temporary sandboxes since those should not have
@@ -281,6 +282,11 @@ public:
 		ECSEngine::Stream<HCURSOR> cursors;
 		ECSEngine::ECS_CURSOR_TYPE current_cursor;
 		EDITOR_APPLICATION_QUIT_RESPONSE application_quit;
+		EditorState editor_state;
+		bool is_editor_state_initialized = false;
+		// This is a handle to the monitor that the window is currently being displayed on
+		void* monitor_handle;
+		uint2 monitor_size;
 
 		// singleton that manages registering and unregistering the editor class
 		class EditorClass {
@@ -309,12 +315,12 @@ Editor::EditorClass::EditorClass() noexcept : hInstance( GetModuleHandle(nullptr
 	editor_class.cbClsExtra = 0;
 	editor_class.cbWndExtra = 0;
 	editor_class.hInstance = GetInstance();
-	editor_class.hIcon = static_cast<HICON>( LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 128, 128, 0 ));
+	editor_class.hIcon = (HICON)( LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 128, 128, 0 ));
 	editor_class.hCursor = nullptr;
 	editor_class.hbrBackground = nullptr;
 	editor_class.lpszMenuName = nullptr;
 	editor_class.lpszClassName = GetName();
-	editor_class.hIconSm = static_cast<HICON>(LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 32, 32, 0));;
+	editor_class.hIconSm = (HICON)(LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 32, 32, 0));
 	
 	// Set application thread DPI to system aware - we are using DX11 to do the scaling
 	DPI_AWARENESS_CONTEXT context = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
@@ -336,7 +342,7 @@ Editor::Editor(const wchar_t* name)
 	timer.SetNewStart();
 	application_quit = EDITOR_APPLICATION_QUIT_APPROVED;
 
-	void* monitor_handle = OS::GetMonitorFromCursor();
+	monitor_handle = OS::GetMonitorFromCursor();
 	OS::MonitorInfo monitor_info = OS::RetrieveMonitorInfo(monitor_handle);
 
 	// calculate window size based on desired client region
@@ -345,7 +351,8 @@ Editor::Editor(const wchar_t* name)
 	window_region.right = monitor_info.origin.x + monitor_info.size.x;
 	window_region.bottom = monitor_info.origin.y + monitor_info.size.y;
 	window_region.top = monitor_info.origin.y;
-	AdjustWindowRect(&window_region, WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU, FALSE);
+	//AdjustWindowRect(&window_region, WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU, FALSE);
+	monitor_size = monitor_info.size;
 
 	//width = _width;
 	//height = _height;
@@ -354,18 +361,18 @@ Editor::Editor(const wchar_t* name)
 
 	// hInstance is null because these are predefined cursors
 	cursors = Stream<HCURSOR>(cursor_stream, ECS_CURSOR_COUNT);
-	cursors[(unsigned int)ECS_CURSOR_APP_STARTING] = LoadCursor(NULL, IDC_APPSTARTING);
-	cursors[(unsigned int)ECS_CURSOR_CROSS] = LoadCursor(NULL, IDC_CROSS);
-	cursors[(unsigned int)ECS_CURSOR_DEFAULT] = LoadCursor(NULL, IDC_ARROW);
-	cursors[(unsigned int)ECS_CURSOR_HAND] = LoadCursor(NULL, IDC_HAND);
-	cursors[(unsigned int)ECS_CURSOR_HELP] = LoadCursor(NULL, IDC_HELP);
-	cursors[(unsigned int)ECS_CURSOR_IBEAM] = LoadCursor(NULL, IDC_IBEAM);
-	cursors[(unsigned int)ECS_CURSOR_SIZE_ALL] = LoadCursor(NULL, IDC_SIZEALL);
-	cursors[(unsigned int)ECS_CURSOR_SIZE_EW] = LoadCursor(NULL, IDC_SIZEWE);
-	cursors[(unsigned int)ECS_CURSOR_SIZE_NESW] = LoadCursor(NULL, IDC_SIZENESW);
-	cursors[(unsigned int)ECS_CURSOR_SIZE_NS] = LoadCursor(NULL, IDC_SIZENS);
-	cursors[(unsigned int)ECS_CURSOR_SIZE_NWSE] = LoadCursor(NULL, IDC_SIZENWSE);
-	cursors[(unsigned int)ECS_CURSOR_WAIT] = LoadCursor(NULL, IDC_WAIT);
+	cursors[ECS_CURSOR_APP_STARTING] = LoadCursor(NULL, IDC_APPSTARTING);
+	cursors[ECS_CURSOR_CROSS] = LoadCursor(NULL, IDC_CROSS);
+	cursors[ECS_CURSOR_DEFAULT] = LoadCursor(NULL, IDC_ARROW);
+	cursors[ECS_CURSOR_HAND] = LoadCursor(NULL, IDC_HAND);
+	cursors[ECS_CURSOR_HELP] = LoadCursor(NULL, IDC_HELP);
+	cursors[ECS_CURSOR_IBEAM] = LoadCursor(NULL, IDC_IBEAM);
+	cursors[ECS_CURSOR_SIZE_ALL] = LoadCursor(NULL, IDC_SIZEALL);
+	cursors[ECS_CURSOR_SIZE_EW] = LoadCursor(NULL, IDC_SIZEWE);
+	cursors[ECS_CURSOR_SIZE_NESW] = LoadCursor(NULL, IDC_SIZENESW);
+	cursors[ECS_CURSOR_SIZE_NS] = LoadCursor(NULL, IDC_SIZENS);
+	cursors[ECS_CURSOR_SIZE_NWSE] = LoadCursor(NULL, IDC_SIZENWSE);
+	cursors[ECS_CURSOR_WAIT] = LoadCursor(NULL, IDC_WAIT);
 
 	ChangeCursor(ECS_CURSOR_DEFAULT);
 
@@ -374,8 +381,8 @@ Editor::Editor(const wchar_t* name)
 		EditorClass::GetName(),
 		name,
 		WS_OVERLAPPEDWINDOW /*^ WS_THICKFRAME*/,
-		CW_USEDEFAULT,
-		CW_USEDEFAULT,
+		window_region.left,
+		window_region.top,
 		window_region.right - window_region.left,
 		window_region.bottom - window_region.top,
 		nullptr,
@@ -417,14 +424,14 @@ LRESULT WINAPI Editor::HandleMessageSetup(HWND hWnd, UINT message, WPARAM wParam
 
 	if (message == WM_NCCREATE) {
 		// extract pointer to window class from creation data
-		const CREATESTRUCTW* const createStruct = reinterpret_cast<CREATESTRUCTW*>(lParam);
-		Editor* const editor_pointer = static_cast<Editor*>(createStruct->lpCreateParams);
+		const CREATESTRUCTW* createStruct = (CREATESTRUCTW*)(lParam);
+		Editor* editor_pointer = (Editor*)(createStruct->lpCreateParams);
 
 		// set WinAPI managed user data to store pointer to editor class
-		SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(editor_pointer));
+		SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)(editor_pointer));
 
 		// set WinAPI procedure to forwarder
-		SetWindowLongPtr(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&Editor::HandleMessageForward));
+		SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)(&Editor::HandleMessageForward));
 
 		// forward message
 		return editor_pointer->HandleMessageForward(hWnd, message, wParam, lParam);
@@ -435,19 +442,7 @@ LRESULT WINAPI Editor::HandleMessageSetup(HWND hWnd, UINT message, WPARAM wParam
 LRESULT WINAPI Editor::HandleMessageForward(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
 
 	// retrieve pointer to editor class
-	Editor* editor = reinterpret_cast<Editor*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-
-	//if (message == WM_SIZE) {
-	//	float new_width = LOWORD(lParam);
-	//	float new_height = HIWORD(lParam);
-	//	if (new_width != 0.0f && new_height != 0.0f) {
-	//		if (editor->graphics != nullptr) {
-	//			editor->graphics->SetNewSize(hWnd, new_width, new_height);
-	//			//std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	//		}
-	//	}
-	//}
-
+	Editor* editor = (Editor*)(GetWindowLongPtr(hWnd, GWLP_USERDATA));
 	return editor->HandleMessage(hWnd, message, wParam, lParam);
 }
 
@@ -487,6 +482,25 @@ LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 			SetCursor(cursors[(unsigned int)current_cursor]);
 		}
 		break;
+	case WM_SIZE: {
+		if (is_editor_state_initialized) {
+			// Retrieve the monitor handle for the current cursor position
+			// If the monitor handle has changed, we must change the aspect ratio
+			// Of the UI
+			void* current_monitor = OS::GetMonitorFromCursor();
+			if (current_monitor != monitor_handle) {
+				monitor_handle = current_monitor;
+				OS::MonitorInfo monitor_info = OS::RetrieveMonitorInfo(current_monitor);
+				monitor_size = monitor_info.size;
+			}
+
+			unsigned int new_width = LOWORD(lParam);
+			unsigned int new_height = HIWORD(lParam);
+			editor_state.ui_system->SetWindowOSSize({ new_width, new_height }, monitor_size);
+			editor_state.UIGraphics()->SetNewSize(hWnd, new_width, new_height);
+		}
+		break;
+	}
 	}
 
 	return DefWindowProc(hWnd, message, wParam, lParam);

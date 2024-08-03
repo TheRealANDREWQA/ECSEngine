@@ -178,6 +178,7 @@
   <ItemGroup>
     <ClCompile Include="src\ContactManifolds.cpp" />
     <ClCompile Include="src\ContactConstraint.cpp" />
+    <ClCompile Include="src\Debugging.cpp" />
     <ClCompile Include="src\Islands.cpp" />
     <ClCompile Include="src\Logging.cpp" />
     <ClCompile Include="src\PhysicsModuleFunction.cpp" />
@@ -189,8 +190,10 @@
     <ClCompile Include="src\Rigidbody.cpp" />
     <ClCompile Include="src\Scripting.cpp" />
     <ClCompile Include="src\SolverCommon.cpp" />
+    <ClCompile Include="src\SolverData.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Debugging.h" />
     <ClInclude Include="src\Islands.h" />
     <ClInclude Include="src\PhysicsComponents.h" />
     <ClInclude Include="src\ContactConstraint.h" />

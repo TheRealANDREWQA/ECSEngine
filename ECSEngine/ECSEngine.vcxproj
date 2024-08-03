@@ -401,6 +401,7 @@
     <ClInclude Include="src\Includes\ECSEngineBenchmark.h" />
     <ClInclude Include="src\Includes\ECSEngineCamera.h" />
     <ClInclude Include="src\Includes\ECSEngineCBufferTags.h" />
+    <ClInclude Include="src\Includes\ECSEngineColor.h" />
     <ClInclude Include="src\Includes\ECSEngineComponents.h" />
     <ClInclude Include="src\Includes\ECSEngineComponentsAll.h" />
     <ClInclude Include="src\Includes\ECSEngineConcurrentPrimitives.h" />
@@ -783,6 +784,11 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
     </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\SolidColorInstanced.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
+    </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\BasicTransform.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
@@ -815,6 +821,11 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\SolidColorInstanced.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

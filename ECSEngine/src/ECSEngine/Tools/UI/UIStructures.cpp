@@ -8,94 +8,7 @@
 
 namespace ECSEngine {
 
-	namespace Tools {
-
-		UISpriteVertex::UISpriteVertex() : position(0.0f, 0.0f), uvs(0.0f, 0.0f) {}
-
-		UISpriteVertex::UISpriteVertex(float position_x, float position_y, float uv_u, float uv_v, Color _color)
-			: position(position_x, position_y), uvs(uv_u, uv_v), color(_color) {}
-
-		UISpriteVertex::UISpriteVertex(float2 _position, float2 _uvs, Color _color)
-			: position(_position), uvs(_uvs), color(_color) {}
-
-		void UISpriteVertex::SetTransform(float position_x, float position_y)
-		{
-			position.x = position_x;
-			position.y = position_y;
-		}
-
-		void UISpriteVertex::SetTransform(float2 _position)
-		{
-			position = { _position.x, -_position.y };
-		}
-
-		void UISpriteVertex::SetColor(Color _color) {
-			color = _color;
-		}
-
-		void UISpriteVertex::SetUV(float2 _uvs) {
-			uvs = _uvs;
-		}
-
-		UIVertexColor::UIVertexColor() : position(0.0f, 0.0f), color((unsigned char)0, 0, 0, 255) {}
-
-		UIVertexColor::UIVertexColor(float position_x, float position_y, Color _color) : position(position_x, position_y), color(_color) {}
-
-		UIVertexColor::UIVertexColor(float2 _position, Color _color) : position(_position), color(_color) {}
-
-		void UIVertexColor::SetTransform(float position_x, float position_y)
-		{
-			position.x = position_x;
-			position.y = position_y;
-		}
-
-		void UIVertexColor::SetTransform(float2 _position)
-		{
-			position = { _position.x, -_position.y };
-		}
-
-		void UIVertexColor::SetColor(Color _color) {
-			color = _color;
-		}
-
-		UIElementTransform::UIElementTransform() : position(0.0f, 0.0f), scale(1.0f, 1.0f) {}
-
-		UIElementTransform::UIElementTransform(float position_x, float position_y, float scale_x, float scale_y)
-			: position(position_x, position_y), scale(scale_x, scale_y) {}
-
-		UIElementTransform::UIElementTransform(float2 _position, float2 _scale) : position(_position), scale(_scale) {}
-
-		bool BorderHover::IsBottom() {
-			return (value & 0x01) != 0;
-		}
-
-		bool BorderHover::IsTop() {
-			return (value & 0x02) != 0;
-		}
-
-		bool BorderHover::IsLeft() {
-			return (value & 0x04) != 0;
-		}
-
-		bool BorderHover::IsRight() {
-			return (value & 0x08) != 0;
-		}
-
-		void BorderHover::SetBottom() {
-			value |= 0x01;
-		}
-
-		void BorderHover::SetTop() {
-			value |= 0x02;
-		}
-
-		void BorderHover::SetLeft() {
-			value |= 0x04;
-		}
-
-		void BorderHover::SetRight() {
-			value |= 0x08;
-		}
+	namespace Tools { 
 
 		float2 UIVisibleDockspaceRegion::GetPosition() {
 			float dockspace_mask = GetDockspaceMaskFromType(type);
@@ -675,6 +588,19 @@ namespace ECSEngine {
 			element_descriptor.slider_shrink *= factor;
 		}
 
+		void UIWindowDrawerDescriptor::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
+		{
+			if (configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT]) {
+				layout.ChangeDimensionRatio(current_ratio, new_ratio);
+			}
+			if (configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_FONT]) {
+				font.ChangeDimensionRatio(current_ratio, new_ratio);
+			}
+			if (configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT]) {
+				element_descriptor.ChangeDimensionRatio(current_ratio, new_ratio);
+			}
+		}
+
 		size_t UIWindow::Serialize(void* buffer) const
 		{
 			/*
@@ -683,10 +609,10 @@ namespace ECSEngine {
 			*/
 
 			uintptr_t ptr = (uintptr_t)buffer;
-			memcpy((void*)ptr, descriptors, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
+			memcpy((void*)ptr, descriptors, sizeof(bool) * ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
 
 			// configured descriptors
-			ptr += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
+			ptr += sizeof(bool) * ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
 			void* descriptor_ptrs[] = {
 				&descriptors->color_theme,
@@ -702,7 +628,7 @@ namespace ECSEngine {
 			};
 
 			// descriptors
-			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
+			for (size_t index = 0; index < ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				if (descriptors->configured[index]) {
 					memcpy((void*)ptr, descriptor_ptrs[index], descriptor_sizes[index]);
 					ptr += descriptor_sizes[index];
@@ -725,7 +651,7 @@ namespace ECSEngine {
 			size_t size = 0;
 
 			// configured descriptors
-			size += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
+			size += sizeof(bool) * ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
 			size_t descriptor_sizes[] = {
 				sizeof(UIColorThemeDescriptor),
@@ -735,7 +661,7 @@ namespace ECSEngine {
 			};
 
 			// descriptors
-			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
+			for (size_t index = 0; index < ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				if (descriptors->configured[index]) {
 					size += descriptor_sizes[index];
 				}
@@ -754,7 +680,7 @@ namespace ECSEngine {
 			uintptr_t ptr = (uintptr_t)buffer;
 
 			// descriptor configurations
-			memcpy(descriptors->configured, (const void*)ptr, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
+			memcpy(descriptors->configured, (const void*)ptr, sizeof(bool) * ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
 
 			void* descriptor_ptrs[] = {
 				&descriptors->color_theme,
@@ -769,10 +695,10 @@ namespace ECSEngine {
 				sizeof(UIElementDescriptor)
 			};
 
-			ptr += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
+			ptr += sizeof(bool) * ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
 			// configured descriptors
-			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
+			for (size_t index = 0; index < ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				if (descriptors->configured[index]) {
 					memcpy(descriptor_ptrs[index], (const void*)ptr, descriptor_sizes[index]);
 					ptr += descriptor_sizes[index];
@@ -1176,6 +1102,137 @@ namespace ECSEngine {
 			runnables.DeallocateEx(allocator);
 		
 			InitializeEmpty();
+		}
+
+		template<typename UpdateXFunctor, typename UpdateYFunctor>
+		void ChangeStructureDimensionRatio(UpdateXFunctor&& update_x, UpdateYFunctor&& update_y, float2 current_ratio, float2 new_ratio) {
+			float2 factor_inverse = current_ratio / new_ratio;
+			if (factor_inverse.x != 1.0f) {
+				update_x(factor_inverse.x);
+			}
+			if (factor_inverse.y != 1.0f) {
+				update_y(factor_inverse.y);
+			}
+		}
+
+		void UIElementDescriptor::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
+		{
+			auto update_x = [this](float value) {
+				label_padd.x *= value;
+				slider_shrink.x *= value;
+				slider_length.x *= value;
+				color_input_padd *= value;
+				combo_box_padding *= value;
+				graph_padding.x *= value;
+				graph_x_axis_space *= value;
+				graph_axis_value_line_size.x *= value;
+				graph_axis_bump.x *= value;
+				histogram_padding.x *= value;
+				histogram_bar_spacing *= value;
+			};
+
+			auto update_y = [this](float value) {
+				label_padd.y *= value;
+				slider_shrink.y *= value;
+				slider_length.y *= value;
+				graph_padding.y *= value;
+				graph_axis_value_line_size.y *= value;
+				graph_axis_bump.y *= value;
+				graph_sample_circle_size *= value;
+				histogram_padding.y *= value;
+				histogram_bar_min_scale *= value;
+				histogram_bar_spacing *= value;
+				menu_button_padding *= value;
+				label_list_circle_size *= value;
+			};
+
+			ChangeStructureDimensionRatio(update_x, update_y, current_ratio, new_ratio);
+		}
+
+		void UIMiscellaneousDescriptor::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
+		{
+			auto update_x = [this](float value) {
+				render_slider_horizontal_size *= value;
+				color_input_window_size_x *= value;
+				graph_hover_offset.x *= value;
+				histogram_hover_offset.x *= value;
+				tool_tip_padding.x *= value;
+				menu_x_padd *= value;
+			};
+
+			auto update_y = [this](float value) {
+				title_y_scale *= value;
+				render_slider_vertical_size *= value;
+				graph_hover_offset.y *= value;
+				histogram_hover_offset.y *= value;
+				tool_tip_padding.y *= value;
+			};
+			
+			ChangeStructureDimensionRatio(update_x, update_y, current_ratio, new_ratio);
+		}
+
+		void UILayoutDescriptor::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
+		{
+			auto update_x = [this](float value) {
+				default_element_x *= value;
+				element_indentation *= value;
+				next_row_padding *= value;
+				node_indentation *= value;
+			};
+
+			auto update_y = [this](float value) {
+				default_element_y *= value;
+				next_row_y_offset *= value;
+			};
+
+			ChangeStructureDimensionRatio(update_x, update_y, current_ratio, new_ratio);
+		}
+
+		void UIDockspaceDescriptor::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
+		{
+			auto update_x = [this](float value) {
+				border_margin *= value;
+				region_header_spacing *= value;
+				region_header_padding *= value;
+				region_header_added_scale *= value;
+				viewport_padding_x *= value;
+				close_x_position_x_left *= value;
+				close_x_position_x_right *= value;
+				close_x_total_x_padding *= value;
+			};
+
+			auto update_y = [this](float value) {
+				border_size *= value;
+				border_minimum_distance *= value;
+				mininum_scale *= value;
+				viewport_padding_y *= value;
+				collapse_triangle_scale *= value;
+				close_x_scale_y *= value;
+			};
+
+			ChangeStructureDimensionRatio(update_x, update_y, current_ratio, new_ratio);
+		}
+
+		void UIFontDescriptor::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
+		{
+			auto update_x = [this](float value) {
+				character_spacing *= value;
+			};
+
+			auto update_y = [this](float value) {
+				size *= value;
+			};
+
+			ChangeStructureDimensionRatio(update_x, update_y, current_ratio, new_ratio);
+		}
+
+		void UISystemDescriptors::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
+		{
+			dockspaces.ChangeDimensionRatio(current_ratio, new_ratio);
+			window_layout.ChangeDimensionRatio(current_ratio, new_ratio);
+			font.ChangeDimensionRatio(current_ratio, new_ratio);
+			misc.ChangeDimensionRatio(current_ratio, new_ratio);
+			element_descriptor.ChangeDimensionRatio(current_ratio, new_ratio);
 		}
 
 	}

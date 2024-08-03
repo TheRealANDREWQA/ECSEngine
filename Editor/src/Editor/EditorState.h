@@ -224,7 +224,7 @@ void EditorStateAddGPUTask(EditorState* editor_state, ECSEngine::ThreadTask task
 // This needs to be called once per application run
 void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, ECSEngine::Mouse* mouse, ECSEngine::Keyboard* keyboard);
 
-void EditorStateInitialize(ECSEngine::Application* application, EditorState* editor_state, HWND hWnd, ECSEngine::Mouse* mouse, ECSEngine::Keyboard* keyboard);
+void EditorStateInitialize(ECSEngine::Application* application, EditorState* editor_state, HWND hWnd, ECSEngine::Mouse* mouse, ECSEngine::Keyboard* keyboard, ECSEngine::uint2 monitor_size);
 
 void EditorStateDestroy(EditorState* editor_state);
 

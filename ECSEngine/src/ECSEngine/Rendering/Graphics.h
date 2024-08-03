@@ -62,6 +62,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_SINT,
 		ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_DEPTH,
 		ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_FLOAT,
+		ECS_GRAPHICS_SHADER_HELPER_SOLID_COLOR,
 		ECS_GRAPHICS_SHADER_HELPER_COUNT
 	};
 
@@ -305,6 +306,13 @@ namespace ECSEngine {
 	// Returns how much memory it allocates in its initial allocation
 	ECSENGINE_API size_t DefaultGraphicsAllocatorSize();
 
+	// This structure is used by the Solid color helper shader
+	struct GraphicsSolidColorInstance {
+		Matrix matrix;
+		// A full floating point color is used to have 16 byte alignment
+		ColorFloat color;
+	};
+
 	/* It has an immediate and a deferred context. The deferred context can be used to generate CommandLists */
 	struct ECSENGINE_API Graphics
 	{
@@ -437,6 +445,9 @@ namespace ECSEngine {
 		ConstantBuffer CreateMousePickShaderPixelCBuffer(bool temporary = true);
 
 		void UpdateMousePickShaderPixelCBuffer(ConstantBuffer buffer, unsigned int blended_value);
+
+		// Returns a vertex buffer that can be filled with instance data for a Solid Color draw
+		VertexBuffer SolidColorHelperShaderReserveInstances(unsigned int count);
 
 #pragma endregion
 
@@ -1156,7 +1167,7 @@ namespace ECSEngine {
 		// It doesn't deallocate the snapshot (it must be done outside)!
 		bool RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot, CapacityStream<char>* mismatch_string = nullptr);
 
-		void ResizeSwapChainSize(HWND hWnd, float width, float height);
+		void ResizeSwapChainSize(HWND hWnd, unsigned int width, unsigned int height);
 
 		void ResizeViewport(float top_left_x, float top_left_y, float new_width, float new_height);
 
@@ -1609,29 +1620,44 @@ namespace ECSEngine {
 	// Releases the mesh GPU resources and the names of the submeshes if any
 	ECSENGINE_API void FreeCoalescedMesh(Graphics* graphics, CoalescedMesh* mesh, bool coalesced_allocation, AllocatorPolymorphic allocator);
 
-	// SINGLE THREADED - It uses the CopyResource which requires the immediate context
+	struct MergeMeshesOptions {
+		bool free_existing_meshes = false;
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE;
+	};
+
+	// SINGLE THREADED - It uses CopyResource which requires the immediate context
 	// Merges the vertex buffers and the index buffers into a single resource that can reduce 
 	// the bind calls by moving the offsets into the draw call; it returns the aggregate mesh
-	// and the submeshes - the offsets into the buffers; it will release the initial mesh 
-	// buffers; The meshes must have the same index buffer int size
+	// and the submeshes - the offsets into the buffers
+	// The meshes must have the same index buffer int size
 	// The mesh will have no name associated with it
 	// It will release the graphics resources of the meshes
 	// The submeshes will inherit the mesh name if it has one
 	// The submeshes and the coalesced mesh don't have their bounds set
-	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE);
-
-	// SINGLE THREADED - It uses the CopyResource which requires the immediate context
-	// Same as the non mask variant - the difference is that it will only convert the meshes specified
-	// in the mesh mask. The mesh will have no name associated with it
-	// It will release the graphics resources of the meshes
-	// The submeshes will inherit the mesh name if it has one
-	// The submeshes and the coalesced mesh don't have their bounds set
-	ECSENGINE_API Mesh MeshesToSubmeshes(
+	// The allocator is used to allocate the submesh buffer
+	// In order to deallocate CPU side resources of coalesced meshes, you must do that
+	ECSENGINE_API CoalescedMesh MergeMeshes(
 		Graphics* graphics, 
-		Stream<Mesh> meshes, 
-		Submesh* submeshes,
-		Stream<unsigned int> mesh_mask, 
-		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE
+		Stream<Mesh*> meshes, 
+		AllocatorPolymorphic allocator, 
+		const MergeMeshesOptions* options = nullptr
+	);
+
+	// SINGLE THREADED - It uses CopyResource which requires the immediate context
+	// Merges the vertex buffers and the index buffers into a single resource that can reduce 
+	// the bind calls by moving the offsets into the draw call; it returns the aggregate mesh
+	// and the submeshes - the offsets into the buffers
+	// The meshes must have the same index buffer int size
+	// The mesh will have no name associated with it
+	// It will release the graphics resources of the meshes
+	// Each submesh from a coalesced mesh will be a submesh in the resulting coalesced mesh
+	// The allocator is used to allocate the submesh buffer
+	// In order to deallocate CPU side resources of coalesced meshes, you must do that
+	ECSENGINE_API CoalescedMesh MergeCoalescedMeshes(
+		Graphics* graphics,
+		Stream<CoalescedMesh*> meshes,
+		AllocatorPolymorphic allocator,
+		const MergeMeshesOptions* options = nullptr
 	);
 
 #endif // ECSENGINE_DIRECTX11

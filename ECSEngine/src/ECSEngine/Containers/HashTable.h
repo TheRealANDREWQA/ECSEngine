@@ -641,7 +641,6 @@ namespace ECSEngine {
 			}
 		}
 
-		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
 		ECS_INLINE void GetEntry(unsigned int index, T& value, Identifier& identifier) const {
 			value = GetValueFromIndex(index);
 			identifier = GetIdentifierFromIndex(index);
