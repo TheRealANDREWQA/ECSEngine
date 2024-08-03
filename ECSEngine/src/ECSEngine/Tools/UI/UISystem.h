@@ -55,6 +55,7 @@ namespace ECSEngine {
 				ResourceManager* resource,
 				TaskManager* task_manager,
 				uint2 window_os_size,
+				uint2 monitor_size,
 				GlobalMemoryManager* initial_allocator = nullptr
 			);
 
@@ -383,6 +384,12 @@ namespace ECSEngine {
 			void ChangeBorderFlags(UIDockspace* dockspace, unsigned int border_index, size_t flags);
 
 			void ChangeBorderFlags(unsigned int window_index, size_t flags);
+
+			// Updates the relevant structures to the aspect ratio change
+			void ChangeAspectRatio(float current_ratio, float new_ratio);
+
+			// Updates the dimension ratio of relevant structures
+			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
 
 			void ChangeFocusedWindowHoverable(UIActionHandler handler, float2 mouse_position = { -2.0f, -2.0f });
 
@@ -1733,7 +1740,8 @@ namespace ECSEngine {
 
 			void SetWindowDrawerDifferenceSpan(unsigned int window_index, float2 span);
 
-			void SetWindowOSSize(uint2 new_size);
+			// The monitor size must be supplied as well
+			void SetWindowOSSize(uint2 new_size, uint2 monitor_size);
 
 			// The position is relative to the window position
 			void SetCursorPosition(uint2 position);
@@ -1928,6 +1936,11 @@ namespace ECSEngine {
 			// Useful for calculating the normalized mouse value when scaling is being applied
 			// at the OS level and try to remedy it
 			uint2 m_window_os_size;
+			// Used to know when the aspect ratio is changed and how to modify the descriptor dimensions
+			uint2 m_monitor_size;
+			// This is a factor that is used to know on which dimension the aspect ratio factor has been
+			// Applied. It strives to maintain a dimension at 1.0f and let the other change (as it should be the case)
+			float2 m_aspect_ratio_factor;
 			// Describes how large a pixel is. Basically, 2.0f / m_window_os_size;
 			float2 m_pixel_size;
 			Timer m_snapshot_mode_timer;

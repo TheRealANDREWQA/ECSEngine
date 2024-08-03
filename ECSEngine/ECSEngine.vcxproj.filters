@@ -282,6 +282,7 @@
     <ClInclude Include="src\Includes\ECSEngineContainersCommon.h" />
     <ClInclude Include="src\ECSEngine\OS\Monitor.h" />
     <ClInclude Include="src\Includes\ECSEngineOSMonitor.h" />
+    <ClInclude Include="src\Includes\ECSEngineColor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -472,6 +473,8 @@
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugMousePick.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugStructuredInstance.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugTransformInstance.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\SolidColorInstanced.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\SolidColorInstanced.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="src\TODO.txt" />

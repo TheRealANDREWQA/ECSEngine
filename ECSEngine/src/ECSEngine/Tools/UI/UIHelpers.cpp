@@ -16,12 +16,12 @@ namespace ECSEngine {
 			unsigned int starting_index,
 			Element* buffer
 		) {
-			buffer[starting_index].SetTransform(position.x, -position.y);                            // top left
-			buffer[starting_index + 1].SetTransform(position.x + scale.x, -position.y);              // top right
-			buffer[starting_index + 2].SetTransform(position.x, -(position.y + scale.y));            // lower left
-			buffer[starting_index + 3].SetTransform(position.x + scale.x, -position.y);              // top right
-			buffer[starting_index + 4].SetTransform(position.x + scale.x, -(position.y + scale.y));  // lower right
-			buffer[starting_index + 5].SetTransform(position.x, -(position.y + scale.y));            // lower left
+			buffer[starting_index].SetTransform({ position.x, position.y });                            // top left
+			buffer[starting_index + 1].SetTransform({ position.x + scale.x, position.y });              // top right
+			buffer[starting_index + 2].SetTransform({ position.x, position.y + scale.y });            // lower left
+			buffer[starting_index + 3].SetTransform({ position.x + scale.x, position.y });              // top right
+			buffer[starting_index + 4].SetTransform({ position.x + scale.x, position.y + scale.y });  // lower right
+			buffer[starting_index + 5].SetTransform({ position.x, position.y + scale.y });            // lower left
 		}
 
 		ECS_TEMPLATE_FUNCTION_2_AFTER(void, SetTransformForRectangle, UIVertexColor*, UISpriteVertex*, float2, float2, unsigned int);

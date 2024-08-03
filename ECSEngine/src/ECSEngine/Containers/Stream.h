@@ -367,16 +367,6 @@ namespace ECSEngine {
 				Swap(index, size - index - 1);
 			}
 		}
-
-		size_t Search(T element) const {
-			for (size_t index = 0; index < size; index++) {
-				if (element == buffer[index]) {
-					return index;
-				}
-			}
-
-			return -1;
-		}
 		
 		// Returns the stream starting at the given offset until the end
 		ECS_INLINE Stream<T> SliceAt(size_t offset) const {
@@ -871,16 +861,6 @@ namespace ECSEngine {
 			}
 		}
 
-		unsigned int Search(T element) const {
-			for (unsigned int index = 0; index < size; index++) {
-				if (buffer[index] == element) {
-					return index;
-				}
-			}
-
-			return -1;
-		}
-
 		// Returns the capacity stream at the given offset
 		ECS_INLINE CapacityStream<T> SliceAt(unsigned int offset) const {
 			return { buffer + offset, size - offset, capacity - offset };
@@ -1249,16 +1229,6 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < size >> 1; index++) {
 				Swap(index, size - index - 1);
 			}
-		}
-
-		unsigned int Search(T element) const {
-			for (unsigned int index = 0; index < size; index++) {
-				if (buffer[index] == element) {
-					return index;
-				}
-			}
-
-			return -1;
 		}
 		
 		// It will leave another additional_elements over the current size

@@ -10,11 +10,13 @@
 // But also to have referential stability, which can be used to accelerate other structures
 typedef HashTable<ContactConstraint*, EntityPair, HashFunctionPowerOfTwo> ContactTable;
 
-struct SolverData {
+struct PHYSICS_API SolverData {
 	ECS_INLINE void SetTimeStepTick(float value) {
 		time_step_tick = value;
 		inverse_time_step_tick = 1.0f / time_step_tick;
 	}
+
+	void Initialize(MemoryManager* backup_allocator);
 
 	unsigned int iterations;
 	float baumgarte_factor;
@@ -28,4 +30,6 @@ struct SolverData {
 
 	MemoryManager allocator;
 	ContactTable contact_table;
+
+	IslandManager island_manager;
 };

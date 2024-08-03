@@ -77,11 +77,14 @@ ECS_THREAD_TASK(SolveContactConstraints);
 void AddSolverTasks(ModuleTaskFunctionData* data);
 
 // The center of masses need to be in world space
+// The rigidbody pointers might be needed if this is a first time insertion of the contact
 PHYSICS_API void AddContactConstraint(
 	World* world,
 	const EntityContact* entity_contact,
 	float3 center_of_mass_A,
-	float3 center_of_mass_B
+	float3 center_of_mass_B,
+	const Rigidbody* first_rigidbody,
+	const Rigidbody* second_rigidbody
 );
 
 // It will perform a narrowphase check to determine

@@ -484,7 +484,7 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateInitialize(Application* application, EditorState* editor_state, HWND hWnd, Mouse* mouse, Keyboard* keyboard)
+void EditorStateInitialize(Application* application, EditorState* editor_state, HWND hWnd, Mouse* mouse, Keyboard* keyboard, uint2 monitor_size)
 {
 	// Initialize the Debug SettingsAllocator Manager
 	DebugAllocatorManagerDescriptor debug_allocator_manager_descriptor;
@@ -562,6 +562,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 		ui_resource_manager,
 		editor_task_manager,
 		graphics->m_window_size,
+		monitor_size,
 		global_memory_manager
 	);
 	ui->BindWindowHandler(WindowHandler, WindowHandlerInitializer, sizeof(Tools::UIDefaultWindowHandler));

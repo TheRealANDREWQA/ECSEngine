@@ -53,7 +53,8 @@ namespace ECSEngine {
 		nullptr,
 		nullptr,
 		nullptr,
-		nullptr
+		nullptr,
+		ECS_VERTEX_SHADER_SOURCE(SolidColorInstanced)
 	};
 
 	const wchar_t* SHADER_HELPERS_PIXEL[] = {
@@ -70,7 +71,8 @@ namespace ECSEngine {
 		nullptr,
 		nullptr,
 		nullptr,
-		nullptr
+		nullptr,
+		ECS_PIXEL_SHADER_SOURCE(SolidColorInstanced)
 	};
 
 	const wchar_t* SHADER_HELPERS_COMPUTE[] = {
@@ -88,6 +90,7 @@ namespace ECSEngine {
 		ECS_COMPUTE_SHADER_SOURCE(VisualizeTexture), // Each shader will have a different macro annotation
 		ECS_COMPUTE_SHADER_SOURCE(VisualizeTexture), // Each shader will have a different macro annotation
 		ECS_COMPUTE_SHADER_SOURCE(VisualizeTexture), // Each shader will have a different macro annotation
+		nullptr,
 	};
 
 	static_assert(ECS_COUNTOF(SHADER_HELPERS_VERTEX) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
@@ -218,7 +221,7 @@ namespace ECSEngine {
 	static bool ExtractLiveObjectsFromDebugInterface(const Graphics* graphics, ResizableStream<GraphicsLiveObject>* live_objects) {
 		ID3D11Debug* debug_device = nullptr;
 		if (graphics->m_debug_device == nullptr) {
-			HRESULT result = graphics->m_device->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&debug_device));
+			HRESULT result = graphics->m_device->QueryInterface(__uuidof(ID3D11Debug), (void**)(&debug_device));
 			if (FAILED(result)) {
 				return false;
 			}
@@ -235,7 +238,7 @@ namespace ECSEngine {
 
 		ID3D11InfoQueue* info_queue = nullptr;
 		if (graphics->m_info_queue == nullptr) {
-			HRESULT result = graphics->m_device->QueryInterface(__uuidof(ID3D11InfoQueue), reinterpret_cast<void**>(&info_queue));
+			HRESULT result = graphics->m_device->QueryInterface(__uuidof(ID3D11InfoQueue), (void**)(&info_queue));
 			if (FAILED(result)) {
 				return false;
 			}
@@ -554,11 +557,11 @@ namespace ECSEngine {
 		ECS_CRASH_CONDITION(SUCCEEDED(result), "Creating deferred context failed!");
 
 		if (HasFlag(flags, D3D11_CREATE_DEVICE_DEBUG)) {
-			HRESULT result = m_device->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&m_debug_device));
+			HRESULT result = m_device->QueryInterface(__uuidof(ID3D11Debug), (void**)(&m_debug_device));
 			if (FAILED(result)) {
 				m_debug_device = nullptr;
 			}
-			result = m_device->QueryInterface(__uuidof(ID3D11InfoQueue), reinterpret_cast<void**>(&m_info_queue));
+			result = m_device->QueryInterface(__uuidof(ID3D11InfoQueue), (void**)(&m_info_queue));
 			if (FAILED(result)) {
 				m_info_queue = nullptr;
 			}
@@ -3642,39 +3645,42 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::ResizeSwapChainSize(HWND hWnd, float width, float height)
+	void Graphics::ResizeSwapChainSize(HWND hWnd, unsigned int width, unsigned int height)
 	{
-		D3D11_RENDER_TARGET_VIEW_DESC descriptor;
-		m_target_view.view->GetDesc(&descriptor);
-		m_context->ClearState();
-		m_target_view.view->Release();
-		m_depth_stencil_view.view->Release();
+		if (width != 0 && height != 0) {
+			D3D11_RENDER_TARGET_VIEW_DESC descriptor;
+			m_target_view.view->GetDesc(&descriptor);
+			m_context->ClearState();
+			m_target_view.view->Release();
+			m_depth_stencil_view.view->Release();
 
-		HRESULT result = m_swap_chain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
+			HRESULT result = m_swap_chain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
 
-		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Resizing swap chain failed!");
+			ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Resizing swap chain failed!");
 
-		/*DXGI_MODE_DESC descriptor;
-		descriptor.Width = m_window_size.x;
-		descriptor.Height = m_window_size.y;
-		descriptor.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		descriptor.RefreshRate.Numerator = 1;
-		descriptor.RefreshRate.Denominator = 60;
-		descriptor.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-		descriptor.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-		result = m_swap_chain->ResizeTarget(&descriptor);
+			/*DXGI_MODE_DESC descriptor;
+			descriptor.Width = m_window_size.x;
+			descriptor.Height = m_window_size.y;
+			descriptor.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			descriptor.RefreshRate.Numerator = 1;
+			descriptor.RefreshRate.Denominator = 60;
+			descriptor.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+			descriptor.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+			result = m_swap_chain->ResizeTarget(&descriptor);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Resizing the swap chain failed!", true);*/
+			ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Resizing the swap chain failed!", true);*/
 
-		CreateRenderTargetViewFromSwapChain(descriptor.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+			CreateRenderTargetViewFromSwapChain(descriptor.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+			CreateWindowDepthStencilView();
 
-		ResizeViewport(0.0f, 0.0f, width, height);
-		BindRenderTargetViewFromInitialViews(m_context);
-		EnableDepth(m_context);
+			ResizeViewport(0.0f, 0.0f, (float)width, (float)height);
+			BindRenderTargetViewFromInitialViews(m_context);
+			EnableDepth(m_context);
 
-		CreateWindowDepthStencilView();
+			CreateWindowDepthStencilView();
 
-		DisableAlphaBlending(m_context);
+			DisableAlphaBlending(m_context);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4364,7 +4370,7 @@ namespace ECSEngine {
 
 		if (graphics->m_debug_device == nullptr) {
 			ID3D11Debug* debug_device = nullptr;
-			HRESULT result = graphics->GetDevice()->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&debug_device));
+			HRESULT result = graphics->GetDevice()->QueryInterface(__uuidof(ID3D11Debug), (void**)(&debug_device));
 			if (SUCCEEDED(result)) {
 				result = debug_device->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
 				debug_device->Release();
@@ -5805,42 +5811,89 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, ECS_GRAPHICS_MISC_FLAGS misc_flags)
-	{
-		unsigned int* mask = (unsigned int*)ECS_STACK_ALLOC(meshes.size * sizeof(unsigned int));
-		Stream<unsigned int> sequence(mask, meshes.size);
-		MakeSequence(Stream<unsigned int>(mask, meshes.size));
+	template<typename MeshType>
+	CoalescedMesh MergeMeshesImplementation(Graphics* graphics, Stream<MeshType*> meshes, AllocatorPolymorphic allocator, const MergeMeshesOptions* options) {
+		static_assert(std::is_same_v<MeshType, Mesh> || std::is_same_v<MeshType, CoalescedMesh>, "MergeMeshes handle additional mesh type!");
 
-		Mesh mesh = MeshesToSubmeshes(graphics, meshes, submeshes, sequence, misc_flags);
-		return mesh;
-	}
+		MergeMeshesOptions default_options;
+		if (options == nullptr) {
+			options = &default_options;
+		}
 
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, Stream<unsigned int> mesh_mask, ECS_GRAPHICS_MISC_FLAGS misc_flags) {
-		Mesh result;
-		result.bounds = InfiniteAABBScalar();
+		CoalescedMesh result;
+		result.mesh.bounds = InfiniteAABBScalar();
 
 		// Walk through the meshes and determine the maximum amount of buffers. The meshes that are missing some buffers will have them
-		// zero'ed in the final mesh
+		// zeroed in the final mesh
+
+		typedef Mesh& (*GetMesh)(MeshType* mesh);
+		typedef size_t (*GetSubmeshCount)(const MeshType* mesh);
+		typedef Submesh (*GetSubmesh)(const MeshType* mesh, size_t index);
+
+		GetMesh get_mesh = nullptr;
+		GetSubmeshCount get_submesh_count = nullptr;
+		GetSubmesh get_submesh = nullptr;
+		if constexpr (std::is_same_v<MeshType, Mesh>) {
+			get_mesh = [](MeshType* mesh) -> Mesh& {
+				return *mesh;
+			};
+			get_submesh_count = [](const MeshType* mesh) {
+				return (size_t)1;
+			};
+			get_submesh = [](const MeshType* mesh, size_t index) {
+				Submesh submesh;
+				submesh.bounds = InfiniteAABBScalar();
+				submesh.index_buffer_offset = 0;
+				submesh.vertex_buffer_offset = 0;
+				submesh.index_count = mesh->index_buffer.count;
+				submesh.vertex_count = mesh->vertex_buffers[0].size;
+				submesh.name = mesh->name;
+				return submesh;
+			};
+		}
+		else if constexpr (std::is_same_v<MeshType, CoalescedMesh>) {
+			get_mesh = [](MeshType* mesh) -> Mesh& {
+				return mesh->mesh;
+			};
+			get_submesh_count = [](const MeshType* mesh) {
+				return mesh->submeshes.size;
+			};
+			get_submesh = [](const MeshType* mesh, size_t index) {
+				return mesh->submeshes[index];
+			};
+		}
+
+		ECS_ASSERT(get_mesh(meshes[0]).index_buffer.int_size == 4, "Merging meshes with integer size different from 4 is not accepted!");
+
+		Stream<Submesh> submeshes;
 
 		// Accumulate the total vertex buffer size and index buffer size
 		size_t vertex_buffer_size = 0;
 		size_t index_buffer_size = 0;
-		size_t mapping_count = meshes[0].mapping_count;
+		size_t mapping_count = get_mesh(meshes[0]).mapping_count;
+		size_t index_buffer_int_size = get_mesh(meshes[0]).index_buffer.int_size;
 
 		ECS_MESH_INDEX mappings[ECS_MESH_BUFFER_COUNT];
-		memcpy(mappings, meshes[0].mapping, sizeof(ECS_MESH_INDEX) * mapping_count);
+		memcpy(mappings, get_mesh(meshes[0]).mapping, sizeof(ECS_MESH_INDEX) * mapping_count);
+		size_t submesh_count = 0;
 
-		for (size_t index = 0; index < mesh_mask.size; index++) {
-			vertex_buffer_size += meshes[mesh_mask[index]].vertex_buffers[0].size;
-			index_buffer_size += meshes[mesh_mask[index]].index_buffer.count;
-			if (mapping_count < meshes[mesh_mask[index]].mapping_count) {
-				mapping_count = meshes[mesh_mask[index]].mapping_count;
+		for (size_t index = 0; index < meshes.size; index++) {
+			const Mesh& current_mesh = get_mesh(meshes[index]);
+			vertex_buffer_size += current_mesh.vertex_buffers[0].size;
+			index_buffer_size += current_mesh.index_buffer.count;
+			if (mapping_count < current_mesh.mapping_count) {
+				mapping_count = current_mesh.mapping_count;
 				// Update the mapping order
-				memcpy(mappings, meshes[mesh_mask[index]].mapping, sizeof(ECS_MESH_INDEX) * mapping_count);
+				memcpy(mappings, current_mesh.mapping, sizeof(ECS_MESH_INDEX) * mapping_count);
 			}
+
+			ECS_ASSERT(index_buffer_int_size == current_mesh.index_buffer.int_size, "Merging meshes with different index buffer int sizes is not accepted!");
+
+			submesh_count += get_submesh_count(meshes[index]);
 		}
+
+		// Allocate the submeshes
+		submeshes.Initialize(allocator, submesh_count);
 
 		// Create a temporary zero vertex buffer for those cases when some mappings are missing
 		// Allocate using calloc since it will yield better results
@@ -5852,48 +5905,36 @@ namespace ECSEngine {
 		VertexBuffer new_vertex_buffers[ECS_MESH_BUFFER_COUNT];
 		for (size_t index = 0; index < mapping_count; index++) {
 			new_vertex_buffers[index] = graphics->CreateVertexBuffer(
-				meshes[0].vertex_buffers[index].stride, 
-				vertex_buffer_size, 
-				false, 
+				GetMeshIndexElementByteSize(mappings[index]),
+				vertex_buffer_size,
+				false,
 				ECS_GRAPHICS_USAGE_DEFAULT,
 				ECS_GRAPHICS_CPU_ACCESS_NONE,
-				misc_flags
+				options->misc_flags
 			);
 		}
 
-		IndexBuffer new_index_buffer = graphics->CreateIndexBuffer(meshes[0].index_buffer.int_size, index_buffer_size, false, ECS_GRAPHICS_USAGE_DEFAULT, ECS_GRAPHICS_CPU_ACCESS_NONE, misc_flags);
+		IndexBuffer new_index_buffer = graphics->CreateIndexBuffer(get_mesh(meshes[0]).index_buffer.int_size, index_buffer_size, false, ECS_GRAPHICS_USAGE_DEFAULT, ECS_GRAPHICS_CPU_ACCESS_NONE, options->misc_flags);
 
-		// all vertex buffers must have the same size - so a single offset suffices
+		// All vertex buffers must have the same size - so a single offset suffices
 		unsigned int vertex_buffer_offset = 0;
 		unsigned int index_buffer_offset = 0;
 
-		// Copy the vertex buffer and index buffer submeshes
-		for (size_t index = 0; index < mesh_mask.size; index++) {
-			Mesh* current_mesh = &meshes[mesh_mask[index]];
-			// If the mesh has a name, simply repoint the submesh pointer - do not deallocate and reallocate again
-			if (current_mesh->name.buffer != nullptr) {
-				submeshes[index].name = current_mesh->name;
-			}
-			else {
-				submeshes[index].name = { nullptr, 0 };
-			}
+		size_t overall_submesh_index = 0;
 
-			submeshes[index].index_buffer_offset = index_buffer_offset;
-			submeshes[index].vertex_buffer_offset = vertex_buffer_offset;
-			submeshes[index].index_count = current_mesh->index_buffer.count;
-			submeshes[index].vertex_buffer_offset = vertex_buffer_offset;
-			submeshes[index].vertex_count = current_mesh->vertex_buffers[0].size;
-			submeshes[index].bounds = ReverseInfiniteAABBScalar();
+		// Copy the vertex buffer and index buffer submeshes
+		for (size_t index = 0; index < meshes.size; index++) {
+			Mesh& current_mesh = get_mesh(meshes[index]);
 
 			bool buffers_comitted[ECS_MESH_BUFFER_COUNT] = { false };
 
-			size_t mesh_vertex_buffer_size = current_mesh->vertex_buffers[0].size;
+			size_t mesh_vertex_buffer_size = current_mesh.vertex_buffers[0].size;
 			// Vertex buffers
-			for (size_t buffer_index = 0; buffer_index < current_mesh->mapping_count; buffer_index++) {
+			for (size_t buffer_index = 0; buffer_index < current_mesh.mapping_count; buffer_index++) {
 				size_t new_vertex_index = 0;
 				// Determine the vertex buffer position from the global vertex buffer
 				for (size_t subindex = 0; subindex < mapping_count; subindex++) {
-					if (mappings[subindex] == current_mesh->mapping[buffer_index]) {
+					if (mappings[subindex] == current_mesh.mapping[buffer_index]) {
 						new_vertex_index = subindex;
 						buffers_comitted[subindex] = true;
 						// Exit the loop
@@ -5904,22 +5945,24 @@ namespace ECSEngine {
 				CopyBufferSubresource(
 					new_vertex_buffers[new_vertex_index],
 					vertex_buffer_offset,
-					current_mesh->vertex_buffers[buffer_index],
+					current_mesh.vertex_buffers[buffer_index],
 					0,
 					mesh_vertex_buffer_size,
 					graphics->GetContext()
 				);
 
-				// Release all the old buffers
-				graphics->FreeResource(current_mesh->vertex_buffers[buffer_index]);
-				current_mesh->vertex_buffers[buffer_index].buffer = nullptr;
+				if (options->free_existing_meshes) {
+					// Release all the old buffers
+					graphics->FreeResource(current_mesh.vertex_buffers[buffer_index]);
+					current_mesh.vertex_buffers[buffer_index].buffer = nullptr;
+				}
 			}
 
 			// For all the buffers which are missing, zero the data with a global zero vector
 			for (size_t buffer_index = 0; buffer_index < mapping_count; buffer_index++) {
 				if (!buffers_comitted[buffer_index]) {
 					// Temporarly set the zero_vertex_buffer.stride to the stride of the new vertex buffer such that the copy is done correctly,
-					// else it will overcopy for types less than float4
+					// else it will overcopy for types smaller than float4
 					zero_vertex_buffer.stride = new_vertex_buffers[buffer_index].stride;
 					CopyBufferSubresource(new_vertex_buffers[buffer_index], vertex_buffer_offset, zero_vertex_buffer, 0, mesh_vertex_buffer_size, graphics->GetContext());
 				}
@@ -5927,17 +5970,20 @@ namespace ECSEngine {
 
 			// Index buffer - a new copy must be created which has the indices offset by the correct amount
 			// Use a staging resource for that
-			IndexBuffer staging_buffer = BufferToStaging(graphics, current_mesh->index_buffer);
+			IndexBuffer staging_buffer = BufferToStaging(graphics, current_mesh.index_buffer);
 
 			// Map the staging buffer 
 			unsigned int* staging_data = (unsigned int*)graphics->MapBuffer(staging_buffer.buffer, ECS_GRAPHICS_MAP_READ_WRITE);
 
-			// Use simd to increase the offsets
-			unsigned int index_buffer_count = current_mesh->index_buffer.count;
-			unsigned int simd_count = index_buffer_count & (-Vec8ui::size());
+			unsigned int current_mesh_vertex_offset = vertex_buffer_offset;
+			unsigned int current_mesh_index_offset = index_buffer_offset;
 
 			Vec8ui simd_offset(vertex_buffer_offset);
-			for (size_t simd_index = 0; simd_index < simd_count; simd_index += Vec8ui::size()) {
+
+			// Use simd to increase the offsets
+			unsigned int index_buffer_count = current_mesh.index_buffer.count;
+			size_t simd_count = GetSimdCount(index_buffer_count, simd_offset.size());
+			for (size_t simd_index = 0; simd_index < simd_count; simd_index += simd_offset.size()) {
 				Vec8ui data;
 				data.load(staging_data + simd_index);
 				data += simd_offset;
@@ -5951,27 +5997,60 @@ namespace ECSEngine {
 			index_buffer_offset += index_buffer_count;
 
 			// all vertex buffers must have the same size
-			vertex_buffer_offset += current_mesh->vertex_buffers[0].size;
+			vertex_buffer_offset += current_mesh.vertex_buffers[0].size;
 
 			// Release the staging buffer and the normal buffer
-			unsigned int staging_count = staging_buffer.Release();
+			staging_buffer.Release();
 
-			graphics->FreeResource(current_mesh->index_buffer);
-			current_mesh->index_buffer.buffer = nullptr;
-			current_mesh->mapping_count = 0;
+			if (options->free_existing_meshes) {
+				graphics->FreeResource(current_mesh.index_buffer);
+				current_mesh.index_buffer.buffer = nullptr;
+				current_mesh.mapping_count = 0;
+			}
+
+			size_t submesh_count = get_submesh_count(meshes[index]);
+			for (size_t submesh_index = 0; submesh_index < submesh_count; submesh_index++) {
+				Submesh current_submesh = get_submesh(meshes[index], submesh_index);
+
+				submeshes[overall_submesh_index] = current_submesh;
+				// Modify the offsets, since these have changed
+				submeshes[overall_submesh_index].index_buffer_offset = current_mesh_index_offset;
+				submeshes[overall_submesh_index].vertex_buffer_offset = current_mesh_vertex_offset;
+				if (submeshes[overall_submesh_index].name.size > 0) {
+					submeshes[overall_submesh_index].name = submeshes[overall_submesh_index].name.Copy(allocator);
+				}
+				overall_submesh_index++;
+
+				current_mesh_index_offset += current_submesh.index_count;
+				current_mesh_vertex_offset += current_submesh.vertex_count;
+			}
 		}
 
-		result.index_buffer = new_index_buffer;
+		result.mesh.index_buffer = new_index_buffer;
 		for (size_t index = 0; index < mapping_count; index++) {
-			result.vertex_buffers[index] = new_vertex_buffers[index];
-			result.mapping[index] = meshes[0].mapping[index];
+			result.mesh.vertex_buffers[index] = new_vertex_buffers[index];
+			result.mesh.mapping[index] = mappings[index];
 		}
-		result.mapping_count = mapping_count;
+		result.mesh.mapping_count = mapping_count;
+		result.submeshes = submeshes;
+		result.mesh.name = {};
 
 		// Release the zero vertex buffer
 		zero_vertex_buffer.Release();
 
 		return result;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	CoalescedMesh MergeMeshes(Graphics* graphics, Stream<Mesh*> meshes, AllocatorPolymorphic allocator, const MergeMeshesOptions* options) {
+		return MergeMeshesImplementation(graphics, meshes, allocator, options);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	CoalescedMesh MergeCoalescedMeshes(Graphics* graphics, Stream<CoalescedMesh*> meshes, AllocatorPolymorphic allocator, const MergeMeshesOptions* options) {
+		return MergeMeshesImplementation(graphics, meshes, allocator, options);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

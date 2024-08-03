@@ -24,6 +24,13 @@ namespace ECSEngine {
 			UISystem* system;
 		};
 
+		struct UIFileMetadata {
+			float2 dimension_ratio;
+			float monitor_aspect_ratio;
+			float2 aspect_ratio_factors;
+			char padding[32 - sizeof(dimension_ratio) - sizeof(monitor_aspect_ratio) - sizeof(aspect_ratio_factors)];
+		};
+
 		ECS_INLINE static float2 NormalizedMousePosition(float2 window_size, float2 mouse_position) {
 			return float2(mouse_position) / float2(window_size) * float2::Splat(2.0f) - float2::Splat(1.0f);
 		}
@@ -118,10 +125,11 @@ namespace ECSEngine {
 			ResourceManager* resource,
 			TaskManager* task_manager,
 			uint2 window_os_size,
+			uint2 monitor_size,
 			MemoryManager* initial_allocator
 		) : m_graphics(graphics), m_mouse(mouse), m_keyboard(keyboard),
 			m_memory(memory), m_resource_manager(resource), m_task_manager(task_manager), m_application(application), m_frame_index(0),
-			m_texture_evict_count(0), m_texture_evict_target(60), m_window_os_size(window_os_size)
+			m_texture_evict_count(0), m_texture_evict_target(60), m_window_os_size(window_os_size), m_monitor_size(monitor_size), m_aspect_ratio_factor(1.0f, 1.0f)
 		{
 			// Set the pixel size early on, since the descriptors will reference it
 			m_pixel_size.x = 2.0f / (float)m_window_os_size.x;
@@ -133,6 +141,12 @@ namespace ECSEngine {
 
 			// copying to the startup descriptors
 			memcpy(&m_startup_descriptors, &m_descriptors, sizeof(UISystemDescriptors));
+
+			// Call the change dimension function to change the descriptors, if needed
+			float2 current_dimension_ratio = float2(1.0f, 1.0f);
+			float2 new_dimension_ratio = float2(m_window_os_size) / float2(m_monitor_size);
+			ChangeDimensionRatio(current_dimension_ratio, new_dimension_ratio);
+			ChangeAspectRatio(ECS_TOOLS_UI_DESIGN_ASPECT_RATIO, (float)m_monitor_size.x / (float)m_monitor_size.y);
 
 			size_t total_memory = 0;
 			total_memory += sizeof(UIWindow) * m_descriptors.misc.window_count;
@@ -1457,6 +1471,44 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::ChangeAspectRatio(float current_ratio, float new_ratio)
+		{
+			if (current_ratio < new_ratio) {
+				// The monitor is wider now or less tall - use the multiplication factor to determine
+				// Which dimension should be changed
+				float y_modification_factor = m_aspect_ratio_factor.y;
+				float x_modification_factor = new_ratio / current_ratio * y_modification_factor;
+				ChangeDimensionRatio(float2(1.0f, 1.0f), float2(x_modification_factor, 1.0f / y_modification_factor));
+				m_aspect_ratio_factor.y = 1.0f;
+				m_aspect_ratio_factor.x *= x_modification_factor;
+			}
+			else if (current_ratio > new_ratio) {
+				// The monitor is taller now or less wide - use the multiplication factor to determine
+				// Which dimension should be changed
+				float x_modification_factor = m_aspect_ratio_factor.x;
+				float y_modification_factor = new_ratio / current_ratio * x_modification_factor;
+				ChangeDimensionRatio(float2(1.0f, 1.0f), float2(1.0f / x_modification_factor, y_modification_factor));
+				m_aspect_ratio_factor.x = 1.0f;
+				m_aspect_ratio_factor.y *= y_modification_factor;
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
+		{
+			if (current_ratio != new_ratio) {
+				// Update the startup descriptors as well
+				m_descriptors.ChangeDimensionRatio(current_ratio, new_ratio);
+				m_startup_descriptors.ChangeDimensionRatio(current_ratio, new_ratio);
+				for (unsigned int index = 0; index < m_windows.size; index++) {
+					m_windows[index].descriptors->ChangeDimensionRatio(current_ratio, new_ratio);
+				}
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::ChangeWindowNameFromIndex(Stream<char> base_name, unsigned int current_index, unsigned int new_index)
 		{
 			ECS_STACK_CAPACITY_STREAM(char, full_name, 256);
@@ -2362,7 +2414,7 @@ namespace ECSEngine {
 
 			void* window_drawer_allocation = m_memory->Allocate(sizeof(UIWindowDrawerDescriptor), alignof(UIWindowDrawerDescriptor));
 			window.descriptors = (UIWindowDrawerDescriptor*)window_drawer_allocation;
-			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
+			for (size_t index = 0; index < ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				window.descriptors->configured[index] = false;
 			}
 			memcpy(&window.descriptors->color_theme, &m_descriptors.color_theme, sizeof(UIColorThemeDescriptor));
@@ -8545,7 +8597,6 @@ namespace ECSEngine {
 			m_descriptors.misc.hierarchy_drag_node_hover_drop = ECS_TOOLS_UI_HIERARCHY_DRAG_NODE_HOVER_DROP;
 			m_descriptors.misc.graph_hover_offset = ECS_TOOLS_UI_GRAPH_HOVER_OFFSET;
 			m_descriptors.misc.histogram_hover_offset = ECS_TOOLS_UI_HISTOGRAM_HOVER_OFFSET;
-
 #pragma endregion
 
 #pragma region Window Layout
@@ -8810,9 +8861,12 @@ namespace ECSEngine {
 			memcpy(versions, (void*)ptr, sizeof(unsigned short) * 2);
 			ptr += sizeof(unsigned short) * 2;
 
-			unsigned char metadata[32];
-			memcpy(metadata, (void*)ptr, sizeof(unsigned char) * 32);
-			ptr += sizeof(unsigned char) * 32;
+			ECS_ASSERT(versions[0] == ECS_TOOLS_UI_FILE_VERSION, "Invalid UI file version!");
+			ECS_ASSERT(versions[1] == ECS_TOOLS_UI_FILE_WINDOW_DESCRIPTOR_VERSION, "Invalid UI file window descriptor version!");
+
+			UIFileMetadata metadata;
+			memcpy(&metadata, (void*)ptr, sizeof(metadata));
+			ptr += sizeof(metadata);
 
 #pragma region Dockspaces
 
@@ -8917,6 +8971,12 @@ namespace ECSEngine {
 				system->SearchAndSetNewFocusedDockspaceRegion(system->m_floating_vertical_dockspaces.buffer, 0, DockspaceType::FloatingVertical);
 				system->SetNewFocusedDockspace(system->m_floating_vertical_dockspaces.buffer, DockspaceType::FloatingVertical);
 			}
+
+			float2 current_dimension_ratio = float2(system->m_window_os_size) / float2(system->m_monitor_size);
+			float current_monitor_aspect_ratio = (float)system->m_monitor_size.x / (float)system->m_monitor_size.y;
+			system->m_aspect_ratio_factor = metadata.aspect_ratio_factors;
+			system->ChangeDimensionRatio(metadata.dimension_ratio, current_dimension_ratio);
+			system->ChangeAspectRatio(metadata.monitor_aspect_ratio, current_monitor_aspect_ratio);
 
 			system->m_memory->Deallocate(contents.buffer);
 			return true;
@@ -9807,9 +9867,16 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::SetWindowOSSize(uint2 new_size)
+		void UISystem::SetWindowOSSize(uint2 new_size, uint2 monitor_size)
 		{
+			float2 current_dimension_ratio = float2(m_window_os_size) / float2(m_monitor_size);
+			float current_aspect_ratio = (float)m_monitor_size.x / (float)m_monitor_size.y;
 			m_window_os_size = new_size;
+			m_monitor_size = monitor_size;
+			float2 new_dimension_ratio = float2(new_size) / float2(monitor_size);
+			float new_aspect_ratio = (float)monitor_size.x / (float)monitor_size.y;
+			ChangeDimensionRatio(current_dimension_ratio, new_dimension_ratio);
+			ChangeAspectRatio(current_aspect_ratio, new_aspect_ratio);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -11800,12 +11867,16 @@ namespace ECSEngine {
 
 				unsigned short versions[2] = { ECS_TOOLS_UI_FILE_VERSION, ECS_TOOLS_UI_FILE_WINDOW_DESCRIPTOR_VERSION };
 
-				unsigned char metadata[32];
+				UIFileMetadata metadata;
+				memset(&metadata, 0, sizeof(metadata));
+				metadata.dimension_ratio = float2(m_window_os_size) / float2(m_monitor_size);
+				metadata.monitor_aspect_ratio = (float)m_monitor_size.x / (float)m_monitor_size.y;
+				metadata.aspect_ratio_factors = m_aspect_ratio_factor;
 
 				bool success = true;
 
 				success &= WriteFile(file, { versions, sizeof(versions) });
-				success &= WriteFile(file, { metadata, sizeof(metadata) });
+				success &= WriteFile(file, { &metadata, sizeof(metadata) });
 
 #pragma endregion
 

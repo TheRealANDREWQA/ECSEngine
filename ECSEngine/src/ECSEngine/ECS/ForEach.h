@@ -433,9 +433,16 @@ namespace ECSEngine {
 
 		ECSENGINE_API void IncrementWorldQueryIndex(World* world);
 
+		static bool ForEachRunAlways(unsigned int thread_id, World* world) {
+			return true;
+		}
+
 		template<bool get_query, FOR_EACH_OPTIONS options, typename... Components>
 		struct ForEachEntityOrBatch {
-			ForEachEntityOrBatch(unsigned int _thread_id, World* _world, const char* _function_name = ECS_FUNCTION) : thread_id(_thread_id), world(_world), function_name(_function_name) {
+			typedef bool (*Condition)(unsigned int thread_id, World* world);
+
+			ForEachEntityOrBatch(unsigned int _thread_id, World* _world, Condition _condition = ForEachRunAlways, const char* _function_name = ECS_FUNCTION) 
+				: thread_id(_thread_id), world(_world), function_name(_function_name), condition(_condition) {
 				if constexpr (get_query) {
 					Internal::RegisterForEachInfo* info = (Internal::RegisterForEachInfo*)world;
 					Internal::AddQueryComponents<Components...>(info);
@@ -459,6 +466,10 @@ namespace ECSEngine {
 			template<typename... ExcludeComponents, typename Functor>
 			void Function(Functor functor, void* function_pointer_data = nullptr, size_t function_pointer_data_size = 0) {
 				if constexpr (!get_query) {
+					if (!condition(thread_id, world)) {
+						return;
+					}
+
 					// Retrieve the optional components since they are not stored in the query cache
 					Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
 					Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
@@ -550,6 +561,7 @@ namespace ECSEngine {
 			unsigned int thread_id;
 			World* world;
 			const char* function_name;
+			Condition condition;
 		};
 
 	}

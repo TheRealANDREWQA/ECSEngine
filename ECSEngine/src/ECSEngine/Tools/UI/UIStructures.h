@@ -95,39 +95,48 @@ namespace ECSEngine {
 
 #pragma region Vertex types
 
-		struct ECSENGINE_API UISpriteVertex {
-			UISpriteVertex();
-			UISpriteVertex(float position_x, float position_y, float uv_u, float uv_v, Color color);
-			UISpriteVertex(float2 position, float2 uvs, Color color);
+		struct UISpriteVertex {
+			ECS_INLINE UISpriteVertex() : position(0.0f, 0.0f), uvs(0.0f, 0.0f) {}
+			ECS_INLINE UISpriteVertex(float position_x, float position_y, float uv_u, float uv_v, Color _color) : position(position_x, position_y), uvs(uv_u, uv_v), color(_color) {}
+			ECS_INLINE UISpriteVertex(float2 _position, float2 _uvs, Color _color) : position(_position), uvs(_uvs), color(_color) {}
 
 			UISpriteVertex(const UISpriteVertex& other) = default;
 			UISpriteVertex& operator = (const UISpriteVertex& other) = default;
 
-			// it does not invert the y axis
-			void SetTransform(float position_x, float position_y);
-			// it does invert the y axis
-			void SetTransform(float2 position);
-			void SetColor(Color color);
-			void SetUV(float2 uv);
+			// It does invert the y axis
+			ECS_INLINE void SetTransform(float2 _position) {
+				position = { _position.x, -_position.y };
+			}
+
+			ECS_INLINE void SetColor(Color _color) {
+				color = _color;
+			}
+
+			ECS_INLINE void SetUV(float2 _uv) {
+				uvs = _uv;
+			}
 
 			float2 position;
 			float2 uvs;
 			Color color;
 		};
 
-		struct ECSENGINE_API UIVertexColor {
-			UIVertexColor();
-			UIVertexColor(float position_x, float position_y, Color color);
-			UIVertexColor(float2 position, Color color);
+		struct UIVertexColor {
+			ECS_INLINE UIVertexColor() : position(0.0f, 0.0f), color((unsigned char)0, 0, 0, 255) {}
+			ECS_INLINE UIVertexColor(float position_x, float position_y, Color _color) : position(position_x, position_y), color(_color) {}
+			ECS_INLINE UIVertexColor(float2 _position, Color _color) : position(_position), color(_color) {}
 
 			UIVertexColor(const UIVertexColor& other) = default;
 			UIVertexColor& operator = (const UIVertexColor& other) = default;
 
-			// it does not inver the y axis
-			void SetTransform(float position_x, float position_y);
-			// it inverts the y axis
-			void SetTransform(float2 position);
-			void SetColor(Color color);
+			// It inverts the y axis
+			ECS_INLINE void SetTransform(float2 _position) {
+				position = { _position.x, -_position.y };
+			}
+
+			ECS_INLINE void SetColor(Color _color) {
+				color = _color;
+			}
 
 			float2 position;
 			Color color;
@@ -137,16 +146,13 @@ namespace ECSEngine {
 
 #pragma region UI primitives
 
-		struct ECSENGINE_API UIElementTransform {
-			UIElementTransform();
-			UIElementTransform(float position_x, float position_y, float scale_x, float scale_y);
-			UIElementTransform(float2 position, float2 scale);
+		struct UIElementTransform {
+			ECS_INLINE UIElementTransform() : position(0.0f, 0.0f), scale(1.0f, 1.0f) {}
+			ECS_INLINE UIElementTransform(float position_x, float position_y, float scale_x, float scale_y) : position(position_x, position_y), scale(scale_x, scale_y) {}
+			ECS_INLINE UIElementTransform(float2 _position, float2 _scale) : position(_position), scale(_scale) {}
 
 			UIElementTransform(const UIElementTransform& other) = default;
-			UIElementTransform(UIElementTransform&& other) = default;
-
 			UIElementTransform& operator = (const UIElementTransform& other) = default;
-			UIElementTransform& operator = (UIElementTransform&& other) = default;
 
 			float2 position;
 			float2 scale;
@@ -158,9 +164,9 @@ namespace ECSEngine {
 
 #pragma region Descriptors
 
-		struct ECSENGINE_API UIMaterialDescriptor {
-			UIMaterialDescriptor() : count(0), sampler_count(0) {}
-			UIMaterialDescriptor(
+		struct UIMaterialDescriptor {
+			ECS_INLINE UIMaterialDescriptor() : count(0), sampler_count(0) {}
+			ECS_INLINE UIMaterialDescriptor(
 				unsigned int _material_count,
 				unsigned int _sampler_count
 			) : count(_material_count), sampler_count(_sampler_count) {}
@@ -207,14 +213,22 @@ namespace ECSEngine {
 			float alpha_inactive_item;
 		};
 
-		struct UIFontDescriptor {
+		struct ECSENGINE_API UIFontDescriptor {
+			// The x component must be the current OS window width divided by the monitor's width
+			// The y component must be the current OS window height divided by the monitor's height
+			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
+
 			float size;
 			float character_spacing;
 			unsigned int texture_dimensions;
 			unsigned int symbol_count;
 		};
 
-		struct UIDockspaceDescriptor {
+		struct ECSENGINE_API UIDockspaceDescriptor {
+			// The x component must be the current OS window width divided by the monitor's width
+			// The y component must be the current OS window height divided by the monitor's height
+			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
+
 			unsigned int count;
 			unsigned int max_border_count;
 			unsigned int max_windows_border;
@@ -240,7 +254,11 @@ namespace ECSEngine {
 			float close_x_total_x_padding;
 		};
 
-		struct UILayoutDescriptor {
+		struct ECSENGINE_API UILayoutDescriptor {
+			// The x component must be the current OS window width divided by the monitor's width
+			// The y component must be the current OS window height divided by the monitor's height
+			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
+
 			float default_element_x;
 			float default_element_y;
 			float element_indentation;
@@ -249,7 +267,11 @@ namespace ECSEngine {
 			float node_indentation;
 		};
 
-		struct UIMiscellaneousDescriptor {
+		struct ECSENGINE_API UIMiscellaneousDescriptor {
+			// The x component must be the current OS window width divided by the monitor's width
+			// The y component must be the current OS window height divided by the monitor's height
+			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
+
 			unsigned short window_count;
 			float title_y_scale;
 			unsigned short window_table_default_count;
@@ -284,7 +306,11 @@ namespace ECSEngine {
 			float menu_x_padd;
 		};
 
-		struct UIElementDescriptor {
+		struct ECSENGINE_API UIElementDescriptor {
+			// The x component must be the current OS window width divided by the monitor's width
+			// The y component must be the current OS window height divided by the monitor's height
+			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
+			
 			float2 label_padd;
 			float2 slider_shrink;
 			float2 slider_length;
@@ -304,7 +330,6 @@ namespace ECSEngine {
 			float label_list_circle_size;
 		};
 
-
 		enum ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX {
 			ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME,
 			ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT,
@@ -316,6 +341,10 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIWindowDrawerDescriptor {
 			void UpdateZoom(float2 before_zoom, float2 current_zoom);
 
+			// The x component must be the current OS window width divided by the monitor's width
+			// The y component must be the current OS window height divided by the monitor's height
+			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
+
 			bool configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT];
 			UIColorThemeDescriptor color_theme;
 			UILayoutDescriptor layout;
@@ -323,7 +352,11 @@ namespace ECSEngine {
 			UIElementDescriptor element_descriptor;
 		};
 
-		struct UISystemDescriptors {
+		struct ECSENGINE_API UISystemDescriptors {
+			// The x component must be the current OS window width divided by the monitor's width
+			// The y component must be the current OS window height divided by the monitor's height
+			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
+
 			UIMaterialDescriptor materials;
 			UIColorThemeDescriptor color_theme;
 			UIFontDescriptor font;
@@ -657,26 +690,44 @@ namespace ECSEngine {
 		};
 
 		enum ECS_UI_BORDER_TYPE {
-			ECS_UI_BORDER_TOP,
-			ECS_UI_BORDER_RIGHT,
-			ECS_UI_BORDER_BOTTOM,
-			ECS_UI_BORDER_LEFT
+			ECS_UI_BORDER_BOTTOM = 1 << 0,
+			ECS_UI_BORDER_TOP = 1 << 1,
+			ECS_UI_BORDER_LEFT = 1 << 2,
+			ECS_UI_BORDER_RIGHT = 1 << 3
 		};
+		
+		struct BorderHover {
+			ECS_INLINE bool IsTop() {
+				return (value & ECS_UI_BORDER_TOP) != 0;
+			}
 
-		// bottom mask: 0x01
-		// top    mask: 0x02
-		// left   mask: 0x04
-		// right  mask: 0x08
-		struct ECSENGINE_API BorderHover {
-			bool IsTop();
-			bool IsLeft();
-			bool IsRight();
-			bool IsBottom();
+			ECS_INLINE bool IsLeft() {
+				return (value & ECS_UI_BORDER_LEFT) != 0;
+			}
 
-			void SetTop();
-			void SetBottom();
-			void SetLeft();
-			void SetRight();
+			ECS_INLINE bool IsRight() {
+				return (value & ECS_UI_BORDER_RIGHT) != 0;
+			}
+
+			ECS_INLINE bool IsBottom() const {
+				return (value & ECS_UI_BORDER_BOTTOM) != 0;
+			}
+
+			ECS_INLINE void SetTop() {
+				value |= ECS_UI_BORDER_TOP;
+			}
+
+			ECS_INLINE void SetBottom() {
+				value |= ECS_UI_BORDER_BOTTOM;
+			}
+
+			ECS_INLINE void SetLeft() {
+				value |= ECS_UI_BORDER_LEFT;
+			}
+
+			ECS_INLINE void SetRight() {
+				value |= ECS_UI_BORDER_RIGHT;
+			}
 
 			unsigned char value;
 		};

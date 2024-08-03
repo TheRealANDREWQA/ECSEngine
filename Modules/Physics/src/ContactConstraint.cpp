@@ -319,87 +319,6 @@ static void SolveContactConstraintsIteration(SolverData* solver_data, float delt
 	}
 }
 
-ECS_THREAD_TASK(SolveContactConstraints) {
-	SolverData* data = (SolverData*)_data;
-	
-	//if (data->constraints.size > 0) {
-	//	StopSimulation(world);
-	//}
-
-	if (data->contact_table.GetCount() > 0) {
-		if (world->entity_manager->ExistsGlobalComponent(PhysicsSettings::ID())) {
-			PhysicsSettings* settings = world->entity_manager->GetGlobalComponent<PhysicsSettings>();
-			data->iterations = settings->iterations;
-			data->baumgarte_factor = settings->baumgarte_factor;
-			data->use_warm_starting = settings->use_warm_starting;
-		}
-
-		CapacityStream<unsigned int> iteration_indices;
-		iteration_indices.Initialize(&data->allocator, 0, data->contact_table.GetCount());
-
-		// Iterate the table and retrieve the indices where items are alive, while
-		// Reducing the reference count and removing the elements that have a reference
-		// Count of 0
-		data->contact_table.ForEachIndex([&iteration_indices, data](unsigned int index) {
-			ContactConstraint& constraint = *data->contact_table.GetValueFromIndex(index);
-			constraint.reference_count--;
-
-			if (constraint.reference_count == 0) {
-				data->contact_table.EraseFromIndex(index);
-				return true;
-			}
-			iteration_indices.Add(index);
-			return false;
-		});
-
-		// Determine if a simulation time step should be performed
-		float elapsed_time = data->previous_time_step_remainder + world->delta_time;
-		while (elapsed_time > data->time_step_tick) {
-			// Prepare the contact data
-			PrepareContactConstraintsData(world, data, iteration_indices);
-
-			// Repeat the solve step for the number of iterations
-			for (unsigned int index = 0; index < data->iterations; index++) {
-				SolveContactConstraintsIteration(data, data->inverse_time_step_tick, iteration_indices);
-			}
-
-			// Decrement the elapsed time
-			elapsed_time -= data->time_step_tick;
-		}
-
-		data->allocator.Deallocate(iteration_indices.buffer);
-
-		// Trim the contact table, such that it doesn't occupy too much memory
-		data->contact_table.Trim(&data->allocator);
-
-		// Update the simulation remainder
-		data->previous_time_step_remainder = elapsed_time;
-	}
-}
-
-static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInitializeInfo* info) {
-	SolverData* data = info->Allocate<SolverData>();
-	data->allocator = MemoryManager(ECS_MB, ECS_KB * 4, ECS_MB * 20, world->memory);
-	data->contact_table.Initialize(&data->allocator, 128);
-	data->iterations = 4;
-	data->baumgarte_factor = 0.05f;
-	data->linear_slop = 0.01f;
-	data->use_warm_starting = true;
-	data->previous_time_step_remainder = 0.0f;
-	// Use a default of 60Hz update rate
-	data->SetTimeStepTick(1.0f / 60.0f);
-
-	// Bind this so we can access the data from outside the main function
-	world->system_manager->BindData(SOLVER_DATA_STRING, data);
-}
-
-void AddSolverTasks(ModuleTaskFunctionData* data) {
-	TaskSchedulerElement solve_element;
-	solve_element.initialize_task_function = SolveContactConstraintsInitialize;
-	solve_element.task_group = ECS_THREAD_TASK_SIMULATE_MID;
-	ECS_REGISTER_TASK(solve_element, SolveContactConstraints, data);
-}
-
 static void DiscardContactConstraintPoint(ContactConstraintPoint& point) {
 	// The information to be discarded are the accumulated impulses
 	point.normal_impulse = 0.0f;
@@ -439,7 +358,7 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 		/*same_features_and_order = contact->entity_A == constraint.contact.base.entity_A &&
 			contact->entity_B == constraint.contact.base.entity_B;*/
 
-		// The matching function receives as value the index of the constraint point
+			// The matching function receives as value the index of the constraint point
 		auto match_points = [&](auto matching_function) {
 			ECS_STACK_CAPACITY_STREAM(unsigned int, contact_add_indices, ECS_COUNTOF(ContactManifold::points));
 			contact_add_indices.size = contact->manifold.point_count;
@@ -500,7 +419,7 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 					constraint.contact.base.manifold.point_edge_indices[index],
 					manifold_indices
 				);
-			});
+				});
 		}
 		else {
 			// If the features are the same but inverted, try to match them based upon the distance
@@ -511,12 +430,12 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 				match_points([&](const ContactManifoldFeatures& manifold, unsigned int index, Stream<unsigned int> manifold_indices) {
 					const float DISTANCE_EPSILON = 0.001f;
 					return ContactManifoldFindByPosition(
-						manifold, 
-						constraint.contact.base.manifold.points[index], 
-						float3::Splat(DISTANCE_EPSILON), 
+						manifold,
+						constraint.contact.base.manifold.points[index],
+						float3::Splat(DISTANCE_EPSILON),
 						manifold_indices
 					);
-				});
+					});
 			}
 			else {
 				// Can discard all the data, since the contact features have changed
@@ -550,7 +469,7 @@ static unsigned int GetContactConstraintIndex(SolverData* solver_data, Entity en
 	return solver_data->contact_table.Find(contact_pair);
 }
 
-static void InsertContactConstraint(SolverData* solver_data, const EntityContact* contact, float3 center_of_mass_A, float3 center_of_mass_B) {
+static void InsertContactConstraint(SolverData* solver_data, const EntityContact* contact, float3 center_of_mass_A, float3 center_of_mass_B, const Rigidbody* first_rigidbody, const Rigidbody* second_rigidbody) {
 	ContactConstraint* constraint = (ContactConstraint*)solver_data->allocator.Allocate(sizeof(ContactConstraint));
 	constraint->contact.base = *contact;
 	// Insert the constraint with the reference count of 2, such that
@@ -560,16 +479,107 @@ static void InsertContactConstraint(SolverData* solver_data, const EntityContact
 	constraint->center_of_mass_A = center_of_mass_A;
 	constraint->center_of_mass_B = center_of_mass_B;
 
+	// Set the rigidbodies now, even tho they are given as const and the structure takes them as mutable,
+	// They might be needed to be accessed in the functions in the call chain, since they might need to read
+	// Data from them
+	constraint->rigidbody_A = (Rigidbody*)first_rigidbody;
+	constraint->rigidbody_B = (Rigidbody*)second_rigidbody;
+
 	// This will discard the impulses, such that they don't have junk values
 	DiscardContactConstraintWarmStarting(*constraint);
 	solver_data->contact_table.InsertDynamic(&solver_data->allocator, constraint, { contact->entity_A, contact->entity_B });
+
+	// Update the island manager
+	solver_data->island_manager.AddContact(constraint);
+}
+
+static void DeallocateContactConstraint(SolverData* solver_data, ContactConstraint* constraint) {
+	// Also, remove it from the island manager
+	solver_data->island_manager.RemoveContact(constraint);
+	solver_data->allocator.Deallocate(constraint);
+}
+
+ECS_THREAD_TASK(SolveContactConstraints) {
+	SolverData* data = (SolverData*)_data;
+	
+	//if (data->constraints.size > 0) {
+	//	StopSimulation(world);
+	//}
+
+	if (data->contact_table.GetCount() > 0) {
+		if (world->entity_manager->ExistsGlobalComponent(PhysicsSettings::ID())) {
+			PhysicsSettings* settings = world->entity_manager->GetGlobalComponent<PhysicsSettings>();
+			data->iterations = settings->iterations;
+			data->baumgarte_factor = settings->baumgarte_factor;
+			data->use_warm_starting = settings->use_warm_starting;
+		}
+
+		CapacityStream<unsigned int> iteration_indices;
+		iteration_indices.Initialize(&data->allocator, 0, data->contact_table.GetCount());
+
+		// Iterate the table and retrieve the indices where items are alive, while
+		// Reducing the reference count and removing the elements that have a reference
+		// Count of 0
+		data->contact_table.ForEachIndex([&iteration_indices, data](unsigned int index) {
+			ContactConstraint* constraint = data->contact_table.GetValueFromIndex(index);
+			constraint->reference_count--;
+
+			if (constraint->reference_count == 0) {
+				// Deallocate the constraint itself
+				DeallocateContactConstraint(data, constraint);
+				data->contact_table.EraseFromIndex(index);
+				return true;
+			}
+			iteration_indices.Add(index);
+			return false;
+		});
+
+		// Determine if a simulation time step should be performed
+		float elapsed_time = data->previous_time_step_remainder + world->delta_time;
+		while (elapsed_time > data->time_step_tick) {
+			// Prepare the contact data
+			PrepareContactConstraintsData(world, data, iteration_indices);
+
+			// Repeat the solve step for the number of iterations
+			for (unsigned int index = 0; index < data->iterations; index++) {
+				SolveContactConstraintsIteration(data, data->inverse_time_step_tick, iteration_indices);
+			}
+
+			// Decrement the elapsed time
+			elapsed_time -= data->time_step_tick;
+		}
+
+		data->allocator.Deallocate(iteration_indices.buffer);
+
+		// Trim the contact table, such that it doesn't occupy too much memory
+		data->contact_table.Trim(&data->allocator);
+
+		// Update the simulation remainder
+		data->previous_time_step_remainder = elapsed_time;
+	}
+}
+
+static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInitializeInfo* info) {
+	SolverData* data = info->Allocate<SolverData>();
+	data->Initialize(world->memory);
+	// Bind this so we can access the data from outside the main function
+	world->system_manager->BindData(SOLVER_DATA_STRING, data);
+}
+
+void AddSolverTasks(ModuleTaskFunctionData* data) {
+	TaskSchedulerElement solve_element;
+	solve_element.initialize_task_function = SolveContactConstraintsInitialize;
+	solve_element.task_group = ECS_THREAD_TASK_SIMULATE_MID;
+	ECS_REGISTER_TASK(solve_element, SolveContactConstraints, data);
 }
 
 void AddContactConstraint(
 	World* world,
 	const EntityContact* contact,
 	float3 center_of_mass_A,
-	float3 center_of_mass_B
+	float3 center_of_mass_B,
+	const Rigidbody* first_rigidbody,
+	const Rigidbody* second_rigidbody
 ) {
 	// At the moment, allocate the contact directly now
 	SolverData* data = (SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
@@ -577,7 +587,7 @@ void AddContactConstraint(
 	// Try to retrieve the existing pair
 	unsigned int pair_index = GetContactConstraintIndex(data, contact->entity_A, contact->entity_B);
 	if (pair_index == -1) {
-		InsertContactConstraint(data, contact, center_of_mass_A, center_of_mass_B);
+		InsertContactConstraint(data, contact, center_of_mass_A, center_of_mass_B, first_rigidbody, second_rigidbody);
 	}
 	else {
 		// Match the constraint
@@ -731,6 +741,7 @@ void AddContactPair(
 								if (!query.face.first_collider) {
 									swap(contact.entity_A, contact.entity_B);
 									swap(first_center_of_mass, second_center_of_mass);
+									swap(first_rigidbody, second_rigidbody);
 								}
 							}
 							
@@ -738,7 +749,9 @@ void AddContactPair(
 								world,
 								&contact,
 								first_center_of_mass,
-								second_center_of_mass
+								second_center_of_mass,
+								first_rigidbody,
+								second_rigidbody
 							);
 						}
 
