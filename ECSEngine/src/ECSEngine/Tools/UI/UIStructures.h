@@ -218,7 +218,7 @@ namespace ECSEngine {
 			// The y component must be the current OS window height divided by the monitor's height
 			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
 
-			float size;
+			float2 size;
 			float character_spacing;
 			unsigned int texture_dimensions;
 			unsigned int symbol_count;
@@ -774,6 +774,10 @@ namespace ECSEngine {
 			// the characters will be copied onto the name stack buffer and then the system can safely assign the name
 			size_t LoadFromFile(const void* buffer, Stream<char>& name_stack);
 
+			ECS_INLINE Stream<char> DrawableName() const {
+				return { name.buffer, name_drawable_count };
+			}
+
 			float2 zoom;
 			float2 render_region_offset;
 			float2 drawer_draw_difference;
@@ -785,7 +789,6 @@ namespace ECSEngine {
 			Stream<char> name;
 			void* window_data;
 			size_t window_data_size;
-			Stream<UISpriteVertex> name_vertex_buffer;
 			UIDynamicStream<void*> memory_resources;
 			HashTableDefault<UIWindowDynamicResource> dynamic_resources;
 			WindowDraw draw;
@@ -797,6 +800,7 @@ namespace ECSEngine {
 			bool is_vertical_render_slider;
 			unsigned char pin_horizontal_slider_count;
 			unsigned char pin_vertical_slider_count;
+			unsigned int name_drawable_count;
 		};
 
 		struct UIWindowSerializedMissingData {

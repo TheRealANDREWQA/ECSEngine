@@ -707,8 +707,8 @@ namespace ECSEngine {
 				font_size.x *= zoom_ptr->x;
 			}
 			else {
-				font_size.y = font.size * zoom_inverse.x;
-				font_size.x = font.size * ECS_TOOLS_UI_FONT_X_FACTOR;
+				font_size.y = font.size.y * zoom_inverse.y;
+				font_size.x = font.size.x * zoom_inverse.x;
 				if (~configuration & UI_CONFIG_UNAVAILABLE_TEXT) {
 					color = color_theme.text;
 				}
@@ -1879,7 +1879,7 @@ namespace ECSEngine {
 			else {
 				text_max_size -= element_descriptor.label_padd * 2.0f;
 			}
-			text_span = system->GetTextSpanLimited({ text.buffer, text_count }, font_size.x, font_size.y, character_spacing, text_max_size, &text_count, invert_order);
+			text_span = system->GetTextSpanLimited({ text.buffer, text_count }, font_size, character_spacing, text_max_size, &text_count, invert_order);
 			float x_text_position, y_text_position;
 			HandleTextLabelAlignment(
 				configuration,
@@ -3558,7 +3558,7 @@ namespace ECSEngine {
 						float character_spacing;
 						Color font_color;
 						drawer->HandleText(configuration, config, font_color, font_size, character_spacing);
-						total_scale.x += drawer->system->GetTextSpan(name, font_size.x, font_size.y, character_spacing).x;
+						total_scale.x += drawer->system->GetTextSpan(name, font_size, character_spacing).x;
 					}
 					else {
 						total_scale.x += name->TextScale()->x;
@@ -5528,7 +5528,7 @@ namespace ECSEngine {
 				UIConfigTextParameters text_parameters;
 				text_parameters.color = color_theme.histogram_text_color;
 				text_parameters.character_spacing = font.character_spacing;
-				text_parameters.size = { font.size * ECS_TOOLS_UI_FONT_X_FACTOR * zoom_ptr->x * zoom_inverse.y, font.size };
+				text_parameters.size = font.size;
 
 
 				if (configuration & UI_CONFIG_TEXT_PARAMETERS) {
@@ -7201,7 +7201,7 @@ namespace ECSEngine {
 
 					Stream<char> top_right_info = info_labels.GetTopRight();
 					if (top_right_info.size > 0) {
-						float2 text_span = system->GetTextSpan(top_right_info, font_size.x, font_size.y, character_spacing);
+						float2 text_span = system->GetTextSpan(top_right_info, font_size, character_spacing);
 						absolute_transform.position = { row_position.x + graph_scale.x - text_span.x, row_position.y };
 						absolute_transform.position += region_render_offset;
 						info_labels_config.AddFlag(absolute_transform);
@@ -7485,7 +7485,7 @@ namespace ECSEngine {
 
 					Stream<char> bottom_right_info = info_labels.GetBottomRight();
 					if (bottom_right_info.size > 0) {
-						float2 text_span = system->GetTextSpan(bottom_right_info, font_size.x, font_size.y, character_spacing);
+						float2 text_span = system->GetTextSpan(bottom_right_info, font_size, character_spacing);
 						absolute_transform.position = { row_position.x + graph_scale.x - text_span.x, row_position.y };
 						absolute_transform.position += region_render_offset;
 						info_labels_config.AddFlag(absolute_transform);
@@ -8152,7 +8152,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UIDrawer::TextSpan(Stream<char> characters, float2 font_size, float character_spacing) const {
-			return system->GetTextSpan(characters, font_size.x, font_size.y, character_spacing);
+			return system->GetTextSpan(characters, font_size, character_spacing);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -11232,8 +11232,8 @@ namespace ECSEngine {
 			HandleText(configuration, config, color, font_size, character_spacing);
 
 			float old_scale = font_size.y;
-			font_size.y = system->GetTextSpriteSizeToScale(scale.y - padding * 2);
-			font_size = system->GetTextSpriteSize(font_size.y);
+			font_size.y = system->GetTextSpriteYSizeToScale(scale.y - padding * 2);
+			font_size.x = ECS_TOOLS_UI_FONT_X_FACTOR * font_size.y;
 			float factor = font_size.y / old_scale;
 			character_spacing *= factor;
 
@@ -11256,9 +11256,9 @@ namespace ECSEngine {
 		{
 			float3 font_size_spacing;
 
-			font_size_spacing.y = system->GetTextSpriteSizeToScale(scale - padding * 2.0f);
-			font_size_spacing.x = system->GetTextSpriteSize(font_size_spacing.y).x;
-			font_size_spacing.z = font.character_spacing * font_size_spacing.y / font.size;
+			font_size_spacing.y = system->GetTextSpriteYSizeToScale(scale - padding * 2.0f);
+			font_size_spacing.x = font_size_spacing.y * ECS_TOOLS_UI_FONT_X_FACTOR;
+			font_size_spacing.z = font.character_spacing * font_size_spacing.y / font.size.y;
 
 			return font_size_spacing;
 		}

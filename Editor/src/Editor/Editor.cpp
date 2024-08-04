@@ -407,12 +407,11 @@ Editor::Editor(const wchar_t* name)
 	mouse.SetPosition(cursor_position.x, cursor_position.y);
 	mouse.m_window_handle = nullptr;
 
-	// show window since default is hidden
+	// Show window since default is hidden
 	ShowWindow(hWnd, SW_SHOWMAXIMIZED);
 	UpdateWindow(hWnd);
 
 	ECS_ASSERT(SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE));
-	GetWindowRect(hWnd, &window_region);
 }
 
 Editor::~Editor() {
@@ -493,6 +492,9 @@ LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 				OS::MonitorInfo monitor_info = OS::RetrieveMonitorInfo(current_monitor);
 				monitor_size = monitor_info.size;
 			}
+
+			RECT window_rect;
+			GetClientRect(hWnd, &window_rect);
 
 			unsigned int new_width = LOWORD(lParam);
 			unsigned int new_height = HIWORD(lParam);

@@ -371,14 +371,14 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float offset_mask,
 				const CapacityStream<UIDockspace>& dockspaces,
-				float2* sizes
+				CapacityStream<float2>& sizes
 			) const;
 
 			void CalculateDockspaceRegionHeaders(
 				const UIDockspace* dockspace,
 				unsigned int border_index,
 				float offset_mask,
-				float2* sizes
+				CapacityStream<float2>& sizes
 			) const;
 
 			void ChangeBorderFlags(UIDockspace* dockspace, unsigned int border_index, size_t flags);
@@ -447,32 +447,7 @@ namespace ECSEngine {
 
 			void ConfigureToolTipBase(UITooltipBaseData* data) const;
 
-			// it will convert the characters into a row of text sprites; position represents the x and y of the
-			void ConvertCharactersToTextSprites(
-				Stream<char> characters,
-				float2 position,
-				UISpriteVertex* vertex_buffer,
-				Color color = Color((unsigned char)255, 255, 255, 255),
-				unsigned int buffer_offset = 0,
-				float font_size = 0.01f,
-				float character_spacing = 0.001f,
-				bool horizontal = true,
-				bool invert_order = false
-			) {
-				ConvertCharactersToTextSprites(
-					characters,
-					position,
-					vertex_buffer,
-					color,
-					buffer_offset,
-					{ font_size * ECS_TOOLS_UI_FONT_X_FACTOR, font_size },
-					character_spacing,
-					horizontal,
-					invert_order
-				);
-			}
-
-			// it will convert the characters into a row of text sprites; position represents the x and y of the 
+			// It will convert the characters into a row of text sprites; position represents the x and y of the 
 			void ConvertCharactersToTextSprites(
 				Stream<char> characters,
 				float2 position,
@@ -490,21 +465,7 @@ namespace ECSEngine {
 				size_t& count,
 				float value,
 				float2 position,
-				size_t precision = 2,
-				Color color = ECS_TOOLS_UI_TEXT_COLOR,
-				float font_size = ECS_TOOLS_UI_FONT_SIZE,
-				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING,
-				bool horizontal = true,
-				bool invert_order = false
-			);
-
-			void ConvertFloatToTextSprites(
-				UISpriteVertex* vertices,
-				size_t& count,
-				float value,
-				float2 position,
-				float font_size_x,
-				float font_size_y,
+				float2 font_size,
 				size_t precision = 2,
 				Color color = ECS_TOOLS_UI_TEXT_COLOR,
 				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING,
@@ -517,21 +478,7 @@ namespace ECSEngine {
 				size_t& count,
 				double value,
 				float2 position,
-				size_t precision = 2,
-				Color color = ECS_TOOLS_UI_TEXT_COLOR,
-				float font_size = ECS_TOOLS_UI_FONT_SIZE,
-				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING,
-				bool horizontal = true,
-				bool invert_order = false
-			);
-
-			void ConvertDoubleToTextSprites(
-				UISpriteVertex* vertices,
-				size_t& count,
-				double value,
-				float2 position,
-				float font_size_x,
-				float font_size_y,
+				float2 font_size,
 				size_t precision = 2,
 				Color color = ECS_TOOLS_UI_TEXT_COLOR,
 				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING,
@@ -690,8 +637,7 @@ namespace ECSEngine {
 				unsigned int border_index,
 				unsigned int window_index_in_region,
 				float offset_mask,
-				float add_x,
-				const float2* sizes,
+				Stream<float2> sizes,
 				void** buffers,
 				size_t* counts
 			);
@@ -966,16 +912,14 @@ namespace ECSEngine {
 			template<bool horizontal = true>
 			ECSENGINE_API float2 GetTextSpan(
 				Stream<char> characters,
-				float font_size_x,
-				float font_size_y,
+				float2 font_size,
 				float character_spacing
 			) const;
 
 			template<bool horizontal = true>
 			ECSENGINE_API float2 GetTextSpanLimited(
 				Stream<char> characters,
-				float font_size_x,
-				float font_size_y,
+				float2 font_size,
 				float character_spacing,
 				float2 scale_limit,
 				size_t* character_count,
@@ -1094,9 +1038,7 @@ namespace ECSEngine {
 
 			float GetTextSpriteYScale(float font_size_y) const;
 
-			float GetTextSpriteSizeToScale(float scale) const;
-
-			float2 GetTextSpriteSize(float size) const;
+			float GetTextSpriteYSizeToScale(float scale) const;
 
 			void GetVisibleDockspaceRegions(CapacityStream<UIVisibleDockspaceRegion>& windows) const;
 

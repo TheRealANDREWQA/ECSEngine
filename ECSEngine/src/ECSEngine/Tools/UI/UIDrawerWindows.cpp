@@ -693,7 +693,8 @@ namespace ECSEngine {
 			drawer.Button("Default values##32", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
 			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Character spacing", &font->character_spacing, 0.0f, 0.1f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Size", &font->size, 0.0007f, 0.003f, 5);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Size X", &font->size.x, 0.0005f, 0.004f, 5);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Size Y", &font->size.y, 0.0007f, 0.003f, 5);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
