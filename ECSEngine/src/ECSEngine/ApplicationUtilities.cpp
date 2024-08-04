@@ -26,8 +26,8 @@ namespace ECSEngine {
 		monitor_scaling = 150.0f;
 	#endif
 		
-		LONG width = window_rectangle.right - window_rectangle.left;
-		LONG height = window_rectangle.bottom - window_rectangle.top;
+		unsigned int width = window_rectangle.right - window_rectangle.left;
+		unsigned int height = window_rectangle.bottom - window_rectangle.top;
 		
 		/*unsigned int new_width = static_cast<unsigned int>(width * monitor_scaling / 100.0f);
 		unsigned int new_height = static_cast<unsigned int>(height * monitor_scaling / 100.0f);*/

@@ -2675,14 +2675,14 @@ namespace ECSEngine {
 					if (state->row_has_submenu != nullptr && state->row_has_submenu[index]) {
 						auto buffers = drawer.GetBuffers();
 						auto counts = drawer.GetCounts();
-						float2 sign_scale = system->GetTextSpan(">", system->m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, system->m_descriptors.font.size, system->m_descriptors.font.character_spacing);
+						float2 sign_scale = system->GetTextSpan(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing);
 						system->ConvertCharactersToTextSprites(
 							">",
 							{ current_position.x + region_scale.x - sign_scale.x * 2.0f, AlignMiddle(current_position.y, default_element_scale.y, sign_scale.y) },
 							(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
 							arrow_color,
 							counts[ECS_TOOLS_UI_TEXT_SPRITE],
-							{ system->m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, system->m_descriptors.font.size },
+							system->m_descriptors.font.size,
 							system->m_descriptors.font.character_spacing
 						);
 						counts[ECS_TOOLS_UI_TEXT_SPRITE] += 6;
@@ -2778,7 +2778,7 @@ namespace ECSEngine {
 					}
 					if (state->row_has_submenu != nullptr && state->row_has_submenu[data->row_index]) {
 						UITooltipBaseData base;
-						float y_text_span = system->GetTextSpriteYScale(system->m_descriptors.font.size);
+						float y_text_span = system->GetTextSpriteYScale(system->m_descriptors.font.size.y);
 						base.next_row_offset = system->m_descriptors.window_layout.default_element_y - y_text_span;
 
 						float2 window_size;
@@ -2801,7 +2801,7 @@ namespace ECSEngine {
 						window_size.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + base.next_row_offset;
 						window_size.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_padd.x - system->m_descriptors.misc.menu_x_padd;
 
-						float arrow_span = system->GetTextSpan(">", system->NormalizeHorizontalToWindowDimensions(system->m_descriptors.font.size), system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
+						float arrow_span = system->GetTextSpan(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
 						window_size.x += (state->row_has_submenu != nullptr) * (arrow_span + system->m_descriptors.element_descriptor.label_padd.x);
 
 						UIWindowDescriptor submenu_descriptor;
@@ -2848,8 +2848,8 @@ namespace ECSEngine {
 				}
 
 				if (state->unavailables == nullptr || (!state->unavailables[data->row_index] && state->unavailables != nullptr)) {
-					float y_text_size = system->GetTextSpriteYScale(system->m_descriptors.font.size);
-					float2 font_size = { system->m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, system->m_descriptors.font.size };
+					float y_text_size = system->GetTextSpriteYScale(system->m_descriptors.font.size.y);
+					float2 font_size = system->m_descriptors.font.size;
 
 					float2 text_position = {
 						position.x + system->m_descriptors.element_descriptor.label_padd.x,
@@ -2878,8 +2878,7 @@ namespace ECSEngine {
 						}
 						float x_span = system->GetTextSpan(
 							{ state->right_characters.buffer + first_character, state->right_row_substreams[data->row_index] - first_character },
-							font_size.x,
-							font_size.y,
+							font_size,
 							system->m_descriptors.font.character_spacing
 						).x;
 
@@ -2902,8 +2901,8 @@ namespace ECSEngine {
 					if (state->row_has_submenu != nullptr && state->row_has_submenu[data->row_index]) {
 						// The compiler messes up the registers and overwrites the font size in distribution
 						// so do a rewrite of the values
-						font_size = { system->m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, system->m_descriptors.font.size };
-						float2 arrow_size = system->GetTextSpan(">", font_size.x, font_size.y, system->m_descriptors.font.character_spacing);
+						font_size = system->m_descriptors.font.size;
+						float2 arrow_size = system->GetTextSpan(">", font_size, system->m_descriptors.font.character_spacing);
 						float2 arrow_position = { position.x + scale.x - arrow_size.x * 2.0f, AlignMiddle(position.y, system->m_descriptors.window_layout.default_element_y, arrow_size.y) };
 
 						system->ConvertCharactersToTextSprites(
@@ -3010,7 +3009,7 @@ namespace ECSEngine {
 				if (IsPointInRectangle(mouse_position, position, scale) && is_left_click_released
 					&& data->menu_initializer_index == 255 && !data->is_opened_when_clicked) {
 					UITooltipBaseData tool_tip_data;
-					float y_text_span = system->GetTextSpriteYScale(system->m_descriptors.font.size);
+					float y_text_span = system->GetTextSpriteYScale(system->m_descriptors.font.size.y);
 					tool_tip_data.next_row_offset = system->m_descriptors.window_layout.default_element_y - y_text_span;
 
 					float2 window_dimensions;
@@ -3029,7 +3028,7 @@ namespace ECSEngine {
 					window_dimensions.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + tool_tip_data.next_row_offset + system->m_descriptors.dockspaces.viewport_padding_y;
 					window_dimensions.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_padd.x - system->m_descriptors.misc.menu_x_padd;
 
-					float arrow_span = system->GetTextSpan(">", system->NormalizeHorizontalToWindowDimensions(system->m_descriptors.font.size), system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
+					float arrow_span = system->GetTextSpan(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
 					window_dimensions.x += (menu->state.row_has_submenu != nullptr) * (arrow_span + system->m_descriptors.element_descriptor.label_padd.x);
 
 					auto destroy_callback = [](ActionData* action_data) {

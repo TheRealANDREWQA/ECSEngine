@@ -590,15 +590,10 @@ namespace ECSEngine {
 
 		void UIWindowDrawerDescriptor::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
 		{
-			if (configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT]) {
-				layout.ChangeDimensionRatio(current_ratio, new_ratio);
-			}
-			if (configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_FONT]) {
-				font.ChangeDimensionRatio(current_ratio, new_ratio);
-			}
-			if (configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT]) {
-				element_descriptor.ChangeDimensionRatio(current_ratio, new_ratio);
-			}
+			// Even if the descriptors are not configured, they must still be updated
+			element_descriptor.ChangeDimensionRatio(current_ratio, new_ratio);
+			font.ChangeDimensionRatio(current_ratio, new_ratio);
+			layout.ChangeDimensionRatio(current_ratio, new_ratio);
 		}
 
 		size_t UIWindow::Serialize(void* buffer) const
@@ -636,13 +631,13 @@ namespace ECSEngine {
 			}
 
 			// name
-			size_t name_length = name_vertex_buffer.size / 6;
+			size_t name_length = name.size;
 			unsigned short* ptr_name_length = (unsigned short*)ptr;
 			*ptr_name_length = (unsigned short)name_length;
 			ptr += sizeof(unsigned short);
 
-			memcpy((void*)ptr, name.buffer, name_length);
-			ptr += name_length;
+			memcpy((void*)ptr, name.buffer, sizeof(char) * name_length);
+			ptr += sizeof(char) * name_length;
 			return ptr - (uintptr_t)buffer;
 		}
 
@@ -668,9 +663,9 @@ namespace ECSEngine {
 			}
 
 			// name
-			size_t name_length = name_vertex_buffer.size / 6;
+			size_t name_length = name.size;
 			size += sizeof(unsigned short);
-			size += name_length;
+			size += sizeof(char) * name_length;
 
 			return size;
 		}
@@ -1152,7 +1147,7 @@ namespace ECSEngine {
 		void UIMiscellaneousDescriptor::ChangeDimensionRatio(float2 current_ratio, float2 new_ratio)
 		{
 			auto update_x = [this](float value) {
-				render_slider_horizontal_size *= value;
+				render_slider_vertical_size *= value;
 				color_input_window_size_x *= value;
 				graph_hover_offset.x *= value;
 				histogram_hover_offset.x *= value;
@@ -1162,7 +1157,7 @@ namespace ECSEngine {
 
 			auto update_y = [this](float value) {
 				title_y_scale *= value;
-				render_slider_vertical_size *= value;
+				render_slider_horizontal_size *= value;
 				graph_hover_offset.y *= value;
 				histogram_hover_offset.y *= value;
 				tool_tip_padding.y *= value;
@@ -1217,10 +1212,11 @@ namespace ECSEngine {
 		{
 			auto update_x = [this](float value) {
 				character_spacing *= value;
+				size.x *= value;
 			};
 
 			auto update_y = [this](float value) {
-				size *= value;
+				size.y *= value;
 			};
 
 			ChangeStructureDimensionRatio(update_x, update_y, current_ratio, new_ratio);

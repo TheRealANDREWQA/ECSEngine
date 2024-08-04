@@ -1394,7 +1394,7 @@ namespace ECSEngine {
 			unsigned int border_index,
 			float offset_mask,
 			const CapacityStream<UIDockspace>& dockspaces,
-			float2* sizes
+			CapacityStream<float2>& sizes
 		) const
 		{
 			CalculateDockspaceRegionHeaders(&dockspaces[dockspace_index], border_index, offset_mask, sizes);
@@ -1406,23 +1406,23 @@ namespace ECSEngine {
 			const UIDockspace* dockspace,
 			unsigned int border_index,
 			float offset_mask,
-			float2* sizes
+			CapacityStream<float2>& sizes
 		) const {
-			float first_letter_position = 0.0f;
 			size_t header_count = dockspace->borders[border_index].window_indices.size;
+			ECS_ASSERT(sizes.size == 0 && sizes.capacity >= header_count);
+
+			float first_letter_position = 0.0f;
 			float total_header_length = 0.0f;
 			float added_scale_and_close_x_padding = m_descriptors.dockspaces.region_header_added_scale + m_descriptors.dockspaces.close_x_total_x_padding;
 
-			// first iteration is executed before the for in order to not add a spacing unnecessary
-			const Stream<UISpriteVertex>* text_sprites = &m_windows[dockspace->borders[border_index].window_indices[0]].name_vertex_buffer;
-			float last_letter_position = text_sprites->buffer[text_sprites->size - 2].position.x;
-			total_header_length += last_letter_position + added_scale_and_close_x_padding;
+			// first iteration is executed before the for in order to not add an unnecessary spacing
+			sizes[0].x = GetTextSpan(m_windows[dockspace->borders[border_index].window_indices[0]].DrawableName(), m_descriptors.font.size, m_descriptors.font.character_spacing).x;
+			total_header_length += sizes[0].x + added_scale_and_close_x_padding;
 
 
 			for (size_t index = 1; index < header_count; index++) {
-				const Stream<UISpriteVertex>* text_sprites = &m_windows[dockspace->borders[border_index].window_indices[index]].name_vertex_buffer;
-				float last_letter_position = text_sprites->buffer[text_sprites->size - 2].position.x;
-				total_header_length += last_letter_position + m_descriptors.dockspaces.region_header_spacing + added_scale_and_close_x_padding;
+				sizes[index].x = GetTextSpan(m_windows[dockspace->borders[border_index].window_indices[index]].DrawableName(), m_descriptors.font.size, m_descriptors.font.character_spacing).x;
+				total_header_length += sizes[index].x + m_descriptors.dockspaces.region_header_spacing + added_scale_and_close_x_padding;
 			}
 
 			float header_fraction = ((dockspace->borders[border_index + 1].position - dockspace->borders[border_index].position - m_descriptors.dockspaces.region_header_padding * 2) * offset_mask
@@ -1432,15 +1432,14 @@ namespace ECSEngine {
 
 			float header_offset = m_descriptors.dockspaces.region_header_padding;
 			for (size_t index = 0; index < dockspace->borders[border_index].window_indices.size; index++) {
-				const Stream<UISpriteVertex>* text_sprites = &m_windows[dockspace->borders[border_index].window_indices[index]].name_vertex_buffer;
-				first_letter_position = text_sprites->buffer[0].position.x;
-				float last_letter_position = text_sprites->buffer[text_sprites->size - 2].position.x;
+				float current_size = sizes[index].x;
 				sizes[index] = float2(
 					(/*dockspace->transform.position.x + */header_offset /*+ dockspace->borders[border_index].position * offset_mask*/) /** header_fraction*/,
-					(last_letter_position - first_letter_position + added_scale_and_close_x_padding) * header_fraction
+					(current_size + added_scale_and_close_x_padding) * header_fraction
 				);
-				header_offset += ((last_letter_position - first_letter_position) + m_descriptors.dockspaces.region_header_spacing + added_scale_and_close_x_padding) * header_fraction;
+				header_offset += (current_size + m_descriptors.dockspaces.region_header_spacing + added_scale_and_close_x_padding) * header_fraction;
 			}
+			sizes.size = header_count;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1719,8 +1718,7 @@ namespace ECSEngine {
 				}
 
 				if (data->font_size == float2(0.0f, 0.0f)) {
-					data->font_size = { m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, m_descriptors.font.size };
-				}
+					data->font_size = m_descriptors.font.size;				}
 
 				if (data->character_spacing == 0.0f) {
 					data->character_spacing = m_descriptors.font.character_spacing;
@@ -1783,40 +1781,6 @@ namespace ECSEngine {
 			}
 		}
 
-		void UISystem::ConvertFloatToTextSprites(UISpriteVertex* vertices, size_t& count, float value, float2 position, size_t precision, Color color, float font_size, float character_spacing, bool horizontal, bool invert_order)
-		{
-			ConvertFloatToTextSprites(
-				vertices,
-				count,
-				value,
-				position,
-				font_size * ECS_TOOLS_UI_FONT_X_FACTOR,
-				font_size,
-				precision,
-				color,
-				character_spacing,
-				horizontal,
-				invert_order
-			);
-		}
-
-		void UISystem::ConvertDoubleToTextSprites(UISpriteVertex* vertices, size_t& count, double value, float2 position, size_t precision, Color color, float font_size, float character_spacing, bool horizontal, bool invert_order)
-		{
-			ConvertDoubleToTextSprites(
-				vertices,
-				count,
-				value,
-				position,
-				font_size * ECS_TOOLS_UI_FONT_X_FACTOR,
-				font_size,
-				precision,
-				color,
-				character_spacing,
-				horizontal,
-				invert_order
-			);
-		}
-
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::ConvertFloatToTextSprites(
@@ -1824,8 +1788,7 @@ namespace ECSEngine {
 			size_t& count,
 			float value,
 			float2 position,
-			float font_size_x,
-			float font_size_y,
+			float2 font_size,
 			size_t precision,
 			Color color,
 			float character_spacing,
@@ -1843,7 +1806,7 @@ namespace ECSEngine {
 				vertices,
 				color,
 				count,
-				{ font_size_x, font_size_y },
+				font_size,
 				character_spacing,
 				horizontal,
 				!invert_order
@@ -1858,8 +1821,7 @@ namespace ECSEngine {
 			size_t& count,
 			double value,
 			float2 position,
-			float font_size_x,
-			float font_size_y,
+			float2 font_size,
 			size_t precision,
 			Color color,
 			float character_spacing,
@@ -1877,7 +1839,7 @@ namespace ECSEngine {
 				vertices,
 				color,
 				count,
-				{ font_size_x, font_size_y },
+				font_size,
 				character_spacing,
 				horizontal,
 				!invert_order
@@ -2409,8 +2371,6 @@ namespace ECSEngine {
 			window.transform.scale = float2(descriptor.initial_size_x, descriptor.initial_size_y);
 			window.render_region_offset = float2(0.0f, 0.0f);
 			window.drawer_draw_difference = { 0.0f, 0.0f };
-			// in order to not accidentally deallocate the name buffer when setting the name 
-			window.name_vertex_buffer.buffer = nullptr;
 
 			void* window_drawer_allocation = m_memory->Allocate(sizeof(UIWindowDrawerDescriptor), alignof(UIWindowDrawerDescriptor));
 			window.descriptors = (UIWindowDrawerDescriptor*)window_drawer_allocation;
@@ -2442,12 +2402,12 @@ namespace ECSEngine {
 
 			window.window_data = CopyNonZero(Allocator(), descriptor.window_data, descriptor.window_data_size);
 			window.window_data_size = descriptor.window_data_size;
+			window.name = {};
 
 			// resource table
 			unsigned short resource_count = descriptor.resource_count == 0 ? m_descriptors.misc.window_table_default_count : descriptor.resource_count;
 			window.table.Initialize(m_memory, resource_count);
 
-			window.name_vertex_buffer.buffer = nullptr;
 			SetWindowName(window_index, descriptor.window_name);
 			if (descriptor.draw != nullptr) {
 				InitializeWindowDraw(window_index, descriptor.draw);
@@ -2924,36 +2884,40 @@ namespace ECSEngine {
 			unsigned int border_index,
 			unsigned int window_index_in_region,
 			float offset_mask,
-			float add_x,
-			const float2* sizes,
+			Stream<float2> sizes,
 			void** buffers,
 			size_t* counts
 		)
 		{
 			UISpriteVertex* reinterpretation = (UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE];
 			int64_t index = 0;
-			size_t maximum_vertex_count = m_windows[dockspace->borders[border_index].window_indices[window_index_in_region]].name_vertex_buffer.size;
+			const UIWindow& window = m_windows[dockspace->borders[border_index].window_indices[window_index_in_region]];
 			size_t initial_count = counts[ECS_TOOLS_UI_TEXT_SPRITE];
 			float vertex_added_scale = m_descriptors.dockspaces.region_header_added_scale * 0.5f;
 
 			float2 region_position = GetDockspaceRegionPosition(dockspace, border_index, offset_mask);
-			float font_size_y_scale = GetTextSpriteYScale(m_descriptors.font.size);
-			float vertex_y_position = -AlignMiddle(region_position.y, m_descriptors.misc.title_y_scale, font_size_y_scale);
-			float vertex_y_translation = vertex_y_position - m_windows[dockspace->borders[border_index].window_indices[window_index_in_region]].name_vertex_buffer[0].position.y;
-			for (; index < maximum_vertex_count; index++) {
-				size_t buffer_index = index + initial_count;
-				if (index % 6 == 1 &&
-					m_windows[dockspace->borders[border_index].window_indices[window_index_in_region]].name_vertex_buffer[index].position.x - m_windows[dockspace->borders[border_index].window_indices[window_index_in_region]].name_vertex_buffer[0].position.x > sizes[window_index_in_region].y - vertex_added_scale - m_descriptors.dockspaces.close_x_total_x_padding) {
-					counts[ECS_TOOLS_UI_TEXT_SPRITE] -= 1;
-					break;
-				}
-				reinterpretation[buffer_index] = m_windows[dockspace->borders[border_index].window_indices[window_index_in_region]].name_vertex_buffer[index];
-				reinterpretation[buffer_index].position.x += add_x + vertex_added_scale;
-				reinterpretation[buffer_index].position.y = m_windows[dockspace->borders[border_index].window_indices[window_index_in_region]].name_vertex_buffer[index].position.y
-					+ vertex_y_translation;
-				reinterpretation[buffer_index].SetColor(m_descriptors.color_theme.text);
-				counts[ECS_TOOLS_UI_TEXT_SPRITE]++;
-			}
+			float font_size_y_scale = GetTextSpriteYScale(m_descriptors.font.size.y);
+			float vertex_y_position = AlignMiddle(region_position.y, m_descriptors.misc.title_y_scale, font_size_y_scale);
+
+			size_t character_count = 0;
+			GetTextSpanLimited(
+				window.DrawableName(), 
+				m_descriptors.font.size, 
+				m_descriptors.font.character_spacing, 
+				{ sizes[window_index_in_region].y - (m_descriptors.dockspaces.region_header_added_scale + m_descriptors.dockspaces.close_x_total_x_padding), 10000.0f }, 
+				&character_count, 
+				false
+			);
+			ConvertCharactersToTextSprites(
+				{ window.name.buffer, character_count },
+				{ region_position.x + sizes[window_index_in_region].x + vertex_added_scale, vertex_y_position },
+				reinterpretation,
+				m_descriptors.color_theme.text,
+				counts[ECS_TOOLS_UI_TEXT_SPRITE],
+				m_descriptors.font.size,
+				m_descriptors.font.character_spacing
+			);
+			counts[ECS_TOOLS_UI_TEXT_SPRITE] += character_count * 6;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3401,8 +3365,8 @@ namespace ECSEngine {
 				m_memory->Deallocate(m_windows[window_index].window_data);
 			}
 
-			m_memory->Deallocate(m_windows[window_index].table.GetAllocatedBuffer());
-			m_memory->Deallocate(m_windows[window_index].name_vertex_buffer.GetAllocatedBuffer());
+			m_windows[window_index].table.Deallocate(m_memory);
+			m_windows[window_index].name.Deallocate(m_memory);
 
 			m_memory->Deallocate(m_windows[window_index].descriptors);
 
@@ -4754,7 +4718,7 @@ namespace ECSEngine {
 					{ SkipAction, nullptr, 0 }
 				);
 
-				float2 sizes[128];
+				ECS_STACK_CAPACITY_STREAM(float2, sizes, 128);
 				CalculateDockspaceRegionHeaders(dockspace, border_index, offset_mask, sizes);
 
 				DrawCollapseTriangleHeader(buffers, vertex_count, dockspace, border_index, offset_mask, true);
@@ -4804,7 +4768,6 @@ namespace ECSEngine {
 						border_index,
 						index,
 						offset_mask,
-						dockspace_region_position.x + sizes[index].x,
 						sizes,
 						buffers,
 						vertex_count
@@ -5233,8 +5196,7 @@ namespace ECSEngine {
 				if (new_line_character > current_position) {
 					float2 text_span = GetTextSpan(
 						{ characters + current_position, new_line_character - current_position },
-						data->font_size.x,
-						data->font_size.y,
+						data->font_size,
 						data->character_spacing
 					);
 					max_scale = max(max_scale, text_span.x);
@@ -5353,7 +5315,7 @@ namespace ECSEngine {
 					word_end_index = temp_stream[index] - 1;
 				}
 				if (word_end_index >= word_start_index) {
-					float2 text_span = GetTextSpan({ characters.buffer + word_start_index, word_end_index - word_start_index + 1 }, data->font_size.x, data->font_size.y, data->character_spacing);
+					float2 text_span = GetTextSpan({ characters.buffer + word_start_index, word_end_index - word_start_index + 1 }, data->font_size, data->character_spacing);
 					position.x += text_span.x;
 				}
 
@@ -5415,8 +5377,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < left_new_lines.size; index++) {
 				float2 text_span = GetTextSpan(
 					{ aligned_to_left_text.buffer + current_position, left_new_lines[index] - current_position },
-					data->font_size.x,
-					data->font_size.y,
+					data->font_size,
 					data->character_spacing
 				);
 				max_left_scale = max(max_left_scale, text_span.x);
@@ -5427,8 +5388,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < right_new_lines.size; index++) {
 				float2 text_span = GetTextSpan(
 					{ aligned_to_right_text.buffer + current_position, right_new_lines[index] - current_position },
-					data->font_size.x,
-					data->font_size.y,
+					data->font_size,
 					data->character_spacing
 				);
 				max_right_scale = max(max_right_scale, text_span.x);
@@ -6386,23 +6346,21 @@ namespace ECSEngine {
 		template<bool horizontal>
 		float2 UISystem::GetTextSpan(
 			Stream<char> characters,
-			float font_size_x,
-			float font_size_y,
+			float2 font_size,
 			float character_spacing
 		) const {
 			size_t character_count;
-			return GetTextSpanLimited<horizontal>(characters, font_size_x, font_size_y, character_spacing, { FLT_MAX, FLT_MAX }, &character_count, false);
+			return GetTextSpanLimited<horizontal>(characters, font_size, character_spacing, { FLT_MAX, FLT_MAX }, &character_count, false);
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpan, Stream<char>, float, float, float);
+		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpan, Stream<char>, float2, float);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<bool horizontal>
 		float2 UISystem::GetTextSpanLimited(
 			Stream<char> characters, 
-			float font_size_x, 
-			float font_size_y, 
+			float2 font_size, 
 			float character_spacing, 
 			float2 scale_limit, 
 			size_t* character_count,
@@ -6412,7 +6370,7 @@ namespace ECSEngine {
 			float2 text_span = { 0.0f, 0.0f };
 
 			float2 atlas_dimensions = m_font_character_uvs[m_descriptors.font.texture_dimensions];
-			float2 sprite_scale_factor = { atlas_dimensions.x * font_size_x, atlas_dimensions.y * font_size_y };
+			float2 sprite_scale_factor = { atlas_dimensions.x * font_size.x, atlas_dimensions.y * font_size.y };
 			float new_character_spacing;
 
 			if constexpr (!horizontal) {
@@ -6420,7 +6378,7 @@ namespace ECSEngine {
 			}
 
 			if constexpr (horizontal) {
-				text_span.y = GetTextSpriteYScale(font_size_y);
+				text_span.y = GetTextSpriteYScale(font_size.y);
 			}
 
 			int64_t index = invert_order ? characters.size - 1 : 0;
@@ -6451,7 +6409,7 @@ namespace ECSEngine {
 			return text_span;
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpanLimited, Stream<char>, float, float, float, float2, size_t*, bool);
+		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpanLimited, Stream<char>, float2, float, float2, size_t*, bool);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -6510,15 +6468,9 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		float UISystem::GetTextSpriteSizeToScale(float scale) const
+		float UISystem::GetTextSpriteYSizeToScale(float scale) const
 		{
-			return scale / GetTextSpriteYScale(m_descriptors.font.size) * m_descriptors.font.size;
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		float2 UISystem::GetTextSpriteSize(float size) const {
-			return { size * ECS_TOOLS_UI_FONT_X_FACTOR, size };
+			return scale / GetTextSpriteYScale(m_descriptors.font.size.y) * m_descriptors.font.size.y;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -8048,6 +8000,8 @@ namespace ECSEngine {
 							element_type,
 							element_to_add
 						);
+						// Set the last border position to the next border in the dockspace receiver
+						element_to_add->borders[element_to_add->borders.size - 1].position = dockspace_receiver->borders[border_index_receiver + 1].position;
 						copy_multiple_windows(element_to_add, position_to_add_window, dockspace_receiver, border_index_receiver);
 						unsigned int new_dockspace_index = 0;
 						new_dockspace_index = system->CreateDockspace(
@@ -8556,7 +8510,7 @@ namespace ECSEngine {
 
 #pragma region Font
 			m_descriptors.font.character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING;
-			m_descriptors.font.size = ECS_TOOLS_UI_FONT_SIZE;
+			m_descriptors.font.size = { ECS_TOOLS_UI_FONT_SIZE * ECS_TOOLS_UI_FONT_X_FACTOR, ECS_TOOLS_UI_FONT_SIZE };
 			m_descriptors.font.symbol_count = ECS_TOOLS_UI_FONT_SYMBOL_COUNT;
 			m_descriptors.font.texture_dimensions = ECS_TOOLS_UI_FONT_TEXTURE_DIMENSIONS;
 #pragma endregion
@@ -8974,9 +8928,23 @@ namespace ECSEngine {
 
 			float2 current_dimension_ratio = float2(system->m_window_os_size) / float2(system->m_monitor_size);
 			float current_monitor_aspect_ratio = (float)system->m_monitor_size.x / (float)system->m_monitor_size.y;
-			system->m_aspect_ratio_factor = metadata.aspect_ratio_factors;
-			system->ChangeDimensionRatio(metadata.dimension_ratio, current_dimension_ratio);
-			system->ChangeAspectRatio(metadata.monitor_aspect_ratio, current_monitor_aspect_ratio);
+			if (metadata.monitor_aspect_ratio != current_monitor_aspect_ratio || metadata.dimension_ratio != current_dimension_ratio) {
+				// If a window has configured descriptors with a different aspect ratio or dimension ratio, those would need to be adjusted
+				// NOTE: At the moment, just copy the system ones, allowing that flexibility requires some overhead
+				for (unsigned int index = 0; index < system->m_windows.size; index++) {
+					UIWindow& window = system->m_windows[index];
+					if (window.descriptors->configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_FONT]) {
+						window.descriptors->font = system->m_descriptors.font;
+					}
+					if (window.descriptors->configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT]) {
+						window.descriptors->element_descriptor = system->m_descriptors.element_descriptor;
+					}
+					if (window.descriptors->configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT]) {
+						window.descriptors->layout = system->m_descriptors.window_layout;
+					}
+				}
+			}
+
 
 			system->m_memory->Deallocate(contents.buffer);
 			return true;
@@ -9805,43 +9773,15 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowName(unsigned int window_index, Stream<char> name) {
-			if (m_windows[window_index].name_vertex_buffer.buffer != nullptr) {
-				m_memory->Deallocate(m_windows[window_index].name_vertex_buffer.buffer);
-			}
+			m_windows[window_index].name.Deallocate(m_memory);
 			if (name.size == 0) {
-				m_windows[window_index].name_vertex_buffer.buffer = nullptr;
-				m_windows[window_index].name_vertex_buffer.size = 0;
-
-				m_windows[window_index].name.size = 0;
+				m_windows[window_index].name = {};
 			}
 			else {
 				// Check for the separation character
 				Stream<char> separation_character = FindFirstToken(name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-				Stream<char> visible_name = name;
-				if (separation_character.size > 0) {
-					visible_name = { name.buffer, name.size - separation_character.size };
-				}
-
-				void* new_allocation = m_memory->Allocate(sizeof(UISpriteVertex) * 6 * visible_name.size + sizeof(char) * name.size, alignof(UISpriteVertex));
-				uintptr_t buffer = (uintptr_t)new_allocation;
-				m_windows[window_index].name_vertex_buffer.buffer = (UISpriteVertex*)new_allocation;
-				m_windows[window_index].name_vertex_buffer.size = visible_name.size * 6;
-				buffer += sizeof(UISpriteVertex) * 6 * visible_name.size;
-				m_windows[window_index].name.InitializeAndCopy(buffer, name);
-				float sprite_y_scale = GetTextSpriteYScale(m_descriptors.font.size);
-				ConvertCharactersToTextSprites(
-					visible_name,
-					float2(0.0f, AlignMiddle(
-						0.0f,
-						m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size,
-						sprite_y_scale)
-					),
-					m_windows[window_index].name_vertex_buffer.buffer,
-					Color((unsigned char)255, 255, 255, 255),
-					0,
-					m_descriptors.font.size,
-					m_descriptors.font.character_spacing
-				);
+				m_windows[window_index].name = name.Copy(m_memory);
+				m_windows[window_index].name_drawable_count = name.size - separation_character.size;
 			}
 		}
 
@@ -12902,12 +12842,12 @@ namespace ECSEngine {
 			const float EPSILON = 0.03f;
 
 			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
-				float2 sizes[32];
+				CapacityStream<float2> window_sizes(data->initial_window_positions, 0, ECS_COUNTOF(data->initial_window_positions));
 				system->CalculateDockspaceRegionHeaders(
 					dockspace,
 					border_index,
 					dockspace_mask,
-					data->initial_window_positions
+					window_sizes
 				);
 
 				float2 dockspace_position = system->GetDockspaceRegionPosition(dockspace, border_index, dockspace_mask);
@@ -12919,7 +12859,7 @@ namespace ECSEngine {
 			if (data->dockspace_to_drag == nullptr) {
 				if (mouse_position.y < position.y || mouse_position.y > position.y + scale.y) {
 					UIDockspace* dockspace_to_drag = dockspace;
-					DockspaceType floating_type = DockspaceType::FloatingHorizontal;
+					DockspaceType floating_type = dockspace_type;
 					bool set_new_active_region_data = false;
 					system->m_windows[data->window_index].transform.scale = system->GetDockspaceRegionScale(dockspace, border_index, dockspace_mask);
 
@@ -12971,8 +12911,9 @@ namespace ECSEngine {
 						system->RemoveDockspaceBorder<false>(dockspace, border_index, dockspace_type);
 						set_new_active_region_data = true;
 					}
-					if (set_new_active_region_data)
+					if (set_new_active_region_data) {
 						system->SetNewFocusedDockspaceRegion(dockspace_to_drag, 0, floating_type);
+					}
 
 					const float masks[4] = { 1.0f, 0.0f, 1.0f, 0.0f };
 					data->dockspace_to_drag = dockspace_to_drag;
@@ -12999,7 +12940,7 @@ namespace ECSEngine {
 				else {
 					action_data->data = &data->hoverable_data;
 					DefaultHoverableAction(action_data);
-					float2 sizes[32];
+					ECS_STACK_CAPACITY_STREAM(float2, sizes, 128);
 
 					bool has_moved = false;
 					for (size_t index = 0; index < dockspace->borders[border_index].window_indices.size; index++) {
@@ -13032,7 +12973,6 @@ namespace ECSEngine {
 							border_index,
 							data->window_index,
 							dockspace_mask,
-							position.x,
 							sizes,
 							buffers,
 							counts
