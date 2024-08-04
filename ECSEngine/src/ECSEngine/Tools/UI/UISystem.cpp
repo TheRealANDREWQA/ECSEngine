@@ -35,6 +35,10 @@ namespace ECSEngine {
 			return float2(mouse_position) / float2(window_size) * float2::Splat(2.0f) - float2::Splat(1.0f);
 		}
 
+		ECS_INLINE static float ComputeTitleYScale(const UISystem* system, float font_size_y) {
+			return system->GetTextSpriteYScale(font_size_y) * 1.5f;
+		}
+
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void ProcessTexture(unsigned int thread_index, World* world, void* data);
@@ -141,12 +145,6 @@ namespace ECSEngine {
 
 			// copying to the startup descriptors
 			memcpy(&m_startup_descriptors, &m_descriptors, sizeof(UISystemDescriptors));
-
-			// Call the change dimension function to change the descriptors, if needed
-			float2 current_dimension_ratio = float2(1.0f, 1.0f);
-			float2 new_dimension_ratio = float2(m_window_os_size) / float2(m_monitor_size);
-			ChangeDimensionRatio(current_dimension_ratio, new_dimension_ratio);
-			ChangeAspectRatio(ECS_TOOLS_UI_DESIGN_ASPECT_RATIO, (float)m_monitor_size.x / (float)m_monitor_size.y);
 
 			size_t total_memory = 0;
 			total_memory += sizeof(UIWindow) * m_descriptors.misc.window_count;
@@ -281,6 +279,15 @@ namespace ECSEngine {
 				);
 			});
 			m_focused_window_data.general_handler_allocator = ResizableLinearAllocator(HANDLER_ALLOCATOR_CAPACITY, HANDLER_ALLOCATOR_BACKUP_CAPACITY, Allocator());
+
+			m_descriptors.title_y_scale = ComputeTitleYScale(this, m_descriptors.font.size.y);
+			m_startup_descriptors.title_y_scale = m_descriptors.title_y_scale;
+
+			// Call the change dimension function to change the descriptors, if needed
+			float2 current_dimension_ratio = float2(1.0f, 1.0f);
+			float2 new_dimension_ratio = float2(m_window_os_size) / float2(m_monitor_size);
+			ChangeDimensionRatio(current_dimension_ratio, new_dimension_ratio);
+			ChangeAspectRatio(ECS_TOOLS_UI_DESIGN_ASPECT_RATIO, (float)m_monitor_size.x / (float)m_monitor_size.y);
 
 			// Unitialize the timer
 			m_frame_timer.SetUninitialized();
@@ -1503,6 +1510,8 @@ namespace ECSEngine {
 				for (unsigned int index = 0; index < m_windows.size; index++) {
 					m_windows[index].descriptors->ChangeDimensionRatio(current_ratio, new_ratio);
 				}
+				m_descriptors.title_y_scale = ComputeTitleYScale(this, m_descriptors.font.size.y);
+				m_startup_descriptors.title_y_scale = ComputeTitleYScale(this, m_startup_descriptors.font.size.y);
 			}
 		}
 
@@ -2897,7 +2906,7 @@ namespace ECSEngine {
 
 			float2 region_position = GetDockspaceRegionPosition(dockspace, border_index, offset_mask);
 			float font_size_y_scale = GetTextSpriteYScale(m_descriptors.font.size.y);
-			float vertex_y_position = AlignMiddle(region_position.y, m_descriptors.misc.title_y_scale, font_size_y_scale);
+			float vertex_y_position = AlignMiddle(region_position.y, GetTitleYSize(), font_size_y_scale);
 
 			size_t character_count = 0;
 			GetTextSpanLimited(
@@ -4690,7 +4699,7 @@ namespace ECSEngine {
 
 				SetSolidColorRectangle(
 					{ dockspace_region_position.x, dockspace_region_position.y },
-					float2(dockspace_region_scale.x, m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size),
+					float2(dockspace_region_scale.x, GetTitleYSize() - m_descriptors.dockspaces.border_size),
 					title_color,
 					solid_color,
 					vertex_count[ECS_TOOLS_UI_SOLID_COLOR]
@@ -4699,14 +4708,14 @@ namespace ECSEngine {
 					dockspace,
 					border_index,
 					dockspace_region_position,
-					{ dockspace_region_scale.x, m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size },
+					{ dockspace_region_scale.x, GetTitleYSize() - m_descriptors.dockspaces.border_size },
 					{ SkipAction, nullptr, 0 }
 				);
 				AddClickableToDockspaceRegion(
 					dockspace,
 					border_index,
 					dockspace_region_position,
-					{ dockspace_region_scale.x, m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size },
+					{ dockspace_region_scale.x, GetTitleYSize() - m_descriptors.dockspaces.border_size },
 					{ SkipAction, nullptr, 0 },
 					ECS_MOUSE_LEFT
 				);
@@ -4714,7 +4723,7 @@ namespace ECSEngine {
 					dockspace,
 					border_index,
 					dockspace_region_position,
-					{ dockspace_region_scale.x, m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size },
+					{ dockspace_region_scale.x, GetTitleYSize() - m_descriptors.dockspaces.border_size },
 					{ SkipAction, nullptr, 0 }
 				);
 
@@ -4727,7 +4736,7 @@ namespace ECSEngine {
 				for (size_t index = 0; index < dockspace->borders[border_index].window_indices.size; index++) {
 					// header rectangle
 					float2 header_position = float2(dockspace_region_position.x + sizes[index].x, dockspace_region_position.y);
-					float2 header_scale = float2(sizes[index].y, m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size);
+					float2 header_scale = float2(sizes[index].y, GetTitleYSize() - m_descriptors.dockspaces.border_size);
 					Color region_header_color = m_descriptors.color_theme.region_header;
 					if (is_focused_region && (dockspace->borders[border_index].active_window == index))
 						region_header_color = LightenColorClamp(region_header_color, m_descriptors.color_theme.region_header_active_window_factor);
@@ -4777,7 +4786,7 @@ namespace ECSEngine {
 						// close window X; adding it to the text sprite stream
 						float2 close_x_position = float2(
 							dockspace_region_position.x + sizes[index].x + sizes[index].y - m_descriptors.dockspaces.close_x_position_x_left,
-							AlignMiddle(dockspace_region_position.y, m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size, m_descriptors.dockspaces.close_x_scale_y)
+							AlignMiddle(dockspace_region_position.y, GetTitleYSize() - m_descriptors.dockspaces.border_size, m_descriptors.dockspaces.close_x_scale_y)
 						);
 						float2 expanded_position = ExpandRectangle(close_x_position, close_x_scale, expanded_close_x_scale);
 						SetSpriteRectangle(
@@ -4826,7 +4835,7 @@ namespace ECSEngine {
 				// close window X; adding it to the text sprite stream
 				float2 close_x_position = float2(
 					dockspace_region_position.x + dockspace_region_scale.x - m_descriptors.dockspaces.close_x_total_x_padding,
-					AlignMiddle(dockspace_region_position.y, m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size, m_descriptors.dockspaces.close_x_scale_y)
+					AlignMiddle(dockspace_region_position.y, GetTitleYSize() - m_descriptors.dockspaces.border_size, m_descriptors.dockspaces.close_x_scale_y)
 				);
 				float2 expanded_position = ExpandRectangle(close_x_position, close_x_scale, expanded_close_x_scale);
 				SetSpriteRectangle(
@@ -6725,7 +6734,7 @@ namespace ECSEngine {
 			scale = GetSquareScale(m_descriptors.dockspaces.collapse_triangle_scale);
 			position = {
 				AlignMiddle(region_position.x, m_descriptors.dockspaces.region_header_padding, scale.x),
-				AlignMiddle(region_position.y, m_descriptors.misc.title_y_scale, scale.y)
+				AlignMiddle(region_position.y, GetTitleYSize(), scale.y)
 			};
 		}
 
@@ -7078,9 +7087,9 @@ namespace ECSEngine {
 			float2 position;
 			position.x = region_position.x + region_scale.x - NormalizeHorizontalToWindowDimensions(m_descriptors.dockspaces.border_size)
 				- m_descriptors.misc.render_slider_vertical_size;
-			position.y = region_position.y + m_descriptors.misc.title_y_scale;
+			position.y = region_position.y + GetTitleYSize();
 			if (!dockspace->borders[border_index].draw_region_header && !dockspace->borders[border_index].draw_close_x) {
-				position.y -= m_descriptors.misc.title_y_scale;
+				position.y -= GetTitleYSize();
 			}
 			return position;
 		}
@@ -7112,12 +7121,12 @@ namespace ECSEngine {
 		) const {
 			float2 scale;
 			scale.x = m_descriptors.misc.render_slider_vertical_size;
-			scale.y = region_scale.y - m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size;
+			scale.y = region_scale.y - GetTitleYSize() - m_descriptors.dockspaces.border_size;
 			if (m_windows[window_index].is_horizontal_render_slider) {
 				scale.y -= m_descriptors.window_layout.next_row_y_offset;
 			}
 			if (!dockspace->borders[border_index].draw_region_header && !dockspace->borders[border_index].draw_close_x) {
-				scale.y += m_descriptors.misc.title_y_scale;
+				scale.y += GetTitleYSize();
 			}
 			return scale;
 		}
@@ -8516,7 +8525,6 @@ namespace ECSEngine {
 #pragma endregion
 
 #pragma region Misc
-			m_descriptors.misc.title_y_scale = ECS_TOOLS_UI_WINDOW_TITLE_Y_SCALE;
 			m_descriptors.misc.window_count = ECS_TOOLS_UI_MAX_WINDOW_COUNT;
 			m_descriptors.misc.thread_temp_memory = ECS_TOOLS_UI_THREAD_TEMP_ALLOCATOR_MEMORY;
 			m_descriptors.misc.system_vertex_buffers[ECS_TOOLS_UI_SOLID_COLOR] = ECS_TOOLS_UI_VERTEX_BUFFER_MISC_SOLID_COLOR;
@@ -8589,7 +8597,6 @@ namespace ECSEngine {
 			m_descriptors.element_descriptor.menu_button_padding = ECS_TOOLS_UI_MENU_BUTTON_PADDING;
 			m_descriptors.element_descriptor.label_list_circle_size = ECS_TOOLS_UI_LABEL_LIST_CIRCLE_SIZE;
 #pragma endregion
-
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9102,31 +9109,15 @@ namespace ECSEngine {
 
 		float UISystem::NormalizeHorizontalToWindowDimensions(float value) const
 		{
-			unsigned int width, height;
-			m_graphics->GetWindowSize(width, height);
-			return value * height / width;
+			return value * (float)m_window_os_size.y / (float)m_window_os_size.x;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::NormalizeHorizontalToWindowDimensions(float* values, size_t count) const
 		{
-			unsigned int width, height;
-			m_graphics->GetWindowSize(width, height);
-			float multiply_factor = (float)height / width;
+			float multiply_factor = (float)m_window_os_size.y / (float)m_window_os_size.x;
 			for (size_t index = 0; index < count; index++) {
-				values[index] *= multiply_factor;
-			}
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void UISystem::NormalizeHorizontalToWindowDimensions(Stream<float>& values) const
-		{
-			unsigned int width, height;
-			m_graphics->GetWindowSize(width, height);
-			float multiply_factor = (float)height / width;
-			for (size_t index = 0; index < values.size; index++) {
 				values[index] *= multiply_factor;
 			}
 		}
@@ -9135,9 +9126,7 @@ namespace ECSEngine {
 
 		float UISystem::NormalizeVerticalToWindowDimensions(float value) const
 		{
-			unsigned int width, height;
-			m_graphics->GetWindowSize(width, height);
-			return value * width / height;
+			return value * (float)m_window_os_size.x / (float)m_window_os_size.y;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -12785,8 +12774,8 @@ namespace ECSEngine {
 									system->HandleDockingGizmoTransparentHover(
 										hovered_dockspace,
 										border_indices[index],
-										{ hovered_region_position.x, hovered_region_position.y + system->m_descriptors.misc.title_y_scale },
-										{ hovered_region_scale.x, hovered_region_scale.y - system->m_descriptors.misc.title_y_scale },
+										{ hovered_region_position.x, hovered_region_position.y + system->GetTitleYSize() },
+										{ hovered_region_scale.x, hovered_region_scale.y - system->GetTitleYSize() },
 										buffers,
 										counts
 									);
@@ -12986,7 +12975,7 @@ namespace ECSEngine {
 						SetSpriteRectangle(
 							float2(
 								position.x + scale.x - system->m_descriptors.dockspaces.close_x_position_x_left,
-								AlignMiddle(position.y, system->m_descriptors.misc.title_y_scale - system->m_descriptors.dockspaces.border_size, system->m_descriptors.dockspaces.close_x_scale_y)
+								AlignMiddle(position.y, system->GetTitleYSize() - system->m_descriptors.dockspaces.border_size, system->m_descriptors.dockspaces.close_x_scale_y)
 							),
 							close_x_scale,
 							system->m_descriptors.color_theme.region_header_x,

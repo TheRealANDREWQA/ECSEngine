@@ -879,7 +879,6 @@ namespace ECSEngine {
 
 			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Menu x padd", &misc->menu_x_padd, 0.0f, 0.1f, 3);
 			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Hierarchy drag node rectangle size", &misc->rectangle_hierarchy_drag_node_dimension, 0.005f, 0.01f, 4);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Title y scale", &misc->title_y_scale, 0.01f, 0.1f);
 
 			drawer.ColorInput("Menu arrow color", &misc->menu_arrow_color);
 			drawer.ColorInput("Menu unavailable arrow color", &misc->menu_unavailable_arrow_color);
@@ -1832,7 +1831,7 @@ namespace ECSEngine {
 
 			config.AddFlag(border);
 			transform.position = drawer.GetRegionPosition() + float2(0.0f, drawer.region_render_offset.y);
-			transform.position.y += drawer.system->m_descriptors.misc.title_y_scale + drawer.GetPixelSizeY();
+			transform.position.y += drawer.system->GetTitleYSize() + drawer.GetPixelSizeY();
 			// small offset to move it out from the border
 			transform.position.x += 0.0015f;
 
@@ -1945,7 +1944,7 @@ namespace ECSEngine {
 				drawer.NextRow();
 			}
 
-			UIConfigTextParameters parameters;
+			UIConfigTextParameters parameters = drawer.TextParameters();
 			float2 icon_scale = drawer.GetSquareScale(drawer.layout.default_element_y);
 			const bool* filter_ptr = data->filter;
 

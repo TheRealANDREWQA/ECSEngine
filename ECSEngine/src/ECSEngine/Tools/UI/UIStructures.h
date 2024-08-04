@@ -273,7 +273,6 @@ namespace ECSEngine {
 			void ChangeDimensionRatio(float2 current_ratio, float2 new_ratio);
 
 			unsigned short window_count;
-			float title_y_scale;
 			unsigned short window_table_default_count;
 			unsigned int system_vertex_buffers[ECS_TOOLS_UI_MATERIALS];
 			unsigned int thread_temp_memory;
@@ -364,6 +363,7 @@ namespace ECSEngine {
 			UILayoutDescriptor window_layout;
 			UIMiscellaneousDescriptor misc;
 			UIElementDescriptor element_descriptor;
+			float title_y_scale;
 		};
 
 #pragma endregion

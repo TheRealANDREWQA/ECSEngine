@@ -1201,6 +1201,10 @@ namespace ECSEngine {
 			float2 GetNormalizeMousePosition() const;
 
 			float2 GetSquareScale(float y_scale) const;
+			
+			ECS_INLINE float GetTitleYSize() const {
+				return m_descriptors.title_y_scale;
+			}
 
 			unsigned int GetWindowFromMouse(float2 mouse_position) const;
 
@@ -1352,8 +1356,6 @@ namespace ECSEngine {
 			float NormalizeHorizontalToWindowDimensions(float value) const;
 
 			void NormalizeHorizontalToWindowDimensions(float* values, size_t count) const;
-
-			void NormalizeHorizontalToWindowDimensions(Stream<float>& values) const;
 
 			float NormalizeVerticalToWindowDimensions(float value) const;
 

@@ -98,6 +98,9 @@ constexpr size_t FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION = 500;
 constexpr size_t FILE_EXPLORER_RETAINED_MODE_FILE_RECHECK_LAZY_EVALUATION = 250;
 constexpr size_t FILE_EXPLORER_DISPLAYED_ITEMS_ALLOCATOR_CAPACITY = ECS_KB * 32;
 
+constexpr size_t FILE_EXPLORER_TEMPORARY_ALLOCATOR_CAPACITY = ECS_KB * 64;
+constexpr size_t FILE_EXPLORER_ALLOCATOR_CAPACITY = ECS_KB * 400;
+
 #define MAX_MESH_THUMBNAILS_PER_FRAME 2
 
 enum FILE_RIGHT_CLICK_INDEX {
@@ -652,10 +655,8 @@ static void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, Select
 	transform.type = ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 	transform.scale_factor = drawer->GetWindowSizeFactors(transform.type, { label_horizontal_scale, drawer->layout.default_element_y });
 	config->AddFlag(transform);
-	UIConfigTextParameters text_parameters;
-	text_parameters.color = drawer->color_theme.text;
-	text_parameters.character_spacing = drawer->font.character_spacing;
-	text_parameters.size *= {0.75f, 0.8f};
+	UIConfigTextParameters text_parameters = drawer->TextParameters();
+	text_parameters.size *= 0.8f;
 	config->AddFlag(text_parameters);
 
 	drawer->element_descriptor.label_padd.x *= 0.5f;
@@ -1962,10 +1963,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			data->current_directory.AddStreamAssert(Path(PROJECT_ASSETS_RELATIVE_PATH, wcslen(PROJECT_ASSETS_RELATIVE_PATH)));
 			data->current_directory[data->current_directory.size] = L'\0';
 
-			void* allocation = drawer.GetMainAllocatorBuffer(ALLOCATOR_CAPACITY);
-			data->temporary_allocator = LinearAllocator(allocation, ALLOCATOR_CAPACITY);
-
-			allocation = drawer.GetMainAllocatorBuffer(data->file_functors.MemoryOf(FILE_FUNCTORS_CAPACITY));
+			void* allocation = drawer.GetMainAllocatorBuffer(data->file_functors.MemoryOf(FILE_FUNCTORS_CAPACITY));
 			data->file_functors.InitializeFromBuffer(allocation, FILE_FUNCTORS_CAPACITY);
 
 #pragma region Deselection Handlers - Main
@@ -2753,7 +2751,8 @@ void InitializeFileExplorer(EditorState* editor_state)
 	FileExplorerData* data = editor_state->file_explorer_data;
 	memset(data, 0, sizeof(*data));
 
-	AllocatorPolymorphic polymorphic_allocator = editor_state->EditorAllocator();
+	data->allocator = MemoryManager(FILE_EXPLORER_ALLOCATOR_CAPACITY, ECS_KB * 8, FILE_EXPLORER_ALLOCATOR_CAPACITY, editor_state->EditorAllocator());
+	AllocatorPolymorphic polymorphic_allocator = &data->allocator;
 	// Copied files must not be initialied since only Cut/Copy will set the appropriate stream
 	data->current_directory.Initialize(polymorphic_allocator, 0, FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY);
 	data->selected_files.Initialize(polymorphic_allocator, FILE_EXPLORER_CURRENT_SELECTED_CAPACITY);
@@ -2785,6 +2784,11 @@ void InitializeFileExplorer(EditorState* editor_state)
 	}
 	data->displayed_items.Initialize(data->displayed_items_allocator + 0, 0);
 	data->displayed_items_allocator_index = 0;
+	data->temporary_allocator = ResizableLinearAllocator(
+		FILE_EXPLORER_TEMPORARY_ALLOCATOR_CAPACITY,
+		FILE_EXPLORER_TEMPORARY_ALLOCATOR_CAPACITY,
+		polymorphic_allocator
+	);
 }
 
 void FileExplorerPrivateAction(ActionData* action_data) {
