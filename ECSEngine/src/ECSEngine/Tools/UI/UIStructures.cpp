@@ -1156,7 +1156,6 @@ namespace ECSEngine {
 			};
 
 			auto update_y = [this](float value) {
-				title_y_scale *= value;
 				render_slider_horizontal_size *= value;
 				graph_hover_offset.y *= value;
 				histogram_hover_offset.y *= value;

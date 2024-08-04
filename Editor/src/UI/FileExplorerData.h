@@ -30,6 +30,9 @@ struct FileExplorerData {
 	// Have the UI redrawn
 	bool should_redraw;
 
+	// This is an allocator from which all allocations related to the file explorer are being made
+	ECSEngine::MemoryManager allocator;
+
 	// This is an array with all the files/directory which have been displayed
 	// in the last draw call. It is used when new items have been added or removed
 	// to make a redraw in that case
@@ -46,7 +49,7 @@ struct FileExplorerData {
 	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> selected_files;
 	ECSEngine::Stream<ECSEngine::Stream<wchar_t>> copied_files;
 	ECSEngine::CapacityStream<char> filter_stream;
-	ECSEngine::LinearAllocator temporary_allocator;
+	ECSEngine::ResizableLinearAllocator temporary_allocator;
 	FileExplorerFunctorTable file_functors;
 
 	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> add_handlers;

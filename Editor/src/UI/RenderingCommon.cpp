@@ -121,7 +121,7 @@ static void DisplayBottomText(UIDrawer& drawer, Stream<char> message, Color text
 	row.SetHorizontalAlignment(ECS_UI_ALIGN_MIDDLE);
 	row.AddLabel(message);
 
-	UIConfigTextParameters text_parameters;
+	UIConfigTextParameters text_parameters = drawer.TextParameters();
 	text_parameters.color = text_color;
 	text_parameters.size *= float2::Splat(font_size);
 	text_parameters.character_spacing *= font_size;
@@ -290,7 +290,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 			}
 		}
 
-		UIConfigTextParameters text_parameters;
+		UIConfigTextParameters text_parameters = drawer.TextParameters();
 		text_parameters.size *= float2::Splat(font_scaling);
 		text_parameters.character_spacing *= font_scaling;
 

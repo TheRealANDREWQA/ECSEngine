@@ -336,10 +336,10 @@ namespace ECSEngine {
 			min_render_bounds.y = 1000.0f;
 
 			region_fit_space_horizontal_offset = region_position.x + layout.next_row_padding;
-			region_fit_space_vertical_offset = region_position.y + system->m_descriptors.misc.title_y_scale + layout.next_row_y_offset;
+			region_fit_space_vertical_offset = region_position.y + system->GetTitleYSize() + layout.next_row_y_offset;
 			if (!initializer) {
 				bool substract = dockspace->borders[border_index].draw_elements == false;
-				region_fit_space_vertical_offset -= system->m_descriptors.misc.title_y_scale * substract;
+				region_fit_space_vertical_offset -= system->GetTitleYSize() * substract;
 			}
 
 			current_x = GetNextRowXPosition();
@@ -704,11 +704,12 @@ namespace ECSEngine {
 				color = *(Color*)params;
 				font_size = *(float2*)(params + 1);
 				character_spacing = *(params + 3);
-				font_size.x *= zoom_ptr->x;
+				//font_size.x *= zoom_ptr->x;
+				//font_size.y *= zoom_ptr->y;
 			}
 			else {
-				font_size.y = font.size.y * zoom_inverse.y;
-				font_size.x = font.size.x * zoom_inverse.x;
+				font_size.y = font.size.y;
+				font_size.x = font.size.x;
 				if (~configuration & UI_CONFIG_UNAVAILABLE_TEXT) {
 					color = color_theme.text;
 				}
@@ -717,7 +718,6 @@ namespace ECSEngine {
 				}
 				character_spacing = font.character_spacing;
 			}
-			font_size.y *= zoom_ptr->y;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -2358,8 +2358,8 @@ namespace ECSEngine {
 					// Change the text color
 					UIConfigTextParameters text_parameters;
 					text_parameters.color = hint_color;
-					text_parameters.size = font_size * zoom_inverse;
-					text_parameters.character_spacing = character_spacing * zoom_inverse.x;
+					text_parameters.size = font_size;
+					text_parameters.character_spacing = character_spacing;
 
 					UIConfigTextParameters previous_parameters;
 					SetConfigParameter(configuration, label_config, text_parameters, previous_parameters);
@@ -7175,7 +7175,7 @@ namespace ECSEngine {
 					info_labels_config.RemoveFlag(UI_CONFIG_ABSOLUTE_TRANSFORM);
 				}
 				if (info_labels.inherit_line_color) {
-					UIConfigTextParameters text_parameters;
+					UIConfigTextParameters text_parameters = TextParameters();
 					if (HasFlag(configuration, UI_CONFIG_TEXT_PARAMETERS)) {
 						text_parameters = *(const UIConfigTextParameters*)config.GetParameter(UI_CONFIG_TEXT_PARAMETERS);
 					}
@@ -8763,7 +8763,7 @@ namespace ECSEngine {
 				system->SetWindowDrawerDifferenceSpan(window_index, difference);
 
 				if (export_scale != nullptr) {
-					float y_offset = dockspace->borders[border_index].draw_region_header * system->m_descriptors.misc.title_y_scale;
+					float y_offset = dockspace->borders[border_index].draw_region_header * system->GetTitleYSize();
 					*export_scale = { render_span.x + 2.0f * layout.next_row_padding, render_span.y + 2.0f * layout.next_row_y_offset + y_offset };
 				}
 
@@ -11641,8 +11641,8 @@ namespace ECSEngine {
 			if (consider_region_header) {
 				UIDockspaceBorder* border = &dockspace->borders[border_index];
 				if (border->draw_region_header) {
-					position.y += system->m_descriptors.misc.title_y_scale;
-					scale.y -= system->m_descriptors.misc.title_y_scale;
+					position.y += system->GetTitleYSize();
+					scale.y -= system->GetTitleYSize();
 				}
 			}
 
@@ -11742,7 +11742,7 @@ namespace ECSEngine {
 			vertical_region_difference += no_padding_render_region ? 2 * layout.next_row_y_offset : 0.0f;
 
 			if (dockspace->borders[border_index].draw_elements) {
-				vertical_region_difference -= system->m_descriptors.misc.title_y_scale;
+				vertical_region_difference -= system->GetTitleYSize();
 			}
 
 			return { horizontal_region_difference, vertical_region_difference };
@@ -14321,7 +14321,7 @@ namespace ECSEngine {
 			element_descriptor.slider_length.x *= zoom_factor;
 			element_descriptor.slider_shrink.x *= zoom_factor;
 
-			font.size *= zoom_factor;
+			font.size.x *= zoom_factor;
 			font.character_spacing *= zoom_factor;
 		}
 
@@ -14341,6 +14341,7 @@ namespace ECSEngine {
 			element_descriptor.label_padd.y *= zoom_factor;
 			element_descriptor.slider_length.y *= zoom_factor;
 			element_descriptor.slider_shrink.y *= zoom_factor;
+			font.size.y *= zoom_factor;
 		}
 
 		ECS_TEMPLATE_FUNCTION_BOOL(void, UIDrawer::SetLayoutFromZoomYFactor, float);
@@ -15044,7 +15045,7 @@ namespace ECSEngine {
 				SetLayoutFromZoomXFactor(zoom_x_factor);
 				zoom_ptr_modifyable->x = zoom_x_factor;
 			}
-			zoom_inverse.x = 1 / zoom_x_factor;
+			zoom_inverse.x = 1.0f / zoom_x_factor;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -15053,9 +15054,9 @@ namespace ECSEngine {
 			if (current_y == region_fit_space_vertical_offset) {
 				SetLayoutFromZoomYFactor(zoom_y_factor);
 				zoom_ptr_modifyable->y = zoom_y_factor;
-				region_fit_space_vertical_offset = region_position.y + system->m_descriptors.misc.title_y_scale + layout.next_row_y_offset;
+				region_fit_space_vertical_offset = region_position.y + system->GetTitleYSize() + layout.next_row_y_offset;
 				if (!dockspace->borders[border_index].draw_region_header) {
-					region_fit_space_vertical_offset -= system->m_descriptors.misc.title_y_scale;
+					region_fit_space_vertical_offset -= system->GetTitleYSize();
 				}
 				current_y = region_fit_space_vertical_offset;
 			}
@@ -15063,7 +15064,7 @@ namespace ECSEngine {
 				SetLayoutFromZoomYFactor(zoom_y_factor);
 				zoom_ptr_modifyable->y = zoom_y_factor;
 			}
-			zoom_inverse.y = 1 / zoom_y_factor;
+			zoom_inverse.y = 1.0f / zoom_y_factor;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

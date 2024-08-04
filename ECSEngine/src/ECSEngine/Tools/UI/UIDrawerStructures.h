@@ -14,6 +14,7 @@ namespace ECSEngine {
 	namespace Tools {
 
 		struct UIDrawConfig;
+		struct UIDrawer;
 
 		typedef bool (*UIDrawerTextInputFilter)(char, CharacterType);
 
@@ -83,7 +84,7 @@ namespace ECSEngine {
 			}
 
 			Color color = ECS_TOOLS_UI_TEXT_COLOR;
-			float2 size = { ECS_TOOLS_UI_FONT_SIZE * ECS_TOOLS_UI_FONT_X_FACTOR, ECS_TOOLS_UI_FONT_SIZE };
+			float2 size = { 0.0f, 0.0f };
 			float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING;
 		};
 

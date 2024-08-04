@@ -801,9 +801,7 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 		alignment.vertical = ECS_UI_ALIGN_MIDDLE;
 		config.AddFlag(alignment);
 
-		UIConfigTextParameters text_parameters;
-		text_parameters.size = drawer.GetFontSize();
-		text_parameters.character_spacing = drawer.font.character_spacing;
+		UIConfigTextParameters text_parameters = drawer.TextParameters();
 		text_parameters.color = MODULE_COLORS[explorer_data->configurations[index]];
 		config.AddFlag(text_parameters);
 

@@ -99,9 +99,7 @@ void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		text_size.scale_factor = drawer.GetWindowSizeFactors(text_size.type, { NOTIFICATION_MESSAGE_SIZE, NOTIFICATION_BAR_WINDOW_SIZE });
 		config.AddFlag(text_size);
 
-		UIConfigTextParameters text_params;
-		text_params.character_spacing = drawer.font.character_spacing;
-		text_params.size = drawer.GetFontSize();
+		UIConfigTextParameters text_params = drawer.TextParameters();
 		text_params.color = CONSOLE_COLORS[(unsigned int)message->type];
 		config.AddFlag(text_params);
 

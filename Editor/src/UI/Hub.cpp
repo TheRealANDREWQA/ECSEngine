@@ -285,9 +285,8 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 	drawer.DisableZoom();
 	drawer.DisablePaddingForRenderSliders();
 	UIDrawConfig config;
-	UIConfigTextParameters ecs_text;
+	UIConfigTextParameters ecs_text = drawer.TextParameters();
 	ecs_text.size *= {1.75f, 1.75f};
-	ecs_text.color = drawer.GetColorThemeDescriptor()->text;
 	ecs_text.character_spacing *= 1.75f;
 
 	char ecs_characters[128];
@@ -374,10 +373,9 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 	table_transform.position = table_start_position;
 	table_transform.scale = { FIRST_COLUMN_SCALE, COLUMN_Y_SCALE };
 
-	UIConfigTextParameters table_text;
+	UIConfigTextParameters table_text = drawer.TextParameters();
 	table_text.size *= {1.3f, 1.3f};
 	table_text.character_spacing *= 1.3f;
-	table_text.color = drawer.GetColorThemeDescriptor()->text;
 
 	table_config.AddFlag(table_alignment);
 	table_config.AddFlag(table_text);
