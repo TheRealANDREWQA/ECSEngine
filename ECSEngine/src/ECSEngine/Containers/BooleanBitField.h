@@ -16,6 +16,9 @@ namespace ECSEngine {
 
 		bool Get(size_t index) const;
 
+		// Returns true if the index is already set, if not, it will set it and returns false.
+		bool GetAndSet(size_t index);
+
 		static size_t MemoryOf(size_t count);
 
 		unsigned char* m_buffer;

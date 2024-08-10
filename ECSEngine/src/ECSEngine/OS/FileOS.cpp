@@ -617,10 +617,8 @@ namespace ECSEngine {
 
 			bool success = GetFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
-				ECS_ASSERT(written_characters < 512);
-				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, GET_FILE_TIMES_ERROR_STRING, path);
+				CreateErrorMessageWindow(system, error_message);
 			}
 		}
 
@@ -640,10 +638,8 @@ namespace ECSEngine {
 
 			bool success = GetRelativeFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
-				ECS_ASSERT(written_characters < 512);
-				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, GET_FILE_TIMES_ERROR_STRING, path);
+				CreateErrorMessageWindow(system, error_message);
 			}
 		}
 
@@ -666,16 +662,14 @@ namespace ECSEngine {
 		)
 		{
 			wchar_t temp_wide_characters[256];
-			ECS_ASSERT(path.size < 256);
+			ECS_ASSERT(path.size < ECS_COUNTOF(temp_wide_characters));
 			path.CopyTo(temp_wide_characters);
 			temp_wide_characters[path.size] = L'\0';
 
 			bool success = GetFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
-				ECS_ASSERT(written_characters < 512);
-				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, GET_FILE_TIMES_ERROR_STRING, path);
+				GetConsole()->Error(error_message);
 			}
 		}
 
@@ -694,16 +688,14 @@ namespace ECSEngine {
 		)
 		{
 			wchar_t temp_wide_characters[256];
-			ECS_ASSERT(path.size < 256);
+			ECS_ASSERT(path.size < ECS_COUNTOF(temp_wide_characters));
 			path.CopyTo(temp_wide_characters);
 			temp_wide_characters[path.size] = L'\0';
 
 			bool success = GetRelativeFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
-				ECS_ASSERT(written_characters < 512);
-				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, GET_FILE_TIMES_ERROR_STRING, path);
+				GetConsole()->Error(error_message);
 			}
 		}
 
@@ -735,20 +727,16 @@ namespace ECSEngine {
 		void FileCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, UISystem* system) {
 			bool success = FileCopy(from, to);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, FILE_COPY_ERROR_STRING, from, to);
-				ECS_ASSERT(written_characters < 512);
-				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, FILE_COPY_ERROR_STRING, from, to);
+				CreateErrorMessageWindow(system, error_message);
 			}
 		}
 
 		void FileCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to) {
 			bool success = FileCopy(from, to);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, FILE_COPY_ERROR_STRING, from, to);
-				ECS_ASSERT(written_characters < 512);
-				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, FILE_COPY_ERROR_STRING, from, to);
+				GetConsole()->Error(error_message);
 			}
 		}
 
@@ -761,20 +749,16 @@ namespace ECSEngine {
 		void FolderCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, UISystem* system) {
 			bool success = FolderCopy(from, to);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, FOLDER_COPY_ERROR_STRING, from, to);
-				ECS_ASSERT(written_characters < 512);
-				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, FOLDER_COPY_ERROR_STRING, from, to);
+				CreateErrorMessageWindow(system, error_message);
 			}
 		}
 
 		void FolderCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to) {
 			bool success = FolderCopy(from, to);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, FOLDER_COPY_ERROR_STRING, from, to);
-				ECS_ASSERT(written_characters < 512);
-				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, FOLDER_COPY_ERROR_STRING, from, to);
+				GetConsole()->Error(error_message);
 			}
 		}
 
@@ -831,20 +815,16 @@ namespace ECSEngine {
 		void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system) {
 			bool success = RenameFolder(path, new_name);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
-				ECS_ASSERT(written_characters < 512);
-				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, RENAME_FOLDER_ERROR_STRING, path, new_name);
+				CreateErrorMessageWindow(system, error_message);
 			}
 		}
 
 		void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name) {
 			bool success = RenameFolder(path, new_name);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
-				ECS_ASSERT(written_characters < 512);
-				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, RENAME_FOLDER_ERROR_STRING, path, new_name);
+				GetConsole()->Error(error_message);
 			}
 		}
 
@@ -877,20 +857,16 @@ namespace ECSEngine {
 		void ResizeFileWithError(Stream<wchar_t> path, size_t new_size, UISystem* system) {
 			bool success = ResizeFile(path, new_size);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, RESIZE_FILE_ERROR_STRING, path, new_size);
-				ECS_ASSERT(written_characters < 512);
-				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, RESIZE_FILE_ERROR_STRING, path, new_size);
+				CreateErrorMessageWindow(system, error_message);
 			}
 		}
 
 		void ResizeFileWithError(Stream<wchar_t> path, size_t new_size) {
 			bool success = ResizeFile(path, new_size);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, RESIZE_FILE_ERROR_STRING, path, new_size);
-				ECS_ASSERT(written_characters < 512);
-				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, RESIZE_FILE_ERROR_STRING, path, new_size);
+				GetConsole()->Error(error_message);
 			}
 		}
 
@@ -903,20 +879,16 @@ namespace ECSEngine {
 		void ChangeFileExtensionWithError(Stream<wchar_t> path, Stream<wchar_t> new_extension, UISystem* system) {
 			bool success = ChangeFileExtension(path, new_extension);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, CHANGE_FILE_EXTENSION_ERROR_STRING, path, new_extension);
-				ECS_ASSERT(written_characters < 512);
-				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, CHANGE_FILE_EXTENSION_ERROR_STRING, path, new_extension);
+				CreateErrorMessageWindow(system, error_message);
 			}
 		}
 
 		void ChangeFileExtensionWithError(Stream<wchar_t> path, Stream<wchar_t> new_extension) {
 			bool success = ChangeFileExtension(path, new_extension);
 			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, CHANGE_FILE_EXTENSION_ERROR_STRING, path, new_extension);
-				ECS_ASSERT(written_characters < 512);
-				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
+				ECS_FORMAT_TEMP_STRING(error_message, CHANGE_FILE_EXTENSION_ERROR_STRING, path, new_extension);
+				GetConsole()->Error(error_message);
 			}
 		}
 

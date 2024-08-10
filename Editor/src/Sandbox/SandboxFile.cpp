@@ -97,16 +97,16 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 				ECS_STACK_CAPACITY_STREAM(char, console_error, 512);
 
 				if (code == ECS_DESERIALIZE_CORRUPTED_FILE) {
-					ECS_FORMAT_STRING(console_error, "Failed to deserialize sandbox {#}. It is corrupted.", index);
+					FormatString(console_error, "Failed to deserialize sandbox {#}. It is corrupted.", index);
 				}
 				else if (code == ECS_DESERIALIZE_MISSING_DEPENDENT_TYPES) {
-					ECS_FORMAT_STRING(console_error, "Failed to deserialize sandbox {#}. It is missing its dependent types.", index);
+					FormatString(console_error, "Failed to deserialize sandbox {#}. It is missing its dependent types.", index);
 				}
 				else if (code == ECS_DESERIALIZE_FIELD_TYPE_MISMATCH) {
-					ECS_FORMAT_STRING(console_error, "Failed to deserialize sandbox {#}. There was a field type mismatch.", index);
+					FormatString(console_error, "Failed to deserialize sandbox {#}. There was a field type mismatch.", index);
 				}
 				else {
-					ECS_FORMAT_STRING(console_error, "Unknown error happened when deserializing sandbox {#}.", index);
+					FormatString(console_error, "Unknown error happened when deserializing sandbox {#}.", index);
 				}
 				EditorSetConsoleError(console_error);
 				return false;

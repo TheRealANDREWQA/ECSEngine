@@ -25,14 +25,10 @@ namespace ECSEngine {
 	ECS_ENUM_BITWISE_OPERATIONS(ECS_FORMAT_DATE_FLAGS)
 
 #define ECS_FORMAT_TEMP_STRING(string_name, base_characters, ...) ECS_STACK_CAPACITY_STREAM(char, string_name, 2048); \
-string_name.size = FormatString(string_name.buffer, base_characters, __VA_ARGS__); \
-string_name.AssertCapacity();
-
-#define ECS_FORMAT_STRING(string, base_characters, ...) (string).size += FormatString((string).buffer + (string).size, base_characters, __VA_ARGS__); \
-(string).AssertCapacity();
+FormatString(string_name, base_characters, __VA_ARGS__);
 
 #define ECS_FORMAT_ERROR_MESSAGE(error_message, base_characters, ...) if (error_message != nullptr) { \
-	error_message->size += FormatString(error_message->buffer + error_message->size, base_characters, __VA_ARGS__); \
+	FormatString(*error_message, base_characters, __VA_ARGS__); \
 }
 
 #define ECS_FORMAT_SPECIFIER "{#}"
@@ -684,20 +680,25 @@ string_name.AssertCapacity();
 #define ECS_CONVERT_INT_TO_HEX_ADD_NORMAL_VALUE_AFTER (1 << 1)
 
 	template<size_t flags = 0, typename Integer>
-	void ConvertIntToHex(Stream<char>& characters, Integer integer) {
+	void ConvertIntToHex(CapacityStream<char>& characters, Integer integer) {
 		static char hex_characters[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 		if constexpr ((flags & ECS_CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X) == 0) {
+			characters.AssertCapacity(2);
 			characters.Add('0');
 			characters.Add('x');
 		}
 		if constexpr (std::is_same_v<Integer, int8_t> || std::is_same_v<Integer, uint8_t> || std::is_same_v<Integer, char>) {
+			characters.AssertCapacity(2);
+
 			char low_part = integer & 0x0F;
 			char high_part = (integer & 0xF0) >> 4;
 			characters.Add(hex_characters[(unsigned int)high_part]);
 			characters.Add(hex_characters[(unsigned int)low_part]);
 		}
 		else if constexpr (std::is_same_v<Integer, int16_t> || std::is_same_v<Integer, uint16_t>) {
+			characters.AssertCapacity(4);
+
 			char digit0 = integer & 0x000F;
 			char digit1 = (integer & 0x00F0) >> 4;
 			char digit2 = (integer & 0x0F00) >> 8;
@@ -721,12 +722,15 @@ string_name.AssertCapacity();
 		}
 
 		if constexpr ((flags & ECS_CONVERT_INT_TO_HEX_ADD_NORMAL_VALUE_AFTER) != 0) {
+			characters.AssertCapacity(2);
 			characters.Add(' ');
 			characters.Add('(');
 			ConvertIntToCharsFormatted(characters, static_cast<int64_t>(integer));
+			characters.AssertCapacity(2);
 			characters.Add(')');
 			characters.Add(' ');
 		}
+		characters.AssertCapacity(1);
 		characters[characters.size] = '\0';
 	}
 
@@ -735,74 +739,72 @@ string_name.AssertCapacity();
 		// and in the y component the offset into the base characters where the string was found
 		template<typename Parameter>
 		ulong2 FormatStringInternal(
-			char* end_characters,
+			CapacityStream<char>& end_characters,
 			const char* base_characters,
 			Parameter parameter
 		) {
 			const char* string_ptr = strstr(base_characters, ECS_FORMAT_SPECIFIER);
 			if (string_ptr != nullptr) {
+				unsigned int initial_end_characters_count = end_characters.size;
 				size_t copy_count = (uintptr_t)string_ptr - (uintptr_t)base_characters;
-				memcpy(end_characters, base_characters, copy_count);
+				end_characters.AddStreamAssert(Stream<char>(base_characters, copy_count));
 
-				Stream<char> temp_stream = Stream<char>(end_characters, copy_count);
 				if constexpr (std::is_floating_point_v<Parameter>) {
 					if constexpr (std::is_same_v<Parameter, float>) {
-						ConvertFloatToChars(temp_stream, parameter, 3);
+						ConvertFloatToChars(end_characters, parameter, 3);
 					}
 					else if constexpr (std::is_same_v<Parameter, double>) {
-						ConvertDoubleToChars(temp_stream, parameter, 3);
+						ConvertDoubleToChars(end_characters, parameter, 3);
 					}
 				}
 				else if constexpr (std::is_integral_v<Parameter>) {
-					ConvertIntToChars(temp_stream, static_cast<int64_t>(parameter));
+					ConvertIntToChars(end_characters, static_cast<int64_t>(parameter));
 				}
 				else if constexpr (std::is_pointer_v<Parameter>) {
 					if constexpr (std::is_same_v<Parameter, const char*>) {
 						size_t substring_size = strlen(parameter);
-						memcpy(temp_stream.buffer + temp_stream.size, parameter, substring_size);
-						temp_stream.size += substring_size;
-						temp_stream[temp_stream.size] = '\0';
+						end_characters.AddStreamAssert(Stream<char>(parameter, substring_size));
+						end_characters.AssertCapacity(1);
 					}
 					else if constexpr (std::is_same_v<Parameter, const wchar_t*>) {
 						size_t wide_count = wcslen(parameter);
-						ConvertWideCharsToASCII(parameter, temp_stream.buffer + temp_stream.size, wide_count, wide_count + 1);
-						temp_stream.size += wide_count;
-						temp_stream[temp_stream.size] = '\0';
+						end_characters.AssertCapacity(wide_count + 1);
+						ConvertWideCharsToASCII(Stream<wchar_t>(parameter, wide_count + 1), end_characters);
 					}
 					else {
-						ConvertIntToHex(temp_stream, (int64_t)parameter);
+						ConvertIntToHex(end_characters, (int64_t)parameter);
 					}
 				}
 				else if constexpr (std::is_same_v<Parameter, CapacityStream<wchar_t>> || std::is_same_v<Parameter, Stream<wchar_t>>) {
-					CapacityStream<char> placeholder_stream(temp_stream.buffer, temp_stream.size, temp_stream.size + parameter.size + 1);
-					ConvertWideCharsToASCII(parameter, placeholder_stream);
-					temp_stream.size += parameter.size;
-					temp_stream[temp_stream.size] = '\0';
+					end_characters.AssertCapacity(parameter.size);
+					ConvertWideCharsToASCII(parameter, end_characters);
 				}
 				else if constexpr (std::is_same_v<Parameter, CapacityStream<char>> || std::is_same_v<Parameter, Stream<char>>) {
-					temp_stream.AddStream(parameter);
+					end_characters.AddStreamAssert(parameter);
 				}
-				return { temp_stream.size, copy_count };
+				else {
+					parameter.ToString(end_characters);
+				}
+				return { end_characters.size - initial_end_characters_count, copy_count };
 			}
 
 			return { 0, 0 };
 		}
 
-		extern template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<const char*>(CapacityStream<char>&, const char*, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(CapacityStream<char>&, const char*, const wchar_t*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(CapacityStream<char>&, const char*, Stream<char>);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(CapacityStream<char>&, const char*, Stream<wchar_t>);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(CapacityStream<char>&, const char*, CapacityStream<char>);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(CapacityStream<char>&, const char*, CapacityStream<wchar_t>);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(CapacityStream<char>&, const char*, unsigned int);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<void*>(CapacityStream<char>&, const char*, void*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<float>(CapacityStream<char>&, const char*, float);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<double>(CapacityStream<char>&, const char*, double);
 
 		template<typename FirstParameter, typename... Parameters>
-		void FormatStringImpl(char* destination, const char* base_characters, ulong2& written_characters, const FirstParameter& first_parameter, Parameters... parameters) {
-			ulong2 current_written_characters = FormatStringInternal(destination + written_characters.x, base_characters + written_characters.y, first_parameter);
-			written_characters.x += current_written_characters.x;
+		void FormatStringImpl(CapacityStream<char>& destination, const char* base_characters, ulong2& written_characters, const FirstParameter& first_parameter, Parameters... parameters) {
+			ulong2 current_written_characters = FormatStringInternal(destination, base_characters + written_characters.y, first_parameter);
 			written_characters.y += current_written_characters.y + 3;
 
 			if constexpr (sizeof...(Parameters) > 0) {
@@ -812,18 +814,21 @@ string_name.AssertCapacity();
 
 	}
 
-	// Returns the count of the characters written
 	template<typename... Parameters>
-	size_t FormatString(char* destination, const char* base_characters, Parameters... parameters) {
+	void FormatString(CapacityStream<char>& destination, const char* base_characters, Parameters... parameters) {
 		ulong2 written_characters = { 0, 0 };
 		Internal::FormatStringImpl(destination, base_characters, written_characters, parameters...);
 
 		// The remaining characters still need to be copied
 		size_t base_character_count = strlen(base_characters);
-		memcpy(destination + written_characters.x, base_characters + written_characters.y, base_character_count - written_characters.y);
-		written_characters.x += base_character_count - written_characters.y;
-		destination[written_characters.x] = '\0';
-		return written_characters.x;
+		size_t characters_to_be_written = base_character_count - written_characters.y;
+		if (characters_to_be_written > 0) {
+			destination.AssertCapacity(characters_to_be_written);
+			memcpy(destination.buffer + destination.size, base_characters + written_characters.y, characters_to_be_written);
+			destination.size += characters_to_be_written;
+		}
+		destination.AssertCapacity(1);
+		destination[destination.size] = '\0';
 	}
 
 	static void DebugLocationString(DebugInfo debug_info, CapacityStream<char>* string) {

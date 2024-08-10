@@ -54,13 +54,13 @@ ECS_INLINE static Stream<char> ColorDepthTextureString(bool color_texture) {
 }
 
 ECS_INLINE static void GetVisualizeTextureName(Stream<char> viewport_description, unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
-	ECS_FORMAT_STRING(name, "{#} {#} {#}", viewport_description, sandbox_index, ColorDepthTextureString(color_texture));
+	FormatString(name, "{#} {#} {#}", viewport_description, sandbox_index, ColorDepthTextureString(color_texture));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 ECS_INLINE static void GetVisualizeInstancedTextureName(unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
-	ECS_FORMAT_STRING(name, "Scene {#} instanced {#}", sandbox_index, ColorDepthTextureString(color_texture));
+	FormatString(name, "Scene {#} instanced {#}", sandbox_index, ColorDepthTextureString(color_texture));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

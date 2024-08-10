@@ -166,10 +166,16 @@ bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, E
 
 bool IsGraphicsModule(const EditorState* editor_state, unsigned int index);
 
-bool IsModuleBeingCompiled(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
+// The last argument tells the function whether or not the module compilation lock should be acquired or not
+// By default, it will acquire it, but if the caller already has done that, it needs to set the last argument to false
+// In order for the function to work
+bool IsModuleBeingCompiled(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration, bool acquire_lock = true);
 
 // Returns true if any of the given modules in currently being compiled
-bool IsAnyModuleBeingCompiled(EditorState* editor_state, Stream<unsigned int> module_indices, const EDITOR_MODULE_CONFIGURATION* configurations);
+// The last argument tells the function whether or not the module compilation lock should be acquired or not
+// By default, it will acquire it, but if the caller already has done that, it needs to set the last argument to false
+// In order for the function to work
+bool IsAnyModuleBeingCompiled(EditorState* editor_state, Stream<unsigned int> module_indices, const EDITOR_MODULE_CONFIGURATION* configurations, bool acquire_lock = true);
 
 // Returns true if the given configuration of the module is being used in at least one sandbox, else false
 // If the configuration is left to COUNT, then it will look for all configurations

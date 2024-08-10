@@ -4,11 +4,11 @@
 
 namespace ECSEngine {
 
-	size_t GetByte(size_t index) {
+	ECS_INLINE size_t GetByte(size_t index) {
 		return index & (~(size_t)0x07);
 	}
 
-	size_t GetBit(size_t index) {
+	ECS_INLINE size_t GetBit(size_t index) {
 		return (size_t)1 << (index & (size_t)0x07);
 	}
 
@@ -24,6 +24,17 @@ namespace ECSEngine {
 
 	bool BooleanBitField::Get(size_t index) const {
 		return m_buffer[GetByte(index)] & GetBit(index);
+	}
+
+	bool BooleanBitField::GetAndSet(size_t index)
+	{
+		size_t byte = GetByte(index);
+		size_t bit = GetBit(index);
+		if ((m_buffer[byte] & bit) == 0) {
+			m_buffer[byte] |= bit;
+			return false;
+		}
+		return true;
 	}
 
 	size_t BooleanBitField::MemoryOf(size_t number) {

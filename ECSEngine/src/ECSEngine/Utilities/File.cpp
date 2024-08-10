@@ -19,29 +19,29 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, temp_string, 256);
 			switch (error) {
 			case ECS_FILE_STATUS_ACCESS_DENIED:
-				ECS_FORMAT_STRING(temp_string, "Access to {#} was not granted. Possible causes: tried to open a read-only file for writing,"
+				FormatString(temp_string, "Access to {#} was not granted. Possible causes: tried to open a read-only file for writing,"
 					"\nfile's sharing mode does not allow the specified operations, or the given path is a directory", path);
 				break;
 			case ECS_FILE_STATUS_ALREADY_EXISTS:
-				ECS_FORMAT_STRING(temp_string, "File {#} already exists.", path);
+				FormatString(temp_string, "File {#} already exists.", path);
 				break;
 			case ECS_FILE_STATUS_INCORRECT_PATH:
-				ECS_FORMAT_STRING(temp_string, "Incorrect path {#}.", path);
+				FormatString(temp_string, "Incorrect path {#}.", path);
 				break;
 			case ECS_FILE_STATUS_INVALID_ARGUMENTS:
-				ECS_FORMAT_STRING(temp_string, "Invalid combination of arguments for {#}.", path);
+				FormatString(temp_string, "Invalid combination of arguments for {#}.", path);
 				break;
 			case ECS_FILE_STATUS_TOO_MANY_OPENED_FILES:
-				ECS_FORMAT_STRING(temp_string, "Too many opened files when trying to create {#}.", path);
+				FormatString(temp_string, "Too many opened files when trying to create {#}.", path);
 				break;
 			case ECS_FILE_STATUS_READING_FILE_FAILED:
-				ECS_FORMAT_STRING(temp_string, "Reading from file {#} failed.", path);
+				FormatString(temp_string, "Reading from file {#} failed.", path);
 				break;
 			case ECS_FILE_STATUS_WRITING_FILE_FAILED:
-				ECS_FORMAT_STRING(temp_string, "Writing to file {#} failed.", path);
+				FormatString(temp_string, "Writing to file {#} failed.", path);
 				break;
 			case ECS_FILE_STATUS_ERROR:
-				ECS_FORMAT_STRING(temp_string, "An unidentifier error occured for {#}.", path);
+				FormatString(temp_string, "An unidentifier error occured for {#}.", path);
 				break;
 			}
 

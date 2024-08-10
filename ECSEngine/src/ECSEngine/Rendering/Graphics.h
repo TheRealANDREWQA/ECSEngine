@@ -447,7 +447,42 @@ namespace ECSEngine {
 		void UpdateMousePickShaderPixelCBuffer(ConstantBuffer buffer, unsigned int blended_value);
 
 		// Returns a vertex buffer that can be filled with instance data for a Solid Color draw
-		VertexBuffer SolidColorHelperShaderReserveInstances(unsigned int count);
+		VertexBuffer SolidColorHelperShaderCreateVertexBufferInstances(unsigned int count, bool temporary = true);
+
+		// Maps a solid color instance data vertex buffer - requires the immediate context
+		GraphicsSolidColorInstance* SolidColorHelperShaderMap(VertexBuffer vertex_buffer);
+
+		// Fills in the instance vertex buffer according to the given instances
+		// The vertex buffer must have at least instances.size entries
+		void SolidColorHelperShaderSetInstances(
+			VertexBuffer vertex_buffer, 
+			Stream<GraphicsSolidColorInstance> instances
+		);
+
+		// Fills in the instance vertex buffer according to the given instances
+		// The vertex buffer must have at least instances.size entries
+		// An auxiliary buffer, instance_submesh, indicates which submesh the instance
+		// Belongs to, such that the most efficient draw can be obtained. The ordered
+		// Submeshes alongside their draw count is filled in the out submeshes buffer
+		void SolidColorHelperShaderSetInstances(
+			VertexBuffer vertex_buffer,
+			Stream<GraphicsSolidColorInstance> instances,
+			Stream<unsigned int> instance_submesh,
+			CapacityStream<uint2>& submeshes
+		);
+
+		// Unmaps a previously mapped solid color instance data vertex buffer - requires the immediate context
+		void SolidColorHelperShaderUnmap(VertexBuffer vertex_buffer);
+
+		// Draws a mesh with the solid color helper shader
+		// Binds the shader state and optionally the mesh buffers
+		void SolidColorHelperShaderDraw(const Mesh& mesh, VertexBuffer instance_vertex_buffer, unsigned int instance_count, bool bind_mesh_buffers = true);
+		
+		// Draws submeshes from the given coalesced mesh with the solid color helper shader
+		// The x value of the uint2 indicates the submesh index, while the y value is the number of instances
+		// The submesh buffer must be filled in the same way the instance vertex buffer was written
+		// Binds the shader state and optionally the mesh buffers
+		void SolidColorHelperShaderDraw(const CoalescedMesh& mesh, VertexBuffer instance_vertex_buffer, Stream<uint2> submeshes, bool bind_mesh_buffers = true);
 
 #pragma endregion
 

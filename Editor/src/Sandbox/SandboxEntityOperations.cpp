@@ -847,7 +847,7 @@ Entity CreateSandboxEntity(
 	}
 
 	ECS_STACK_CAPACITY_STREAM(char, entity_name, 512);
-	EntityToString(entity, entity_name);
+	entity.ToString(entity_name);
 	ChangeSandboxEntityName(editor_state, sandbox_index, entity, entity_name, viewport);
 	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 
@@ -1616,7 +1616,7 @@ Stream<char> GetSandboxEntityName(
 		return name->name;
 	}
 	else {
-		EntityToString(entity, storage);
+		entity.ToString(storage);
 		return storage;
 	}
 }

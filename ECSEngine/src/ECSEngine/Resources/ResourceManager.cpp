@@ -2209,7 +2209,7 @@ namespace ECSEngine {
 				size_t snapshot_index = snapshot.Find(identifier, current_type);
 				if (snapshot_index == -1) {
 					if (mismatch_string != nullptr) {
-						ECS_FORMAT_STRING(
+						FormatString(
 							*mismatch_string, 
 							"Resource {#}, type {#}, was added in between snapshots and deleted\n", 
 							identifier_without_suffix.AsWide(),
@@ -2233,7 +2233,7 @@ namespace ECSEngine {
 					if (mismatch_string != nullptr) {
 						ResourceIdentifier identifier_without_suffix = snapshot.resources[index][subindex].identifier;
 						identifier_without_suffix.size -= snapshot.resources[index][subindex].suffix_size;
-						ECS_FORMAT_STRING(
+						FormatString(
 							*mismatch_string, 
 							"Resource {#}, type {#}, was removed in between snapshots\n", 
 							identifier_without_suffix.AsWide(),

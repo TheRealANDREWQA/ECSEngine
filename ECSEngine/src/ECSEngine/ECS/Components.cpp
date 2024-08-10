@@ -68,7 +68,7 @@ namespace ECSEngine {
 			return name->name;
 		}
 		else {
-			EntityToString(entity, storage);
+			entity.ToString(storage);
 			return storage;
 		}
 	}

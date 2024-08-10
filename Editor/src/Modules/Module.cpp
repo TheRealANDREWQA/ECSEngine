@@ -254,8 +254,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 
 	if (!ExistsFileOrFolder(solution_path)) {
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		error_message.size = FormatString(error_message.buffer, "Project module {#} solution does not exist.", solution_path);
-		error_message.AssertCapacity();
+		FormatString(error_message, "Project module {#} solution does not exist.", solution_path);
 		EditorSetConsoleError(error_message);
 		return false;
 	}
@@ -263,8 +262,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 	unsigned int module_index = GetModuleIndex(editor_state, solution_path);
 	if (module_index != -1) {
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		error_message.size = FormatString(error_message.buffer, "Project module {#} already exists.", solution_path);
-		error_message.AssertCapacity();
+		FormatString(error_message, "Project module {#} already exists.", solution_path);
 		EditorSetConsoleError(error_message);
 		return false;
 	}
@@ -615,6 +613,7 @@ struct RunCmdCommandDLLImportData {
 		unsigned int module_index;
 		std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS> status;
 		bool verified_once;
+		bool already_being_compiled;
 	};
 
 	unsigned int module_index;
@@ -634,9 +633,9 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 	bool has_failed = false;
 	// Check to see if they have a command pending
 	for (size_t index = 0; index < data->dependencies.size; index++) {
-		if (!data->dependencies[index].verified_once) {
-			Stream<wchar_t> library_name = editor_state->project_modules->buffer[data->dependencies[index].module_index].library_name;
-			unsigned int launched_index = FindString(library_name, editor_state->launched_module_compilation[data->configuration]);
+		Stream<wchar_t> dependency_library_name = editor_state->project_modules->buffer[data->dependencies[index].module_index].library_name;
+		unsigned int launched_index = FindString(dependency_library_name, editor_state->launched_module_compilation[data->configuration]);
+		if (!data->dependencies[index].verified_once && !data->dependencies[index].already_being_compiled) {
 			if (launched_index == -1) {
 				const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index].module_index, data->configuration);
 				if (data->command == BUILD_PROJECT_STRING_WIDE) {
@@ -665,18 +664,34 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 				else {
 					ECS_ASSERT(false);
 				}
-				data->dependencies[index].verified_once = true;
 			}
 			else {
+				data->dependencies[index].already_being_compiled = true;
 				have_not_finished = true;
 			}
+			data->dependencies[index].verified_once = true;
 		}
 		else {
-			if (data->dependencies[index].status == EDITOR_FINISH_BUILD_COMMAND_WAITING) {
-				have_not_finished = true;
+			if (!data->dependencies[index].already_being_compiled) {
+				if (data->dependencies[index].status == EDITOR_FINISH_BUILD_COMMAND_WAITING) {
+					have_not_finished = true;
+				}
+				else if (data->dependencies[index].status == EDITOR_FINISH_BUILD_COMMAND_FAILED) {
+					has_failed = true;
+				}
 			}
-			else if (data->dependencies[index].status == EDITOR_FINISH_BUILD_COMMAND_FAILED) {
-				has_failed = true;
+			else {
+				bool is_module_being_compiled = launched_index != -1;
+				if (!is_module_being_compiled) {
+					// Retrieve its status
+					bool is_module_good = GetModuleLoadStatus(editor_state, data->dependencies[index].module_index, data->configuration) == EDITOR_MODULE_LOAD_GOOD;
+					if (!is_module_good) {
+						has_failed = true;
+					}
+				}
+				else {
+					have_not_finished = true;
+				}
 			}
 		}
 	}
@@ -915,8 +930,7 @@ static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	GetModuleDLLExternalReferences(editor_state, index, external_references);
 
 	// It the module has imports, it will fill them in the stream
-	// If all the imports are in their good state, the imports will
-	// Be empty
+	// If all the imports are in their good state, the imports will be empty
 	auto has_imports = [&](CapacityStream<unsigned int>& import_references) {
 		GetModuleDLLImports(editor_state, index, import_references);
 
@@ -943,6 +957,10 @@ static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	auto execute_import = [&]() {
 		ECS_STACK_CAPACITY_STREAM(unsigned int, import_references, 512);
 		if (has_imports(import_references)) {
+			// Lock the compilation lock in order to see if the imports already have a build command started
+			// If a module is already being compiled, signal this such that we know not to launch a new build command
+			editor_state->launched_module_compilation_lock.Lock();
+
 			// We also need the dll imports to be finished
 			RunCmdCommandDLLImportData import_data;
 			import_data.command = command;
@@ -955,7 +973,12 @@ static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 				import_data.dependencies[subindex].module_index = import_references[subindex];
 				import_data.dependencies[subindex].verified_once = false;
 				import_data.dependencies[subindex].status = EDITOR_FINISH_BUILD_COMMAND_WAITING;
+				import_data.dependencies[subindex].already_being_compiled = IsModuleBeingCompiled(editor_state, import_references[subindex], configuration, false);
 			}
+
+			// It is a bit silly to unlock the lock and then require it again in the Remove function
+			// But leave it like this in order to not change the function
+			editor_state->launched_module_compilation_lock.Unlock();
 
 			// Remove the project from compilation list since it will make the dependencies deadlock waiting
 			// for this to finish compiling such that they can unload the module while this will wait for them
@@ -1107,19 +1130,19 @@ void PrintConsoleMessageForBuildCommand(
 	ECS_STACK_CAPACITY_STREAM(char, console_message, 256);
 	switch (command_status) {
 	case EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING:
-		ECS_FORMAT_STRING(console_message, "Command for module {#} with configuration {#} launched successfully.", library_name, configuration_string);
+		FormatString(console_message, "Command for module {#} with configuration {#} launched successfully.", library_name, configuration_string);
 		EditorSetConsoleInfo(console_message);
 		break;
 	case EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED:
-		ECS_FORMAT_STRING(console_message, "The module {#} with configuration {#} is up to date. The command is skipped", library_name, configuration_string);
+		FormatString(console_message, "The module {#} with configuration {#} is up to date. The command is skipped", library_name, configuration_string);
 		EditorSetConsoleInfo(console_message);
 		break;
 	case EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING:
-		ECS_FORMAT_STRING(console_message, "An error has occured when launching the command line for module {#} with configuration {#}. The command is aborted.", library_name, configuration_string);
+		FormatString(console_message, "An error has occured when launching the command line for module {#} with configuration {#}. The command is aborted.", library_name, configuration_string);
 		EditorSetConsoleError(console_message);
 		break;
 	case EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING:
-		ECS_FORMAT_STRING(console_message, "The module {#} with configuration {#} is already executing a command.", library_name, configuration_string);
+		FormatString(console_message, "The module {#} with configuration {#} is already executing a command.", library_name, configuration_string);
 		EditorSetConsoleError(console_message);
 		break;
 	}
@@ -1317,24 +1340,28 @@ bool IsGraphicsModule(const EditorState* editor_state, unsigned int index)
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool IsModuleBeingCompiled(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
+bool IsModuleBeingCompiled(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration, bool acquire_lock)
 {
-	return IsAnyModuleBeingCompiled(editor_state, { &module_index, 1 }, &configuration);
+	return IsAnyModuleBeingCompiled(editor_state, { &module_index, 1 }, &configuration, acquire_lock);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool IsAnyModuleBeingCompiled(EditorState* editor_state, Stream<unsigned int> module_indices, const EDITOR_MODULE_CONFIGURATION* configurations)
+bool IsAnyModuleBeingCompiled(EditorState* editor_state, Stream<unsigned int> module_indices, const EDITOR_MODULE_CONFIGURATION* configurations, bool acquire_lock)
 {
 	ECS_STACK_CAPACITY_STREAM(bool, is_compiled, 512);
 	ECS_ASSERT(module_indices.size <= is_compiled.capacity);
 
-	editor_state->launched_module_compilation_lock.Lock();
+	if (acquire_lock) {
+		editor_state->launched_module_compilation_lock.Lock();
+	}
 	for (size_t index = 0; index < module_indices.size; index++) {
 		const EditorModule* module = editor_state->project_modules->buffer + module_indices[index];
 		is_compiled[index] = FindString(module->library_name, editor_state->launched_module_compilation[configurations[index]].ToStream()) != -1;
 	}
-	editor_state->launched_module_compilation_lock.Unlock();
+	if (acquire_lock) {
+		editor_state->launched_module_compilation_lock.Unlock();
+	}
 
 	// Check for events as well - retrieve these outside the loop
 	ECS_STACK_CAPACITY_STREAM(void*, dll_import_events_data, 512);
@@ -2399,7 +2426,7 @@ void RemoveModule(EditorState* editor_state, Stream<wchar_t> solution_path)
 		return;
 	}
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-	error_message.size = FormatString(error_message.buffer, "Removing project module {#} failed. No such module exists.", solution_path);
+	FormatString(error_message, "Removing project module {#} failed. No such module exists.", solution_path);
 	EditorSetConsoleError(error_message);
 }
 

@@ -234,20 +234,19 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 		Stream<char> evaluation_name = "ID";
 
 		for (unsigned int index = 0; index < reflected_components.size; index++) {
-			labels[index].buffer = label_list_characters.buffer + label_list_characters.size;
-
 			const Reflection::ReflectionType* type = editor_state->editor_components.GetType(editor_components_index, reflected_components[index]);
 			size_t byte_size = Reflection::GetReflectionTypeByteSize(type);
 
+			CapacityStream<char> current_label = label_list_characters;
 			// The component might be lacking an ID
 			double id_evaluation = type->GetEvaluation(evaluation_name);
 			if (id_evaluation == DBL_MAX) {
-				labels[index].size = FormatString(labels[index].buffer, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
+				FormatString(label_list_characters, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
 			}
 			else {
-				labels[index].size = FormatString(labels[index].buffer, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
+				FormatString(label_list_characters, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
 			}
-			label_list_characters.size += labels[index].size;
+			labels[index] = { current_label.buffer + current_label.size, label_list_characters.size - current_label.size };
 		}
 
 		labels.size = reflected_components.size;
@@ -268,20 +267,19 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 		Stream<char> evaluation_name = "ID";
 
 		for (unsigned int index = 0; index < reflected_shared_components.size; index++) {
-			labels[index].buffer = label_list_characters.buffer + label_list_characters.size;
-
 			const Reflection::ReflectionType* type = editor_state->editor_components.GetType(editor_components_index, reflected_shared_components[index]);;
 			size_t byte_size = Reflection::GetReflectionTypeByteSize(type);
 
+			CapacityStream<char> current_label = label_list_characters;
 			// The component might be lacking an ID
 			double id_evaluation = type->GetEvaluation(evaluation_name);
 			if (id_evaluation == DBL_MAX) {
-				labels[index].size = FormatString(labels[index].buffer, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
+				FormatString(label_list_characters, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
 			}
 			else {
-				labels[index].size = FormatString(labels[index].buffer, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
+				FormatString(label_list_characters, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
 			}
-			label_list_characters.size += labels[index].size;
+			labels[index] = { current_label.buffer + current_label.size, label_list_characters.size - current_label.size };
 		}
 
 		labels.size = reflected_shared_components.size;

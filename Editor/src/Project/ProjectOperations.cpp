@@ -65,8 +65,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 		if (!success) {
 			if (!ExistsFileOrFolder(new_directory_path)) {
 				if (data->error_message.buffer != nullptr) {
-					data->error_message.size = FormatString(data->error_message.buffer, "Creating project auxilary directory {#} failed!", new_directory_path);
-					data->error_message.AssertCapacity();
+					FormatString(data->error_message, "Creating project auxilary directory {#} failed!", new_directory_path);
 				}
 
 				CreateErrorMessageWindow(ui_system, data->error_message);
@@ -74,8 +73,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 			}
 			else {
 				ECS_STACK_CAPACITY_STREAM(char, description, 256);
-				description.size = FormatString(description.buffer, "Folder {#} already exists. Do you want to keep it or clean it?", PROJECT_DIRECTORIES[index]);
-				description.AssertCapacity();
+				FormatString(description, "Folder {#} already exists. Do you want to keep it or clean it?", PROJECT_DIRECTORIES[index]);
 				ChooseOptionWindowData choose_data;
 
 				Stream<char> button_names[2] = { "Keep", "Clean" };
@@ -136,7 +134,7 @@ void CreateProject(ProjectOperationData* data)
 
 	if (ExistsProjectInFolder(data->file_data)) {
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		error_message.size = FormatString(error_message.buffer, "A project in {#} already exists. Do you want to overwrite it?", data->file_data->path);
+		FormatString(error_message, "A project in {#} already exists. Do you want to overwrite it?", data->file_data->path);
 		if (data->error_message.buffer != nullptr) {
 			data->error_message.CopyOther(error_message);
 		}
@@ -191,8 +189,7 @@ void CreateProject(ProjectOperationData* data)
 
 			if (!success) {
 				ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-				error_message.size = FormatString(error_message.buffer, "Overwriting project {#} failed.", project_path);
-				error_message.AssertCapacity();
+				FormatString(error_message, "Overwriting project {#} failed.", project_path);
 				CreateErrorMessageWindow(system, error_message);
 			}
 
@@ -220,8 +217,7 @@ void CreateProject(ProjectOperationData* data)
 		}
 		else {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-			error_message.size = FormatString(error_message.buffer, "Error when creating project {#}.", data->file_data->path);
-			error_message.AssertCapacity();
+			FormatString(error_message, "Error when creating project {#}.", data->file_data->path);
 			CreateErrorMessageWindow(ui_system, error_message);
 		}
 		return;
@@ -501,7 +497,7 @@ bool OpenProjectFile(ProjectOperationData data, bool info_only) {
 	);
 	if (status != ECS_DESERIALIZE_OK) {
 		if (data.error_message.buffer != nullptr) {
-			ECS_FORMAT_STRING(data.error_message, "Failed to deserialize project file {#}. Detailed message: {#}.", project_path, error_message);
+			FormatString(data.error_message, "Failed to deserialize project file {#}. Detailed message: {#}.", project_path, error_message);
 		}
 		return false;
 	}
@@ -509,7 +505,7 @@ bool OpenProjectFile(ProjectOperationData data, bool info_only) {
 	// If the version is different, fail
 	if (file_data->version < COMPATIBLE_PROJECT_FILE_VERSION_INDEX) {
 		if (data.error_message.buffer != nullptr) {
-			ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; version is {#} while compatible versions are above {#}.", project_path, file_data->version, COMPATIBLE_PROJECT_FILE_VERSION_INDEX);
+			FormatString(data.error_message, "Opening project file {#} failed; version is {#} while compatible versions are above {#}.", project_path, file_data->version, COMPATIBLE_PROJECT_FILE_VERSION_INDEX);
 		}
 		return false;
 	}
@@ -518,25 +514,25 @@ bool OpenProjectFile(ProjectOperationData data, bool info_only) {
 		// If the version description could not be deserialized, fail
 		if (file_data->version_description[0] == 0) {
 			if (data.error_message.buffer != nullptr) {
-				ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; version description is missing.", project_path);
+				FormatString(data.error_message, "Opening project file {#} failed; version description is missing.", project_path);
 			}
 			return false;
 		}
 		if (file_data->platform_description[0] == 0) {
 			if (data.error_message.buffer != nullptr) {
-				ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; platform description is missing.", project_path);
+				FormatString(data.error_message, "Opening project file {#} failed; platform description is missing.", project_path);
 			}
 			return false;
 		}
 		if (file_data->project_name.buffer == nullptr) {
 			if (data.error_message.buffer != nullptr) {
-				ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; project name is missing.", project_path);
+				FormatString(data.error_message, "Opening project file {#} failed; project name is missing.", project_path);
 			}
 			return false;
 		}
 		if (file_data->path.buffer == nullptr) {
 			if (data.error_message.buffer != nullptr) {
-				ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; the project's path is missing.", project_path);
+				FormatString(data.error_message, "Opening project file {#} failed; the project's path is missing.", project_path);
 			}
 			return false;
 		}
@@ -544,7 +540,7 @@ bool OpenProjectFile(ProjectOperationData data, bool info_only) {
 
 	if (!HasFlag(file_data->platform, ECS_PLATFORM_WIN64_DX11)) {
 		if (data.error_message.buffer != nullptr) {
-			ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed, compatible platform {#}, actual platform {#}", project_path, ECS_PLATFORM_WIN64_DX11, file_data->platform);
+			FormatString(data.error_message, "Opening project file {#} failed, compatible platform {#}, actual platform {#}", project_path, ECS_PLATFORM_WIN64_DX11, file_data->platform);
 		}
 		return false;
 	}
@@ -770,7 +766,7 @@ bool SaveProjectFile(ProjectOperationData data) {
 
 	if (!success) {
 		if (data.error_message.buffer != nullptr) {
-			ECS_FORMAT_STRING(data.error_message, "Saving project file failed; writing to {#}", project_path);
+			FormatString(data.error_message, "Saving project file failed; writing to {#}", project_path);
 		}
 		return false;
 	}
@@ -796,9 +792,7 @@ void SaveProjectFileAction(ActionData* action_data) {
 			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
 			GetProjectFilePath(data->file_data, project_name);
 
-			error_message.size = FormatString(error_message.buffer, "Saving project file {#} failed.", project_name);
-			error_message.AssertCapacity();
-
+			FormatString(error_message, "Saving project file {#} failed.", project_name);
 			CreateErrorMessageWindow(system, error_message);
 		}
 	}
@@ -839,8 +833,7 @@ void SaveProjectAction(ActionData* action_data) {
 			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
 			GetProjectFilePath(data->file_data, project_name);
 			
-			error_message.size = FormatString(error_message.buffer, "Saving project {#} failed.", project_name);
-			error_message.AssertCapacity();
+			FormatString(error_message, "Saving project {#} failed.", project_name);
 			CreateErrorMessageWindow(system, error_message);
 		}
 	}

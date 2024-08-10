@@ -563,6 +563,10 @@ namespace ECSEngine {
 			ECS_ASSERT(size <= capacity);
 		}
 
+		ECS_INLINE void AssertCapacity(unsigned int elements) const {
+			ECS_ASSERT(size + elements <= capacity);
+		}
+
 		ECS_INLINE void AssertSpace(unsigned int count) const {
 			ECS_ASSERT(size + count <= capacity, "Not enough capacity for CapacityStream");
 		}

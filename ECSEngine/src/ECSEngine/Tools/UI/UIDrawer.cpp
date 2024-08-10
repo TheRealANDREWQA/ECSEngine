@@ -6337,6 +6337,7 @@ namespace ECSEngine {
 
 				if (single_sentence) {
 					float2 text_span = TextSpan(Stream<char>(text.buffer, text_length), font_size, character_spacing);
+					float initial_y_position = position.y;
 					if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
 						position.y = AlignMiddle(position.y, current_row_y_scale, text_span.y);
 					}
@@ -6364,7 +6365,9 @@ namespace ECSEngine {
 							float finalize_span = 0.0f;
 							if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
 								// Only the initial row will follow this span. The others will use the text span.y
-								float initial_row_scale = current_row_y_scale < text_span.y ? text_span.y : current_row_y_scale;
+								// Take into consideration the fact that the text has the position offset in order to be aligned
+								float align_offset = (current_row_y_scale - text_span.y) / 2.0f;
+								float initial_row_scale = current_row_y_scale < text_span.y ? text_span.y : current_row_y_scale - align_offset;
 								finalize_span = initial_row_scale + (float)(needed_rows - 1) * text_span.y;
 							}
 							else {
@@ -6372,7 +6375,6 @@ namespace ECSEngine {
 							}
 							finalize_span += (float)(needed_rows - 1) * layout.next_row_y_offset;
 							FinalizeRectangle(0, position, { 0.0f, finalize_span });
-
 						}
 						else {
 							FinalizeRectangle(0, position, text_span);

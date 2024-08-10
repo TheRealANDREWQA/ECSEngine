@@ -9798,6 +9798,11 @@ namespace ECSEngine {
 
 		void UISystem::SetWindowOSSize(uint2 new_size, uint2 monitor_size)
 		{
+			if (new_size.x == 0 && new_size.y == 0) {
+				// Do not modify the size if the given size is 0
+				return;
+			}
+
 			float2 current_dimension_ratio = float2(m_window_os_size) / float2(m_monitor_size);
 			float current_aspect_ratio = (float)m_monitor_size.x / (float)m_monitor_size.y;
 			m_window_os_size = new_size;

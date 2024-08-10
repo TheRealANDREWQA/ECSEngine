@@ -4793,7 +4793,7 @@ namespace ECSEngine {
 						Stream<char> current_field_name = type->fields[index].name;
 						ECS_STACK_CAPACITY_STREAM(char, current_name_storage, 512);
 						if (current_grouping.per_element_name.size > 0) {
-							ECS_FORMAT_STRING(current_name_storage, "{#} {#}", current_grouping.per_element_name, grouping_index);
+							FormatString(current_name_storage, "{#} {#}", current_grouping.per_element_name, grouping_index);
 							current_field_name = current_name_storage;
 						}
 

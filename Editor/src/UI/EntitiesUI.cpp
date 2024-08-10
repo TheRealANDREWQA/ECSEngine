@@ -134,7 +134,7 @@ struct HierarchyIteratorImpl {
 					return name->name;
 				}
 
-				EntityToString(entity, entity_label);
+				entity.ToString(entity_label);
 				return entity_label;
 			}
 		}

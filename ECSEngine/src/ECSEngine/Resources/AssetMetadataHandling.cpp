@@ -747,13 +747,13 @@ namespace ECSEngine {
 						load_desc->error_string->AddStreamAssert(invalid_handle_string);
 					}
 					else {
-						ECS_FORMAT_STRING(*load_desc->error_string, invalid_handle_string, asset_name);
+						FormatString(*load_desc->error_string, invalid_handle_string, asset_name);
 					}
 				}
 				else {
 					ECS_STACK_CAPACITY_STREAM(char, asset_string, 256);
 					AssetToString(database->GetAssetConst(handle, type), type, asset_string);
-					ECS_FORMAT_STRING(*load_desc->error_string, not_loaded_string, asset_string);
+					FormatString(*load_desc->error_string, not_loaded_string, asset_string);
 				}
 				load_desc->error_string->AddAssert('\n');
 			}

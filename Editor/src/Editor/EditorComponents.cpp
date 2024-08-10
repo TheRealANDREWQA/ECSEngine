@@ -2838,7 +2838,7 @@ void UserEventsWindow(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			type_string = " SAME_ID with ";
 		}
 		else if (component_event == EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION) {
-			ECS_FORMAT_STRING(temporary_string, " IS_MISSING the function {#}", data->user_events[index].missing_function_name);
+			FormatString(temporary_string, " IS_MISSING the function {#}", data->user_events[index].missing_function_name);
 			type_string = temporary_string;
 		}
 		else if (component_event == EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS) {

@@ -60,10 +60,10 @@ EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 
 					ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
 					if (target_file.size > 0) {
-						ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", asset_name, type_string, target_file);
+						FormatString(console_message, "Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", asset_name, type_string, target_file);
 					}
 					else {
-						ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#} or assets that depend on it.", asset_name, type_string);
+						FormatString(console_message, "Failed to unload asset {#}, type {#} or assets that depend on it.", asset_name, type_string);
 					}
 					EditorSetConsoleError(console_message);
 				}
@@ -108,10 +108,10 @@ EDITOR_EVENT(DeallocateAssetWithRemappingWithOldMetadataEvent) {
 
 			ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
 			if (target_file.size > 0) {
-				ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", asset_name, type_string, target_file);
+				FormatString(console_message, "Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", asset_name, type_string, target_file);
 			}
 			else {
-				ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#} or assets that depend on it.", asset_name, type_string);
+				FormatString(console_message, "Failed to unload asset {#}, type {#} or assets that depend on it.", asset_name, type_string);
 			}
 			EditorSetConsoleError(console_message);
 		}
@@ -172,10 +172,10 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 
 					ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
 					if (target_file.size > 0) {
-						ECS_FORMAT_STRING(console_message, message_with_file, asset_name, type_string, target_file);
+						FormatString(console_message, message_with_file, asset_name, type_string, target_file);
 					}
 					else {
-						ECS_FORMAT_STRING(console_message, message_without_file, asset_name, type_string);
+						FormatString(console_message, message_without_file, asset_name, type_string);
 					}
 					EditorSetConsoleError(console_message);
 				};
@@ -828,10 +828,10 @@ UpdateAssetToComponentElement ReloadAssetTaskIteration(EditorState* editor_state
 		Stream<char> detailed_part = !success.x ? "The deallocation part failed." : "The creation part failed.";
 
 		if (asset_file.size > 0) {
-			ECS_FORMAT_STRING(console_message, "Failed to reload asset {#}, target file {#}, type {#}. {#}", asset_name, asset_file, asset_type_string, detailed_part);
+			FormatString(console_message, "Failed to reload asset {#}, target file {#}, type {#}. {#}", asset_name, asset_file, asset_type_string, detailed_part);
 		}
 		else {
-			ECS_FORMAT_STRING(console_message, "Failed to reload asset {#}, type {#}. {#}", asset_name, asset_type_string, detailed_part);
+			FormatString(console_message, "Failed to reload asset {#}, type {#}. {#}", asset_name, asset_type_string, detailed_part);
 		}
 		EditorSetConsoleError(console_message);
 
@@ -1038,11 +1038,11 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 										Stream<char> detailed_part = !reload_result.success.x ? "The deallocation part failed." : "The creation part failed.";
 
 										if (current_file.size > 0) {
-											ECS_FORMAT_STRING(console_message, "Failed to reload asset {#}, target file {#}, type {#}. {#}",
+											FormatString(console_message, "Failed to reload asset {#}, target file {#}, type {#}. {#}",
 												current_name, current_file, asset_type_string, detailed_part);
 										}
 										else {
-											ECS_FORMAT_STRING(console_message, "Failed to reload asset {#}, type {#}. {#}", current_name, asset_type_string, detailed_part);
+											FormatString(console_message, "Failed to reload asset {#}, type {#}. {#}", current_name, asset_type_string, detailed_part);
 										}
 										EditorSetConsoleError(console_message);
 

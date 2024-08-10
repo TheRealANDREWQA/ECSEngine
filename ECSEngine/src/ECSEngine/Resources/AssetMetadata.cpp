@@ -1909,7 +1909,7 @@ namespace ECSEngine {
 				path_to_write = PathFilenameBoth(path_to_write);
 			}
 
-			ECS_FORMAT_STRING(string, "{#} ({#})", path_to_write, name);
+			FormatString(string, "{#} ({#})", path_to_write, name);
 		}
 	}
 

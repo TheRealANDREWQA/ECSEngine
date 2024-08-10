@@ -1022,6 +1022,83 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	VertexBuffer Graphics::SolidColorHelperShaderCreateVertexBufferInstances(unsigned int count, bool temporary) {
+		return CreateVertexBuffer(sizeof(GraphicsSolidColorInstance), count, temporary);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsSolidColorInstance* Graphics::SolidColorHelperShaderMap(VertexBuffer vertex_buffer) {
+		return (GraphicsSolidColorInstance*)MapBuffer(vertex_buffer.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::SolidColorHelperShaderSetInstances(VertexBuffer vertex_buffer, Stream<GraphicsSolidColorInstance> instances)
+	{
+		GraphicsSolidColorInstance* data = (GraphicsSolidColorInstance*)SolidColorHelperShaderMap(vertex_buffer);
+		instances.CopyTo(data);
+		SolidColorHelperShaderUnmap(vertex_buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::SolidColorHelperShaderSetInstances(
+		VertexBuffer vertex_buffer, 
+		Stream<GraphicsSolidColorInstance> instances, 
+		Stream<unsigned int> instance_submesh, 
+		CapacityStream<uint2>& submeshes
+	)
+	{
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 128, ECS_MB * 32);
+
+		GraphicsSolidColorInstance* data = (GraphicsSolidColorInstance*)SolidColorHelperShaderMap(vertex_buffer);
+		// Use the utility function ForEachGroup
+		ForEachGroup(instance_submesh, &temporary_allocator, 
+		[&](size_t ordered_index, size_t original_index, size_t group_index) {
+			data[ordered_index] = instances[original_index];
+		}, 
+		[&](size_t group_index, uint2 group) {
+			submeshes.AddAssert(group);
+		});
+		SolidColorHelperShaderUnmap(vertex_buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::SolidColorHelperShaderUnmap(VertexBuffer vertex_buffer) {
+		UnmapBuffer(vertex_buffer.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::SolidColorHelperShaderDraw(const Mesh& mesh, VertexBuffer instance_vertex_buffer, unsigned int instance_count, bool bind_mesh_buffers) {
+		BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_SOLID_COLOR);
+		if (bind_mesh_buffers) {
+			BindMesh(mesh);
+		}
+		BindVertexBuffer(instance_vertex_buffer, 1);
+		DrawIndexedInstanced(mesh.index_buffer.count, instance_count);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::SolidColorHelperShaderDraw(const CoalescedMesh& mesh, VertexBuffer instance_vertex_buffer, Stream<uint2> submeshes, bool bind_mesh_buffers) {
+		BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_SOLID_COLOR);
+		if (bind_mesh_buffers) {
+			BindMesh(mesh.mesh);
+		}
+		BindVertexBuffer(instance_vertex_buffer, 1);
+		unsigned int drawn_instance_count = 0;
+		for (size_t index = 0; index < submeshes.size; index++) {
+			const Submesh& submesh = mesh.submeshes[submeshes[index].x];
+			DrawIndexedInstanced(submesh.index_count, submeshes[index].y, submesh.index_buffer_offset, submesh.vertex_buffer_offset, drawn_instance_count);
+			drawn_instance_count += submeshes[index].y;
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3677,8 +3754,6 @@ namespace ECSEngine {
 			BindRenderTargetViewFromInitialViews(m_context);
 			EnableDepth(m_context);
 
-			CreateWindowDepthStencilView();
-
 			DisableAlphaBlending(m_context);
 		}
 	}
@@ -3970,7 +4045,7 @@ namespace ECSEngine {
 				return false;
 			}
 			else {
-				ECS_FORMAT_STRING(*mismatch_string, "Expected {#} resources in the graphics object, instead there are {#}.",
+				FormatString(*mismatch_string, "Expected {#} resources in the graphics object, instead there are {#}.",
 					snapshot.interface_pointers.size, current_resource_count);
 				size_success = false;
 			}
@@ -4011,7 +4086,7 @@ namespace ECSEngine {
 						Stream<char> resource_type = GraphicsResourceTypeString(m_internal_resources[index].type);
 						ECS_STACK_CAPACITY_STREAM(char, location_string, 512);
 						DebugLocationString(m_internal_resources[index].debug_info, &location_string);
-						ECS_FORMAT_STRING(*mismatch_string, "Graphics resource with type {#} was added in between snapshots. {#}\n", resource_type, location_string);
+						FormatString(*mismatch_string, "Graphics resource with type {#} was added in between snapshots. {#}\n", resource_type, location_string);
 					}
 
 					FreeGraphicsResourceInterface(interface_pointer, m_internal_resources[index].type);
@@ -4036,7 +4111,7 @@ namespace ECSEngine {
 				Stream<char> resource_type = GraphicsResourceTypeString(snapshot.types[missing]);
 				ECS_STACK_CAPACITY_STREAM(char, location_string, 512);
 				DebugLocationString(snapshot.debug_infos[missing], &location_string);
-				ECS_FORMAT_STRING(*mismatch_string, "Graphics resource with type {#} was removed in between snapshots. {#}\n", resource_type, location_string);
+				FormatString(*mismatch_string, "Graphics resource with type {#} was removed in between snapshots. {#}\n", resource_type, location_string);
 
 				missing += SearchBytes(was_found.buffer + missing, snapshot.interface_pointers.size - missing, (size_t)false, sizeof(bool));
 			}

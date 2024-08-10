@@ -206,23 +206,23 @@ namespace ECSEngine {
 
 	static void DebugAllocatorManagerWriteAllocatorState(CapacityStream<char>* characters, const void* allocator_pointer, const TrackedAllocator& allocator) {
 		if (allocator.name.size > 0) {
-			ECS_FORMAT_STRING(*characters, "Allocator {#} at {#}\n", allocator.name, allocator_pointer);
+			FormatString(*characters, "Allocator {#} at {#}\n", allocator.name, allocator_pointer);
 		}
 		else {
-			ECS_FORMAT_STRING(*characters, "Allocator {#}\n", allocator_pointer);
+			FormatString(*characters, "Allocator {#}\n", allocator_pointer);
 		}
 		allocator.ForEach([&](const TrackedAllocation& allocation) {
 			Stream<char> function_type_name = DebugAllocatorFunctionName(allocation.function_type);
 			if (allocation.function_type == ECS_DEBUG_ALLOCATOR_ALLOCATE || allocation.function_type == ECS_DEBUG_ALLOCATOR_DEALLOCATE) {
-				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tPointer {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
+				FormatString(*characters, "\tType {#}\n\tPointer {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
 					function_type_name, allocation.allocated_pointer, allocation.debug_info.file, allocation.debug_info.function, allocation.debug_info.line);
 			}
 			else if (allocation.function_type == ECS_DEBUG_ALLOCATOR_CLEAR || allocation.function_type == ECS_DEBUG_ALLOCATOR_FREE) {
-				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
+				FormatString(*characters, "\tType {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
 					function_type_name, allocation.debug_info.file, allocation.debug_info.function, allocation.debug_info.line);
 			}
 			else if (allocation.function_type == ECS_DEBUG_ALLOCATOR_REALLOCATE) {
-				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tInitial Pointer {#}\n\tReallocated Pointer {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
+				FormatString(*characters, "\tType {#}\n\tInitial Pointer {#}\n\tReallocated Pointer {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
 					function_type_name, 
 					allocation.allocated_pointer,
 					allocation.secondary_pointer, 
@@ -232,7 +232,7 @@ namespace ECSEngine {
 				);
 			}
 			else if (allocation.function_type == ECS_DEBUG_ALLOCATOR_RETURN_TO_MARKER) {
-				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tMarker value {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
+				FormatString(*characters, "\tType {#}\n\tMarker value {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
 					function_type_name, (size_t)allocation.allocated_pointer, allocation.debug_info.file, allocation.debug_info.function, allocation.debug_info.line);
 			}
 			else {

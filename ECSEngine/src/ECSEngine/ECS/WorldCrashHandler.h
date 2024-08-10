@@ -29,6 +29,9 @@ namespace ECSEngine {
 		bool suspending_threads_success;
 		bool resuming_threads_success;
 		bool crash_write_success;
+		// This is an error message that is filled if an error was encountered while saving the runtime state
+		Stream<char> save_error_message;
+		// This is the actual error message that is passed to the crash function
 		Stream<char> error_message;
 		void* user_data;
 	};

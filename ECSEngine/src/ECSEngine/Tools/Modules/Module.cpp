@@ -738,10 +738,10 @@ namespace ECSEngine {
 				if (element.task_dependencies.size > 0) {
 					ECS_STACK_CAPACITY_STREAM(char, temp_string, 512);
 					StreamToString(element.task_dependencies, temp_string);
-					ECS_FORMAT_STRING(*error_message, "Task with dependencies {#} in group {#} has no name specified", temp_string, group_name);
+					FormatString(*error_message, "Task with dependencies {#} in group {#} has no name specified", temp_string, group_name);
 				}
 				else {
-					ECS_FORMAT_STRING(*error_message, "Task in group {#} has no name specified", group_name);
+					FormatString(*error_message, "Task in group {#} has no name specified", group_name);
 				}
 			}
 
@@ -790,10 +790,10 @@ namespace ECSEngine {
 			if (element.extension.buffer == nullptr || element.extension.size == 0) {
 				if (error_message != nullptr) {
 					if (element.asset_editor_name.size > 0) {
-						ECS_FORMAT_STRING(*error_message, "Build Asset Type {#} is missing the extension", element.asset_editor_name);
+						FormatString(*error_message, "Build Asset Type {#} is missing the extension", element.asset_editor_name);
 					}
 					else if (element.asset_metadata_name.size > 0) {
-						ECS_FORMAT_STRING(*error_message, "Build Asset Type with metadata {#} is missing the extension", element.asset_metadata_name);
+						FormatString(*error_message, "Build Asset Type with metadata {#} is missing the extension", element.asset_metadata_name);
 					}
 					else {
 						error_message->AddStreamSafe("Build Asset Type is missing the extension");
@@ -806,10 +806,10 @@ namespace ECSEngine {
 			if (element.build_function == nullptr) {
 				if (error_message != nullptr) {
 					if (element.asset_editor_name.size > 0) {
-						ECS_FORMAT_STRING(*error_message, "Build Asset Type {#} is missing the build function", element.asset_editor_name);
+						FormatString(*error_message, "Build Asset Type {#} is missing the build function", element.asset_editor_name);
 					}
 					else if (element.asset_metadata_name.size > 0) {
-						ECS_FORMAT_STRING(*error_message, "Build Asset Type with metadata {#} is missing the build function", element.asset_metadata_name);
+						FormatString(*error_message, "Build Asset Type with metadata {#} is missing the build function", element.asset_metadata_name);
 					}
 					else {
 						error_message->AddStreamSafe("Build Asset Type is missing the build function");
@@ -836,7 +836,7 @@ namespace ECSEngine {
 
 			if (element.build_function == nullptr || element.reverse_function == nullptr) {
 				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "User defined conversion for link component {#} is missing the build or the reverse function", element.component_name);
+					FormatString(*error_message, "User defined conversion for link component {#} is missing the build or the reverse function", element.component_name);
 				}
 				return true;
 			}
@@ -939,7 +939,7 @@ namespace ECSEngine {
 			if (names.size > 0) {
 				if (FindString(element.component_name, names) == -1) {
 					if (error_message != nullptr) {
-						ECS_FORMAT_STRING(*error_message, "Component name {#} for component functions is not valid", element.component_name);
+						FormatString(*error_message, "Component name {#} for component functions is not valid", element.component_name);
 					}
 					return true;
 				}
@@ -948,7 +948,7 @@ namespace ECSEngine {
 					Stream<char> dependency = element.build_entry.component_dependencies[index];
 					if (FindString(dependency, names) == -1) {
 						if (error_message != nullptr) {
-							ECS_FORMAT_STRING(*error_message, "Component functions for {#} has build entry invalid dependency {#}", element.component_name, dependency);
+							FormatString(*error_message, "Component functions for {#} has build entry invalid dependency {#}", element.component_name, dependency);
 						}
 						return true;
 					}
@@ -959,10 +959,10 @@ namespace ECSEngine {
 				&& element.build_entry.function == nullptr)) {
 				if (error_message != nullptr) {
 					if (element.copy_function == nullptr) {
-						ECS_FORMAT_STRING(*error_message, "Component functions for {#} is missing the copy function", element.component_name);
+						FormatString(*error_message, "Component functions for {#} is missing the copy function", element.component_name);
 					}
 					else {
-						ECS_FORMAT_STRING(*error_message, "Component functions for {#} is missing the deallocate function", element.component_name);
+						FormatString(*error_message, "Component functions for {#} is missing the deallocate function", element.component_name);
 					}
 				}
 				return true;

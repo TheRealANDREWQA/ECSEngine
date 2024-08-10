@@ -22,3 +22,13 @@ void LogTrace(Stream<char> message, ECS_CONSOLE_VERBOSITY verbosity) {
 	Console* console = GetConsole();
 	console->Trace(message, PROJECT_NAME, verbosity);
 }
+
+void Log(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, ECS_CONSOLE_VERBOSITY verbosity) {
+	Console* console = GetConsole();
+	console->Message(message, type, PROJECT_NAME, verbosity);
+}
+
+void LogEntity(Entity entity, ECS_CONSOLE_MESSAGE_TYPE type, ECS_CONSOLE_VERBOSITY verbosity) {
+	ECS_ENTITY_TO_STRING(string, entity);
+	Log(string, type, verbosity);
+}

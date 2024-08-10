@@ -49,7 +49,7 @@ namespace ECSEngine {
 			error_string.CopyTo(new_string);
 			CapacityStream<char> new_string_stream(new_string, error_string.size, error_string.size + characters_needed);
 
-			ECS_FORMAT_STRING(new_string_stream, "\nCaller: {#}, File: {#}, Line: {#}", function_string, file_string, line);
+			FormatString(new_string_stream, "\nCaller: {#}, File: {#}, Line: {#}", function_string, file_string, line);
 			ECS_GLOBAL_CRASH_HANDLER.function(ECS_GLOBAL_CRASH_HANDLER.data, new_string_stream);
 		}
 	}

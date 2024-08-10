@@ -34,7 +34,7 @@ ECS_THREAD_TASK(CreateAssetAsyncTask) {
 		bool is_valid = ValidateAssetMetadataOptions(data->editor_state->asset_database->GetAssetConst(data->handle, data->asset_type), data->asset_type);
 		if (is_valid) {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-			ECS_FORMAT_STRING(error_message, "Failed to create asset {#}, type {#}. Possible causes: invalid path or the processing failed.", asset_name, type_string);
+			FormatString(error_message, "Failed to create asset {#}, type {#}. Possible causes: invalid path or the processing failed.", asset_name, type_string);
 			EditorSetConsoleError(error_message);
 		}
 
@@ -233,10 +233,10 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 			const char* type_string = ConvertAssetTypeString(type);
 			ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 			if (file.size > 0) {
-				ECS_FORMAT_STRING(error_message, "Failed to remove asset {#} with settings {#}, type {#}. {#}", file, asset_name, type_string, tail_message);
+				FormatString(error_message, "Failed to remove asset {#} with settings {#}, type {#}. {#}", file, asset_name, type_string, tail_message);
 			}
 			else {
-				ECS_FORMAT_STRING(error_message, "Failed to remove asset {#}, type {#}. {#}", asset_name, type_string, tail_message);
+				FormatString(error_message, "Failed to remove asset {#}, type {#}. {#}", asset_name, type_string, tail_message);
 			}
 			EditorSetConsoleError(error_message);
 		};

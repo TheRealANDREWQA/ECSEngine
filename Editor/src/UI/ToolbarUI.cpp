@@ -73,8 +73,7 @@ void DefaultUITemplate(ActionData* action_data) {
 	}
 	else {
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		error_message.size = FormatString(error_message.buffer, "Could not find default template {#}. It has been deleted.", template_path);
-		error_message.AssertCapacity();
+		FormatString(error_message, "Could not find default template {#}. It has been deleted.", template_path);
 		CreateErrorMessageWindow(system, error_message);
 	}
 }

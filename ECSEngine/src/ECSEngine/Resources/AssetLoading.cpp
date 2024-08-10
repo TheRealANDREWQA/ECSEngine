@@ -1303,10 +1303,10 @@ namespace ECSEngine {
 			failure_string.CopyOther(failure_string_base);
 			failure_string.AddStream(" with target file {#}");
 			failure_string.Add('\0');
-			ECS_FORMAT_STRING(characters, failure_string.buffer, name, type_string, file);
+			FormatString(characters, failure_string.buffer, name, type_string, file);
 		}
 		else {
-			ECS_FORMAT_STRING(characters, failure_string_base, name, type_string);
+			FormatString(characters, failure_string_base, name, type_string);
 		}
 
 	}

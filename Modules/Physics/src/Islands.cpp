@@ -2,6 +2,7 @@
 #include "Islands.h"
 #include "ContactConstraint.h"
 #include "Rigidbody.h"
+#include "Logging.h"
 
 #define ISLAND_STREAM_INITIAL_SIZE 8
 
@@ -16,8 +17,8 @@
 static void MergeIslands(IslandManager& island_manager, unsigned int first_island_handle, unsigned int second_island_handle) {
 	// Moves all contacts from the second island to the first one, and remap all the entities that belonged to the second island
 	// To the first island in the entity connection table
-	Island& first_island = island_manager.islands.At(first_island_handle);
-	Island& second_island = island_manager.islands.At(second_island_handle);
+	Island& first_island = island_manager.islands[first_island_handle];
+	Island& second_island = island_manager.islands[second_island_handle];
 	
 	// Firstly, perform the remapping
 	for (unsigned int index = 0; index < second_island.contacts.size; index++) {
@@ -41,6 +42,7 @@ static void MergeIslands(IslandManager& island_manager, unsigned int first_islan
 
 	// Move the contacts
 	first_island.AddContacts(second_island.contacts.ToStream());
+	second_island.contacts.FreeBuffer();
 
 	// Remove the second island
 	island_manager.islands.RemoveSwapBack(second_island_handle);
@@ -115,21 +117,25 @@ void IslandManager::AddContact(ContactConstraint* constraint) {
 			// Add the first entity directly to the second island
 			Island& island = islands[second_entity_island_handle];
 			island.AddContact(constraint);
+
+			// Must increment the handle before inserting because the insert can invalidate the pointer
+			increment_handle(second_entity_island);
 			// Add the entry only if it is not static
 			if (!is_first_entity_static) {
 				entity_table.InsertDynamic(&allocator, { second_entity_island_handle, 1 }, first_entity);
 			}
-			increment_handle(second_entity_island);;
 		}
 		else if (second_entity_island_handle == -1) {
 			// Add the second entity directly to the first island
 			Island& island = islands[first_entity_island_handle];
 			island.AddContact(constraint);
+
+			// Must increment the handle before inserting because the insert can invalidate the pointer
+			increment_handle(first_entity_island);
 			// Add the entry only if it is not static
 			if (!is_second_entity_static) {
 				entity_table.InsertDynamic(&allocator, { first_entity_island_handle, 1 }, second_entity);
 			}
-			increment_handle(first_entity_island);
 		}
 		else {
 			// Both islands exist and are distinct - merge them
@@ -196,6 +202,7 @@ void IslandManager::RemoveContact(ContactConstraint* constraint) {
 
 	unsigned int first_island = handle_entry(first_entity_table_index);
 	unsigned int second_island = handle_entry(second_entity_table_index);
+
 
 	// Remove the constraint from the island storage - must be done only once
 	unsigned int handle_value = first_island == -1 ? second_island : first_island;

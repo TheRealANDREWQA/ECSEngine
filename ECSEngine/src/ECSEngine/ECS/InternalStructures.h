@@ -11,6 +11,7 @@
 #include "../Utilities/File.h"
 #include "../Containers/DataPointer.h"
 #include "ComponentFunctions.h"
+#include "../Utilities/StringUtilities.h"
 
 #define ECS_ARCHETYPE_MAX_COMPONENTS 15
 #define ECS_ARCHETYPE_MAX_SHARED_COMPONENTS 15
@@ -53,6 +54,10 @@ namespace ECSEngine {
 			return value;
 		}
 
+		// If the extended string is specified, it will write the value and in parentheses the index and generation count
+		// Else just the value
+		void ToString(CapacityStream<char>& string, bool extended_string = false) const;
+
 		union {
 			struct {
 				unsigned int index : 26;
@@ -62,7 +67,7 @@ namespace ECSEngine {
 		};
 	};
 
-	struct EntityPair {
+	struct ECSENGINE_API EntityPair {
 		ECS_INLINE EntityPair() {}
 		ECS_INLINE EntityPair(Entity _first, Entity _second) : first(_first), second(_second) {}
 
@@ -74,6 +79,8 @@ namespace ECSEngine {
 			// Use CantorPair hashing such that reversed pairs will be considered the same
 			return CantorPair(first.value, second.value);
 		}
+
+		void ToString(CapacityStream<char>& string, bool extended_string = false) const;
 
 		union {
 			struct {
@@ -87,12 +94,11 @@ namespace ECSEngine {
 		};
 	};
 
-	// If the extended string is specified, it will write the value and in parentheses the index and generation count
-	// Else just the value
-	ECSENGINE_API void EntityToString(Entity entity, CapacityStream<char>& string, bool extended_string = false);
-
 	// Returns the entity from that string
 	ECSENGINE_API Entity StringToEntity(Stream<char> string);
+
+#define ECS_ENTITY_TO_STRING(string_name, entity) ECS_STACK_CAPACITY_STREAM(char, string_name, 128); entity.ToString(string_name)
+#define ECS_ENTITY_TO_STRING_EXTENDED(string_name, entity) ECS_STACK_CAPACITY_STREAM(char, string_name, 128); entity.ToString(string_name, true)
 
 #define ECS_MAIN_ARCHETYPE_MAX_COUNT (1 << 10)
 #define ECS_BASE_ARCHETYPE_MAX_COUNT (1 << 10)
@@ -162,6 +168,10 @@ namespace ECSEngine {
 			return value != -1;
 		}
 
+		ECS_INLINE void ToString(CapacityStream<char>& string) const {
+			ConvertIntToChars(string, value);
+		}
+
 		short value;
 	};
 
@@ -219,6 +229,10 @@ namespace ECSEngine {
 		// And not if the entity is valid in the context of an entity manager
 		ECS_INLINE bool IsValid() const {
 			return value != -1;
+		}
+
+		ECS_INLINE void ToString(CapacityStream<char>& string) const {
+			ConvertIntToChars(string, value);
 		}
 
 		short value;
