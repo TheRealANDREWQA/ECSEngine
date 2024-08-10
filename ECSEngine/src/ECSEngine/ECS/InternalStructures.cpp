@@ -23,24 +23,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void EntityToString(Entity entity, CapacityStream<char>& string, bool extended_string)
-	{
-		string.AddStream("Entity ");
-		ConvertIntToChars(string, entity.value);
-
-		if (extended_string) {
-			string.AddStream(" (Index - ");
-			ConvertIntToChars(string, entity.index);
-			string.AddStream(", generation - ");
-			ConvertIntToChars(string, entity.generation_count);
-			string.Add(')');
-		}
-
-		string.AssertCapacity();
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
 	Entity StringToEntity(Stream<char> string)
 	{
 		Stream<char> parenthese = FindFirstCharacter(string, '(');
@@ -873,6 +855,33 @@ namespace ECSEngine {
 		if (deallocate_function != nullptr) {
 			CallDeallocateFunction(data);
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void Entity::ToString(CapacityStream<char>& string, bool extended_string) const
+	{
+		string.AddStreamAssert("Entity ");
+		ConvertIntToChars(string, value);
+
+		if (extended_string) {
+			string.AddStreamAssert(" (Index - ");
+			ConvertIntToChars(string, index);
+			string.AddStreamAssert(", generation - ");
+			ConvertIntToChars(string, generation_count);
+			string.AddAssert(')');
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void EntityPair::ToString(CapacityStream<char>& string, bool extended_string) const
+	{
+		string.AddStreamAssert("Pair {");
+		first.ToString(string, extended_string);
+		string.AddStreamAssert(", ");
+		second.ToString(string, extended_string);
+		string.AddAssert('}');
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

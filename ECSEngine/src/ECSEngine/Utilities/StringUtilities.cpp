@@ -2453,16 +2453,16 @@ namespace ECSEngine {
 
 	namespace Internal {
 
-		template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*);
-		template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>);
-		template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>);
-		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>);
-		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>);
-		template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int);
-		template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*);
-		template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float);
-		template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double);
+		template ECSENGINE_API ulong2 FormatStringInternal<const char*>(CapacityStream<char>&, const char*, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(CapacityStream<char>&, const char*, const wchar_t*);
+		template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(CapacityStream<char>&, const char*, Stream<char>);
+		template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(CapacityStream<char>&, const char*, Stream<wchar_t>);
+		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(CapacityStream<char>&, const char*, CapacityStream<char>);
+		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(CapacityStream<char>&, const char*, CapacityStream<wchar_t>);
+		template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(CapacityStream<char>&, const char*, unsigned int);
+		template ECSENGINE_API ulong2 FormatStringInternal<void*>(CapacityStream<char>&, const char*, void*);
+		template ECSENGINE_API ulong2 FormatStringInternal<float>(CapacityStream<char>&, const char*, float);
+		template ECSENGINE_API ulong2 FormatStringInternal<double>(CapacityStream<char>&, const char*, double);
 
 	}
 

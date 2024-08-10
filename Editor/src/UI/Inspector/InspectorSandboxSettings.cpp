@@ -584,7 +584,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			active_state.state = true;
 			Stream<char> settings_name = "No settings";
 			if (sandbox->modules_in_use[module_display_order[index]].reflected_settings.size > 0) {
-				ECS_FORMAT_STRING(module_settings_display, "{#} - {#}", module_library, sandbox->modules_in_use[module_display_order[index]].settings_name);
+				FormatString(module_settings_display, "{#} - {#}", module_library, sandbox->modules_in_use[module_display_order[index]].settings_name);
 				settings_name = module_settings_display;
 			}
 			else {

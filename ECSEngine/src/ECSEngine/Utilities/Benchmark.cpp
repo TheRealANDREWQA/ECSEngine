@@ -272,7 +272,7 @@ namespace ECSEngine {
                     float step_elements = pow(options.buffer_step_jump, step_index + options.min_step_count);
                     size_t elements = (size_t)step_elements;
 
-                    ECS_FORMAT_STRING(report, "Step {#} - elements {#} - accepted iterations {#}: {#} {#} (lowest valid {#} {#}, highest valid {#} {#})", step_index, elements, iteration_values.size, median, time_unit, lowest_valid, lowest_unit, highest_valid, highest_unit);
+                    FormatString(report, "Step {#} - elements {#} - accepted iterations {#}: {#} {#} (lowest valid {#} {#}, highest valid {#} {#})", step_index, elements, iteration_values.size, median, time_unit, lowest_valid, lowest_unit, highest_valid, highest_unit);
                     if (verbose) {
                         // Print all values
                         report.AddStream(". Values: ");
@@ -302,7 +302,7 @@ namespace ECSEngine {
                 }
                 else {
                     // Print the number of times only
-                    ECS_FORMAT_STRING(report, "Step {#} - ran {#}.\n", step_index, durations[index][step_index]);
+                    FormatString(report, "Step {#} - ran {#}.\n", step_index, durations[index][step_index]);
                 }
             }
         }

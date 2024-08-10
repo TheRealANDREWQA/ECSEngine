@@ -493,9 +493,6 @@ LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 				monitor_size = monitor_info.size;
 			}
 
-			RECT window_rect;
-			GetClientRect(hWnd, &window_rect);
-
 			unsigned int new_width = LOWORD(lParam);
 			unsigned int new_height = HIWORD(lParam);
 			editor_state.ui_system->SetWindowOSSize({ new_width, new_height }, monitor_size);

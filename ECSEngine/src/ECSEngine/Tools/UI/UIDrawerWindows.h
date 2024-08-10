@@ -417,6 +417,8 @@ namespace ECSEngine {
 			HashTableDefault<UniqueConsoleMessage> unique_messages;
 			Stream<bool> system_filter;
 
+			CapacityStream<char> filter_string;
+
 			Timer retained_timer;
 		};
 

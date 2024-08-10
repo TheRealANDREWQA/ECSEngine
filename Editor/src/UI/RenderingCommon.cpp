@@ -438,7 +438,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 			"CPU Usage", 
 			EDITOR_STATISTIC_CPU_USAGE_COLOR,
 		[&](CapacityStream<char>& value_label) {
-			ECS_FORMAT_STRING(value_label, "{#} %", display_values->cpu_utilization);
+			FormatString(value_label, "{#} %", display_values->cpu_utilization);
 		});
 
 		draw_entry(
@@ -447,7 +447,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 			EDITOR_STATISTIC_RAM_USAGE_COLOR, 
 			[&](CapacityStream<char>& value_label) 
 		{
-			ECS_FORMAT_STRING(value_label, "{#} KB", display_values->physical_ram_usage);
+			FormatString(value_label, "{#} KB", display_values->physical_ram_usage);
 		});
 
 		/*draw_entry(EDITOR_SANDBOX_STATISTIC_CPU_USAGE, "GPU Usage", EDITOR_STATISTIC_GPU_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
@@ -463,7 +463,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 			"Framerate (Simulation)", 
 			EDITOR_STATISTIC_SANDBOX_TIME_COLOR,
 			[&](CapacityStream<char>& value_label) {
-			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", display_values->simulation_fps, display_values->simulation_ms);
+			FormatString(value_label, "{#} FPS ({#} ms)", display_values->simulation_fps, display_values->simulation_ms);
 		});
 
 		draw_entry(
@@ -471,7 +471,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 			"Framerate (Overall)", 
 			EDITOR_STATISTIC_FRAME_TIME_COLOR, 
 			[&](CapacityStream<char>& value_label) {
-			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", display_values->overall_fps, display_values->overall_ms);
+			FormatString(value_label, "{#} FPS ({#} ms)", display_values->overall_fps, display_values->overall_ms);
 		});
 
 		/*draw_entry(EDITOR_SANDBOX_STATISTIC_GPU_SANDBOX_TIME, "Framerate (GPU)", EDITOR_STATISTIC_GPU_TIME_COLOR, [&](CapacityStream<char>& value_label) {

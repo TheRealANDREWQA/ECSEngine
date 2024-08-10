@@ -145,7 +145,7 @@ void DirectoryExplorerDeleteFolder(ActionData* action_data) {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 			size_t parent_size = PathParentSize(*data->current_path);
 			CapacityStream<wchar_t> folder_name(data->current_path->buffer + parent_size + 1, data->current_path->size - parent_size - 1, data->current_path->size - parent_size - 1 );
-			error_message.size = FormatString(error_message.buffer, "Cannot delete {#} folder.", folder_name);
+			FormatString(error_message, "Cannot delete {#} folder.", folder_name);
 			CreateErrorMessageWindow(system, error_message);
 		}
 	}

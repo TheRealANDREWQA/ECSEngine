@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "BasicTypes.h"
 #include "../Containers/Stream.h"
+#include "../Containers/BooleanBitField.h"
 
 namespace ECSEngine {
 
@@ -647,6 +648,50 @@ namespace ECSEngine {
 			const float step = 1.0f;
 			samples[index] = { (float)index * step, (float)value };
 		});
+	}
+
+	// It will group the entries that have the same group index and call the functor for each entry of the group.
+	// The entry_functor receives as parameters (size_t overall_index, size_t original_index, size_t group_index).
+	// The overall index is the index of the sorted entry, i.e. an index that is incremented for each entry
+	// The original index is the index inside the group_indices array that can be used to reference other data
+	// The group_index parameter is the index of the ordered group it belongs to
+	// The group_functor receives as parameters (size_t group_index, uint2 group_count).
+	// The group_count parameter contains in the x component the group value (the one in group_indices) and in the y the count of existing entries
+	// The temporary allocator is needed in order to make a temporary allocation
+	template<typename EntryFunctor, typename GroupFunctor>
+	void ForEachGroup(Stream<unsigned int> group_indices, AllocatorPolymorphic temporary_allocator, EntryFunctor&& entry_functor, GroupFunctor&& group_functor)
+	{
+		size_t allocation_size = BooleanBitField::MemoryOf(group_indices.size);
+		void* allocation = AllocateEx(temporary_allocator, allocation_size);
+		memset(allocation, 0, allocation_size);
+		BooleanBitField bit_field(allocation, group_indices.size);
+
+		uint2 current_group;
+		size_t group_index = 0;
+		size_t ordered_index = 0;
+		for (size_t index = 0; index < group_indices.size; index++) {
+			if (!bit_field.GetAndSet(index)) {
+				current_group.x = group_indices[index];
+				current_group.y = 0;
+				entry_functor(ordered_index, index, group_index);
+				ordered_index++;
+
+				size_t next_entry_index = SearchBytes(group_indices.buffer + index + 1, group_indices.size - index, current_group.x, sizeof(current_group.x));
+				while (next_entry_index != -1) {
+					current_group.y++;
+					index++;
+					entry_functor(ordered_index, next_entry_index, group_index);
+					ordered_index++;
+				
+					next_entry_index = SearchBytes(group_indices.buffer + next_entry_index + 1, group_indices.size - next_entry_index, current_group.x, sizeof(current_group.x));
+				}
+
+				group_functor(group_index, current_group);
+				group_index++;
+			}
+		}
+
+		DeallocateEx(temporary_allocator, allocation);
 	}
 
 }

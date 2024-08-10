@@ -48,6 +48,12 @@ constexpr size_t ECS_TB_10 = 1'000'000'000'000;
 // but the argument is actually a list of values
 #define FORWARD(...) __VA_ARGS__
 #define STRING(s) #s
+#define CONCAT_HELPER(a, b) a##b
+#define CONCAT(a, b) CONCAT_HELPER(a, b)
+// It conflicts with other macro definitions if left as UNIQUE_NAME
+// Use __LINE__ instead of __COUNTER__ in order to be able to reference the name
+#define _UNIQUE_NAME(base) CONCAT(base, __LINE__)
+
 // Places the type followed by a comma with the stringified name
 #define WITH_NAME(type) type, STRING(type)
 #define ECS_CACHE_LINE_SIZE 64

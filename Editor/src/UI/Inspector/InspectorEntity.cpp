@@ -369,7 +369,7 @@ struct InspectorDrawEntityData {
 	unsigned int FindCreatedInstanceByComponentName(unsigned int sandbox_index, Stream<char> component_name) {
 		ECS_STACK_CAPACITY_STREAM(char, full_name, 1024);
 		ECS_STACK_CAPACITY_STREAM(char, entity_name, 512);
-		EntityToString(entity, entity_name, true);
+		entity.ToString(entity_name, true);
 		InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, full_name);
 		return FindCreatedInstance(full_name);
 	}
@@ -535,7 +535,7 @@ struct InspectorDrawEntityData {
 		memset(valid_created_instances.buffer, 0, valid_created_instances.MemoryOf(valid_created_instances.capacity));
 
 		ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-		EntityToString(entity, entity_name_storage, true);
+		entity.ToString(entity_name_storage, true);
 		Stream<char> entity_name = entity_name_storage;
 
 		ECS_STACK_CAPACITY_STREAM(char, full_component_name_storage, 1024);
@@ -1783,7 +1783,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
 		Name* name = (Name*)entity_manager->TryGetComponent(data->entity, name_component);
 
-		EntityToString(data->entity, base_entity_name, true);
+		data->entity.ToString(base_entity_name, true);
 
 		if (name != nullptr) {
 			struct CallbackData {

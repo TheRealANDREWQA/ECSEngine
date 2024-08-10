@@ -1797,6 +1797,9 @@ namespace ECSEngine {
 				data->system_filter.buffer = (bool*)drawer.GetMainAllocatorBuffer(sizeof(bool) * data->console->system_filter_strings.size);
 				memset(data->system_filter.buffer, 1, sizeof(bool) * data->console->system_filter_strings.size);
 				data->system_filter.size = data->console->system_filter_strings.size;
+
+				const size_t max_filter_string_size = 128;
+				data->filter_string.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * max_filter_string_size), 0, max_filter_string_size);
 			}
 			else {
 				// Check to see if a new system was added such that we can readjust the system filter array
@@ -1821,8 +1824,7 @@ namespace ECSEngine {
 
 #pragma region State buttons
 
-			constexpr size_t button_configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW
-				| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_BORDER;
+			const size_t BUTTON_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_BORDER;
 
 			UIConfigAbsoluteTransform transform;
 			UIConfigBorder border;
@@ -1838,48 +1840,31 @@ namespace ECSEngine {
 			transform.scale = drawer.GetLabelScale("Clear");
 
 			config.AddFlag(transform);
-			drawer.Button(button_configuration, config, "Clear", { ConsoleClearAction, data->console, 0 });
+			drawer.Button(BUTTON_CONFIGURATION, config, "Clear", { ConsoleClearAction, data->console, 0 });
 			config.flag_count--;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
 			transform.scale = drawer.GetLabelScale("Collapse");
 			config.AddFlag(transform);
-			drawer.StateButton(button_configuration, config, "Collapse", &data->collapse);
+			drawer.StateButton(BUTTON_CONFIGURATION, config, "Collapse", &data->collapse);
 			config.flag_count--;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
 			transform.scale = drawer.GetLabelScale("Clear on play");
 			config.AddFlag(transform);
-			drawer.StateButton(button_configuration, config, "Clear on play", &data->clear_on_play);
+			drawer.StateButton(BUTTON_CONFIGURATION, config, "Clear on play", &data->clear_on_play);
 			config.flag_count--;
-
-			transform.position.x += transform.scale.x + border_thickness.x;
-			transform.scale = drawer.GetLabelScale("Pause on error");
-			config.AddFlag(transform);
-			drawer.StateButton(button_configuration, config, "Pause on error", &data->console->pause_on_error);
-			config.flag_count--;
-
-			transform.position.x += transform.scale.x + border_thickness.x;
-			transform.scale = drawer.GetLabelScale("Filter");
-			config.AddFlag(transform);
-
-			constexpr size_t filter_menu_configuration = button_configuration | UI_CONFIG_FILTER_MENU_ALL | UI_CONFIG_FILTER_MENU_NOTIFY_ON_CHANGE;
-
-			Stream<char> filter_labels[] = { "Info", "Warn", "Error", "Trace", "Graphics" };
-			Stream<Stream<char>> filter_stream = Stream<Stream<char>>(filter_labels, ECS_COUNTOF(filter_labels));
-			UIConfigFilterMenuNotify menu_notify;
-			menu_notify.notifier = &data->filter_message_type_changed;
-			config.AddFlag(menu_notify);
-			drawer.FilterMenu(filter_menu_configuration | UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES, config, "Filter", filter_stream, data->filter);
-			config.flag_count -= 2;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
 			transform.scale = drawer.GetLabelScale("System");
 			config.AddFlag(transform);
+			UIConfigFilterMenuNotify menu_notify;
 			menu_notify.notifier = &data->system_filter_changed;
 			config.AddFlag(menu_notify);
+			
+			const size_t FILTER_MENU_CONFIGURATION = BUTTON_CONFIGURATION | UI_CONFIG_FILTER_MENU_ALL | UI_CONFIG_FILTER_MENU_NOTIFY_ON_CHANGE;
 			Stream<Stream<char>> system_filter_stream = Stream<Stream<char>>(data->console->system_filter_strings.buffer, data->console->system_filter_strings.size);
-			drawer.FilterMenu(filter_menu_configuration, config, "System", system_filter_stream, data->system_filter.buffer);
+			drawer.FilterMenu(FILTER_MENU_CONFIGURATION, config, "System", system_filter_stream, data->system_filter.buffer);
 			config.flag_count -= 2;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
@@ -1892,7 +1877,7 @@ namespace ECSEngine {
 			verbosity_prefix.prefix = "Verbosity: ";
 			config.AddFlag(verbosity_prefix);
 			drawer.ComboBox(
-				button_configuration | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_NO_NAME,
+				BUTTON_CONFIGURATION | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_NO_NAME,
 				config, 
 				"Verbosity",
 				verbosity_label_stream, 
@@ -1908,34 +1893,64 @@ namespace ECSEngine {
 			Stream<char> dump_label_ptrs[] = { "Count Messages", "On Call", "None" };
 			Stream<Stream<char>> dump_labels = Stream<Stream<char>>(dump_label_ptrs, ECS_COUNTOF(dump_label_ptrs));
 
-			float2 get_position = { 0.0f, 0.0f }, get_scale = {0.0f, 0.0f};
-			UIConfigGetTransform get_transform;
-			get_transform.position = &get_position;
-			get_transform.scale = &get_scale;
-			config.AddFlag(get_transform);
-
 			UIConfigComboBoxPrefix dump_prefix;
 			dump_prefix.prefix = "Dump type: ";
 			config.AddFlag(dump_prefix);
 
 			drawer.ComboBox(
-				button_configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_GET_TRANSFORM,
+				BUTTON_CONFIGURATION | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX,
 				config, 
 				"Dump", 
 				dump_labels, 
 				dump_labels.size, 
 				(unsigned char*)&data->console->dump_type
 			);
-			config.flag_count -= 3;
+			config.flag_count -= 2;
+
+			float2 get_position = { 0.0f, 0.0f }, get_scale = { 0.0f, 0.0f };
+			UIConfigGetTransform get_transform;
+			get_transform.position = &get_position;
+			get_transform.scale = &get_scale;
+			config.AddFlag(get_transform);
+
+			auto filter_callback = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				ConsoleWindowData* data = (ConsoleWindowData*)_data;
+				data->filter_message_type_changed = true;
+				action_data->redraw_window = true;
+			};
+
+			float2 dump_label_scale = drawer.GetLastSolidColorRectangleScale(UI_CONFIG_LATE_DRAW, 1);
+			transform.position.x += dump_label_scale.x;
+			transform.scale.x = drawer.GetLayoutDescriptor()->default_element_x * 1.5f;
+			config.AddFlag(transform);
+
+			// Draw the filter string
+			UIConfigTextInputCallback filter_input_callback;
+			filter_input_callback.handler = { filter_callback, data, 0 };
+			config.AddFlag(filter_input_callback);
+
+			UIConfigTextInputHint filter_hint;
+			filter_hint.characters = "Search";
+			config.AddFlag(filter_hint);
+
+			drawer.TextInput(
+				BUTTON_CONFIGURATION | UI_CONFIG_GET_TRANSFORM | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_TEXT_INPUT_HINT,
+				config,
+				"FilterString",
+				&data->filter_string
+			);
 
 			transform.position.x = get_position.x + get_scale.x;
+			config.flag_count -= 3;
 
 #pragma endregion
 
 #pragma region Messages
-			
-			drawer.NextRow();
 
+			drawer.NextRow();
+			
 			// Display a warning if there are too many messages
 			unsigned int console_message_size = data->console->messages.WaitWrites();
 			if (console_message_size == Console::MaxMessageCount()) {
@@ -2223,13 +2238,21 @@ namespace ECSEngine {
 					size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
 
 					for (size_t index = starting_index; index < message_count; index++) {
+						// Check the filter string first
+						if (data->filter_string.size > 0) {
+							if (FindFirstToken(data->console->messages[index].message, data->filter_string).size == 0) {
+								// Skip this entry
+								continue;
+							}
+						}
+
 						ptrs[(unsigned int)data->console->messages[index].type]++;
 						ResourceIdentifier identifier = {
 							data->console->messages[index].message.buffer + data->console->messages[index].client_message_start,
 							(unsigned int)data->console->messages[index].message.size - data->console->messages[index].client_message_start
 						};
 
-						int message_index = data->unique_messages.Find(identifier);
+						unsigned int message_index = data->unique_messages.Find(identifier);
 						if (message_index == -1) {
 							UIDrawerAllocator drawer_allocator = { &drawer };
 							data->unique_messages.InsertDynamic(&drawer_allocator, { data->console->messages[index], 1 }, identifier);
@@ -2257,12 +2280,12 @@ namespace ECSEngine {
 					}
 				};
 
-				// if more messages have been added, only account for them
+				// If more messages have been added, only account for them
 				// And the filter has not changed
 				if (!filter_was_changed && data->last_frame_message_count < message_count) {
 					update_kernel(data->last_frame_message_count);
 				}
-				// else start from scratch; console has been cleared, type filter changed, verbosity filter changed,
+				// Else start from scratch; console has been cleared, type filter changed, verbosity filter changed,
 				// or system filter changed
 				else {
 					memset(ptrs, 0, sizeof(unsigned int) * ECS_CONSOLE_MESSAGE_COUNT);
@@ -2364,6 +2387,7 @@ namespace ECSEngine {
 			memset(data.type_count, 0, sizeof(data.type_count));
 			data.last_frame_message_count = 0;
 			data.filtered_message_indices.InitializeFromBuffer(nullptr, 0, 0);
+			data.filter_string.InitializeFromBuffer(nullptr, 0, 0);
 		}
 
 		// -------------------------------------------------------------------------------------------------------

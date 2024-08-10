@@ -119,7 +119,8 @@ namespace ECSEngine {
 				callback_data.resuming_threads_success = resume_threads_success;
 				callback_data.suspending_threads_success = suspend_success;
 				callback_data.user_data = WORLD_GLOBAL_DATA.descriptor.post_callback.data;
-				callback_data.error_message = *write_options.error_message;
+				callback_data.save_error_message = *write_options.error_message;
+				callback_data.error_message = error_string;
 				callback_data.crash_directory = crash_directory;
 				WORLD_GLOBAL_DATA.descriptor.post_callback.function(&callback_data);
 			}

@@ -19,7 +19,7 @@ struct GlobalOverrideData {
 };
 
 ECS_INLINE void ConvertMetadataNameAndFileToSelection(Stream<char> name, Stream<wchar_t> file, CapacityStream<char>& characters) {
-	ECS_FORMAT_STRING(characters, "{#} ({#})", file, name);
+	FormatString(characters, "{#} ({#})", file, name);
 }
 
 struct BaseDrawData {
@@ -977,14 +977,14 @@ void OverrideAssetHandle(
 			Stream<wchar_t> filename = PathFilenameBoth(file);
 			if (filename.size != file.size) {
 				configuration |= UI_CONFIG_SELECTION_INPUT_OVERRIDE_HOVERABLE;
-				ECS_FORMAT_STRING(hoverable_string, "{#} ({#})", file, name);
+				FormatString(hoverable_string, "{#} ({#})", file, name);
 				override_hoverable.text = hoverable_string;
 				override_hoverable.stable = false;
 				config->AddFlag(override_hoverable);
 			}
 
 			// Name and file. Put the file first and the name in paranthesis
-			ECS_FORMAT_STRING(composite_string, "{#} ({#})", filename, name);
+			FormatString(composite_string, "{#} ({#})", filename, name);
 		}
 		else {
 			composite_string = name;

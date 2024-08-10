@@ -167,11 +167,11 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, thread_allocator_name, 512);
 		for (unsigned int index = 0; index < thread_count; index++) {
 			thread_allocator_name.size = 0;
-			ECS_FORMAT_STRING(thread_allocator_name, "Thread {#} Linear", index);
+			FormatString(thread_allocator_name, "Thread {#} Linear", index);
 			world->task_manager->m_thread_linear_allocators[index].value.SetProfilingMode(thread_allocator_name.buffer);
 
 			thread_allocator_name.size = 0;
-			ECS_FORMAT_STRING(thread_allocator_name, "Thread {#} Dynamic", index);
+			FormatString(thread_allocator_name, "Thread {#} Dynamic", index);
 			world->task_manager->m_dynamic_task_allocators[index].value.SetProfilingMode(thread_allocator_name.buffer);
 		}
 		SetAllocatorProfilingMode(world->task_scheduler->Allocator(), "Task Scheduler");

@@ -79,16 +79,24 @@ namespace ECSEngine {
 			bool is_valid = attribute_type != cgltf_attribute_type_invalid;
 
 			if (!is_valid) {
-				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "Mesh attribute has invalid type. Attribute name is {#}.", attribute->name);
-				}
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Mesh attribute has invalid type. Attribute name is {#}.", attribute->name);
 				return -1;
 			}
 
 			if (accessor->type != cgltf_type_vec2 && accessor->type != cgltf_type_vec3 && accessor->type != cgltf_type_vec4) {
-				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "Mesh data type is invalid. Expected float2, float3 or float4 but found {#}.", accessor->type);
-				}
+				// Matches cgltf_type
+				static Stream<char> cgltf_type_strings[] = {
+					"invalid",
+					"scalar",
+					"float2",
+					"float3",
+					"float4",
+					"matrix2",
+					"matrix3",
+					"matrix4"
+				};
+				
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Mesh data type is invalid. Expected float2, float3 or float4 but found {#}.", cgltf_type_strings[accessor->type]);
 				return -1;
 			}
 
@@ -157,7 +165,7 @@ namespace ECSEngine {
 					normal = Select(less_than_tolerance_mask, up_vector, normal);
 					// We could say error if the normal data seems invalid
 					/*if (error_message != nullptr) {
-							ECS_FORMAT_STRING(*error_message, "Mesh normal data is invalid. A normal has a squared length smaller than the tolerance. Index is {#}", index);
+							FormatString(*error_message, "Mesh normal data is invalid. A normal has a squared length smaller than the tolerance. Index is {#}", index);
 						}
 					return false;*/
 
@@ -215,9 +223,7 @@ namespace ECSEngine {
 				is_valid &= joints.x != -1 && joints.y != -1 && joints.z != -1 && joints.w != -1;
 
 				if (!is_valid) {
-					if (error_message != nullptr) {
-						ECS_FORMAT_STRING(*error_message, "Mesh skin influences are invalid. Joint index is {#}.", index);
-					}
+					ECS_FORMAT_ERROR_MESSAGE(error_message, "Mesh skin influences are invalid. Joint index is {#}.", index);
 					return false;
 				}
 
@@ -255,9 +261,7 @@ namespace ECSEngine {
 			bool is_valid = true;
 			Stream<float> values = GetScalarValues(allocator, accessor, component_count, &is_valid);
 			if (!is_valid) {
-				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "Mesh data values are invalid. Attribute name is {#}.", attribute->name);
-				}
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Mesh data values are invalid. Attribute name is {#}.", attribute->name);
 				return false;
 			}
 			
@@ -364,9 +368,7 @@ namespace ECSEngine {
 
 			bool is_valid = GetScalarValues(accessor, component_count, &values);
 			if (!is_valid) {
-				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "Mesh data values are invalid. Attribute name is {#}.", attribute->name);
-				}
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Mesh data values are invalid. Attribute name is {#}.", attribute->name);
 				return false;
 			}
 
@@ -529,27 +531,21 @@ namespace ECSEngine {
 		cgltf_result result = functor(&options, &data.data);
 
 		if (result != cgltf_result_success) {
-			if (error_message != nullptr) {
-				ECS_FORMAT_STRING(*error_message, "Could not load gltf file {#}. Parsing failed.", path);
-			}
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "Could not load gltf file {#}. Parsing failed.", path);
 			data.data = nullptr;
 			return data;
 		}
 		result = cgltf_load_buffers(&options, data.data, path.buffer);
 		if (result != cgltf_result_success) {
 			cgltf_free(data.data);
-			if (error_message != nullptr) {
-				ECS_FORMAT_STRING(*error_message, "Could not load gltf file {#}. Loading buffers failed.", path);
-			}
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "Could not load gltf file {#}. Loading buffers failed.", path);
 			data.data = nullptr;
 			return data;
 		}
 		result = cgltf_validate(data.data);
 		if (result != cgltf_result_success) {
 			cgltf_free(data.data);
-			if (error_message != nullptr) {
-				ECS_FORMAT_STRING(*error_message, "Invalid gltf file {#}. Validation failed.", path);
-			}
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "Invalid gltf file {#}. Validation failed.", path);
 			data.data = nullptr;
 			return data;
 		}
@@ -770,9 +766,7 @@ namespace ECSEngine {
 
 		if (success) {
 			if (current_mesh_index < mesh_index) {
-				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "No mesh with index {#} has been found. The file contains only {1}", mesh_index, current_mesh_index);
-				}
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "No mesh with index {#} has been found. The file contains only {#}", mesh_index, current_mesh_index);
 				return false;
 			}
 		}
@@ -794,9 +788,7 @@ namespace ECSEngine {
 
 		if (success) {
 			if (current_mesh_index < mesh_index) {
-				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "No mesh with index {#} has been found. The file contains only {1}", mesh_index, current_mesh_index);
-				}
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "No mesh with index {#} has been found. The file contains only {#}", mesh_index, current_mesh_index);
 				return false;
 			}
 		}

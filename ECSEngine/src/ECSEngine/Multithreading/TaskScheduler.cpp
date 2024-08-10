@@ -537,20 +537,20 @@ namespace ECSEngine {
 					bool has_initialize = elements[index].initialize_task_function != nullptr;
 					Stream<TaskDependency> dependencies = elements[index].task_dependencies;
 					
-					ECS_FORMAT_STRING(element_string, "\tTask Name: {#}\n\tInitialize Function: {#}\n\tDependencies: ", task_name, has_initialize);
+					FormatString(element_string, "\tTask Name: {#}\n\tInitialize Function: {#}\n\tDependencies: ", task_name, has_initialize);
 					if (dependencies.size == 0) {
 						element_string.AddStreamAssert("None\n\n");
 					}
 					else {
-						element_string.Add('[');
+						element_string.AddAssert('[');
 						for (size_t subindex = 0; subindex < dependencies.size; subindex++) {
 							dependencies[subindex].ToString(element_string);
-							element_string.Add(',');
-							element_string.Add(' ');
+							element_string.AddAssert(',');
+							element_string.AddAssert(' ');
 						}
 						// Reduce the size by 2 such that we remove the last added ',' and  ' '
 						element_string.size -= 2;
-						element_string.AddStream("]\n\n");
+						element_string.AddStreamAssert("]\n\n");
 					}
 
 					string.AddStream(element_string);

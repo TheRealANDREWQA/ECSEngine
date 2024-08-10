@@ -176,8 +176,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 	bool success = ui_system->LoadUIFile(_template.ui_file, file_window_names);
 	if (!success) {
 		if (error_message.buffer != nullptr) {
-			error_message.size = FormatString(error_message.buffer, "Error when loading Project UI template: {#} does not exist or it is corrupted!", _template.ui_file);
-			error_message.AssertCapacity();
+			FormatString(error_message, "Error when loading Project UI template: {#} does not exist or it is corrupted!", _template.ui_file);
 		}
 		return false;
 	}

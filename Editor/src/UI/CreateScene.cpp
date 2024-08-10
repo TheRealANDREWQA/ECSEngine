@@ -109,7 +109,7 @@ void SaveScenePopUpDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 
 	if (data->sandbox_index_count == 1) {
 		EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_indices[0]);
-		ECS_FORMAT_STRING(description, "Scene {#} used in sandbox {#} is not saved. Do you want to save it?", sandbox->scene_path, data->sandbox_indices[0]);
+		FormatString(description, "Scene {#} used in sandbox {#} is not saved. Do you want to save it?", sandbox->scene_path, data->sandbox_indices[0]);
 
 		drawer.Text(description);
 		drawer.NextRow();

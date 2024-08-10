@@ -23,7 +23,7 @@ static void PostCrashCallback(WorldCrashHandlerPostCallbackFunctionData* functio
 
 	// Print a default error message in the console which indicates the sandbox index
 	// Such that we don't have to indicate it in the next message
-	ECS_FORMAT_TEMP_STRING(default_message, "The sandbox {#} crashed", data->sandbox_index);
+	ECS_FORMAT_TEMP_STRING(default_message, "The sandbox {#} crashed. {#}", data->sandbox_index, function_data->error_message);
 	EditorSetConsoleError(default_message);
 	if (!function_data->suspending_threads_success) {
 		EditorSetConsoleError("Failed to suspend threads before crash. The stack trace might be inaccurate");
@@ -37,8 +37,8 @@ static void PostCrashCallback(WorldCrashHandlerPostCallbackFunctionData* functio
 		EditorSetConsoleError("Failed to write complete crash information");
 	}
 
-	if (function_data->error_message.size > 0) {
-		EditorSetConsoleError(function_data->error_message);
+	if (function_data->save_error_message.size > 0) {
+		EditorSetConsoleError(function_data->save_error_message);
 	}
 
 	// Change the file explorer to the crash directory
