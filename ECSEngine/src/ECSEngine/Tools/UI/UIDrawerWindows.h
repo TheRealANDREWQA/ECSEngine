@@ -401,10 +401,9 @@ namespace ECSEngine {
 			unsigned int counter;
 		};
 
-		struct ECSENGINE_API ConsoleWindowData {
+		struct ConsoleWindowData {
 			ECSEngine::Console* console;
 			bool collapse;
-			bool clear_on_play;
 
 			bool filter[ECS_CONSOLE_MESSAGE_COUNT + 1];
 			bool filter_message_type_changed;

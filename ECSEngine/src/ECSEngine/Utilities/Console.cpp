@@ -181,6 +181,7 @@ namespace ECSEngine {
 	{
 		on_error_trigger = nullptr;
 		on_error_trigger_data = nullptr;
+		clear_on_play = false;
 
 		format = ECS_FORMAT_DATE_HOUR | ECS_FORMAT_DATE_MINUTES | ECS_FORMAT_DATE_SECONDS;
 		// Don't choose a power of two as chunk size to avoid cache associativity problems
@@ -273,6 +274,15 @@ namespace ECSEngine {
 	{
 		DUMP_OPERATION = CONSOLE_DUMP_APPEND;
 		dump_flag.Signal();
+	}
+
+	// -------------------------------------------------------------------------------------------------------
+
+	void Console::ClearOnPlay()
+	{
+		if (clear_on_play) {
+			Clear();
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------
