@@ -421,12 +421,13 @@ ECS_INLINE void LockSandbox(EditorState* editor_state, unsigned int sandbox_inde
 
 // -------------------------------------------------------------------------------------------------------------
 
-void PauseSandboxWorld(EditorState* editor_state, unsigned int index);
+// By default, it will restore the mouse status, but you can disable this feature with the last parameter
+void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool restore_mouse_status = true);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Pauses all sandboxes that want to be paused using the general button
-void PauseSandboxWorlds(EditorState* editor_state);
+void PauseSandboxWorlds(EditorState* editor_state, bool restore_mouse_status = true);
 
 // -------------------------------------------------------------------------------------------------------------
 

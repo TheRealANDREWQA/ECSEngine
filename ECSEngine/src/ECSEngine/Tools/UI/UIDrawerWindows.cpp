@@ -1852,7 +1852,7 @@ namespace ECSEngine {
 			transform.position.x += transform.scale.x + border_thickness.x;
 			transform.scale = drawer.GetLabelScale("Clear on play");
 			config.AddFlag(transform);
-			drawer.StateButton(BUTTON_CONFIGURATION, config, "Clear on play", &data->clear_on_play);
+			drawer.StateButton(BUTTON_CONFIGURATION, config, "Clear on play", &data->console->clear_on_play);
 			config.flag_count--;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
@@ -2381,7 +2381,6 @@ namespace ECSEngine {
 		void CreateConsoleWindowData(ConsoleWindowData& data)
 		{
 			data.console = GetConsole();
-			data.clear_on_play = false;
 			data.collapse = false;
 			memset(data.filter, true, sizeof(data.filter));
 			memset(data.type_count, 0, sizeof(data.type_count));

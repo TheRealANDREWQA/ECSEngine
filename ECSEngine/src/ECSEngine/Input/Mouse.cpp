@@ -28,7 +28,7 @@ namespace ECSEngine {
 	}
 
 	void Mouse::SetCursorVisibility(bool visible) {
-		CURSORINFO info = { sizeof(CURSORINFO), 0, nullptr, {} };
+		/*CURSORINFO info = { sizeof(CURSORINFO), 0, nullptr, {} };
 		if (!GetCursorInfo(&info))
 		{
 			ECS_ASSERT(false, "Could not change cursor visibility");
@@ -39,7 +39,10 @@ namespace ECSEngine {
 		{
 			ShowCursor(visible);
 			m_is_visible = visible;
-		}
+		}*/
+
+		ShowCursor(visible);
+		m_is_visible = visible;
 
 		if (!visible) {
 			uint2 bounds = OS::GetOSWindowSize(m_window_handle);

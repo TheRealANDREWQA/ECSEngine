@@ -76,6 +76,9 @@ namespace ECSEngine {
 		// Appends to the dump output
 		void AppendDump();
 
+		// It will clear the console if the clear on play flag is set to true
+		void ClearOnPlay();
+
 		// Dumps from the start using the background thread
 		void Dump();
 
@@ -113,6 +116,7 @@ namespace ECSEngine {
 		// This flag is used to notify the dumping thread when to write
 		AtomicFlag dump_flag;
 		bool pause_on_error;
+		bool clear_on_play;
 		unsigned char verbosity_level;
 		ECS_CONSOLE_DUMP_TYPE dump_type;
 		unsigned int last_dumped_message;

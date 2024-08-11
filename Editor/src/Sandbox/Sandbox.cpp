@@ -71,6 +71,19 @@ ECS_INLINE static bool IsSandboxRuntimePreinitialized(const EditorState* editor_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+// Restores the mouse state to visible and no raw input. Does not take into consideration the PAUSE_UNPASE flags.
+static void RestoreMouseState(EditorState* editor_state) {
+	Mouse* mouse = editor_state->Mouse();
+	if (!mouse->IsVisible()) {
+		mouse->SetCursorVisibility(true);
+	}
+	if (mouse->GetRawInputStatus()) {
+		mouse->DisableRawInput();
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 // Stores all the current state of the modules being used such that changes to them can be detected dynamically
 static void RegisterSandboxModuleSnapshots(EditorState* editor_state, unsigned int sandbox_index) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -1877,7 +1890,7 @@ bool LoadRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void PauseSandboxWorld(EditorState* editor_state, unsigned int index)
+void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool restore_mouse_state)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, index);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_RUNNING);
@@ -1891,19 +1904,27 @@ void PauseSandboxWorld(EditorState* editor_state, unsigned int index)
 	// Bring back the viewport rendering since it was disabled
 	EnableSceneUIRendering(editor_state, index, false);
 	EnableGameUIRendering(editor_state, index, false);
+
+	if (restore_mouse_state) {
+		RestoreMouseState(editor_state);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void PauseSandboxWorlds(EditorState* editor_state)
+void PauseSandboxWorlds(EditorState* editor_state, bool restore_mouse_state)
 {
 	// Exclude temporary sandboxes
 	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-			PauseSandboxWorld(editor_state, sandbox_index);
+			PauseSandboxWorld(editor_state, sandbox_index, false);
 		}
 	}, true);
+
+	if (restore_mouse_state) {
+		RestoreMouseState(editor_state);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2731,7 +2752,7 @@ void RemoveSandboxDebugDrawComponent(
 
 bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool is_step)
 {
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 256, ECS_MB * 8);
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
 	ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
 
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -2919,6 +2940,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 		// Pause the current sandbox
 		PauseSandboxWorld(editor_state, sandbox_index);
+
 		// At last set the is_crashed flag to indicate to the runtime
 		// That this sandbox is invalid at this moment and should not be run
 		sandbox->is_crashed = true;
@@ -3257,6 +3279,9 @@ bool StartEndSandboxWorld(EditorState* editor_state) {
 		}
 	}
 
+	// If the console clear on play flag is 
+	GetConsole()->ClearOnPlay();
+
 	return success;
 }
 
@@ -3406,7 +3431,8 @@ void TickSandboxRuntimes(EditorState* editor_state)
 				if (!simulation_success) {
 					for (unsigned int subindex = 0; subindex < sandbox_count; subindex++) {
 						if (GetSandboxState(editor_state, subindex) == EDITOR_SANDBOX_RUNNING) {
-							PauseSandboxWorld(editor_state, subindex);
+							// Do not restore the mouse state, the crashing/invalid sandbox already did that 
+							PauseSandboxWorld(editor_state, subindex, false);
 						}
 					}
 					// We can exit the loop now
