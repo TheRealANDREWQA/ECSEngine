@@ -127,6 +127,14 @@ namespace ECSEngine {
 	// The pipeline must be set previously
 	ECSENGINE_API void DrawWholeViewportQuad(Graphics* graphics, GraphicsContext* context);
 
+	// Fills the array with "random" colors, equal to the array size. It can be used for visualizing stuff.
+	// The maximum amount is ECS_KB * 4.
+	ECSENGINE_API void CreateColorizeBuffer(Stream<Color> colors);
+
+	// Fills the array with "random" colors, equal to the array size. It can be used for visualizing stuff.
+	// The maximum amount is ECS_KB * 4.
+	ECSENGINE_API void CreateColorizeBuffer(Stream<ColorFloat> colors);
+
 	// Creates a constant buffer that can be used as a colorization array
 	// Where values can be indexed into it in order to have better visualization
 	// The theoretical maximum count can be ECS_KB * 4 (because the values are stored as ColorFloat)

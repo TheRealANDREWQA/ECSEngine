@@ -29,10 +29,6 @@ static ECS_THREAD_TASK(CameraController) {
 			);
 			camera->value.Recalculate();
 		//}
-
-			if (world->keyboard->IsPressed(ECS_KEY_P)) {
-				ECS_CRASH("Crash");
-		}
 	}
 }
 

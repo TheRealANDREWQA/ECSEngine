@@ -7,6 +7,7 @@
 #include "ECSEngineDebugDrawer.h"
 #include "ECSEngineCBufferTags.h"
 #include "ECSEngineMath.h"
+#include "Debug.h"
 
 using namespace ECSEngine;
 
@@ -19,8 +20,10 @@ ECS_INLINE unsigned int GizmoRenderIndex(unsigned int instance_index, bool extra
 struct DrawMeshTaskData {
 	Matrix camera_matrix;
 	float3 camera_translation;
+	const GraphicsDebugData* debug_data;
 };
 
+template<bool check_for_debug>
 static void DrawMeshTask(
 	ForEachEntityData* for_each_data,
 	const RenderMesh* render_mesh,
@@ -29,6 +32,13 @@ static void DrawMeshTask(
 	const Scale* scale
 ) {
 	DrawMeshTaskData* data = (DrawMeshTaskData*)for_each_data->user_data;
+
+	if constexpr (check_for_debug) {
+		if (data->debug_data->entities_table.Find(for_each_data->entity) != -1) {
+			// Skip the entry if it is drawn as debug
+			return;
+		}
+	}
 
 	Graphics* graphics = for_each_data->world->graphics;
 
@@ -106,8 +116,13 @@ ECS_THREAD_TASK(DrawMeshes) {
 			float3 camera_translation = camera.translation;
 			world->debug_drawer->UpdateCameraMatrix(camera_matrix);
 
-			DrawMeshTaskData draw_data = { camera_matrix, camera_translation };
-			kernel.Function(DrawMeshTask, &draw_data, sizeof(draw_data));
+			const GraphicsDebugData* debug_data = GetGraphicsDebugData(world);
+			DrawMeshTaskData draw_data = { camera_matrix, camera_translation, debug_data };
+			auto draw_function = DrawMeshTask<false>;
+			if (debug_data != nullptr && debug_data->groups.size > 0) {
+				draw_function = DrawMeshTask<true>;
+			}
+			kernel.Function(draw_function, &draw_data, sizeof(draw_data));
 		}
 	}
 }
