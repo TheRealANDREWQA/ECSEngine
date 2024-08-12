@@ -424,6 +424,7 @@
     <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
     <ClInclude Include="src\Includes\ECSEngineProfiling.h" />
     <ClInclude Include="src\Includes\ECSEngineProfilingGlobal.h" />
+    <ClInclude Include="src\Includes\ECSEngineTaskTypes.h" />
     <ClInclude Include="src\Includes\ECSEngineThreadTaskExport.h" />
     <ClInclude Include="src\Includes\ECSEngineRuntime.h" />
     <ClInclude Include="src\Includes\ECSEngineLinkComponents.h" />

@@ -283,6 +283,7 @@
     <ClInclude Include="src\ECSEngine\OS\Monitor.h" />
     <ClInclude Include="src\Includes\ECSEngineOSMonitor.h" />
     <ClInclude Include="src\Includes\ECSEngineColor.h" />
+    <ClInclude Include="src\Includes\ECSEngineTaskTypes.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

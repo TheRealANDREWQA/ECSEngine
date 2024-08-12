@@ -438,12 +438,9 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ConstantBuffer CreateColorizeConstantBuffer(Graphics* graphics, unsigned int count, bool temporary)
-	{
-		ConstantBuffer result;
-	
-		ECS_ASSERT(count <= 256);
-		ECS_STACK_CAPACITY_STREAM(ColorFloat, colorize_values, 256);
+	template<typename Color>
+	void CreateColorizeBufferImpl(Stream<Color> colors) {
+		ECS_ASSERT(colors.size <= ECS_KB * 4);
 
 		// Use an HSV description since it allows us to have different hues
 		// which will make things easier to stop difference
@@ -454,7 +451,7 @@ namespace ECSEngine {
 
 		const unsigned int SATURATION_BASE_OFFSET = 128;
 		const unsigned int VALUE_BASE_OFFSET = 255;
-		for (unsigned int index = 0; index < count; index++) {
+		for (unsigned int index = 0; index < colors.size; index++) {
 			Color hsv_color;
 			unsigned int hue_divisor = (index % 4) * 64;
 			unsigned int hue_offset = ((index / 4) % 4) * 16;
@@ -466,8 +463,28 @@ namespace ECSEngine {
 			hsv_color.saturation = (unsigned char)(saturation_divisor + saturation_offset);
 			hsv_color.value = (unsigned char)(value_offset - value_divisor);
 
-			colorize_values[index] = HSVToRGB(hsv_color);
+			colors[index] = HSVToRGB(hsv_color);
 		}
+	}
+
+	void CreateColorizeBuffer(Stream<Color> colors) {
+		CreateColorizeBufferImpl(colors);
+	}
+
+	void CreateColorizeBuffer(Stream<ColorFloat> colors) {
+		CreateColorizeBufferImpl(colors);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	ConstantBuffer CreateColorizeConstantBuffer(Graphics* graphics, unsigned int count, bool temporary)
+	{
+		ConstantBuffer result;
+	
+		ECS_ASSERT(count <= 256);
+		ECS_STACK_CAPACITY_STREAM(ColorFloat, colorize_values, 256);
+		colorize_values.size = count;
+		CreateColorizeBuffer(colorize_values);
 
 		result = graphics->CreateConstantBuffer(count * sizeof(ColorFloat), colorize_values.buffer, temporary);
 		return result;

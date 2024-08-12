@@ -2,6 +2,7 @@
 #include "GraphicsModuleFunction.h"
 #include "Render.h"
 #include "GraphicsComponents.h"
+#include "Debug.h"
 
 using namespace ECSEngine;
 

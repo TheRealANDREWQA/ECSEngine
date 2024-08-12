@@ -14,19 +14,19 @@ namespace ECSEngine {
 	struct QueryRead {
 		using Type = T;
 
-		constexpr static bool IsShared() {
+		ECS_INLINE constexpr static bool IsShared() {
 			return T::IsShared();
 		}
 
-		constexpr static bool IsExclude() {
+		ECS_INLINE constexpr static bool IsExclude() {
 			return false;
 		}
 
-		constexpr static ECS_ACCESS_TYPE Access() {
+		ECS_INLINE constexpr static ECS_ACCESS_TYPE Access() {
 			return ECS_READ;
 		}
 
-		constexpr static bool IsOptional() {
+		ECS_INLINE constexpr static bool IsOptional() {
 			return false;
 		}
 	};
@@ -36,19 +36,19 @@ namespace ECSEngine {
 	struct QueryWrite {
 		using Type = T;
 
-		constexpr static bool IsShared() {
+		ECS_INLINE constexpr static bool IsShared() {
 			return T::IsShared();
 		}
 
-		constexpr static bool IsExclude() {
+		ECS_INLINE constexpr static bool IsExclude() {
 			return false;
 		}
 
-		constexpr static ECS_ACCESS_TYPE Access() {
+		ECS_INLINE constexpr static ECS_ACCESS_TYPE Access() {
 			return ECS_WRITE;
 		}
 
-		constexpr static bool IsOptional() {
+		ECS_INLINE constexpr static bool IsOptional() {
 			return false;
 		}
 	};
@@ -58,19 +58,19 @@ namespace ECSEngine {
 	struct QueryReadWrite {
 		using Type = T;
 
-		constexpr static bool IsShared() {
+		ECS_INLINE constexpr static bool IsShared() {
 			return T::IsShared();
 		}
 
-		constexpr static bool IsExclude() {
+		ECS_INLINE constexpr static bool IsExclude() {
 			return false;
 		}
 
-		constexpr static ECS_ACCESS_TYPE Access() {
+		ECS_INLINE constexpr static ECS_ACCESS_TYPE Access() {
 			return ECS_READ_WRITE;
 		}
 
-		constexpr static bool IsOptional() {
+		ECS_INLINE constexpr static bool IsOptional() {
 			return false;
 		}
 	};
@@ -80,19 +80,19 @@ namespace ECSEngine {
 	struct QueryExclude {
 		using Type = T;
 
-		constexpr static bool IsShared() {
+		ECS_INLINE constexpr static bool IsShared() {
 			return T::IsShared();
 		}
 
-		constexpr static bool IsExclude() {
+		ECS_INLINE constexpr static bool IsExclude() {
 			return true;
 		}
 
-		constexpr static ECS_ACCESS_TYPE Access() {
+		ECS_INLINE constexpr static ECS_ACCESS_TYPE Access() {
 			return ECS_ACCESS_TYPE_COUNT;
 		}
 
-		constexpr static bool IsOptional() {
+		ECS_INLINE constexpr static bool IsOptional() {
 			return false;
 		}
 	};
@@ -102,19 +102,19 @@ namespace ECSEngine {
 	struct QueryOptional {
 		using Type = typename T::Type;
 
-		constexpr static bool IsShared() {
+		ECS_INLINE constexpr static bool IsShared() {
 			return T::IsShared();
 		}
 
-		constexpr static bool IsExclude() {
+		ECS_INLINE constexpr static bool IsExclude() {
 			return false;
 		}
 
-		constexpr static ECS_ACCESS_TYPE Access() {
+		ECS_INLINE constexpr static ECS_ACCESS_TYPE Access() {
 			return T::Access();
 		}
 
-		constexpr static bool IsOptional() {
+		ECS_INLINE constexpr static bool IsOptional() {
 			return true;
 		}
 	};
@@ -133,9 +133,9 @@ namespace ECSEngine {
 
 	struct ForEachBatchUntypedFunctorData {
 		unsigned int thread_id;
+		unsigned short count;
 		World* world;
 		const Entity* entities;
-		unsigned short count;
 		void** unique_components;
 		void** shared_components;
 		void* data;
@@ -176,7 +176,16 @@ namespace ECSEngine {
 		World* world,
 		ForEachBatchUntypedFunctor functor,
 		void* data,
-		unsigned short batch_size,
+		const ArchetypeQueryDescriptor& query_descriptor
+	);
+
+	// It doesn't bring too much benefit against using a handrolled version, but it is added to allow the type safe wrapper
+	// work in a commit fashion. The world needs to contain an entity manager. (other fields are optional)
+	ECSENGINE_API void ForEachEntitySelectionCommitFunctor(
+		Stream<Entity> entities,
+		World* world,
+		ForEachEntityUntypedFunctor functor,
+		void* data,
 		const ArchetypeQueryDescriptor& query_descriptor
 	);
 
@@ -199,7 +208,6 @@ namespace ECSEngine {
 	template<typename Functor>
 	ECS_INLINE void ForEachBatchCommitFunctor(
 		World* world,
-		unsigned short batch_size,
 		const ArchetypeQueryDescriptor& query_descriptor,
 		Functor functor
 	) {
@@ -208,8 +216,38 @@ namespace ECSEngine {
 			(*functor)(for_each_data);
 		};
 
-		ForEachBatchCommitFunctor(world, functor_wrapper, &functor, batch_size, query_descriptor);
+		ForEachBatchCommitFunctor(world, functor_wrapper, &functor, query_descriptor);
 	}
+
+	// TODO: This accepts lambdas at the moment, function pointer support is not decided yet
+	template<typename Functor>
+	ECS_INLINE void ForEachEntitySelectionCommitFunctor(Stream<Entity> entities, World* world, const ArchetypeQueryDescriptor& query_descriptor, Functor functor) {
+		auto functor_wrapper = [](ForEachEntityUntypedFunctorData* for_each_data) {
+			Functor* functor = (Functor*)for_each_data->data;
+			(*functor)(for_each_data);
+		};
+
+		ForEachEntitySelectionCommitFunctor(entities, world, functor_wrapper, &functor, query_descriptor);
+	}
+
+	static bool ForEachRunAlways(unsigned int thread_id, World* world) {
+		return true;
+	}
+
+	typedef bool (*ForEachCondition)(unsigned int thread_id, World* world);
+
+	// Extra options that can be passed to the ForEach type safe wrappers
+	struct ForEachOptions {
+		ForEachCondition condition = ForEachRunAlways;
+		unsigned int deferred_action_capacity = 0;
+	};
+
+	// Extra options that can be passed to the ForEachSelection type safe wrapper
+	struct ForEachSelectionOptions {
+		ForEachCondition condition = ForEachRunAlways;
+		unsigned int deferred_action_capacity = 0;
+		unsigned short batch_size = 0;
+	};
 
 	namespace Internal {
 		// If data size is 0, it will simply reference the pointer. If data size is greater than 0, it will copy it.
@@ -245,6 +283,28 @@ namespace ECSEngine {
 			ComponentSignature optional_shared_signature,
 			unsigned int deferred_action_capacity = 0
 		);
+
+		// -------------------------------------------------------------------------------------------------------------------------------
+
+		// Iterates over the given entities with the specified components. The advantage is that the query dependencies are properly registered
+		// And that it will parallelize the functor by default. The last parameter, the batch_size, can be used to tell the runtime how many
+		// Entities each individual parallel task should have. In most cases, you do not need to specify this value, but in case you want
+		// Very few entries per task (if each task unit takes a long time) or many (in order to reduce the number of tasks to be spawned)
+		// At the moment, exclude queries are not supported
+		ECSENGINE_API void ForEachEntitySelection(
+			Stream<Entity> entities,
+			unsigned int thread_id,
+			World* world,
+			ForEachEntityUntypedFunctor functor,
+			const char* functor_name,
+			void* data,
+			size_t data_size,
+			const ArchetypeQueryDescriptor& query_descriptor,
+			unsigned int deferred_action_capacity = 0,
+			unsigned short batch_size = 0
+		);
+
+		// -------------------------------------------------------------------------------------------------------------------------------
 
 		struct RegisterForEachInfo {
 			ModuleTaskFunctionData* module_data;
@@ -433,19 +493,13 @@ namespace ECSEngine {
 
 		ECSENGINE_API void IncrementWorldQueryIndex(World* world);
 
-		static bool ForEachRunAlways(unsigned int thread_id, World* world) {
-			return true;
-		}
-
-		template<bool get_query, FOR_EACH_OPTIONS options, typename... Components>
+		template<bool get_query, FOR_EACH_OPTIONS type_options, typename... Components>
 		struct ForEachEntityOrBatch {
-			typedef bool (*Condition)(unsigned int thread_id, World* world);
-
-			ForEachEntityOrBatch(unsigned int _thread_id, World* _world, Condition _condition = ForEachRunAlways, const char* _function_name = ECS_FUNCTION) 
-				: thread_id(_thread_id), world(_world), function_name(_function_name), condition(_condition) {
+			ForEachEntityOrBatch(unsigned int _thread_id, World* _world, ForEachOptions _options = {}, const char* _function_name = ECS_FUNCTION)
+				: thread_id(_thread_id), world(_world), function_name(_function_name), options(_options) {
 				if constexpr (get_query) {
-					Internal::RegisterForEachInfo* info = (Internal::RegisterForEachInfo*)world;
-					Internal::AddQueryComponents<Components...>(info);
+					RegisterForEachInfo* info = (RegisterForEachInfo*)world;
+					AddQueryComponents<Components...>(info);
 				}
 				else {
 					//if constexpr (options & FOR_EACH_IS_COMMIT) {
@@ -464,9 +518,143 @@ namespace ECSEngine {
 			// the fact that when a crash happens you don't know exactly where that is from looking at a stack trace
 			// is extremely annoying and can eat up a lot of time
 			template<typename... ExcludeComponents, typename Functor>
-			void Function(Functor functor, void* function_pointer_data = nullptr, size_t function_pointer_data_size = 0) {
+			void Function(
+				Functor functor, 
+				void* function_pointer_data = nullptr, 
+				size_t function_pointer_data_size = 0
+			) {
 				if constexpr (!get_query) {
-					if (!condition(thread_id, world)) {
+					if (!options.condition(thread_id, world)) {
+						return;
+					}
+
+					// Retrieve the optional components since they are not stored in the query cache
+					Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+					Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+					Component unique_exclude_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+					Component shared_exclude_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+					Component optional_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+					Component optional_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+
+					ArchetypeQueryDescriptor query_descriptor;
+					query_descriptor.unique = { unique_components, 0 };
+					query_descriptor.shared = { shared_components, 0 };
+					query_descriptor.unique_exclude = { unique_exclude_components, 0 };
+					query_descriptor.shared_exclude = { shared_exclude_components, 0 };
+					query_descriptor.unique_optional = { optional_components, 0 };
+					query_descriptor.shared_optional = { optional_shared_components, 0 };
+
+					GetComponentSignatureFromTemplatePack<Components...>(
+						query_descriptor.unique,
+						query_descriptor.shared,
+						query_descriptor.unique_exclude,
+						query_descriptor.shared_exclude,
+						query_descriptor.unique_optional,
+						query_descriptor.shared_optional
+					);
+
+					ECS_CRASH_CONDITION(query_descriptor.unique_exclude.count == 0 && query_descriptor.shared_exclude.count == 0, "ECS ForEach:"
+						" You must specify the exclude components in the Function template parameter pack");
+
+					ForEachEntityBatchTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
+					if constexpr (~type_options & FOR_EACH_IS_COMMIT) {
+						if (function_pointer_data_size > 0) {
+							// We need to allocate this data, we can use the thread task manager allocator for this
+							wrapper_data.functor_data = world->task_manager->AllocateTempBuffer(thread_id, function_pointer_data_size);
+							memcpy(wrapper_data.functor_data, function_pointer_data, function_pointer_data_size);
+						}
+					}
+					if constexpr (type_options & FOR_EACH_IS_COMMIT) {
+						if constexpr (type_options & FOR_EACH_IS_BATCH) {
+							ForEachBatchCommitFunctor(
+								world,
+								ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
+								&wrapper_data,
+								query_descriptor
+							);
+						}
+						else {
+							ForEachEntityCommitFunctor(
+								world,
+								ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
+								&wrapper_data,
+								query_descriptor
+							);
+						}
+					}
+					else {
+						if constexpr (type_options & FOR_EACH_IS_BATCH) {
+							ForEachBatch(
+								thread_id,
+								world,
+								ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
+								function_name,
+								&wrapper_data,
+								sizeof(wrapper_data),
+								query_descriptor.unique_optional,
+								query_descriptor.shared_optional,
+								options.deferred_action_capacity
+							);
+						}
+						else {
+							ForEachEntity(
+								thread_id,
+								world,
+								ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
+								function_name,
+								&wrapper_data,
+								sizeof(wrapper_data),
+								query_descriptor.unique_optional,
+								query_descriptor.shared_optional,
+								options.deferred_action_capacity
+							);
+						}
+					}
+				}
+				else {
+					RegisterForEachInfo* info = (RegisterForEachInfo*)world;
+					AddQueryComponents<ExcludeComponents...>(info);
+				}
+			}
+
+			unsigned int thread_id;
+			World* world;
+			const char* function_name;
+			ForEachOptions options;
+		};
+
+		template<bool get_query, bool is_commit, typename... Components>
+		struct ForEachEntitySelectionTypeSafe {
+			ECS_INLINE ForEachEntitySelectionTypeSafe(
+				Stream<Entity> _entities,
+				unsigned int _thread_id,
+				World* _world,
+				ForEachSelectionOptions _options = {},
+				const char* _function_name = ECS_FUNCTION
+			) : thread_id(_thread_id), world(_world), function_name(_function_name), options(_options), entities(_entities) {
+				if constexpr (get_query) {
+					RegisterForEachInfo* info = (RegisterForEachInfo*)world;
+					AddQueryComponents<Components...>(info);
+				}
+			}
+
+			// Here functor can be a self contained lambda (or functor struct) or a function pointer
+			// for which you can supply additional data in the default parameter function_pointer_data
+			// The use of lambdas is convenient when you want to do some single threaded preparation
+			// before hand and only reference the values from inside the functor but it has a big drawback
+			// The stack trace contains a mangled name that is very hard to pinpoint in source code which
+			// code actually crashed or produced a problem. The recommendation is to use named function pointers
+			// that you pass to the function with their required data to operate. Even tho it is more tedious,
+			// the fact that when a crash happens you don't know exactly where that is from looking at a stack trace
+			// is extremely annoying and can eat up a lot of time
+			template<typename Functor>
+			void Function(
+				Functor functor,
+				void* function_pointer_data = nullptr,
+				size_t function_pointer_data_size = 0
+			) {
+				if constexpr (!get_query) {
+					if (!options.condition(thread_id, world)) {
 						return;
 					}
 
@@ -495,81 +683,43 @@ namespace ECSEngine {
 						query_descriptor.shared_optional
 					);
 
-					ECS_CRASH_CONDITION(query_descriptor.unique_exclude.count == 0 && query_descriptor.shared_exclude.count == 0, "ECS ForEach:"
-						" You must specify the exclude components in the Function template parameter pack");
+					Internal::ForEachEntityBatchTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
 
-					ForEachEntityBatchTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
-					if constexpr (~options & FOR_EACH_IS_COMMIT) {
+					if constexpr (!is_commit) {
 						if (function_pointer_data_size > 0) {
 							// We need to allocate this data, we can use the thread task manager allocator for this
 							wrapper_data.functor_data = world->task_manager->AllocateTempBuffer(thread_id, function_pointer_data_size);
 							memcpy(wrapper_data.functor_data, function_pointer_data, function_pointer_data_size);
 						}
-					}
-					if constexpr (options & FOR_EACH_IS_COMMIT) {
-						if constexpr (options & FOR_EACH_IS_BATCH) {
-							ForEachBatchCommitFunctor(
-								world,
-								Internal::ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
-								&wrapper_data,
-								batch_size,
-								query_descriptor
-							);
-						}
-						else {
-							ForEachEntityCommitFunctor(
-								world,
-								Internal::ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
-								&wrapper_data,
-								query_descriptor
-							);
-						}
+
+						Internal::ForEachEntitySelection(
+							entities,
+							thread_id,
+							world,
+							Internal::ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
+							function_name,
+							&wrapper_data,
+							sizeof(wrapper_data),
+							query_descriptor,
+							options.deferred_action_capacity,
+							options.batch_size
+						);
 					}
 					else {
-						if constexpr (options & FOR_EACH_IS_BATCH) {
-							Internal::ForEachBatch(
-								thread_id,
-								world,
-								Internal::ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
-								function_name,
-								&wrapper_data,
-								sizeof(wrapper_data),
-								query_descriptor.unique_optional,
-								query_descriptor.shared_optional
-							);
-						}
-						else {
-							Internal::ForEachEntity(
-								thread_id,
-								world,
-								Internal::ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
-								function_name,
-								&wrapper_data,
-								sizeof(wrapper_data),
-								query_descriptor.unique_optional,
-								query_descriptor.shared_optional
-							);
-						}
+						ForEachEntitySelectionCommitFunctor(entities, world, ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>, wrapper_data, query_descriptor);
 					}
-				}
-				else {
-					Internal::RegisterForEachInfo* info = (Internal::RegisterForEachInfo*)world;
-					Internal::AddQueryComponents<ExcludeComponents...>(info);
 				}
 			}
 
 			unsigned int thread_id;
 			World* world;
 			const char* function_name;
-			Condition condition;
+			Stream<Entity> entities;
+			ForEachSelectionOptions options;
 		};
 
 	}
 
-	// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
-	// Runs on multiple threads. The lambda cannot capture by reference!! (This will cause the thread tasks to reference
-	// stack memory from a stack frame that is invalid - if you want a piece of code to be cached across tasks, create a temporary
-	// pointer to it from the thread allocator and then reference the pointer by value)
 	template<bool get_query, typename... Components>
 	using ForEachEntity = Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_NONE, Components...>;
 
@@ -582,68 +732,11 @@ namespace ECSEngine {
 	template<bool get_query, typename... Components>
 	using ForEachBatchCommit = Internal::ForEachEntityOrBatch<get_query, (Internal::FOR_EACH_OPTIONS)(Internal::FOR_EACH_IS_BATCH | Internal::FOR_EACH_IS_COMMIT), Components...>;
 
+	template<bool get_query, typename... Components>
+	using ForEachEntitySelection = Internal::ForEachEntitySelectionTypeSafe<get_query, false, Components...>;
 
-	//// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
-	//// Runs on multiple threads. The lambda cannot capture by reference!! (This will cause the thread tasks to reference
-	//// stack memory from a stack frame that is invalid - if you want a piece of code to be cached across tasks, create a temporary
-	//// pointer to it from the thread allocator and then reference the pointer by value)
-	//template<bool get_query, typename... Components>
-	//struct ForEachEntity {
-	//	ECS_INLINE ForEachEntity(unsigned int thread_id, World* world, const char* function_name = ECS_FUNCTION) : internal_(thread_id, world, function_name) {}
-
-	//	// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
-	//	template< typename Functor>
-	//	ECS_INLINE void Function(Functor& functor) {
-	//		internal_.Function(functor);
-	//	}
-
-	//	Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_NONE, Components...> internal_;
-	//};
-
-	//// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
-	//template<bool get_query, typename... Components>
-	//struct ForEachEntityCommit {
-	//	ECS_INLINE ForEachEntityCommit(unsigned int thread_id, World* world, const char* function_name = ECS_FUNCTION) : internal_(thread_id, world, function_name) {}
-
-	//	// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
-	//	template<typename Functor>
-	//	ECS_INLINE void Function(Functor& functor) {
-	//		internal_.Function(functor);
-	//	}
-
-	//	Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_IS_COMMIT, Components...> internal_;
-	//};
-
-	//// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
-	//// Runs on multiple threads. The lambda cannot capture by reference!! (This will cause the thread tasks to reference
-	//// stack memory from a stack frame that is invalid - if you want a piece of code to be cached across tasks, create a temporary
-	//// pointer to it from the thread allocator and then reference the pointer by value)
-	//template<bool get_query, typename... Components>
-	//struct ForEachBatch {
-	//	ECS_INLINE ForEachBatch(unsigned int thread_id, World* world, const char* function_name = ECS_FUNCTION) : internal_(thread_id, world, function_name) {}
-
-	//	// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
-	//	template<typename Functor>
-	//	ECS_INLINE void Function(Functor& functor) {
-	//		internal_.Function(functor);
-	//	}
-
-	//	Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_IS_BATCH, Components...> internal_;
-	//};
-
-	//// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
-	//template<bool get_query, typename... Components>
-	//struct ForEachBatchCommit {
-	//	ECS_INLINE ForEachBatchCommit(unsigned int thread_id, World* world, const char* function_name = ECS_FUNCTION) : internal_(thread_id, world, function_name) {}
-
-	//	// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
-	//	template<typename... ExcludeComponents, typename Functor>
-	//	ECS_INLINE void Function(Functor& functor) {
-	//		internal_.Function(functor);
-	//	}
-
-	//	Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_IS_BATCH | Internal::FOR_EACH_IS_COMMIT, Components...> internal_;
-	//};
+	template<bool get_query, typename... Components>
+	using ForEachEntitySelectionCommit = Internal::ForEachEntitySelectionTypeSafe<get_query, true, Components...>;
 
 #define ECS_REGISTER_FOR_EACH_TASK(schedule_element, thread_task_function, module_function_data)	\
 	ECSEngine::Internal::RegisterForEachInfo __register_info##thread_task_function; \
