@@ -15,8 +15,8 @@ namespace ECSEngine {
 	struct SparseSet {
 		typedef T T;
 
-		SparseSet() : buffer(nullptr), indirection_buffer(nullptr), size(0), capacity(0), first_empty_slot(0) {}
-		SparseSet(void* _buffer, unsigned int _capacity) { InitializeFromBuffer(_buffer, _capacity); }
+		ECS_INLINE SparseSet() : buffer(nullptr), indirection_buffer(nullptr), size(0), capacity(0), first_empty_slot(0) {}
+		ECS_INLINE SparseSet(void* _buffer, unsigned int _capacity) { InitializeFromBuffer(_buffer, _capacity); }
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(SparseSet);
 
@@ -270,7 +270,15 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Stream<T> ToStream() const {
-			return  { buffer, size };
+			return { buffer, size };
+		}
+
+		ECS_INLINE StreamIterator<const T> ConstIterator(size_t starting_index = 0) const {
+			return ToStream().ConstIterator(starting_index);
+		}
+
+		ECS_INLINE StreamIterator<T> MutableIterator(size_t starting_index = 0) {
+			return ToStream().MutableIterator(starting_index);
 		}
 
 		ECS_INLINE static size_t MemoryOf(unsigned int capacity) {
@@ -520,6 +528,14 @@ namespace ECSEngine {
 
 		ECS_INLINE Stream<T> ToStream() const {
 			return set.ToStream();
+		}
+
+		ECS_INLINE StreamIterator<const T> ConstIterator(size_t starting_index = 0) const {
+			return ToStream().ConstIterator(starting_index);
+		}
+
+		ECS_INLINE StreamIterator<T> MutableIterator(size_t starting_index = 0) {
+			return ToStream().MutableIterator(starting_index);
 		}
 
 		ECS_INLINE static size_t MemoryOf(unsigned int capacity) {

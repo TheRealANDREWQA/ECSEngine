@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "../Math/VCLExtensions.h"
 #include "Hashing.h"
+#include "../Utilities/Iterator.h"
 
 #ifndef ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR
 #define ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR 95
@@ -41,6 +42,16 @@ namespace ECSEngine {
 		struct Pair {
 			T value;
 			Identifier identifier;
+		};
+
+		struct PairPtr {
+			T* value;
+			Identifier* identifier;
+		};
+
+		struct ConstPairPtr {
+			const T* value;
+			const Identifier* identifier;
 		};
 
 #define ECS_HASH_TABLE_DISTANCE_MASK 0xF8
@@ -111,7 +122,7 @@ namespace ECSEngine {
 		template<bool early_exit = false, typename Functor>
 		bool ForEachIndex(Functor&& functor) {
 			unsigned int extended_capacity = GetExtendedCapacity();
-			for (int index = 0; index < (int)extended_capacity; index++) {
+			for (unsigned int index = 0; index < extended_capacity; index++) {
 				if (IsItemAt(index)) {
 					if constexpr (early_exit) {
 						if (functor(index)) {
@@ -947,6 +958,103 @@ namespace ECSEngine {
 			}
 
 			return old_buffer;
+		}
+
+		// Value type must be T or const T
+		template<typename HashTableType, typename ValueType>
+		struct ValueIterator : IteratorInterface<ValueType> {
+			ECS_INLINE ValueIterator(HashTableType* table) : table(table), remaining_element_count(table->GetCount()), index(0) {}
+			
+			ValueType* Get() override {
+				if (remaining_element_count == 0) {
+					return nullptr;
+				}
+				remaining_element_count--;
+				ValueType* value = nullptr;
+				while (!table->IsItemAt(index)) {
+					index++;
+				}
+				table->GetValuePtrFromIndex(index, value);
+				index++;
+				return value_type;
+			}
+
+			HashTableType* table;
+			unsigned int remaining_element_count;
+			unsigned int index;
+		};
+
+		// Identifier type must be Identifier or const Identifier
+		template<typename HashTableType, typename IdentifierType>
+		struct IdentifierIterator : IteratorInterface<IdentifierType> {
+			ECS_INLINE IdentifierIterator(HashTableType* table) : table(table), remaining_element_count(table->GetCount()), index(0) {}
+
+			IdentifierType* Get() override {
+				if (remaining_element_count == 0) {
+					return nullptr;
+				}
+				remaining_element_count--;
+				IdentifierType* identifier = nullptr;
+				while (!table->IsItemAt(index)) {
+					index++;
+				}
+				identifier = table->GetIdentifierPtrFromIndex(index);
+				index++;
+				return value_type;
+			}
+
+			HashTableType* table;
+			unsigned int remaining_element_count;
+			unsigned int index;
+		};
+
+		// Pair type must be PairPtr or ConstPairPtr
+		template<typename HashTableType, typename PairType>
+		struct PairIterator : IteratorInterface<PairType> {
+			ECS_INLINE PairIterator(HashTableType* table) : table(table), remaining_element_count(table->GetCount()), index(0) {}
+
+			PairType* Get() override {
+				if (remaining_element_count == 0) {
+					return nullptr;
+				}
+				remaining_element_count--;
+				while (!table->IsItemAt(index)) {
+					index++;
+				}
+				pair.value = table->GetValuePtrFromIndex(index);
+				pair.identifier = table->GetIdentifierPtrFromIndex(index);
+				index++;
+				return &pair;
+			}
+
+			PairType pair;
+			HashTableType* table;
+			unsigned int remaining_element_count;
+			unsigned int index;
+		};
+
+		ECS_INLINE ValueIterator<const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>, const T> ConstValueIterator() const {
+			return { this };
+		}
+
+		ECS_INLINE IdentifierIterator<const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>, const Identifier> ConstIdentifierIterator() const {
+			return { this };
+		}
+
+		ECS_INLINE PairIterator<const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>, ConstPairPtr> ConstPairIterator() const {
+			return { this };
+		}
+
+		ECS_INLINE ValueIterator<HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>, T> MutableValueIterator() {
+			return { this };
+		}
+
+		ECS_INLINE IdentifierIterator<HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>, Identifier> MutableIdentifierIterator() {
+			return { this };
+		}
+
+		ECS_INLINE PairIterator<HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>, PairPtr> MutablePairIterator() {
+			return { this };
 		}
 
 		unsigned char* m_metadata;

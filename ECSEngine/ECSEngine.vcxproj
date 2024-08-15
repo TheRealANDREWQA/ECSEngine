@@ -363,6 +363,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\DebugInfo.h" />
     <ClInclude Include="src\ECSEngine\Utilities\EvaluateExpression.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FilePreprocessor.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Iterator.h" />
     <ClInclude Include="src\ECSEngine\Utilities\PointerUtilities.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />

@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Debug.h"
 #include "ECSEngineWorld.h"
+#include "GraphicsComponents.h"
 
 #define GRAPHICS_DEBUG_DATA_STRING "__GraphicsDebugData"
 #define ALLOCATOR_CAPACITY ECS_MB
@@ -81,14 +82,26 @@ void GraphicsDebugResetSolidGroups(World* world) {
 	GraphicsDebugResetSolidGroups(GetGraphicsDebugData(world));
 }
 
-ECS_THREAD_TASK(GraphicsDebugDraw) {
-	
+template<bool schedule_element>
+static ECS_THREAD_TASK(GraphicsDebugDraw) {
+	Stream<Entity> entities;
+	const GraphicsDebugData* data = nullptr;
+	if constexpr (!schedule_element)
+	{
+		data = GetGraphicsDebugData(world);
+		entities = data->
+	}
+
+	ForEachEntitySelectionCommit<schedule_element, 
+		QueryOptional<QueryRead<Translation>>,
+		QueryOptional<QueryRead<Rotation>>,
+		QueryOptional<QueryRead<Scale>>,
+		QueryRead<RenderMesh>
+	>()
 }
 
-TaskSchedulerElement GetGraphicsDebugScheduleElement(ModuleTaskFunctionData* task_data) {
+void RegisterGraphicsDebugTasks(ModuleTaskFunctionData* task_data) {
 	TaskSchedulerElement element;
-
 	element.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
-
-	return element;
+	ECS_REGISTER_FOR_EACH_TASK(element, GraphicsDebugDraw, task_data);
 }
