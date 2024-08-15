@@ -738,6 +738,7 @@ namespace ECSEngine {
 	template<bool get_query, typename... Components>
 	using ForEachEntitySelectionCommit = Internal::ForEachEntitySelectionTypeSafe<get_query, true, Components...>;
 
+	// Can be used for EntitySelection as well
 #define ECS_REGISTER_FOR_EACH_TASK(schedule_element, thread_task_function, module_function_data)	\
 	ECSEngine::Internal::RegisterForEachInfo __register_info##thread_task_function; \
 	__register_info##thread_task_function.module_data = module_function_data; \

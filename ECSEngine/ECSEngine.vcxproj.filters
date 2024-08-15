@@ -284,6 +284,7 @@
     <ClInclude Include="src\Includes\ECSEngineOSMonitor.h" />
     <ClInclude Include="src\Includes\ECSEngineColor.h" />
     <ClInclude Include="src\Includes\ECSEngineTaskTypes.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Iterator.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

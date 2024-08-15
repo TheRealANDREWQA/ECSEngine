@@ -158,7 +158,7 @@ namespace ECSEngine {
 			return value;
 		}
 
-		ECS_INLINE operator short() {
+		ECS_INLINE operator short() const {
 			return value;
 		}
 

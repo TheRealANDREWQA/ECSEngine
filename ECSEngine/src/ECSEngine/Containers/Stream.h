@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <type_traits>
+#include "../Utilities/Iterator.h"
 
 #define ECS_RESIZABLE_STREAM_FACTOR (1.5f)
 
@@ -26,6 +27,23 @@ namespace ECSEngine {
 
 	template<typename T>
 	struct CapacityStream;
+
+	template<typename ValueType>
+	struct StreamIterator : IteratorInterface<ValueType> {
+		ValueType* Get() override {
+			if (index >= size)
+			{
+				return nullptr;
+			}
+			ValueType* value = buffer + index;
+			index++;
+			return value;
+		}
+
+		ValueType* buffer;
+		size_t size;
+		size_t index;
+	};
 
 	template <typename T>
 	struct Stream
@@ -456,6 +474,14 @@ namespace ECSEngine {
 				buffer = nullptr;
 			}
 			size = _size;
+		}
+
+		ECS_INLINE StreamIterator<const T> ConstIterator(size_t starting_index = 0) const {
+			return { buffer, size, starting_index };
+		}
+
+		ECS_INLINE StreamIterator<T> MutableIterator(size_t starting_index = 0) {
+			return { buffer, size, starting_index };
 		}
 
 		T* buffer;
@@ -968,6 +994,14 @@ namespace ECSEngine {
 			}
 		}
 
+		ECS_INLINE StreamIterator<const T> ConstIterator(unsigned int starting_index = 0) const {
+			return { buffer, size, starting_index };
+		}
+
+		ECS_INLINE StreamIterator<T> MutableIterator(unsigned int starting_index = 0) {
+			return { buffer, size, starting_index };
+		}
+
 		T* buffer;
 		unsigned int size;
 		unsigned int capacity;
@@ -1309,6 +1343,14 @@ namespace ECSEngine {
 			}
 
 			return *this;
+		}
+
+		ECS_INLINE StreamIterator<const T> ConstIterator(unsigned int starting_index = 0) const {
+			return { buffer, size, starting_index };
+		}
+
+		ECS_INLINE StreamIterator<T> MutableIterator(unsigned int starting_index = 0) {
+			return { buffer, size, starting_index };
 		}
 
 		T* buffer;

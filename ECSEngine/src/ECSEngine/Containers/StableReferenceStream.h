@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "Stream.h"
 #include "../Utilities/Utilities.h"
+#include "../Utilities/Iterator.h"
 
 namespace ECSEngine {
 
@@ -12,8 +13,8 @@ namespace ECSEngine {
 	// To reduce the memory footprint and the memory bandwidth
 	template<typename T, bool queue_indirection_list = false>
 	struct StableReferenceStream {
-		StableReferenceStream() {}
-		StableReferenceStream(void* buffer, unsigned int _capacity) {
+		ECS_INLINE StableReferenceStream() {}
+		ECS_INLINE StableReferenceStream(void* buffer, unsigned int _capacity) {
 			InitializeFromBuffer(buffer, _capacity);
 		}
 
@@ -478,6 +479,37 @@ namespace ECSEngine {
 			}
 
 			size = other.size;
+		}
+
+		template<typename ContainerType, typename ValueType>
+		struct Iterator : IteratorInterface<ValueType> {
+			ValueType* Get() override {
+				if (index >= container->size) {
+					return nullptr;
+				}
+
+				unsigned int current_index = 0;
+				if constexpr (!queue_indirection_list) {
+					current_index = containers->indirection_list[index];
+				}
+				else {
+					unsigned int occupied_list_index = (container->indirection_list_start_index + index) == container->capacity ? 0 : container->indirection_list_start_index + index;
+					current_index = container->indirection_list[occupied_list_index];
+				}
+				index++;
+				return container->buffer + current_index;
+			}
+
+			ContainerType* container;
+			unsigned int index;
+		};
+
+		ECS_INLINE Iterator<const StableReferenceStream<T, queue_indirection_list>, const T> ConstIterator() const {
+			return { this, 0 };
+		}
+		
+		ECS_INLINE Iterator<StableReferenceStream<T, queue_indirection_list>, T> MutableIterator() {
+			return { this, 0 };
 		}
 
 		T* buffer;

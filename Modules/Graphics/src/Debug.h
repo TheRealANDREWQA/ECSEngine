@@ -44,5 +44,4 @@ void GraphicsDebugSetSolidGroups(World* world, Stream<GraphicsDebugSolidGroup> g
 // Clears the debug draw groups
 void GraphicsDebugResetSolidGroups(World* world);
 
-// It will not add the element to the task_data, but it requires the allocator from it
-TaskSchedulerElement GetGraphicsDebugScheduleElement(ModuleTaskFunctionData* task_data);
+void RegisterGraphicsDebugTasks(ModuleTaskFunctionData* task_data);
