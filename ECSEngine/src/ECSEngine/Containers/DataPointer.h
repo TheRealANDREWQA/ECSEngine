@@ -1,6 +1,6 @@
 #pragma once
 #include "../Core.h"
-#include "../Containers/Stream.h"
+#include "../Allocators/AllocatorTypes.h"
 
 namespace ECSEngine {
 
@@ -14,20 +14,10 @@ namespace ECSEngine {
 			SetData(data);
 		}
 
-		ECS_INLINE DataPointer(Stream<void> data) : pointer(data.buffer) {
-			SetData(data.size);
-		}
-
 		DataPointer(const DataPointer& other) = default;
 		DataPointer& operator = (const DataPointer& other) = default;
 		
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
-			void* allocation = GetPointer();
-			if (allocation != nullptr && GetData() > 0) {
-				ECSEngine::Deallocate(allocator, allocation);
-				pointer = nullptr;
-			}
-		}
+		void Deallocate(AllocatorPolymorphic allocator);
 
 		// Will prevent underflow; returns the new value
 		unsigned short DecrementData(unsigned short count);
@@ -43,11 +33,6 @@ namespace ECSEngine {
 		void* GetPointer() const;
 
 		void SetPointer(void* new_pointer);
-
-		template<typename ElementType>
-		ECS_INLINE Stream<ElementType> As() const {
-			return { GetPointer(), GetData() };
-		}
 
 		void* pointer;
 	};

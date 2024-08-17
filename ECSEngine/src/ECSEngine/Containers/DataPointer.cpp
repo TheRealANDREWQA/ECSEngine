@@ -1,10 +1,20 @@
 #include "ecspch.h"
 #include "DataPointer.h"
+#include "../Allocators/AllocatorPolymorphic.h"
 
 constexpr uintptr_t DATA_MASK = 0x000000000000FFFF;
 constexpr uintptr_t POINTER_MASK = ~0xFFFF000000000000;
 
 namespace ECSEngine {
+	
+	void DataPointer::Deallocate(AllocatorPolymorphic allocator)
+	{
+		void* allocation = GetPointer();
+		if (allocation != nullptr && GetData() > 0) {
+			ECSEngine::Deallocate(allocator, allocation);
+			pointer = nullptr;
+		}
+	}
 
 	unsigned short DataPointer::DecrementData(unsigned short count)
 	{

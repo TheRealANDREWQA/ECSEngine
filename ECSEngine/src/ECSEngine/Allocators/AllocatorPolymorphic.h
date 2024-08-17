@@ -160,7 +160,7 @@ namespace ECSEngine {
 			return Malloc(size, alignment);
 		}
 		else {
-			return AllocateTs(allocator.allocator, allocator.allocator_type, size, 8, debug_info);
+			return AllocateTs(allocator.allocator, allocator.allocator_type, size, alignment, debug_info);
 		}
 	}
 

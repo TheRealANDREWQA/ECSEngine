@@ -94,15 +94,19 @@ namespace ECSEngine {
 			return &m_component_memory_manager;
 		}
 
-		ECS_INLINE AllocatorPolymorphic MainAllocator() {
+		ECS_INLINE AllocatorPolymorphic MainAllocator() const {
 			return m_memory_manager;
+		}
+
+		ECS_INLINE AllocatorPolymorphic TemporaryAllocator() {
+			return AllocatorPolymorphic(&m_temporary_allocator).AsMulti();
 		}
 
 		// Use this this if you want to pass this buffer to the deferred calls with a stable flag.
 		// This avoids making unnecessary copies between buffers. Do not ask ridiculous sizes. Try for the smallest.
 		// If the data size cannot be predicted and can be potentially large, precondition the data into a stack buffer
 		// and then use the deferred call to copy it
-		void* AllocateTemporaryBuffer(size_t size, size_t alignment = 8);
+		void* AllocateTemporaryBuffer(size_t size, size_t alignment = alignof(void*));
 
 		// It will sort the entities by their base archetype and call the functor
 		// With a sequence of contiguous entities that are from the same base archetype

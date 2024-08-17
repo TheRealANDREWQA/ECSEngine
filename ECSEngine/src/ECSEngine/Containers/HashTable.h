@@ -3,6 +3,7 @@
 #include "../Math/VCLExtensions.h"
 #include "Hashing.h"
 #include "../Utilities/Iterator.h"
+#include "../Utilities/Utilities.h"
 
 #ifndef ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR
 #define ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR 95
@@ -36,6 +37,8 @@ namespace ECSEngine {
 		bool SoA = false
 	>
 	struct HashTable {
+		static_assert(!std::is_same_v<T, HashTableEmptyValue> || SoA, "Look up table without any value must be SoA!");
+
 		typedef T Value;
 		typedef Identifier Identifier;
 
@@ -68,7 +71,7 @@ namespace ECSEngine {
 
 	private:
 		template<typename = std::enable_if_t<SoA == true>>
-		static size_t GetValueSize() {
+		ECS_INLINE static size_t GetValueSize() {
 			size_t value = sizeof(T);
 			if constexpr (std::is_same_v<T, HashTableEmptyValue>) {
 				value = 0;
@@ -440,6 +443,48 @@ namespace ECSEngine {
 
 		ECS_INLINE bool IsItemAt(unsigned int index) const {
 			return m_metadata[index] != 0;
+		}
+
+		// For a given index, it will return the index of the first entry that
+		// Is at count elements away from the current element, which may or may not hold an actual value,
+		// (it starts verifying from the given index, so if there is an element at the given index and count is 1,
+		// It will return the index value + 1). It returns -1 if there are not count valid entries starting from the
+		// given index
+		unsigned int SkipElements(unsigned int index, unsigned int count) const {
+			// If out of bounds, early exit
+			if (index >= GetExtendedCapacity() || count == 0) {
+				return -1;
+			}
+
+			// We can use SIMD for this, since the metadata is sequential
+			// And a comparison with 0 suffices
+			Vec32uc simd_zero = ZeroVectorInteger();
+			while (index < GetExtendedCapacity()) {
+				Vec32uc current_metadata;
+				current_metadata.load(m_metadata + index);
+				Vec32cb is_valid_mask = current_metadata != simd_zero;
+				unsigned int valid_mask_int = to_bits(is_valid_mask);
+				unsigned int valid_entry_count = CountBits(valid_mask_int);
+				if (valid_entry_count >= count) {
+					// Iterate over the bits until count is exhausted
+					unsigned int bit = 1;
+					while (count > 0)
+					{
+						if ((valid_mask_int & bit) != 0) {
+							count--;
+						}
+						index++;
+					}
+
+					return index >= GetExtendedCapacity() ? -1 : index;
+				}
+
+				count -= valid_entry_count;
+				index += simd_zero.size();
+			}
+
+			// It can exit with a valid entry only inside the while
+			return -1;
 		}
 
 		ECS_INLINE const void* GetAllocatedBuffer() const {
@@ -963,73 +1008,97 @@ namespace ECSEngine {
 		// Value type must be T or const T
 		template<typename HashTableType, typename ValueType>
 		struct ValueIterator : IteratorInterface<ValueType> {
-			ECS_INLINE ValueIterator(HashTableType* table) : table(table), remaining_element_count(table->GetCount()), index(0) {}
+			ECS_INLINE ValueIterator(HashTableType* table) : table(*table), remaining_count(table->GetCount()), index(0) {}
 			
 			ValueType* Get() override {
-				if (remaining_element_count == 0) {
-					return nullptr;
-				}
-				remaining_element_count--;
 				ValueType* value = nullptr;
-				while (!table->IsItemAt(index)) {
+				while (!table.IsItemAt(index)) {
 					index++;
 				}
-				table->GetValuePtrFromIndex(index, value);
+				value = table.GetValuePtrFromIndex(index);
 				index++;
-				return value_type;
+				return value;
 			}
 
-			HashTableType* table;
-			unsigned int remaining_element_count;
+			bool IsContiguous() const override {
+				return false;
+			}
+
+			IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
+				ValueIterator<HashTableType, ValueType>* iterator = (ValueIterator<HashTableType, ValueType>*)AllocateEx(allocator, sizeof(ValueIterator<HashTableType, ValueType>));
+				*iterator = ValueIterator<HashTableType, ValueType>(&table);
+				iterator->index = index;
+				index = table.SkipElements(index, count);
+				ECS_ASSERT(index != -1, "Creating hash table sub iterator failed! The given subrange is too large.");
+				return iterator;
+			}
+
+			HashTableType table;
 			unsigned int index;
 		};
 
 		// Identifier type must be Identifier or const Identifier
 		template<typename HashTableType, typename IdentifierType>
 		struct IdentifierIterator : IteratorInterface<IdentifierType> {
-			ECS_INLINE IdentifierIterator(HashTableType* table) : table(table), remaining_element_count(table->GetCount()), index(0) {}
+			ECS_INLINE IdentifierIterator(HashTableType* table) : table(*table), remaining_count(table->GetCount()), index(0) {}
 
 			IdentifierType* Get() override {
-				if (remaining_element_count == 0) {
-					return nullptr;
-				}
-				remaining_element_count--;
 				IdentifierType* identifier = nullptr;
-				while (!table->IsItemAt(index)) {
+				while (!table.IsItemAt(index)) {
 					index++;
 				}
-				identifier = table->GetIdentifierPtrFromIndex(index);
+				identifier = table.GetIdentifierPtrFromIndex(index);
 				index++;
-				return value_type;
+				return identifier;
 			}
 
-			HashTableType* table;
-			unsigned int remaining_element_count;
+			bool IsContiguous() const override {
+				return false;
+			}
+
+			IteratorInterface<IdentifierType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
+				IdentifierIterator<HashTableType, IdentifierType>* iterator = (IdentifierIterator<HashTableType, IdentifierType>*)AllocateEx(allocator, sizeof(IdentifierIterator<HashTableType, IdentifierType>));
+				*iterator = IdentifierIterator<HashTableType, IdentifierType>(&table);
+				iterator->index = index;
+				index = table.SkipElements(index, count);
+				ECS_ASSERT(index != -1, "Creating hash table sub iterator failed! The given subrange is too large.");
+				return iterator;
+			}
+
+			HashTableType table;
 			unsigned int index;
 		};
 
 		// Pair type must be PairPtr or ConstPairPtr
 		template<typename HashTableType, typename PairType>
 		struct PairIterator : IteratorInterface<PairType> {
-			ECS_INLINE PairIterator(HashTableType* table) : table(table), remaining_element_count(table->GetCount()), index(0) {}
+			ECS_INLINE PairIterator(HashTableType* table) : table(*table), remaining_count(table->GetCount()), index(0) {}
 
 			PairType* Get() override {
-				if (remaining_element_count == 0) {
-					return nullptr;
-				}
-				remaining_element_count--;
-				while (!table->IsItemAt(index)) {
+				while (!table.IsItemAt(index)) {
 					index++;
 				}
-				pair.value = table->GetValuePtrFromIndex(index);
-				pair.identifier = table->GetIdentifierPtrFromIndex(index);
+				pair.value = tabl.GetValuePtrFromIndex(index);
+				pair.identifier = table.GetIdentifierPtrFromIndex(index);
 				index++;
 				return &pair;
 			}
 
+			bool IsContiguous() const override {
+				return false;
+			}
+
+			IteratorInterface<PairType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
+				PairIterator<HashTableType, PairType>* iterator = (PairIterator<HashTableType, PairType>*)AllocateEx(allocator, sizeof(PairIterator<HashTableType, PairType>));
+				*iterator = PairIterator<HashTableType, PairType>(&table);
+				iterator->index = index;
+				index = table.SkipElements(index, count);
+				ECS_ASSERT(index != -1, "Creating hash table sub iterator failed! The given subrange is too large.");
+				return iterator;
+			}
+
+			HashTableType table;
 			PairType pair;
-			HashTableType* table;
-			unsigned int remaining_element_count;
 			unsigned int index;
 		};
 
@@ -1148,7 +1217,7 @@ namespace ECSEngine {
 	// The identifier must have the function Identifier Copy(AllocatorPolymorphic allocator) const;
 	// The value must have the function Value Copy(AllocatorPolymorphic allocator) const;
 	template<bool copy_values, bool copy_identifiers, typename Table>
-	void HashTableCopy(
+	ECS_INLINE void HashTableCopy(
 		const Table& source, 
 		Table& destination, 
 		AllocatorPolymorphic allocator
@@ -1158,7 +1227,7 @@ namespace ECSEngine {
 
 	// The identifier must have the function void Deallocate(AllocatorPolymorphic allocator);
 	template<typename Table>
-	void HashTableDeallocateIdentifiers(const Table& source, AllocatorPolymorphic allocator) {
+	ECS_INLINE void HashTableDeallocateIdentifiers(const Table& source, AllocatorPolymorphic allocator) {
 		source.ForEachConst([&](auto value, auto identifier) {
 			identifier.Deallocate(allocator);
 		});
@@ -1166,7 +1235,7 @@ namespace ECSEngine {
 
 	// The value must have the function void Deallocate(AllocatorPolymorphic allocator);
 	template<typename Table>
-	void HashTableDeallocateValues(const Table& source, AllocatorPolymorphic allocator) {
+	ECS_INLINE void HashTableDeallocateValues(const Table& source, AllocatorPolymorphic allocator) {
 		source.ForEachConst([&](auto value, auto identifier) {
 			value.Deallocate(allocator);
 		});

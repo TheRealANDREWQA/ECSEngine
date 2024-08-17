@@ -74,16 +74,12 @@ namespace ECSEngine {
 		ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE;
 	};
 
-	struct Copyable {
+	struct ECSENGINE_API Copyable {
 		ECS_INLINE Copyable(size_t _byte_size) : byte_size(_byte_size) {}
 
-		virtual void CopyBuffers(const void* other, AllocatorPolymorphic allocator) {
+		virtual void CopyBuffers(const void* other, AllocatorPolymorphic allocator) = 0;
 
-		}
-
-		virtual void DeallocateBuffers(AllocatorPolymorphic allocator) {
-
-		}
+		virtual void DeallocateBuffers(AllocatorPolymorphic allocator) = 0;
 
 		ECS_INLINE void* GetChildData() const {
 			return (void*)((uintptr_t)this + sizeof(Copyable));

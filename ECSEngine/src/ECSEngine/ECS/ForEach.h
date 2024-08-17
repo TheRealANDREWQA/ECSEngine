@@ -2,6 +2,7 @@
 #include "InternalStructures.h"
 #include "VectorComponentSignature.h"
 #include "../Tools/Modules/ModuleDefinition.h"
+#include "../Utilities/Iterator.h"
 
 namespace ECSEngine {
 
@@ -182,7 +183,7 @@ namespace ECSEngine {
 	// It doesn't bring too much benefit against using a handrolled version, but it is added to allow the type safe wrapper
 	// work in a commit fashion. The world needs to contain an entity manager. (other fields are optional)
 	ECSENGINE_API void ForEachEntitySelectionCommitFunctor(
-		Stream<Entity> entities,
+		IteratorInterface<const Entity>* entities,
 		World* world,
 		ForEachEntityUntypedFunctor functor,
 		void* data,
@@ -221,7 +222,7 @@ namespace ECSEngine {
 
 	// TODO: This accepts lambdas at the moment, function pointer support is not decided yet
 	template<typename Functor>
-	ECS_INLINE void ForEachEntitySelectionCommitFunctor(Stream<Entity> entities, World* world, const ArchetypeQueryDescriptor& query_descriptor, Functor functor) {
+	ECS_INLINE void ForEachEntitySelectionCommitFunctor(IteratorInterface<const Entity>* entities, World* world, const ArchetypeQueryDescriptor& query_descriptor, Functor functor) {
 		auto functor_wrapper = [](ForEachEntityUntypedFunctorData* for_each_data) {
 			Functor* functor = (Functor*)for_each_data->data;
 			(*functor)(for_each_data);
@@ -290,9 +291,11 @@ namespace ECSEngine {
 		// And that it will parallelize the functor by default. The last parameter, the batch_size, can be used to tell the runtime how many
 		// Entities each individual parallel task should have. In most cases, you do not need to specify this value, but in case you want
 		// Very few entries per task (if each task unit takes a long time) or many (in order to reduce the number of tasks to be spawned)
-		// At the moment, exclude queries are not supported
+		// At the moment, exclude queries are not supported. The boolean are_entities_stable is a fast path that allows the function to
+		// Not copy the given entities in case they are already stable (and do not change after this call)
 		ECSENGINE_API void ForEachEntitySelection(
-			Stream<Entity> entities,
+			IteratorInterface<const Entity> entities,
+			bool are_entities_stable,
 			unsigned int thread_id,
 			World* world,
 			ForEachEntityUntypedFunctor functor,

@@ -227,6 +227,16 @@ namespace ECSEngine {
 		return _BitScanForward(&value, number) == 0 ? -1 : value;
 	}
 
+	// Counts the number of bits set for the given integer
+	ECS_INLINE unsigned int CountBits(unsigned int value) {
+		return __popcnt(value);
+	}
+
+	// Counts the number of bits set for the given integer
+	ECS_INLINE size_t CountBits(size_t value) {
+		return __popcnt64(value);
+	}
+
 	// Returns a pair of { value, exponent } which represents the actual value which is greater
 	// and the exponent of the base 2 that gives you that number. Example { 16, 4 }
 	ECS_INLINE ulong2 PowerOfTwoGreaterEx(size_t number) {

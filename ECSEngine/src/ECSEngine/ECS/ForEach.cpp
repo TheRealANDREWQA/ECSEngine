@@ -44,23 +44,23 @@ namespace ECSEngine {
 	struct ForEachEntitySelectionImplementationTaskData {
 		// All functions can be implemented directly since we are in a .cpp
 
-		ComponentSignature UniqueSignature() const {
+		ECS_INLINE ComponentSignature UniqueSignature() const {
 			return { (Component*)OffsetPointer(this, sizeof(*this)), unique_count };
 		}
 
-		ComponentSignature OptionalUniqueSignature() const {
+		ECS_INLINE ComponentSignature OptionalUniqueSignature() const {
 			return { (Component*)OffsetPointer(this, sizeof(*this)) + unique_count, optional_unique_count };
 		}
 
-		ComponentSignature SharedSignature() const {
+		ECS_INLINE ComponentSignature SharedSignature() const {
 			return { (Component*)OffsetPointer(this, sizeof(*this)) + unique_count + optional_unique_count, shared_count };
 		}
 		
-		ComponentSignature OptionalSharedSignature() const {
+		ECS_INLINE ComponentSignature OptionalSharedSignature() const {
 			return { (Component*)OffsetPointer(this, sizeof(*this)) + unique_count + optional_unique_count + shared_count, optional_shared_count };
 		}
 
-		ArchetypeQueryDescriptor GetQueryDescriptor() const {
+		ECS_INLINE ArchetypeQueryDescriptor GetQueryDescriptor() const {
 			ArchetypeQueryDescriptor descriptor;
 
 			descriptor.unique = UniqueSignature();
@@ -83,7 +83,7 @@ namespace ECSEngine {
 			query_descriptor.shared_optional.WriteTo(OptionalSharedSignature().indices);
 		}
 
-		static size_t MemoryOf(const ArchetypeQueryDescriptor& query_descriptor) {
+		ECS_INLINE static size_t MemoryOf(const ArchetypeQueryDescriptor& query_descriptor) {
 			return sizeof(ForEachEntitySelectionImplementationTaskData) + sizeof(Component) * (query_descriptor.unique.count + query_descriptor.unique_optional.count
 				+ query_descriptor.shared.count + query_descriptor.shared_optional.count);
 		}
@@ -92,9 +92,7 @@ namespace ECSEngine {
 		unsigned char optional_unique_count;
 		unsigned char shared_count;
 		unsigned char optional_shared_count;
-		const Entity* entities;
-		unsigned int entity_offset;
-		unsigned int count;
+		StableIterator<const Entity> stable_iterator;
 
 		void* functor_data;
 		ForEachEntityUntypedFunctor functor;
@@ -390,25 +388,25 @@ namespace ECSEngine {
 
 		ArchetypeQueryDescriptor query_descriptor = data->GetQueryDescriptor();
 
-		// For the mandatory components, crash if the component is missing
-		for (unsigned int index = 0; index < data->count; index++) {
-			Entity current_entity = data->entities[data->entity_offset + index];
+		data->stable_iterator.iterator->ForEach([data, world, &functor_data, &query_descriptor](const Entity* entity) {
+			// For the mandatory components, crash if the component is missing
+			Entity current_entity = *entity;
 			functor_data.entity = current_entity;
-			
+
 			for (size_t component_index = 0; component_index < (size_t)query_descriptor.unique.count; component_index++) {
-				unique_components[component_index] = world->entity_manager->GetComponent(current_entity, query_descriptor.unique[component_index]);
+				functor_data.unique_components[component_index] = world->entity_manager->GetComponent(current_entity, query_descriptor.unique[component_index]);
 			}
 			for (size_t component_index = 0; component_index < (size_t)query_descriptor.unique_optional.count; component_index++) {
-				unique_components[query_descriptor.unique.count + component_index] = world->entity_manager->TryGetComponent(current_entity, query_descriptor.unique_optional[component_index]);
+				functor_data.unique_components[query_descriptor.unique.count + component_index] = world->entity_manager->TryGetComponent(current_entity, query_descriptor.unique_optional[component_index]);
 			}
 			for (size_t component_index = 0; component_index < (size_t)query_descriptor.shared.count; component_index++) {
-				shared_components[component_index] = world->entity_manager->GetSharedComponent(current_entity, query_descriptor.shared[component_index]);
+				functor_data.shared_components[component_index] = world->entity_manager->GetSharedComponent(current_entity, query_descriptor.shared[component_index]);
 			}
 			for (size_t component_index = 0; component_index < (size_t)query_descriptor.shared_optional.count; component_index++) {
-				shared_components[query_descriptor.shared.count + component_index] = world->entity_manager->TryGetSharedComponent(current_entity, query_descriptor.shared_optional[component_index]);
+				functor_data.shared_components[query_descriptor.shared.count + component_index] = world->entity_manager->TryGetSharedComponent(current_entity, query_descriptor.shared_optional[component_index]);
 			}
 			data->functor(&functor_data);
-		}
+		});
 
 	}
 
@@ -481,7 +479,7 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------------------
 
 	void ForEachEntitySelectionCommitFunctor(
-		Stream<Entity> entities,
+		IteratorInterface<const Entity>* entities,
 		World* world,
 		ForEachEntityUntypedFunctor functor,
 		void* data,
@@ -492,9 +490,7 @@ namespace ECSEngine {
 		size_t task_data_size = task_data->MemoryOf(query_descriptor);
 		ECS_CRASH_CONDITION(task_data_size <= sizeof(task_data_storage), "ForEachEntitySelectionCommitFunctor: Exceeded task data storage capacity.");
 
-		task_data->count = entities.size;
-		task_data->entities = entities.buffer;
-		task_data->entity_offset = 0;
+		task_data->stable_iterator = ToStableIterator(entities);
 		task_data->functor = functor;
 		task_data->functor_data = data;
 		task_data->WriteComponents(query_descriptor);
@@ -557,7 +553,8 @@ namespace ECSEngine {
 		}
 
 		void ForEachEntitySelection(
-			Stream<Entity> entities,
+			IteratorInterface<const Entity>* entities,
+			bool are_entities_stable,
 			unsigned int thread_id,
 			World* world,
 			ForEachEntityUntypedFunctor functor,
@@ -579,33 +576,40 @@ namespace ECSEngine {
 
 			// Allocate the entities buffer from temporary storage as well,
 			// But not from the task manager since this buffer might be quite large.
-			// Use the entity manager temporary allocator
-			void* entities_buffer = world->entity_manager->AllocateTemporaryBuffer(entities.CopySize());
-			entities.CopyTo(entities_buffer);
-			entities.InitializeFromBuffer(entities_buffer, entities.size);
+			// Use the entity manager temporary allocator.
+			AllocatorPolymorphic temporary_allocator = world->entity_manager->TemporaryAllocator();
+			// Lock it until the task creation is finished 
+			// in order to not produce many unnecessary lock and unlocks
+			LockAllocator(temporary_allocator);
 
+			temporary_allocator.allocation_type = ECS_ALLOCATION_SINGLE;
+			StableIterator<const Entity> stable_iterator = GetStableIterator(entities, are_entities_stable, temporary_allocator);
+
+			alignas(void*) char task_data_storage[ECS_KB];
 			size_t task_data_size = ForEachEntitySelectionImplementationTaskData::MemoryOf(query_descriptor);
+			ECS_ASSERT(task_data_size <= sizeof(task_data_storage));
 
-			ForEachEntitySelectionImplementationTaskData task_data;
-			task_data.functor = functor;
-			task_data.functor_data = data;
-			task_data.entities = entities.buffer;
+			ForEachEntitySelectionImplementationTaskData* task_data = (ForEachEntitySelectionImplementationTaskData*)task_data_storage;
+			task_data->functor = functor;
+			task_data->functor_data = data;
+			task_data->stable_iterator = stable_iterator;
+			task_data->WriteComponents(query_descriptor);
 
 			size_t deferred_call_allocation_size = sizeof(DeferredAction) * deferred_action_capacity + sizeof(EntityManagerCommandStream);
 			EntityManagerCommandStream* command_stream = nullptr;
 
 			auto task_data_functor = [&](size_t batch_index, size_t current_count) {
-				task_data.count = current_count;
-				task_data.entity_offset = batch_index * batch_size;
+				task_data->stable_iterator = task_data->stable_iterator.GetSubrange(temporary_allocator, current_count);
 
 				if (deferred_action_capacity > 0) {
 					command_stream = (EntityManagerCommandStream*)world->task_manager->AllocateTempBuffer(thread_id, deferred_call_allocation_size);
 					command_stream->InitializeFromBuffer(OffsetPointer(command_stream, sizeof(EntityManagerCommandStream)), 0, deferred_action_capacity);
-					task_data.command_stream = command_stream;
+					task_data->command_stream = command_stream;
 				}
 			};
 
-			world->task_manager->AddDynamicTaskParallelFor(ForEachEntitySelectionThreadTask, functor_name, entities.size, batch_size, &task_data, sizeof(task_data), true, task_data_functor);
+			world->task_manager->AddDynamicTaskParallelFor(ForEachEntitySelectionThreadTask, functor_name, entities->remaining_count, batch_size, task_data, task_data_size, true, task_data_functor);
+			UnlockAllocator(temporary_allocator);
 		}
 
 		void IncrementWorldQueryIndex(World* world)

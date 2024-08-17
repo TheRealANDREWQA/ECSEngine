@@ -123,7 +123,8 @@ namespace ECSEngine {
 						current_index = indirection_list[occupied_index];
 					}
 					else {
-						unsigned int queue_occupied_index = (indirection_list_start_index + occupied_index) == capacity ? 0 : indirection_list_start_index + occupied_index;
+						unsigned int queue_occupied_index = indirection_list_start_index + occupied_index; 
+						queue_occupied_index = queue_occupied_index >= capacity ? queue_occupied_index - capacity : queue_occupied_index;
 						current_index = indirection_list[queue_occupied_index];
 					}
 
@@ -166,7 +167,8 @@ namespace ECSEngine {
 					current_index = indirection_list[index];
 				}
 				else {
-					unsigned int occupied_list_index = (indirection_list_start_index + index) == capacity ? 0 : indirection_list_start_index + index;
+					unsigned int occupied_list_index = indirection_list_start_index + index;
+					occupied_list_index = occupied_list_index >= capacity ? occupied_list_index - capacity : 0;
 					current_index = indirection_list[occupied_list_index];
 				}
 				if constexpr (early_exit) {
@@ -483,33 +485,44 @@ namespace ECSEngine {
 
 		template<typename ContainerType, typename ValueType>
 		struct Iterator : IteratorInterface<ValueType> {
-			ValueType* Get() override {
-				if (index >= container->size) {
-					return nullptr;
-				}
+			ECS_INLINE Iterator(ContainerType* container) : container(*container), index(0), remaining_count(container->size) {}
 
+			ValueType* Get() override {
 				unsigned int current_index = 0;
 				if constexpr (!queue_indirection_list) {
-					current_index = containers->indirection_list[index];
+					current_index = container.indirection_list[index];
 				}
 				else {
-					unsigned int occupied_list_index = (container->indirection_list_start_index + index) == container->capacity ? 0 : container->indirection_list_start_index + index;
-					current_index = container->indirection_list[occupied_list_index];
+					unsigned int occupied_list_index = container.indirection_list_start_index + index;
+					occupied_list_index = occupied_list_index >= capacity ? occupied_list_index - capacity : occupied_list_index;
+					current_index = container.indirection_list[occupied_list_index];
 				}
 				index++;
-				return container->buffer + current_index;
+				return container.buffer + current_index;
 			}
 
-			ContainerType* container;
+			bool IsContiguous() const override {
+				return false;
+			}
+
+			IteratorInterface<ValueType>* GetSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
+				Iterator<ContainerType, ValueType>* iterator = (Iterator<ContainerType, ValueType>*)AllocateEx(allocator, sizeof(Iterator<ContainerType, ValueType>));
+				*iterator = Iterator<ContainerType, ValueType>(&container);
+				iterator->index = index;
+				index += count;
+				return iterator;
+			}
+
+			ContainerType container;
 			unsigned int index;
 		};
 
 		ECS_INLINE Iterator<const StableReferenceStream<T, queue_indirection_list>, const T> ConstIterator() const {
-			return { this, 0 };
+			return this;
 		}
 		
 		ECS_INLINE Iterator<StableReferenceStream<T, queue_indirection_list>, T> MutableIterator() {
-			return { this, 0 };
+			return this;
 		}
 
 		T* buffer;
