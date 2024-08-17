@@ -215,7 +215,9 @@ namespace ECSEngine {
 			});
 		}
 
-		void* AllocateTempBuffer(unsigned int thread_id, size_t size, size_t alignment = 8);
+		void* AllocateTempBuffer(unsigned int thread_id, size_t size, size_t alignment = alignof(void*));
+
+		AllocatorPolymorphic AllocatorTemp(unsigned int thread_id) const;
 
 		void ChangeStaticWrapperMode(ThreadFunctionWrapperData wrapper_data);
 

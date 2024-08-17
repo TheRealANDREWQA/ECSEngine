@@ -360,6 +360,13 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	AllocatorPolymorphic TaskManager::AllocatorTemp(unsigned int thread_id) const
+	{
+		return &m_thread_linear_allocators[thread_id].value;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ChangeStaticWrapperMode(ThreadFunctionWrapperData wrapper_data)
 	{
 		TaskManagerChangeWrapperMode(this, wrapper_data, &m_static_wrapper);

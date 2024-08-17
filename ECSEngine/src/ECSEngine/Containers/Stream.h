@@ -28,23 +28,6 @@ namespace ECSEngine {
 	template<typename T>
 	struct CapacityStream;
 
-	template<typename ValueType>
-	struct StreamIterator : IteratorInterface<ValueType> {
-		ValueType* Get() override {
-			if (index >= size)
-			{
-				return nullptr;
-			}
-			ValueType* value = buffer + index;
-			index++;
-			return value;
-		}
-
-		ValueType* buffer;
-		size_t size;
-		size_t index;
-	};
-
 	template <typename T>
 	struct Stream
 	{
