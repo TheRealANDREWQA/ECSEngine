@@ -57,6 +57,10 @@ namespace ECSEngine {
 			return { ptr, size / sizeof(wchar_t) };
 		}
 
+		ECS_INLINE void ToString(CapacityStream<char>& string) const {
+			string.AddStreamAssert(AsASCII());
+		}
+
 		const void* ptr;
 		unsigned int size;
 	};

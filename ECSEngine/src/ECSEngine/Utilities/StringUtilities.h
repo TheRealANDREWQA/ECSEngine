@@ -782,6 +782,9 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 				else if constexpr (std::is_same_v<Parameter, CapacityStream<char>> || std::is_same_v<Parameter, Stream<char>>) {
 					end_characters.AddStreamAssert(parameter);
 				}
+				else if constexpr (std::is_same_v<Parameter, CapacityStream<void>> || std::is_same_v<Parameter, Stream<void>>) {
+					end_characters.AddStreamAssert(parameter.As<char>());
+				}
 				else {
 					parameter.ToString(end_characters);
 				}

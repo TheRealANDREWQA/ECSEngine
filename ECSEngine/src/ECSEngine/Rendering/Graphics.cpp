@@ -1043,6 +1043,28 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	template<typename IntegerType, typename IntegerType2>
+	void SolidColorHelperShaderSetInstancesImpl(
+		Graphics* graphics,
+		VertexBuffer vertex_buffer,
+		Stream<GraphicsSolidColorInstance> instances,
+		Stream<IntegerType> instance_submesh,
+		CapacityStream<IntegerType2>& submeshes
+	) {
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 128, ECS_MB * 32);
+
+		GraphicsSolidColorInstance* data = (GraphicsSolidColorInstance*)graphics->SolidColorHelperShaderMap(vertex_buffer);
+		// Use the utility function ForEachGroup
+		ForEachGroup(instance_submesh, &temporary_allocator,
+			[&](size_t ordered_index, size_t original_index, size_t group_index) {
+				data[ordered_index] = instances[original_index];
+			},
+			[&](size_t group_index, ulong2 group) {
+				submeshes.AddAssert(group);
+			});
+		graphics->SolidColorHelperShaderUnmap(vertex_buffer);
+	}
+
 	void Graphics::SolidColorHelperShaderSetInstances(
 		VertexBuffer vertex_buffer, 
 		Stream<GraphicsSolidColorInstance> instances, 
@@ -1050,18 +1072,18 @@ namespace ECSEngine {
 		CapacityStream<uint2>& submeshes
 	)
 	{
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 128, ECS_MB * 32);
+		SolidColorHelperShaderSetInstancesImpl(this, vertex_buffer, instances, instance_submesh, submeshes);
+	}
 
-		GraphicsSolidColorInstance* data = (GraphicsSolidColorInstance*)SolidColorHelperShaderMap(vertex_buffer);
-		// Use the utility function ForEachGroup
-		ForEachGroup(instance_submesh, &temporary_allocator, 
-		[&](size_t ordered_index, size_t original_index, size_t group_index) {
-			data[ordered_index] = instances[original_index];
-		}, 
-		[&](size_t group_index, uint2 group) {
-			submeshes.AddAssert(group);
-		});
-		SolidColorHelperShaderUnmap(vertex_buffer);
+	void Graphics::SolidColorHelperShaderSetInstances(
+		VertexBuffer vertex_buffer,
+		Stream<GraphicsSolidColorInstance> instances,
+		Stream<size_t> instance_submesh,
+		CapacityStream<ulong2>& submeshes
+	)
+	{
+		SolidColorHelperShaderSetInstancesImpl(this, vertex_buffer, instances, instance_submesh, submeshes);
+
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1072,23 +1094,27 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::SolidColorHelperShaderDraw(const Mesh& mesh, VertexBuffer instance_vertex_buffer, unsigned int instance_count, bool bind_mesh_buffers) {
+	void Graphics::SolidColorHelperShaderBind(VertexBuffer instance_vertex_buffer) {
 		BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_SOLID_COLOR);
-		if (bind_mesh_buffers) {
-			BindMesh(mesh);
-		}
 		BindVertexBuffer(instance_vertex_buffer, 1);
-		DrawIndexedInstanced(mesh.index_buffer.count, instance_count);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::SolidColorHelperShaderMeshProperties(CapacityStream<ECS_MESH_INDEX>& properties) {
+		// At the moment, only the position is needed
+		properties.AddAssert(ECS_MESH_POSITION);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::SolidColorHelperShaderDraw(const CoalescedMesh& mesh, VertexBuffer instance_vertex_buffer, Stream<uint2> submeshes, bool bind_mesh_buffers) {
-		BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_SOLID_COLOR);
+		ECS_STACK_CAPACITY_STREAM(ECS_MESH_INDEX, vertex_properties, ECS_MESH_BUFFER_COUNT);
+		SolidColorHelperShaderMeshProperties(vertex_properties);
 		if (bind_mesh_buffers) {
-			BindMesh(mesh.mesh);
+			BindMesh(mesh.mesh, vertex_properties);
 		}
-		BindVertexBuffer(instance_vertex_buffer, 1);
+		SolidColorHelperShaderBind(instance_vertex_buffer);
 		unsigned int drawn_instance_count = 0;
 		for (size_t index = 0; index < submeshes.size; index++) {
 			const Submesh& submesh = mesh.submeshes[submeshes[index].x];
@@ -2024,7 +2050,7 @@ namespace ECSEngine {
 		SamplerState state;
 		HRESULT result = m_device->CreateSamplerState(&sampler_desc, &state.sampler);
 
-		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Constructing sampler state failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Creating sampler state failed!");
 		AddInternalResource(state, temporary, debug_info);
 		return state;
 	}
@@ -2041,27 +2067,36 @@ namespace ECSEngine {
 		graphics->m_internal_resources.SpinWaitWrites();
 		unsigned int resource_count = graphics->m_internal_resources.size.load(ECS_RELAXED);
 
+		bool encountered_protected = false;
 		for (unsigned int index = 0; index < resource_count && resource != nullptr; index++) {
 			if (graphics->m_internal_resources[index].interface_pointer == resource) {
 				bool expected = false;
 				if (graphics->m_internal_resources[index].is_deleted.compare_exchange_weak(expected, true)) {
-					// Exit by changing the interface to nullptr
-					resource = nullptr;
+					// Check to see if the resource is protected. If it is protected, then set
+					// The is_deleted_flag to false again, and continue onwards
+					if (graphics->m_internal_resources[index].is_protected) {
+						graphics->m_internal_resources[index].is_deleted.store(false, ECS_RELAXED);
+						encountered_protected = true;
+					}
+					else {
+						// Exit by changing the interface to nullptr
+						resource = nullptr;
+					}
 				}
 			}
 		}
 
 		graphics->m_internal_resources_reader_count.fetch_sub(1, ECS_RELAXED);
 		if constexpr (assert) {
-			ECS_CRASH_CONDITION_RETURN_VOID(resource == nullptr, "Trying to remove resource from Graphics tracking that was not added");
+			const char* error_string = nullptr;
+			if (encountered_protected) {
+				error_string = "Trying to remove a Graphics protected resource!";
+			}
+			else {
+				error_string = "Trying to remove resource from Graphics tracking that was not added";
+			}
+			ECS_CRASH_CONDITION_RETURN_VOID(resource == nullptr, error_string);
 		}
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	AllocatorPolymorphic Graphics::Allocator() const
-	{
-		return m_allocator;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2085,6 +2120,41 @@ namespace ECSEngine {
 	void Graphics::RemovePossibleResourceFromTracking(void* resource)
 	{
 		RemoveResourceFromTrackingImplementation<false>(this, resource);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	static void SetProtectionStatusForResources(Graphics* graphics, Stream<void*> resources, bool status) {
+		// Acquire the lock - we need exclusive rights for this operation
+		graphics->m_internal_resources_lock.Lock();
+		// Wait for any readers to exit
+		SpinWait<'>'>(graphics->m_internal_resources_reader_count, (unsigned int)0);
+		
+		// For each resource that matches the ones given, change its protection status,
+		// For all of the copies.
+		unsigned int resource_count = graphics->m_internal_resources.SpinWaitWrites();
+		for (unsigned int index = 0; index < resource_count; index++) {
+			void* current_pointer = graphics->m_internal_resources[index].interface_pointer;
+			if (SearchBytes(resources, current_pointer) != -1) {
+				graphics->m_internal_resources[index].is_protected = status;
+			}
+		}
+
+		graphics->m_internal_resources_lock.Unlock();
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::ProtectResources(Stream<void*> resources)
+	{
+		SetProtectionStatusForResources(this, resources, true);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::UnprotectResources(Stream<void*> resources)
+	{
+		SetProtectionStatusForResources(this, resources, false);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3416,14 +3486,16 @@ namespace ECSEngine {
 	void Graphics::AddInternalResource(void* interface_ptr, ECS_GRAPHICS_RESOURCE_TYPE resource_type, DebugInfo debug_info)
 	{
 		GraphicsInternalResource internal_res = {
-				interface_ptr,
-				debug_info,
-				resource_type,
-				false
+			interface_ptr,
+			debug_info,
+			resource_type,
+			false,
+			false
 		};
 
+		unsigned int initial_capacity = m_internal_resources.capacity;
 		unsigned int write_index = m_internal_resources.RequestInt(1);
-		if (write_index >= m_internal_resources.capacity) {
+		if (write_index >= initial_capacity) {
 			bool do_resizing = m_internal_resources_lock.TryLock();
 			// The first one to acquire the lock - do the resizing or the flush of removals
 			if (do_resizing) {
@@ -3435,10 +3507,11 @@ namespace ECSEngine {
 
 				// Do the resizing if no resources were deleted from the main array
 				if (m_internal_resources.size.load(ECS_RELAXED) >= m_internal_resources.capacity) {
-					void* allocation = m_allocator->Allocate(sizeof(GraphicsInternalResource) * (m_internal_resources.capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR));
-					memcpy(allocation, m_internal_resources.buffer, sizeof(GraphicsInternalResource) * m_internal_resources.capacity);
+					unsigned int new_capacity = initial_capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR;
+					void* allocation = m_allocator->Allocate(sizeof(GraphicsInternalResource) * new_capacity);
+					memcpy(allocation, m_internal_resources.buffer, sizeof(GraphicsInternalResource) * initial_capacity);
 					m_allocator->Deallocate(m_internal_resources.buffer);
-					m_internal_resources.InitializeFromBuffer(allocation, m_internal_resources.capacity, m_internal_resources.capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR);
+					m_internal_resources.InitializeFromBuffer(allocation, m_internal_resources.capacity, new_capacity);
 				}
 				write_index = m_internal_resources.RequestInt(1);
 				m_internal_resources[write_index] = internal_res;
@@ -3449,17 +3522,11 @@ namespace ECSEngine {
 			// Other thread got to do the resizing or freeing of the resources - stall until it finishes
 			else {
 				m_internal_resources_lock.WaitLocked();
-				// Rerequest the position
-				write_index = m_internal_resources.RequestInt(1);
-				if (write_index >= m_internal_resources.capacity) {
-					// Retry again
-					AddInternalResource(interface_ptr, resource_type, debug_info);
-					return;
-				}
-				else {
-					m_internal_resources[write_index] = internal_res;
-					m_internal_resources.FinishRequest(1);
-				}
+				// There might be threads that execute other operations that might acquire the lock
+				// So it is not a guarantee that a resize has happened. Retrying again ensures that
+				// No matter what operation was performed, then we will get to resize eventually.
+				AddInternalResource(interface_ptr, resource_type, debug_info);
+				return;
 			}
 		}
 		// Write into the internal resources
@@ -4099,7 +4166,7 @@ namespace ECSEngine {
 
 		if (mismatch_string == nullptr) {
 			// Now check for all the old resources to see if they have been accidentally removed
-			// If there is a false value then it means that an old resources was removed
+			// If there is a false value then it means that an old resource was removed
 			size_t first_missing = SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
 			return first_missing == -1 && size_success;
 		}

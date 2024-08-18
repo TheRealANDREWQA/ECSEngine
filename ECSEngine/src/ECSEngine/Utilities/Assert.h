@@ -23,14 +23,14 @@ namespace ECSEngine {
 
 	// This type of assert can be diverted to a crash
 #define ECS_ASSERT(condition, ...) ECSEngine::Assert(condition, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__);
-#define ECS_ASSERT_FORMAT(condition, ...) if (!condition) { \
+#define ECS_ASSERT_FORMAT(condition, ...) if (!(condition)) { /* Use a pre-check such that the formatting parameters are evaluated only if the branch is taken */\
 	ECS_FORMAT_TEMP_STRING(__message, __VA_ARGS__);  \
 	ECSEngine::Assert(condition, __FILE__, __FUNCTION__, __LINE__, __message.buffer); \
 }
 	
 	// This type of assert cannot be diverted to a crash
 #define ECS_HARD_ASSERT(condition, ...) ECSEngine::HardAssert(condition, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__);
-#define ECS_HARD_ASSERT_FORMAT(condition, ...) if (!condition) { \
+#define ECS_HARD_ASSERT_FORMAT(condition, ...) if (!(condition)) { /* Use a pre-check such that the formatting parameters are evaluated only if the branch is taken */ \
 		ECS_FORMAT_TEMP_STRING(__message, __VA_ARGS__); \
 		ECSEngine::HardAssert(condition, __FILE__, __FUNCTION__, __LINE, __message.buffer); \
 	}

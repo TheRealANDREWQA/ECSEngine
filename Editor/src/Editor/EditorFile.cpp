@@ -135,9 +135,13 @@ bool LoadEditorFile(EditorState* editor_state) {
 		Stream<char> compiler_path_ascii = lines[0].AdvanceReturn(strlen(COMPILER_PATH_STRING));
 		compiler_path_ascii = SkipWhitespace(compiler_path_ascii);
 		compiler_path_ascii = SkipWhitespace(compiler_path_ascii, -1);
+		// Add a null terminator such that the final path contains it at the end
+		compiler_path_ascii.Add('\0');
 		ECS_STACK_CAPACITY_STREAM(wchar_t, compiler_path, 512);
 		ConvertASCIIToWide(compiler_path, compiler_path_ascii);
 		editor_state->settings.compiler_path = compiler_path.Copy(editor_state->EditorAllocator());
+		// Don't include the null terminator in the path size
+		editor_state->settings.compiler_path.size--;
 
 		hub_data->projects.size = 0;
 		if (lines[1].StartsWith(PROJECTS_STRING)) {

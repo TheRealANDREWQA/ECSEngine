@@ -141,18 +141,17 @@ namespace ECSEngine {
 	}
 
 	struct GraphicsInternalResource {
-		inline GraphicsInternalResource& operator = (const GraphicsInternalResource& other) {
-			interface_pointer = other.interface_pointer;
-			type = other.type;
-			debug_info = other.debug_info;
-			is_deleted.store(other.is_deleted.load(ECS_ACQUIRE), ECS_RELEASE);
-
+		ECS_INLINE GraphicsInternalResource& operator = (const GraphicsInternalResource& other) {
+			memcpy(this, &other, sizeof(*this));
 			return *this;
 		}
 
 		void* interface_pointer;
 		DebugInfo debug_info;
 		ECS_GRAPHICS_RESOURCE_TYPE type;
+		// This boolean indicates whether or not the resource is protected.
+		// When it is protected, it means that trying to delete it will result in a soft crash.
+		bool is_protected;
 		std::atomic<bool> is_deleted;
 	};
 
@@ -459,6 +458,9 @@ namespace ECSEngine {
 			Stream<GraphicsSolidColorInstance> instances
 		);
 
+		// NOTE: Not using a template here to not complicate the API, even tho the functions
+		// Are virtually identical in all regards
+
 		// Fills in the instance vertex buffer according to the given instances
 		// The vertex buffer must have at least instances.size entries
 		// An auxiliary buffer, instance_submesh, indicates which submesh the instance
@@ -471,12 +473,27 @@ namespace ECSEngine {
 			CapacityStream<uint2>& submeshes
 		);
 
+		// Fills in the instance vertex buffer according to the given instances
+		// The vertex buffer must have at least instances.size entries
+		// An auxiliary buffer, instance_submesh, indicates which submesh the instance
+		// Belongs to, such that the most efficient draw can be obtained. The ordered
+		// Submeshes alongside their draw count is filled in the out submeshes buffer
+		void SolidColorHelperShaderSetInstances(
+			VertexBuffer vertex_buffer,
+			Stream<GraphicsSolidColorInstance> instances,
+			Stream<size_t> instance_submesh,
+			CapacityStream<ulong2>& submeshes
+		);
+
 		// Unmaps a previously mapped solid color instance data vertex buffer - requires the immediate context
 		void SolidColorHelperShaderUnmap(VertexBuffer vertex_buffer);
 
-		// Draws a mesh with the solid color helper shader
-		// Binds the shader state and optionally the mesh buffers
-		void SolidColorHelperShaderDraw(const Mesh& mesh, VertexBuffer instance_vertex_buffer, unsigned int instance_count, bool bind_mesh_buffers = true);
+		// Binds the necessary state for the solid color helper shader - you just need to bind the
+		// Mesh buffers using the properties necessary for this helper shader, which you can find out
+		// By calling SolidColorHelperShaderMeshProperties
+		void SolidColorHelperShaderBind(VertexBuffer instance_vertex_buffer);
+
+		static void SolidColorHelperShaderMeshProperties(CapacityStream<ECS_MESH_INDEX>& properties);
 		
 		// Draws submeshes from the given coalesced mesh with the solid color helper shader
 		// The x value of the uint2 indicates the submesh index, while the y value is the number of instances
@@ -1070,7 +1087,9 @@ namespace ECSEngine {
 			}
 		}
 
-		AllocatorPolymorphic Allocator() const;
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			return m_allocator;
+		}
 
 		// Only for basic resources
 		template<typename Resource>
@@ -1105,6 +1124,13 @@ namespace ECSEngine {
 
 		// If it doesn't find the resource, it does nothing
 		void RemovePossibleResourceFromTracking(void* resource);
+
+		// Ensures that the given resources are protected. Protected means that a future
+		// Call to remove resource from tracking on any of these resources will fail with a soft crash.
+		void ProtectResources(Stream<void*> resources);
+
+		// Eliminates the protection status of these resources
+		void UnprotectResources(Stream<void*> resources);
 
 		void CreateRenderTargetViewFromSwapChain(bool gamma_corrected);
 		
