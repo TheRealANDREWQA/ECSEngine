@@ -438,8 +438,9 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	template<typename Color>
-	void CreateColorizeBufferImpl(Stream<Color> colors) {
+	// Use color type such that the normal Color type does not get overwritten with the template parameter
+	template<typename ColorType>
+	void CreateColorizeBufferImpl(Stream<ColorType> colors) {
 		ECS_ASSERT(colors.size <= ECS_KB * 4);
 
 		// Use an HSV description since it allows us to have different hues

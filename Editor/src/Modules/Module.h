@@ -259,10 +259,12 @@ void GetModuleDLLImports(EditorState* editor_state, unsigned int index);
 // It will fill in all the indices of the modules that are being used by this module
 void GetModuleDLLImports(const EditorState* editor_state, unsigned int index, CapacityStream<unsigned int>& dll_imports);
 
+// If the recursive flag is set, it will retrieve the external references of modules that are external references to the given one
 void GetModuleDLLExternalReferences(
 	const EditorState* editor_state, 
 	unsigned int index,  
-	CapacityStream<unsigned int>& external_references
+	CapacityStream<unsigned int>& external_references,
+	bool recursive
 );
 
 size_t GetModuleSolutionLastWrite(Stream<wchar_t> solution_path);

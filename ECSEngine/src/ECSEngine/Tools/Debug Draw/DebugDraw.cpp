@@ -3737,11 +3737,14 @@ namespace ECSEngine {
 
 		// Blender export bug - " gets exported as \" - must account for that
 		for (size_t index = 0; index < (unsigned int)AlphabetIndex::Space; index++) {
-			for (size_t subindex = 0; subindex < submesh_count && string_submesh_mask[index] == 0; subindex++) {
+			for (size_t subindex = 0; subindex < submesh_count; subindex++) {
 				// If it is not the invalid character, " or backslash
 				if (string_mesh->submeshes[subindex].name.size == 1) {
 					unsigned int alphabet_index = GetAlphabetIndex(string_mesh->submeshes[subindex].name[0]);
-					string_submesh_mask[index] = (alphabet_index == index) * subindex;
+					if (alphabet_index == index) {
+						string_submesh_mask[index] = subindex;
+						break;
+					}
 				}
 			}
 		}
@@ -3750,7 +3753,7 @@ namespace ECSEngine {
 
 		// "
 		for (size_t index = 0; index < submesh_count; index++) {
-			if (string_mesh->submeshes[index].name[1] == '\"') {
+			if (string_mesh->submeshes[index].name.size > 1 && string_mesh->submeshes[index].name[1] == '\"') {
 				string_submesh_mask[(unsigned int)AlphabetIndex::Quotes] = index;
 				break;
 			}
@@ -3758,7 +3761,7 @@ namespace ECSEngine {
 
 		// backslash
 		for (size_t index = 0; index < submesh_count; index++) {
-			if (string_mesh->submeshes[index].name[1] == '\\') {
+			if (string_mesh->submeshes[index].name.size > 1 && string_mesh->submeshes[index].name[1] == '\\') {
 				string_submesh_mask[(unsigned int)AlphabetIndex::Backslash] = index;
 				break;
 			}
@@ -3766,10 +3769,15 @@ namespace ECSEngine {
 
 		// Invalid character
 		for (size_t index = 0; index < submesh_count; index++) {
-			if (string_mesh->submeshes[index].name[1] != '\0' && string_mesh->submeshes[index].name[2] != '\0') {
+			if (string_mesh->submeshes[index].name.size > 1 && string_mesh->submeshes[index].name[1] != '\"' && string_mesh->submeshes[index].name[1] != '\\') {
 				string_submesh_mask[submesh_count - 1] = index;
 				break;
 			}
+		}
+
+		// Validate that we do not repeat a mesh
+		for (size_t index = 0; index < submesh_count; index++) {
+			ECS_ASSERT(SearchBytes(string_submesh_mask + index + 1, submesh_count - index - 1, string_submesh_mask[index], sizeof(unsigned int)) == -1);
 		}
 
 		// Swap the submeshes according to the mask

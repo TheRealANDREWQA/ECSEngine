@@ -90,7 +90,7 @@ namespace ECSEngine {
 
 	// Shifts the pointer 3 positions to the right in order to provide significant digits for hashing functions
 	// like power of two that use the lower bits in order to hash the element inside the table.
-	// It will clip to only 24 bits - 3 bytes - that's the precision the hash table work with
+	// It will clip to only 24 bits - 3 bytes - that's the precision the hash table works with
 	ECS_INLINE unsigned int PointerHash(const void* ptr) {
 		return (unsigned int)(((uintptr_t)ptr >> 3) & 0x0000000000FFFFFF);
 	}

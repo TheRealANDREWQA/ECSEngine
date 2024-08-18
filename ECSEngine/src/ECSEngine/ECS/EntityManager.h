@@ -1487,6 +1487,9 @@ namespace ECSEngine {
 		// Fills in all the shared instances that are registered for that component
 		void GetSharedComponentInstanceAll(Component component, CapacityStream<SharedInstance>& shared_instances) const;
 
+		// Returns the number of instances created for the given component
+		unsigned int GetSharedComponentInstanceCount(Component component) const;
+
 		// These are vector components which are much faster to use than normal components
 		VectorComponentSignature ECS_VECTORCALL GetArchetypeUniqueComponents(unsigned int archetype_index) const;
 

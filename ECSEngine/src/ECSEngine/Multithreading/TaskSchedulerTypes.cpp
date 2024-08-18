@@ -36,7 +36,7 @@ namespace ECSEngine {
 
 	static void AddSharedComponentImpl(TaskComponentQuery* query, Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory, bool check_optional) {
 		if (check_optional) {
-			ECS_ASSERT(query->optional_component_count == 0, "Trying to add TaskComponentQuery shared component after optional one");
+			ECS_ASSERT(query->optional_shared_component_count == 0, "Trying to add TaskComponentQuery shared component after optional one");
 		}
 		
 		if (query->shared_component_count < ECS_TASK_COMPONENT_QUERY_COUNT) {

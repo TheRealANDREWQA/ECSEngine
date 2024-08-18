@@ -274,10 +274,10 @@ namespace ECSEngine {
 		bool ForEachResource(ResourceType resource_type, Functor&& functor) const {
 			return m_resource_types[(unsigned int)resource_type].ForEachConst<early_exit>([&](ResourceManagerEntry entry, ResourceIdentifier identifier) {
 				if constexpr (early_exit) {
-					return functor(entry.data_pointer.GetPointer());
+					return functor(entry.data);
 				}
 				else {
-					functor(entry.data_pointer.GetPointer());
+					functor(entry.data);
 				}
 			});
 		}
@@ -320,6 +320,9 @@ namespace ECSEngine {
 		ResourceManagerSnapshot GetSnapshot(AllocatorPolymorphic allocator) const;
 		
 		unsigned int GetReferenceCount(ResourceType type, unsigned int resource_index) const;
+
+		// Returns the number of currently loaded resource for the given type
+		unsigned int GetResourceCount(ResourceType type) const;
 
 		// Returns true whether or not the given stamp is greater than the stamp currently registered. If the entry doesn't exist,
 		// it returns false. The suffix is optional (can either bake it into the identifier or give it to the function to do it)

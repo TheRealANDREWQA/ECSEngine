@@ -780,6 +780,13 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+	unsigned int ResourceManager::GetResourceCount(ResourceType type) const
+	{
+		return m_resource_types[(unsigned int)type].GetCount();
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	bool ResourceManager::IsResourceOutdated(ResourceIdentifier identifier, ResourceType type, size_t new_stamp, Stream<void> suffix)
 	{
 		ResourceManagerEntry entry = GetEntry(identifier, type, suffix);

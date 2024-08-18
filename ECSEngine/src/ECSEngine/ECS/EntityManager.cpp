@@ -4886,6 +4886,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	unsigned int EntityManager::GetSharedComponentInstanceCount(Component component) const
+	{
+		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: Trying to retrieve instance count for shared component {#}, but it doesn't exist.", component.value);
+		return m_shared_components[component.value].instances.stream.size;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	VectorComponentSignature EntityManager::GetArchetypeUniqueComponents(unsigned int archetype_index) const
 	{
 		return GetEntityManagerUniqueVectorSignature(m_archetype_vector_signatures, archetype_index);

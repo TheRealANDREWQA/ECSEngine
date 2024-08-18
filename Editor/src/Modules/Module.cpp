@@ -926,8 +926,8 @@ static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	ReleaseModuleStreamsAndHandle(editor_state, index, configuration);
 
 	ECS_STACK_CAPACITY_STREAM(unsigned int, external_references, 512);
-	// Get the external references. We need to unload these before trying to procede
-	GetModuleDLLExternalReferences(editor_state, index, external_references);
+	// Get the external references. We need to unload these before trying to proceed
+	GetModuleDLLExternalReferences(editor_state, index, external_references, true);
 
 	// It the module has imports, it will fill them in the stream
 	// If all the imports are in their good state, the imports will be empty
@@ -1713,9 +1713,12 @@ void GetModuleDLLImports(const EditorState* editor_state, unsigned int index, Ca
 void GetModuleDLLExternalReferences(
 	const EditorState* editor_state, 
 	unsigned int index, 
-	CapacityStream<unsigned int>& external_references
+	CapacityStream<unsigned int>& external_references,
+	bool recursive
 )
 {
+	unsigned int initial_size = external_references.size;
+
 	ECS_STACK_CAPACITY_STREAM(wchar_t, library_name, 512);
 	ECS_STACK_CAPACITY_STREAM(char, ascii_library_name, 512);
 	GetModuleFilenameNoConfig(editor_state->project_modules->buffer[index].library_name, library_name);
@@ -1724,8 +1727,19 @@ void GetModuleDLLExternalReferences(
 	for (unsigned int subindex = 0; subindex < editor_state->project_modules->size; subindex++) {
 		if (subindex != index) {
 			if (FindString(ascii_library_name, editor_state->project_modules->buffer[subindex].dll_imports) != -1) {
-				external_references.AddAssert(subindex);
+				// Add the entry only if it doesn't already exist
+				if (external_references.Find(subindex) == -1) {
+					external_references.AddAssert(subindex);
+				}
 			}
+		}
+	}
+
+	if (recursive) {
+		// Use a local variable for the external_references size because it can be updated by the recursive calls
+		unsigned int current_size = external_references.size;
+		for (unsigned int subindex = initial_size; subindex < current_size; subindex++) {
+			GetModuleDLLExternalReferences(editor_state, external_references[subindex], external_references, true);
 		}
 	}
 }
@@ -2333,7 +2347,7 @@ bool UpdateModuleSolutionLastWrite(EditorState* editor_state, unsigned int index
 		}
 
 		ECS_STACK_CAPACITY_STREAM(unsigned int, external_dependencies, 512);
-		GetModuleDLLExternalReferences(editor_state, index, external_dependencies);
+		GetModuleDLLExternalReferences(editor_state, index, external_dependencies, true);
 		for (unsigned int subindex = 0; subindex < external_dependencies.size; subindex++) {
 			for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
 				EditorModuleInfo* info = GetModuleInfo(editor_state, external_dependencies[subindex], (EDITOR_MODULE_CONFIGURATION)configuration_index);
