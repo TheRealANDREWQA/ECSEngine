@@ -665,18 +665,19 @@ namespace ECSEngine {
 	// The overall index is the index of the sorted entry, i.e. an index that is incremented for each entry
 	// The original index is the index inside the group_indices array that can be used to reference other data
 	// The group_index parameter is the index of the ordered group it belongs to
-	// The group_functor receives as parameters (size_t group_index, uint2 group_count).
+	// The group_functor receives as parameters (size_t group_index, ulong2 group_count).
 	// The group_count parameter contains in the x component the group value (the one in group_indices) and in the y the count of existing entries
 	// The temporary allocator is needed in order to make a temporary allocation
-	template<typename EntryFunctor, typename GroupFunctor>
-	void ForEachGroup(Stream<unsigned int> group_indices, AllocatorPolymorphic temporary_allocator, EntryFunctor&& entry_functor, GroupFunctor&& group_functor)
+	// IntegerType should be a fundamental integer type
+	template<typename EntryFunctor, typename GroupFunctor, typename IntegerType>
+	void ForEachGroup(Stream<IntegerType> group_indices, AllocatorPolymorphic temporary_allocator, EntryFunctor&& entry_functor, GroupFunctor&& group_functor)
 	{
 		size_t allocation_size = BooleanBitField::MemoryOf(group_indices.size);
 		void* allocation = AllocateEx(temporary_allocator, allocation_size);
 		memset(allocation, 0, allocation_size);
 		BooleanBitField bit_field(allocation, group_indices.size);
 
-		uint2 current_group;
+		ulong2 current_group;
 		size_t group_index = 0;
 		size_t ordered_index = 0;
 		for (size_t index = 0; index < group_indices.size; index++) {

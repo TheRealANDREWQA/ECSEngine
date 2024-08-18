@@ -863,6 +863,17 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 	}
 #else
 
+	ECS_STACK_CAPACITY_STREAM(wchar_t, flag_file, 256);
+	GetProjectDebugFolder(editor_state, flag_file);
+	flag_file.Add(ECS_OS_PATH_SEPARATOR);
+	GetModuleBuildFlagFile(editor_state, index, configuration, command, flag_file);
+
+	// Remove the flag file, if it exists, such that the check loop does not believe the compilation has finished when it did not
+	// Don't assert that it succeeded, since it may not be there
+	RemoveFile(flag_file);
+
+	// Ensure that the last character is a null terminator
+	ECS_ASSERT(editor_state->settings.compiler_path[editor_state->settings.compiler_path.size] == L'\0', "Editor compiler path does not end with a null terminator!");
 	HINSTANCE value = ShellExecute(NULL, L"runas", L"C:\\Windows\\System32\\cmd.exe", command_string.buffer, editor_state->settings.compiler_path.buffer, SW_HIDE);
 	if ((uint64_t)value < 32) {
 		if (!disable_logging) {
@@ -874,11 +885,6 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		return EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING;
 	}
 	else {
-		ECS_STACK_CAPACITY_STREAM(wchar_t, flag_file, 256);
-		GetProjectDebugFolder(editor_state, flag_file);
-		flag_file.Add(ECS_OS_PATH_SEPARATOR);
-		GetModuleBuildFlagFile(editor_state, index, configuration, command, flag_file);
-
 		// Log the command status
 		CheckBuildStatusEventData check_data;
 		check_data.editor_state = editor_state;

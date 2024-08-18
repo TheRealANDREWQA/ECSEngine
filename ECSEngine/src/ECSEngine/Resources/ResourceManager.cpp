@@ -44,6 +44,7 @@ namespace ECSEngine {
 			entry.reference_count = reference_count;
 			entry.time_stamp = OS::GetFileLastWrite(path);
 			entry.suffix_size = load_descriptor.identifier_suffix.size;
+			entry.is_protected = false;
 
 			ResourceIdentifier new_identifier(allocation, identifier.size);
 			resource_manager->m_resource_types[type_int].InsertDynamic(resource_manager->m_memory, entry, new_identifier);
@@ -122,6 +123,7 @@ namespace ECSEngine {
 				entry.reference_count = initial_increment;
 				entry.time_stamp = OS::GetFileLastWrite(path);
 				entry.suffix_size = load_descriptor.identifier_suffix.size;
+				entry.is_protected = false;
 
 				ResourceIdentifier new_identifier(allocation, identifier.size);
 				resource_manager->m_resource_types[type_int].InsertDynamic(resource_manager->m_memory, entry, new_identifier);
@@ -175,6 +177,7 @@ namespace ECSEngine {
 		unsigned int type_int = (unsigned int)type;
 
 		ResourceManagerEntry* entry = resource_manager->m_resource_types[type_int].GetValuePtrFromIndex(index);
+		ECS_ASSERT_FORMAT(!entry->is_protected, "ResourceManager: Trying to unload protected resource {#} of type {#}.", resource_manager->m_resource_types[type_int].GetIdentifierFromIndex(index), ResourceTypeString(type));
 
 		void (*handler)(void*, ResourceManager*) = UNLOAD_FUNCTIONS[type_int];
 
@@ -413,6 +416,7 @@ namespace ECSEngine {
 		entry.reference_count = reference_count;
 		entry.time_stamp = time_stamp;
 		entry.suffix_size = suffix.size;
+		entry.is_protected = false;
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
 		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
@@ -461,36 +465,6 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void* ResourceManager::Allocate(size_t size)
-	{
-		return m_memory->Allocate(size);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void* ResourceManager::AllocateTs(size_t size)
-	{
-		return m_memory->Allocate_ts(size);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	AllocatorPolymorphic ResourceManager::Allocator()
-	{
-		return m_memory;
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	AllocatorPolymorphic ResourceManager::AllocatorTs()
-	{
-		AllocatorPolymorphic allocator = m_memory;
-		allocator.allocation_type = ECS_ALLOCATION_MULTI;
-		return allocator;
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
 	size_t ResourceManager::ChangeTimeStamp(ResourceIdentifier identifier, ResourceType resource_type, size_t new_time_stamp, Stream<void> suffix)
 	{
 		ResourceManagerEntry* entry = GetEntryPtr(identifier, resource_type, suffix);
@@ -502,26 +476,14 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::Deallocate(const void* data)
-	{
-		m_memory->Deallocate(data);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void ResourceManager::DeallocateTs(const void* data)
-	{
-		m_memory->Deallocate_ts(data);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
 	template<bool delete_if_zero>
 	void ResourceManager::DecrementReferenceCounts(ResourceType type, unsigned short amount)
 	{
 		unsigned int type_int = (unsigned int)type;
 		m_resource_types[type_int].ForEachIndex([&](unsigned int index) {
 			ResourceManagerEntry* entry = m_resource_types[type_int].GetValuePtrFromIndex(index);
+			ECS_ASSERT_FORMAT(!entry->is_protected, "ResourceManager: Trying to decrement reference count for protected resource {#} of type {#} "
+				"during a decrement call for all entries.", m_resource_types[type_int].GetIdentifierFromIndex(index), ResourceTypeString(type));
 			unsigned short reference_count = entry->reference_count;
 
 			if (reference_count != USHORT_MAX) {
@@ -545,6 +507,8 @@ namespace ECSEngine {
 	bool ResourceManager::DecrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned short amount)
 	{
 		ResourceManagerEntry* entry = m_resource_types[(unsigned int)type].GetValuePtrFromIndex(resource_index);
+		ECS_ASSERT_FORMAT(!entry->is_protected, "ResourceManager: Trying to decrement the reference count of protected resource {#} of type {#}.",
+			m_resource_types[(unsigned int)type].GetIdentifierFromIndex(resource_index), ResourceTypeString(type));
 		entry->reference_count = SaturateSub(entry->reference_count, amount);
 		return entry->reference_count == 0;
 	}
@@ -602,7 +566,7 @@ namespace ECSEngine {
 
 		unsigned int type_int = (unsigned int)type;
 		unsigned int table_index = m_resource_types[type_int].Find(identifier);
-		ECS_ASSERT(table_index != -1, "Trying to evict a resource from ResourceManager that doesn't exist.");
+		ECS_ASSERT_FORMAT(table_index != -1, "ResourceManager: Trying to evict resource {#} of type {#} that doesn't exist.", identifier, ResourceTypeString(type));
 
 		EvictResource(table_index, type);;
 	}
@@ -615,6 +579,7 @@ namespace ECSEngine {
 
 		ResourceManagerEntry entry = m_resource_types[type_int].GetValueFromIndex(index);
 		ResourceIdentifier identifier = m_resource_types[type_int].GetIdentifierFromIndex(index);
+		ECS_ASSERT_FORMAT(!entry.is_protected, "ResourceManager: Trying to evict protected resource {#} of type {#}.", identifier, ResourceTypeString(type));
 
 		Deallocate(identifier.ptr);
 		m_resource_types[type_int].EraseFromIndex(index);
@@ -802,6 +767,8 @@ namespace ECSEngine {
 	void ResourceManager::IncrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned short amount)
 	{
 		ResourceManagerEntry* entry = m_resource_types[(unsigned int)type].GetValuePtrFromIndex(resource_index);
+		ECS_ASSERT_FORMAT(!entry->is_protected, "ResourceManager: Trying to increment the reference count of protected resource {#} of type {#}.", 
+			m_resource_types[(unsigned int)type].GetIdentifierFromIndex(resource_index), ResourceTypeString(type));
 		entry->reference_count = SaturateAdd(entry->reference_count, amount);
 		if (entry->reference_count == USHORT_MAX) {
 			entry->reference_count = USHORT_MAX - 1;
@@ -814,6 +781,8 @@ namespace ECSEngine {
 	{
 		unsigned int type_int = (unsigned int)type;
 		m_resource_types[type_int].ForEach([&](ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+			ECS_ASSERT_FORMAT(!entry.is_protected, "ResourceManager: Trying to increment the reference count of protected resource {#} of type {#} during a call to increment"
+				" the reference count for all entries.", identifier, ResourceTypeString(type));
 			entry.reference_count = SaturateAdd(entry.reference_count, amount);
 			if (entry.reference_count == USHORT_MAX) {
 				entry.reference_count = USHORT_MAX - 1;
@@ -2188,6 +2157,22 @@ namespace ECSEngine {
 		resizable_data.capacity = data.size;
 		resizable_data.allocator = allocator;
 		return resizable_data;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::ProtectResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix) {
+		ResourceManagerEntry* entry = GetEntryPtr(identifier, resource_type, suffix);
+		ECS_ASSERT_FORMAT(entry != nullptr, "ResourceManager: Trying to protect resource {#} of type {#} and with suffix {#}, but it doesn't exist.", identifier, ResourceTypeString(resource_type), suffix);
+		entry->is_protected = true;
+	}
+
+	void ResourceManager::UnprotectResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix) {
+		ResourceManagerEntry* entry = GetEntryPtr(identifier, resource_type, suffix);
+		ECS_ASSERT_FORMAT(entry != nullptr, "ResourceManager: Trying to unprotect resource {#} of type {#} and with suffix {#}, but it doesn't exist.", identifier, ResourceTypeString(resource_type), suffix);
+		ECS_ASSERT_FORMAT(entry->is_protected, "ResourceManager: Trying to unprotect resource {#} of type {#} and with suffix {#}, but it was not protected beforehand.",
+			identifier, ResourceTypeString(resource_type), suffix);
+		entry->is_protected = false;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

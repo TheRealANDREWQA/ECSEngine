@@ -40,8 +40,9 @@ void DisplaySandboxTexture(EditorState* editor_state, UIDrawer& drawer, EDITOR_S
 void DisplayGraphicsModuleRecompilationWarning(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_sandbox_module_index, UIDrawer& drawer)
 {
 	// Determine if the graphics module is out of date to display a warning
-	bool is_out_of_date = GetSandboxModuleInfo(editor_state, sandbox_index, in_sandbox_module_index)->load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE;
-	if (is_out_of_date) {
+	EDITOR_MODULE_LOAD_STATUS status = GetSandboxModuleInfo(editor_state, sandbox_index, in_sandbox_module_index)->load_status;
+	bool is_out_of_date_or_failed = status == EDITOR_MODULE_LOAD_OUT_OF_DATE || status == EDITOR_MODULE_LOAD_FAILED;
+	if (is_out_of_date_or_failed) {
 		UIDrawConfig config;
 		float2 warning_scale = drawer.GetSquareScale(0.1f);
 

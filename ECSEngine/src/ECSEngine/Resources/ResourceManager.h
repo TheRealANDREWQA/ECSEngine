@@ -54,6 +54,9 @@ namespace ECSEngine {
 		size_t time_stamp;
 		unsigned short reference_count;
 		unsigned short suffix_size;
+		// If a resource is protected, it means that any decrement or increment reference count call on this resource will
+		// Fail with a soft crash.
+		bool is_protected = false;
 	};
 
 	typedef HashTableDefault<ResourceManagerEntry> ResourceManagerTable;
@@ -180,7 +183,7 @@ namespace ECSEngine {
 			ResourceType resource_type,
 			void* resource, 
 			size_t time_stamp = 0,
-			Stream<void> suffix = { nullptr, 0 },
+			Stream<void> suffix = {},
 			unsigned short reference_count = USHORT_MAX
 		);
 
@@ -190,25 +193,37 @@ namespace ECSEngine {
 			ResourceIdentifier identifier,
 			size_t time_stamp = 0,
 			bool reference_counted = false,
-			Stream<void> suffix = { nullptr, 0 }
+			Stream<void> suffix = {}
 		);
 
 		void AddShaderDirectory(Stream<wchar_t> directory);
 
-		void* Allocate(size_t size);
+		ECS_INLINE void* Allocate(size_t size) {
+			return m_memory->Allocate(size);
+		}
 
-		void* AllocateTs(size_t size);
+		ECS_INLINE void* AllocateTs(size_t size) {
+			return m_memory->Allocate_ts(size);
+		}
 
-		AllocatorPolymorphic Allocator();
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			return m_memory;
+		}
 
-		AllocatorPolymorphic AllocatorTs();
+		ECS_INLINE AllocatorPolymorphic AllocatorTs() const {
+			return AllocatorPolymorphic(m_memory).AsMulti();
+		}
 
 		// Returns the old time stamp
-		size_t ChangeTimeStamp(ResourceIdentifier identifier, ResourceType resource_type, size_t new_time_stamp, Stream<void> suffix = { nullptr, 0 });
+		size_t ChangeTimeStamp(ResourceIdentifier identifier, ResourceType resource_type, size_t new_time_stamp, Stream<void> suffix = {});
 
-		void Deallocate(const void* data);
+		ECS_INLINE void Deallocate(const void* data) {
+			m_memory->Deallocate(data);
+		}
 
-		void DeallocateTs(const void* data);
+		ECS_INLINE void DeallocateTs(const void* data) {
+			m_memory->Deallocate_ts(data);
+		}
 
 		// Decrements the reference count all resources of that type
 		template<bool delete_if_zero = true>
@@ -220,13 +235,13 @@ namespace ECSEngine {
 		unsigned int FindResourceFromPointer(void* resource, ResourceType type) const;
 
 		// Checks to see if the resource exists
-		bool Exists(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
+		bool Exists(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = {}) const;
 
 		// Checks to see if the resource exists and returns its position as index inside the hash table
-		bool Exists(ResourceIdentifier identifier, ResourceType type, unsigned int& table_index, Stream<void> suffix = { nullptr, 0 }) const;
+		bool Exists(ResourceIdentifier identifier, ResourceType type, unsigned int& table_index, Stream<void> suffix = {}) const;
 
 		// Removes a resource from the table - it does not unload it. (it just removes it from the table)
-		void EvictResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 });
+		void EvictResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = {});
 		
 		// Removes a resource from the table - it does not unload it. (it just removes it from the table)
 		void EvictResource(unsigned int index, ResourceType type);
@@ -295,26 +310,26 @@ namespace ECSEngine {
 		}
 
 		// It returns -1 if the resource doesn't exist
-		unsigned int GetResourceIndex(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
+		unsigned int GetResourceIndex(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = {}) const;
 
 		// It returns nullptr if the resource doesn't exist
-		void* GetResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 });
+		void* GetResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = {});
 
 		// It returns nullptr if the resource doesn't exist
-		const void* GetResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
+		const void* GetResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = {}) const;
 
 		void* GetResourceFromIndex(unsigned int index, ResourceType type) const;
 
 		ResourceIdentifier GetResourceIdentifierFromIndex(unsigned int index, ResourceType type) const;
 
 		// Returns -1 if the identifier doesn't exist
-		size_t GetTimeStamp(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
+		size_t GetTimeStamp(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = {}) const;
 
 		// Returns an entry with the data pointer set to nullptr and the time stamp to -1
-		ResourceManagerEntry GetEntry(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
+		ResourceManagerEntry GetEntry(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = {}) const;
 
 		// Returns nullptr if the identifier doesn't exist
-		ResourceManagerEntry* GetEntryPtr(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 });
+		ResourceManagerEntry* GetEntryPtr(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = {});
 
 		// Returns the current state of the resources inside - including identifiers and suffix sizes
 		ResourceManagerSnapshot GetSnapshot(AllocatorPolymorphic allocator) const;
@@ -326,7 +341,7 @@ namespace ECSEngine {
 
 		// Returns true whether or not the given stamp is greater than the stamp currently registered. If the entry doesn't exist,
 		// it returns false. The suffix is optional (can either bake it into the identifier or give it to the function to do it)
-		bool IsResourceOutdated(ResourceIdentifier identifier, ResourceType type, size_t new_stamp, Stream<void> suffix = { nullptr, 0 });
+		bool IsResourceOutdated(ResourceIdentifier identifier, ResourceType type, size_t new_stamp, Stream<void> suffix = {});
 
 		void IncrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned short amount);
 
@@ -540,6 +555,12 @@ namespace ECSEngine {
 		ResizableStream<void> LoadMiscImplementation(Stream<wchar_t> filename, AllocatorPolymorphic allocator = { nullptr }, ResourceManagerLoadDesc load_descriptor = {});
 
 		// ---------------------------------------------------------------------------------------------------------------------------
+
+		void ProtectResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix = {});
+
+		void UnprotectResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix = {});
+
+		// ---------------------------------------------------------------------------------------------------------------------------
 		
 		// Brings back the state of the resource manager to the recorded snapshot. Can optionally give a string to be built with the
 		// mismatches that are between the two states. Returns true if there are no mismatches, else false
@@ -547,15 +568,15 @@ namespace ECSEngine {
 		bool RestoreSnapshot(const ResourceManagerSnapshot& snapshot, CapacityStream<char>* mismatch_string = nullptr);
 
 		// Reassigns a value to a resource that has been loaded; the resource is first destroyed then reassigned
-		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix = { nullptr, 0 });
+		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix = {});
 
 		// Reassigns a value to a resource that has been loaded; no destruction is being done
-		void RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix = { nullptr, 0 });
+		void RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix = {});
 
-		void RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix = { nullptr, 0 });
+		void RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix = {});
 
 		// Returns true when reference counted is set to true and the time stamp was removed
-		bool RemoveTimeStamp(ResourceIdentifier identifier, bool reference_count = false, Stream<void> suffix = { nullptr, 0 });
+		bool RemoveTimeStamp(ResourceIdentifier identifier, bool reference_count = false, Stream<void> suffix = {});
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 

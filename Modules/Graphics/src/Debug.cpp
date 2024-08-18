@@ -3,7 +3,7 @@
 #include "ECSEngineWorld.h"
 #include "GraphicsComponents.h"
 
-#define GRAPHICS_DEBUG_DATA_STRING "__GraphicsDebugData"
+#define GRAPHICS_DEBUG_DATA_STRING "GraphicsDebugData"
 #define ALLOCATOR_CAPACITY ECS_MB
 #define ALLOCATOR_BACKUP_CAPACITY ECS_MB
 #define RANDOM_COLOR_COUNT ECS_KB * 4
@@ -53,15 +53,19 @@ struct Iterator : IteratorInterface<const Entity> {
 	unsigned int stream_index;
 };
 
-static void GraphicsDebugAddSolidGroup(GraphicsDebugData* data, GraphicsDebugSolidGroup group) {
+static void GraphicsDebugAddSolidGroup(World* world, GraphicsDebugData* data, GraphicsDebugSolidGroup group) {
 	if (group.randomize_color) {
 		unsigned int entry_index = data->groups.size % RANDOM_COLOR_COUNT;
 		group.color = data->colors[entry_index];
 	}
 	
+	GraphicsDebugData::Group debug_group;
+	debug_group.color = group.color;
 	// Reallocate the buffer
-	group.entities = group.entities.Copy(&data->allocator);
-	data->groups.Add(group);
+	debug_group.entities = group.entities.Copy(&data->allocator);
+	// Create an instanced vertex buffer for the group
+	debug_group.instanced_vertex_buffer = world->graphics->SolidColorHelperShaderCreateVertexBufferInstances(debug_group.entities.size, false);
+	data->groups.Add(debug_group);
 
 	// Add the entities to the hash table
 	for (size_t index = 0; index < group.entities.size; index++) {
@@ -70,9 +74,10 @@ static void GraphicsDebugAddSolidGroup(GraphicsDebugData* data, GraphicsDebugSol
 	}
 }
 
-static void GraphicsDebugResetSolidGroups(GraphicsDebugData* data) {
-	// Deallocate the entity buffers
+static void GraphicsDebugResetSolidGroups(World* world, GraphicsDebugData* data) {
+	// Deallocate the entity buffers and the vertex buffers
 	for (unsigned int index = 0; index < data->groups.size; index++) {
+		world->graphics->FreeResource(data->groups[index].instanced_vertex_buffer);
 		data->groups[index].entities.Deallocate(&data->allocator);
 	}
 
@@ -111,21 +116,28 @@ void GraphicsDebugInitialize(World* world, StaticThreadTaskInitializeInfo* info)
 
 void GraphicsDebugAddSolidGroup(World* world, GraphicsDebugSolidGroup group) {
 	GraphicsDebugData* data = GetGraphicsDebugData(world);
-	GraphicsDebugAddSolidGroup(data, group);
+	GraphicsDebugAddSolidGroup(world, data, group);
 }
 
 void GraphicsDebugSetSolidGroups(World* world, Stream<GraphicsDebugSolidGroup> groups) {
 	GraphicsDebugData* data = GetGraphicsDebugData(world);
-	GraphicsDebugResetSolidGroups(data);
+	GraphicsDebugResetSolidGroups(world, data);
 	for (size_t index = 0; index < groups.size; index++) {
-		GraphicsDebugAddSolidGroup(data, groups[index]);
+		GraphicsDebugAddSolidGroup(world, data, groups[index]);
 	}
 }
 
 void GraphicsDebugResetSolidGroups(World* world) {
-	GraphicsDebugResetSolidGroups(GetGraphicsDebugData(world));
+	GraphicsDebugResetSolidGroups(world, GetGraphicsDebugData(world));
 }
 
+struct GraphicsDebugDrawData {
+	const GraphicsDebugData* data;
+	const Matrix* camera_matrix;
+	GraphicsSolidColorInstance* instance_vertex_data;
+};
+
+// During this pass, only the instance vertex buffer must be filled in
 static void GraphicsDebugDraw_Impl(
 	const ForEachEntityData* for_each_data,
 	const RenderMesh* render_mesh,
@@ -133,10 +145,13 @@ static void GraphicsDebugDraw_Impl(
 	const Rotation* rotation,
 	const Scale* scale
 ) {
-	const GraphicsDebugData* data = (const GraphicsDebugData*)for_each_data->user_data;
+	const GraphicsDebugDrawData* data = (const GraphicsDebugDrawData*)for_each_data->user_data;
 	if (render_mesh->Validate()) {
 		Matrix transform_matrix = GetEntityTransformMatrix(translation, rotation, scale);
-		
+
+		Matrix mvp_matrix = transform_matrix * *data->camera_matrix;
+		mvp_matrix = MatrixGPU(mvp_matrix);
+		//data->
 	}
 }
 
