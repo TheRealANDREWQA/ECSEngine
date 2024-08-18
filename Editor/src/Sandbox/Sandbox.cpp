@@ -2193,11 +2193,18 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 
 void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, GraphicsResourceSnapshot snapshot, EDITOR_SANDBOX_VIEWPORT viewport)
 {
+	ECS_STACK_CAPACITY_STREAM(char, error_string, ECS_KB * 32);
+
 	// Restore the graphics snapshot and deallocate it
-	bool are_resources_valid = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(snapshot);
+	bool are_resources_valid = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(snapshot, &error_string);
 	if (!are_resources_valid) {
 		ECS_FORMAT_TEMP_STRING(console_message, "Restoring graphics resources after sandbox {#} failed.", sandbox_index);
 		EditorSetConsoleError(console_message);
+	}
+	else if (error_string.size > 0) {
+		ECS_FORMAT_TEMP_STRING(console_message, "Restoring graphics resources found added resources after sandbox {#} ran. They were freed in order to maintain consistency. Detailed error:", sandbox_index);
+		EditorSetConsoleError(console_message);
+		EditorSetConsoleError(error_string);
 	}
 	snapshot.Deallocate(editor_state->EditorAllocator());
 

@@ -6043,39 +6043,18 @@ namespace ECSEngine {
 				}
 			}
 
-			// Index buffer - a new copy must be created which has the indices offset by the correct amount
-			// Use a staging resource for that
-			IndexBuffer staging_buffer = BufferToStaging(graphics, current_mesh.index_buffer);
-
-			// Map the staging buffer 
-			unsigned int* staging_data = (unsigned int*)graphics->MapBuffer(staging_buffer.buffer, ECS_GRAPHICS_MAP_READ_WRITE);
-
+			
+			unsigned int index_buffer_count = current_mesh.index_buffer.count;
 			unsigned int current_mesh_vertex_offset = vertex_buffer_offset;
 			unsigned int current_mesh_index_offset = index_buffer_offset;
 
-			Vec8ui simd_offset(vertex_buffer_offset);
-
-			// Use simd to increase the offsets
-			unsigned int index_buffer_count = current_mesh.index_buffer.count;
-			size_t simd_count = GetSimdCount(index_buffer_count, simd_offset.size());
-			for (size_t simd_index = 0; simd_index < simd_count; simd_index += simd_offset.size()) {
-				Vec8ui data;
-				data.load(staging_data + simd_index);
-				data += simd_offset;
-				data.store(staging_data + simd_index);
-			}
-			for (size_t simd_index = simd_count; simd_index < index_buffer_count; simd_index++) {
-				staging_data[simd_index] += vertex_buffer_offset;
-			}
-			graphics->UnmapBuffer(staging_buffer.buffer);
-			CopyBufferSubresource(new_index_buffer, index_buffer_offset, staging_buffer, 0, index_buffer_count, graphics->GetContext());
+			// Copy the index buffer data
+			CopyBufferSubresource(new_index_buffer, index_buffer_offset, current_mesh.index_buffer, 0, index_buffer_count, graphics->GetContext());
+			
 			index_buffer_offset += index_buffer_count;
 
 			// all vertex buffers must have the same size
 			vertex_buffer_offset += current_mesh.vertex_buffers[0].size;
-
-			// Release the staging buffer and the normal buffer
-			staging_buffer.Release();
 
 			if (options->free_existing_meshes) {
 				graphics->FreeResource(current_mesh.index_buffer);
@@ -6099,6 +6078,9 @@ namespace ECSEngine {
 				current_mesh_index_offset += current_submesh.index_count;
 				current_mesh_vertex_offset += current_submesh.vertex_count;
 			}
+
+			ECS_ASSERT(current_mesh_index_offset == index_buffer_offset, "Merging an invalid mesh: its submesh index count is different from the its index buffer count.");
+			ECS_ASSERT(current_mesh_vertex_offset == vertex_buffer_offset, "Merging an invalid mesh: its submesh vertex count is different from the its vertex buffer count.");
 		}
 
 		result.mesh.index_buffer = new_index_buffer;
@@ -6126,6 +6108,37 @@ namespace ECSEngine {
 
 	CoalescedMesh MergeCoalescedMeshes(Graphics* graphics, Stream<CoalescedMesh*> meshes, AllocatorPolymorphic allocator, const MergeMeshesOptions* options) {
 		return MergeMeshesImplementation(graphics, meshes, allocator, options);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	CoalescedMesh MergeCoalescedMeshesAsCoalescedSubmeshes(
+		Graphics* graphics,
+		Stream<CoalescedMesh*> meshes,
+		AllocatorPolymorphic allocator,
+		const MergeMeshesOptions* options
+	) {
+		// Use the normal call, even tho it is a bit more inefficient in the sense that a larger submesh
+		// Buffer is used, but it is not all that important
+		CoalescedMesh coalesced_mesh = MergeCoalescedMeshes(graphics, meshes, allocator, options);
+		
+		// For each mesh from the original set, count the length of the submeshes and replace the entries
+		unsigned int total_submesh_vertex_length = 0;
+		unsigned int total_submesh_index_length = 0;
+		for (size_t index = 0; index < meshes.size; index++) {
+			unsigned int current_vertex_length = meshes[index]->mesh.vertex_buffers[0].size;
+			unsigned int current_index_length = meshes[index]->mesh.index_buffer.count;
+			coalesced_mesh.submeshes[index].vertex_buffer_offset = total_submesh_vertex_length;
+			coalesced_mesh.submeshes[index].index_buffer_offset = total_submesh_index_length;
+			coalesced_mesh.submeshes[index].vertex_count = current_vertex_length;
+			coalesced_mesh.submeshes[index].index_count = current_index_length;
+
+			total_submesh_index_length += current_index_length;
+			total_submesh_vertex_length += current_vertex_length;
+		}
+
+		coalesced_mesh.submeshes.size = meshes.size;
+		return coalesced_mesh;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

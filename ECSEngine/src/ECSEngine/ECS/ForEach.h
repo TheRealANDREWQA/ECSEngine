@@ -231,11 +231,11 @@ namespace ECSEngine {
 		ForEachEntitySelectionCommitFunctor(entities, world, functor_wrapper, &functor, query_descriptor);
 	}
 
-	static bool ForEachRunAlways(unsigned int thread_id, World* world) {
+	static bool ForEachRunAlways(unsigned int thread_id, World* world, void* user_data) {
 		return true;
 	}
 
-	typedef bool (*ForEachCondition)(unsigned int thread_id, World* world);
+	typedef bool (*ForEachCondition)(unsigned int thread_id, World* world, void* user_data);
 
 	// Extra options that can be passed to the ForEach type safe wrappers
 	struct ForEachOptions {
@@ -294,7 +294,7 @@ namespace ECSEngine {
 		// At the moment, exclude queries are not supported. The boolean are_entities_stable is a fast path that allows the function to
 		// Not copy the given entities in case they are already stable (and do not change after this call)
 		ECSENGINE_API void ForEachEntitySelection(
-			IteratorInterface<const Entity> entities,
+			IteratorInterface<const Entity>* entities,
 			bool are_entities_stable,
 			unsigned int thread_id,
 			World* world,
@@ -527,7 +527,7 @@ namespace ECSEngine {
 				size_t function_pointer_data_size = 0
 			) {
 				if constexpr (!get_query) {
-					if (!options.condition(thread_id, world)) {
+					if (!options.condition(thread_id, world, function_pointer_data)) {
 						return;
 					}
 
@@ -629,7 +629,7 @@ namespace ECSEngine {
 		template<bool get_query, bool is_commit, typename... Components>
 		struct ForEachEntitySelectionTypeSafe {
 			ECS_INLINE ForEachEntitySelectionTypeSafe(
-				Stream<Entity> _entities,
+				IteratorInterface<const Entity>* _entities,
 				unsigned int _thread_id,
 				World* _world,
 				ForEachSelectionOptions _options = {},
@@ -657,7 +657,7 @@ namespace ECSEngine {
 				size_t function_pointer_data_size = 0
 			) {
 				if constexpr (!get_query) {
-					if (!options.condition(thread_id, world)) {
+					if (!options.condition(thread_id, world, function_pointer_data)) {
 						return;
 					}
 
@@ -709,7 +709,7 @@ namespace ECSEngine {
 						);
 					}
 					else {
-						ForEachEntitySelectionCommitFunctor(entities, world, ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>, wrapper_data, query_descriptor);
+						ForEachEntitySelectionCommitFunctor(entities, world, ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>, &wrapper_data, query_descriptor);
 					}
 				}
 			}
@@ -717,7 +717,7 @@ namespace ECSEngine {
 			unsigned int thread_id;
 			World* world;
 			const char* function_name;
-			Stream<Entity> entities;
+			IteratorInterface<const Entity>* entities;
 			ForEachSelectionOptions options;
 		};
 

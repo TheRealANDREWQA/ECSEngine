@@ -1695,6 +1695,23 @@ namespace ECSEngine {
 		const MergeMeshesOptions* options = nullptr
 	);
 
+	// SINGLE THREADED - It uses CopyResource which requires the immediate context
+	// Merges the vertex buffers and the index buffers into a single resource that can reduce 
+	// the bind calls by moving the offsets into the draw call; it returns the aggregate mesh
+	// and the submeshes - the offsets into the buffers
+	// The meshes must have the same index buffer int size
+	// The mesh will have no name associated with it
+	// It will release the graphics resources of the meshes
+	// All submeshes of a coalesced mesh will be a single submesh in the resulting coalesced mesh
+	// The allocator is used to allocate the submesh buffer
+	// In order to deallocate CPU side resources of coalesced meshes, you must do that
+	ECSENGINE_API CoalescedMesh MergeCoalescedMeshesAsCoalescedSubmeshes(
+		Graphics* graphics,
+		Stream<CoalescedMesh*> meshes,
+		AllocatorPolymorphic allocator,
+		const MergeMeshesOptions* options = nullptr
+	);
+
 #endif // ECSENGINE_DIRECTX11
 
 

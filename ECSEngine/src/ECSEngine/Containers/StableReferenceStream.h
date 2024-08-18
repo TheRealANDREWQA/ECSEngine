@@ -168,7 +168,7 @@ namespace ECSEngine {
 				}
 				else {
 					unsigned int occupied_list_index = indirection_list_start_index + index;
-					occupied_list_index = occupied_list_index >= capacity ? occupied_list_index - capacity : 0;
+					occupied_list_index = occupied_list_index >= capacity ? occupied_list_index - capacity : occupied_list_index;
 					current_index = indirection_list[occupied_list_index];
 				}
 				if constexpr (early_exit) {

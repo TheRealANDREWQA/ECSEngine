@@ -36,6 +36,7 @@ namespace ECSEngine {
 			}
 			size_t subrange_count = remaining_count >= count ? count : remaining_count;
 			IteratorInterface<ValueType>* subiterator = CreateSubIteratorImpl(allocator, subrange_count);
+			subiterator->remaining_count = count;
 			remaining_count -= subrange_count;
 			return subiterator;
 		}
@@ -118,7 +119,7 @@ namespace ECSEngine {
 			return (IteratorInterface<const ValueType>*)this;
 		}
 
-		size_t remaining_count;
+		size_t remaining_count = 0;
 	};
 
 	template<typename ValueType>

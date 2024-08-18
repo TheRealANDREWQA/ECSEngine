@@ -1286,7 +1286,7 @@ namespace ECSEngine {
 
 		if (continue_status == OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED) {
 			if (OS::IsExceptionCodeCritical(handler_data.exception_information.error_code)) {
-				ECS_FORMAT_TEMP_STRING(error_message, "Thread {#} has hard crashed with a ", thread_id);
+				ECS_FORMAT_TEMP_STRING(error_message, "Thread {#} has hard crashed with an error of type ", thread_id);
 				OS::ExceptionCodeToString(handler_data.exception_information.error_code, error_message);
 				Crash(error_message);
 				// We need to execute the crash block
