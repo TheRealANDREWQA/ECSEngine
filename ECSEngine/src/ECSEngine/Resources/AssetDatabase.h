@@ -340,6 +340,10 @@ namespace ECSEngine {
 
 		AssetDatabaseSnapshot GetSnapshot(AllocatorPolymorphic allocator) const;
 
+		// Returns the GPU resources used by the database. Some pointers might repeat themselves. It is helpful for protecting/unprotecting
+		// The resources.
+		void GetGPUResources(AdditionStream<void*> resources) const;
+
 		unsigned int GetRandomizedPointer(ECS_ASSET_TYPE type) const;
 
 		// Returns true if the asset is being referenced by another asset

@@ -556,9 +556,18 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
+		// Protects the resource, meaning that any decrement or increment reference count call on this resource will
+		// Fail with a soft crash.
 		void ProtectResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix = {});
 
+		// Tries to protect the given resource, with an option to assert if the resource was not found.
+		void ProtectResource(const void* resource, ResourceType resource_type, bool assert_if_not_found);
+
+		// Removes the protection status for the given resource.
 		void UnprotectResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix = {});
+
+		// Tries to unprotect the given resource, with an option to assert if the resource was not found.
+		void UnprotectResource(const void* resource, ResourceType resource_type, bool assert_if_not_found);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 		

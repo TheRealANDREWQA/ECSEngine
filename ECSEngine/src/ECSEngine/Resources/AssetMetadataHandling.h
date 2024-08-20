@@ -1,6 +1,7 @@
 #pragma once
 #include "AssetMetadata.h"
 #include "../Rendering/TextureOperations.h"
+#include "../Utilities/StackScope.h"
 
 namespace ECSEngine {
 	
@@ -539,6 +540,28 @@ namespace ECSEngine {
 
 	ECS_INLINE void SetMiscData(MiscAsset* misc_asset, Stream<void> data) {
 		misc_asset->data = data;
+	}
+
+	// Protects all the assets from the database into the resource manager, such that they cannot be unloaded
+	ECSENGINE_API void ProtectAssetDatabaseResources(const AssetDatabase* database, ResourceManager* resource_manager);
+
+	// Unprotects all the assets from the database into the resource manager
+	ECSENGINE_API void UnprotectAssetDatabaseResources(const AssetDatabase* database, ResourceManager* resource_manager);
+
+	// Helper that based upon a boolean will protect/unprotect the resources in the resource manager
+	// From the asset database. They will be unprotected upon leaving the scope, using a stack scope.
+	// Database and resource manager must be pointers.
+#define ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(should_protect, database, resource_manager) \
+	bool ___should_protect = should_protect; /* Use a temporary to hold the resource manager in order to capture it in the lambda */ \
+	ResourceManager* ___resource_manager = (resource_manager); /* Use a temporary to hold the resource manager in order to capture it in the lambda */ \
+	const AssetDatabase* ___asset_database = (database); /* Use a temporary to hold the resource manager in order to capture it in the lambda */ \
+	auto __unprotect_database_resources = StackScope([___should_protect, ___asset_database, ___resource_manager]() { \
+		if (___should_protect) { \
+			UnprotectAssetDatabaseResources(___asset_database, ___resource_manager); \
+		} \
+	}); \
+	if (___should_protect) {\
+		ProtectAssetDatabaseResources(___asset_database, ___resource_manager); \
 	}
 
 }

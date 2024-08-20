@@ -611,9 +611,6 @@ namespace ECSEngine {
 		ID3D11InputLayout* layout;
 	};
 
-	// The byte code is mostly needed to check the input layout
-	// against the shader's signature; Path is stable and null terminated
-	// The byte code can be released after the input layout has been created
 	struct ECSENGINE_API VertexShader {
 		ECS_INLINE VertexShader() : shader(nullptr) {}
 		ECS_INLINE VertexShader(ID3D11VertexShader* _shader) : shader(_shader) {}
@@ -642,7 +639,6 @@ namespace ECSEngine {
 		ID3D11VertexShader* shader;
 	};
 
-	// Path is stable and null terminated
 	struct ECSENGINE_API PixelShader {
 		ECS_INLINE PixelShader() : shader(nullptr) {}
 		ECS_INLINE PixelShader(ID3D11PixelShader* _shader) : shader(_shader) {}
@@ -1440,6 +1436,14 @@ namespace ECSEngine {
 			}
 		}
 
+		// Retrieves all the GPU resources in use by this mesh
+		void GetGPUResources(AdditionStream<void*> resources) const {
+			resources.Add(index_buffer.Interface());
+			for (size_t index = 0; index < (size_t)mapping_count; index++) {
+				resources.Add(vertex_buffers[index].Interface());
+			}
+		}
+
 		IndexBuffer index_buffer;
 		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
 		ECS_MESH_INDEX mapping[ECS_MESH_BUFFER_COUNT];
@@ -1716,6 +1720,9 @@ namespace ECSEngine {
 		ECS_INLINE void ResetUnorderedViews() {
 			unordered_view_count = 0;
 		}
+
+		// Retrieves all the GPU resources in use by this material. Useful for protecting/unprotecting the resources.
+		void GetGPUResources(AdditionStream<void*> resources) const;
 
 		InputLayout layout;
 		VertexShader vertex_shader;

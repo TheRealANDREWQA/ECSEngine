@@ -78,7 +78,7 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 		unsigned int active_sandbox = GetActiveSandbox(editor_state);
 		if (active_sandbox != -1) {
 			if (GetSandboxState(editor_state, active_sandbox) == EDITOR_SANDBOX_PAUSED) {
-				RunSandboxWorld(editor_state, active_sandbox, true);
+				RunSandboxWorld(editor_state, active_sandbox, true, true);
 			}
 		}
 	}

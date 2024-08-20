@@ -1229,6 +1229,15 @@ namespace ECSEngine {
 
 		return snapshot;
 	}
+	
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::GetGPUResources(AdditionStream<void*> resources) const {
+		ForEachAsset([this, &resources](unsigned int handle, ECS_ASSET_TYPE type) {
+			const void* metadata = GetAssetConst(handle, type);
+			GetAssetGPUResources(metadata, type, resources);
+		});
+	}
 
 	// --------------------------------------------------------------------------------------
 

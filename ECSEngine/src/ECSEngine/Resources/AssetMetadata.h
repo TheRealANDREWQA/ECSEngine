@@ -770,4 +770,8 @@ namespace ECSEngine {
 	// Makes sure all internal asset dependencies are set
 	ECSENGINE_API bool ValidateAssetDependencies(const void* metadata, ECS_ASSET_TYPE type);
 
+	// Retrieves all the GPU resource that the asset currently holds. It does not go recursively, only the resources
+	// That are owned by this asset will be added. Useful for protecting/unprotecting the GPU resources.
+	ECSENGINE_API void GetAssetGPUResources(const void* metadata, ECS_ASSET_TYPE asset_type, AdditionStream<void*> resources);
+
 }

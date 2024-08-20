@@ -4104,7 +4104,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	bool Graphics::RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot, CapacityStream<char>* mismatch_string) {
+	bool Graphics::RestoreResourceSnapshot(const GraphicsResourceSnapshot& snapshot, CapacityStream<char>* mismatch_string) {
 		unsigned int current_resource_count = m_internal_resources.SpinWaitWrites();
 		bool size_success = true;
 		if (current_resource_count < snapshot.interface_pointers.size) {

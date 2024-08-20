@@ -103,15 +103,18 @@ const GraphicsDebugData* GetGraphicsDebugData(const World* world) {
 }
 
 void GraphicsDebugInitialize(World* world, StaticThreadTaskInitializeInfo* info) {
-	GraphicsDebugData debug_data;
-	GraphicsDebugData* data = (GraphicsDebugData*)world->system_manager->BindData(GRAPHICS_DEBUG_DATA_STRING, &debug_data, sizeof(debug_data));
-	data->allocator = MemoryManager(ALLOCATOR_CAPACITY, ECS_KB * 16, ALLOCATOR_BACKUP_CAPACITY, world->memory);
-	
-	data->colors.Initialize(&data->allocator, RANDOM_COLOR_COUNT);
-	CreateColorizeBuffer(data->colors);
+	// Bind the data only if it doesn't exist already
+	if (world->system_manager->TryGetData(GRAPHICS_DEBUG_DATA_STRING) == nullptr) {
+		GraphicsDebugData debug_data;
+		GraphicsDebugData* data = (GraphicsDebugData*)world->system_manager->BindData(GRAPHICS_DEBUG_DATA_STRING, &debug_data, sizeof(debug_data));
+		data->allocator = MemoryManager(ALLOCATOR_CAPACITY, ECS_KB * 16, ALLOCATOR_BACKUP_CAPACITY, world->memory);
 
-	data->entities_table.Initialize(&data->allocator, ENTITIES_TABLE_INITIAL_CAPACITY);
-	data->groups.Initialize(&data->allocator, 8);
+		data->colors.Initialize(&data->allocator, RANDOM_COLOR_COUNT);
+		CreateColorizeBuffer(data->colors);
+
+		data->entities_table.Initialize(&data->allocator, ENTITIES_TABLE_INITIAL_CAPACITY);
+		data->groups.Initialize(&data->allocator, 8);
+	}
 }
 
 void GraphicsDebugAddSolidGroup(World* world, GraphicsDebugSolidGroup group) {

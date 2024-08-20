@@ -2118,4 +2118,38 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
+	// Helper function that iterates over the asset database in order to apply a protection/unprotection to resource manager resources.
+	// The ActionFunctor receives as parameters (const void* asset_pointer, ResourceType resource_type).
+	template<typename ActionFunctor>
+	static void ProtectUnprotectAssetDatabaseResources(const AssetDatabase* database, ActionFunctor&& action_functor) {
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)index;
+			ResourceType resource_type = AssetTypeToResourceType(asset_type);
+			if (resource_type != ResourceType::TypeCount) {
+				database->ForEachAsset(asset_type, [&](unsigned int handle) {
+					const void* asset_pointer = GetAssetFromMetadata(database->GetAssetConst(handle, asset_type), asset_type).buffer;
+					action_functor(asset_pointer, resource_type);
+				});
+			}
+		}
+		// NOTE: Misc assets are looked upon their buffer pointer, instead of the pointer to the buffer structure inside
+		// The resource manager, which means they can never succeed. But don't create a special case for it, it is niche anyway.
+	}
+
+	void ProtectAssetDatabaseResources(const AssetDatabase* database, ResourceManager* resource_manager) {
+		ProtectUnprotectAssetDatabaseResources(database, [resource_manager](const void* asset_pointer, ResourceType resource_type) {
+			resource_manager->ProtectResource(asset_pointer, resource_type, false);
+		});
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	void UnprotectAssetDatabaseResources(const AssetDatabase* database, ResourceManager* resource_manager) {
+		ProtectUnprotectAssetDatabaseResources(database, [resource_manager](const void* asset_pointer, ResourceType resource_type) {
+			resource_manager->UnprotectResource(asset_pointer, resource_type, false);
+		});
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
 }
