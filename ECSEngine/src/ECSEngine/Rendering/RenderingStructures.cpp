@@ -1979,6 +1979,35 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	void Material::GetGPUResources(AdditionStream<void*> resources) const {
+		resources.Add(layout.Interface());
+		resources.Add(vertex_shader.Interface());
+		resources.Add(pixel_shader.Interface());
+		for (size_t index = 0; index < (size_t)v_buffer_count; index++) {
+			resources.Add(v_buffers[index].Interface());
+		}
+		for (size_t index = 0; index < (size_t)p_buffer_count; index++) {
+			resources.Add(p_buffers[index].Interface());
+		}
+		for (size_t index = 0; index < (size_t)v_texture_count; index++) {
+			resources.Add(v_textures[index].Interface());
+		}
+		for (size_t index = 0; index < (size_t)p_texture_count; index++) {
+			resources.Add(p_textures[index].Interface());
+		}
+		for (size_t index = 0; index < (size_t)unordered_view_count; index++) {
+			resources.Add(unordered_views[index].Interface());
+		}
+		for (size_t index = 0; index < (size_t)v_sampler_count; index++) {
+			resources.Add(v_samplers[index].Interface());
+		}
+		for (size_t index = 0; index < (size_t)p_sampler_count; index++) {
+			resources.Add(p_samplers[index].Interface());
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	bool PBRMaterial::HasTextures() const
 	{
 		const Stream<wchar_t>* texture_start = &color_texture;

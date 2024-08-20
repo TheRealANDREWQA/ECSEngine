@@ -423,6 +423,54 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Determines all the runtime GPU resources which are needed for the simulation. These do not include UI resources, only runtime resources
+// and other GPU resources needed for sandboxes.
+static Stream<void*> GetRuntimeGPUResources(const EditorState* editor_state, AllocatorPolymorphic allocator) {
+	// Choose a default size, in order to avoid many small allocations
+	ResizableStream<void*> resources;
+	resources.Initialize(allocator, 128);
+
+	// Start by protecting the render and depth textures for the runtime/scene
+	SandboxAction(editor_state, -1, [editor_state, allocator, &resources](unsigned int sandbox_index) {
+		// Don't include the debug drawer for the sandbox, since it will add many resources which will slow down
+		// The protection/unprotection process, with a very small likelihood of actually being affected
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		resources.Add(sandbox->scene_viewport_instance_framebuffer.Interface());
+		resources.Add(sandbox->scene_viewport_depth_stencil_framebuffer.Interface());
+		for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
+			resources.Add(sandbox->viewport_render_destination[index].render_view.Interface());
+			resources.Add(sandbox->viewport_render_destination[index].depth_view.Interface());
+			resources.Add(sandbox->viewport_render_destination[index].output_view.Interface());
+			void* ua_view = sandbox->viewport_render_destination[index].render_ua_view.Interface();
+			if (ua_view != nullptr) {
+				resources.Add(ua_view);
+			}
+			resources.Add(sandbox->viewport_transferred_texture[index].Interface());
+		}
+	});
+
+	// Add all the assets from the database - we want to preserve all of them.
+	editor_state->asset_database->GetGPUResources(&resources);
+
+	return resources;
+}
+
+// A helper that takes care of the protecting and unprotecting of GPU resources. You must specify the allocator
+// And the boolean flag which tells whether or not it should protect the resources.
+#define SCOPE_PROTECT_GPU_RESOURCES(allocator, protect_resources) \
+Stream<void*> __gpu_resources; \
+auto scope_unprotect_resources = StackScope([editor_state, &__gpu_resources]() { \
+	if (__gpu_resources.size > 0) { \
+		editor_state->RuntimeGraphics()->UnprotectResources(__gpu_resources); \
+	} \
+}); \
+if (protect_resources) { \
+	__gpu_resources = GetRuntimeGPUResources(editor_state, allocator);  \
+	editor_state->RuntimeGraphics()->ProtectResources(__gpu_resources); \
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 void AddSandboxDebugDrawComponent(EditorState* editor_state, unsigned int sandbox_index, Component component, ECS_COMPONENT_TYPE component_type)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -2165,11 +2213,10 @@ void ReloadSandboxRuntimeSettings(EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-GraphicsResourceSnapshot RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	SetSandboxGraphicsTextures(editor_state, sandbox_index, viewport);
 	BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, viewport);
-	return editor_state->RuntimeGraphics()->GetResourceSnapshot(editor_state->EditorAllocator());
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2187,28 +2234,6 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 		RemoveEditorRuntimeInstancedFramebuffer(system_manager);
 		RemoveEditorExtraTransformGizmos(system_manager);
 	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, GraphicsResourceSnapshot snapshot, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	ECS_STACK_CAPACITY_STREAM(char, error_string, ECS_KB * 32);
-
-	// Restore the graphics snapshot and deallocate it
-	bool are_resources_valid = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(snapshot, &error_string);
-	if (!are_resources_valid) {
-		ECS_FORMAT_TEMP_STRING(console_message, "Restoring graphics resources after sandbox {#} failed.", sandbox_index);
-		EditorSetConsoleError(console_message);
-	}
-	else if (error_string.size > 0) {
-		ECS_FORMAT_TEMP_STRING(console_message, "Restoring graphics resources found added resources after sandbox {#} ran. They were freed in order to maintain consistency. Detailed error:", sandbox_index);
-		EditorSetConsoleError(console_message);
-		EditorSetConsoleError(error_string);
-	}
-	snapshot.Deallocate(editor_state->EditorAllocator());
-
-	RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2436,9 +2461,10 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			ResizeSandboxRenderTextures(editor_state, sandbox_index, viewport, new_texture_size);
 		}
 
-		// Get the resource manager and graphics snapshot
+		// Sse resource manager and graphics snapshots because the rendering operation should not modify state
 		ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(editor_state->EditorAllocator());
-		GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
+		GraphicsResourceSnapshot graphics_snapshot = editor_state->RuntimeGraphics()->GetResourceSnapshot(editor_state->EditorAllocator());
+		RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
 
 		EntityManager* viewport_entity_manager = sandbox->sandbox_world.entity_manager;
 		EntityManager* runtime_entity_manager = sandbox->sandbox_world.entity_manager;
@@ -2506,7 +2532,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		if (active_viewport != EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			set_options.assert_exists_initialize_from_other_task = false;
 		}
-		PrepareWorld(&sandbox->sandbox_world);
+		PrepareWorld(&sandbox->sandbox_world, &set_options);
 		if (active_viewport != EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			sandbox->sandbox_world.task_scheduler->SetTasksDataFromOther(runtime_task_manager, true);
 			RetrieveModuleDebugDrawTaskElementsInitializeData(sandbox->sandbox_world.task_scheduler, sandbox->sandbox_world.task_manager, runtime_task_manager);
@@ -2561,12 +2587,25 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		sandbox->sandbox_world.SetDeltaTime(previous_sandbox_delta_time);
 
+		ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
 		// Restore the resource manager first
-		editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot);
+		editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot, &snapshot_message);
 		resource_snapshot.Deallocate(editor_state->EditorAllocator());
+		if (snapshot_message.size > 0) {
+			ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring resource manager snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
+			EditorSetConsoleError(message);
+			EditorSetConsoleError(snapshot_message);
+			snapshot_message.size = 0;
+		}
 
 		// Now the graphics snapshot will be restored as well
-		RenderSandboxFinishGraphics(editor_state, sandbox_index, graphics_snapshot, viewport);
+		editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
+		if (snapshot_message.size > 0) {
+			ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring runtime graphics snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
+			EditorSetConsoleError(message);
+			EditorSetConsoleError(snapshot_message);
+		}
+		RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport);
 
 		return true;
 	}
@@ -2757,10 +2796,9 @@ void RemoveSandboxDebugDrawComponent(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool is_step)
+bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool protect_resources, bool is_step)
 {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
-	ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
 
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	if (is_step) {
@@ -2830,6 +2868,10 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		ResizeSandboxRenderTextures(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME, sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME]);
 	}
 
+	// Retrieve the gpu resources after the render texture resize
+	SCOPE_PROTECT_GPU_RESOURCES(&stack_allocator, protect_resources);
+	ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(protect_resources, editor_state->asset_database, editor_state->RuntimeResourceManager());
+
 	// Add the sandbox debug elements
 	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
@@ -2839,8 +2881,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	sandbox->sandbox_world.debug_drawer->redirect_drawer = &sandbox->redirect_drawer;
 	sandbox->sandbox_world.debug_drawer->ActivateRedirect();
 
-	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
-	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(&stack_allocator);
+	RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
 	CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
 	StartSandboxFrameProfiling(editor_state, sandbox_index);
@@ -2912,24 +2953,6 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	// Print any graphics messages that have accumulated
 	sandbox->sandbox_world.graphics->PrintRuntimeMessagesToConsole();
 
-	bool graphics_snapshot_success = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
-	if (snapshot_message.size > 0) {
-		ECS_FORMAT_TEMP_STRING(console_message, "There are mismatches in the graphics resource snapshot after running sandbox {#}", sandbox_index);
-		EditorSetConsoleError(console_message);
-		EditorSetConsoleError(snapshot_message);
-	}
-
-	snapshot_message.size = 0;
-	bool resource_snapshot_success = editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot, &snapshot_message);
-	if (snapshot_message.size > 0) {
-		ECS_FORMAT_TEMP_STRING(console_message, "There are mismatches in the resource manager snapshot after running sandbox {#}", sandbox_index);
-		EditorSetConsoleError(console_message);
-		EditorSetConsoleError(snapshot_message);
-	}
-
-	// The graphics snapshot was allocated from the editor allocator, we need to deallocate it
-	graphics_snapshot.Deallocate(editor_state->EditorAllocator());
-
 	// Check to see if a crash happened - do this after the snapshots were restored
 	if (ECS_GLOBAL_CRASH_IN_PROGRESS.load(ECS_RELAXED) > 0) {
 		// A crash has occured
@@ -2971,7 +2994,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		PauseSandboxWorld(editor_state, sandbox_index);
 	}
 
-	return graphics_snapshot_success && resource_snapshot_success;
+	return true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2979,13 +3002,23 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 bool RunSandboxWorlds(EditorState* editor_state, bool is_step)
 {
 	bool success = true;
-	// Exclude temporary sandboxes
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		if (sandbox->should_step && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
-			success &= RunSandboxWorld(editor_state, sandbox_index, is_step);
-		}
-	}, true);
+	
+	bool is_any_paused = IsAnyDefaultSandboxPaused(editor_state);
+	if (is_any_paused) {
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 8);
+		// Take care of protecting the resources outside the loop
+		SCOPE_PROTECT_GPU_RESOURCES(&stack_allocator, true);
+		ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(true, editor_state->asset_database, editor_state->RuntimeResourceManager());
+
+		// Exclude temporary sandboxes
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+			if (sandbox->should_step && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
+				// Do not protect the resources
+				success &= RunSandboxWorld(editor_state, sandbox_index, false, is_step);
+			}
+		}, true);
+	}
 	return success;
 }
 
@@ -3424,36 +3457,48 @@ void TickSandboxRuntimes(EditorState* editor_state)
 	editor_state->frame_delta_time = editor_state->frame_timer.GetDurationFloat(ECS_TIMER_DURATION_S);
 	editor_state->frame_timer.SetNewStart();
 
-	// Allow temporary sandboxes here since they might want to enter the play state
-	// Through some of their actions
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) && !EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_index) {
-			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-			// Check to see if the current sandbox is being run
-			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-				bool simulation_success = RunSandboxWorld(editor_state, sandbox_index);
-
-				// If there was an error with the snapshot, then pause all other sandboxes
-				if (!simulation_success) {
-					for (unsigned int subindex = 0; subindex < sandbox_count; subindex++) {
-						if (GetSandboxState(editor_state, subindex) == EDITOR_SANDBOX_RUNNING) {
-							// Do not restore the mouse state, the crashing/invalid sandbox already did that 
-							PauseSandboxWorld(editor_state, subindex, false);
-						}
-					}
-					// We can exit the loop now
-					return true;
-				}
-			}
-			else if (sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
-				// In case it is paused and it has frame profiling, refresh the overall frame timer
-				if (IsSandboxStatisticEnabled(editor_state, sandbox_index, ECS_WORLD_PROFILING_CPU)) {
-					sandbox->world_profiling.cpu_profiler.RefreshOverallTime();
-				}
-			}
-			return false;
+		// Allow temporary sandboxes here since they might want to enter the play state
+		// Through some of their actions
+		// Use a pre-check first to see if we have a running sandbox in order to protect the resources outside the loop
+		bool is_any_running = SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_index) {
+			return GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_RUNNING;
 		});
+
+		if (is_any_running) {
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 8);
+			SCOPE_PROTECT_GPU_RESOURCES(&stack_allocator, true);
+			ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(true, editor_state->asset_database, editor_state->RuntimeResourceManager());
+
+			SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_index) {
+				EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+				// Check to see if the current sandbox is being run
+				if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+					// Don't protect the resources, that is done outside the loop
+					bool simulation_success = RunSandboxWorld(editor_state, sandbox_index, false);
+
+					// If there was an error with the snapshot, then pause all other sandboxes
+					if (!simulation_success) {
+						for (unsigned int subindex = 0; subindex < sandbox_count; subindex++) {
+							if (GetSandboxState(editor_state, subindex) == EDITOR_SANDBOX_RUNNING) {
+								// Do not restore the mouse state, the crashing/invalid sandbox already did that 
+								PauseSandboxWorld(editor_state, subindex, false);
+							}
+						}
+						// We can exit the loop now
+						return true;
+					}
+				}
+				else if (sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
+					// In case it is paused and it has frame profiling, refresh the overall frame timer
+					if (IsSandboxStatisticEnabled(editor_state, sandbox_index, ECS_WORLD_PROFILING_CPU)) {
+						sandbox->world_profiling.cpu_profiler.RefreshOverallTime();
+					}
+				}
+				return false;
+			});
+		}
 	}
 }
 

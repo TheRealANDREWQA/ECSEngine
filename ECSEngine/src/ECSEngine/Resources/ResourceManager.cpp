@@ -2167,12 +2167,46 @@ namespace ECSEngine {
 		entry->is_protected = true;
 	}
 
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::ProtectResource(const void* resource, ResourceType resource_type, bool assert_if_not_found) {
+		bool was_found = m_resource_types[(unsigned int)resource_type].ForEachIndexConst<true>([&](unsigned int entry_index) {
+			ResourceManagerEntry* entry = m_resource_types[(unsigned int)resource_type].GetValuePtrFromIndex(entry_index);
+			if (entry->data == resource) {
+				entry->is_protected = true;
+				return true;
+			}
+			return false;
+		});
+		if (assert_if_not_found) {
+			ECS_ASSERT_FORMAT(was_found, "ResourceManager: Trying to protect a resource by pointer of type {#}, but it was not found.", ResourceTypeString(resource_type));
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	void ResourceManager::UnprotectResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix) {
 		ResourceManagerEntry* entry = GetEntryPtr(identifier, resource_type, suffix);
 		ECS_ASSERT_FORMAT(entry != nullptr, "ResourceManager: Trying to unprotect resource {#} of type {#} and with suffix {#}, but it doesn't exist.", identifier, ResourceTypeString(resource_type), suffix);
 		ECS_ASSERT_FORMAT(entry->is_protected, "ResourceManager: Trying to unprotect resource {#} of type {#} and with suffix {#}, but it was not protected beforehand.",
 			identifier, ResourceTypeString(resource_type), suffix);
 		entry->is_protected = false;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::UnprotectResource(const void* resource, ResourceType resource_type, bool assert_if_not_found) {
+		bool was_found = m_resource_types[(unsigned int)resource_type].ForEachIndexConst<true>([&](unsigned int entry_index) {
+			ResourceManagerEntry* entry = m_resource_types[(unsigned int)resource_type].GetValuePtrFromIndex(entry_index);
+			if (entry->data == resource) {
+				entry->is_protected = false;
+				return true;
+			}
+			return false;
+		});
+		if (assert_if_not_found) {
+			ECS_ASSERT_FORMAT(was_found, "ResourceManager: Trying to unprotect a resource by pointer of type {#}, but it was not found.", ResourceTypeString(resource_type));
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

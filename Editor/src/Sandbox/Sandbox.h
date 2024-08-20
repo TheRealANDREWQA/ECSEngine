@@ -467,18 +467,11 @@ void ReloadSandboxRuntimeSettings(
 // -------------------------------------------------------------------------------------------------------------
 
 // Sets all the required graphics options needed to run the given viewport
-// Returns the current snapshot of the runtime graphics. It is allocated from the EditorAllocator()
-ECSEngine::GraphicsResourceSnapshot RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+void RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 
-// This version does not restore the graphics snapshot
 void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
-
-// -------------------------------------------------------------------------------------------------------------
-
-// The snapshot must be given from the Initialize call
-void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::GraphicsResourceSnapshot snapshot, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -489,7 +482,7 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 bool RenderSandbox(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	EDITOR_SANDBOX_VIEWPORT viewport, 
+	EDITOR_SANDBOX_VIEWPORT viewport,
 	ECSEngine::uint2 new_size = { 0, 0 }, 
 	bool disable_logging = false
 );
@@ -545,7 +538,9 @@ void RemoveSandboxDebugDrawComponent(
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns true if the simulation was successful, else false. It prints the according error messages inside
-bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool is_step = false);
+// The bool protect_resources tells the function whether or not it should protect GPU resources and resource manager entries.
+// It should be off if this is done beforehand, else let it true.
+bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool protect_resources, bool is_step = false);
 
 // -------------------------------------------------------------------------------------------------------------
 

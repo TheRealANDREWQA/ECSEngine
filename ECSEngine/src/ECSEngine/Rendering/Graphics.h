@@ -1226,7 +1226,7 @@ namespace ECSEngine {
 		// Returns true if all the resources from the previous snapshot are still valid else it returns false. 
 		// Can optionally give a string to be built with the mismatches that are between the two states
 		// It doesn't deallocate the snapshot (it must be done outside)!
-		bool RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot, CapacityStream<char>* mismatch_string = nullptr);
+		bool RestoreResourceSnapshot(const GraphicsResourceSnapshot& snapshot, CapacityStream<char>* mismatch_string = nullptr);
 
 		void ResizeSwapChainSize(HWND hWnd, unsigned int width, unsigned int height);
 
@@ -1737,6 +1737,9 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		const MergeMeshesOptions* options = nullptr
 	);
+
+	// Retrieves all the GPU resources the mesh is currently using. Useful for protecting/unprotecting.
+	ECSENGINE_API void GetMeshGPUResources(const Mesh& mesh, AdditionStream<void*> resources);
 
 #endif // ECSENGINE_DIRECTX11
 

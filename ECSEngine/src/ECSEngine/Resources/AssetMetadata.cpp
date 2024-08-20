@@ -2092,5 +2092,44 @@ namespace ECSEngine {
 		return true;
 	}
 
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE static void GetGPUResources(const MeshMetadata* metadata, AdditionStream<void*> resources) {
+		metadata->mesh_pointer->mesh.GetGPUResources(resources);
+	}
+
+	ECS_INLINE static void GetGPUResources(const TextureMetadata* metadata, AdditionStream<void*> resources) {
+		resources.Add(metadata->texture.Interface());
+	}
+
+	ECS_INLINE static void GetGPUResources(const GPUSamplerMetadata* metadata, AdditionStream<void*> resources) {
+		resources.Add(metadata->sampler.Interface());
+	}
+
+	ECS_INLINE static void GetGPUResources(const ShaderMetadata* metadata, AdditionStream<void*> resources) {
+		resources.Add(metadata->shader_interface);
+	}
+
+	ECS_INLINE static void GetGPUResources(const MaterialAsset* metadata, AdditionStream<void*> resources) {
+		// This might add textures and samplers multiple times, but it's alright if that happens
+		metadata->material_pointer->GetGPUResources(resources);
+	}
+
+	ECS_INLINE static void GetGPUResources(const MiscAsset* metadata, AdditionStream<void*> resources) {}
+
+	void GetAssetGPUResources(const void* metadata, ECS_ASSET_TYPE asset_type, AdditionStream<void*> resources) {
+		// Early exit if the asset pointer is not valid
+		if (!IsAssetFromMetadataValid(metadata, asset_type)) {
+			return;
+		}
+
+#define CASE(asset_type, metadata_type) 	{ \
+											const metadata_type* typed_metadata = (const metadata_type*)metadata; \
+											GetGPUResources(typed_metadata, resources); \
+										} 
+
+		ASSET_SWITCH(asset_type, CASE);
+	}
+
 	// ------------------------------------------------------------------------------------------------------
 }

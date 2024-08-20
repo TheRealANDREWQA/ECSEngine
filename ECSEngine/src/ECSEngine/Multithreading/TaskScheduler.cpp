@@ -643,7 +643,7 @@ namespace ECSEngine {
 				});
 
 				if (task_data_index == -1) {
-					if (!options->assert_exists_initialize_from_other_task) {
+					if (options->assert_exists_initialize_from_other_task) {
 						ECS_CRASH("Missing initialize task data name {#} for task {#}", elements[index].initialize_data_task_name, elements[index].task_name);
 					}
 					else {
