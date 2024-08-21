@@ -120,31 +120,6 @@ namespace ECSEngine {
 		}
 	};
 
-	struct ForEachEntityUntypedFunctorData {
-		unsigned int thread_id;
-		Entity entity;
-		World* world;
-		void** unique_components;
-		void** shared_components;
-		void* data;
-		EntityManagerCommandStream* command_stream;
-	};
-
-	typedef void (*ForEachEntityUntypedFunctor)(ForEachEntityUntypedFunctorData* data);
-
-	struct ForEachBatchUntypedFunctorData {
-		unsigned int thread_id;
-		unsigned short count;
-		World* world;
-		const Entity* entities;
-		void** unique_components;
-		void** shared_components;
-		void* data;
-		EntityManagerCommandStream* command_stream;
-	};
-
-	typedef void (*ForEachBatchUntypedFunctor)(ForEachBatchUntypedFunctorData* data);
-	
 	struct ForEachEntityData {
 		unsigned int thread_id;
 		Entity entity;
@@ -161,6 +136,44 @@ namespace ECSEngine {
 		EntityManagerCommandStream* command_stream;
 		void* user_data;
 	};
+
+	struct ForEachEntitySelectionData {
+		unsigned int thread_id;
+		// This is the index inside the selection of the current entry
+		unsigned int index;
+		Entity entity;
+		World* world;
+		EntityManagerCommandStream* command_stream;
+		void* user_data;
+		// This pointer is going to be nullptr if the given data for the ForEachEntitySelection
+		// Is not stable. It will be set only if the iterator that was passed to the function is stable.
+		// Useful if you want to extract other information out of the iterator.
+		IteratorInterface<const Entity>* iterator;
+	};
+
+	struct ForEachEntityUntypedFunctorData {
+		ForEachEntityData base;
+		void** unique_components;
+		void** shared_components;
+	};
+
+	typedef void (*ForEachEntityUntypedFunctor)(ForEachEntityUntypedFunctorData* data);
+
+	struct ForEachBatchUntypedFunctorData {
+		ForEachBatchData base;
+		void** unique_components;
+		void** shared_components;
+	};
+
+	typedef void (*ForEachBatchUntypedFunctor)(ForEachBatchUntypedFunctorData* data);
+	
+	struct ForEachEntitySelectionUntypedFunctorData {
+		ForEachEntitySelectionData base;
+		void** unique_components;
+		void** shared_components;
+	};
+	
+	typedef void (*ForEachEntitySelectionUntypedFunctor)(ForEachEntitySelectionUntypedFunctorData* data);
 
 	// This is the same as the ForEachEntity with the difference that it can be outside the ECS runtime. This version
 	// doesn't use the archetype query acceleration. The world needs to contain an entity manager. (other fields are optional)
@@ -185,7 +198,7 @@ namespace ECSEngine {
 	ECSENGINE_API void ForEachEntitySelectionCommitFunctor(
 		IteratorInterface<const Entity>* entities,
 		World* world,
-		ForEachEntityUntypedFunctor functor,
+		ForEachEntitySelectionUntypedFunctor functor,
 		void* data,
 		const ArchetypeQueryDescriptor& query_descriptor
 	);
@@ -198,7 +211,7 @@ namespace ECSEngine {
 		Functor functor
 	) {
 		auto functor_wrapper = [](ForEachEntityUntypedFunctorData* for_each_data) {
-			Functor* functor = (Functor*)for_each_data->data;
+			Functor* functor = (Functor*)for_each_data->base.user_data;
 			(*functor)(for_each_data);
 		};
 
@@ -213,7 +226,7 @@ namespace ECSEngine {
 		Functor functor
 	) {
 		auto functor_wrapper = [](ForEachBatchUntypedFunctorData* for_each_data) {
-			Functor* functor = (Functor*)for_each_data->data;
+			Functor* functor = (Functor*)for_each_data->base.user_data;
 			(*functor)(for_each_data);
 		};
 
@@ -223,8 +236,8 @@ namespace ECSEngine {
 	// TODO: This accepts lambdas at the moment, function pointer support is not decided yet
 	template<typename Functor>
 	ECS_INLINE void ForEachEntitySelectionCommitFunctor(IteratorInterface<const Entity>* entities, World* world, const ArchetypeQueryDescriptor& query_descriptor, Functor functor) {
-		auto functor_wrapper = [](ForEachEntityUntypedFunctorData* for_each_data) {
-			Functor* functor = (Functor*)for_each_data->data;
+		auto functor_wrapper = [](ForEachEntitySelectionUntypedFunctorData* for_each_data) {
+			Functor* functor = (Functor*)for_each_data->base.user_data;
 			(*functor)(for_each_data);
 		};
 
@@ -298,7 +311,7 @@ namespace ECSEngine {
 			bool are_entities_stable,
 			unsigned int thread_id,
 			World* world,
-			ForEachEntityUntypedFunctor functor,
+			ForEachEntitySelectionUntypedFunctor functor,
 			const char* functor_name,
 			void* data,
 			size_t data_size,
@@ -357,40 +370,22 @@ namespace ECSEngine {
 			}
 		}
 
-		static ForEachEntityData FromFunctorToEntityData(ForEachEntityUntypedFunctorData* data, void* user_data) {
-			ForEachEntityData for_each_data;
-
-			for_each_data.command_stream = data->command_stream;
-			for_each_data.entity = data->entity;
-			for_each_data.thread_id = data->thread_id;
-			for_each_data.world = data->world;
-			for_each_data.user_data = user_data;
-
-			return for_each_data;
-		}
-
-		static ForEachBatchData FromFunctorToBatchData(ForEachBatchUntypedFunctorData* data, void* user_data) {
-			ForEachBatchData for_each_data;
-
-			for_each_data.command_stream = data->command_stream;
-			for_each_data.entities = data->entities;
-			for_each_data.thread_id = data->thread_id;
-			for_each_data.world = data->world;
-			for_each_data.count = data->count;
-			for_each_data.user_data = user_data;
-
-			return for_each_data;
-		}
+		enum FOR_EACH_TYPE : unsigned char {
+			FOR_EACH_ENTITY,
+			FOR_EACH_BATCH,
+			FOR_EACH_SELECTION
+		};
 		
 		template<typename Functor>
-		struct ForEachEntityBatchTypeSafeWrapperData {
+		struct ForEachTypeSafeWrapperData {
 			Functor functor;
 			void* functor_data;
 		};
 
-		template<bool is_batch, typename Functor, typename... T>
-		void ForEachEntityBatchTypeSafeWrapper(ForEachEntityUntypedFunctorData* data) {
-			ForEachEntityBatchTypeSafeWrapperData<Functor>* wrapper_data = (ForEachEntityBatchTypeSafeWrapperData<Functor>*)data->data;
+		// DataType must be ForEachEntityUntypedFunctorData, ForEachBatchUntypedFunctorData or ForEachEntitySelectionUntypedFunctorData
+		template<typename DataType, typename Functor, typename... T>
+		void ForEachEntityBatchTypeSafeWrapper(DataType* data) {
+			ForEachTypeSafeWrapperData<Functor>* wrapper_data = (ForEachTypeSafeWrapperData<Functor>*)data->base.user_data;
 			
 			constexpr size_t component_count = sizeof...(T);
 			
@@ -415,15 +410,10 @@ namespace ECSEngine {
 
 			// We need to decrement index to reflect the correct final index
 			total_index--;
-			
-			if constexpr (is_batch) {
-				ForEachBatchData for_each_data = FromFunctorToBatchData(data, wrapper_data->functor_data);
-				wrapper_data->functor(&for_each_data, (typename T::Type*)(current_components[total_index--])...);
-			}
-			else {
-				ForEachEntityData for_each_data = FromFunctorToEntityData(data, wrapper_data->functor_data);
-				wrapper_data->functor(&for_each_data, (typename T::Type*)(current_components[total_index--])...);
-			}
+			// Need to change the user data and then restore it back
+			data->base.user_data = wrapper_data->functor_data;;
+			wrapper_data->functor(&data->base, (typename T::Type*)(current_components[total_index--])...);
+			data->base.user_data = wrapper_data;
 		}
 
 		template<typename... Components>
@@ -559,7 +549,7 @@ namespace ECSEngine {
 					ECS_CRASH_CONDITION(query_descriptor.unique_exclude.count == 0 && query_descriptor.shared_exclude.count == 0, "ECS ForEach:"
 						" You must specify the exclude components in the Function template parameter pack");
 
-					ForEachEntityBatchTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
+					ForEachTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
 					if constexpr (~type_options & FOR_EACH_IS_COMMIT) {
 						if (function_pointer_data_size > 0) {
 							// We need to allocate this data, we can use the thread task manager allocator for this
@@ -571,7 +561,7 @@ namespace ECSEngine {
 						if constexpr (type_options & FOR_EACH_IS_BATCH) {
 							ForEachBatchCommitFunctor(
 								world,
-								ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
+								ForEachEntityBatchTypeSafeWrapper<ForEachBatchUntypedFunctorData, Functor, Components...>,
 								&wrapper_data,
 								query_descriptor
 							);
@@ -579,7 +569,7 @@ namespace ECSEngine {
 						else {
 							ForEachEntityCommitFunctor(
 								world,
-								ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
+								ForEachEntityBatchTypeSafeWrapper<ForEachEntityUntypedFunctorData, Functor, Components...>,
 								&wrapper_data,
 								query_descriptor
 							);
@@ -590,7 +580,7 @@ namespace ECSEngine {
 							ForEachBatch(
 								thread_id,
 								world,
-								ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
+								ForEachEntityBatchTypeSafeWrapper<ForEachBatchUntypedFunctorData, Functor, Components...>,
 								function_name,
 								&wrapper_data,
 								sizeof(wrapper_data),
@@ -603,7 +593,7 @@ namespace ECSEngine {
 							ForEachEntity(
 								thread_id,
 								world,
-								ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
+								ForEachEntityBatchTypeSafeWrapper<ForEachEntityUntypedFunctorData, Functor, Components...>,
 								function_name,
 								&wrapper_data,
 								sizeof(wrapper_data),
@@ -686,7 +676,7 @@ namespace ECSEngine {
 						query_descriptor.shared_optional
 					);
 
-					Internal::ForEachEntityBatchTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
+					Internal::ForEachTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
 
 					if constexpr (!is_commit) {
 						if (function_pointer_data_size > 0) {
@@ -699,7 +689,7 @@ namespace ECSEngine {
 							entities,
 							thread_id,
 							world,
-							Internal::ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
+							Internal::ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, Functor, Components...>,
 							function_name,
 							&wrapper_data,
 							sizeof(wrapper_data),
@@ -709,7 +699,13 @@ namespace ECSEngine {
 						);
 					}
 					else {
-						ForEachEntitySelectionCommitFunctor(entities, world, ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>, &wrapper_data, query_descriptor);
+						ForEachEntitySelectionCommitFunctor(
+							entities, 
+							world, 
+							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, Functor, Components...>, 
+							&wrapper_data, 
+							query_descriptor
+						);
 					}
 				}
 			}

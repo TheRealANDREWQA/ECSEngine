@@ -14,6 +14,7 @@ struct Iterator : IteratorInterface<const Entity> {
 	ECS_INLINE Iterator(const GraphicsDebugData* _data) : data(_data), group_index(0), stream_index(0) {}
 	
 	const Entity* Get() {
+		last_color = data->groups[group_index].color;
 		const Entity* entity = data->groups[group_index].entities.buffer + stream_index;
 		stream_index++;
 		if (stream_index == data->groups[group_index].entities.size) {
@@ -21,6 +22,10 @@ struct Iterator : IteratorInterface<const Entity> {
 			group_index++;
 		}
 		return entity;
+	}
+
+	ECS_INLINE Color GetLastColor() const {
+		return last_color;
 	}
 
 	bool IsContiguous() const override {
@@ -51,6 +56,8 @@ struct Iterator : IteratorInterface<const Entity> {
 	const GraphicsDebugData* data;
 	unsigned int group_index;
 	unsigned int stream_index;
+	// Set such that it can be returned immediately
+	Color last_color;
 };
 
 static void GraphicsDebugAddSolidGroup(World* world, GraphicsDebugData* data, GraphicsDebugSolidGroup group) {
@@ -142,7 +149,7 @@ struct GraphicsDebugDrawData {
 
 // During this pass, only the instance vertex buffer must be filled in
 static void GraphicsDebugDraw_Impl(
-	const ForEachEntityData* for_each_data,
+	const ForEachEntitySelectionData* for_each_data,
 	const RenderMesh* render_mesh,
 	const Translation* translation,
 	const Rotation* rotation,
@@ -150,11 +157,12 @@ static void GraphicsDebugDraw_Impl(
 ) {
 	const GraphicsDebugDrawData* data = (const GraphicsDebugDrawData*)for_each_data->user_data;
 	if (render_mesh->Validate()) {
+		Iterator* iterator = (Iterator*)for_each_data->iterator;
 		Matrix transform_matrix = GetEntityTransformMatrix(translation, rotation, scale);
 
 		Matrix mvp_matrix = transform_matrix * *data->camera_matrix;
 		mvp_matrix = MatrixGPU(mvp_matrix);
-		//data->
+		data->instance_vertex_data[for_each_data->index] = { mvp_matrix, iterator->GetLastColor() };
 	}
 }
 

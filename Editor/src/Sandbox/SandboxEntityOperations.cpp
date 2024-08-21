@@ -2346,7 +2346,7 @@ struct SplatLinkComponentBasicData {
 };
 
 void SplatLinkComponentBasic(ForEachEntityUntypedFunctorData* functor_data) {
-	SplatLinkComponentBasicData* data = (SplatLinkComponentBasicData*)functor_data->data;
+	SplatLinkComponentBasicData* data = (SplatLinkComponentBasicData*)functor_data->base.user_data;
 	for (size_t index = 0; index < data->asset_fields.size; index++) {
 		SetAssetTargetFieldFromReflection(
 			data->target_type, 
@@ -2365,7 +2365,7 @@ struct SplatLinkComponentBuildData {
 };
 
 void SplatLinkComponentBuild(ForEachEntityUntypedFunctorData* functor_data) {
-	SplatLinkComponentBuildData* data = (SplatLinkComponentBuildData*)functor_data->data;
+	SplatLinkComponentBuildData* data = (SplatLinkComponentBuildData*)functor_data->base.user_data;
 
 	ModuleLinkComponentFunctionData function_data;
 	function_data.assets = data->assets;
