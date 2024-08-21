@@ -663,8 +663,8 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 				query_descriptor.unique = { &component_id, 1 };
 			}
 			SandboxForEachEntity(data->editor_state, data->sandbox_index, [](ForEachEntityUntypedFunctorData* for_each_data) {
-				FunctorData* data = (FunctorData*)for_each_data->data;
-				ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, for_each_data->entity, data->component_name);
+				FunctorData* data = (FunctorData*)for_each_data->base.user_data;
+				ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, for_each_data->base.entity, data->component_name);
 			}, &functor_data, query_descriptor);
 			RenderSandboxViewports(data->editor_state, data->sandbox_index);
 			SetSandboxSceneDirty(data->editor_state, data->sandbox_index);

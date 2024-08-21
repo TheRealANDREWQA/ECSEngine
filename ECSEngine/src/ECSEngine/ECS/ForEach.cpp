@@ -95,8 +95,10 @@ namespace ECSEngine {
 		StableIterator<const Entity> stable_iterator;
 
 		void* functor_data;
-		ForEachEntityUntypedFunctor functor;
+		ForEachEntitySelectionUntypedFunctor functor;
 		EntityManagerCommandStream* command_stream;
+		// This is set only if the initial iterator was stable. Will be passed to the functors
+		IteratorInterface<const Entity>* initial_iterator;
 	};
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -323,16 +325,16 @@ namespace ECSEngine {
 		InitializeForEachDataUniqueData(data, unique_components);
 
 		ForEachEntityUntypedFunctorData functor_data;
-		functor_data.thread_id = thread_id;
-		functor_data.world = world;
+		functor_data.base.thread_id = thread_id;
+		functor_data.base.world = world;
 		functor_data.unique_components = unique_components;
 		functor_data.shared_components = data->shared_data;
-		functor_data.data = data->functor_data;
-		functor_data.command_stream = data->command_stream;
+		functor_data.base.user_data = data->functor_data;
+		functor_data.base.command_stream = data->command_stream;
 
 		ForEachEntityUntypedFunctor functor = (ForEachEntityUntypedFunctor)data->thread_function;
 		for (unsigned short index = 0; index < data->count; index++) {
-			functor_data.entity = data->entities[data->entity_offset + index];
+			functor_data.base.entity = data->entities[data->entity_offset + index];
 			functor(&functor_data);
 
 			// Offset the functor uniques now
@@ -358,14 +360,14 @@ namespace ECSEngine {
 		InitializeForEachDataUniqueData(data, unique_components);
 
 		ForEachBatchUntypedFunctorData functor_data;
-		functor_data.thread_id = thread_id;
-		functor_data.world = world;
-		functor_data.entities = data->entities;
-		functor_data.count = data->count;
-		functor_data.command_stream = data->command_stream;
+		functor_data.base.thread_id = thread_id;
+		functor_data.base.world = world;
+		functor_data.base.entities = data->entities;
+		functor_data.base.count = data->count;
+		functor_data.base.command_stream = data->command_stream;
 		functor_data.unique_components = unique_components;
 		functor_data.shared_components = data->shared_data;
-		functor_data.data = data->functor_data;
+		functor_data.base.user_data = data->functor_data;
 
 		ForEachBatchUntypedFunctor functor = (ForEachBatchUntypedFunctor)data->thread_function;
 		functor(&functor_data);
@@ -378,20 +380,25 @@ namespace ECSEngine {
 
 		void* unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
 		void* shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-		ForEachEntityUntypedFunctorData functor_data;
+		ForEachEntitySelectionUntypedFunctorData functor_data;
 		functor_data.unique_components = unique_components;
 		functor_data.shared_components = shared_components;
-		functor_data.command_stream = data->command_stream;
-		functor_data.data = data->functor_data;
-		functor_data.thread_id = thread_id;
-		functor_data.world = world;
+		functor_data.base.command_stream = data->command_stream;
+		functor_data.base.user_data = data->functor_data;
+		functor_data.base.thread_id = thread_id;
+		functor_data.base.world = world;
+		functor_data.base.iterator = data->initial_iterator;
 
 		ArchetypeQueryDescriptor query_descriptor = data->GetQueryDescriptor();
 
-		data->stable_iterator.iterator->ForEach([data, world, &functor_data, &query_descriptor](const Entity* entity) {
+		unsigned int index = 0;
+		data->stable_iterator.iterator->ForEach([&index, data, world, &functor_data, &query_descriptor](const Entity* entity) {
+			functor_data.base.index = index;
+			index++;
+
 			// For the mandatory components, crash if the component is missing
 			Entity current_entity = *entity;
-			functor_data.entity = current_entity;
+			functor_data.base.entity = current_entity;
 
 			for (size_t component_index = 0; component_index < (size_t)query_descriptor.unique.count; component_index++) {
 				functor_data.unique_components[component_index] = world->entity_manager->GetComponent(current_entity, query_descriptor.unique[component_index]);
@@ -481,7 +488,7 @@ namespace ECSEngine {
 	void ForEachEntitySelectionCommitFunctor(
 		IteratorInterface<const Entity>* entities,
 		World* world,
-		ForEachEntityUntypedFunctor functor,
+		ForEachEntitySelectionUntypedFunctor functor,
 		void* data,
 		const ArchetypeQueryDescriptor& query_descriptor
 	) {
@@ -491,6 +498,7 @@ namespace ECSEngine {
 		ECS_CRASH_CONDITION(task_data_size <= sizeof(task_data_storage), "ForEachEntitySelectionCommitFunctor: Exceeded task data storage capacity.");
 
 		task_data->stable_iterator = ToStableIterator(entities);
+		task_data->initial_iterator = entities;
 		task_data->functor = functor;
 		task_data->functor_data = data;
 		task_data->WriteComponents(query_descriptor);
@@ -557,7 +565,7 @@ namespace ECSEngine {
 			bool are_entities_stable,
 			unsigned int thread_id,
 			World* world,
-			ForEachEntityUntypedFunctor functor,
+			ForEachEntitySelectionUntypedFunctor functor,
 			const char* functor_name,
 			void* data,
 			size_t data_size,
@@ -593,6 +601,7 @@ namespace ECSEngine {
 			task_data->functor = functor;
 			task_data->functor_data = data;
 			task_data->stable_iterator = stable_iterator;
+			task_data->initial_iterator = are_entities_stable ? entities : nullptr;
 			task_data->WriteComponents(query_descriptor);
 
 			size_t deferred_call_allocation_size = sizeof(DeferredAction) * deferred_action_capacity + sizeof(EntityManagerCommandStream);
