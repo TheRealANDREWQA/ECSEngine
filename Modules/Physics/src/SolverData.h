@@ -4,7 +4,7 @@
 #include "ContactConstraint.h"
 #include "Islands.h"
 
-#define SOLVER_DATA_STRING "SolverData"
+#define SOLVER_DATA_STRING "PhysicsSolverData"
 
 // Store pointers, since this will reduce the table size, which helps with resizings,
 // But also to have referential stability, which can be used to accelerate other structures

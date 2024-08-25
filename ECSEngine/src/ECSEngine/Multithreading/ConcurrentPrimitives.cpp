@@ -58,8 +58,8 @@ namespace ECSEngine {
 
 			// Do this in a loop since the WaitOnAddress can wake the thread spuriously
 			unsigned char true_var = 1;
-			while (value.load(ECS_RELAXED)) {
-				BOOL success = WaitOnAddress(&value, &true_var, sizeof(unsigned char), INFINITE);
+			while (IsLocked()) {
+				WaitOnAddress(&value, &true_var, sizeof(unsigned char), INFINITE);
 			}
 		}
 	}
@@ -76,8 +76,8 @@ namespace ECSEngine {
 
 			// Here we don't want to use a loop since the thread will be woken up
 			// when the value becomes 0
-			if (!IsLocked()) {
-				unsigned char compare_value = 0;
+			unsigned char compare_value = 0;
+			while (!IsLocked()) {
 				WaitOnAddress(&value, &compare_value, sizeof(unsigned char), INFINITE);
 			}
 		}
@@ -599,15 +599,9 @@ namespace ECSEngine {
 
 	void AtomicFlag::Wait()
 	{
-		// Here we would normally need ACQUIRE barrier in order to not have reads be moved before this
-		// value, but it is incompatible with the store, the same goes for ACQ_REL.
-		// Here, we could use ECS_RELEASE since we will be using a load with acquire inside the
-		// while anyway and would be enough to ensure correct access for reads
-		value.store(true, ECS_RELEASE);
-
 		// Do this in a loop since the WaitOnAddress can wake the thread spuriously
-		bool current_value = true;
-		while (current_value) {
+		bool current_value = false;
+		while (!current_value) {
 			BOOL success = WaitOnAddress(&value, &current_value, sizeof(unsigned char), INFINITE);
 			current_value = value.load(ECS_ACQUIRE);
 		}
@@ -617,7 +611,7 @@ namespace ECSEngine {
 
 	void AtomicFlag::Signal()
 	{
-		value.store(false, ECS_RELEASE);
+		value.store(true, ECS_RELEASE);
 		WakeByAddressAll(&value);
 	}
 

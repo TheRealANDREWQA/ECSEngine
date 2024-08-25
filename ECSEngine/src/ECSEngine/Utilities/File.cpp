@@ -423,7 +423,10 @@ namespace ECSEngine {
 		NULL_TERMINATE_WIDE(folder);
 
 		// Delete folder contents
-		DeleteFolderContents(folder);
+		bool delete_contents_success = DeleteFolderContents(folder);
+		if (!delete_contents_success) {
+			return false;
+		}
 
 		// The folder must be empty for this function
 		return _wrmdir(folder.buffer) == 0;

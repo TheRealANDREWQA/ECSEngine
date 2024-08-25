@@ -1096,6 +1096,12 @@ namespace ECSEngine {
 
 	void Graphics::SolidColorHelperShaderBind(VertexBuffer instance_vertex_buffer) {
 		BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_SOLID_COLOR);
+		SolidColorHelperShaderBindBuffer(instance_vertex_buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::SolidColorHelperShaderBindBuffer(VertexBuffer instance_vertex_buffer) {
 		BindVertexBuffer(instance_vertex_buffer, 1);
 	}
 

@@ -151,6 +151,11 @@ namespace ECSEngine {
 			return indirection_buffer[index].y;
 		}
 
+		// Returns the current maximum value of a valid handle, this value is larger by 1 then the maximum valid value
+		ECS_INLINE unsigned int GetMaxValidHandle() const {
+			return capacity;
+		}
+
 		// The buffer needs to have at least size elements
 		void GetOccupiedHandles(Stream<unsigned int>& handles) const {
 			handles.size = 0;
@@ -417,6 +422,11 @@ namespace ECSEngine {
 
 		ECS_INLINE void GetOccupiedIndices(Stream<unsigned int>& indices) const {
 			set.GetOccupiedIndices(indices);
+		}
+
+		// Returns the current maximum value of a valid handle, this value is larger by 1 then the maximum valid value
+		ECS_INLINE unsigned int GetMaxValidHandle() const {
+			return set.GetMaxValidHandle();
 		}
 
 		// All the positions must be updated - potentially expensive

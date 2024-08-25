@@ -64,9 +64,13 @@ namespace ECSEngine {
 		}
 
 		// Writes the entire set of data to a buffer that is allocated. The remaining count will be 0 after this call.
-		// It uses the fast path for contiguous iterators of memcpying the data directly.
-		ValueType* WriteTo(AllocatorPolymorphic allocator) {
+		// It uses the fast path for contiguous iterators of memcpying the data directly. The count pointer is an optional
+		// Value that can be set to the allocated count
+		ValueType* WriteTo(AllocatorPolymorphic allocator, size_t* count = nullptr) {
 			size_t allocation_size = sizeof(ValueType) * remaining_count;
+			if (count != nullptr) {
+				*count = remaining_count;
+			}
 			std::remove_const_t<ValueType>* buffer = (std::remove_const_t<ValueType>*)AllocateEx(allocator, allocation_size);
 			WriteTo(buffer);
 			return buffer;

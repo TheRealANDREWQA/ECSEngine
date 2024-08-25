@@ -235,6 +235,10 @@ namespace ECSEngine {
 			ConvertIntToChars(string, value);
 		}
 
+		ECS_INLINE static SharedInstance Invalid() {
+			return { -1 };
+		}
+
 		short value;
 	};
 

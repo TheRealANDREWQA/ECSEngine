@@ -1234,10 +1234,12 @@ namespace ECSEngine {
 
 		public:
 
+		// It does not set the size, it will only allocate the given capacity
 		ECS_INLINE void Resize(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			ResizeImpl<true>(new_capacity, debug_info);
 		}
 
+		// It does not set the size, it will only allocate the given capacity
 		ECS_INLINE void ResizeNoCopy(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			ResizeImpl<false>(new_capacity, debug_info);
 		}

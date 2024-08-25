@@ -144,6 +144,7 @@ namespace ECSEngine {
 	static void BackgroundThreadFunction() {
 		Console* console = GetConsole();
 		while (true) {
+			console->dump_flag.Clear();
 			if (DUMP_OPERATION == CONSOLE_DUMP_APPEND) {
 				ConsoleAppendToDump();
 			}

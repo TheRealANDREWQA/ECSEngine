@@ -76,6 +76,12 @@ namespace ECSEngine {
 		SharedInstance new_instance;
 	};
 
+	struct EntitySharedGroup {
+		unsigned int offset;
+		unsigned int size;
+		SharedInstance instance;
+	};
+
 	struct ECSENGINE_API EntityManager
 	{
 	public:
@@ -1260,12 +1266,12 @@ namespace ECSEngine {
 
 		// Verifies if a component already exists at that slot
 		ECS_INLINE bool ExistsComponent(Component component) const {
-			return component.value < m_unique_components.size&& m_unique_components[component.value].size != -1;
+			return component.value < m_unique_components.size && m_unique_components[component.value].size != -1;
 		}
 
 		// Verifies if a shared component was already allocated at that slot
 		ECS_INLINE bool ExistsSharedComponent(Component component) const {
-			return component.value < m_shared_components.size&& m_shared_components[component.value].info.size != -1;
+			return component.value < m_shared_components.size && m_shared_components[component.value].info.size != -1;
 		}
 
 		// Verifies if a global component was already allocated at that slot
@@ -1469,6 +1475,16 @@ namespace ECSEngine {
 
 		const void* GetSharedData(Component component, SharedInstance instance) const;
 
+		template<typename ComponentType>
+		ECS_INLINE ComponentType* GetSharedData(SharedInstance instance) {
+			return (ComponentType*)GetSharedData(ComponentType::ID(), instance);
+		}
+
+		template<typename ComponentType>
+		ECS_INLINE const ComponentType* GetSharedData(SharedInstance instance) const {
+			return (ComponentType*)GetSharedData(ComponentType::ID(), instance);
+		}
+
 		void* GetNamedSharedData(Component component, Stream<char> identifier);
 
 		const void* GetNamedSharedData(Component component, Stream<char> identifier) const;
@@ -1538,6 +1554,18 @@ namespace ECSEngine {
 
 		// Returns the number of entities that have this shared instance in use
 		unsigned int GetNumberOfEntitiesForSharedInstance(Component component, SharedInstance instance) const;
+
+		// Groups the given entities by their shared component, such that entities with the same instance
+		// Are contiguous. The groups are written into the out stream, while also reshuffling the entities
+		// Inside the given entities stream.
+		// It does not accept entities that do not have the component! (it will crash)
+		void GroupEntitiesBySharedInstance(Stream<Entity> entities, Component shared_component, AdditionStream<EntitySharedGroup> groups);
+
+		// Groups the given entities by their shared component, such that entities with the same instance
+		// Are contiguous. The groups are written into the out stream, while also reshuffling the entities
+		// Inside the given entities stream.
+		// It does accept entities that do not have the component, these entities having their own group 
+		void GroupEntitiesBySharedInstanceWithMissing(Stream<Entity> entities, Component shared_component, AdditionStream<EntitySharedGroup> groups);
 
 		// Tag should only be the bit index, not the actual value
 		bool HasEntityTag(Entity entity, unsigned char tag) const;
@@ -1836,6 +1864,10 @@ namespace ECSEngine {
 			return (const T*)TryGetGlobalComponent(T::ID());
 		}
 
+		// It tries to retrieve the shared instance that the entity has. If the entity does not have the shared component,
+		// It will return an invalid shared instance.
+		SharedInstance TryGetComponentSharedInstance(Component component, Entity entity) const;
+
 		// ---------------------------------------------------------------------------------------------------
 
 		// It will search to see if there is an existing instance that has the same data. In that case,
@@ -2002,16 +2034,24 @@ namespace ECSEngine {
 	};
 
 	// Uses the internal indexing of the entity manager
-	ECSENGINE_API VectorComponentSignature ECS_VECTORCALL GetEntityManagerUniqueVectorSignature(const VectorComponentSignature* signatures, unsigned int index);
+	ECS_INLINE VectorComponentSignature ECS_VECTORCALL GetEntityManagerUniqueVectorSignature(const VectorComponentSignature* signatures, unsigned int index) {
+		return signatures[index << 1];
+	}
 
 	// Uses the internal indexing of the entity manager
-	ECSENGINE_API VectorComponentSignature ECS_VECTORCALL GetEntityManagerSharedVectorSignature(const VectorComponentSignature* signatures, unsigned int index);
+	ECS_INLINE VectorComponentSignature ECS_VECTORCALL GetEntityManagerSharedVectorSignature(const VectorComponentSignature* signatures, unsigned int index) {
+		return signatures[(index << 1) + 1];
+	}
 
 	// Uses the internal indexing of the entity manager
-	ECSENGINE_API VectorComponentSignature* GetEntityManagerUniqueVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index);
+	ECS_INLINE VectorComponentSignature* GetEntityManagerUniqueVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index) {
+		return signatures + (index << 1);
+	}
 
 	// Uses the internal indexing of the entity manager
-	ECSENGINE_API VectorComponentSignature* GetEntityManagerSharedVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index);
+	ECS_INLINE VectorComponentSignature* GetEntityManagerSharedVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index) {
+		return signatures + (index << 1) + 1;
+	}
 
 	// Creates the allocator for the entity pool, the entity pool itself, the entity manager allocator,
 	// and the entity manager itself.

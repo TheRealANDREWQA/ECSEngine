@@ -393,7 +393,7 @@ namespace ECSEngine {
 				return signature.instances[index];
 			}
 		}
-		return { -1 };
+		return SharedInstance::Invalid();
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
