@@ -2,6 +2,7 @@
 #include "EntityManager.h"
 #include "../Utilities/Crash.h"
 #include "ArchetypeQueryCache.h"
+#include "Components.h"
 
 #define ENTITY_MANAGER_DEFAULT_UNIQUE_COMPONENTS (1 << 7)
 #define ENTITY_MANAGER_DEFAULT_SHARED_COMPONENTS (1 << 7)
@@ -248,6 +249,10 @@ namespace ECSEngine {
 	};
 
 #pragma region Helpers
+
+	ECS_INLINE static Stream<char> EntityName(const EntityManager* entity_manager, Entity entity) {
+		return GetEntityNameExtendedTempStorage(entity_manager, entity, true);
+	}
 
 	static void WriteCommandStream(EntityManager* manager, DeferredActionParameters parameters, DeferredAction action) {
 		if (parameters.command_stream == nullptr) {
@@ -680,8 +685,10 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, signature_string, 512);
 			ECS_CRASH_CONDITION_RETURN_VOID(
 				unique_signature.Find(data->components[new_index]) == UCHAR_MAX,
-				"EntityManager: Trying to add the same component {#} twice to entity. Archetype components: {#}",
+				"EntityManager: Trying to add the same component {#} twice to entities. First entity is {#}, total entity count {#}. Archetype components: {#}",
 				manager->GetComponentName(data->components[new_index]),
+				EntityName(manager, data->entities[0]),
+				data->entities.size,
 				manager->GetComponentSignatureString(unique_signature, signature_string)
 			);
 		}
@@ -867,9 +874,10 @@ namespace ECSEngine {
 			// If the component was not found, fail
 			ECS_CRASH_CONDITION_RETURN_VOID(
 				subindex != unique_signature.count, 
-				"EntityManager: Could not find component {#} when trying to remove it from entity. First entity is {#}",
+				"EntityManager: Could not find component {#} when trying to remove it from entities. First entity is {#}, the total entity count is {#}.",
 				manager->GetComponentName(data->components.indices[index]),
-				data->entities[0].index
+				EntityName(manager, data->entities[0]),
+				data->entities.size
 			);
 		}
 
@@ -1143,8 +1151,10 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, signature_string, 512);
 			ECS_CRASH_CONDITION_RETURN_VOID(
 				_shared_signature.Find(data->components.indices[new_index]) == UCHAR_MAX,
-				"EntityManager: Trying to add shared component {#} twice for entities. The archetype components: {#}",
+				"EntityManager: Trying to add shared component {#} twice for entities. First entity is {#}, total entity count {#}. The archetype components: {#}",
 				manager->GetSharedComponentName(data->components.indices[new_index]),
+				EntityName(manager, data->entities[0]),
+				data->entities.size,
 				manager->GetSharedComponentSignatureString(_shared_signature, signature_string)
 			);
 		}
@@ -1208,8 +1218,8 @@ namespace ECSEngine {
 				}
 			}
 			// Fail if the component doesn't exist
-			ECS_CRASH_CONDITION(subindex < data->components.count || subindex == -1, "EntityManager: A component could not be found when trying to remove components from entities. "
-				"The first entity is {#}. The component is {#}.", data->entities[0].value, manager->GetComponentName(data->components.indices[index]));
+			ECS_CRASH_CONDITION(subindex < data->components.count || subindex == -1, "EntityManager: Component {#} could not be found when trying to remove components from entities. "
+				"The first entity is {#}, total entity count {#}.", manager->GetComponentName(data->components.indices[index]), EntityName(manager, data->entities[0]), data->entities.size);
 		}
 
 		uint2 new_archetype_indices = manager->FindOrCreateArchetypeBase(unique_signature, shared_signature);
@@ -1240,7 +1250,7 @@ namespace ECSEngine {
 				manager->ExistsComponent(data->elements[index].component),
 				"EntityManager: The shared component {#} does not exist when trying to change the shared instance for entity {#}.",
 				manager->GetSharedComponentName(data->elements[index].component),
-				data->elements[index].entity
+				EntityName(manager, data->elements[index].entity)
 			);
 
 			SharedInstance entity_instance = manager->GetSharedComponentInstance(data->elements[index].component, data->elements[index].entity);
@@ -1256,13 +1266,13 @@ namespace ECSEngine {
 					"EntityManager: The shared instance {#} does not exist for component {#} when trying to change the shared instance for entity {#}.",
 					data->elements[index].new_instance,
 					manager->GetSharedComponentName(data->elements[index].component),
-					data->elements[index].entity
+					EntityName(manager,  data->elements[index].entity)
 				);
 				ECS_CRASH_CONDITION(
 					data->elements[index].new_instance != entity_instance,
 					"EntityManager: Trying to change the shared instance for component {#} for entity {#} to the same instance",
 					manager->GetSharedComponentName(data->elements[index].component),
-					data->elements[index].entity.value
+					EntityName(manager, data->elements[index].entity.value)
 				);
 			}
 
@@ -2216,8 +2226,8 @@ namespace ECSEngine {
 		default:
 		{
 			ECS_STACK_CAPACITY_STREAM(char, component_signature_string, 1024);
-			ECS_CRASH_CONDITION(false, "EntityManager: Copy entity data type is incorrect when trying to add component/s { {#} } to entities. First entity is {#}.",
-				GetComponentSignatureString(components, component_signature_string), entities[0].value);
+			ECS_CRASH_CONDITION(false, "EntityManager: Copy entity data type is incorrect when trying to add component/s { {#} } to entities. First entity is {#}, total count is {#}.",
+				GetComponentSignatureString(components, component_signature_string), EntityName(this, entities[0]), entities.size);
 		}
 		}
 
@@ -2269,8 +2279,8 @@ namespace ECSEngine {
 		default:
 		{
 			ECS_STACK_CAPACITY_STREAM(char, component_string_storage, 1024);
-			ECS_CRASH_CONDITION(false, "EntityManager: Incorrect copy type when trying to add components {#} to entities. First entity is {#}.",
-				GetComponentSignatureString(components, component_string_storage), entities[0].value);
+			ECS_CRASH_CONDITION(false, "EntityManager: Incorrect copy type when trying to add components {#} to entities. First entity is {#}, total count is {#}.",
+				GetComponentSignatureString(components, component_string_storage), EntityName(this, entities[0]), entities.size);
 		}
 		}
 
@@ -2663,7 +2673,7 @@ namespace ECSEngine {
 		Archetype* archetype = GetArchetype(entity_info.main_archetype);
 		unsigned char deallocate_index = archetype->FindCopyDeallocateComponentIndex(component);
 		ECS_CRASH_CONDITION(deallocate_index != UCHAR_MAX, "EntityManager: Trying to deallocate buffers for component {#} for entity {#} but the "
-			"component doesn't exist", GetComponentName(component), entity.value);
+			"component is missing.", GetComponentName(component), EntityName(this, entity));
 		archetype->CallEntityDeallocate(deallocate_index, entity_info);
 	}
 
@@ -2833,7 +2843,7 @@ namespace ECSEngine {
 			shared_index != UCHAR_MAX, 
 			{},
 			"EntityManager: Entity {#} doesn't have shared component {#} when trying to change shared instance to {#}.", 
-			entity.value,
+			EntityName(this, entity),
 			GetSharedComponentName(component), 
 			new_instance.value
 		);
@@ -2847,7 +2857,7 @@ namespace ECSEngine {
 				{},
 				"EntityManager: Trying to replace shared instance {#} with the same instance for entity {#}, component {#}.",
 				new_instance.value,
-				entity.value,
+				EntityName(this, entity),
 				GetSharedComponentName(component)
 			);
 		}
@@ -3565,7 +3575,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, shared_component_signature_storage, 1024);
 
 			ECS_CRASH_CONDITION(false, "EntityManager: Incorrect copy type when trying to create entities from source data. "
-				"Components: { {#} }. Shared Components{{#}}. Number of entities into command{#}.",
+				"Components: { {#} }. Shared Components{ {#} }. Number of entities into command {#}.",
 				GetComponentSignatureString(unique_components, component_signature_storage),
 				GetSharedComponentSignatureString(shared_components.ComponentSignature(), shared_component_signature_storage),
 				count
@@ -3620,7 +3630,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, shared_component_string_storage, 1024);
 
 			ECS_CRASH_CONDITION(false, "EntityManager: Incorrect copy type when trying to create entities from source data. "
-				"Components: { {#} }. Shared Components : { {#} }. Entity count in command : {#}.",
+				"Components: { {#} }. Shared Components: { {#} }. Entity count in command: {#}.",
 				GetComponentSignatureString(unique_components, component_string_storage),
 				GetSharedComponentSignatureString(shared_components.ComponentSignature(), shared_component_string_storage),
 				count
@@ -4832,12 +4842,11 @@ namespace ECSEngine {
 
 	SharedInstance EntityManager::GetSharedComponentInstance(Component component, Entity entity) const
 	{
-		ECS_CRASH_CONDITION_RETURN(HasSharedComponent(entity, component), { -1 }, "EntityManager: The entity {#} doesn't have the shared component {#}.",
-			entity, GetSharedComponentName(component));
-
 		EntityInfo info = GetEntityInfo(entity);
 		const Archetype* archetype = GetArchetype(info.main_archetype);
-		return archetype->GetBaseInstance(component, info.base_archetype);
+		SharedInstance instance = archetype->GetBaseInstance(component, info.base_archetype);
+		ECS_CRASH_CONDITION_RETURN(instance.IsValid(), SharedInstance::Invalid(), "EntityManager: The entity {#} doesn't have the shared component {#}.", EntityName(this, entity), GetSharedComponentName(component));
+		return instance;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4951,7 +4960,7 @@ namespace ECSEngine {
 		ECS_CRASH_CONDITION(
 			children.capacity >= parent_children.size, 
 			"EntityManager: Not enough space to copy the children for entity {#} into the capacity stream. Current capacity {#}, size needed {#}.",
-			parent.value,
+			EntityName(this, parent),
 			children.capacity,
 			parent_children.size
 		);
@@ -5034,6 +5043,58 @@ namespace ECSEngine {
 		});
 
 		return total_count;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	template<bool allow_missing_component>
+	void GroupEntitiesBySharedInstanceImplementation(EntityManager* entity_manager, Stream<Entity> entities, Component shared_component, AdditionStream<EntitySharedGroup> groups) {
+		const size_t MAX_STACK_CAPACITY = ECS_KB * 64;
+
+		// Do a prepass where the shared instances of the entities are determined, which will also validate
+		// That the entities exist and that they have the given component
+		Stream<SharedInstance> instances;
+		instances.buffer = (SharedInstance*)ECS_MALLOCA_ALLOCATOR(sizeof(SharedInstance) * entities.size, MAX_STACK_CAPACITY, entity_manager->TemporaryAllocator());
+		instances.size = entities.size;
+		for (size_t index = 0; index < entities.size; index++) {
+			if constexpr (allow_missing_component) {
+				instances[index] = 
+			}
+			else {
+				instances[index] = entity_manager->GetSharedComponentInstance(shared_component, entities[index]);
+			}
+		}
+
+		size_t shuffle_index = 0;
+		EntitySharedGroup groupping;
+		for (size_t index = 0; index < entities.size; index++) {
+			// This will be the instance for this new group
+			SharedInstance group_instance = instances[index];
+			groupping.instance = group_instance;
+			groupping.offset = (unsigned int)shuffle_index;
+			groupping.size = 1;
+
+			shuffle_index++;
+			index++;
+			for (; index < entities.size; index++) {
+				if (instances[index] == group_instance) {
+					entities.Swap(shuffle_index, index);
+					shuffle_index++;
+					groupping.size++;
+				}
+			}
+			groups.Add(groupping);
+		}
+	}
+
+	void EntityManager::GroupEntitiesBySharedInstance(Stream<Entity> entities, Component shared_component, AdditionStream<EntitySharedGroup> groups) {
+		
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::GroupEntitiesBySharedInstanceWithMissing(Stream<Entity> entities, Component shared_component, AdditionStream<EntitySharedGroup> groups) {
+
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5236,7 +5297,7 @@ namespace ECSEngine {
 
 		ECS_CRASH_CONDITION(
 			size <= ECS_COMPONENT_MAX_BYTE_SIZE,
-			"EntityManager: Unique component {#} is too large",
+			"EntityManager: Unique component {#} is too large.",
 			component_name
 		);
 
@@ -5777,6 +5838,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	SharedInstance EntityManager::TryGetComponentSharedInstance(Component component, Entity entity) const {
+		EntityInfo info = GetEntityInfo(entity);
+		const Archetype* archetype = GetArchetype(info.main_archetype);
+		return archetype->GetBaseInstance(component, info.base_archetype);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	bool EntityManager::TryMergeSharedInstanceCommit(Component component, SharedInstance instance, bool remove_empty_archetypes)
 	{
 		ECS_CRASH_CONDITION_RETURN(ExistsSharedInstance(component, instance), false, "EntityManager: Trying to merge invalid shared instance {#} for component {#}", instance.value,
@@ -6089,34 +6158,6 @@ namespace ECSEngine {
 		ForEachUnreferencedSharedInstance(component, [&](SharedInstance instance, const void* data) {
 			instances->AddAssert(instance);
 		});
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	VectorComponentSignature ECS_VECTORCALL GetEntityManagerUniqueVectorSignature(const VectorComponentSignature* signatures, unsigned int index)
-	{
-		return signatures[index << 1];
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	VectorComponentSignature ECS_VECTORCALL GetEntityManagerSharedVectorSignature(const VectorComponentSignature* signatures, unsigned int index)
-	{
-		return signatures[(index << 1) + 1];
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	VectorComponentSignature* GetEntityManagerUniqueVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index)
-	{
-		return signatures + (index << 1);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	VectorComponentSignature* GetEntityManagerSharedVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index)
-	{
-		return signatures + (index << 1) + 1;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

@@ -1,7 +1,11 @@
 #pragma once
 #include "Export.h"
 
-template<bool schedule_element>
-ECS_THREAD_TASK(DebugDrawPhysicsIslands);
+namespace ECSEngine {
+	struct ModuleTaskFunctionData;
+	struct World;
+}
 
-void SetPhysicsIslandDraw(World* world, bool set);
+void RegisterDebugTasks(ECSEngine::ModuleTaskFunctionData* task_data);
+
+void SetPhysicsIslandDraw(ECSEngine::World* world, bool set);

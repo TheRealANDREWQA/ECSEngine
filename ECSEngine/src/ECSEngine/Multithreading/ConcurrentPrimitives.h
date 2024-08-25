@@ -66,14 +66,10 @@ namespace ECSEngine {
 
 		void Wait();
 
-		ECS_INLINE bool IsWaiting() const {
-			return value.load(ECS_RELAXED);
-		}
-
 		void Signal();
 
 		ECS_INLINE void Clear() {
-			value.store(0, ECS_RELEASE);
+			value.store(false, ECS_RELAXED);
 		}
 
 		std::atomic<bool> value = false;

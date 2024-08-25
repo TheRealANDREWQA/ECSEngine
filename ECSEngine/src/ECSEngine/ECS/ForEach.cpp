@@ -39,11 +39,8 @@ namespace ECSEngine {
 		EntityManagerCommandStream* command_stream;
 	};
 
-	// This structure should be allocated dinamically, such that components are written immediately after this structure
-	// In order to reduce memory footprint (which can ammount to significant gains), do not store the pointers
-	struct ForEachEntitySelectionImplementationTaskData {
-		// All functions can be implemented directly since we are in a .cpp
-
+	// Structure that allows writing components directly after it and retrieving them. Must be placed at the end of a structure in order to be used
+	struct InPlaceSignature {
 		ECS_INLINE ComponentSignature UniqueSignature() const {
 			return { (Component*)OffsetPointer(this, sizeof(*this)), unique_count };
 		}
@@ -55,7 +52,7 @@ namespace ECSEngine {
 		ECS_INLINE ComponentSignature SharedSignature() const {
 			return { (Component*)OffsetPointer(this, sizeof(*this)) + unique_count + optional_unique_count, shared_count };
 		}
-		
+
 		ECS_INLINE ComponentSignature OptionalSharedSignature() const {
 			return { (Component*)OffsetPointer(this, sizeof(*this)) + unique_count + optional_unique_count + shared_count, optional_shared_count };
 		}
@@ -84,7 +81,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE static size_t MemoryOf(const ArchetypeQueryDescriptor& query_descriptor) {
-			return sizeof(ForEachEntitySelectionImplementationTaskData) + sizeof(Component) * (query_descriptor.unique.count + query_descriptor.unique_optional.count
+			return sizeof(Component) * (query_descriptor.unique.count + query_descriptor.unique_optional.count
 				+ query_descriptor.shared.count + query_descriptor.shared_optional.count);
 		}
 
@@ -92,14 +89,76 @@ namespace ECSEngine {
 		unsigned char optional_unique_count;
 		unsigned char shared_count;
 		unsigned char optional_shared_count;
-		StableIterator<const Entity> stable_iterator;
+	};
 
+	template<typename Structure>
+	struct ForEachDataWithInPlaceComponents {
+		ECS_INLINE ArchetypeQueryDescriptor GetQueryDescriptor() const {
+			return signature.GetQueryDescriptor();
+		}
+
+		ECS_INLINE void WriteComponents(const ArchetypeQueryDescriptor& query_descriptor) {
+			signature.WriteComponents(query_descriptor);
+		}
+
+		ECS_INLINE static size_t MemoryOf(const ArchetypeQueryDescriptor& query_descriptor) {
+			return sizeof(ForEachDataWithInPlaceComponents<Structure>) + InPlaceSignature::MemoryOf(query_descriptor);
+		}
+
+		Structure base;
+		InPlaceSignature signature;
+	};
+
+	struct ForEachEntitySelectionImplementationTaskData_ {
+		size_t index_offset;
+		StableIterator<const Entity> stable_iterator;
 		void* functor_data;
 		ForEachEntitySelectionUntypedFunctor functor;
 		EntityManagerCommandStream* command_stream;
 		// This is set only if the initial iterator was stable. Will be passed to the functors
 		IteratorInterface<const Entity>* initial_iterator;
 	};
+
+	// This structure should be allocated dinamically, such that components are written immediately after this structure.
+	// In order to reduce memory footprint (which can ammount to significant gains), do not store the pointers
+	typedef ForEachDataWithInPlaceComponents<ForEachEntitySelectionImplementationTaskData_> ForEachEntitySelectionImplementationTaskData;
+
+	struct SharedGroupStatus {
+		// The first 3 fields are used in conjunction to obtain the initialize synchronization. One flag is used to allow only a single thread
+		// To perform the group functor, while the other one is used to let the other threads with the same group know that it has finished.
+		SpinLock initialize_lock;
+		AtomicFlag initialize_is_finalized;
+		// In case the group is aborted, this flag will be set to indicate to the other batch functors to not continue
+		bool is_group_aborted;
+		// The last 3 fields are used in conjunction to obtain the finalize synchronization. Batch total count will be set by the main
+		// Thread that performs the task creation to a non zero value after the total number of batches is known. Batch finish count
+		// Will be incremented by each thread task batch and the last thread will perform the finalize functor call.
+		AtomicFlag finalize_count_is_initialized;
+		std::atomic<unsigned int> batch_finish_count;
+		unsigned int batch_total_count;
+	};
+
+	struct ForEachEntitySelectionSharedGrouppingImplementationTaskData_ {
+		// The shared instance value of the shared component for which the grouping is made
+		SharedInstance shared_instance;
+		// These are the entities of the entire group, which are needed for the group functor
+		Stream<Entity> group_entities;
+		// This is a pointer to a flag that needs to be acquired in order to run the group functor
+		CacheAligned<SharedGroupStatus>* group_status;
+		// These are the entities to be used for the entity iteration, which may be smaller than the
+		// Total group count
+		Stream<Entity> batch_entities;
+		void* functor_data;
+		ForEachEntitySelectionSharedGroupingUntypedFunctor group_initialize_functor;
+		ForEachEntitySelectionSharedGroupingUntypedFunctor group_finalize_functor;
+		ForEachEntitySelectionUntypedFunctor entity_functor;
+		EntityManagerCommandStream* command_stream;
+		IteratorInterface<const Entity>* initial_iterator;
+	};
+
+	// This structure should be allocated dinamically, such that components are written immediately after this structure.
+	// In order to reduce memory footprint (which can ammount to significant gains), do not store the pointers
+	typedef ForEachDataWithInPlaceComponents<ForEachEntitySelectionSharedGrouppingImplementationTaskData_> ForEachEntitySelectionSharedGroupingImplementationTaskData;
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
@@ -375,24 +434,30 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	static ECS_THREAD_TASK(ForEachEntitySelectionThreadTask) {
-		ForEachEntitySelectionImplementationTaskData* data = (ForEachEntitySelectionImplementationTaskData*)_data;
-
+	static void ForEachEntitySelectionThreadTaskCommon(
+		StableIterator<const Entity> stable_iterator,
+		unsigned int thread_id,
+		size_t iteration_start_index,
+		World* world,
+		EntityManagerCommandStream* command_stream,
+		void* user_data,
+		ForEachEntitySelectionUntypedFunctor functor,
+		IteratorInterface<const Entity>* initial_iterator,
+		const ArchetypeQueryDescriptor& query_descriptor
+	) {
 		void* unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
 		void* shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 		ForEachEntitySelectionUntypedFunctorData functor_data;
 		functor_data.unique_components = unique_components;
 		functor_data.shared_components = shared_components;
-		functor_data.base.command_stream = data->command_stream;
-		functor_data.base.user_data = data->functor_data;
+		functor_data.base.command_stream = command_stream;
+		functor_data.base.user_data = user_data;
 		functor_data.base.thread_id = thread_id;
 		functor_data.base.world = world;
-		functor_data.base.iterator = data->initial_iterator;
+		functor_data.base.iterator = initial_iterator;
 
-		ArchetypeQueryDescriptor query_descriptor = data->GetQueryDescriptor();
-
-		unsigned int index = 0;
-		data->stable_iterator.iterator->ForEach([&index, data, world, &functor_data, &query_descriptor](const Entity* entity) {
+		size_t index = iteration_start_index;
+		stable_iterator.iterator->ForEach([&index, world, &functor_data, &query_descriptor, functor](const Entity* entity) {
 			functor_data.base.index = index;
 			index++;
 
@@ -412,9 +477,90 @@ namespace ECSEngine {
 			for (size_t component_index = 0; component_index < (size_t)query_descriptor.shared_optional.count; component_index++) {
 				functor_data.shared_components[query_descriptor.shared.count + component_index] = world->entity_manager->TryGetSharedComponent(current_entity, query_descriptor.shared_optional[component_index]);
 			}
-			data->functor(&functor_data);
+			functor(&functor_data);
 		});
+	}
+	
+	static ECS_THREAD_TASK(ForEachEntitySelectionThreadTask) {
+		ForEachEntitySelectionImplementationTaskData* data = (ForEachEntitySelectionImplementationTaskData*)_data;
+		ArchetypeQueryDescriptor query_descriptor = data->GetQueryDescriptor();
+		ForEachEntitySelectionThreadTaskCommon(
+			data->base.stable_iterator, 
+			thread_id, 
+			data->base.index_offset, 
+			world, 
+			data->base.command_stream, 
+			data->base.functor_data, 
+			data->base.functor, 
+			data->base.initial_iterator, 
+			query_descriptor
+		);
+	}
 
+	// -------------------------------------------------------------------------------------------------------------------------------
+	
+	static ECS_THREAD_TASK(ForEachEntitySelectionSharedGroupingThreadTask) {
+		ForEachEntitySelectionSharedGroupingImplementationTaskData* data = (ForEachEntitySelectionSharedGroupingImplementationTaskData*)_data;
+
+		// Try to acquire the group status
+		if (data->base.group_initialize_functor != nullptr) {
+			if (data->base.group_status->value.initialize_lock.TryLock()) {
+				ForEachEntitySelectionSharedGroupingUntypedFunctorData functor_data;
+				functor_data.command_stream = data->base.command_stream;
+				functor_data.entities = data->base.group_entities;
+				functor_data.iterator = data->base.initial_iterator;
+				functor_data.shared_instance = data->base.shared_instance;
+				functor_data.thread_id = thread_id;
+				functor_data.user_data = data->base.functor_data;
+				functor_data.world = world;
+				data->base.group_status->value.is_group_aborted = !data->base.group_initialize_functor(&functor_data);
+
+				// Notify the other threads that we finished
+				data->base.group_status->value.initialize_is_finalized.Signal();
+			}
+			else {
+				// Wait for the other thread to finish
+				data->base.group_status->value.initialize_is_finalized.Wait();
+			}
+
+			if (data->base.group_status->value.is_group_aborted) {
+				// Do not continue
+				return;
+			}
+		}
+
+		// Perform the common part
+		ArchetypeQueryDescriptor query_descriptor = data->GetQueryDescriptor();
+		StreamIterator<const Entity> iterator = data->base.batch_entities.ConstIterator();
+		ForEachEntitySelectionThreadTaskCommon(
+			ToStableIterator(&iterator),
+			thread_id,
+			ULLONG_MAX - 1000, // This value is a placeholder, use a large value such that it will likely result in a crash if the user tries to use it
+			world,
+			data->base.command_stream,
+			data->base.functor_data,
+			data->base.entity_functor,
+			data->base.initial_iterator,
+			query_descriptor
+		);
+
+		// Do the finalize part
+		if (data->base.group_finalize_functor != nullptr) {
+			unsigned int finished_count = data->base.group_status->value.batch_finish_count.fetch_add(1, ECS_RELAXED);
+			data->base.group_status->value.finalize_count_is_initialized.Wait();
+			if (finished_count == data->base.group_status->value.batch_total_count - 1) {
+				// Perform the finalize call
+				ForEachEntitySelectionSharedGroupingUntypedFunctorData functor_data;
+				functor_data.command_stream = data->base.command_stream;
+				functor_data.entities = data->base.group_entities;
+				functor_data.iterator = data->base.initial_iterator;
+				functor_data.shared_instance = data->base.shared_instance;
+				functor_data.thread_id = thread_id;
+				functor_data.user_data = data->base.functor_data;
+				functor_data.world = world;
+				data->base.group_finalize_functor(&functor_data);
+			}
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -497,12 +643,88 @@ namespace ECSEngine {
 		size_t task_data_size = task_data->MemoryOf(query_descriptor);
 		ECS_CRASH_CONDITION(task_data_size <= sizeof(task_data_storage), "ForEachEntitySelectionCommitFunctor: Exceeded task data storage capacity.");
 
-		task_data->stable_iterator = ToStableIterator(entities);
-		task_data->initial_iterator = entities;
-		task_data->functor = functor;
-		task_data->functor_data = data;
+		task_data->base.stable_iterator = ToStableIterator(entities);
+		task_data->base.initial_iterator = entities;
+		task_data->base.functor = functor;
+		task_data->base.functor_data = data;
+		task_data->base.index_offset = 0;
+		task_data->base.command_stream = nullptr;
 		task_data->WriteComponents(query_descriptor);
 		ForEachEntitySelectionThreadTask(0, world, task_data);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	void ForEachEntitySelectionSharedGroupingCommitFunctor(
+		IteratorInterface<const Entity>* entities,
+		bool allow_missing_component_group,
+		World* world,
+		ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_initialize_functor,
+		ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_finalize_functor,
+		ForEachEntitySelectionUntypedFunctor entity_functor,
+		void* data,
+		const ArchetypeQueryDescriptor& query_descriptor
+	) {
+		// Do not use ForEachEntitySelectionSharedGroupingThreadTask because it incurs overhead with the atomic operations.
+		// Use the for
+		alignas(alignof(void*)) char task_data_storage[ECS_KB * 8];
+		ForEachEntitySelectionImplementationTaskData* task_data = (ForEachEntitySelectionImplementationTaskData*)task_data_storage;
+		size_t task_data_size = task_data->MemoryOf(query_descriptor);
+		ECS_CRASH_CONDITION(task_data_size <= sizeof(task_data_storage), "ForEachEntitySelectionSharedGroupingCommitFunctor: Exceeded task data storage capacity.");
+
+		ECS_CRASH_CONDITION((allow_missing_component_group && query_descriptor.shared_optional.count > 0) ||
+			(!allow_missing_component_group && query_descriptor.shared.count > 0), "ForEachEntitySelectionSharedGrouping: a shared component must be specified!");
+		
+		ECS_CRASH_CONDITION(grouping_initialize_functor != nullptr || grouping_finalize_functor != nullptr, "ForEachEntitySelectionSharedGrouping: A group functor (initialize and/or finalize) must be specified!");
+
+		// Allocate the entities into a temporary buffer
+		Stream<Entity> entities_array;
+		entities_array.buffer = (Entity*)entities->WriteTo(world->entity_manager->TemporaryAllocator(), &entities_array.size);
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR_BACKUP(stack_allocator, ECS_KB * 64, ECS_MB * 32, world->entity_manager->TemporaryAllocator());
+		ResizableStream<EntitySharedGroup> groups;
+		groups.Initialize(&stack_allocator, 128);
+		if (allow_missing_component_group) {
+			world->entity_manager->GroupEntitiesBySharedInstanceWithMissing(entities_array, query_descriptor.shared_optional[0], &groups);
+		}
+		else {
+			world->entity_manager->GroupEntitiesBySharedInstance(entities_array, query_descriptor.shared[0], &groups);
+		}
+
+		StreamIterator<const Entity> stream_iterator = entities_array.ConstIterator();
+		StableIterator<const Entity> stable_iterator = ToStableIterator(&stream_iterator);
+		task_data->base.command_stream = nullptr;
+		task_data->base.functor = entity_functor;
+		task_data->base.functor_data = data;
+		task_data->base.index_offset = -1;
+		task_data->base.initial_iterator = entities;
+		
+		ForEachEntitySelectionSharedGroupingUntypedFunctorData grouping_data;
+		grouping_data.command_stream = nullptr;
+		grouping_data.iterator = entities;
+		grouping_data.thread_id = 0;
+		grouping_data.user_data = data;
+		grouping_data.world = world;
+		for (unsigned int index = 0; index < groups.size; index++) {
+			grouping_data.shared_instance = groups[index].instance;
+			grouping_data.entities = { entities_array.buffer + groups[index].offset, groups[index].size };
+			bool is_group_aborted = false;
+			if (grouping_initialize_functor != nullptr) {
+				is_group_aborted = !grouping_initialize_functor(&grouping_data);
+			}
+
+			if (is_group_aborted) {
+				// Skip this iteration
+				continue;
+			}
+			
+			task_data->base.stable_iterator = stable_iterator.GetSubrange(&stack_allocator, groups[index].size);
+			ForEachEntitySelectionThreadTask(0, world, task_data);
+
+			if (grouping_finalize_functor != nullptr) {
+				grouping_finalize_functor(&grouping_data);
+			}
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -582,9 +804,7 @@ namespace ECSEngine {
 				data = allocation;
 			}
 
-			// Allocate the entities buffer from temporary storage as well,
-			// But not from the task manager since this buffer might be quite large.
-			// Use the entity manager temporary allocator.
+			size_t entity_count = entities->remaining_count;
 			AllocatorPolymorphic temporary_allocator = world->entity_manager->TemporaryAllocator();
 			// Lock it until the task creation is finished 
 			// in order to not produce many unnecessary lock and unlocks
@@ -595,30 +815,151 @@ namespace ECSEngine {
 
 			alignas(void*) char task_data_storage[ECS_KB];
 			size_t task_data_size = ForEachEntitySelectionImplementationTaskData::MemoryOf(query_descriptor);
-			ECS_ASSERT(task_data_size <= sizeof(task_data_storage));
+			ECS_CRASH_CONDITION(task_data_size <= sizeof(task_data_storage), "ForEachEntitySelection: Stack buffer limit was exceeded.");
 
 			ForEachEntitySelectionImplementationTaskData* task_data = (ForEachEntitySelectionImplementationTaskData*)task_data_storage;
-			task_data->functor = functor;
-			task_data->functor_data = data;
-			task_data->stable_iterator = stable_iterator;
-			task_data->initial_iterator = are_entities_stable ? entities : nullptr;
+			task_data->base.functor = functor;
+			task_data->base.functor_data = data;
+			task_data->base.stable_iterator = stable_iterator;
+			task_data->base.initial_iterator = are_entities_stable ? entities : nullptr;
 			task_data->WriteComponents(query_descriptor);
 
 			size_t deferred_call_allocation_size = sizeof(DeferredAction) * deferred_action_capacity + sizeof(EntityManagerCommandStream);
 			EntityManagerCommandStream* command_stream = nullptr;
 
+			size_t index_offset = 0;
 			auto task_data_functor = [&](size_t batch_index, size_t current_count) {
-				task_data->stable_iterator = task_data->stable_iterator.GetSubrange(temporary_allocator, current_count);
+				task_data->base.stable_iterator = task_data->base.stable_iterator.GetSubrange(temporary_allocator, current_count);
+				task_data->base.index_offset = index_offset;
 
 				if (deferred_action_capacity > 0) {
 					command_stream = (EntityManagerCommandStream*)world->task_manager->AllocateTempBuffer(thread_id, deferred_call_allocation_size);
 					command_stream->InitializeFromBuffer(OffsetPointer(command_stream, sizeof(EntityManagerCommandStream)), 0, deferred_action_capacity);
-					task_data->command_stream = command_stream;
+					task_data->base.command_stream = command_stream;
 				}
+				index_offset += current_count;
 			};
 
-			world->task_manager->AddDynamicTaskParallelFor(ForEachEntitySelectionThreadTask, functor_name, entities->remaining_count, batch_size, task_data, task_data_size, true, task_data_functor);
+			// Calculate the batch size. If it is 0, then compute a batch size such that 2x thread count of tasks are spawned
+			size_t size_t_batch_size = batch_size;
+			if (batch_size == 0) {
+				size_t_batch_size = SlotsFor(entity_count, (size_t)world->task_manager->GetThreadCount());
+			}
+			world->task_manager->AddDynamicTaskParallelFor(ForEachEntitySelectionThreadTask, functor_name, entities->remaining_count, size_t_batch_size, task_data, task_data_size, true, task_data_functor);
 			UnlockAllocator(temporary_allocator);
+		}
+
+		void ForEachEntitySelectionSharedGrouping(
+			IteratorInterface<const Entity>* entities,
+			unsigned int thread_id,
+			World* world,
+			ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_initialize_functor,
+			ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_finalize_functor,
+			ForEachEntitySelectionUntypedFunctor entity_functor,
+			const char* functor_name,
+			void* data,
+			size_t data_size,
+			const ArchetypeQueryDescriptor& query_descriptor,
+			bool allow_missing_component_group,
+			unsigned int deferred_action_capacity,
+			unsigned short batch_size
+		) {
+			ECS_CRASH_CONDITION(query_descriptor.unique_exclude.count == 0 && query_descriptor.shared_exclude.count == 0, 
+				"ForEachEntitySelectionSharedGrouping: Exclude queries are not supported.");
+			ECS_CRASH_CONDITION((allow_missing_component_group && query_descriptor.shared_optional.count > 0) || 
+				(!allow_missing_component_group && query_descriptor.shared.count > 0), "ForEachEntitySelectionSharedGrouping: a shared component must be specified!");
+
+			ECS_CRASH_CONDITION(grouping_initialize_functor != nullptr || grouping_finalize_functor != nullptr, "ForEachEntitySelectionSharedGrouping: A group functor (initialize and/or finalize) must be specified!");
+
+			if (data_size > 0) {
+				void* allocation = world->task_manager->AllocateTempBuffer(thread_id, data_size);
+				memcpy(allocation, data, data_size);
+				data = allocation;
+			}
+
+			alignas(void*) char task_data_storage[ECS_KB];
+			size_t task_data_size = ForEachEntitySelectionSharedGroupingImplementationTaskData::MemoryOf(query_descriptor);
+			ECS_CRASH_CONDITION(task_data_size <= sizeof(task_data_storage), "ForEachEntitySelectionSharedGrouping: Stack buffer limit was exceeded.");
+
+			// Allocate the entities into a temporary buffer
+			Stream<Entity> entities_array;
+			entities_array.buffer = (Entity*)entities->WriteTo(world->entity_manager->TemporaryAllocator(), &entities_array.size);
+
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR_BACKUP(stack_allocator, ECS_KB * 64, ECS_MB * 32, world->entity_manager->TemporaryAllocator());
+			ResizableStream<EntitySharedGroup> groups;
+			// Initialize this with a small size already
+			groups.Initialize(&stack_allocator, 128);
+
+			// Retrieve the groups on the main thread
+			if (allow_missing_component_group) {
+				world->entity_manager->GroupEntitiesBySharedInstanceWithMissing(entities_array, query_descriptor.shared_optional[0], &groups);
+			}
+			else {
+				world->entity_manager->GroupEntitiesBySharedInstance(entities_array, query_descriptor.shared[0], &groups);
+			}
+
+			// Allocate the group status structures. Use cache aligned structures to avoid false sharing.
+			CacheAligned<SharedGroupStatus>* statuses = (CacheAligned<SharedGroupStatus>*)world->entity_manager->AllocateTemporaryBuffer(sizeof(CacheAligned<SharedGroupStatus>) * groups.size);
+			memset(statuses, 0, sizeof(CacheAligned<SharedGroupStatus>) * groups.size);
+
+			ForEachEntitySelectionSharedGroupingImplementationTaskData* task_data = (ForEachEntitySelectionSharedGroupingImplementationTaskData*)task_data_storage;
+			task_data->base.entity_functor = entity_functor;
+			task_data->base.group_initialize_functor = grouping_initialize_functor;
+			task_data->base.group_finalize_functor = grouping_finalize_functor;
+			task_data->base.functor_data = data;
+			task_data->base.initial_iterator = entities;
+			task_data->WriteComponents(query_descriptor);
+
+			size_t deferred_call_allocation_size = sizeof(DeferredAction) * deferred_action_capacity + sizeof(EntityManagerCommandStream);
+			EntityManagerCommandStream* command_stream = nullptr;
+
+			size_t batch_size_long = batch_size;
+			if (batch_size == 0) {
+				batch_size_long = SlotsFor(entities_array.size, (size_t)world->task_manager->GetThreadCount());
+			}
+			
+			// Ensure that each task runs with the same shared instance. For this, we must perform the partition ourselves, without using AddDynamicTaskParallelFor.
+			size_t last_batch_entity_offset = 0;
+			size_t group_index = 0;
+			size_t current_group_batch_count = 0;
+
+			// This is the index at which to add the task to. We maintain a stack value such that we avoid using AddDynamicTask which needs to perform
+			// An atomic increment each time.
+			unsigned int thread_affinity = 0;
+			unsigned int thread_count = world->task_manager->GetThreadCount();
+			while (last_batch_entity_offset < entities_array.size) {
+				task_data->base.shared_instance = groups[group_index].instance;
+				task_data->base.group_status = statuses + group_index;
+				size_t group_start = groups[group_index].offset;
+				size_t group_size = groups[group_index].size;
+				current_group_batch_count++;
+
+				// Determine if the batch straddles instance boundaries
+				size_t current_batch_size = batch_size_long;
+				if (last_batch_entity_offset + batch_size_long > (size_t)groups[group_index].size) {
+					// We must use only the count until the group is exhausted
+					current_batch_size = (size_t)groups[group_index].size - (last_batch_entity_offset - (size_t)groups[group_index].offset);
+					statuses[group_index].value.batch_total_count = current_group_batch_count;
+					statuses[group_index].value.finalize_count_is_initialized.Signal();
+
+					group_index++;
+					current_group_batch_count = 0;
+				}
+
+				if (deferred_action_capacity > 0) {
+					command_stream = (EntityManagerCommandStream*)world->task_manager->AllocateTempBuffer(thread_id, deferred_call_allocation_size);
+					command_stream->InitializeFromBuffer(OffsetPointer(command_stream, sizeof(EntityManagerCommandStream)), 0, deferred_action_capacity);
+					task_data->base.command_stream = command_stream;
+				}
+
+				task_data->base.group_entities = { entities_array.buffer + group_start, group_size };
+				task_data->base.batch_entities = { entities_array.buffer + last_batch_entity_offset, current_batch_size };
+
+				world->task_manager->AddDynamicTaskWithAffinity(ECS_THREAD_TASK_NAME(ForEachEntitySelectionSharedGroupingThreadTask, task_data, task_data_size), thread_affinity);
+				thread_affinity++;
+				thread_affinity = thread_affinity == thread_count ? 0 : thread_affinity;
+				last_batch_entity_offset += current_batch_size;
+			}
 		}
 
 		void IncrementWorldQueryIndex(World* world)

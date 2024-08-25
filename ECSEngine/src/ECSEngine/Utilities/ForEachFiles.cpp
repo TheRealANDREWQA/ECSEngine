@@ -74,15 +74,22 @@ namespace ECSEngine {
 	};
 
 	const size_t MAX_SIMULTANEOUS_DIRECTORIES = 128;
-	const size_t STACK_ALLOCATION = 16 * ECS_KB;
+	const size_t STACK_ALLOCATION = 64 * ECS_KB;
 
 	struct FindNextReleaseHandle {
-		void operator() () const {
+		ECS_INLINE void operator() () const {
 			_findclose(handle);
 		}
 
 		intptr_t handle;
 	};
+
+	// Returns true if the entry is valid, not the '.' or '..' directories and it is not hidden
+	ECS_INLINE static bool IsValidEntry(const struct _wfinddata64_t* data) {
+		bool is_current_directory = data->name[0] == L'.' && data->name[1] == L'\0';
+		bool is_parent_directory = data->name[0] == L'.' && data->name[1] == L'.' && data->name[2] == L'\0';
+		return !is_current_directory && !is_parent_directory && (data->attrib & _A_HIDDEN) == 0;
+	}
 
 	template<typename Function>
 	static bool ForEachInDirectoryInternal(Stream<wchar_t> directory, Function&& function) {
@@ -103,8 +110,7 @@ namespace ECSEngine {
 		size_t current_directory_size = directory.size + 1;
 		bool has_subdirectories = true;
 		while (has_subdirectories) {
-			// Make sure it is not a "." or a ".." directory - hidden one
-			if (find_data.name[0] != L'.') {
+			if (IsValidEntry(&find_data)) {
 				// find_data.name only contains the filename - the relative path
 				temp_string.size = current_directory_size;
 				temp_string.AddStream((find_data.name));
@@ -157,7 +163,7 @@ namespace ECSEngine {
 			bool has_subdirectories = true;
 			while (has_subdirectories) {
 				// Make sure it is not a "." or a ".." directory - current or
-				if (find_data.name[0] != L'.') {
+				if (IsValidEntry(&find_data)) {
 					// find_data.name only contains the filename - the relative path
 					temp_string.size = current_directory_size;
 					temp_string.AddStream((find_data.name));
@@ -235,8 +241,7 @@ namespace ECSEngine {
 				subdirectories.size++;
 			}
 
-			// Make sure it is not a "." or a ".." directory
-			if (find_data.name[0] != L'.') {
+			if (IsValidEntry(&find_data)) {
 				// find_data.name only contains the filename - the relative path
 				temp_string.size = current_directory_size;
 				temp_string.AddStream(find_data.name);

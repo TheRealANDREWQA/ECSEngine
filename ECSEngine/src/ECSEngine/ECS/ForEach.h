@@ -151,6 +151,19 @@ namespace ECSEngine {
 		IteratorInterface<const Entity>* iterator;
 	};
 
+	struct ForEachEntitySelectionSharedGroupingData {
+		unsigned int thread_id;
+		// The entities that comprise this group
+		Stream<Entity> entities;
+		// This is the current shared instance of the group
+		SharedInstance shared_instance;
+		World* world;
+		EntityManagerCommandStream* command_stream;
+		void* user_data;
+		// This is the initial interface pointer. It can be used to extract extra data.
+		IteratorInterface<const Entity>* iterator;
+	};
+
 	struct ForEachEntityUntypedFunctorData {
 		ForEachEntityData base;
 		void** unique_components;
@@ -174,6 +187,12 @@ namespace ECSEngine {
 	};
 	
 	typedef void (*ForEachEntitySelectionUntypedFunctor)(ForEachEntitySelectionUntypedFunctorData* data);
+
+	typedef ForEachEntitySelectionSharedGroupingData ForEachEntitySelectionSharedGroupingUntypedFunctorData;
+
+	// For initialize functors, the return is used to know whether or not the entity iteration for the group should continue
+	// In case you want to abort the group. In that case, the finalize functor will not be called.
+	typedef bool (*ForEachEntitySelectionSharedGroupingUntypedFunctor)(ForEachEntitySelectionSharedGroupingUntypedFunctorData* data);
 
 	// This is the same as the ForEachEntity with the difference that it can be outside the ECS runtime. This version
 	// doesn't use the archetype query acceleration. The world needs to contain an entity manager. (other fields are optional)
@@ -203,12 +222,24 @@ namespace ECSEngine {
 		const ArchetypeQueryDescriptor& query_descriptor
 	);
 
-	// TODO: This accepts lambdas at the moment, function pointer support is not decided yet
+	// It doesn't bring too much benefit against using a handrolled version, but it is added to allow the type safe wrapper
+	// work in a commit fashion. The world needs to contain an entity manager. (other fields are optional)
+	ECSENGINE_API void ForEachEntitySelectionSharedGroupingCommitFunctor(
+		IteratorInterface<const Entity>* entities,
+		bool allow_missing_component_group,
+		World* world,
+		ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_initialize_functor,
+		ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_finalize_functor,
+		ForEachEntitySelectionUntypedFunctor entity_functor,
+		void* data,
+		const ArchetypeQueryDescriptor& query_descriptor
+	);
+
 	template<typename Functor>
 	ECS_INLINE void ForEachEntityCommitFunctor(
 		World* world,
 		const ArchetypeQueryDescriptor& query_descriptor,
-		Functor functor
+		Functor&& functor
 	) {
 		auto functor_wrapper = [](ForEachEntityUntypedFunctorData* for_each_data) {
 			Functor* functor = (Functor*)for_each_data->base.user_data;
@@ -218,12 +249,11 @@ namespace ECSEngine {
 		ForEachEntityCommitFunctor(world, functor_wrapper, &functor, query_descriptor);
 	}
 
-	// TODO: This accepts lambdas at the moment, function pointer support is not decided yet
 	template<typename Functor>
 	ECS_INLINE void ForEachBatchCommitFunctor(
 		World* world,
 		const ArchetypeQueryDescriptor& query_descriptor,
-		Functor functor
+		Functor&& functor
 	) {
 		auto functor_wrapper = [](ForEachBatchUntypedFunctorData* for_each_data) {
 			Functor* functor = (Functor*)for_each_data->base.user_data;
@@ -233,15 +263,45 @@ namespace ECSEngine {
 		ForEachBatchCommitFunctor(world, functor_wrapper, &functor, query_descriptor);
 	}
 
-	// TODO: This accepts lambdas at the moment, function pointer support is not decided yet
 	template<typename Functor>
-	ECS_INLINE void ForEachEntitySelectionCommitFunctor(IteratorInterface<const Entity>* entities, World* world, const ArchetypeQueryDescriptor& query_descriptor, Functor functor) {
+	ECS_INLINE void ForEachEntitySelectionCommitFunctor(IteratorInterface<const Entity>* entities, World* world, const ArchetypeQueryDescriptor& query_descriptor, Functor&& functor) {
 		auto functor_wrapper = [](ForEachEntitySelectionUntypedFunctorData* for_each_data) {
 			Functor* functor = (Functor*)for_each_data->base.user_data;
 			(*functor)(for_each_data);
 		};
 
 		ForEachEntitySelectionCommitFunctor(entities, world, functor_wrapper, &functor, query_descriptor);
+	}
+	
+	// The Functor type must be a struct with 3 functions: 
+	// void ForEachGroupInitialize(ForEachEntitySelectionSharedGroupingUntypedFunctorData* for_each_data) 
+	// void ForEachGroupFinalize(ForEachEntitySelectionSharedGroupingUntypedFunctorData* for_each_data) 
+	// void ForEachEntity(ForEachEntitySelectionUntypedFunctorData* for_each_data);
+	// The user data pointer should be ignored for those functions.
+	template<typename Functor>
+	ECS_INLINE void ForEachEntitySelectionSharedGroupingCommitFunctor(
+		IteratorInterface<const Entity>* entities,
+		bool allow_missing_component_group,
+		World* world,
+		const ArchetypeQueryDescriptor& query_descriptor,
+		Functor&& functor
+	) {
+		auto group_initialize_functor_wrapper = [](ForEachEntitySelectionSharedGroupingUntypedFunctorData* for_each_data) {
+			Functor* functor = (Functor*)for_each_data->user_data;
+			functor->ForEachGroupInitialize(for_each_data);
+		};
+
+		auto group_finalize_functor_wrapper = [](ForEachEntitySelectionSharedGroupingUntypedFunctorData* for_each_data) {
+			Functor* functor = (Functor*)for_each_data->user_data;
+			functor->ForEachGroupFinalize(for_each_data);
+		};
+
+		auto entity_functor_wrapper = [](ForEachEntitySelectionUntypedFunctorData* for_each_data) {
+			Functor* functor = (Functor*)for_each_data->base.user_data;
+			functor->ForEachEntity(for_each_data);
+		};
+
+		ForEachEntitySelectionSharedGroupingCommitFunctor(entities, allow_missing_component_group, world, group_initialize_functor_wrapper, group_finalize_functor_wrapper, entity_functor_wrapper, &functor, query_descriptor);
 	}
 
 	static bool ForEachRunAlways(unsigned int thread_id, World* world, void* user_data) {
@@ -320,6 +380,29 @@ namespace ECSEngine {
 			unsigned short batch_size = 0
 		);
 
+		// Iterates over the given entities with the specified components, while groupping them based on the first shared component that appears in the query descriptor. 
+		// The advantage is that the query dependencies are properly registered and that it will parallelize the functor by default. 
+		// The last parameter, the batch_size, can be used to tell the runtime how many entities each individual parallel task should have. 
+		// In most cases, you do not need to specify this value, but in case you want very few entries per task (if each task unit takes a long time) 
+		// Or many (in order to reduce the number of tasks to be spawned). At the moment, exclude queries are not supported. The last mandatory flag is used
+		// To know whether or not it should accept entities with the component missing, in that case grouping them together. The index field of the
+		// ForEachEntitySelectionUntypedFunctorData is not valid, it should not be used.
+		ECSENGINE_API void ForEachEntitySelectionSharedGrouping(
+			IteratorInterface<const Entity>* entities,
+			unsigned int thread_id,
+			World* world,
+			ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_initialize_functor,
+			ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_finalize_functor,
+			ForEachEntitySelectionUntypedFunctor entity_functor,
+			const char* functor_name,
+			void* data,
+			size_t data_size,
+			const ArchetypeQueryDescriptor& query_descriptor,
+			bool allow_missing_component,
+			unsigned int deferred_action_capacity = 0,
+			unsigned short batch_size = 0
+		);
+
 		// -------------------------------------------------------------------------------------------------------------------------------
 
 		struct RegisterForEachInfo {
@@ -369,23 +452,22 @@ namespace ECSEngine {
 				}
 			}
 		}
-
-		enum FOR_EACH_TYPE : unsigned char {
-			FOR_EACH_ENTITY,
-			FOR_EACH_BATCH,
-			FOR_EACH_SELECTION
-		};
 		
-		template<typename Functor>
+		template<typename Functor, typename Miscellaneous>
 		struct ForEachTypeSafeWrapperData {
 			Functor functor;
 			void* functor_data;
+			// Can be used to inject more data
+			Miscellaneous miscellaneous;
 		};
+
+		struct EmptyMisc {};
 
 		// DataType must be ForEachEntityUntypedFunctorData, ForEachBatchUntypedFunctorData or ForEachEntitySelectionUntypedFunctorData
 		template<typename DataType, typename Functor, typename... T>
 		void ForEachEntityBatchTypeSafeWrapper(DataType* data) {
-			ForEachTypeSafeWrapperData<Functor>* wrapper_data = (ForEachTypeSafeWrapperData<Functor>*)data->base.user_data;
+			// Here it doesn't matter what the misc type is, since we are not using it
+			ForEachTypeSafeWrapperData<Functor, EmptyMisc>* wrapper_data = (ForEachTypeSafeWrapperData<Functor, EmptyMisc>*)data->base.user_data;
 			
 			constexpr size_t component_count = sizeof...(T);
 			
@@ -411,7 +493,7 @@ namespace ECSEngine {
 			// We need to decrement index to reflect the correct final index
 			total_index--;
 			// Need to change the user data and then restore it back
-			data->base.user_data = wrapper_data->functor_data;;
+			data->base.user_data = wrapper_data->functor_data;
 			wrapper_data->functor(&data->base, (typename T::Type*)(current_components[total_index--])...);
 			data->base.user_data = wrapper_data;
 		}
@@ -486,6 +568,37 @@ namespace ECSEngine {
 
 		ECSENGINE_API void IncrementWorldQueryIndex(World* world);
 
+		// Retrieves the components from the parameter pack and writes them into a ArchetypeQueryDescriptor
+		// For which you must specify the name and the template parameter name
+#define GET_COMPONENT_SIGNATURE_FROM_TEMPLATE_PACK(query_descriptor_name, template_pack_name) \
+		/* Retrieve the optional components since they are not stored in the query cache */ \
+		Component __unique_components[ECS_ARCHETYPE_MAX_COMPONENTS]; \
+		Component __shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS]; \
+		Component __unique_exclude_components[ECS_ARCHETYPE_MAX_COMPONENTS]; \
+		Component __shared_exclude_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS]; \
+		Component __optional_components[ECS_ARCHETYPE_MAX_COMPONENTS]; \
+		Component __optional_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS]; \
+\
+		ArchetypeQueryDescriptor query_descriptor_name; \
+		query_descriptor_name.unique = { __unique_components, 0 }; \
+		query_descriptor_name.shared = { __shared_components, 0 }; \
+		query_descriptor_name.unique_exclude = { __unique_exclude_components, 0 }; \
+		query_descriptor_name.shared_exclude = { __shared_exclude_components, 0 }; \
+		query_descriptor_name.unique_optional = { __optional_components, 0 }; \
+		query_descriptor_name.shared_optional = { __optional_shared_components, 0 }; \
+\
+		GetComponentSignatureFromTemplatePack<template_pack_name...>( \
+			query_descriptor_name.unique, \
+			query_descriptor_name.shared, \
+			query_descriptor_name.unique_exclude, \
+			query_descriptor_name.shared_exclude, \
+			query_descriptor_name.unique_optional, \
+			query_descriptor_name.shared_optional \
+		); \
+\
+		ECS_CRASH_CONDITION(query_descriptor_name.unique_exclude.count == 0 && query_descriptor_name.shared_exclude.count == 0, "ECS ForEach:" \
+			" You must specify the exclude components in the Function template parameter pack");
+
 		template<bool get_query, FOR_EACH_OPTIONS type_options, typename... Components>
 		struct ForEachEntityOrBatch {
 			ForEachEntityOrBatch(unsigned int _thread_id, World* _world, ForEachOptions _options = {}, const char* _function_name = ECS_FUNCTION)
@@ -501,18 +614,12 @@ namespace ECSEngine {
 				}
 			}
 
-			// Here functor can be a self contained lambda (or functor struct) or a function pointer
-			// for which you can supply additional data in the default parameter function_pointer_data
-			// The use of lambdas is convenient when you want to do some single threaded preparation
-			// before hand and only reference the values from inside the functor but it has a big drawback
-			// The stack trace contains a mangled name that is very hard to pinpoint in source code which
-			// code actually crashed or produced a problem. The recommendation is to use named function pointers
-			// that you pass to the function with their required data to operate. Even tho it is more tedious,
-			// the fact that when a crash happens you don't know exactly where that is from looking at a stack trace
-			// is extremely annoying and can eat up a lot of time
+			// The fact that lambdas are not allowed is intentional, because of the reason that lambdas
+			// Provide ugly stack traces when an error occurs in them, and in order to have reasonable
+			// stack traces, named function pointers with accompanying data is the preferred way.
 			template<typename... ExcludeComponents, typename Functor>
 			void Function(
-				Functor functor, 
+				Functor functor,
 				void* function_pointer_data = nullptr, 
 				size_t function_pointer_data_size = 0
 			) {
@@ -521,35 +628,9 @@ namespace ECSEngine {
 						return;
 					}
 
-					// Retrieve the optional components since they are not stored in the query cache
-					Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-					Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-					Component unique_exclude_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-					Component shared_exclude_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-					Component optional_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-					Component optional_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+					GET_COMPONENT_SIGNATURE_FROM_TEMPLATE_PACK(query_descriptor, Components);
 
-					ArchetypeQueryDescriptor query_descriptor;
-					query_descriptor.unique = { unique_components, 0 };
-					query_descriptor.shared = { shared_components, 0 };
-					query_descriptor.unique_exclude = { unique_exclude_components, 0 };
-					query_descriptor.shared_exclude = { shared_exclude_components, 0 };
-					query_descriptor.unique_optional = { optional_components, 0 };
-					query_descriptor.shared_optional = { optional_shared_components, 0 };
-
-					GetComponentSignatureFromTemplatePack<Components...>(
-						query_descriptor.unique,
-						query_descriptor.shared,
-						query_descriptor.unique_exclude,
-						query_descriptor.shared_exclude,
-						query_descriptor.unique_optional,
-						query_descriptor.shared_optional
-					);
-
-					ECS_CRASH_CONDITION(query_descriptor.unique_exclude.count == 0 && query_descriptor.shared_exclude.count == 0, "ECS ForEach:"
-						" You must specify the exclude components in the Function template parameter pack");
-
-					ForEachTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
+					ForEachTypeSafeWrapperData<Functor, EmptyMisc> wrapper_data{ functor, function_pointer_data };
 					if constexpr (~type_options & FOR_EACH_IS_COMMIT) {
 						if (function_pointer_data_size > 0) {
 							// We need to allocate this data, we can use the thread task manager allocator for this
@@ -620,26 +701,21 @@ namespace ECSEngine {
 		struct ForEachEntitySelectionTypeSafe {
 			ECS_INLINE ForEachEntitySelectionTypeSafe(
 				IteratorInterface<const Entity>* _entities,
+				bool _are_entities_stable,
 				unsigned int _thread_id,
 				World* _world,
 				ForEachSelectionOptions _options = {},
 				const char* _function_name = ECS_FUNCTION
-			) : thread_id(_thread_id), world(_world), function_name(_function_name), options(_options), entities(_entities) {
+			) : thread_id(_thread_id), world(_world), function_name(_function_name), options(_options), entities(_entities), are_entities_stable(_are_entities_stable) {
 				if constexpr (get_query) {
 					RegisterForEachInfo* info = (RegisterForEachInfo*)world;
 					AddQueryComponents<Components...>(info);
 				}
 			}
 
-			// Here functor can be a self contained lambda (or functor struct) or a function pointer
-			// for which you can supply additional data in the default parameter function_pointer_data
-			// The use of lambdas is convenient when you want to do some single threaded preparation
-			// before hand and only reference the values from inside the functor but it has a big drawback
-			// The stack trace contains a mangled name that is very hard to pinpoint in source code which
-			// code actually crashed or produced a problem. The recommendation is to use named function pointers
-			// that you pass to the function with their required data to operate. Even tho it is more tedious,
-			// the fact that when a crash happens you don't know exactly where that is from looking at a stack trace
-			// is extremely annoying and can eat up a lot of time
+			// The fact that lambdas are not allowed is intentional, because of the reason that lambdas
+			// Provide ugly stack traces when an error occurs in them, and in order to have reasonable
+			// stack traces, named function pointers with accompanying data is the preferred way.
 			template<typename Functor>
 			void Function(
 				Functor functor,
@@ -651,32 +727,10 @@ namespace ECSEngine {
 						return;
 					}
 
-					// Retrieve the optional components since they are not stored in the query cache
-					Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-					Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-					Component unique_exclude_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-					Component shared_exclude_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-					Component optional_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-					Component optional_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+					GET_COMPONENT_SIGNATURE_FROM_TEMPLATE_PACK(query_descriptor, Components);
 
-					ArchetypeQueryDescriptor query_descriptor;
-					query_descriptor.unique = { unique_components, 0 };
-					query_descriptor.shared = { shared_components, 0 };
-					query_descriptor.unique_exclude = { unique_exclude_components, 0 };
-					query_descriptor.shared_exclude = { shared_exclude_components, 0 };
-					query_descriptor.unique_optional = { optional_components, 0 };
-					query_descriptor.shared_optional = { optional_shared_components, 0 };
 
-					Internal::GetComponentSignatureFromTemplatePack<Components...>(
-						query_descriptor.unique,
-						query_descriptor.shared,
-						query_descriptor.unique_exclude,
-						query_descriptor.shared_exclude,
-						query_descriptor.unique_optional,
-						query_descriptor.shared_optional
-					);
-
-					Internal::ForEachTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
+					ForEachTypeSafeWrapperData<Functor, EmptyMisc> wrapper_data{ functor, function_pointer_data };
 
 					if constexpr (!is_commit) {
 						if (function_pointer_data_size > 0) {
@@ -685,11 +739,11 @@ namespace ECSEngine {
 							memcpy(wrapper_data.functor_data, function_pointer_data, function_pointer_data_size);
 						}
 
-						Internal::ForEachEntitySelection(
+						ForEachEntitySelection(
 							entities,
 							thread_id,
 							world,
-							Internal::ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, Functor, Components...>,
+							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, Functor, Components...>,
 							function_name,
 							&wrapper_data,
 							sizeof(wrapper_data),
@@ -702,8 +756,118 @@ namespace ECSEngine {
 						ForEachEntitySelectionCommitFunctor(
 							entities, 
 							world, 
-							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, Functor, Components...>, 
+							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, Functor, Components...>,
 							&wrapper_data, 
+							query_descriptor
+						);
+					}
+				}
+			}
+
+			unsigned int thread_id;
+			bool are_entities_stable;
+			World* world;
+			const char* function_name;
+			IteratorInterface<const Entity>* entities;
+			ForEachSelectionOptions options;
+		};
+
+		// Shared component must be a Query shared component type
+		// Exclude components are not allowed.
+		template<bool get_query, bool is_commit, typename SharedComponent, typename... Components>
+		struct ForEachEntitySelectionSharedGroupingTypeSafe {
+			static_assert(SharedComponent::IsShared(), "ForEachEntitySelectionSharedGrouping: Must use a shared component as grouping!");
+
+			ECS_INLINE ForEachEntitySelectionSharedGroupingTypeSafe(
+				IteratorInterface<const Entity>* _entities,
+				unsigned int _thread_id,
+				World* _world,
+				ForEachSelectionOptions _options = {},
+				const char* _function_name = ECS_FUNCTION
+			) : thread_id(_thread_id), world(_world), function_name(_function_name), options(_options), entities(_entities) {
+				if constexpr (get_query) {
+					RegisterForEachInfo* info = (RegisterForEachInfo*)world;
+					AddQueryComponents<SharedComponent, Components...>(info);
+				}
+			}
+
+			// The fact that lambdas are not allowed is intentional, because of the reason that lambdas
+			// Provide ugly stack traces when an error occurs in them, and in order to have reasonable
+			// stack traces, named function pointers with accompanying data is the preferred way.
+			// For the entity functor, the index field of ForEachEntitySelectionUntypedFunctorData should not be used.
+			// There are 2 group functors, one that is called before the entity functor and one that is called after the
+			// Entity functor.
+			template<typename EntityFunctor>
+			void Function(
+				ForEachEntitySelectionUntypedFunctor grouping_initialize_functor,
+				ForEachEntitySelectionUntypedFunctor grouping_finalize_functor,
+				EntityFunctor entity_functor,
+				void* function_pointer_data = nullptr,
+				size_t function_pointer_data_size = 0
+			) {
+				if constexpr (!get_query) {
+					if (!options.condition(thread_id, world, function_pointer_data)) {
+						return;
+					}
+
+					GET_COMPONENT_SIGNATURE_FROM_TEMPLATE_PACK(query_descriptor, Components);
+
+					struct MiscellaneousData {
+						ForEachEntitySelectionUntypedFunctor initialize_functor;
+						ForEachEntitySelectionUntypedFunctor finalize_functor;
+					};
+
+					ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData> wrapper_data{ entity_functor, function_pointer_data, { grouping_initialize_functor, grouping_finalize_functor } };
+					auto grouping_initialize_wrapper = [](ForEachEntitySelectionSharedGroupingUntypedFunctorData* for_each_data) {
+						ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData>* data = (ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData>*)for_each_data->user_data;
+						// Need to change the user data and then restore it back
+						for_each_data->user_data = data->functor_data;
+						data->miscellaneous.initialize_functor(for_each_data);
+						for_each_data->user_data = data;
+					};
+
+					auto grouping_finalize_wrapper = [](ForEachEntitySelectionSharedGroupingUntypedFunctorData* for_each_data) {
+						ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData>* data = (ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData>*)for_each_data->user_data;
+						// Need to change the user data and then restore it back
+						for_each_data->user_data = data->functor_data;
+						data->miscellaneous.finalize_functor(for_each_data);
+						for_each_data->user_data = data;
+					};
+
+					bool allow_missing_component_group = SharedComponent::IsOptional();
+
+					if constexpr (!is_commit) {
+						if (function_pointer_data_size > 0) {
+							// We need to allocate this data, we can use the thread task manager allocator for this
+							wrapper_data.functor_data = world->task_manager->AllocateTempBuffer(thread_id, function_pointer_data_size);
+							memcpy(wrapper_data.functor_data, function_pointer_data, function_pointer_data_size);
+						}
+
+						ForEachEntitySelectionSharedGroupping(
+							entities,
+							thread_id,
+							world,
+							grouping_initialize_wrapper,
+							grouping_finalize_wrapper,
+							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, EntityFunctor, Components...>,
+							function_name,
+							&wrapper_data,
+							sizeof(wrapper_data),
+							query_descriptor,
+							allow_missing_component_group,
+							options.deferred_action_capacity,
+							options.batch_size
+						);
+					}
+					else {
+						ForEachEntitySelectionSharedGrouppingCommitFunctor(
+							entities,
+							allow_missing_component_group,
+							world,
+							grouping_initialize_wrapper,
+							grouping_finalize_wrapper,
+							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, EntityFunctor, Components...>,
+							&wrapper_data,
 							query_descriptor
 						);
 					}

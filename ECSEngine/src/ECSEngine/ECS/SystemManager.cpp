@@ -110,6 +110,33 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
+	void* SystemManager::BindDataUnique(Stream<char> identifier, const void* data, size_t data_size) {
+		ECS_CRASH_CONDITION_RETURN(data_table.Find(identifier) == -1, nullptr, "SystemManager: data identifier {#} already exists when trying to bind unique entry.", identifier);
+
+		// Add padding for the alignment of the final pointer
+		size_t total_size_to_allocate = identifier.size + data_size + (data_size > 0 ? alignof(void*) : 0);
+		void* allocation = Allocate(allocator, total_size_to_allocate);
+		uintptr_t allocation_ptr = (uintptr_t)allocation;
+		identifier.CopyTo(allocation_ptr);
+		identifier.buffer = (char*)allocation;
+
+		void* final_pointer = (void*)data;
+		if (data_size > 0) {
+			allocation_ptr = AlignPointer(allocation_ptr, alignof(void*));
+			memcpy((void*)allocation_ptr, data, data_size);
+			final_pointer = (void*)allocation_ptr;
+		}
+
+		DataPointer data_pointer;
+		data_pointer.SetData(data_size);
+		data_pointer.SetPointer(final_pointer);
+		data_table.InsertDynamic(allocator, data_pointer, identifier);
+
+		return final_pointer;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------------
+
 	void* SystemManager::BindDataNoCopy(Stream<char> identifier, size_t data_size)
 	{
 		unsigned int table_index = data_table.Find(identifier);

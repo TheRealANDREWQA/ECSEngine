@@ -2,6 +2,7 @@
 #include "Debug.h"
 #include "ECSEngineWorld.h"
 #include "GraphicsComponents.h"
+#include "ECSEngineECSRuntimeResources.h"
 
 #define GRAPHICS_DEBUG_DATA_STRING "GraphicsDebugData"
 #define ALLOCATOR_CAPACITY ECS_MB
@@ -60,31 +61,45 @@ struct Iterator : IteratorInterface<const Entity> {
 	Color last_color;
 };
 
-static void GraphicsDebugAddSolidGroup(World* world, GraphicsDebugData* data, GraphicsDebugSolidGroup group) {
-	if (group.randomize_color) {
-		unsigned int entry_index = data->groups.size % RANDOM_COLOR_COUNT;
-		group.color = data->colors[entry_index];
+static GraphicsDebugSolidGroup* GraphicsDebugReserveSolidGroup(GraphicsDebugData* data, unsigned int entity_count) {
+	unsigned int group_index = data->groups.ReserveRange();
+	data->groups[group_index].entities.Initialize(&data->allocator, entity_count);
+	return data->groups.buffer + group_index;
+}
+
+static Color GetGroupColor(const GraphicsDebugData* data, Color color, unsigned int group_index, bool randomize_color) {
+	Color result_color = color;
+	if (randomize_color) {
+		result_color = data->colors[group_index % RANDOM_COLOR_COUNT];
 	}
-	
-	GraphicsDebugData::Group debug_group;
-	debug_group.color = group.color;
+	return result_color;
+}
+
+static void AddEntitiesToTable(GraphicsDebugData* data, Stream<Entity> entities) {
+	for (size_t index = 0; index < entities.size; index++) {
+		ECS_CRASH_CONDITION(data->entities_table.Find(entities[index]) == -1, "Graphics: Debug draw entity {#} already exists!", entities[index]);
+		data->entities_table.Insert({}, entities[index]);
+	}
+}
+
+static void GraphicsDebugAddSolidGroup(World* world, GraphicsDebugData* data, GraphicsDebugSolidGroup group) {
+	if (group.entities.size == 0) {
+		return;
+	}
+
+	group.color = GetGroupColor(data, group.color, data->groups.size, group.randomize_color);
+
 	// Reallocate the buffer
-	debug_group.entities = group.entities.Copy(&data->allocator);
-	// Create an instanced vertex buffer for the group
-	debug_group.instanced_vertex_buffer = world->graphics->SolidColorHelperShaderCreateVertexBufferInstances(debug_group.entities.size, false);
-	data->groups.Add(debug_group);
+	group.entities = group.entities.Copy(&data->allocator);
+	data->groups.Add(group);
 
 	// Add the entities to the hash table
-	for (size_t index = 0; index < group.entities.size; index++) {
-		ECS_CRASH_CONDITION(data->entities_table.Find(group.entities[index]) == -1, "Graphics: Debug draw entity {#} already exists!", group.entities[index]);
-		data->entities_table.Insert({}, group.entities[index]);
-	}
+	AddEntitiesToTable(data, group.entities);
 }
 
 static void GraphicsDebugResetSolidGroups(World* world, GraphicsDebugData* data) {
 	// Deallocate the entity buffers and the vertex buffers
 	for (unsigned int index = 0; index < data->groups.size; index++) {
-		world->graphics->FreeResource(data->groups[index].instanced_vertex_buffer);
 		data->groups[index].entities.Deallocate(&data->allocator);
 	}
 
@@ -99,6 +114,14 @@ static void GraphicsDebugResetSolidGroups(World* world, GraphicsDebugData* data)
 	else {
 		data->entities_table.Clear();
 	}
+}
+
+ECS_INLINE static unsigned int GetTotalEntityCount(const GraphicsDebugData* data) {
+	unsigned int count = 0;
+	for (unsigned int index = 0; index < data->groups.size; index++) {
+		count += data->groups[index].entities.size;
+	}
+	return count;
 }
 
 GraphicsDebugData* GetGraphicsDebugData(World* world) {
@@ -132,8 +155,40 @@ void GraphicsDebugAddSolidGroup(World* world, GraphicsDebugSolidGroup group) {
 void GraphicsDebugSetSolidGroups(World* world, Stream<GraphicsDebugSolidGroup> groups) {
 	GraphicsDebugData* data = GetGraphicsDebugData(world);
 	GraphicsDebugResetSolidGroups(world, data);
+	data->groups.Reserve(groups.size);
 	for (size_t index = 0; index < groups.size; index++) {
 		GraphicsDebugAddSolidGroup(world, data, groups[index]);
+	}
+}
+
+void GraphicsDebugSetSolidGroupsIterator(World* world, GraphicsDebugSolidGroupIterator* iterator) {
+	GraphicsDebugData* data = GetGraphicsDebugData(world);
+	GraphicsDebugResetSolidGroups(world, data);
+
+	unsigned int group_count = iterator->GetGroupCount();
+	data->groups.ReserveRange(group_count);
+	for (unsigned int index = 0; index < group_count; index++) {
+		unsigned int entity_count = iterator->GetCurrentGroupEntityCount();
+		if (entity_count > 0) {
+			GraphicsDebugSolidGroup* group_pointer = GraphicsDebugReserveSolidGroup(data, entity_count);
+			GraphicsDebugSolidGroup group = iterator->FillCurrentGroupAndAdvanced(group_pointer->entities.buffer);
+			group_pointer->color = GetGroupColor(data, group.color, index, group.randomize_color);
+			group_pointer->randomize_color = group.randomize_color;
+			group_pointer->entities = group.entities;
+			AddEntitiesToTable(data, group_pointer->entities);
+		}
+	}
+}
+
+void GraphicsDebugSetSolidGroupsAllocated(World* world, GraphicsDebugData* data, Stream<GraphicsDebugSolidGroup> groups) {
+	GraphicsDebugResetSolidGroups(world, data);
+	data->groups.Reserve(groups.size);
+	for (size_t index = 0; index < groups.size; index++) {
+		if (groups[index].entities.size > 0) {
+			unsigned int added_group_index = data->groups.Add(groups[index]);
+			data->groups[added_group_index].color = GetGroupColor(data, groups[index].color, index, groups[index].randomize_color);
+			AddEntitiesToTable(data, groups[index].entities);
+		}
 	}
 }
 
@@ -144,11 +199,40 @@ void GraphicsDebugResetSolidGroups(World* world) {
 struct GraphicsDebugDrawData {
 	const GraphicsDebugData* data;
 	const Matrix* camera_matrix;
-	GraphicsSolidColorInstance* instance_vertex_data;
+	VertexBuffer group_vertex_buffer;
+	GraphicsSolidColorInstance* solid_color_instances;
+	unsigned int index_buffer_count;
 };
 
+
+static bool GraphicsDebugDraw_GroupInitializeImpl(ForEachEntitySelectionSharedGroupingUntypedFunctorData* for_each_data) {
+	GraphicsDebugDrawData* data = (GraphicsDebugDrawData*)for_each_data->user_data;
+	const RenderMesh* render_mesh = for_each_data->world->entity_manager->GetSharedData<RenderMesh>(for_each_data->shared_instance);
+	if (!render_mesh->Validate()) {
+		return false;
+	}
+
+	// Bind the mesh now
+	for_each_data->world->graphics->BindMesh(render_mesh->mesh->mesh);
+	// Write the index buffer count now
+	data->index_buffer_count = render_mesh->mesh->mesh.index_buffer.count;
+	data->group_vertex_buffer = for_each_data->world->graphics->SolidColorHelperShaderCreateVertexBufferInstances(for_each_data->entities.size);
+	data->solid_color_instances = for_each_data->world->graphics->SolidColorHelperShaderMap(data->group_vertex_buffer);
+	return true;
+}
+
+static bool GraphicsDebugDraw_GroupFinalizeImpl(ForEachEntitySelectionSharedGroupingUntypedFunctorData* for_each_data) {
+	GraphicsDebugDrawData* data = (GraphicsDebugDrawData*)for_each_data->user_data;
+	for_each_data->world->graphics->SolidColorHelperShaderUnmap(data->group_vertex_buffer);
+	for_each_data->world->graphics->SolidColorHelperShaderBindBuffer(data->group_vertex_buffer);
+	for_each_data->world->graphics->DrawIndexedInstanced(data->index_buffer_count, for_each_data->entities.size);
+	data->group_vertex_buffer.Release();
+	return true;
+}
+
+
 // During this pass, only the instance vertex buffer must be filled in
-static void GraphicsDebugDraw_Impl(
+static void GraphicsDebugDraw_EntityImpl(
 	const ForEachEntitySelectionData* for_each_data,
 	const RenderMesh* render_mesh,
 	const Translation* translation,
@@ -156,48 +240,60 @@ static void GraphicsDebugDraw_Impl(
 	const Scale* scale
 ) {
 	const GraphicsDebugDrawData* data = (const GraphicsDebugDrawData*)for_each_data->user_data;
-	if (render_mesh->Validate()) {
-		Iterator* iterator = (Iterator*)for_each_data->iterator;
-		Matrix transform_matrix = GetEntityTransformMatrix(translation, rotation, scale);
+	Iterator* iterator = (Iterator*)for_each_data->iterator;
+	Matrix transform_matrix = GetEntityTransformMatrix(translation, rotation, scale);
 
-		Matrix mvp_matrix = transform_matrix * *data->camera_matrix;
-		mvp_matrix = MatrixGPU(mvp_matrix);
-		data->instance_vertex_data[for_each_data->index] = { mvp_matrix, iterator->GetLastColor() };
-	}
+	Matrix mvp_matrix = transform_matrix * *data->camera_matrix;
+	mvp_matrix = MatrixGPU(mvp_matrix);
+	data->solid_color_instances[for_each_data->index] = { mvp_matrix, iterator->GetLastColor() };
 }
 
 template<bool schedule_element>
 static ECS_THREAD_TASK(GraphicsDebugDraw) {
 	Iterator iterator = nullptr;
 	IteratorInterface<const Entity>* iterator_pointer = nullptr;
-	const GraphicsDebugData* data = nullptr;
-	if constexpr (!schedule_element)
-	{
-		data = GetGraphicsDebugData(world);
+	GraphicsDebugDrawData draw_data;
+	memset(&draw_data, 0, sizeof(draw_data));
+
+	if constexpr (!schedule_element) {
+		draw_data.data = GetGraphicsDebugData(world);
 		iterator = Iterator(data);
 		iterator.ComputeRemainingCount();
 		iterator_pointer = &iterator;
+		if (draw_data.data->groups.size > 0) {
+			CameraCached world_camera;
+			// This will check for both the runtime camera, but also for the camera component
+			if (GetWorldCamera(world, world_camera)) {
+				// Use this design in case in the future we will parallelize the call and the matrix needs to be shared
+				Matrix* matrix = world->task_manager->AllocateTempBuffer(thread_id, sizeof(Matrix));
+				*matrix = world_camera.GetViewProjectionMatrix();
+				draw_data.camera_matrix = matrix;
+
+				// Bind the shader now, once
+				world->graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_SOLID_COLOR);
+			}
+		}
 	}
 
 	ForEachSelectionOptions options;
 	options.condition = [](unsigned int thread_id, World* world, void* user_data) {
-		const GraphicsDebugData* data = (const GraphicsDebugData*)user_data;
+		const GraphicsDebugDrawData* data = (const GraphicsDebugData*)user_data;
 		return data->groups.size > 0;
 	};
 	
-	auto kernel = ForEachEntitySelectionCommit<schedule_element,
+	auto kernel = ForEachEntitySelectionSharedGroupingCommit<schedule_element,
 		QueryRead<RenderMesh>,
 		QueryOptional<QueryRead<Translation>>,
 		QueryOptional<QueryRead<Rotation>>,
 		QueryOptional<QueryRead<Scale>>
-	>(iterator_pointer, thread_id, world);
+	>(iterator_pointer, thread_id, world, options);
 
-	kernel.Function(GraphicsDebugDraw_Impl, (void*)data);
+	kernel.Function(GraphicsDebugDraw_GroupInitializeImpl, GraphicsDebugDraw_GroupFinalizeImpl, GraphicsDebugDraw_EntityImpl, &draw_data);
 }
 
 void RegisterGraphicsDebugTasks(ModuleTaskFunctionData* task_data) {
 	TaskSchedulerElement element;
-	element.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
+	element.task_group = ECS_THREAD_TASK_SIMULATE_MID;
 	element.initialize_task_function = GraphicsDebugInitialize;
 	ECS_REGISTER_FOR_EACH_TASK(element, GraphicsDebugDraw, task_data);
 }

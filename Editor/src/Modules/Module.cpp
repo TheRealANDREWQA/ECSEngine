@@ -638,10 +638,11 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 		if (!data->dependencies[index].verified_once && !data->dependencies[index].already_being_compiled) {
 			if (launched_index == -1) {
 				const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index].module_index, data->configuration);
+				EDITOR_LAUNCH_BUILD_COMMAND_STATUS launch_status = EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING;
 				if (data->command == BUILD_PROJECT_STRING_WIDE) {
 					if (info->load_status != EDITOR_MODULE_LOAD_GOOD) {
 						editor_state->launched_module_compilation_lock.Unlock();
-						BuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
+						launch_status = BuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
 						editor_state->launched_module_compilation_lock.Lock();
 						have_not_finished = true;
 					}
@@ -649,7 +650,7 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 				else if (data->command == CLEAN_PROJECT_STRING_WIDE) {
 					if (info->load_status != EDITOR_MODULE_LOAD_FAILED) {
 						editor_state->launched_module_compilation_lock.Unlock();
-						CleanModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
+						launch_status = CleanModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
 						editor_state->launched_module_compilation_lock.Lock();
 						have_not_finished = true;
 					}
@@ -657,12 +658,17 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 				else if (data->command == REBUILD_PROJECT_STRING_WIDE) {
 					// Here we need to perform the command no matter what
 					editor_state->launched_module_compilation_lock.Unlock();
-					RebuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
+					launch_status = RebuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
 					editor_state->launched_module_compilation_lock.Lock();
 					have_not_finished = true;
 				}
 				else {
 					ECS_ASSERT(false);
+				}
+
+				if (launch_status != EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING) {
+					// This will force the function to check the status
+					data->dependencies[index].already_being_compiled = true;
 				}
 			}
 			else {
@@ -779,8 +785,7 @@ static EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 				reload_data.dependencies_finish_status = nullptr;
 
 				if (data->has_imports) {
-					// In case it has imports, check to see if the import
-					// Event has finished
+					// In case it has imports, check to see if the import event has finished
 					ECS_STACK_CAPACITY_STREAM(void*, import_data, ECS_KB);
 					EditorGetEventTypeDataWhileInsideEvent(editor_state, RunCmdCommandDLLImport, &import_data);
 					for (unsigned int index = 0; index < import_data.size; index++) {
@@ -1035,13 +1040,10 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	bool disable_logging,
 	bool force_build
 ) {
-	ProjectModules* modules = editor_state->project_modules;
-	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
-
 	if (IsModuleInfoLocked(editor_state,index, configuration)) {
 		return EDITOR_LAUNCH_BUILD_COMMAND_LOCKED;
 	}
-	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status != EDITOR_MODULE_LOAD_GOOD || force_build) {
+	if (UpdateModuleLastWrite(editor_state, index, configuration) || GetModuleLoadStatus(editor_state, index, configuration) != EDITOR_MODULE_LOAD_GOOD || force_build) {
 		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status, disable_logging);
 	}
 	if (report_status != nullptr) {

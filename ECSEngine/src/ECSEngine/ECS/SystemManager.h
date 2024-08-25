@@ -30,6 +30,12 @@ namespace ECSEngine {
 		// the allocator from here it will deallocate that automatically
 		void* BindData(Stream<char> identifier, const void* data, size_t data_size = 0);
 
+		// Returns the pointer stored in the hash table
+		// If the data_size is 0, when removing, if the data was allocated using
+		// the allocator from here it will deallocate that automatically. Ensures
+		// That no other data is bound with the same identifier
+		void* BindDataUnique(Stream<char> identifier, const void* data, size_t data_size = 0);
+
 		// Returns the pointer of the allocated data that you must fill in
 		void* BindDataNoCopy(Stream<char> identifier, size_t data_size);
 

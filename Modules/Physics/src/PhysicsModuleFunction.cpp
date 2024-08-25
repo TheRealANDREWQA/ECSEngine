@@ -11,6 +11,7 @@
 #include "SolverCommon.h"
 #include "ContactConstraint.h"
 
+#include "Debugging.h"
 #include "Scripting.h"
 
 using namespace ECSEngine;
@@ -34,6 +35,7 @@ void ModuleTaskFunction(ModuleTaskFunctionData* data) {
 	AddSolverCommonTasks(data);
 	AddSolverTasks(data);
 	AddScripts(data);
+	RegisterDebugTasks(data);
 }
 
 #if 0

@@ -493,6 +493,9 @@ namespace ECSEngine {
 		// By calling SolidColorHelperShaderMeshProperties
 		void SolidColorHelperShaderBind(VertexBuffer instance_vertex_buffer);
 
+		// Only the vertex buffer will be bound - the shader will not, in case you want to do that manually.
+		void SolidColorHelperShaderBindBuffer(VertexBuffer instance_vertex_buffer);
+
 		static void SolidColorHelperShaderMeshProperties(CapacityStream<ECS_MESH_INDEX>& properties);
 		
 		// Draws submeshes from the given coalesced mesh with the solid color helper shader
