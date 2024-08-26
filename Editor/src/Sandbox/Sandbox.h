@@ -696,7 +696,3 @@ void TickSandboxRuntimes(EditorState* editor_state);
 void TickSandboxUpdateMasterButtons(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
-
-void TickSandboxHIDInputs(EditorState* editor_state);
-
-// -------------------------------------------------------------------------------------------------------------

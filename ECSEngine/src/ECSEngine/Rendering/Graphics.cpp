@@ -4925,13 +4925,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void BindMesh(const Mesh& mesh, GraphicsContext* context) {
-		// Vertex Buffers
-		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
-		for (size_t index = 0; index < mesh.mapping_count; index++) {
-			vertex_buffers[index] = mesh.vertex_buffers[mesh.mapping[index]];
-		}
-
-		BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, mesh.mapping_count), context);
+		BindVertexBuffers(Stream<VertexBuffer>(mesh.vertex_buffers, mesh.mapping_count), context);
 
 		// Topology
 		BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, context);

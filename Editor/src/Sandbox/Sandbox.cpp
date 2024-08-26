@@ -3577,14 +3577,3 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
-
-void TickSandboxHIDInputs(EditorState* editor_state)
-{
-	SandboxAction(editor_state, -1, [editor_state](unsigned int sandbox_index) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		sandbox->sandbox_world.mouse->Update();
-		sandbox->sandbox_world.keyboard->Update();
-	});
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------

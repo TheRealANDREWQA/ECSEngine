@@ -5058,7 +5058,7 @@ namespace ECSEngine {
 		instances.size = entities.size;
 		for (size_t index = 0; index < entities.size; index++) {
 			if constexpr (allow_missing_component) {
-				instances[index] = 
+				instances[index] = entity_manager->TryGetComponentSharedInstance(shared_component, entities[index]);
 			}
 			else {
 				instances[index] = entity_manager->GetSharedComponentInstance(shared_component, entities[index]);
@@ -5088,13 +5088,13 @@ namespace ECSEngine {
 	}
 
 	void EntityManager::GroupEntitiesBySharedInstance(Stream<Entity> entities, Component shared_component, AdditionStream<EntitySharedGroup> groups) {
-		
+		GroupEntitiesBySharedInstanceImplementation<false>(this, entities, shared_component, groups);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::GroupEntitiesBySharedInstanceWithMissing(Stream<Entity> entities, Component shared_component, AdditionStream<EntitySharedGroup> groups) {
-
+		GroupEntitiesBySharedInstanceImplementation<true>(this, entities, shared_component, groups);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

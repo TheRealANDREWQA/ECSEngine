@@ -12,7 +12,11 @@
 
 // Create an iterator for the collection such that it can be used by the ForEach
 struct Iterator : IteratorInterface<const Entity> {
-	ECS_INLINE Iterator(const GraphicsDebugData* _data) : data(_data), group_index(0), stream_index(0) {}
+	ECS_INLINE Iterator(const GraphicsDebugData* _data) : data(_data), group_index(0), stream_index(0), IteratorInterface<const Entity>(0) {
+		if (data != nullptr) {
+			ComputeRemainingCount();
+		}
+	}
 	
 	const Entity* Get() {
 		last_color = data->groups[group_index].color;
@@ -257,7 +261,7 @@ static ECS_THREAD_TASK(GraphicsDebugDraw) {
 
 	if constexpr (!schedule_element) {
 		draw_data.data = GetGraphicsDebugData(world);
-		iterator = Iterator(data);
+		iterator = Iterator(draw_data.data);
 		iterator.ComputeRemainingCount();
 		iterator_pointer = &iterator;
 		if (draw_data.data->groups.size > 0) {
@@ -265,7 +269,7 @@ static ECS_THREAD_TASK(GraphicsDebugDraw) {
 			// This will check for both the runtime camera, but also for the camera component
 			if (GetWorldCamera(world, world_camera)) {
 				// Use this design in case in the future we will parallelize the call and the matrix needs to be shared
-				Matrix* matrix = world->task_manager->AllocateTempBuffer(thread_id, sizeof(Matrix));
+				Matrix* matrix = (Matrix*)world->task_manager->AllocateTempBuffer(thread_id, sizeof(Matrix));
 				*matrix = world_camera.GetViewProjectionMatrix();
 				draw_data.camera_matrix = matrix;
 
@@ -277,8 +281,8 @@ static ECS_THREAD_TASK(GraphicsDebugDraw) {
 
 	ForEachSelectionOptions options;
 	options.condition = [](unsigned int thread_id, World* world, void* user_data) {
-		const GraphicsDebugDrawData* data = (const GraphicsDebugData*)user_data;
-		return data->groups.size > 0;
+		const GraphicsDebugDrawData* data = (const GraphicsDebugDrawData*)user_data;
+		return data->data->groups.size > 0;
 	};
 	
 	auto kernel = ForEachEntitySelectionSharedGroupingCommit<schedule_element,
