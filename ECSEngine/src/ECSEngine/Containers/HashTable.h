@@ -1008,7 +1008,7 @@ namespace ECSEngine {
 		// Value type must be T or const T
 		template<typename HashTableType, typename ValueType>
 		struct ValueIterator : IteratorInterface<ValueType> {
-			ECS_INLINE ValueIterator(HashTableType* table) : table(*table), remaining_count(table->GetCount()), index(0) {}
+			ECS_INLINE ValueIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<ValueType>(table->GetCount()) {}
 			
 			ValueType* Get() override {
 				ValueType* value = nullptr;
@@ -1058,7 +1058,7 @@ namespace ECSEngine {
 
 			IteratorInterface<IdentifierType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				IdentifierIterator<HashTableType, IdentifierType>* iterator = (IdentifierIterator<HashTableType, IdentifierType>*)AllocateEx(allocator, sizeof(IdentifierIterator<HashTableType, IdentifierType>));
-				*iterator = IdentifierIterator<HashTableType, IdentifierType>(&table);
+				new (iterator) IdentifierIterator<HashTableType, IdentifierType>(&table);
 				iterator->index = index;
 				index = table.SkipElements(index, count);
 				ECS_ASSERT(index != -1, "Creating hash table sub iterator failed! The given subrange is too large.");
@@ -1072,7 +1072,7 @@ namespace ECSEngine {
 		// Pair type must be PairPtr or ConstPairPtr
 		template<typename HashTableType, typename PairType>
 		struct PairIterator : IteratorInterface<PairType> {
-			ECS_INLINE PairIterator(HashTableType* table) : table(*table), remaining_count(table->GetCount()), index(0) {}
+			ECS_INLINE PairIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<ValueType>(table->GetCount()) {}
 
 			PairType* Get() override {
 				while (!table.IsItemAt(index)) {
@@ -1090,7 +1090,7 @@ namespace ECSEngine {
 
 			IteratorInterface<PairType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				PairIterator<HashTableType, PairType>* iterator = (PairIterator<HashTableType, PairType>*)AllocateEx(allocator, sizeof(PairIterator<HashTableType, PairType>));
-				*iterator = PairIterator<HashTableType, PairType>(&table);
+				new (iterator) PairIterator<HashTableType, PairType>(&table);
 				iterator->index = index;
 				index = table.SkipElements(index, count);
 				ECS_ASSERT(index != -1, "Creating hash table sub iterator failed! The given subrange is too large.");

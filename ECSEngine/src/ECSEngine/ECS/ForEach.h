@@ -139,8 +139,11 @@ namespace ECSEngine {
 
 	struct ForEachEntitySelectionData {
 		unsigned int thread_id;
-		// This is the index inside the selection of the current entry
+		// This is the index of the current entry inside the selection
 		unsigned int index;
+		// This is used by the for each entity selection of the shared grouping. This is the index
+		// Of the entry inside the current group, while the other index is a global index.
+		unsigned int in_group_index;
 		Entity entity;
 		World* world;
 		EntityManagerCommandStream* command_stream;
@@ -153,10 +156,12 @@ namespace ECSEngine {
 
 	struct ForEachEntitySelectionSharedGroupingData {
 		unsigned int thread_id;
-		// The entities that comprise this group
-		Stream<Entity> entities;
+		// The index of the current group inside the ordered groups
+		unsigned int group_index;
 		// This is the current shared instance of the group
 		SharedInstance shared_instance;
+		// The entities that comprise this group
+		Stream<Entity> entities;
 		World* world;
 		EntityManagerCommandStream* command_stream;
 		void* user_data;
@@ -787,20 +792,19 @@ namespace ECSEngine {
 			) : thread_id(_thread_id), world(_world), function_name(_function_name), options(_options), entities(_entities) {
 				if constexpr (get_query) {
 					RegisterForEachInfo* info = (RegisterForEachInfo*)world;
-					AddQueryComponents<SharedComponent, Components...>(info);
+					AddQueryComponents<SharedComponent, SharedComponent, Components...>(info);
 				}
 			}
 
 			// The fact that lambdas are not allowed is intentional, because of the reason that lambdas
 			// Provide ugly stack traces when an error occurs in them, and in order to have reasonable
 			// stack traces, named function pointers with accompanying data is the preferred way.
-			// For the entity functor, the index field of ForEachEntitySelectionUntypedFunctorData should not be used.
 			// There are 2 group functors, one that is called before the entity functor and one that is called after the
 			// Entity functor.
 			template<typename EntityFunctor>
 			void Function(
-				ForEachEntitySelectionUntypedFunctor grouping_initialize_functor,
-				ForEachEntitySelectionUntypedFunctor grouping_finalize_functor,
+				ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_initialize_functor,
+				ForEachEntitySelectionSharedGroupingUntypedFunctor grouping_finalize_functor,
 				EntityFunctor entity_functor,
 				void* function_pointer_data = nullptr,
 				size_t function_pointer_data_size = 0
@@ -812,9 +816,24 @@ namespace ECSEngine {
 
 					GET_COMPONENT_SIGNATURE_FROM_TEMPLATE_PACK(query_descriptor, Components);
 
+					// Must insert the shared component at the very beginning
+					bool allow_missing_component_group = SharedComponent::IsOptional();
+					if (allow_missing_component_group) {
+						ECS_CRASH_CONDITION(query_descriptor.shared_optional.count < ECS_ARCHETYPE_MAX_SHARED_COMPONENTS, "ForEachEntitySelectionSharedGrouping: Too many shared optional components!");
+						memmove(query_descriptor.shared_optional.indices + 1, query_descriptor.shared_optional.indices, sizeof(*query_descriptor.shared_optional.indices) * query_descriptor.shared_optional.count);
+						query_descriptor.shared_optional.indices[0] = SharedComponent::Type::ID();
+						query_descriptor.shared_optional.count++;
+					}
+					else {
+						ECS_CRASH_CONDITION(query_descriptor.shared.count < ECS_ARCHETYPE_MAX_SHARED_COMPONENTS, "ForEachEntitySelectionSharedGrouping: Too many shared components!");
+						memmove(query_descriptor.shared.indices + 1, query_descriptor.shared.indices, sizeof(*query_descriptor.shared.indices) * query_descriptor.shared.count);
+						query_descriptor.shared.indices[0] = SharedComponent::Type::ID();
+						query_descriptor.shared.count++;
+					}
+
 					struct MiscellaneousData {
-						ForEachEntitySelectionUntypedFunctor initialize_functor;
-						ForEachEntitySelectionUntypedFunctor finalize_functor;
+						ForEachEntitySelectionSharedGroupingUntypedFunctor initialize_functor;
+						ForEachEntitySelectionSharedGroupingUntypedFunctor finalize_functor;
 					};
 
 					ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData> wrapper_data{ entity_functor, function_pointer_data, { grouping_initialize_functor, grouping_finalize_functor } };
@@ -822,19 +841,19 @@ namespace ECSEngine {
 						ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData>* data = (ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData>*)for_each_data->user_data;
 						// Need to change the user data and then restore it back
 						for_each_data->user_data = data->functor_data;
-						data->miscellaneous.initialize_functor(for_each_data);
+						bool return_value = data->miscellaneous.initialize_functor(for_each_data);
 						for_each_data->user_data = data;
+						return return_value;
 					};
 
 					auto grouping_finalize_wrapper = [](ForEachEntitySelectionSharedGroupingUntypedFunctorData* for_each_data) {
 						ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData>* data = (ForEachTypeSafeWrapperData<EntityFunctor, MiscellaneousData>*)for_each_data->user_data;
 						// Need to change the user data and then restore it back
 						for_each_data->user_data = data->functor_data;
-						data->miscellaneous.finalize_functor(for_each_data);
+						bool return_value = data->miscellaneous.finalize_functor(for_each_data);
 						for_each_data->user_data = data;
+						return return_value;
 					};
-
-					bool allow_missing_component_group = SharedComponent::IsOptional();
 
 					if constexpr (!is_commit) {
 						if (function_pointer_data_size > 0) {
@@ -843,13 +862,13 @@ namespace ECSEngine {
 							memcpy(wrapper_data.functor_data, function_pointer_data, function_pointer_data_size);
 						}
 
-						ForEachEntitySelectionSharedGroupping(
+						ForEachEntitySelectionSharedGrouping(
 							entities,
 							thread_id,
 							world,
 							grouping_initialize_wrapper,
 							grouping_finalize_wrapper,
-							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, EntityFunctor, Components...>,
+							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, EntityFunctor, SharedComponent, Components...>,
 							function_name,
 							&wrapper_data,
 							sizeof(wrapper_data),
@@ -860,13 +879,13 @@ namespace ECSEngine {
 						);
 					}
 					else {
-						ForEachEntitySelectionSharedGrouppingCommitFunctor(
+						ForEachEntitySelectionSharedGroupingCommitFunctor(
 							entities,
 							allow_missing_component_group,
 							world,
 							grouping_initialize_wrapper,
 							grouping_finalize_wrapper,
-							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, EntityFunctor, Components...>,
+							ForEachEntityBatchTypeSafeWrapper<ForEachEntitySelectionUntypedFunctorData, EntityFunctor, SharedComponent, Components...>,
 							&wrapper_data,
 							query_descriptor
 						);
@@ -900,6 +919,12 @@ namespace ECSEngine {
 
 	template<bool get_query, typename... Components>
 	using ForEachEntitySelectionCommit = Internal::ForEachEntitySelectionTypeSafe<get_query, true, Components...>;
+
+	template<bool get_query, typename SharedComponent, typename... Components>
+	using ForEachEntitySelectionSharedGrouping = Internal::ForEachEntitySelectionSharedGroupingTypeSafe<get_query, false, SharedComponent, Components...>;
+
+	template<bool get_query, typename SharedComponent, typename... Components>
+	using ForEachEntitySelectionSharedGroupingCommit = Internal::ForEachEntitySelectionSharedGroupingTypeSafe<get_query, true, SharedComponent, Components...>;
 
 	// Can be used for EntitySelection as well
 #define ECS_REGISTER_FOR_EACH_TASK(schedule_element, thread_task_function, module_function_data)	\

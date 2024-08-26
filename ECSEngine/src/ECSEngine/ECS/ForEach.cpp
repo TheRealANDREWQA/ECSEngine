@@ -139,15 +139,30 @@ namespace ECSEngine {
 	};
 
 	struct ForEachEntitySelectionSharedGrouppingImplementationTaskData_ {
+		ECS_INLINE Stream<Entity> GroupEntities() const {
+			return { entities + group_start_offset, group_entity_count };
+		}
+
+		ECS_INLINE Stream<Entity> BatchEntities() const {
+			return { entities + batch_start_offset, batch_entity_count };
+		}
+
 		// The shared instance value of the shared component for which the grouping is made
 		SharedInstance shared_instance;
-		// These are the entities of the entire group, which are needed for the group functor
-		Stream<Entity> group_entities;
+		// This is the index inside the ordered array at which the batch starts
+		unsigned int batch_start_offset;
+		// The number of entities in the current batch
+		unsigned int batch_entity_count;
+		// This is the index inisde the ordered array at which the group starts
+		unsigned int group_start_offset;
+		// The number of entities in the current group
+		unsigned int group_entity_count;
+		// This is the index of the current group inside the ordered groups
+		unsigned int group_index;
+		// A stable pointer at which the ordered entities are located
+		const Entity* entities;
 		// This is a pointer to a flag that needs to be acquired in order to run the group functor
 		CacheAligned<SharedGroupStatus>* group_status;
-		// These are the entities to be used for the entity iteration, which may be smaller than the
-		// Total group count
-		Stream<Entity> batch_entities;
 		void* functor_data;
 		ForEachEntitySelectionSharedGroupingUntypedFunctor group_initialize_functor;
 		ForEachEntitySelectionSharedGroupingUntypedFunctor group_finalize_functor;
@@ -438,6 +453,7 @@ namespace ECSEngine {
 		StableIterator<const Entity> stable_iterator,
 		unsigned int thread_id,
 		size_t iteration_start_index,
+		size_t iteration_in_group_index,
 		World* world,
 		EntityManagerCommandStream* command_stream,
 		void* user_data,
@@ -457,9 +473,11 @@ namespace ECSEngine {
 		functor_data.base.iterator = initial_iterator;
 
 		size_t index = iteration_start_index;
-		stable_iterator.iterator->ForEach([&index, world, &functor_data, &query_descriptor, functor](const Entity* entity) {
+		stable_iterator.iterator->ForEach([&index, &iteration_in_group_index, world, &functor_data, &query_descriptor, functor](const Entity* entity) {
 			functor_data.base.index = index;
+			functor_data.base.in_group_index = iteration_in_group_index;
 			index++;
+			iteration_in_group_index++;
 
 			// For the mandatory components, crash if the component is missing
 			Entity current_entity = *entity;
@@ -487,7 +505,8 @@ namespace ECSEngine {
 		ForEachEntitySelectionThreadTaskCommon(
 			data->base.stable_iterator, 
 			thread_id, 
-			data->base.index_offset, 
+			data->base.index_offset,
+			0, // This is not needed for our use case
 			world, 
 			data->base.command_stream, 
 			data->base.functor_data, 
@@ -507,7 +526,8 @@ namespace ECSEngine {
 			if (data->base.group_status->value.initialize_lock.TryLock()) {
 				ForEachEntitySelectionSharedGroupingUntypedFunctorData functor_data;
 				functor_data.command_stream = data->base.command_stream;
-				functor_data.entities = data->base.group_entities;
+				functor_data.entities = data->base.GroupEntities();
+				functor_data.group_index = data->base.group_index;
 				functor_data.iterator = data->base.initial_iterator;
 				functor_data.shared_instance = data->base.shared_instance;
 				functor_data.thread_id = thread_id;
@@ -531,11 +551,12 @@ namespace ECSEngine {
 
 		// Perform the common part
 		ArchetypeQueryDescriptor query_descriptor = data->GetQueryDescriptor();
-		StreamIterator<const Entity> iterator = data->base.batch_entities.ConstIterator();
+		StreamIterator<const Entity> iterator = data->base.BatchEntities().ConstIterator();
 		ForEachEntitySelectionThreadTaskCommon(
 			ToStableIterator(&iterator),
 			thread_id,
-			ULLONG_MAX - 1000, // This value is a placeholder, use a large value such that it will likely result in a crash if the user tries to use it
+			data->base.batch_start_offset,
+			data->base.batch_start_offset - data->base.group_start_offset,
 			world,
 			data->base.command_stream,
 			data->base.functor_data,
@@ -552,7 +573,8 @@ namespace ECSEngine {
 				// Perform the finalize call
 				ForEachEntitySelectionSharedGroupingUntypedFunctorData functor_data;
 				functor_data.command_stream = data->base.command_stream;
-				functor_data.entities = data->base.group_entities;
+				functor_data.entities = data->base.GroupEntities();
+				functor_data.group_index = data->base.group_index;
 				functor_data.iterator = data->base.initial_iterator;
 				functor_data.shared_instance = data->base.shared_instance;
 				functor_data.thread_id = thread_id;
@@ -642,6 +664,7 @@ namespace ECSEngine {
 		ForEachEntitySelectionImplementationTaskData* task_data = (ForEachEntitySelectionImplementationTaskData*)task_data_storage;
 		size_t task_data_size = task_data->MemoryOf(query_descriptor);
 		ECS_CRASH_CONDITION(task_data_size <= sizeof(task_data_storage), "ForEachEntitySelectionCommitFunctor: Exceeded task data storage capacity.");
+		task_data->WriteComponents(query_descriptor);
 
 		task_data->base.stable_iterator = ToStableIterator(entities);
 		task_data->base.initial_iterator = entities;
@@ -666,16 +689,16 @@ namespace ECSEngine {
 		const ArchetypeQueryDescriptor& query_descriptor
 	) {
 		// Do not use ForEachEntitySelectionSharedGroupingThreadTask because it incurs overhead with the atomic operations.
-		// Use the for
 		alignas(alignof(void*)) char task_data_storage[ECS_KB * 8];
 		ForEachEntitySelectionImplementationTaskData* task_data = (ForEachEntitySelectionImplementationTaskData*)task_data_storage;
 		size_t task_data_size = task_data->MemoryOf(query_descriptor);
 		ECS_CRASH_CONDITION(task_data_size <= sizeof(task_data_storage), "ForEachEntitySelectionSharedGroupingCommitFunctor: Exceeded task data storage capacity.");
+		task_data->WriteComponents(query_descriptor);
 
 		ECS_CRASH_CONDITION((allow_missing_component_group && query_descriptor.shared_optional.count > 0) ||
-			(!allow_missing_component_group && query_descriptor.shared.count > 0), "ForEachEntitySelectionSharedGrouping: a shared component must be specified!");
+			(!allow_missing_component_group && query_descriptor.shared.count > 0), "ForEachEntitySelectionSharedGroupingCommitFunctor: a shared component must be specified!");
 		
-		ECS_CRASH_CONDITION(grouping_initialize_functor != nullptr || grouping_finalize_functor != nullptr, "ForEachEntitySelectionSharedGrouping: A group functor (initialize and/or finalize) must be specified!");
+		ECS_CRASH_CONDITION(grouping_initialize_functor != nullptr || grouping_finalize_functor != nullptr, "ForEachEntitySelectionSharedGroupingCommitFunctor: A group functor (initialize and/or finalize) must be specified!");
 
 		// Allocate the entities into a temporary buffer
 		Stream<Entity> entities_array;
@@ -696,7 +719,7 @@ namespace ECSEngine {
 		task_data->base.command_stream = nullptr;
 		task_data->base.functor = entity_functor;
 		task_data->base.functor_data = data;
-		task_data->base.index_offset = -1;
+		task_data->base.index_offset = 0;
 		task_data->base.initial_iterator = entities;
 		
 		ForEachEntitySelectionSharedGroupingUntypedFunctorData grouping_data;
@@ -908,6 +931,7 @@ namespace ECSEngine {
 			task_data->base.group_finalize_functor = grouping_finalize_functor;
 			task_data->base.functor_data = data;
 			task_data->base.initial_iterator = entities;
+			task_data->base.entities = entities_array.buffer;
 			task_data->WriteComponents(query_descriptor);
 
 			size_t deferred_call_allocation_size = sizeof(DeferredAction) * deferred_action_capacity + sizeof(EntityManagerCommandStream);
@@ -952,8 +976,10 @@ namespace ECSEngine {
 					task_data->base.command_stream = command_stream;
 				}
 
-				task_data->base.group_entities = { entities_array.buffer + group_start, group_size };
-				task_data->base.batch_entities = { entities_array.buffer + last_batch_entity_offset, current_batch_size };
+				task_data->base.group_start_offset = group_start;
+				task_data->base.group_entity_count = group_size;
+				task_data->base.batch_entity_count = current_batch_size;
+				task_data->base.batch_start_offset = last_batch_entity_offset;
 
 				world->task_manager->AddDynamicTaskWithAffinity(ECS_THREAD_TASK_NAME(ForEachEntitySelectionSharedGroupingThreadTask, task_data, task_data_size), thread_affinity);
 				thread_affinity++;

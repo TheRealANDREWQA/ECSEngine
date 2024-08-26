@@ -11,6 +11,8 @@ namespace ECSEngine {
 	template<typename ValueType>
 	struct IteratorInterface
 	{
+		ECS_INLINE IteratorInterface(size_t _remaining_count) : remaining_count(_remaining_count) {}
+
 		typedef void (*Functor)(ValueType* value, void* data);
 
 		typedef bool (*ExitFunctor)(ValueType* value, void* data);
@@ -128,9 +130,8 @@ namespace ECSEngine {
 
 	template<typename ValueType>
 	struct StreamIterator : IteratorInterface<ValueType> {
-		ECS_INLINE StreamIterator(ValueType* _buffer, size_t _size, size_t _starting_index) : buffer(_buffer), size(_size), index(_starting_index) {
-			remaining_count = index >= size ? 0 : size - index;
-		}
+		ECS_INLINE StreamIterator(ValueType* _buffer, size_t _size, size_t _starting_index) : buffer(_buffer), size(_size), index(_starting_index), 
+			IteratorInterface<ValueType>(_starting_index >= _size ? 0 : _size - _starting_index) {}
 
 		ValueType* Get() override {
 			ValueType* value = buffer + index;
@@ -144,7 +145,7 @@ namespace ECSEngine {
 
 		IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 			StreamIterator<ValueType>* iterator = (StreamIterator<ValueType>*)AllocateEx(allocator, sizeof(StreamIterator<ValueType>));
-			*iterator = StreamIterator<ValueType>(buffer + index, count, 0);
+			new (iterator) StreamIterator<ValueType>(buffer + index, count, 0);
 			index += count;
 			return iterator;
 		}

@@ -705,8 +705,8 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 	editor_state->launched_module_compilation_lock.Unlock();
 
 	if (!have_not_finished) {
-		// If all the build finished with ok status, then continue
-		if (!has_failed) {
+		// If all the build finished with ok status, then continue or if it is a clean command, we should proceed anyway
+		if (!has_failed || data->command == CLEAN_PROJECT_STRING_WIDE) {
 			// We need to push the project to the compilation list
 			AddProjectModuleToLaunchedCompilation(editor_state, GetModuleLibraryName(editor_state, data->module_index), data->configuration);
 			RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->original_status, data->disable_logging);

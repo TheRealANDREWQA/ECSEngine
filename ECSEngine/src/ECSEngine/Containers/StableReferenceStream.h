@@ -485,7 +485,7 @@ namespace ECSEngine {
 
 		template<typename ContainerType, typename ValueType>
 		struct Iterator : IteratorInterface<ValueType> {
-			ECS_INLINE Iterator(ContainerType* container) : container(*container), index(0), remaining_count(container->size) {}
+			ECS_INLINE Iterator(ContainerType* container) : container(*container), index(0), IteratorInterface<ValueType>(container->size) {}
 
 			ValueType* Get() override {
 				unsigned int current_index = 0;
@@ -507,7 +507,7 @@ namespace ECSEngine {
 
 			IteratorInterface<ValueType>* GetSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				Iterator<ContainerType, ValueType>* iterator = (Iterator<ContainerType, ValueType>*)AllocateEx(allocator, sizeof(Iterator<ContainerType, ValueType>));
-				*iterator = Iterator<ContainerType, ValueType>(&container);
+				new (iterator) Iterator<ContainerType, ValueType>(&container);
 				iterator->index = index;
 				index += count;
 				return iterator;
