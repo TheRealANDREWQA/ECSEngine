@@ -2235,6 +2235,9 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 	// Restore the graphics main texture
 	editor_state->RuntimeGraphics()->ChangeMainRenderTargetToInitial(false);
 	editor_state->RuntimeGraphics()->RestoreBoundTarget(bound_target);
+
+	// Also, disable the depth to not disturb the UI
+	editor_state->RuntimeGraphics()->DisableDepth();
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
