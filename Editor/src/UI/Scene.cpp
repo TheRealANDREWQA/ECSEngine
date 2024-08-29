@@ -1070,7 +1070,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 						selection_color,
 						{ 0.0f, 0.0f },
 						{ 1.0f, 1.0f },
-						ECS_UI_DRAW_LATE
+						ECS_UI_DRAW_SYSTEM
 					);
 
 					float2 border_scale = system->GetPixelSize() * 2.0f;
@@ -1197,11 +1197,12 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			hoverable_data.sandbox_index = sandbox_index;
 
 			// Add the handlers for rotation, translation, zoom
-			UIActionHandler rotation_handler = { SceneRotationAction, &hoverable_data, sizeof(hoverable_data) };
+			// Handle these at the system level, such that they don't interfere with the UI rendering
+			UIActionHandler rotation_handler = { SceneRotationAction, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM };
 			drawer.SetWindowClickable(&rotation_handler, ECS_MOUSE_RIGHT);
-			UIActionHandler translation_handler = { SceneTranslationAction, &hoverable_data, sizeof(hoverable_data) };
+			UIActionHandler translation_handler = { SceneTranslationAction, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM };
 			drawer.SetWindowClickable(&translation_handler, ECS_MOUSE_MIDDLE);
-			UIActionHandler zoom_handler = { SceneZoomAction, &hoverable_data, sizeof(hoverable_data) };
+			UIActionHandler zoom_handler = { SceneZoomAction, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM };
 			drawer.SetWindowHoverable(&zoom_handler);
 
 			SceneLeftClickableActionData left_clickable_data;
@@ -1210,8 +1211,8 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			left_clickable_data.click_ui_position = { FLT_MAX, FLT_MAX };
 			left_clickable_data.is_selection_mode = false;
 			left_clickable_data.tool_axis = ECS_AXIS_COUNT;
-			// Set the phase to late to have the selection border be drawn over the main sprite
-			UIActionHandler selection_handler = { SceneLeftClickableAction, &left_clickable_data, sizeof(left_clickable_data), ECS_UI_DRAW_LATE };
+			// We need to handle the event at the system level, such as to not affect the UI rendering
+			UIActionHandler selection_handler = { SceneLeftClickableAction, &left_clickable_data, sizeof(left_clickable_data), ECS_UI_DRAW_SYSTEM };
 			drawer.SetWindowClickable(&selection_handler);
 
 			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_index, sandbox_graphics_module_index, drawer);

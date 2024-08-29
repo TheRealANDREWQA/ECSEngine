@@ -31,13 +31,6 @@ enum EDITOR_STATE_FLAGS : unsigned char {
 	EDITOR_STATE_PREVENT_LAUNCH,
 	// This is for runtime only - it doesn't affect the UI loads
 	EDITOR_STATE_PREVENT_RESOURCE_LOADING,
-	// This is a one off flag. Used when creating the dedicated GPU device
-	// such that if it is the first time a device is created on a dedicated GPU
-	// and it is asleep (like it a laptop) then it will do the creation deferred
-	// in another thread and this signals when that creation has finished (this
-	// usually takes 1 second and if the user doesn't open up a project quicker than
-	// this then there should be no problem.
-	EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED,
 	// This flag is used to know whether or not the mouse was visible
 	// When the pause/unpause action was performed to restore it when the
 	// Simulation is replayed

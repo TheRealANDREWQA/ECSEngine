@@ -109,6 +109,8 @@ ECS_THREAD_TASK(DrawMeshes) {
 	if constexpr (!schedule_element) {
 		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.25f, 0.3f, 0.5f, 1.0f));
 		world->graphics->ClearDepth(world->graphics->GetBoundDepthStencil());
+		world->graphics->EnableDepth();
+		world->graphics->DisableAlphaBlending();
 
 		CameraCached camera;
 		if (GetWorldCamera(world, camera)) {

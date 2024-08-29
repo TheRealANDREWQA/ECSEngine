@@ -173,7 +173,8 @@ public:
 					// physical memory profilers in case the exception is of type PAGE_GUARD
 					__try {
 						if (!IsIconic(hWnd)) {
-							graphics->BindRenderTargetViewFromInitialViews();
+							// Change the main render target to that of the swap chain
+							graphics->ChangeMainRenderTargetToInitial();
 
 							/*static float average = 0.0f;
 							static int average_count = 0;*/
@@ -220,6 +221,9 @@ public:
 							if (removed) {
 								__debugbreak();
 							}
+
+							// Unbind any shader PS resource at slot 0
+							graphics->BindPixelResourceView(nullptr);
 
 							/*static double average_duration = 0.0f;
 							static size_t count = 0;

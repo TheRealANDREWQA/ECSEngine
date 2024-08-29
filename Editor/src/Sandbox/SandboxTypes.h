@@ -295,7 +295,6 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::AssetDatabaseReference database;
 
 	ECSEngine::RenderDestination viewport_render_destination[EDITOR_SANDBOX_VIEWPORT_COUNT];
-	ECSEngine::ResourceView viewport_transferred_texture[EDITOR_SANDBOX_VIEWPORT_COUNT];
 	ECSEngine::RenderTargetView scene_viewport_instance_framebuffer;
 	ECSEngine::DepthStencilView scene_viewport_depth_stencil_framebuffer;
 	// These are set used to make calls to RenderSandbox ignore the request if the output is

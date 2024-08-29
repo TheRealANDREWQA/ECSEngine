@@ -4574,7 +4574,7 @@ namespace ECSEngine {
 			//		region_half_scale
 			//	);
 
-			//	m_graphics->BindRenderTargetViewFromInitialViews();
+			//	m_graphics->BindMainRenderTargetView();
 
 			//	border.Reset();
 

@@ -53,7 +53,7 @@ namespace ECSEngine {
 		// Then use a compute shader to read the contents of this texture and then
 		// perform the highlighting
 		GraphicsPipelineState pipeline_state = graphics->GetPipelineState();
-		Texture2D render_texture = pipeline_state.views.target.GetResource();
+		Texture2D render_texture = pipeline_state.target.target.GetResource();
 
 		Texture2DDescriptor stencil_descriptor;
 		stencil_descriptor.size = GetTextureDimensions(render_texture);
@@ -92,7 +92,7 @@ namespace ECSEngine {
 
 		// Second pass
 		// Unbind the stencil texture and rebing the initial texture
-		graphics->BindRenderTargetView(pipeline_state.views.target, graphics->GetBoundDepthStencil());
+		graphics->BindRenderTargetView(pipeline_state.target.target, graphics->GetBoundDepthStencil());
 
 		// Enable alpha blending - we'll use this as a way of masking the pixels which should not be highlighted
 		graphics->EnableAlphaBlending();

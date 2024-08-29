@@ -22,7 +22,7 @@ void DisplaySandboxTexture(EditorState* editor_state, UIDrawer& drawer, EDITOR_S
 	drawer.SpriteRectangle(
 		UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
 		config,
-		sandbox->viewport_transferred_texture[viewport]
+		sandbox->viewport_render_destination[viewport].output_view
 	);
 
 	if (RenderSandboxIsPending(editor_state, sandbox_index, viewport)) {

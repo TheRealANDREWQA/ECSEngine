@@ -1266,7 +1266,7 @@ struct UnloadSandboxAssetsEventData {
 EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 	UnloadSandboxAssetsEventData* data = (UnloadSandboxAssetsEventData*)_data;
 
-	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) && EditorStateHasFlag(editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED)) {
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
