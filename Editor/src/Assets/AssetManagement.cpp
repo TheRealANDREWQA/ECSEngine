@@ -1812,7 +1812,7 @@ static EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 		// Check to see if we have launched/need to launch the load
 		if (!data->has_launched) {
 			// We need to wait graphics initialization as well
-			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) && EditorStateHasFlag(editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED)) {
+			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 				// Can launch
 				data->has_launched = true;
 

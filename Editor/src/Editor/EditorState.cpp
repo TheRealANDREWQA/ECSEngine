@@ -427,33 +427,8 @@ void PreinitializeRuntime(EditorState* editor_state) {
 	editor_state->asset_database = database;
 }
 
-ECS_THREAD_TASK(InitializeRuntimeGraphicsTask) {
-	EditorState* editor_state = (EditorState*)_data;
-
-	// Coallesce the allocations
-	size_t allocation_size = sizeof(MemoryManager) + sizeof(Graphics);
-	void* allocation = editor_state->multithreaded_editor_allocator->Allocate_ts(allocation_size);
-	MemoryManager* runtime_graphics_allocator = (MemoryManager*)allocation;
-	editor_state->runtime_graphics = (Graphics*)OffsetPointer(runtime_graphics_allocator, sizeof(*runtime_graphics_allocator));
-
-	*runtime_graphics_allocator = DefaultGraphicsAllocator(editor_state->GlobalMemoryManager());
-
-	GraphicsDescriptor graphics_descriptor;
-	graphics_descriptor.allocator = runtime_graphics_allocator;
-	graphics_descriptor.create_swap_chain = false;
-	graphics_descriptor.gamma_corrected = true;
-	graphics_descriptor.discrete_gpu = true;
-	graphics_descriptor.hWnd = nullptr;
-	graphics_descriptor.window_size = { 0, 0 };
-	*editor_state->runtime_graphics = Graphics(&graphics_descriptor);
-	editor_state->runtime_resource_manager->m_graphics = editor_state->runtime_graphics;
-
-	EditorStateSetFlag(editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED);
-}
-
 void InitializeRuntime(EditorState* editor_state) {
 	PreinitializeRuntime(editor_state);
-	EditorStateAddBackgroundTask(editor_state, { InitializeRuntimeGraphicsTask, editor_state, 0 });
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -499,10 +474,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	GlobalMemoryManager* global_memory_manager = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
 	*global_memory_manager = CreateGlobalMemoryManager(GLOBAL_MEMORY_COUNT, 512, GLOBAL_MEMORY_RESERVE_COUNT);
 	Graphics* graphics = (Graphics*)Malloc(sizeof(Graphics));
-	// Could have used the integrated GPU to render the UI but since the sandboxes
-	// will use the dedicated GPU then they will have to share the textures through CPU RAM
-	// and that will be slow. So instead we have to use the dedicated GPU for UI as well
 	CreateGraphicsForProcess(graphics, hWnd, global_memory_manager, true);
+	editor_state->graphics = graphics;
 
 	MemoryManager* editor_allocator = new MemoryManager(MEMORY_MANAGER_CAPACITY, 4 * ECS_KB, MEMORY_MANAGER_RESERVE_CAPACITY, global_memory_manager);
 	editor_state->editor_allocator = editor_allocator;

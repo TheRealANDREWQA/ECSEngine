@@ -32,7 +32,7 @@ struct EditorState {
 	}
 
 	ECS_INLINE ECSEngine::Graphics* RuntimeGraphics() {
-		return runtime_graphics;
+		return graphics;
 	}
 
 	ECS_INLINE ECSEngine::ResourceManager* RuntimeResourceManager() {
@@ -104,14 +104,9 @@ struct EditorState {
 	// or wrappers are changed for the existing ones
 	ECSEngine::TaskManager* render_task_manager;
 
-	// All sandboxes will refer to these. Cannot make a separate GPU runtime for each 
-	// sandbox because of technical D3D issues which don't allow resource sharing
-	// across multiple devices (for shaders, input layouts etc. and for buffers (might not even be possible)
-	// and textures it is complicated to get right). So instead rely on the fact that when the device gets
-	// removed due to a crash we can recover it.
+	ECSEngine::Graphics* graphics;
 	ECSEngine::AssetDatabase* asset_database;
 	ECSEngine::ResourceManager* runtime_resource_manager;
-	ECSEngine::Graphics* runtime_graphics;
 	
 	// We keep these separately since we don't want to clutter the
 	// ProjectModules with a "fake" module that needs special treatment

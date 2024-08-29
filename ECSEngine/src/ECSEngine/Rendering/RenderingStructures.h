@@ -1394,10 +1394,15 @@ namespace ECSEngine {
 		DepthStencilView depth_stencil;
 	};
 
+	struct GraphicsBoundTarget {
+		RenderTargetView target;
+		DepthStencilView depth_stencil;
+		GraphicsViewport viewport;
+	};
+
 	struct GraphicsPipelineState {
 		GraphicsPipelineRenderState render_state;
-		GraphicsBoundViews views;
-		GraphicsViewport viewport;
+		GraphicsBoundTarget target;
 	};
 
 	struct ECS_REFLECT OrientedPoint {

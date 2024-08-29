@@ -413,9 +413,9 @@ namespace ECSEngine {
 
 		void BindBlendState(BlendState state);
 
-		void BindRenderTargetViewFromInitialViews();
+		void BindMainRenderTargetView();
 
-		void BindRenderTargetViewFromInitialViews(GraphicsContext* context);
+		void BindMainRenderTargetView(GraphicsContext* context);
 
 		void BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view);
 
@@ -924,6 +924,10 @@ namespace ECSEngine {
 		// Uses the immediate context.
 		void ClearDepthStencil(DepthStencilView depth_stencil, float depth = 1.0f, unsigned char stencil = 0);
 
+		// Clears the main render target view with the given color, while also clearing the depth buffer
+		void ClearMainTarget(float red, float green, float blue);
+
+		// Clears the swap chain's back buffer
 		void ClearBackBuffer(float red, float green, float blue);
 
 		void DisableAlphaBlending();
@@ -1000,6 +1004,8 @@ namespace ECSEngine {
 
 		GraphicsViewport GetBoundViewport() const;
 
+		GraphicsBoundTarget GetBoundTarget() const;
+
 		void* MapBuffer(ID3D11Buffer* buffer, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
 		MappedTexture MapTexture(Texture1D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
@@ -1064,8 +1070,11 @@ namespace ECSEngine {
 		
 		// -------------------------------------------- Getters and other operations --------------------------------------------
 
-		// Can optionally bind the render target and the depth stencil
-		void ChangeInitialRenderTarget(RenderTargetView render_target, DepthStencilView depth_stencil, bool bind = true);
+		// Can optionally bind the render target and the depth stencil, as well as a viewport that has the same dimensions as the render target
+		void ChangeMainRenderTarget(RenderTargetView render_target, DepthStencilView depth_stencil, bool bind = true);
+
+		// Can optionally bind the render target and the depth stencil, as well as a viewport that has the same dimensions as the render target
+		void ChangeMainRenderTargetToInitial(bool bind = true);
 
 		// It does not acquire the lock - call this if inside a lock
 		// Can be called only from a single thread
@@ -1223,6 +1232,8 @@ namespace ECSEngine {
 
 		void RestoreBoundViews(GraphicsBoundViews views);
 
+		void RestoreBoundTarget(const GraphicsBoundTarget& target);
+
 		void RestorePipelineState(const GraphicsPipelineState* state);
 
 		// It will remove the resources which have been added in between the snapshot and the current state.
@@ -1286,10 +1297,16 @@ namespace ECSEngine {
 		IDXGISwapChain* m_swap_chain;
 		GraphicsContext* m_context;
 		GraphicsContext* m_deferred_context;
-		RenderTargetView m_target_view;
+		// This variable will contain the render target created on construction
+		RenderTargetView m_creation_render_view;
+		// This is a view that can be set as main, which allows code to easily "revert" back to the main view
+		RenderTargetView m_main_target_view;
 		RenderTargetView m_bound_render_targets[ECS_GRAPHICS_MAX_RENDER_TARGETS_BIND];
 		size_t m_bound_render_target_count;
-		DepthStencilView m_depth_stencil_view;
+		// This variable will contain the depth stenci lcreated on construction
+		DepthStencilView m_creation_depth_view;
+		// This is a view that can be set as main, which allows code to easily "revert" back to the main view
+		DepthStencilView m_main_depth_stencil_view;
 		DepthStencilView m_current_depth_stencil;
 		// The debug device is used for leak detection and validation that the current
 		// Graphical objects are valid
@@ -1567,6 +1584,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API GraphicsBoundViews GetBoundViews(GraphicsContext* context);
 
+	ECSENGINE_API GraphicsBoundTarget GetBoundTarget(GraphicsContext* context);
+
 	ECSENGINE_API GraphicsPipelineState GetPipelineState(GraphicsContext* context);
 
 	ECSENGINE_API GraphicsViewport GetViewport(GraphicsContext* context);
@@ -1626,6 +1645,8 @@ namespace ECSEngine {
 	ECSENGINE_API void RestorePipelineRenderState(GraphicsContext* context, const GraphicsPipelineRenderState* render_state);
 
 	ECSENGINE_API void RestoreBoundViews(GraphicsContext* context, GraphicsBoundViews views);
+
+	ECSENGINE_API void RestoreBoundTarget(GraphicsContext* context, const GraphicsBoundTarget& target);
 
 	ECSENGINE_API void RestorePipelineState(GraphicsContext* context, const GraphicsPipelineState* state);
 

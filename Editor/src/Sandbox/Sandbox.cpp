@@ -445,7 +445,6 @@ static Stream<void*> GetRuntimeGPUResources(const EditorState* editor_state, All
 			if (ua_view != nullptr) {
 				resources.Add(ua_view);
 			}
-			resources.Add(sandbox->viewport_transferred_texture[index].Interface());
 		}
 	});
 
@@ -1473,7 +1472,6 @@ void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_i
 
 	if (sandbox->viewport_render_destination[viewport].render_view.Interface() != nullptr) {
 		runtime_graphics->FreeRenderDestination(sandbox->viewport_render_destination[viewport]);
-		ReleaseGraphicsView(sandbox->viewport_transferred_texture[viewport]);
 
 		ECS_STACK_CAPACITY_STREAM(char, visualize_texture_name, 512);	
 		if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
@@ -2139,9 +2137,6 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	// Set the mouse OS window handle
 	sandbox_mouse->m_window_handle = editor_state->Mouse()->m_window_handle;
 
-	// Wait until the graphics initialization is finished, otherwise the debug drawer can fail
-	EditorStateWaitFlag(50, editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED);
-
 	// Create the sandbox world
 	sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 	sandbox->sandbox_world.speed_up_factor = sandbox->simulation_speed_up_factor;
@@ -2213,20 +2208,22 @@ void ReloadSandboxRuntimeSettings(EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+GraphicsBoundTarget RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
+	GraphicsBoundTarget bound_target = editor_state->RuntimeGraphics()->GetBoundTarget();
 	SetSandboxGraphicsTextures(editor_state, sandbox_index, viewport);
 	BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, viewport);
+	return bound_target;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, const GraphicsBoundTarget& bound_target)
 {
 	// Remove from the system manager bound resources
 	SystemManager* system_manager = GetSandbox(editor_state, sandbox_index)->sandbox_world.system_manager;
-	RemoveEditorRuntimeType(system_manager);
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+		RemoveEditorRuntimeType(system_manager);
 		RemoveRuntimeCamera(system_manager);
 		RemoveEditorRuntimeSelectColor(system_manager);
 		RemoveEditorRuntimeSelectedEntities(system_manager);
@@ -2234,6 +2231,10 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 		RemoveEditorRuntimeInstancedFramebuffer(system_manager);
 		RemoveEditorExtraTransformGizmos(system_manager);
 	}
+
+	// Restore the graphics main texture
+	editor_state->RuntimeGraphics()->ChangeMainRenderTargetToInitial(false);
+	editor_state->RuntimeGraphics()->RestoreBoundTarget(bound_target);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2456,6 +2457,10 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 	
 	if (!is_being_compiled) {
+		// Unbind the resource slot 0, which is used by UI as the texture binding slot
+		// and might contain a sandbox texture
+		editor_state->RuntimeGraphics()->BindPixelResourceView(nullptr);
+
 		// Check to see if we need to resize the textures
 		if (new_texture_size.x != 0 && new_texture_size.y != 0) {
 			ResizeSandboxRenderTextures(editor_state, sandbox_index, viewport, new_texture_size);
@@ -2464,7 +2469,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		// Sse resource manager and graphics snapshots because the rendering operation should not modify state
 		ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(editor_state->EditorAllocator());
 		GraphicsResourceSnapshot graphics_snapshot = editor_state->RuntimeGraphics()->GetResourceSnapshot(editor_state->EditorAllocator());
-		RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
+		GraphicsBoundTarget bound_target = RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
 
 		EntityManager* viewport_entity_manager = sandbox->sandbox_world.entity_manager;
 		EntityManager* runtime_entity_manager = sandbox->sandbox_world.entity_manager;
@@ -2515,7 +2520,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 				RemoveTaskManagerPhysicalMemoryProfilingExceptionHandler(sandbox->sandbox_world.task_manager);
 			}
 
-			RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport);
+			RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport, bound_target);
 		};
 
 		// Prepare the task scheduler
@@ -2589,7 +2594,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
 		// Restore the resource manager first
-		editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot, &snapshot_message);
+		//editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot, &snapshot_message);
 		resource_snapshot.Deallocate(editor_state->EditorAllocator());
 		if (snapshot_message.size > 0) {
 			ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring resource manager snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
@@ -2599,13 +2604,13 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		}
 
 		// Now the graphics snapshot will be restored as well
-		editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
+		//editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
 		if (snapshot_message.size > 0) {
 			ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring runtime graphics snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
 			EditorSetConsoleError(message);
 			EditorSetConsoleError(snapshot_message);
 		}
-		RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport);
+		RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport, bound_target);
 
 		return true;
 	}
@@ -2672,13 +2677,7 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 	// Free the current textures and create new ones
 	FreeSandboxRenderTextures(editor_state, sandbox_index, viewport);
 
-	GraphicsRenderDestinationOptions destination_options;
-	destination_options.render_misc = ECS_GRAPHICS_MISC_SHARED;
-	destination_options.depth_misc = ECS_GRAPHICS_MISC_SHARED;
-	sandbox->viewport_render_destination[viewport] = runtime_graphics->CreateRenderDestination(new_size, destination_options);
-
-	// Now transfer the texture from the RuntimeGraphics to the UIGraphics
-	sandbox->viewport_transferred_texture[viewport] = editor_state->UIGraphics()->TransferGPUView(sandbox->viewport_render_destination[viewport].output_view);
+	sandbox->viewport_render_destination[viewport] = runtime_graphics->CreateRenderDestination(new_size);
 
 	ECS_STACK_CAPACITY_STREAM(char, visualize_name, 512);
 
@@ -2881,7 +2880,10 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	sandbox->sandbox_world.debug_drawer->redirect_drawer = &sandbox->redirect_drawer;
 	sandbox->sandbox_world.debug_drawer->ActivateRedirect();
 
-	RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	GraphicsBoundTarget bound_target = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	auto restore_finish_graphics = StackScope([&]() {
+		RenderSandboxFinishGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME, bound_target);
+	});
 
 	CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
 	StartSandboxFrameProfiling(editor_state, sandbox_index);
@@ -3106,14 +3108,10 @@ void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_
 	// Clear the depth view
 	editor_state->RuntimeGraphics()->ClearDepthStencil(sandbox->viewport_render_destination[viewport].depth_view);
 
-	sandbox->sandbox_world.graphics->ChangeInitialRenderTarget(
+	sandbox->sandbox_world.graphics->ChangeMainRenderTarget(
 		sandbox->viewport_render_destination[viewport].render_view, 
 		sandbox->viewport_render_destination[viewport].depth_view
 	);
-
-	// Get the texel size for the textures and bind a viewport according to that
-	GraphicsViewport graphics_viewport = GetGraphicsViewportForTexture(sandbox->viewport_render_destination[viewport].render_view.GetResource());
-	sandbox->sandbox_world.graphics->BindViewport(graphics_viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

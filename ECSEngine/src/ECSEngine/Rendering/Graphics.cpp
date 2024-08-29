@@ -471,7 +471,7 @@ namespace ECSEngine {
 	}
 
 	Graphics::Graphics(const GraphicsDescriptor* descriptor)
-		: m_target_view(nullptr), m_depth_stencil_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
+		: m_creation_render_view(nullptr), m_creation_depth_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
 		m_bound_render_target_count(1)
 	{
 		// The internal resources
@@ -578,20 +578,20 @@ namespace ECSEngine {
 		if (descriptor->create_swap_chain) {
 			CreateRenderTargetViewFromSwapChain(descriptor->gamma_corrected);
 			CreateWindowDepthStencilView();
-			BindRenderTargetView(m_target_view, m_depth_stencil_view);
 		}
 		else {
 			if (descriptor->window_size.x != 0 && descriptor->window_size.y != 0) {
-				CreateWindowDepthStencilView();
 				CreateWindowRenderTargetView(descriptor->gamma_corrected);
-				BindRenderTargetView(m_target_view, m_depth_stencil_view);
+				CreateWindowDepthStencilView();
 			}
 		}
 
-		if (m_target_view.Interface() != nullptr) {
-			AddInternalResource(m_target_view);
-			AddInternalResource(m_depth_stencil_view);
+		if (m_creation_render_view.Interface() != nullptr) {
+			AddInternalResource(m_creation_render_view);
+			AddInternalResource(m_creation_depth_view);
 		}
+
+		ChangeMainRenderTargetToInitial(true);
 
 		DepthStencilState depth_stencil_state = CreateDepthStencilStateDefault(true);
 		RasterizerState rasterizer_state = CreateRasterizerStateDefault(true);
@@ -914,19 +914,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::BindRenderTargetViewFromInitialViews()
+	void Graphics::BindMainRenderTargetView()
 	{
-		BindRenderTargetViewFromInitialViews(m_context);
-		m_bound_render_targets[0] = m_target_view;
-		m_bound_render_target_count = 1;
-		m_current_depth_stencil = m_depth_stencil_view;
+		BindRenderTargetView(m_main_target_view, m_main_depth_stencil_view);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::BindRenderTargetViewFromInitialViews(GraphicsContext* context)
+	void Graphics::BindMainRenderTargetView(GraphicsContext* context)
 	{
-		ECSEngine::BindRenderTargetView(m_target_view, m_depth_stencil_view, context);
+		ECSEngine::BindRenderTargetView(m_main_target_view, m_main_depth_stencil_view, context);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2174,7 +2171,7 @@ namespace ECSEngine {
 		descriptor.size = m_window_size;
 
 		Texture2D texture = CreateTexture(&descriptor);
-		m_target_view = CreateRenderTargetView(texture);
+		m_creation_render_view = CreateRenderTargetView(texture);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2240,10 +2237,10 @@ namespace ECSEngine {
 			descriptor.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 			descriptor.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 			descriptor.Texture2D.MipSlice = 0;
-			result = m_device->CreateRenderTargetView(back_buffer.Get(), &descriptor, &m_target_view.view);
+			result = m_device->CreateRenderTargetView(back_buffer.Get(), &descriptor, &m_creation_render_view.view);
 		}
 		else {
-			result = m_device->CreateRenderTargetView(back_buffer.Get(), nullptr, &m_target_view.view);
+			result = m_device->CreateRenderTargetView(back_buffer.Get(), nullptr, &m_creation_render_view.view);
 		}
 
 		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Creating render target view failed");
@@ -2272,7 +2269,7 @@ namespace ECSEngine {
 		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Creating depth texture failed");
 
 		// creating depth stencil texture view
-		result = m_device->CreateDepthStencilView(depth_texture, nullptr, &m_depth_stencil_view.view);
+		result = m_device->CreateDepthStencilView(depth_texture, nullptr, &m_creation_depth_view.view);
 
 		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Creating depth stencil view failed");
 		depth_texture->Release();
@@ -2312,7 +2309,9 @@ namespace ECSEngine {
 		}
 		else {
 			D3D11_SUBRESOURCE_DATA subresource_data[32];
-			memset(subresource_data, 0, sizeof(D3D11_SUBRESOURCE_DATA) * 32);
+			ECS_ASSERT(ECS_COUNTOF(subresource_data) >= ecs_descriptor->mip_data.size, "Creating Texture 1D failed because of stack buffer limitation!");
+
+			memset(subresource_data, 0, sizeof(subresource_data));
 			for (size_t index = 0; index < ecs_descriptor->mip_data.size; index++) {
 				subresource_data[index].pSysMem = ecs_descriptor->mip_data[index].buffer;
 			}
@@ -2349,7 +2348,9 @@ namespace ECSEngine {
 		}
 		else {
 			D3D11_SUBRESOURCE_DATA subresource_data[32];
-			memset(subresource_data, 0, sizeof(D3D11_SUBRESOURCE_DATA) * 32);
+			ECS_ASSERT(ECS_COUNTOF(subresource_data) >= ecs_descriptor->mip_data.size, "Creating Texture 2D failed because of stack buffer limitation!");
+
+			memset(subresource_data, 0, sizeof(subresource_data));
 			unsigned int height = ecs_descriptor->size.y;
 
 			unsigned int pitch_multiplier = 1;
@@ -2451,7 +2452,8 @@ namespace ECSEngine {
 		}
 		else {
 			D3D11_SUBRESOURCE_DATA subresource_data[32];
-			memset(subresource_data, 0, sizeof(D3D11_SUBRESOURCE_DATA) * 32);
+			ECS_ASSERT(ECS_COUNTOF(subresource_data) >= ecs_descriptor->mip_data.size, "Creating Texture 3D failed because of stack buffer limitation!");
+			memset(subresource_data, 0, sizeof(subresource_data));
 
 			unsigned int height = ecs_descriptor->size.y;
 			unsigned int depth = ecs_descriptor->size.z;
@@ -2495,7 +2497,8 @@ namespace ECSEngine {
 		}
 		else {
 			D3D11_SUBRESOURCE_DATA subresource_data[128];
-			memset(subresource_data, 0, sizeof(D3D11_SUBRESOURCE_DATA) * 128);
+			ECS_ASSERT(ECS_COUNTOF(subresource_data) >= ecs_descriptor->mip_data.size, "Creating Texture Cube failed because of stack buffer limitation!");
+			memset(subresource_data, 0, sizeof(subresource_data));
 			for (size_t index = 0; index < ecs_descriptor->mip_data.size; index++) {
 				subresource_data[index].pSysMem = ecs_descriptor->mip_data[index].buffer;
 				subresource_data[index].SysMemPitch = ecs_descriptor->mip_data[index].size;
@@ -3074,9 +3077,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::ClearMainTarget(float red, float green, float blue) {
+		ClearRenderTarget(m_main_target_view, ColorFloat(red, green, blue, 1.0f));
+		ClearDepth(m_main_depth_stencil_view);
+	}
+
 	void Graphics::ClearBackBuffer(float red, float green, float blue) {
-		ClearRenderTarget(m_target_view, ColorFloat(red, green, blue, 1.0f));
-		ClearDepth(m_depth_stencil_view);
+		ClearRenderTarget(m_creation_render_view, ColorFloat(red, green, blue, 1.0f));
+		ClearDepth(m_creation_depth_view);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3434,13 +3442,22 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::ChangeInitialRenderTarget(RenderTargetView render_target, DepthStencilView depth_stencil, bool bind) {
-		m_depth_stencil_view = depth_stencil;
-		m_target_view = render_target;
+	void Graphics::ChangeMainRenderTarget(RenderTargetView render_target, DepthStencilView depth_stencil, bool bind) {
+		m_main_depth_stencil_view = depth_stencil;
+		m_main_target_view = render_target;
 
 		if (bind) {
 			BindRenderTargetView(render_target, depth_stencil);
+			// Bind a viewport with the texture dimensions as well
+			Texture2D texture = render_target.AsTexture2D();
+			D3D11_TEXTURE2D_DESC texture_descriptor;
+			texture.tex->GetDesc(&texture_descriptor);
+			BindViewport(0.0f, 0.0f, texture_descriptor.Width, texture_descriptor.Height, 0.0f, 1.0f);
 		}
+	}
+
+	void Graphics::ChangeMainRenderTargetToInitial(bool bind) {
+		ChangeMainRenderTarget(m_creation_render_view, m_creation_depth_view, bind);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3658,7 +3675,7 @@ namespace ECSEngine {
 
 	GraphicsPipelineState Graphics::GetPipelineState() const
 	{
-		return { GetPipelineRenderState(), GetCurrentViews(), GetBoundViewport() };
+		return { GetPipelineRenderState(), GetBoundTarget() };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3795,14 +3812,21 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	GraphicsBoundTarget Graphics::GetBoundTarget() const
+	{
+		return { GetBoundRenderTarget(), GetBoundDepthStencil(), GetBoundViewport() };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::ResizeSwapChainSize(HWND hWnd, unsigned int width, unsigned int height)
 	{
 		if (width != 0 && height != 0) {
 			D3D11_RENDER_TARGET_VIEW_DESC descriptor;
-			m_target_view.view->GetDesc(&descriptor);
+			m_creation_render_view.view->GetDesc(&descriptor);
 			m_context->ClearState();
-			m_target_view.view->Release();
-			m_depth_stencil_view.view->Release();
+			m_creation_render_view.view->Release();
+			m_creation_depth_view.view->Release();
 
 			HRESULT result = m_swap_chain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
 
@@ -3822,12 +3846,6 @@ namespace ECSEngine {
 
 			CreateRenderTargetViewFromSwapChain(descriptor.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
 			CreateWindowDepthStencilView();
-
-			ResizeViewport(0.0f, 0.0f, (float)width, (float)height);
-			BindRenderTargetViewFromInitialViews(m_context);
-			EnableDepth(m_context);
-
-			DisableAlphaBlending(m_context);
 		}
 	}
 
@@ -4101,11 +4119,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::RestoreBoundTarget(const GraphicsBoundTarget& target)
+	{
+		RestoreBoundViews({ target.target, target.depth_stencil });
+		BindViewport(target.viewport);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::RestorePipelineState(const GraphicsPipelineState* state)
 	{
 		RestorePipelineRenderState(&state->render_state);
-		RestoreBoundViews(state->views);
-		BindViewport(state->viewport);
+		RestoreBoundTarget(state->target);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -5365,9 +5390,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	GraphicsBoundTarget GetBoundTarget(GraphicsContext* context) {
+		GraphicsBoundViews views = GetBoundViews(context);
+		return { views.target, views.depth_stencil, GetViewport(context) };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	GraphicsPipelineState GetPipelineState(GraphicsContext* context)
 	{
-		return { GetPipelineRenderState(context), GetBoundViews(context), GetViewport(context) };
+		return { GetPipelineRenderState(context), GetBoundTarget(context) };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -5633,11 +5665,17 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void RestoreBoundTarget(GraphicsContext* context, const GraphicsBoundTarget& target) {
+		RestoreBoundViews(context, { target.target, target.depth_stencil });
+		BindViewport(target.viewport, context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void RestorePipelineState(GraphicsContext* context, const GraphicsPipelineState* state)
 	{
 		RestorePipelineRenderState(context, &state->render_state);
-		RestoreBoundViews(context, state->views);
-		BindViewport(state->viewport, context);
+		RestoreBoundTarget(context, state->target);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

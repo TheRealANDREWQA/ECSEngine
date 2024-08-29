@@ -467,11 +467,12 @@ void ReloadSandboxRuntimeSettings(
 // -------------------------------------------------------------------------------------------------------------
 
 // Sets all the required graphics options needed to run the given viewport
-void RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+// Returns a structure that must be given to FinishGraphics
+GraphicsBoundTarget RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, const GraphicsBoundTarget& bound_target);
 
 // -------------------------------------------------------------------------------------------------------------
 

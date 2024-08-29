@@ -14,8 +14,8 @@ static ECS_THREAD_TASK(CameraController) {
 		//const PhysicsSettings* settings = entity_manager->TryGetGlobalComponent<PhysicsSettings>();
 		//if (settings != nullptr && settings->first_person) {
 			if (world->mouse->IsVisible()) {
-				world->mouse->SetCursorVisibility(false);
-				world->mouse->EnableRawInput();
+				//world->mouse->SetCursorVisibility(false);
+				//world->mouse->EnableRawInput();
 			}
 
 			FirstPersonWASDControllerModifiers(
