@@ -13,6 +13,13 @@ using namespace ECSEngine;
 
 #define GIZMO_THICKNESS 4
 
+ECS_THREAD_TASK(InitializeDrawPipeline) {
+	world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.25f, 0.3f, 0.5f, 1.0f));
+	world->graphics->ClearDepth(world->graphics->GetBoundDepthStencil());
+	world->graphics->EnableDepth();
+	world->graphics->DisableAlphaBlending();
+}
+
 ECS_INLINE unsigned int GizmoRenderIndex(unsigned int instance_index, bool extra_thick = true) {
 	return GenerateRenderInstanceValue(instance_index, extra_thick ? ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS : GIZMO_THICKNESS);
 }
@@ -107,11 +114,6 @@ ECS_THREAD_TASK(DrawMeshes) {
 	>(thread_id, world);
 
 	if constexpr (!schedule_element) {
-		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.25f, 0.3f, 0.5f, 1.0f));
-		world->graphics->ClearDepth(world->graphics->GetBoundDepthStencil());
-		world->graphics->EnableDepth();
-		world->graphics->DisableAlphaBlending();
-
 		CameraCached camera;
 		if (GetWorldCamera(world, camera)) {
 			Matrix camera_matrix = camera.GetViewProjectionMatrix();

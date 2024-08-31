@@ -7,23 +7,35 @@
 using namespace ECSEngine;
 
 void ModuleTaskFunction(ModuleTaskFunctionData* data) {
-	TaskSchedulerElement elements[5];
+	TaskSchedulerElement elements[6];
 	
 	for (size_t index = 0; index < ECS_COUNTOF(elements); index++) {
 		elements[index].task_group = ECS_THREAD_TASK_FINALIZE_LATE;
 	}
 
-	ECS_REGISTER_FOR_EACH_TASK(elements[0], DrawMeshes, data);
-	ECS_REGISTER_FOR_EACH_TASK(elements[1], DrawSelectables, data);
+	size_t index = 0;
+	ECS_SET_SCHEDULE_TASK_FUNCTION(elements[index], InitializeDrawPipeline);
+	data->tasks->AddAssert(elements[index]);
+	index++;
+
+	ECS_REGISTER_FOR_EACH_TASK(elements[index], DrawMeshes, data);
+	index++;
+	ECS_REGISTER_FOR_EACH_TASK(elements[index], DrawSelectables, data);
+	index++;
+
 	// The debug tasks must be added before flushing the render commands
 	RegisterGraphicsDebugTasks(data);
-	ECS_REGISTER_FOR_EACH_TASK(elements[2], DrawInstancedFramebuffer, data);
-	ECS_REGISTER_FOR_EACH_TASK(elements[3], FlushRenderCommands, data);
+	
+	ECS_REGISTER_FOR_EACH_TASK(elements[index], DrawInstancedFramebuffer, data);
+	index++;
+	ECS_REGISTER_FOR_EACH_TASK(elements[index], FlushRenderCommands, data);
+	index++;
 
-	elements[4].task_group = ECS_THREAD_TASK_FINALIZE_EARLY;
-	elements[4].task_function = RecalculateCamera;
-	elements[4].task_name = STRING(RecalculateCamera);
-	data->tasks->AddAssert(elements[4]);
+	elements[index].task_group = ECS_THREAD_TASK_FINALIZE_EARLY;
+	elements[index].task_function = RecalculateCamera;
+	elements[index].task_name = STRING(RecalculateCamera);
+	data->tasks->AddAssert(elements[index]);
+	index++;
 
 	// Maintain the order since this is important
 	data->maintain_order_in_group = true;

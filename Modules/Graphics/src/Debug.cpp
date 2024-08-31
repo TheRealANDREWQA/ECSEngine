@@ -297,7 +297,7 @@ static ECS_THREAD_TASK(GraphicsDebugDraw) {
 
 void RegisterGraphicsDebugTasks(ModuleTaskFunctionData* task_data) {
 	TaskSchedulerElement element;
-	element.task_group = ECS_THREAD_TASK_SIMULATE_MID;
+	element.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
 	element.initialize_task_function = GraphicsDebugInitialize;
 	ECS_REGISTER_FOR_EACH_TASK(element, GraphicsDebugDraw, task_data);
 }

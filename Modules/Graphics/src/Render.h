@@ -1,6 +1,8 @@
 #pragma once
 #include "Export.h"
 
+ECS_THREAD_TASK(InitializeDrawPipeline);
+
 template<bool schedule_element>
 ECS_THREAD_TASK(DrawMeshes);
 
