@@ -462,8 +462,8 @@ namespace ECSEngine {
 	ECSENGINE_API float4 GetCameraFrustumNearAndFarPlaneDimensions(const CameraType* camera);
 
 	struct FrustumPoints {
-		Rectangle3D near_plane;
-		Rectangle3D far_plane;
+		FullRectangle3D near_plane;
+		FullRectangle3D far_plane;
 	};
 
 	// Calculates the camera frustum points

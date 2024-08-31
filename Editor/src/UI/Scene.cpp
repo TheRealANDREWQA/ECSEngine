@@ -1053,8 +1053,16 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 						}
 					}
 
+					// We must clamp the scale such that it doesn't go outside the window
+					float2 window_position = system->GetWindowPosition(window_index);
+					float2 window_scale = system->GetWindowScale(window_index);
+					Rectangle2D window_rectangle = { window_position, window_position + window_scale };
+
 					float2 selection_top_left = BasicTypeMin(mouse_position, data->click_ui_position);
 					float2 selection_bottom_right = BasicTypeMax(mouse_position, data->click_ui_position);
+					selection_top_left = ClampPointToRectangle(selection_top_left, window_rectangle);
+					selection_bottom_right = ClampPointToRectangle(selection_bottom_right, window_rectangle);
+
 					float2 selection_scale = selection_bottom_right - selection_top_left;
 
 					Color selection_color = EDITOR_SELECT_COLOR;

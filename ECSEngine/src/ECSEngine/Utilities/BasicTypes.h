@@ -615,22 +615,70 @@ namespace ECSEngine {
 	typedef Base4<float> float4;
 	typedef Base4<double> double4;
 
-	union Rectangle3D {
-		ECS_INLINE Rectangle3D() {}
+	template<typename ValueType>
+	struct Rectangle {
+		typedef ValueType Value;
 
-		float3 values[4];
-		struct {
-			float3 top_left;
-			float3 top_right;
-			float3 bottom_right;
-			float3 bottom_left;
-		};
+		ECS_INLINE ValueType GetScale() const {
+			return bottom_right - top_left;
+		}
+
+		ECS_INLINE ValueType* AsValues() {
+			return (ValueType*)this;
+		}
+
+		ECS_INLINE const ValueType* AsValues() const {
+			return (const ValueType*)this;
+		}
+
+		ECS_INLINE constexpr static size_t Count() {
+			return 2;
+		}
+
+		ValueType top_left;
+		ValueType bottom_right;
 	};
 
-	struct Line3D {
-		float3 A;
-		float3 B;
+	typedef Rectangle<float2> Rectangle2D;
+	typedef Rectangle<float3> Rectangle3D;
+
+	template<typename ValueType>
+	struct FullRectangle {
+		typedef ValueType Value;
+
+		ECS_INLINE ValueType GetScale() const {
+			return bottom_right - top_left;
+		}
+
+		ECS_INLINE ValueType* AsValues() {
+			return (ValueType*)this;
+		}
+
+		ECS_INLINE const ValueType* AsValues() const {
+			return (const ValueType*)this;
+		}
+
+		ECS_INLINE constexpr static size_t Count() {
+			return 4;
+		}
+
+		ValueType top_left;
+		ValueType top_right;
+		ValueType bottom_right;
+		ValueType bottom_left;
 	};
+
+	typedef FullRectangle<float2> FullRectangle2D;
+	typedef FullRectangle<float3> FullRectangle3D;
+
+	template<typename ValueType>
+	struct Line {
+		ValueType A;
+		ValueType B;
+	};
+
+	typedef Line<float2> Line2D;
+	typedef Line<float3> Line3D;
 
 	// Allow these functions to receive a specified return type
 	// such that we can do something like applying functors on floats
