@@ -241,14 +241,14 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
 		uintptr_t& stream,
-		Stream<SerializeOmitField> omit_fields = { nullptr, 0 },
+		Stream<SerializeOmitField> omit_fields = {},
 		bool write_tags = false
-	); 
+	);
 
 	ECSENGINE_API size_t SerializeFieldTableSize(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
-		Stream<SerializeOmitField> omit_fields = { nullptr, 0 },
+		Stream<SerializeOmitField> omit_fields = {},
 		bool write_tags = false
 	);
 

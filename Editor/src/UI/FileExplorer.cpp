@@ -1179,16 +1179,19 @@ void MeshExportSelectionAction(ActionData* action_data) {
 
 #pragma endregion
 
+struct FileExplorerDragData {
+	EditorState* editor_state;
+	// Used to know whether or not the prefab was initialized such that we don't call it multiple times
+	bool prefab_initiated;
+};
+
 static void FileExplorerDrag(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	EditorState* editor_state = (EditorState*)_data;
+	FileExplorerDragData* data = (FileExplorerDragData*)_data;
+	EditorState* editor_state = data->editor_state;
 	FileExplorerData* explorer_data = editor_state->file_explorer_data;
-	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
-		// We can start the drag for prefabs
-		PrefabStartDrag(editor_state);
-	}
-	else if (mouse->IsDown(ECS_MOUSE_LEFT)) {
+	if (mouse->IsDown(ECS_MOUSE_LEFT)) {
 		// Display the hover only if the mouse exited the action box
 		if (!IsPointInRectangle(mouse_position, position, scale)) {
 			if (!IsPrefabFileSelected(editor_state)) {
@@ -1309,6 +1312,10 @@ static void FileExplorerDrag(ActionData* action_data) {
 				}
 				explorer_data->flags = SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
 			}
+			else if (!data->prefab_initiated) {
+				PrefabStartDrag(editor_state);
+				data->prefab_initiated = true;
+			}
 		}
 	}
 	else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -1316,7 +1323,9 @@ static void FileExplorerDrag(ActionData* action_data) {
 			explorer_data->flags = SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_MOVE_SELECTED_FILES);
 			explorer_data->flags = ClearFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
 		}
-		PrefabEndDrag(editor_state);
+		if (data->prefab_initiated) {
+			PrefabEndDrag(editor_state);
+		}
 	}
 
 }
@@ -2419,8 +2428,9 @@ data->file_functors.Insert(action, identifier);
 				right_click_data.state.row_count = FOLDER_RIGHT_CLICK_ROW_COUNT;
 				right_click_data.state.submenu_index = 0;
 
+				FileExplorerDragData drag_data = { _data->editor_state, false };
 				UIConfigRectangleClickable clickable_actions;
-				clickable_actions.handlers[0] = { FileExplorerDrag, _data->editor_state, 0, ECS_UI_DRAW_SYSTEM };
+				clickable_actions.handlers[0] = { FileExplorerDrag, &drag_data, sizeof(drag_data), ECS_UI_DRAW_SYSTEM };
 				clickable_actions.handlers[1] = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_SYSTEM };
 				clickable_actions.button_types[1] = ECS_MOUSE_RIGHT;
 				config->AddFlag(clickable_actions);
@@ -2599,8 +2609,9 @@ data->file_functors.Insert(action, identifier);
 					}
 				};
 				
+				FileExplorerDragData drag_data = { _data->editor_state, false };
 				UIConfigRectangleClickable clickable_actions;
-				clickable_actions.handlers[0] = { FileExplorerDrag, _data->editor_state, 0, ECS_UI_DRAW_SYSTEM };
+				clickable_actions.handlers[0] = { FileExplorerDrag, &drag_data, sizeof(drag_data), ECS_UI_DRAW_SYSTEM };
 				clickable_actions.handlers[1] = drawer->PrepareRightClickMenuHandler(
 					right_click_menu_name, 
 					&main_state, 

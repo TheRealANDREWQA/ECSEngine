@@ -1843,6 +1843,10 @@ namespace ECSEngine {
 
 		unsigned int custom_serializer_count = 0;
 		Read<true>(&data, &custom_serializer_count, sizeof(custom_serializer_count));
+		if (custom_serializer_count == 0) {
+			// This is indicative of an error
+			return field_table;
+		}
 
 		unsigned int serializer_count = SerializeCustomTypeCount();
 
@@ -2054,7 +2058,7 @@ namespace ECSEngine {
 		LinearAllocator linear_allocator(stack_allocation, stack_allocation_size);
 		if (deserialized_manager == nullptr) {
 			deserialized_manager = &temp_manager;
-			temp_manager.type_definitions.Initialize(&linear_allocator, 256);
+			temp_manager.type_definitions.Initialize(&linear_allocator, 32);
 			field_table.ToNormalReflection(&temp_manager, &linear_allocator);
 		}
 

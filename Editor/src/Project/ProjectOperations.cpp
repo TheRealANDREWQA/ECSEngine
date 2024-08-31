@@ -15,6 +15,7 @@
 #include "../Modules/ModuleFile.h"
 #include "../Modules/Module.h"
 #include "../Sandbox/SandboxFile.h"
+#include "../Editor/EditorSourceCode.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -658,6 +659,8 @@ bool OpenProject(ProjectOperationData data)
 			}
 		}
 	}
+
+	DetermineProjectSourceCodeGitDirectory(data.editor_state);
 
 	// Delete all the auxiliary build files .build, .clean, .rebuild
 	DeleteModuleFlagFiles(data.editor_state);

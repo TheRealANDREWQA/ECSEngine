@@ -151,6 +151,13 @@ static bool SaveScenePrefabChunk(SaveSceneChunkFunctionData* function_data) {
 
 // ----------------------------------------------------------------------------------------------
 
+// Determines the scene modules that should be set on the
+static Stream<SceneModule> GetSaveSceneModules(const EditorState* editor_state, AllocatorPolymorphic temporary_allocator) {
+
+}
+
+// ----------------------------------------------------------------------------------------------
+
 bool CreateEmptyScene(const EditorState* editor_state, Stream<wchar_t> path)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);

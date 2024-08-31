@@ -52,6 +52,10 @@ namespace ECSEngine {
 		bool* success = nullptr;
 		AtomicStream<LoadAssetFailure>* load_failures = nullptr;
 		Stream<wchar_t> mount_point = { nullptr, 0 };
+		// An optional lock. Can be used to synchronize the access to the resource manager when pushing the entries.
+		SpinLock* resource_manager_lock = nullptr;
+		// An optional lock. Can be used to synchronize the access to the graphics object when pushing the entries.
+		SpinLock* graphics_lock = nullptr;
 
 		// With this mask can specify which actual handles should be loaded
 		// There must be ECS_ASSET_TYPE_COUNT streams

@@ -1789,13 +1789,15 @@ public:
 	std::atomic<LOAD_EDITOR_ASSETS_STATE>* load_state;
 };
 
-static LoadAssetInfo LoadInfoFromEventData(LoadSandboxMissingAssetsEventData* event_data, Stream<wchar_t> mount_point) {
+static LoadAssetInfo LoadInfoFromEventData(EditorState* editor_state, LoadSandboxMissingAssetsEventData* event_data, Stream<wchar_t> mount_point) {
 	LoadAssetInfo info;
 
 	info.finish_semaphore = &event_data->semaphore;
 	info.load_failures = event_data->failures;
 	info.mount_point = mount_point;
 	info.success = &event_data->success;
+	info.graphics_lock = &editor_state->gpu_lock;
+	info.resource_manager_lock = &editor_state->resource_manager_lock;
 
 	return info;
 }
@@ -1835,7 +1837,7 @@ static EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 
 				ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 				GetProjectAssetsFolder(editor_state, assets_folder);
-				LoadAssetInfo load_info = LoadInfoFromEventData(data, assets_folder);
+				LoadAssetInfo load_info = LoadInfoFromEventData(editor_state, data, assets_folder);
 				LoadAssets(&data->database, editor_state->RuntimeResourceManager(), editor_state->task_manager, &load_info);
 			}
 			return true;

@@ -88,7 +88,7 @@ namespace ECSEngine {
 			ResourceManagerExDesc ex_desc;
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
-			ex_desc.push_lock = ex_data->manager_lock;
+			ex_desc.push_lock = ex_data->resource_manager_lock;
 			return resource_manager->LoadCoalescedMeshImplementationEx(meshes, metadata->scale_factor, load_descriptor, &ex_desc);
 		});
 	}
@@ -108,7 +108,7 @@ namespace ECSEngine {
 			ResourceManagerExDesc ex_desc;
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
-			ex_desc.push_lock = ex_data->manager_lock;
+			ex_desc.push_lock = ex_data->resource_manager_lock;
 			ex_desc.reference_count = ex_data->reference_count;
 			return resource_manager->LoadCoalescedMeshImplementationEx(coalesced_mesh, submeshes, metadata->scale_factor, load_descriptor, &ex_desc);
 		}));
@@ -170,7 +170,7 @@ namespace ECSEngine {
 			ResourceManagerExDesc ex_desc;
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
-			ex_desc.push_lock = ex_data->manager_lock;
+			ex_desc.push_lock = ex_data->resource_manager_lock;
 			ex_desc.reference_count = ex_data->reference_count;
 			return resource_manager->LoadTextureImplementationEx(texture, texture_descriptor, load_desc, &ex_desc);
 		});
@@ -240,7 +240,7 @@ namespace ECSEngine {
 			ResourceManagerExDesc ex_desc;
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
-			ex_desc.push_lock = ex_data->manager_lock;
+			ex_desc.push_lock = ex_data->resource_manager_lock;
 			ex_desc.reference_count = ex_data->reference_count;
 			metadata->source_code = source_code;
 			return resource_manager->LoadShaderImplementationEx(source_code, metadata->shader_type, &metadata->byte_code, compile_options, load_desc, &ex_desc);

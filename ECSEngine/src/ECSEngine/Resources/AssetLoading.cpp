@@ -138,7 +138,13 @@ namespace ECSEngine {
 
 		ControlBlockExtra extra;
 
-		// this lock is used to syncronize access to the immediate GPU context
+		// These pointers are hoisted here because they can point
+		// To locks that the user supplies in the load_info. The ones
+		// that follow are used in case the user does not supply any lock
+		SpinLock* gpu_lock_ptr;
+		SpinLock* resource_manager_lock_ptr;
+
+		// This lock is used to syncronize access to the immediate GPU context
 	private:
 		char padding[ECS_CACHE_LINE_SIZE];
 	public:
@@ -146,7 +152,7 @@ namespace ECSEngine {
 	private:
 		char padding2[ECS_CACHE_LINE_SIZE];
 	public:
-		SpinLock manager_lock;
+		SpinLock resource_manager_lock;
 	};
 
 	// It is the same for all types of preload - meshes, textures, shaders or miscs
@@ -177,7 +183,7 @@ namespace ECSEngine {
 			data.handle = handle;
 			data.database = control_block->database;
 			data.resource_manager = control_block->resource_manager;
-			data.spin_lock = &control_block->manager_lock;
+			data.spin_lock = control_block->resource_manager_lock_ptr;
 			data.type = asset_type;
 			data.data = tasks[asset_type].data;
 
@@ -205,7 +211,7 @@ namespace ECSEngine {
 
 		// Use the reference count from the database
 		CreateAssetFromMetadataExData ex_data = {
-			&data->control_block->manager_lock,
+			data->control_block->resource_manager_lock_ptr,
 			meshes->time_stamp,
 			data->control_block->load_info.mount_point,
 			data->control_block->database->GetReferenceCountStandalone(handle, ECS_ASSET_MESH)
@@ -248,7 +254,7 @@ namespace ECSEngine {
 
 		// Use the reference count from the database
 		CreateAssetFromMetadataExData ex_data = {
-			&data->control_block->manager_lock,
+			data->control_block->resource_manager_lock_ptr,
 			textures->time_stamp,
 			data->control_block->load_info.mount_point,
 			data->control_block->database->GetReferenceCountStandalone(handle, ECS_ASSET_TEXTURE)
@@ -258,7 +264,7 @@ namespace ECSEngine {
 			data->control_block->resource_manager, 
 			metadata, 
 			textures->texture,
-			&data->control_block->gpu_lock,
+			data->control_block->gpu_lock_ptr,
 			&ex_data
 		);
 		if (!success) {
@@ -290,7 +296,7 @@ namespace ECSEngine {
 
 		// Use the reference count from the database
 		CreateAssetFromMetadataExData ex_data = {
-			&data->control_block->manager_lock,
+			data->control_block->resource_manager_lock_ptr,
 			shaders->time_stamp,
 			data->control_block->load_info.mount_point,
 			data->control_block->database->GetReferenceCountStandalone(handle, ECS_ASSET_SHADER)
@@ -555,9 +561,9 @@ namespace ECSEngine {
 		misc_data_resizable.capacity = file_data.size;
 
 		// Insert the resource into the resource manager
-		data->control_block->manager_lock.Lock();
+		data->control_block->resource_manager_lock_ptr->Lock();
 		data->control_block->resource_manager->AddResource(file_path, ResourceType::Misc, &misc_data_resizable, misc_block_pointer->time_stamp);
-		data->control_block->manager_lock.Unlock();
+		data->control_block->resource_manager_lock_ptr->Unlock();
 
 		// Go through all the misc handles and set their data
 		for (size_t index = 0; index < misc_block_pointer->different_handles.size; index++) {
@@ -939,10 +945,14 @@ namespace ECSEngine {
 		}
 
 		control_block->gpu_lock.Clear();
-		control_block->manager_lock.Clear();
+		control_block->resource_manager_lock.Clear();
 		control_block->database = database;
 		control_block->resource_manager = resource_manager;
 		control_block->extra = *extra;
+
+		// Determine if the user supplied locks, else use these ones allocated
+		control_block->gpu_lock_ptr = load_info->graphics_lock != nullptr ? load_info->graphics_lock : &control_block->gpu_lock;
+		control_block->resource_manager_lock_ptr = load_info->resource_manager_lock != nullptr ? load_info->resource_manager_lock : &control_block->resource_manager_lock;
 
 		if (extra->dimension == CONTROL_BLOCK_PACKED) {
 			PackedFile* allocated_packed_file = (PackedFile*)persistent_allocator.Allocate(sizeof(PackedFile));

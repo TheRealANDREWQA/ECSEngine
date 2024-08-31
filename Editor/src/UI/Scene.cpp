@@ -140,7 +140,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 	break;
 	case ECS_TRANSFORM_SCALE:
 	{
-		float factor = 0.004f;
+		float factor = 0.006f;
 		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 			factor *= 0.2f;
 		}
@@ -978,6 +978,8 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 							&data->gizmo_translation_midpoint, 
 							&data->gizmo_rotation_midpoint
 						);
+
+						mouse->ActivateWrap(editor_state->UIGraphics()->GetWindowSize());
 					}
 				}
 			}
@@ -1153,9 +1155,12 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			if (data->cpu_framebuffer.values != nullptr) {
 				data->cpu_framebuffer.Deallocate({ nullptr });
 			}
+
 			// We need to reset any selected tool info
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 			ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+			mouse->DisableRawInput();
+			mouse->DeactivateWrap();
 		}
 
 		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
@@ -1165,7 +1170,6 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 		if (!mouse->IsReleased(ECS_MOUSE_LEFT)) {
 			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
-		mouse->DisableRawInput();
 	}
 }
 
