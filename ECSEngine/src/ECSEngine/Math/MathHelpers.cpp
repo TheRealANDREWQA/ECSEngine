@@ -97,9 +97,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	Rectangle3D GetRectangle3D(float3 center, float3 half_width, float3 half_height)
+	FullRectangle3D GetRectangle3D(float3 center, float3 half_width, float3 half_height)
 	{
-		Rectangle3D rectangle;
+		FullRectangle3D rectangle;
 
 		rectangle.top_left = center - half_width + half_height;
 		rectangle.top_right = center + half_width + half_height;
@@ -1052,6 +1052,33 @@ namespace ECSEngine {
 		}
 
 		return farthest_index;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	template<typename ValueType>
+	static ValueType ClampPointToRectangleImpl(ValueType point, const Rectangle<ValueType>& rectangle) {
+		ValueType clamped_point = point;
+
+		const size_t floating_component_count = ValueType::Count();
+		for (size_t index = 0; index < floating_component_count; index++) {
+			if (clamped_point[index] < rectangle.top_left[index]) {
+				clamped_point[index] = rectangle.top_left[index];
+			}
+			if (clamped_point[index] > rectangle.bottom_right[index]) {
+				clamped_point[index] = rectangle.bottom_right[index];
+			}
+		}
+
+		return clamped_point;
+	}
+
+	float2 ClampPointToRectangle(float2 point, const Rectangle2D& rectangle) {
+		return ClampPointToRectangleImpl(point, rectangle);
+	}
+
+	float3 ClampPointToRectangle(float3 point, const Rectangle3D& rectangle) {
+		return ClampPointToRectangleImpl(point, rectangle);
 	}
 
 	// --------------------------------------------------------------------------------------------------

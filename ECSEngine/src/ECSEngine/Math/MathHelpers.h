@@ -131,7 +131,7 @@ namespace ECSEngine {
 	// Positions will be filled with the 4 corners of the rectangle
 	ECSENGINE_API void ObliqueRectangle(float2* positions, float2 a, float2 b, float thickness);
 
-	ECSENGINE_API Rectangle3D GetRectangle3D(float3 center, float3 half_width, float3 half_height);
+	ECSENGINE_API FullRectangle3D GetRectangle3D(float3 center, float3 half_width, float3 half_height);
 
 	// Uses SIMD operations
 	ECSENGINE_API float3 CalculateFloat3Midpoint(Stream<float3> values);
@@ -275,5 +275,9 @@ namespace ECSEngine {
 	// This version does not use SIMD to compute the farthest point
 	// Returns the index of the point
 	ECSENGINE_API size_t ComputeFarthestPointFromScalar(Stream<float3> points, float3 point);
+
+	ECSENGINE_API float2 ClampPointToRectangle(float2 point, const Rectangle2D& rectangle);
+
+	ECSENGINE_API float3 ClampPointToRectangle(float3 point, const Rectangle3D& rectangle);
 
 }
