@@ -89,6 +89,16 @@ struct EditorState {
 		return allocator;
 	}
 
+	ECS_INLINE void AcquireFrameLocks() {
+		gpu_lock.Lock();
+		resource_manager_lock.Lock();
+	}
+
+	ECS_INLINE void ReleaseFrameLocks() {
+		gpu_lock.Unlock();
+		resource_manager_lock.Unlock();
+	}
+
 	EditorSettings settings;
 	EditorStateTick editor_tick;
 	ECSEngine::Tools::UISystem* ui_system;
@@ -107,6 +117,12 @@ struct EditorState {
 	ECSEngine::Graphics* graphics;
 	ECSEngine::AssetDatabase* asset_database;
 	ECSEngine::ResourceManager* runtime_resource_manager;
+
+	// These hold information about the source code branch, which are helpful when saving scenes
+	// In order to be replayed at a later time. Updated periodically
+	ECSEngine::Stream<wchar_t> source_code_git_directory;
+	ECSEngine::Stream<char> source_code_branch_name;
+	ECSEngine::Stream<char> source_code_commit_name;
 	
 	// We keep these separately since we don't want to clutter the
 	// ProjectModules with a "fake" module that needs special treatment
@@ -189,6 +205,17 @@ struct EditorState {
 	// Value such that all sandboxes receive the same input
 	ECSEngine::Timer frame_timer;
 	float frame_delta_time;
+
+private:
+	char padding[ECS_CACHE_LINE_SIZE];
+
+public:
+	// These are locks that are used in conjunction with the LoadAssets such that background loading threads
+	// Don't interfere with the main thread. For an easier management, the main thread will lock each individual lock
+	// For the entire duration of the frame, since it allows the main thread to not have to worry about when to lock,
+	// And there is not much of an issue if the background threads get delayed a bit.
+	ECSEngine::SpinLock gpu_lock;
+	ECSEngine::SpinLock resource_manager_lock;
 
 	// TODO: Implement an "event" like system where functions can be subscribed to certain
 	// Actions? This is helpful for less coupling between systems. At the moment, the first

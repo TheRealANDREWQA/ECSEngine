@@ -245,15 +245,17 @@ namespace ECSEngine {
         float scale_factor
     ) {
         // This is a scaling with constant factor
-        if (drag_tool->projected_direction_sign.x == FLT_MAX || drag_tool->projected_direction_sign.y == FLT_MAX) {
-            float3 axis_direction = AxisDirectionLocal(drag_tool->axis, rotation_value);
-            ChangeLineSpace(&scale_center, &axis_direction, GetCameraViewProjectionMatrix(camera));
+        if (drag_tool->axis_direction.x == FLT_MAX || drag_tool->axis_direction.y == FLT_MAX) {
+            float3 axis_direction_3D = AxisDirectionLocal(drag_tool->axis, rotation_value);
+            ChangeLineSpace(&scale_center, &axis_direction_3D, GetCameraViewProjectionMatrix(camera));
             // We need to negate the y axis
-            drag_tool->projected_direction_sign = BasicTypeSign(float2(axis_direction.x, -axis_direction.y));
+            drag_tool->axis_direction = float2(axis_direction_3D.x, -axis_direction_3D.y);
+            // Perform the normalization after eliminating the Z coordinate
+            drag_tool->axis_direction = Normalize(drag_tool->axis_direction);
         }
 
         float2 delta = { (float)mouse_texel_delta.x, (float)mouse_texel_delta.y };
-        delta *= drag_tool->projected_direction_sign * float2::Splat(scale_factor);
+        delta *= drag_tool->axis_direction * float2::Splat(scale_factor);
         return float3::Splat(delta.x + delta.y) * AxisDirection(drag_tool->axis);
     }
 

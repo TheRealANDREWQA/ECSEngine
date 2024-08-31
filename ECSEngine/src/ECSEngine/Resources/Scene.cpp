@@ -17,7 +17,7 @@ namespace ECSEngine {
 		ASSET_DATABASE_CHUNK,
 		ENTITY_MANAGER_CHUNK,
 		TIME_CHUNK,
-		MODULE_SETTINGS_CHUNK,
+		MODULES_CHUNK,
 		CHUNK_COUNT
 	};
 
@@ -27,8 +27,6 @@ namespace ECSEngine {
 		unsigned char reserved[3];
 		size_t chunk_offsets[CHUNK_COUNT + ECS_SCENE_EXTRA_CHUNKS];
 	};
-
-	typedef size_t ModuleSettingsCountType;
 
 	// ------------------------------------------------------------------------------------------------------------
 
@@ -229,63 +227,53 @@ namespace ECSEngine {
 			*load_data->speed_up_factor = world_time_values.y;
 		}
 
-		if (file_header->chunk_offsets[MODULE_SETTINGS_CHUNK] != ptr - data_start_ptr) {
+		// The modules chunk is following
+		if (file_header->chunk_offsets[MODULES_CHUNK] != ptr - data_start_ptr) {
 			// Restore the snapshot
 			database->RestoreSnapshot(asset_database_snapshot);
 			if (load_data->detailed_error_string) {
-				load_data->detailed_error_string->AddStreamAssert("The scene file is corrupted (module settings chunk)");
+				load_data->detailed_error_string->AddStreamAssert("The scene file is corrupted (modules chunk)");
 			}
 			return false;
 		}
 
-		ModuleSettingsCountType settings_count;
-		Read<true>(&ptr, &settings_count, sizeof(settings_count));
-		ECS_STACK_CAPACITY_STREAM(char, setting_name, 512);
+		// Before retrieving the modules themselves, get the source code branch and commit hash.
+		void* source_code_branch_name = nullptr;
+		unsigned short source_code_branch_name_size = 0;
+		ReferenceDataWithSizeShort<true>(&ptr, &source_code_branch_name, source_code_branch_name_size);
 
+		void* source_code_commit_hash = nullptr;
+		unsigned short source_code_commit_hash_size = 0;
+		ReferenceDataWithSizeShort<true>(&ptr, &source_code_commit_hash, source_code_commit_hash_size);
+
+		Reflection::ReflectionType scene_modules_type;
+		ECS_ASSERT(load_data->reflection_manager->TryGetType(STRING(SceneModule), scene_modules_type), "Loading scene requires the ReflectionManager to have the type SceneModules reflected!");
 		if (load_data->scene_modules.IsInitialized()) {
-			load_data->scene_modules.AssertNewItems(settings_count);
-			for (size_t index = 0; index < settings_count; index++) {
-				unsigned short name_size = 0;
-				ReadWithSizeShort<true>(&ptr, setting_name.buffer, name_size);
-				Stream<char> allocated_name;
-				allocated_name.InitializeAndCopy(load_data->scene_modules_allocator, Stream<char>(setting_name.buffer, name_size));
+			ECS_ASSERT(load_data->scene_modules_allocator.allocator != nullptr, "Loading a scene with module retrieval but no allocator is specified.");
 
-				Reflection::ReflectionType setting_type;
-				if (load_data->reflection_manager->TryGetType(allocated_name, setting_type)) {
-					SceneModuleSetting setting;
-					setting.name = allocated_name;
-					setting.data = Allocate(load_data->scene_modules_allocator, Reflection::GetReflectionTypeByteSize(&setting_type));
+			DeserializeOptions options;
+			options.backup_allocator = load_data->scene_modules_allocator;
+			options.field_allocator = load_data->scene_modules_allocator;
+			options.default_initialize_missing_fields = true;
 
-					DeserializeOptions deserialize_options;
-					deserialize_options.backup_allocator = load_data->scene_modules_allocator;
-					deserialize_options.error_message = load_data->detailed_error_string;
-					deserialize_options.field_allocator = load_data->scene_modules_allocator;
-					ECS_DESERIALIZE_CODE deserialize_code = Deserialize(load_data->reflection_manager, &setting_type, setting.data, ptr, &deserialize_options);
-					if (deserialize_code != ECS_DESERIALIZE_OK) {
-						database->RestoreSnapshot(asset_database_snapshot);
-						return false;
-					}
-
-					load_data->scene_modules.Add(setting);
+			SceneModules scene_modules;
+			ECS_DESERIALIZE_CODE deserialize_status = Deserialize(load_data->reflection_manager, &scene_modules_type, &scene_modules, ptr, &options);
+			if (deserialize_status != ECS_DESERIALIZE_OK) {
+				if (load_data->detailed_error_string) {
+					load_data->detailed_error_string->AddStreamAssert("The scene file is corrupted - could not deserialize the modules (module chunk)");
 				}
-				else {
-					database->RestoreSnapshot(asset_database_snapshot);
-					if (load_data->detailed_error_string) {
-						ECS_FORMAT_TEMP_STRING(message, "There is no reflection type for module setting type {#}", allocated_name);
-						load_data->detailed_error_string->AddStreamAssert(message);
-					}
-					return false;
-				}
+				return false;
 			}
+
+			load_data->scene_modules.AddStream(scene_modules.values);
+			// Write the source code info. Don't forget to allocate from the scene modules allocator
+			load_data->source_code_branch_name = { source_code_branch_name, source_code_branch_name_size };
+			load_data->source_code_branch_name = load_data->source_code_branch_name.Copy(load_data->scene_modules_allocator);
+			load_data->source_code_commit_hash = { source_code_commit_hash, source_code_commit_hash_size };
+			load_data->source_code_commit_hash = load_data->source_code_commit_hash.Copy(load_data->scene_modules_allocator);
 		}
 		else {
-			if (MODULE_SETTINGS_CHUNK < CHUNK_COUNT - 1) {
-				// We need to skip this data
-				for (size_t index = 0; index < settings_count; index++) {
-					IgnoreWithSizeShort(&ptr);
-					IgnoreDeserialize(ptr);
-				}
-			}
+			IgnoreDeserialize(ptr);
 		}
 
 		// If there are any chunk functors specified, we should call them
@@ -461,45 +449,34 @@ namespace ECSEngine {
 
 		_stack_allocator.Clear();
 		file_write_size += sizeof(world_time_values);
-		header.chunk_offsets[MODULE_SETTINGS_CHUNK] = file_write_size;
+		header.chunk_offsets[MODULES_CHUNK] = file_write_size;
 
-		// Make a large allocation for this and assert that it fits
-		const size_t SERIALIZE_SETTING_ALLOCATION_CAPACITY = ECS_KB * 192;
-		void* serialize_setting_allocation = _stack_allocator.Allocate(SERIALIZE_SETTING_ALLOCATION_CAPACITY);
-		uintptr_t serialize_setting_allocation_ptr = (uintptr_t)serialize_setting_allocation;
-
-		ModuleSettingsCountType settings_count = save_data->scene_settings.size;
-		// Write the count at the beginning
-		Write<true>(&serialize_setting_allocation_ptr, &settings_count, sizeof(settings_count));
-
-		// Now we should write the settings chunk
-		for (size_t index = 0; index < save_data->scene_settings.size; index++) {
-			Reflection::ReflectionType setting_type;
-			if (save_data->reflection_manager->TryGetType(save_data->scene_settings[index].name, setting_type)) {
-				// Write the name before that
-				WriteWithSizeShort<true>(&serialize_setting_allocation_ptr, save_data->scene_settings[index].name);
-				ECS_ASSERT(serialize_setting_allocation_ptr - (uintptr_t)serialize_setting_allocation <= SERIALIZE_SETTING_ALLOCATION_CAPACITY);
-
-				ECS_SERIALIZE_CODE serialize_code = Serialize(
-					save_data->reflection_manager,
-					&setting_type,
-					save_data->scene_settings[index].data,
-					serialize_setting_allocation_ptr
-				);
-				if (serialize_code != ECS_SERIALIZE_OK) {
-					return false;
-				}
-
-				ECS_ASSERT(serialize_setting_allocation_ptr - (uintptr_t)serialize_setting_allocation <= SERIALIZE_SETTING_ALLOCATION_CAPACITY);
-			}
-			else {
-				// The module setting type is not reflected
-				return false;
-			}
+		// Retrieve the module serialize size firstly such that we can make a stack allocation for it and write it to the file then
+		// Use the reflection manager to write the scene modules
+		Reflection::ReflectionType scene_modules_type;
+		ECS_ASSERT(save_data->reflection_manager->TryGetType(STRING(SceneModules), scene_modules_type), "Saving scene requires the SceneModules type to be reflected!");
+		size_t serialize_modules_size = SerializeSize(save_data->reflection_manager, &scene_modules_type, &save_data->modules);
+		if (serialize_modules_size == 0) {
+			// An error has occured
+			return false;
 		}
 
-		// Write to file the settings
-		success = WriteFile(file_handle, { serialize_setting_allocation, serialize_setting_allocation_ptr - (uintptr_t)serialize_setting_allocation });
+		size_t modules_allocation_total_size = serialize_modules_size + save_data->source_code_branch_name.CopySize() + save_data->source_code_commit_hash.CopySize()
+			+ sizeof(unsigned short) * 2;
+		void* modules_allocation = _stack_allocator.Allocate(modules_allocation_total_size);
+		uintptr_t modules_allocation_ptr = (uintptr_t)modules_allocation;
+
+		// Write the source code branch and commit hash first
+		WriteWithSizeShort<true>(&modules_allocation_ptr, save_data->source_code_branch_name);
+		WriteWithSizeShort<true>(&modules_allocation_ptr, save_data->source_code_commit_hash);
+
+		ECS_SERIALIZE_CODE serialize_modules_status = Serialize(save_data->reflection_manager, &scene_modules_type, &save_data->modules, modules_allocation_ptr);
+		if (serialize_modules_status != ECS_SERIALIZE_OK) {
+			// An error has occured
+			return false;
+		}
+
+		success = WriteFile(file_handle, { modules_allocation, modules_allocation_total_size });
 		if (!success) {
 			return false;
 		}

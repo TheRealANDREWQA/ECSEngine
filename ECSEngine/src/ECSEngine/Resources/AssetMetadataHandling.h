@@ -11,7 +11,7 @@ namespace ECSEngine {
 	struct GLTFMesh;
 
 	struct CreateAssetFromMetadataExData {
-		SpinLock* manager_lock = nullptr;
+		SpinLock* resource_manager_lock = nullptr;
 		size_t time_stamp = 0;
 		Stream<wchar_t> mount_point = { nullptr, 0 };
 		

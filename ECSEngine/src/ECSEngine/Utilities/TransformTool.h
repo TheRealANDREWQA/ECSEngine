@@ -68,12 +68,12 @@ namespace ECSEngine {
 
 	struct ScaleToolDrag {
 		ECS_INLINE void Initialize() {
-			projected_direction_sign.x = FLT_MAX;
+			axis_direction.x = FLT_MAX;
 		}
 
 		// Returns true if the Init values were set to an initial value, else false
 		ECS_INLINE bool WasFirstCalled() const {
-			return projected_direction_sign.x != FLT_MAX;
+			return axis_direction.x != FLT_MAX;
 		}
 
 		ECS_AXIS axis;
@@ -82,8 +82,8 @@ namespace ECSEngine {
 		// have the same layout such as when setting the space this tool is not affected
 		ECS_TRANSFORM_SPACE space;
 	public:
-		// We need these such that we know what sign we should apply to the delta
-		float2 projected_direction_sign;
+		// This is the direction of the axis in screen space, with a normalization applied beforehand
+		float2 axis_direction;
 	};
 
 	union TransformToolDrag  {

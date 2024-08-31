@@ -84,6 +84,7 @@
     <ClInclude Include="src\UI\Inspector\InspectorAssetUtilities.h" />
     <ClInclude Include="src\Project\ProjectRenameFile.h" />
     <ClInclude Include="src\Editor\EditorSettings.h" />
+    <ClInclude Include="src\Editor\EditorSourceCode.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -159,6 +160,7 @@
     <ClCompile Include="src\UI\Inspector\InspectorAssetUtilities.cpp" />
     <ClCompile Include="src\Project\ProjectRenameFile.cpp" />
     <ClCompile Include="src\Editor\EditorSettings.cpp" />
+    <ClCompile Include="src\Editor\EditorSourceCode.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

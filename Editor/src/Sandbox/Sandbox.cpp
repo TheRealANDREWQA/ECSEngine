@@ -2469,9 +2469,9 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			ResizeSandboxRenderTextures(editor_state, sandbox_index, viewport, new_texture_size);
 		}
 
-		// Sse resource manager and graphics snapshots because the rendering operation should not modify state
-		ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(editor_state->EditorAllocator());
-		GraphicsResourceSnapshot graphics_snapshot = editor_state->RuntimeGraphics()->GetResourceSnapshot(editor_state->EditorAllocator());
+		// TODO: Are these needed anymore?
+		//ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(editor_state->EditorAllocator());
+		//GraphicsResourceSnapshot graphics_snapshot = editor_state->RuntimeGraphics()->GetResourceSnapshot(editor_state->EditorAllocator());
 		GraphicsBoundTarget bound_target = RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
 
 		EntityManager* viewport_entity_manager = sandbox->sandbox_world.entity_manager;
@@ -2510,8 +2510,8 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		auto deallocate_temp_resources_and_restore = [&]() {
 			AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
-			resource_snapshot.Deallocate(editor_allocator);
-			graphics_snapshot.Deallocate(editor_allocator);
+			//resource_snapshot.Deallocate(editor_allocator);
+			//graphics_snapshot.Deallocate(editor_allocator);
 			viewport_task_scheduler_allocator.Free();
 			runtime_query_cache_allocator.Free();
 
@@ -2595,26 +2595,26 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		sandbox->sandbox_world.SetDeltaTime(previous_sandbox_delta_time);
 
-		ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
+		//ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
 		// Restore the resource manager first
 		//editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot, &snapshot_message);
-		resource_snapshot.Deallocate(editor_state->EditorAllocator());
-		if (snapshot_message.size > 0) {
-			ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring resource manager snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
-			EditorSetConsoleError(message);
-			EditorSetConsoleError(snapshot_message);
-			snapshot_message.size = 0;
-		}
+		//resource_snapshot.Deallocate(editor_state->EditorAllocator());
+		//if (snapshot_message.size > 0) {
+		//	ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring resource manager snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
+		//	EditorSetConsoleError(message);
+		//	EditorSetConsoleError(snapshot_message);
+		//	snapshot_message.size = 0;
+		//}
 
-		// Now the graphics snapshot will be restored as well
+		//// Now the graphics snapshot will be restored as well
 		//editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
-		if (snapshot_message.size > 0) {
-			ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring runtime graphics snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
-			EditorSetConsoleError(message);
-			EditorSetConsoleError(snapshot_message);
-		}
+		//if (snapshot_message.size > 0) {
+		//	ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring runtime graphics snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
+		//	EditorSetConsoleError(message);
+		//	EditorSetConsoleError(snapshot_message);
+		//}
+		
 		RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport, bound_target);
-
 		return true;
 	}
 	else {

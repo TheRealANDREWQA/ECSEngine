@@ -151,7 +151,13 @@ enum EDITOR_SANDBOX_FLAG : size_t {
 	// This flag is used by the shared component build function to indicate
 	// That there is a pending event where build functions are considered and
 	// The sandbox should wait them
-	EDITOR_SANDBOX_FLAG_PENDING_BUILD_FUNCTIONS = 1 << 4
+	EDITOR_SANDBOX_FLAG_PENDING_BUILD_FUNCTIONS = 1 << 4,
+	// When this flag is set, running the sandbox will result in serializing the scene
+	// At the beginning of each frame. The scene is saved without any form of compression.
+	EDITOR_SANDBOX_FLAG_RECORD_STATE_FULL = 1 << 5,
+	// When this flag is set, when the sandbox starts, the scene will be serialized as a full scene,
+	// While for the next frames only the delta time and the input is written.
+	EDITOR_SANDBOX_FLAG_RECORD_STATE_TIME_ONLY = 1 << 6
 };
 
 enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char {
