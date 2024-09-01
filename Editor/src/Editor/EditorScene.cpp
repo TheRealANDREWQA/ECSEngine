@@ -152,8 +152,30 @@ static bool SaveScenePrefabChunk(SaveSceneChunkFunctionData* function_data) {
 // ----------------------------------------------------------------------------------------------
 
 // Determines the scene modules that should be set on the
-static Stream<SceneModule> GetSaveSceneModules(const EditorState* editor_state, AllocatorPolymorphic temporary_allocator) {
+static Stream<SceneModule> GetSaveSceneModules(const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) {
+	Stream<SceneModule> modules;
 
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	unsigned int module_count = sandbox->modules_in_use.size;
+	modules.Initialize(temporary_allocator, module_count);
+	// There may be deactivated modules, do not include them
+	modules.size = 0;
+
+	for (unsigned int index = 0; index < module_count; index++) {
+		if (!sandbox->modules_in_use[index].is_deactivated) {
+			SceneModule current_module;
+
+			unsigned int module_index = sandbox->modules_in_use[index].module_index;
+			const EditorModule* module = editor_state->project_modules->buffer + module_index;
+			current_module.configuration = MODULE_CONFIGURATIONS[sandbox->modules_in_use[index].module_configuration];
+			current_module.solution_path = module->solution_path;
+			current_module.library_name = module->library_name;
+
+			modules.Add(&current_module);
+		}
+	}
+
+	return modules;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -336,9 +358,9 @@ bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, 
 
 // ----------------------------------------------------------------------------------------------
 
-bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_manager, const AssetDatabaseReference* database, Stream<wchar_t> filename)
+bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_manager, const AssetDatabaseReference* database, Stream<wchar_t> filename, Stream<SceneModule> modules)
 {
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 256, ECS_MB * 8);
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
 	AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 	// Convert the asset database reference into a standalone
@@ -375,6 +397,9 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 	save_data.unique_overrides = unique_overrides;
 	save_data.shared_overrides = shared_overrides;
 	save_data.global_overrides = global_overrides;
+	save_data.modules = modules;
+	save_data.source_code_branch_name = editor_state->source_code_branch_name;
+	save_data.source_code_commit_hash = editor_state->source_code_commit_hash;
 
 	// Set the extra chunks - at the moment, only the prefab chunk is needed
 	save_data.chunk_functors[PREFAB_CHUNK_INDEX] = { SaveScenePrefabChunk, (void*)editor_state, true };
@@ -387,16 +412,18 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 
 bool SaveEditorScene(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> filename)
 {
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, filename);
+	return SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, filename, GetSaveSceneModules(editor_state, sandbox_index, &stack_allocator));
 }
 
 // ----------------------------------------------------------------------------------------------
 
 bool SaveEditorSceneRuntime(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> filename)
 {
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return SaveEditorScene(editor_state, sandbox->sandbox_world.entity_manager, &sandbox->database, filename);
+	return SaveEditorScene(editor_state, sandbox->sandbox_world.entity_manager, &sandbox->database, filename, GetSaveSceneModules(editor_state, sandbox_index, &stack_allocator));
 }
 
 // ----------------------------------------------------------------------------------------------
