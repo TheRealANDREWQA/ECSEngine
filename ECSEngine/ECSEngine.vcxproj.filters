@@ -285,6 +285,7 @@
     <ClInclude Include="src\Includes\ECSEngineColor.h" />
     <ClInclude Include="src\Includes\ECSEngineTaskTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Iterator.h" />
+    <ClInclude Include="src\ECSEngine\OS\Shell.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -459,6 +460,7 @@
     <ClCompile Include="src\ECSEngine\Math\Triangle.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Controller\FirstPerson.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Monitor.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Shell.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

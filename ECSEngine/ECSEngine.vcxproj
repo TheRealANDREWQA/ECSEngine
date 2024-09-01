@@ -290,6 +290,7 @@
     <ClInclude Include="src\ECSEngine\OS\Misc.h" />
     <ClInclude Include="src\ECSEngine\OS\Monitor.h" />
     <ClInclude Include="src\ECSEngine\OS\PhysicalMemory.h" />
+    <ClInclude Include="src\ECSEngine\OS\Shell.h" />
     <ClInclude Include="src\ECSEngine\OS\Thread.h" />
     <ClInclude Include="src\ECSEngine\OS\WithError.h" />
     <ClInclude Include="src\ECSEngine\Profiling\AllocatorProfiling.h" />
@@ -604,6 +605,7 @@
     <ClCompile Include="src\ECSEngine\OS\Misc.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Monitor.cpp" />
     <ClCompile Include="src\ECSEngine\OS\PhysicalMemory.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Shell.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Thread.cpp" />
     <ClCompile Include="src\ECSEngine\OS\WithError.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\AllocatorProfiling.cpp" />

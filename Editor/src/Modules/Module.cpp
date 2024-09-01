@@ -483,24 +483,6 @@ static void ForEachProjectModule(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-// For system() - the CRT function
-void CommandLineString(CapacityStream<char>& string, Stream<wchar_t> solution_path, Stream<char> command, Stream<char> configuration, Stream<wchar_t> log_file) {
-	string.CopyOther(CMB_BUILD_SYSTEM_PATH);
-	string.AddStream(" && ");
-	string.AddStream(CMD_BUILD_SYSTEM);
-	string.Add(' ');
-	ConvertWideCharsToASCII(solution_path, string);
-	string.Add(' ');
-	string.AddStream(command);
-	string.Add(' ');
-	string.AddStream(configuration);
-	string.Add(' ');
-	string.AddStream(CMD_BUILD_SYSTEM_LOG_FILE_COMMAND);
-	string.Add(' ');
-	ConvertWideCharsToASCII(log_file, string);
-	string[string.size] = '\0';
-}
-
 // For ShellExecute() - Win32 API
 void CommandLineString(
 	const EditorState* editor_state,
@@ -512,7 +494,6 @@ void CommandLineString(
 ) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 
-	string.CopyOther(L"/c ");
 	string.AddStream(CMD_BUILD_SYSTEM_WIDE);
 	string.Add(L' ');
 	string.AddStream(modules->buffer[module_index].solution_path);
@@ -833,40 +814,13 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 ) {
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
 
-	// Construct the system string
-#ifdef MODULE_BUILD_USING_CRT
-	ECS_STACK_CAPACITY_STREAM(char, command_string, 512);
-#else
-	ECS_STACK_CAPACITY_STREAM(wchar_t, command_string, 512);
-#endif
 
 	wchar_t _log_path[512];
 	Stream<wchar_t> log_path(_log_path, 0);
 	GetModuleBuildLogPath(editor_state, index, configuration, command, log_path);
 
-#ifdef MODULE_BUILD_USING_CRT
-	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
-	Stream<wchar_t> solution_path = modules->buffer[index].solution_path;
-	Stream<wchar_t> library_name = modules->buffer[index].library_name;
-	Stream<char> configuration = editor_state->module_configuration_definitions[(unsigned int)configuration];
-
-	CommandLineString(command_string, solution_path, command, configuration, log_path);
-#else
+	ECS_STACK_CAPACITY_STREAM(wchar_t, command_string, 512);
 	CommandLineString(editor_state, command_string, index, command, log_path, configuration);
-#endif
-
-	// Run the command
-#ifdef MODULE_BUILD_USING_CRT
-	system(command_string.buffer);
-
-	// Log the command status
-	bool succeded = PrintCommandStatus(editor_state, log_path);
-
-	if (succeded) {
-		ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} ({#}) with configuration {#} completed successfully.", command, library_name, solution_path, configuration);
-		EditorSetConsoleInfoFocus(editor_state, console_string);
-	}
-#else
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, flag_file, 256);
 	GetProjectDebugFolder(editor_state, flag_file);
@@ -879,8 +833,8 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 
 	// Ensure that the last character is a null terminator
 	ECS_ASSERT(editor_state->settings.compiler_path[editor_state->settings.compiler_path.size] == L'\0', "Editor compiler path does not end with a null terminator!");
-	HINSTANCE value = ShellExecute(NULL, L"runas", L"C:\\Windows\\System32\\cmd.exe", command_string.buffer, editor_state->settings.compiler_path.buffer, SW_HIDE);
-	if ((uint64_t)value < 32) {
+	bool success = OS::ShellRunCommand(command_string, editor_state->settings.compiler_path);
+	if (!success) {
 		if (!disable_logging) {
 			EditorSetConsoleError("An error occured when creating the command prompt that builds the module.");
 		}
@@ -902,7 +856,6 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		EditorAddEvent(editor_state, CheckBuildStatusEvent, &check_data, sizeof(check_data));
 	}
 	return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
-#endif
 }
 
 // Returns whether or not the command actually will be executed. The command can be skipped if the module is in flight

@@ -9,3 +9,4 @@
 #include "../ECSEngine/OS/Thread.h"
 #include "../ECSEngine/OS/PhysicalMemory.h"
 #include "../ECSEngine/OS/Monitor.h"
+#include "../ECSEngine/OS/Shell.h"
