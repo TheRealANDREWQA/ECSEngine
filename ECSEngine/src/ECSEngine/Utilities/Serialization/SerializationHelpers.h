@@ -684,43 +684,45 @@ namespace ECSEngine {
 					Ignore(&stream, byte_size);
 				}
 
-				// If it is a string and ends with '\0', then eliminate it
-				if (info.stream_type == Reflection::ReflectionStreamFieldType::Stream) {
-					Stream<void>* field_stream = (Stream<void>*)data;
-					field_stream->size = byte_size / info.stream_byte_size;
+				if constexpr (read_data) {
+					// If it is a string and ends with '\0', then eliminate it
+					if (info.stream_type == Reflection::ReflectionStreamFieldType::Stream) {
+						Stream<void>* field_stream = (Stream<void>*)data;
+						field_stream->size = byte_size / info.stream_byte_size;
 
-					if (info.basic_type == Reflection::ReflectionBasicFieldType::Int8) {
-						char* characters = (char*)field_stream->buffer;
-						if (field_stream->size > 0) {
-							field_stream->size -= characters[field_stream->size - 1] == '\0';
+						if (info.basic_type == Reflection::ReflectionBasicFieldType::Int8) {
+							char* characters = (char*)field_stream->buffer;
+							if (field_stream->size > 0) {
+								field_stream->size -= characters[field_stream->size - 1] == '\0';
+							}
+						}
+						else if (info.basic_type == Reflection::ReflectionBasicFieldType::Wchar_t) {
+							wchar_t* characters = (wchar_t*)field_stream->buffer;
+							if (field_stream->size > 0) {
+								field_stream->size -= characters[field_stream->size - 1] == L'\0';
+							}
 						}
 					}
-					else if (info.basic_type == Reflection::ReflectionBasicFieldType::Wchar_t) {
-						wchar_t* characters = (wchar_t*)field_stream->buffer;
-						if (field_stream->size > 0) {
-							field_stream->size -= characters[field_stream->size - 1] == L'\0';
-						}
-					}
-				}
-				// They can be safely aliased
-				else if (info.stream_type == Reflection::ReflectionStreamFieldType::CapacityStream || info.stream_type == Reflection::ReflectionStreamFieldType::ResizableStream) {
-					CapacityStream<void>* field_stream = (CapacityStream<void>*)data;
-					field_stream->size = (unsigned int)byte_size / info.stream_byte_size;
+					// They can be safely aliased
+					else if (info.stream_type == Reflection::ReflectionStreamFieldType::CapacityStream || info.stream_type == Reflection::ReflectionStreamFieldType::ResizableStream) {
+						CapacityStream<void>* field_stream = (CapacityStream<void>*)data;
+						field_stream->size = (unsigned int)byte_size / info.stream_byte_size;
 
-					if (update_stream_capacity) {
-						field_stream->capacity = field_stream->size;
-					}
-
-					if (info.basic_type == Reflection::ReflectionBasicFieldType::Int8) {
-						char* characters = (char*)field_stream->buffer;
-						if (field_stream->size > 0) {
-							field_stream->size -= characters[field_stream->size - 1] == '\0';
+						if (update_stream_capacity) {
+							field_stream->capacity = field_stream->size;
 						}
-					}
-					else if (info.basic_type == Reflection::ReflectionBasicFieldType::Wchar_t) {
-						wchar_t* characters = (wchar_t*)field_stream->buffer;
-						if (field_stream->size > 0) {
-							field_stream->size -= characters[field_stream->size - 1] == L'\0';
+
+						if (info.basic_type == Reflection::ReflectionBasicFieldType::Int8) {
+							char* characters = (char*)field_stream->buffer;
+							if (field_stream->size > 0) {
+								field_stream->size -= characters[field_stream->size - 1] == '\0';
+							}
+						}
+						else if (info.basic_type == Reflection::ReflectionBasicFieldType::Wchar_t) {
+							wchar_t* characters = (wchar_t*)field_stream->buffer;
+							if (field_stream->size > 0) {
+								field_stream->size -= characters[field_stream->size - 1] == L'\0';
+							}
 						}
 					}
 				}

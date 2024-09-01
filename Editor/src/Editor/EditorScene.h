@@ -8,6 +8,7 @@ namespace ECSEngine {
 	struct EntityManager;
 	struct AssetDatabaseReference;
 	struct AssetDatabaseReferencePointerRemap;
+	struct SceneModule;
 }
 
 // Returns true if it could create the scene, else false.
@@ -49,12 +50,13 @@ bool LoadEditorSceneCore(
 
 // Writes a combined entity_manager + database reference in a single file
 // The reason the entity manager is not const is because it will remove any empty
-// archetypes as well
+// archetypes as well. The modules array is optional.
 bool SaveEditorScene(
 	const EditorState* editor_state,
 	ECSEngine::EntityManager* entity_manager,
 	const ECSEngine::AssetDatabaseReference* database,
-	ECSEngine::Stream<wchar_t> filename
+	ECSEngine::Stream<wchar_t> filename,
+	ECSEngine::Stream<ECSEngine::SceneModule> modules = {}
 );
 
 // Saves the normal editor scene

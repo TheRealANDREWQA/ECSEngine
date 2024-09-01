@@ -41,8 +41,6 @@ namespace ECSEngine {
 		Stream<char> commit_hash;
 		// This is the configuration used for the module, i.e. Debug/Release/Distribution
 		Stream<char> configuration;
-		size_t solution_time_stamp;
-		size_t library_time_stamp;
 	};
 
 	struct ECS_REFLECT SceneModules {

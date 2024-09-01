@@ -243,7 +243,7 @@ bool SaveSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
 
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	GetSandboxScenePath(editor_state, sandbox_index, absolute_path);
-	bool success = SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, absolute_path);
+	bool success = SaveEditorScene(editor_state, sandbox_index, absolute_path);
 	if (success) {
 		sandbox->is_scene_dirty = false;
 	}
