@@ -122,7 +122,7 @@ struct EditorState {
 	// In order to be replayed at a later time. Updated periodically
 	ECSEngine::Stream<wchar_t> source_code_git_directory;
 	ECSEngine::Stream<char> source_code_branch_name;
-	ECSEngine::Stream<char> source_code_commit_name;
+	ECSEngine::Stream<char> source_code_commit_hash;
 	
 	// We keep these separately since we don't want to clutter the
 	// ProjectModules with a "fake" module that needs special treatment

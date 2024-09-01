@@ -6,6 +6,7 @@
 #include "EditorParameters.h"
 #include "EditorEvent.h"
 #include "EditorGeneralInputTick.h"
+#include "EditorSourceCode.h"
 #include "../Modules/Module.h"
 #include "../Project/ProjectFolders.h"
 #include "../Project/ProjectBackup.h"
@@ -349,6 +350,8 @@ void EditorStateProjectTick(EditorState* editor_state) {
 			ResetProjectNeedsBackup(editor_state);
 		}
 
+		TickProjectSourceCodeInfo(editor_state);
+
 		TickUpdateSandboxHIDInputs(editor_state);
 		TickModuleStatus(editor_state);
 
@@ -470,6 +473,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	debug_allocator_manager_descriptor.capacity = ECS_DEBUG_ALLOCATOR_MANAGER_CAPACITY_MEDIUM;
 	debug_allocator_manager_descriptor.enable_global_write_to_file = true;
 	DebugAllocatorManagerInitialize(&debug_allocator_manager_descriptor);
+
+	InitializeProjectSourceCode(editor_state);
 
 	// Create every single member using new for easier class construction
 	editor_state->editor_tick = TickPendingTasks;
