@@ -93,7 +93,8 @@ namespace ECSEngine {
 
 }
 
-#define ECS_BIT(bit_index) (1 << bit_index)
+#define ECS_BIT(bit_index) ((uint64_t)1 << bit_index)
+#define ECS_BIT_SIGNED(bit_index) ((int64_t)1 << bit_index)
 
 #define ECS_FILE_LINE __FILE__, (unsigned int)__LINE__
 #define ECS_LOCATION __builtin_FILE(), __builtin_FUNCTION(), __builtin_LINE()

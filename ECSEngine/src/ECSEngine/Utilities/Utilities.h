@@ -513,6 +513,24 @@ namespace ECSEngine {
 		}
 	}
 
+	// Returns true if the given extended value belongs in the specified integer range, else false
+	template<typename Integer>
+	ECS_INLINE bool EnsureUnsignedIntegerIsInRange(size_t value) {
+		Integer min;
+		Integer max;
+		IntegerRange<Integer>(min, max);
+		return value <= (size_t)max;
+	}
+
+	// Returns true if the given extended value belongs in the specified integer range, else false
+	template<typename Integer>
+	ECS_INLINE bool EnsureSignedIntegerIsInRange(int64_t value) {
+		Integer min;
+		Integer max;
+		IntegerRange<Integer>(min, max);
+		return (int64_t)min <= value && value <= (int64_t)max;
+	}
+
 	// Doubles, floats and ints
 	template<typename FundamentalType>
 	ECS_INLINE FundamentalType FundamentalTypeMin() {
