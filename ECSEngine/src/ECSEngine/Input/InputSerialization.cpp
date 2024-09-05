@@ -8,6 +8,9 @@ namespace ECSEngine {
 
 	// Pad the struct and only write the first 14 bytes
 	struct SerializeMouse {
+		// All 3 integers are serialized using variable length serialization
+		// To reduce the memory consumption.
+
 		int x_position;
 		int y_position;
 		int mouse_wheel;
@@ -26,8 +29,13 @@ namespace ECSEngine {
 		unsigned short queue_count;
 	};
 
-	void SerializeMouseInput(uintptr_t& buffer, const Mouse* state)
+	bool SerializeMouseInput(uintptr_t& buffer, const Mouse* state, size_t buffer_capacity)
 	{
+		const size_t WRITE_SIZE = 14 * sizeof(char);
+		if (buffer_capacity < WRITE_SIZE) {
+			return false;
+		}
+
 		SerializeMouse* serialize_mouse = (SerializeMouse*)buffer;
 		serialize_mouse->left_button = state->IsDown(ECS_MOUSE_LEFT);
 		serialize_mouse->right_button = state->IsDown(ECS_MOUSE_RIGHT);
@@ -38,15 +46,16 @@ namespace ECSEngine {
 		serialize_mouse->y_position = state->GetPosition().y;
 		serialize_mouse->mouse_wheel = state->GetScrollValue();
 
-		memcpy((void*)buffer, serialize_mouse, 14);
+		memcpy((void*)buffer, serialize_mouse, WRITE_SIZE);
 
 		// Update the value of the buffer
-		buffer += 14;
+		buffer += WRITE_SIZE;
+		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	void SerializeKeyboardInput(uintptr_t& buffer, const Keyboard* state)
+	bool SerializeKeyboardInput(uintptr_t& buffer, const Keyboard* state, size_t buffer_capacity)
 	{
 		// Blit the state, then the boolean flag and the queue count
 		Write<true>(&buffer, state->m_states, sizeof(state->m_states));
@@ -54,23 +63,27 @@ namespace ECSEngine {
 		unsigned short queue_size = (unsigned short)state->m_character_queue.GetSize();
 		Write<true>(&buffer, &queue_size, sizeof(queue_size));
 		state->m_character_queue.CopyTo(buffer);
+		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	void SerializeInput(
+	bool SerializeInput(
 		uintptr_t& buffer, 
 		const Mouse* mouse,
-		const Keyboard* keyboard
+		const Keyboard* keyboard,
+		size_t buffer_capacity
 	)
 	{
-		SerializeMouseInput(buffer, mouse);
-		SerializeKeyboardInput(buffer, keyboard);
+		if (!SerializeMouseInput(buffer, mouse, buffer_capacity)) {
+			return false;
+		}
+		return SerializeKeyboardInput(buffer, keyboard, buffer_capacity);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	void DeserializeMouseInput(uintptr_t& buffer, Mouse* new_state)
+	bool DeserializeMouseInput(uintptr_t& buffer, Mouse* new_state, size_t buffer_capacity)
 	{
 		SerializeMouse* data = (SerializeMouse*)buffer;
 		new_state->SetButton(ECS_MOUSE_LEFT, (ECS_BUTTON_STATE)data->left_button);
@@ -83,11 +96,13 @@ namespace ECSEngine {
 		
 		// Only the add the actual write part
 		buffer += 14;
+
+		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	void DeserializeKeyboardInput(uintptr_t& buffer, Keyboard* keyboard_state)
+	bool DeserializeKeyboardInput(uintptr_t& buffer, Keyboard* keyboard_state, size_t buffer_capacity)
 	{
 		SerializeKeyboard* data = (SerializeKeyboard*)buffer;
 		buffer += sizeof(*data);
@@ -103,18 +118,23 @@ namespace ECSEngine {
 		keyboard_state->m_character_queue.ResizeNoCopy(data->queue_count);
 		memcpy(keyboard_state->m_character_queue.GetQueue()->buffer, (void*)buffer, sizeof(char) * data->queue_count);
 		buffer += sizeof(char) * data->queue_count;
+
+		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	void DeserializeInput(
+	bool DeserializeInput(
 		uintptr_t& buffer, 
 		Mouse* mouse_state,
-		Keyboard* keyboard_state
+		Keyboard* keyboard_state,
+		size_t buffer_capacity
 	)
 	{
-		DeserializeMouseInput(buffer, mouse_state);
-		DeserializeKeyboardInput(buffer, keyboard_state);
+		if (!DeserializeMouseInput(buffer, mouse_state, buffer_capacity)) {
+			return false;
+		}
+		return DeserializeKeyboardInput(buffer, keyboard_state, buffer_capacity);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------

@@ -915,7 +915,6 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 		// Disable for this sandbox the selectable axes from keyboard hotkeys
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		data->was_keyboard_transform_on_click = sandbox->transform_display_axes;
 		sandbox->transform_display_axes = false;
 		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 
@@ -1223,6 +1222,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			left_clickable_data.click_ui_position = { FLT_MAX, FLT_MAX };
 			left_clickable_data.is_selection_mode = false;
 			left_clickable_data.tool_axis = ECS_AXIS_COUNT;
+			left_clickable_data.was_keyboard_transform_on_click = sandbox->transform_display_axes;
 			// We need to handle the event at the system level, such as to not affect the UI rendering
 			UIActionHandler selection_handler = { SceneLeftClickableAction, &left_clickable_data, sizeof(left_clickable_data), ECS_UI_DRAW_SYSTEM };
 			drawer.SetWindowClickable(&selection_handler);

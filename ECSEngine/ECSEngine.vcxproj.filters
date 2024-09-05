@@ -286,6 +286,7 @@
     <ClInclude Include="src\Includes\ECSEngineTaskTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Iterator.h" />
     <ClInclude Include="src\ECSEngine\OS\Shell.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -461,6 +462,7 @@
     <ClCompile Include="src\ECSEngine\Input\Controller\FirstPerson.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Monitor.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Shell.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />
