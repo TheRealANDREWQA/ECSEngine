@@ -492,6 +492,10 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < other->m_pushed_character_count; index++) {
 			m_character_queue.Push(other->m_character_queue.PushPeekByIndex(index));
 		}
+		m_pushed_character_count = other->m_pushed_character_count;
+		// And update the alphanumeric keys as well
+		m_process_characters = other->m_process_characters;
+		m_alphanumeric_keys.CopyOther(other->m_alphanumeric_keys);
 	}
 
 	ECS_BUTTON_STATE Keyboard::GetAlphanumericKey(ECS_KEY key) const
@@ -526,6 +530,15 @@ namespace ECSEngine {
 		}
 
 		return false;
+	}
+
+	void GetKeyboardButtonDelta(const Keyboard* previous_state, const Keyboard* current_state, CapacityStream<ECS_KEY>& keys) 
+	{
+		for (size_t index = 0; index < ECS_KEY_COUNT; index++) {
+			if (previous_state->IsDown((ECS_KEY)index) != current_state->IsDown((ECS_KEY)index)) {
+				keys.AddAssert((ECS_KEY)index);
+			}
+		}
 	}
 
 }

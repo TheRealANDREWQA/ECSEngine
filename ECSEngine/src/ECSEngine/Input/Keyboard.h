@@ -245,5 +245,9 @@ namespace ECSEngine {
         // States even when recording characters.
         CapacityStream<AlphanumericKey> m_alphanumeric_keys;
 	};
+
+    // Fills in the keys which have changed their state from the previous state to the current state
+    ECSENGINE_API void GetKeyboardButtonDelta(const Keyboard* previous_state, const Keyboard* current_state, CapacityStream<ECS_KEY>& keys);
+
 }
 

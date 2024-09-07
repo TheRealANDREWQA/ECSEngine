@@ -231,6 +231,11 @@ namespace ECSEngine {
 		}
 	}
 
+	template<bool write_data, typename T>
+	ECS_INLINE size_t Write(uintptr_t* stream, const T* data) {
+		return Write<write_data>(stream, data, sizeof(*data));
+	}
+
 	ECS_INLINE size_t Write(uintptr_t* stream, const void* data, size_t data_size, bool write_data) {
 		return write_data ? Write<true>(stream, data, data_size) : Write<false>(stream, data, data_size);
 	}
@@ -307,6 +312,11 @@ namespace ECSEngine {
 			*stream += data_size;
 			return data_size;
 		}
+	}
+
+	template<bool read_data, typename T>
+	ECS_INLINE size_t Read(uintptr_t* stream, T* data) {
+		return Read<read_data>(stream, data, sizeof(*data));
 	}
 
 	ECS_INLINE size_t Read(uintptr_t* stream, void* data, size_t data_size, bool read_data) {
@@ -825,7 +835,113 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
+	// A helper function to be used for serialize functions that handles how to check the buffer capacity
+	// The helper returns true if it can continue, else false.
+	typedef bool (*SerializeBufferCapacityFunctor)(size_t current_size, size_t& buffer_capacity);
+
+	ECS_INLINE bool SerializeBufferCapacityTrue(size_t current_size, size_t& buffer_capacity) {
+		return true;
+	}
+
+	ECS_INLINE bool SerializeBufferCapacityAssert(size_t current_size, size_t& buffer_capacity) {
+		ECS_ASSERT(buffer_capacity >= current_size, "Serialize memory buffer is not large enough");
+		buffer_capacity -= current_size;
+		return true;
+	}
+
+	ECS_INLINE bool SerializeBufferCapacityBool(size_t current_size, size_t& buffer_capacity) {
+		if (buffer_capacity >= current_size) {
+			buffer_capacity -= current_size;
+			return true;
+		}
+		return false;
+	}
+
+	// Returns true if the write was performed, else false (there is not enough capacity)
+	ECS_INLINE bool WriteChecked(uintptr_t* ptr, size_t& buffer_capacity, const void* data, size_t data_size) {
+		if (buffer_capacity < data_size) {
+			return false;
+		}
+		buffer_capacity -= data_size;
+		Write<true>(ptr, data, data_size);
+		return true;
+	}
+
+	// Returns true if the write was performed, else false (there is not enough capacity)
+	template<typename T>
+	ECS_INLINE bool WriteChecked(uintptr_t* ptr, size_t& buffer_capacity, const T* data) {
+		return WriteChecked(ptr, buffer_capacity, data, sizeof(*data));
+	}
+
+	// Returns true if both writes were performed, else false (there is not enough capacity)
+	template<typename SizeType, typename DataType>
+	ECS_INLINE bool WriteCheckedWithSize(uintptr_t* ptr, size_t& buffer_capacity, const DataType* data, SizeType size) {
+		if (!WriteChecked(ptr, buffer_capacity, &size)) {
+			return false;
+		}
+		return WriteChecked(ptr, buffer_capacity, data, sizeof(*data) * (size_t)size);
+	}
+
+	// Returns true if the read was performed, else false (there is not enough capacity)
+	ECS_INLINE bool ReadChecked(uintptr_t* ptr, size_t& buffer_capacity, void* data, size_t data_size) {
+		if (buffer_capacity < data_size) {
+			return false;
+		}
+		buffer_capacity -= data_size;
+		Read<true>(ptr, data, data_size);
+		return true;
+	}
+
+	// Returns true if the read was performed, else false (there is not enough capacity)
+	template<typename T>
+	ECS_INLINE bool ReadChecked(uintptr_t* ptr, size_t& buffer_capacity, T* data) {
+		return ReadChecked(ptr, buffer_capacity, data, sizeof(*data));
+	}
+
+	// Returns true if both reads were performed, else false (there is not enough capacity)
+	// The data capacity is used to avoid writing over the allowed capacity of the data
+	template<typename SizeType, typename DataType>
+	ECS_INLINE bool ReadCheckedWithSize(uintptr_t* ptr, size_t& buffer_capacity, DataType* data, SizeType& size, size_t data_capacity) {
+		if (!ReadChecked(ptr, buffer_capacity, &size)) {
+			return false;
+		}
+		if ((size_t)size > data_capacity) {
+			return false;
+		}
+		return ReadChecked(ptr, buffer_capacity, data, (size_t)size * sizeof(*data));
+	}
+
 	// -----------------------------------------------------------------------------------------
+
+	// For an array of integers, it will write a compact delta such that it consumes at least memory.
+	// The integer byte size is the integer byte size, i.e. for int 4, bits per entry is the number of
+	// Bits the integer actually needs. It can be lower than integer_byte_size * 8, for example, when
+	// A boolean is used, a single bit suffices, or for an enum which can hold at max 10 values, 4 bits suffice.
+	// Returns the number of bytes written. If the buffer capacity is not large enough, it will return 0.
+	ECSENGINE_API size_t SerializeIntegerDelta(
+		const void* previous_data, 
+		const void* current_data,
+		size_t integer_count,
+		size_t integer_byte_size, 
+		size_t bits_per_entry,
+		uintptr_t& buffer,
+		size_t& buffer_capacity
+	);
+
+	// -----------------------------------------------------------------------------------------
+
+	// Restores the current data knowing the previous data and the serialized compact delta.
+	// Returns the number of bytes read, but if there is an error (i.e. the buffer capacity is not
+	// Large enough), it will return 0.
+	ECSENGINE_API size_t DeserializeIntegerDelta(
+		const void* previous_data,
+		void* current_data,
+		size_t integer_count,
+		size_t integer_byte_size,
+		size_t bits_per_entry,
+		uintptr_t& buffer,
+		size_t& buffer_capacity
+	);
 
 	// -----------------------------------------------------------------------------------------
 

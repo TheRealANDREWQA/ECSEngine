@@ -8,11 +8,70 @@
 
 namespace ECSEngine {
 
+	namespace Internal {
+		template<typename QueueType>
+		bool CompareQueue(const QueueType& first, const QueueType& second) {
+			if (first.GetSize() != second.GetSize()) {
+				return false;
+			}
+
+			const size_t element_size = sizeof(typename QueueType::T);
+
+			unsigned int first_start_size = ClampMax(first.m_queue.size, first.m_queue.capacity - first.m_first_item);
+			unsigned int first_end_size = ClampMax(first.m_queue.size - first_start_size, first.m_first_item);
+			unsigned int second_start_size = ClampMax(second.m_queue.size, second.m_queue.capacity - second.m_first_item);
+			unsigned int second_end_size = ClampMax(second.m_queue.size - second_start_size, second.m_first_item);
+
+			unsigned int start_size_min = min(first_start_size, second_start_size);
+			// Compare the start ranges
+			if (memcmp(first.m_queue.buffer + first.m_first_item, second.m_queue.buffer + second.m_first_item, element_size * (size_t)first_start_size) != 0) {
+				return false;
+			}
+
+			if (first_start_size < second_start_size) {
+				// Must compare the start of this instance with still the first range
+				unsigned int current_compare_count = second_start_size - first_start_size;
+				if (memcmp(first.m_queue.buffer, second.m_queue.buffer + second.m_first_item + first_start_size, element_size * (size_t)current_compare_count) != 0) {
+					return false;
+				}
+
+				// If there are still entries, compare the end ranges
+				if (second_end_size > 0) {
+					if (memcmp(first.m_queue.buffer + current_compare_count, second.m_queue.buffer, element_size * (size_t)second_end_size) != 0) {
+						return false;
+					}
+				}
+			}
+			else if (first_start_size > second_start_size) {
+				unsigned int compare_count = first_start_size - second_start_size;
+				if (memcmp(first.m_queue.buffer + first.m_first_item + second_start_size, second.m_queue.buffer, element_size * (size_t)compare_count) != 0) {
+					return false;
+				}
+
+				// If there are still entries, compare the end ranges
+				if (first_end_size > 0) {
+					if (memcmp(first.m_queue.buffer, second.m_queue.buffer + compare_count, element_size * (size_t)first_end_size) != 0) {
+						return false;
+					}
+				}
+			}
+			else {
+				// Both are equal, compare the end ranges
+				if (memcmp(first.m_queue.buffer, second.m_queue.buffer, element_size * (size_t)second_end_size) != 0) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+	}
+
 	// Does not check to see if it goes out of boundaries
 	// It is already circular
 	template<typename T>
 	struct Queue {
-	public:
+		typedef T T;
+
 		Queue() : m_queue(nullptr, 0, 0), m_first_item(0) {}
 		Queue(void* buffer, size_t capacity) {
 			InitializeFromBuffer(buffer, capacity);
@@ -44,6 +103,10 @@ namespace ECSEngine {
 				unsigned int second_copy_count = GetSize() - first_copy_count;
 				memcpy(memory, m_queue.buffer, MemoryOf(second_copy_count));
 			}
+		}
+
+		ECS_INLINE bool Compare(const Queue<T>& other) const {
+			return Internal::CompareQueue(*this, other);
 		}
 
 		ECS_INLINE bool Peek(T& element) const {
@@ -310,7 +373,8 @@ namespace ECSEngine {
 
 	template<typename T>
 	struct ResizableQueue {
-	public:
+		typedef T T;
+
 		ResizableQueue() : m_first_item(0) {}
 		ResizableQueue(AllocatorPolymorphic allocator, size_t capacity) : m_queue(allocator, capacity), m_first_item(0) {}
 
@@ -347,6 +411,11 @@ namespace ECSEngine {
 
 		ECS_INLINE ResizableStream<T>* GetQueue() {
 			return &m_queue;
+		}
+
+		// Returns true if both queue have the same content, else false
+		ECS_INLINE bool Compare(const ResizableQueue<T>& other) const {
+			return Internal::CompareQueue(*this, other);
 		}
 
 		ECS_INLINE bool Peek(T& element) const {
@@ -741,7 +810,7 @@ namespace ECSEngine {
 	using ThreadSafeResizableQueue = ThreadSafeQueueAdapter<T, ResizableQueue<T>>;
 
 	template<typename ElementType, typename ContainerType>
-	constexpr bool IsQueueType() {
+	ECS_INLINE constexpr bool IsQueueType() {
 		return std::is_same_v<ContainerType, Queue<ElementType>>;
 	}
 
