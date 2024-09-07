@@ -4,11 +4,18 @@
 
 namespace ECSEngine
 {
+#define EXPORT(function_name, int_type)	template ECSENGINE_API size_t function_name<false, SerializeBufferCapacityTrue>(uintptr_t&, size_t&, int_type); \
+										template ECSENGINE_API size_t function_name<false, SerializeBufferCapacityAssert>(uintptr_t&, size_t&, int_type); \
+										template ECSENGINE_API size_t function_name<false, SerializeBufferCapacityBool>(uintptr_t&, size_t&, int_type); \
+										template ECSENGINE_API size_t function_name<true, SerializeBufferCapacityTrue>(uintptr_t&, size_t&, int_type); \
+										template ECSENGINE_API size_t function_name<true, SerializeBufferCapacityAssert>(uintptr_t&, size_t&, int_type); \
+										template ECSENGINE_API size_t function_name<true, SerializeBufferCapacityBool>(uintptr_t&, size_t&, int_type);
+
 	// Use a "Unicode" like encoding, where the last bit of a byte indicates whether or not the
 	// There is a next byte. For signed integers, the last byte uses another bit to indicate whether
 	// The value is negative or not.
 
-	template<bool write_data>
+	template<bool write_data, SerializeBufferCapacityFunctor capacity_functor>
 	static size_t SerializeIntVariableLengthUnsigned(uintptr_t& ptr, size_t& buffer_capacity, size_t value) {
 		// Find the last bit set, we need to write up to its byte
 		unsigned int last_bit_set = FirstMSB64(value);
@@ -19,11 +26,12 @@ namespace ECSEngine
 			// We can write 7 value bits per byte
 			while (last_bit_set >= 7) {
 				if constexpr (write_data) {
-					ECS_ASSERT(buffer_capacity > 0, "Variable length integer encoding failed: no more buffer capacity.");
+					if (!capacity_functor(1, buffer_capacity)) {
+						return 0;
+					}
 					unsigned char* byte = (unsigned char*)ptr;
 					*byte = ECS_BIT(7) | (unsigned char)value;
 					ptr += 1;
-					buffer_capacity--;
 				}
 				last_bit_set -= 7;
 				value >>= 7;
@@ -33,17 +41,20 @@ namespace ECSEngine
 
 		// There is one more byte to write
 		if constexpr (write_data) {
-			ECS_ASSERT(buffer_capacity > 0, "Variable length integer encoding failed: no more buffer capacity.");
+			if (!capacity_functor(1, buffer_capacity)) {
+				return 0;
+			}
 			unsigned char* byte = (unsigned char*)ptr;
 			*byte = (unsigned char)value;
 			ptr += 1;
-			buffer_capacity--;
 		}
 		byte_count++;
 		return byte_count;
 	}
 
-	template<bool write_data>
+	EXPORT(SerializeIntVariableLengthUnsigned, size_t);
+
+	template<bool write_data, SerializeBufferCapacityFunctor capacity_functor>
 	static size_t SerializeIntVariableLengthSigned(uintptr_t& ptr, size_t& buffer_capacity, int64_t value) {
 		int64_t extended_value = value;
 		int last_bit = -1;
@@ -71,11 +82,12 @@ namespace ECSEngine
 		if (last_bit >= 7) {
 			while (last_bit >= 7) {
 				if constexpr (write_data) {
-					ECS_ASSERT(buffer_capacity > 0, "Variable length integer encoding failed: no more buffer capacity.");
+					if (!capacity_functor(1, buffer_capacity)) {
+						return 0;
+					}
 					char* byte = (char*)ptr;
 					*byte = ECS_BIT_SIGNED(7) | (char)extended_value;
 					ptr += 1;
-					buffer_capacity--;
 				}
 				last_bit -= 7;
 				extended_value >>= 7;
@@ -86,11 +98,12 @@ namespace ECSEngine
 		// Check to see if the last bit is 6, for that case, we must write another byte
 		if (last_bit == 6) {
 			if constexpr (write_data) {
-				ECS_ASSERT(buffer_capacity > 0, "Variable length integer encoding failed: no more buffer capacity.");
+				if (!capacity_functor(1, buffer_capacity)) {
+					return 0;
+				}
 				char* byte = (char*)ptr;
 				*byte = ECS_BIT_SIGNED(7) | (char)extended_value;
 				ptr += 1;
-				buffer_capacity--;
 			}
 			// Here, the shift must be done with a 7 as well, in order for the last bit
 			// To be completely removed.
@@ -100,20 +113,25 @@ namespace ECSEngine
 
 		// Write the last byte
 		if constexpr (write_data) {
-			ECS_ASSERT(buffer_capacity > 0, "Variable length integer encoding failed: no more buffer capacity.");
+			if (!capacity_functor(1, buffer_capacity)) {
+				return 0;
+			}
 			char* byte = (char*)ptr;
 			// Make sure to zero out the MSB, since it may be 1 with signed integers
 			*byte = (sign_bit | (char)extended_value) & (~(ECS_BIT_SIGNED(7)));
 			ptr += 1;
-			buffer_capacity--;
 		}
 		byte_count++;
 		return byte_count;
 	}
 
-	template<bool read_data>
+	EXPORT(SerializeIntVariableLengthSigned, int64_t);
+
+	template<bool read_data, SerializeBufferCapacityFunctor capacity_functor>
 	static size_t DeserializeIntVariableLengthUnsigned(uintptr_t& ptr, size_t& buffer_capacity, size_t& value) {
-		ECS_ASSERT(buffer_capacity > 0, "Variable length integer decoding failed: no more buffer capacity.");
+		if (!capacity_functor(1, buffer_capacity)) {
+			return 0;
+		}
 
 		uintptr_t initial_ptr = ptr;
 
@@ -131,20 +149,24 @@ namespace ECSEngine
 			bytes++;
 			current_byte = *bytes;
 			ptr++;
-			buffer_capacity--;
-			ECS_ASSERT(buffer_capacity > 0, "Variable length integer decoding failed: no more buffer capacity.");
+			if (!capacity_functor(1, buffer_capacity)) {
+				return 0;
+			}
 		}
 
 		// Perform one more iteration
 		value |= (size_t)current_byte << shift_count;
 		ptr++;
-		buffer_capacity--;
 		return ptr - initial_ptr;
 	}
 
-	template<bool read_data>
+	EXPORT(DeserializeIntVariableLengthUnsigned, size_t&);
+
+	template<bool read_data, SerializeBufferCapacityFunctor capacity_functor>
 	static size_t DeserializeIntVariableLengthSigned(uintptr_t& ptr, size_t& buffer_capacity, int64_t& value) {
-		ECS_ASSERT(buffer_capacity > 0, "Variable length integer decoding failed: no more buffer capacity.");
+		if (!capacity_functor(1, buffer_capacity)) {
+			return 0;
+		}
 
 		uintptr_t initial_ptr = ptr;
 
@@ -166,8 +188,9 @@ namespace ECSEngine
 			bytes++;
 			current_byte = *bytes;
 			ptr++;
-			buffer_capacity--;
-			ECS_ASSERT(buffer_capacity > 0, "Variable length integer decoding failed: no more buffer capacity.");
+			if (!capacity_functor(1, buffer_capacity)) {
+				return 0;
+			}
 		}
 
 		const int64_t VALUE_BIT_COUNT = sizeof(value) * 8;
@@ -182,67 +205,10 @@ namespace ECSEngine
 			value >>= VALUE_BIT_COUNT - shift_count;
 		}
 		ptr++;
-		buffer_capacity--;
-
+		
 		return ptr - initial_ptr;
 	}
 
-	template<bool write_data, typename IntType>
-	size_t SerializeIntVariableLength(uintptr_t& ptr, IntType value) {
-		size_t buffer_capacity = ULLONG_MAX;
-		return SerializeIntVariableLength<write_data, IntType>(ptr, buffer_capacity, value);
-	}
-
-	template<bool write_data, typename IntType>
-	size_t SerializeIntVariableLength(uintptr_t& ptr, size_t& buffer_capacity, IntType value) {
-		if constexpr (std::is_unsigned_v<IntType>) {
-			return SerializeIntVariableLengthUnsigned<write_data>(ptr, buffer_capacity, value);
-		}
-		else {
-			return SerializeIntVariableLengthSigned<write_data>(ptr, buffer_capacity, value);
-		}
-	}
-
-#define EXPORT_SERIALIZE(int_type)	template ECSENGINE_API size_t SerializeIntVariableLength<false, int_type>(uintptr_t&, int_type); \
-									template ECSENGINE_API size_t SerializeIntVariableLength<true, int_type>(uintptr_t&, int_type); \
-									template ECSENGINE_API size_t SerializeIntVariableLength<false, int_type>(uintptr_t&, size_t&, int_type); \
-									template ECSENGINE_API size_t SerializeIntVariableLength<true, int_type>(uintptr_t&, size_t&, int_type);
-
-	ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT_SERIALIZE);
-
-#undef EXPORT_SERIALIZE
-
-	template<bool read_data, typename IntType>
-	size_t DeserializeIntVariableLength(uintptr_t& ptr, IntType& value, bool& is_out_of_range) {
-		size_t buffer_capacity = ULLONG_MAX;
-		return DeserializeIntVariableLength<read_data, IntType>(ptr, buffer_capacity, value, is_out_of_range);
-	}
-
-	template<bool read_data, typename IntType>
-	size_t DeserializeIntVariableLength(uintptr_t& ptr, size_t& buffer_capacity, IntType& value, bool& is_out_of_range) {
-		if constexpr (std::is_unsigned_v<IntType>) {
-			size_t large_unsigned = 0;
-			size_t read_count = DeserializeIntVariableLengthUnsigned<read_data>(ptr, large_unsigned);
-			is_out_of_range = EnsureUnsignedIntegerIsInRange<IntType>(large_unsigned);
-			value = large_unsigned;
-			return read_count;
-		}
-		else {
-			int64_t large_signed = 0;
-			size_t read_count = DeserializeIntVariableLengthSigned<read_data>(ptr, large_signed);
-			is_out_of_range = EnsureSignedIntegerIsInRange<IntType>(large_signed);
-			value = large_signed;
-			return read_count;
-		}
-	}
-
-#define EXPORT_DESERIALIZE(int_type)	template ECSENGINE_API size_t DeserializeIntVariableLength<false, int_type>(uintptr_t&, int_type&, bool&); \
-										template ECSENGINE_API size_t DeserializeIntVariableLength<true, int_type>(uintptr_t&, int_type&, bool&); \
-										template ECSENGINE_API size_t DeserializeIntVariableLength<false, int_type>(uintptr_t&, size_t&, int_type&, bool&); \
-										template ECSENGINE_API size_t DeserializeIntVariableLength<true, int_type>(uintptr_t&, size_t&, int_type&, bool&);
-
-	ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT_DESERIALIZE);
-
-#undef EXPORT_DESERIALIZE
+	EXPORT(DeserializeIntVariableLengthSigned, int64_t&);
 
 }

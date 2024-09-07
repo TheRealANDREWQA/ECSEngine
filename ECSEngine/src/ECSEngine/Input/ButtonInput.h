@@ -55,6 +55,17 @@ namespace ECSEngine {
 			memset(m_states, ECS_BUTTON_RAISED, sizeof(m_states));
 		}
 
+		// Transitions a button from its current down to up or vice versa state.
+		ECS_INLINE void FlipButton(ButtonType button) {
+			ECS_BUTTON_STATE current_state = Get(button);
+			if (current_state == ECS_BUTTON_PRESSED || current_state == ECS_BUTTON_HELD) {
+				SetButton(button, ECS_BUTTON_RELEASED);
+			}
+			else {
+				SetButton(button, ECS_BUTTON_PRESSED);
+			}
+		}
+
 		// Updates the state of a button
 		ECS_INLINE void UpdateButton(ButtonType button, bool is_released) {
 			ECS_BUTTON_STATE current_state = Get(button);

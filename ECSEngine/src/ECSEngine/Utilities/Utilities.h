@@ -723,4 +723,127 @@ namespace ECSEngine {
 		DeallocateEx(temporary_allocator, allocation);
 	}
 
+	// A helper function that helps you write an entry with an arbitrary number of bits.
+	// The functor receives as parameters (size_t index, void* entry) where entry is a byte aligned value
+	// That will be properly written afterwards. The entry_bit_count must be at max the bit count of the largest integer.
+	// Returns the number of bytes written.
+	template<typename Functor>
+	size_t WriteBits(void* bits, size_t entry_bit_count, size_t entry_count, Functor&& functor) {
+		ECS_ASSERT(entry_bit_count <= sizeof(size_t) * 8);
+		unsigned char* bytes = (unsigned char*)bits;
+		size_t byte_index = 0;
+		unsigned char shift_count = 0;
+		
+		size_t functor_value = 0;
+		for (size_t index = 0; index < entry_count; index++) {
+			if (shift_count == 0) {
+				bytes[byte_index] = 0;
+			}
+
+			functor(index, &functor_value);
+			size_t current_bit_count = entry_bit_count;
+			// Write the first bits first into the available byte and if the space
+			// Is not enough, then continue
+			unsigned char first_byte_remaining_bits = 8 - shift_count;
+			bytes[byte_index] |= (unsigned char)functor_value << shift_count;
+			shift_count += current_bit_count;
+			if (shift_count >= 8) {
+				byte_index++;
+				shift_count = 0;
+				current_bit_count -= first_byte_remaining_bits;
+			}
+			else
+			{
+				current_bit_count -= (size_t)first_byte_remaining_bits >= current_bit_count ? 0 : current_bit_count - (size_t)first_byte_remaining_bits;
+			}
+			functor_value >>= first_byte_remaining_bits;
+
+			// The parameter is needed only for its type, not for its value
+			auto perform_int_operation = [&current_bit_count, &functor_value, &byte_index, bytes](auto int_type) {
+				if (current_bit_count >= sizeof(decltype(int_type)) * 8) {
+					// Use the int_type
+					decltype(int_type)* unsigned_value = (decltype(int_type)*)(bytes + byte_index);
+					*unsigned_value = functor_value;
+					functor_value >>= sizeof(decltype(int_type)) * 8;
+					byte_index += sizeof(decltype(int_type));
+				}
+			};
+
+			// Start from the highest integer and go downwards to the smallest integer
+			// If it fits into the value, use it
+			perform_int_operation((unsigned int)0);
+			perform_int_operation((unsigned short)0);
+			perform_int_operation((unsigned char)0);
+
+			// If we still have bits left, write them
+			if (current_bit_count > 0) {
+				bytes[byte_index] |= (unsigned char)functor_value;
+				shift_count += (unsigned char)current_bit_count;
+			}
+		}
+
+		return shift_count > 0 ? byte_index + 1 : byte_index;
+	}
+
+	// A helper function that helps you read a packed bit stream, which was written with WriteBits.
+	// The functor is called with the parameters (size_t index, const void* value) where value is a byte
+	// Aligned value. Entry_bit_count must not be larger than the bit count of the largest integer.
+	// Returns the number of bytes read
+	template<typename Functor>
+	size_t ReadBits(const void* bits, size_t entry_bit_count, size_t entry_count, Functor&& functor) {
+		ECS_ASSERT(entry_bit_count <= sizeof(size_t) * 8);
+		const unsigned char* bytes = (const unsigned char*)bits;
+		size_t byte_index = 0;
+		unsigned char shift_count = 0;
+
+		size_t functor_value = 0;
+		for (size_t index = 0; index < entry_count; index++) {
+			size_t current_bit_count = entry_bit_count;
+			size_t functor_shift_count = 0;
+
+			// If we have remaining bits from the current byte, read them first
+			functor_value = 0;
+			if (shift_count > 0) {
+				functor_value |= (size_t)(bytes[byte_index] >> shift_count);
+				if ((size_t)(8 - shift_count) >= current_bit_count) {
+					shift_count += (unsigned char)current_bit_count;
+					current_bit_count = 0;
+				}
+				else {
+					functor_shift_count += 8 - shift_count;
+					current_bit_count = current_bit_count - functor_shift_count;
+					byte_index++;
+					shift_count = 0;
+				}
+			}
+
+			// The parameter is needed only for its type, not for its value
+			auto perform_int_operation = [&current_bit_count, &functor_value, &functor_shift_count, &byte_index, bytes](auto int_type) {
+				if (current_bit_count >= sizeof(decltype(int_type)) * 8) {
+					const decltype(int_type)* unsigned_value = (const decltype(int_type)*)(bytes + byte_index);
+					functor_value |= (size_t)*unsigned_value << functor_shift_count;
+					functor_shift_count += sizeof(decltype(int_type)) * 8;
+					current_bit_count -= sizeof(decltype(int_type)) * 8;
+					byte_index += sizeof(decltype(int_type));
+				}
+			};
+
+			// Start from the largest integer to the smallest
+			perform_int_operation((size_t)0);
+			perform_int_operation((unsigned int)0);
+			perform_int_operation((unsigned short)0);
+			perform_int_operation((unsigned char)0);
+
+			// If there are still bits left, read them
+			if (current_bit_count > 0) {
+				functor_value |= (size_t)bytes[byte_index] << functor_shift_count;
+				shift_count += (unsigned char)current_bit_count;
+			}
+
+			functor(index, &functor_value);
+		}
+
+		return shift_count > 0 ? byte_index + 1 : byte_index;
+	}
+
 }
