@@ -106,41 +106,39 @@ namespace ECSEngine {
 	ECSENGINE_API bool CloseFile(ECS_FILE_HANDLE handle, CapacityStream<void> buffering);
 
 	// Unbuffered write to a file 
-	// Returns the amount of bytes written 
-	// -1 signals an error
-	ECSENGINE_API unsigned int WriteToFile(ECS_FILE_HANDLE handle, Stream<void> data);
+	// Returns the amount of bytes written, -1 signals an error
+	ECSENGINE_API size_t WriteToFile(ECS_FILE_HANDLE handle, Stream<void> data);
 
 	// Unbuffered write to a file; reports if a failure has occured
 	ECSENGINE_API bool WriteFile(ECS_FILE_HANDLE handle, Stream<void> data);
 
 	// Buffered write to a file
-	// Returns the amount of bytes written 
-	// -1 signals an error
-	ECSENGINE_API unsigned int WriteToFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering);
+	// Returns the amount of bytes written, -1 signals an error
+	ECSENGINE_API size_t WriteToFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering);
 
 	// Buffered write to a file
 	// Reports if an error occured
 	ECSENGINE_API bool WriteFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering);
 
-	// Unbuffered read from a file - the maximum amount of data that can be read is INT_MAX
-	// Returns the amount of bytes actually read from the file - it might be less for text files or if there are fewer bytes left
-	// -1 signals an error
-	ECSENGINE_API unsigned int ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data);
+	// Unbuffered read from a file. Returns the amount of bytes actually read from the file 
+	// - it might be less for text files or if there are fewer bytes left, -1 signals an error
+	ECSENGINE_API size_t ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data);
 
-	// Unbuffered read from a file - the maximum amount of data that can be read is INT_MAX
-	// Reports if a failure has occured. This returns true even when the file doesn't have
+	// Unbuffered read from a file. Reports if a failure has occured. This returns true even when the file doesn't have
 	// Data.size bytes, but the read was successful
 	ECSENGINE_API bool ReadFile(ECS_FILE_HANDLE handle, Stream<void> data);
 
-	// Unbuffered read from a file - the maximum amount of data that can be read is INT_MAX
-	// Reports if a failure has occured. This returns true only if the read size coincides
+	// Unbuffered read from a file. Reports if a failure has occured. This returns true only if the read size coincides
 	// With the data.size
 	ECSENGINE_API bool ReadFileExact(ECS_FILE_HANDLE handle, Stream<void> data);
 
-	// Buffered read from a file - the maximum amount of data that can be read is INT_MAX
-	// Returns the amount of bytes actually read from the file - it might be less for text files or if there are fewer bytes left
-	// -1 signals an error
-	ECSENGINE_API unsigned int ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering);
+	// Buffered read from a file. Returns the amount of bytes actually read from the file 
+	// - it might be less for text files or if there are fewer bytes left, -1 signals an error
+	ECSENGINE_API size_t ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering);
+
+	// Buffered read from a file. Reports if a failure has occured. This returns true only if the read size coincides
+	// With the data.size
+	ECSENGINE_API bool ReadFileExact(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering);
 
 	// A value of -1 means error
 	ECSENGINE_API size_t GetFileCursor(ECS_FILE_HANDLE handle);

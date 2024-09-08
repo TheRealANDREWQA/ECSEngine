@@ -128,9 +128,26 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	unsigned int WriteToFile(ECS_FILE_HANDLE handle, Stream<void> data)
+	size_t WriteToFile(ECS_FILE_HANDLE handle, Stream<void> data)
 	{
-		return _write(handle, data.buffer, data.size);
+		const size_t max_write_per_call = INT_MAX;
+		size_t total_written_size = 0;
+		while (data.size > 0) {
+			size_t current_write_size = data.size > max_write_per_call ? max_write_per_call : data.size;
+			int written_size = _write(handle, data.buffer, current_write_size);
+			if (written_size == -1) {
+				return -1;
+			}
+			else if ((size_t)written_size != current_write_size) {
+				return total_written_size + (size_t)written_size;
+			}
+
+			total_written_size += current_write_size;
+			data.size -= current_write_size;
+		}
+
+		// Should be the same as with the initial data size
+		return total_written_size;
 	}
 
 	bool WriteFile(ECS_FILE_HANDLE handle, Stream<void> data)
@@ -140,7 +157,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	unsigned int WriteToFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering)
+	size_t WriteToFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering)
 	{
 		if (buffering.size + data.size < buffering.capacity) {
 			memcpy(OffsetPointer(buffering), data.buffer, data.size);
@@ -152,7 +169,7 @@ namespace ECSEngine {
 			bool success = WriteFile(handle, { buffering.buffer, buffering.size });
 			buffering.size = 0;
 			if (success) {
-				unsigned int bytes_written = WriteToFile(handle, data);
+				size_t bytes_written = WriteToFile(handle, data);
 				return bytes_written;
 			}
 			return 0;
@@ -180,29 +197,46 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	unsigned int ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data)
+	size_t ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data)
 	{
-		return _read(handle, data.buffer, data.size);
+		const size_t max_read_per_call = INT_MAX;
+		size_t total_read_size = 0;
+		while (data.size > 0) {
+			size_t current_read_size = data.size > max_read_per_call ? max_read_per_call : data.size;
+			int read_size = _read(handle, data.buffer, current_read_size);
+			if (read_size == -1) {
+				return -1;
+			}
+			else if ((size_t)read_size != current_read_size) {
+				return total_read_size + (size_t)read_size;
+			}
+
+			total_read_size += current_read_size;
+			data.size -= current_read_size;
+		}
+		
+		// Should be the same as with the initial data size
+		return total_read_size;
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
 	bool ReadFile(ECS_FILE_HANDLE handle, Stream<void> data)
 	{
-		unsigned int val = ReadFromFile(handle, data);
+		size_t val = ReadFromFile(handle, data);
 		return val != -1;
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
 	bool ReadFileExact(ECS_FILE_HANDLE handle, Stream<void> data) {
-		unsigned int val = ReadFromFile(handle, data);
-		return val == (unsigned int)data.size;
+		size_t val = ReadFromFile(handle, data);
+		return val == data.size;
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	unsigned int ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering)
+	size_t ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering)
 	{
 		if (buffering.size >= data.size) {
 			memcpy(data.buffer, OffsetPointer(buffering.buffer, buffering.capacity - buffering.size), data.size);
@@ -211,50 +245,30 @@ namespace ECSEngine {
 		}
 		else {
 			// Read any bytes left from the buffer
-			unsigned int bytes_to_copy = buffering.size;
+			size_t bytes_to_copy = buffering.size;
 			memcpy(data.buffer, OffsetPointer(buffering.buffer, buffering.capacity - buffering.size), bytes_to_copy);
-			unsigned int primary_byte_count = ReadFromFile(handle, { OffsetPointer(data.buffer, bytes_to_copy), data.size - bytes_to_copy });
-			unsigned int buffering_bytes_read = ReadFromFile(handle, { buffering.buffer, buffering.capacity });
+			size_t primary_byte_count = ReadFromFile(handle, { OffsetPointer(data.buffer, bytes_to_copy), data.size - bytes_to_copy });
+			size_t buffering_bytes_read = ReadFromFile(handle, { buffering.buffer, buffering.capacity });
 			if (buffering_bytes_read == -1) {
 				buffering.size = 0;
 			}
 			else if (buffering_bytes_read < buffering.capacity) {
 				memmove(OffsetPointer(buffering.buffer, buffering.capacity - buffering_bytes_read), buffering.buffer, buffering_bytes_read);
-				buffering.size = buffering.capacity - buffering_bytes_read;
+				buffering.size = buffering_bytes_read;
 			}
 			else {
 				buffering.size = buffering_bytes_read;
 			}
-			return bytes_to_copy + primary_byte_count != -1 ? primary_byte_count : 0;
+			if (bytes_to_copy == 0 && primary_byte_count == -1) {
+				return -1;
+			}
+			return bytes_to_copy + (primary_byte_count != -1 ? primary_byte_count : 0);
 		}
 	}
 
-	// --------------------------------------------------------------------------------------------------
-
-	bool ReadFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering)
-	{
-		if (buffering.size + data.size <= buffering.capacity) {
-			memcpy(data.buffer, OffsetPointer(buffering), data.size);
-			buffering.size += data.size;
-			return true;
-		}
-		else {
-			unsigned int bytes_to_copy = buffering.size;
-			memcpy(data.buffer, OffsetPointer(buffering), bytes_to_copy);
-			unsigned int primary_byte_count = ReadFromFile(handle, { OffsetPointer(data.buffer, bytes_to_copy), data.size - bytes_to_copy });
-			unsigned int buffering_bytes_read = ReadFromFile(handle, { buffering.buffer, buffering.capacity });
-			if (buffering_bytes_read == -1) {
-				buffering.size = buffering.capacity;
-			}
-			else if (buffering_bytes_read < buffering.capacity) {
-				memmove(OffsetPointer(buffering.buffer, buffering.capacity - buffering_bytes_read), buffering.buffer, buffering_bytes_read);
-				buffering.size = buffering.capacity - buffering_bytes_read;
-			}
-			else {
-				buffering.size = buffering_bytes_read;
-			}
-			return primary_byte_count != -1;
-		}
+	bool ReadFileExact(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering) {
+		size_t read_size = ReadFromFile(handle, data, buffering);
+		return read_size == -1 ? false : read_size == data.size;
 	}
 
 	// --------------------------------------------------------------------------------------------------s

@@ -913,35 +913,201 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	// For an array of integers, it will write a compact delta such that it consumes at least memory.
-	// The integer byte size is the integer byte size, i.e. for int 4, bits per entry is the number of
-	// Bits the integer actually needs. It can be lower than integer_byte_size * 8, for example, when
-	// A boolean is used, a single bit suffices, or for an enum which can hold at max 10 values, 4 bits suffice.
-	// Returns the number of bytes written. If the buffer capacity is not large enough, it will return 0.
-	ECSENGINE_API size_t SerializeIntegerDelta(
-		const void* previous_data, 
-		const void* current_data,
-		size_t integer_count,
-		size_t integer_byte_size, 
-		size_t bits_per_entry,
-		uintptr_t& buffer,
-		size_t& buffer_capacity
-	);
+	// These are some read/write instruments that can be used generically
+	// For write/read functions. Here is the static interface, the rest of the functions
+	// Are inherited from the appropriate writers.
+	// 
+	// For writers:
+	// Returns true if it succeeded, else false
+	// ECS_INLINE bool Write(const void* data, size_t data_size)
+	//
+	// Returns true if it succeeded, else false
+	// ECS_INLINE bool Flush()
+	//
+	// For readers:
+	// ECS_INLINE bool Read(void* data, size_t data_size) 
+	//
 
-	// -----------------------------------------------------------------------------------------
+	template<typename Concrete>
+	struct WriteInstrumentHelper {
+		// Returns true if it succeeded, else false
+		template<typename T>
+		ECS_INLINE bool Write(const T* data) {
+			return Concrete::Write(data, sizeof(*data));
+		}
 
-	// Restores the current data knowing the previous data and the serialized compact delta.
-	// Returns the number of bytes read, but if there is an error (i.e. the buffer capacity is not
-	// Large enough), it will return 0.
-	ECSENGINE_API size_t DeserializeIntegerDelta(
-		const void* previous_data,
-		void* current_data,
-		size_t integer_count,
-		size_t integer_byte_size,
-		size_t bits_per_entry,
-		uintptr_t& buffer,
-		size_t& buffer_capacity
-	);
+		// Returns true if it succeeded, else false
+		ECS_INLINE bool WriteWithSize(Stream<void> data) {
+			if (!Write(&data.size)) {
+				return false;
+			}
+			return Concrete::Write(data.buffer, data.size);
+		}
+
+		// Returns true if it succeeded, else false
+		ECS_INLINE bool WriteWithSizeShort(Stream<void> data) {
+			unsigned short unsigned_size = (unsigned short)data.size;
+			if (!Write(&unsigned_size)) {
+				return false;
+			}
+			return Concrete::Write(data.buffer, data.size);
+		}
+	};
+
+	template<typename Concrete>
+	struct ReadInstrumentHelper {
+		// Returns true if it succeeded, else false
+		template<typename T>
+		ECS_INLINE bool Read(T* data) {
+			return Concrete::Read(data, sizeof(*data));
+		}
+
+	private:
+		// Returns true if it succeeded, else false
+		// To determine if the overbound protection was triggered,
+		// Compare size with data_capacity. Data_capacity must be in bytes
+		template<typename IntegerType>
+		ECS_INLINE bool ReadWithSizeImpl(void* data, IntegerType& size, size_t data_capacity) {
+			if (!Read(&size)) {
+				return false;
+			}
+			if ((size_t)size > data_capacity) {
+				return false;
+			}
+			return Concrete::Read(data, (size_t)size);
+		}
+
+		// Returns true if it succeeded, else false
+		// Data_capacity must be expressed in number of elements
+		// Size will be the number of elements as well
+		template<typename T, typename IntegerType>
+		ECS_INLINE bool ReadWithSizeTypedImpl(T* data, IntegerType& size, size_t data_capacity) {
+			bool success = ReadWithSizeImpl(data, size, data_capacity * sizeof(*data));
+			// Must be converted to the number of elements
+			size /= (IntegerType)sizeof(*data);
+			return success;
+		}
+
+		// This variant allows you to dynamically allocate the data, using an allocator
+		// The last argument allows to limit the maximum number of bytes, by failing with a false
+		// If it surpasses that value
+		template<typename IntegerType>
+		ECS_INLINE bool ReadWithSizeImpl(Stream<void>& data, AllocatorPolymorphic allocator, size_t max_allowed_capacity = UINT64_MAX) {
+			IntegerType integer_size = 0;
+			if (!Read(&integer_size)) {
+				return false;
+			}
+			if ((size_t)integer_size > max_allowed_capacity) {
+				return false;
+			}
+			data.size = (size_t)integer_size;
+			data.buffer = AllocateEx(allocator, data.size);
+			return Concrete::Read(data.buffer, data.size);
+		}
+
+	public:
+
+		// Returns true if it succeeded, else false
+		// To determine if the overbound protection was triggered,
+		// Compare size with data_capacity. Data_capacity must be in bytes
+		ECS_INLINE bool ReadWithSize(void* data, size_t& size, size_t data_capacity) {
+			return ReadWithSizeImpl(data, size, data_capacity);
+		}
+
+		// Returns true if it succeeded, else false
+		// Data_capacity must be expressed in number of elements
+		// Size will be the number of elements as well
+		template<typename T>
+		ECS_INLINE bool ReadWithSizeTyped(T* data, size_t& size, size_t data_capacity) {
+			return ReadWithSizeTypedImpl(data, size, data_capacity);
+		}
+
+		// This variant allows you to dynamically allocate the data, using an allocator
+		// The last argument allows to limit the maximum number of bytes, by failing with a false
+		// If it surpasses that value
+		ECS_INLINE bool ReadWithSize(Stream<void>& data, AllocatorPolymorphic allocator, size_t max_allowed_capacity = UINT64_MAX) {
+			return ReadWithSizeImpl<size_t>(data, allocator, max_allowed_capacity);
+		}
+
+		// Returns true if it succeeded, else false
+		// To determine if the overbound protection was triggered,
+		// Compare size with data_capacity. Data_capacity must be in bytes
+		ECS_INLINE bool ReadWithSizeShort(void* data, unsigned short& size, size_t data_capacity) {
+			return ReadWithSizeImpl(data, size, data_capacity);
+		}
+
+		// Returns true if it succeeded, else false
+		// Data_capacity must be expressed in number of elements
+		// Size will be the number of elements as well
+		template<typename T>
+		ECS_INLINE bool ReadWithSizeShortTyped(T* data, unsigned short& size, size_t data_capacity) {
+			return ReadWithSizeTypedImpl(data, size, data_capacity);
+		}
+
+		// This variant allows you to dynamically allocate the data, using an allocator
+		// The last argument allows to limit the maximum number of bytes, by failing with a false
+		// If it surpasses that value
+		ECS_INLINE bool ReadWithSizeShort(Stream<void>& data, AllocatorPolymorphic allocator, size_t max_allowed_capacity = UINT64_MAX) {
+			return ReadWithSizeImpl<unsigned short>(data, allocator, max_allowed_capacity);
+		}
+	};
+
+	struct InMemoryWriteInstrument : WriteInstrumentHelper<InMemoryWriteInstrument> {
+		ECS_INLINE bool Write(const void* data, size_t data_size) {
+			if (*buffer_capacity < data_size) {
+				return false;
+			}
+			*buffer_capacity -= data_size;
+			ECSEngine::Write<true>(buffer, data, data_size);
+			return true;
+		}
+
+		ECS_INLINE bool Flush() {
+			return true;
+		}
+
+		uintptr_t* buffer;
+		size_t* buffer_capacity;
+	};
+
+	struct InMemoryReadInstrument : ReadInstrumentHelper<InMemoryReadInstrument> {
+		ECS_INLINE bool Read(void* data, size_t data_size) {
+			if (*buffer_capacity < data_size) {
+				return false;
+			}
+			*buffer_capacity -= data_size;
+			ECSEngine::Read<true>(buffer, data, data_size);
+			return true;
+		}
+
+		uintptr_t* buffer;
+		size_t* buffer_capacity;
+	};
+
+	struct BufferedFileWriteInstrument : WriteInstrumentHelper<BufferedFileWriteInstrument> {
+		ECS_INLINE bool Write(const void* data, size_t data_size) {
+			return WriteFile(file, { data, data_size }, buffering);
+		}
+
+		ECS_INLINE bool Flush() {
+			if (buffering.size == 0) {
+				return true;
+			}
+			return WriteFile(file, buffering);
+		}
+
+		CapacityStream<void> buffering;
+		ECS_FILE_HANDLE file;
+	};
+
+	struct BufferedFileReadInstrument : ReadInstrumentHelper<BufferedFileReadInstrument> {
+		ECS_INLINE bool Read(void* data, size_t data_size) {
+			return ReadFileExact(file, { data, data_size }, buffering);
+		}
+
+		CapacityStream<void> buffering;
+		ECS_FILE_HANDLE file;
+	};
 
 	// -----------------------------------------------------------------------------------------
 

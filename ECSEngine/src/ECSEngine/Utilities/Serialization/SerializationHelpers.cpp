@@ -1129,35 +1129,5 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	size_t SerializeIntegerDelta(
-		const void* previous_data,
-		const void* current_data,
-		size_t integer_count,
-		size_t integer_byte_size,
-		size_t bits_per_entry,
-		uintptr_t& buffer,
-		size_t& buffer_capacity
-	) {
-		ECS_ASSERT(false, "Unimplemented");
-		return 0;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	size_t DeserializeIntegerDelta(
-		const void* previous_data,
-		void* current_data,
-		size_t integer_count,
-		size_t integer_byte_size,
-		size_t bits_per_entry,
-		uintptr_t& buffer,
-		size_t& buffer_capacity
-	) {
-		ECS_ASSERT(false, "Unimplemented");
-		return 0;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
 
 }

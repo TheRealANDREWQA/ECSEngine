@@ -105,7 +105,7 @@ namespace ECSEngine {
 		}
 
 		// Increments the pointer and decrements the size with the given amount
-		// and returns the stream with those values. It does not modify this one
+		// And returns the stream with those values. It does not modify this one
 		Stream<T> AdvanceReturn(int64_t amount = 1) const {
 			Stream<T> copy = *this;
 			copy.Advance(amount);
@@ -118,23 +118,23 @@ namespace ECSEngine {
 			return result;
 		}
 
-		// it will set the size
+		// It will set the size
 		ECS_INLINE void CopyOther(const void* memory, size_t count) {
 			memcpy(buffer, memory, count * sizeof(T));
 			size = count;
 		}
 
-		// it will set the size
+		// It will set the size
 		ECS_INLINE void CopyOther(Stream<T> other) {
 			CopyOther(other.buffer, other.size);
 		}
 
-		// it will not set the size
+		// It will not set the size
 		ECS_INLINE void CopySlice(size_t starting_index, const void* memory, size_t count) {
 			memcpy(buffer + starting_index, memory, sizeof(T) * count);
 		}
 
-		// it will not set the size
+		// It will not set the size
 		ECS_INLINE void CopySlice(size_t starting_index, Stream<T> other) {
 			CopySlice(starting_index, other.buffer, other.size);
 		}
@@ -193,7 +193,7 @@ namespace ECSEngine {
 		}
 
 		// Returns the stream starting from the buffer up until the start of the subregion (even when the size of the subregion
-		// does not cover the end of the stream)
+		// Does not cover the end of the stream)
 		ECS_INLINE Stream<T> StartDifference(Stream<T> subregion) const {
 			return { buffer, (size_t)(subregion.buffer - buffer) };
 		}
@@ -599,24 +599,24 @@ namespace ECSEngine {
 			return result;
 		}
 
-		// it will set the size
+		// It will set the size
 		ECS_INLINE void CopyOther(const void* memory, unsigned int count) {
 			ECS_ASSERT(count <= capacity);
 			memcpy(buffer, memory, sizeof(T) * count);
 			size = count;
 		}
 
-		// it will set the size
+		// It will set the size
 		ECS_INLINE void CopyOther(Stream<T> other) {
 			CopyOther(other.buffer, other.size);
 		}
 
-		// it will not set the size and will not do a check
+		// It will not set the size and will not do a check
 		ECS_INLINE void CopySlice(unsigned int starting_index, const void* memory, unsigned int count) {
 			memcpy(buffer + starting_index, memory, sizeof(T) * count);
 		}
 
-		// it will not set the size and will not do a check
+		// It will not set the size and will not do a check
 		ECS_INLINE void CopySlice(unsigned int starting_index, Stream<T> other) {
 			CopySlice(starting_index, other.buffer, other.size);
 		}
@@ -857,7 +857,7 @@ namespace ECSEngine {
 		}
 
 		// Returns the stream starting from the buffer up until the start of the subregion (even when the size of the subregion
-		// does not cover the end of the capacity stream)
+		// Does not cover the end of the capacity stream)
 		ECS_INLINE CapacityStream<T> StartDifference(Stream<T> subregion) const {
 			return { buffer, (unsigned int)(subregion.buffer - buffer), capacity };
 		}
@@ -1035,7 +1035,7 @@ namespace ECSEngine {
 			return result;
 		}
 
-		// it will set the size
+		// It will set the size
 		ECS_INLINE void CopyOther(const void* memory, unsigned int count) {
 			if (count != size) {
 				ResizeNoCopy(count);
@@ -1044,17 +1044,17 @@ namespace ECSEngine {
 			size = count;
 		}
 
-		// it will set the size
+		// It will set the size
 		ECS_INLINE void CopyOther(Stream<T> other) {
 			CopyOther(other.buffer, other.size);
 		}
 
-		// it will not set the size and will not do a check
+		// It will not set the size and will not do a check
 		ECS_INLINE void CopySlice(unsigned int starting_index, const void* memory, unsigned int count) {
 			memcpy(buffer + starting_index, memory, sizeof(T) * count);
 		}
 
-		// it will not set the size and will not do a check
+		// It will not set the size and will not do a check
 		ECS_INLINE void CopySlice(unsigned int starting_index, Stream<T> other) {
 			CopySlice(starting_index, other.buffer, other.size);
 		}
@@ -1398,7 +1398,7 @@ namespace ECSEngine {
 			return (ptr <= other_ptr && other_ptr < final_ptr) && (ptr <= other_final_ptr && other_final_ptr < final_ptr);
 		}
 
-		// it will set the size
+		// It will set the size
 		ECS_INLINE void CopyOther(const void* memory, size_t memory_size) {
 			memcpy(buffer, memory, memory_size);
 			size = memory_size;
@@ -1419,7 +1419,7 @@ namespace ECSEngine {
 			return result;
 		}
 
-		// it will not set the size
+		// It will not set the size
 		ECS_INLINE void CopySlice(size_t offset, const void* memory, size_t memory_size) {
 			memcpy((void*)((size_t)buffer + offset), memory, memory_size);
 		}
@@ -1429,7 +1429,7 @@ namespace ECSEngine {
 		}
 
 		// It considers this stream to contain untyped data with the size being the count, not
-		// the byte size such that it can copy to other buffers
+		// The byte size such that it can copy to other buffers
 		ECS_INLINE void CopyTo(void* memory, size_t byte_size) const {
 			memcpy(memory, buffer, size * byte_size);
 		}
@@ -1582,7 +1582,7 @@ namespace ECSEngine {
 			ECS_ASSERT(size <= capacity, message);
 		}
 
-		// it will set the size
+		// It will set the size
 		ECS_INLINE void CopyOther(const void* memory, unsigned int memory_size) {
 			ECS_ASSERT(memory_size <= capacity);
 			memcpy(buffer, memory, memory_size);
@@ -1602,13 +1602,22 @@ namespace ECSEngine {
 			return result;
 		}
 
-		// it will not set the size
+		// It will not set the size
 		ECS_INLINE void CopySlice(unsigned int offset, const void* memory, unsigned int memory_size) {
 			memcpy((void*)((uintptr_t)buffer + offset), memory, memory_size);
 		}
 
 		ECS_INLINE void CopyTo(void* memory) const {
 			memcpy(memory, buffer, size);
+		}
+
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+			if (buffer != nullptr && capacity > 0) {
+				DeallocateEx(allocator, buffer);
+				buffer = nullptr;
+				size = 0;
+				capacity = 0;
+			}
 		}
 
 		ECS_INLINE bool Equals(Stream<void> other) const {
@@ -1737,7 +1746,7 @@ namespace ECSEngine {
 			return offset;
 		}
 
-		// it will set the size
+		// It will set the size
 		void CopyOther(const void* memory, unsigned int count) {
 			if (count != capacity) {
 				ResizeNoCopy(count);
@@ -1754,7 +1763,7 @@ namespace ECSEngine {
 			size = count;
 		}
 
-		// it will set the size
+		// It will set the size
 		ECS_INLINE void CopyOther(Stream<void> other) {
 			CopyOther(other.buffer, other.size);
 		}
@@ -1770,7 +1779,7 @@ namespace ECSEngine {
 			return result;
 		}
 
-		// it will not set the size
+		// It will not set the size
 		ECS_INLINE void CopySlice(unsigned int offset, const void* memory, unsigned int memory_size) {
 			memcpy((void*)((uintptr_t)buffer + offset), memory, memory_size);
 		}
@@ -1803,18 +1812,18 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void* Get(unsigned int index, unsigned int byte_size) {
-			return (void*)((uintptr_t)buffer + index * byte_size);
+			return (void*)((uintptr_t)buffer + (size_t)index * (size_t)byte_size);
 		}
 
 		ECS_INLINE const void* Get(unsigned int index, unsigned int byte_size) const {
-			return (const void*)((uintptr_t)buffer + index * byte_size);
+			return (const void*)((uintptr_t)buffer + (size_t)index * (size_t)byte_size);
 		}
 
 		ECS_INLINE void Reset() {
 			size = 0;
 		}
 
-		// makes sure there is enough space for extra count elements
+		// Makes sure there is enough space for extra count elements
 		void Reserve(unsigned int byte_count) {
 			unsigned int new_size = size + byte_count;
 			if (new_size > capacity) {
