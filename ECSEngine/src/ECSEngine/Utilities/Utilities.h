@@ -516,6 +516,8 @@ namespace ECSEngine {
 	// Returns true if the given extended value belongs in the specified integer range, else false
 	template<typename Integer>
 	ECS_INLINE bool EnsureUnsignedIntegerIsInRange(size_t value) {
+		static_assert(std::is_unsigned_v<Integer>, "EnsureUnsignedIntegerIsInRange template parameter must be an integer!");
+
 		Integer min;
 		Integer max;
 		IntegerRange<Integer>(min, max);
@@ -525,6 +527,8 @@ namespace ECSEngine {
 	// Returns true if the given extended value belongs in the specified integer range, else false
 	template<typename Integer>
 	ECS_INLINE bool EnsureSignedIntegerIsInRange(int64_t value) {
+		static_assert(std::is_signed_v<Integer>, "EnsureSignedIntegerIsInRange template parameter must be an integer!");
+
 		Integer min;
 		Integer max;
 		IntegerRange<Integer>(min, max);

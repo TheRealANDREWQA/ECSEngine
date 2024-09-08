@@ -40,6 +40,30 @@ namespace ECSEngine {
 	// A larger buffer needed status is returned.
 	typedef ECS_DELTA_STATE_WRITER_STATUS (*DeltaStateWriterEntireFunction)(DeltaStateWriterEntireFunctionData* data);
 
+	// The functor must know the read instrument type as well
+	struct DeltaStateReaderDeltaFunctionData {
+		void* user_data;
+		void* current_data;
+		void* read_instrument;
+		float elapsed_seconds;
+		Stream<void> header;
+	};
+
+	// The functor must know the read instrument type as well
+	struct DeltaStateReaderEntireFunctionData {
+		void* user_data;
+		void* current_data;
+		void* read_instrument;
+		float elapsed_seconds;
+		Stream<void> header;
+	};
+
+	// Should return true if it succeeded reading the values, else false
+	typedef bool (*DeltaStateReaderDeltaFunction)(DeltaStateReaderDeltaFunctionData* data);
+	
+	// Should return true if it succeeded reading the values, else false
+	typedef bool (*DeltaStateReaderEntireFunction)(DeltaStateReaderEntireFunctionData* data);
+
 	struct DeltaStateWriterInitializeInfo {
 		AllocatorPolymorphic allocator;
 		size_t user_data_size;
@@ -53,6 +77,19 @@ namespace ECSEngine {
 		// An optional field to initialize this writer with a user defined header
 		Stream<void> header = {};
 	};
+
+	struct DeltaStateEntireStateInfo {
+		unsigned int write_size;
+		// Store the elapsed seconds for the entire state in the header to allow fast seeking
+		float elapsed_seconds;
+	};
+
+	// This is the struct that is stored in delta_state_count, but it is not used directly
+	//template<typename IntegerType>
+	//struct DeltaStateDeltaInfo {
+	//	IntegerType count;
+	//	IntegerType total_byte_size;
+	//};
 
 	// A helper structure that helps in writing input serialization data in an efficient
 	struct ECSENGINE_API DeltaStateWriter {
@@ -78,19 +115,6 @@ namespace ECSEngine {
 		// Returns true if it successfully wrote the entire data into the given file, else false
 		bool WriteTo(ECS_FILE_HANDLE file) const;
 
-		// This is the struct that is stored in delta_state_count
-		template<typename IntegerType>
-		struct DeltaStateInfo {
-			IntegerType count;
-			IntegerType total_byte_size;
-		};
-
-		struct EntireStateInfo {
-			unsigned int write_size;
-			// Store the elapsed seconds for the entire state in the header to allow fast seeking
-			float elapsed_seconds;
-		};
-
 		DeltaStateWriterDeltaFunction delta_function;
 		DeltaStateWriterEntireFunction entire_function;
 		void* user_data;
@@ -108,17 +132,78 @@ namespace ECSEngine {
 		// In order to avoid adding a template parameter to the DeltaStateWriter, use an untyped
 		// Stream that has as elemetns DeltaStateInfo with a specific integer type that is given as a runtime parameter
 		ResizableStream<void> delta_state_infos;
+		// This array holds the moments in time when a delta was written
+		ResizableStream<float> delta_state_elapsed_seconds;
 		// The size of an entire state chunk
 		size_t entire_state_chunk_capacity;
 		// The size of a delta state chunk
 		size_t delta_state_chunk_capacity;
 		// Additional information about the entire states written immediately after the header
-		ResizableStream<EntireStateInfo> entire_state_infos;
+		ResizableStream<DeltaStateEntireStateInfo> entire_state_infos;
 		// How many seconds it takes to write a new entire state again, which helps with seeking time
 		float entire_state_write_seconds_tick;
 		// The elapsed second duration of the last entire write
 		float last_entire_state_write_seconds;
 		ECS_INT_TYPE delta_state_integer_type;
+	};
+
+	struct DeltaStateReaderInitializeInfo {
+		AllocatorPolymorphic allocator;
+		size_t user_data_size;
+		DeltaStateReaderDeltaFunction delta_function;
+		DeltaStateReaderEntireFunction entire_function;
+		// This flag indicates whether or not a copy of the read instrument
+		// Should be copied and that copy be referenced internally. Useful if the
+		// read instrument is not stable
+		bool allocate_read_instrument = false;
+		// This is an optional parameter. In case the header read part fails, the reason
+		// Will be filled in this parameter
+		CapacityStream<char>* error_message = nullptr;
+	};
+
+	struct InMemoryReadInstrument;
+	struct BufferedFileReadInstrument;
+
+	struct ECSENGINE_API DeltaStateReader {
+		// Advances the state to the specified continuous moment. If no entire state or delta state is found, nothing will be performed
+		void Advance(float elapsed_seconds);
+
+		// It will set the delta index to start at the first delta state that starts from that entire state
+		void AdjustDeltaIndexForEntireIndex();
+
+		void Deallocate();
+
+		// Returns index of the last entire state before the given moment. Returns -1 if there is no such entry
+		size_t GetEntireStateIndexForTime(float elapsed_seconds) const;
+
+		// Returns the pointer to the user data such that you can initialize the data properly. It will be 0'ed.
+		// Returns nullptr if it failed to read the header portion of the state.
+		void* Initialize(const DeltaStateReaderInitializeInfo& initialize_info, InMemoryReadInstrument* read_instrument);
+
+		// Returns the pointer to the user data such that you can initialize the data properly. It will be 0'ed.
+		// Returns nullptr if it failed to read the header portion of the state.
+		void* Initialize(const DeltaStateReaderInitializeInfo& initialize_info, BufferedFileReadInstrument* read_instrument);
+
+		// Skips forward/backwards to the specified moment in time. It will choose the most optimal route, by
+		// Finding the last entire state write before the specified moment and then applying deltas until the specified moment
+		void Seek(float elapsed_seconds);
+
+		DeltaStateReaderDeltaFunction delta_function;
+		DeltaStateReaderEntireFunction entire_function;
+		void* user_data;
+		void* read_instrument;
+		// This is the user defined header that was written in the file
+		Stream<void> header;
+
+		AllocatorPolymorphic allocator;
+		CapacityStream<DeltaStateEntireStateInfo> entire_state_infos;
+		CapacityStream<void> delta_state_infos;
+		CapacityStream<float> delta_state_elapsed_seconds;
+		// The following 2 fields are used for when sequential execution is desired
+		size_t current_entire_state_index;
+		size_t current_delta_state_index;
+		ECS_INT_TYPE delta_state_integer_type;
+		bool is_read_instrument_allocated;
 	};
 
 }
