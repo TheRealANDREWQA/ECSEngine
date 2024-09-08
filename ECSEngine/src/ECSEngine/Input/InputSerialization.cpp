@@ -95,16 +95,18 @@ namespace ECSEngine {
 		
 		if (x_delta != 0 || y_delta != 0 || scroll_delta != 0 || previous_button_states != current_button_states) {
 			// One of the values changed
+			InMemoryWriteInstrument write_instrument = { buffer, buffer_capacity };
+			
 			// There are 3 bits that in the button states that can be used to indicate whether or not the deltas are 0 or not
 			current_button_states |= x_delta != 0 ? MOUSE_DELTA_X_BIT : 0;
 			current_button_states |= y_delta != 0 ? MOUSE_DELTA_Y_BIT : 0;
 			current_button_states |= scroll_delta != 0 ? MOUSE_DELTA_SCROLL_BIT : 0;
 
 			// Write the elapsed seconds first, then the button states (with the additional delta bits) followed by the variable length deltas.
-			if (!WriteChecked(&buffer, buffer_capacity, &elapsed_seconds)) {
+			if (!write_instrument.Write(&elapsed_seconds)) {
 				return false;
 			}
-			if (!WriteChecked(&buffer, buffer_capacity, &current_button_states)) {
+			if (!write_instrument.Write(&current_button_states)) {
 				return false;
 			}
 
@@ -133,8 +135,10 @@ namespace ECSEngine {
 
 	bool SerializeMouseInput(const Mouse* state, uintptr_t& buffer, size_t& buffer_capacity, float elapsed_seconds)
 	{
+		InMemoryWriteInstrument write_instrument = { buffer, buffer_capacity };
+
 		// Write the elapsed duration first, followed by the button states and the variable length integers at last
-		if (!WriteChecked(&buffer, buffer_capacity, &elapsed_seconds)) {
+		if (!write_instrument.Write(&elapsed_seconds)) {
 			return false;
 		}
 
@@ -143,7 +147,7 @@ namespace ECSEngine {
 			unsigned char* byte = (unsigned char*)value;
 			*byte = state->m_states[index];
 		});
-		if (!WriteChecked(&buffer, buffer_capacity, &button_states)) {
+		if (!write_instrument.Write(&button_states)) {
 			return false;
 		}
 
@@ -176,7 +180,9 @@ namespace ECSEngine {
 
 		if (is_process_queue_different || is_pushed_character_count_different || is_queue_different || changed_keys.size > 0 || is_alphanumeric_different) {
 			// There is a difference, we must serialize a state
-			if (!WriteChecked(&buffer, buffer_capacity, &elapsed_seconds)) {
+			InMemoryWriteInstrument write_instrument = { buffer, buffer_capacity };
+
+			if (!write_instrument.Write(&elapsed_seconds)) {
 				return false;
 			}
 
@@ -187,7 +193,7 @@ namespace ECSEngine {
 			difference_bit_mask |= is_queue_different ? KEYBOARD_DELTA_CHARACTER_QUEUE_BIT : 0;
 			difference_bit_mask |= changed_keys.size > 0 ? KEYBOARD_DELTA_CHANGED_KEYS_BIT : 0;
 			difference_bit_mask |= is_alphanumeric_different ? KEYBOARD_DELTA_ALPHANUMERIC_BIT : 0;
-			if (!WriteChecked(&buffer, buffer_capacity, &difference_bit_mask)) {
+			if (!write_instrument.Write(&difference_bit_mask)) {
 				return false;
 			}
 
@@ -201,13 +207,13 @@ namespace ECSEngine {
 			if (is_queue_different) {
 				ECS_ASSERT(current_state->m_character_queue.GetSize() <= MAX_KEYBOARD_CHARACTER_QUEUE_DELTA_COUNT);
 				unsigned char queue_size = current_state->m_character_queue.GetSize();
-				if (!WriteChecked(&buffer, buffer_capacity, &queue_size)) {
+				if (!write_instrument.Write(&queue_size)) {
 					return false;
 				}
 				ECS_STACK_CAPACITY_STREAM(char, character_queue_array, UCHAR_MAX);
 				uintptr_t character_queue_ptr = (uintptr_t)character_queue_array.buffer;
 				current_state->m_character_queue.CopyTo(character_queue_ptr);
-				if (!WriteChecked(&buffer, buffer_capacity, character_queue_array.buffer, (size_t)queue_size * sizeof(char))) {
+				if (!write_instrument.Write(character_queue_array.buffer, (size_t)queue_size * sizeof(char))) {
 					return false;
 				}
 			}
@@ -215,14 +221,14 @@ namespace ECSEngine {
 			if (changed_keys.size > 0) {
 				// The states are already compressed enough, since there will be a small number of them
 				ECS_ASSERT(changed_keys.size <= MAX_KEYBOARD_KEY_DELTA_COUNT);
-				if (!WriteCheckedWithSize(&buffer, buffer_capacity, changed_keys.buffer, (unsigned char)changed_keys.size)) {
+				if (!write_instrument.WriteWithSize<unsigned char>(changed_keys)) {
 					return false;
 				}
 			}
 
 			if (is_alphanumeric_different) {
 				ECS_ASSERT(current_state->m_alphanumeric_keys.size <= MAX_KEYBOARD_ALPHANUMERIC_DELTA_COUNT);
-				if (!WriteChecked(&buffer, buffer_capacity, current_state->m_alphanumeric_keys.buffer, (unsigned char)current_state->m_alphanumeric_keys.size)) {
+				if (!write_instrument.WriteWithSize<unsigned char>(current_state->m_alphanumeric_keys)) {
 					return false;
 				}
 			}
@@ -245,10 +251,12 @@ namespace ECSEngine {
 		ECS_ASSERT(state->m_character_queue.GetSize() <= MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT);
 		ECS_ASSERT(state->m_alphanumeric_keys.size <= MAX_KEYBOARD_ALPHANUMERIC_ENTIRE_COUNT);
 
-		if (!WriteChecked(&buffer, buffer_capacity, &elapsed_seconds)) {
+		InMemoryWriteInstrument write_instrument = { buffer, buffer_capacity };
+
+		if (!write_instrument.Write(&elapsed_seconds)) {
 			return false;
 		}
-		if (!WriteChecked(&buffer, buffer_capacity, &state->m_process_characters)) {
+		if (!write_instrument.Write(&state->m_process_characters)) {
 			return false;
 		}
 		if (!SerializeIntVariableLengthBool(buffer, buffer_capacity, state->m_pushed_character_count)) {
@@ -256,13 +264,16 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_CAPACITY_STREAM(char, character_queue_storage, MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT);
+		character_queue_storage.size = state->m_character_queue.GetSize();
+		ECS_ASSERT(character_queue_storage.size <= character_queue_storage.capacity, "Serializing keyboard failed because the character queue exceeded the capacity!");
 		uintptr_t character_queue_storage_ptr = (uintptr_t)character_queue_storage.buffer;
 		state->m_character_queue.CopyTo(character_queue_storage_ptr);
-		if (!WriteCheckedWithSize(&buffer, buffer, character_queue_storage.buffer, (unsigned char)character_queue_storage.size)) {
+		if (!write_instrument.WriteWithSize<unsigned char>(character_queue_storage)) {
 			return false;
 		}
 
-		if (!WriteCheckedWithSize(&buffer, buffer, state->m_alphanumeric_keys.buffer, (unsigned char)state->m_alphanumeric_keys.size)) {
+		ECS_ASSERT(state->m_alphanumeric_keys.size <= MAX_KEYBOARD_ALPHANUMERIC_ENTIRE_COUNT, "Serializing keyboard failed because the alphanumeric key size exceeded the maximum allowed!");
+		if (!write_instrument.WriteWithSize<unsigned char>(state->m_alphanumeric_keys)) {
 			return false;
 		}
 
@@ -273,7 +284,7 @@ namespace ECSEngine {
 			unsigned char* byte_value = (unsigned char*)value;
 			*byte_value = state->m_states[index];
 		});
-		if (!WriteChecked(&buffer, buffer, key_state.buffer, key_state_byte_count)) {
+		if (!write_instrument.Write(key_state.buffer, key_state_byte_count)) {
 			return false;
 		}
 
@@ -287,13 +298,15 @@ namespace ECSEngine {
 		ECS_ASSERT_FORMAT(version == VERSION, "Deserializing mouse with unknown version {#}: expected {#}.", version, VERSION);
 		current_state->UpdateFromOther(previous_state);
 
-		if (!ReadChecked(&buffer, buffer_capacity, &elapsed_seconds)) {
+		InMemoryReadInstrument read_instrument = { buffer, buffer_capacity };
+
+		if (!read_instrument.Read(&elapsed_seconds)) {
 			return false;
 		}
 
 		// Read the combined bit mask
 		unsigned char button_states = 0;
-		if (!ReadChecked(&buffer, buffer_capacity, &button_states)) {
+		if (!read_instrument.Read(&button_states)) {
 			return false;
 		}
 
@@ -339,12 +352,14 @@ namespace ECSEngine {
 		ECS_ASSERT_FORMAT(version == VERSION, "Deserializing mouse with unknown version {#}: expected {#}.", version, VERSION);
 		state->Reset();
 
-		if (!ReadChecked(&buffer, buffer_capacity, &elapsed_seconds)) {
+		InMemoryReadInstrument read_instrument = { buffer, buffer_capacity };
+
+		if (!read_instrument.Read(&elapsed_seconds)) {
 			return false;
 		}
 
 		unsigned short button_states = 0;
-		if (!ReadChecked(&buffer, buffer_capacity, &button_states)) {
+		if (!read_instrument.Read(&button_states)) {
 			return false;
 		}
 		ReadBits(&button_states, 2, ECS_MOUSE_BUTTON_COUNT, [state](size_t index, const void* value) {
@@ -371,12 +386,14 @@ namespace ECSEngine {
 		ECS_ASSERT_FORMAT(version == VERSION, "Deserializing keyboard with unknown version {#}: expected {#}.", version, VERSION);
 		current_state->UpdateFromOther(previous_state);
 
-		if (!ReadChecked(&buffer, buffer_capacity, &elapsed_seconds)) {
+		InMemoryReadInstrument read_instrument = { buffer, buffer_capacity };
+
+		if (!read_instrument.Read(&elapsed_seconds)) {
 			return false;
 		}
 
 		unsigned char difference_bit_mask = 0;
-		if (!ReadChecked(&buffer, buffer_capacity, &difference_bit_mask)) {
+		if (!read_instrument.Read(&difference_bit_mask)) {
 			return false;
 		}
 
@@ -401,7 +418,7 @@ namespace ECSEngine {
 			current_state->m_character_queue.Reset();
 			ECS_ASSERT(current_state->m_character_queue.GetCapacity() >= MAX_KEYBOARD_CHARACTER_QUEUE_DELTA_COUNT);
 			unsigned char queue_size = 0;
-			if (!ReadCheckedWithSize(&buffer, buffer_capacity, current_state->m_character_queue.GetQueue()->buffer, queue_size, MAX_KEYBOARD_CHARACTER_QUEUE_DELTA_COUNT)) {
+			if (!read_instrument.ReadWithSize<unsigned char>(current_state->m_character_queue.GetQueue()->buffer, queue_size, MAX_KEYBOARD_CHARACTER_QUEUE_DELTA_COUNT)) {
 				return false;
 			}
 			current_state->m_character_queue.m_queue.size = queue_size;
@@ -409,11 +426,10 @@ namespace ECSEngine {
 
 		if (HasFlag(difference_bit_mask, KEYBOARD_DELTA_CHANGED_KEYS_BIT)) {
 			ECS_STACK_CAPACITY_STREAM(ECS_KEY, changed_keys, MAX_KEYBOARD_KEY_DELTA_COUNT);
-			unsigned char changed_key_size = 0;
-			if (!ReadCheckedWithSize(&buffer, buffer_capacity, changed_keys.buffer, changed_key_size, MAX_KEYBOARD_KEY_DELTA_COUNT)) {
+			if (!read_instrument.ReadWithSize<unsigned char>(changed_keys)) {
 				return false;
 			}
-			for (unsigned char index = 0; index < changed_key_size; index++) {
+			for (unsigned char index = 0; index < changed_keys.size; index++) {
 				current_state->FlipButton(changed_keys[index]);
 			}
 		}
@@ -422,11 +438,9 @@ namespace ECSEngine {
 			// The alphanumeric entries
 			current_state->m_alphanumeric_keys.Reset();
 			ECS_ASSERT(current_state->m_alphanumeric_keys.capacity >= MAX_KEYBOARD_ALPHANUMERIC_DELTA_COUNT);
-			unsigned char alphanumeric_size = 0;
-			if (!ReadCheckedWithSize(&buffer, buffer_capacity, current_state->m_alphanumeric_keys.buffer, alphanumeric_size, MAX_KEYBOARD_ALPHANUMERIC_DELTA_COUNT)) {
+			if (!read_instrument.ReadWithSize<unsigned char>(current_state->m_alphanumeric_keys)) {
 				return false;
 			}
-			current_state->m_alphanumeric_keys.size = alphanumeric_size;
 		}
 
 		return true;
@@ -437,10 +451,12 @@ namespace ECSEngine {
 		ECS_ASSERT_FORMAT(version == VERSION, "Deserializing keyboard with unknown version {#}: expected {#}.", version, VERSION);
 		state->Reset();
 
-		if (!ReadChecked(&buffer, buffer_capacity, &elapsed_seconds)) {
+		InMemoryReadInstrument read_instrument = { buffer, buffer_capacity };
+
+		if (!read_instrument.Read(&elapsed_seconds)) {
 			return false;
 		}
-		if (!ReadChecked(&buffer, buffer_capacity, &state->m_process_characters)) {
+		if (!read_instrument.Read(&state->m_process_characters)) {
 			return false;
 		}
 
@@ -449,17 +465,14 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_CAPACITY_STREAM(char, character_queue_storage, MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT);
-		unsigned char character_queue_size = 0;
-		if (!ReadCheckedWithSize(&buffer, buffer, character_queue_storage.buffer, character_queue_size, MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT)) {
+		if (!read_instrument.ReadWithSize<unsigned char>(character_queue_storage)) {
 			return false;
 		}
-		character_queue_storage.size = character_queue_size;
 		state->m_character_queue.Reset();
 		state->m_character_queue.PushRange(character_queue_storage);
 
-		unsigned char alphanumeric_size = 0;
 		ECS_ASSERT(state->m_alphanumeric_keys.capacity >= MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT, "Deserializing keyboard: expected larger alphanumeric buffer capacity.");
-		if (!ReadCheckedWithSize(&buffer, buffer, state->m_alphanumeric_keys.buffer, alphanumeric_size, MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT)) {
+		if (!read_instrument.ReadWithSize<unsigned char>(state->m_alphanumeric_keys)) {
 			return false;
 		}
 
@@ -468,7 +481,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, key_state, ECS_KEY_COUNT);
 		// 2 bits per entry, determine the number of bytes
 		size_t key_state_byte_count = SlotsFor(ECS_KEY_COUNT * 2, 8);
-		if (!ReadChecked(&buffer, buffer, key_state.buffer, key_state_byte_count)) {
+		if (!read_instrument.Read(key_state.buffer, key_state_byte_count)) {
 			return false;
 		}
 
@@ -514,44 +527,6 @@ namespace ECSEngine {
 			return false;
 		}
 		return DeserializeKeyboardInput(keyboard_state, buffer, buffer_capacity, keyboard_elapsed_seconds, version);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------------------------
-
-	bool ReadInputSerializationHeader(uintptr_t& buffer, size_t& buffer_capacity, InputSerializationHeader& header) {
-		return ReadChecked(&buffer, buffer_capacity, &header);
-	}
-
-	InputSerializedType ReadInputs(InputSerializationState& state, Mouse* mouse, Keyboard* keyboard, uintptr_t& buffer, size_t& buffer_capacity, float& mouse_elapsed_seconds, float& keyboard_elapsed_seconds, unsigned char version) {
-		// Read the prefix byte
-		bool is_mouse = false;
-		if (!ReadChecked(&buffer, buffer_capacity, &is_mouse)) {
-			return { false, false };
-		}
-		
-		return {};
-		//if ((unsigned char)is_mouse > 1) {
-		//	// An invalid value
-		//	return { false, false };
-		//}
-
-		//if (is_mouse) {
-		//	return DeserializeMouse
-		//}
-		//else {
-
-		//}
-	}
-
-	bool WriteInputs(InputSerializationState& state, const Mouse* current_mouse, const Keyboard* keyboard, uintptr_t& buffer, size_t& buffer_capacity, float elapsed_seconds) {
-		return true;
-	}
-
-	bool WriteInputSerializationHeader(uintptr_t& buffer, size_t& buffer_capacity) {
-		InputSerializationHeader header;
-		memset(&header, 0, sizeof(header));
-		header.version = VERSION;
-		return WriteChecked(&buffer, buffer_capacity, &header);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------

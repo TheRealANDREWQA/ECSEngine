@@ -369,7 +369,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializationMacro.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeltaStateWriter.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerialization.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.h" />
     <ClInclude Include="src\ECSEngine\Utilities\StringUtilities.h" />
     <ClInclude Include="src\ECSEngine\Utilities\TransformTool.h" />
@@ -708,7 +708,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\FilePackaging.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\FilePreprocessor.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Serialization\DeltaStateWriter.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerialization.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\StreamUtilities.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>

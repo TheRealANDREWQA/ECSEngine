@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "Mouse.h"
 #include "Keyboard.h"
+#include "../Utilities/Serialization/DeltaStateSerialization.h"
 
 namespace ECSEngine {
 
@@ -12,40 +13,6 @@ namespace ECSEngine {
 	struct InputSerializationHeader {
 		unsigned char version;
 		unsigned char reserved[7];
-	};
-
-	// A helper structure that helps in writing input serialization data in an efficient
-	struct ECSENGINE_API InputSerializationState {
-		void Write(const Mouse* current_mouse, const Keyboard* keyboard, float elapsed_seconds);
-
-		struct DeltaStateInfo {
-			unsigned int count;
-			unsigned int file_offset;
-		};
-
-		AllocatorPolymorphic allocator;
-		// Maintain the entire state in a chunked fashion such that we eliminate the need to
-		// Copy the data with a normal array.
-		ResizableStream<CapacityStream<void>> entire_state_chunks;
-		// Maintain the delta states in between the entire states, chunked for the same reason
-		ResizableStream<CapacityStream<void>> delta_state_chunks;
-		// Info about the delta states, specifically, information to help with seeking
-		// The number of entries in this array must be the same as the entire_state_count
-		ResizableStream<DeltaStateInfo> delta_state_count;
-		size_t entire_state_count;
-		// The "previous" values, which lag one frame behind the actual values
-		Mouse mouse;
-		Keyboard keyboard;
-		// How many seconds it takes to write a new entire state again, which helps with seeking time
-		float entire_state_write_seconds_tick;
-		// The elapsed second duration of the last entire write
-		float last_entire_state_write_seconds;
-	};
-
-	struct InputSerializedType {
-		bool success;
-		// This flag indicates whether or not the read type is a mouse or a keyboard
-		bool is_mouse;
 	};
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -100,23 +67,6 @@ namespace ECSEngine {
 
 	// Returns true if it succeeded (i.e. there is enough capacity in the buffer and the values are valid), else false
 	ECSENGINE_API bool DeserializeKeyboardInput(Keyboard* state, uintptr_t& buffer, size_t& buffer_capacity, float& elapsed_seconds, unsigned char version);
-
-	// -----------------------------------------------------------------------------------------------------------------------------
-
-	// Returns true if it succeeded (i.e. there is enough capacity in the buffer), else false
-	ECSENGINE_API bool ReadInputSerializationHeader(uintptr_t& buffer, size_t& buffer_capacity, InputSerializationHeader& header);
-
-	// Returns true if it succeeded (i.e. there is enough capacity in the buffer), else false.
-	// It reads only a single entry, either a mouse or a keyboard, and updates only that entry. For example, if a mouse is read,
-	// the keyboard elapsed seconds and the keyboard are not modified at all
-	ECSENGINE_API InputSerializedType ReadInputs(InputSerializationState& state, Mouse* mouse, Keyboard* keyboard, uintptr_t& buffer, size_t& buffer_capacity, float& mouse_elapsed_seconds, float& keyboard_elapsed_seconds, unsigned char version);
-
-	// Returns true if it succeeded (i.e. there is enough capacity in the buffer), else false
-	// When an entry is written, it will write a prefix byte which indicates whether or not the current input is a mouse or keyboard input
-	ECSENGINE_API bool WriteInputs(InputSerializationState& state, const Mouse* current_mouse, const Keyboard* keyboard, uintptr_t& buffer, size_t& buffer_capacity, float elapsed_seconds);
-
-	// Returns true if it succeeded (i.e. there is enough capacity in the buffer), else false
-	ECSENGINE_API bool WriteInputSerializationHeader(uintptr_t& buffer, size_t& buffer_capacity);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 

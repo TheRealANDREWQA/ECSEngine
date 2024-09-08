@@ -287,7 +287,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\Iterator.h" />
     <ClInclude Include="src\ECSEngine\OS\Shell.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeltaStateWriter.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerialization.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -464,7 +464,7 @@
     <ClCompile Include="src\ECSEngine\OS\Monitor.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Shell.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Serialization\DeltaStateWriter.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerialization.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />
