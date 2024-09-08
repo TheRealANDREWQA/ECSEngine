@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <malloc.h>
 #include "Reflection/ReflectionMacros.h"
+#include "Assert.h"
 
 namespace ECSEngine {
 
@@ -37,6 +38,26 @@ namespace ECSEngine {
 	ECSENGINE_API void SetIntValueUnsigned(void* ptr, ECS_INT_TYPE type, size_t value);
 
 	ECSENGINE_API void SetIntValueSigned(void* ptr, ECS_INT_TYPE type, int64_t value);
+
+	ECSENGINE_API bool IsUnsignedIntInRange(ECS_INT_TYPE type, size_t value);
+	
+	ECSENGINE_API bool IsSignedIntInRange(ECS_INT_TYPE type, int64_t value);
+
+	ECS_INLINE size_t GetIntTypeByteSize(ECS_INT_TYPE type) {
+		switch (type) {
+		case ECS_INT8:
+			return 1;
+		case ECS_INT16:
+			return 2;
+		case ECS_INT32:
+			return 4;
+		case ECS_INT64:
+			return 8;
+		}
+
+		ECS_ASSERT(false, "Invalid int type when retrieving the byte size");
+		return 0;
+	}
 
 	struct Date {
 		unsigned char month;

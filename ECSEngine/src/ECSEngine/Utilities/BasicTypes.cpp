@@ -90,6 +90,40 @@ namespace ECSEngine {
 		}
 	}
 
+	bool IsUnsignedIntInRange(ECS_INT_TYPE type, size_t value) {
+		switch (type) {
+		case ECS_INT8:
+			return value <= UINT8_MAX;
+		case ECS_INT16:
+			return value <= UINT16_MAX;
+		case ECS_INT32:
+			return value <= UINT32_MAX;
+		case ECS_INT64:
+			// The compiler theoretically should transform this to true
+			return value <= UINT64_MAX;
+		}
+
+		ECS_ASSERT(false, "Invalid unsigned integer type when testing the boundaries");
+		return false;
+	}
+
+	bool IsSignedIntInRange(ECS_INT_TYPE type, int64_t value) {
+		switch (type) {
+		case ECS_INT8:
+			return INT8_MIN <= value && value <= INT8_MAX;
+		case ECS_INT16:
+			return INT16_MIN <= value && value <= INT16_MAX;
+		case ECS_INT32:
+			return INT32_MIN <= value && value <= INT32_MAX;
+		case ECS_INT64:
+			// The compiler theoretically should transform this to true
+			return INT64_MIN <= value && value <= INT64_MAX;
+		}
+
+		ECS_ASSERT(false, "Invalid signed integer type when testing the boundaries");
+		return false;
+	}
+
 	bool IsDateLater(Date first, Date second) {
 		if (second.year > first.year) {
 			return true;
