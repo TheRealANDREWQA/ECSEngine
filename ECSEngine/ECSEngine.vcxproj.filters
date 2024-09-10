@@ -288,6 +288,9 @@
     <ClInclude Include="src\ECSEngine\OS\Shell.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerialization.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\ReaderWriterInterface.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\InMemoryReaderWriter.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\BufferedFileReaderWriter.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

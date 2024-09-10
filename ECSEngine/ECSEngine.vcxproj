@@ -358,14 +358,17 @@
     <ClInclude Include="src\ECSEngine\Utilities\Assert.h" />
     <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Input\ButtonInput.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\BufferedFileReaderWriter.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ByteUnits.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
     <ClInclude Include="src\ECSEngine\Input\InputMapping.h" />
     <ClInclude Include="src\ECSEngine\Utilities\DebugInfo.h" />
     <ClInclude Include="src\ECSEngine\Utilities\EvaluateExpression.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FilePreprocessor.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\InMemoryReaderWriter.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Iterator.h" />
     <ClInclude Include="src\ECSEngine\Utilities\PointerUtilities.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\ReaderWriterInterface.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializationMacro.h" />

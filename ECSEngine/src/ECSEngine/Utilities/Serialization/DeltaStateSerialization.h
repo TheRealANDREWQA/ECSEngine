@@ -71,7 +71,6 @@ namespace ECSEngine {
 		DeltaStateWriterEntireFunction entire_function;
 		size_t entire_state_chunk_capacity;
 		size_t delta_state_chunk_capacity;
-		ECS_INT_TYPE delta_state_info_integer_type = ECS_INT32;
 		// How many seconds it takes to write a new entire state again, which helps with seeking time
 		float entire_state_write_seconds_tick = 0.0f;
 		// An optional field to initialize this writer with a user defined header
@@ -80,16 +79,19 @@ namespace ECSEngine {
 
 	struct DeltaStateEntireStateInfo {
 		unsigned int write_size;
+		// The number of delta states up until the next entire state
+		unsigned int delta_count;
 		// Store the elapsed seconds for the entire state in the header to allow fast seeking
 		float elapsed_seconds;
 	};
 
-	// This is the struct that is stored in delta_state_count, but it is not used directly
-	//template<typename IntegerType>
-	//struct DeltaStateDeltaInfo {
-	//	IntegerType count;
-	//	IntegerType total_byte_size;
-	//};
+	struct DeltaStateDeltaInfo {
+		float elapsed_seconds;
+		unsigned int write_size;
+	};
+
+	struct WriteInstrument;
+	struct ReadInstrument;
 
 	// A helper structure that helps in writing input serialization data in an efficient
 	struct ECSENGINE_API DeltaStateWriter {
@@ -109,11 +111,8 @@ namespace ECSEngine {
 		// Or not the operation succeeded, and in case it did not, if it is because the allocator is not large enough.
 		ECS_DELTA_STATE_WRITER_STATUS Register(const void* current_data, float elapsed_seconds);
 
-		// Returns true if it successfully wrote the entire data into the given buffer, else false (there is not enough capacity)
-		bool WriteTo(uintptr_t& buffer, size_t& buffer_capacity) const;
-
-		// Returns true if it successfully wrote the entire data into the given file, else false
-		bool WriteTo(ECS_FILE_HANDLE file) const;
+		// Returns true if it successfully wrote the entire data, else false
+		bool WriteTo(WriteInstrument* write_instrument) const;
 
 		DeltaStateWriterDeltaFunction delta_function;
 		DeltaStateWriterEntireFunction entire_function;
@@ -127,24 +126,18 @@ namespace ECSEngine {
 		ResizableStream<CapacityStream<void>> entire_state_chunks;
 		// Maintain the delta states in between the entire states, chunked for the same reason
 		ResizableStream<CapacityStream<void>> delta_state_chunks;
-		// Info about the delta states, specifically, information to help with seeking
-		// The number of entries in this array must be the same as the entire_state_count
-		// In order to avoid adding a template parameter to the DeltaStateWriter, use an untyped
-		// Stream that has as elemetns DeltaStateInfo with a specific integer type that is given as a runtime parameter
-		ResizableStream<void> delta_state_infos;
-		// This array holds the moments in time when a delta was written
-		ResizableStream<float> delta_state_elapsed_seconds;
+		// This array holds additional information per each delta state
+		ResizableStream<DeltaStateDeltaInfo> delta_state_infos;
+		// Additional information about the entire states written immediately after the header
+		ResizableStream<DeltaStateEntireStateInfo> entire_state_infos;
 		// The size of an entire state chunk
 		size_t entire_state_chunk_capacity;
 		// The size of a delta state chunk
 		size_t delta_state_chunk_capacity;
-		// Additional information about the entire states written immediately after the header
-		ResizableStream<DeltaStateEntireStateInfo> entire_state_infos;
 		// How many seconds it takes to write a new entire state again, which helps with seeking time
 		float entire_state_write_seconds_tick;
 		// The elapsed second duration of the last entire write
 		float last_entire_state_write_seconds;
-		ECS_INT_TYPE delta_state_integer_type;
 	};
 
 	struct DeltaStateReaderInitializeInfo {
@@ -152,21 +145,18 @@ namespace ECSEngine {
 		size_t user_data_size;
 		DeltaStateReaderDeltaFunction delta_function;
 		DeltaStateReaderEntireFunction entire_function;
-		// This flag indicates whether or not a copy of the read instrument
-		// Should be copied and that copy be referenced internally. Useful if the
-		// read instrument is not stable
-		bool allocate_read_instrument = false;
 		// This is an optional parameter. In case the header read part fails, the reason
 		// Will be filled in this parameter
 		CapacityStream<char>* error_message = nullptr;
 	};
 
-	struct InMemoryReadInstrument;
-	struct BufferedFileReadInstrument;
+	struct ReadInstrument;
 
 	struct ECSENGINE_API DeltaStateReader {
-		// Advances the state to the specified continuous moment. If no entire state or delta state is found, nothing will be performed
-		void Advance(float elapsed_seconds);
+		// Advances the state to the specified continuous moment. If no entire state or delta state is found, nothing will be performed.
+		// Returns true if it succeeded, else false (the serialized state is invalid or IO related operations failed)
+		// The last argument is an optional parameter that can be used to be filled with a more descriptive error
+		bool Advance(float elapsed_seconds, CapacityStream<char>* error_message = nullptr);
 
 		// It will set the delta index to start at the first delta state that starts from that entire state
 		void AdjustDeltaIndexForEntireIndex();
@@ -176,34 +166,39 @@ namespace ECSEngine {
 		// Returns index of the last entire state before the given moment. Returns -1 if there is no such entry
 		size_t GetEntireStateIndexForTime(float elapsed_seconds) const;
 
-		// Returns the pointer to the user data such that you can initialize the data properly. It will be 0'ed.
-		// Returns nullptr if it failed to read the header portion of the state.
-		void* Initialize(const DeltaStateReaderInitializeInfo& initialize_info, InMemoryReadInstrument* read_instrument);
+		// Returns the offset from the beginning of the serialized range up until the entire state for the given index
+		size_t GetOffsetForEntireState(size_t index) const;
+
+		// Returns the offset from the beginning of the serialized range up until the delta state for the given index
+		size_t GetOffsetForDeltaState(size_t overall_delta_index) const;
 
 		// Returns the pointer to the user data such that you can initialize the data properly. It will be 0'ed.
-		// Returns nullptr if it failed to read the header portion of the state.
-		void* Initialize(const DeltaStateReaderInitializeInfo& initialize_info, BufferedFileReadInstrument* read_instrument);
+		// Returns nullptr if it failed to read the header portion of the state. The read instrument must be stable
+		// For the entire duration of using this reader
+		void* Initialize(const DeltaStateReaderInitializeInfo& initialize_info, ReadInstrument* read_instrument);
 
 		// Skips forward/backwards to the specified moment in time. It will choose the most optimal route, by
 		// Finding the last entire state write before the specified moment and then applying deltas until the specified moment
-		void Seek(float elapsed_seconds);
+		// Returns true if it succeeded, else false (the serialized state is invalid or IO related operations failed)
+		bool Seek(float elapsed_seconds);
 
 		DeltaStateReaderDeltaFunction delta_function;
 		DeltaStateReaderEntireFunction entire_function;
 		void* user_data;
-		void* read_instrument;
+		ReadInstrument* read_instrument;
 		// This is the user defined header that was written in the file
 		Stream<void> header;
 
 		AllocatorPolymorphic allocator;
 		CapacityStream<DeltaStateEntireStateInfo> entire_state_infos;
-		CapacityStream<void> delta_state_infos;
-		CapacityStream<float> delta_state_elapsed_seconds;
+		CapacityStream<DeltaStateDeltaInfo> delta_state_infos;
 		// The following 2 fields are used for when sequential execution is desired
 		size_t current_entire_state_index;
 		size_t current_delta_state_index;
-		ECS_INT_TYPE delta_state_integer_type;
-		bool is_read_instrument_allocated;
+		// This caches the offset from the beginning of the serialized range up to the first entire state
+		size_t entire_state_start_offset;
+		// This caches the total write size for the entire states
+		size_t entire_state_total_write_size;
 	};
 
 }
