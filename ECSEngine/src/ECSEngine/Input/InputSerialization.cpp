@@ -3,6 +3,7 @@
 #include "../Utilities/Serialization/SerializationHelpers.h"
 #include "../Utilities/Serialization/SerializeIntVariableLength.h"
 #include "../Utilities/Utilities.h"
+#include "../Utilities/InMemoryReaderWriter.h"
 
 #define VERSION 0
 
@@ -111,17 +112,17 @@ namespace ECSEngine {
 			}
 
 			if (x_delta != 0) {
-				if (!SerializeIntVariableLengthBool(buffer, buffer_capacity, x_delta)) {
+				if (!SerializeIntVariableLengthBool(&write_instrument, x_delta)) {
 					return false;
 				}
 			}
 			if (y_delta != 0) {
-				if (!SerializeIntVariableLengthBool(buffer, buffer_capacity, y_delta)) {
+				if (!SerializeIntVariableLengthBool(&write_instrument, y_delta)) {
 					return false;
 				}
 			}
 			if (scroll_delta != 0) {
-				if (!SerializeIntVariableLengthBool(buffer, buffer_capacity, scroll_delta)) {
+				if (!SerializeIntVariableLengthBool(&write_instrument, scroll_delta)) {
 					return false;
 				}
 			}
@@ -151,7 +152,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		return SerializeIntVariableLengthBoolMultiple(buffer, buffer_capacity, state->GetPosition().x, state->GetPosition().y, state->GetScrollValue());
+		return SerializeIntVariableLengthBoolMultiple(&write_instrument, state->GetPosition().x, state->GetPosition().y, state->GetScrollValue());
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -199,7 +200,7 @@ namespace ECSEngine {
 
 			// Continue with the individual values, except for the boolean m_process_characters, which is already transmitted through the bit mask
 			if (is_pushed_character_count_different) {
-				if (!SerializeIntVariableLengthBool(buffer, buffer_capacity, (int)(current_state->m_pushed_character_count - previous_state->m_pushed_character_count))) {
+				if (!SerializeIntVariableLengthBool(&write_instrument, (int)(current_state->m_pushed_character_count - previous_state->m_pushed_character_count))) {
 					return false;
 				}
 			}
@@ -259,7 +260,7 @@ namespace ECSEngine {
 		if (!write_instrument.Write(&state->m_process_characters)) {
 			return false;
 		}
-		if (!SerializeIntVariableLengthBool(buffer, buffer_capacity, state->m_pushed_character_count)) {
+		if (!SerializeIntVariableLengthBool(&write_instrument, state->m_pushed_character_count)) {
 			return false;
 		}
 
@@ -322,7 +323,7 @@ namespace ECSEngine {
 		if (HasFlag(button_states, MOUSE_DELTA_X_BIT)) {
 			// There is a x delta
 			int x_delta = 0;
-			if (!DeserializeIntVariableLengthBool(buffer, buffer_capacity, x_delta)) {
+			if (!DeserializeIntVariableLengthBool(&read_instrument, x_delta)) {
 				return false;
 			}
 			current_state->AddDelta(x_delta, 0);
@@ -330,7 +331,7 @@ namespace ECSEngine {
 		if (HasFlag(button_states, MOUSE_DELTA_Y_BIT)) {
 			// There is a y delta
 			int y_delta = 0;
-			if (!DeserializeIntVariableLengthBool(buffer, buffer_capacity, y_delta)) {
+			if (!DeserializeIntVariableLengthBool(&read_instrument, y_delta)) {
 				return false;
 			}
 			current_state->AddDelta(0, y_delta);
@@ -338,7 +339,7 @@ namespace ECSEngine {
 		if (HasFlag(button_states, MOUSE_DELTA_SCROLL_BIT)) {
 			// There is a scroll delta
 			int scroll_delta = 0;
-			if (!DeserializeIntVariableLengthBool(buffer, buffer_capacity, scroll_delta)) {
+			if (!DeserializeIntVariableLengthBool(&read_instrument, scroll_delta)) {
 				return false;
 			}
 			current_state->SetCursorWheel(current_state->GetScrollValue() + scroll_delta);
@@ -369,7 +370,7 @@ namespace ECSEngine {
 
 		int2 position;
 		int scroll_value;
-		if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(buffer, buffer_capacity, position.x, position.y, scroll_value)) {
+		if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(&read_instrument, position.x, position.y, scroll_value)) {
 			return false;
 		}
 
@@ -402,7 +403,7 @@ namespace ECSEngine {
 		if (HasFlag(difference_bit_mask, KEYBOARD_DELTA_PUSHED_CHARACTER_COUNT_BIT)) {
 			// The pushed character count
 			int character_count_delta = 0;
-			if (!DeserializeIntVariableLengthBool(buffer, buffer_capacity, character_count_delta)) {
+			if (!DeserializeIntVariableLengthBool(&read_instrument, character_count_delta)) {
 				return false;
 			}
 			current_state->m_pushed_character_count += character_count_delta;
@@ -460,7 +461,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		if (!DeserializeIntVariableLengthBool(buffer, buffer_capacity, state->m_pushed_character_count)) {
+		if (!DeserializeIntVariableLengthBool(&read_instrument, state->m_pushed_character_count)) {
 			return false;
 		}
 

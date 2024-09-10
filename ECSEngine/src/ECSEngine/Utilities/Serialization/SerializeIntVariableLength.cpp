@@ -1,22 +1,15 @@
 #include "ecspch.h"
 #include "SerializeIntVariableLength.h"
-#include "../Utilities.h"
+#include "../ReaderWriterInterface.h"
 
-namespace ECSEngine
-{
-#define EXPORT(function_name, int_type)	template ECSENGINE_API size_t function_name<false, SerializeBufferCapacityTrue>(uintptr_t&, size_t&, int_type); \
-										template ECSENGINE_API size_t function_name<false, SerializeBufferCapacityAssert>(uintptr_t&, size_t&, int_type); \
-										template ECSENGINE_API size_t function_name<false, SerializeBufferCapacityBool>(uintptr_t&, size_t&, int_type); \
-										template ECSENGINE_API size_t function_name<true, SerializeBufferCapacityTrue>(uintptr_t&, size_t&, int_type); \
-										template ECSENGINE_API size_t function_name<true, SerializeBufferCapacityAssert>(uintptr_t&, size_t&, int_type); \
-										template ECSENGINE_API size_t function_name<true, SerializeBufferCapacityBool>(uintptr_t&, size_t&, int_type);
+namespace ECSEngine {
 
 	// Use a "Unicode" like encoding, where the last bit of a byte indicates whether or not the
 	// There is a next byte. For signed integers, the last byte uses another bit to indicate whether
 	// The value is negative or not.
 
-	template<bool write_data, SerializeBufferCapacityFunctor capacity_functor>
-	static size_t SerializeIntVariableLengthUnsigned(uintptr_t& ptr, size_t& buffer_capacity, size_t value) {
+	template<bool write_data>
+	size_t SerializeIntVariableLengthUnsigned(WriteInstrument* write_instrument, size_t value) {
 		// Find the last bit set, we need to write up to its byte
 		unsigned int last_bit_set = FirstMSB64(value);
 
@@ -26,12 +19,10 @@ namespace ECSEngine
 			// We can write 7 value bits per byte
 			while (last_bit_set >= 7) {
 				if constexpr (write_data) {
-					if (!capacity_functor(1, buffer_capacity)) {
+					unsigned char byte = ECS_BIT(7) | (unsigned char)value;
+					if (!write_instrument->Write(&byte)) {
 						return 0;
 					}
-					unsigned char* byte = (unsigned char*)ptr;
-					*byte = ECS_BIT(7) | (unsigned char)value;
-					ptr += 1;
 				}
 				last_bit_set -= 7;
 				value >>= 7;
@@ -41,21 +32,19 @@ namespace ECSEngine
 
 		// There is one more byte to write
 		if constexpr (write_data) {
-			if (!capacity_functor(1, buffer_capacity)) {
+			unsigned char byte = (unsigned char)value;
+			if (!write_instrument->Write(&byte)) {
 				return 0;
 			}
-			unsigned char* byte = (unsigned char*)ptr;
-			*byte = (unsigned char)value;
-			ptr += 1;
 		}
 		byte_count++;
 		return byte_count;
 	}
 
-	EXPORT(SerializeIntVariableLengthUnsigned, size_t);
+	ECS_TEMPLATE_FUNCTION_BOOL(size_t, SerializeIntVariableLengthUnsigned, WriteInstrument*, size_t);
 
-	template<bool write_data, SerializeBufferCapacityFunctor capacity_functor>
-	static size_t SerializeIntVariableLengthSigned(uintptr_t& ptr, size_t& buffer_capacity, int64_t value) {
+	template<bool write_data>
+	size_t SerializeIntVariableLengthSigned(WriteInstrument* write_instrument, int64_t value) {
 		int64_t extended_value = value;
 		int last_bit = -1;
 		char sign_bit = 0;
@@ -82,12 +71,10 @@ namespace ECSEngine
 		if (last_bit >= 7) {
 			while (last_bit >= 7) {
 				if constexpr (write_data) {
-					if (!capacity_functor(1, buffer_capacity)) {
+					char byte = ECS_BIT_SIGNED(7) | (char)extended_value;
+					if (!write_instrument->Write(&byte)) {
 						return 0;
 					}
-					char* byte = (char*)ptr;
-					*byte = ECS_BIT_SIGNED(7) | (char)extended_value;
-					ptr += 1;
 				}
 				last_bit -= 7;
 				extended_value >>= 7;
@@ -98,12 +85,10 @@ namespace ECSEngine
 		// Check to see if the last bit is 6, for that case, we must write another byte
 		if (last_bit == 6) {
 			if constexpr (write_data) {
-				if (!capacity_functor(1, buffer_capacity)) {
-					return 0;
+				char byte = ECS_BIT_SIGNED(7) | (char)extended_value;
+				if (!write_instrument->Write(&byte)) {
+					return false;
 				}
-				char* byte = (char*)ptr;
-				*byte = ECS_BIT_SIGNED(7) | (char)extended_value;
-				ptr += 1;
 			}
 			// Here, the shift must be done with a 7 as well, in order for the last bit
 			// To be completely removed.
@@ -113,84 +98,75 @@ namespace ECSEngine
 
 		// Write the last byte
 		if constexpr (write_data) {
-			if (!capacity_functor(1, buffer_capacity)) {
+			// Make sure to zero out the MSB, since it may be 1 with signed integers
+			char byte = (sign_bit | (char)extended_value) & (~(ECS_BIT_SIGNED(7)));
+			if (!write_instrument->Write(&byte)) {
 				return 0;
 			}
-			char* byte = (char*)ptr;
-			// Make sure to zero out the MSB, since it may be 1 with signed integers
-			*byte = (sign_bit | (char)extended_value) & (~(ECS_BIT_SIGNED(7)));
-			ptr += 1;
 		}
 		byte_count++;
 		return byte_count;
 	}
 
-	EXPORT(SerializeIntVariableLengthSigned, int64_t);
+	ECS_TEMPLATE_FUNCTION_BOOL(size_t, SerializeIntVariableLengthSigned, WriteInstrument*, int64_t);
 
-	template<bool read_data, SerializeBufferCapacityFunctor capacity_functor>
-	static size_t DeserializeIntVariableLengthUnsigned(uintptr_t& ptr, size_t& buffer_capacity, size_t& value) {
-		if (!capacity_functor(1, buffer_capacity)) {
+	template<bool read_data>
+	size_t DeserializeIntVariableLengthUnsigned(ReadInstrument* read_instrument, size_t& value) {
+		size_t read_count = 0;
+		// Read until the MSB is 0
+		unsigned char current_byte = 0;
+		if (!read_instrument->Read(&current_byte)) {
 			return 0;
 		}
 
-		uintptr_t initial_ptr = ptr;
-
-		// Read until the MSB is 0
-		unsigned char* bytes = (unsigned char*)ptr;
+		read_count++;
 		unsigned char byte_MSB = ECS_BIT(7);
 		unsigned char negated_byte_MSB = ~byte_MSB;
 		value = 0;
 		
-		unsigned char current_byte = *bytes;
 		size_t shift_count = 0;
 		while ((current_byte & byte_MSB) != 0) {
 			value |= (size_t)(current_byte & negated_byte_MSB) << shift_count;
 			shift_count += 7;
-			bytes++;
-			current_byte = *bytes;
-			ptr++;
-			if (!capacity_functor(1, buffer_capacity)) {
+			if (!read_instrument->Read(&current_byte)) {
 				return 0;
 			}
+			read_count++;
 		}
 
 		// Perform one more iteration
 		value |= (size_t)current_byte << shift_count;
-		ptr++;
-		return ptr - initial_ptr;
+		return read_count;
 	}
 
-	EXPORT(DeserializeIntVariableLengthUnsigned, size_t&);
+	ECS_TEMPLATE_FUNCTION_BOOL(size_t, DeserializeIntVariableLengthUnsigned, ReadInstrument*, size_t&);
 
-	template<bool read_data, SerializeBufferCapacityFunctor capacity_functor>
-	static size_t DeserializeIntVariableLengthSigned(uintptr_t& ptr, size_t& buffer_capacity, int64_t& value) {
-		if (!capacity_functor(1, buffer_capacity)) {
+	template<bool read_data>
+	size_t DeserializeIntVariableLengthSigned(ReadInstrument* read_instrument, int64_t& value) {
+		size_t read_count = 0;
+		char current_byte = 0;
+		if (!read_instrument->Read(&current_byte)) {
 			return 0;
 		}
-
-		uintptr_t initial_ptr = ptr;
+		read_count++;
 
 		// This function is largely the same as the unsigned version
 		// The difference lies in the last part, where we need to read
 		// The additional bit and determine how to extend the integer
 		
 		// Read until the MSB is 0
-		char* bytes = (char*)ptr;
 		char byte_MSB = ECS_BIT_SIGNED(7);
 		char negated_byte_MSB = ~byte_MSB;
 		value = 0;
 
-		char current_byte = *bytes;
 		int64_t shift_count = 0;
 		while ((current_byte & byte_MSB) != 0) {
 			value |= (int64_t)(current_byte & negated_byte_MSB) << shift_count;
 			shift_count += 7;
-			bytes++;
-			current_byte = *bytes;
-			ptr++;
-			if (!capacity_functor(1, buffer_capacity)) {
+			if (!read_instrument->Read(&current_byte)) {
 				return 0;
 			}
+			read_count++;
 		}
 
 		const int64_t VALUE_BIT_COUNT = sizeof(value) * 8;
@@ -204,11 +180,9 @@ namespace ECSEngine
 			value <<= VALUE_BIT_COUNT - shift_count;
 			value >>= VALUE_BIT_COUNT - shift_count;
 		}
-		ptr++;
-		
-		return ptr - initial_ptr;
+		return read_count;
 	}
 
-	EXPORT(DeserializeIntVariableLengthSigned, int64_t&);
+	ECS_TEMPLATE_FUNCTION_BOOL(size_t, DeserializeIntVariableLengthSigned, ReadInstrument*, int64_t&);
 
 }

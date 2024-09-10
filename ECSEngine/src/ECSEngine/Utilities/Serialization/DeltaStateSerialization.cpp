@@ -2,6 +2,9 @@
 #include "DeltaStateSerialization.h"
 #include "../PointerUtilities.h"
 #include "SerializationHelpers.h"
+#include "../InMemoryReaderWriter.h"
+#include "../BufferedFileReaderWriter.h"
+#include "SerializeIntVariableLength.h"
 
 #define VERSION 0
 #define LAST_ENTIRE_STATE_INITIALIZE -10000.0f
@@ -11,23 +14,9 @@ namespace ECSEngine {
 	// This is a header that is used by the writer in order to help accommodate changes
 	struct Header {
 		unsigned char version;
-		ECS_INT_TYPE delta_state_int_type;
 		// Not used at the moment, should be all 0s
-		unsigned char reserved[6];
+		unsigned char reserved[7];
 	};
-
-	ECS_INLINE static size_t DeltaStateInfoByteSize(ECS_INT_TYPE int_type) {
-		size_t int_byte_size = GetIntTypeByteSize(int_type);
-		return int_byte_size * 2;
-	}
-
-	ECS_INLINE static size_t DeltaStateInfoByteSize(const DeltaStateWriter* writer) {
-		return DeltaStateInfoByteSize(writer->delta_state_integer_type);
-	}
-
-	ECS_INLINE static size_t DeltaStateInfoByteSize(const DeltaStateReader* reader) {
-		return DeltaStateInfoByteSize(reader->delta_state_integer_type);
-	}
 
 	// Returns true if it succeeded, else false (the allocation could not be made)
 	static bool AllocateEntireStateChunk(DeltaStateWriter* writer) {
@@ -37,13 +26,6 @@ namespace ECSEngine {
 		}
 
 		writer->entire_state_chunks.Add({ allocation, 0, (unsigned int)writer->entire_state_chunk_capacity });
-		// Allocate a new entry in the delta state sizes as well
-		unsigned int delta_info_byte_size = (unsigned int)DeltaStateInfoByteSize(writer);
-		writer->delta_state_infos.Reserve(delta_info_byte_size);
-		void* delta_state_info = writer->delta_state_infos.Get(writer->delta_state_infos.size, 1);
-		// Set the entry to 0 for all fields
-		memset(delta_state_info, 0, delta_info_byte_size);
-		writer->delta_state_infos.size += delta_info_byte_size;
 		return true;
 	}
 
@@ -69,7 +51,6 @@ namespace ECSEngine {
 		StreamDeallocateElements(delta_state_chunks, allocator);
 		delta_state_chunks.FreeBuffer();
 		delta_state_infos.FreeBuffer();
-		delta_state_elapsed_seconds.FreeBuffer();
 		entire_state_infos.FreeBuffer();
 	}
 
@@ -106,7 +87,6 @@ namespace ECSEngine {
 		delta_state_chunk_capacity = initialize_info->delta_state_chunk_capacity;
 		entire_function = initialize_info->entire_function;
 		entire_state_chunk_capacity = initialize_info->entire_state_chunk_capacity;
-		delta_state_integer_type = initialize_info->delta_state_info_integer_type;
 		entire_state_write_seconds_tick = initialize_info->entire_state_write_seconds_tick;
 		last_entire_state_write_seconds = 0.0f;
 		
@@ -120,7 +100,6 @@ namespace ECSEngine {
 		entire_state_chunks.Initialize(allocator, 0);
 		delta_state_chunks.Initialize(allocator, 0);
 		delta_state_infos.Initialize(allocator, 0);
-		delta_state_elapsed_seconds.Initialize(allocator, 0);
 		entire_state_infos.Initialize(allocator, 0);
 
 		return user_data;
@@ -186,7 +165,7 @@ namespace ECSEngine {
 						size_t written_size = last_chunk.capacity - last_chunk.size - entire_data.write_capacity;
 						ECS_ASSERT(written_size <= UINT_MAX, "Delta state writer: entire state serialization exceeded the limit of 4GB.");
 						last_chunk.size += written_size;
-						entire_state_infos.Add({ (unsigned int)written_size, elapsed_seconds });
+						entire_state_infos.Add({ (unsigned int)written_size, 0u, elapsed_seconds, });
 					}
 					return status;
 				},
@@ -213,23 +192,7 @@ namespace ECSEngine {
 
 						if (written_size > 0) {
 							// Modify the entry in the delta_state_count
-							size_t entry_size = DeltaStateInfoByteSize(this);
-							size_t delta_state_int_byte_size = GetIntTypeByteSize(delta_state_integer_type);
-							void* delta_info = delta_state_infos.Get(delta_state_infos.size - entry_size, 1);
-
-							size_t delta_count = GetIntValueUnsigned(delta_info, delta_state_integer_type);
-							size_t total_byte_count = GetIntValueUnsigned(OffsetPointer(delta_info, delta_state_int_byte_size), delta_state_integer_type);
-							// Validate that the total written size fits into the integer type
-							// We could technically verify that the delta count + 1 is also in range, but it is not necessary
-							// Since each write is at least 1 byte long, so the total byte count will go out of bounds at least at the same time
-							ECS_ASSERT(IsUnsignedIntInRange(delta_state_integer_type, total_byte_count + written_size), "Delta state writer: delta state chunk serialization exceeded the limit of the integer range.");
-
-							SetIntValueUnsigned(delta_info, delta_state_integer_type, delta_count + 1);
-							SetIntValueUnsigned(OffsetPointer(delta_info, delta_state_int_byte_size), delta_state_integer_type, total_byte_count + written_size);
-
-							// Add a new elapsed seconds entry
-							delta_state_elapsed_seconds.Add(elapsed_seconds);
-
+							delta_state_infos.Add({ elapsed_seconds, (unsigned int)written_size });
 							last_chunk.size += written_size;
 						}
 					}
@@ -242,45 +205,59 @@ namespace ECSEngine {
 		}
 	}
 
-	template<typename WriteInstrument>
-	bool WriteToImpl(const DeltaStateWriter* writer, WriteInstrument& write_instrument) {
+	bool DeltaStateWriter::WriteTo(WriteInstrument* write_instrument) const {
 		Header write_header;
 		memset(&write_header, 0, sizeof(write_header));
 		write_header.version = VERSION;
-		write_header.delta_state_int_type = writer->delta_state_integer_type;
 
-		if (!write_instrument.Write(&write_header)) {
+		if (!write_instrument->Write(&write_header)) {
 			return false;
 		}
 
 		// Write the user header, if there is one. Write the header size even when it is missing,
 		// Such that we can always skip this entry, even if the user doesn't correctly set it
-		if (!write_instrument.WriteWithSize<unsigned short>(writer->header)) {
+		if (!write_instrument->WriteWithSize<unsigned short>(header)) {
 			return false;
 		}
 
-		// Write the entire chunk infos
-		if (!write_instrument.WriteWithSize<size_t>(writer->entire_state_infos.ToStream())) {
+		// Write the entire chunk infos - use dynamic integer serialization in order to reduce the size
+		if (!SerializeIntVariableLengthBool(write_instrument, entire_state_infos.size)) {
 			return false;
+		}
+		for (unsigned int index = 0; index < entire_state_infos.size; index++) {
+			if (!SerializeIntVariableLengthBool(write_instrument, entire_state_infos[index].write_size)) {
+				return false;
+			}
+			if (!SerializeIntVariableLengthBool(write_instrument, entire_state_infos[index].delta_count)) {
+				return false;
+			}
+			if (!write_instrument->Write(&entire_state_infos[index].elapsed_seconds)) {
+				return false;
+			}
 		}
 		// Write the delta chunk infos
-		if (!write_instrument.WriteWithSize<size_t>(writer->delta_state_infos.ToStream())) {
+		if (!SerializeIntVariableLengthBool(write_instrument, delta_state_infos.size)) {
 			return false;
 		}
-		if (!write_instrument.WriteWithSize<size_t>(writer->delta_state_elapsed_seconds.ToStream())) {
-			return false;
+		for (unsigned int index = 0; index < delta_state_infos.size; index++) {
+			if (!SerializeIntVariableLengthBool(write_instrument, delta_state_infos[index].write_size)) {
+				return false;
+			}
+			if (!write_instrument->Write(&entire_state_infos[index].elapsed_seconds)) {
+				return false;
+			}
 		}
 
 		// Write the entire chunks now
-		for (size_t index = 0; index < writer->entire_state_chunks.size; index++) {
-			if (!write_instrument.Write(writer->entire_state_chunks[index].buffer, writer->entire_state_chunks[index].size)) {
+		for (unsigned int index = 0; index < entire_state_chunks.size; index++) {
+			if (!write_instrument->Write(entire_state_chunks[index].buffer, entire_state_chunks[index].size)) {
 				return false;
 			}
 		}
 
 		// Write the delta state chunks now
-		for (size_t index = 0; index < writer->delta_state_chunks.size; index++) {
-			if (!write_instrument.Write(writer->delta_state_chunks[index].buffer, writer->delta_state_chunks[index].size)) {
+		for (unsigned int index = 0; index < delta_state_chunks.size; index++) {
+			if (!write_instrument->Write(delta_state_chunks[index].buffer, delta_state_chunks[index].size)) {
 				return false;
 			}
 		}
@@ -288,135 +265,39 @@ namespace ECSEngine {
 		return true;
 	}
 
-	bool DeltaStateWriter::WriteTo(uintptr_t& buffer, size_t& buffer_capacity) const {
-		// Do a pre-check and ensure the buffer is large enough
-		size_t serialize_size = GetWriteSize();
-		if (buffer_capacity < serialize_size) {
-			return false;
-		}
-
-		InMemoryWriteInstrument write_instrument = { buffer, buffer_capacity };
-		return WriteToImpl(this, write_instrument);
-	}
-
-	bool DeltaStateWriter::WriteTo(ECS_FILE_HANDLE file) const {
-		// Allocate a medium sized buffering capacity
-		ECS_STACK_VOID_STREAM(buffering, ECS_KB * 128);
-		BufferedFileWriteInstrument write_instrument = { file, buffering };
-		return WriteToImpl(this, write_instrument);
-	}
-
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	template<typename ReadInstrument>
-	static void* DeltaStateReaderInitializeBase(DeltaStateReader* reader, const DeltaStateReaderInitializeInfo& initialize_info, ReadInstrument* read_instrument) {
-		// Read the header part before continuing with the general assignment
-		Header header;
-		if (!read_instrument->Read(&header)) {
-			SetErrorMessage(initialize_info.error_message, "Could not read the delta state header.");
-			return nullptr;
+	bool DeltaStateReader::Advance(float elapsed_seconds, CapacityStream<char>* error_message) {
+		// Get the index of the entire state that corresponds to this moment
+		size_t entire_state_index = GetEntireStateIndexForTime(elapsed_seconds);
+		ECS_ASSERT(entire_state_index != -1, "DeltaStateReader: advancing to a time which does not have an entire state written!");
+
+		if (entire_state_index != current_entire_state_index) {
+			// The entire state has changed, seek to that location and read the entire state
+			size_t entire_state_offset = GetOffsetForEntireState(entire_state_index);
+			if (!read_instrument->Seek(entire_state_offset)) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to seek at offset {#} for index {#}.", entire_state_offset, entire_state_index);
+				return false;
+			}
+
+			// Read the current state
+			if (!read_instrument->Read())
 		}
 
-		if (header.version != VERSION) {
-			SetErrorMessage(initialize_info.error_message, "The delta state header version is not supported.");
-			return nullptr;
-		}
-
-		reader->delta_state_integer_type = header.delta_state_int_type;
-
-		// Read the user header
-		if (!read_instrument->ReadWithSize<unsigned short>(reader->header, initialize_info.allocator, UINT16_MAX)) {
-			SetErrorMessage(initialize_info.error_message, "The user specified header could not be read or is corrupted.");
-			return nullptr;
-		}
-
-		// Continue with the entire state infos
-		if (!read_instrument->ReadWithSize<size_t>(reader->entire_state_infos, initialize_info.allocator)) {
-			SetErrorMessage(initialize_info.error_message, "The entire state infos could not be read or are corrupted.");
-			reader->header.Deallocate(initialize_info.allocator);
-			return nullptr;
-		}
-
-		// Continue with the delta state infos
-		Stream<void> delta_state_infos;
-		if (!read_instrument->ReadWithSize<size_t>(delta_state_infos, initialize_info.allocator)) {
-			SetErrorMessage(initialize_info.error_message, "The delta state infos could not be read or are corrupted.");
-			reader->header.Deallocate(initialize_info.allocator);
-			reader->entire_state_infos.Deallocate(initialize_info.allocator);
-			return nullptr;
-		}
-		reader->delta_state_infos.InitializeFromBuffer(delta_state_infos.buffer, delta_state_infos.size, delta_state_infos.size);
-
-		// The number of delta state infos and entire state infos must be the same
-		unsigned int delta_state_info_byte_size = (unsigned int)DeltaStateInfoByteSize(reader);
-		if ((reader->delta_state_infos.size / delta_state_info_byte_size) != reader->entire_state_infos.size) {
-			SetErrorMessage(initialize_info.error_message, "The entire state info and delta state infos are mismatched, the data is corrupted.");
-			reader->header.Deallocate(initialize_info.allocator);
-			reader->entire_state_infos.Deallocate(initialize_info.allocator);
-			reader->delta_state_infos.Deallocate(initialize_info.allocator);
-			return nullptr;
-		}
-
-		// Read the delta state elapsed seconds
-		if (!read_instrument->ReadWithSize<size_t>(reader->delta_state_elapsed_seconds, initialize_info.allocator)) {
-			SetErrorMessage(initialize_info.error_message, "The delta state elapsed seconds could not be read or is corrupted.");
-			reader->header.Deallocate(initialize_info.allocator);
-			reader->entire_state_infos.Deallocate(initialize_info.allocator);
-			reader->delta_state_infos.Deallocate(initialize_info.allocator);
-			return nullptr;
-		}
-
-		// Make a sanity check - the total number of delta state from the info and the elapsed seconds must be the same
-		size_t total_delta_count = 0;
-		for (unsigned int index = 0; index < reader->entire_state_infos.size; index++) {
-			const void* delta_state_info = reader->delta_state_infos.Get(index, delta_state_info_byte_size);
-			total_delta_count += GetIntValueUnsigned(delta_state_info, reader->delta_state_integer_type);
-		}
-		if (total_delta_count != reader->delta_state_elapsed_seconds.size) {
-			SetErrorMessage(initialize_info.error_message, "The delta state elapsed seconds size is mismatched with the info, it indicates that the data is corrupted.");
-			reader->header.Deallocate(initialize_info.allocator);
-			reader->entire_state_infos.Deallocate(initialize_info.allocator);
-			reader->delta_state_infos.Deallocate(initialize_info.allocator);
-			reader->delta_state_elapsed_seconds.Deallocate(initialize_info.allocator);
-		}
-		
-		// We succeeded reading the entire header part, continue with the basic assignment
-
-		reader->current_entire_state_index = 0;
-		reader->current_delta_state_index = 0;
-		reader->delta_function = initialize_info.delta_function;
-		reader->entire_function = initialize_info.entire_function;
-		reader->allocator = initialize_info.allocator;
-		reader->user_data = AllocateEx(reader->allocator, initialize_info.user_data_size);
-		memset(reader->user_data, 0, initialize_info.user_data_size);
-
-		if (initialize_info.allocate_read_instrument) {
-			reader->read_instrument = AllocateEx(reader->allocator, sizeof(*read_instrument));
-			memcpy(reader->read_instrument, read_instrument, sizeof(*read_instrument));
-			reader->is_read_instrument_allocated = true;
-		}
-		else {
-			reader->read_instrument = read_instrument;
-			reader->is_read_instrument_allocated = false;
-		}
-
-		return reader->user_data;
+		return false;
 	}
 
-	void DeltaStateReader::Advance(float elapsed_seconds) {
-		// See if an entire state treshold has been passed
-		
+	void DeltaStateReader::AdjustDeltaIndexForEntireIndex() {
+		current_delta_state_index = 0;
+		for (size_t index = 0; index < current_entire_state_index; index++) { 
+			current_delta_state_index += entire_state_infos[index].delta_count;
+		}
 	}
 
 	void DeltaStateReader::Deallocate() {
 		header.Deallocate(allocator);
 		entire_state_infos.Deallocate(allocator);
 		delta_state_infos.Deallocate(allocator);
-		delta_state_elapsed_seconds.Deallocate(allocator);
-		if (is_read_instrument_allocated) {
-			DeallocateEx(allocator, read_instrument);
-			is_read_instrument_allocated = false;
-		}
 		read_instrument = nullptr;
 	}
 
@@ -439,16 +320,140 @@ namespace ECSEngine {
 		return entire_state_infos.size - 1;
 	}
 
-	void* DeltaStateReader::Initialize(const DeltaStateReaderInitializeInfo& initialize_info, InMemoryReadInstrument* read_instrument) {
-		return DeltaStateReaderInitializeBase(this, initialize_info, read_instrument);
+	size_t DeltaStateReader::GetOffsetForEntireState(size_t index) const {
+		size_t offset = entire_state_start_offset;
+		for (size_t entire_index = 0; entire_index < index; entire_index++) {
+			offset += entire_state_infos[entire_index].write_size;
+		}
+		return offset;
 	}
 
-	void* DeltaStateReader::Initialize(const DeltaStateReaderInitializeInfo& initialize_info, BufferedFileReadInstrument* read_instrument) {
-		return DeltaStateReaderInitializeBase(this, initialize_info, read_instrument);
+	size_t DeltaStateReader::GetOffsetForDeltaState(size_t overall_delta_index) const {
+		size_t offset = entire_state_start_offset + entire_state_total_write_size;
+		for (size_t delta_index = 0; delta_index < overall_delta_index; delta_index++) {
+			offset += delta_state_infos[delta_index].write_size;
+		}
+		return offset;
 	}
 
-	void DeltaStateReader::Seek(float elapsed_seconds) {
+	void* DeltaStateReader::Initialize(const DeltaStateReaderInitializeInfo& initialize_info, ReadInstrument* read_instrument_parameter) {
+		read_instrument = read_instrument_parameter;
 
+		auto error_message = [initialize_info](const char* error_message) {
+			SetErrorMessage(initialize_info.error_message, error_message);
+		};
+
+		// Read the header part before continuing with the general assignment
+		Header serialize_header;
+		if (!read_instrument->Read(&serialize_header)) {
+			error_message("Could not read the delta state header.");
+			return nullptr;
+		}
+
+		if (serialize_header.version != VERSION) {
+			error_message("The delta state header version is not supported.");
+			return nullptr;
+		}
+
+		// Read the user header
+		if (!read_instrument->ReadWithSize<unsigned short>(header, initialize_info.allocator, UINT16_MAX)) {
+			error_message("The user specified header could not be read or is corrupted.");
+			return nullptr;
+		}
+
+		bool deallocate_header = true;
+		bool deallocate_entire_state_infos = false;
+		bool deallocate_delta_state_infos = false;
+		auto deallocate_stack_scope = StackScope([&]() {
+			if (deallocate_header) {
+				header.Deallocate(initialize_info.allocator);
+			}
+			if (deallocate_entire_state_infos) {
+				entire_state_infos.Deallocate(initialize_info.allocator);
+			}
+			if (deallocate_delta_state_infos) {
+				delta_state_infos.Deallocate(initialize_info.allocator);
+			}
+		});
+
+		// Continue with the entire state infos
+		if (!DeserializeIntVariableLengthBool(read_instrument, entire_state_infos.size)) {
+			error_message("The entire state info size could not be read or is corrupted.");
+			return nullptr;
+		}
+		deallocate_entire_state_infos = true;
+		entire_state_infos.Initialize(initialize_info.allocator, entire_state_infos.size, entire_state_infos.size);
+		for (unsigned int index = 0; index < entire_state_infos.size; index++) {
+			if (!DeserializeIntVariableLengthBool(read_instrument, entire_state_infos[index].write_size)) {
+				error_message("An entire state info write size entry could not be read or is corrupted.");
+				return nullptr;
+			}
+			if (!DeserializeIntVariableLengthBool(read_instrument, entire_state_infos[index].delta_count)) {
+				error_message("An entire state info delta count entry could not be read or is corrupted.");
+				return nullptr;
+			}
+			if (!read_instrument->Read(&entire_state_infos[index].elapsed_seconds)) {
+				error_message("An entire state elapsed seconds entry could not be read or is corrupted.");
+				return nullptr;
+			}
+		}
+
+		if (!DeserializeIntVariableLengthBool(read_instrument, delta_state_infos.size)) {
+			error_message("The delta state info size could not be read or is corrupted.");
+			return nullptr;
+		}
+
+		// Make a sanity check - the number of delta state infos should be the same as the one deduced from the entire states
+		unsigned int total_delta_count = 0;
+		for (unsigned int index = 0; index < entire_state_infos.size; index++) {
+			total_delta_count += entire_state_infos[index].delta_count;
+		}
+		if (total_delta_count != delta_state_infos.size) {
+			error_message("The delta state info size is mismatched with the info from the entire states, which indicates that the data is corrupted.");
+			return nullptr;
+		}
+
+		deallocate_delta_state_infos = true;
+		delta_state_infos.Initialize(initialize_info.allocator, delta_state_infos.size, delta_state_infos.size);
+		for (unsigned int index = 0; index < delta_state_infos.size; index++) {
+			if (!DeserializeIntVariableLengthBool(read_instrument, delta_state_infos[index].write_size)) {
+				error_message("A delta state info write size entry could not be read or is corrupted.");
+				return nullptr;
+			}
+			if (!read_instrument->Read(&delta_state_infos[index].elapsed_seconds)) {
+				error_message("A delta state info elapsed seconds entry could not be read or is corrupted.");
+				return nullptr;
+			}
+		}
+
+		// Cache the first entire state offset
+		entire_state_start_offset = read_instrument->GetOffset();
+
+		// We succeeded reading the entire header part, continue with the basic assignment and deactivate the
+		// Stack scope deallocation
+		deallocate_header = false;
+		deallocate_entire_state_infos = false;
+		deallocate_delta_state_infos = false;
+
+		current_entire_state_index = 0;
+		current_delta_state_index = 0;
+		delta_function = initialize_info.delta_function;
+		entire_function = initialize_info.entire_function;
+		allocator = initialize_info.allocator;
+		user_data = AllocateEx(allocator, initialize_info.user_data_size);
+		memset(user_data, 0, initialize_info.user_data_size);
+
+		// Compute the cached total entire state size
+		entire_state_total_write_size = 0;
+		for (size_t index = 0; index < entire_state_infos.size; index++) {
+			entire_state_total_write_size += entire_state_infos[index].write_size;
+		}
+
+		return user_data;
+	}
+
+	bool DeltaStateReader::Seek(float elapsed_seconds) {
+		return false;
 	}
 	
 	// -----------------------------------------------------------------------------------------------------------------------------
