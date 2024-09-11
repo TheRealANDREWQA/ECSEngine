@@ -819,19 +819,27 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 
 	template<typename... Parameters>
 	void FormatString(CapacityStream<char>& destination, const char* base_characters, Parameters... parameters) {
-		ulong2 written_characters = { 0, 0 };
-		Internal::FormatStringImpl(destination, base_characters, written_characters, parameters...);
-
-		// The remaining characters still need to be copied
-		size_t base_character_count = strlen(base_characters);
-		size_t characters_to_be_written = base_character_count - written_characters.y;
-		if (characters_to_be_written > 0) {
-			destination.AssertCapacity(characters_to_be_written);
-			memcpy(destination.buffer + destination.size, base_characters + written_characters.y, characters_to_be_written);
-			destination.size += characters_to_be_written;
+		if constexpr (sizeof...(Parameters) == 0) {
+			destination.AddStreamAssert(base_characters);
+			destination.AssertCapacity(1);
+			destination[destination.size] = '\0';
+			return;
 		}
-		destination.AssertCapacity(1);
-		destination[destination.size] = '\0';
+		else {
+			ulong2 written_characters = { 0, 0 };
+			Internal::FormatStringImpl(destination, base_characters, written_characters, parameters...);
+
+			// The remaining characters still need to be copied
+			size_t base_character_count = strlen(base_characters);
+			size_t characters_to_be_written = base_character_count - written_characters.y;
+			if (characters_to_be_written > 0) {
+				destination.AssertCapacity(characters_to_be_written);
+				memcpy(destination.buffer + destination.size, base_characters + written_characters.y, characters_to_be_written);
+				destination.size += characters_to_be_written;
+			}
+			destination.AssertCapacity(1);
+			destination[destination.size] = '\0';
+		}
 	}
 
 	static void DebugLocationString(DebugInfo debug_info, CapacityStream<char>* string) {

@@ -46,18 +46,27 @@ namespace ECSEngine {
 #define ECS_WRITE_INSTRUMENT_HELPER using WriteInstrument::Write
 
 	struct ReadInstrument {
+		enum SEEK_TYPE : unsigned char {
+			SEEK_START,
+			SEEK_CURRENT,
+			SEEK_FINISH // Not using SEEK_END because of the Windows conflict
+		};
+
 		// Returns the offset from the beginning of the read range up until the current read location
 		virtual size_t GetOffset() const = 0;
 
 		virtual bool Read(void* data, size_t data_size) = 0;
 
-		virtual bool Seek(size_t offset) = 0;
+		virtual bool Seek(SEEK_TYPE seek_type, int64_t offset) = 0;
 
 		// Returns a valid pointer if the data size can be directly referenced in the reader, without having you to allocate
 		// A buffer and then read into it. The out boolean parameter will be set to true if the current data size is out of bounds
 		// For the serialized range, else it will be set to false. In case it can reference the data but it is out of bounds, it will return nullptr,
 		// But if it cannot reference the data and the data size is out of bounds, the out parameter won't be set to true.
 		virtual void* ReferenceData(size_t data_size, bool& out_of_bounds) = 0;
+
+		// Returns the total byte size of the written data
+		virtual size_t TotalSize() const = 0;
 
 		// Returns true if it succeeded, else false
 		template<typename T>
@@ -149,9 +158,9 @@ namespace ECSEngine {
 			void* buffer = nullptr;
 			// It is set to true if the buffer was allocated from the allocator
 			bool was_allocated = false;
-			// Set to true if the reference 
+			// Set to true if the reference operation failed, else it is the read operation that failed
+			// Should only be checked if the returned buffer is nullptr.
 			bool is_reference_failure = false;
-			bool is_read_failure = false;
 		};
 
 		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
@@ -167,7 +176,7 @@ namespace ECSEngine {
 				result.buffer = AllocateEx(allocator, data_size);
 				if (!Read(result.buffer, data_size)) {
 					DeallocateEx(allocator, result.buffer);
-					result.is_read_failure = true;
+					result.buffer = nullptr;
 				}
 				else {
 					result.was_allocated = true;
