@@ -38,7 +38,19 @@ namespace ECSEngine {
 		ECS_READ_INSTRUMENT_HELPER;
 
 		ECS_INLINE BufferedFileReadInstrument() : buffering(), file(-1), initial_file_offset(0) {}
-		ECS_INLINE BufferedFileReadInstrument(ECS_FILE_HANDLE _file, CapacityStream<void> _buffering, size_t _initial_file_offset) : file(_file), buffering(_buffering), initial_file_offset(_initial_file_offset) {}
+		// The last argument is optional. If it is left at -1, it will deduce the data size as all the data from the initial offset until the end of the file
+		ECS_INLINE BufferedFileReadInstrument(ECS_FILE_HANDLE _file, CapacityStream<void> _buffering, size_t _initial_file_offset, size_t _data_byte_size = -1) : file(_file), buffering(_buffering), 
+			initial_file_offset(_initial_file_offset) {
+			// Retrieve the total data size now
+			if (_data_byte_size == -1) {
+				size_t file_byte_size = GetFileByteSize(file);
+				ECS_ASSERT(file_byte_size >= _initial_file_offset, "BufferedFileReadInstrument: The file byte size is smaller than the initial file offset!");
+				total_data_size = file_byte_size - _initial_file_offset;
+			}
+			else {
+				total_data_size = _data_byte_size;
+			}
+		}
 
 		ECS_INLINE size_t GetOffset() const override {
 			// This is a little bit more complicated, since we need to take the buffering into account
@@ -51,10 +63,22 @@ namespace ECSEngine {
 			return ReadFileExact(file, { data, data_size }, buffering);
 		}
 
-		ECS_INLINE bool Seek(size_t offset) override {
+		ECS_INLINE bool Seek(SEEK_TYPE seek_type, int64_t offset) override {
 			// Discard the buffering, since we changed the location
 			buffering.size = 0;
-			return SetFileCursorBool(file, offset, ECS_FILE_SEEK_BEG);
+			ECS_FILE_SEEK file_seek = ECS_FILE_SEEK_BEG;
+			switch (seek_type) {
+			case SEEK_START:
+				file_seek = ECS_FILE_SEEK_BEG;
+				break;
+			case SEEK_CURRENT:
+				file_seek = ECS_FILE_SEEK_CURRENT;
+				break;
+			case SEEK_FINISH:
+				file_seek = ECS_FILE_SEEK_END;
+				break;
+			}
+			return SetFileCursorBool(file, offset, file_seek);
 		}
 
 		ECS_INLINE void* ReferenceData(size_t data_size, bool& is_out_of_range) override {
@@ -65,8 +89,13 @@ namespace ECSEngine {
 			return nullptr;
 		}
 
+		ECS_INLINE size_t TotalSize() const override {
+			return total_data_size;
+		}
+
 		ECS_FILE_HANDLE file;
 		size_t initial_file_offset;
+		size_t total_data_size;
 		CapacityStream<void> buffering;
 	};
 
