@@ -3,7 +3,7 @@
 #include "../Utilities/Serialization/SerializationHelpers.h"
 #include "../Utilities/Serialization/SerializeIntVariableLength.h"
 #include "../Utilities/Utilities.h"
-#include "../Utilities/InMemoryReaderWriter.h"
+#include "../Utilities/ReaderWriterInterface.h"
 
 #define VERSION 0
 
@@ -81,11 +81,14 @@ namespace ECSEngine {
 		return VERSION;
 	}
 
-	size_t SerializeMouseInputDeltaMaxSize() {
-		return sizeof(float) + 1 + SerializeIntVariableLengthMaxSize<int>() * 3;
+	InputSerializationHeader GetSerializeInputHeader() {
+		InputSerializationHeader header;
+		memset(&header, 0, sizeof(header));
+		header.version = VERSION;
+		return header;
 	}
 
-	bool SerializeMouseInputDelta(const Mouse* previous_state, const Mouse* current_state, uintptr_t& buffer, size_t& buffer_capacity, float elapsed_seconds) {
+	bool SerializeMouseInputDelta(const Mouse* previous_state, const Mouse* current_state, WriteInstrument* write_instrument) {
 		// Determine if there is any difference at all between the two states. If there is not, we can simply skip the entry all together.
 		int x_delta = current_state->GetPosition().x - previous_state->GetPosition().x;
 		int y_delta = current_state->GetPosition().y - previous_state->GetPosition().y;
@@ -96,33 +99,29 @@ namespace ECSEngine {
 		
 		if (x_delta != 0 || y_delta != 0 || scroll_delta != 0 || previous_button_states != current_button_states) {
 			// One of the values changed
-			InMemoryWriteInstrument write_instrument = { buffer, buffer_capacity };
 			
 			// There are 3 bits that in the button states that can be used to indicate whether or not the deltas are 0 or not
 			current_button_states |= x_delta != 0 ? MOUSE_DELTA_X_BIT : 0;
 			current_button_states |= y_delta != 0 ? MOUSE_DELTA_Y_BIT : 0;
 			current_button_states |= scroll_delta != 0 ? MOUSE_DELTA_SCROLL_BIT : 0;
 
-			// Write the elapsed seconds first, then the button states (with the additional delta bits) followed by the variable length deltas.
-			if (!write_instrument.Write(&elapsed_seconds)) {
-				return false;
-			}
-			if (!write_instrument.Write(&current_button_states)) {
+			// Write the button states (with the additional delta bits) followed by the variable length deltas.
+			if (!write_instrument->Write(&current_button_states)) {
 				return false;
 			}
 
 			if (x_delta != 0) {
-				if (!SerializeIntVariableLengthBool(&write_instrument, x_delta)) {
+				if (!SerializeIntVariableLengthBool(write_instrument, x_delta)) {
 					return false;
 				}
 			}
 			if (y_delta != 0) {
-				if (!SerializeIntVariableLengthBool(&write_instrument, y_delta)) {
+				if (!SerializeIntVariableLengthBool(write_instrument, y_delta)) {
 					return false;
 				}
 			}
 			if (scroll_delta != 0) {
-				if (!SerializeIntVariableLengthBool(&write_instrument, scroll_delta)) {
+				if (!SerializeIntVariableLengthBool(write_instrument, scroll_delta)) {
 					return false;
 				}
 			}
@@ -130,45 +129,24 @@ namespace ECSEngine {
 		return true;
 	}
 
-	size_t SerializeMouseInputMaxSize() {
-		return sizeof(float) + sizeof(unsigned short) + SerializeIntVariableLengthMaxSize<int>() * 3;
-	}
-
-	bool SerializeMouseInput(const Mouse* state, uintptr_t& buffer, size_t& buffer_capacity, float elapsed_seconds)
+	bool SerializeMouseInput(const Mouse* state, WriteInstrument* write_instrument)
 	{
-		InMemoryWriteInstrument write_instrument = { buffer, buffer_capacity };
-
-		// Write the elapsed duration first, followed by the button states and the variable length integers at last
-		if (!write_instrument.Write(&elapsed_seconds)) {
-			return false;
-		}
-
+		// Write the button states and the variable length integers at last
 		unsigned short button_states;
 		WriteBits(&button_states, 2, ECS_MOUSE_BUTTON_COUNT, [state](size_t index, void* value) {
 			unsigned char* byte = (unsigned char*)value;
 			*byte = state->m_states[index];
 		});
-		if (!write_instrument.Write(&button_states)) {
+		if (!write_instrument->Write(&button_states)) {
 			return false;
 		}
 
-		return SerializeIntVariableLengthBoolMultiple(&write_instrument, state->GetPosition().x, state->GetPosition().y, state->GetScrollValue());
+		return SerializeIntVariableLengthBoolMultiple(write_instrument, state->GetPosition().x, state->GetPosition().y, state->GetScrollValue());
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	size_t SerializeKeyboardInputDeltaMaxSize() {
-		// Even tho the number can be much larger, use a smaller realistic value,
-		// Since changing the state of many keys is not a normal occurence. There is also the
-		// Character queue that we must take into consideration, for that use a conservative
-		// Estimation of actual usage.
-		return sizeof(float) + sizeof(unsigned char) + sizeof(ECS_KEY) * MAX_KEYBOARD_KEY_DELTA_COUNT // The key states
-			+ SerializeIntVariableLengthMaxSize<int>() // Pushed character count
-			+ sizeof(unsigned char) + sizeof(unsigned char) * MAX_KEYBOARD_CHARACTER_QUEUE_DELTA_COUNT // The character queue
-			+ sizeof(unsigned char) + sizeof(Keyboard::AlphanumericKey) * MAX_KEYBOARD_ALPHANUMERIC_DELTA_COUNT; // The alphanumeric entries
-	}
-
-	bool SerializeKeyboardInputDelta(const Keyboard* previous_state, const Keyboard* current_state, uintptr_t& buffer, size_t& buffer_capacity, float elapsed_seconds)
+	bool SerializeKeyboardInputDelta(const Keyboard* previous_state, const Keyboard* current_state, WriteInstrument* write_instrument)
 	{
 		// Determine if there is any difference between the 2 states
 		bool is_process_queue_different = previous_state->m_process_characters != current_state->m_process_characters;
@@ -181,11 +159,6 @@ namespace ECSEngine {
 
 		if (is_process_queue_different || is_pushed_character_count_different || is_queue_different || changed_keys.size > 0 || is_alphanumeric_different) {
 			// There is a difference, we must serialize a state
-			InMemoryWriteInstrument write_instrument = { buffer, buffer_capacity };
-
-			if (!write_instrument.Write(&elapsed_seconds)) {
-				return false;
-			}
 
 			// Write a compressed mask that indicates what deltas there are such that we can skip those that are not needed
 			unsigned char difference_bit_mask = 0;
@@ -194,13 +167,13 @@ namespace ECSEngine {
 			difference_bit_mask |= is_queue_different ? KEYBOARD_DELTA_CHARACTER_QUEUE_BIT : 0;
 			difference_bit_mask |= changed_keys.size > 0 ? KEYBOARD_DELTA_CHANGED_KEYS_BIT : 0;
 			difference_bit_mask |= is_alphanumeric_different ? KEYBOARD_DELTA_ALPHANUMERIC_BIT : 0;
-			if (!write_instrument.Write(&difference_bit_mask)) {
+			if (!write_instrument->Write(&difference_bit_mask)) {
 				return false;
 			}
 
 			// Continue with the individual values, except for the boolean m_process_characters, which is already transmitted through the bit mask
 			if (is_pushed_character_count_different) {
-				if (!SerializeIntVariableLengthBool(&write_instrument, (int)(current_state->m_pushed_character_count - previous_state->m_pushed_character_count))) {
+				if (!SerializeIntVariableLengthBool(write_instrument, (int)(current_state->m_pushed_character_count - previous_state->m_pushed_character_count))) {
 					return false;
 				}
 			}
@@ -208,13 +181,13 @@ namespace ECSEngine {
 			if (is_queue_different) {
 				ECS_ASSERT(current_state->m_character_queue.GetSize() <= MAX_KEYBOARD_CHARACTER_QUEUE_DELTA_COUNT);
 				unsigned char queue_size = current_state->m_character_queue.GetSize();
-				if (!write_instrument.Write(&queue_size)) {
+				if (!write_instrument->Write(&queue_size)) {
 					return false;
 				}
 				ECS_STACK_CAPACITY_STREAM(char, character_queue_array, UCHAR_MAX);
 				uintptr_t character_queue_ptr = (uintptr_t)character_queue_array.buffer;
 				current_state->m_character_queue.CopyTo(character_queue_ptr);
-				if (!write_instrument.Write(character_queue_array.buffer, (size_t)queue_size * sizeof(char))) {
+				if (!write_instrument->Write(character_queue_array.buffer, (size_t)queue_size * sizeof(char))) {
 					return false;
 				}
 			}
@@ -222,14 +195,14 @@ namespace ECSEngine {
 			if (changed_keys.size > 0) {
 				// The states are already compressed enough, since there will be a small number of them
 				ECS_ASSERT(changed_keys.size <= MAX_KEYBOARD_KEY_DELTA_COUNT);
-				if (!write_instrument.WriteWithSize<unsigned char>(changed_keys)) {
+				if (!write_instrument->WriteWithSize<unsigned char>(changed_keys)) {
 					return false;
 				}
 			}
 
 			if (is_alphanumeric_different) {
 				ECS_ASSERT(current_state->m_alphanumeric_keys.size <= MAX_KEYBOARD_ALPHANUMERIC_DELTA_COUNT);
-				if (!write_instrument.WriteWithSize<unsigned char>(current_state->m_alphanumeric_keys)) {
+				if (!write_instrument->WriteWithSize<unsigned char>(current_state->m_alphanumeric_keys)) {
 					return false;
 				}
 			}
@@ -238,29 +211,15 @@ namespace ECSEngine {
 		return true;
 	}
 
-	size_t SerializeKeyboardInputMaxSize() {
-		return sizeof(float)
-			+ sizeof(bool) // The process characters boolean
-			+ ECS_KEY_COUNT / 8 * 2 + sizeof(unsigned char) // The key states, + 1 byte for padding
-			+ SerializeIntVariableLengthMaxSize<unsigned int>() // Pushed character count
-			+ sizeof(unsigned char) + sizeof(unsigned char) * MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT // The character queue
-			+ sizeof(unsigned char) + sizeof(Keyboard::AlphanumericKey) * MAX_KEYBOARD_ALPHANUMERIC_ENTIRE_COUNT; // The alphanumeric entries
-	}
-
-	bool SerializeKeyboardInput(const Keyboard* state, uintptr_t& buffer, size_t& buffer_capacity, float elapsed_seconds)
+	bool SerializeKeyboardInput(const Keyboard* state, WriteInstrument* write_instrument)
 	{
 		ECS_ASSERT(state->m_character_queue.GetSize() <= MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT);
 		ECS_ASSERT(state->m_alphanumeric_keys.size <= MAX_KEYBOARD_ALPHANUMERIC_ENTIRE_COUNT);
 
-		InMemoryWriteInstrument write_instrument = { buffer, buffer_capacity };
-
-		if (!write_instrument.Write(&elapsed_seconds)) {
+		if (!write_instrument->Write(&state->m_process_characters)) {
 			return false;
 		}
-		if (!write_instrument.Write(&state->m_process_characters)) {
-			return false;
-		}
-		if (!SerializeIntVariableLengthBool(&write_instrument, state->m_pushed_character_count)) {
+		if (!SerializeIntVariableLengthBool(write_instrument, state->m_pushed_character_count)) {
 			return false;
 		}
 
@@ -269,12 +228,12 @@ namespace ECSEngine {
 		ECS_ASSERT(character_queue_storage.size <= character_queue_storage.capacity, "Serializing keyboard failed because the character queue exceeded the capacity!");
 		uintptr_t character_queue_storage_ptr = (uintptr_t)character_queue_storage.buffer;
 		state->m_character_queue.CopyTo(character_queue_storage_ptr);
-		if (!write_instrument.WriteWithSize<unsigned char>(character_queue_storage)) {
+		if (!write_instrument->WriteWithSize<unsigned char>(character_queue_storage)) {
 			return false;
 		}
 
 		ECS_ASSERT(state->m_alphanumeric_keys.size <= MAX_KEYBOARD_ALPHANUMERIC_ENTIRE_COUNT, "Serializing keyboard failed because the alphanumeric key size exceeded the maximum allowed!");
-		if (!write_instrument.WriteWithSize<unsigned char>(state->m_alphanumeric_keys)) {
+		if (!write_instrument->WriteWithSize<unsigned char>(state->m_alphanumeric_keys)) {
 			return false;
 		}
 
@@ -285,7 +244,7 @@ namespace ECSEngine {
 			unsigned char* byte_value = (unsigned char*)value;
 			*byte_value = state->m_states[index];
 		});
-		if (!write_instrument.Write(key_state.buffer, key_state_byte_count)) {
+		if (!write_instrument->Write(key_state.buffer, key_state_byte_count)) {
 			return false;
 		}
 
@@ -294,20 +253,17 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	bool DeserializeMouseInputDelta(const Mouse* previous_state, Mouse* current_state, uintptr_t& buffer, size_t& buffer_capacity, float& elapsed_seconds, unsigned char version) 
+	bool DeserializeMouseInputDelta(const Mouse* previous_state, Mouse* current_state, ReadInstrument* read_instrument, const InputSerializationHeader& header) 
 	{
-		ECS_ASSERT_FORMAT(version == VERSION, "Deserializing mouse with unknown version {#}: expected {#}.", version, VERSION);
-		current_state->UpdateFromOther(previous_state);
-
-		InMemoryReadInstrument read_instrument = { buffer, buffer_capacity };
-
-		if (!read_instrument.Read(&elapsed_seconds)) {
+		if (header.version != VERSION) {
 			return false;
 		}
 
+		current_state->UpdateFromOther(previous_state);
+
 		// Read the combined bit mask
 		unsigned char button_states = 0;
-		if (!read_instrument.Read(&button_states)) {
+		if (!read_instrument->Read(&button_states)) {
 			return false;
 		}
 
@@ -323,7 +279,7 @@ namespace ECSEngine {
 		if (HasFlag(button_states, MOUSE_DELTA_X_BIT)) {
 			// There is a x delta
 			int x_delta = 0;
-			if (!DeserializeIntVariableLengthBool(&read_instrument, x_delta)) {
+			if (!DeserializeIntVariableLengthBool(read_instrument, x_delta)) {
 				return false;
 			}
 			current_state->AddDelta(x_delta, 0);
@@ -331,7 +287,7 @@ namespace ECSEngine {
 		if (HasFlag(button_states, MOUSE_DELTA_Y_BIT)) {
 			// There is a y delta
 			int y_delta = 0;
-			if (!DeserializeIntVariableLengthBool(&read_instrument, y_delta)) {
+			if (!DeserializeIntVariableLengthBool(read_instrument, y_delta)) {
 				return false;
 			}
 			current_state->AddDelta(0, y_delta);
@@ -339,7 +295,7 @@ namespace ECSEngine {
 		if (HasFlag(button_states, MOUSE_DELTA_SCROLL_BIT)) {
 			// There is a scroll delta
 			int scroll_delta = 0;
-			if (!DeserializeIntVariableLengthBool(&read_instrument, scroll_delta)) {
+			if (!DeserializeIntVariableLengthBool(read_instrument, scroll_delta)) {
 				return false;
 			}
 			current_state->SetCursorWheel(current_state->GetScrollValue() + scroll_delta);
@@ -348,19 +304,15 @@ namespace ECSEngine {
 		return true;
 	}
 
-	bool DeserializeMouseInput(Mouse* state, uintptr_t& buffer, size_t& buffer_capacity, float& elapsed_seconds, unsigned char version)
+	bool DeserializeMouseInput(Mouse* state, ReadInstrument* read_instrument, const InputSerializationHeader& header)
 	{
-		ECS_ASSERT_FORMAT(version == VERSION, "Deserializing mouse with unknown version {#}: expected {#}.", version, VERSION);
-		state->Reset();
-
-		InMemoryReadInstrument read_instrument = { buffer, buffer_capacity };
-
-		if (!read_instrument.Read(&elapsed_seconds)) {
+		if (header.version != VERSION) {
 			return false;
 		}
+		state->Reset();
 
 		unsigned short button_states = 0;
-		if (!read_instrument.Read(&button_states)) {
+		if (!read_instrument->Read(&button_states)) {
 			return false;
 		}
 		ReadBits(&button_states, 2, ECS_MOUSE_BUTTON_COUNT, [state](size_t index, const void* value) {
@@ -370,7 +322,7 @@ namespace ECSEngine {
 
 		int2 position;
 		int scroll_value;
-		if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(&read_instrument, position.x, position.y, scroll_value)) {
+		if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(read_instrument, position.x, position.y, scroll_value)) {
 			return false;
 		}
 
@@ -382,19 +334,15 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	bool DeserializeKeyboardInputDelta(const Keyboard* previous_state, Keyboard* current_state, uintptr_t& buffer, size_t& buffer_capacity, float& elapsed_seconds, unsigned char version) 
+	bool DeserializeKeyboardInputDelta(const Keyboard* previous_state, Keyboard* current_state, ReadInstrument* read_instrument, const InputSerializationHeader& header) 
 	{
-		ECS_ASSERT_FORMAT(version == VERSION, "Deserializing keyboard with unknown version {#}: expected {#}.", version, VERSION);
-		current_state->UpdateFromOther(previous_state);
-
-		InMemoryReadInstrument read_instrument = { buffer, buffer_capacity };
-
-		if (!read_instrument.Read(&elapsed_seconds)) {
+		if (header.version != VERSION) {
 			return false;
 		}
+		current_state->UpdateFromOther(previous_state);
 
 		unsigned char difference_bit_mask = 0;
-		if (!read_instrument.Read(&difference_bit_mask)) {
+		if (!read_instrument->Read(&difference_bit_mask)) {
 			return false;
 		}
 
@@ -403,7 +351,7 @@ namespace ECSEngine {
 		if (HasFlag(difference_bit_mask, KEYBOARD_DELTA_PUSHED_CHARACTER_COUNT_BIT)) {
 			// The pushed character count
 			int character_count_delta = 0;
-			if (!DeserializeIntVariableLengthBool(&read_instrument, character_count_delta)) {
+			if (!DeserializeIntVariableLengthBool(read_instrument, character_count_delta)) {
 				return false;
 			}
 			current_state->m_pushed_character_count += character_count_delta;
@@ -419,7 +367,7 @@ namespace ECSEngine {
 			current_state->m_character_queue.Reset();
 			ECS_ASSERT(current_state->m_character_queue.GetCapacity() >= MAX_KEYBOARD_CHARACTER_QUEUE_DELTA_COUNT);
 			unsigned char queue_size = 0;
-			if (!read_instrument.ReadWithSize<unsigned char>(current_state->m_character_queue.GetQueue()->buffer, queue_size, MAX_KEYBOARD_CHARACTER_QUEUE_DELTA_COUNT)) {
+			if (!read_instrument->ReadWithSize<unsigned char>(current_state->m_character_queue.GetQueue()->buffer, queue_size, MAX_KEYBOARD_CHARACTER_QUEUE_DELTA_COUNT)) {
 				return false;
 			}
 			current_state->m_character_queue.m_queue.size = queue_size;
@@ -427,7 +375,7 @@ namespace ECSEngine {
 
 		if (HasFlag(difference_bit_mask, KEYBOARD_DELTA_CHANGED_KEYS_BIT)) {
 			ECS_STACK_CAPACITY_STREAM(ECS_KEY, changed_keys, MAX_KEYBOARD_KEY_DELTA_COUNT);
-			if (!read_instrument.ReadWithSize<unsigned char>(changed_keys)) {
+			if (!read_instrument->ReadWithSize<unsigned char>(changed_keys)) {
 				return false;
 			}
 			for (unsigned char index = 0; index < changed_keys.size; index++) {
@@ -439,7 +387,7 @@ namespace ECSEngine {
 			// The alphanumeric entries
 			current_state->m_alphanumeric_keys.Reset();
 			ECS_ASSERT(current_state->m_alphanumeric_keys.capacity >= MAX_KEYBOARD_ALPHANUMERIC_DELTA_COUNT);
-			if (!read_instrument.ReadWithSize<unsigned char>(current_state->m_alphanumeric_keys)) {
+			if (!read_instrument->ReadWithSize<unsigned char>(current_state->m_alphanumeric_keys)) {
 				return false;
 			}
 		}
@@ -447,33 +395,30 @@ namespace ECSEngine {
 		return true;
 	}
 
-	bool DeserializeKeyboardInput(Keyboard* state, uintptr_t& buffer, size_t& buffer_capacity, float& elapsed_seconds, unsigned char version)
+	bool DeserializeKeyboardInput(Keyboard* state, ReadInstrument* read_instrument, const InputSerializationHeader& header)
 	{
-		ECS_ASSERT_FORMAT(version == VERSION, "Deserializing keyboard with unknown version {#}: expected {#}.", version, VERSION);
+		if (header.version != VERSION) {
+			return false;
+		}
 		state->Reset();
 
-		InMemoryReadInstrument read_instrument = { buffer, buffer_capacity };
-
-		if (!read_instrument.Read(&elapsed_seconds)) {
-			return false;
-		}
-		if (!read_instrument.Read(&state->m_process_characters)) {
+		if (!read_instrument->Read(&state->m_process_characters)) {
 			return false;
 		}
 
-		if (!DeserializeIntVariableLengthBool(&read_instrument, state->m_pushed_character_count)) {
+		if (!DeserializeIntVariableLengthBool(read_instrument, state->m_pushed_character_count)) {
 			return false;
 		}
 
 		ECS_STACK_CAPACITY_STREAM(char, character_queue_storage, MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT);
-		if (!read_instrument.ReadWithSize<unsigned char>(character_queue_storage)) {
+		if (!read_instrument->ReadWithSize<unsigned char>(character_queue_storage)) {
 			return false;
 		}
 		state->m_character_queue.Reset();
 		state->m_character_queue.PushRange(character_queue_storage);
 
 		ECS_ASSERT(state->m_alphanumeric_keys.capacity >= MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT, "Deserializing keyboard: expected larger alphanumeric buffer capacity.");
-		if (!read_instrument.ReadWithSize<unsigned char>(state->m_alphanumeric_keys)) {
+		if (!read_instrument->ReadWithSize<unsigned char>(state->m_alphanumeric_keys)) {
 			return false;
 		}
 
@@ -482,7 +427,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, key_state, ECS_KEY_COUNT);
 		// 2 bits per entry, determine the number of bytes
 		size_t key_state_byte_count = SlotsFor(ECS_KEY_COUNT * 2, 8);
-		if (!read_instrument.Read(key_state.buffer, key_state_byte_count)) {
+		if (!read_instrument->Read(key_state.buffer, key_state_byte_count)) {
 			return false;
 		}
 
@@ -492,42 +437,6 @@ namespace ECSEngine {
 		});
 		
 		return true;
-	}
-
-	// -----------------------------------------------------------------------------------------------------------------------------
-
-	bool DeserializeInputDelta(
-		const Mouse* previous_mouse,
-		const Keyboard* previous_keyboard,
-		Mouse* current_mouse,
-		Keyboard* current_keyboard,
-		uintptr_t& buffer,
-		size_t& buffer_capacity,
-		float& mouse_elapsed_seconds,
-		float& keyboard_elapsed_seconds,
-		unsigned char version
-	)
-	{
-		if (!DeserializeMouseInputDelta(previous_mouse, current_mouse, buffer, buffer_capacity, mouse_elapsed_seconds, version)) {
-			return false;
-		}
-		return DeserializeKeyboardInputDelta(previous_keyboard, current_keyboard, buffer, buffer_capacity, keyboard_elapsed_seconds, version);
-	}
-
-	bool DeserializeInput(
-		Mouse* mouse_state,
-		Keyboard* keyboard_state,
-		uintptr_t& buffer, 
-		size_t& buffer_capacity,
-		float& mouse_elapsed_seconds,
-		float& keyboard_elapsed_seconds,
-		unsigned char version
-	)
-	{
-		if (!DeserializeMouseInput(mouse_state, buffer, buffer_capacity, mouse_elapsed_seconds, version)) {
-			return false;
-		}
-		return DeserializeKeyboardInput(keyboard_state, buffer, buffer_capacity, keyboard_elapsed_seconds, version);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
