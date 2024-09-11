@@ -122,7 +122,7 @@ namespace ECSEngine {
 	// Returns true if the serialization succeeded for all integers, else false
 	// The is out of range boolean is set to true if at least one entry is out of range
 	template<typename FirstInteger, typename... Integers>
-	ECS_INLINE bool DeserializeIntVariableLengthBoolMultiple(ReadInstrument* read_instrument, bool& is_out_of_range, FirstInteger& first_integer, Integers... integers) {
+	ECS_INLINE bool DeserializeIntVariableLengthBoolMultiple(ReadInstrument* read_instrument, bool& is_out_of_range, FirstInteger& first_integer, Integers&... integers) {
 		if (!DeserializeIntVariableLengthBoolMultiple(read_instrument, is_out_of_range, first_integer)) {
 			return false;
 		}
@@ -135,7 +135,7 @@ namespace ECSEngine {
 
 	// Returns true if the serialization succeeded for all integers and all integers are in their range, else false
 	template<typename FirstInteger, typename... Integers>
-	ECS_INLINE bool DeserializeIntVariableLengthBoolMultipleEnsureRange(ReadInstrument* read_instrument, FirstInteger& first_integer, Integers... integers) {
+	ECS_INLINE bool DeserializeIntVariableLengthBoolMultipleEnsureRange(ReadInstrument* read_instrument, FirstInteger& first_integer, Integers&... integers) {
 		bool is_out_of_range = false;
 		if (!DeserializeIntVariableLengthBoolMultiple(read_instrument, is_out_of_range, first_integer, integers...)) {
 			return false;
