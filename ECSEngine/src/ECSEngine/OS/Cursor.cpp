@@ -35,10 +35,6 @@ namespace ECSEngine {
 			RECT window_rect;
 			ECS_ASSERT(GetClientRect(hwnd, &window_rect));
 
-			// If we have a top border we need to take that into account
-			RECT bounds;
-			GetWindowRect(hwnd, &bounds);
-
 			POINT cursor;
 			GetCursorPos(&cursor);
 

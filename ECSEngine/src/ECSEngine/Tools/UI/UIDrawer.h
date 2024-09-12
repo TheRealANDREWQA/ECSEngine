@@ -704,6 +704,14 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			void CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerTextElement* element, void* value_to_modify, unsigned char bit_index, float2 position, float2 scale);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, void* value_to_modify, unsigned char bit_index, float2 position, float2 scale);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void ComboBoxDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerComboBox* data, unsigned char* active_label, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -2927,6 +2935,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 			
 			// StreamType/states: CapacityStream<bool> or ResizableStream<bool>
+			// At the moment, it doesn't support the integer bit check box
 			template<typename StreamType>
 			void ArrayCheckBox(
 				size_t configuration,
@@ -3156,6 +3165,12 @@ namespace ECSEngine {
 			void CheckBox(Stream<char> name, bool* value_to_change);
 
 			void CheckBox(size_t configuration, const UIDrawConfig& config, Stream<char> name, bool* value_to_change);
+
+			// This variant works on a bit inside the given value.
+			void CheckBox(Stream<char> name, void* value_to_change, unsigned char bit_index);
+
+			// This variant works on a bit inside the given value.
+			void CheckBox(size_t configuration, const UIDrawConfig& config, Stream<char> name, void* value_to_change, unsigned char bit_index);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
