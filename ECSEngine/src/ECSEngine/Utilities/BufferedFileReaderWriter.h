@@ -4,6 +4,22 @@
 
 namespace ECSEngine {
 
+	ECS_INLINE ECS_FILE_SEEK InstrumentSeekToFileSeek(ECS_INSTRUMENT_SEEK_TYPE seek_type) {
+		switch (seek_type) {
+		case ECS_INSTRUMENT_SEEK_START:
+			return ECS_FILE_SEEK_BEG;
+		case ECS_INSTRUMENT_SEEK_CURRENT:
+			return ECS_FILE_SEEK_CURRENT;
+		case ECS_INSTRUMENT_SEEK_END:
+			return ECS_FILE_SEEK_END;
+		default:
+			// Shouldn't be reached
+			ECS_ASSERT(false, "Invalid instrument seek type");
+		}
+
+		return ECS_FILE_SEEK_BEG;
+	}
+
 	struct BufferedFileWriteInstrument : WriteInstrument {
 		ECS_WRITE_INSTRUMENT_HELPER;
 
@@ -20,6 +36,25 @@ namespace ECSEngine {
 
 		ECS_INLINE bool Write(const void* data, size_t data_size) override {
 			return WriteFile(file, { data, data_size }, buffering);
+		}
+
+		bool ResetAndSeekTo(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
+			// Write any buffering that is still left
+			if (!WriteFile(file, buffering)) {
+				return false;
+			}
+			buffering.size = 0;
+
+			if (!SetFileCursorBool(file, offset, InstrumentSeekToFileSeek(seek_type))) {
+				return false;
+			}
+
+			// Resize the file such that it ends at the current cursor
+			if (!ResizeFile(file, GetFileCursor(file))) {
+				return false;
+			}
+
+			return true;
 		}
 
 		ECS_INLINE bool Flush() override {
@@ -63,22 +98,10 @@ namespace ECSEngine {
 			return ReadFileExact(file, { data, data_size }, buffering);
 		}
 
-		ECS_INLINE bool Seek(SEEK_TYPE seek_type, int64_t offset) override {
+		ECS_INLINE bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
 			// Discard the buffering, since we changed the location
 			buffering.size = 0;
-			ECS_FILE_SEEK file_seek = ECS_FILE_SEEK_BEG;
-			switch (seek_type) {
-			case SEEK_START:
-				file_seek = ECS_FILE_SEEK_BEG;
-				break;
-			case SEEK_CURRENT:
-				file_seek = ECS_FILE_SEEK_CURRENT;
-				break;
-			case SEEK_FINISH:
-				file_seek = ECS_FILE_SEEK_END;
-				break;
-			}
-			return SetFileCursorBool(file, offset, file_seek);
+			return SetFileCursorBool(file, offset, InstrumentSeekToFileSeek(seek_type));
 		}
 
 		ECS_INLINE void* ReferenceData(size_t data_size, bool& is_out_of_range) override {

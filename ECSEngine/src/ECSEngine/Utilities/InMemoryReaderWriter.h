@@ -6,8 +6,8 @@ namespace ECSEngine {
 	struct InMemoryWriteInstrument : WriteInstrument {
 		ECS_WRITE_INSTRUMENT_HELPER;
 
-		ECS_INLINE InMemoryWriteInstrument() : initial_buffer(0), buffer(nullptr), buffer_capacity(nullptr) {}
-		ECS_INLINE InMemoryWriteInstrument(uintptr_t& _buffer, size_t& _buffer_capacity) : initial_buffer(_buffer), buffer(&_buffer), buffer_capacity(&_buffer_capacity) {}
+		ECS_INLINE InMemoryWriteInstrument() : initial_buffer(0), initial_capacity(0), buffer(nullptr), buffer_capacity(nullptr) {}
+		ECS_INLINE InMemoryWriteInstrument(uintptr_t& _buffer, size_t& _buffer_capacity) : initial_buffer(_buffer), initial_capacity(_buffer_capacity), buffer(&_buffer), buffer_capacity(&_buffer_capacity) {}
 
 		ECS_INLINE size_t GetOffset() const override {
 			return *buffer - initial_buffer;
@@ -23,11 +23,35 @@ namespace ECSEngine {
 			return true;
 		}
 
+		bool ResetAndSeekTo(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
+			switch (seek_type) {
+			case ECS_INSTRUMENT_SEEK_START:
+			{
+				*buffer = initial_buffer + offset;
+				*buffer_capacity = initial_capacity - offset;
+			}
+				break;
+			// Current and end are the same, since the current location is basically the end
+			case ECS_INSTRUMENT_SEEK_CURRENT:
+			case ECS_INSTRUMENT_SEEK_END:
+			{
+				*buffer = *buffer + offset;
+				*buffer_capacity = *buffer_capacity - offset;
+			}
+				break;
+			default:
+				ECS_ASSERT(false, "Invalid instrument seek type.");
+			}
+
+			return true;
+		}
+
 		ECS_INLINE bool Flush() override {
 			return true;
 		}
 
 		uintptr_t initial_buffer;
+		size_t initial_capacity;
 		uintptr_t* buffer;
 		size_t* buffer_capacity;
 	};
@@ -53,19 +77,28 @@ namespace ECSEngine {
 			return true;
 		}
 
-		ECS_INLINE bool Seek(SEEK_TYPE seek_type, int64_t offset) override {
+		bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
 			switch (seek_type) {
-			case SEEK_START:
+			case ECS_INSTRUMENT_SEEK_START:
+			{
 				*buffer = initial_buffer + offset;
+				*buffer_capacity = initial_buffer_capacity - offset;
+			}
 				break;
-			case SEEK_CURRENT:
+			case ECS_INSTRUMENT_SEEK_CURRENT:
+			{
 				*buffer = *buffer + offset;
+				*buffer_capacity = *buffer_capacity - offset;
+			}
 				break;
-			case SEEK_FINISH:
+			case ECS_INSTRUMENT_SEEK_END:
+			{
 				*buffer = initial_buffer + initial_buffer_capacity + offset;
+				*buffer_capacity = -offset;
+			}
 				break;
 			default:
-				ECS_ASSERT(false);
+				ECS_ASSERT(false, "Invalid instrument seek type");
 			}
 			
 			return true;
