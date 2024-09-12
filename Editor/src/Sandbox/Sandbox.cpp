@@ -5,6 +5,7 @@
 #include "SandboxCrashHandler.h"
 #include "SandboxProfiling.h"
 #include "SandboxFile.h"
+#include "SandboxRecording.h"
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorEvent.h"
 #include "../Editor/EditorPalette.h"
@@ -994,6 +995,9 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// Unload the sandbox assets
 	UnloadSandboxAssets(editor_state, sandbox_index);
+
+	// Finish any recordings that are still valid
+	FinishSandboxRecordings(editor_state, sandbox_index);
 
 	// We also need to remove the prefab component references
 
@@ -2185,6 +2189,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 		ResizeSandboxRenderTextures(editor_state, sandbox_index, (EDITOR_SANDBOX_VIEWPORT)index, { 1, 1 });
 	}
 
+	ResetSandboxRecordings(editor_state, sandbox_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

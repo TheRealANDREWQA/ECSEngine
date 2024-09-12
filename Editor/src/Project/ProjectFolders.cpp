@@ -158,3 +158,15 @@ Stream<wchar_t> GetProjectAssetRelativePath(const EditorState* editor_state, Str
 }
 
 // -------------------------------------------------------------------------------------------------------------
+
+Stream<wchar_t> GetProjectPathFromAssetRelative(const EditorState* editor_state, CapacityStream<wchar_t>& storage, Stream<wchar_t> relative_path) {
+	unsigned int storage_size = storage.size;
+	GetProjectAssetsFolder(editor_state, storage);
+	storage.AddAssert(ECS_OS_PATH_SEPARATOR);
+	storage.AddStreamAssert(relative_path);
+	Stream<wchar_t> path = storage.SliceAt(storage_size);
+	ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+	return path;
+}
+
+// -------------------------------------------------------------------------------------------------------------

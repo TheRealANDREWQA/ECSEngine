@@ -258,9 +258,10 @@ namespace ECSEngine {
 	// New name must only be the directory/filename name, not the fully qualified path
 	ECSENGINE_API bool RenameFileOrFolder(Stream<wchar_t> path, Stream<wchar_t> new_name);
 
-	ECSENGINE_API bool ResizeFile(Stream<wchar_t> file, int size);
+	ECSENGINE_API bool ResizeFile(Stream<wchar_t> file, size_t size);
 
-	ECSENGINE_API bool ResizeFile(ECS_FILE_HANDLE file_handle, int size);
+	// The file handle must be opened for write
+	ECSENGINE_API bool ResizeFile(ECS_FILE_HANDLE file_handle, size_t size);
 
 	// The extension must start with a dot; operation applies to the OS file, not for the in memory paths
 	ECSENGINE_API bool ChangeFileExtension(Stream<wchar_t> path, Stream<wchar_t> new_extension);

@@ -4,6 +4,12 @@
 
 namespace ECSEngine {
 
+	enum ECS_INSTRUMENT_SEEK_TYPE : unsigned char {
+		ECS_INSTRUMENT_SEEK_START,
+		ECS_INSTRUMENT_SEEK_CURRENT,
+		ECS_INSTRUMENT_SEEK_END
+	};
+
 	// The following are some read/write instruments that can be used generically
 	// For write/read functions.
 
@@ -12,6 +18,9 @@ namespace ECSEngine {
 		virtual size_t GetOffset() const = 0;
 
 		virtual bool Write(const void* data, size_t data_size) = 0;
+
+		// It will discard any data that was written after that point
+		virtual bool ResetAndSeekTo(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) = 0;
 
 		virtual bool Flush() = 0;
 
@@ -46,18 +55,12 @@ namespace ECSEngine {
 #define ECS_WRITE_INSTRUMENT_HELPER using WriteInstrument::Write
 
 	struct ReadInstrument {
-		enum SEEK_TYPE : unsigned char {
-			SEEK_START,
-			SEEK_CURRENT,
-			SEEK_FINISH // Not using SEEK_END because of the Windows conflict
-		};
-
 		// Returns the offset from the beginning of the read range up until the current read location
 		virtual size_t GetOffset() const = 0;
 
 		virtual bool Read(void* data, size_t data_size) = 0;
 
-		virtual bool Seek(SEEK_TYPE seek_type, int64_t offset) = 0;
+		virtual bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) = 0;
 
 		// Returns a valid pointer if the data size can be directly referenced in the reader, without having you to allocate
 		// A buffer and then read into it. The out boolean parameter will be set to true if the current data size is out of bounds

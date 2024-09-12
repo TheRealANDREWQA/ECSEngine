@@ -197,6 +197,12 @@ enum ECS_REFLECT EDITOR_SANDBOX_GPU_STATISTICS_TYPE : unsigned char {
 	EDITOR_SANDBOX_GPU_STATISTICS_ADVANCED
 };
 
+enum EDITOR_SANDBOX_RECORDING_TYPE : unsigned char {
+	EDITOR_SANDBOX_RECORDING_INPUT,
+	EDITOR_SANDBOX_RECORDING_STATE,
+	EDITOR_SANDBOX_RECORDING_TYPE_COUNT
+};
+
 // We are reflecting this since we want this to be stored in the sandbox file
 struct ECS_REFLECT EditorSandboxStatisticsDisplay {
 	ECS_INLINE bool IsGraphDisplay(EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry) const {
@@ -346,20 +352,24 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::CapacityStream<wchar_t> input_recorder_file;
 	// How many seconds it should wait until an entire input state is written for the input recording
 	float input_recorder_entire_state_tick_seconds;
+	bool is_input_recorder_initialized;
 
 	// The input replay structure - should be used only when the flag EDITOR_SANDBOX_FLAG_REPLAY_INPUT is set
 	ECSEngine::DeltaStateReader input_replay;
 	ECSEngine::CapacityStream<wchar_t> input_replay_file;
+	bool is_input_replay_initialized;
 
 	// The state recorder structure - should be used only when the flag EDITOR_SANDBOX_FLAG_RECORD_STATE is set
 	ECSEngine::DeltaStateWriter state_recorder;
 	ECSEngine::CapacityStream<wchar_t> state_recorder_file;
 	// How many seconds it should wait until an entire state is written for the state recording
-	float state_recorder_entire_state_tick;
+	float state_recorder_entire_state_tick_seconds;
+	bool is_state_recorder_initialized;
 
 	// The state replay structure - should be used only when the flag EDITOR_SANDBOX_FLAG_REPLAY_STATE is set
 	ECSEngine::DeltaStateReader state_replay;
 	ECSEngine::CapacityStream<wchar_t> state_replay_file;
+	bool is_state_replay_initialized;
 
 	// Miscellaneous flags
 	size_t flags;

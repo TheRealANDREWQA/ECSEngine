@@ -660,7 +660,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool ResizeFile(Stream<wchar_t> file, int size)
+	bool ResizeFile(Stream<wchar_t> file, size_t size)
 	{
 		ECS_FILE_HANDLE file_handle = 0;
 		ECS_FILE_STATUS_FLAGS status = OpenFile(file, &file_handle, ECS_FILE_ACCESS_WRITE_ONLY);
@@ -675,9 +675,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool ResizeFile(ECS_FILE_HANDLE file_handle, int size)
+	bool ResizeFile(ECS_FILE_HANDLE file_handle, size_t size)
 	{
-		return _chsize(file_handle, size) == 0;
+		return _chsize_s(file_handle, size) == 0;
 	}
 
 	// --------------------------------------------------------------------------------------------------

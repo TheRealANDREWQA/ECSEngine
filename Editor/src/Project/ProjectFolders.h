@@ -66,3 +66,6 @@ void GetProjectRootPath(const EditorState* editor_state, ECSEngine::CapacityStre
 
 // Returns { nullptr, 0 } if the path is not relative to the assets folder
 ECSEngine::Stream<wchar_t> GetProjectAssetRelativePath(const EditorState* editor_state, ECSEngine::Stream<wchar_t> path);
+
+// Returns the path from the storage
+ECSEngine::Stream<wchar_t> GetProjectPathFromAssetRelative(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& storage, ECSEngine::Stream<wchar_t> relative_path);

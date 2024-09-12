@@ -353,7 +353,7 @@ namespace ECSEngine {
 		read_instrument = initialize_info.read_instrument;
 
 		// Try to deserialize the footer. If we cannot deserialize it, then we must abort
-		if (!read_instrument->Seek(ReadInstrument::SEEK_FINISH, -(int64_t)sizeof(Footer))) {
+		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_END, -(int64_t)sizeof(Footer))) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek at the footer location.");
 			return;
 		}
@@ -370,7 +370,7 @@ namespace ECSEngine {
 		}
 
 		// Seek to the start of the footer and start deserializing from there
-		if (!read_instrument->Seek(ReadInstrument::SEEK_CURRENT, -(int64_t)footer.size)) {
+		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_CURRENT, -(int64_t)footer.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the beginning of the footer data.");
 			return;
 		}
@@ -454,7 +454,7 @@ namespace ECSEngine {
 
 	bool DeltaStateReader::SeekInstrumentAtState(size_t state_index, CapacityStream<char>* error_message) const {
 		size_t state_offset = GetOffsetForState(state_index);
-		if (!read_instrument->Seek(ReadInstrument::SEEK_START, state_offset)) {
+		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, state_offset)) {
 			ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to seek at offset {#} for state with index {#}, elapsed seconds {#}.", state_offset,
 				state_index, state_infos[state_index].elapsed_seconds);
 			return false;
