@@ -10,6 +10,14 @@ namespace ECSEngine {
 
 	struct WriteInstrument;
 	struct ReadInstrument;
+	struct World;
+
+	// Initializes the data with the given allocator. This function exists to allow setup functions be decoupled from the
+	// The allocator that can be bound later on
+	typedef void (*DeltaStateUserDataAllocatorInitialize)(void* user_data, AllocatorPolymorphic allocator);
+
+	// Deallocates the buffers that were initially allocated from this allocator
+	typedef void (*DeltaStateUserDataAllocatorDeallocate)(void* user_data, AllocatorPolymorphic allocator);
 
 	struct DeltaStateWriterDeltaFunctionData {
 		void* user_data;
@@ -30,6 +38,9 @@ namespace ECSEngine {
 
 	// The functor returns true if it managed to write the state successfully, else false
 	typedef bool (*DeltaStateWriterEntireFunction)(DeltaStateWriterEntireFunctionData* data);
+
+	// Returns the current moment in time for the given data
+	typedef float (*DeltaStateWriterSelfContainedExtractFunction)(void* data);
 
 	// The functor must know the read instrument type as well
 	struct DeltaStateReaderDeltaFunctionData {
@@ -57,21 +68,39 @@ namespace ECSEngine {
 	// Should return true if it succeeded reading the values, else false
 	typedef bool (*DeltaStateReaderEntireFunction)(DeltaStateReaderEntireFunctionData* data);
 
-	struct DeltaStateWriterInitializeInfo {
-		AllocatorPolymorphic allocator;
-		size_t user_data_size;
-		DeltaStateWriterDeltaFunction delta_function;
-		DeltaStateWriterEntireFunction entire_function;
-		WriteInstrument* write_instrument;
-		// How many seconds it takes to write a new entire state again, which helps with seeking time
-		float entire_state_write_seconds_tick = 0.0f;
-		// An optional field to initialize this writer with a user defined header
-		Stream<void> header = {};
-	};
-
 	struct DeltaStateInfo {
 		float elapsed_seconds;
 		size_t write_size;
+	};
+	
+	struct DeltaStateWriterInitializeFunctorInfo {
+		// If the buffer is nullptr but the data size is non zero, then it will allocate a buffer that will be 0'ed,
+		// Else it will copy the data from the user data into the allocated buffer
+		Stream<void> user_data;
+		DeltaStateWriterDeltaFunction delta_function;
+		DeltaStateWriterEntireFunction entire_function;
+		// An optional field to initialize this writer with a user defined header
+		Stream<void> header = {};
+		// When this field is set, it signals to the writer that it doesn't need parameters in order to write the state,
+		// Only a call to Write is enough, but the elapsed seconds needs to be extracted out of it in order for the writer to
+		// Work properly
+		DeltaStateWriterSelfContainedExtractFunction self_contained_extract = nullptr;
+		// Optional function that is called in initialize for the user data to allocate buffers, if it needs to.
+		// The deallocate function must be specified as well
+		DeltaStateUserDataAllocatorInitialize user_data_allocator_initialize = nullptr;
+		// Must be set when the initialize function was specified
+		DeltaStateUserDataAllocatorDeallocate user_data_allocator_deallocate = nullptr;
+	};
+
+	struct DeltaStateWriterInitializeInfo {
+		// This information is per functor specific
+		DeltaStateWriterInitializeFunctorInfo functor_info;
+
+		// These are customization points that a user can modify agnostic of the functor
+		AllocatorPolymorphic allocator;
+		WriteInstrument* write_instrument;
+		// How many seconds it takes to write a new entire state again, which helps with seeking time
+		float entire_state_write_seconds_tick = 0.0f;
 	};
 
 	// A helper structure that helps in writing input serialization data in an efficient
@@ -82,16 +111,22 @@ namespace ECSEngine {
 		// Writes the remaining data that the writer has to write. It returns true if it succeeded, else false
 		bool Flush();
 
-		// Returns the user pointer data that you can initialize to certain values. It is memsetted to 0 by default.
-		void* Initialize(const DeltaStateWriterInitializeInfo& initialize_info);
+		// Returns the user pointer data that you can initialize to certain values. It is memsetted to 0 by default
+		void Initialize(const DeltaStateWriterInitializeInfo& initialize_info);
 
 		// Register a new state to be written, for the given time. Returns true if it succeeded in writing the state,
-		// Else false.
+		// Else false
 		bool Write(const void* current_data, float elapsed_seconds);
+
+		// Register a new state to be written, when the functor is self contained. It asserts that the functor is self contained.
+		// Returns true if it succeeded in writing the state, else false
+		bool Write();
 
 		DeltaStateWriterDeltaFunction delta_function;
 		DeltaStateWriterEntireFunction entire_function;
-		void* user_data;
+		DeltaStateWriterSelfContainedExtractFunction extract_function;
+		DeltaStateUserDataAllocatorDeallocate user_deallocate_function;
+		Stream<void> user_data;
 		// This a header that can be added before the actual data to write
 		Stream<void> header;
 		WriteInstrument* write_instrument;
@@ -108,11 +143,25 @@ namespace ECSEngine {
 		float last_entire_state_write_seconds;
 	};
 
-	struct DeltaStateReaderInitializeInfo {
-		AllocatorPolymorphic allocator;
-		size_t user_data_size;
+	struct DeltaStateReaderInitializeFunctorInfo {
+		// If the buffer is nullptr but the data size is non zero, then it will allocate a buffer that will be 0'ed,
+		// Else it will copy the data from the user data into the allocated buffer
+		Stream<void> user_data;
 		DeltaStateReaderDeltaFunction delta_function;
 		DeltaStateReaderEntireFunction entire_function;
+		// Optional function that is called in initialize for the user data to allocate buffers, if it needs to.
+		// The deallocate function must be specified as well
+		DeltaStateUserDataAllocatorInitialize user_data_allocator_initialize = nullptr;
+		// Must be set when the initialize function was specified
+		DeltaStateUserDataAllocatorDeallocate user_data_allocator_deallocate = nullptr;
+	};
+
+	struct DeltaStateReaderInitializeInfo {
+		// This is functor specific
+		DeltaStateReaderInitializeFunctorInfo functor_info;
+
+		// These fields are customization points agnostic of the functor
+		AllocatorPolymorphic allocator;
 		ReadInstrument* read_instrument;
 		// This is an optional parameter. In case the header read part fails, the reason
 		// Will be filled in this parameter
@@ -157,7 +206,7 @@ namespace ECSEngine {
 		// Returns the pointer to the user data such that you can initialize the data properly. It will be 0'ed.
 		// Returns nullptr if it failed to read the header portion of the state. The read instrument must be stable
 		// For the entire duration of using this reader
-		void* Initialize(const DeltaStateReaderInitializeInfo& initialize_info);
+		void Initialize(const DeltaStateReaderInitializeInfo& initialize_info);
 
 		// Returns true if it succeeded in seeking at the beginning of the given state, else false.
 		bool SeekInstrumentAtState(size_t state_index, CapacityStream<char>* error_message = nullptr) const;
@@ -169,7 +218,8 @@ namespace ECSEngine {
 
 		DeltaStateReaderDeltaFunction delta_function;
 		DeltaStateReaderEntireFunction entire_function;
-		void* user_data;
+		DeltaStateUserDataAllocatorDeallocate user_deallocate_function;
+		Stream<void> user_data;
 		ReadInstrument* read_instrument;
 		// This is the user defined header that was written in the file
 		Stream<void> header;

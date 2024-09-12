@@ -3,6 +3,18 @@
 
 namespace ECSEngine {
 
+	void Keyboard::CopyOther(const Keyboard* other) {
+		memcpy(m_states, other->m_states, sizeof(m_states));
+		m_process_characters = other->m_process_characters;
+		m_pushed_character_count = other->m_pushed_character_count;
+		m_alphanumeric_keys.CopyOther(other->m_alphanumeric_keys);
+		
+		m_character_queue.Reset();
+		other->m_character_queue.ForEach([this](char character) {
+			m_character_queue.Push(character);
+		});
+	}
+	
 	void Keyboard::Reset() {
 		ButtonInput<ECS_KEY, ECS_KEY_COUNT>::Reset();
 		m_pushed_character_count = 0;

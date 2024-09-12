@@ -30,11 +30,16 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	void DeltaStateWriter::Deallocate() {
-		DeallocateEx(allocator, user_data);
+		if (user_deallocate_function != nullptr) {
+			user_deallocate_function(user_data.buffer, allocator);
+		}
+		if (user_data.size > 0) {
+			DeallocateEx(allocator, user_data.buffer);
+		}
 		header.Deallocate(allocator);
-
 		state_infos.FreeBuffer();
 		entire_state_indices.FreeBuffer();
+		write_instrument = nullptr;
 	}
 
 	bool DeltaStateWriter::Flush() {
@@ -89,29 +94,44 @@ namespace ECSEngine {
 		return true;
 	}
 
-	void* DeltaStateWriter::Initialize(const DeltaStateWriterInitializeInfo& initialize_info) {
+	void DeltaStateWriter::Initialize(const DeltaStateWriterInitializeInfo& initialize_info) {
 		allocator = initialize_info.allocator;
 
-		user_data = AllocateEx(allocator, initialize_info.user_data_size);
-		memset(user_data, 0, initialize_info.user_data_size);
+		if (initialize_info.functor_info.user_data.size > 0) {
+			user_data.Initialize(allocator, initialize_info.functor_info.user_data.size);
+			if (initialize_info.functor_info.user_data.buffer != nullptr) {
+				user_data.CopyOther(initialize_info.functor_info.user_data.buffer, initialize_info.functor_info.user_data.size);
+			}
+			else {
+				memset(user_data.buffer, 0, user_data.size);
+			}
+		}
+		else {
+			user_data = initialize_info.functor_info.user_data;
+		}
+
+		if (initialize_info.functor_info.user_data_allocator_initialize != nullptr) {
+			ECS_ASSERT(initialize_info.functor_info.user_data_allocator_deallocate != nullptr);
+			initialize_info.functor_info.user_data_allocator_initialize(user_data.buffer, allocator);
+		}
+		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;
 
 		write_instrument = initialize_info.write_instrument;
-		delta_function = initialize_info.delta_function;
-		entire_function = initialize_info.entire_function;
+		delta_function = initialize_info.functor_info.delta_function;
+		entire_function = initialize_info.functor_info.entire_function;
+		extract_function = initialize_info.functor_info.self_contained_extract;
 		entire_state_write_seconds_tick = initialize_info.entire_state_write_seconds_tick;
 		last_entire_state_write_seconds = 0.0f;
 		
-		size_t user_header_size = initialize_info.header.size;
+		size_t user_header_size = initialize_info.functor_info.header.size;
 		if (user_header_size > 0) {
 			header.buffer = AllocateEx(allocator, user_header_size);
-			memcpy(header.buffer, initialize_info.header.buffer, user_header_size);
+			memcpy(header.buffer, initialize_info.functor_info.header.buffer, user_header_size);
 			header.size = user_header_size;
 		}
 
 		state_infos.Initialize(allocator, 0);
 		entire_state_indices.Initialize(allocator, 0);
-
-		return user_data;
 	}
 
 	bool DeltaStateWriter::Write(const void* current_data, float elapsed_seconds) {
@@ -124,7 +144,7 @@ namespace ECSEngine {
 			DeltaStateWriterEntireFunctionData entire_data;
 			entire_data.current_data = current_data;
 			entire_data.elapsed_seconds = elapsed_seconds;
-			entire_data.user_data = user_data;
+			entire_data.user_data = user_data.buffer;
 			entire_data.write_instrument = write_instrument;
 			bool success = entire_function(&entire_data);
 			if (success) {
@@ -144,7 +164,7 @@ namespace ECSEngine {
 			DeltaStateWriterDeltaFunctionData entire_data;
 			entire_data.current_data = current_data;
 			entire_data.elapsed_seconds = elapsed_seconds;
-			entire_data.user_data = user_data;
+			entire_data.user_data = user_data.buffer;
 			entire_data.write_instrument = write_instrument;
 			bool success = delta_function(&entire_data);
 			if (success) {
@@ -155,6 +175,13 @@ namespace ECSEngine {
 			}
 			return success;
 		}
+	}
+
+	bool DeltaStateWriter::Write() {
+		ECS_ASSERT(extract_function != nullptr, "DeltaStateWriter: trying to make a self-contained call when no extract function has been specified.");
+		float elapsed_seconds = extract_function(user_data.buffer);
+		// We can give nullptr to the current data, since the functor is self-contained
+		return Write(nullptr, elapsed_seconds);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -234,7 +261,7 @@ namespace ECSEngine {
 		entire_data.write_size = state_infos[overall_state_index].write_size;
 		entire_data.header = header;
 		entire_data.read_instrument = read_instrument;
-		entire_data.user_data = user_data;
+		entire_data.user_data = user_data.buffer;
 		if (!entire_function(&entire_data)) {
 			ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to read entire state with index {#}, elapsed seconds {#} with write size of {#}.", overall_state_index,
 				entire_data.elapsed_seconds, entire_data.write_size);
@@ -249,7 +276,7 @@ namespace ECSEngine {
 		delta_data.write_size = state_infos[overall_state_index].write_size;
 		delta_data.header = header;
 		delta_data.read_instrument = read_instrument;
-		delta_data.user_data = user_data;
+		delta_data.user_data = user_data.buffer;
 		if (!delta_function(&delta_data)) {
 			ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to read delta state with index {#}, elapsed seconds {#} with write size of {#}.", overall_state_index,
 				delta_data.elapsed_seconds, delta_data.write_size);
@@ -259,6 +286,12 @@ namespace ECSEngine {
 	}
 
 	void DeltaStateReader::Deallocate() {
+		if (user_deallocate_function != nullptr) {
+			user_deallocate_function(user_data.buffer, allocator);
+		}
+		if (user_data.size > 0) {
+			DeallocateEx(allocator, user_data.buffer);
+		}
 		header.Deallocate(allocator);
 		state_infos.Deallocate(allocator);
 		entire_state_indices.Deallocate(allocator);
@@ -319,35 +352,35 @@ namespace ECSEngine {
 		return false;
 	}
 
-	void* DeltaStateReader::Initialize(const DeltaStateReaderInitializeInfo& initialize_info) {
+	void DeltaStateReader::Initialize(const DeltaStateReaderInitializeInfo& initialize_info) {
 		read_instrument = initialize_info.read_instrument;
 
 		// Try to deserialize the footer. If we cannot deserialize it, then we must abort
 		if (!read_instrument->Seek(ReadInstrument::SEEK_FINISH, -(int64_t)sizeof(Footer))) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek at the footer location.");
-			return nullptr;
+			return;
 		}
 
 		Footer footer;
 		if (!read_instrument->Read(&footer)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not read the written footer or it is corrupted.");
-			return nullptr;
+			return;
 		}
 
 		if (footer.version != VERSION) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Written version {#} is not accepted.", footer.version);
-			return nullptr;
+			return;
 		}
 
 		// Seek to the start of the footer and start deserializing from there
 		if (!read_instrument->Seek(ReadInstrument::SEEK_CURRENT, -(int64_t)footer.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the beginning of the footer data.");
-			return nullptr;
+			return;
 		}
 
 		if (!DeserializeIntVariableLengthBool(read_instrument, state_infos.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the state infos size or it is corrupted.");
-			return nullptr;
+			return;
 		}
 
 		state_infos.Initialize(allocator, state_infos.size, state_infos.size);
@@ -355,19 +388,19 @@ namespace ECSEngine {
 			if (!DeserializeIntVariableLengthBool(read_instrument, state_infos[index].write_size)) {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize state info {#} write size or it is corrupted.", index);
 				state_infos.Deallocate(allocator);
-				return nullptr;
+				return;
 			}
 			if (!read_instrument->Read(&state_infos[index].elapsed_seconds)) {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize state info {#} elapsed seconds.", index);
 				state_infos.Deallocate(allocator);
-				return nullptr;
+				return;
 			}
 		}
 
 		if (!DeserializeIntVariableLengthBool(read_instrument, entire_state_indices.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the entire state indices size or it is corrupted.");
 			state_infos.Deallocate(allocator);
-			return nullptr;
+			return;
 		}
 		entire_state_indices.Initialize(allocator, entire_state_indices.size, entire_state_indices.size);
 		for (unsigned int index = 0; index < entire_state_indices.size; index++) {
@@ -375,7 +408,7 @@ namespace ECSEngine {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize entire state index {#} or it is corrupted.", index);
 				state_infos.Deallocate(allocator);
 				entire_state_indices.Deallocate(allocator);
-				return nullptr;
+				return;
 			}
 		}
 
@@ -384,7 +417,7 @@ namespace ECSEngine {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user header size.");
 			state_infos.Deallocate(allocator);
 			entire_state_indices.Deallocate(allocator);
-			return nullptr;
+			return;
 		}
 
 		if (header.size > 0) {
@@ -394,18 +427,32 @@ namespace ECSEngine {
 				state_infos.Deallocate(allocator);
 				entire_state_indices.Deallocate(allocator);
 				header.Deallocate(allocator);
-				return nullptr;
+				return;
 			}
 		}
 
 		current_state_index = 0;
-		delta_function = initialize_info.delta_function;
-		entire_function = initialize_info.entire_function;
+		delta_function = initialize_info.functor_info.delta_function;
+		entire_function = initialize_info.functor_info.entire_function;
 		allocator = initialize_info.allocator;
-		user_data = AllocateEx(allocator, initialize_info.user_data_size);
-		memset(user_data, 0, initialize_info.user_data_size);
+		if (initialize_info.functor_info.user_data.size > 0) {
+			user_data.Initialize(allocator, initialize_info.functor_info.user_data.size);
+			if (initialize_info.functor_info.user_data.buffer != nullptr) {
+				user_data.CopyOther(initialize_info.functor_info.user_data.buffer, initialize_info.functor_info.user_data.size);
+			}
+			else {
+				memset(user_data.buffer, 0, initialize_info.functor_info.user_data.size);
+			}
+		}
+		else {
+			user_data = initialize_info.functor_info.user_data;
+		}
 
-		return user_data;
+		if (initialize_info.functor_info.user_data_allocator_initialize != nullptr) {
+			ECS_ASSERT(initialize_info.functor_info.user_data_allocator_deallocate != nullptr);
+			initialize_info.functor_info.user_data_allocator_initialize(user_data.buffer, allocator);
+		}
+		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;
 	}
 
 	bool DeltaStateReader::SeekInstrumentAtState(size_t state_index, CapacityStream<char>* error_message) const {
