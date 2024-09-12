@@ -44,6 +44,7 @@ struct DrawSandboxSettingsData {
 	bool collapsing_runtime_state;
 	bool collapsing_modifiers_state;
 	bool collapsing_statistics_state;
+	bool collapsing_recording_state;
 
 	struct AvailableModuleSettings {
 		unsigned char label;
@@ -189,7 +190,7 @@ struct CreateAddSandboxWindowData {
 	unsigned int sandbox_index;
 };
 
-void CreateAddSandboxWindow(ActionData* action_data) {
+static void CreateAddSandboxWindow(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	CreateAddSandboxWindowData* data = (CreateAddSandboxWindowData*)_data;
@@ -215,121 +216,16 @@ void CreateAddSandboxWindow(ActionData* action_data) {
 	system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL);
 }
 
-void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
-	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
-
-	DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
-	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
-	data->sandbox_index = sandbox_index;
-
-	auto get_name = [](unsigned int index, CapacityStream<char>& name) {
-		name.CopyOther("Sandbox ");
-		ConvertIntToChars(name, index);
-	};
-
-	// Initialize the ui_reflection_instance if we haven't done so
-	if (data->ui_reflection_instance_name.size == 0) {
-		ECS_STACK_CAPACITY_STREAM(char, ui_reflection_name, 128);
-		UIReflectionDrawer* ui_drawer = editor_state->ui_reflection;
-
-		unsigned int current_index = 0;
-		get_name(current_index, ui_reflection_name);
-		// Try the UI reflection instance indices until we get a free slot
-		UIReflectionInstance* instance = ui_drawer->GetInstance(ui_reflection_name.buffer);
-		while (instance != nullptr) {
-			// Try again with the current_index
-			ui_reflection_name.size = 0;
-			get_name(current_index, ui_reflection_name);
-
-			instance = ui_drawer->GetInstance(ui_reflection_name.buffer);
-			current_index++;
-		}
-
-		// Increase the index by 1 such that we include the '\0'
-		ui_reflection_name.size++;
-		void* allocation = editor_state->editor_allocator->Allocate(sizeof(char) * ui_reflection_name.size);
-		ui_reflection_name.CopyTo(allocation);
-
-		data->ui_reflection_instance_name = { allocation, ui_reflection_name.size - 1 };
-		instance = ui_drawer->CreateInstance(data->ui_reflection_instance_name.buffer, STRING(WorldDescriptor));
-
-		WorldDescriptor* sandbox_descriptor = GetSandboxWorldDescriptor(editor_state, sandbox_index);
-		memcpy(&data->ui_descriptor, sandbox_descriptor, sizeof(data->ui_descriptor));
-
-		// Bind the pointers
-		ui_drawer->BindInstancePtrs(instance, &data->ui_descriptor);
-
-		data->runtime_settings_allocator = LinearAllocator::InitializeFrom(editor_allocator, AVAILABLE_RUNTIME_SETTINGS_ALLOCATOR_CAPACITY);
-		data->module_settings_allocator = ResizableLinearAllocator(
-			AVAILABLE_MODULE_SETTINGS_ALLOCATOR_CAPACITY, 
-			AVAILABLE_MODULE_SETTINGS_BACKUP_ALLOCATOR_CAPACITY, 
-			editor_allocator
-		);
-		data->available_module_settings.Initialize(editor_allocator, 0, AVAILABLE_MODULE_SETTINGS_ENTRY_CAPACITY);
-	}
-
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG, drawer->color_theme.text, drawer->color_theme.theme);
-
-	UIDrawConfig config;
-
-	ECS_STACK_CAPACITY_STREAM(char, sandbox_window_name, 128);
-	get_name(sandbox_index, sandbox_window_name);
-	sandbox_window_name.AddStream(" Settings");
-	sandbox_window_name[sandbox_window_name.size] = '\0';
-	drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, sandbox_window_name.buffer);
-	drawer->NextRow();
-
-	// Display a warning if there is no graphics module or there are multiple
-	ECS_STACK_CAPACITY_STREAM(unsigned int, graphics_module_indices, 128);
-	GetSandboxGraphicsModules(editor_state, sandbox_index, graphics_module_indices);
-	if (graphics_module_indices.size == 0) {
-		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
-		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There is no graphics module assigned.");
-		drawer->NextRow();
-	}
-	else if (graphics_module_indices.size > 1) {
-		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
-		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There are multiple graphics modules assigned.");
-		drawer->NextRow();
-	}
-
+static void InspectorDrawSandboxModuleSection(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	unsigned int inspector_index,
+	UIDrawer* drawer, 
+	DrawSandboxSettingsData* data, 
+	Stream<unsigned int> graphics_module_indices
+) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
-	// Display a warning if no scene path is assigned
-	if (sandbox->scene_path.size == 0) {
-		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
-		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There is no scene assigned. The sandbox cannot run.");
-		drawer->NextRow();
-	}
-
-	config.flag_count = 0;
-	UIConfigActiveState active_state;
-	active_state.state = sandbox->scene_path.size > 0;
-	config.AddFlag(active_state);
-
-	float2 square_scale = drawer->GetSquareScale();
-	drawer->UpdateCurrentRowScale(square_scale.y);
-
-	drawer->Text(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "Scene: ");
-	if (sandbox->scene_path.size == 0) {
-		drawer->Text(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "No scene is assigned.");
-	}
-	else {
-		drawer->TextWide(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, sandbox->scene_path);
-	}
-
-	config.flag_count--;
-	active_state.state = !IsSandboxStateRuntime(sandbox->run_state);
-	config.AddFlag(active_state);
-	ChangeSandboxSceneActionData change_scene_data = { editor_state, sandbox_index };
-	drawer->SpriteButton(
-		UI_CONFIG_MAKE_SQUARE | UI_CONFIG_ACTIVE_STATE,
-		config,
-		{ ChangeSandboxSceneAction, &change_scene_data, sizeof(change_scene_data), ECS_UI_DRAW_SYSTEM },
-		ECS_TOOLS_UI_TEXTURE_FOLDER
-	);
-	drawer->NextRow();
-	config.flag_count = 0;
+	UIDrawConfig config;
 
 	drawer->CollapsingHeader("Modules", &data->collapsing_module_state, [&]() {
 		// Display the count of modules in use
@@ -423,8 +319,8 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, current_options, 256);
 			GetModuleAvailableSettings(
 				editor_state,
-				sandbox->modules_in_use[module_display_order[index]].module_index, 
-				current_options, 
+				sandbox->modules_in_use[module_display_order[index]].module_index,
+				current_options,
 				settings_allocator
 			);
 			// Add an initial label that says no settings
@@ -437,9 +333,9 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 				// We must add one since the conversion function adds a '\0'
 				data->available_module_settings[index].string_labels[write_index].Initialize(settings_allocator, current_options[subindex].size + 1);
 				ConvertWideCharsToASCII(
-					current_options[subindex].buffer, 
+					current_options[subindex].buffer,
 					data->available_module_settings[index].string_labels[write_index].buffer,
-					current_options[subindex].size, 
+					current_options[subindex].size,
 					current_options[subindex].size + 1
 				);
 				// Reduce the size by 1 since we don't want this null terminator
@@ -514,8 +410,8 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			Color status_color;
 
 			const EditorModuleInfo* info = GetModuleInfo(
-				editor_state, 
-				module_index, 
+				editor_state,
+				module_index,
 				sandbox->modules_in_use[in_stream_index].module_configuration
 			);
 			switch (info->load_status) {
@@ -568,7 +464,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			module_config.flag_count--;
 
 			drawer->PopIdentifierStack();
-			drawer->NextRow();		
+			drawer->NextRow();
 
 			Stream<Stream<char>> available_module_settings = data->available_module_settings[index].string_labels;
 			UIDrawerRowLayout settings_display_row_layout = drawer->GenerateRowLayout();
@@ -632,8 +528,12 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		create_data.sandbox_index = sandbox_index;
 		drawer->Button("Add Module", { CreateAddSandboxWindow, &create_data, sizeof(create_data), ECS_UI_DRAW_SYSTEM });
 	});
+}
 
+static void InspectorDrawSandboxComponentsSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Components", &data->collapsing_components_state, [&]() {
+		UIDrawConfig config;
+
 		// At the moment, add some basic functions that operate on all entities
 		// Reset is the primary candidate, maybe Add/Remove for all? Questinable use tho
 		struct ComponentToAllActionData {
@@ -665,7 +565,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			SandboxForEachEntity(data->editor_state, data->sandbox_index, [](ForEachEntityUntypedFunctorData* for_each_data) {
 				FunctorData* data = (FunctorData*)for_each_data->base.user_data;
 				ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, for_each_data->base.entity, data->component_name);
-			}, &functor_data, query_descriptor);
+				}, &functor_data, query_descriptor);
 			RenderSandboxViewports(data->editor_state, data->sandbox_index);
 			SetSandboxSceneDirty(data->editor_state, data->sandbox_index);
 		};
@@ -675,23 +575,23 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			bool IsUniqueEnabled(Component component) const {
 				return true;
 			}
-			
+
 			// Returns true if the component should appear in the menu
 			bool IsSharedEnabled(Component component) const {
 				return true;
 			}
-			 
+
 			// Fills the data for a click handler
 			void Fill(void* callback_untyped_data, Stream<char> component_name) {
 				ComponentToAllActionData* callback_data = (ComponentToAllActionData*)callback_untyped_data;
 				*callback_data = { editor_state, sandbox_index, component_name };
 			}
-			 
+
 			// Return true if the unique entries should be made unavailable
 			bool LimitUnique() const {
 				return false;
 			}
-			 
+
 			// Return true if the shared entries should be made unavailable
 			bool LimitShared() const {
 				return false;
@@ -703,7 +603,6 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 
 		DrawMenuFunctor draw_menu_functor = { editor_state, sandbox_index };
 
-		config.flag_count = 0;
 		UIConfigWindowDependentSize dependent_size;
 		config.AddFlag(dependent_size);
 		DrawChooseComponentMenu(
@@ -716,9 +615,12 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			draw_menu_functor
 		);
 	});
+}
 
+static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Runtime Settings", &data->collapsing_runtime_state, [&]() {
-		config.flag_count = 0;
+		UIDrawConfig config;
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 		// Display all the available settings
 		ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, available_settings, 128);
@@ -849,11 +751,15 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		drawer->NextRow();
 		drawer->CrossLine();
 	});
+}
 
+static void InspectorDrawSandboxModifiersSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Modifiers", &data->collapsing_modifiers_state, [&]() {
-		config.flag_count = 0;
+		UIDrawConfig config;
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
 		const size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
-	
+
 		UIConfigNamePadding name_padding;
 		name_padding.total_length = NAME_PADDING_LENGTH;
 		config.AddFlag(name_padding);
@@ -884,7 +790,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			EditorState* editor_state;
 			unsigned int sandbox_index;
 		};
-		
+
 		auto speed_up_callback_action = [](ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
@@ -899,26 +805,30 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		speed_up_callback.handler = { speed_up_callback_action, &speed_up_data, sizeof(speed_up_data) };
 		config.AddFlag(speed_up_callback);
 		drawer->FloatInput(
-			CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_INPUT_CALLBACK 
-				| UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_NUMBER_INPUT_RANGE, 
-			config, 
-			"Simulation Speed", 
-			&sandbox->simulation_speed_up_factor, 
-			1.0, 
-			0.001f, 
+			CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_INPUT_CALLBACK
+			| UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_NUMBER_INPUT_RANGE,
+			config,
+			"Simulation Speed",
+			&sandbox->simulation_speed_up_factor,
+			1.0,
+			0.001f,
 			100.0f
 		);
 
 		config.flag_count = 0;
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
 	});
+}
 
+static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Statistics", &data->collapsing_statistics_state, [&]() {
-		config.flag_count = 0;
+		UIDrawConfig config;
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
 		const size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
 
 		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
-		
+
 		UIConfigNamePadding name_padding;
 		name_padding.total_length = NAME_PADDING_LENGTH;
 		config.AddFlag(name_padding);
@@ -970,11 +880,11 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		const Reflection::ReflectionEnum* cpu_statistic_enum = editor_state->EditorReflectionManager()->GetEnum(STRING(EDITOR_SANDBOX_CPU_STATISTICS_TYPE));
 		Stream<Stream<char>> cpu_statistic_labels = cpu_statistic_enum->fields;
 		drawer->ComboBox(
-			CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK, 
+			CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK,
 			config,
 			"CPU Statistic",
-			cpu_statistic_labels, 
-			cpu_statistic_labels.size, 
+			cpu_statistic_labels,
+			cpu_statistic_labels.size,
 			(unsigned char*)&sandbox->cpu_statistics_type
 		);
 		config.flag_count--;
@@ -1019,10 +929,10 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 
 		Stream<Stream<char>> enabled_statistic_labels = { EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY_STRINGS, EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT };
 		drawer->StateTable(
-			CONFIGURATION | UI_CONFIG_STATE_TABLE_ALL | UI_CONFIG_STATE_TABLE_CALLBACK, 
-			config, 
-			"Enabled Statistics", 
-			enabled_statistic_labels, 
+			CONFIGURATION | UI_CONFIG_STATE_TABLE_ALL | UI_CONFIG_STATE_TABLE_CALLBACK,
+			config,
+			"Enabled Statistics",
+			enabled_statistic_labels,
 			sandbox->statistics_display.should_display
 		);
 		config.flag_count--;
@@ -1030,10 +940,25 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		drawer->OffsetNextRow(-drawer->layout.node_indentation);
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
 	});
+}
 
+static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
+	drawer->CollapsingHeader("Recording", &data->collapsing_recording_state, [&]() {
+		struct BlockInfo {
+			bool is_active;
+		};
+		
+		auto block = []() {
+
+		};
+	});
+}
+
+static void InspectorDrawSandboxCopySection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 	if (sandbox_count > 1) {
 		drawer->NextRow();
+		UIDrawConfig config;
 
 		UIConfigComboBoxPrefix prefix;
 		prefix.prefix = "Sandbox: ";
@@ -1044,7 +969,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		ECS_ASSERT_FORMAT(sandbox_count <= MAX_SANDBOX_ENTRIES - 1, "Insufficient space for InspectorSandboxSettings. Max supported sandboxes are {#}. "
 			"Stick below that limit", MAX_SANDBOX_ENTRIES);
 		const size_t CHARACTERS_PER_LABEL = 3;
-		
+
 		unsigned int written_count = 0;
 		for (unsigned int index = 0; index < sandbox_count; index++) {
 			if (data->sandbox_index != index) {
@@ -1056,7 +981,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			}
 		}
 		labels.size = written_count;
-		
+
 		drawer->ComboBox(UI_CONFIG_COMBO_BOX_PREFIX, config, "Sandbox to Copy", labels, labels.size, &data->sandbox_to_copy);
 
 		auto copy_sandbox_action = [](ActionData* action_data) {
@@ -1071,6 +996,130 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		drawer->Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Copy", { copy_sandbox_action, data, 0 });
 		drawer->NextRow();
 	}
+}
+
+void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+
+	DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
+	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
+	data->sandbox_index = sandbox_index;
+
+	auto get_name = [](unsigned int index, CapacityStream<char>& name) {
+		name.CopyOther("Sandbox ");
+		ConvertIntToChars(name, index);
+	};
+
+	// Initialize the ui_reflection_instance if we haven't done so
+	if (data->ui_reflection_instance_name.size == 0) {
+		ECS_STACK_CAPACITY_STREAM(char, ui_reflection_name, 128);
+		UIReflectionDrawer* ui_drawer = editor_state->ui_reflection;
+
+		unsigned int current_index = 0;
+		get_name(current_index, ui_reflection_name);
+		// Try the UI reflection instance indices until we get a free slot
+		UIReflectionInstance* instance = ui_drawer->GetInstance(ui_reflection_name.buffer);
+		while (instance != nullptr) {
+			// Try again with the current_index
+			ui_reflection_name.size = 0;
+			get_name(current_index, ui_reflection_name);
+
+			instance = ui_drawer->GetInstance(ui_reflection_name.buffer);
+			current_index++;
+		}
+
+		// Increase the index by 1 such that we include the '\0'
+		ui_reflection_name.size++;
+		void* allocation = editor_state->editor_allocator->Allocate(sizeof(char) * ui_reflection_name.size);
+		ui_reflection_name.CopyTo(allocation);
+
+		data->ui_reflection_instance_name = { allocation, ui_reflection_name.size - 1 };
+		instance = ui_drawer->CreateInstance(data->ui_reflection_instance_name.buffer, STRING(WorldDescriptor));
+
+		WorldDescriptor* sandbox_descriptor = GetSandboxWorldDescriptor(editor_state, sandbox_index);
+		memcpy(&data->ui_descriptor, sandbox_descriptor, sizeof(data->ui_descriptor));
+
+		// Bind the pointers
+		ui_drawer->BindInstancePtrs(instance, &data->ui_descriptor);
+
+		data->runtime_settings_allocator = LinearAllocator::InitializeFrom(editor_allocator, AVAILABLE_RUNTIME_SETTINGS_ALLOCATOR_CAPACITY);
+		data->module_settings_allocator = ResizableLinearAllocator(
+			AVAILABLE_MODULE_SETTINGS_ALLOCATOR_CAPACITY, 
+			AVAILABLE_MODULE_SETTINGS_BACKUP_ALLOCATOR_CAPACITY, 
+			editor_allocator
+		);
+		data->available_module_settings.Initialize(editor_allocator, 0, AVAILABLE_MODULE_SETTINGS_ENTRY_CAPACITY);
+	}
+
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG, drawer->color_theme.text, drawer->color_theme.theme);
+
+	UIDrawConfig config;
+
+	ECS_STACK_CAPACITY_STREAM(char, sandbox_window_name, 128);
+	get_name(sandbox_index, sandbox_window_name);
+	sandbox_window_name.AddStream(" Settings");
+	sandbox_window_name[sandbox_window_name.size] = '\0';
+	drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, sandbox_window_name.buffer);
+	drawer->NextRow();
+
+	// Display a warning if there is no graphics module or there are multiple
+	ECS_STACK_CAPACITY_STREAM(unsigned int, graphics_module_indices, 128);
+	GetSandboxGraphicsModules(editor_state, sandbox_index, graphics_module_indices);
+	if (graphics_module_indices.size == 0) {
+		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There is no graphics module assigned.");
+		drawer->NextRow();
+	}
+	else if (graphics_module_indices.size > 1) {
+		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There are multiple graphics modules assigned.");
+		drawer->NextRow();
+	}
+
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	// Display a warning if no scene path is assigned
+	if (sandbox->scene_path.size == 0) {
+		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There is no scene assigned. The sandbox cannot run.");
+		drawer->NextRow();
+	}
+
+	config.flag_count = 0;
+	UIConfigActiveState active_state;
+	active_state.state = sandbox->scene_path.size > 0;
+	config.AddFlag(active_state);
+
+	float2 square_scale = drawer->GetSquareScale();
+	drawer->UpdateCurrentRowScale(square_scale.y);
+
+	drawer->Text(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "Scene: ");
+	if (sandbox->scene_path.size == 0) {
+		drawer->Text(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "No scene is assigned.");
+	}
+	else {
+		drawer->TextWide(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, sandbox->scene_path);
+	}
+
+	config.flag_count--;
+	active_state.state = !IsSandboxStateRuntime(sandbox->run_state);
+	config.AddFlag(active_state);
+	ChangeSandboxSceneActionData change_scene_data = { editor_state, sandbox_index };
+	drawer->SpriteButton(
+		UI_CONFIG_MAKE_SQUARE | UI_CONFIG_ACTIVE_STATE,
+		config,
+		{ ChangeSandboxSceneAction, &change_scene_data, sizeof(change_scene_data), ECS_UI_DRAW_SYSTEM },
+		ECS_TOOLS_UI_TEXTURE_FOLDER
+	);
+	drawer->NextRow();
+	config.flag_count = 0;
+
+	InspectorDrawSandboxModuleSection(editor_state, sandbox_index, inspector_index, drawer, data, graphics_module_indices);
+	InspectorDrawSandboxComponentsSection(editor_state, sandbox_index, drawer, data);
+	InspectorDrawSandboxRuntimeSettingsSection(editor_state, sandbox_index, drawer, data);
+	InspectorDrawSandboxModifiersSection(editor_state, sandbox_index, drawer, data);	
+	InspectorDrawSandboxStatisticsSection(editor_state, sandbox_index, drawer, data);
+	InspectorDrawSandboxCopySection(editor_state, sandbox_index, drawer, data);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

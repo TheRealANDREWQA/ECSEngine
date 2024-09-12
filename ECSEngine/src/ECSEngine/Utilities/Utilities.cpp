@@ -4,6 +4,55 @@
 
 namespace ECSEngine {
 
+	template<typename Functor>
+	void AddressFlagBit(void* value, unsigned char bit_index, Functor&& functor) {
+		if (bit_index <= sizeof(unsigned char) * 8) {
+			functor((unsigned char*)value);
+		}
+		else if (bit_index <= sizeof(unsigned short) * 8) {
+			functor((unsigned short*)value);
+		}
+		else if (bit_index <= sizeof(unsigned int) * 8) {
+			functor((unsigned int*)value);
+		}
+		else if (bit_index <= sizeof(size_t) * 8) {
+			functor((size_t*)value);
+		}
+		else {
+			ECS_ASSERT(false);
+		}
+	}
+
+	void SetFlag(void* value, unsigned char bit_index) {
+		AddressFlagBit(value, bit_index, [bit_index](auto* integral_value) {
+			using IntegralType = std::remove_reference_t<decltype(*integral_value)>;
+			*integral_value = *integral_value | ((IntegralType)1 << (IntegralType)bit_index);
+		});
+	}
+
+	void ClearFlag(void* value, unsigned char bit_index) {
+		AddressFlagBit(value, bit_index, [bit_index](auto* integral_value) {
+			using IntegralType = std::remove_reference_t<decltype(*integral_value)>;
+			*integral_value = *integral_value & ~((IntegralType)1 << (IntegralType)bit_index);
+		});
+	}
+
+	bool HasFlag(const void* value, unsigned char bit_index) {
+		bool has = false;
+		AddressFlagBit((void*)value, bit_index, [bit_index, &has](auto* integral_value) {
+			using IntegralType = std::remove_reference_t<decltype(*integral_value)>;
+			has = (*integral_value & ((IntegralType)1 << (IntegralType)bit_index)) != 0;
+		});
+		return has;
+	}
+
+	void FlipFlag(void* value, unsigned char bit_index) {
+		AddressFlagBit(value, bit_index, [bit_index](auto* integral_value) {
+			using IntegralType = std::remove_reference_t<decltype(*integral_value)>;
+			*integral_value = *integral_value ^ ((IntegralType)1 << (IntegralType)bit_index);
+		});
+	}
+
 	// AVX2 accelerated memcpy, works best for workloads of at least 1KB
 	template<bool unaligned>
 	static void avx2_copy_32multiple(void* destination, const void* source, size_t bytes) {

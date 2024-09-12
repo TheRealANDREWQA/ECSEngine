@@ -3482,10 +3482,34 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		struct CheckBoxValue {
+			ECS_INLINE bool IsSet() const {
+				return is_boolean ? *boolean_to_modify : HasFlag(value_to_modify, bit_index);
+			}
+
+			ECS_INLINE void Flip() {
+				if (is_boolean) {
+					*boolean_to_modify = !*boolean_to_modify;
+				}
+				else {
+					FlipFlag(value_to_modify, bit_index);
+				}
+			}
+
+			union {
+				bool* boolean_to_modify;
+				struct {
+					void* value_to_modify;
+					unsigned char bit_index;
+				};
+			};
+			bool is_boolean;
+		};
+
 		template<typename NameType>
-		void CheckBoxDrawerImplementation(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, NameType name, bool* value_to_modify, float2 position, float2 scale) {
+		void CheckBoxDrawerImplementation(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, NameType name, CheckBoxValue value, float2 position, float2 scale) {
 			struct DefaultActionData {
-				bool* value_to_modify;
+				CheckBoxValue value;
 				UIConfigCheckBoxDefault default_value;
 				UIActionHandler callback;
 			};
@@ -3503,12 +3527,12 @@ namespace ECSEngine {
 						new_value = data->default_value.value;
 					}
 
-					if (new_value != *data->value_to_modify) {
+					if (new_value != data->value.IsSet()) {
 						action_data->redraw_window = true;
-						*data->value_to_modify = new_value;
+						data->value.Flip();
 						if (data->callback.action != nullptr) {
 							action_data->data = data->callback.data;
-							action_data->additional_data = data->value_to_modify;
+							action_data->additional_data = data->value.boolean_to_modify;
 							data->callback.action(action_data);
 						}
 					}
@@ -3527,7 +3551,7 @@ namespace ECSEngine {
 
 					const UIConfigCheckBoxDefault* default_value = (const UIConfigCheckBoxDefault*)config.GetParameter(UI_CONFIG_CHECK_BOX_DEFAULT);
 
-					default_data.value_to_modify = value_to_modify;
+					default_data.value = value;
 					default_data.default_value = *default_value;
 					default_data.callback.action = nullptr;
 					default_data.callback.phase = ECS_UI_DRAW_NORMAL;
@@ -3591,7 +3615,7 @@ namespace ECSEngine {
 				}
 				else {
 					drawer->SolidColorRectangle(configuration, position, scale, color);
-					if (*value_to_modify) {
+					if (value.IsSet()) {
 						Color check_color = ToneColor(color, drawer->color_theme.check_box_factor);
 						drawer->SpriteRectangle(configuration, position, scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, check_color);
 					}
@@ -3613,7 +3637,7 @@ namespace ECSEngine {
 
 						if (!callback->disable_value_to_modify) {
 							struct WrapperData {
-								bool* value_to_modify;
+								CheckBoxValue value;
 								Action callback;
 								void* callback_data;
 							};
@@ -3622,8 +3646,7 @@ namespace ECSEngine {
 								UI_UNPACK_ACTION_DATA;
 
 								WrapperData* data = (WrapperData*)_data;
-								bool old_value = *data->value_to_modify;
-								*data->value_to_modify = !old_value;
+								data->value.Flip();
 								action_data->redraw_window = true;
 
 								if (data->callback_data != nullptr) {
@@ -3632,13 +3655,13 @@ namespace ECSEngine {
 								else {
 									action_data->data = OffsetPointer(data, sizeof(*data));
 								}
-								action_data->additional_data = data->value_to_modify;
+								action_data->additional_data = data->value.boolean_to_modify;
 								data->callback(action_data);
 							};
 
 							size_t _wrapper_data[512];
 							WrapperData* wrapper_data = (WrapperData*)_wrapper_data;
-							*wrapper_data = { value_to_modify, callback->handler.action, callback->handler.data };
+							*wrapper_data = { value, callback->handler.action, callback->handler.data };
 
 							unsigned int wrapper_size = sizeof(*wrapper_data);
 							// The data needs to be copied, embedd it after the wrapper
@@ -3658,7 +3681,14 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						drawer->AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, value_to_modify, 0, phase }, nullptr, color);
+						auto default_action = [](ActionData* action_data) {
+							UI_UNPACK_ACTION_DATA;
+
+							CheckBoxValue* value = (CheckBoxValue*)_data;
+							value->Flip();
+						};
+
+						drawer->AddDefaultClickableHoverable(configuration, position, scale, { default_action, &value, sizeof(value), phase }, nullptr, color);
 					}
 				}
 
@@ -3675,13 +3705,37 @@ namespace ECSEngine {
 		}
 
 		void UIDrawer::CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerTextElement* element, bool* value_to_modify, float2 position, float2 scale) {
-			CheckBoxDrawerImplementation(this, configuration, config, element, value_to_modify, position, scale);
+			CheckBoxValue value;
+			value.is_boolean = true;
+			value.boolean_to_modify = value_to_modify;
+			CheckBoxDrawerImplementation(this, configuration, config, element, value, position, scale);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, bool* value_to_modify, float2 position, float2 scale) {
-			CheckBoxDrawerImplementation(this, configuration, config, name, value_to_modify, position, scale);
+			CheckBoxValue value;
+			value.is_boolean = true;
+			value.boolean_to_modify = value_to_modify;
+			CheckBoxDrawerImplementation(this, configuration, config, name, value, position, scale);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerTextElement* element, void* value_to_modify, unsigned char bit_index, float2 position, float2 scale) {
+			CheckBoxValue value;
+			value.is_boolean = false;
+			value.value_to_modify = value_to_modify;
+			value.bit_index = bit_index;
+			CheckBoxDrawerImplementation(this, configuration, config, element, value, position, scale);
+		}
+
+		void UIDrawer::CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, void* value_to_modify, unsigned char bit_index, float2 position, float2 scale) {
+			CheckBoxValue value;
+			value.is_boolean = false;
+			value.value_to_modify = value_to_modify;
+			value.bit_index = bit_index;
+			CheckBoxDrawerImplementation(this, configuration, config, name, value, position, scale);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9863,6 +9917,33 @@ namespace ECSEngine {
 				}
 				else {
 					CheckBoxDrawer(configuration, config, name, value_to_change, position, scale);
+				}
+			}
+			else {
+				if (configuration & UI_CONFIG_DO_CACHE) {
+					CheckBoxInitializer(configuration, config, name, scale);
+				}
+			}
+		}
+
+		void UIDrawer::CheckBox(Stream<char> name, void* value_to_change, unsigned char bit_index) {
+			UIDrawConfig config;
+			CheckBox(0, config, name, value_to_change, bit_index);
+		}
+
+		void UIDrawer::CheckBox(size_t configuration, const UIDrawConfig& config, Stream<char> name, void* value_to_change, unsigned char bit_index) {
+			ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
+
+			if (!initializer) {
+				scale = GetSquareScale(scale.y);
+
+				if (configuration & UI_CONFIG_DO_CACHE) {
+					UIDrawerTextElement* element = (UIDrawerTextElement*)GetResource(name);
+
+					CheckBoxDrawer(configuration, config, element, value_to_change, bit_index, position, scale);
+				}
+				else {
+					CheckBoxDrawer(configuration, config, name, value_to_change, bit_index, position, scale);
 				}
 			}
 			else {
