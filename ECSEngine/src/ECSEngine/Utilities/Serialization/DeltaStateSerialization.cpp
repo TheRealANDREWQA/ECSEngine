@@ -134,7 +134,7 @@ namespace ECSEngine {
 		entire_state_indices.Initialize(allocator, 0);
 	}
 
-	bool DeltaStateWriter::Write(const void* current_data, float elapsed_seconds) {
+	bool DeltaStateWriter::Write(float elapsed_seconds) {
 		float entire_state_delta = elapsed_seconds - last_entire_state_write_seconds;
 
 		if (entire_state_delta >= entire_state_write_seconds_tick || entire_state_indices.size == 0) {
@@ -142,7 +142,6 @@ namespace ECSEngine {
 
 			// The delta was exceeded or it is the first serialization, an entire state must be written
 			DeltaStateWriterEntireFunctionData entire_data;
-			entire_data.current_data = current_data;
 			entire_data.elapsed_seconds = elapsed_seconds;
 			entire_data.user_data = user_data.buffer;
 			entire_data.write_instrument = write_instrument;
@@ -162,7 +161,6 @@ namespace ECSEngine {
 			size_t instrument_offset = write_instrument->GetOffset();
 
 			DeltaStateWriterDeltaFunctionData entire_data;
-			entire_data.current_data = current_data;
 			entire_data.elapsed_seconds = elapsed_seconds;
 			entire_data.user_data = user_data.buffer;
 			entire_data.write_instrument = write_instrument;
@@ -180,8 +178,7 @@ namespace ECSEngine {
 	bool DeltaStateWriter::Write() {
 		ECS_ASSERT(extract_function != nullptr, "DeltaStateWriter: trying to make a self-contained call when no extract function has been specified.");
 		float elapsed_seconds = extract_function(user_data.buffer);
-		// We can give nullptr to the current data, since the functor is self-contained
-		return Write(nullptr, elapsed_seconds);
+		return Write(elapsed_seconds);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------

@@ -207,6 +207,7 @@
     <ClInclude Include="src\Sandbox\SandboxAccessor.h" />
     <ClInclude Include="src\Sandbox\SandboxModule.h" />
     <ClInclude Include="src\Sandbox\SandboxProfiling.h" />
+    <ClInclude Include="src\Sandbox\SandboxRecording.h" />
     <ClInclude Include="src\Sandbox\SandboxScene.h" />
     <ClInclude Include="src\Sandbox\SandboxTypes.h" />
     <ClInclude Include="src\Editor\EditorScene.h" />
@@ -311,6 +312,7 @@
     <ClCompile Include="src\Sandbox\SandboxAccessor.cpp" />
     <ClCompile Include="src\Sandbox\SandboxModule.cpp" />
     <ClCompile Include="src\Sandbox\SandboxProfiling.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxRecording.cpp" />
     <ClCompile Include="src\Sandbox\SandboxScene.cpp" />
     <ClCompile Include="src\UI\HelperWindows.cpp" />
     <ClCompile Include="src\UI\AssetExplorer.cpp" />

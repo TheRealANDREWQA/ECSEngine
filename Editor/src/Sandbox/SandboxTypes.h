@@ -49,7 +49,7 @@ struct EditorSandboxEntitySlot {
 	union {
 		size_t uinteger;
 		int64_t sinteger;
-		char data[8];
+		char data[sizeof(uinteger)];
 	};
 };
 
@@ -153,11 +153,15 @@ enum EDITOR_SANDBOX_FLAG : size_t {
 	// The sandbox should wait them
 	EDITOR_SANDBOX_FLAG_PENDING_BUILD_FUNCTIONS = 1 << 4,
 	// When this flag is set, running the sandbox will result in serializing the scene
-	// At the beginning of each frame. The scene is saved without any form of compression.
-	EDITOR_SANDBOX_FLAG_RECORD_STATE_FULL = 1 << 5,
-	// When this flag is set, when the sandbox starts, the scene will be serialized as a full scene,
-	// While for the next frames only the delta time and the input is written.
-	EDITOR_SANDBOX_FLAG_RECORD_STATE_TIME_ONLY = 1 << 6
+	// At the beginning of each frame. The scene is saved using a specialized delta algorithm
+	EDITOR_SANDBOX_FLAG_RECORD_STATE = 1 << 5,
+	// When this flag is set, the input that this sandbox sees will be written in a file, which
+	// Can be replayed later on. It uses a specialized delta algorithm with fast seek times
+	EDITOR_SANDBOX_FLAG_RECORD_INPUT = 1 << 6,
+	// When this flag is set, the sandbox will have its runtime (entity) data read from a pre-recorded session
+	EDITOR_SANDBOX_FLAG_REPLAY_STATE = 1 << 7,
+	// When this flag is set, the sandbox will receive input from a pre-recorded input session
+	EDITOR_SANDBOX_FLAG_REPLAY_INPUT = 1 << 8,
 };
 
 enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char {
@@ -259,7 +263,7 @@ struct ECS_REFLECT EditorSandbox {
 	// This flag is set when initiating keyboard transform actions
 	bool transform_display_axes;
 	// Indicate which axis of the transform tool is currently selected
-	bool transform_tool_selected[3];
+	bool transform_tool_selected[ECS_AXIS_COUNT];
 	// We need to record separately the tool that is being used for the keyboard presses
 	ECSEngine::ECS_TRANSFORM_TOOL transform_keyboard_tool;
 	// We need to record the transform space for the keyboard press
@@ -336,6 +340,26 @@ struct ECS_REFLECT EditorSandbox {
 	// This is data that is to be transfered in between module compilations
 	ECSEngine::ResizableLinearAllocator sandbox_world_transfer_data_allocator;
 	ECSEngine::Stream<ECSEngine::TaskSchedulerTransferStaticData> sandbox_world_transfer_data;
+
+	// The input recorder structure - should be used only when the flag EDITOR_SANDBOX_FLAG_RECORD_INPUT is set
+	ECSEngine::DeltaStateWriter input_recorder;
+	ECSEngine::CapacityStream<wchar_t> input_recorder_file;
+	// How many seconds it should wait until an entire input state is written for the input recording
+	float input_recorder_entire_state_tick_seconds;
+
+	// The input replay structure - should be used only when the flag EDITOR_SANDBOX_FLAG_REPLAY_INPUT is set
+	ECSEngine::DeltaStateReader input_replay;
+	ECSEngine::CapacityStream<wchar_t> input_replay_file;
+
+	// The state recorder structure - should be used only when the flag EDITOR_SANDBOX_FLAG_RECORD_STATE is set
+	ECSEngine::DeltaStateWriter state_recorder;
+	ECSEngine::CapacityStream<wchar_t> state_recorder_file;
+	// How many seconds it should wait until an entire state is written for the state recording
+	float state_recorder_entire_state_tick;
+
+	// The state replay structure - should be used only when the flag EDITOR_SANDBOX_FLAG_REPLAY_STATE is set
+	ECSEngine::DeltaStateReader state_replay;
+	ECSEngine::CapacityStream<wchar_t> state_replay_file;
 
 	// Miscellaneous flags
 	size_t flags;

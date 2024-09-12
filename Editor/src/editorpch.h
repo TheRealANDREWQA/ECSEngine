@@ -8,5 +8,6 @@
 #include "ECSEngineMultithreading.h"
 #include "ECSEngineUtilities.h"
 #include "ECSEngineOS.h"
+#include "ECSEngineInput.h"
 
 using namespace ECSEngine;

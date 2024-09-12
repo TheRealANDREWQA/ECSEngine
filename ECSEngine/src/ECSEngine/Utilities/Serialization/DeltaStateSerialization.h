@@ -21,14 +21,12 @@ namespace ECSEngine {
 
 	struct DeltaStateWriterDeltaFunctionData {
 		void* user_data;
-		const void* current_data;
 		float elapsed_seconds;
 		WriteInstrument* write_instrument;
 	};
 
 	struct DeltaStateWriterEntireFunctionData {
 		void* user_data;
-		const void* current_data;
 		float elapsed_seconds;
 		WriteInstrument* write_instrument;
 	};
@@ -116,7 +114,7 @@ namespace ECSEngine {
 
 		// Register a new state to be written, for the given time. Returns true if it succeeded in writing the state,
 		// Else false
-		bool Write(const void* current_data, float elapsed_seconds);
+		bool Write(float elapsed_seconds);
 
 		// Register a new state to be written, when the functor is self contained. It asserts that the functor is self contained.
 		// Returns true if it succeeded in writing the state, else false

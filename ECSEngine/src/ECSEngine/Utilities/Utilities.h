@@ -283,6 +283,11 @@ namespace ECSEngine {
 		return count & (-(int64_t)vector_size);
 	}
 
+	template<typename T>
+	ECS_INLINE void ZeroOut(T* data) {
+		memset(data, 0, sizeof(*data));
+	}
+
 	constexpr ECS_INLINE float CalculateFloatPrecisionPower(size_t precision) {
 		float value = 1.0f;
 		for (size_t index = 0; index < precision; index++) {

@@ -17,6 +17,8 @@
 
 #include "../ECSEngine/Utilities/Encryption.h"
 #include "../ECSEngine/Utilities/FilePackaging.h"
+#include "../ECSEngine/Utilities/BufferedFileReaderWriter.h"
+#include "../ECSEngine/Utilities/InMemoryReaderWriter.h"
 
 #include "ECSEngineReflection.h"
 #include "ECSEngineSerialization.h"
