@@ -103,6 +103,8 @@ namespace ECSEngine {
 		// This factor is used to increase/decrease the simulation speed
 		// If the simulation speed is too high, things might start to brake
 		float speed_up_factor;
+		// Measures the number of seconds that have elapsed since the simulation start
+		float elapsed_seconds;
 	};
 
 	// Destroys the graphics object if it was created internally, deallocates the global memory manager

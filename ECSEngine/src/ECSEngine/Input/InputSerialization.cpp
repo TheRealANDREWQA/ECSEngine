@@ -4,6 +4,8 @@
 #include "../Utilities/Serialization/SerializeIntVariableLength.h"
 #include "../Utilities/Utilities.h"
 #include "../Utilities/ReaderWriterInterface.h"
+#include "../Utilities/Serialization/DeltaStateSerialization.h"
+#include "../ECS/World.h"
 
 #define VERSION 0
 
@@ -81,7 +83,7 @@ namespace ECSEngine {
 		return VERSION;
 	}
 
-	InputSerializationHeader GetSerializeInputHeader() {
+	InputSerializationHeader GeInputSerializeHeader() {
 		InputSerializationHeader header;
 		memset(&header, 0, sizeof(header));
 		header.version = VERSION;
@@ -104,6 +106,11 @@ namespace ECSEngine {
 			current_button_states |= x_delta != 0 ? MOUSE_DELTA_X_BIT : 0;
 			current_button_states |= y_delta != 0 ? MOUSE_DELTA_Y_BIT : 0;
 			current_button_states |= scroll_delta != 0 ? MOUSE_DELTA_SCROLL_BIT : 0;
+
+			ECS_INPUT_SERIALIZE_TYPE type = ECS_INPUT_SERIALIZE_MOUSE;
+			if (!write_instrument->Write(&type)) {
+				return false;
+			}
 
 			// Write the button states (with the additional delta bits) followed by the variable length deltas.
 			if (!write_instrument->Write(&current_button_states)) {
@@ -131,6 +138,11 @@ namespace ECSEngine {
 
 	bool SerializeMouseInput(const Mouse* state, WriteInstrument* write_instrument)
 	{
+		ECS_INPUT_SERIALIZE_TYPE type = ECS_INPUT_SERIALIZE_MOUSE;
+		if (!write_instrument->Write(&type)) {
+			return false;
+		}
+
 		// Write the button states and the variable length integers at last
 		unsigned short button_states;
 		WriteBits(&button_states, 2, ECS_MOUSE_BUTTON_COUNT, [state](size_t index, void* value) {
@@ -159,6 +171,11 @@ namespace ECSEngine {
 
 		if (is_process_queue_different || is_pushed_character_count_different || is_queue_different || changed_keys.size > 0 || is_alphanumeric_different) {
 			// There is a difference, we must serialize a state
+
+			ECS_INPUT_SERIALIZE_TYPE type = ECS_INPUT_SERIALIZE_KEYBOARD;
+			if (!write_instrument->Write(&type)) {
+				return false;
+			}
 
 			// Write a compressed mask that indicates what deltas there are such that we can skip those that are not needed
 			unsigned char difference_bit_mask = 0;
@@ -215,6 +232,11 @@ namespace ECSEngine {
 	{
 		ECS_ASSERT(state->m_character_queue.GetSize() <= MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT);
 		ECS_ASSERT(state->m_alphanumeric_keys.size <= MAX_KEYBOARD_ALPHANUMERIC_ENTIRE_COUNT);
+
+		ECS_INPUT_SERIALIZE_TYPE input_type = ECS_INPUT_SERIALIZE_KEYBOARD;
+		if (!write_instrument->Write(&input_type)) {
+			return false;
+		}
 
 		if (!write_instrument->Write(&state->m_process_characters)) {
 			return false;
@@ -437,6 +459,153 @@ namespace ECSEngine {
 		});
 		
 		return true;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------------------
+
+	ECS_INPUT_SERIALIZE_TYPE DeserializeInputDelta(
+		const Mouse* previous_mouse,
+		Mouse* current_mouse,
+		const Keyboard* previous_keyboard,
+		Keyboard* current_keyboard,
+		ReadInstrument* read_instrument,
+		const InputSerializationHeader& header
+	) {
+		// Read the input byte
+		ECS_INPUT_SERIALIZE_TYPE type = ECS_INPUT_SERIALIZE_COUNT;
+		if (!read_instrument->Read(&type)) {
+			return ECS_INPUT_SERIALIZE_COUNT;
+		}
+
+		if (type == ECS_INPUT_SERIALIZE_MOUSE) {
+			if (!DeserializeMouseInputDelta(previous_mouse, current_mouse, read_instrument, header)) {
+				return ECS_INPUT_SERIALIZE_COUNT;
+			}
+			return type;
+		}
+		else if (type == ECS_INPUT_SERIALIZE_KEYBOARD) {
+			if (!DeserializeKeyboardInputDelta(previous_keyboard, current_keyboard, read_instrument, header)) {
+				return ECS_INPUT_SERIALIZE_COUNT;
+			}
+			return type;
+		}
+		else {
+			// Unidentified type - possibly corrupted data
+			return ECS_INPUT_SERIALIZE_COUNT;
+		}
+	}
+
+	ECS_INPUT_SERIALIZE_TYPE DeserializeInput(
+		Mouse* mouse,
+		Keyboard* keyboard,
+		ReadInstrument* read_instrument,
+		const InputSerializationHeader& header
+	) {
+		// Read the input byte
+		ECS_INPUT_SERIALIZE_TYPE type = ECS_INPUT_SERIALIZE_COUNT;
+		if (!read_instrument->Read(&type)) {
+			return ECS_INPUT_SERIALIZE_COUNT;
+		}
+
+		if (type == ECS_INPUT_SERIALIZE_MOUSE) {
+			if (!DeserializeMouseInput(mouse, read_instrument, header)) {
+				return ECS_INPUT_SERIALIZE_COUNT;
+			}
+			return type;
+		}
+		else if (type == ECS_INPUT_SERIALIZE_KEYBOARD) {
+			if (!DeserializeKeyboardInput(keyboard, read_instrument, header)) {
+				return ECS_INPUT_SERIALIZE_COUNT;
+			}
+			return type;
+		}
+		else {
+			// Unidentified type - possibly corrupted data
+			return ECS_INPUT_SERIALIZE_COUNT;
+		}
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------------------
+
+	// This is the structure that is stored in the delta state reader/writer
+	struct DeltaState {
+		Mouse mouse;
+		Keyboard keyboard;
+	};
+
+	// This allows the writer to work in a self-contained manner
+	struct DeltaStateWorld {
+		DeltaState delta_state;
+		const World* world;
+	};
+
+	static void InputDeltaInitialize(void* user_data, AllocatorPolymorphic allocator) {
+		DeltaState* delta_state = (DeltaState*)user_data;
+		delta_state->keyboard = Keyboard(allocator);
+	}
+
+	static bool InputDeltaWriterDeltaFunction(DeltaStateWriterDeltaFunctionData* data) {
+		DeltaState* previous_data = (DeltaState*)data->user_data;
+		const DeltaState* current_data = (const DeltaState*)data->current_data;
+		
+		if (!SerializeMouseInputDelta(&previous_data->mouse, &current_data->mouse, data->write_instrument)) {
+			return false;
+		}
+		previous_data->mouse = current_data->mouse;
+
+		if (!SerializeKeyboardInputDelta(&previous_data->keyboard, &current_data->keyboard, data->write_instrument)) {
+			return false;
+		}
+		
+		previous_data->keyboard.CopyOther(&current_data->keyboard);
+	}
+
+	static bool InputDeltaWriterEntireFunction(DeltaStateWriterEntireFunctionData* data) {
+		return true;
+	}
+
+	static bool InputDeltaReaderDeltaFunction(DeltaStateReaderDeltaFunctionData* data) {
+		return true;
+	}
+
+	static bool InputDeltaReaderEntireFunction(DeltaStateReaderEntireFunctionData* data) {
+		return true;
+	}
+
+	static float InputDeltaWriterExtractFunction(void* user_data) {
+		DeltaStateWorld* data = (DeltaStateWorld*)user_data;
+		return data->world->elapsed_seconds;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------------------
+
+	void SetInputDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, CapacityStream<void>& stack_memory) {
+		info.delta_function = InputDeltaWriterDeltaFunction;
+		info.entire_function = InputDeltaWriterEntireFunction;
+		info.self_contained_extract = nullptr;
+		info.user_data_allocator_initialize = InputDeltaInitialize;
+
+		InputSerializationHeader serialization_header = GeInputSerializeHeader();
+		info.header = stack_memory.Add(&serialization_header);
+		info.user_data = { nullptr, sizeof(DeltaState) };
+	}
+
+	void SetInputDeltaWriterWorldInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const World* world, CapacityStream<void>& stack_memory) {
+		info.delta_function = InputDeltaWriterDeltaFunction;
+		info.entire_function = InputDeltaWriterEntireFunction;
+		info.self_contained_extract = nullptr;
+		info.user_data_allocator_initialize = InputDeltaInitialize;
+
+		InputSerializationHeader serialization_header = GeInputSerializeHeader();
+		info.header = stack_memory.Add(&serialization_header);
+		info.user_data = { nullptr, sizeof(DeltaState) };
+	}
+
+	void SetInputDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, CapacityStream<void>& stack_memory) {
+		info.delta_function = InputDeltaReaderDeltaFunction;
+		info.entire_function = InputDeltaReaderEntireFunction;
+		info.user_data_allocator_initialize = InputDeltaInitialize;
+		info.user_data = { nullptr, sizeof(DeltaState) };
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------

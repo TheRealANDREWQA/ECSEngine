@@ -1,7 +1,6 @@
 #pragma once
 #include "../Core.h"
 #include "../Containers/Queues.h"
-#include "../Allocators/MemoryManager.h"
 #include "ButtonInput.h"
 
 #define ECS_KEYBOARD_CHARACTER_QUEUE_DEFAULT_SIZE 256
@@ -189,7 +188,7 @@ namespace ECSEngine {
 	struct ECSENGINE_API Keyboard : ButtonInput<ECS_KEY, ECS_KEY_COUNT>
 	{
 		ECS_INLINE Keyboard() {}
-        ECS_INLINE Keyboard(GlobalMemoryManager* allocator) {
+        ECS_INLINE Keyboard(AllocatorPolymorphic allocator) {
             Reset();
             m_character_queue = KeyboardCharacterQueue(allocator, ECS_KEYBOARD_CHARACTER_QUEUE_DEFAULT_SIZE);
             m_alphanumeric_keys.Initialize(allocator, 0, ECS_KEYBOARD_ALPHANUMERIC_CAPACITY);
@@ -198,6 +197,11 @@ namespace ECSEngine {
 
 		Keyboard(const Keyboard& other) = default;
 		Keyboard& operator = (const Keyboard& other) = default;
+
+        // Copies the data from another keyboard into this instance. The difference between this
+        // Function and UpdateFromOther is that this function will copy the character queue as it is,
+        // Instead of pushing new characters
+        void CopyOther(const Keyboard* other);
 
 		ECS_INLINE void CaptureCharacters() {
 			m_process_characters = true;

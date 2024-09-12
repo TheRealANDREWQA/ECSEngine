@@ -291,6 +291,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\ReaderWriterInterface.h" />
     <ClInclude Include="src\ECSEngine\Utilities\InMemoryReaderWriter.h" />
     <ClInclude Include="src\ECSEngine\Utilities\BufferedFileReaderWriter.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerializationForward.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

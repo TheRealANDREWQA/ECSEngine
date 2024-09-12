@@ -373,6 +373,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializationMacro.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerialization.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerializationForward.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.h" />
     <ClInclude Include="src\ECSEngine\Utilities\StringUtilities.h" />
     <ClInclude Include="src\ECSEngine\Utilities\TransformTool.h" />

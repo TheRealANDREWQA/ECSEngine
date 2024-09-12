@@ -1374,9 +1374,12 @@ namespace ECSEngine {
 			return !(*this == other);
 		}
 
-		ECS_INLINE void Add(Stream<void> other) {
+		// Returns the subrange in this entry
+		ECS_INLINE Stream<void> Add(Stream<void> other) {
+			size_t previous_size = size;
 			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
 			size += other.size;
+			return SliceAt(previous_size);
 		}
 
 		// If using the buffer for untyped data
@@ -1489,6 +1492,11 @@ namespace ECSEngine {
 			SetElement(second, temporary_storage, byte_size);
 		}
 
+		// Returns the subrange starting at the given offset until the end of this stream
+		ECS_INLINE Stream<void> SliceAt(size_t offset) const {
+			return { (void*)((uintptr_t)buffer + offset), size - offset };
+		}
+
 		// The size is divided by the sizeof T
 		template<typename T>
 		ECS_INLINE Stream<T> As() const {
@@ -1555,16 +1563,13 @@ namespace ECSEngine {
 		ECS_INLINE CapacityStream(const CapacityStream& other) = default;
 		ECS_INLINE CapacityStream<void>& operator = (const CapacityStream<void>& other) = default;
 
-		ECS_INLINE void Add(Stream<void> other) {
+		// Returns the subrange inside this entry
+		ECS_INLINE Stream<void> Add(Stream<void> other) {
+			unsigned int previous_size = size;
 			ECS_ASSERT(size + other.size < capacity);
 			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
 			size += other.size;
-		}
-
-		ECS_INLINE void Add(CapacityStream<void> other) {
-			ECS_ASSERT(size + other.size < capacity);
-			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
-			size += other.size;
+			return SliceAt(previous_size);
 		}
 
 		// If using the buffer for untyped data
@@ -1668,6 +1673,11 @@ namespace ECSEngine {
 			memcpy(temporary_storage, Get(first, byte_size), byte_size);
 			SetElement(first, Get(second, byte_size), byte_size);
 			SetElement(second, temporary_storage, byte_size);
+		}
+
+		// Returns the subrange starting at the given offset until the end of the size
+		ECS_INLINE CapacityStream<void> SliceAt(unsigned int offset) const {
+			return { (void*)((uintptr_t)buffer + offset), size - offset, capacity - offset };
 		}
 
 		// Divides the size and the capacity by the sizeof(T)
