@@ -469,7 +469,8 @@ namespace ECSEngine {
 		const Keyboard* previous_keyboard,
 		Keyboard* current_keyboard,
 		ReadInstrument* read_instrument,
-		const InputSerializationHeader& header
+		const InputSerializationHeader& header,
+		Stream<ECS_INPUT_SERIALIZE_TYPE> accepted_input_types
 	) {
 		// Read the input byte
 		ECS_INPUT_SERIALIZE_TYPE type = ECS_INPUT_SERIALIZE_COUNT;
@@ -477,29 +478,36 @@ namespace ECSEngine {
 			return ECS_INPUT_SERIALIZE_COUNT;
 		}
 
-		if (type == ECS_INPUT_SERIALIZE_MOUSE) {
-			if (!DeserializeMouseInputDelta(previous_mouse, current_mouse, read_instrument, header)) {
-				return ECS_INPUT_SERIALIZE_COUNT;
+		bool is_type_found = true;
+		if (accepted_input_types.size > 0) {
+			is_type_found = accepted_input_types.Find(type);
+		}
+
+		if (is_type_found) {
+			if (type == ECS_INPUT_SERIALIZE_MOUSE) {
+				if (!DeserializeMouseInputDelta(previous_mouse, current_mouse, read_instrument, header)) {
+					return ECS_INPUT_SERIALIZE_COUNT;
+				}
+				return type;
 			}
-			return type;
-		}
-		else if (type == ECS_INPUT_SERIALIZE_KEYBOARD) {
-			if (!DeserializeKeyboardInputDelta(previous_keyboard, current_keyboard, read_instrument, header)) {
-				return ECS_INPUT_SERIALIZE_COUNT;
+			else if (type == ECS_INPUT_SERIALIZE_KEYBOARD) {
+				if (!DeserializeKeyboardInputDelta(previous_keyboard, current_keyboard, read_instrument, header)) {
+					return ECS_INPUT_SERIALIZE_COUNT;
+				}
+				return type;
 			}
-			return type;
 		}
-		else {
-			// Unidentified type - possibly corrupted data
-			return ECS_INPUT_SERIALIZE_COUNT;
-		}
+
+		// Unidentified type or not accepted - possibly corrupted data
+		return ECS_INPUT_SERIALIZE_COUNT;
 	}
 
 	ECS_INPUT_SERIALIZE_TYPE DeserializeInput(
 		Mouse* mouse,
 		Keyboard* keyboard,
 		ReadInstrument* read_instrument,
-		const InputSerializationHeader& header
+		const InputSerializationHeader& header,
+		Stream<ECS_INPUT_SERIALIZE_TYPE> accepted_input_types
 	) {
 		// Read the input byte
 		ECS_INPUT_SERIALIZE_TYPE type = ECS_INPUT_SERIALIZE_COUNT;
@@ -507,105 +515,241 @@ namespace ECSEngine {
 			return ECS_INPUT_SERIALIZE_COUNT;
 		}
 
-		if (type == ECS_INPUT_SERIALIZE_MOUSE) {
-			if (!DeserializeMouseInput(mouse, read_instrument, header)) {
-				return ECS_INPUT_SERIALIZE_COUNT;
+		bool is_type_found = true;
+		if (accepted_input_types.size > 0) {
+			is_type_found = accepted_input_types.Find(type);
+		}
+
+		if (is_type_found) {
+			if (type == ECS_INPUT_SERIALIZE_MOUSE) {
+				if (!DeserializeMouseInput(mouse, read_instrument, header)) {
+					return ECS_INPUT_SERIALIZE_COUNT;
+				}
+				return type;
 			}
-			return type;
-		}
-		else if (type == ECS_INPUT_SERIALIZE_KEYBOARD) {
-			if (!DeserializeKeyboardInput(keyboard, read_instrument, header)) {
-				return ECS_INPUT_SERIALIZE_COUNT;
+			else if (type == ECS_INPUT_SERIALIZE_KEYBOARD) {
+				if (!DeserializeKeyboardInput(keyboard, read_instrument, header)) {
+					return ECS_INPUT_SERIALIZE_COUNT;
+				}
+				return type;
 			}
-			return type;
 		}
-		else {
-			// Unidentified type - possibly corrupted data
-			return ECS_INPUT_SERIALIZE_COUNT;
-		}
+
+		// Unidentified type or unaccepted type - possibly corrupted data
+		return ECS_INPUT_SERIALIZE_COUNT;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	// This is the structure that is stored in the delta state reader/writer
-	struct DeltaState {
-		Mouse mouse;
-		Keyboard keyboard;
+	// This is the structure that is stored in the delta state writer
+	struct DeltaStateWriterData {
+		Mouse previous_mouse;
+		Keyboard previous_keyboard;
+		const Mouse* mouse;
+		const Keyboard* keyboard;
+	};
+
+	struct DeltaStateReaderData {
+		Mouse previous_mouse;
+		Keyboard previous_keyboard;
+		Mouse* mouse;
+		Keyboard* keyboard;
 	};
 
 	// This allows the writer to work in a self-contained manner
-	struct DeltaStateWorld {
-		DeltaState delta_state;
+	struct DeltaStateWriterWorldData : DeltaStateWriterData {
 		const World* world;
 	};
 
-	static void InputDeltaInitialize(void* user_data, AllocatorPolymorphic allocator) {
-		DeltaState* delta_state = (DeltaState*)user_data;
-		delta_state->keyboard = Keyboard(allocator);
+	static void InputDeltaWriterInitialize(void* user_data, AllocatorPolymorphic allocator) {
+		DeltaStateWriterData* delta_state = (DeltaStateWriterData*)user_data;
+		delta_state->previous_keyboard = Keyboard(allocator);
 	}
 
-	static bool InputDeltaWriterDeltaFunction(DeltaStateWriterDeltaFunctionData* data) {
-		DeltaState* previous_data = (DeltaState*)data->user_data;
-		const DeltaState* current_data = (const DeltaState*)data->current_data;
+	static void InputDeltaWriterDeallocate(void* user_data, AllocatorPolymorphic allocator) {
+		DeltaStateWriterData* delta_state = (DeltaStateWriterData*)user_data;
+		delta_state->previous_keyboard.Deallocate(allocator);
+	}
+
+	static void InputDeltaReaderInitialize(void* user_data, AllocatorPolymorphic allocator) {
+		DeltaStateReaderData* delta_state = (DeltaStateReaderData*)user_data;
+		delta_state->previous_keyboard = Keyboard(allocator);
+	}
+
+	static void InputDeltaReaderDeallocate(void* user_data, AllocatorPolymorphic allocator) {
+		DeltaStateReaderData* delta_state = (DeltaStateReaderData*)user_data;
+		delta_state->previous_keyboard.Deallocate(allocator);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------------------
+
+	static bool InputDeltaWriterDeltaFunction(DeltaStateWriterDeltaFunctionData* function_data) {
+		DeltaStateWriterData* data = (DeltaStateWriterData*)function_data->user_data;
 		
-		if (!SerializeMouseInputDelta(&previous_data->mouse, &current_data->mouse, data->write_instrument)) {
+		if (!SerializeMouseInputDelta(&data->previous_mouse, data->mouse, function_data->write_instrument)) {
 			return false;
 		}
-		previous_data->mouse = current_data->mouse;
+		data->previous_mouse = *data->mouse;
 
-		if (!SerializeKeyboardInputDelta(&previous_data->keyboard, &current_data->keyboard, data->write_instrument)) {
+		if (!SerializeKeyboardInputDelta(&data->previous_keyboard, data->keyboard, function_data->write_instrument)) {
+			return false;
+		}		
+		data->previous_keyboard.CopyOther(data->keyboard);
+		
+		return true;
+	}
+
+	static bool InputDeltaWriterEntireFunction(DeltaStateWriterEntireFunctionData* function_data) {
+		DeltaStateWriterData* data = (DeltaStateWriterData*)function_data->user_data;
+		
+		if (!SerializeMouseInput(data->mouse, function_data->write_instrument)) {
 			return false;
 		}
-		
-		previous_data->keyboard.CopyOther(&current_data->keyboard);
-	}
+		data->previous_mouse = *data->mouse;
 
-	static bool InputDeltaWriterEntireFunction(DeltaStateWriterEntireFunctionData* data) {
+		if (!SerializeKeyboardInput(data->keyboard, function_data->write_instrument)) {
+			return false;
+		}
+		data->previous_keyboard.CopyOther(data->keyboard);
+
 		return true;
 	}
 
-	static bool InputDeltaReaderDeltaFunction(DeltaStateReaderDeltaFunctionData* data) {
+	// -----------------------------------------------------------------------------------------------------------------------------
+
+	// The deserialize functor is called with a (const InputSerializationHeader& header, Stream<ECS_INPUT_SERIALIZE_TYPE> accepted_input_types) parameters
+	template<typename FunctorData, typename DeserializeFunctor>
+	static bool InputDeltaReaderFunctionImpl(FunctorData* function_data, DeserializeFunctor&& deserialize_functor) {
+		DeltaStateReaderData* data = (DeltaStateReaderData*)function_data->user_data;
+
+		// If the header does not have the same size, fail
+		if (function_data->header.size != sizeof(InputSerializationHeader)) {
+			return false;
+		}
+
+		// If nothing was written, we can exit
+		if (function_data->write_size == 0) {
+			return true;
+		}
+
+		InputSerializationHeader* header = (InputSerializationHeader*)function_data->header.buffer;
+
+		ECS_STACK_CAPACITY_STREAM(ECS_INPUT_SERIALIZE_TYPE, valid_types, ECS_INPUT_SERIALIZE_COUNT);
+		for (size_t index = 0; index < ECS_INPUT_SERIALIZE_COUNT; index++) {
+			valid_types[index] = (ECS_INPUT_SERIALIZE_TYPE)index;
+		}
+		valid_types.size = ECS_INPUT_SERIALIZE_COUNT;
+
+		size_t initial_offset = function_data->read_instrument->GetOffset();
+		size_t read_size = 0;
+		while (read_size < function_data->write_size && valid_types.size > 0) {
+			ECS_INPUT_SERIALIZE_TYPE serialized_type = deserialize_functor(*header, valid_types);
+			if (serialized_type == ECS_INPUT_SERIALIZE_COUNT) {
+				return false;
+			}
+			else {
+				// Verify that an input of that type is still available
+				unsigned int valid_type_index = valid_types.Find(serialized_type);
+				if (valid_type_index == -1) {
+					// An input is repeated, which means that the data is corrupted.
+					return false;
+				}
+
+				if (serialized_type == ECS_INPUT_SERIALIZE_MOUSE) {
+					data->previous_mouse = *data->mouse;
+				}
+				else if (serialized_type == ECS_INPUT_SERIALIZE_KEYBOARD) {
+					data->previous_keyboard = *data->keyboard;
+				}
+				else {
+					ECS_ASSERT(false);
+				}
+
+				size_t current_offset = function_data->read_instrument->GetOffset();
+				read_size += current_offset - initial_offset;
+				initial_offset = current_offset;
+			}
+		}
+
 		return true;
 	}
 
-	static bool InputDeltaReaderEntireFunction(DeltaStateReaderEntireFunctionData* data) {
-		return true;
+	static bool InputDeltaReaderDeltaFunction(DeltaStateReaderDeltaFunctionData* function_data) {
+		DeltaStateReaderData* data = (DeltaStateReaderData*)function_data->user_data;
+		return InputDeltaReaderFunctionImpl(function_data, [function_data, data](const InputSerializationHeader& header, Stream<ECS_INPUT_SERIALIZE_TYPE> accepted_input_types) {
+			return DeserializeInputDelta(&data->previous_mouse, data->mouse, &data->previous_keyboard, data->keyboard, function_data->read_instrument, header, accepted_input_types);
+		});
 	}
+
+	static bool InputDeltaReaderEntireFunction(DeltaStateReaderEntireFunctionData* function_data) {
+		// This is a mirror of the delta function, but instead of the delta function, we use the entire function
+		DeltaStateReaderData* data = (DeltaStateReaderData*)function_data->user_data;
+		return InputDeltaReaderFunctionImpl(function_data, [function_data, data](const InputSerializationHeader& header, Stream<ECS_INPUT_SERIALIZE_TYPE> accepted_input_types) {
+			return DeserializeInput(data->mouse, data->keyboard, function_data->read_instrument, header, accepted_input_types);
+		});
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------------------
 
 	static float InputDeltaWriterExtractFunction(void* user_data) {
-		DeltaStateWorld* data = (DeltaStateWorld*)user_data;
+		DeltaStateWriterWorldData* data = (DeltaStateWriterWorldData*)user_data;
 		return data->world->elapsed_seconds;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	void SetInputDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, CapacityStream<void>& stack_memory) {
+	void SetInputDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const Mouse* mouse, const Keyboard* keyboard, CapacityStream<void>& stack_memory) {
 		info.delta_function = InputDeltaWriterDeltaFunction;
 		info.entire_function = InputDeltaWriterEntireFunction;
 		info.self_contained_extract = nullptr;
-		info.user_data_allocator_initialize = InputDeltaInitialize;
+		info.user_data_allocator_initialize = InputDeltaWriterInitialize;
+		info.user_data_allocator_deallocate = InputDeltaWriterDeallocate;
 
 		InputSerializationHeader serialization_header = GeInputSerializeHeader();
 		info.header = stack_memory.Add(&serialization_header);
-		info.user_data = { nullptr, sizeof(DeltaState) };
+
+		DeltaStateWriterData writer_data;
+		memset(&writer_data, 0, sizeof(writer_data));
+		writer_data.keyboard = keyboard;
+		writer_data.mouse = mouse;
+		info.user_data = stack_memory.Add(&writer_data);
 	}
 
 	void SetInputDeltaWriterWorldInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const World* world, CapacityStream<void>& stack_memory) {
+		// We can use the same delta, entire, initialize and deallocate functions since it is the same at base
 		info.delta_function = InputDeltaWriterDeltaFunction;
 		info.entire_function = InputDeltaWriterEntireFunction;
-		info.self_contained_extract = nullptr;
-		info.user_data_allocator_initialize = InputDeltaInitialize;
+		info.self_contained_extract = InputDeltaWriterExtractFunction;
+		info.user_data_allocator_initialize = InputDeltaWriterInitialize;
+		info.user_data_allocator_deallocate = InputDeltaWriterDeallocate;
 
 		InputSerializationHeader serialization_header = GeInputSerializeHeader();
 		info.header = stack_memory.Add(&serialization_header);
-		info.user_data = { nullptr, sizeof(DeltaState) };
+
+		DeltaStateWriterWorldData writer_data;
+		ZeroOut(&writer_data);
+		writer_data.world = world;
+		writer_data.mouse = world->mouse;
+		writer_data.keyboard = world->keyboard;
+		info.user_data = stack_memory.Add(&writer_data);
 	}
 
-	void SetInputDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, CapacityStream<void>& stack_memory) {
+	void SetInputDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, Mouse* mouse, Keyboard* keyboard, CapacityStream<void>& stack_memory) {
 		info.delta_function = InputDeltaReaderDeltaFunction;
 		info.entire_function = InputDeltaReaderEntireFunction;
-		info.user_data_allocator_initialize = InputDeltaInitialize;
-		info.user_data = { nullptr, sizeof(DeltaState) };
+		info.user_data_allocator_initialize = InputDeltaReaderInitialize;
+		info.user_data_allocator_deallocate = InputDeltaReaderDeallocate;
+
+		DeltaStateReaderData reader_data;
+		ZeroOut(&reader_data);
+		reader_data.mouse = mouse;
+		reader_data.keyboard = keyboard;
+		info.user_data = stack_memory.Add(&reader_data);
+	}
+
+	void SetInputDeltaReaderWorldInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, World* world, CapacityStream<void>& stack_memory) {
+		// Here, we can simply forward the parameters
+		SetInputDeltaReaderInitializeInfo(info, world->mouse, world->keyboard, stack_memory);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------

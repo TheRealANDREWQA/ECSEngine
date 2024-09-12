@@ -74,33 +74,39 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// Returns the input type that was read, or COUNT if no input could be read
+	// The last parameter can be used to prevent reading input types that you do not expect
 	ECSENGINE_API ECS_INPUT_SERIALIZE_TYPE DeserializeInputDelta(
 		const Mouse* previous_mouse,
 		Mouse* current_mouse,
 		const Keyboard* previous_keyboard,
 		Keyboard* current_keyboard,
 		ReadInstrument* read_instrument,
-		const InputSerializationHeader& header
+		const InputSerializationHeader& header,
+		Stream<ECS_INPUT_SERIALIZE_TYPE> accepted_input_types = {}
 	);
 
 	// Returns the input type that was read, or COUNT if no input could be read
+	// The last parameter can be used to prevent reading input types that you do not expect
 	ECSENGINE_API ECS_INPUT_SERIALIZE_TYPE DeserializeInput(
 		Mouse* mouse,
 		Keyboard* keyboard,
 		ReadInstrument* read_instrument,
-		const InputSerializationHeader& header
+		const InputSerializationHeader& header,
+		Stream<ECS_INPUT_SERIALIZE_TYPE> accepted_input_types = {}
 	);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
-	ECSENGINE_API void SetInputDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, CapacityStream<void>& stack_memory);
+	// The mouse and keyboard must be stable for the entire duration of the writer
+	ECSENGINE_API void SetInputDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const Mouse* mouse, const Keyboard* keyboard, CapacityStream<void>& stack_memory);
 	
 	// Sets the necessary info for the writer to be initialized as an input delta writer - for a simulation world
 	ECSENGINE_API void SetInputDeltaWriterWorldInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const World* world, CapacityStream<void>& stack_memory);
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
-	ECSENGINE_API void SetInputDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, CapacityStream<void>& stack_memory);
+	// The mouse and keyboard must be stable for the entire duration of the reader
+	ECSENGINE_API void SetInputDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, Mouse* mouse, Keyboard* keyboard, CapacityStream<void>& stack_memory);
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
 	ECSENGINE_API void SetInputDeltaReaderWorldInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, World* world, CapacityStream<void>& stack_memory);

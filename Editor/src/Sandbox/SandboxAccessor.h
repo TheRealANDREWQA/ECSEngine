@@ -97,3 +97,39 @@ ECS_INLINE bool IsSandboxTemporary(const EditorState* editor_state, unsigned int
 const ECSEngine::EntityManager* RuntimeSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
+
+ECS_INLINE bool DoesSandboxRecordInput(const EditorState* editor_state, unsigned int sandbox_index) {
+	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_RECORD_INPUT);
+}
+
+ECS_INLINE bool DoesSandboxRecordState(const EditorState* editor_state, unsigned int sandbox_index) {
+	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_RECORD_STATE);
+}
+
+ECS_INLINE bool DoesSandboxReplayInput(const EditorState* editor_state, unsigned int sandbox_index) {
+	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_REPLAY_INPUT);
+}
+
+ECS_INLINE bool DoesSandboxReplayState(const EditorState* editor_state, unsigned int sandbox_index) {
+	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_REPLAY_STATE);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECS_INLINE bool CanSandboxRecordInput(const EditorState* editor_state, unsigned int sandbox_index) {
+	return !DoesSandboxReplayInput(editor_state, sandbox_index);
+}
+
+ECS_INLINE bool CanSandboxRecordState(const EditorState* editor_state, unsigned int sandbox_index) {
+	return !DoesSandboxReplayState(editor_state, sandbox_index);
+}
+
+ECS_INLINE bool CanSandboxReplayInput(const EditorState* editor_state, unsigned int sandbox_index) {
+	return !DoesSandboxRecordInput(editor_state, sandbox_index);
+}
+
+ECS_INLINE bool CanSandboxReplayState(const EditorState* editor_state, unsigned int sandbox_index) {
+	return !DoesSandboxRecordState(editor_state, sandbox_index);
+}
+
+// -------------------------------------------------------------------------------------------------------------

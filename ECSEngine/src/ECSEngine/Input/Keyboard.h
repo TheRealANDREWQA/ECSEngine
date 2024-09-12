@@ -223,6 +223,11 @@ namespace ECSEngine {
 			return m_character_queue.Pop(character);
 		}
 
+        ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+            m_character_queue.GetQueue()->FreeBuffer();
+            m_alphanumeric_keys.Deallocate(allocator);
+        }
+
         void Reset();
 
         void Update();

@@ -32,8 +32,8 @@ using namespace ECSEngine;
 
 #define LAZY_EVALUATION_RUNTIME_SETTINGS 500
 
-#define SANDBOX_ALLOCATOR_EXTRA_CAPACITY ECS_MB * 20
-#define SANDBOX_ALLOCATOR_BACKUP_EXTRA_CAPACITY ECS_MB * 10
+#define SANDBOX_ALLOCATOR_EXTRA_CAPACITY ECS_MB * 100
+#define SANDBOX_ALLOCATOR_BACKUP_EXTRA_CAPACITY ECS_MB * 50
 
 Stream<char> EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY_STRINGS[] = {
 	"CPU Usage",
@@ -2075,7 +2075,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	*allocator = CreateGlobalMemoryManager(
 		sandbox->runtime_descriptor.entity_manager_memory_size + SANDBOX_ALLOCATOR_EXTRA_CAPACITY + profiling_reserve_size + 
 			DebugDrawer::DefaultAllocatorSize() * 2,
-		1024,
+		ECS_KB * 4,
 		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size + SANDBOX_ALLOCATOR_BACKUP_EXTRA_CAPACITY + 
 			DebugDrawer::DefaultAllocatorSize() * 2
 	);
