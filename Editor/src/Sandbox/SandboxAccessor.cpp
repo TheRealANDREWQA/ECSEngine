@@ -1,6 +1,7 @@
 #include "editorpch.h"
 #include "SandboxAccessor.h"
 #include "../UI/Game.h"
+#include "../UI/Scene.h"
 
 using namespace ECSEngine;
 
@@ -33,6 +34,14 @@ EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandb
 
 unsigned int GetActiveSandbox(const EditorState* editor_state) {
 	return GameUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
+}
+
+unsigned int GetActiveSandboxIncludeScene(const EditorState* editor_state) {
+	unsigned int active_sandbox = GetActiveSandbox(editor_state);
+	if (active_sandbox == -1) {
+		return SceneUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
+	}
+	return active_sandbox;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

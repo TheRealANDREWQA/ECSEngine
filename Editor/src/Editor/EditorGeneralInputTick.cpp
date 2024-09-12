@@ -6,6 +6,7 @@
 #include "../Sandbox/SandboxAccessor.h"
 #include "../Sandbox/SandboxScene.h"
 #include "../Sandbox/Sandbox.h"
+#include "../UI/Inspector.h"
 
 void TickEditorGeneralInput(EditorState* editor_state) {
 	const InputMapping& input_mapping = editor_state->input_mapping;
@@ -92,5 +93,13 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 				FocusUIOnSandbox(editor_state, sandbox_index);
 			}
 		});
+	}
+
+	// Check the sandbox settings shortcut
+	if (input_mapping.IsTriggered(EDITOR_INPUT_OPEN_SANDBOX_SETTINGS)) {
+		unsigned int active_sandbox = GetActiveSandboxIncludeScene(editor_state);
+		if (active_sandbox != -1) {
+			ChangeInspectorToSandboxSettings(editor_state, -1, active_sandbox);
+		}
 	}
 }
