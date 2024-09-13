@@ -1,7 +1,7 @@
 #pragma once
-#include "ecspch.h"
 #include "Core.h"
 #include "Utilities/BasicTypes.h"
+#include "Containers/Stream.h"
 
 #define ECS_CURSOR_COUNT 12
 
@@ -43,11 +43,15 @@ namespace ECSEngine {
 		
 		virtual ECS_CURSOR_TYPE GetCurrentCursor() const = 0;
 		
-		// null terminated
-		virtual void WriteTextToClipboard(const char* text) = 0;
+		// Null terminated
+		virtual void WriteTextToClipboard(Stream<char> text) = 0;
 		
+		virtual void WriteTextToClipboard(Stream<wchar_t> text) = 0;
+
 		// returns the count of characters written
-		virtual unsigned int CopyTextFromClipboard(char* text, unsigned int max_size) = 0;
+		virtual unsigned int CopyTextFromClipboard(CapacityStream<char>* text) = 0;
+
+		virtual unsigned int CopyTextFromClipboard(CapacityStream<wchar_t>* text) = 0;
 
 		virtual void* GetOSWindowHandle() const = 0;
 
@@ -58,9 +62,5 @@ namespace ECSEngine {
 		// Sets the position of the cursor relative to the current window position
 		virtual void SetCursorPositionRelative(uint2 position) = 0;
 	};
-
-	// To be defined in Client
-	Application* CreateApplication(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow);
-	Application* CreateApplication();
 
 }

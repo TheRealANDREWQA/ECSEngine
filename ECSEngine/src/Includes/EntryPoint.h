@@ -9,11 +9,11 @@
 
 #ifdef ECSENGINE_RENDER
 
-extern ECSEngine::Application* ECSEngine::CreateApplication(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow);
+extern ECSEngine::Application* CreateApplication(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow);
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 
-	auto application = ECSEngine::CreateApplication(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
+	auto application = CreateApplication(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
 
 	int exit_code = application->Run();
 

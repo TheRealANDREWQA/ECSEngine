@@ -5200,7 +5200,7 @@ namespace ECSEngine {
 			float right_text_spans[256];
 			auto calculate_span_kernel = [data, this, &current_position](float& max_scale, const char* characters, size_t new_line_character, float& text_x_scale) {
 				if (new_line_character > current_position) {
-					float2 text_span = GetTextSpan(
+					float2 text_span = GetTextSpan<char>(
 						{ characters + current_position, new_line_character - current_position },
 						data->font_size,
 						data->character_spacing
@@ -5321,7 +5321,7 @@ namespace ECSEngine {
 					word_end_index = temp_stream[index] - 1;
 				}
 				if (word_end_index >= word_start_index) {
-					float2 text_span = GetTextSpan({ characters.buffer + word_start_index, word_end_index - word_start_index + 1 }, data->font_size, data->character_spacing);
+					float2 text_span = GetTextSpan<char>({ characters.buffer + word_start_index, word_end_index - word_start_index + 1 }, data->font_size, data->character_spacing);
 					position.x += text_span.x;
 				}
 
@@ -5381,7 +5381,7 @@ namespace ECSEngine {
 
 			size_t current_position = 0;
 			for (size_t index = 0; index < left_new_lines.size; index++) {
-				float2 text_span = GetTextSpan(
+				float2 text_span = GetTextSpan<char>(
 					{ aligned_to_left_text.buffer + current_position, left_new_lines[index] - current_position },
 					data->font_size,
 					data->character_spacing
@@ -5392,7 +5392,7 @@ namespace ECSEngine {
 
 			current_position = 0;
 			for (size_t index = 0; index < right_new_lines.size; index++) {
-				float2 text_span = GetTextSpan(
+				float2 text_span = GetTextSpan<char>(
 					{ aligned_to_right_text.buffer + current_position, right_new_lines[index] - current_position },
 					data->font_size,
 					data->character_spacing
@@ -6349,28 +6349,30 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		template<bool horizontal>
+		template<typename CharacterType>
 		float2 UISystem::GetTextSpan(
-			Stream<char> characters,
+			Stream<CharacterType> characters,
 			float2 font_size,
-			float character_spacing
+			float character_spacing,
+			bool horizontal
 		) const {
 			size_t character_count;
-			return GetTextSpanLimited<horizontal>(characters, font_size, character_spacing, { FLT_MAX, FLT_MAX }, &character_count, false);
+			return GetTextSpanLimited<CharacterType>(characters, font_size, character_spacing, { FLT_MAX, FLT_MAX }, &character_count, false, horizontal);
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpan, Stream<char>, float2, float);
+		ECS_TEMPLATE_FUNCTION_2_BEFORE_CONST(float2, UISystem::GetTextSpan, Stream<char>, Stream<wchar_t>, float2, float, bool);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		template<bool horizontal>
+		template<typename CharacterType>
 		float2 UISystem::GetTextSpanLimited(
-			Stream<char> characters, 
+			Stream<CharacterType> characters,
 			float2 font_size, 
 			float character_spacing, 
 			float2 scale_limit, 
 			size_t* character_count,
-			bool invert_order
+			bool invert_order,
+			bool horizontal
 		) const
 		{
 			float2 text_span = { 0.0f, 0.0f };
@@ -6379,17 +6381,24 @@ namespace ECSEngine {
 			float2 sprite_scale_factor = { atlas_dimensions.x * font_size.x, atlas_dimensions.y * font_size.y };
 			float new_character_spacing;
 
-			if constexpr (!horizontal) {
+			if (!horizontal) {
 				new_character_spacing = character_spacing * 0.1f;
 			}
-
-			if constexpr (horizontal) {
+			else {
 				text_span.y = GetTextSpriteYScale(font_size.y);
 			}
 
 			int64_t index = invert_order ? characters.size - 1 : 0;
 			while (index < characters.size && index >= 0 && text_span.x < scale_limit.x && text_span.y < scale_limit.y) {
-				unsigned int character_uv_index = FindCharacterType(characters[index]);
+				char ascii_char = 0;
+				if constexpr (std::is_same_v<CharacterType, char>) {
+					ascii_char = characters[index];
+				}
+				else {
+					ECS_ASSERT(characters[index] <= CHAR_MAX);
+					ascii_char = (char)characters[index];
+				}
+				unsigned int character_uv_index = FindCharacterType(ascii_char);
 
 				size_t character_index = character_uv_index * 2;
 				// they are in uv space
@@ -6399,7 +6408,7 @@ namespace ECSEngine {
 
 				float2 scale = float2(uv.x * sprite_scale_factor.x, uv.y * sprite_scale_factor.y);
 
-				if constexpr (horizontal) {
+				if (horizontal) {
 					text_span.x += scale.x + character_spacing;
 				}
 				else {
@@ -6408,30 +6417,38 @@ namespace ECSEngine {
 				}
 				index = invert_order ? index - 1 : index + 1;
 			}
-			if constexpr (horizontal) {
+			if (horizontal) {
 				text_span.x -= character_spacing;
 			}
 			*character_count = invert_order ? characters.size - index : index;
 			return text_span;
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpanLimited, Stream<char>, float2, float, float2, size_t*, bool);
+		ECS_TEMPLATE_FUNCTION_2_BEFORE_CONST(float2, UISystem::GetTextSpanLimited, Stream<char>, Stream<wchar_t>, float2, float, float2, size_t*, bool, bool);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		template<bool horizontal>
-		void UISystem::GetTextCharacterPositions(Stream<char> characters, float2 font_size, float character_spacing, float2* start_positions, float2* end_positions, float2 translation) const
+		template<typename CharacterType>
+		void UISystem::GetTextCharacterPositions(Stream<CharacterType> characters, float2 font_size, float character_spacing, float2* start_positions, float2* end_positions, float2 translation, bool horizontal) const
 		{
 			float2 atlas_dimensions = m_font_character_uvs[m_descriptors.font.texture_dimensions];
 			float2 sprite_scale_factor = { atlas_dimensions.x * font_size.x, atlas_dimensions.y * font_size.y };
 			float new_character_spacing;
 
-			if constexpr (!horizontal) {
+			if (!horizontal) {
 				new_character_spacing = character_spacing * 0.1f;
 			}
 
 			for (size_t index = 0; index < characters.size; index++) {
-				unsigned int character_uv_index = FindCharacterType(characters[index]);
+				char ascii_char = 0;
+				if constexpr (std::is_same_v<CharacterType, char>) {
+					ascii_char = characters[index];
+				}
+				else {
+					ECS_ASSERT(characters[index] <= CHAR_MAX);
+					ascii_char = (char)characters[index];
+				}
+				unsigned int character_uv_index = FindCharacterType(ascii_char);
 
 				size_t character_index = character_uv_index * 2;
 				// they are in uv space
@@ -6443,7 +6460,7 @@ namespace ECSEngine {
 
 				start_positions[index] = translation;
 				end_positions[index] = scale;
-				if constexpr (horizontal) {
+				if (horizontal) {
 					translation.x += scale.x + character_spacing;
 				}
 				else {
@@ -6452,7 +6469,7 @@ namespace ECSEngine {
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL_CONST(void, UISystem::GetTextCharacterPositions, Stream<char>, float2, float, float2*, float2*, float2);
+		ECS_TEMPLATE_FUNCTION_2_BEFORE_CONST(void, UISystem::GetTextCharacterPositions, Stream<char>, Stream<wchar_t>, float2, float, float2*, float2*, float2, bool);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 

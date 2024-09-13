@@ -3,13 +3,16 @@
 #include "SandboxAccessor.h"
 #include "../Project/ProjectFolders.h"
 
-#define PATH_MAX_CAPACITY 256
+#define PATH_MAX_CAPACITY 512
 
 #define RECORDER_ALLOCATOR_CAPACITY ECS_MB * 32
 #define RECORDER_BUFFERING_CAPACITY ECS_MB
 
 #define INPUT_RECORDER_TYPE_STRING "input"
 #define STATE_RECORDER_TYPE_STRING "state"
+
+// Choose a reasonable default - 15 seconds seems a decent value
+#define DEFAULT_ENTIRE_STATE_TICK_SECONDS 15.0f
 
 using namespace ECSEngine;
 
@@ -142,7 +145,7 @@ static bool InitializeSandboxRecording(
 
 static void ResetSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, const SandboxRecordingInfo& info) {
 	ZeroOut(info.delta_writer);
-	*info.entire_state_tick_seconds = 0.0f;
+	*info.entire_state_tick_seconds = DEFAULT_ENTIRE_STATE_TICK_SECONDS;
 	*info.is_delta_writer_initialized = false;
 	info.file_path->Initialize(GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager(), 0, PATH_MAX_CAPACITY);
 }

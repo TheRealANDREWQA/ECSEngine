@@ -49,37 +49,54 @@ public:
 		return current_cursor;
 	}
 
-	void WriteTextToClipboard(const char* text) override {
+	template<typename CharacterType>
+	void WriteTextToClipboardImpl(Stream<CharacterType> text) {
 		assert(OpenClipboard(hWnd) == TRUE);
 		assert(EmptyClipboard() == TRUE);
 
-		size_t text_size = strlen((const char*)text);
-		auto handle = GlobalAlloc(GMEM_MOVEABLE, text_size + 1);
-		auto new_handle = GlobalLock(handle);
-		memcpy(new_handle, text, sizeof(unsigned char) * text_size);
-		char* reinterpretation = (char*)new_handle;
-		reinterpretation[text_size] = '\0';
+		HGLOBAL handle = GlobalAlloc(GMEM_MOVEABLE, (text.size + 1) * sizeof(CharacterType));
+		LPVOID new_handle = GlobalLock(handle);
+		text.CopyTo(new_handle);
+		CharacterType* reinterpretation = (CharacterType*)new_handle;
+		reinterpretation[text.size] = Character<CharacterType>('\0');
 		GlobalUnlock(handle);
-		SetClipboardData(CF_TEXT, handle);
+		SetClipboardData(std::is_same_v<CharacterType, char> ? CF_TEXT : CF_UNICODETEXT, handle);
 		assert(CloseClipboard() == TRUE);
 	}
 
-	unsigned int CopyTextFromClipboard(char* text, unsigned int max_size) override {
-		if (IsClipboardFormatAvailable(CF_TEXT)) {
+	void WriteTextToClipboard(Stream<char> text) override {
+		WriteTextToClipboardImpl<char>(text);
+	}
+
+	void WriteTextToClipboard(Stream<wchar_t> text) override {
+		WriteTextToClipboardImpl<wchar_t>(text);
+	}
+
+	template<typename CharacterType>
+	unsigned int CopyTextFromClipboardImpl(CapacityStream<CharacterType>* text) {
+		int format = std::is_same_v<CharacterType, char> ? CF_TEXT : CF_UNICODETEXT;
+		if (IsClipboardFormatAvailable(format)) {
 			assert(OpenClipboard(hWnd) == TRUE);
-			HANDLE global_handle = GetClipboardData(CF_TEXT);
+			HANDLE global_handle = GetClipboardData(format);
 			HANDLE data_handle = GlobalLock(global_handle);
-			unsigned int copy_count = strlen((const char*)data_handle);
-			copy_count = copy_count > max_size - 1 ? max_size - 1 : copy_count;
-			memcpy(text, data_handle, copy_count);
+			unsigned int copy_count = std::is_same_v<CharacterType, char> ? strlen((const char*)data_handle) : wcslen((const wchar_t*)data_handle);
+			copy_count = ClampMax(copy_count, text->capacity - text->size);
+			text->AddStreamAssert(Stream<CharacterType>((const CharacterType*)data_handle, copy_count));
 			GlobalUnlock(global_handle);
 			assert(CloseClipboard() == TRUE);
 			return copy_count;
 		}
 		else {
-			text = (char*)"";
 			return 0;
 		}
+	}
+
+	unsigned int CopyTextFromClipboard(CapacityStream<char>* text) override {
+		return CopyTextFromClipboardImpl<char>(text);
+	}
+
+	unsigned int CopyTextFromClipboard(CapacityStream<wchar_t>* text) override {
+		return CopyTextFromClipboardImpl<wchar_t>(text);
 	}
 
 	ECS_INLINE void* GetOSWindowHandle() const override {
@@ -509,9 +526,9 @@ LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
-ECSEngine::Application* ECSEngine::CreateApplication(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow ) {
+ECSEngine::Application* CreateApplication(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow ) {
 	return new Editor(L"ECSEngine Editor");
 }
-ECSEngine::Application* ECSEngine::CreateApplication() {
+ECSEngine::Application* CreateApplication() {
 	return new Editor(L"ECSEngine Editor");
 }
