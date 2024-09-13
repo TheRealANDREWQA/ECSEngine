@@ -132,23 +132,45 @@ struct_name.field10 = field10;
 
 
 #define ECS_TEMPLATE_FUNCTION(return_type, function_name, ...) template ECSENGINE_API return_type function_name(__VA_ARGS__)
+#define ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, ...) template ECSENGINE_API return_type function_name(__VA_ARGS__) const
 
 #define ECS_TEMPLATE_FUNCTION_2_BEFORE(return_type, function_name, first, second, ...) ECS_TEMPLATE_FUNCTION(return_type, function_name, first, __VA_ARGS__); \
 ECS_TEMPLATE_FUNCTION(return_type, function_name, second, __VA_ARGS__)
 
+#define ECS_TEMPLATE_FUNCTION_2_BEFORE_CONST(return_type, function_name, first, second, ...) ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, first, __VA_ARGS__); \
+ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, second, __VA_ARGS__)
+
 #define ECS_TEMPLATE_FUNCTION_2_AFTER(return_type, function_name, first, second, ...) ECS_TEMPLATE_FUNCTION(return_type, function_name, __VA_ARGS__, first); \
  ECS_TEMPLATE_FUNCTION(return_type, function_name, __VA_ARGS__, second)
+
+#define ECS_TEMPLATE_FUNCTION_2_AFTER_CONST(return_type, function_name, first, second, ...) ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, __VA_ARGS__, first); \
+ ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, __VA_ARGS__, second)
 
 #define ECS_TEMPLATE_FUNCTION_3_BEFORE(return_type, function_name, first, second, third, ...) ECS_TEMPLATE_FUNCTION(return_type, function_name, first, __VA_ARGS__); \
  ECS_TEMPLATE_FUNCTION(return_type, function_name, second, __VA_ARGS__); \
  ECS_TEMPLATE_FUNCTION(return_type, function_name, third, __VA_ARGS__)
 
+#define ECS_TEMPLATE_FUNCTION_3_BEFORE_CONST(return_type, function_name, first, second, third, ...) ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, first, __VA_ARGS__); \
+ ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, second, __VA_ARGS__); \
+ ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, third, __VA_ARGS__)
+
 #define ECS_TEMPLATE_FUNCTION_3_AFTER(return_type, function_name, first, second, third, ...) ECS_TEMPLATE_FUNCTION(return_type, function_name, __VA_ARGS__, first); \
-ECS_TEMPLATE_FUNCTION(return_type, function_name, __VA_ARGS__, second); ECS_TEMPLATE_FUNCTION(return_type, function_name, __VA_ARGS__, third)
+ECS_TEMPLATE_FUNCTION(return_type, function_name, __VA_ARGS__, second); \
+ECS_TEMPLATE_FUNCTION(return_type, function_name, __VA_ARGS__, third)
 
-#define ECS_TEMPLATE_FUNCTION_4_BEFORE(return_type, function_name, first, second, third, fourth, ...) ECS_TEMPLATE_FUNCTION_2_BEFORE(return_type, function_name, first, second, __VA_ARGS__); ECS_TEMPLATE_FUNCTION_2_BEFORE(return_type, function_name, third, fourth, __VA_ARGS__)
+#define ECS_TEMPLATE_FUNCTION_3_AFTER_CONST(return_type, function_name, first, second, third, ...) ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, __VA_ARGS__, first); \
+ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, __VA_ARGS__, second); \
+ECS_TEMPLATE_FUNCTION_CONST(return_type, function_name, __VA_ARGS__, third)
 
-#define ECS_TEMPLATE_FUNCTION_4_AFTER(return_type, function_name, first, second, third, fourth, ...) ECS_TEMPLATE_FUNCTION_2_AFTER(return_type, function_name, first, second, __VA_ARGS__); ECS_TEMPLATE_FUNCTION_2_AFTER(return_type, function_name, third, fourth, __VA_ARGS__)
+#define ECS_TEMPLATE_FUNCTION_4_BEFORE(return_type, function_name, first, second, third, fourth, ...) ECS_TEMPLATE_FUNCTION_2_BEFORE(return_type, function_name, first, second, __VA_ARGS__); \
+ECS_TEMPLATE_FUNCTION_2_BEFORE(return_type, function_name, third, fourth, __VA_ARGS__)
+#define ECS_TEMPLATE_FUNCTION_4_BEFORE_CONST(return_type, function_name, first, second, third, fourth, ...) ECS_TEMPLATE_FUNCTION_2_BEFORE_CONST(return_type, function_name, first, second, __VA_ARGS__); \
+ECS_TEMPLATE_FUNCTION_2_BEFORE_CONST(return_type, function_name, third, fourth, __VA_ARGS__)
+
+#define ECS_TEMPLATE_FUNCTION_4_AFTER(return_type, function_name, first, second, third, fourth, ...) ECS_TEMPLATE_FUNCTION_2_AFTER(return_type, function_name, first, second, __VA_ARGS__); \
+ECS_TEMPLATE_FUNCTION_2_AFTER(return_type, function_name, third, fourth, __VA_ARGS__)
+#define ECS_TEMPLATE_FUNCTION_4_AFTER_CONST(return_type, function_name, first, second, third, fourth, ...) ECS_TEMPLATE_FUNCTION_2_AFTER(return_type, function_name, first, second, __VA_ARGS__); \
+ECS_TEMPLATE_FUNCTION_2_AFTER(return_type, function_name, third, fourth, __VA_ARGS__)
 
 #define ECS_TEMPLATE_FUNCTION_BOOL(return_type, function_name, ...) template ECSENGINE_API return_type function_name<false>(__VA_ARGS__); template ECSENGINE_API return_type function_name<true>(__VA_ARGS__)
 #define ECS_TEMPLATE_FUNCTION_BOOL_NO_API(return_type, function_name, ...) template return_type function_name<false>(__VA_ARGS__); template return_type function_name<true>(__VA_ARGS__);

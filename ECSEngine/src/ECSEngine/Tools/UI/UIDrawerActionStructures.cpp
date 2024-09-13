@@ -104,7 +104,7 @@ namespace ECSEngine {
 			float2* positions = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
 			float2* scales = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
 
-			system->GetTextCharacterPositions(*text, font_size, character_spacing, positions, scales, position + padding);
+			system->GetTextCharacterPositions<char>(*text, font_size, character_spacing, positions, scales, position + padding);
 
 			if (sprite_render_offset > 0) {
 				mouse_position.x += positions[sprite_render_offset].x - positions[0].x;
@@ -133,7 +133,7 @@ namespace ECSEngine {
 			float2* positions = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
 			float2* scales = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
 
-			system->GetTextCharacterPositions(*text, font_size, character_spacing, positions, scales, position + padding);
+			system->GetTextCharacterPositions<char>(*text, font_size, character_spacing, positions, scales, position + padding);
 
 			if (sprite_render_offset > 0) {
 				right_bound += positions[sprite_render_offset].x - positions[0].x;
@@ -153,7 +153,7 @@ namespace ECSEngine {
 			float2* positions = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
 			float2* scales = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
 
-			system->GetTextCharacterPositions(*text, font_size, character_spacing, positions, scales, position + padding);
+			system->GetTextCharacterPositions<char>(*text, font_size, character_spacing, positions, scales, position + padding);
 
 			if (current_sprite_position == 0) {
 				caret_position = position + padding;
@@ -185,7 +185,7 @@ namespace ECSEngine {
 			float2* positions = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
 			float2* scales = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
 
-			system->GetTextCharacterPositions(*text, font_size, character_spacing, positions, scales, position + padding);
+			system->GetTextCharacterPositions<char>(*text, font_size, character_spacing, positions, scales, position + padding);
 
 			float2 sprite_position = { 0.0f, 0.0f };
 			if (index < text->size) {

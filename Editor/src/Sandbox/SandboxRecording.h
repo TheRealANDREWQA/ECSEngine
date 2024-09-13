@@ -1,6 +1,9 @@
 #pragma once
 #include "ECSEngineContainersCommon.h"
 
+#define EDITOR_INPUT_RECORDING_FILE_EXTENSION L".input"
+#define EDITOR_STATE_RECORDING_FILE_EXTENSION L".replay"
+
 struct EditorState;
 enum EDITOR_SANDBOX_FLAG : size_t;
 enum EDITOR_SANDBOX_RECORDING_TYPE : unsigned char;

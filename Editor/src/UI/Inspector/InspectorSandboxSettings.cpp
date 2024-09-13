@@ -9,6 +9,7 @@
 #include "../../Sandbox/SandboxModule.h"
 #include "../../Sandbox/SandboxProfiling.h"
 #include "../../Sandbox/SandboxEntityOperations.h"
+#include "../../Sandbox/SandboxRecording.h"
 #include "../Common.h"
 
 #include "../CreateScene.h"
@@ -946,11 +947,46 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 	drawer->CollapsingHeader("Recording", &data->collapsing_recording_state, [&]() {
 		struct BlockInfo {
 			EDITOR_SANDBOX_FLAG flag;
+			float* entire_state_tick_seconds;
+			CapacityStream<wchar_t>* file_path;
+			const char* type_string;
+			const wchar_t* type_extension;
 		};
 		
-		auto block = []() {
+		auto block = [=](const BlockInfo& block_info) {
+			UIDrawConfig config;
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
+			const size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
+			drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
+
+			UIConfigNamePadding name_padding;
+			name_padding.total_length = NAME_PADDING_LENGTH;
+			config.AddFlag(name_padding);
+
+			ECS_FORMAT_TEMP_STRING(check_box_name, "{#} recording enabled", block_info.type_string);
+			drawer->CheckBox(CONFIGURATION, config, check_box_name, &sandbox->flags, FirstLSB64(block_info.flag));
+
+			UIConfigActiveState active_state;
+			active_state.state = HasFlag(sandbox->flags, block_info.flag);
+			config.AddFlag(active_state);
+
+			ECS_FORMAT_TEMP_STRING(file_path_name, "{#} recording file", block_info.type_string);
+			Stream<wchar_t> recording_extension = block_info.type_extension;
+			drawer->FileInput(CONFIGURATION | UI_CONFIG_ACTIVE_STATE, config, file_path_name, block_info.file_path, { &recording_extension, 1 });	
+
+			drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
 		};
+
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		BlockInfo input_block;
+		input_block.flag = EDITOR_SANDBOX_FLAG_RECORD_INPUT;
+		input_block.entire_state_tick_seconds = &sandbox->input_recorder_entire_state_tick_seconds;
+		input_block.file_path = &sandbox->input_recorder_file;
+		input_block.type_extension = EDITOR_INPUT_RECORDING_FILE_EXTENSION;
+		input_block.type_string = "input";
+
+		block(input_block);
 	});
 }
 
@@ -1117,8 +1153,9 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	InspectorDrawSandboxModuleSection(editor_state, sandbox_index, inspector_index, drawer, data, graphics_module_indices);
 	InspectorDrawSandboxComponentsSection(editor_state, sandbox_index, drawer, data);
 	InspectorDrawSandboxRuntimeSettingsSection(editor_state, sandbox_index, drawer, data);
-	InspectorDrawSandboxModifiersSection(editor_state, sandbox_index, drawer, data);	
+	InspectorDrawSandboxModifiersSection(editor_state, sandbox_index, drawer, data);
 	InspectorDrawSandboxStatisticsSection(editor_state, sandbox_index, drawer, data);
+	InspectorDrawSandboxRecordingSection(editor_state, sandbox_index, drawer, data);
 	InspectorDrawSandboxCopySection(editor_state, sandbox_index, drawer, data);
 }
 

@@ -229,10 +229,10 @@ namespace ECSEngine {
 
 			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 				if (keyboard->IsPressed(ECS_KEY_C)) {
-					system->m_application->WriteTextToClipboard(data->slider->characters.buffer);
+					system->m_application->WriteTextToClipboard(data->slider->characters);
 				}
 				else if (keyboard->IsPressed(ECS_KEY_V)) {
-					data->slider->characters.size = system->m_application->CopyTextFromClipboard(data->slider->characters.buffer, data->slider->characters.capacity);
+					data->slider->characters.size = system->m_application->CopyTextFromClipboard(&data->slider->characters);
 					data->slider->character_value = true;
 					data->slider->changed_value = true;
 				}
@@ -258,10 +258,10 @@ namespace ECSEngine {
 
 			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 				if (keyboard->IsPressed(ECS_KEY_C)) {
-					system->m_application->WriteTextToClipboard(data->characters.buffer);
+					system->m_application->WriteTextToClipboard(data->characters);
 				}
 				else if (keyboard->IsPressed(ECS_KEY_V)) {
-					data->characters.size = system->m_application->CopyTextFromClipboard(data->characters.buffer, data->characters.capacity);
+					data->characters.size = system->m_application->CopyTextFromClipboard(&data->characters);
 					data->changed_value = true;
 					data->character_value = true;
 				}
@@ -1027,10 +1027,10 @@ namespace ECSEngine {
 			UIDrawerSlider* slider = (UIDrawerSlider*)_data;
 			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 				if (keyboard->IsPressed(ECS_KEY_C)) {
-					system->m_application->WriteTextToClipboard(slider->characters.buffer);
+					system->m_application->WriteTextToClipboard(slider->characters);
 				}
 				else if (keyboard->IsPressed(ECS_KEY_V)) {
-					slider->characters.size = system->m_application->CopyTextFromClipboard(slider->characters.buffer, slider->characters.capacity);
+					slider->characters.size = system->m_application->CopyTextFromClipboard(&slider->characters);
 					slider->character_value = true;
 					slider->changed_value = true;
 				}
@@ -1871,14 +1871,14 @@ namespace ECSEngine {
 						input->CopyCharacters(system);
 					}
 					else if (keyboard->GetAlphanumericKey(ECS_KEY_V) == ECS_BUTTON_PRESSED) {
-						char characters[256];
-						unsigned int character_count = system->m_application->CopyTextFromClipboard(characters, 256);
+						ECS_STACK_CAPACITY_STREAM(char, characters, 256);
+						unsigned int character_count = system->m_application->CopyTextFromClipboard(&characters);
 
 						if (input->text->size + character_count <= input->text->capacity) {
 							char deleted_characters[revert_command_stack_size];
 							unsigned int deleted_character_count = 0;
 							unsigned int delete_position = 0;
-							input->PasteCharacters(characters, character_count, system, window_index, deleted_characters, &deleted_character_count, &delete_position);
+							input->PasteCharacters(characters.buffer, character_count, system, window_index, deleted_characters, &deleted_character_count, &delete_position);
 							input->current_selection = delete_position;
 
 							size_t total_size = sizeof(UIDrawerTextInputReplaceCommandInfo) + deleted_character_count + 1;
@@ -1994,7 +1994,7 @@ namespace ECSEngine {
 					TextInputAction(action_data);
 
 					if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) && keyboard->GetAlphanumericKey(ECS_KEY_C) == ECS_BUTTON_PRESSED) {
-						system->m_application->WriteTextToClipboard(slider->characters.buffer);
+						system->m_application->WriteTextToClipboard(slider->characters);
 					}
 				}
 			}
@@ -2675,7 +2675,7 @@ namespace ECSEngine {
 					if (state->row_has_submenu != nullptr && state->row_has_submenu[index]) {
 						auto buffers = drawer.GetBuffers();
 						auto counts = drawer.GetCounts();
-						float2 sign_scale = system->GetTextSpan(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing);
+						float2 sign_scale = system->GetTextSpan<char>(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing);
 						system->ConvertCharactersToTextSprites(
 							">",
 							{ current_position.x + region_scale.x - sign_scale.x * 2.0f, AlignMiddle(current_position.y, default_element_scale.y, sign_scale.y) },
@@ -2801,7 +2801,7 @@ namespace ECSEngine {
 						window_size.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + base.next_row_offset;
 						window_size.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_padd.x - system->m_descriptors.misc.menu_x_padd;
 
-						float arrow_span = system->GetTextSpan(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
+						float arrow_span = system->GetTextSpan<char>(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
 						window_size.x += (state->row_has_submenu != nullptr) * (arrow_span + system->m_descriptors.element_descriptor.label_padd.x);
 
 						UIWindowDescriptor submenu_descriptor;
@@ -2876,7 +2876,7 @@ namespace ECSEngine {
 						if (data->row_index != 0) {
 							first_character = state->right_row_substreams[data->row_index - 1] + 1;
 						}
-						float x_span = system->GetTextSpan(
+						float x_span = system->GetTextSpan<char>(
 							{ state->right_characters.buffer + first_character, state->right_row_substreams[data->row_index] - first_character },
 							font_size,
 							system->m_descriptors.font.character_spacing
@@ -2902,7 +2902,7 @@ namespace ECSEngine {
 						// The compiler messes up the registers and overwrites the font size in distribution
 						// so do a rewrite of the values
 						font_size = system->m_descriptors.font.size;
-						float2 arrow_size = system->GetTextSpan(">", font_size, system->m_descriptors.font.character_spacing);
+						float2 arrow_size = system->GetTextSpan<char>(">", font_size, system->m_descriptors.font.character_spacing);
 						float2 arrow_position = { position.x + scale.x - arrow_size.x * 2.0f, AlignMiddle(position.y, system->m_descriptors.window_layout.default_element_y, arrow_size.y) };
 
 						system->ConvertCharactersToTextSprites(
@@ -3028,7 +3028,7 @@ namespace ECSEngine {
 					window_dimensions.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + tool_tip_data.next_row_offset + system->m_descriptors.dockspaces.viewport_padding_y;
 					window_dimensions.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_padd.x - system->m_descriptors.misc.menu_x_padd;
 
-					float arrow_span = system->GetTextSpan(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
+					float arrow_span = system->GetTextSpan<char>(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
 					window_dimensions.x += (menu->state.row_has_submenu != nullptr) * (arrow_span + system->m_descriptors.element_descriptor.label_padd.x);
 
 					auto destroy_callback = [](ActionData* action_data) {

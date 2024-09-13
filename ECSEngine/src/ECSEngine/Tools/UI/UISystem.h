@@ -909,32 +909,38 @@ namespace ECSEngine {
 				return m_pixel_size;
 			}
 
-			template<bool horizontal = true>
+			// For wide characters, it supports only the wide characters that are ASCII compatible
+			template<typename CharacterType = char>
 			ECSENGINE_API float2 GetTextSpan(
-				Stream<char> characters,
+				Stream<CharacterType> characters,
 				float2 font_size,
-				float character_spacing
+				float character_spacing,
+				bool horizontal = true
 			) const;
 
-			template<bool horizontal = true>
+			// For wide characters, it supports only the wide characters that are ASCII compatible
+			template<typename CharacterType = char>
 			ECSENGINE_API float2 GetTextSpanLimited(
-				Stream<char> characters,
+				Stream<CharacterType> characters,
 				float2 font_size,
 				float character_spacing,
 				float2 scale_limit,
 				size_t* character_count,
-				bool invert_order
+				bool invert_order,
+				bool horizontal = true
 			) const;
 
+			// For wide characters, it supports only the wide characters that are ASCII compatible
 			// It fills in the positions of the text sprites and their scale when positioned at the given translation
-			template<bool horizontal = true>
+			template<typename CharacterType = char>
 			ECSENGINE_API void GetTextCharacterPositions(
-				Stream<char> characters,
+				Stream<CharacterType> characters,
 				float2 font_size, 
 				float character_spacing, 
 				float2* positions,
 				float2* scales, 
-				float2 translation = { 0.0f, 0.0f }
+				float2 translation = { 0.0f, 0.0f },
+				bool horizontal = true
 			) const;
 
 			float GetSpaceXSpan(float font_size_x);

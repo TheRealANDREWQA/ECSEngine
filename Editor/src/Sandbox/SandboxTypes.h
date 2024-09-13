@@ -264,6 +264,15 @@ struct ECS_REFLECT EditorSandbox {
 
 	float simulation_speed_up_factor;
 
+	// How many seconds it should wait until an entire input state is written for the input recording
+	float input_recorder_entire_state_tick_seconds;
+	// How many seconds it should wait until an entire state is written for the state recording
+	float state_recorder_entire_state_tick_seconds;
+	// When this flag is set, every run will generate a new file, forming a sequence
+	bool is_input_recorder_file_automatic;
+	// When this flag is set, every run will generate a new file, forming a sequence
+	bool is_state_recorder_file_automatic;
+
 	ECS_FIELDS_END_REFLECT;
 
 	// This flag is set when initiating keyboard transform actions
@@ -350,9 +359,9 @@ struct ECS_REFLECT EditorSandbox {
 	// The input recorder structure - should be used only when the flag EDITOR_SANDBOX_FLAG_RECORD_INPUT is set
 	ECSEngine::DeltaStateWriter input_recorder;
 	ECSEngine::CapacityStream<wchar_t> input_recorder_file;
-	// How many seconds it should wait until an entire input state is written for the input recording
-	float input_recorder_entire_state_tick_seconds;
 	bool is_input_recorder_initialized;
+	// Records the highest index that is being used by the automatic sequence. If no entry exists, it will be -1
+	unsigned int input_recorder_file_automatic_index;
 
 	// The input replay structure - should be used only when the flag EDITOR_SANDBOX_FLAG_REPLAY_INPUT is set
 	ECSEngine::DeltaStateReader input_replay;
@@ -362,9 +371,9 @@ struct ECS_REFLECT EditorSandbox {
 	// The state recorder structure - should be used only when the flag EDITOR_SANDBOX_FLAG_RECORD_STATE is set
 	ECSEngine::DeltaStateWriter state_recorder;
 	ECSEngine::CapacityStream<wchar_t> state_recorder_file;
-	// How many seconds it should wait until an entire state is written for the state recording
-	float state_recorder_entire_state_tick_seconds;
 	bool is_state_recorder_initialized;
+	// Records the highest index that is being used by the automatic sequence. If no entry exists, it will be -1
+	unsigned int input_state_file_automatic_index;
 
 	// The state replay structure - should be used only when the flag EDITOR_SANDBOX_FLAG_REPLAY_STATE is set
 	ECSEngine::DeltaStateReader state_replay;

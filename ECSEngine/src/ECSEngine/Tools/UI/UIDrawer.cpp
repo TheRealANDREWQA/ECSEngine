@@ -1879,7 +1879,7 @@ namespace ECSEngine {
 			else {
 				text_max_size -= element_descriptor.label_padd * 2.0f;
 			}
-			text_span = system->GetTextSpanLimited({ text.buffer, text_count }, font_size, character_spacing, text_max_size, &text_count, invert_order);
+			text_span = system->GetTextSpanLimited<char>({ text.buffer, text_count }, font_size, character_spacing, text_max_size, &text_count, invert_order);
 			float x_text_position, y_text_position;
 			HandleTextLabelAlignment(
 				configuration,
