@@ -4847,6 +4847,13 @@ namespace ECSEngine {
 			// Single lined text input
 			UIDrawerTextInput* TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<char>* text_to_fill, UIDrawerTextInputFilter filter = UIDrawerTextInputFilterAll);
 
+			// Single lined text input
+			void TextInput(Stream<char> name, CapacityStream<wchar_t>* text_to_fill);
+
+			// Single lined text input
+			// At the moment, it doesn't support filtering
+			void TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<wchar_t>* text_to_fill);
+
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
@@ -5185,6 +5192,10 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void InitializeTextInputElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void InitializeTextInputWideElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
 
 		// --------------------------------------------------------------------------------------------------------------
 

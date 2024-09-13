@@ -16164,6 +16164,107 @@ namespace ECSEngine {
 			}
 		}
 
+		void UIDrawer::TextInput(Stream<char> name, CapacityStream<wchar_t>* text_to_fill) {
+			UIDrawConfig config;
+			TextInput(0, config, name, text_to_fill);
+		}
+
+		void UIDrawer::TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<wchar_t>* text_to_fill) {
+			struct CallbackData {
+				CapacityStream<wchar_t>* text_to_fill;
+				CapacityStream<char> ascii_text;
+				UIActionHandler user_callback;
+			};
+
+			auto override_callback = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				CallbackData* callback_data = (CallbackData*)_data;
+				ConvertASCIIToWide(*callback_data->text_to_fill, callback_data->ascii_text);
+				if (callback_data->user_callback.action != nullptr) {
+					action_data->data = callback_data->user_callback.data;
+					callback_data->user_callback.action(action_data);
+				}
+			};
+
+			ECS_FORMAT_TEMP_STRING(internal_resource_name, "{#}____internal", name);
+			if (!initializer) {
+				if (configuration & UI_CONFIG_DO_CACHE) {
+					CallbackData* callback_data = (CallbackData*)GetResource(internal_resource_name);
+					callback_data->text_to_fill = text_to_fill;
+
+					UIConfigTextInputCallback previous_callback;
+					if (configuration & UI_CONFIG_TEXT_INPUT_CALLBACK) {
+						previous_callback = *(const UIConfigTextInputCallback*)config.GetParameter(UI_CONFIG_TEXT_INPUT_CALLBACK);
+						if (!previous_callback.copy_on_initialization) {
+							if (previous_callback.handler.data_size == 0) {
+								callback_data->user_callback.data = previous_callback.handler.data;
+							}
+							else if (previous_callback.handler.data_size <= callback_data->user_callback.data_size && previous_callback.handler.data_size > 0) {
+								memcpy(callback_data->user_callback.data, previous_callback.handler.data, previous_callback.handler.data_size);
+							}
+						}
+					}
+
+					UIConfigTextInputCallback current_callback;
+					current_callback.handler = { override_callback, callback_data, 0, previous_callback.handler.phase };
+
+					SetConfigParameter(configuration, config, current_callback, previous_callback);
+
+					TextInput(configuration | UI_CONFIG_TEXT_INPUT_CALLBACK, config, name, &callback_data->ascii_text);
+					RemoveConfigParameter(configuration, config, previous_callback);
+					HandleDynamicResource(configuration, internal_resource_name);
+				}
+				else {
+					bool exists = ExistsResource(internal_resource_name);
+					if (!exists) {
+						UIDrawerInitializeTextInputWide initialize_data;
+						initialize_data.config = &config;
+						ECS_FORWARD_STRUCT_MEMBERS_2(initialize_data, name, text_to_fill);
+						InitializeDrawerElement(*this, &initialize_data, name, InitializeTextInputWideElement, DynamicConfiguration(configuration));
+					}
+					TextInput(DynamicConfiguration(configuration), config, name, text_to_fill);
+				}
+			}
+			else {
+				CallbackData* data = nullptr;
+				UIConfigTextInputCallback existing_callback;
+				existing_callback.handler.phase = ECS_UI_DRAW_NORMAL;
+
+				AddWindowResource(internal_resource_name, [&](Stream<char> label_name) {
+					data = GetMainAllocatorBuffer<CallbackData>();
+
+					data->text_to_fill = text_to_fill;
+					data->ascii_text.InitializeFromBuffer(GetMainAllocatorBuffer(sizeof(char) * text_to_fill->capacity), 0, text_to_fill->capacity);
+					ConvertWideCharsToASCII(*text_to_fill, data->ascii_text);
+
+					if (configuration & UI_CONFIG_TEXT_INPUT_CALLBACK) {
+						const UIConfigTextInputCallback* callback = (const UIConfigTextInputCallback*)config.GetParameter(UI_CONFIG_TEXT_INPUT_CALLBACK);
+						data->user_callback = callback->handler;
+						if (data->user_callback.data_size > 0) {
+							data->user_callback.data = GetMainAllocatorBuffer(data->user_callback.data_size);
+							memcpy(data->user_callback.data, callback->handler.data, data->user_callback.data_size);
+						}
+						existing_callback = *callback;
+					}
+					else {
+						data->user_callback = { nullptr };
+					}
+
+					return data;
+				});
+
+				UIConfigTextInputCallback current_callback;
+				current_callback.handler = { override_callback, data, 0, existing_callback.handler.phase };
+
+				UIConfigTextInputCallback previous_callback;
+				SetConfigParameter(configuration, config, current_callback, previous_callback);
+
+				TextInput(configuration | UI_CONFIG_TEXT_INPUT_CALLBACK, config, name, &data->ascii_text);
+				RemoveConfigParameter(configuration, config, previous_callback);
+			}
+		}
+
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
@@ -17147,6 +17248,13 @@ namespace ECSEngine {
 
 		void InitializeTextInputElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration) {
 			UIDrawerInitializeTextInput* data = (UIDrawerInitializeTextInput*)additional_data;
+			drawer_ptr->TextInput(configuration, *data->config, data->name, data->text_to_fill);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void InitializeTextInputWideElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration) {
+			UIDrawerInitializeTextInputWide* data = (UIDrawerInitializeTextInputWide*)additional_data;
 			drawer_ptr->TextInput(configuration, *data->config, data->name, data->text_to_fill);
 		}
 
