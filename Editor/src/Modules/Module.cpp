@@ -483,8 +483,7 @@ static void ForEachProjectModule(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-// For ShellExecute() - Win32 API
-void CommandLineString(
+static void CommandLineString(
 	const EditorState* editor_state,
 	CapacityStream<wchar_t>& string,
 	unsigned int module_index,
@@ -494,19 +493,22 @@ void CommandLineString(
 ) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 
-	string.AddStream(CMD_BUILD_SYSTEM_WIDE);
-	string.Add(L' ');
-	string.AddStream(modules->buffer[module_index].solution_path);
-	string.Add(L' ');
-	string.AddStream(command);
-	string.AddStream(L" /p:Configuration=");
-	string.AddStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration]);
-	string.AddStream(L" /p:Platform=x64 /flp:logfile=");
-	string.AddStream(log_file);
-	string.AddStream(L";verbosity=normal & cd . > ");
+	string.AddStreamAssert(CMD_BUILD_SYSTEM_WIDE);
+	string.AddAssert(L' ');
+	string.AddStreamAssert(modules->buffer[module_index].solution_path);
+	string.AddAssert(L' ');
+	string.AddStreamAssert(command);
+	string.AddStreamAssert(L" /p:Configuration=");
+	string.AddStreamAssert(MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration]);
+	string.AddStreamAssert(L" /p:OutDir=");
+	GetProjectModulesFolder(editor_state, string);
+	string.AddStreamAssert(L" /p:Platform=x64 /flp:logfile=");
+	string.AddStreamAssert(log_file);
+	string.AddStreamAssert(L";verbosity=normal & cd . > ");
 	GetProjectDebugFolder(editor_state, string);
-	string.Add(ECS_OS_PATH_SEPARATOR);
+	string.AddAssert(ECS_OS_PATH_SEPARATOR);
 	GetModuleBuildFlagFile(editor_state, module_index, configuration, command, string);
+	string.AssertCapacity(1);
 	string[string.size] = L'\0';
 }
 

@@ -240,7 +240,6 @@ void UpdateProjectSourceCodeInfo(EditorState* editor_state) {
 		// Delay the marker such that it gets triggered the first time it enters in the event
 		monitor_data.timer.DelayMarker(-MONITOR_TICK_MILLISECONDS, ECS_TIMER_DURATION_MS);
 		EditorAddEvent(editor_state, MonitorGitInfoStatus, &monitor_data, sizeof(monitor_data));
-
 	}
 }
 

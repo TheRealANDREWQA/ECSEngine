@@ -945,7 +945,7 @@ static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, uns
 static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Recording", &data->collapsing_recording_state, [&]() {
 		struct BlockInfo {
-			bool is_active;
+			EDITOR_SANDBOX_FLAG flag;
 		};
 		
 		auto block = []() {

@@ -3098,9 +3098,12 @@ namespace ECSEngine {
 	void Graphics::DisableAlphaBlending(GraphicsContext* context) {
 		GraphicsPipelineBlendState state = ECSEngine::GetBlendState(context);
 
-		D3D11_BLEND_DESC blend_desc = {};
+		D3D11_BLEND_DESC blend_desc;
 		if (state.blend_state.Interface() != nullptr) {
 			state.blend_state.state->GetDesc(&blend_desc);
+		}
+		else {
+			blend_desc = CD3D11_BLEND_DESC();
 		}
 		blend_desc.RenderTarget[0].BlendEnable = FALSE;
 
@@ -3128,11 +3131,14 @@ namespace ECSEngine {
 
 	void Graphics::DisableDepth(GraphicsContext* context)
 	{
-		D3D11_DEPTH_STENCIL_DESC depth_desc = {};
+		D3D11_DEPTH_STENCIL_DESC depth_desc;
 		GraphicsPipelineDepthStencilState depth_stencil_state = ECSEngine::GetDepthStencilState(context);
 
 		if (depth_stencil_state.depth_stencil_state.Interface() != nullptr) {
 			depth_stencil_state.depth_stencil_state.state->GetDesc(&depth_desc);
+		}
+		else {
+			depth_desc = CD3D11_DEPTH_STENCIL_DESC();
 		}
 		depth_desc.DepthEnable = FALSE;
 
@@ -3146,11 +3152,14 @@ namespace ECSEngine {
 
 	void Graphics::DisableCulling(GraphicsContext* context, bool wireframe)
 	{
-		D3D11_RASTERIZER_DESC rasterizer_desc = {};
+		D3D11_RASTERIZER_DESC rasterizer_desc;
 
 		GraphicsPipelineRasterizerState raster_state = ECSEngine::GetRasterizerState(context);
 		if (raster_state.rasterizer_state.Interface() != nullptr) {
 			raster_state.rasterizer_state.state->GetDesc(&rasterizer_desc);
+		}
+		else {
+			rasterizer_desc = CD3D11_RASTERIZER_DESC();
 		}
 		
 		rasterizer_desc.CullMode = D3D11_CULL_NONE;
@@ -3173,11 +3182,14 @@ namespace ECSEngine {
 
 	void Graphics::DisableWireframe(GraphicsContext* context)
 	{
-		D3D11_RASTERIZER_DESC rasterizer_desc = {};
+		D3D11_RASTERIZER_DESC rasterizer_desc;
 
 		GraphicsPipelineRasterizerState raster_state = ECSEngine::GetRasterizerState(context);
 		if (raster_state.rasterizer_state.Interface() != nullptr) {
 			raster_state.rasterizer_state.state->GetDesc(&rasterizer_desc);
+		}
+		else {
+			rasterizer_desc = CD3D11_RASTERIZER_DESC();
 		}
 
 		if (rasterizer_desc.FillMode == D3D11_FILL_WIREFRAME) {
@@ -3298,9 +3310,12 @@ namespace ECSEngine {
 	void Graphics::EnableAlphaBlending(GraphicsContext* context) {
 		GraphicsPipelineBlendState state = ECSEngine::GetBlendState(context);
 
-		D3D11_BLEND_DESC blend_desc = {};
+		D3D11_BLEND_DESC blend_desc;
 		if (state.blend_state.state != nullptr) {
 			state.blend_state.state->GetDesc(&blend_desc);
+		}
+		else {
+			blend_desc = CD3D11_BLEND_DESC();
 		}
 		
 		blend_desc.RenderTarget[0].BlendEnable = TRUE;
@@ -3329,10 +3344,13 @@ namespace ECSEngine {
 
 	void Graphics::EnableDepth(GraphicsContext* context)
 	{
-		D3D11_DEPTH_STENCIL_DESC depth_desc = {};
+		D3D11_DEPTH_STENCIL_DESC depth_desc;
 		GraphicsPipelineDepthStencilState depth_stencil_state = ECSEngine::GetDepthStencilState(context);
 		if (depth_stencil_state.depth_stencil_state.Interface() != nullptr) {
 			depth_stencil_state.depth_stencil_state.state->GetDesc(&depth_desc);
+		}
+		else {
+			depth_desc = CD3D11_DEPTH_STENCIL_DESC();
 		}
 
 		depth_desc.DepthEnable = TRUE;
@@ -3356,11 +3374,14 @@ namespace ECSEngine {
 
 	void Graphics::EnableCulling(GraphicsContext* context, bool wireframe)
 	{
-		D3D11_RASTERIZER_DESC rasterizer_desc = {};
+		D3D11_RASTERIZER_DESC rasterizer_desc;
 
 		GraphicsPipelineRasterizerState raster_state = ECSEngine::GetRasterizerState(GetContext());
 		if (raster_state.rasterizer_state.Interface() != nullptr) {
 			raster_state.rasterizer_state.state->GetDesc(&rasterizer_desc);
+		}
+		else {
+			rasterizer_desc = CD3D11_RASTERIZER_DESC();
 		}
 		
 		rasterizer_desc.CullMode = D3D11_CULL_BACK;
@@ -3383,11 +3404,14 @@ namespace ECSEngine {
 
 	void Graphics::EnableWireframe(GraphicsContext* context)
 	{
-		D3D11_RASTERIZER_DESC rasterizer_desc = {};
+		D3D11_RASTERIZER_DESC rasterizer_desc;
 
 		GraphicsPipelineRasterizerState raster_state = ECSEngine::GetRasterizerState(context);
 		if (raster_state.rasterizer_state.Interface() != nullptr) {
 			raster_state.rasterizer_state.state->GetDesc(&rasterizer_desc);
+		}
+		else {
+			rasterizer_desc = CD3D11_RASTERIZER_DESC();
 		}
 
 		if (rasterizer_desc.FillMode != D3D11_FILL_WIREFRAME) {
