@@ -1137,6 +1137,15 @@ namespace ECSEngine {
 			};
 		};
 
+		struct UIDrawerInitializeTextInputWide {
+			UIDrawConfig* config;
+			Stream<char> name;
+			union {
+				CapacityStream<wchar_t>* text_to_fill;
+				ResizableStream<wchar_t>* resizable_text_to_fill;
+			};
+		};
+
 		struct UIDrawerInitializePathInput {
 			ECS_INLINE UIDrawerInitializePathInput() {}
 
