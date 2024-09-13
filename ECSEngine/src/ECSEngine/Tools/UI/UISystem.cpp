@@ -4133,7 +4133,7 @@ namespace ECSEngine {
 			UIDockspaceBorder& border = data->dockspace->borders[data->border_index];
 
 			unsigned int window_index_in_border = border.active_window;
-			unsigned int window_index = 0xFFFFFFFF;
+			unsigned int window_index = -1;
 
 			float dockspace_mask = GetDockspaceMaskFromType(data->type);
 
@@ -4160,7 +4160,7 @@ namespace ECSEngine {
 			bool has_snapshot_mode = data->snapshot_mode;
 			bool is_retained = false;
 			// Check to see if the window is in "retained" mode
-			if (m_windows[window_index].retained_mode != nullptr) {
+			if (window_index != -1 && m_windows[window_index].retained_mode != nullptr) {
 				WindowRetainedModeInfo info;
 				info.border_index = data->border_index;
 				info.dockspace = data->dockspace;
@@ -4243,7 +4243,7 @@ namespace ECSEngine {
 					);
 				}
 
-				if (window_index != 0xFFFFFFFF) {
+				if (window_index != -1) {
 					UIDrawerDescriptor drawer_descriptor = InitializeDrawerDescriptorReferences(window_index);
 					drawer_descriptor.border_index = data->border_index;
 					drawer_descriptor.dockspace = data->dockspace;
@@ -4521,16 +4521,13 @@ namespace ECSEngine {
 			);
 			//}
 
-			// viewport buffer description: 
-			// float2 region_center_position;
-			// float2 region_half_dimensions_inverse;
 			DrawPass<ECS_UI_DRAW_NORMAL>(
 				border.draw_resources,
 				vertex_count,
 				region_position,
 				region_scale,
 				m_graphics->GetContext()
-				);
+			);
 
 			if (is_hoverable && m_focused_window_data.hoverable_handler.phase == ECS_UI_DRAW_LATE) {
 				HandleHoverable(data->mouse_position, buffers + ECS_TOOLS_UI_MATERIALS, vertex_count + ECS_TOOLS_UI_MATERIALS);
@@ -4630,7 +4627,7 @@ namespace ECSEngine {
 				m_windows[window_index].default_handler.action(&window_handler);
 			}
 
-			if (!snapshot_mode) {
+			if (!snapshot_mode && window_index != -1) {
 				// We need to decrement the dynamic resources only if not using
 				// A restored snapshot
 				DecrementWindowDynamicResource(window_index);
@@ -12291,8 +12288,10 @@ namespace ECSEngine {
 		void CollapseTriangleClickableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			if (mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(mouse_position, position, scale))
-				dockspace->borders[border_index].draw_region_header = 1 - dockspace->borders[border_index].draw_region_header;
+			if (mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(mouse_position, position, scale)) {
+				dockspace->borders[border_index].draw_region_header = !dockspace->borders[border_index].draw_region_header;
+			}
+			action_data->redraw_window = true;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

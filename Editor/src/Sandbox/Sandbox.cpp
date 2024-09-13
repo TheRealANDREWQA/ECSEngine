@@ -2694,7 +2694,6 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 	// Add the sandbox render and depth textures into the visualize textures
 	VisualizeTextureSelectElement visualize_element;
-	visualize_element.transfer_texture_to_ui_graphics = true;
 	visualize_element.name = visualize_name;
 	visualize_element.texture = sandbox->viewport_render_destination[viewport].output_view.AsTexture2D();
 	visualize_element.override_format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB;
@@ -2714,7 +2713,6 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 		instanced_framebuffer_descriptor.bind_flag = ECS_GRAPHICS_BIND_RENDER_TARGET | ECS_GRAPHICS_BIND_SHADER_RESOURCE;
 		instanced_framebuffer_descriptor.mip_levels = 1;
 		instanced_framebuffer_descriptor.size = new_size;
-		instanced_framebuffer_descriptor.misc_flag = ECS_GRAPHICS_MISC_SHARED;
 		Texture2D instanced_framebuffer_texture = runtime_graphics->CreateTexture(&instanced_framebuffer_descriptor);
 		sandbox->scene_viewport_instance_framebuffer = runtime_graphics->CreateRenderTargetView(instanced_framebuffer_texture);
 
@@ -2729,7 +2727,6 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 		instanced_depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_DEPTH_STENCIL;
 		instanced_depth_stencil_descriptor.mip_levels = 1;
 		instanced_depth_stencil_descriptor.size = new_size;
-		instanced_depth_stencil_descriptor.misc_flag = ECS_GRAPHICS_MISC_SHARED;
 		Texture2D instanced_depth_texture = runtime_graphics->CreateTexture(&instanced_depth_stencil_descriptor);
 		sandbox->scene_viewport_depth_stencil_framebuffer = runtime_graphics->CreateDepthStencilView(instanced_depth_texture);
 
