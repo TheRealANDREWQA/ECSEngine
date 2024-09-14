@@ -15,3 +15,6 @@ KillGPUThunk.bat
 ECSEngine.iml
 *.cap
 enc_temp_folder
+
+branch.txt
+hash.txt

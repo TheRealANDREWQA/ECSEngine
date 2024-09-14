@@ -16171,15 +16171,19 @@ namespace ECSEngine {
 
 		void UIDrawer::TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<wchar_t>* text_to_fill) {
 			struct CallbackData {
+				// This must be the first field, such that we can alias this structure with the normal text input
+				UIDrawerTextInput* text_input;
 				CapacityStream<wchar_t>* text_to_fill;
 				CapacityStream<char> ascii_text;
 				UIActionHandler user_callback;
+				bool trigger_on_release;
 			};
 
 			auto override_callback = [](ActionData* action_data) {
 				UI_UNPACK_ACTION_DATA;
 
 				CallbackData* callback_data = (CallbackData*)_data;
+				callback_data->text_to_fill->size = 0;
 				ConvertASCIIToWide(*callback_data->text_to_fill, callback_data->ascii_text);
 				if (callback_data->user_callback.action != nullptr) {
 					action_data->data = callback_data->user_callback.data;
@@ -16213,7 +16217,30 @@ namespace ECSEngine {
 
 					TextInput(configuration | UI_CONFIG_TEXT_INPUT_CALLBACK, config, name, &callback_data->ascii_text);
 					RemoveConfigParameter(configuration, config, previous_callback);
-					HandleDynamicResource(configuration, internal_resource_name);
+
+					callback_data->trigger_on_release = previous_callback.trigger_only_on_release;
+					SnapshotRunnable(callback_data, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+						CallbackData* data = (CallbackData*)_data;
+
+						// If the path has changed, change the text input as well
+						// This must be done after the text input because the callback will be called
+						// from inside the text input
+						ECS_STACK_CAPACITY_STREAM(char, path_converted, 512);
+						ConvertWideCharsToASCII(*data->text_to_fill, path_converted);
+						if (data->ascii_text != path_converted) {
+							if (!data->trigger_on_release || !data->text_input->is_currently_selected) {
+								data->text_input->DeleteAllCharacters();
+								if (path_converted.size > 0) {
+									data->text_input->InsertCharacters(path_converted.buffer, path_converted.size, 0, action_data->system);
+								}
+
+								// Disable the callback
+								data->text_input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+								return true;
+							}
+						}
+						return false;
+						});
 				}
 				else {
 					bool exists = ExistsResource(internal_resource_name);
@@ -16222,6 +16249,10 @@ namespace ECSEngine {
 						initialize_data.config = &config;
 						ECS_FORWARD_STRUCT_MEMBERS_2(initialize_data, name, text_to_fill);
 						InitializeDrawerElement(*this, &initialize_data, name, InitializeTextInputWideElement, DynamicConfiguration(configuration));
+
+						Stream<char> internal_resource_full_name = HandleResourceIdentifier(internal_resource_name);
+						// We must register manually the extra window resource
+						system->AddWindowDynamicElement(window_index, internal_resource_full_name, {}, {});
 					}
 					TextInput(DynamicConfiguration(configuration), config, name, text_to_fill);
 				}
@@ -16230,6 +16261,11 @@ namespace ECSEngine {
 				CallbackData* data = nullptr;
 				UIConfigTextInputCallback existing_callback;
 				existing_callback.handler.phase = ECS_UI_DRAW_NORMAL;
+
+				if (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+					configuration |= UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
+				}
 
 				AddWindowResource(internal_resource_name, [&](Stream<char> label_name) {
 					data = GetMainAllocatorBuffer<CallbackData>();
