@@ -953,29 +953,31 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 			const wchar_t* type_extension;
 		};
 		
+		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
+		
 		auto block = [=](const BlockInfo& block_info) {
 			UIDrawConfig config;
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 			const size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
-			drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
 
 			UIConfigNamePadding name_padding;
 			name_padding.total_length = NAME_PADDING_LENGTH;
 			config.AddFlag(name_padding);
 
-			ECS_FORMAT_TEMP_STRING(check_box_name, "{#} recording enabled", block_info.type_string);
+			ECS_FORMAT_TEMP_STRING(check_box_name, "{#} recording", block_info.type_string);
 			drawer->CheckBox(CONFIGURATION, config, check_box_name, &sandbox->flags, FirstLSB64(block_info.flag));
 
 			UIConfigActiveState active_state;
 			active_state.state = HasFlag(sandbox->flags, block_info.flag);
 			config.AddFlag(active_state);
 
+			UIConfigWindowDependentSize dependent_size;
+			config.AddFlag(dependent_size);
+
 			ECS_FORMAT_TEMP_STRING(file_path_name, "{#} recording file", block_info.type_string);
 			Stream<wchar_t> recording_extension = block_info.type_extension;
-			drawer->FileInput(CONFIGURATION | UI_CONFIG_ACTIVE_STATE, config, file_path_name, block_info.file_path, { &recording_extension, 1 });	
-
-			drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
+			drawer->TextInput(CONFIGURATION | UI_CONFIG_ACTIVE_STATE | UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, file_path_name, block_info.file_path);
 		};
 
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -984,9 +986,19 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 		input_block.entire_state_tick_seconds = &sandbox->input_recorder_entire_state_tick_seconds;
 		input_block.file_path = &sandbox->input_recorder_file;
 		input_block.type_extension = EDITOR_INPUT_RECORDING_FILE_EXTENSION;
-		input_block.type_string = "input";
-
+		input_block.type_string = "Input";
 		block(input_block);
+		drawer->CrossLine();
+
+		BlockInfo state_block;
+		state_block.flag = EDITOR_SANDBOX_FLAG_RECORD_STATE;
+		state_block.entire_state_tick_seconds = &sandbox->input_recorder_entire_state_tick_seconds;
+		state_block.file_path = &sandbox->input_recorder_file;
+		state_block.type_extension = EDITOR_STATE_RECORDING_FILE_EXTENSION;
+		state_block.type_string = "State";
+		block(state_block);
+		
+		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
 	});
 }
 
