@@ -198,8 +198,8 @@ namespace ECSEngine {
 			}
 
 			// All mouse messages provide a new pointer position
-			int x = LOWORD(info.lParam);
-			int y = HIWORD(info.lParam);
+			int x = GET_X_LPARAM(info.lParam);
+			int y = GET_Y_LPARAM(info.lParam);
 
 			m_current_position = { x, y };
 			if (m_wrap_position) {

@@ -997,7 +997,7 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	UnloadSandboxAssets(editor_state, sandbox_index);
 
 	// Finish any recordings that are still valid
-	FinishSandboxRecordings(editor_state, sandbox_index);
+	FinishSandboxRecordings(editor_state, sandbox_index, true);
 
 	// We also need to remove the prefab component references
 
@@ -1367,6 +1367,9 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 			DecrementAssetReference(editor_state, current_handle, sandbox->runtime_asset_handle_snapshot.handle_types[index], sandbox_index, reference_count);
 		}
 	}
+
+	// Finish the sandbox recorders
+	FinishSandboxRecordings(editor_state, sandbox_index, true);
 
 	ClearWorld(&sandbox->sandbox_world);
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
@@ -2876,6 +2879,8 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	SCOPE_PROTECT_GPU_RESOURCES(&stack_allocator, protect_resources);
 	ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(protect_resources, editor_state->asset_database, editor_state->RuntimeResourceManager());
 
+	RunSandboxRecordings(editor_state, sandbox_index);
+
 	// Add the sandbox debug elements
 	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
@@ -3259,6 +3264,8 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 		sandbox->run_state = EDITOR_SANDBOX_RUNNING;
+
+		InitializeSandboxRecordings(editor_state, sandbox_index, true);
 
 		// We need to record the snapshot of the current sandbox state
 		// We also need to bind the module runtime settings

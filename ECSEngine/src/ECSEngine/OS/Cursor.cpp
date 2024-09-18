@@ -35,9 +35,6 @@ namespace ECSEngine {
 			RECT window_rect;
 			ECS_ASSERT(GetClientRect(hwnd, &window_rect));
 
-			POINT cursor;
-			GetCursorPos(&cursor);
-
 			unsigned int width = window_rect.right - window_rect.left;
 			unsigned int height = window_rect.bottom - window_rect.top;
 

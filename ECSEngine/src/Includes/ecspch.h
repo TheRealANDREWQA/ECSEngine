@@ -77,6 +77,7 @@
 #include <ShlObj_core.h>
 #include <ShellScalingApi.h>
 #include <dwmapi.h>
+#include <windowsx.h>
 
 #undef max
 #undef min

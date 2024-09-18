@@ -29,25 +29,25 @@ namespace ECSEngine {
 
 	void ConvertASCIIToWide(wchar_t* wide_string, const char* pointer, size_t max_w_string_count) {
 		int result = MultiByteToWideChar(CP_ACP, 0, pointer, -1, wide_string, max_w_string_count);
-		ECS_ASSERT(result != 0);
+		ECS_ASSERT(result != 0 || strlen(pointer) == 0);
 	}
 
 	void ConvertASCIIToWide(wchar_t* wide_string, Stream<char> pointer, size_t max_w_string_count) {
 		int result = MultiByteToWideChar(CP_ACP, 0, pointer.buffer, pointer.size, wide_string, max_w_string_count);
-		ECS_ASSERT(result != 0);
+		ECS_ASSERT(result != 0 || pointer.size == 0);
 	}
 
 	void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string) {
 		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, 
 			wide_string.buffer + wide_string.size, wide_string.capacity - wide_string.size);
-		ECS_ASSERT(result != 0);
+		ECS_ASSERT(result != 0 || ascii_string.size == 0);
 		wide_string.size += ascii_string.size;
 	}
 
 	void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
 		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, 
 			wide_string.buffer + wide_string.size, wide_string.capacity - wide_string.size);
-		ECS_ASSERT(result != 0);
+		ECS_ASSERT(result != 0 || ascii_string.size == 0);
 		wide_string.size += ascii_string.size;
 	}
 

@@ -3686,6 +3686,7 @@ namespace ECSEngine {
 
 							CheckBoxValue* value = (CheckBoxValue*)_data;
 							value->Flip();
+							action_data->redraw_window = true;
 						};
 
 						drawer->AddDefaultClickableHoverable(configuration, position, scale, { default_action, &value, sizeof(value), phase }, nullptr, color);
@@ -8499,6 +8500,11 @@ namespace ECSEngine {
 			alignment.horizontal = ECS_UI_ALIGN_LEFT;
 			alignment.vertical = ECS_UI_ALIGN_MIDDLE;
 
+			bool is_active = true;
+			if (configuration & UI_CONFIG_ACTIVE_STATE) {
+				const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
+				is_active = active_state->state;
+			}
 			if (configuration & UI_CONFIG_TEXT_PARAMETERS) {
 				const UIConfigTextParameters* parameters = (const UIConfigTextParameters*)config.GetParameter(UI_CONFIG_TEXT_PARAMETERS);
 
@@ -8508,12 +8514,14 @@ namespace ECSEngine {
 					new_parameters.size = { font_size_spacing.x, font_size_spacing.y };
 					new_parameters.character_spacing = font_size_spacing.z;
 				}
+				// Override the color to have only the text color or the unavailable color
+				new_parameters.color = is_active ? drawer->color_theme.text : drawer->color_theme.unavailable_text;
 				label_config.AddFlag(new_parameters);
 				label_configuration |= UI_CONFIG_TEXT_PARAMETERS;
 			}
 			else if (configuration & UI_CONFIG_NAME_FIT_TO_SCALE) {
 				UIConfigTextParameters text_parameters;
-				text_parameters.color = drawer->color_theme.text;
+				text_parameters.color = is_active ? drawer->color_theme.text : drawer->color_theme.unavailable_text;
 
 				float3 font_size_spacing = drawer->FitTextToScale(scale.y, drawer->element_descriptor.label_padd.y);
 				text_parameters.character_spacing = font_size_spacing.z;
@@ -8566,12 +8574,6 @@ namespace ECSEngine {
 			}
 
 			label_config.AddFlag(alignment);
-
-			bool is_active = true;
-			if (configuration & UI_CONFIG_ACTIVE_STATE) {
-				const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
-				is_active = active_state->state;
-			}
 
 			label_configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
 			label_configuration |= configuration & UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW ? UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW : 0;
@@ -16296,7 +16298,7 @@ namespace ECSEngine {
 				UIConfigTextInputCallback previous_callback;
 				SetConfigParameter(configuration, config, current_callback, previous_callback);
 
-				TextInput(configuration | UI_CONFIG_TEXT_INPUT_CALLBACK, config, name, &data->ascii_text);
+				data->text_input = TextInput(configuration | UI_CONFIG_TEXT_INPUT_CALLBACK, config, name, &data->ascii_text);
 				RemoveConfigParameter(configuration, config, previous_callback);
 			}
 		}
