@@ -11,6 +11,7 @@
 #include "../../Sandbox/SandboxEntityOperations.h"
 #include "../../Sandbox/SandboxRecording.h"
 #include "../Common.h"
+#include "../../Project/ProjectFolders.h"
 
 #include "../CreateScene.h"
 #include "../../Modules/Module.h"
@@ -951,6 +952,7 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 			CapacityStream<wchar_t>* file_path;
 			const char* type_string;
 			const wchar_t* type_extension;
+			bool* automatic_boolean;
 		};
 		
 		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
@@ -959,25 +961,59 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 			UIDrawConfig config;
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-			const size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
+			size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
 
 			UIConfigNamePadding name_padding;
 			name_padding.total_length = NAME_PADDING_LENGTH;
 			config.AddFlag(name_padding);
 
-			ECS_FORMAT_TEMP_STRING(check_box_name, "{#} recording", block_info.type_string);
-			drawer->CheckBox(CONFIGURATION, config, check_box_name, &sandbox->flags, FirstLSB64(block_info.flag));
+			ECS_FORMAT_TEMP_STRING(enabled_box_name, "{#} recording", block_info.type_string);
+			drawer->CheckBox(CONFIGURATION, config, enabled_box_name, &sandbox->flags, FirstLSB64(block_info.flag));
+
+			CONFIGURATION |= UI_CONFIG_ACTIVE_STATE;
 
 			UIConfigActiveState active_state;
 			active_state.state = HasFlag(sandbox->flags, block_info.flag);
 			config.AddFlag(active_state);
 
+			ECS_FORMAT_TEMP_STRING(automatic_box_name, "{#} automatic mode", block_info.type_string);
+			drawer->CheckBox(CONFIGURATION, config, automatic_box_name, block_info.automatic_boolean);
+
 			UIConfigWindowDependentSize dependent_size;
 			config.AddFlag(dependent_size);
 
+			ECS_STACK_CAPACITY_STREAM(wchar_t, full_path, 512);
+			UIConfigTextParameters text_parameters = drawer->TextParameters();
+			// Make the text with green when the path is valid, else make it red
+			text_parameters.color = ECS_COLOR_GREEN;
+			// Verify that the path parent is valid
+			Stream<wchar_t> path_parent = PathParent(*block_info.file_path, ECS_OS_PATH_SEPARATOR_REL);
+			GetProjectPathFromAssetRelative(editor_state, full_path, path_parent);
+			if (!ExistsFileOrFolder(full_path)) {
+				text_parameters.color = ECS_COLOR_RED;
+			}
+			else {
+				// If it not automatic, then verify that a file with the same name does not exist already
+				if (!*block_info.automatic_boolean) {
+					Stream<wchar_t> file_stem = PathStem(*block_info.file_path, ECS_OS_PATH_SEPARATOR_REL);
+					if (file_stem.size > 0) {
+						full_path.AddStreamAssert(file_stem);
+						full_path.AddStreamAssert(EDITOR_INPUT_RECORDING_FILE_EXTENSION);
+						if (ExistsFileOrFolder(full_path)) {
+							text_parameters.color = ECS_COLOR_RED;
+						}
+					}
+					else {
+						text_parameters.color = ECS_COLOR_RED;
+					}
+				}
+			}
+
+			config.AddFlag(text_parameters);
+
 			ECS_FORMAT_TEMP_STRING(file_path_name, "{#} recording file", block_info.type_string);
 			Stream<wchar_t> recording_extension = block_info.type_extension;
-			drawer->TextInput(CONFIGURATION | UI_CONFIG_ACTIVE_STATE | UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, file_path_name, block_info.file_path);
+			drawer->TextInput(CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_PARAMETERS, config, file_path_name, block_info.file_path);
 		};
 
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -987,15 +1023,17 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 		input_block.file_path = &sandbox->input_recorder_file;
 		input_block.type_extension = EDITOR_INPUT_RECORDING_FILE_EXTENSION;
 		input_block.type_string = "Input";
+		input_block.automatic_boolean = &sandbox->is_input_recorder_file_automatic;
 		block(input_block);
 		drawer->CrossLine();
 
 		BlockInfo state_block;
 		state_block.flag = EDITOR_SANDBOX_FLAG_RECORD_STATE;
 		state_block.entire_state_tick_seconds = &sandbox->input_recorder_entire_state_tick_seconds;
-		state_block.file_path = &sandbox->input_recorder_file;
+		state_block.file_path = &sandbox->state_recorder_file;
 		state_block.type_extension = EDITOR_STATE_RECORDING_FILE_EXTENSION;
 		state_block.type_string = "State";
+		state_block.automatic_boolean = &sandbox->is_state_recorder_file_automatic;
 		block(state_block);
 		
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);

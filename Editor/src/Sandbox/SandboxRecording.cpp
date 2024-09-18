@@ -29,8 +29,16 @@ static void DeallocateSandboxRecording(DeltaStateWriter& delta_writer, Allocator
 static bool FinishSandboxRecording(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
+	bool check_that_it_is_enabled,
 	const SandboxRecordingInfo& info
 ) {
+	if (check_that_it_is_enabled) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		if (!HasFlag(sandbox->flags, info.flag)) {
+			return true;
+		}
+	}
+
 	auto deallocate_stack_scope = StackScope([&]() {
 		if (*info.is_delta_writer_initialized) {
 			DeallocateSandboxRecording(*info.delta_writer, GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager());
@@ -98,11 +106,19 @@ typedef void (*InitializeSandboxRecordingFunctor)(DeltaStateWriterInitializeFunc
 static bool InitializeSandboxRecording(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
+	bool check_that_it_is_enabled,
 	const SandboxRecordingInfo& info,
 	size_t allocator_size,
 	size_t buffering_size,
 	InitializeSandboxRecordingFunctor initialize_functor
 ) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	if (check_that_it_is_enabled) {
+		if (!HasFlag(sandbox->flags, info.flag)) {
+			return true;
+		}
+	}
+
 	// Open the file for write
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_file_path_storage, 512);
 	Stream<wchar_t> absolute_file_path = GetProjectPathFromAssetRelative(editor_state, absolute_file_path_storage, *info.file_path);
@@ -115,8 +131,6 @@ static bool InitializeSandboxRecording(
 		EditorSetConsoleError(console_message);
 		return false;
 	}
-
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 	// Create an allocator just for the recorder, such that we can wink it at the end
 	GlobalMemoryManager* sandbox_allocator = sandbox->GlobalMemoryManager();
@@ -147,6 +161,7 @@ static void ResetSandboxRecording(EditorState* editor_state, unsigned int sandbo
 	ZeroOut(info.delta_writer);
 	*info.entire_state_tick_seconds = DEFAULT_ENTIRE_STATE_TICK_SECONDS;
 	*info.is_delta_writer_initialized = false;
+	*info.is_recording_automatic = false;
 	info.file_path->Initialize(GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager(), 0, PATH_MAX_CAPACITY);
 }
 
@@ -155,12 +170,28 @@ SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned
 	switch (type) {
 	case EDITOR_SANDBOX_RECORDING_INPUT:
 	{
-		return { &sandbox->input_recorder, &sandbox->is_input_recorder_initialized, &sandbox->input_recorder_entire_state_tick_seconds, &sandbox->input_recorder_file, INPUT_RECORDER_TYPE_STRING, EDITOR_SANDBOX_FLAG_RECORD_INPUT };
+		return { 
+			&sandbox->input_recorder, 
+			&sandbox->is_input_recorder_initialized, 
+			&sandbox->is_input_recorder_file_automatic, 
+			&sandbox->input_recorder_entire_state_tick_seconds, 
+			&sandbox->input_recorder_file, 
+			INPUT_RECORDER_TYPE_STRING, 
+			EDITOR_SANDBOX_FLAG_RECORD_INPUT 
+		};
 	}
 	break;
 	case EDITOR_SANDBOX_RECORDING_STATE:
 	{
-		return { &sandbox->state_recorder, &sandbox->is_state_recorder_initialized, &sandbox->state_recorder_entire_state_tick_seconds, &sandbox->state_recorder_file, INPUT_RECORDER_TYPE_STRING, EDITOR_SANDBOX_FLAG_RECORD_INPUT };
+		return { 
+			&sandbox->state_recorder, 
+			&sandbox->is_state_recorder_initialized, 
+			&sandbox->is_state_recorder_file_automatic,
+			&sandbox->state_recorder_entire_state_tick_seconds, 
+			&sandbox->state_recorder_file, 
+			STATE_RECORDER_TYPE_STRING, 
+			EDITOR_SANDBOX_FLAG_RECORD_STATE
+		};
 	}
 	break;
 	default:
@@ -186,19 +217,19 @@ void EnableSandboxRecording(EditorState* editor_state, unsigned int sandbox_inde
 	sandbox->flags = SetFlag(sandbox->flags, info.flag);
 }
 
-bool FinishSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	return FinishSandboxRecording(editor_state, sandbox_index, GetSandboxRecordingInfo(editor_state, sandbox_index, type));
+bool FinishSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled) {
+	return FinishSandboxRecording(editor_state, sandbox_index, check_that_it_is_enabled, GetSandboxRecordingInfo(editor_state, sandbox_index, type));
 }
 
-bool FinishSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index) {
+bool FinishSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index, bool check_that_it_is_enabled) {
 	bool success = true;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		success &= FinishSandboxRecording(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+		success &= FinishSandboxRecording(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index, check_that_it_is_enabled);
 	}
 	return success;
 }
 
-bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
+bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled) {
 	InitializeSandboxRecordingFunctor initialize_functor = nullptr;
 	switch (type) {
 	case EDITOR_SANDBOX_RECORDING_INPUT:
@@ -214,7 +245,15 @@ bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_
 	default:
 		ECS_ASSERT(false, "Invalid sandbox recording type enum in initialize.");
 	}
-	return InitializeSandboxRecording(editor_state, sandbox_index, GetSandboxRecordingInfo(editor_state, sandbox_index, type), RECORDER_ALLOCATOR_CAPACITY, RECORDER_BUFFERING_CAPACITY, initialize_functor);
+	return InitializeSandboxRecording(editor_state, sandbox_index, check_that_it_is_enabled, GetSandboxRecordingInfo(editor_state, sandbox_index, type), RECORDER_ALLOCATOR_CAPACITY, RECORDER_BUFFERING_CAPACITY, initialize_functor);
+}
+
+bool InitializeSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index, bool check_that_it_is_enabled) {
+	bool success = true;
+	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
+		success &= InitializeSandboxRecording(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index, check_that_it_is_enabled);
+	}
+	return success;
 }
 
 void ResetSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
