@@ -148,6 +148,16 @@ namespace ECSEngine {
 		};
 	};
 
+	// Helper function that allocates an instance and calls the constructor for it. Helpful for polymorphic types that need the vtable
+	template<typename T, typename Allocator, typename... Args>
+	ECS_INLINE T* AllocateAndConstruct(Allocator* allocator, Args... arguments) {
+		T* allocation = (T*)allocator->Allocate(sizeof(T), alignof(T));
+		if (allocation != nullptr) {
+			new (allocation) T(arguments...);
+		}
+		return allocation;
+	}
+
 #define ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(return_type, function_name, ...) template ECSENGINE_API return_type function_name(LinearAllocator*, __VA_ARGS__); \
 template ECSENGINE_API return_type function_name(StackAllocator*, __VA_ARGS__); \
 /*template ECSENGINE_API return_type function_name(PoolAllocator*, __VA_ARGS__);*/ \

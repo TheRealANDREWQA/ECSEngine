@@ -16,19 +16,19 @@ struct SandboxRecordingInfo {
 	ECSEngine::DeltaStateWriter* delta_writer;
 	bool* is_delta_writer_initialized;
 	bool* is_recording_automatic;
+	bool* is_recording_file_valid;
+	unsigned int* recording_automatic_index;
 	float* entire_state_tick_seconds;
 	ECSEngine::CapacityStream<wchar_t>* file_path;
 	const char* type_string;
+	const wchar_t* extension;
 	EDITOR_SANDBOX_FLAG flag;
 };
 
 SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
 
-ECS_INLINE ECSEngine::CapacityStream<wchar_t>* GetSandboxRecordingFile(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	return GetSandboxRecordingInfo(editor_state, sandbox_index, type).file_path;
-}
-
-void ChangeSandboxRecordingFile(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> file, EDITOR_SANDBOX_RECORDING_TYPE type);
+// It takes into consideration automatic recording. It will write into the storage the absolute path of the resolved
+ECSEngine::Stream<wchar_t> GetSandboxRecordingFile(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, ECSEngine::CapacityStream<wchar_t>& storage);
 
 void DisableSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
 
@@ -60,3 +60,6 @@ bool RunSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, 
 
 // Calls this functor for each recording type. Returns true if all of them succeeded, else false
 bool RunSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index);
+
+// Updates the valid file boolean for the given sandbox recording
+void UpdateSandboxValidFileBoolRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
