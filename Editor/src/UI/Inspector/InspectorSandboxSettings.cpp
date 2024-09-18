@@ -27,6 +27,8 @@
 // From other input sources and this window might miss them
 #define RETAINED_MODE_REFRESH_MS 250
 
+#define RECORDING_FILE_VALID_STATUS_LAZY_MS 300
+
 #define MAX_SANDBOX_ENTRIES 32
 
 struct DrawSandboxSettingsData {
@@ -57,6 +59,8 @@ struct DrawSandboxSettingsData {
 	CapacityStream<AvailableModuleSettings> available_module_settings;
 
 	Timer retained_timer;
+	// Used to lazy update the valid status
+	Timer update_recording_valid_status_timer;
 
 	unsigned char sandbox_to_copy;
 	unsigned char sandbox_mappings[MAX_SANDBOX_ENTRIES];
@@ -953,11 +957,17 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 			const char* type_string;
 			const wchar_t* type_extension;
 			bool* automatic_boolean;
+			bool is_file_valid;
 		};
 		
 		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
+
+		bool is_valid_lazy_update = data->update_recording_valid_status_timer.GetDurationFloat(ECS_TIMER_DURATION_MS) >= RECORDING_FILE_VALID_STATUS_LAZY_MS;
+		if (is_valid_lazy_update) {
+			data->update_recording_valid_status_timer.SetNewStart();
+		}
 		
-		auto block = [=](const BlockInfo& block_info) {
+		auto block = [=](const BlockInfo& block_info, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
 			UIDrawConfig config;
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
@@ -982,32 +992,13 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 			UIConfigWindowDependentSize dependent_size;
 			config.AddFlag(dependent_size);
 
-			ECS_STACK_CAPACITY_STREAM(wchar_t, full_path, 512);
+			if (is_valid_lazy_update) {
+				UpdateSandboxValidFileBoolRecording(editor_state, sandbox_index, recording_type);
+			}
+
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
 			// Make the text with green when the path is valid, else make it red
-			text_parameters.color = ECS_COLOR_GREEN;
-			// Verify that the path parent is valid
-			Stream<wchar_t> path_parent = PathParent(*block_info.file_path, ECS_OS_PATH_SEPARATOR_REL);
-			GetProjectPathFromAssetRelative(editor_state, full_path, path_parent);
-			if (!ExistsFileOrFolder(full_path)) {
-				text_parameters.color = ECS_COLOR_RED;
-			}
-			else {
-				// If it not automatic, then verify that a file with the same name does not exist already
-				if (!*block_info.automatic_boolean) {
-					Stream<wchar_t> file_stem = PathStem(*block_info.file_path, ECS_OS_PATH_SEPARATOR_REL);
-					if (file_stem.size > 0) {
-						full_path.AddStreamAssert(file_stem);
-						full_path.AddStreamAssert(EDITOR_INPUT_RECORDING_FILE_EXTENSION);
-						if (ExistsFileOrFolder(full_path)) {
-							text_parameters.color = ECS_COLOR_RED;
-						}
-					}
-					else {
-						text_parameters.color = ECS_COLOR_RED;
-					}
-				}
-			}
+			text_parameters.color = block_info.is_file_valid ? ECS_COLOR_GREEN : ECS_COLOR_RED;
 
 			config.AddFlag(text_parameters);
 
@@ -1024,7 +1015,8 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 		input_block.type_extension = EDITOR_INPUT_RECORDING_FILE_EXTENSION;
 		input_block.type_string = "Input";
 		input_block.automatic_boolean = &sandbox->is_input_recorder_file_automatic;
-		block(input_block);
+		input_block.is_file_valid = sandbox->is_input_recorder_file_valid;
+		block(input_block, EDITOR_SANDBOX_RECORDING_INPUT);
 		drawer->CrossLine();
 
 		BlockInfo state_block;
@@ -1034,7 +1026,8 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 		state_block.type_extension = EDITOR_STATE_RECORDING_FILE_EXTENSION;
 		state_block.type_string = "State";
 		state_block.automatic_boolean = &sandbox->is_state_recorder_file_automatic;
-		block(state_block);
+		state_block.is_file_valid = sandbox->is_state_recorder_file_valid;
+		block(state_block, EDITOR_SANDBOX_RECORDING_STATE);
 		
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
 	});
@@ -1234,6 +1227,7 @@ void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int in
 	memset(&data, 0, sizeof(data));
 	data.editor_state = editor_state;
 	data.retained_timer.SetUninitialized();
+	data.update_recording_valid_status_timer.SetUninitialized();
 	unsigned int matched_inspector_index = ChangeInspectorDrawFunction(
 		editor_state,
 		inspector_index,

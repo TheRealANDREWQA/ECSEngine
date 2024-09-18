@@ -91,7 +91,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		return true;
+		return write_instrument->Flush();
 	}
 
 	void DeltaStateWriter::Initialize(const DeltaStateWriterInitializeInfo& initialize_info) {
