@@ -166,7 +166,7 @@ namespace ECSEngine {
 			return ConvertDoubleToChars(characters, *(double*)address, 4);
 		}
 
-#define COMMA_SEPARATE characters.Add(','); characters.AddAssert(' ');
+#define COMMA_SEPARATE characters.AddAssert(','); characters.AddAssert(' ');
 
 		template<ConvertFunction basic_convert, int byte_size>
 		size_t ConvertBasic2(const void* address, CapacityStream<char>& characters) {
@@ -239,16 +239,26 @@ namespace ECSEngine {
 
 #define NOTHING
 
-#define INTEGER_GROUP(function, end) function int8_t> end, \
-								function uint8_t> end, \
-								function int16_t> end, \
-								function uint16_t> end, \
-								function int32_t> end, \
-								function uint32_t> end, \
-								function int64_t> end, \
-								function uint64_t> end
+#define INTEGER_GROUP(function) function<int8_t>, \
+								function<uint8_t>, \
+								function<int16_t>, \
+								function<uint16_t>, \
+								function<int32_t>, \
+								function<uint32_t>, \
+								function<int64_t>, \
+								function<uint64_t>
 
-#define BASIC_INTEGER_GROUP(function, basic_function) function<basic_function<int8_t>, 1>, \
+#define BASIC_INTEGER_GROUP(function, basic_function) function<basic_function<int8_t>>, \
+										function<basic_function<uint8_t>>, \
+										function<basic_function<int16_t>>, \
+										function<basic_function<uint16_t>>, \
+										function<basic_function<int32_t>>, \
+										function<basic_function<uint32_t>>, \
+										function<basic_function<int64_t>>, \
+										function<basic_function<uint64_t>>
+
+
+#define BASIC_INTEGER_GROUP_BYTE_SIZE(function, basic_function) function<basic_function<int8_t>, 1>, \
 										function<basic_function<uint8_t>, 1>, \
 										function<basic_function<int16_t>, 2>, \
 										function<basic_function<uint16_t>, 2>, \
@@ -259,7 +269,7 @@ namespace ECSEngine {
 
 		// Jump table for converting reflected fields into strings
 		ConvertFunction REFLECT_CONVERT_FIELD_DATA_INTO_STRING[] = {
-			INTEGER_GROUP(ConvertInteger<, NOTHING),
+			INTEGER_GROUP(ConvertInteger, NOTHING),
 			// Wide char
 			ConvertWideCharacters,
 			ConvertFloat,
@@ -267,9 +277,9 @@ namespace ECSEngine {
 			ConvertBool,
 			// Enum - use a place holder for ASCII characters
 			ConvertASCIICharacters,
-			BASIC_INTEGER_GROUP(ConvertBasic2, ConvertInteger),
-			BASIC_INTEGER_GROUP(ConvertBasic3, ConvertInteger),
-			BASIC_INTEGER_GROUP(ConvertBasic4, ConvertInteger),
+			BASIC_INTEGER_GROUP_BYTE_SIZE(ConvertBasic2, ConvertInteger),
+			BASIC_INTEGER_GROUP_BYTE_SIZE(ConvertBasic3, ConvertInteger),
+			BASIC_INTEGER_GROUP_BYTE_SIZE(ConvertBasic4, ConvertInteger),
 			ConvertBasic2<ConvertFloat, sizeof(float)>,
 			ConvertBasic3<ConvertFloat, sizeof(float)>,
 			ConvertBasic4<ConvertFloat, sizeof(float)>,
@@ -290,9 +300,9 @@ namespace ECSEngine {
 
 		static_assert(ECS_COUNTOF(REFLECT_CONVERT_FIELD_DATA_INTO_STRING) == (unsigned int)ReflectionBasicFieldType::COUNT);
 
-		typedef bool (*ParseFunction)(void* data, Stream<char> characters);
+		typedef bool (*ParseFunction)(CapacityStream<void>* data, Stream<char> characters);
 
-		Stream<char> TrimWhitespaces(Stream<char> characters) {
+		static Stream<char> TrimWhitespaces(Stream<char> characters) {
 			Stream<char> trimmed_characters = characters;
 
 			while (trimmed_characters.size > 0 && (*trimmed_characters.buffer == '\t' || *trimmed_characters.buffer == ' ')) {
@@ -310,8 +320,8 @@ namespace ECSEngine {
 #define DELIMITERS '\n', ',', '\0', ']'
 
 		template<typename Integer>
-		bool ParseInteger(void* data, Stream<char> characters) {
-			Integer* ptr = (Integer*)data;
+		bool ParseInteger(CapacityStream<void>* data, Stream<char> characters) {
+			Integer* ptr = data->Reserve<Integer>();
 
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			bool is_integer = IsIntegerNumber(trimmed_characters);
@@ -326,8 +336,8 @@ namespace ECSEngine {
 			}
 		}
 
-		bool ParseFloat(void* data, Stream<char> characters) {
-			float* ptr = (float*)data;
+		bool ParseFloat(CapacityStream<void>* data, Stream<char> characters) {
+			float* ptr = data->Reserve<float>();
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			bool is_floating_point = IsFloatingPointNumber(trimmed_characters);
 			if (is_floating_point) {
@@ -340,8 +350,8 @@ namespace ECSEngine {
 			}
 		}
 
-		bool ParseDouble(void* data, Stream<char> characters) {
-			double* ptr = (double*)data;
+		bool ParseDouble(CapacityStream<void>* data, Stream<char> characters) {
+			double* ptr = data->Reserve<double>();
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			bool is_floating_point = IsFloatingPointNumber(trimmed_characters);
 			if (is_floating_point) {
@@ -354,8 +364,8 @@ namespace ECSEngine {
 			}
 		}
 
-		bool ParseBool(void* data, Stream<char> characters) {
-			bool* ptr = (bool*)data;
+		bool ParseBool(CapacityStream<void>* data, Stream<char> characters) {
+			bool* ptr = data->Reserve<bool>();
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			if (trimmed_characters.size == 1) {
 				if (trimmed_characters[0] != '1' && trimmed_characters[0] != '0') {
@@ -384,92 +394,79 @@ namespace ECSEngine {
 		}
 
 		// For enum, user defined or unknown
-		bool ParseError(void* data, Stream<char> characters) {
+		bool ParseError(CapacityStream<void>* data, Stream<char> characters) {
 			ECS_ASSERT(false);
 			return false;
 		}
 
-		template<ParseFunction basic_parse, int byte_size>
-		bool ParseBasic2(void* data, Stream<char> characters) {
+		template<ParseFunction basic_parse>
+		bool ParseBasic2(CapacityStream<void>* data, Stream<char> characters) {
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			// Look for a comma - if it doesn't exist fail
-			char last_character = trimmed_characters[trimmed_characters.size];
-			trimmed_characters[trimmed_characters.size] = '\0';
+			Stream<char> comma = FindFirstCharacter(trimmed_characters, ',');
 
-			const char* comma = strchr(trimmed_characters.buffer, ',');
-			trimmed_characters[trimmed_characters.size] = last_character;
-
-			if (comma == nullptr) {
+			if (comma.size) {
 				return false;
 			}
 
-			bool first_success = basic_parse(data, Stream<char>(trimmed_characters.buffer, comma - trimmed_characters.buffer));
+			bool first_success = basic_parse(data, trimmed_characters.StartDifference(comma));
 			if (first_success) {
-				return basic_parse(OffsetPointer(data, byte_size), Stream<char>(comma + 1, trimmed_characters.buffer + trimmed_characters.size - comma - 1));
+				return basic_parse(data, comma.AdvanceReturn(1));
 			}
 			return false;
 		}
 
-		template<ParseFunction basic_parse, int byte_size>
-		bool ParseBasic3(void* data, Stream<char> characters) {
+		template<ParseFunction basic_parse>
+		bool ParseBasic3(CapacityStream<void>* data, Stream<char> characters) {
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			// Look for 2 commas - if they don't exist fail
-			char last_character = trimmed_characters[trimmed_characters.size];
-			trimmed_characters[trimmed_characters.size] = '\0';
-
-			const char* first_comma = strchr(trimmed_characters.buffer, ',');
-			if (first_comma == nullptr) {
-				trimmed_characters[trimmed_characters.size] = last_character;
+			Stream<char> first_comma = FindFirstCharacter(trimmed_characters, ',');
+			if (first_comma.size == 0) {
 				return false;
 			}
-			const char* second_comma = strchr(first_comma + 1, ',');
-			trimmed_characters[trimmed_characters.size] = last_character;
-
-			if (second_comma == nullptr) {
+			
+			Stream<char> second_comma = FindFirstCharacter(first_comma.AdvanceReturn(1), ',');
+			if (second_comma.size == 0) {
 				return false;
 			}
 
-			bool first_success = basic_parse(data, Stream<char>(trimmed_characters.buffer, first_comma - trimmed_characters.buffer));
+			bool first_success = basic_parse(data, trimmed_characters.StartDifference(first_comma));
 			if (first_success) {
-				bool second_success = basic_parse(OffsetPointer(data, byte_size), Stream<char>(first_comma + 1, second_comma - first_comma - 1));
+				bool second_success = basic_parse(data, first_comma.AdvanceReturn(1).StartDifference(second_comma));
 				if (second_success) {
-					return basic_parse(OffsetPointer(data, 2 * byte_size), Stream<char>(second_comma + 1, trimmed_characters.buffer + trimmed_characters.size - second_comma - 1));
+					return basic_parse(data, second_comma.AdvanceReturn(1));
 				}
 				return false;
 			}
 			return false;
 		}
 
-		template<ParseFunction basic_parse, int byte_size>
-		bool ParseBasic4(void* data, Stream<char> characters) {
+		template<ParseFunction basic_parse>
+		bool ParseBasic4(CapacityStream<void>* data, Stream<char> characters) {
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			// Look for 3 commas - if they don't exist fail
-			char last_character = trimmed_characters[trimmed_characters.size];
-			trimmed_characters[trimmed_characters.size] = '\0';
-
-			const char* first_comma = strchr(trimmed_characters.buffer, ',');
-			if (first_comma == nullptr) {
-				trimmed_characters[trimmed_characters.size] = last_character;
-				return false;
-			}
-			const char* second_comma = strchr(first_comma + 1, ',');
-			if (second_comma == nullptr) {
-				trimmed_characters[trimmed_characters.size] = last_character;
-				return false;
-			}
-			const char* third_comma = strchr(second_comma + 1, ',');
-			trimmed_characters[trimmed_characters.size] = last_character;
-			if (third_comma == nullptr) {
+			Stream<char> first_comma = FindFirstCharacter(trimmed_characters, ',');
+			if (first_comma.size == 0) {
 				return false;
 			}
 
-			bool first_success = basic_parse(data, Stream<char>(trimmed_characters.buffer, first_comma - trimmed_characters.buffer));
+			Stream<char> second_comma = FindFirstCharacter(first_comma.AdvanceReturn(1), ',');
+			if (second_comma.size == 0) {
+				return false;
+			}
+
+			Stream<char> third_comma = FindFirstCharacter(second_comma.AdvanceReturn(1), ',');
+			if (third_comma.size == 0) {
+				return false;
+			}
+
+			bool first_success = basic_parse(data, trimmed_characters.StartDifference(first_comma));
 			if (first_success) {
-				bool second_success = basic_parse(OffsetPointer(data, byte_size), Stream<char>(first_comma + 1, second_comma - first_comma - 1));
+				bool second_success = basic_parse(data, first_comma.AdvanceReturn(1).StartDifference(second_comma));
 				if (second_success) {
-					bool third_success = basic_parse(OffsetPointer(data, 2 * byte_size), Stream<char>(second_comma + 1, third_comma - second_comma - 1));
+					bool third_success = basic_parse(data, second_comma.AdvanceReturn(1).StartDifference(third_comma));
 					if (third_success) {
-						return basic_parse(OffsetPointer(data, 3 * byte_size), Stream<char>(third_comma + 1, trimmed_characters.buffer + trimmed_characters.size - third_comma - 1));
+						return basic_parse(data, third_comma.AdvanceReturn(1));
 					}
 					return false;
 				}
@@ -478,16 +475,16 @@ namespace ECSEngine {
 			return false;
 		}
 
-		bool ParseASCIICharacters(void* data, Stream<char> characters) {
-			Stream<char>* ascii_characters = (Stream<char>*)data;
+		bool ParseASCIICharacters(CapacityStream<void>* data, Stream<char> characters) {
+			Stream<char>* ascii_characters = data->Reserve<Stream<char>>();
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			*ascii_characters = trimmed_characters;
 
 			return true;
 		}
 
-		bool ParseWideCharacters(void* data, Stream<char> characters) {
-			Stream<wchar_t>* wide_characters = (Stream<wchar_t>*)data;
+		bool ParseWideCharacters(CapacityStream<void>* data, Stream<char> characters) {
+			Stream<wchar_t>* wide_characters = data->Reserve<Stream<wchar_t>>();
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			// There can only be an even number of characters
 			if (trimmed_characters.size % 2 == 1) {
@@ -511,7 +508,7 @@ namespace ECSEngine {
 #undef DELIMITERS
 
 		ParseFunction REFLECT_PARSE_FIELD_DATA_FROM_STRING[] = {
-			INTEGER_GROUP(ParseInteger< , NOTHING),
+			INTEGER_GROUP(ParseInteger),
 			// Wide char
 			ParseWideCharacters,
 			ParseFloat,
@@ -522,18 +519,18 @@ namespace ECSEngine {
 			BASIC_INTEGER_GROUP(ParseBasic2, ParseInteger),
 			BASIC_INTEGER_GROUP(ParseBasic3, ParseInteger),
 			BASIC_INTEGER_GROUP(ParseBasic4, ParseInteger),
-			ParseBasic2<ParseFloat, sizeof(float)>,
-			ParseBasic3<ParseFloat, sizeof(float)>,
-			ParseBasic4<ParseFloat, sizeof(float)>,
-			ParseBasic2<ParseDouble, sizeof(double)>,
-			ParseBasic3<ParseDouble, sizeof(double)>,
-			ParseBasic4<ParseDouble, sizeof(double)>,
+			ParseBasic2<ParseFloat>,
+			ParseBasic3<ParseFloat>,
+			ParseBasic4<ParseFloat>,
+			ParseBasic2<ParseDouble>,
+			ParseBasic3<ParseDouble>,
+			ParseBasic4<ParseDouble>,
 			// Bool 2
-			ParseBasic2<ParseBool, sizeof(bool)>,
+			ParseBasic2<ParseBool>,
 			// Bool 3
-			ParseBasic3<ParseBool, sizeof(bool)>,
+			ParseBasic3<ParseBool>,
 			// Bool 4
-			ParseBasic4<ParseBool, sizeof(bool)>,
+			ParseBasic4<ParseBool>,
 			// User defined
 			ParseError,
 			// Unknown
@@ -663,7 +660,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ParseReflectionBasicFieldType(ReflectionBasicFieldType type, Stream<char> characters, void* data)
+		bool ParseReflectionBasicFieldType(ReflectionBasicFieldType type, Stream<char> characters, CapacityStream<void>* data)
 		{
 			return REFLECT_PARSE_FIELD_DATA_FROM_STRING[(unsigned int)type](data, characters);
 		}

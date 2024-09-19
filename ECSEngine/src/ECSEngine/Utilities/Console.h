@@ -98,7 +98,7 @@ namespace ECSEngine {
 
 		void Graphics(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
-		void WriteFormatCharacters(Stream<char>& characters);
+		void WriteFormatCharacters(CapacityStream<char>& characters);
 
 		void SetDumpType(ECS_CONSOLE_DUMP_TYPE type, unsigned int count = 1);
 

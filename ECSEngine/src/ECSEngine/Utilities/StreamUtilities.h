@@ -80,7 +80,8 @@ namespace ECSEngine {
 	// Writes the stream data right after the type and sets the size
 	// Returns the total write size
 	template<typename Type>
-	unsigned int CoalesceStreamIntoType(Type* type, Stream<void> stream) {
+	unsigned int CoalesceStreamIntoType(Type* type, size_t type_capacity, Stream<void> stream) {
+		ECS_ASSERT(sizeof(*type) + stream.size <= type_capacity);
 		void* location = OffsetPointer(type, sizeof(*type));
 		memcpy(location, stream.buffer, stream.size);
 		*type->Size() = stream.size;
@@ -98,9 +99,11 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Type>
-	ECS_INLINE Type* CreateCoalescedStreamIntoType(void* buffer, Stream<void> stream, unsigned int* write_size) {
-		Type* type = (Type*)buffer;
-		*write_size = CoalesceStreamIntoType(type, stream);
+	ECS_INLINE Type* CreateCoalescedStreamIntoType(CapacityStream<void>& buffer, Stream<void> stream, unsigned int* write_size) {
+		buffer.AssertCapacity(stream.size);
+		Type* type = (Type*)OffsetPointer(buffer);
+		*write_size = CoalesceStreamIntoType(type, buffer.capacity - buffer.size, stream);
+		buffer.size += stream.size;
 		return type;
 	}
 
@@ -108,14 +111,16 @@ namespace ECSEngine {
 
 	// Does not set the data size inside the type
 	template<typename Type>
-	Type* CreateCoalescedStreamsIntoType(void* buffer, Stream<Stream<void>> buffers, unsigned int* write_size) {
-		Type* type = (Type*)buffer;
-		unsigned int offset = 0;
+	Type* CreateCoalescedStreamsIntoType(CapacityStream<void>& buffer, Stream<Stream<void>> buffers, unsigned int* write_size) {
+		unsigned int initial_size = buffer.size;
+		Type* type = (Type*)OffsetPointer(buffer);
+		buffer.size += sizeof(*type);
 		for (size_t index = 0; index < buffers.size; index++) {
-			buffers[index].CopyTo(OffsetPointer(buffer, sizeof(*type) + offset));
-			offset += buffers[index].size;
+			buffer.AssertCapacity(buffers[index].size);
+			buffers[index].CopyTo(OffsetPointer(buffer));
+			buffer.size += buffers[index].size;
 		}
-		*write_size = sizeof(*type) + offset;
+		*write_size = buffer.size - initial_size;
 		return type;
 	}
 

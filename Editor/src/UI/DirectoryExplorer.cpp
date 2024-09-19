@@ -33,13 +33,12 @@ struct DirectoryExplorerData {
 };
 
 bool IsProtectedFolderSelected(DirectoryExplorerData* data) {
-	wchar_t temp_characters[512];
-	CapacityStream<wchar_t> folder(temp_characters, 0, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, folder, 512);
 
 	EditorState* editor_state = (EditorState*)data->editor_state;
 	ProjectFile* project_file = editor_state->project_file;
 	folder.CopyOther(project_file->path);
-	folder.Add(L'\\');
+	folder.AddAssert(ECS_OS_PATH_SEPARATOR);
 	size_t folder_base_size = folder.size;
 	
 	for (size_t index = 0; index < std::size(PROTECTED_FOLDERS); index++) {
@@ -66,9 +65,9 @@ void DirectoryExplorerHierarchySelectableCallback(ActionData* action_data) {
 	data->current_path->CopyOther(project_file->path);
 	data->current_path->Add(ECS_OS_PATH_SEPARATOR);
 
-	wchar_t temp_characters[256];
-	ConvertASCIIToWide(temp_characters, label, 256);
-	data->current_path->AddStreamAssert(Stream<wchar_t>(temp_characters, label_stream.size));
+	ECS_STACK_CAPACITY_STREAM(wchar_t, temp_characters, 256);
+	ConvertASCIIToWide(temp_characters, label_stream);
+	data->current_path->AddStreamAssert(temp_characters);
 	ChangeFileExplorerDirectory(data->editor_state, *data->current_path);
 
 }
@@ -105,8 +104,7 @@ void DirectoryExplorerCreateFolderCallback(ActionData* action_data) {
 	data->current_path->Add(ECS_OS_PATH_SEPARATOR);
 	ConvertASCIIToWide(*data->current_path, *choose_data->ascii);
 
-	char ascii_path[512];
-	CapacityStream<char> ascii(ascii_path, 0, 512);
+	ECS_STACK_CAPACITY_STREAM(char, ascii, 512);
 	ConvertWideCharsToASCII(*data->current_path, ascii);
 	OS::CreateFolderWithError(*data->current_path, system);
 
@@ -168,8 +166,7 @@ void DirectoryExplorerRenameFolderCallback(ActionData* action_data) {
 	data->current_path->buffer[data->current_path->size] = L'\0';
 	data->current_path->AssertCapacity();
 
-	char ascii_path[512];
-	CapacityStream<char> ascii(ascii_path, 0, 512);
+	ECS_STACK_CAPACITY_STREAM(char, ascii, 512);
 	ConvertWideCharsToASCII(*data->current_path, ascii);
 
 	EditorState* editor_state = (EditorState*)data->editor_state;
@@ -351,11 +348,11 @@ void DirectoryExplorerDestroyCallback(ActionData* action_data) {
 	Deallocate(data->editor_state->EditorAllocator(), data->right_click_menu_handlers.buffer);
 }
 
-void DirectoryExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void DirectoryExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	descriptor.draw = DirectoryExplorerDraw;
 
-	DirectoryExplorerData* data = (DirectoryExplorerData*)stack_memory;
+	DirectoryExplorerData* data = stack_memory->Reserve<DirectoryExplorerData>();
 	data->editor_state = editor_state;
 	descriptor.window_name = DIRECTORY_EXPLORER_WINDOW_NAME;
 	descriptor.window_data = data;
@@ -375,8 +372,8 @@ unsigned int CreateDirectoryExplorerWindow(EditorState* editor_state) {
 	descriptor.initial_size_x = window_size.x;
 	descriptor.initial_size_y = window_size.y;
 
-	size_t stack_memory[128];
-	DirectoryExplorerSetDescriptor(descriptor, editor_state, stack_memory);
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+	DirectoryExplorerSetDescriptor(descriptor, editor_state, &stack_memory);
 
 	return editor_state->ui_system->Create_Window(descriptor);
 }
@@ -392,8 +389,7 @@ void TickDirectoryExplorer(EditorState* editor_state)
 			data->allocator.Clear();
 			data->directories_ptrs.size = 0;
 
-			wchar_t _folder_path_wide_stream[256];
-			Stream<wchar_t> folder_path_wide_stream(_folder_path_wide_stream, 0);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, folder_path_wide_stream, 256);
 			folder_path_wide_stream.AddStream(project_file->path);
 			folder_path_wide_stream.Add(ECS_OS_PATH_SEPARATOR);
 			size_t folder_path_wide_size_return = folder_path_wide_stream.size;
@@ -434,8 +430,7 @@ void TickDirectoryExplorer(EditorState* editor_state)
 		// Copy the current directory if it changed from the directory selectable inside file explorer
 		// And make the parent state true in order to have it appear here
 		if (data->current_path->size > 0) {
-			char temp_characters[512];
-			CapacityStream<char> ascii_stream(temp_characters, 0, 512);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_stream, 512);
 			Path starting_path = *data->current_path;
 			starting_path.buffer += project_file->path.size + 1;
 			starting_path.size -= project_file->path.size + 1;

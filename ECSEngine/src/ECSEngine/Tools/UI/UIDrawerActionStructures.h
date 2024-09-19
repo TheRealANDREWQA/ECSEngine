@@ -118,14 +118,14 @@ namespace ECSEngine {
 			void SetNewZoom(float2 new_zoom);
 
 			// returns whether or not it deleted something
-			bool Backspace(unsigned int* text_count, unsigned int* text_position, char* text);
+			bool Backspace(unsigned int* text_count, unsigned int* text_position, CapacityStream<char>* text);
 
 			void PasteCharacters(
 				const char* characters,
 				unsigned int character_count,
 				UISystem* system,
 				unsigned int window_index,
-				char* deleted_characters,
+				CapacityStream<char>* deleted_characters,
 				unsigned int* deleted_character_count,
 				unsigned int* delete_position
 			);
@@ -644,7 +644,7 @@ namespace ECSEngine {
 			void GetCurrentLabel(void* storage) const;
 
 			// Returns the total size of the structure with the string embedded
-			unsigned int WriteLabel(const void* untyped_data);
+			unsigned int WriteLabel(const void* untyped_data, size_t storage_capacity);
 
 			UIDrawerLabelHierarchyData* hierarchy;
 			unsigned int label_size;
@@ -655,7 +655,7 @@ namespace ECSEngine {
 
 			// Returns the total size of the structure with the label embedded (both for normal string
 			// or untyped data). Must set the hierarchy before calling this function
-			unsigned int WriteLabel(const void* untyped_data);
+			unsigned int WriteLabel(const void* untyped_data, size_t storage_capacity);
 
 			inline bool IsTheSameData(const LabelHierarchyClickActionData* other) const {
 				return other != nullptr && hierarchy == other->hierarchy;
@@ -670,7 +670,7 @@ namespace ECSEngine {
 
 		// Wrapps a base data with a user supplied callback
 		struct ECSENGINE_API ActionWrapperWithCallbackData {
-			unsigned int WriteCallback(UIActionHandler handler);
+			unsigned int WriteCallback(UIActionHandler handler, size_t storage_capacity);
 
 			UIActionHandler GetCallback() const;
 

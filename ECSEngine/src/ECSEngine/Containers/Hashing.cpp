@@ -90,7 +90,6 @@ namespace ECSEngine {
 		else {
 			temp_buffer.CopyOther(base.ptr, base.size);
 			temp_buffer.Add(suffix);
-			temp_buffer.AssertCapacity();
 			return temp_buffer;
 		}
 	}

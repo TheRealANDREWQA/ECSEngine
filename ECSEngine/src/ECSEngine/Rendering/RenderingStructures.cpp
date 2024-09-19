@@ -1949,7 +1949,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	uint2 Material::FindTag(Stream<char> tag, bool vertex_shader) const
+	uint2 Material::FindTag(Stream<char> tag, bool is_vertex_shader) const
 	{
 		auto find = [&](unsigned char count, const uchar2* tags) {
 			for (unsigned char index = 0; index < count; index++) {
@@ -1961,7 +1961,7 @@ namespace ECSEngine {
 			return (unsigned char)UCHAR_MAX;
 		};
 
-		if (vertex_shader) {
+		if (is_vertex_shader) {
 			unsigned char found_index = find(v_tag_count, v_tags);
 			if (found_index != UCHAR_MAX) {
 				return { v_tag_buffer_index[found_index], v_tag_byte_offset[found_index] };

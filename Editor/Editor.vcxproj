@@ -248,6 +248,7 @@
     <ClInclude Include="src\UI\Inspector\InspectorMeshFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorMiscFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorModule.h" />
+    <ClInclude Include="src\UI\Inspector\InspectorRecordingFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorShaderFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorTextFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorTextureFile.h" />
@@ -333,6 +334,7 @@
     <ClCompile Include="src\UI\Inspector\InspectorMeshFile.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorMiscFile.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorModule.cpp" />
+    <ClCompile Include="src\UI\Inspector\InspectorRecordingFile.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorSandboxSettings.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorShaderFile.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorTextFile.cpp" />

@@ -1006,18 +1006,20 @@ namespace ECSEngine {
 				}
 			}
 
-			Stream<void> data[64];
+			ECS_STACK_CAPACITY_STREAM(Stream<void>, data, 64);
+			data.AssertCapacity(image.GetImageCount());
 			const auto* images = image.GetImages();
 			for (size_t index = 0; index < image.GetImageCount(); index++) {
 				data[index] = { images[index].pixels, images[index].slicePitch };
 			}
+			data.size = image.GetImageCount();
 
 			CompressTextureDescriptor compress_descriptor;
 			compress_descriptor.gpu_lock = load_descriptor.gpu_lock;
 			if (descriptor->srgb) {
 				compress_descriptor.flags |= ECS_TEXTURE_COMPRESS_SRGB;
 			}
-			Texture2D texture = CompressTexture(m_graphics, Stream<Stream<void>>(data, image.GetImageCount()), images[0].width, images[0].height, descriptor->compression, temporary, compress_descriptor);
+			Texture2D texture = CompressTexture(m_graphics, data, images[0].width, images[0].height, descriptor->compression, temporary, compress_descriptor);
 			if (texture.Interface() == nullptr) {
 				return nullptr;
 			}

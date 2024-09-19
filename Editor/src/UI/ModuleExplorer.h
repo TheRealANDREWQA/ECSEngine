@@ -8,7 +8,7 @@ ECS_TOOLS;
 
 struct EditorState;
 
-void ModuleExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
+void ModuleExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory);
 
 void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 

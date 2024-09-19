@@ -55,8 +55,7 @@ void AddExistingProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
-	char temp_characters[256];
-	CapacityStream<char> error_message(temp_characters, 0, 256);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 	OS::FileExplorerGetFileData get_data;
 	get_data.error_message = error_message;
 	get_data.path = path;
@@ -80,8 +79,8 @@ bool LoadHubProjectInfo(EditorState* editor_state, unsigned int index) {
 	AllocatorPolymorphic allocator = editor_state->hub_data->allocator;
 
 	ProjectOperationData open_data;
-	char error_message[256];
-	open_data.error_message.InitializeFromBuffer(error_message, 0, 256);
+	ECS_STACK_CAPACITY_STREAM(char, error_message_storage, 512);
+	open_data.error_message = error_message_storage;
 	open_data.file_data = &editor_state->hub_data->projects[index].data;
 	open_data.editor_state = editor_state;
 
@@ -89,7 +88,7 @@ bool LoadHubProjectInfo(EditorState* editor_state, unsigned int index) {
 
 	if (!success) {
 		editor_state->hub_data->projects[index].error_message.Deallocate(allocator);
-		editor_state->hub_data->projects[index].error_message.InitializeAndCopy(allocator, error_message);
+		editor_state->hub_data->projects[index].error_message.InitializeAndCopy(allocator, open_data.error_message);
 	}
 
 	return success;
@@ -289,11 +288,9 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 	ecs_text.size *= {1.75f, 1.75f};
 	ecs_text.character_spacing *= 1.75f;
 
-	char ecs_characters[128];
-	memcpy(ecs_characters, "ECSEngine Version: ", 19);
-	size_t version_size = strlen(VERSION_DESCRIPTION);
-	memcpy(ecs_characters + 19, VERSION_DESCRIPTION, version_size);
-	ecs_characters[19 + version_size] = '\0';
+	ECS_STACK_CAPACITY_STREAM(char, ecs_characters, 128);
+	ecs_characters.AddStreamAssert("ECSEngine Version: ");
+	ecs_characters.AddStreamAssert(VERSION_DESCRIPTION);
 	config.AddFlag(ecs_text);
 
 	drawer.Text(UI_CONFIG_TEXT_PARAMETERS, config, ecs_characters);
@@ -308,11 +305,9 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 	config.AddFlag(transform);
 	config.AddFlag(alignment);
 
-	char user_characters[128];
-	memcpy(user_characters, "User: ", 6);
-	size_t user_size = strlen(USER);
-	memcpy(user_characters + 6, USER, user_size);
-	user_characters[6 + user_size] = '\0';
+	ECS_STACK_CAPACITY_STREAM(char, user_characters, 128);
+	user_characters.AddStreamAssert("User: ");
+	user_characters.AddStreamAssert(USER);
 	drawer.TextLabel(UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_ABSOLUTE_TRANSFORM
 		| UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_TEXT_PARAMETERS, config, user_characters);
 
@@ -417,8 +412,6 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 	const size_t ROW_LABEL_CONFIGURATION = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_ABSOLUTE_TRANSFORM
 		| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
 
-	unsigned int invalid_indices_buffer[128];
-	Stream<unsigned int> invalid_indices = Stream<unsigned int>(invalid_indices_buffer, 0);
 	auto row_lambda = [&](unsigned int index) {
 		float2 row_start_position = { table_start_position.x, drawer.GetCurrentPositionNonOffset().y };
 
@@ -435,9 +428,9 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 			alignment.vertical = ECS_UI_ALIGN_TOP;
 			config.AddFlag(alignment);
 
-			char ascii_name[256];
+			ECS_STACK_CAPACITY_STREAM(char, ascii_name, 256);
 			Stream<wchar_t> path_stem = PathStem(data->projects[index].data.path);
-			ConvertWideCharsToASCII(path_stem.buffer, ascii_name, path_stem.size, 256);
+			ConvertWideCharsToASCII(path_stem, ascii_name);
 			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, ascii_name);
 
 			alignment.vertical = ECS_UI_ALIGN_BOTTOM;
@@ -483,9 +476,8 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 		};
 
 		if (data->projects[index].error_message.size == 0) {
-			char last_write_time[128];
-			last_write_time[0] = '\0';
-			bool succeeded = OS::GetRelativeFileTimes(data->projects[index].data.path, nullptr, nullptr, last_write_time);
+			ECS_STACK_CAPACITY_STREAM(char, last_write_time, 128);
+			bool succeeded = OS::GetRelativeFileTimes(data->projects[index].data.path, nullptr, nullptr, &last_write_time);
 
 			if (succeeded) {
 				UIDrawConfig config;

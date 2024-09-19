@@ -67,8 +67,8 @@ static void InspectorPrivateAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {	
-	unsigned int inspector_index = *(unsigned int*)stack_memory;
+void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory) {	
+	unsigned int inspector_index = *(unsigned int*)stack_memory->buffer;
 
 	descriptor.draw = InspectorWindowDraw;
 	descriptor.window_data = editor_state;
@@ -82,7 +82,8 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 	descriptor.private_action_data = stack_memory;
 	descriptor.private_action_data_size = sizeof(inspector_index);
 
-	CapacityStream<char> inspector_name(OffsetPointer(stack_memory, sizeof(unsigned int)), 0, 128);
+	const size_t MAX_WINDOW_NAME = 128;
+	CapacityStream<char> inspector_name(stack_memory->Reserve(MAX_WINDOW_NAME), 0, MAX_WINDOW_NAME);
 	GetInspectorName(inspector_index, inspector_name);
 	descriptor.window_name = inspector_name.buffer;
 }
@@ -327,10 +328,10 @@ unsigned int CreateInspectorWindow(EditorState* editor_state, unsigned int inspe
 	descriptor.initial_size_x = WINDOW_SIZE.x;
 	descriptor.initial_size_y = WINDOW_SIZE.y;
 
-	size_t stack_memory[128];
-	unsigned int* stack_inspector_index = (unsigned int*)stack_memory;
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+	unsigned int* stack_inspector_index = stack_memory.Reserve<unsigned int>();
 	*stack_inspector_index = inspector_index;
-	InspectorSetDescriptor(descriptor, editor_state, stack_memory);
+	InspectorSetDescriptor(descriptor, editor_state, &stack_memory);
 
 	return editor_state->ui_system->Create_Window(descriptor);
 }

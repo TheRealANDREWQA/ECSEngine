@@ -772,7 +772,7 @@ namespace ECSEngine {
 			size_t Serialize(void* buffer) const;
 			size_t SerializeSize() const;
 			// the characters will be copied onto the name stack buffer and then the system can safely assign the name
-			size_t LoadFromFile(const void* buffer, Stream<char>& name_stack);
+			size_t LoadFromFile(const void* buffer, CapacityStream<char>& name_stack);
 
 			ECS_INLINE Stream<char> DrawableName() const {
 				return { name.buffer, name_drawable_count };
@@ -1017,10 +1017,12 @@ namespace ECSEngine {
 
 		// If the characters pointer is nullptr, it means that the data is relative
 		struct UITextTooltipHoverableData {
-			unsigned int Write(Stream<char> copy_characters) {
+			unsigned int Write(Stream<char> copy_characters, size_t storage_capacity) {
+				unsigned int total_size = sizeof(*this) + copy_characters.size * sizeof(char);
+				ECS_ASSERT(total_size <= storage_capacity);
 				memcpy(OffsetPointer(this, sizeof(*this)), copy_characters.buffer, copy_characters.size * sizeof(char));
 				characters = { nullptr, copy_characters.size };
-				return sizeof(*this) + copy_characters.size * sizeof(char);
+				return total_size;
 			}
 
 			Stream<char> GetCharacters() const {

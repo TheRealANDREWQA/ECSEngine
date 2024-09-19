@@ -34,14 +34,14 @@ namespace ECSEngine {
 		ECSENGINE_API ReflectionStreamFieldType ConvertStringToStreamFieldType(Stream<char> string);
 
 		// Uses a jump table to convert the type
-		// The Enum type is used for ASCII stream. Wchar_t will be treated as a wide character stream (In both cases a Stream<char/wchar_t>* is expected as data)
+		// The Enum type is used for ASCII stream. Wchar_t will be treated as a wide character stream (In both cases a Stream<char/wchar_t>* is expected as data->buffer)
 		// Returns the amount of characters written
 		ECSENGINE_API size_t ConvertReflectionBasicFieldTypeToString(ReflectionBasicFieldType type, const void* data, CapacityStream<char>& characters);
 
 		// Uses a jump table to convert the type
-		// The Enum type is used for ASCII stream. Wchar_t will be treated as a wide character stream (In both cases a Stream<char/wchar_t>* is expected as data)
+		// The Enum type is used for ASCII stream. Wchar_t will be treated as a wide character stream (In both cases a Stream<char/wchar_t>* is expected as data->buffer)
 		// Returns whether or not it succeded - it can fail for example for when there are alphabet characters mixed with digits for integers
-		ECSENGINE_API bool ParseReflectionBasicFieldType(ReflectionBasicFieldType type, Stream<char> characters, void* data);
+		ECSENGINE_API bool ParseReflectionBasicFieldType(ReflectionBasicFieldType type, Stream<char> characters, CapacityStream<void>* data);
 
 		// Returns how many characters this takes up
 		ECSENGINE_API size_t ConvertReflectionBasicFieldTypeToStringSize(ReflectionBasicFieldType type, const void* data);

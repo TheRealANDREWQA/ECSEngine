@@ -1124,12 +1124,12 @@ namespace ECSEngine {
 					unsigned int entity_count = archetype_base->EntityCount();
 					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
 						Entity entity = archetype_base->GetEntityAtIndex(entity_index);
-						void* component = archetype_base->GetComponentByIndex(entity_index, component_index);
+						void* component_data = archetype_base->GetComponentByIndex(entity_index, component_index);
 						if constexpr (early_exit) {
-							return functor(entity, component);
+							return functor(entity, component_data);
 						}
 						else {
-							functor(entity, component);
+							functor(entity, component_data);
 						}
 					}
 				}
@@ -1152,12 +1152,12 @@ namespace ECSEngine {
 					unsigned int entity_count = archetype_base->EntityCount();
 					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
 						Entity entity = archetype_base->GetEntityAtIndex(entity_index);
-						const void* component = archetype_base->GetComponentByIndex(entity_index, component_index);
+						const void* component_data = archetype_base->GetComponentByIndex(entity_index, component_index);
 						if constexpr (early_exit) {
-							return functor(entity, component);
+							return functor(entity, component_data);
 						}
 						else {
-							functor(entity, component);
+							functor(entity, component_data);
 						}
 					}
 				}

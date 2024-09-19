@@ -848,10 +848,10 @@ static void FilterActive(ActionData* action_data) {
 
 	Path filename = PathFilename(data->selection);
 
-	char temp_characters[512];
-	CapacityStream<char> ascii_path(temp_characters, 0, 512);
+	ECS_STACK_CAPACITY_STREAM(char, ascii_path, 512);
 	ConvertWideCharsToASCII(filename, ascii_path);
-	ascii_path[ascii_path.size] = '\0';
+	ascii_path.AddAssert('\0');
+	ascii_path.size--;
 
 	FileExplorerData* file_explorer_data = data->editor_state->file_explorer_data;
 	*is_valid = strstr(ascii_path.buffer, file_explorer_data->filter_stream.buffer) != nullptr;
@@ -2254,11 +2254,11 @@ data->file_functors.Insert(action, identifier);
 		drawer.min_render_bounds.x = min_x_render_bound;
 
 		ProjectFile* project_file = editor_state->project_file;
-		char temp_characters[512];
-		CapacityStream<char> ascii_path(temp_characters, 0, 512);
+		ECS_STACK_CAPACITY_STREAM(char, ascii_path, 512);
 		Path wide_path = { data->current_directory.buffer + project_file->path.size + 1, data->current_directory.size - project_file->path.size - 1 };
 		ConvertWideCharsToASCII(wide_path, ascii_path);
-		ascii_path[ascii_path.size] = '\0';
+		ascii_path.AddAssert('\0');
+		ascii_path.size--;
 
 		size_t total_path_size = project_file->path.size + 1;
 		char* delimiter = strchr(ascii_path.buffer, ECS_OS_PATH_SEPARATOR_ASCII);
@@ -2841,7 +2841,7 @@ static bool FileExplorerRetainedMode(void* window_data, WindowRetainedModeInfo* 
 	return true;
 }
 
-void FileExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void FileExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	descriptor.window_name = FILE_EXPLORER_WINDOW_NAME;
 	descriptor.window_data = editor_state;
@@ -2864,8 +2864,8 @@ unsigned int CreateFileExplorerWindow(EditorState* editor_state) {
 	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.x);
 	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.y);
 
-	size_t stack_memory[128];
-	FileExplorerSetDescriptor(descriptor, editor_state, stack_memory);
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+	FileExplorerSetDescriptor(descriptor, editor_state, &stack_memory);
 
 	return editor_state->ui_system->Create_Window(descriptor);
 }

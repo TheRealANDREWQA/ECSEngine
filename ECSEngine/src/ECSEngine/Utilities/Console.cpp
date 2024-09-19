@@ -45,31 +45,29 @@ namespace ECSEngine {
 		ECS_STACK_VOID_STREAM(file_buffering, FILE_BUFFERING_STACK_SIZE);
 
 		bool success = true;
-		const char header_annotation[] = "**********************************************\n";
-		size_t annotation_size = ECS_COUNTOF(header_annotation) - 1;
-		success &= WriteFile(file, { header_annotation, annotation_size }, file_buffering);
 
-		char time_characters[256];
-		Stream<char> time_stream = Stream<char>(time_characters, 0);
-		ConvertIntToChars(time_stream, current_date.hour);
-		time_stream.Add(':');
-		ConvertIntToChars(time_stream, current_date.minute);
-		time_stream.Add(':');
-		ConvertIntToChars(time_stream, current_date.seconds);
-		time_stream.Add(':');
-		ConvertIntToChars(time_stream, current_date.milliseconds);
-		time_stream.Add(' ');
-		ConvertIntToChars(time_stream, current_date.day);
-		time_stream.Add('-');
-		ConvertIntToChars(time_stream, current_date.month);
-		time_stream.Add('-');
-		ConvertIntToChars(time_stream, current_date.year);
-		time_stream.Add(' ');
+		ECS_STACK_CAPACITY_STREAM(char, time_characters, 256);
+		Stream<char> separator_characters = "**********************************************\n";
+		time_characters.AddStreamAssert(separator_characters);
+		ConvertIntToChars(time_characters, current_date.hour);
+		time_characters.AddAssert(':');
+		ConvertIntToChars(time_characters, current_date.minute);
+		time_characters.AddAssert(':');
+		ConvertIntToChars(time_characters, current_date.seconds);
+		time_characters.AddAssert(':');
+		ConvertIntToChars(time_characters, current_date.milliseconds);
+		time_characters.AddAssert(' ');
+		ConvertIntToChars(time_characters, current_date.day);
+		time_characters.AddAssert('-');
+		ConvertIntToChars(time_characters, current_date.month);
+		time_characters.AddAssert('-');
+		ConvertIntToChars(time_characters, current_date.year);
+		time_characters.AddAssert(' ');
 		const char description[] = "Console output\n";
-		time_stream.AddStream(Stream<char>(description, ECS_COUNTOF(description) - 1));
+		time_characters.AddStreamAssert(Stream<char>(description, ECS_COUNTOF(description) - 1));
+		time_characters.AddStreamAssert(separator_characters);
 
-		success &= WriteFile(file, { time_characters, time_stream.size }, file_buffering);
-		success &= WriteFile(file, { header_annotation, annotation_size }, file_buffering);
+		success &= WriteFile(file, time_characters, file_buffering);
 
 #pragma endregion
 
@@ -239,7 +237,7 @@ namespace ECSEngine {
 		size_t format_character_count = GetFormatCharacterCount();
 
 		bool not_enough_space = false;
-		Stream<char> allocation = message_allocator.Request(message.size + format_character_count + 1, not_enough_space);
+		CapacityStream<char> allocation = message_allocator.Request(message.size + format_character_count + 1, not_enough_space);
 		ECS_HARD_ASSERT(!not_enough_space, "Console message allocator ran out of space");
 
 		allocation.size = 0;
@@ -250,6 +248,8 @@ namespace ECSEngine {
 		allocation.size += message.size;
 		allocation[allocation.size] = '\0';
 		console_message.message = allocation;
+
+		message_allocator.FinishRequest(allocation.capacity);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
@@ -398,14 +398,15 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::WriteFormatCharacters(Stream<char>& characters)
+	void Console::WriteFormatCharacters(CapacityStream<char>& characters)
 	{
 		Date current_date = OS::GetLocalTime();
-		characters.Add('[');
+		characters.AddAssert('[');
 		ConvertDateToString(current_date, characters, format);
-		characters.Add(']');
-		characters.Add(' ');
-		characters[characters.size] = '\0';
+		characters.AddAssert(']');
+		characters.AddAssert(' ');
+		characters.AddAssert('\0');
+		characters.size--;
 	}
 
 	// -------------------------------------------------------------------------------------------------------

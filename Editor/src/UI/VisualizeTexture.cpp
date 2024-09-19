@@ -88,12 +88,13 @@ void VisualizeTextureUIAdditionalDraw(void* window_data, UIDrawerDescriptor* dra
 	}
 }
 
-void VisualizeTextureUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void VisualizeTextureUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
-	unsigned int index = *(unsigned int*)stack_memory;
+	unsigned int index = *(unsigned int*)stack_memory->buffer;
 
-	CapacityStream<char>* window_name = (CapacityStream<char>*)OffsetPointer(stack_memory, sizeof(index));
-	window_name->InitializeFromBuffer(OffsetPointer(window_name, sizeof(*window_name)), 0, 128);
+	CapacityStream<char>* window_name = stack_memory->Reserve<CapacityStream<char>>();
+	const size_t MAX_WINDOW_NAME = 128;;
+	window_name->InitializeFromBuffer(stack_memory->Reserve(MAX_WINDOW_NAME), 0, MAX_WINDOW_NAME);
 	GetVisualizeTextureUIWindowName(index, *window_name);
 
 	VisualizeTextureCreateData create_data;
@@ -101,7 +102,7 @@ void VisualizeTextureUISetDecriptor(UIWindowDescriptor& descriptor, EditorState*
 	create_data.window_name = *window_name;
 	create_data.additional_draw = VisualizeTextureUIAdditionalDraw;
 	create_data.additional_draw_data = editor_state;
-	descriptor = VisualizeTextureWindowDescriptor(editor_state->ui_system, &create_data, OffsetPointer(window_name, sizeof(*window_name) + window_name->capacity));
+	descriptor = VisualizeTextureWindowDescriptor(editor_state->ui_system, &create_data, stack_memory);
 }
 
 // ------------------------------------------------------------------------------------------------------------

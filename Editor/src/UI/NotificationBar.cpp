@@ -12,9 +12,9 @@ struct NotificationBarData {
 
 static ECS_FORMAT_DATE_FLAGS NOTIFICATION_HISTORY_STRING_FORMAT = ECS_FORMAT_DATE_HOUR | ECS_FORMAT_DATE_MINUTES | ECS_FORMAT_DATE_SECONDS;
 
-void NotificationBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void NotificationBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
-	NotificationBarData* data = (NotificationBarData*)stack_memory;
+	NotificationBarData* data = stack_memory->Reserve<NotificationBarData>();
 	data->editor_state = editor_state;
 
 	descriptor.draw = NotificationBarDraw;
@@ -157,8 +157,8 @@ unsigned int CreateNotificationBarWindow(EditorState* editor_state) {
 	descriptor.initial_size_x = window_size.x;
 	descriptor.initial_size_y = window_size.y;
 
-	size_t stack_memory[128];
-	NotificationBarSetDescriptor(descriptor, editor_state, stack_memory);
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+	NotificationBarSetDescriptor(descriptor, editor_state, &stack_memory);
 
 	return ui_system->Create_Window(descriptor);
 }

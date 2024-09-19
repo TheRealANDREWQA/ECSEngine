@@ -37,6 +37,6 @@ namespace ECSEngine {
 		return (void*)ptr;
 	}
 
-	void AtomicLinearAllocator::Deallocate(const void* buffer) {}
+	void AtomicLinearAllocator::Deallocate(const void* _buffer) {}
 
 }

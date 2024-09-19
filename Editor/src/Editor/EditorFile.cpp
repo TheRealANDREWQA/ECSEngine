@@ -115,8 +115,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 
 	Stream<char> file_data = ReadWholeFileText(EDITOR_FILE, editor_state->EditorAllocator());
 
-	const char* _invalid_file_paths[64];
-	Stream<Stream<char>> invalid_file_paths(_invalid_file_paths, 0);
+	ECS_STACK_CAPACITY_STREAM(Stream<char>, invalid_file_paths, 64);
 
 	if (file_data.size > 0) {
 		ResizableStream<Stream<char>> lines = { editor_state->EditorAllocator(), 8 };
@@ -156,7 +155,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 						void* allocation = Allocate(editor_state->EditorAllocator(), sizeof(char) * (wide_path.size + 1), alignof(char));
 						CapacityStream<char> allocated_path(allocation, 0, wide_path.size + 1);
 						ConvertWideCharsToASCII(wide_path, allocated_path);
-						invalid_file_paths.Add(allocated_path.buffer);
+						invalid_file_paths.AddAssert(allocated_path);
 					}
 					else {
 						AddHubProject(editor_state, wide_path);
@@ -168,7 +167,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 		// Make an allocation for the stream pointers
 		if (invalid_file_paths.size > 0) {
 			void* allocation = Allocate(editor_state->EditorAllocator(), sizeof(Stream<char>) * invalid_file_paths.size);
-			memcpy(allocation, invalid_file_paths.buffer, sizeof(Stream<char>) * invalid_file_paths.size);
+			invalid_file_paths.CopyTo(allocation);
 			CreateMissingProjectWindow(editor_state, Stream<Stream<char>>(allocation, invalid_file_paths.size));
 
 			SaveEditorFile(editor_state);

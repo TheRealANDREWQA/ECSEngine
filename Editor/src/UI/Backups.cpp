@@ -11,7 +11,7 @@ using namespace ECSEngine;
 
 // ----------------------------------------------------------------------------------------------------------------
 
-void BackupsWindowSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void BackupsWindowSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	descriptor.window_name = BACKUPS_WINDOW_NAME;
 

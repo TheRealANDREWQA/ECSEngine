@@ -629,13 +629,13 @@ static void EntitiesUIDestroyAction(ActionData* action_data) {
 	draw_data->virtual_global_components_entities.Deallocate(draw_data->editor_state->EditorAllocator());
 }
 
-void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
-	unsigned int window_index = *(unsigned int*)stack_memory;
+	unsigned int window_index = *(unsigned int*)stack_memory->buffer;
 
 	ECS_ASSERT(window_index < MAX_ENTITIES_UI_WINDOWS);
 
-	EntitiesUIData* data = (EntitiesUIData*)OffsetPointer(stack_memory, sizeof(unsigned int));
+	EntitiesUIData* data = stack_memory->Reserve<EntitiesUIData>();
 	data->editor_state = editor_state;
 	data->sandbox_index = 0;
 	data->virtual_global_components_entities.InitializeFromBuffer(nullptr, 0);
@@ -994,10 +994,10 @@ unsigned int CreateEntitiesUIWindow(EditorState* editor_state, unsigned int wind
 {
 	UIWindowDescriptor descriptor;
 
-	size_t stack_memory[256];
-	unsigned int* stack_index = (unsigned int*)stack_memory;
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 2);
+	unsigned int* stack_index = stack_memory.Reserve<unsigned int>();
 	*stack_index = window_index;
-	EntitiesUISetDescriptor(descriptor, editor_state, stack_memory);
+	EntitiesUISetDescriptor(descriptor, editor_state, &stack_memory);
 
 	descriptor.initial_size_x = 0.6f;
 	descriptor.initial_size_y = 1.0f;

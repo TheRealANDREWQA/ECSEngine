@@ -327,8 +327,9 @@ namespace ECSEngine {
 		}
 		else {
 			// Need to call the GPU version.
-			DirectX::Image initial_images[32];
-			void* mip_data[32];
+			ECS_STACK_CAPACITY_STREAM(DirectX::Image, initial_images, 64);
+			ECS_STACK_CAPACITY_STREAM(void*, mip_data, 64);
+			mip_data.AssertCapacity(data.size);
 			for (size_t index = 0; index < data.size; index++) {
 				mip_data[index] = data[index].buffer;
 			}
@@ -341,9 +342,9 @@ namespace ECSEngine {
 			}
 			DirectX::ScratchImage initial_image;
 			HRESULT dx_result = initial_image.Initialize2DNoMemory(
-				(const void**)mip_data, 
+				(const void**)mip_data.buffer, 
 				data.size, 
-				initial_images, 
+				initial_images.buffer, 
 				GetGraphicsNativeFormat(non_compressed_format), 
 				width, 
 				height, 
@@ -372,7 +373,7 @@ namespace ECSEngine {
 			__try {
 				result = DirectX::CompressGPU(
 					graphics->GetDevice(),
-					initial_images,
+					initial_images.buffer,
 					data.size,
 					initial_image.GetMetadata(),
 					GetGraphicsNativeFormat(compressed_format),

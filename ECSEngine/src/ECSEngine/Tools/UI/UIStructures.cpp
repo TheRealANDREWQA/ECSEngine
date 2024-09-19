@@ -670,7 +670,7 @@ namespace ECSEngine {
 			return size;
 		}
 
-		size_t UIWindow::LoadFromFile(const void* buffer, Stream<char>& name_stack)
+		size_t UIWindow::LoadFromFile(const void* buffer, CapacityStream<char>& name_stack)
 		{
 			uintptr_t ptr = (uintptr_t)buffer;
 
@@ -702,10 +702,10 @@ namespace ECSEngine {
 
 			// name
 			const unsigned short* name_length = (const unsigned short*)ptr;
-			name_stack.size = *name_length;
 			ptr += sizeof(unsigned short);
-			memcpy(name_stack.buffer, (const void*)ptr, sizeof(char) * name_stack.size);
-			name_stack[name_stack.size] = '\0';
+			name_stack.AddStreamAssert({ (char*)ptr, *name_length });
+			name_stack.AddAssert('\0');
+			name_stack.size--;
 			ptr += sizeof(char) * name_stack.size;
 
 			return ptr - (uintptr_t)buffer;

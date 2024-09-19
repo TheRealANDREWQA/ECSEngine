@@ -54,8 +54,9 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	// returns the count of decoded numbers
-	size_t ParseNumbersFromCharString(Stream<char> characters, unsigned int* number_buffer) {
-		size_t count = 0, index = 0;
+	size_t ParseNumbersFromCharString(Stream<char> characters, CapacityStream<unsigned int>* number_buffer) {
+		unsigned int initial_size = number_buffer->size;
+		size_t index = 0;
 		while (index < characters.size) {
 			size_t number = 0;
 			// reading characters until the first digit
@@ -68,15 +69,16 @@ namespace ECSEngine {
 				number = number * 10 + (characters[index] - '0');
 				index++;
 			}
-			number_buffer[count++] = number;
+			number_buffer->AddAssert(number);
 		}
-		return count;
+		return number_buffer->size - initial_size;
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	size_t ParseNumbersFromCharString(Stream<char> characters, int* number_buffer) {
-		size_t count = 0, index = 0;
+	size_t ParseNumbersFromCharString(Stream<char> characters, CapacityStream<int>* number_buffer) {
+		unsigned int initial_size = number_buffer->size;
+		size_t index = 0;
 		while (index < characters.size) {
 			size_t number = 0;
 
@@ -91,9 +93,9 @@ namespace ECSEngine {
 				number = number * 10 + characters[index] - '0';
 				index++;
 			}
-			number_buffer[count++] = is_negative ? -(int)number : (int)number;
+			number_buffer->AddAssert(is_negative ? -(int)number : (int)number);
 		}
-		return count;
+		return number_buffer->size - initial_size;
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -148,96 +150,77 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	size_t ConvertDurationToChars(size_t duration, char* characters)
+	size_t ConvertDurationToChars(size_t duration, CapacityStream<char>& characters)
 	{
-		auto append_lambda = [characters](size_t integer) {
-			size_t character_count = strlen(characters);
-			Stream<char> stream = Stream<char>(characters, character_count);
-			return ConvertIntToCharsFormatted(stream, (int64_t)integer);
-		};
-
-		size_t write_size = 0;
+		unsigned int initial_size = characters.size;
 		const char* string = nullptr;
 
 		// less than 10 seconds
 		if (duration < 10000) {
-			string = "Just now";
-			strcat(characters, string);
+			characters.AddStreamAssert("Just now");
 		}
 		// less than 60 seconds - 1 minute
 		else if (duration < 60'000) {
-			string = "Less than a minute ago";
-			strcat(characters, string);
+			characters.AddStreamAssert("Less than a minute ago");
 		}
 		// less than 60 minutes - 1 hour
 		else if (duration < 3'600'000) {
 			size_t minutes = duration / 60'000;
 
 			if (minutes > 1) {
-				string = " minutes ago";
-
-				write_size = append_lambda(minutes);
-				strcat(characters, string);
+				ConvertIntToChars(characters, minutes);
+				characters.AddStreamAssert(" minutes ago");
 			}
 			else {
-				string = "A minute ago";
-				strcat(characters, string);
+				characters.AddStreamAssert("A minute ago");
 			}
 		}
 		// less than a 24 hours - 1 day
 		else if (duration < 24 * 3'600'000) {
 			size_t hours = duration / 3'600'000;
 			if (hours > 1) {
-				string = " hours ago";
-				write_size = append_lambda(hours);
-				strcat(characters, string);
+				ConvertIntToChars(characters, hours);
+				characters.AddStreamAssert(" hours ago");
 			}
 			else {
-				string = "An hour ago";
-				strcat(characters, string);
+				characters.AddStreamAssert("An hour ago");
 			}
 		}
 		// less than a 30 days - 1 months
 		else if (duration < (size_t)30 * 24 * 3'600'000) {
 			size_t days = duration / (24 * 3'600'000);
 			if (days > 1) {
-				string = " days ago";
-				write_size = append_lambda(days);
-				strcat(characters, string);
+				ConvertIntToChars(characters, days);
+				characters.AddStreamAssert(" days ago");
 			}
 			else {
-				string = "A day ago";
-				strcat(characters, string);
+				characters.AddStreamAssert("A day ago");
 			}
 		}
 		// less than 12 months - 1 year
 		else if (duration < (size_t)12 * 30 * 24 * 3'600'000) {
 			size_t months = duration / ((size_t)30 * (size_t)24 * (size_t)3'600'000);
 			if (months > 1) {
-				string = " months ago";
-				write_size = append_lambda(months);
-				strcat(characters, string);
+				ConvertIntToChars(characters, months);
+				characters.AddStreamAssert(" months ago");
 			}
 			else {
-				string = "A month ago";
-				strcat(characters, string);
+				characters.AddStreamAssert("A month ago");
 			}
 		}
 		// years
 		else {
 			size_t years = duration / ((size_t)12 * (size_t)30 * (size_t)24 * (size_t)3'600'000);
 			if (years > 1) {
-				string = " years ago";
-				write_size = append_lambda(years);
-				strcat(characters, string);
+				ConvertIntToChars(characters, years);
+				characters.AddStreamAssert(" years ago");
 			}
 			else {
-				string = "A year ago";
-				strcat(characters, string);
+				characters.AddStreamAssert("A year ago");
 			}
 		}
 
-		return write_size + strlen(string);
+		return characters.size - initial_size;
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -995,16 +978,14 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename CharacterType>
-	static void ConvertDateToStringImplementation(Date date, Stream<CharacterType>& characters, ECS_FORMAT_DATE_FLAGS format_flags) {
+	static void ConvertDateToStringImplementation(Date date, CapacityStream<CharacterType>& characters, ECS_FORMAT_DATE_FLAGS format_flags) {
 		auto flag = [&](size_t integer) {
-			CharacterType temp[256];
-			Stream<CharacterType> temp_stream = Stream<CharacterType>(temp, 0);
+			ECS_STACK_CAPACITY_STREAM(CharacterType, temp_characters, 256);
 			if (integer < 10) {
-				temp_stream.Add(Character<CharacterType>('0'));
+				temp_characters.AddAssert(Character<CharacterType>('0'));
 			}
-			ConvertIntToChars(temp_stream, integer);
-
-			characters.AddStream(temp_stream);
+			ConvertIntToChars(temp_characters, integer);
+			characters.AddStreamAssert(temp_characters);
 		};
 
 		CharacterType colon_or_dash = (format_flags & ECS_FORMAT_DATE_COLON_INSTEAD_OF_DASH) == 0 ? Character<CharacterType>('-') : Character<CharacterType>(':');
@@ -1018,7 +999,7 @@ namespace ECSEngine {
 		bool has_minutes = false;
 		if (HasFlag(format_flags, ECS_FORMAT_DATE_MINUTES)) {
 			if (has_hour) {
-				characters.Add(colon_or_dash);
+				characters.AddAssert(colon_or_dash);
 			}
 			has_minutes = true;
 			flag(date.minute);
@@ -1027,7 +1008,7 @@ namespace ECSEngine {
 		bool has_seconds = false;
 		if (HasFlag(format_flags, ECS_FORMAT_DATE_SECONDS)) {
 			if (has_minutes || has_hour) {
-				characters.Add(colon_or_dash);
+				characters.AddAssert(colon_or_dash);
 			}
 			has_seconds = true;
 			flag(date.seconds);
@@ -1036,7 +1017,7 @@ namespace ECSEngine {
 		bool has_milliseconds = false;
 		if (HasFlag(format_flags, ECS_FORMAT_DATE_MILLISECONDS)) {
 			if (has_hour || has_minutes || has_seconds) {
-				characters.Add(colon_or_dash);
+				characters.AddAssert(colon_or_dash);
 			}
 			has_milliseconds = true;
 			flag(date.milliseconds);
@@ -1048,7 +1029,7 @@ namespace ECSEngine {
 		bool has_day = false;
 		if (HasFlag(format_flags, ECS_FORMAT_DATE_DAY)) {
 			if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
-				characters.Add(Character<CharacterType>(' '));
+				characters.AddAssert(Character<CharacterType>(' '));
 				has_space_been_written = true;
 			}
 			has_day = true;
@@ -1058,11 +1039,11 @@ namespace ECSEngine {
 		bool has_month = false;
 		if (HasFlag(format_flags, ECS_FORMAT_DATE_MONTH)) {
 			if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
-				characters.Add(Character<CharacterType>(' '));
+				characters.AddAssert(Character<CharacterType>(' '));
 				has_space_been_written = true;
 			}
 			if (has_day) {
-				characters.Add(Character<CharacterType>('-'));
+				characters.AddAssert(Character<CharacterType>('-'));
 			}
 			has_month = true;
 			flag(date.month);
@@ -1070,46 +1051,30 @@ namespace ECSEngine {
 
 		if (HasFlag(format_flags, ECS_FORMAT_DATE_YEAR)) {
 			if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
-				characters.Add(Character<CharacterType>(' '));
+				characters.AddAssert(Character<CharacterType>(' '));
 				has_space_been_written = true;
 			}
 			if (has_day || has_month) {
-				characters.Add(Character<CharacterType>('-'));
+				characters.AddAssert(Character<CharacterType>('-'));
 			}
 			flag(date.year);
 		}
 
-		characters[characters.size] = Character<CharacterType>('\0');
-	}
-
-	void ConvertDateToString(Date date, Stream<char>& characters, ECS_FORMAT_DATE_FLAGS format_flags)
-	{
-		ConvertDateToStringImplementation(date, characters, format_flags);
+		characters.AddAssert(Character<CharacterType>('\0'));
+		characters.size--;
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
 	void ConvertDateToString(Date date, CapacityStream<char>& characters, ECS_FORMAT_DATE_FLAGS format_flags)
 	{
-		Stream<char> stream(characters);
-		ConvertDateToString(date, stream, format_flags);
-		characters.size = stream.size;
-		characters.AssertCapacity();
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
-	void ConvertDateToString(Date date, Stream<wchar_t>& characters, ECS_FORMAT_DATE_FLAGS format_flags) {
 		ConvertDateToStringImplementation(date, characters, format_flags);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
 	void ConvertDateToString(Date date, CapacityStream<wchar_t>& characters, ECS_FORMAT_DATE_FLAGS format_flags) {
-		Stream<wchar_t> stream(characters);
-		ConvertDateToString(date, stream, format_flags);
-		characters.size = stream.size;
-		characters.AssertCapacity();
+		ConvertDateToStringImplementation(date, characters, format_flags);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -1831,21 +1796,20 @@ namespace ECSEngine {
 
 			size_t starting_swap_index = chars.size;
 
-			size_t count = 0;
-			char temp_characters[128];
+			ECS_STACK_CAPACITY_STREAM(char, temp_characters, 128);
 			if (value == 0) {
 				chars[chars.size++] = '0';
 			}
 			else {
 				while (value != 0) {
-					temp_characters[count++] = value % 10 + '0';
+					temp_characters.AddAssert(value % 10 + '0');
 					value /= 10;
 				}
 			}
 
 			size_t apostrophe_count = 0;
-			for (int64_t index = 0; index < count; index++) {
-				unsigned int copy_index = count - index - 1;
+			for (int64_t index = 0; index < temp_characters.size; index++) {
+				unsigned int copy_index = temp_characters.size - index - 1;
 				chars.Add(temp_characters[copy_index]);
 				if (copy_index % 3 == 0 && copy_index > 0) {
 					chars.Add(',');

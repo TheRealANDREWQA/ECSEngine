@@ -18,7 +18,7 @@ struct EditorState;
 enum EDITOR_MODULE_LOAD_STATUS : unsigned char;
 
 // In the stack memory the first 4 bytes should be the inspector index
-void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
+void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory);
 
 void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 

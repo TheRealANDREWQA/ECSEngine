@@ -9,7 +9,7 @@ ECS_TOOLS;
 
 // Stack memory size should be at least 512
 // In the stack memory the first 4 bytes need to be the sandbox index
-void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
+void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory);
 
 void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 

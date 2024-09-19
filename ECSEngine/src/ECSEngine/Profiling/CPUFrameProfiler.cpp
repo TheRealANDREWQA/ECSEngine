@@ -277,13 +277,13 @@ namespace ECSEngine {
 	void CPUFrameProfiler::Initialize(
 		AllocatorPolymorphic allocator, 
 		const TaskManager* task_manager, 
-		unsigned int entry_capacity, 
+		unsigned int _entry_capacity, 
 		size_t thread_arena_capacity, 
 		size_t thread_arena_backup_capacity
 	)
 	{
 		Stream<void*> thread_handles = { task_manager->m_thread_handles, task_manager->GetThreadCount() };
-		Initialize(allocator, thread_handles, entry_capacity, thread_arena_capacity, thread_arena_backup_capacity);
+		Initialize(allocator, thread_handles, _entry_capacity, thread_arena_capacity, thread_arena_backup_capacity);
 	}
 
 	void CPUFrameProfiler::RefreshOverallTime()

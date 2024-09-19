@@ -348,11 +348,11 @@ static bool CallModuleComponentBuildFunctionBase(
 	EditorClearMainThreadCrashHandlerIntercept();
 
 	if (task.function != nullptr) {
-		size_t wrapper_data_storage[256];
-		BuildFunctionWrapperData* wrapper_data = (BuildFunctionWrapperData*)wrapper_data_storage;
+		ECS_STACK_VOID_STREAM(wrapper_data_storage, ECS_KB * 4);
+		BuildFunctionWrapperData* wrapper_data = wrapper_data_storage.Reserve<BuildFunctionWrapperData>();
 		wrapper_data->locked_components_count = 0;
 		wrapper_data->locked_global_count = 0;
-		ECS_ASSERT(task.data_size + sizeof(*wrapper_data) <= sizeof(wrapper_data_storage));
+		wrapper_data_storage.AssertCapacity(task.data_size);
 
 		// We also need to register the component dependencies
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);

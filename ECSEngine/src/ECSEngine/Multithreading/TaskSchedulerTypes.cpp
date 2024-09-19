@@ -277,10 +277,10 @@ namespace ECSEngine {
 
 	bool TaskComponentQuery::Conflicts(const TaskComponentQuery* other) const
 	{
-		const Component* components = Components();
-		const ECS_ACCESS_TYPE* components_access = ComponentAccess();
-		const Component* shared_components = SharedComponents();
-		const ECS_ACCESS_TYPE* shared_components_access = SharedComponentAccess();
+		const Component* this_components = Components();
+		const ECS_ACCESS_TYPE* this_components_access = ComponentAccess();
+		const Component* this_shared_components = SharedComponents();
+		const ECS_ACCESS_TYPE* this_shared_components_access = SharedComponentAccess();
 
 		const Component* other_components = other->Components();
 		const ECS_ACCESS_TYPE* other_components_access = other->ComponentAccess();
@@ -289,8 +289,8 @@ namespace ECSEngine {
 
 		for (size_t index = 0; index < component_count; index++) {
 			for (size_t other_index = 0; other_index < other->component_count; other_index++) {
-				if (other_components[other_index] == components[index]) {
-					if (ECSEngine::Conflicts(other_components_access[other_index], components_access[index])) {
+				if (other_components[other_index] == this_components[index]) {
+					if (ECSEngine::Conflicts(other_components_access[other_index], this_components_access[index])) {
 						return true;
 					}
 					else {
@@ -302,8 +302,8 @@ namespace ECSEngine {
 
 		for (size_t index = 0; index < shared_component_count; index++) {
 			for (size_t other_index = 0; other_index < other->shared_component_count; other_index++) {
-				if (other_shared_components[other_index] == shared_components[index]) {
-					if (ECSEngine::Conflicts(other_shared_components_access[other_index], shared_components_access[index])) {
+				if (other_shared_components[other_index] == this_shared_components[index]) {
+					if (ECSEngine::Conflicts(other_shared_components_access[other_index], this_shared_components_access[index])) {
 						return true;
 					}
 					else {

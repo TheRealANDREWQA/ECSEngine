@@ -429,7 +429,8 @@ namespace ECSEngine {
 						// Get a new array entry
 						if constexpr (pointer_data_allocation_available) {
 							void* allocation = allocate(byte_size);
-							bool success = ParseReflectionBasicFieldType(basic_type, entry_characters, allocation);
+							CapacityStream<void> allocation_stream(allocation, 0, byte_size);
+							bool success = ParseReflectionBasicFieldType(basic_type, entry_characters, &allocation_stream);
 							if (!success) {
 								// The first argument is the buffer towards the data - in this case we don't care about it
 								deallocate(nullptr, byte_size);
@@ -443,7 +444,8 @@ namespace ECSEngine {
 							// Check to see if there is enough space on the stack buffer
 							if (temporary_stack_values.size + byte_size <= temporary_stack_values.capacity) {
 								void* allocation = temporary_stack_values.buffer + temporary_stack_values.size;
-								bool success = ParseReflectionBasicFieldType(basic_type, entry_characters, allocation);
+								CapacityStream<void> allocation_stream(allocation, 0, byte_size);
+								bool success = ParseReflectionBasicFieldType(basic_type, entry_characters, &allocation_stream);
 								if (success) {
 									temporary_stack_values.size += byte_size;
 									array_entries++;
@@ -459,7 +461,8 @@ namespace ECSEngine {
 
 								// Use again the stack buffer
 								allocation = temporary_stack_values.buffer;
-								bool success = ParseReflectionBasicFieldType(basic_type, entry_characters, allocation);
+								CapacityStream<void> allocation_stream(allocation, 0, byte_size);
+								bool success = ParseReflectionBasicFieldType(basic_type, entry_characters, &allocation_stream);
 								if (success) {
 									temporary_stack_values.size += byte_size;
 									array_entries++;
@@ -468,8 +471,8 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						char temp_memory[256];
-						bool success = ParseReflectionBasicFieldType(basic_type, entry_characters, temp_memory);
+						ECS_STACK_VOID_STREAM(temp_memory, 256);
+						bool success = ParseReflectionBasicFieldType(basic_type, entry_characters, &temp_memory);
 						if (success) {
 							extract_info(byte_size, in_file_field_index, true);
 						}
@@ -536,7 +539,8 @@ namespace ECSEngine {
 				Stream<char> stream_characters(equals + 1, new_line - equals - 1);
 				if constexpr (!extract_fields) {
 					TextDeserializeField field;
-					bool success = ParseReflectionBasicFieldType(basic_type, stream_characters, &field.floating);
+					CapacityStream<void> floating_field = { &field.floating, 0, sizeof(field.floating) };
+					bool success = ParseReflectionBasicFieldType(basic_type, stream_characters, &floating_field);
 
 					if (success) {
 						// The name must be copied
@@ -582,18 +586,18 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					char temp_memory[256];
-					bool success = ParseReflectionBasicFieldType(basic_type, stream_characters, temp_memory);
+					ECS_STACK_VOID_STREAM(temp_memory, 256);
+					bool success = ParseReflectionBasicFieldType(basic_type, stream_characters, &temp_memory);
 					if (success) {
 						// ASCII string
 						bool array_entry = false;
 						if (basic_type == ReflectionBasicFieldType::Enum) {
-							Stream<char>* string = (Stream<char>*)temp_memory;
+							Stream<char>* string = (Stream<char>*)temp_memory.buffer;
 							byte_size = (string->size + 1) * sizeof(char);
 							array_entry = true;
 						}
 						else if (basic_type == ReflectionBasicFieldType::Wchar_t) {
-							Stream<wchar_t>* string = (Stream<wchar_t>*)temp_memory;
+							Stream<wchar_t>* string = (Stream<wchar_t>*)temp_memory.buffer;
 							byte_size = (string->size + 1) * sizeof(wchar_t);
 							array_entry = true;
 						}

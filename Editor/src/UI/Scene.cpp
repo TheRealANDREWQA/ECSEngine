@@ -728,17 +728,17 @@ static void ScenePrivateAction(ActionData* action_data) {
 	}
 }
 
-void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
-	unsigned int index = *(unsigned int*)stack_memory;
+void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory) {
+	unsigned int index = *(unsigned int*)stack_memory->buffer;
 
-	SceneDrawData* data = (SceneDrawData*)OffsetPointer(stack_memory, sizeof(unsigned int));
+	SceneDrawData* data = (SceneDrawData*)stack_memory->Reserve<SceneDrawData>();
 
 	memset(data, 0, sizeof(*data));
 	data->editor_state = editor_state;
 
 	descriptor.draw = SceneUIWindowDraw;
 
-	ScenePrivateActionData* private_data = (ScenePrivateActionData*)OffsetPointer(data, sizeof(*data));
+	ScenePrivateActionData* private_data = stack_memory->Reserve<ScenePrivateActionData>();
 	private_data->editor_state = editor_state;
 	descriptor.private_action = ScenePrivateAction;
 	descriptor.private_action_data = private_data;
@@ -747,7 +747,8 @@ void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_sta
 	descriptor.destroy_action = SceneUIDestroy;
 	descriptor.destroy_action_data = editor_state;
 
-	CapacityStream<char> window_name(OffsetPointer(private_data, sizeof(*private_data)), 0, 128);
+	const size_t MAX_WINDOW_NAME_SIZE = 128;
+	CapacityStream<char> window_name(stack_memory->Reserve(MAX_WINDOW_NAME_SIZE), 0, MAX_WINDOW_NAME_SIZE);
 	GetSceneUIWindowName(index, window_name);
 
 	descriptor.window_name = window_name;

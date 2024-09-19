@@ -97,16 +97,17 @@ namespace ECSEngine {
 
 		void UIDrawerSentenceBase::SetWhitespaceCharacters(Stream<char> characters, char parse_token)
 		{
-			unsigned int temp_chars[256];
-			Stream<unsigned int> temp_stream = { temp_chars, 0 };
+			ECS_STACK_CAPACITY_STREAM(unsigned int, temp_stream, 256);
 			FindWhitespaceCharacters(temp_stream, characters, parse_token);
 
+			whitespace_characters.size = 0;
+			whitespace_characters.AssertCapacity(temp_stream.size);
 			for (size_t index = 0; index < temp_stream.size; index++) {
 				whitespace_characters[index].position = temp_stream[index];
 				whitespace_characters[index].type = characters[temp_stream[index]];
 			}
 			whitespace_characters.size = temp_stream.size;
-			whitespace_characters.Add({ (unsigned short)characters.size, parse_token });
+			whitespace_characters.AddAssert({ (unsigned short)characters.size, parse_token });
 		}
 
 		UIDrawerSliderFunctions UIDrawerGetFloatSliderFunctions(unsigned int& precision)
@@ -653,11 +654,11 @@ namespace ECSEngine {
 			}
 		}
 
-		unsigned int UIDrawerLabelHierarchyData::DynamicIndex(const UISystem* system, unsigned int window_index) const
+		unsigned int UIDrawerLabelHierarchyData::DynamicIndex(const UISystem* system, unsigned int _window_index) const
 		{
 			unsigned int index = -1;
 			if (identifier.size > 0) {
-				index = system->GetWindowDynamicElement(window_index, identifier);
+				index = system->GetWindowDynamicElement(_window_index, identifier);
 			}
 			return index;
 		}
@@ -894,27 +895,27 @@ namespace ECSEngine {
 			}
 		}
 
-		void UIDrawerLabelHierarchyData::UpdateMonitorSelection(UIConfigLabelHierarchyMonitorSelection* monitor_selection) const
+		void UIDrawerLabelHierarchyData::UpdateMonitorSelection()
 		{
 			Stream<void> final_selection = selected_labels;
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 4);
 
 			// Check the callback
-			if (monitor_selection->callback.action != nullptr) {
+			if (monitor_selection.callback.action != nullptr) {
 				ActionData dummy_data;
 				dummy_data.buffers = nullptr;
 				dummy_data.counts = nullptr;
 				dummy_data.system = nullptr;
 				// We can reference it directly
-				dummy_data.data = monitor_selection->callback.data;
+				dummy_data.data = monitor_selection.callback.data;
 
 				Stream<void> user_selected_labels = selected_labels.Copy(&stack_allocator, label_size == 0 ? sizeof(Stream<char>) : label_size);
 
 				UIConfigLabelHierarchyMonitorSelectionInfo monitor_info;
-				monitor_info.monitor_selection = monitor_selection;
+				monitor_info.monitor_selection = &monitor_selection;
 				monitor_info.selected_labels = user_selected_labels;
 				dummy_data.additional_data = &monitor_info;
-				monitor_selection->callback.action(&dummy_data);
+				monitor_selection.callback.action(&dummy_data);
 
 				final_selection = monitor_info.selected_labels;
 				if (monitor_info.override_labels.size > 0) {
@@ -923,46 +924,46 @@ namespace ECSEngine {
 			}
 
 			// Deallocate the current labels
-			monitor_selection->Deallocate(label_size != 0);
+			monitor_selection.Deallocate(label_size != 0);
 
 			if (label_size == 0) {
 				// Strings
 				Stream<Stream<char>> char_selected_labels = final_selection.AsIs<Stream<char>>();
-				if (monitor_selection->is_capacity_selection) {
-					CapacityStream<Stream<char>>* destination_labels = (CapacityStream<Stream<char>>*)monitor_selection->capacity_selection;
+				if (monitor_selection.is_capacity_selection) {
+					CapacityStream<Stream<char>>* destination_labels = (CapacityStream<Stream<char>>*)monitor_selection.capacity_selection;
 					ECS_ASSERT(char_selected_labels.size <= destination_labels->capacity);
 
 					destination_labels->size = char_selected_labels.size;
 					for (size_t index = 0; index < char_selected_labels.size; index++) {
-						destination_labels->buffer[index].InitializeAndCopy(monitor_selection->Allocator(), char_selected_labels[index]);
+						destination_labels->buffer[index].InitializeAndCopy(monitor_selection.Allocator(), char_selected_labels[index]);
 					}
 				}
 				else {
-					monitor_selection->resizable_selection->Resize(char_selected_labels.size);
-					ResizableStream<Stream<char>>* destination_labels = (ResizableStream<Stream<char>>*)monitor_selection->resizable_selection;
+					monitor_selection.resizable_selection->Resize(char_selected_labels.size);
+					ResizableStream<Stream<char>>* destination_labels = (ResizableStream<Stream<char>>*)monitor_selection.resizable_selection;
 					for (size_t index = 0; index < char_selected_labels.size; index++) {
-						destination_labels->buffer[index].InitializeAndCopy(monitor_selection->Allocator(), char_selected_labels[index]);
+						destination_labels->buffer[index].InitializeAndCopy(monitor_selection.Allocator(), char_selected_labels[index]);
 					}
 				}
 			}
 			else {
 				// Blittable data
-				if (monitor_selection->is_capacity_selection) {
-					monitor_selection->capacity_selection->CopyOther(final_selection, label_size);
+				if (monitor_selection.is_capacity_selection) {
+					monitor_selection.capacity_selection->CopyOther(final_selection, label_size);
 				}
 				else {
-					monitor_selection->resizable_selection->CopyOther(final_selection, label_size);
+					monitor_selection.resizable_selection->CopyOther(final_selection, label_size);
 				}
 			}
 
-			if (monitor_selection->boolean_changed_flag) {
-				*monitor_selection->is_changed = true;
+			if (monitor_selection.boolean_changed_flag) {
+				*monitor_selection.is_changed = true;
 			}
 			else {
 				// Increase the counter by 2 in order to have all windows be notified
 				// Of the change - if there are windows A and B and B updates afterwards
 				// the count it will be then decremented and A will not see the change
-				(*monitor_selection->is_changed_counter) += 2;
+				(*monitor_selection.is_changed_counter) += 2;
 			}
 		}
 
@@ -971,31 +972,35 @@ namespace ECSEngine {
 			UIDrawerLabelHierarchyGetEmbeddedLabel(this, storage);
 		}
 
-		unsigned int UIDrawerLabelHierarchyRightClickData::WriteLabel(const void* untyped_label)
+		unsigned int UIDrawerLabelHierarchyRightClickData::WriteLabel(const void* untyped_label, size_t storage_capacity)
 		{
-			return UIDrawerLabelHierarchySetEmbeddedLabel(this, untyped_label);
+			return UIDrawerLabelHierarchySetEmbeddedLabel(this, untyped_label, storage_capacity);
 		}
 
-		unsigned int UIDrawerMenuButtonData::Write() const
+		unsigned int UIDrawerMenuButtonData::Write(size_t storage_capacity) const
 		{
 			unsigned int write_size = sizeof(*this);
 
 			if (descriptor.window_name.size > 0) {
+				ECS_ASSERT(write_size + descriptor.window_name.size <= storage_capacity);
 				memcpy(OffsetPointer(this, write_size), descriptor.window_name.buffer, descriptor.window_name.size);
 				write_size += descriptor.window_name.size;
 			}
 
 			if (descriptor.window_data_size > 0) {
+				ECS_ASSERT(write_size + descriptor.window_data_size <= storage_capacity);
 				memcpy(OffsetPointer(this, write_size), descriptor.window_data, descriptor.window_data_size);
 				write_size += descriptor.window_data_size;
 			}
 
 			if (descriptor.private_action_data_size > 0) {
+				ECS_ASSERT(write_size + descriptor.private_action_data_size <= storage_capacity);
 				memcpy(OffsetPointer(this, write_size), descriptor.private_action_data, descriptor.private_action_data_size);
 				write_size += descriptor.private_action_data_size;
 			}
 
 			if (descriptor.destroy_action_data_size > 0) {
+				ECS_ASSERT(write_size + descriptor.destroy_action_data_size <= storage_capacity);
 				memcpy(OffsetPointer(this, write_size), descriptor.destroy_action_data, descriptor.destroy_action_data_size);
 				write_size += descriptor.destroy_action_data_size;
 			}

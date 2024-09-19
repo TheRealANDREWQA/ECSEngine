@@ -2019,10 +2019,9 @@ namespace ECSEngine {
 					if (do_draw) {
 						// draw the counter
 						parameters.color = CONSOLE_COLORS[(unsigned int)message.message.type];
-						char temp_characters[256];
-						Stream<char> temp_stream = Stream<char>(temp_characters, 0);
-						ConvertIntToChars(temp_stream, message.counter);
-						float2 label_scale = drawer.GetLabelScale(temp_stream);
+						ECS_STACK_CAPACITY_STREAM(char, temp_characters, 256);
+						ConvertIntToChars(temp_characters, message.counter);
+						float2 label_scale = drawer.GetLabelScale(temp_characters);
 						float2 aligned_position = drawer.GetAlignedToRightOverLimit(label_scale.x);
 
 						UIConfigAbsoluteTransform absolute_transform;
@@ -2055,7 +2054,7 @@ namespace ECSEngine {
 			float2 sprite_scale = drawer.GetSquareScale(transform.scale.y);
 			
 			// temp characters should be used at max 20; for conversion for numbers
-			char temp_characters[1024];
+			ECS_STACK_CAPACITY_STREAM(char, temp_characters, ECS_KB);
 
 			constexpr float COUNTER_BOUND_PADD = 0.005f;
 			// if the counter rectangle passes this bound, abort the rendering and redoit with an offset
@@ -2085,8 +2084,8 @@ namespace ECSEngine {
 					color = ECS_COLOR_WHITE;
 				}
 
-				Stream<char> stream = Stream<char>(temp_characters, 0);
-				ConvertIntToCharsFormatted(stream, (int64_t)(count));
+				temp_characters.size = 0;
+				ConvertIntToCharsFormatted(temp_characters, (int64_t)(count));
 				float2 label_scale = drawer.GetLabelScale(temp_characters);
 
 				float initial_x_position = transform.position.x;
@@ -2151,8 +2150,8 @@ namespace ECSEngine {
 					color = ECS_COLOR_WHITE;
 				}
 
-				Stream<char> stream = Stream<char>(temp_characters, 0);
-				ConvertIntToCharsFormatted(stream, (int64_t)count);
+				temp_characters.size = 0;
+				ConvertIntToCharsFormatted(temp_characters, (int64_t)count);
 				float2 label_scale = drawer.GetLabelScale(temp_characters);
 
 				float initial_x_position = transform.position.x;
@@ -3109,8 +3108,8 @@ namespace ECSEngine {
 										}
 									};
 
-									size_t _combo_wrapper_data[128];
-									ComboWrapperData* combo_wrapper_data = (ComboWrapperData*)_combo_wrapper_data;
+									ECS_STACK_VOID_STREAM(_combo_wrapper_data, ECS_KB * 4);
+									ComboWrapperData* combo_wrapper_data = _combo_wrapper_data.Reserve<ComboWrapperData>();
 									combo_wrapper_data->flag_index = &data->additional_draw_combo_index;
 									combo_wrapper_data->has_include_select = additional_data.include_select_label;
 									combo_wrapper_data->last_label_index = additional_data.combo_labels->size - 1;
@@ -3118,9 +3117,8 @@ namespace ECSEngine {
 									combo_wrapper_data->user_handler = additional_data.combo_callback;
 									unsigned int copy_size = sizeof(*combo_wrapper_data);
 									if (additional_data.combo_callback.data_size > 0) {
-										ECS_ASSERT(additional_data.combo_callback.data_size + sizeof(*combo_wrapper_data) <= sizeof(_combo_wrapper_data));
 										memcpy(
-											OffsetPointer(combo_wrapper_data, sizeof(*combo_wrapper_data)),
+											_combo_wrapper_data.Reserve(additional_data.combo_callback.data_size),
 											additional_data.combo_callback.data,
 											additional_data.combo_callback.data_size
 										);
@@ -3182,7 +3180,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		UIWindowDescriptor VisualizeTextureWindowDescriptor(UISystem* system, const VisualizeTextureCreateData* create_data, void* stack_memory)
+		UIWindowDescriptor VisualizeTextureWindowDescriptor(UISystem* system, const VisualizeTextureCreateData* create_data, CapacityStream<void>* stack_memory)
 		{
 			constexpr float2 SIZE = { 1.0f, 1.0f };
 
@@ -3198,11 +3196,11 @@ namespace ECSEngine {
 			descriptor.initial_size_y = SIZE.y;
 
 			// Allow the texture to be nullptr in order to have it be reconstructed from an UI file
-			VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)stack_memory;
+			VisualizeTextureWindowData* data = stack_memory->Reserve<VisualizeTextureWindowData>();
 			data->texture_view = nullptr;
 			data->transferred_texture = (ID3D11Texture2D*)nullptr;
 			data->additional_draw = nullptr;
-			data->automatic_update = false;
+			data->automatic_update = true;
 			data->additional_draw_combo_index = 0;
 			data->display_options = true;
 			data->select_mode = create_data->select_mode;
@@ -3233,9 +3231,10 @@ namespace ECSEngine {
 			// Embed the data directly here if needed
 			size_t destroy_data_size = sizeof(UIActionHandler) + create_data->destroy_window_handler.data_size;
 
-			void* destroy_data = OffsetPointer(stack_memory, sizeof(*data));
+			void* destroy_data = stack_memory->Reserve(sizeof(create_data->destroy_window_handler));
 			memcpy(destroy_data, &create_data->destroy_window_handler, sizeof(create_data->destroy_window_handler));
 			if (create_data->destroy_window_handler.data_size > 0) {
+				void* destroy_handler_data = stack_memory->Reserve(create_data->destroy_window_handler.data_size);
 				memcpy(OffsetPointer(destroy_data, sizeof(create_data->destroy_window_handler)), create_data->destroy_window_handler.data, create_data->destroy_window_handler.data_size);
 			}
 
@@ -3249,8 +3248,8 @@ namespace ECSEngine {
 
 		unsigned int CreateVisualizeTextureWindow(UISystem* system, const VisualizeTextureCreateData* create_data)
 		{
-			size_t stack_memory[256];
-			UIWindowDescriptor descriptor = VisualizeTextureWindowDescriptor(system, create_data, stack_memory);
+			ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 4);
+			UIWindowDescriptor descriptor = VisualizeTextureWindowDescriptor(system, create_data, &stack_memory);
 
 			unsigned int window_index = system->CreateWindowAndDockspace(
 				descriptor, 

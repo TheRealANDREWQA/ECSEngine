@@ -2247,12 +2247,11 @@ namespace ECSEngine {
 						UIDrawerTextInput* input = (UIDrawerTextInput*)_data;
 						int64_t integer = ConvertCharactersToInt(*input->text);
 
-						char temp_characters[256];
-						CapacityStream<char> temp_stream(temp_characters, 0, 256);
+						ECS_STACK_CAPACITY_STREAM(char, temp_stream, 256);
 						ConvertIntToCharsFormatted(temp_stream, integer);
 						if (temp_stream != *input->text) {
 							input->DeleteAllCharacters();
-							input->InsertCharacters(temp_characters, temp_stream.size, 0, action_data->system);
+							input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
 						}
 
 						return true;
@@ -2799,8 +2798,8 @@ namespace ECSEngine {
 					}
 				}
 				else if (slider->character_value) {
-					size_t storage[128];
-					memcpy(storage, value_to_modify, slider->value_byte_size);
+					ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+					memcpy(stack_memory.Reserve(slider->value_byte_size), value_to_modify, slider->value_byte_size);
 
 					functions.convert_text_input(slider->characters, value_to_modify);
 					if (!mouse_draggable_fixed_offset) {
@@ -2815,7 +2814,7 @@ namespace ECSEngine {
 					}
 					slider->slider_position = functions.percentage(lower_bound, upper_bound, value_to_modify);
 					slider->character_value = false;
-					slider->changed_value = memcmp(storage, value_to_modify, slider->value_byte_size) != 0;
+					slider->changed_value = memcmp(stack_memory.buffer, value_to_modify, slider->value_byte_size) != 0;
 				}
 				else {
 					if (!mouse_draggable_fixed_offset) {
@@ -3659,14 +3658,14 @@ namespace ECSEngine {
 								data->callback(action_data);
 							};
 
-							size_t _wrapper_data[512];
-							WrapperData* wrapper_data = (WrapperData*)_wrapper_data;
+							ECS_STACK_VOID_STREAM(_wrapper_data, ECS_KB * 4);
+							WrapperData* wrapper_data = _wrapper_data.Reserve<WrapperData>();
 							*wrapper_data = { value, callback->handler.action, callback->handler.data };
 
 							unsigned int wrapper_size = sizeof(*wrapper_data);
 							// The data needs to be copied, embedd it after the wrapper
 							if (callback->handler.data_size > 0) {
-								void* callback_data = OffsetPointer(wrapper_data, sizeof(WrapperData));
+								void* callback_data = _wrapper_data.Reserve(callback->handler.data_size);
 								memcpy(callback_data, callback->handler.data, callback->handler.data_size);
 								// Signal that the data is relative to the wrapper
 								wrapper_data->callback_data = nullptr;
@@ -4894,8 +4893,8 @@ namespace ECSEngine {
 				}
 
 				if (active_state) {
-					size_t click_data_storage[256];
-					UIDrawerBoolClickableWithPinCallbackData* click_data = (UIDrawerBoolClickableWithPinCallbackData*)click_data_storage;
+					ECS_STACK_VOID_STREAM(click_data_storage, ECS_KB);
+					UIDrawerBoolClickableWithPinCallbackData* click_data = (UIDrawerBoolClickableWithPinCallbackData*)click_data_storage.buffer;
 					if constexpr (std::is_same_v<Data, UIDrawerCollapsingHeader>) {
 						click_data->base.pointer = &data->state;
 					}
@@ -4911,6 +4910,7 @@ namespace ECSEngine {
 						const UIConfigCollapsingHeaderCallback* callback = (const UIConfigCollapsingHeaderCallback*)config.GetParameter(UI_CONFIG_COLLAPSING_HEADER_CALLBACK);
 						click_data->handler = callback->handler;
 						if (click_data->handler.data_size > 0) {
+							ECS_ASSERT(sizeof(*click_data) + click_data->handler.data_size <= click_data_storage.capacity);
 							memcpy(OffsetPointer(click_data, sizeof(*click_data)), click_data->handler.data, click_data->handler.data_size);
 						}
 						clickable_handler = { BoolClickableWithPinCallback, click_data, sizeof(*click_data) + click_data->handler.data_size, click_data->handler.phase };
@@ -5961,8 +5961,7 @@ namespace ECSEngine {
 					graph_scale.x -= axis_span;
 					graph_position.x += axis_span;
 
-					char stack_memory[64];
-					Stream<char> temp_stream = Stream<char>(stack_memory, 0);
+					ECS_STACK_CAPACITY_STREAM(char, temp_stream, 64);
 					ConvertFloatToChars(temp_stream, get_sample(0, 0), x_axis_precision);
 
 					float2 first_sample_span = TextSpan(temp_stream, font_size, character_spacing);
@@ -6150,19 +6149,22 @@ namespace ECSEngine {
 				char parse_token = SentenceToken(configuration, config);
 				size_t whitespace_characters = ParseWordsFromSentence(text, parse_token);
 
-				data->base.whitespace_characters.buffer = (UIDrawerWhitespaceCharacter*)GetMainAllocatorBuffer(sizeof(UISpriteVertex) * sentence_length * 6
-					+ sizeof(UIDrawerWhitespaceCharacter) * (whitespace_characters + 1));
+				data->base.whitespace_characters.capacity = whitespace_characters + 1;
+				data->base.vertices.capacity = sentence_length * 6;
+
+				data->base.whitespace_characters.buffer = (UIDrawerWhitespaceCharacter*)GetMainAllocatorBuffer(data->base.vertices.MemoryOf(data->base.vertices.capacity)
+					+ data->base.whitespace_characters.MemoryOf(data->base.whitespace_characters.capacity));
 				data->base.whitespace_characters.size = 0;
 
 				// setting up the buffers
 				uintptr_t buffer = (uintptr_t)data->base.whitespace_characters.buffer;
 
-				buffer += sizeof(UIDrawerWhitespaceCharacter) * (whitespace_characters + 1);
+				buffer += data->base.whitespace_characters.MemoryOf(data->base.whitespace_characters.capacity);
 
 				data->base.vertices.buffer = (UISpriteVertex*)buffer;
 				data->base.vertices.size = 0;
 
-				buffer += sizeof(UISpriteVertex) * sentence_length * 6;
+				buffer += data->base.vertices.MemoryOf(data->base.vertices.capacity);
 
 				data->base.SetWhitespaceCharacters({ text.buffer, sentence_length }, parse_token);
 
@@ -6317,8 +6319,7 @@ namespace ECSEngine {
 #pragma region Non cached
 
 				constexpr size_t WHITESPACE_ALLOCATION_SIZE = ECS_KB * 50;
-				unsigned int _whitespace_characters[4096];
-				CapacityStream<unsigned int> whitespace_characters(_whitespace_characters, 0, 4096);
+				ECS_STACK_CAPACITY_STREAM(unsigned int, whitespace_characters, ECS_KB * 4);
 				whitespace_characters.size = SentenceWhitespaceCharactersCount(text, whitespace_characters, separator_token);
 
 				if (whitespace_characters.size > whitespace_characters.capacity) {
@@ -6795,9 +6796,8 @@ namespace ECSEngine {
 		) {
 			float y_sprite_scale = system->GetTextSpriteYScale(font_size.y);
 
-			// upper corner value
-			char temp_memory[128];
-			Stream<char> temp_float_stream = Stream<char>(temp_memory, 0);
+			// Upper corner value
+			ECS_STACK_CAPACITY_STREAM(char, temp_float_stream, 128);
 			ConvertFloatToChars(temp_float_stream, max_y, y_axis_precision);
 
 			size_t* text_count = HandleTextSpriteCount(configuration);
@@ -6936,8 +6936,7 @@ namespace ECSEngine {
 			float y_sprite_scale = system->GetTextSpriteYScale(font_size.y);
 
 			// upper corner value
-			char temp_memory[128];
-			Stream<char> temp_float_stream = Stream<char>(temp_memory, 0);
+			ECS_STACK_CAPACITY_STREAM(char, temp_float_stream, 128);
 			ConvertFloatToChars(temp_float_stream, min_x, x_axis_precision);
 
 			size_t* text_count = HandleTextSpriteCount(configuration);
@@ -7339,8 +7338,7 @@ namespace ECSEngine {
 					graph_scale.x -= axis_span;
 					graph_position.x += axis_span;
 
-					char stack_memory[64];
-					Stream<char> temp_stream = Stream<char>(stack_memory, 0);
+					ECS_STACK_CAPACITY_STREAM(char, temp_stream, 64);
 					ConvertFloatToChars(temp_stream, samples[0].x, x_axis_precision);
 
 					float2 first_sample_span = TextSpan(temp_stream, font_size, character_spacing);
@@ -8884,12 +8882,12 @@ namespace ECSEngine {
 
 		void UIDrawer::AddTextTooltipHoverable(size_t configuration, float2 position, float2 scale, UITextTooltipHoverableData* data, bool stable, ECS_UI_DRAW_PHASE phase) {
 			if (!initializer && record_actions) {
-				size_t total_storage[256];
+				ECS_STACK_VOID_STREAM(total_storage, ECS_KB);
 				unsigned int write_size = sizeof(*data);
 				if (!stable) {
-					UITextTooltipHoverableData* stack_data = (UITextTooltipHoverableData*)total_storage;
+					UITextTooltipHoverableData* stack_data = (UITextTooltipHoverableData*)total_storage.buffer;
 					memcpy(stack_data, data, sizeof(*data));
-					write_size = stack_data->Write(data->characters);
+					write_size = stack_data->Write(data->characters, total_storage.capacity);
 					data = stack_data;
 				}
 				system->AddHoverableToDockspaceRegion(dockspace, border_index, position, scale, { TextTooltipHoverable, data, write_size, phase });
@@ -9767,13 +9765,13 @@ namespace ECSEngine {
 							custom_callback = callback->handler;
 						}
 
-						size_t action_data_storage[512];
-						UIDrawerBoolClickableCallbackData* clickable_data = (UIDrawerBoolClickableCallbackData*)action_data_storage;
+						ECS_STACK_VOID_STREAM(action_data_storage, ECS_KB * 4);
+						UIDrawerBoolClickableCallbackData* clickable_data = action_data_storage.Reserve<UIDrawerBoolClickableCallbackData>();
 						unsigned int total_write_size = sizeof(*clickable_data);
 						clickable_data->value = state;
 						clickable_data->callback = custom_callback;
 						if (custom_callback.data_size > 0) {
-							memcpy(OffsetPointer(clickable_data, total_write_size), custom_callback.data, custom_callback.data_size);
+							memcpy(action_data_storage.Reserve(custom_callback.data_size), custom_callback.data, custom_callback.data_size);
 							total_write_size += custom_callback.data_size;
 						}
 
@@ -9855,8 +9853,8 @@ namespace ECSEngine {
 
 				if (is_active) {
 					// If the descriptor has any data with size > 0, we need to copy it as well
-					size_t _button_data_storage[512];
-					UIDrawerMenuButtonData* data = (UIDrawerMenuButtonData*)_button_data_storage;
+					ECS_STACK_VOID_STREAM(_button_data_storage, ECS_KB * 4);
+					UIDrawerMenuButtonData* data = _button_data_storage.Reserve<UIDrawerMenuButtonData>();
 
 					data->descriptor = window_descriptor;
 					data->descriptor.initial_position_x = position.x;
@@ -9864,7 +9862,7 @@ namespace ECSEngine {
 					data->border_flags = border_flags;
 					data->is_opened_when_pressed = false;
 
-					unsigned int write_size = data->Write();
+					unsigned int write_size = data->Write(_button_data_storage.capacity);
 
 					Color color = HandleColor(configuration, config);
 
@@ -10251,10 +10249,10 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ColorFloatInputIntensityInputName(char* intensity_input_name) {
-			size_t base_intensity_name = strlen("Intensity");
-			memcpy(intensity_input_name, "Intensity", base_intensity_name * sizeof(char));
-			intensity_input_name[base_intensity_name] = '\0';
+		void UIDrawer::ColorFloatInputIntensityInputName(CapacityStream<char>& intensity_input_name) {
+			intensity_input_name.AddStreamAssert("Intensity");
+			intensity_input_name.AssertCapacity(1);
+			intensity_input_name[intensity_input_name.size] = '\0';
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -10293,7 +10291,7 @@ namespace ECSEngine {
 			scale.x -= horizontal_x;
 
 			// Draw the intensity
-			char intensity_input_name[256];
+			ECS_STACK_CAPACITY_STREAM(char, intensity_input_name, 256);
 			ColorFloatInputIntensityInputName(intensity_input_name);
 
 			size_t FLOAT_INPUT_CONFIGURATION = configuration | UI_CONFIG_TEXT_INPUT_CALLBACK;
@@ -10358,8 +10356,9 @@ namespace ECSEngine {
 			configuration = ClearFlag(configuration, UI_CONFIG_COLOR_FLOAT_CALLBACK);
 
 			// The intensity will be controlled by number input - the reference must be made through the name
-			char intensity_input_name[256];
+			ECS_STACK_CAPACITY_STREAM(char, intensity_input_name, 256);
 			ColorFloatInputIntensityInputName(intensity_input_name);
+
 			// Add the callback
 			UIConfigTextInputCallback callback;
 			callback.handler.action = ColorFloatInputIntensityCallback;
@@ -13022,10 +13021,10 @@ namespace ECSEngine {
 
 						if (!active_renamed) {
 							// Embedd the string into the data
-							size_t _click_data[64];
-							LabelHierarchyClickActionData* click_data = (LabelHierarchyClickActionData*)_click_data;
+							ECS_STACK_VOID_STREAM(_click_data, ECS_KB);
+							LabelHierarchyClickActionData* click_data = _click_data.Reserve<LabelHierarchyClickActionData>();
 							click_data->hierarchy = data;
-							unsigned int click_data_size = click_data->WriteLabel(untyped_label);
+							unsigned int click_data_size = click_data->WriteLabel(untyped_label, _click_data.capacity);
 
 							AddGeneral(configuration, current_position, current_scale, { LabelHierarchyClickAction, click_data, click_data_size, click_action_phase });
 							AddDefaultHoverable(configuration, current_position, current_scale, current_color);
@@ -13034,10 +13033,10 @@ namespace ECSEngine {
 						}
 
 						// Embedd the string into the data
-						size_t _change_state_data[64];
-						LabelHierarchyChangeStateData* change_state_data = (LabelHierarchyChangeStateData*)_change_state_data;
+						ECS_STACK_VOID_STREAM(_change_state_data, ECS_KB);
+						LabelHierarchyChangeStateData* change_state_data = _change_state_data.Reserve<LabelHierarchyChangeStateData>();
 						change_state_data->hierarchy = data;
-						unsigned int change_data_size = change_state_data->WriteLabel(untyped_label);
+						unsigned int change_data_size = change_state_data->WriteLabel(untyped_label, _change_state_data.capacity);
 
 						if (keep_triangle && has_children) {
 							if (opened_index != -1) {
@@ -13066,12 +13065,12 @@ namespace ECSEngine {
 						if (!active_renamed) {
 							if (configuration & UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK) {
 								// Embedd the string into the data
-								size_t _right_click_data[64];
-								UIDrawerLabelHierarchyRightClickData* right_click_data = (UIDrawerLabelHierarchyRightClickData*)_right_click_data;
+								ECS_STACK_VOID_STREAM(_right_click_data, ECS_KB);
+								UIDrawerLabelHierarchyRightClickData* right_click_data = _right_click_data.Reserve<UIDrawerLabelHierarchyRightClickData>();
 								right_click_data->data = data->right_click_data;
 								right_click_data->hierarchy = data;
 								right_click_data->hover_color = current_color;
-								unsigned int write_size = right_click_data->WriteLabel(untyped_label);
+								unsigned int write_size = right_click_data->WriteLabel(untyped_label, _right_click_data.capacity);
 
 								AddClickable(
 									configuration, 
@@ -13122,9 +13121,7 @@ namespace ECSEngine {
 				}
 
 				data->determine_selection = false;
-				if (monitor_selection != nullptr) {
-					data->UpdateMonitorSelection(monitor_selection);
-				}
+				data->UpdateMonitorSelection();
 				// Call the selection callback
 				data->TriggerSelectable(&action_data);
 			}
@@ -14117,9 +14114,8 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::PushIdentifierStack(size_t index) {
-			char temp_chars[64];
-			Stream<char> stream_char = Stream<char>(temp_chars, 0);
-			ConvertIntToChars(stream_char, (int64_t)index);
+			ECS_STACK_CAPACITY_STREAM(char, temp_chars, 64);
+			ConvertIntToChars(temp_chars, (int64_t)index);
 			PushIdentifierStack(temp_chars);
 		}
 
@@ -14342,9 +14338,9 @@ namespace ECSEngine {
 			};
 
 			for (size_t index = 0; index < labels.size; index++) {
-				size_t storage[512];
+				ECS_STACK_VOID_STREAM(stack_storage, ECS_KB * 4);
 				unsigned int write_size;
-				SelectData* select_data = CreateCoalescedStreamIntoType<SelectData>(storage, labels[index], &write_size);
+				SelectData* select_data = CreateCoalescedStreamIntoType<SelectData>(stack_storage, labels[index], &write_size);
 				select_data->selected_label = selected_label;
 
 				Button(configuration, config, labels[index], { select_action, select_data, write_size });
@@ -15070,8 +15066,8 @@ namespace ECSEngine {
 			
 			Stream<char> current_window_name = system->GetWindowName(window_index);
 
-			size_t _callback_data_storage[256];
-			DestroyWindowCallbackData* callback_data = (DestroyWindowCallbackData*)_callback_data_storage;
+			ECS_STACK_VOID_STREAM(callback_data_storage, ECS_KB);
+			DestroyWindowCallbackData* callback_data = (DestroyWindowCallbackData*)callback_data_storage.buffer;
 			callback_data->handler_data = selection_callback;
 			callback_data->selection = selection;
 			callback_data->target_window_name_size = current_window_name.size;
@@ -15080,12 +15076,14 @@ namespace ECSEngine {
 
 			// Now copy the callback data first and then the initial selection
 			if (selection_callback.data_size > 0) {
+				ECS_ASSERT(write_size + selection_callback.data_size <= callback_data_storage.capacity);
 				void* selection_callback_data = OffsetPointer(callback_data, write_size);
 				memcpy(selection_callback_data, selection_callback.data, selection_callback.data_size);
 				write_size += selection_callback.data_size;
 			}
 
 			if (final_descriptor.destroy_action_data_size > 0) {
+				ECS_ASSERT(write_size + final_descriptor.destroy_action_data_size <= callback_data_storage.capacity);
 				void* destroy_buffer = OffsetPointer(callback_data, write_size);
 				memcpy(destroy_buffer, final_descriptor.destroy_action_data, final_descriptor.destroy_action_data_size);
 				write_size += final_descriptor.destroy_action_data_size;
@@ -16611,8 +16609,8 @@ namespace ECSEngine {
 
 		void UIDrawer::TextToolTip(Stream<char> characters, float2 position, float2 scale, bool stable_characters, const UITooltipBaseData* base) {
 			if (record_actions) {
-				size_t tool_tip_data_storage[512];
-				UITextTooltipHoverableData* tool_tip_data = (UITextTooltipHoverableData*)tool_tip_data_storage;
+				ECS_STACK_VOID_STREAM(tool_tip_data_storage, ECS_KB * 4);
+				UITextTooltipHoverableData* tool_tip_data = (UITextTooltipHoverableData*)tool_tip_data_storage.buffer;
 				unsigned int write_size = sizeof(*tool_tip_data);
 				if (base != nullptr) {
 					tool_tip_data->base = *base;
@@ -16628,9 +16626,8 @@ namespace ECSEngine {
 					tool_tip_data->characters = characters;
 				}
 				else {
-					write_size = tool_tip_data->Write(characters);
+					write_size = tool_tip_data->Write(characters, tool_tip_data_storage.capacity);
 				}
-				ECS_ASSERT(write_size <= sizeof(tool_tip_data_storage));
 
 				system->ComposeHoverable(dockspace, border_index, position, scale, { TextTooltipHoverable, tool_tip_data, write_size, ECS_UI_DRAW_SYSTEM }, true);
 			}
@@ -16646,12 +16643,12 @@ namespace ECSEngine {
 		)
 		{
 			if (record_actions) {
-				size_t total_storage[256];
+				ECS_STACK_VOID_STREAM(total_storage, ECS_KB);
 				unsigned int write_size = sizeof(*data);
 				if (!stable_characters) {
-					UITextTooltipHoverableData* stack_data = (UITextTooltipHoverableData*)total_storage;
+					UITextTooltipHoverableData* stack_data = (UITextTooltipHoverableData*)total_storage.buffer;
 					memcpy(stack_data, data, sizeof(*data));
-					write_size = stack_data->Write(data->characters);
+					write_size = stack_data->Write(data->characters, total_storage.capacity);
 					data = stack_data;
 				}
 				return { TextTooltipHoverable, (void*)data, write_size, phase };

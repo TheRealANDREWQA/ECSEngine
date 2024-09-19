@@ -341,7 +341,7 @@ namespace ECSEngine {
 	template<int stride, int offset>
 	ECS_INLINE Vec8f ECS_VECTORCALL GatherStride(const void* data, size_t load_count) {
 		if (load_count == Vec8f::size()) {
-			GatherStride<stride, offset>(data);
+			return GatherStride<stride, offset>(data);
 		}
 		else {
 			alignas(ECS_SIMD_BYTE_SIZE) int indices_array[Vec8f::size()];
@@ -362,7 +362,7 @@ namespace ECSEngine {
 	template<int stride, int offset>
 	ECS_INLINE Vec8f ECS_VECTORCALL GatherStrideMasked(const void* data, size_t load_count, Vec8f mask_vector = ZeroVectorFloat()) {
 		if (load_count == Vec8f::size()) {
-			GatherStride<stride, offset>(data);
+			return GatherStride<stride, offset>(data);
 		}
 		else {
 			alignas(ECS_SIMD_BYTE_SIZE) int indices_array[Vec8f::size()];
@@ -1070,60 +1070,6 @@ namespace ECSEngine {
 	}
 
 	// Dynamic mask creation - if possible consider using the compile time variant
-	static __m256i ECS_VECTORCALL SelectMask32(
-		bool element_0,
-		bool element_1,
-		bool element_2,
-		bool element_3,
-		bool element_4,
-		bool element_5,
-		bool element_6,
-		bool element_7,
-		bool element_8,
-		bool element_9,
-		bool element_10,
-		bool element_11,
-		bool element_12,
-		bool element_13,
-		bool element_14,
-		bool element_15,
-		bool element_16,
-		bool element_17,
-		bool element_18,
-		bool element_19,
-		bool element_20,
-		bool element_21,
-		bool element_22,
-		bool element_23,
-		bool element_24,
-		bool element_25,
-		bool element_26,
-		bool element_27,
-		bool element_28,
-		bool element_29,
-		bool element_30,
-		bool element_31
-	) {
-		__m256i zeros = ZeroVectorInteger();
-
-		alignas(ECS_SIMD_BYTE_SIZE) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)];
-#define LOOP_ITERATION(index) mask[index] = element_##index ? UINT8_MAX : 0;
-
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 4);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 8);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 12);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 16);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 20);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 24);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 28);
-
-#undef LOOP_ITERATION
-
-		return _mm256_load_si256((const __m256i*)mask);
-	}
-
-	// Dynamic mask creation - if possible consider using the compile time variant
 	static __m256i ECS_VECTORCALL SelectMask32(const bool* elements) {
 		__m256i zeros = ZeroVectorInteger();
 
@@ -1166,14 +1112,26 @@ namespace ECSEngine {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)];
-#define LOOP_ITERATION(index) mask[index] = element_##index ? UINT_MAX : 0;
+#define EXPAND(index) mask[index] = element_##index ? UINT16_MAX : 0
 
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 4);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 8);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 12);
+		EXPAND(0);
+		EXPAND(1);
+		EXPAND(2);
+		EXPAND(3);
+		EXPAND(4);
+		EXPAND(5);
+		EXPAND(6);
+		EXPAND(7);
+		EXPAND(8);
+		EXPAND(9);
+		EXPAND(10);
+		EXPAND(11);
+		EXPAND(12);
+		EXPAND(13);
+		EXPAND(14);
+		EXPAND(15);
 
-#undef LOOP_ITERATION
+#undef EXPAND
 
 		return _mm256_load_si256((const __m256i*)mask);
 	}
@@ -1183,7 +1141,7 @@ namespace ECSEngine {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)];
-#define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT_MAX : 0;
+#define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT16_MAX : 0;
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 4);
@@ -1209,12 +1167,19 @@ namespace ECSEngine {
 		__m256 zeros = ZeroVectorFloat();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint32_t mask[sizeof(__m256) / sizeof(float)];
-#define LOOP_ITERATION(index) mask[index] = element_##index ? UINT_MAX : 0; 
+		// Cannot use loop unroll with the value added to the name, because it does not get evaluated as a constant
+#define EXPAND(index) mask[index] = element_##index ? UINT32_MAX : 0 
 
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 4);
+		EXPAND(0);
+		EXPAND(1);
+		EXPAND(2);
+		EXPAND(3);
+		EXPAND(4);
+		EXPAND(5);
+		EXPAND(6);
+		EXPAND(7);
 
-#undef LOOP_ITERATION
+#undef EXPAND
 
 		return _mm256_load_ps((const float*)mask);
 	}
@@ -1224,7 +1189,7 @@ namespace ECSEngine {
 		__m256 zeros = ZeroVectorFloat();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint32_t mask[sizeof(__m256) / sizeof(float)];
-#define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT_MAX : 0; 
+#define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT32_MAX : 0; 
 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 4);
@@ -1263,7 +1228,7 @@ namespace ECSEngine {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint64_t mask[4];
-#define LOOP_ITERATION(index) mask[index] = element_##index ? UINT_MAX : 0; 
+#define LOOP_ITERATION(index) mask[index] = element_##index ? UINT64_MAX : 0; 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 
 #undef LOOP_ITERATION
@@ -1276,7 +1241,7 @@ namespace ECSEngine {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint64_t mask[sizeof(__m256i) / sizeof(uint64_t)];
-#define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT_MAX : 0; 
+#define LOOP_ITERATION(index) mask[index] = elements[index] ? UINT64_MAX : 0; 
 		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 
 #undef LOOP_ITERATION

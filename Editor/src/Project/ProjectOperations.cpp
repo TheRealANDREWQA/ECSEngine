@@ -36,8 +36,7 @@ void CreateProjectMisc(ProjectOperationData* data) {
 	new_console_dump_stream.AddStreamSafe(CONSOLE_RELATIVE_DUMP_PATH);
 	GetConsole()->ChangeDumpPath(new_console_dump_stream);
 
-	wchar_t hub_characters[256];
-	CapacityStream<wchar_t> hub_path(hub_characters, 0, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, hub_path, 512);
 	hub_path.CopyOther(data->file_data->path);
 	hub_path.Add(ECS_OS_PATH_SEPARATOR);
 	hub_path.AddStream(data->file_data->project_name);
@@ -52,8 +51,7 @@ void CreateProjectMisc(ProjectOperationData* data) {
 void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 	UISystem* ui_system = data->editor_state->ui_system;
 
-	wchar_t temp_characters[512];
-	CapacityStream<wchar_t> new_directory_path(temp_characters, 0, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, new_directory_path, 512);
 
 	new_directory_path.CopyOther(data->file_data->path);
 	new_directory_path.AddAssert(ECS_OS_PATH_SEPARATOR);
@@ -173,16 +171,16 @@ void CreateProject(ProjectOperationData* data)
 			ForEachFileInDirectoryWithExtension(data->data->file_data->path, extension, &for_each_data, functor);
 
 			GetProjectFilePath(data->data->file_data, temp_string);
-			wchar_t temp_project_name[256];
-			temp_string.CopyTo(temp_project_name);
-			Path project_path(temp_project_name, temp_string.size);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, temp_project_name, 512);
+			temp_project_name.CopyOther(temp_string);
+			Path project_path = temp_project_name;
 
 			if (ExistsFileOrFolder(temp_string)) {
 				success &= RemoveFile(temp_string);
 			}
 			for (size_t index = 0; index < data->project_directories.size; index++) {
 				temp_string.size = data->data->file_data->path.size + 1;
-				temp_string.AddStreamSafe(data->project_directories[index]);
+				temp_string.AddStreamAssert(data->project_directories[index]);
 				if (ExistsFileOrFolder(temp_string)) {
 					success &= RemoveFolder(temp_string);
 				}
@@ -243,10 +241,10 @@ bool CheckProjectDirectoryIntegrity(const ProjectFile* project) {
 	// Can't get that as a constexpr variable in order to initialize the stack buffer
 	// So use a fixed size with a big value
 	size_t folders_size = PROJECT_DIRECTORIES_SIZE();
-	ECS_ASSERT(folders_size < 128);
+	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, required_folders_buffer, 128);
+	ECS_ASSERT(folders_size < required_folders_buffer.capacity);
 
-	Stream<wchar_t> required_folders_buffer[128];
-	Stream<Stream<wchar_t>> required_folders(required_folders_buffer, PROJECT_DIRECTORIES_SIZE());
+	Stream<Stream<wchar_t>> required_folders(required_folders_buffer.buffer, PROJECT_DIRECTORIES_SIZE());
 	for (size_t index = 0; index < required_folders.size; index++) {
 		required_folders[index] = PROJECT_DIRECTORIES[index];
 	}
@@ -599,11 +597,9 @@ bool OpenProject(ProjectOperationData data)
 	data.editor_state->project_file = data.file_data;
 
 	// Change the dump path early on
-	wchar_t console_dump_path_characters[256];
-	Stream<wchar_t> console_dump_path(console_dump_path_characters, 0);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, console_dump_path, 512);
 	console_dump_path.CopyOther(data.file_data->path);
-	console_dump_path.AddStream(CONSOLE_RELATIVE_DUMP_PATH);
-	ECS_ASSERT(console_dump_path.size < 256);
+	console_dump_path.AddStreamAssert(CONSOLE_RELATIVE_DUMP_PATH);
 	GetConsole()->ChangeDumpPath(console_dump_path);
 
 	// Also change the console to dump type count messages
@@ -761,8 +757,7 @@ void RepairProjectAuxiliaryDirectories(ProjectOperationData data)
 bool SaveProjectFile(ProjectOperationData data) {
 	UIReflectionDrawer* ui_reflection = data.editor_state->ui_reflection;
 
-	wchar_t temp_characters[256];
-	CapacityStream<wchar_t> project_path = CapacityStream<wchar_t>(temp_characters, 0, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, project_path, 512);
 	GetProjectFilePath(data.file_data, project_path);
 
 	bool success = Serialize(ui_reflection->reflection, ui_reflection->reflection->GetType(STRING(ProjectFile)), data.file_data, project_path) == ECS_SERIALIZE_OK;
@@ -791,8 +786,7 @@ void SaveProjectFileAction(ActionData* action_data) {
 		}
 		else {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-			wchar_t project_name_characters[256];
-			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, project_name, 512);
 			GetProjectFilePath(data->file_data, project_name);
 
 			FormatString(error_message, "Saving project file {#} failed.", project_name);
@@ -832,8 +826,7 @@ void SaveProjectAction(ActionData* action_data) {
 		}
 		else {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-			wchar_t project_name_characters[256];
-			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, project_name, 512);
 			GetProjectFilePath(data->file_data, project_name);
 			
 			FormatString(error_message, "Saving project {#} failed.", project_name);
@@ -912,11 +905,11 @@ void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> 
 
 // -------------------------------------------------------------------------------------------------------------------
 
-void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
+void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory) {
 	descriptor.draw = ConsoleWindowDraw;
 	descriptor.retained_mode = ConsoleWindowRetainedMode;
 
-	ConsoleWindowData* window_data = (ConsoleWindowData*)stack_memory;
+	ConsoleWindowData* window_data = stack_memory->Reserve<ConsoleWindowData>();
 	CreateConsoleWindowData(*window_data);
 
 	descriptor.window_data = window_data;

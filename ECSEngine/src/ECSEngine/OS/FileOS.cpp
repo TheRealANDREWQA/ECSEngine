@@ -12,25 +12,25 @@ namespace ECSEngine {
 
 	namespace OS {
 
-		void ConvertSystemTimeToDate(const SYSTEMTIME* system_time, char* characters) {
-			Stream<char> stream(characters, 0);
-			ConvertIntToChars(stream, system_time->wDay);
-			stream.Add('/');
-			ConvertIntToChars(stream, system_time->wMonth);
-			stream.Add('/');
-			ConvertIntToChars(stream, system_time->wYear);
-			stream.Add(' ');
-			ConvertIntToChars(stream, system_time->wHour);
-			stream.Add(':');
-			ConvertIntToChars(stream, system_time->wMinute);
-			stream.Add(':');
-			ConvertIntToChars(stream, system_time->wSecond);
-			stream[stream.size] = '\0';
+		static void ConvertSystemTimeToDate(const SYSTEMTIME* system_time, CapacityStream<char>& characters) {
+			ConvertIntToChars(characters, system_time->wDay);
+			characters.AddAssert('/');
+			ConvertIntToChars(characters, system_time->wMonth);
+			characters.AddAssert('/');
+			ConvertIntToChars(characters, system_time->wYear);
+			characters.AddAssert(' ');
+			ConvertIntToChars(characters, system_time->wHour);
+			characters.AddAssert(':');
+			ConvertIntToChars(characters, system_time->wMinute);
+			characters.AddAssert(':');
+			ConvertIntToChars(characters, system_time->wSecond);
+			characters.AssertCapacity(1);
+			characters[characters.size] = '\0';
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimesInternal(void* file_handle, char* creation_time, char* access_time, char* last_write_time)
+		bool GetFileTimesInternal(void* file_handle, CapacityStream<char>* creation_time, CapacityStream<char>* access_time, CapacityStream<char>* last_write_time)
 		{
 			FILETIME filetime_creation, filetime_last_access, filetime_last_write;
 
@@ -41,12 +41,12 @@ namespace ECSEngine {
 			}
 
 			SYSTEMTIME sys_creation_time, sys_access_time, sys_last_write_time;
-			if (creation_time != nullptr) {
+			if (creation_time != nullptr && success) {
 				SYSTEMTIME local_creation_time;
 				success &= FileTimeToSystemTime(&filetime_creation, &sys_creation_time);
 				success &= SystemTimeToTzSpecificLocalTime(nullptr, &sys_creation_time, &local_creation_time);
 				if (success) {
-					ConvertSystemTimeToDate(&local_creation_time, creation_time);
+					ConvertSystemTimeToDate(&local_creation_time, *creation_time);
 				}
 			}
 			if (access_time != nullptr && success) {
@@ -54,7 +54,7 @@ namespace ECSEngine {
 				success &= FileTimeToSystemTime(&filetime_last_access, &sys_access_time);
 				success &= SystemTimeToTzSpecificLocalTime(nullptr, &sys_access_time, &local_access_time);
 				if (success) {
-					ConvertSystemTimeToDate(&local_access_time, access_time);
+					ConvertSystemTimeToDate(&local_access_time, *access_time);
 				}
 			}
 			if (last_write_time != nullptr && success) {
@@ -62,7 +62,7 @@ namespace ECSEngine {
 				success &= FileTimeToSystemTime(&filetime_last_write, &sys_last_write_time);
 				success &= SystemTimeToTzSpecificLocalTime(nullptr, &sys_last_write_time, &local_write_time);
 				if (success) {
-					ConvertSystemTimeToDate(&local_write_time, last_write_time);
+					ConvertSystemTimeToDate(&local_write_time, *last_write_time);
 				}
 			}
 			return success;
@@ -70,26 +70,26 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimesInternal(void* file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+		bool GetFileTimesInternal(void* file_handle, CapacityStream<wchar_t>* creation_time, CapacityStream<wchar_t>* access_time, CapacityStream<wchar_t>* last_write_time)
 		{
-			char _creation_time[256];
-			char _access_time[256];
-			char _last_write_time[256];
+			ECS_STACK_CAPACITY_STREAM(char, ascii_creation_time_storage, 256);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_access_time_storage, 256);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_last_write_time_storage, 256);
 
-			char* ptr1 = creation_time == nullptr ? nullptr : _creation_time;
-			char* ptr2 = access_time == nullptr ? nullptr : _access_time;
-			char* ptr3 = last_write_time == nullptr ? nullptr : _last_write_time;
+			CapacityStream<char>* ascii_creation_time = creation_time != nullptr ? &ascii_creation_time_storage : nullptr;
+			CapacityStream<char>* ascii_access_time = access_time != nullptr ? &ascii_access_time_storage : nullptr;
+			CapacityStream<char>* ascii_last_write_time = last_write_time != nullptr ? &ascii_last_write_time_storage : nullptr;
 
-			bool success = GetFileTimesInternal(file_handle, ptr1, ptr2, ptr3);
+			bool success = GetFileTimesInternal(file_handle, ascii_access_time, ascii_access_time, ascii_last_write_time);
 			if (success) {
-				if (ptr1 != nullptr) {
-					ConvertASCIIToWide(creation_time, ptr1, 256);
+				if (ascii_creation_time != nullptr) {
+					ConvertASCIIToWide(*creation_time, *ascii_creation_time);
 				}
-				if (ptr2 != nullptr) {
-					ConvertASCIIToWide(access_time, ptr2, 256);
+				if (ascii_access_time != nullptr) {
+					ConvertASCIIToWide(*access_time, *ascii_access_time);
 				}
-				if (ptr3 != nullptr) {
-					ConvertASCIIToWide(last_write_time, ptr3, 256);
+				if (ascii_last_write_time != nullptr) {
+					ConvertASCIIToWide(*last_write_time, *ascii_last_write_time);
 				}
 				return true;
 			}
@@ -145,27 +145,23 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetRelativeFileTimesInternal(void* file_handle, char* creation_time, char* access_time, char* last_write_time)
+		bool GetRelativeFileTimesInternal(void* file_handle, CapacityStream<char>* creation_time, CapacityStream<char>* access_time, CapacityStream<char>* last_write_time)
 		{
 			size_t creation_time_int, access_time_int, last_write_time_int;
-			size_t* ptr1 = nullptr;
-			size_t* ptr2 = nullptr;
-			size_t* ptr3 = nullptr;
+			size_t* creation_time_ptr = creation_time != nullptr ? &creation_time_int : nullptr;
+			size_t* access_time_ptr = access_time != nullptr ? &access_time_int : nullptr;
+			size_t* last_write_time_ptr = last_write_time != nullptr ? &last_write_time_int : nullptr;
 
-			ptr1 = creation_time != nullptr ? &creation_time_int : nullptr;
-			ptr2 = access_time != nullptr ? &access_time_int : nullptr;
-			ptr3 = last_write_time != nullptr ? &last_write_time_int : nullptr;
-
-			bool success = GetRelativeFileTimesInternal(file_handle, ptr1, ptr2, ptr3);
+			bool success = GetRelativeFileTimesInternal(file_handle, creation_time_ptr, access_time_ptr, last_write_time_ptr);
 			if (success) {
-				if (ptr1 != nullptr) {
-					ConvertDurationToChars(creation_time_int, creation_time);
+				if (creation_time_ptr != nullptr) {
+					ConvertDurationToChars(creation_time_int, *creation_time);
 				}
-				if (ptr2 != nullptr) {
-					ConvertDurationToChars(access_time_int, access_time);
+				if (access_time_ptr != nullptr) {
+					ConvertDurationToChars(access_time_int, *access_time);
 				}
-				if (ptr3 != nullptr) {
-					ConvertDurationToChars(last_write_time_int, last_write_time);
+				if (last_write_time_ptr != nullptr) {
+					ConvertDurationToChars(last_write_time_int, *last_write_time);
 				}
 				return true;
 			}
@@ -174,26 +170,26 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetRelativeFileTimesInternal(void* file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+		bool GetRelativeFileTimesInternal(void* file_handle, CapacityStream<wchar_t>* creation_time, CapacityStream<wchar_t>* access_time, CapacityStream<wchar_t>* last_write_time)
 		{
-			char temp_characters1[256];
-			char temp_characters2[256];
-			char temp_characters3[256];
+			ECS_STACK_CAPACITY_STREAM(char, ascii_creation_time_storage, 256);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_access_time_storage, 256);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_last_write_time_storage, 256);
 
-			char* ptr1 = creation_time != nullptr ? temp_characters1 : nullptr;
-			char* ptr2 = access_time != nullptr ? temp_characters2 : nullptr;
-			char* ptr3 = last_write_time != nullptr ? temp_characters3 : nullptr;
-			bool success = GetRelativeFileTimesInternal(file_handle, ptr1, ptr2, ptr3);
+			CapacityStream<char>* ascii_creation_time = creation_time != nullptr ? &ascii_creation_time_storage : nullptr;
+			CapacityStream<char>* ascii_access_time = access_time != nullptr ? &ascii_access_time_storage : nullptr;
+			CapacityStream<char>* ascii_last_write_time = last_write_time != nullptr ? &ascii_last_write_time_storage : nullptr;
+			bool success = GetRelativeFileTimesInternal(file_handle, ascii_creation_time, ascii_access_time, ascii_last_write_time);
 
 			if (success) {
-				if (ptr1 != nullptr) {
-					ConvertASCIIToWide(creation_time, temp_characters1, 256);
+				if (ascii_creation_time != nullptr) {
+					ConvertASCIIToWide(*creation_time, *ascii_creation_time);
 				}
-				if (ptr2 != nullptr) {
-					ConvertASCIIToWide(access_time, temp_characters2, 256);
+				if (ascii_access_time != nullptr) {
+					ConvertASCIIToWide(*access_time, *ascii_access_time);
 				}
-				if (ptr3 != nullptr) {
-					ConvertASCIIToWide(last_write_time, temp_characters3, 256);
+				if (ascii_last_write_time != nullptr) {
+					ConvertASCIIToWide(*last_write_time, *ascii_last_write_time);
 				}
 				return true;
 			}
@@ -296,7 +292,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimes(Stream<wchar_t> path, char* creation_time, char* access_time, char* last_write_time)
+		bool GetFileTimes(Stream<wchar_t> path, CapacityStream<char>* creation_time, CapacityStream<char>* access_time, CapacityStream<char>* last_write_time)
 		{
 			FILETIME os_creation_time, os_access_time, os_last_write_time;
 			bool success = GetFileTimesInternal(path, &os_creation_time, &os_access_time, &os_last_write_time);
@@ -308,7 +304,7 @@ namespace ECSEngine {
 					success &= (bool)FileTimeToSystemTime(&os_creation_time, &sys_creation_time);
 					success &= (bool)SystemTimeToTzSpecificLocalTime(nullptr, &sys_creation_time, &local_creation_time);
 					if (success) {
-						ConvertSystemTimeToDate(&local_creation_time, creation_time);
+						ConvertSystemTimeToDate(&local_creation_time, *creation_time);
 					}
 				}
 				if (access_time != nullptr && success) {
@@ -316,7 +312,7 @@ namespace ECSEngine {
 					success &= (bool)FileTimeToSystemTime(&os_access_time, &sys_access_time);
 					success &= (bool)SystemTimeToTzSpecificLocalTime(nullptr, &sys_access_time, &local_access_time);
 					if (success) {
-						ConvertSystemTimeToDate(&local_access_time, access_time);
+						ConvertSystemTimeToDate(&local_access_time, *access_time);
 					}
 				}
 				if (last_write_time != nullptr && success) {
@@ -324,7 +320,7 @@ namespace ECSEngine {
 					success &= (bool)FileTimeToSystemTime(&os_last_write_time, &sys_last_write_time);
 					success &= (bool)SystemTimeToTzSpecificLocalTime(nullptr, &sys_last_write_time, &local_write_time);
 					if (success) {
-						ConvertSystemTimeToDate(&local_write_time, last_write_time);
+						ConvertSystemTimeToDate(&local_write_time, *last_write_time);
 					}
 				}
 				return success;
@@ -334,26 +330,26 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimes(Stream<wchar_t> path, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+		bool GetFileTimes(Stream<wchar_t> path, CapacityStream<wchar_t>* creation_time, CapacityStream<wchar_t>* access_time, CapacityStream<wchar_t>* last_write_time)
 		{
-			char _creation_time[256];
-			char _access_time[256];
-			char _last_write_time[256];
+			ECS_STACK_CAPACITY_STREAM(char, ascii_creation_time_storage, 256);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_access_time_storage, 256);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_last_write_time_storage, 256);
 
-			char* ptr1 = creation_time == nullptr ? nullptr : _creation_time;
-			char* ptr2 = access_time == nullptr ? nullptr : _access_time;
-			char* ptr3 = last_write_time == nullptr ? nullptr : _last_write_time;
+			CapacityStream<char>* ascii_creation_time = creation_time == nullptr ? nullptr : &ascii_creation_time_storage;
+			CapacityStream<char>* ascii_access_time = access_time == nullptr ? nullptr : &ascii_access_time_storage;
+			CapacityStream<char>* ascii_last_write_time = last_write_time == nullptr ? nullptr : &ascii_last_write_time_storage;
 
-			bool success = GetFileTimes(path, ptr1, ptr2, ptr3);
+			bool success = GetFileTimes(path, ascii_creation_time, ascii_access_time, ascii_last_write_time);
 			if (success) {
-				if (ptr1 != nullptr) {
-					ConvertASCIIToWide(creation_time, ptr1, 256);
+				if (ascii_creation_time != nullptr) {
+					ConvertASCIIToWide(*creation_time, *ascii_creation_time);
 				}
-				if (ptr2 != nullptr) {
-					ConvertASCIIToWide(access_time, ptr2, 256);
+				if (ascii_access_time != nullptr) {
+					ConvertASCIIToWide(*access_time, *ascii_access_time);
 				}
-				if (ptr3 != nullptr) {
-					ConvertASCIIToWide(last_write_time, ptr3, 256);
+				if (ascii_last_write_time != nullptr) {
+					ConvertASCIIToWide(*last_write_time, *ascii_last_write_time);
 				}
 				return true;
 			}
@@ -469,9 +465,9 @@ namespace ECSEngine {
 
 		bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			char* creation_time,
-			char* access_time,
-			char* last_write_time
+			CapacityStream<char>* creation_time,
+			CapacityStream<char>* access_time,
+			CapacityStream<char>* last_write_time
 		)
 		{
 			size_t creation_time_int, access_time_int, last_write_time_int;
@@ -486,13 +482,13 @@ namespace ECSEngine {
 			bool success = GetRelativeFileTimes(path, ptr1, ptr2, ptr3);
 			if (success) {
 				if (ptr1 != nullptr) {
-					ConvertDurationToChars(creation_time_int, creation_time);
+					ConvertDurationToChars(creation_time_int, *creation_time);
 				}
 				if (ptr2 != nullptr) {
-					ConvertDurationToChars(access_time_int, access_time);
+					ConvertDurationToChars(access_time_int, *access_time);
 				}
 				if (ptr3 != nullptr) {
-					ConvertDurationToChars(last_write_time_int, last_write_time);
+					ConvertDurationToChars(last_write_time_int, *last_write_time);
 				}
 				return true;
 			}
@@ -503,29 +499,29 @@ namespace ECSEngine {
 
 		bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			wchar_t* creation_time,
-			wchar_t* access_time,
-			wchar_t* last_write_time
+			CapacityStream<wchar_t>* creation_time,
+			CapacityStream<wchar_t>* access_time,
+			CapacityStream<wchar_t>* last_write_time
 		)
 		{
-			char temp_characters1[256];
-			char temp_characters2[256];
-			char temp_characters3[256];
+			ECS_STACK_CAPACITY_STREAM(char, ascii_creation_time_storage, 256);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_access_time_storage, 256);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_last_write_time_storage, 256);
 
-			char* ptr1 = creation_time != nullptr ? temp_characters1 : nullptr;
-			char* ptr2 = access_time != nullptr ? temp_characters2 : nullptr;
-			char* ptr3 = last_write_time != nullptr ? temp_characters3 : nullptr;
-			bool success = GetRelativeFileTimes(path, ptr1, ptr2, ptr3);
+			CapacityStream<char>* ascii_creation_time = creation_time != nullptr ? &ascii_creation_time_storage : nullptr;
+			CapacityStream<char>* ascii_access_time = access_time != nullptr ? &ascii_access_time_storage : nullptr;
+			CapacityStream<char>* ascii_last_write_time = last_write_time != nullptr ? &ascii_last_write_time_storage : nullptr;
+			bool success = GetRelativeFileTimes(path, ascii_creation_time, ascii_access_time, ascii_last_write_time);
 
 			if (success) {
-				if (ptr1 != nullptr) {
-					ConvertASCIIToWide(creation_time, temp_characters1, 256);
+				if (ascii_creation_time != nullptr) {
+					ConvertASCIIToWide(*creation_time, *ascii_creation_time);
 				}
-				if (ptr2 != nullptr) {
-					ConvertASCIIToWide(access_time, temp_characters2, 256);
+				if (ascii_access_time != nullptr) {
+					ConvertASCIIToWide(*access_time, *ascii_access_time);
 				}
-				if (ptr3 != nullptr) {
-					ConvertASCIIToWide(last_write_time, temp_characters3, 256);
+				if (ascii_last_write_time != nullptr) {
+					ConvertASCIIToWide(*last_write_time, *ascii_last_write_time);
 				}
 				return true;
 			}
@@ -605,17 +601,12 @@ namespace ECSEngine {
 		void GetFileTimesWithError(
 			Stream<wchar_t> path,
 			UISystem* system,
-			PointerType* ECS_RESTRICT creation_time,
-			PointerType* ECS_RESTRICT access_time,
-			PointerType* ECS_RESTRICT last_write_time
+			PointerType* creation_time,
+			PointerType* access_time,
+			PointerType* last_write_time
 		)
 		{
-			wchar_t temp_wide_characters[256];
-			ECS_ASSERT(path.size < 256);
-			path.CopyTo(temp_wide_characters);
-			temp_wide_characters[path.size] = L'\0';
-
-			bool success = GetFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
+			bool success = GetFileTimes(path, creation_time, access_time, last_write_time);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(error_message, GET_FILE_TIMES_ERROR_STRING, path);
 				CreateErrorMessageWindow(system, error_message);
@@ -626,82 +617,67 @@ namespace ECSEngine {
 		void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path,
 			UISystem* system,
-			PointerType* ECS_RESTRICT creation_time,
-			PointerType* ECS_RESTRICT access_time,
-			PointerType* ECS_RESTRICT last_write_time
+			PointerType* creation_time,
+			PointerType* access_time,
+			PointerType* last_write_time
 		)
 		{
-			wchar_t temp_wide_characters[256];
-			ECS_ASSERT(path.size < 256);
-			path.CopyTo(temp_wide_characters);
-			temp_wide_characters[path.size] = L'\0';
-
-			bool success = GetRelativeFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
+			bool success = GetRelativeFileTimes(path, creation_time, access_time, last_write_time);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(error_message, GET_FILE_TIMES_ERROR_STRING, path);
 				CreateErrorMessageWindow(system, error_message);
 			}
 		}
 
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem*, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem*, CapacityStream<wchar_t>*, CapacityStream<wchar_t>*, CapacityStream<wchar_t>*);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem*, CapacityStream<char>*, CapacityStream<char>*, CapacityStream<char>*);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem*, size_t*, size_t*, size_t*);
 
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, CapacityStream<wchar_t>*, CapacityStream<wchar_t>*, CapacityStream<wchar_t>*);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, CapacityStream<char>*, CapacityStream<char>*, CapacityStream<char>*);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, size_t*, size_t*, size_t*);
 
 		// -----------------------------------------------------------------------------------------------------
 
 		template<typename PointerType>
 		void GetFileTimesWithError(
 			Stream<wchar_t> path,
-			PointerType* ECS_RESTRICT creation_time,
-			PointerType* ECS_RESTRICT access_time,
-			PointerType* ECS_RESTRICT last_write_time
+			PointerType* creation_time,
+			PointerType* access_time,
+			PointerType* last_write_time
 		)
 		{
-			wchar_t temp_wide_characters[256];
-			ECS_ASSERT(path.size < ECS_COUNTOF(temp_wide_characters));
-			path.CopyTo(temp_wide_characters);
-			temp_wide_characters[path.size] = L'\0';
-
-			bool success = GetFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
+			bool success = GetFileTimes(path, creation_time, access_time, last_write_time);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(error_message, GET_FILE_TIMES_ERROR_STRING, path);
 				GetConsole()->Error(error_message);
 			}
 		}
 
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, CapacityStream<wchar_t>*, CapacityStream<wchar_t>*, CapacityStream<wchar_t>*);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, CapacityStream<char>*, CapacityStream<char>*, CapacityStream<char>*);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, size_t*, size_t*, size_t*);
 
 		// -----------------------------------------------------------------------------------------------------
 
 		template<typename PointerType>
 		void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path,
-			PointerType* ECS_RESTRICT creation_time,
-			PointerType* ECS_RESTRICT access_time,
-			PointerType* ECS_RESTRICT last_write_time
+			PointerType* creation_time,
+			PointerType* access_time,
+			PointerType* last_write_time
 		)
 		{
-			wchar_t temp_wide_characters[256];
-			ECS_ASSERT(path.size < ECS_COUNTOF(temp_wide_characters));
-			path.CopyTo(temp_wide_characters);
-			temp_wide_characters[path.size] = L'\0';
-
-			bool success = GetRelativeFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
+			bool success = GetRelativeFileTimes(path, creation_time, access_time, last_write_time);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(error_message, GET_FILE_TIMES_ERROR_STRING, path);
 				GetConsole()->Error(error_message);
 			}
 		}
 
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, CapacityStream<wchar_t>*, CapacityStream<wchar_t>*, CapacityStream<wchar_t>*);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, CapacityStream<char>*, CapacityStream<char>*, CapacityStream<char>*);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, size_t*, size_t*, size_t*);
 
 		// -----------------------------------------------------------------------------------------------------
 
@@ -820,7 +796,7 @@ namespace ECSEngine {
 			}
 		}
 
-		void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name) {
+		void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name) {
 			bool success = RenameFolder(path, new_name);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(error_message, RENAME_FOLDER_ERROR_STRING, path, new_name);
@@ -840,7 +816,7 @@ namespace ECSEngine {
 			}
 		}
 
-		void RenameFileOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name) {
+		void RenameFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name) {
 			bool success = RenameFile(path, new_name);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(message, RENAME_FILE_ERROR_STRING, path, new_name);

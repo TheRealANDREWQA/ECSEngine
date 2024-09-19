@@ -301,7 +301,7 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	drawer.SpriteStateButton(INPUT_ICON_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_SPLIT_CURSORS, &project_settings->synchronized_sandbox_input, drawer.color_theme.text);
 }
 
-void MiscellaneousBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void MiscellaneousBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	descriptor.draw = MiscellaneousBarDraw;
 

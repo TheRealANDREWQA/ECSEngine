@@ -589,13 +589,13 @@ bool AddRegisterAssetEvent(
 
 	unsigned int existing_handle = FindAsset(editor_state, name, file, type);
 	if (existing_handle == -1) {
-		size_t storage[128];
+		ECS_STACK_VOID_STREAM(stack_storage, ECS_KB);
 		unsigned int write_size = 0;
 		Stream<void> streams[] = {
 			name,
 			file
 		};
-		RegisterEventData* data = CreateCoalescedStreamsIntoType<RegisterEventData>(storage, { streams, std::size(streams) }, &write_size);
+		RegisterEventData* data = CreateCoalescedStreamsIntoType<RegisterEventData>(stack_storage, { streams, std::size(streams) }, &write_size);
 		data->handle = handle;
 		data->sandbox_index = sandbox_index;
 		data->type = type;
@@ -1086,14 +1086,14 @@ EDITOR_EVENT(DeleteAssetSettingEvent) {
 
 void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type)
 {
-	size_t storage[256];
+	ECS_STACK_VOID_STREAM(stack_storage, ECS_KB * 2);
 	unsigned int write_size = 0;
 	Stream<void> buffers[] = {
 		name,
 		file
 	};
 
-	DeleteAssetSettingEventData* data = CreateCoalescedStreamsIntoType<DeleteAssetSettingEventData>(storage, { buffers, std::size(buffers) }, &write_size);
+	DeleteAssetSettingEventData* data = CreateCoalescedStreamsIntoType<DeleteAssetSettingEventData>(stack_storage, { buffers, std::size(buffers) }, &write_size);
 	data->name_size = name.size;
 	data->file_size = file.size;
 	data->type = type;

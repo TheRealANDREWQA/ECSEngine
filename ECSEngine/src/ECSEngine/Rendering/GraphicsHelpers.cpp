@@ -636,6 +636,8 @@ namespace ECSEngine {
 				DeallocateEx(allocator, data.bytes.buffer);
 			}
 		}
+
+		return data;
 	}
 
 #define EXPORT(type) ECS_TEMPLATE_FUNCTION(TextureCPUData, GetTextureDataToCPU, Graphics*, type, unsigned int, AllocatorPolymorphic, SpinLock*);

@@ -283,10 +283,10 @@ namespace ECSEngine {
 		}
 
 		// It does not create the allocator
-		ECS_INLINE void SetComponentFunctions(const ComponentFunctions* component_functions, AllocatorPolymorphic allocator) {
+		ECS_INLINE void SetComponentFunctions(const ComponentFunctions* component_functions, AllocatorPolymorphic _allocator) {
 			copy_function = component_functions->copy_function;
 			deallocate_function = component_functions->deallocate_function;
-			data = CopyableCopy(component_functions->data, allocator);
+			data = CopyableCopy(component_functions->data, _allocator);
 		}
 
 		ECS_INLINE void ResetComponentFunctions() {

@@ -1441,9 +1441,10 @@ namespace ECSEngine {
 
 				for (unsigned int index = starting_dependency_size; index < dependencies.size; index++) {
 					if (has_storage_dependencies) {
+						size_t asset_metadata_byte_size = AssetMetadataByteSize(dependencies[index].type);
+						remove_info->storage_dependencies_allocation.AssertCapacity(asset_metadata_byte_size);
 						remove_info->storage = OffsetPointer(remove_info->storage_dependencies_allocation);
-						remove_info->storage_dependencies_allocation.size += AssetMetadataByteSize(dependencies[index].type);
-						remove_info->storage_dependencies_allocation.AssertCapacity();
+						remove_info->storage_dependencies_allocation.size += asset_metadata_byte_size;
 					}
 					bool evicted = database->RemoveAsset(dependencies[index].handle, dependencies[index].type, 1, remove_info);
 					if (evicted && has_storage_dependencies) {

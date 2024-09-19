@@ -172,18 +172,18 @@ namespace ECSEngine {
 	// Works for directories too
 	ECSENGINE_API bool GetFileTimes(
 		ECS_FILE_HANDLE file_handle,
-		wchar_t* creation_time = nullptr,
-		wchar_t* access_time = nullptr,
-		wchar_t* last_write_time = nullptr
+		CapacityStream<wchar_t>* creation_time = nullptr,
+		CapacityStream<wchar_t>* access_time = nullptr,
+		CapacityStream<wchar_t>* last_write_time = nullptr
 	);
 
 	// A pointer null means I don't care; returns whether or not succeeded
 	// Works for directories too
 	ECSENGINE_API bool GetFileTimes(
 		ECS_FILE_HANDLE file_handle,
-		char* creation_time = nullptr,
-		char* access_time = nullptr,
-		char* last_write_time = nullptr
+		CapacityStream<char>* creation_time = nullptr,
+		CapacityStream<char>* access_time = nullptr,
+		CapacityStream<char>* last_write_time = nullptr
 	);
 
 	// A pointer null means I don't care; returns whether or not succeeded
@@ -199,18 +199,18 @@ namespace ECSEngine {
 	// Works for directories too
 	ECSENGINE_API bool GetRelativeFileTimes(
 		ECS_FILE_HANDLE file_handle,
-		wchar_t* creation_time = nullptr,
-		wchar_t* access_time = nullptr,
-		wchar_t* last_write_time = nullptr
+		CapacityStream<wchar_t>* creation_time = nullptr,
+		CapacityStream<wchar_t>* access_time = nullptr,
+		CapacityStream<wchar_t>* last_write_time = nullptr
 	);
 
 	// A pointer null means I don't care; returns whether or not succeeded
 	// Works for directories too
 	ECSENGINE_API bool GetRelativeFileTimes(
 		ECS_FILE_HANDLE file_handle,
-		char* creation_time = nullptr,
-		char* access_time = nullptr,
-		char* last_write_time = nullptr
+		CapacityStream<char>* creation_time = nullptr,
+		CapacityStream<char>* access_time = nullptr,
+		CapacityStream<char>* last_write_time = nullptr
 	);
 
 	// A pointer null means I don't care; returns whether or not succeeded
