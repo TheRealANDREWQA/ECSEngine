@@ -14,6 +14,8 @@
 #pragma warning(disable:26812)
 #pragma warning(disable:6255)
 #pragma warning(disable:26495)
+#pragma warning(disable:4251)
+#pragma warning(disable:4201)
 
 #include <float.h>
 #include <limits.h>

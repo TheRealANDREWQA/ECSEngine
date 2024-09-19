@@ -850,10 +850,10 @@ namespace ECSEngine {
 		}
 	}
 
-	void ComponentInfo::TryCallDeallocateFunction(void* data) const
+	void ComponentInfo::TryCallDeallocateFunction(void* _data) const
 	{
 		if (deallocate_function != nullptr) {
-			CallDeallocateFunction(data);
+			CallDeallocateFunction(_data);
 		}
 	}
 

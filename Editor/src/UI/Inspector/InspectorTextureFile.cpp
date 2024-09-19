@@ -112,9 +112,9 @@ void InspectorTextureFileAddFunctors(InspectorTable* table) {
 
 void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index, Stream<char> initial_name)
 {
-	size_t _draw_data_storage[128];
+	ECS_STACK_VOID_STREAM(stack_storage, ECS_KB);
 	unsigned int write_size = 0;
-	InspectorDrawTextureData* draw_data = CreateCoalescedStreamIntoType<InspectorDrawTextureData>(_draw_data_storage, path, &write_size);
+	InspectorDrawTextureData* draw_data = CreateCoalescedStreamIntoType<InspectorDrawTextureData>(stack_storage, path, &write_size);
 	memset(&draw_data->helper_data, 0, sizeof(draw_data->helper_data));
 
 	uint3 indices = ChangeInspectorDrawFunctionWithSearchEx(

@@ -188,10 +188,10 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 	}
 
 	// returns the count of decoded numbers
-	ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, unsigned int* number_buffer);
+	ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, CapacityStream<unsigned int>* number_buffer);
 
 	// returns the count of decoded numbers
-	ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, int* number_buffer);
+	ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, CapacityStream<int>* number_buffer);
 
 	ECSENGINE_API void ConvertWideCharsToASCII(
 		const wchar_t* wide_chars,
@@ -259,7 +259,7 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 
 	// Duration should be expressed as milliseconds
 		// Returns how many characters were written
-	ECSENGINE_API size_t ConvertDurationToChars(size_t duration_milliseconds, char* characters);
+	ECSENGINE_API size_t ConvertDurationToChars(size_t duration_milliseconds, CapacityStream<char>& characters);
 
 	// finds the tokens that appear in the current string
 	ECSENGINE_API void FindToken(Stream<char> string, char token, AdditionStream<unsigned int> tokens);
@@ -382,11 +382,7 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 	// Generates the string variants of the given numbers
 	ECSENGINE_API void FromNumbersToStrings(size_t count, CapacityStream<char>& storage, Stream<char>* strings, size_t offset = 0);
 
-	ECSENGINE_API void ConvertDateToString(Date date, Stream<char>& characters, ECS_FORMAT_DATE_FLAGS format_flags);
-
 	ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<char>& characters, ECS_FORMAT_DATE_FLAGS format_flags);
-
-	ECSENGINE_API void ConvertDateToString(Date date, Stream<wchar_t>& characters, ECS_FORMAT_DATE_FLAGS format_flags);
 
 	ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<wchar_t>& characters, ECS_FORMAT_DATE_FLAGS format_flags);
 

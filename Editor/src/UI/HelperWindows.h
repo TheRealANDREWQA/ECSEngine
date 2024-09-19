@@ -19,7 +19,7 @@ unsigned int CreateDefaultWindow(
 	const char* window_name,
 	EditorState* editor_state,
 	float2 window_size,
-	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 );
 
 unsigned int CreateDefaultWindowWithIndex(
@@ -27,7 +27,7 @@ unsigned int CreateDefaultWindowWithIndex(
 	EditorState* editor_state,
 	float2 window_size,
 	unsigned int index,
-	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 );
 
 // Changes the index of an UI window (eg Inspector 1 -> Inspector 0)

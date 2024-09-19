@@ -497,7 +497,6 @@
     <None Include="src\ECSEngine\Rendering\Shaders\LightingUtilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\Utilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\PBRBase.hlsli" />
-    <None Include="cpp.hint" />
     <None Include="src\ECSEngine\Rendering\Shaders\CBufferTags.hlsli" />
   </ItemGroup>
 </Project>

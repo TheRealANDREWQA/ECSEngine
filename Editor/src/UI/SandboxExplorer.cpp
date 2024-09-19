@@ -442,11 +442,11 @@ void CreateSandboxExplorerAction(ActionData* action_data) {
 
 // --------------------------------------------------------------------------------------------
 
-void SandboxExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void SandboxExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	descriptor.draw = SandboxExplorerDraw;
 
-	SandboxExplorerData* data = (SandboxExplorerData*)stack_memory;
+	SandboxExplorerData* data = stack_memory->Reserve<SandboxExplorerData>();
 	data->editor_state = editor_state;
 	data->active_sandbox = -1;
 
@@ -470,8 +470,8 @@ unsigned int CreateSandboxExplorerWindow(EditorState* editor_state) {
 	descriptor.initial_size_x = window_size.x;
 	descriptor.initial_size_y = window_size.y;
 
-	size_t stack_memory[128];
-	SandboxExplorerSetDescriptor(descriptor, editor_state, stack_memory);
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+	SandboxExplorerSetDescriptor(descriptor, editor_state, &stack_memory);
 
 	return editor_state->ui_system->Create_Window(descriptor);
 }

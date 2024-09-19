@@ -410,8 +410,8 @@ namespace ECSEngine {
 			size = _size;
 		}
 
-		void InitializeAndCopy(uintptr_t& buffer, Stream<T> other) {
-			InitializeFromBuffer(buffer, other.size);
+		void InitializeAndCopy(uintptr_t& _buffer, Stream<T> other) {
+			InitializeFromBuffer(_buffer, other.size);
 			CopyOther(other);
 		}
 
@@ -1565,8 +1565,8 @@ namespace ECSEngine {
 
 		// Returns the subrange inside this entry
 		ECS_INLINE Stream<void> Add(Stream<void> other) {
+			AssertCapacity(other.size);
 			unsigned int previous_size = size;
-			ECS_ASSERT(size + other.size < capacity);
 			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
 			size += other.size;
 			return SliceAt(previous_size);
@@ -1579,12 +1579,12 @@ namespace ECSEngine {
 			size++;
 		}
 
-		ECS_INLINE void AssertCapacity() const {
-			ECS_ASSERT(size <= capacity);
+		ECS_INLINE void AssertCapacity(unsigned int extra_size) const {
+			ECS_ASSERT(size + extra_size <= capacity);
 		}
 
-		ECS_INLINE void AssertCapacity(const char* message) const {
-			ECS_ASSERT(size <= capacity, message);
+		ECS_INLINE void AssertCapacity(unsigned int extra_size, const char* message) const {
+			ECS_ASSERT(size + extra_size <= capacity, message);
 		}
 
 		// It will set the size
@@ -1660,6 +1660,18 @@ namespace ECSEngine {
 		ECS_INLINE void RemoveSwapBack(unsigned int index, unsigned int byte_size) {
 			size--;
 			CopySlice(index * byte_size, (void*)((uintptr_t)buffer + size * byte_size), byte_size);
+		}
+
+		ECS_INLINE void* Reserve(unsigned int reserve_size) {
+			ECS_ASSERT(size + reserve_size <= capacity);
+			void* value = (void*)((uintptr_t)buffer + size);
+			size += reserve_size;
+			return value;
+		}
+
+		template<typename T>
+		ECS_INLINE T* Reserve() {
+			return (T*)Reserve(sizeof(T));
 		}
 
 		// If used untyped
@@ -1782,9 +1794,9 @@ namespace ECSEngine {
 			CopyOther(other.buffer, other.size, element_byte_size);
 		}
 
-		ResizableStream<void> Copy(AllocatorPolymorphic allocator) const {
+		ResizableStream<void> Copy(AllocatorPolymorphic _allocator) const {
 			ResizableStream<void> result;
-			result.Initialize(allocator, size);
+			result.Initialize(_allocator, size);
 			result.CopyOther(buffer, size);
 			return result;
 		}

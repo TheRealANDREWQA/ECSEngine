@@ -600,7 +600,7 @@ namespace ECSEngine {
 					}
 					elements[index].initialize_task_function(task_manager->m_world, &initialize_info);
 
-					frame_data.AssertCapacity();
+					frame_data.AssertCapacity(0);
 					// Check to see if there is any frame data
 					if (frame_data.size > 0) {
 						task_data = frame_data.buffer;

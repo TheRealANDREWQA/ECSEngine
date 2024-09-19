@@ -133,7 +133,7 @@ namespace ECSEngine {
 		}
 
 		size_t total_size = 0;
-		char temp_name[512];
+		ECS_STACK_CAPACITY_STREAM(char, temp_name, 512);
 
 		// Prerecord section names
 		unsigned short* name_sizes = (unsigned short*)ECS_STACK_ALLOC(sections.size * sizeof(unsigned short));
@@ -145,10 +145,10 @@ namespace ECSEngine {
 			unsigned short name_size;
 			Read<true>(&stream, &name_size, sizeof(unsigned short));
 
-			Read<true>(&stream, temp_name, (sizeof(char) + 1) * name_size);
+			Read<true>(&stream, temp_name.buffer, (sizeof(char) + 1) * name_size);
 			unsigned int section_index = -1;
 			for (size_t subindex = 0; subindex < sections.size && section_index == -1; index++) {
-				if (Stream<char>(temp_name, name_size) == Stream<char>(sections[subindex].name, name_sizes[subindex])) {
+				if (Stream<char>(temp_name.buffer, name_size) == Stream<char>(sections[subindex].name, name_sizes[subindex])) {
 					section_index = subindex;
 				}
 			}
@@ -194,15 +194,15 @@ namespace ECSEngine {
 
 		size_t total_memory = 0;
 		
-		char temp_name[512];
+		ECS_STACK_CAPACITY_STREAM(char, temp_name, 512);
 		for (size_t index = 0; index < section_count; index++) {
 			unsigned short name_size;
 			Read<true>(&data, &name_size, sizeof(unsigned short));
-			Read<true>(&data, temp_name, (name_size + 1) * sizeof(char));
+			Read<true>(&data, temp_name.buffer, (name_size + 1) * sizeof(char));
 
 			unsigned int section_index = -1;
 			for (size_t subindex = 0; subindex < serialize_data.size; subindex++) {
-				if (Stream<char>(temp_name, name_size) == Stream<char>(serialize_data[subindex].name, section_name_sizes[subindex])) {
+				if (Stream<char>(temp_name.buffer, name_size) == Stream<char>(serialize_data[subindex].name, section_name_sizes[subindex])) {
 					section_index = subindex;
 					break;
 				}

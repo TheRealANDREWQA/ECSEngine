@@ -1248,17 +1248,17 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	ID3DBlob* ShaderByteCode(GraphicsDevice* device, Stream<char> source_code, ShaderCompileOptions options, ID3DInclude* include_policy, ECS_SHADER_TYPE type) {
-		D3D_SHADER_MACRO macros[64];
+		ECS_STACK_CAPACITY_STREAM(D3D_SHADER_MACRO, macros, 64);
 		// For strings that are nullptr or of size 0, redirect them to this
 		char empty_string = '\0';
-		ECS_CRASH_CONDITION_RETURN(options.macros.size <= ECS_COUNTOF(macros) - 1, nullptr, "Too many shaders");
+		ECS_CRASH_CONDITION_RETURN(options.macros.size <= macros.capacity - 1, nullptr, "Too many shaders");
 		ECS_STACK_CAPACITY_STREAM(char, null_terminated_strings, ECS_KB * 8);
 
 		for (size_t index = 0; index < options.macros.size; index++) {
 			// Write the strings into a temp buffer and null terminate them
 			macros[index].Name = null_terminated_strings.buffer + null_terminated_strings.size;
 			null_terminated_strings.AddStreamAssert(options.macros[index].name);
-			null_terminated_strings.Add('\0');
+			null_terminated_strings.AddAssert('\0');
 			macros[index].Definition = options.macros[index].definition.size == 0 ? &empty_string : options.macros[index].definition.buffer;
 		}
 		macros[options.macros.size] = { NULL, NULL };
@@ -1286,7 +1286,7 @@ namespace ECSEngine {
 
 		ID3DBlob* blob;
 		ID3DBlob* error_message_blob = nullptr;
-		HRESULT result = D3DCompile(source_code.buffer, source_code.size, nullptr, macros, include_policy, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, &error_message_blob);
+		HRESULT result = D3DCompile(source_code.buffer, source_code.size, nullptr, macros.buffer, include_policy, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, &error_message_blob);
 
 		const char* error_message;
 		if (error_message_blob != nullptr) {
@@ -2308,14 +2308,14 @@ namespace ECSEngine {
 			result = m_device->CreateTexture1D(&descriptor, nullptr, &resource.tex);
 		}
 		else {
-			D3D11_SUBRESOURCE_DATA subresource_data[32];
-			ECS_ASSERT(ECS_COUNTOF(subresource_data) >= ecs_descriptor->mip_data.size, "Creating Texture 1D failed because of stack buffer limitation!");
+			ECS_STACK_CAPACITY_STREAM(D3D11_SUBRESOURCE_DATA, subresource_data, 32);
+			ECS_ASSERT(subresource_data.capacity >= ecs_descriptor->mip_data.size, "Creating Texture 1D failed because of stack buffer limitation!");
 
-			memset(subresource_data, 0, sizeof(subresource_data));
+			memset(subresource_data.buffer, 0, sizeof(subresource_data[0]) * ecs_descriptor->mip_data.size);
 			for (size_t index = 0; index < ecs_descriptor->mip_data.size; index++) {
 				subresource_data[index].pSysMem = ecs_descriptor->mip_data[index].buffer;
 			}
-			result = m_device->CreateTexture1D(&descriptor, subresource_data, &resource.tex);
+			result = m_device->CreateTexture1D(&descriptor, subresource_data.buffer, &resource.tex);
 		}
 
 		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), resource, "Creating Texture 1D failed!");
@@ -2347,10 +2347,10 @@ namespace ECSEngine {
 			result = m_device->CreateTexture2D(&descriptor, nullptr, &resource.tex);
 		}
 		else {
-			D3D11_SUBRESOURCE_DATA subresource_data[32];
-			ECS_ASSERT(ECS_COUNTOF(subresource_data) >= ecs_descriptor->mip_data.size, "Creating Texture 2D failed because of stack buffer limitation!");
+			ECS_STACK_CAPACITY_STREAM(D3D11_SUBRESOURCE_DATA, subresource_data, 32);
+			ECS_ASSERT(subresource_data.capacity >= ecs_descriptor->mip_data.size, "Creating Texture 2D failed because of stack buffer limitation!");
 
-			memset(subresource_data, 0, sizeof(subresource_data));
+			memset(subresource_data.buffer, 0, sizeof(subresource_data) * ecs_descriptor->mip_data.size);
 			unsigned int height = ecs_descriptor->size.y;
 
 			unsigned int pitch_multiplier = 1;
@@ -2365,7 +2365,7 @@ namespace ECSEngine {
 
 				height = height == 1 ? 1 : height >> 1;
 			}
-			result = m_device->CreateTexture2D(&descriptor, subresource_data, &resource.tex);
+			result = m_device->CreateTexture2D(&descriptor, subresource_data.buffer, &resource.tex);
 		}
 
 		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), resource, "Creating Texture 2D failed!");
@@ -2451,9 +2451,9 @@ namespace ECSEngine {
 			result = m_device->CreateTexture3D(&descriptor, nullptr, &resource.tex);
 		}
 		else {
-			D3D11_SUBRESOURCE_DATA subresource_data[32];
-			ECS_ASSERT(ECS_COUNTOF(subresource_data) >= ecs_descriptor->mip_data.size, "Creating Texture 3D failed because of stack buffer limitation!");
-			memset(subresource_data, 0, sizeof(subresource_data));
+			ECS_STACK_CAPACITY_STREAM(D3D11_SUBRESOURCE_DATA, subresource_data, 32);
+			ECS_ASSERT(subresource_data.capacity >= ecs_descriptor->mip_data.size, "Creating Texture 3D failed because of stack buffer limitation!");
+			memset(subresource_data.buffer, 0, sizeof(subresource_data) * ecs_descriptor->mip_data.size);
 
 			unsigned int height = ecs_descriptor->size.y;
 			unsigned int depth = ecs_descriptor->size.z;
@@ -2465,7 +2465,7 @@ namespace ECSEngine {
 				height = height == 1 ? 1 : height >> 1;
 				depth = depth == 1 ? 1 : depth >> 1;
 			}
-			result = m_device->CreateTexture3D(&descriptor, subresource_data, &resource.tex);
+			result = m_device->CreateTexture3D(&descriptor, subresource_data.buffer, &resource.tex);
 		}
 
 		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), resource, "Creating Texture 3D failed!");
@@ -2496,15 +2496,15 @@ namespace ECSEngine {
 			result = m_device->CreateTexture2D(&descriptor, nullptr, &resource.tex);
 		}
 		else {
-			D3D11_SUBRESOURCE_DATA subresource_data[128];
-			ECS_ASSERT(ECS_COUNTOF(subresource_data) >= ecs_descriptor->mip_data.size, "Creating Texture Cube failed because of stack buffer limitation!");
-			memset(subresource_data, 0, sizeof(subresource_data));
+			ECS_STACK_CAPACITY_STREAM(D3D11_SUBRESOURCE_DATA, subresource_data, 128);
+			ECS_ASSERT(subresource_data.capacity >= ecs_descriptor->mip_data.size, "Creating Texture Cube failed because of stack buffer limitation!");
+			memset(subresource_data.buffer, 0, sizeof(subresource_data[0]) * ecs_descriptor->mip_data.size);
 			for (size_t index = 0; index < ecs_descriptor->mip_data.size; index++) {
 				subresource_data[index].pSysMem = ecs_descriptor->mip_data[index].buffer;
 				subresource_data[index].SysMemPitch = ecs_descriptor->mip_data[index].size;
 			}
 
-			result = m_device->CreateTexture2D(&descriptor, subresource_data, &resource.tex);
+			result = m_device->CreateTexture2D(&descriptor, subresource_data.buffer, &resource.tex);
 		}
 
 		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), resource, "Creating Texture Cube failed!");

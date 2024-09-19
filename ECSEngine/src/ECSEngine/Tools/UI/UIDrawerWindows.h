@@ -538,7 +538,7 @@ namespace ECSEngine {
 		};
 
 		// Stack memory should be at least 512 bytes long
-		ECSENGINE_API UIWindowDescriptor VisualizeTextureWindowDescriptor(UISystem* system, const VisualizeTextureCreateData* create_data, void* stack_memory);
+		ECSENGINE_API UIWindowDescriptor VisualizeTextureWindowDescriptor(UISystem* system, const VisualizeTextureCreateData* create_data, CapacityStream<void>* stack_memory);
 
 		// It also creates a dockspace for it, returns the window index
 		ECSENGINE_API unsigned int CreateVisualizeTextureWindow(

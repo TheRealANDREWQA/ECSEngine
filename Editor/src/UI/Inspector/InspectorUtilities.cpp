@@ -128,7 +128,7 @@ void InspectorDefaultInteractButtons(EditorState* editor_state, UIDrawer* drawer
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawFileTimesInternal(UIDrawer* drawer, const char* creation_time, const char* write_time, const char* access_time, bool success) {
+void InspectorDrawFileTimesInternal(UIDrawer* drawer, Stream<char> creation_time, Stream<char> write_time, Stream<char> access_time, bool success) {
 	UIDrawConfig config;
 	// Display file times
 	if (success) {
@@ -154,10 +154,10 @@ void InspectorDrawFileTimesInternal(UIDrawer* drawer, const char* creation_time,
 // ----------------------------------------------------------------------------------------------------------------------------
 
 void InspectorDrawFileTimes(UIDrawer* drawer, Stream<wchar_t> path) {
-	char creation_time[256];
-	char write_time[256];
-	char access_time[256];
-	bool success = OS::GetFileTimes(path, creation_time, access_time, write_time);
+	ECS_STACK_CAPACITY_STREAM(char, creation_time, 256);
+	ECS_STACK_CAPACITY_STREAM(char, write_time, 256);
+	ECS_STACK_CAPACITY_STREAM(char, access_time, 256);
+	bool success = OS::GetFileTimes(path, &creation_time, &access_time, &write_time);
 
 	InspectorDrawFileTimesInternal(drawer, creation_time, write_time, access_time, success);
 }

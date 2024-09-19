@@ -58,8 +58,8 @@ namespace ECSEngine {
 			OS::GetFileTimesWithError<PointerType>(data->path, system, data->creation_time, data->access_time, data->last_write_time);
 		}
 
-		template ECSENGINE_API void GetFileTimesAction<wchar_t>(ActionData*);
-		template ECSENGINE_API void GetFileTimesAction<char>(ActionData*);
+		template ECSENGINE_API void GetFileTimesAction<CapacityStream<wchar_t>>(ActionData*);
+		template ECSENGINE_API void GetFileTimesAction<CapacityStream<char>>(ActionData*);
 
 		template<typename PointerType>
 		void GetRelativeFileTimesAction(ActionData* action_data) {
@@ -69,8 +69,8 @@ namespace ECSEngine {
 			OS::GetRelativeFileTimesWithError<PointerType>(data->path, system, data->creation_time, data->access_time, data->last_write_time);
 		}
 
-		template ECSENGINE_API void GetRelativeFileTimesAction<wchar_t>(ActionData*);
-		template ECSENGINE_API void GetRelativeFileTimesAction<char>(ActionData*);
+		template ECSENGINE_API void GetRelativeFileTimesAction<CapacityStream<wchar_t>>(ActionData*);
+		template ECSENGINE_API void GetRelativeFileTimesAction<CapacityStream<char>>(ActionData*);
 		template ECSENGINE_API void GetRelativeFileTimesAction<size_t>(ActionData*);
 
 		// ----------------------------------------------------------------------------------------------------
@@ -341,12 +341,11 @@ namespace ECSEngine {
 			}
 			else {
 				if (data->input != nullptr) {
-					char temp_chars[256];
-					size_t written_chars;
+					ECS_STACK_CAPACITY_STREAM(char, temp_chars, 256);
 					if (data->get_file_data.path.size > 0) {
-						ConvertWideCharsToASCII(data->get_file_data.path.buffer, temp_chars, data->get_file_data.path.size, 256, 256, written_chars);
+						ConvertWideCharsToASCII(data->get_file_data.path, temp_chars);
 						data->input->DeleteAllCharacters();
-						data->input->InsertCharacters(temp_chars, written_chars, 0, system);
+						data->input->InsertCharacters(temp_chars.buffer, temp_chars.size, 0, system);
 						if (data->update_stream) {
 							data->update_stream->CopyOther(data->get_file_data.path);
 						}
@@ -372,12 +371,11 @@ namespace ECSEngine {
 			}
 			else {
 				if (data->input != nullptr) {
-					char temp_chars[256];
-					size_t written_chars;
+					ECS_STACK_CAPACITY_STREAM(char, temp_chars, 256);
 					if (data->get_directory_data.path.size > 0) {
-						ConvertWideCharsToASCII(data->get_directory_data.path.buffer, temp_chars, data->get_directory_data.path.size, 256, 256, written_chars);
+						ConvertWideCharsToASCII(data->get_directory_data.path, temp_chars);
 						data->input->DeleteAllCharacters();
-						data->input->InsertCharacters(temp_chars, written_chars, 0, system);
+						data->input->InsertCharacters(temp_chars.buffer, temp_chars.size, 0, system);
 						if (data->update_stream != nullptr) {
 							data->update_stream->CopyOther(data->get_directory_data.path);
 						}

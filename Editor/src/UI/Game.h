@@ -9,7 +9,7 @@ ECS_TOOLS;
 
 // Stack memory size should be at least 512
 // In the stack memory the first 4 bytes need to be the sandbox index
-void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
+void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory);
 
 void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 

@@ -968,35 +968,42 @@ namespace ECSEngine {
 							const UIConfigElementNameAction* name_action = (const UIConfigElementNameAction*)config.GetParameter(UI_CONFIG_ELEMENT_NAME_ACTION);
 
 							if (name_action->hoverable_handler.action != nullptr) {
-								size_t hoverable_data_storage[256];
-								ActionWrapperWithCallbackData* wrapper_data = (ActionWrapperWithCallbackData*)hoverable_data_storage;
-								wrapper_data->base_action_data_size = sizeof(hoverable_data);
-								void* base_data = wrapper_data->GetBaseData();
-								memcpy(base_data, &hoverable_data, sizeof(hoverable_data));
+								ECS_STACK_VOID_STREAM(hoverable_data_storage, ECS_KB);
+								unsigned int hoverable_data_size = sizeof(hoverable_data);
+								ActionWrapperWithCallbackData* wrapper_data = hoverable_data_storage.Reserve<ActionWrapperWithCallbackData>();
+								wrapper_data->base_action_data_size = hoverable_data_size;
 
-								unsigned int write_size = wrapper_data->WriteCallback(name_action->hoverable_handler);
-								AddHoverable(configuration, text_position, text_span, { ActionWrapperWithCallback, hoverable_data_storage, write_size, ECS_UI_DRAW_SYSTEM });
+								hoverable_data_storage.AssertCapacity(hoverable_data_size);
+								void* base_data = wrapper_data->GetBaseData();
+								memcpy(base_data, &hoverable_data, hoverable_data_size);
+								hoverable_data_storage.size += hoverable_data_size;
+
+								unsigned int write_size = wrapper_data->WriteCallback(name_action->hoverable_handler, hoverable_data_storage.capacity);
+								AddHoverable(configuration, text_position, text_span, { ActionWrapperWithCallback, wrapper_data, write_size, ECS_UI_DRAW_SYSTEM });
 							}
 							else {
 								AddHoverable(configuration, text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
 							}
 
 							if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
-								UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)draggable_data;
-								base_data->input = input;
+								UIDrawerNumberInputCallbackData* number_input_data = (UIDrawerNumberInputCallbackData*)draggable_data;
+								number_input_data->input = input;
 								if (name_action->clickable_handler.action != nullptr) {
-									size_t clickable_data_storage[256];
-									ActionWrapperWithCallbackData* wrapper_data = (ActionWrapperWithCallbackData*)clickable_data_storage;
+									ECS_STACK_VOID_STREAM(clickable_data_storage, ECS_KB);
+									ActionWrapperWithCallbackData* wrapper_data = clickable_data_storage.Reserve<ActionWrapperWithCallbackData>();
 									wrapper_data->base_action_data_size = draggable_data_size;
 									wrapper_data->base_action = draggable_action;
 									if (draggable_data_size == 0) {
 										wrapper_data->base_action_data = draggable_data;
 									}
 									else {
+										clickable_data_storage.AssertCapacity(draggable_data_size);
 										void* base_data = wrapper_data->GetBaseData();
 										memcpy(base_data, draggable_data, draggable_data_size);
+										clickable_data_storage.size += draggable_data_size;
 									}
-									unsigned int write_size = wrapper_data->WriteCallback(name_action->clickable_handler);
+									clickable_data_storage.AssertCapacity(name_action->clickable_handler.data_size);
+									unsigned int write_size = wrapper_data->WriteCallback(name_action->clickable_handler, clickable_data_storage.capacity);
 									AddClickable(configuration, text_position, text_span, { ActionWrapperWithCallback, wrapper_data, write_size, name_action->clickable_handler.phase });
 								}
 								else {
@@ -3280,7 +3287,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ColorFloatInputIntensityInputName(char* intensity_input_name);
+			void ColorFloatInputIntensityInputName(CapacityStream<char>& intensity_input_name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

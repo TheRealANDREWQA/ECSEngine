@@ -228,7 +228,7 @@ namespace ECSEngine {
 			unsigned int character_count,
 			UISystem* system,
 			unsigned int window_index,
-			char* deleted_characters,
+			CapacityStream<char>* deleted_characters,
 			unsigned int* deleted_character_count,
 			unsigned int* delete_position
 		)
@@ -250,10 +250,8 @@ namespace ECSEngine {
 				unsigned int* text_count = deleted_character_count;
 				unsigned int* text_position = &command_info->text_position;
 				unsigned char* info_text = (unsigned char*)((uintptr_t)command_info + data_size);
-				char* text = deleted_characters;
 				command_info->input = this;
-
-				Backspace(text_count, text_position, text);
+				Backspace(text_count, text_position, deleted_characters);
 			}
 			InsertCharacters(characters, character_count, current_sprite_position, system);
 		}
@@ -270,14 +268,15 @@ namespace ECSEngine {
 			return callback != nullptr;
 		}
 
-		bool UIDrawerTextInput::Backspace(unsigned int* output_text_count, unsigned int* output_text_position, char* output_text) {
+		bool UIDrawerTextInput::Backspace(unsigned int* output_text_count, unsigned int* output_text_position, CapacityStream<char>* output_text) {
 			trigger_callback = TRIGGER_CALLBACK_MODIFY;
 			if (current_sprite_position == current_selection && current_sprite_position > 0) {
 				*output_text_count = 1;
 				*output_text_position = current_sprite_position;
 
-				output_text[0] = text->buffer[current_sprite_position - 1];
-				output_text[1] = '\0';
+				output_text->AddAssert(text->buffer[current_sprite_position - 1]);
+				output_text->AddAssert('\0');
+				output_text->size--;
 
 				for (size_t index = current_sprite_position; index < text->size; index++) {
 					text->buffer[index - 1] = text->buffer[index];
@@ -320,7 +319,9 @@ namespace ECSEngine {
 					}
 
 					memcpy(output_text, text->buffer + *output_text_position, *output_text_count);
-					output_text[*output_text_count] = '\0';
+					output_text->AddStreamAssert(Stream<char>(text->buffer + *output_text_position, *output_text_count));
+					output_text->AddAssert('\0');
+					output_text->size--;
 
 					for (size_t index = start_iteration; index < text->size; index++) {
 						text->buffer[index - displacement] = text->buffer[index];
@@ -588,8 +589,8 @@ namespace ECSEngine {
 		}
 
 		// Returns the total size of the structure with the string embedded
-		unsigned int LabelHierarchyChangeStateData::WriteLabel(const void* untyped_data) {
-			return UIDrawerLabelHierarchySetEmbeddedLabel(this, untyped_data);
+		unsigned int LabelHierarchyChangeStateData::WriteLabel(const void* untyped_data, size_t storage_capacity) {
+			return UIDrawerLabelHierarchySetEmbeddedLabel(this, untyped_data, storage_capacity);
 		}
 
 		void LabelHierarchyClickActionData::GetCurrentLabel(void* storage) const {
@@ -598,15 +599,16 @@ namespace ECSEngine {
 
 		// Returns the total size of the structure with the label embedded (both for normal string
 		// or untyped data)
-		unsigned int LabelHierarchyClickActionData::WriteLabel(const void* untyped_data) {
-			return UIDrawerLabelHierarchySetEmbeddedLabel(this, untyped_data);
+		unsigned int LabelHierarchyClickActionData::WriteLabel(const void* untyped_data, size_t storage_capacity) {
+			return UIDrawerLabelHierarchySetEmbeddedLabel(this, untyped_data, storage_capacity);
 		}
 
-		unsigned int ActionWrapperWithCallbackData::WriteCallback(UIActionHandler handler) {
+		unsigned int ActionWrapperWithCallbackData::WriteCallback(UIActionHandler handler, size_t storage_capacity) {
 			unsigned int write_size = sizeof(*this) + base_action_data_size;
 
 			user_callback = handler;
 			if (handler.data_size > 0) {
+				ECS_ASSERT(write_size + handler.data_size <= storage_capacity);
 				memcpy(OffsetPointer(this, write_size), handler.data, handler.data_size);
 				write_size += handler.data_size;
 			}

@@ -111,8 +111,8 @@ void MiscellaneousBarNoActions(void* window_data, UIDrawerDescriptor* drawer_des
 void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 	UIWindowDescriptor descriptor;
 
-	size_t stack_memory[128];
-	MiscellaneousBarSetDescriptor(descriptor, editor_state, stack_memory);
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+	MiscellaneousBarSetDescriptor(descriptor, editor_state, &stack_memory);
 	
 	descriptor.initial_position_x = -1.0f;
 	descriptor.initial_position_y = -1.0f + TOOLBAR_SIZE_Y;
@@ -152,8 +152,7 @@ void SaveLayoutWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 		UI_UNPACK_ACTION_DATA;
 
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		wchar_t path_chars[256];
-		CapacityStream<wchar_t> path(path_chars, 0, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
 		path.CopyOther(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
 		path.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 		path[path.size] = L'\0';
@@ -328,8 +327,8 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, UIDrawerDescriptor* drawe
 
 void CreateToolbarUIPlaceholder(EditorState* editor_state) {
 	UIWindowDescriptor descriptor;
-	size_t stack_memory[128];
-	ToolbarSetDescriptor(descriptor, editor_state, stack_memory);
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+	ToolbarSetDescriptor(descriptor, editor_state, &stack_memory);
 
 	descriptor.initial_position_x = -1.0f;
 	descriptor.initial_position_y = -1.0f;

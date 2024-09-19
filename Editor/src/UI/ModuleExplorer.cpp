@@ -253,7 +253,7 @@ void CreateAddModuleWizard(ActionData* action_data) {
 
 // --------------------------------------------------------------------------------------------------------
 
-void ModuleExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
+void ModuleExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory) {
 	descriptor.draw = ModuleExplorerDraw;
 
 	descriptor.window_name = MODULE_EXPLORER_WINDOW_NAME;
@@ -568,8 +568,6 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 	}
 
 	ProjectModules* project_modules = editor_state->project_modules;
-	TaskSchedulerElement _elements[128];
-	Stream<TaskSchedulerElement> elements(_elements, 0);
 
 	UIDrawConfig config;
 

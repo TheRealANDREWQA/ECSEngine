@@ -194,8 +194,8 @@ void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbo
 
 		descriptor.window_name = "Save Scene";
 
-		size_t _draw_data[128];
-		SaveScenePopUpDrawData* draw_data = (SaveScenePopUpDrawData*)_draw_data;
+		ECS_STACK_VOID_STREAM(_draw_data, ECS_KB);
+		SaveScenePopUpDrawData* draw_data = _draw_data.Reserve<SaveScenePopUpDrawData>();
 		draw_data->editor_state = editor_state;
 		draw_data->sandbox_index_count = sandbox_indices.size;
 		sandbox_indices.CopyTo(draw_data->sandbox_indices);
@@ -209,7 +209,7 @@ void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbo
 		descriptor.initial_position_y = 0.0f;
 
 		if (continue_handler.data_size > 0) {
-			memcpy(OffsetPointer(draw_data, sizeof(*draw_data)), continue_handler.data, continue_handler.data_size);
+			memcpy(_draw_data.Reserve(continue_handler.data_size), continue_handler.data, continue_handler.data_size);
 			descriptor.window_data_size += continue_handler.data_size;
 		}
 

@@ -1030,11 +1030,6 @@ namespace ECSEngine {
 			dockspace->transform.scale.y = new_scale_to_resize * inverse_mask + other_scale * mask;
 
 			float position_factor = new_scale_to_resize / old_scale;
-			float old_positions[128];
-
-			for (size_t index = 0; index < dockspace->borders.size; index++) {
-				old_positions[index] = dockspace->borders[index].position;
-			}
 			for (size_t index = 0; index < dockspace->borders.size; index++) {
 				dockspace->borders[index].position *= position_factor;
 			}
@@ -1804,13 +1799,10 @@ namespace ECSEngine {
 			bool horizontal,
 			bool invert_order
 		) {
-			char temp_chars[64];
-			Stream<char> temp_stream(temp_chars, 0);
-
-			ConvertFloatToChars(temp_stream, value, precision);
-
+			ECS_STACK_CAPACITY_STREAM(char, temp_chars, 64);
+			ConvertFloatToChars(temp_chars, value, precision);
 			ConvertCharactersToTextSprites(
-				temp_stream,
+				temp_chars,
 				position,
 				vertices,
 				color,
@@ -1820,7 +1812,7 @@ namespace ECSEngine {
 				horizontal,
 				!invert_order
 			);
-			count += 6 * temp_stream.size;
+			count += 6 * temp_chars.size;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1837,13 +1829,10 @@ namespace ECSEngine {
 			bool horizontal,
 			bool invert_order
 		) {
-			char temp_chars[64];
-			Stream<char> temp_stream(temp_chars, 0);
-
-			ConvertDoubleToChars(temp_stream, value, precision);
-
+			ECS_STACK_CAPACITY_STREAM(char, temp_chars, 64);
+			ConvertDoubleToChars(temp_chars, value, precision);
 			ConvertCharactersToTextSprites(
-				temp_stream,
+				temp_chars,
 				position,
 				vertices,
 				color,
@@ -1853,7 +1842,7 @@ namespace ECSEngine {
 				horizontal,
 				!invert_order
 			);
-			count += 6 * temp_stream.size;
+			count += 6 * temp_chars.size;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2699,14 +2688,13 @@ namespace ECSEngine {
 			for (; index >= 0; index--) {
 				if (dockspace_handler->position_x[index] == position.x && dockspace_handler->position_y[index] == position.y
 					&& dockspace_handler->scale_x[index] == scale.x && dockspace_handler->scale_y[index] == scale.y) {
-					size_t composed_action_storage[1024];
-					ComposedActionData* composed_data = (ComposedActionData*)composed_action_storage;
+					ECS_STACK_VOID_STREAM(composed_action_storage, ECS_KB * 4);
+					ComposedActionData* composed_data = composed_action_storage.Reserve<ComposedActionData>();
 					// Check to see if we need to change the temporary allocator
 					if (handler.phase != ECS_UI_DRAW_SYSTEM && dockspace_handler->action[index].phase == ECS_UI_DRAW_SYSTEM) {
 						temporary_allocator = system->TemporaryAllocator(ECS_UI_DRAW_SYSTEM);
 					}
 
-					uintptr_t action_write_data = (uintptr_t)OffsetPointer(composed_data, sizeof(*composed_data));
 					unsigned int composed_write_size = sizeof(*composed_data);
 					auto set_previous = [&](unsigned int write_index) {
 						composed_data->actions[write_index] = dockspace_handler->action[index].action;
@@ -2715,9 +2703,8 @@ namespace ECSEngine {
 						composed_data->draw_phase[write_index] = dockspace_handler->action[index].phase;
 						unsigned int previous_write_size = dockspace_handler->action[index].data_size;
 						if (previous_write_size > 0) {
-							composed_data->data[write_index] = (void*)action_write_data;
-							memcpy((void*)action_write_data, dockspace_handler->action[index].data, previous_write_size);
-							action_write_data += previous_write_size;
+							composed_data->data[write_index] = composed_action_storage.Reserve(previous_write_size);
+							memcpy(composed_data->data[write_index], dockspace_handler->action[index].data, previous_write_size);
 							composed_write_size += previous_write_size;
 						}
 						composed_data->data_size[write_index] = previous_write_size;
@@ -2728,9 +2715,8 @@ namespace ECSEngine {
 						composed_data->data[write_index] = handler.data;
 						unsigned write_size = handler.data_size;
 						if (write_size > 0) {
-							composed_data->data[write_index] = (void*)action_write_data;
-							memcpy((void*)action_write_data, handler.data, write_size);
-							action_write_data += write_size;
+							composed_data->data[write_index] = composed_action_storage.Reserve(write_size);
+							memcpy(composed_data->data[write_index], handler.data, write_size);
 							composed_write_size += write_size;
 						}
 						composed_data->data_size[write_index] = write_size;
@@ -2750,7 +2736,6 @@ namespace ECSEngine {
 					composed_data->is_clickable = is_clickable;
 					composed_data->is_general = is_general;
 
-					ECS_ASSERT(action_write_data - (uintptr_t)composed_data <= sizeof(composed_action_storage));
 					void* temporary_allocation = temporary_allocator->Allocate(composed_write_size);
 					memcpy(temporary_allocation, composed_data, composed_write_size);
 					composed_data = (ComposedActionData*)temporary_allocation;
@@ -3433,6 +3418,7 @@ namespace ECSEngine {
 		void UISystem::DestroyNonReferencedWindows()
 		{
 			bool reference_table[256] = { false };
+			ECS_ASSERT(m_windows.size <= ECS_COUNTOF(reference_table));
 
 			auto set_references = [&reference_table](CapacityStream<UIDockspace>& dockspaces) {
 				for (size_t index = 0; index < dockspaces.size; index++) {
@@ -3467,8 +3453,8 @@ namespace ECSEngine {
 			}
 
 			DockspaceType dockspace_type(DockspaceType::FloatingVertical);
-			unsigned int dockspaces_to_search[32];
-			DockspaceType dockspace_types[32];
+			ECS_STACK_CAPACITY_STREAM(DockspaceType, dockspace_types, 64);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, dockspaces_to_search, 64);
 			unsigned int parent_count = 0;
 			unsigned int hovered_floating_dockspace = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, dockspace_type);
 			bool succeded;
@@ -3491,13 +3477,13 @@ namespace ECSEngine {
 					unsigned int hovered_dockspace = GetDockspaceIndexFromMouseCoordinatesWithChildren(
 						mouse_position,
 						dockspace_type,
-						dockspaces_to_search,
-						dockspace_types,
+						&dockspaces_to_search,
+						&dockspace_types,
 						parent_count
 					);
 					succeded = CheckDockspaceInnerBorders(mouse_position, hovered_dockspace, dockspace_type);
 					if (!succeded) {
-						succeded = CheckParentInnerBorders(mouse_position, dockspaces_to_search, dockspace_types, parent_count);
+						succeded = CheckParentInnerBorders(mouse_position, dockspaces_to_search.buffer, dockspace_types.buffer, parent_count);
 						if (!succeded) {
 							UIDockspace* dockspaces[] = {
 								m_horizontal_dockspaces.buffer,
@@ -4961,15 +4947,14 @@ namespace ECSEngine {
 			position.x += data->offset_scale.x ? scale.x : 0.0f;
 			position.y += data->offset_scale.y ? scale.y : 0.0f;
 
-			unsigned int new_line_characters[256];
-			Stream<unsigned int> temp_stream = Stream<unsigned int>(new_line_characters, 0);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, new_line_characters, 256);
 			for (size_t index = 0; index < characters.size; index++) {
 				if (characters[index] == '\n') {
-					temp_stream.Add(index);
+					new_line_characters.AddAssert(index);
 				}
 			}
 
-			temp_stream.Add(characters.size);
+			new_line_characters.AddAssert(characters.size);
 			size_t word_start_index = 0;
 			size_t word_end_index = 0;
 
@@ -4998,9 +4983,9 @@ namespace ECSEngine {
 			}
 			size_t row_index = 0;
 
-			for (size_t index = 0; index < temp_stream.size; index++) {
-				if (temp_stream[index] != 0) {
-					word_end_index = temp_stream[index] - 1;
+			for (size_t index = 0; index < new_line_characters.size; index++) {
+				if (new_line_characters[index] != 0) {
+					word_end_index = new_line_characters[index] - 1;
 				}
 				if (word_end_index >= word_start_index) {
 					float2 text_span;
@@ -5021,7 +5006,7 @@ namespace ECSEngine {
 					*count += temp_vertex_stream.size;
 				}
 
-				while (temp_stream[index] == temp_stream[index + 1] - 1) {
+				while (new_line_characters[index] == new_line_characters[index + 1] - 1) {
 					max_bounds.x = max(max_bounds.x, position.x);
 					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 					max_bounds.y = max(max_bounds.y, position.y);
@@ -5044,7 +5029,7 @@ namespace ECSEngine {
 				row_position = position;
 				row_index++;
 				max_bounds.y = max(max_bounds.y, position.y);
-				word_start_index = temp_stream[index] + 1;
+				word_start_index = new_line_characters[index] + 1;
 			}
 
 			max_bounds.y += m_descriptors.misc.tool_tip_padding.y /*+ 0.003f*/;
@@ -5197,7 +5182,8 @@ namespace ECSEngine {
 
 			float max_right_scale = 0.0f;
 
-			float right_text_spans[256];
+			ECS_STACK_CAPACITY_STREAM(float, right_text_spans, 256);
+			right_text_spans.AssertCapacity(right_new_lines.size);
 			auto calculate_span_kernel = [data, this, &current_position](float& max_scale, const char* characters, size_t new_line_character, float& text_x_scale) {
 				if (new_line_character > current_position) {
 					float2 text_span = GetTextSpan<char>(
@@ -5288,17 +5274,16 @@ namespace ECSEngine {
 
 		float2 UISystem::DrawToolTipSentenceSize(Stream<char> characters, UITooltipBaseData* data, unsigned int row_count)
 		{
-			unsigned int new_line_characters[256];
-			Stream<unsigned int> temp_stream = Stream<unsigned int>(new_line_characters, 0);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, new_line_characters, 256);
 			for (size_t index = 0; index < characters.size; index++) {
 				if (characters[index] == '\n') {
-					temp_stream.Add(index);
+					new_line_characters.AddAssert(index);
 				}
 			}
 
-			temp_stream.Add(characters.size);
+			new_line_characters.AddAssert(characters.size);
 			if (row_count != 0) {
-				temp_stream.size = row_count;
+				new_line_characters.size = row_count;
 			}
 
 			size_t word_start_index = 0;
@@ -5316,16 +5301,16 @@ namespace ECSEngine {
 			position.y += m_descriptors.misc.tool_tip_padding.y + data->next_row_offset;
 			float2 max_bounds = position;
 
-			for (size_t index = 0; index < temp_stream.size; index++) {
-				if (temp_stream[index] != 0) {
-					word_end_index = temp_stream[index] - 1;
+			for (size_t index = 0; index < new_line_characters.size; index++) {
+				if (new_line_characters[index] != 0) {
+					word_end_index = new_line_characters[index] - 1;
 				}
 				if (word_end_index >= word_start_index) {
 					float2 text_span = GetTextSpan<char>({ characters.buffer + word_start_index, word_end_index - word_start_index + 1 }, data->font_size, data->character_spacing);
 					position.x += text_span.x;
 				}
 
-				while (index < temp_stream.size - 1 && temp_stream[index] == temp_stream[index + 1] - 1) {
+				while (index < new_line_characters.size - 1 && new_line_characters[index] == new_line_characters[index + 1] - 1) {
 					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 					max_bounds.x = max(max_bounds.x, position.x);
 					max_bounds.y = max(max_bounds.y, position.y);
@@ -5337,7 +5322,7 @@ namespace ECSEngine {
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 				max_bounds.x = max(max_bounds.x, position.x);
 				max_bounds.y = max(max_bounds.y, position.y);
-				word_start_index = temp_stream[index] + 1;
+				word_start_index = new_line_characters[index] + 1;
 			}
 
 			max_bounds.y += m_descriptors.misc.tool_tip_padding.y;
@@ -6081,8 +6066,8 @@ namespace ECSEngine {
 		unsigned int UISystem::GetDockspaceIndexFromMouseCoordinatesWithChildren(
 			float2 mouse_position,
 			DockspaceType& dockspace_type,
-			unsigned int* parent_indices,
-			DockspaceType* dockspace_types,
+			CapacityStream<unsigned int>* parent_indices,
+			CapacityStream<DockspaceType>* dockspace_types,
 			unsigned int& parent_count
 		) {
 			// get the floating dockspace index
@@ -6090,11 +6075,11 @@ namespace ECSEngine {
 
 			parent_count = 0;
 			// if hovering over a floating dockspace
-			if (floating_dockspace_index != 0xFFFFFFFF) {
+			if (floating_dockspace_index != -1) {
 				// search to the deepest child and get that dockspace
-				unsigned int child_index = 0xFFFFFFFF;
+				unsigned int child_index = -1;
 				if (dockspace_type == DockspaceType::FloatingHorizontal) {
-					for (size_t index = 0; child_index == 0xFFFFFFFF && index < m_floating_horizontal_dockspaces[floating_dockspace_index].borders.size - 1; index++) {
+					for (size_t index = 0; child_index == -1 && index < m_floating_horizontal_dockspaces[floating_dockspace_index].borders.size - 1; index++) {
 						// if it a dock search its children
 						if (m_floating_horizontal_dockspaces[floating_dockspace_index].borders[index].is_dock) {
 							child_index = SearchDockspaceForChildrenDockspaces(
@@ -6108,20 +6093,22 @@ namespace ECSEngine {
 							);
 						}
 					}
-					if (child_index != 0xFFFFFFFF) {
-						parent_indices[parent_count] = floating_dockspace_index;
-						dockspace_types[parent_count++] = DockspaceType::FloatingHorizontal;
+					if (child_index != -1) {
+						parent_indices->AddAssert(floating_dockspace_index);
+						dockspace_types->AddAssert(DockspaceType::FloatingHorizontal);
+						parent_count++;
 						return child_index;
 					}
 					else {
-						parent_indices[parent_count] = floating_dockspace_index;
-						dockspace_types[parent_count++] = DockspaceType::FloatingHorizontal;
+						parent_indices->AddAssert(floating_dockspace_index);
+						dockspace_types->AddAssert(DockspaceType::FloatingHorizontal);
+						parent_count++;
 						dockspace_type = DockspaceType::FloatingHorizontal;
 						return floating_dockspace_index;
 					}
 				}
 				else if (dockspace_type == DockspaceType::FloatingVertical) {
-					for (size_t index = 0; child_index == 0xFFFFFFFF && index < m_floating_vertical_dockspaces[floating_dockspace_index].borders.size - 1; index++) {
+					for (size_t index = 0; child_index == -1 && index < m_floating_vertical_dockspaces[floating_dockspace_index].borders.size - 1; index++) {
 						// if it a dock search its children
 						if (m_floating_vertical_dockspaces[floating_dockspace_index].borders[index].is_dock) {
 							child_index = SearchDockspaceForChildrenDockspaces(
@@ -6135,20 +6122,22 @@ namespace ECSEngine {
 							);
 						}
 					}
-					if (child_index != 0xFFFFFFFF) {
-						parent_indices[parent_count] = floating_dockspace_index;
-						dockspace_types[parent_count++] = DockspaceType::FloatingVertical;
+					if (child_index != -1) {
+						parent_indices->AddAssert(floating_dockspace_index);
+						dockspace_types->AddAssert(DockspaceType::FloatingVertical);
+						parent_count++;
 						return child_index;
 					}
 					else {
-						parent_indices[parent_count] = floating_dockspace_index;
-						dockspace_types[parent_count++] = DockspaceType::FloatingVertical;
+						parent_indices->AddAssert(floating_dockspace_index);
+						dockspace_types->AddAssert(DockspaceType::FloatingVertical);
+						parent_count++;
 						dockspace_type = DockspaceType::FloatingVertical;
 						return floating_dockspace_index;
 					}
 				}
 			}
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6156,8 +6145,8 @@ namespace ECSEngine {
 		void UISystem::GetDockspacesFromParent(
 			unsigned int dockspace_index,
 			DockspaceType dockspace_type,
-			unsigned int* subindicies,
-			DockspaceType* subtypes,
+			CapacityStream<unsigned int>* subindicies,
+			CapacityStream<DockspaceType>* subtypes,
 			unsigned int& children_count
 		) const {
 			if (dockspace_type == DockspaceType::Horizontal) {
@@ -6170,8 +6159,9 @@ namespace ECSEngine {
 							subtypes,
 							children_count
 						);
-						subindicies[children_count] = m_horizontal_dockspaces[dockspace_index].borders[index].window_indices[0];
-						subtypes[children_count++] = DockspaceType::Vertical;
+						subindicies->AddAssert(m_horizontal_dockspaces[dockspace_index].borders[index].window_indices[0]);
+						subtypes->AddAssert(DockspaceType::Vertical);
+						children_count++;
 					}
 				}
 			}
@@ -6185,8 +6175,9 @@ namespace ECSEngine {
 							subtypes,
 							children_count
 						);
-						subindicies[children_count] = m_vertical_dockspaces[dockspace_index].borders[index].window_indices[0];
-						subtypes[children_count++] = DockspaceType::Horizontal;
+						subindicies->AddAssert(m_vertical_dockspaces[dockspace_index].borders[index].window_indices[0]);
+						subtypes->AddAssert(DockspaceType::Horizontal);
+						children_count++;
 					}
 				}
 			}
@@ -6200,8 +6191,9 @@ namespace ECSEngine {
 							subtypes,
 							children_count
 						);
-						subindicies[children_count] = m_floating_horizontal_dockspaces[dockspace_index].borders[index].window_indices[0];
-						subtypes[children_count++] = DockspaceType::Vertical;
+						subindicies->AddAssert(m_floating_horizontal_dockspaces[dockspace_index].borders[index].window_indices[0]);
+						subtypes->AddAssert(DockspaceType::Vertical);
+						children_count++;
 					}
 				}
 			}
@@ -6215,8 +6207,9 @@ namespace ECSEngine {
 							subtypes,
 							children_count
 						);
-						subindicies[children_count] = m_floating_vertical_dockspaces[dockspace_index].borders[index].window_indices[0];
-						subtypes[children_count++] = DockspaceType::Horizontal;
+						subindicies->AddAssert(m_floating_vertical_dockspaces[dockspace_index].borders[index].window_indices[0]);
+						subtypes->AddAssert(DockspaceType::Horizontal);
+						children_count++;
 					}
 				}
 			}
@@ -6513,15 +6506,16 @@ namespace ECSEngine {
 				0.0f
 			};
 
-			const UIDockspace* dockspace_ptr[64];
+			ECS_STACK_CAPACITY_STREAM(const UIDockspace*, dockspace_ptr, 64);
+			dockspace_ptr.AssertCapacity(m_dockspace_layers.size);
 			unsigned int dockspace_count = 0;
 
-			unsigned int children_dockspace_indices[64];
-			DockspaceType children_types[64];
+			ECS_STACK_CAPACITY_STREAM(unsigned int, children_dockspace_indices, 64);
+			ECS_STACK_CAPACITY_STREAM(DockspaceType, children_types, 64);
 
 			for (size_t index = 0; index < m_dockspace_layers.size; index++) {
 				unsigned int children_dockspace_count = 0;
-				GetDockspacesFromParent(m_dockspace_layers[index].index, m_dockspace_layers[index].type, children_dockspace_indices, children_types, children_dockspace_count);
+				GetDockspacesFromParent(m_dockspace_layers[index].index, m_dockspace_layers[index].type, &children_dockspace_indices, &children_types, children_dockspace_count);
 				// children dockspaces windows
 				for (size_t subindex = 0; subindex < children_dockspace_count; subindex++) {
 					UIDockspace* dockspace = &dockspaces[(unsigned int)children_types[subindex]][children_dockspace_indices[subindex]];
@@ -8810,25 +8804,12 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		struct AddToUIFileData {
-			void* window_names;
-			Stream<char> name;
+			CapacityStream<Stream<char>>* window_names;
 		};
 
-		void AddToUIFileChar(AddToUIFileData* parameter) {
-			Stream<const char*>* window_names = (Stream<const char*>*)parameter->window_names;
-			window_names->Add(parameter->name.buffer);
-		}
-
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void AddToUIFileStream(AddToUIFileData* parameter) {
-			Stream<Stream<char>>* window_names = (Stream<Stream<char>>*)parameter->window_names;
-			window_names->Add(parameter->name);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		bool LoadUIFileBase(UISystem* system, Stream<void> contents, AddToUIFileData* parameter, void (*handler)(AddToUIFileData*)) {
+		static bool LoadUIFileBase(UISystem* system, Stream<void> contents, AddToUIFileData* parameter) {
 			system->Clear();
 
 			uintptr_t ptr = (uintptr_t)contents.buffer;
@@ -8891,14 +8872,13 @@ namespace ECSEngine {
 			system->m_windows.size = 0;
 			ECS_ASSERT(window_count_value <= system->m_windows.capacity);
 
-			char window_name_characters[128];
-			Stream<char> window_name_stream = Stream<char>(window_name_characters, 0);
+			ECS_STACK_CAPACITY_STREAM(char, window_name_stream, 128);
 			for (size_t index = 0; index < window_count_value; index++) {
 				system->CreateEmptyWindow();
+				window_name_stream.size = 0;
 				buffer += system->m_windows[index].LoadFromFile((const void*)buffer, window_name_stream);
-				system->SetWindowName(index, window_name_characters);
-				parameter->name = Stream<char>(system->m_windows[index].name.buffer, window_name_stream.size);
-				handler(parameter);
+				system->SetWindowName(index, window_name_stream);
+				parameter->window_names->AddAssert(system->m_windows[index].name);
 			}
 #pragma endregion
 
@@ -9009,14 +8989,14 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		bool UISystem::LoadUIFile(Stream<wchar_t> filename, Stream<Stream<char>>& window_names)
+		bool UISystem::LoadUIFile(Stream<wchar_t> filename, CapacityStream<Stream<char>>& window_names)
 		{
 			Stream<void> contents = ReadWholeFileBinary(filename, m_memory);
 
 			if (contents.size > 0) {
 				AddToUIFileData data;
 				data.window_names = &window_names;
-				return LoadUIFileBase(this, contents, &data, AddToUIFileStream);
+				return LoadUIFileBase(this, contents, &data);
 			}
 			else {
 				return false;
@@ -9189,8 +9169,8 @@ namespace ECSEngine {
 
 		void UISystem::PushBackgroundDockspace()
 		{
-			UIDockspaceLayer old_layers[128];
-			memcpy(old_layers, m_dockspace_layers.buffer, sizeof(UIDockspaceLayer) * m_dockspace_layers.size);
+			ECS_STACK_CAPACITY_STREAM(UIDockspaceLayer, old_layers, 128);
+			old_layers.CopyOther(m_dockspace_layers);
 
 			unsigned int current_index = 0;
 			for (size_t index = 0; index < m_dockspace_layers.size; index++) {
@@ -9306,8 +9286,8 @@ namespace ECSEngine {
 			// loading font uv descriptor;
 			size_t size = 2000;
 			Stream<char> uv_buffer = m_resource_manager->LoadTextFileImplementation(filename);
-			unsigned int uvs[1024];
-			size_t numbers = ParseNumbersFromCharString(uv_buffer, uvs);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, uvs, 1024);
+			size_t numbers = ParseNumbersFromCharString(uv_buffer, &uvs);
 
 			// first two numbers represents the texture width and height
 			// these parameters will be used to normalize the coordinates
@@ -9839,13 +9819,14 @@ namespace ECSEngine {
 
 		void* UISystem::StartDragDrop(UIActionHandler handler, Stream<char> name, bool trigger_on_hover, bool trigger_on_region_exit)
 		{
-			size_t handler_data_storage[256];
-			UISystemDragHandler* stack_handler = (UISystemDragHandler*)handler_data_storage;
+			ECS_STACK_VOID_STREAM(handler_data_storage, ECS_KB * 4);
+			UISystemDragHandler* stack_handler = (UISystemDragHandler*)handler_data_storage.buffer;
 			stack_handler->handler = handler;
 			stack_handler->trigger_on_hover = trigger_on_hover;
 			stack_handler->call_on_region_exit = trigger_on_region_exit;
 			size_t write_size = sizeof(*stack_handler);
 			if (handler.data_size > 0) {
+				ECS_ASSERT(sizeof(*stack_handler) + handler.data_size <= handler_data_storage.capacity);
 				memcpy(OffsetPointer(stack_handler, sizeof(*stack_handler)), handler.data, handler.data_size);
 				write_size += handler.data_size;
 			}
@@ -11429,8 +11410,8 @@ namespace ECSEngine {
 			unsigned int dockspace_index,
 			DockspaceType dockspace_type,
 			DockspaceType& children_type,
-			unsigned int* parent_indices,
-			DockspaceType* dockspace_types,
+			CapacityStream<unsigned int>* parent_indices,
+			CapacityStream<DockspaceType>* dockspace_types,
 			unsigned int& parent_count
 		) {
 			unsigned int child_index = 0xFFFFFFFF;
@@ -11453,8 +11434,9 @@ namespace ECSEngine {
 					m_horizontal_dockspaces[dockspace_index].transform.position,
 					m_horizontal_dockspaces[dockspace_index].transform.scale)
 					) {
-					parent_indices[parent_count] = dockspace_index;
-					dockspace_types[parent_count++] = DockspaceType::Horizontal;
+					parent_indices->AddAssert(dockspace_index);
+					dockspace_types->AddAssert(DockspaceType::Horizontal);
+					parent_count++;
 					if (child_index != 0xFFFFFFFF) {
 						return child_index;
 					}
@@ -11463,7 +11445,7 @@ namespace ECSEngine {
 					}
 					return dockspace_index;
 				}
-				return 0xFFFFFFFF;
+				return -1;
 			}
 			else if (dockspace_type == DockspaceType::Vertical) {
 				for (size_t index = 0; child_index == 0xFFFFFFFF && index < m_vertical_dockspaces[dockspace_index].borders.size - 1; index++) {
@@ -11484,8 +11466,9 @@ namespace ECSEngine {
 					m_vertical_dockspaces[dockspace_index].transform.position,
 					m_vertical_dockspaces[dockspace_index].transform.scale)
 					) {
-					parent_indices[parent_count] = dockspace_index;
-					dockspace_types[parent_count++] = DockspaceType::Vertical;
+					parent_indices->AddAssert(dockspace_index);
+					dockspace_types->AddAssert(DockspaceType::Vertical);
+					parent_count++;
 					//children_type = DockspaceType::Vertical;
 					if (child_index != 0xFFFFFFFF) {
 						return child_index;
@@ -11495,10 +11478,10 @@ namespace ECSEngine {
 					}
 					return dockspace_index;
 				}
-				return 0xFFFFFFFF;
+				return -1;
 			}
 
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -11835,37 +11818,50 @@ namespace ECSEngine {
 					m_floating_vertical_dockspaces.size
 				};
 
-				UIDockspaceLayer pop_up_layers[32];
-				Stream<UIDockspaceLayer> pop_up_stream(pop_up_layers, 0);
+				ECS_STACK_CAPACITY_STREAM(UIDockspaceLayer, pop_up_stream, 64);
 
-				UIDockspaceLayer dockspace_layers[32];
-				Stream<UIDockspaceLayer> stack_dockspace_layers(dockspace_layers, 0);
+				ECS_STACK_CAPACITY_STREAM(UIDockspaceLayer, stack_dockspace_layers, 64);
 				stack_dockspace_layers.CopyOther(m_dockspace_layers);
 
-				unsigned short _valid_layers[32];
-				Stream<unsigned short> valid_layers(_valid_layers, m_dockspace_layers.size);
+				ECS_STACK_CAPACITY_STREAM(unsigned short, valid_layers, 64);
+				valid_layers.AssertCapacity(m_dockspace_layers.size);
+				valid_layers.size = m_dockspace_layers.size;
+				
+				ECS_STACK_CAPACITY_STREAM(unsigned short, pop_up_windows, 64);
 
-				unsigned short _pop_up_windows[32];
-				Stream<unsigned short> pop_up_windows(_pop_up_windows, 0);
+				ECS_STACK_CAPACITY_STREAM(unsigned short, valid_horizontals, 64);
+				valid_horizontals.AssertCapacity(m_horizontal_dockspaces.size);
+				valid_horizontals.size = m_horizontal_dockspaces.size;
 
-				unsigned short _valid_horizontals[64];
-				unsigned short _valid_verticals[64];
-				unsigned short _valid_floating_horizontals[64];
-				unsigned short _valid_floating_verticals[64];
-				UIDockspaceLayer _valid_fixed[64];
-				UIDockspaceLayer _original_fixed[64];
-				UIDockspaceLayer _valid_background[64];
-				UIDockspaceLayer _original_background[64];
-				Stream<unsigned short> valid_horizontals(_valid_horizontals, m_horizontal_dockspaces.size);
-				Stream<unsigned short> valid_verticals(_valid_verticals, m_vertical_dockspaces.size);
-				Stream<unsigned short> valid_floating_horizontals(_valid_floating_horizontals, m_floating_horizontal_dockspaces.size);
-				Stream<unsigned short> valid_floating_verticals(_valid_floating_verticals, m_floating_vertical_dockspaces.size);
-				Stream<UIDockspaceLayer> valid_fixed(_valid_fixed, m_fixed_dockspaces.size);
-				Stream<UIDockspaceLayer> original_fixed(_original_fixed, m_fixed_dockspaces.size);
-				Stream<UIDockspaceLayer> valid_background(_valid_background, m_background_dockspaces.size);
-				Stream<UIDockspaceLayer> original_background(_original_background, m_background_dockspaces.size);
+				ECS_STACK_CAPACITY_STREAM(unsigned short, valid_verticals, 64);
+				valid_verticals.AssertCapacity(m_vertical_dockspaces.size);
+				valid_verticals.size = m_vertical_dockspaces.size;
+				
+				ECS_STACK_CAPACITY_STREAM(unsigned short, valid_floating_horizontals, 64);
+				valid_floating_horizontals.AssertCapacity(m_floating_horizontal_dockspaces.size);
+				valid_floating_horizontals.size = m_floating_horizontal_dockspaces.size;
 
-				Stream<unsigned short>* valids[] = { &valid_horizontals, &valid_verticals, &valid_floating_horizontals, &valid_floating_verticals };
+				ECS_STACK_CAPACITY_STREAM(unsigned short, valid_floating_verticals, 64);
+				valid_floating_verticals.AssertCapacity(m_floating_vertical_dockspaces.size);
+				valid_floating_verticals.size = m_floating_vertical_dockspaces.size;
+
+				ECS_STACK_CAPACITY_STREAM(UIDockspaceLayer, valid_fixed, 64);
+				valid_fixed.AssertCapacity(m_fixed_dockspaces.size);
+				valid_fixed.size = m_fixed_dockspaces.size;
+
+				ECS_STACK_CAPACITY_STREAM(UIDockspaceLayer, original_fixed, 64);
+				original_fixed.AssertCapacity(m_fixed_dockspaces.size);
+				original_fixed.size = m_fixed_dockspaces.size;
+
+				ECS_STACK_CAPACITY_STREAM(UIDockspaceLayer, valid_background, 64);
+				valid_background.AssertCapacity(m_background_dockspaces.size);
+				valid_background.size = m_background_dockspaces.size;
+
+				ECS_STACK_CAPACITY_STREAM(UIDockspaceLayer, original_background, 64);
+				original_background.AssertCapacity(m_background_dockspaces.size);
+				original_background.size = m_background_dockspaces.size;
+
+				CapacityStream<unsigned short>* valids[] = { &valid_horizontals, &valid_verticals, &valid_floating_horizontals, &valid_floating_verticals };
 
 				MakeSequence(valid_layers);
 				MakeSequence(valid_horizontals);
@@ -11880,11 +11876,11 @@ namespace ECSEngine {
 				for (size_t index = 0; index < m_pop_up_windows.size; index++) {
 					unsigned int layer_index = m_pop_up_windows[index];
 					const UIDockspace* dockspace = GetConstDockspace(m_dockspace_layers[layer_index]);
-					pop_up_stream.Add(m_dockspace_layers[layer_index]);
-					pop_up_windows.Add(dockspace->borders[0].window_indices[0]);
+					pop_up_stream.AddAssert(m_dockspace_layers[layer_index]);
+					pop_up_windows.AddAssert(dockspace->borders[0].window_indices[0]);
 					dockspace_counts[(unsigned int)m_dockspace_layers[layer_index].type]--;
 
-					Stream<unsigned short>* stream = valids[(unsigned int)m_dockspace_layers[layer_index].type];
+					CapacityStream<unsigned short>* stream = valids[(unsigned int)m_dockspace_layers[layer_index].type];
 					for (size_t subindex = 0; subindex < stream->size; subindex++) {
 						if (stream->buffer[subindex] == m_dockspace_layers[layer_index].index) {
 							stream->RemoveSwapBack(subindex);
@@ -11933,15 +11929,18 @@ namespace ECSEngine {
 				success &= WriteFile(file, { dockspace_counts, sizeof(dockspace_counts) });
 				char temp_memory[temp_memory_size];
 
-				unsigned short _dockspace_window_replacement[256];
+				const size_t MAX_WINDOW_INDICES_PER_BORDER = 16;
 				unsigned short* _dockspace_window_replacement_pointers[16];
-				Stream<unsigned short*> dockspace_window_replacement(_dockspace_window_replacement_pointers, 16);
-				for (size_t index = 0; index < 16; index++) {
-					dockspace_window_replacement[index] = _dockspace_window_replacement + 16 * index;
+				unsigned short _dockspace_window_replacement[ECS_COUNTOF(_dockspace_window_replacement_pointers) * MAX_WINDOW_INDICES_PER_BORDER];
+				Stream<unsigned short*> dockspace_window_replacement(_dockspace_window_replacement_pointers, ECS_COUNTOF(_dockspace_window_replacement_pointers));
+				for (size_t index = 0; index < dockspace_window_replacement.size; index++) {
+					dockspace_window_replacement[index] = _dockspace_window_replacement + MAX_WINDOW_INDICES_PER_BORDER * index;
 				}
 
-				auto copy_border_window_indices = [dockspace_window_replacement](const UIDockspace* dockspace) {
+				auto copy_border_window_indices = [dockspace_window_replacement, MAX_WINDOW_INDICES_PER_BORDER](const UIDockspace* dockspace) {
+					ECS_ASSERT(dockspace->borders.size - 1 <= dockspace_window_replacement.size);
 					for (size_t index = 0; index < dockspace->borders.size - 1; index++) {
+						ECS_ASSERT(dockspace->borders[index].window_indices.size <= MAX_WINDOW_INDICES_PER_BORDER);
 						dockspace->borders[index].window_indices.CopyTo(dockspace_window_replacement[index]);
 					}
 				};
@@ -11959,6 +11958,7 @@ namespace ECSEngine {
 				};
 
 				auto restore_border_window_indices = [dockspace_window_replacement](UIDockspace* dockspace) {
+					ECS_ASSERT(dockspace->borders.size - 1 <= dockspace_window_replacement.size);
 					for (size_t index = 0; index < dockspace->borders.size - 1; index++) {
 						if (!dockspace->borders[index].is_dock) {
 							memcpy(dockspace->borders[index].window_indices.buffer, dockspace_window_replacement[index], sizeof(unsigned short) * dockspace->borders[index].window_indices.size);
@@ -11999,25 +11999,25 @@ namespace ECSEngine {
 
 #pragma region Windows
 
-				unsigned int valid_windows[128];
-				Stream<unsigned int> valid_stream(valid_windows, m_windows.size);
-				MakeSequence(valid_stream);
+				ECS_STACK_CAPACITY_STREAM(unsigned int, valid_windows, 128);
+				valid_windows.size = m_windows.size;
+				MakeSequence(valid_windows);
 
 				for (size_t index = 0; index < pop_up_stream.size; index++) {
-					for (size_t subindex = 0; subindex < valid_stream.size; subindex++) {
+					for (size_t subindex = 0; subindex < valid_windows.size; subindex++) {
 						const UIDockspace* dockspace = GetConstDockspace(pop_up_stream[index]);
-						if (valid_stream[subindex] == dockspace->borders[0].window_indices[0]) {
-							valid_stream.Remove(subindex);
+						if (valid_windows[subindex] == dockspace->borders[0].window_indices[0]) {
+							valid_windows.Remove(subindex);
 							break;
 						}
 					}
 				}
 
-				unsigned short window_count = valid_stream.size;
+				unsigned short window_count = valid_windows.size;
 				success &= WriteFile(file, { &window_count, sizeof(window_count) });
 
 				for (size_t index = 0; index < window_count && success; index++) {
-					size_t size = m_windows[valid_stream[index]].Serialize(temp_memory);
+					size_t size = m_windows[valid_windows[index]].Serialize(temp_memory);
 					success &= WriteFile(file, { temp_memory, size });
 				}
 

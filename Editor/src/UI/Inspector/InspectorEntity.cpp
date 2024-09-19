@@ -2077,8 +2077,8 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 		}
 	}
 
-	size_t _draw_data[128];
-	InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)_draw_data;
+	ECS_STACK_VOID_STREAM(_draw_data, ECS_KB * 4);
+	InspectorDrawEntityData* draw_data = _draw_data.Reserve<InspectorDrawEntityData>();
 	set_info_functor(draw_data);
 	draw_data->name_input.buffer = nullptr;
 	draw_data->name_input.size = 0;

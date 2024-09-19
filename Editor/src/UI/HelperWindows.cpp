@@ -59,15 +59,14 @@ unsigned int CreateDefaultWindow(
 	const char* window_name,
 	EditorState* editor_state,
 	float2 window_size,
-	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 )
 {
-	size_t stack_memory[512];
-
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 4);
 	UIWindowDescriptor descriptor;
 	descriptor.Center(window_size);
 
-	set_descriptor(descriptor, editor_state, stack_memory);
+	set_descriptor(descriptor, editor_state, &stack_memory);
 
 	return editor_state->ui_system->Create_Window(descriptor);
 }
@@ -77,17 +76,16 @@ unsigned int CreateDefaultWindowWithIndex(
 	EditorState* editor_state,
 	float2 window_size,
 	unsigned int index,
-	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 ) {
-	size_t stack_memory[512];
-
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 4);
 	UIWindowDescriptor descriptor;
 	descriptor.Center(window_size);
 
-	unsigned int* stack_index = (unsigned int*)stack_memory;
+	unsigned int* stack_index = stack_memory.Reserve<unsigned int>();
 	*stack_index = index;
 
-	set_descriptor(descriptor, editor_state, stack_memory);
+	set_descriptor(descriptor, editor_state, &stack_memory);
 
 	return editor_state->ui_system->Create_Window(descriptor);
 }
@@ -230,15 +228,17 @@ struct RenameData {
 		return callback.data_size > 0 ? OffsetPointer(this, sizeof(*this) + path_size * sizeof(wchar_t)) : callback.data;
 	}
 
-	void WritePath(Stream<wchar_t> path) {
+	void WritePath(Stream<wchar_t> path, size_t storage_capacity) {
+		ECS_ASSERT(sizeof(*this) + path.MemoryOf(path.size) <= storage_capacity);
 		path.CopyTo(OffsetPointer(this, sizeof(*this)));
 		path_size = path.size;
 	}
 	
 	// Returns the total size needed for the copy
-	unsigned int WriteCallback(UIActionHandler _callback) {
+	unsigned int WriteCallback(UIActionHandler _callback, size_t storage_capacity) {
 		callback = _callback;
 		if (_callback.data_size > 0) {
+			ECS_ASSERT(sizeof(*this) + path_size * sizeof(wchar_t) + _callback.data_size <= storage_capacity);
 			memcpy(OffsetPointer(this, sizeof(*this) + path_size * sizeof(wchar_t)), _callback.data, _callback.data_size);
 		}
 		return sizeof(*this) + path_size * sizeof(wchar_t) + _callback.data_size;
@@ -292,10 +292,10 @@ static unsigned int CreateRenameWizard(
 	const char* window_name,
 	bool is_file
 ) {
-	size_t wizard_callback_data_storage[128];
-	RenameData* rename_data = (RenameData*)wizard_callback_data_storage;
-	rename_data->WritePath(path);
-	unsigned int write_size = rename_data->WriteCallback(user_callback);
+	ECS_STACK_VOID_STREAM(wizard_callback_data_storage, ECS_KB * 4);
+	RenameData* rename_data = wizard_callback_data_storage.Reserve<RenameData>();
+	rename_data->WritePath(path, wizard_callback_data_storage.capacity);
+	unsigned int write_size = rename_data->WriteCallback(user_callback, wizard_callback_data_storage.capacity);
 	ECS_ASSERT(write_size <= sizeof(wizard_callback_data_storage));
 	rename_data->is_file = is_file;
 

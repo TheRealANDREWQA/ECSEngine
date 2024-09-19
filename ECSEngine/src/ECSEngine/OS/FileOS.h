@@ -14,18 +14,18 @@ namespace ECSEngine {
 		// Works on directories too
 		ECSENGINE_API bool GetFileTimesInternal(
 			void* file_handle,
-			char* creation_time = nullptr,
-			char* access_time = nullptr,
-			char* last_write_time = nullptr
+			CapacityStream<char>* creation_time = nullptr,
+			CapacityStream<char>* access_time = nullptr,
+			CapacityStream<char>* last_write_time = nullptr
 		);
 
 		// Should prefer the other variants. This can be used when getting OS handles for files
 		// Works on directories too
 		ECSENGINE_API bool GetFileTimesInternal(
 			void* file_handle,
-			wchar_t* creation_time = nullptr,
-			wchar_t* access_time = nullptr,
-			wchar_t* last_write_time = nullptr
+			CapacityStream<wchar_t>* creation_time = nullptr,
+			CapacityStream<wchar_t>* access_time = nullptr,
+			CapacityStream<wchar_t>* last_write_time = nullptr
 		);
 
 		// Should prefer the other variants. This can be used when getting OS handles for files
@@ -41,18 +41,18 @@ namespace ECSEngine {
 		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimesInternal(
 			void* file_handle,
-			char* creation_time = nullptr,
-			char* access_time = nullptr,
-			char* last_write_time = nullptr
+			CapacityStream<char>* creation_time = nullptr,
+			CapacityStream<char>* access_time = nullptr,
+			CapacityStream<char>* last_write_time = nullptr
 		);
 
 		// Should prefer the other variants. This can be used when getting OS handles for files
 		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimesInternal(
 			void* file_handle,
-			wchar_t* creation_time = nullptr,
-			wchar_t* access_time = nullptr,
-			wchar_t* last_write_time = nullptr
+			CapacityStream<wchar_t>* creation_time = nullptr,
+			CapacityStream<wchar_t>* access_time = nullptr,
+			CapacityStream<wchar_t>* last_write_time = nullptr
 		);
 
 		// Should prefer the other variants. This can be used when getting OS handles for files
@@ -68,9 +68,9 @@ namespace ECSEngine {
 		// Works on directories too
 		ECSENGINE_API bool GetFileTimes(
 			Stream<wchar_t> path,
-			char* creation_time = nullptr,
-			char* access_time = nullptr,
-			char* last_write_time = nullptr
+			CapacityStream<char>* creation_time = nullptr,
+			CapacityStream<char>* access_time = nullptr,
+			CapacityStream<char>* last_write_time = nullptr
 		);
 
 		// This is the absolute date (like dd/ww/yyyy)
@@ -78,9 +78,9 @@ namespace ECSEngine {
 		// Works on directories too
 		ECSENGINE_API bool GetFileTimes(
 			Stream<wchar_t> path,
-			wchar_t* creation_time = nullptr,
-			wchar_t* access_time = nullptr,
-			wchar_t* last_write_time = nullptr
+			CapacityStream<wchar_t>* creation_time = nullptr,
+			CapacityStream<wchar_t>* access_time = nullptr,
+			CapacityStream<wchar_t>* last_write_time = nullptr
 		);
 
 		// This is like an absolute date (like dd/ww/yyyy)
@@ -110,9 +110,9 @@ namespace ECSEngine {
 		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			char* creation_time = nullptr,
-			char* access_time = nullptr,
-			char* last_write_time = nullptr
+			CapacityStream<char>* creation_time = nullptr,
+			CapacityStream<char>* access_time = nullptr,
+			CapacityStream<char>* last_write_time = nullptr
 		);
 
 		// This is relative in the sense that reports what is the difference between the time
@@ -121,9 +121,9 @@ namespace ECSEngine {
 		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			wchar_t* creation_time = nullptr,
-			wchar_t* access_time = nullptr,
-			wchar_t* last_write_time = nullptr
+			CapacityStream<wchar_t>* creation_time = nullptr,
+			CapacityStream<wchar_t>* access_time = nullptr,
+			CapacityStream<wchar_t>* last_write_time = nullptr
 		);
 
 		ECSENGINE_API bool OpenFileWithDefaultApplication(
@@ -134,44 +134,44 @@ namespace ECSEngine {
 		ECSENGINE_API size_t GetFileLastWrite(Stream<wchar_t> path);
 
 
-		// Char*, wchar_t* or size_t*
+		// Capacity<char>*, Capacity<wchar_t>* or size_t*
 		template<typename PointerType>
 		ECSENGINE_API void GetFileTimesWithError(
 			Stream<wchar_t> path,
 			Tools::UISystem* system,
-			PointerType* ECS_RESTRICT creation_time = nullptr,
-			PointerType* ECS_RESTRICT access_time = nullptr,
-			PointerType* ECS_RESTRICT last_write_time = nullptr
+			PointerType* creation_time = nullptr,
+			PointerType* access_time = nullptr,
+			PointerType* last_write_time = nullptr
 		);
 
-		// Char*, wchar_t* or size_t*
+		// Capacity<char>*, Capacity<wchar_t>* or size_t*
 		template<typename PointerType>
 		ECSENGINE_API void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path,
 			Tools::UISystem* system,
-			PointerType* ECS_RESTRICT creation_time = nullptr,
-			PointerType* ECS_RESTRICT access_time = nullptr,
-			PointerType* ECS_RESTRICT last_write_time = nullptr
+			PointerType* creation_time = nullptr,
+			PointerType* access_time = nullptr,
+			PointerType* last_write_time = nullptr
 		);
 
-		// Char*, wchar_t* or size_t*
+		// Capacity<char>*, Capacity<wchar_t>* or size_t*
 		// Uses the console to print the message
 		template<typename PointerType>
 		ECSENGINE_API void GetFileTimesWithError(
 			Stream<wchar_t> path,
-			PointerType* ECS_RESTRICT creation_time = nullptr,
-			PointerType* ECS_RESTRICT access_time = nullptr,
-			PointerType* ECS_RESTRICT last_write_time = nullptr
+			PointerType* creation_time = nullptr,
+			PointerType* access_time = nullptr,
+			PointerType* last_write_time = nullptr
 		);
 
-		// Char*, wchar_t* or size_t*
+		// Capacity<char>*, Capacity<wchar_t>* or size_t*
 		// Uses the console to print the message
 		template<typename PointerType>
 		ECSENGINE_API void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path,
-			PointerType* ECS_RESTRICT creation_time = nullptr,
-			PointerType* ECS_RESTRICT access_time = nullptr,
-			PointerType* ECS_RESTRICT last_write_time = nullptr
+			PointerType* creation_time = nullptr,
+			PointerType* access_time = nullptr,
+			PointerType* last_write_time = nullptr
 		);
 
 		ECSENGINE_API void ClearFileWithError(Stream<wchar_t> path, Tools::UISystem* system);

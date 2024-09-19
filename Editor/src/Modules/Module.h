@@ -210,7 +210,7 @@ void GetModuleBuildLogPath(
 	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION configuration,
 	Stream<wchar_t> command,
-	Stream<wchar_t>& log_path
+	CapacityStream<wchar_t>& log_path
 );
 
 EditorModuleInfo* GetModuleInfo(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);

@@ -153,24 +153,23 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, system_string, 256);
 		system_string.CopyOther(EDITOR_SYSTEM_PROJECT_UI_TEMPLATE_PREFIX);
-		system_string.Add(L' ');
+		system_string.AddAssert(L' ');
 
 		size_t prefix_size = system_string.size;
 		system_string.size++;
-		system_string.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
+		system_string.AddStreamAssert(PROJECT_UI_TEMPLATE_EXTENSION);
 
 		size_t string_total_size = system_string.size * TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT * sizeof(wchar_t);
 
-		wchar_t __temp_project_memory[256];
-		CapacityStream<wchar_t> project_string(__temp_project_memory, 0, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, project_string, 512);
 		project_string.CopyOther(project_file->path);
-		project_string.Add(ECS_OS_PATH_SEPARATOR);
+		project_string.AddAssert(ECS_OS_PATH_SEPARATOR);
 
-		project_string.AddStream(L"UI");
-		project_string.Add(ECS_OS_PATH_SEPARATOR);
+		project_string.AddStreamAssert(L"UI");
+		project_string.AddAssert(ECS_OS_PATH_SEPARATOR);
 		size_t project_number_index = project_string.size;
 		project_string.size++;
-		project_string.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
+		project_string.AddStreamAssert(PROJECT_UI_TEMPLATE_EXTENSION);
 
 		string_total_size += project_string.size * (TOOLBAR_DATA_LAYOUT_ROW_COUNT - TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT - 1) * sizeof(wchar_t);
 		void* string_allocation = drawer.GetMainAllocatorBuffer(string_total_size);
@@ -386,25 +385,24 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 
 	drawer.Menu(configuration, config, "Window", &current_state);
 
-	char layout_state_characters[256];
-	CapacityStream<char> layout_state_stream(layout_state_characters, 0, 256);
+	ECS_STACK_CAPACITY_STREAM(char, layout_state_stream, 512);
 	layout_state_stream.CopyOther("Default");
 
 	Stream<char> layout_system_string = "System ";
 	for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT; index++) {
-		layout_state_stream.Add('\n');
-		layout_state_stream.AddStream(layout_system_string);
-		layout_state_stream.Add(index + '1');
+		layout_state_stream.AddAssert('\n');
+		layout_state_stream.AddStreamAssert(layout_system_string);
+		layout_state_stream.AddAssert(index + '1');
 	}
 	Stream<char> layout_project_string = "Project ";
 	for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_ROW_COUNT - TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT - 1; index++) {
-		layout_state_stream.Add('\n');
-		layout_state_stream.AddStream(layout_project_string);
-		layout_state_stream.Add(index + '1');
+		layout_state_stream.AddAssert('\n');
+		layout_state_stream.AddStreamAssert(layout_project_string);
+		layout_state_stream.AddAssert(index + '1');
 	}
 	layout_state_stream.AddAssert('\0');
 
-	current_state.left_characters = layout_state_characters;
+	current_state.left_characters = layout_state_stream.buffer;
 	current_state.separation_lines[0] = 0;
 	current_state.separation_lines[1] = 4;
 	current_state.separation_line_count = 2;
@@ -450,11 +448,11 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 
 // ------------------------------------------------------------------------------------------------
 
-void ToolbarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void ToolbarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	descriptor.draw = ToolbarDraw;
 
-	ToolbarData* data = (ToolbarData*)stack_memory;
+	ToolbarData* data = stack_memory->Reserve<ToolbarData>();
 	data->editor_state = editor_state;
 	descriptor.window_data = data;
 	descriptor.window_data_size = sizeof(*data);
@@ -470,8 +468,8 @@ void CreateToolbarUI(EditorState* editor_state) {
 	toolbar_window.initial_size_x = 2.0f;
 	toolbar_window.initial_size_y = TOOLBAR_SIZE_Y;
 
-	size_t stack_memory[128];
-	ToolbarSetDescriptor(toolbar_window, editor_state, stack_memory);
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+	ToolbarSetDescriptor(toolbar_window, editor_state, &stack_memory);
 
 	editor_state->ui_system->CreateWindowAndDockspace(toolbar_window, UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING 
 		| UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X | UI_DOCKSPACE_BORDER_FLAG_NO_TITLE);

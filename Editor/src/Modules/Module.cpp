@@ -816,9 +816,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 ) {
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
 
-
-	wchar_t _log_path[512];
-	Stream<wchar_t> log_path(_log_path, 0);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, log_path, 512);
 	GetModuleBuildLogPath(editor_state, index, configuration, command, log_path);
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, command_string, 512);
@@ -1479,12 +1477,13 @@ void GetModuleBuildFlagFile(
 	command.size--;
 
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
-	temp_file.AddStreamSafe(modules->buffer[module_index].library_name);
-	temp_file.Add(L'_');
-	temp_file.AddStream(MODULE_CONFIGURATIONS_WIDE[configuration]);
-	temp_file.Add(L'.');
-	temp_file.AddStream(Stream<wchar_t>(command.buffer + 2, command.size - 2));
-	temp_file[temp_file.size] = L'\0';
+	temp_file.AddStreamAssert(modules->buffer[module_index].library_name);
+	temp_file.AddAssert(L'_');
+	temp_file.AddStreamAssert(MODULE_CONFIGURATIONS_WIDE[configuration]);
+	temp_file.AddAssert(L'.');
+	temp_file.AddStreamAssert(Stream<wchar_t>(command.buffer + 2, command.size - 2));
+	temp_file.AddAssert(L'\0');
+	temp_file.size--;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1494,21 +1493,22 @@ void GetModuleBuildLogPath(
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
 	Stream<wchar_t> command,
-	Stream<wchar_t>& log_path
+	CapacityStream<wchar_t>& log_path
 )
 {
 	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 	log_path.CopyOther(project_file->path);
-	log_path.AddStream(CMD_BUILD_SYSTEM_LOG_FILE_PATH);
-	log_path.AddStream(modules->buffer[index].library_name);
-	log_path.Add(L'_');
-	log_path.AddStream(MODULE_CONFIGURATIONS_WIDE[configuration]);
+	log_path.AddStreamAssert(CMD_BUILD_SYSTEM_LOG_FILE_PATH);
+	log_path.AddStreamAssert(modules->buffer[index].library_name);
+	log_path.AddAssert(L'_');
+	log_path.AddStreamAssert(MODULE_CONFIGURATIONS_WIDE[configuration]);
 	wchar_t* replace_slash_with_underscore = log_path.buffer + log_path.size;
-	log_path.AddStream(Stream<wchar_t>(command.buffer + 2, command.size - 2));
+	log_path.AddStreamAssert(Stream<wchar_t>(command.buffer + 2, command.size - 2));
 	*replace_slash_with_underscore = L'_';
-	log_path.AddStream(CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION);
-	log_path[log_path.size] = L'\0';
+	log_path.AddStreamAssert(CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION);
+	log_path.AddAssert(L'\0');
+	log_path.size--;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

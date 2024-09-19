@@ -9,7 +9,7 @@ ECS_TOOLS;
 
 // Stack memory size should be at least 512
 // In the stack memory the first 4 bytes need to be the sandbox index
-void VisualizeTextureUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
+void VisualizeTextureUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory);
 
 // It creates the dockspace and the window
 // It returns the index of the visualize index window. Returns -1 if the limit for visualize windows was reached

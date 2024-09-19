@@ -188,11 +188,11 @@ static bool AssetExplorerRetainedMode(void* window_data, WindowRetainedModeInfo*
 	return true;
 }
 
-void AssetExplorerSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void AssetExplorerSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	unsigned int index = *(unsigned int*)stack_memory;
 
-	AssetExplorerData* data = (AssetExplorerData*)OffsetPointer(stack_memory, sizeof(unsigned int));
+	AssetExplorerData* data = (AssetExplorerData*)stack_memory->Reserve<AssetExplorerData>();
 	data->editor_state = editor_state;
 	memset(data->asset_opened_headers, 0, sizeof(data->asset_opened_headers));
 	memset(data->resource_manager_opened_headers, 0, sizeof(data->resource_manager_opened_headers));

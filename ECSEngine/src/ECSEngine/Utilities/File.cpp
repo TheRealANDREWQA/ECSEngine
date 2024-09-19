@@ -333,14 +333,14 @@ namespace ECSEngine {
 		return OS::GetFileTimesInternal(handle, creation_time, access_time, last_write_time);
 	}
 
-	bool GetFileTimes(ECS_FILE_HANDLE file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+	bool GetFileTimes(ECS_FILE_HANDLE file_handle, CapacityStream<wchar_t>* creation_time, CapacityStream<wchar_t>* access_time, CapacityStream<wchar_t>* last_write_time)
 	{
 		return GetFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool GetFileTimes(ECS_FILE_HANDLE file_handle, char* creation_time, char* access_time, char* last_write_time)
+	bool GetFileTimes(ECS_FILE_HANDLE file_handle, CapacityStream<char>* creation_time, CapacityStream<char>* access_time, CapacityStream<char>* last_write_time)
 	{
 		return GetFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
 	}
@@ -364,14 +364,14 @@ namespace ECSEngine {
 		return OS::GetRelativeFileTimesInternal(handle, creation_time, access_time, last_write_time);
 	}
 
-	bool GetRelativeFileTimes(ECS_FILE_HANDLE file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+	bool GetRelativeFileTimes(ECS_FILE_HANDLE file_handle, CapacityStream<wchar_t>* creation_time, CapacityStream<wchar_t>* access_time, CapacityStream<wchar_t>* last_write_time)
 	{
 		return GetRelativeFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool GetRelativeFileTimes(ECS_FILE_HANDLE file_handle, char* creation_time, char* access_time, char* last_write_time)
+	bool GetRelativeFileTimes(ECS_FILE_HANDLE file_handle, CapacityStream<char>* creation_time, CapacityStream<char>* access_time, CapacityStream<char>* last_write_time)
 	{
 		return GetRelativeFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
 	}

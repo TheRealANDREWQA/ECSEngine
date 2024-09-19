@@ -245,20 +245,20 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::AddTexture(ECS_MATERIAL_SHADER shader, Stream<char> name, unsigned int handle, unsigned char slot, AllocatorPolymorphic allocator)
+	void MaterialAsset::AddTexture(ECS_MATERIAL_SHADER shader, Stream<char> _name, unsigned int handle, unsigned char slot, AllocatorPolymorphic allocator)
 	{
 		unsigned int count = textures[shader].size;
 		ResizeTexturesNewValue(count + 1, shader, allocator);
-		textures[shader][count] = { name.Copy(allocator), handle, slot };
+		textures[shader][count] = { _name.Copy(allocator), handle, slot };
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::AddSampler(ECS_MATERIAL_SHADER shader, Stream<char> name, unsigned int handle, unsigned char slot, AllocatorPolymorphic allocator)
+	void MaterialAsset::AddSampler(ECS_MATERIAL_SHADER shader, Stream<char> _name, unsigned int handle, unsigned char slot, AllocatorPolymorphic allocator)
 	{
 		unsigned int count = samplers[shader].size;
 		ResizeSamplersNewValue(count + 1, shader, allocator);
-		samplers[shader][count] = { name.Copy(allocator), handle, slot };
+		samplers[shader][count] = { _name.Copy(allocator), handle, slot };
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -693,10 +693,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	size_t MaterialAsset::FindBuffer(Stream<char> name, ECS_MATERIAL_SHADER shader) const
+	size_t MaterialAsset::FindBuffer(Stream<char> _name, ECS_MATERIAL_SHADER shader) const
 	{
 		for (size_t index = 0; index < buffers[shader].size; index++) {
-			if (buffers[shader][index].name == name) {
+			if (buffers[shader][index].name == _name) {
 				return index;
 			}
 		}
@@ -705,10 +705,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	size_t MaterialAsset::FindBuffer(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
+	size_t MaterialAsset::FindBuffer(Stream<char> _name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
 	{
 		for (size_t index = 0; index < buffers[shader].size; index++) {
-			if (buffers[shader][index].name == name && buffers[shader][index].slot == slot) {
+			if (buffers[shader][index].name == _name && buffers[shader][index].slot == slot) {
 				return index;
 			}
 		}
@@ -717,10 +717,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	size_t MaterialAsset::FindTexture(Stream<char> name, ECS_MATERIAL_SHADER shader) const
+	size_t MaterialAsset::FindTexture(Stream<char> _name, ECS_MATERIAL_SHADER shader) const
 	{
 		for (size_t index = 0; index < textures[shader].size; index++) {
-			if (textures[shader][index].name == name) {
+			if (textures[shader][index].name == _name) {
 				return index;
 			}
 		}
@@ -729,10 +729,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	size_t MaterialAsset::FindTexture(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
+	size_t MaterialAsset::FindTexture(Stream<char> _name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
 	{
 		for (size_t index = 0; index < textures[shader].size; index++) {
-			if (textures[shader][index].name == name && textures[shader][index].slot == slot) {
+			if (textures[shader][index].name == _name && textures[shader][index].slot == slot) {
 				return index;
 			}
 		}
@@ -741,10 +741,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	size_t MaterialAsset::FindSampler(Stream<char> name, ECS_MATERIAL_SHADER shader) const
+	size_t MaterialAsset::FindSampler(Stream<char> _name, ECS_MATERIAL_SHADER shader) const
 	{
 		for (size_t index = 0; index < samplers[shader].size; index++) {
-			if (samplers[shader][index].name == name) {
+			if (samplers[shader][index].name == _name) {
 				return index;
 			}
 		}
@@ -753,10 +753,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	size_t MaterialAsset::FindSampler(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
+	size_t MaterialAsset::FindSampler(Stream<char> _name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
 	{
 		for (size_t index = 0; index < samplers[shader].size; index++) {
-			if (samplers[shader][index].name == name && samplers[shader][index].slot == slot) {
+			if (samplers[shader][index].name == _name && samplers[shader][index].slot == slot) {
 				return index;
 			}
 		}
@@ -1106,7 +1106,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void ShaderMetadata::AddMacro(Stream<char> name, Stream<char> definition, AllocatorPolymorphic allocator)
+	void ShaderMetadata::AddMacro(Stream<char> macro_name, Stream<char> definition, AllocatorPolymorphic allocator)
 	{
 		// Copy the string pointers to a temporary stack such that the memory can be freed first and then
 		// reallocated
@@ -1121,7 +1121,7 @@ namespace ECSEngine {
 		memcpy(macros.buffer, temp_macros, sizeof(ShaderMacro) * macros.size);
 
 		// Allocate the name and the definition separately
-		Stream<char> new_name = StringCopy(allocator, name);
+		Stream<char> new_name = StringCopy(allocator, macro_name);
 		Stream<char> new_definition = StringCopy(allocator, definition);
 
 		macros.Add({ new_name, new_definition });
@@ -1251,9 +1251,9 @@ namespace ECSEngine {
 		memcpy(macros.buffer, temp_macros, sizeof(ShaderMacro) * macros.size);
 	}
 
-	void ShaderMetadata::RemoveMacro(Stream<char> name, AllocatorPolymorphic allocator)
+	void ShaderMetadata::RemoveMacro(Stream<char> macro_name, AllocatorPolymorphic allocator)
 	{
-		unsigned int index = FindMacro(name);
+		unsigned int index = FindMacro(macro_name);
 		ECS_ASSERT(index != -1);
 		RemoveMacro(index, allocator);
 	}
@@ -1268,19 +1268,19 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void ShaderMetadata::UpdateMacro(Stream<char> name, Stream<char> new_definition, AllocatorPolymorphic allocator)
+	void ShaderMetadata::UpdateMacro(Stream<char> macro_name, Stream<char> new_definition, AllocatorPolymorphic allocator)
 	{
-		unsigned int index = FindMacro(name);
+		unsigned int index = FindMacro(macro_name);
 		ECS_ASSERT(index != -1);
 		UpdateMacro(index, new_definition, allocator);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	unsigned int ShaderMetadata::FindMacro(Stream<char> name) const
+	unsigned int ShaderMetadata::FindMacro(Stream<char> macro_name) const
 	{
 		for (size_t index = 0; index < macros.size; index++) {
-			if (macros[index].name == name) {
+			if (macros[index].name == macro_name) {
 				return index;
 			}
 		}

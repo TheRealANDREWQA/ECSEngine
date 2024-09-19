@@ -1007,16 +1007,16 @@ namespace ECSEngine {
 			unsigned int GetDockspaceIndexFromMouseCoordinatesWithChildren(
 				float2 mouse_position,
 				DockspaceType& dockspace_type,
-				unsigned int* parent_indicies,
-				DockspaceType* dockspace_types,
+				CapacityStream<unsigned int>* parent_indicies,
+				CapacityStream<DockspaceType>* dockspace_types,
 				unsigned int& parent_count
 			);
 
 			void GetDockspacesFromParent(
 				unsigned int dockspace_index,
 				DockspaceType dockspace_type,
-				unsigned int* subindicies,
-				DockspaceType* subtypes,
+				CapacityStream<unsigned int>* subindicies,
+				CapacityStream<DockspaceType>* subtypes,
 				unsigned int& children_count
 			) const;
 
@@ -1350,7 +1350,7 @@ namespace ECSEngine {
 			// Returns whether or not the viewer can see this window or not
 			bool IsWindowVisible(unsigned int window_index) const;
 			
-			bool LoadUIFile(Stream<wchar_t> filename, Stream<Stream<char>>& window_names);
+			bool LoadUIFile(Stream<wchar_t> filename, CapacityStream<Stream<char>>& window_names);
 
 			// returns whether or not a valid file was found
 			bool LoadDescriptorFile(Stream<wchar_t> filename);
@@ -1525,8 +1525,8 @@ namespace ECSEngine {
 				unsigned int dockspace_index,
 				DockspaceType dockspace_type,
 				DockspaceType& children_type,
-				unsigned int* parent_indices,
-				DockspaceType* border_mask_index,
+				CapacityStream<unsigned int>* parent_indices,
+				CapacityStream<DockspaceType>* border_mask_index,
 				unsigned int& parent_count
 			);
 

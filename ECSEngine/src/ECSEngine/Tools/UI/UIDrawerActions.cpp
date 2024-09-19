@@ -33,12 +33,13 @@ namespace ECSEngine {
 			const char* window_name = (const char*)_additional_data;
 
 			size_t current_window_name_size = strnlen_s(window_name, 256);
-			if (current_window_name_size > 11) {
-				char parent_window_name[256];
-				memcpy(parent_window_name, window_name, current_window_name_size);
-				parent_window_name[current_window_name_size - 11] = '\0';
+			size_t parameter_character_count = sizeof("Parameters");
+			if (current_window_name_size > parameter_character_count) {
+				ECS_STACK_CAPACITY_STREAM(char, parent_window_name, 256);
+				parent_window_name.CopyOther(window_name);
+				parent_window_name[current_window_name_size - parameter_character_count] = '\0';
 				unsigned int window_index = system->GetWindowFromName(parent_window_name);
-				if (window_index != 0xFFFFFFFF) {
+				if (window_index != -1) {
 					window_data->is_this_parameter_window = true;
 				}
 				else {
@@ -333,18 +334,18 @@ namespace ECSEngine {
 				UIDrawerTextInputAddCommandInfo* data = (UIDrawerTextInputAddCommandInfo*)_data;
 				UIDrawerTextInput* input = data->input;
 
-				unsigned char bytes[128];
-				UIDrawerTextInputRemoveCommandInfo* command_info = (UIDrawerTextInputRemoveCommandInfo*)&bytes;
+				ECS_STACK_VOID_STREAM(stack_storage, 512);
+				UIDrawerTextInputRemoveCommandInfo* command_info = (UIDrawerTextInputRemoveCommandInfo*)stack_storage.buffer;
 
 				unsigned int data_size = sizeof(UIDrawerTextInputRemoveCommandInfo);
 				unsigned int* text_count = &command_info->text_count;
 				unsigned int* text_position = &command_info->text_position;
-				char* text = (char*)((uintptr_t)command_info + data_size);
+				CapacityStream<char> text = { (char*)((uintptr_t)command_info + data_size), 0, stack_storage.capacity - data_size };
 				command_info->input = input;
 
 				input->current_sprite_position = data->text_position + data->text_count;
 				input->current_selection = data->text_position;
-				input->Backspace(text_count, text_position, text);
+				input->Backspace(text_count, text_position, &text);
 
 				if (!input->is_currently_selected) {
 					input->is_caret_display = false;
@@ -362,11 +363,11 @@ namespace ECSEngine {
 			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
 				input->current_sprite_position = data->text_position;
 				input->current_selection = input->current_sprite_position;
-				char deleted_characters[256];
+				ECS_STACK_CAPACITY_STREAM(char, deleted_characters, 512);
 				unsigned int deleted_character_count = 0;
 				unsigned int delete_position = 0;
 
-				input->PasteCharacters((char*)((uintptr_t)data + sizeof(UIDrawerTextInputRemoveCommandInfo)), data->text_count, system, window_index, deleted_characters, &deleted_character_count, &delete_position);
+				input->PasteCharacters((char*)((uintptr_t)data + sizeof(UIDrawerTextInputRemoveCommandInfo)), data->text_count, system, window_index, &deleted_characters, &deleted_character_count, &delete_position);
 				input->current_selection = data->text_position;
 
 				if (!input->is_currently_selected) {
@@ -896,11 +897,10 @@ namespace ECSEngine {
 					bool on_release = data->callback_on_release && mouse->IsReleased(ECS_MOUSE_LEFT);
 					if (amount != 0.0f || on_release) {
 						// The text input must also be updated before it
-						char number_characters[64];
-						Stream<char> number_characters_stream(number_characters, 0);
-						ConvertFloatingPointToChars<FloatingPoint>(number_characters_stream, *data->callback_data.number, 3);
+						ECS_STACK_CAPACITY_STREAM(char, number_characters, 64);
+						ConvertFloatingPointToChars<FloatingPoint>(number_characters, *data->callback_data.number, 3);
 						data->callback_data.number_data.input->DeleteAllCharacters();
-						data->callback_data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
+						data->callback_data.number_data.input->InsertCharacters(number_characters.buffer, number_characters.size, 0, system);
 
 						// Set the trigger callback to exit
 						data->callback_data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
@@ -987,11 +987,10 @@ namespace ECSEngine {
 
 					if (data->data.number_data.input->HasCallback()) {
 						// The text input must also be updated before it
-						char number_characters[64];
-						Stream<char> number_characters_stream(number_characters, 0);
-						ConvertIntToChars(number_characters_stream, *data->data.number);
+						ECS_STACK_CAPACITY_STREAM(char, number_characters, 64);
+						ConvertIntToChars(number_characters, *data->data.number);
 						data->data.number_data.input->DeleteAllCharacters();
-						data->data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
+						data->data.number_data.input->InsertCharacters(number_characters.buffer, number_characters.size, 0, system);
 
 						if (data->callback_on_release) {
 							if (!mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -1244,8 +1243,7 @@ namespace ECSEngine {
 			if (mouse->IsPressed(ECS_MOUSE_RIGHT) && data->data->number_data.return_to_default) {
 				*data->data->number = data->data->default_value;
 				data->data->number_data.input->DeleteAllCharacters();
-				char temp_chars[128];
-				Stream<char> temp_stream = Stream<char>(temp_chars, 0);
+				ECS_STACK_CAPACITY_STREAM(char, temp_stream, 128);
 				ConvertFloatToChars(temp_stream, *data->data->number, 3);
 				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 
@@ -1282,8 +1280,7 @@ namespace ECSEngine {
 			if (mouse->IsPressed(ECS_MOUSE_RIGHT) && data->data->number_data.return_to_default) {
 				*data->data->number = data->data->default_value;
 				data->data->number_data.input->DeleteAllCharacters();
-				char temp_chars[128];
-				Stream<char> temp_stream = Stream<char>(temp_chars, 0);
+				ECS_STACK_CAPACITY_STREAM(char, temp_stream, 128);
 				ConvertDoubleToChars(temp_stream, *data->data->number, 3);
 				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 
@@ -1321,8 +1318,7 @@ namespace ECSEngine {
 			if (mouse->IsPressed(ECS_MOUSE_RIGHT) && data->data->number_data.return_to_default) {
 				*data->data->number = data->data->default_value;
 				data->data->number_data.input->DeleteAllCharacters();
-				char temp_chars[128];
-				Stream<char> temp_stream = Stream<char>(temp_chars, 0);
+				ECS_STACK_CAPACITY_STREAM(char, temp_stream, 128);
 				ConvertIntToChars(temp_stream, static_cast<int64_t>(*data->data->number));
 				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 
@@ -1685,25 +1681,24 @@ namespace ECSEngine {
 					input->is_caret_display = true;
 				};
 
-				unsigned char command[128];
-				UIDrawerTextInputRemoveCommandInfo* command_info = (UIDrawerTextInputRemoveCommandInfo*)command;
+				ECS_STACK_VOID_STREAM(commad_storage, 512);
+				UIDrawerTextInputRemoveCommandInfo* command_info = (UIDrawerTextInputRemoveCommandInfo*)commad_storage.buffer;
 
 				unsigned int data_size = sizeof(UIDrawerTextInputRemoveCommandInfo);
 				unsigned int* backspace_text_count = &command_info->text_count;
 				unsigned int* backspace_text_position = &command_info->text_position;
 				char* info_text = (char*)((uintptr_t)command_info + data_size);
-				char* backspace_text = info_text;
+				CapacityStream<char> backspace_text = { info_text, 0, commad_storage.capacity - data_size };
 				command_info->input = input;
 
 				bool is_backspace_lambda = false;
 				auto backspace_lambda = [&]() {
-					is_backspace_lambda = input->Backspace(backspace_text_count, backspace_text_position, backspace_text);
+					is_backspace_lambda = input->Backspace(backspace_text_count, backspace_text_position, &backspace_text);
 				};
 
 				if (input->filter_character_count > 0) {
 					size_t valid_characters = 0;
 
-					float push_offsets[256] = { 0 };
 					for (size_t index = 0; index < input->filter_character_count; index++) {
 						CharacterType type = CharacterType::Unknown;
 
@@ -1718,7 +1713,6 @@ namespace ECSEngine {
 						}
 						valid_characters += is_valid;
 					}
-					push_offsets[0] = 0.0f;
 
 					size_t push_count = input->filter_character_count - valid_characters;
 					if (push_count > 0) {
@@ -1743,21 +1737,20 @@ namespace ECSEngine {
 				}
 
 				if (keyboard->IsUp(ECS_KEY_LEFT_CTRL) && keyboard->IsUp(ECS_KEY_RIGHT_CTRL)) {
-					char characters[64];
-					size_t character_count = 0;
-					while (keyboard->GetCharacter(characters[character_count++])) {
+					ECS_STACK_CAPACITY_STREAM(char, characters, 64);
+					while (keyboard->GetCharacter(characters[characters.size++])) {
 						CharacterType type;
-						system->FindCharacterType(characters[character_count - 1], type);
+						system->FindCharacterType(characters[characters.size - 1], type);
 						if (type == CharacterType::Unknown) {
-							character_count--;
+							characters.size--;
 						}
 						else {
-							character_count -= data->filter(characters[character_count - 1], type) ? 0 : 1;
+							characters.size -= data->filter(characters[characters.size - 1], type) ? 0 : 1;
 						}
 					}
-					character_count--;
+					characters.size--;
 
-					if (character_count > 0) {
+					if (characters.size > 0) {
 						if (input->current_sprite_position != input->current_selection) {
 							backspace_lambda();
 
@@ -1771,7 +1764,7 @@ namespace ECSEngine {
 							remove_info->deallocate_data = true;
 							remove_info->deallocate_buffer = remove_info;
 							unsigned char* info_text = (unsigned char*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo));
-							memcpy(info_text, backspace_text, *backspace_text_count);
+							memcpy(info_text, backspace_text.buffer, *backspace_text_count);
 							info_text[*backspace_text_count] = '\0';
 
 							AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
@@ -1779,11 +1772,11 @@ namespace ECSEngine {
 
 						size_t text_size = input->text->size;
 
-						if (input->text->size + character_count <= input->text->capacity) {
+						if (input->text->size + characters.size <= input->text->capacity) {
 							unsigned char revert_info_data[revert_command_stack_size];
 							UIDrawerTextInputAddCommandInfo* revert_info = (UIDrawerTextInputAddCommandInfo*)revert_info_data;
 							revert_info->input = input;
-							revert_info->text_count = character_count;
+							revert_info->text_count = characters.size;
 							revert_info->text_position = input->current_sprite_position;
 
 							AddWindowHandleCommand(
@@ -1795,7 +1788,7 @@ namespace ECSEngine {
 								input
 							);
 
-							input->InsertCharacters(characters, character_count, input->current_sprite_position, system);
+							input->InsertCharacters(characters.buffer, characters.size, input->current_sprite_position, system);
 						}
 
 						input->current_selection = input->current_sprite_position;
@@ -1819,7 +1812,7 @@ namespace ECSEngine {
 						remove_info->deallocate_data = true;
 						remove_info->deallocate_buffer = remove_info;
 						unsigned char* info_text = (unsigned char*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo));
-						memcpy((void*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo)), backspace_text, *backspace_text_count);
+						memcpy((void*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo)), backspace_text.buffer, *backspace_text_count);
 						info_text[*backspace_text_count] = '\0';
 
 						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
@@ -1862,7 +1855,7 @@ namespace ECSEngine {
 						remove_info->deallocate_data = true;
 						remove_info->deallocate_buffer = remove_info;
 						unsigned char* info_text = (unsigned char*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo));
-						memcpy(info_text, backspace_text, *backspace_text_count);
+						memcpy(info_text, backspace_text.buffer, *backspace_text_count);
 						info_text[*backspace_text_count] = '\0';
 
 						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
@@ -1875,10 +1868,10 @@ namespace ECSEngine {
 						unsigned int character_count = system->m_application->CopyTextFromClipboard(&characters);
 
 						if (input->text->size + character_count <= input->text->capacity) {
-							char deleted_characters[revert_command_stack_size];
+							ECS_STACK_CAPACITY_STREAM(char, deleted_characters, revert_command_stack_size);
 							unsigned int deleted_character_count = 0;
 							unsigned int delete_position = 0;
-							input->PasteCharacters(characters.buffer, character_count, system, window_index, deleted_characters, &deleted_character_count, &delete_position);
+							input->PasteCharacters(characters.buffer, character_count, system, window_index, &deleted_characters, &deleted_character_count, &delete_position);
 							input->current_selection = delete_position;
 
 							size_t total_size = sizeof(UIDrawerTextInputReplaceCommandInfo) + deleted_character_count + 1;
@@ -1891,7 +1884,7 @@ namespace ECSEngine {
 							replace_info->text_position = delete_position;
 							replace_info->text_count = character_count;
 							replace_info->deallocate_buffer = replace_info;
-							memcpy(info_text, deleted_characters, deleted_character_count);
+							memcpy(info_text, deleted_characters.buffer, deleted_character_count);
 							info_text[deleted_character_count] = '\0';
 
 							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, input);
@@ -2638,12 +2631,13 @@ namespace ECSEngine {
 					
 					if (state->unavailables == nullptr || (state->unavailables != nullptr && !state->unavailables[index])) {
 						// Embed the data into the wrapper
-						size_t _wrapper_data[256];
+						ECS_STACK_VOID_STREAM(_wrapper_data, ECS_KB * 2);
 						if (state->row_has_submenu == nullptr || state->row_has_submenu[index] == false) {
-							ClickableWrapperData* wrapper_data = (ClickableWrapperData*)_wrapper_data;
+							ClickableWrapperData* wrapper_data = (ClickableWrapperData*)_wrapper_data.buffer;
 							wrapper_data->drawer_data = data;
 							wrapper_data->row_index = index;
 							if (state->click_handlers[index].data_size > 0) {
+								ECS_ASSERT(sizeof(*wrapper_data) + state->click_handlers[index].data_size <= _wrapper_data.capacity);
 								memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), state->click_handlers[index].data, state->click_handlers[index].data_size);
 							}
 							clickable.handlers[0] = {
@@ -3247,12 +3241,13 @@ namespace ECSEngine {
 
 			UIDrawerPathInputFolderActionData* data = (UIDrawerPathInputFolderActionData*)_data;
 
-			size_t window_data_bytes[256];
-			UIDrawerPathInputFolderWindowData* window_data = (UIDrawerPathInputFolderWindowData*)window_data_bytes;
+			ECS_STACK_VOID_STREAM(window_data_bytes, ECS_KB);
+			UIDrawerPathInputFolderWindowData* window_data = (UIDrawerPathInputFolderWindowData*)window_data_bytes.buffer;
 			char* child_window_name = (char*)OffsetPointer(window_data, sizeof(UIDrawerPathInputFolderWindowData));
 			*window_data = { data->input, data->path, data->custom_handler, child_window_name };
 
 			Stream<char> window_name = system->GetWindowName(window_index);
+			ECS_ASSERT(sizeof(*window_data) + window_name.size <= window_data_bytes.capacity);
 			window_name.CopyTo(child_window_name);
 
 			UIWindowDescriptor window_descriptor;
@@ -3618,9 +3613,7 @@ namespace ECSEngine {
 			if (IsClickableTrigger(action_data)) {
 				UIDrawerLabelHierarchyData* data = (UIDrawerLabelHierarchyData*)_data;
 				data->ChangeSelection({ nullptr, 0 }, action_data);
-				if (data->has_monitor_selection) {
-					data->UpdateMonitorSelection(&data->monitor_selection);
-				}
+				data->UpdateMonitorSelection();
 			}
 		}
 
@@ -3645,9 +3638,7 @@ namespace ECSEngine {
 				else {
 					data->hierarchy->RemoveOpenedLabel(system, label_storage);
 				}
-				if (data->hierarchy->has_monitor_selection) {
-					data->hierarchy->UpdateMonitorSelection(&data->hierarchy->monitor_selection);
-				}
+				data->hierarchy->UpdateMonitorSelection();
 				action_data->redraw_window = true;
 			}
 		}
@@ -3775,9 +3766,7 @@ namespace ECSEngine {
 					else {
 						data->hierarchy->ChangeSelection(untyped_data, action_data);
 					}
-					if (data->hierarchy->has_monitor_selection) {
-						data->hierarchy->UpdateMonitorSelection(&data->hierarchy->monitor_selection);
-					}
+					data->hierarchy->UpdateMonitorSelection();
 				}
 				else {
 					if (data->hierarchy->drag_action != nullptr) {

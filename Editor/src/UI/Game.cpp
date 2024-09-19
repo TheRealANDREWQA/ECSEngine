@@ -82,11 +82,11 @@ void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 	DisplayCompilingSandbox(drawer, editor_state, sandbox_index);
 }
 
-void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
-	unsigned int index = *(unsigned int*)stack_memory;
+	unsigned int index = *(unsigned int*)stack_memory->buffer;
 
-	GameData* game_data = (GameData*)OffsetPointer(stack_memory, sizeof(unsigned int));
+	GameData* game_data = (GameData*)stack_memory->Reserve<GameData>();
 	
 	memset(game_data, 0, sizeof(*game_data));
 	game_data->editor_state = editor_state;
@@ -99,7 +99,8 @@ void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state,
 	descriptor.private_action = GameWindowPrivateAction;
 	descriptor.private_action_data = editor_state;
 
-	CapacityStream<char> window_name(OffsetPointer(game_data, sizeof(*game_data)), 0, 128);
+	const size_t WINDOW_NAME_CAPACITY = 128;
+	CapacityStream<char> window_name(stack_memory->Reserve(WINDOW_NAME_CAPACITY), 0, WINDOW_NAME_CAPACITY);
 	GetGameUIWindowName(index, window_name);
 
 	descriptor.window_name = window_name;

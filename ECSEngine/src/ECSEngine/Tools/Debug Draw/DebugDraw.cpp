@@ -2988,11 +2988,11 @@ namespace ECSEngine {
 				info->instance_thickness_z,
 			};
 
-			DebugOOBB oobbs[3] = {};
-			for (size_t index = 0; index < ECS_COUNTOF(oobbs); index++) {
+			DebugOOBB oobb_crosses[3] = {};
+			for (size_t index = 0; index < ECS_COUNTOF(oobb_crosses); index++) {
 				DebugDrawOptions current_option = options;
 				current_option.instance_thickness = instance_thickness_values[index];
-				oobbs[index] = {
+				oobb_crosses[index] = {
 					translations[index],
 					rotations[index],
 					complete_sizes[index],
@@ -3001,7 +3001,7 @@ namespace ECSEngine {
 				};
 			}
 
-			addition_stream->AddStream({ oobbs, ECS_COUNTOF(oobbs) });
+			addition_stream->AddStream({ oobb_crosses, ECS_COUNTOF(oobb_crosses) });
 		}
 		else {
 			DebugDrawerOutput outputs[] = {
@@ -3113,13 +3113,13 @@ namespace ECSEngine {
 			DebugDrawOptions options_z = options;
 			options_z.instance_thickness = instance_thickness_z;
 
-			DebugArrow arrows[] = {
+			DebugArrow axes_arrows[] = {
 				{ translation, AxesArrowXRotation(rotation), size, size, Color(), options_x },
 				{ translation, AxesArrowYRotation(rotation), size, size, Color(), options_y },
 				{ translation, AxesArrowZRotation(rotation), size, size, Color(), options_z }
 			};
 
-			addition_stream->AddStream({ arrows, ECS_COUNTOF(arrows)});
+			addition_stream->AddStream({ axes_arrows, ECS_COUNTOF(axes_arrows)});
 		}
 		else {
 			DebugDrawerOutput outputs[] = {
@@ -3211,7 +3211,7 @@ namespace ECSEngine {
 		Stream<char> text, 
 		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugString>* addition_stream, 
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic _allocator
 	)
 	{
 		ECS_ASSERT(false, "Output ID for Debug Strings is not yet implemented");
@@ -3226,10 +3226,10 @@ namespace ECSEngine {
 		Stream<char> text, 
 		DebugDrawOptions options,
 		AdditionStreamAtomic<DebugString>* addition_stream, 
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic _allocator
 	)
 	{
-		OutputInstanceIndexString(translation, RotateVector(GetRightVector(), rotation), size, text, options, addition_stream, allocator);
+		OutputInstanceIndexString(translation, RotateVector(GetRightVector(), rotation), size, text, options, addition_stream, _allocator);
 	}
 
 

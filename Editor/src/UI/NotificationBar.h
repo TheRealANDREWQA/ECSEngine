@@ -8,7 +8,7 @@ struct EditorState;
 ECS_TOOLS;
 
 // Stack memory size should be at least 512
-void NotificationBarSetDescriptor(ECSEngine::Tools::UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
+void NotificationBarSetDescriptor(ECSEngine::Tools::UIWindowDescriptor& descriptor, EditorState* editor_state, ECSEngine::CapacityStream<void>* stack_memory);
 
 void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 

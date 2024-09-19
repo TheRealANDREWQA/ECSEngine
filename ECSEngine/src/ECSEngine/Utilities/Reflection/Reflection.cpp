@@ -2836,8 +2836,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			AdditionStream<unsigned int> words_addition = &words;
 
 			size_t ecs_reflect_size = strlen(STRING(ECS_REFLECT));
-			const size_t MAX_FIRST_LINE_CHARACTERS = 512;
-			char first_line_characters[512];
+			ECS_STACK_CAPACITY_STREAM(char, first_line_characters, 512);
 
 			// search every path
 			for (size_t index = 0; index < data->paths.size; index++) {
@@ -2851,18 +2850,19 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 					const size_t MAX_FIRST_LINE_CHARACTERS = 512;
 					// Assume that the first line is at most MAX_FIRST_LINE characters
-					unsigned int first_line_count = ReadFromFile(file, { first_line_characters, MAX_FIRST_LINE_CHARACTERS });
+					unsigned int first_line_count = ReadFromFile(file, { first_line_characters.buffer, first_line_characters.capacity - 1 });
 					if (first_line_count == -1) {
 						WriteErrorMessage(data, "Could not read first line. Faulty path: ", index);
 						return;
 					}
-					first_line_characters[first_line_count - 1] = '\0';
+					first_line_characters[first_line_count] = '\0';
+					first_line_characters.size = first_line_count;
 
 					// read the first line in order to check if there is something to be reflected	
 					// if there is something to be reflected
-					const char* first_new_line = strchr(first_line_characters, '\n');
-					const char* has_reflect = strstr(first_line_characters, STRING(ECS_REFLECT));
-					if (first_new_line != nullptr && has_reflect != nullptr && has_reflect < first_new_line) {
+					Stream<char> first_new_line = FindFirstCharacter(first_line_characters, '\n');
+					Stream<char> has_reflect = FindFirstToken(first_line_characters, STRING(ECS_REFLECT));
+					if (first_new_line.size > 0 && has_reflect.size > 0 && has_reflect.buffer < first_new_line.buffer) {
 						// reset words stream
 						words.size = 0;
 
@@ -4037,10 +4037,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 						}
 						// Use the parse function, any member from the union can be used
+						CapacityStream<void> default_value = { &info.default_bool, 0, sizeof(info.default_double4) };
 						bool parse_success = ParseReflectionBasicFieldType(
 							info.basic_type, 
 							Stream<char>(start_default_value, ending_default_value - start_default_value),
-							&info.default_bool
+							&default_value
 						);
 						info.has_default_value = parse_success;
 						return ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS;
@@ -4069,10 +4070,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 						else {
 							// If it is a space, tab or semicolon, it means that we skipped the value
+							CapacityStream<void> default_value = { &info.default_bool, 0, sizeof(info.default_double4) };
 							info.has_default_value = ParseReflectionBasicFieldType(
 								info.basic_type, 
 								Stream<char>(start_parse_value, default_value_parse - start_parse_value),
-								&info.default_bool
+								&default_value
 							);
 						}
 					}

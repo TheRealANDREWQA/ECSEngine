@@ -354,8 +354,8 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIDrawerSentenceBase {
 			void SetWhitespaceCharacters(Stream<char> characters, char parse_token = ' ');
 
-			Stream<UISpriteVertex> vertices;
-			Stream<UIDrawerWhitespaceCharacter> whitespace_characters;
+			CapacityStream<UISpriteVertex> vertices;
+			CapacityStream<UIDrawerWhitespaceCharacter> whitespace_characters;
 		};
 
 		struct UIDrawerSentenceCached {
@@ -688,8 +688,8 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API UIDrawerMenuButtonData {
 			// Embedds after it all the data for the actions and the name
-			// Returns the total write size
-			unsigned int Write() const;
+			// Returns the total write size. The storage capacity parameter is the total capacity of the stack memory where this is located
+			unsigned int Write(size_t storage_capacity) const;
 
 			// Retrieves all the data for the actions (when relative offsets are in place)
 			void Read();
@@ -1601,7 +1601,8 @@ namespace ECSEngine {
 
 			void TriggerDrag(ActionData* action_data, bool is_released);
 
-			void UpdateMonitorSelection(UIConfigLabelHierarchyMonitorSelection* monitor_selection) const;
+			// It will check that the has_monitor_selection boolean before proceeding
+			void UpdateMonitorSelection();
 
 			Stream<void> opened_labels;
 			CapacityStream<void> hovered_label;
@@ -1683,17 +1684,19 @@ namespace ECSEngine {
 
 		// Returns the total write size
 		template<typename UIDrawerLabelHierarchyActionData>
-		unsigned int UIDrawerLabelHierarchySetEmbeddedLabel(UIDrawerLabelHierarchyActionData* data, const void* untyped_label) {
+		unsigned int UIDrawerLabelHierarchySetEmbeddedLabel(UIDrawerLabelHierarchyActionData* data, const void* untyped_label, size_t storage_capacity) {
 			unsigned int total_size = sizeof(*data);
 
 			if (data->hierarchy->label_size == 0) {
 				Stream<char> label = *(Stream<char>*)untyped_label;
+				ECS_ASSERT(sizeof(*data) + label.size <= storage_capacity);
 				memcpy(OffsetPointer(data, sizeof(*data)), label.buffer, label.size);
 				data->label_size = label.size;
 
 				total_size += label.size;
 			}
 			else {
+				ECS_ASSERT(sizeof(*data) + data->hierarchy->label_size <= storage_capacity);
 				memcpy(OffsetPointer(data, sizeof(*data)), untyped_label, data->hierarchy->label_size);
 				data->label_size = 0;
 				total_size += data->hierarchy->label_size;
@@ -1707,7 +1710,7 @@ namespace ECSEngine {
 			void GetLabel(void* storage) const;
 
 			// Set the hierarchy before it
-			unsigned int WriteLabel(const void* untyped_label);
+			unsigned int WriteLabel(const void* untyped_label, size_t storage_capacity);
 
 			UIDrawerLabelHierarchyData* hierarchy;
 			void* data;
