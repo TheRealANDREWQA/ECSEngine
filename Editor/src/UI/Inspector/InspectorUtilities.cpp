@@ -47,14 +47,14 @@ void InspectorIcon(UIDrawer* drawer, Stream<wchar_t> path, Color color) {
 // ----------------------------------------------------------------------------------------------------------------------------
 
 // A double sprite icon
-void InspectorIconDouble(UIDrawer* drawer, Stream<wchar_t> icon0, Stream<wchar_t> icon1, Color icon_color0, Color icon_color1) {
+void InspectorIconDouble(UIDrawer* drawer, Stream<wchar_t> icon0, Stream<wchar_t> icon1) {
 	UIDrawConfig config;
 	UIConfigRelativeTransform transform;
 	float2 icon_size = drawer->GetSquareScale(ICON_SIZE);
 	transform.scale = drawer->GetRelativeTransformFactorsZoomed(icon_size);
 	config.AddFlag(transform);
 
-	drawer->SpriteRectangleDouble(UI_CONFIG_RELATIVE_TRANSFORM, config, icon0, icon1, icon_color0, icon_color1);
+	drawer->SpriteRectangleDouble(UI_CONFIG_RELATIVE_TRANSFORM, config, icon0, icon1, drawer->color_theme.text, drawer->color_theme.theme);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -162,6 +162,14 @@ void InspectorDrawFileTimes(UIDrawer* drawer, Stream<wchar_t> path) {
 	InspectorDrawFileTimesInternal(drawer, creation_time, write_time, access_time, success);
 }
 
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void InspectorDefaultFileInfo(EditorState* editor_state, Tools::UIDrawer* drawer, Stream<wchar_t> path) {
+	InspectorIconNameAndPath(drawer, path);
+	InspectorDrawFileTimes(drawer, path);
+	InspectorDefaultInteractButtons(editor_state, drawer, path);
+	drawer->CrossLine();
+}
 
 // ----------------------------------------------------------------------------------------------------------------------------
 

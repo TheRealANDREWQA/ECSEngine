@@ -58,6 +58,10 @@ namespace ECSEngine {
 		float3& translation,
 		QuaternionScalar& rotation
 	) {
+		//if (fabsf(input_delta.x) > 100.0f || fabsf(input_delta.y) > 100.0f) {
+		//	__debugbreak();
+		//}
+
 		float3 forward_direction = RotateVector(GetForwardVector(), rotation);
 		float3 right_direction = RotateVector(GetRightVector(), rotation);
 		translation += WASDController(w, a, s, d, movement_factor, delta_time, forward_direction, right_direction);

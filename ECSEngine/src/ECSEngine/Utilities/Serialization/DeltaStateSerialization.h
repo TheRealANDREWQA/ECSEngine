@@ -155,7 +155,8 @@ namespace ECSEngine {
 	};
 
 	struct DeltaStateReaderInitializeInfo {
-		// This is functor specific
+		// This is functor specific - it is valid to have this entry completely zeroed out if you only want to read the
+		// Header and perform operations on the data set available in the header
 		DeltaStateReaderInitializeFunctorInfo functor_info;
 
 		// These fields are customization points agnostic of the functor

@@ -1,0 +1,3 @@
+#pragma once
+#define EDITOR_INPUT_RECORDING_FILE_EXTENSION L".input"
+#define EDITOR_STATE_RECORDING_FILE_EXTENSION L".replay"

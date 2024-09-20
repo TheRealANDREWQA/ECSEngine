@@ -20,6 +20,7 @@
 #include "Inspector/InspectorMaterialFile.h"
 #include "Inspector/InspectorMiscFile.h"
 #include "Inspector/InspectorShaderFile.h"
+#include "Inspector/InspectorRecordingFile.h"
 
 constexpr float2 WINDOW_SIZE = float2(0.5f, 1.2f);
 constexpr size_t FUNCTION_TABLE_CAPACITY = 32;
@@ -75,11 +76,11 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 	descriptor.window_data_size = 0;
 
 	descriptor.destroy_action = InspectorDestroyCallback;
-	descriptor.destroy_action_data = stack_memory;
+	descriptor.destroy_action_data = stack_memory->buffer;
 	descriptor.destroy_action_data_size = sizeof(inspector_index);
 
 	descriptor.private_action = InspectorPrivateAction;
-	descriptor.private_action_data = stack_memory;
+	descriptor.private_action_data = stack_memory->buffer;
 	descriptor.private_action_data_size = sizeof(inspector_index);
 
 	const size_t MAX_WINDOW_NAME = 128;
@@ -104,7 +105,7 @@ static void InspectorDrawSceneFile(EditorState* editor_state, unsigned int inspe
 		ChangeInspectorToNothing(editor_state, inspector_index);
 	}
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_SCENE, drawer->color_theme.text, drawer->color_theme.theme);
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_SCENE);
 	InspectorIconNameAndPath(drawer, absolute_path);
 	InspectorDrawFileTimes(drawer, absolute_path);
 }
@@ -118,7 +119,7 @@ static void InspectorDrawPrefabFile(EditorState* editor_state, unsigned int insp
 	}
 
 	// TODO: What icon should we have for prefabs?
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, drawer->color_theme.text, drawer->color_theme.theme);
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_BLANK);
 	InspectorIconNameAndPath(drawer, absolute_path);
 	InspectorDrawFileTimes(drawer, absolute_path);
 }
@@ -402,7 +403,8 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 		InspectorDrawMaterialFile,
 		InspectorDrawMiscFile,
 		InspectorDrawSceneFile,
-		InspectorDrawPrefabFile
+		InspectorDrawPrefabFile,
+		InspectorDrawRecordingFile
 	};
 
 	auto mesh_wrapper = [](EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
@@ -421,7 +423,8 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 		ChangeInspectorToMaterialFile,
 		ChangeInspectorToMiscFile,
 		ChangeInspectorToSceneFile,
-		ChangeInspectorToPrefabFile
+		ChangeInspectorToPrefabFile,
+		ChangeInspectorToRecordingFile
 	};
 	
 	static_assert(std::size(change_functions) == std::size(draw_functions));
@@ -857,6 +860,7 @@ void InitializeInspectorTable(EditorState* editor_state) {
 	InspectorShaderFileAddFunctors(inspector_table);
 	InspectorMaterialFileAddFunctors(inspector_table);
 	InspectorGPUSamplerFileAddFunctors(inspector_table);
+	InspectorRecordingFileAddFunctors(inspector_table);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

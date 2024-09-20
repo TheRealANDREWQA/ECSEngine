@@ -132,8 +132,7 @@ namespace ECSEngine {
 			component_functions.deallocate_function = ReflectionTypeRuntimeComponentDeallocate;
 			component_functions.allocator_size = GetReflectionComponentAllocatorSize(type);
 
-			RuntimeComponentCopyDeallocateData* copyable = (RuntimeComponentCopyDeallocateData*)Allocate(allocator, sizeof(RuntimeComponentCopyDeallocateData));
-			new (copyable) RuntimeComponentCopyDeallocateData;
+			RuntimeComponentCopyDeallocateData* copyable = AllocateAndConstruct<RuntimeComponentCopyDeallocateData>(allocator);
 
 			copyable->type = type->CopyCoalesced(allocator);
 			memset(&copyable->reflection_manager, 0, sizeof(copyable->reflection_manager));

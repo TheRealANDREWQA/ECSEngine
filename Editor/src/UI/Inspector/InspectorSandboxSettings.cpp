@@ -1130,7 +1130,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		data->available_module_settings.Initialize(editor_allocator, 0, AVAILABLE_MODULE_SETTINGS_ENTRY_CAPACITY);
 	}
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG, drawer->color_theme.text, drawer->color_theme.theme);
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG);
 
 	UIDrawConfig config;
 
