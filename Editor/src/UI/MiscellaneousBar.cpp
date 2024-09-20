@@ -11,9 +11,17 @@
 #define TOOP_TIP_OFFSET 0.01f
 #define KEYBOARD_ICON_OFFSET 0.2f
 
+struct DrawData {
+	bool is_playing;
+	bool is_paused;
+	bool splat_input;
+	bool capture_input_out_of_focus;
+	EditorState* editor_state;
+};
+
 // ----------------------------------------------------------------------------------------------------------------------
 
-EDITOR_EVENT(StartUnstartedSandboxEvent) {
+static EDITOR_EVENT(StartUnstartedSandboxEvent) {
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 		return true;
 	}
@@ -21,7 +29,7 @@ EDITOR_EVENT(StartUnstartedSandboxEvent) {
 	return false;
 }
 
-void RunProjectAction(ActionData* action_data) {
+static void RunProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
@@ -45,7 +53,7 @@ void RunProjectAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------
 
-EDITOR_EVENT(StartPausedSandboxEvent) {
+static EDITOR_EVENT(StartPausedSandboxEvent) {
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 		return true;
 	}
@@ -53,7 +61,7 @@ EDITOR_EVENT(StartPausedSandboxEvent) {
 	return false;
 }
 
-void PauseProjectAction(ActionData* action_data) {
+static void PauseProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
@@ -75,7 +83,7 @@ void PauseProjectAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------
 
-EDITOR_EVENT(StepProjectEvent) {
+static EDITOR_EVENT(StepProjectEvent) {
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 		return true;
 	}
@@ -83,7 +91,7 @@ EDITOR_EVENT(StepProjectEvent) {
 	return false;
 }
 
-void StepProjectAction(ActionData* action_data) {
+static void StepProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
@@ -100,6 +108,21 @@ void StepProjectAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------
 
+static bool MiscellaneousBarRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+	// Check to see if any of the flags has changed
+	bool redraw = false;
+	
+	DrawData* data = (DrawData*)window_data;
+	redraw |= data->splat_input != data->editor_state->project_settings.synchronized_sandbox_input;
+	redraw |= data->capture_input_out_of_focus != data->editor_state->project_settings.unfocused_keyboard_input;
+	redraw |= data->is_playing != EditorStateHasFlag(data->editor_state, EDITOR_STATE_IS_PLAYING);
+	redraw |= data->is_paused != EditorStateHasFlag(data->editor_state, EDITOR_STATE_IS_PAUSED);
+
+	return !redraw;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------
+
 void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
@@ -107,10 +130,17 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	drawer.DisablePaddingForRenderSliders();
 	drawer.DisableZoom();
 
-	EditorState* editor_state = (EditorState*)window_data;
+	DrawData* draw_data = (DrawData*)window_data;
+	EditorState* editor_state = draw_data->editor_state;
+
+	// Update the data for the retained mode
+	draw_data->capture_input_out_of_focus = editor_state->project_settings.unfocused_keyboard_input;
+	draw_data->splat_input = editor_state->project_settings.synchronized_sandbox_input;
+	draw_data->is_playing = EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+	draw_data->is_paused = EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED);
 
 #pragma region Start, Pause, Frame
-	
+
 	UIDrawConfig config;
 
 	// If the start button is active, then display a small black overlay to indicate to the user that we are in run mode
@@ -304,9 +334,14 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 void MiscellaneousBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	descriptor.draw = MiscellaneousBarDraw;
+	descriptor.retained_mode = MiscellaneousBarRetainedMode;
 
-	descriptor.window_data = editor_state;
-	descriptor.window_data_size = 0;
+	DrawData* data = stack_memory->Reserve<DrawData>();
+	ZeroOut(data);
+	data->editor_state = editor_state;
+
+	descriptor.window_data = data;
+	descriptor.window_data_size = sizeof(*data);
 	descriptor.window_name = MISCELLANEOUS_BAR_WINDOW_NAME;
 }
 
