@@ -32,7 +32,7 @@ constexpr size_t TOOLBAR_DATA_EDIT_ROW_COUNT = 4;
 constexpr size_t TOOLBAR_DATA_LAYOUT_ROW_COUNT = 9;
 constexpr size_t TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT = 4;
 
-// PERFORMANCE TODO: Make this retained mode
+#define RETAINED_MODE_CHECK_MS 2500
 
 // ------------------------------------------------------------------------------------------------
 
@@ -52,6 +52,9 @@ struct ToolbarData {
 	UIDrawerMenuState* layout_submenu_states;
 	UIActionHandler* layout_submenu_handlers;
 	EditorState* editor_state;
+
+	// Used to determine if a redraw is necessary
+	Timer retained_timer;
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -87,6 +90,33 @@ void LoadProjectUITemplateClickable(ActionData* action_data) {
 }
 
 // ------------------------------------------------------------------------------------------------
+
+static bool ToolbarRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+	ToolbarData* data = (ToolbarData*)window_data;
+	bool redraw = false;
+
+	if (data->retained_timer.GetDurationFloat(ECS_TIMER_DURATION_MS) >= RETAINED_MODE_CHECK_MS) {
+		// Check the template statuses
+		for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT; index++) {
+			SaveProjectUITemplateData* _template = (SaveProjectUITemplateData*)data->layout_submenu_states[index + 1].click_handlers[0].data;
+			bool current_status = !ExistsFileOrFolder(_template->ui_template.ui_file);
+			redraw |= current_status != data->layout_submenu_states[index + 1].unavailables[1];
+			data->layout_submenu_states[index + 1].unavailables[1] = current_status;
+		}
+		// Update the availability status - project
+		for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_ROW_COUNT - TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT - 1; index++) {
+			SaveProjectUITemplateData* _template = (SaveProjectUITemplateData*)data->layout_submenu_states[index + 1 + TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT].click_handlers[0].data;
+			bool current_status = !ExistsFileOrFolder(_template->ui_template.ui_file);
+			redraw |= current_status != data->layout_submenu_states[index + 1 + TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT].unavailables[1];
+			data->layout_submenu_states[index + 1 + TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT].unavailables[1] = current_status;
+		}
+
+		data->retained_timer.SetNewStart();
+	}
+	redraw |= GetSandboxCount(data->editor_state, true) != data->game_ui_handlers.size;
+
+	return !redraw;
+}
 
 void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
@@ -411,17 +441,6 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 	current_state.row_has_submenu = data->layout_has_submenu;
 	current_state.submenues = data->layout_submenu_states;
 
-	// Update the availability status - system
-	for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT; index++) {
-		SaveProjectUITemplateData* _template = (SaveProjectUITemplateData*)data->layout_submenu_states[index + 1].click_handlers[0].data;
-		data->layout_submenu_states[index + 1].unavailables[1] = !ExistsFileOrFolder(_template->ui_template.ui_file);
-	}
-	// Update the availability status - project
-	for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_ROW_COUNT - TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT - 1; index++) {
-		SaveProjectUITemplateData* _template = (SaveProjectUITemplateData*)data->layout_submenu_states[index + 1 + TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT].click_handlers[0].data;
-		data->layout_submenu_states[index + 1 + TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT].unavailables[1] = !ExistsFileOrFolder(_template->ui_template.ui_file);
-	}
-
 	drawer.Menu(configuration | UI_CONFIG_DO_CACHE, config, "Layout", &current_state);
 
 	UIConfigRelativeTransform logo_transform;
@@ -451,9 +470,11 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 void ToolbarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	descriptor.draw = ToolbarDraw;
+	descriptor.retained_mode = ToolbarRetainedMode;
 
 	ToolbarData* data = stack_memory->Reserve<ToolbarData>();
 	data->editor_state = editor_state;
+	data->retained_timer.SetUninitialized();
 	descriptor.window_data = data;
 	descriptor.window_data_size = sizeof(*data);
 	descriptor.window_name = TOOLBAR_WINDOW_NAME;
