@@ -297,12 +297,8 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 	// Lazy retrieve the shader data
 	RetrieveSourceCode(editor_state, data);
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_SHADER_ICON, drawer->color_theme.text, drawer->color_theme.theme);
-
-	InspectorIconNameAndPath(drawer, data->path);
-	InspectorDrawFileTimes(drawer, data->path);
-	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
-	drawer->CrossLine();
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_SHADER_ICON);
+	InspectorDefaultFileInfo(editor_state, drawer, data->path);
 
 	UIDrawConfig config;
 

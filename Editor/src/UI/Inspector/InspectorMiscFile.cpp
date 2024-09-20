@@ -34,12 +34,9 @@ void InspectorDrawMiscFile(EditorState* editor_state, unsigned int inspector_ind
 		return;
 	}
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_MISC_ICON, drawer->color_theme.text, drawer->color_theme.theme);
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_MISC_ICON);
 
-	InspectorIconNameAndPath(drawer, path);
-	InspectorDrawFileTimes(drawer, path);
-	InspectorDefaultInteractButtons(editor_state, drawer, path);
-	drawer->CrossLine();
+	InspectorDefaultFileInfo(editor_state, drawer, path);
 
 	// Draw the settings
 	UIDrawConfig config;

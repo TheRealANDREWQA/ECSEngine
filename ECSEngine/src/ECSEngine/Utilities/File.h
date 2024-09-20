@@ -309,7 +309,7 @@ namespace ECSEngine {
 
 	struct FileScopeDeleter {
 		void operator() () const {
-			if (handle != 0) {
+			if (handle != 0 && handle != -1) {
 				CloseFile(handle);
 			}
 		}

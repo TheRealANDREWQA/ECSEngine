@@ -70,9 +70,8 @@ static void InspectorDrawTextFileImplementation(
 		return;
 	}
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, icon_texture, drawer->color_theme.text, drawer->color_theme.theme);
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, icon_texture);
 	InspectorIconNameAndPath(drawer, data->path);
-
 	InspectorDrawFileTimes(drawer, data->path);
 	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
 

@@ -49,5 +49,7 @@
 #define ECS_TOOLS_UI_TEXTURE_UNLOCKED_PADLOCK L"Resources/UnlockedPadlock.png"
 #define ECS_TOOLS_UI_TEXTURE_LIGHT_BULB L"Resources/LightBulb.png"
 #define ECS_TOOLS_UI_TEXTURE_KEYBOARD L"Resources/Keyboard.png"
+#define ECS_TOOLS_UI_TEXTURE_KEYBOARD_SQUARE L"Resources/Keyboard_square.png"
 #define ECS_TOOLS_UI_TEXTURE_CURSOR L"Resources/Cursor.png"
 #define ECS_TOOLS_UI_TEXTURE_SPLIT_CURSORS L"Resources/SplitCursors.png"
+#define ECS_TOOLS_UI_TEXTURE_REPLAY L"Resources/Replay.png"

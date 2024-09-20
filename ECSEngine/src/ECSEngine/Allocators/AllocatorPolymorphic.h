@@ -474,4 +474,13 @@ namespace ECSEngine {
 	// The returned string is a constant literal
 	ECSENGINE_API const char* AllocatorTypeName(ECS_ALLOCATOR_TYPE type);
 
+	template<typename T, typename... Args>
+	ECS_INLINE T* AllocateAndConstruct(AllocatorPolymorphic allocator, Args... arguments) {
+		T* allocation = (T*)AllocateEx(allocator, sizeof(T), alignof(T));
+		if (allocation != nullptr) {
+			new (allocation) T(arguments...);
+		}
+		return allocation;
+	}
+
 }

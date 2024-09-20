@@ -8720,7 +8720,7 @@ namespace ECSEngine {
 			UIElementDescriptor& _element_descriptor,
 			bool _initializer
 		) : color_theme(_color_theme), font(_font), layout(_layout), element_descriptor(_element_descriptor),
-			export_scale(nullptr), initializer(_initializer), window_dependent_size_offsets(0.0f, 0.0f) {}
+			export_scale(nullptr), initializer(_initializer), window_dependent_size_offsets(0.0f, 0.0f), record_actions(false) {}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 

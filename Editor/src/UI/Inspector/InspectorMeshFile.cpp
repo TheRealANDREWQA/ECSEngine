@@ -99,7 +99,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 		InspectorIconTexture(drawer, mesh_thumbnail.texture);
 	}
 	else {
-		InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_MESH, drawer->color_theme.text, drawer->color_theme.theme);
+		InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_MESH);
 	}
 
 	if (data->current_metadata.file.size == 0) {
@@ -109,10 +109,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 		data->current_metadata.file = relative_path;
 	}
 
-	InspectorIconNameAndPath(drawer, data->path);
-	InspectorDrawFileTimes(drawer, data->path);
-	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
-	drawer->CrossLine();
+	InspectorDefaultFileInfo(editor_state, drawer, data->path);
 
 	// Convert the absolute separator into relative
 	ReplaceCharacter(data->current_metadata.file, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);

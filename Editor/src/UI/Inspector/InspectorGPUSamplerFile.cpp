@@ -39,12 +39,8 @@ void InspectorDrawGPUSamplerFile(EditorState* editor_state, unsigned int inspect
 		return;
 	}
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_GPU_SAMPLER_ICON, drawer->color_theme.text, drawer->color_theme.theme);
-
-	InspectorIconNameAndPath(drawer, data->path);
-	InspectorDrawFileTimes(drawer, data->path);
-	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
-	drawer->CrossLine();
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_GPU_SAMPLER_ICON);
+	InspectorDefaultFileInfo(editor_state, drawer, data->path);
 
 	AssetSettingsExtractPointerFromMainDatabase(editor_state, &data->sampler_metadata, ECS_ASSET_GPU_SAMPLER);
 	AssetSettingsIsReferencedUIStatus(drawer, editor_state, data->sampler_metadata.name, {}, ECS_ASSET_GPU_SAMPLER);

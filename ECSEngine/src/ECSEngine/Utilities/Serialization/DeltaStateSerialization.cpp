@@ -351,6 +351,7 @@ namespace ECSEngine {
 
 	void DeltaStateReader::Initialize(const DeltaStateReaderInitializeInfo& initialize_info) {
 		read_instrument = initialize_info.read_instrument;
+		allocator = initialize_info.allocator;
 
 		// Try to deserialize the footer. If we cannot deserialize it, then we must abort
 		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_END, -(int64_t)sizeof(Footer))) {
@@ -431,7 +432,6 @@ namespace ECSEngine {
 		current_state_index = 0;
 		delta_function = initialize_info.functor_info.delta_function;
 		entire_function = initialize_info.functor_info.entire_function;
-		allocator = initialize_info.allocator;
 		if (initialize_info.functor_info.user_data.size > 0) {
 			user_data.Initialize(allocator, initialize_info.functor_info.user_data.size);
 			if (initialize_info.functor_info.user_data.buffer != nullptr) {

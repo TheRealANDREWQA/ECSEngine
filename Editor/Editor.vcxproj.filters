@@ -87,6 +87,7 @@
     <ClInclude Include="src\Editor\EditorSourceCode.h" />
     <ClInclude Include="src\Sandbox\SandboxRecording.h" />
     <ClInclude Include="src\UI\Inspector\InspectorRecordingFile.h" />
+    <ClInclude Include="src\Sandbox\SandboxRecordingFileExtension.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />

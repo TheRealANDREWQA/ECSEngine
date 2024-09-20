@@ -33,7 +33,7 @@ void InspectorIcon(Tools::UIDrawer* drawer, Stream<wchar_t> path, Color color = 
 // ----------------------------------------------------------------------------------------------------------------------------
 
 // A double sprite icon
-void InspectorIconDouble(Tools::UIDrawer* drawer, Stream<wchar_t> icon0, Stream<wchar_t> icon1, Color icon_color0 = ECS_COLOR_WHITE, Color icon_color1 = ECS_COLOR_WHITE);
+void InspectorIconDouble(Tools::UIDrawer* drawer, Stream<wchar_t> icon0, Stream<wchar_t> icon1);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
@@ -46,6 +46,11 @@ void InspectorShowButton(Tools::UIDrawer* drawer, Stream<wchar_t> path);
 // ----------------------------------------------------------------------------------------------------------------------------
 
 void InspectorDefaultInteractButtons(EditorState* editor_state, Tools::UIDrawer* drawer, Stream<wchar_t> path);
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+// Display the stock information and buttons for an inspector file. It does not include the preamble icon
+void InspectorDefaultFileInfo(EditorState* editor_state, Tools::UIDrawer* drawer, Stream<wchar_t> path);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 

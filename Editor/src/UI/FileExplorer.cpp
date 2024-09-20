@@ -19,6 +19,7 @@
 #include "../Assets/AssetManagement.h"
 #include "../Assets/AssetExtensions.h"
 #include "AssetIcons.h"
+#include "../Sandbox/SandboxRecordingFileExtension.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -611,6 +612,7 @@ struct ForEachData {
 	EditorState* editor_state;
 	UIDrawer* drawer;
 	UIDrawConfig* config;
+	size_t draw_configuration;
 	unsigned int element_count;
 	CapacityStream<wchar_t>* mouse_element_path;
 	FileExplorerSelectFromIndex select_function;
@@ -729,12 +731,13 @@ SelectableData* data = (SelectableData*)_data; \
 UIDrawer* drawer = functor_data->for_each_data->drawer; \
 UIDrawConfig* config = functor_data->for_each_data->config; \
 Color white_color = ECS_COLOR_WHITE; \
-white_color.alpha = functor_data->color_alpha;
+white_color.alpha = functor_data->color_alpha; \
+size_t configuration = functor_data->for_each_data->draw_configuration;
 
 static void FileTextureDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE , *config, data->selection, white_color);
+	drawer->SpriteRectangle(configuration, *config, data->selection, white_color);
 }
 
 static void FileBlankDraw(ActionData* action_data) {
@@ -742,7 +745,7 @@ static void FileBlankDraw(ActionData* action_data) {
 
 	Color sprite_color = drawer->color_theme.text;
 	sprite_color.alpha = white_color.alpha;
-	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE , *config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, sprite_color);
+	drawer->SpriteRectangle(configuration, *config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, sprite_color);
 }
 
 static void FileOverlayDraw(ActionData* action_data, const wchar_t* overlay_texture) {
@@ -753,7 +756,7 @@ static void FileOverlayDraw(ActionData* action_data, const wchar_t* overlay_text
 	base_color.alpha = white_color.alpha;
 	overlay_color.alpha = white_color.alpha;
 	drawer->SpriteRectangleDouble(
-		UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
+		configuration,
 		*config,
 		ECS_TOOLS_UI_TEXTURE_FILE_BLANK,
 		overlay_texture,
@@ -814,7 +817,7 @@ static void FileMaterialDraw(ActionData* action_data) {
 	base_color.alpha = white_color.alpha;
 	overlay_color.alpha = white_color.alpha;
 	drawer->SpriteRectangleDouble(
-		UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
+		configuration,
 		*config,
 		ECS_TOOLS_UI_TEXTURE_FILE_BLANK,
 		ASSET_MATERIAL_ICON,
@@ -829,7 +832,15 @@ static void FileMeshThumbnailDraw(ActionData* action_data) {
 	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
 	FileExplorerMeshThumbnail thumbnail = explorer_data->mesh_thumbnails.GetValue(data->selection);
 
-	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, *config, thumbnail.texture, white_color);
+	drawer->SpriteRectangle(configuration, *config, thumbnail.texture, white_color);
+}
+
+static void FileInputRecordingFileDraw(ActionData* action_data) {
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_KEYBOARD_SQUARE);
+}
+
+static void FileStateRecordingFileDraw(ActionData* action_data) {
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_REPLAY);
 }
 
 #undef EXPAND_ACTION
@@ -1222,56 +1233,90 @@ static void FileExplorerDrag(ActionData* action_data) {
 				Stream<wchar_t> last_file = explorer_data->selected_files[explorer_data->selected_files.size - 1];
 				Stream<wchar_t> last_type_extension = PathExtension(last_file);
 				const wchar_t* texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
-				ResourceView thumbnail_texture = nullptr;
-				ECS_STACK_CAPACITY_STREAM(wchar_t, texture_draw, 256);
 
 				// If it has an extension, check to see existing files
+				bool draw_texture = true;
 				if (last_type_extension.size != 0) {
 					Action action;
 					ResourceIdentifier identifier(last_type_extension.buffer, last_type_extension.size * sizeof(wchar_t));
 					bool success = explorer_data->file_functors.TryGetValue(identifier, action);
 					if (success) {
-						if (action == FileTextureDraw) {
-							texture_draw.CopyOther(last_file);
-							texture_draw.Add(L'\0');
-							texture = texture_draw.buffer;
-						}
-						else if (action == FileCDraw) {
-							texture = ECS_TOOLS_UI_TEXTURE_FILE_C;
-						}
-						else if (action == FileCppDraw) {
-							texture = ECS_TOOLS_UI_TEXTURE_FILE_CPP;
-						}
-						else if (action == FileConfigDraw) {
-							texture = ECS_TOOLS_UI_TEXTURE_FILE_CONFIG;
-						}
-						else if (action == FileTextDraw) {
-							texture = ECS_TOOLS_UI_TEXTURE_FILE_TEXT;
-						}
-						else if (action == FileShaderDraw) {
-							texture = ECS_TOOLS_UI_TEXTURE_FILE_SHADER;
-						}
-						else if (action == FileEditorDraw) {
-							texture = ECS_TOOLS_UI_TEXTURE_FILE_EDITOR;
-						}
-						else if (action == FileMeshDraw) {
+						// The mesh is a special case
+						if (action == FileMeshDraw) {
 							// If it is a mesh draw, check to see if the thumbnail was generated
 							FileExplorerMeshThumbnail thumbnail;
 							if (explorer_data->mesh_thumbnails.TryGetValue(last_file, thumbnail)) {
 								if (thumbnail.could_be_read) {
 									// Set the thumbnail texture
-									thumbnail_texture = thumbnail.texture;
+									system->SetSprite(
+										dockspace,
+										border_index,
+										thumbnail.texture,
+										hover_position,
+										hover_scale,
+										buffers,
+										counts,
+										transparent_color,
+										{ 0.0f, 0.0f },
+										{ 1.0f, 1.0f },
+										ECS_UI_DRAW_SYSTEM
+									);
+									draw_texture = false;
 								}
 								else {
+									// The last file texture
 									texture = ECS_TOOLS_UI_TEXTURE_FILE_MESH;
 								}
 							}
 							else {
+								// The last file texture
 								texture = ECS_TOOLS_UI_TEXTURE_FILE_MESH;
 							}
 						}
-						else if (action == FileSceneDraw) {
-							texture = ECS_TOOLS_UI_TEXTURE_FILE_SCENE;
+						else {
+							// Emulate a drawer at the current location
+							UIDrawer drawer(system->m_descriptors.color_theme, system->m_descriptors.font, system->m_descriptors.window_layout, system->m_descriptors.element_descriptor, false);
+							drawer.SetCurrentX(hover_position.x);
+							drawer.SetCurrentY(hover_position.y);
+							drawer.buffers = buffers;
+							drawer.counts = counts;
+							drawer.system_buffers = buffers;
+							drawer.system_counts = counts;
+							drawer.system = system;
+							drawer.min_region_render_limit = { -FLT_MAX, -FLT_MAX };
+							drawer.max_region_render_limit = { FLT_MAX, FLT_MAX };
+
+							UIDrawConfig config;
+							UIConfigRelativeTransform transform;
+							transform.scale = drawer.GetRelativeTransformFactors(hover_scale);
+							config.AddFlag(transform);
+
+							SelectableData selectable_data;
+							selectable_data.editor_state = editor_state;
+							selectable_data.index = -1;
+							selectable_data.selection = last_file;
+
+							FileFunctorData file_functor_data;
+							ForEachData for_each_data;
+							for_each_data.editor_state = editor_state;
+							for_each_data.drawer = &drawer;
+							for_each_data.config = &config;
+							for_each_data.element_count = 0;
+							for_each_data.mouse_element_path = nullptr;
+							for_each_data.select_function = nullptr;
+							for_each_data.draw_configuration = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_SYSTEM_DRAW;
+
+							file_functor_data.for_each_data = &for_each_data;
+							file_functor_data.color_alpha = UINT8_MAX;
+							ActionData functor_action_data;
+							functor_action_data.additional_data = &file_functor_data;
+							functor_action_data.data = &selectable_data;
+							functor_action_data.system = system;
+							action(&functor_action_data);
+
+							// Set this such that we avoid the destructor to draw the resize bars
+							drawer.initializer = true;
+							draw_texture = false;
 						}
 					}
 					else {
@@ -1279,8 +1324,7 @@ static void FileExplorerDrag(ActionData* action_data) {
 					}
 				}
 
-				if (thumbnail_texture.view == nullptr) {
-					// The last file texture
+				if (draw_texture) {
 					system->SetSprite(
 						dockspace,
 						border_index,
@@ -1295,21 +1339,7 @@ static void FileExplorerDrag(ActionData* action_data) {
 						ECS_UI_DRAW_SYSTEM
 					);
 				}
-				else {
-					system->SetSprite(
-						dockspace,
-						border_index,
-						thumbnail_texture,
-						hover_position,
-						hover_scale,
-						buffers,
-						counts,
-						transparent_color,
-						{ 0.0f, 0.0f },
-						{ 1.0f, 1.0f },
-						ECS_UI_DRAW_SYSTEM
-					);
-				}
+
 				explorer_data->flags = SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
 			}
 			else if (!data->prefab_initiated) {
@@ -1317,6 +1347,8 @@ static void FileExplorerDrag(ActionData* action_data) {
 				data->prefab_initiated = true;
 			}
 		}
+
+		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 	}
 	else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 		if (HasFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES)) {
@@ -2072,8 +2104,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 				ECS_STACK_CAPACITY_STREAM(char, ascii_path, 256);
 				Stream<wchar_t>* path = (Stream<wchar_t>*)_data;
 				ConvertWideCharsToASCII(*path, ascii_path);
-				ascii_path[ascii_path.size] = '\0';
-				system->m_application->WriteTextToClipboard(ascii_path.buffer);
+				system->m_application->WriteTextToClipboard(ascii_path);
 			};
 
 			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_RIGHT_CLICK_ROW_COUNT);
@@ -2157,6 +2188,8 @@ data->file_functors.Insert(action, identifier);
 				ADD_FUNCTOR(FileMaterialDraw, ASSET_MATERIAL_EXTENSIONS[index]);
 			}
 			ADD_FUNCTOR(FileSceneDraw, EDITOR_SCENE_EXTENSION);
+			ADD_FUNCTOR(FileInputRecordingFileDraw, EDITOR_INPUT_RECORDING_FILE_EXTENSION);
+			ADD_FUNCTOR(FileStateRecordingFileDraw, EDITOR_STATE_RECORDING_FILE_EXTENSION);
 
 #undef ADD_FUNCTOR
 		}
@@ -2360,6 +2393,7 @@ data->file_functors.Insert(action, identifier);
 		for_each_data.editor_state = editor_state;
 		for_each_data.drawer = &drawer;
 		for_each_data.element_count = 0;
+		for_each_data.draw_configuration = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE;
 		for_each_data.select_function = FileExplorerSelectFromIndexNothing;
 		if (HasFlag(data->flags, FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES)) {
 			FileExplorerResetSelectedFiles(data);

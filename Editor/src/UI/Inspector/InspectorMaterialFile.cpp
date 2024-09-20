@@ -958,12 +958,8 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 
 	ReloadShaders(data, inspector_index, false);
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_MATERIAL_ICON, drawer->color_theme.text, drawer->color_theme.theme);
-
-	InspectorIconNameAndPath(drawer, data->path);
-	InspectorDrawFileTimes(drawer, data->path);
-	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
-	drawer->CrossLine();
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_MATERIAL_ICON);
+	InspectorDefaultFileInfo(editor_state, drawer, data->path);
 
 	// Draw the settings
 	UIDrawConfig config;

@@ -261,7 +261,7 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	config.AddFlag(border);
 
 	UIConfigAbsoluteTransform input_icon_transform;
-	input_icon_transform.scale = { button_scale.x * 1.5f, button_scale.y };
+	input_icon_transform.scale = button_scale;
 	input_icon_transform.position = drawer.GetAlignedToRight(button_scale.x);
 	input_icon_transform.position.y = starting_position.y;
 	input_icon_transform.position.x -= KEYBOARD_ICON_OFFSET;
@@ -279,7 +279,7 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	config.AddFlag(keyboard_callback);
 
 	ProjectSettings* project_settings = &editor_state->project_settings;
-	drawer.SpriteStateButton(INPUT_ICON_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_KEYBOARD, &project_settings->unfocused_keyboard_input, drawer.color_theme.text);
+	drawer.SpriteStateButton(INPUT_ICON_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_KEYBOARD_SQUARE, &project_settings->unfocused_keyboard_input, drawer.color_theme.text);
 
 	config.flag_count -= 2;
 
