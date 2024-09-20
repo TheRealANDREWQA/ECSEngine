@@ -5,19 +5,33 @@
 using namespace ECSEngine;
 ECS_TOOLS;
 
-// Create an internal allocator to not put extra pressure on the editor allocator
+#define RETAINED_MODE_TICK_MILLISECONDS 50
+
 struct NotificationBarData {
 	EditorState* editor_state;
+	// Use a simple timer for the retained mode
+	Timer retained_timer;
 };
 
 static ECS_FORMAT_DATE_FLAGS NOTIFICATION_HISTORY_STRING_FORMAT = ECS_FORMAT_DATE_HOUR | ECS_FORMAT_DATE_MINUTES | ECS_FORMAT_DATE_SECONDS;
+
+static bool NotificationBarRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+	NotificationBarData* data = (NotificationBarData*)window_data;
+	if (data->retained_timer.GetDurationFloat(ECS_TIMER_DURATION_MS) >= RETAINED_MODE_TICK_MILLISECONDS) {
+		data->retained_timer.SetNewStart();
+		return false;
+	}
+	return true;
+}
 
 void NotificationBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	NotificationBarData* data = stack_memory->Reserve<NotificationBarData>();
 	data->editor_state = editor_state;
+	data->retained_timer.SetUninitialized();
 
 	descriptor.draw = NotificationBarDraw;
+	descriptor.retained_mode = NotificationBarRetainedMode;
 	descriptor.window_name = NOTIFICATION_BAR_WINDOW_NAME;
 
 	descriptor.window_data = data;
