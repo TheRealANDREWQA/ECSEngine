@@ -1542,6 +1542,8 @@ namespace ECSEngine {
 
 			void SetCleanupHoverableHandler();
 
+			void SetFramePacing(ECS_UI_FRAME_PACING pacing);
+
 			void SetTextureEvictionCount(unsigned int frame_count);
 
 			void SetColorTheme(Color color);

@@ -1348,7 +1348,7 @@ static void FileExplorerDrag(ActionData* action_data) {
 			}
 		}
 
-		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+		system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 	}
 	else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 		if (HasFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES)) {

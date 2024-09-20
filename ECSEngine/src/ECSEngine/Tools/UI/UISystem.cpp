@@ -3866,7 +3866,7 @@ namespace ECSEngine {
 
 			if (m_focused_window_data.hoverable_handler.phase == ECS_UI_DRAW_SYSTEM) {
 				HandleHoverable(mouse_position, buffers, counts);
-				m_frame_pacing = m_frame_pacing < ECS_UI_FRAME_PACING_LOW ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
+				SetFramePacing(ECS_UI_FRAME_PACING_LOW);
 			}
 			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 				if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_SYSTEM) {
@@ -3877,12 +3877,12 @@ namespace ECSEngine {
 						HandleFocusedWindowClickable(mouse_position, button_type);
 						m_focused_window_data.ResetClickableHandler(button_type);
 					}
-					m_frame_pacing = m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
+					SetFramePacing(ECS_UI_FRAME_PACING_MEDIUM);
 				}
 				});
 			if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_SYSTEM) {
 				HandleFocusedWindowGeneral(mouse_position);
-				m_frame_pacing = m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
+				SetFramePacing(ECS_UI_FRAME_PACING_MEDIUM);
 			}
 
 			// These are still allocated from the main allocator, not from the corresponding handler allocator
@@ -4392,7 +4392,9 @@ namespace ECSEngine {
 						data->mouse_position,
 						0
 					);
-					m_frame_pacing = (is_hoverable && m_frame_pacing < ECS_UI_FRAME_PACING_LOW) ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
+					if (is_hoverable) {
+						SetFramePacing(ECS_UI_FRAME_PACING_LOW);
+					}
 				}
 
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
@@ -4433,7 +4435,9 @@ namespace ECSEngine {
 							}
 						}
 						active_region |= is_clickable | is_general;
-						m_frame_pacing = ((is_clickable || is_general) && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
+						if (is_clickable || is_general) {
+							SetFramePacing(ECS_UI_FRAME_PACING_MEDIUM);
+						}
 					}
 					});
 			}
@@ -7410,7 +7414,9 @@ namespace ECSEngine {
 			action_data.window_index = GetWindowIndexFromBorder(action_data.dockspace, action_data.border_index);
 
 			bool executed = m_focused_window_data.ExecuteHoverableHandler(&action_data);
-			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_LOW) ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
+			if (executed) {
+				SetFramePacing(ECS_UI_FRAME_PACING_LOW);
+			}
 
 			if (action_data.redraw_window) {
 				// Discard the snapshot of the border
@@ -7440,7 +7446,9 @@ namespace ECSEngine {
 			}
 
 			m_execute_events = !m_focused_window_data.ExecuteClickableHandler(&action_data, button_type);
-			m_frame_pacing = (!m_execute_events && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
+			if (!m_execute_events) {
+				SetFramePacing(ECS_UI_FRAME_PACING_MEDIUM);
+			}
 
 			if (action_data.redraw_window) {
 				DeallocateDockspaceBorderSnapshot(action_data.dockspace, action_data.border_index, false);
@@ -7465,7 +7473,9 @@ namespace ECSEngine {
 			action_data.window_index = GetWindowIndexFromBorder(action_data.dockspace, action_data.border_index);
 
 			bool executed = m_focused_window_data.ExecuteGeneralHandler(&action_data);
-			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
+			if (executed) {
+				SetFramePacing(ECS_UI_FRAME_PACING_MEDIUM);
+			}
 
 			if (action_data.redraw_window) {
 				DeallocateDockspaceBorderSnapshot(action_data.dockspace, action_data.border_index, false);
@@ -11554,6 +11564,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::SetFramePacing(ECS_UI_FRAME_PACING pacing)
+		{
+			m_frame_pacing = max(pacing, m_frame_pacing);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetTextureEvictionCount(unsigned int frame_count)
 		{
 			m_texture_evict_target = frame_count;
@@ -12831,7 +12848,7 @@ namespace ECSEngine {
 			if (!is_fixed) {
 				data->floating_dockspace->transform.position.x += mouse_delta.x;
 				data->floating_dockspace->transform.position.y += mouse_delta.y;
-				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+				system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 			}
 		}
 
@@ -13224,7 +13241,7 @@ namespace ECSEngine {
 
 			if (system->m_focused_window_data.locked_window == 0 || (system->m_focused_window_data.active_location.dockspace == data->dockspace &&
 				system->m_focused_window_data.active_location.border_index == data->border_index)) {
-				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+				system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 
 				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					system->HandleFocusedWindowCleanupGeneral({ normalized_mouse_x, normalized_mouse_y }, 0);
@@ -13303,7 +13320,7 @@ namespace ECSEngine {
 			UIDockspace* dockspace = &dockspaces[(unsigned int)data->dockspace_type][data->dockspace_index];
 
 			if (system->m_focused_window_data.locked_window == 0 || (system->m_focused_window_data.active_location.dockspace == dockspace)) {
-				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+				system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 
 				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					// cleaning up the last action; signaling clean up call by marking the buffers and the counts as nullptr

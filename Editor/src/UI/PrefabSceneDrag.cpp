@@ -56,7 +56,7 @@ static void FileExplorerPrefabDragCallback(ActionData* action_data) {
 			float3 direction = ViewportToWorldRayDirection(&scene_camera, window_dimensions, window_pixel_positions);
 			entity_translation->value = scene_camera.translation + direction * CIRCLE_RADIUS;
 			RenderSandboxViewports(editor_state, sandbox_index);
-			system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		};
 
 		auto add_prefab_to_sandbox = [&](unsigned int sandbox_index) {

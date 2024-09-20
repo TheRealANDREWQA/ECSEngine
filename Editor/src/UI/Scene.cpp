@@ -301,16 +301,16 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	);
 
 	// Change the frame pacing to one a little faster
-	editor_state->ui_system->m_frame_pacing = std::max(editor_state->ui_system->m_frame_pacing, ECS_UI_FRAME_PACING_HIGH);
+	editor_state->ui_system->SetFramePacing(ECS_UI_FRAME_PACING_HIGH);
 	if (delta != float3::Splat(0.0f)) {
 		TranslateSandboxCamera(editor_state, sandbox_index, delta, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		// Re-render the sandbox as well and increase the frame pacing
-		editor_state->ui_system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+		editor_state->ui_system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
 	else if (camera_was_rotated) {
 		// Render the sandbox and save the editor file
-		editor_state->ui_system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+		editor_state->ui_system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		SaveEditorSandboxFile(editor_state);
 	}
@@ -442,7 +442,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 				data->camera_wasd_initial_translation = camera_point.position;
 				data->camera_wasd_initial_rotation = camera_point.rotation;
 				// We need this to make the camera movement smoother
-				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+				system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 
 				// Disable the axes if they are drawn
 				sandbox->transform_display_axes = false;
@@ -781,7 +781,7 @@ static void SceneRotationAction(ActionData* action_data) {
 			mouse->EnableRawInput();
 			// Make the pacing instant such that we won't have a big frame difference
 			// That can cause the camera to snap
-			system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		}
 	}
 	
@@ -790,7 +790,7 @@ static void SceneRotationAction(ActionData* action_data) {
 			mouse->DisableRawInput();
 		}
 		else if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
-			system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		}
 
 
@@ -821,7 +821,7 @@ static void SceneTranslationAction(ActionData* action_data) {
 			mouse->DisableRawInput();
 		}
 		else if (mouse->IsDown(ECS_MOUSE_MIDDLE)) {
-			system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		}
 
 		if (mouse->IsHeld(ECS_MOUSE_MIDDLE)) {
@@ -1010,7 +1010,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 
 			if (data->cpu_framebuffer.values != nullptr) {
 				if (data->is_selection_mode) {
-					system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+					system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 					ECS_STACK_CAPACITY_STREAM(unsigned int, selected_entities, ECS_KB * 16);
 					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
 					uint2 top_left = BasicTypeMin(hovered_texel_offset, data->click_texel_position);
@@ -1166,7 +1166,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		// We need to render one more time in order for the transform tool to appear normal
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+		system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		if (!mouse->IsReleased(ECS_MOUSE_LEFT)) {
 			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
