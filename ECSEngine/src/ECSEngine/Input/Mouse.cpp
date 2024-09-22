@@ -49,7 +49,9 @@ namespace ECSEngine {
 			// Reduce the y bounds by a bit since it will show the cursor for some reason
 			if (bounds.y >= 10) {
 				bounds.y -= 10;
-			}
+			}/*
+			RECT rectangle;
+			ClipCursor(&rectangle);*/
 			ActivateWrap(bounds);
 		}
 		else {

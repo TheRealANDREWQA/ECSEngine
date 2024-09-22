@@ -69,6 +69,8 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 
 	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, icon_path);
 	InspectorDefaultFileInfo(editor_state, drawer, data->path);
+
+	// TODO: Better rew input handling - by removing legacy messages
 }
 
 void InspectorRecordingFileAddFunctors(InspectorTable* table) {

@@ -14,6 +14,7 @@
 #include "../UI/VisualizeTexture.h"
 #include "ECSEngineBenchmark.h"
 #include "ECSEngineOSMonitor.h"
+#include <hidusage.h>
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -143,6 +144,22 @@ public:
 			auto run_application = [&](EDITOR_APPLICATION_QUIT_RESPONSE application_quit_value) {
 				unsigned int frame_pacing = 0;
 				while (result == 0 && application_quit == application_quit_value) {
+					// Handle the raw input messages
+					//RAWINPUT raw_inputs[100];
+					//UINT raw_inputs_size = sizeof(raw_inputs);
+					//UINT read_size = GetRawInputBuffer(raw_inputs, &raw_inputs_size, sizeof(RAWINPUTHEADER));
+					//for (unsigned int index = 0; index < read_size; index++) {
+					//	if (raw_inputs[index].header.dwType == RIM_TYPEMOUSE) {
+					//		editor_state.Mouse()->AddDelta(raw_inputs[index].data.mouse.lLastX, raw_inputs[index].data.mouse.lLastY);
+					//	}
+					//}
+
+					//POINT cursor;
+					//GetCursorPos(&cursor);
+					//if (cursor.y > 1540) {
+					//	ReleaseCapture();
+					//}
+
 					while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
 						switch (message.message) {
 						case WM_QUIT:
@@ -238,9 +255,6 @@ public:
 							if (removed) {
 								__debugbreak();
 							}
-
-							// Unbind any shader PS resource at slot 0
-							graphics->BindPixelResourceView(nullptr);
 
 							/*static double average_duration = 0.0f;
 							static size_t count = 0;
@@ -366,13 +380,7 @@ Editor::Editor(const wchar_t* name)
 	monitor_handle = OS::GetMonitorFromCursor();
 	OS::MonitorInfo monitor_info = OS::RetrieveMonitorInfo(monitor_handle);
 
-	// calculate window size based on desired client region
-	RECT window_region;
-	window_region.left = monitor_info.origin.x;
-	window_region.right = monitor_info.origin.x + monitor_info.size.x;
-	window_region.bottom = monitor_info.origin.y + monitor_info.size.y;
-	window_region.top = monitor_info.origin.y;
-	//AdjustWindowRect(&window_region, WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU, FALSE);
+	// Use the work area such that we don't overlapp system UI
 	monitor_size = monitor_info.size;
 
 	//width = _width;
@@ -401,11 +409,11 @@ Editor::Editor(const wchar_t* name)
 	hWnd = CreateWindow(
 		EditorClass::GetName(),
 		name,
-		WS_OVERLAPPEDWINDOW /*^ WS_THICKFRAME*/,
-		window_region.left,
-		window_region.top,
-		window_region.right - window_region.left,
-		window_region.bottom - window_region.top,
+		WS_OVERLAPPEDWINDOW,
+		monitor_info.work_origin.x,
+		monitor_info.work_origin.y,
+		monitor_info.work_size.x,
+		monitor_info.work_size.y,
 		nullptr,
 		nullptr,
 		EditorClass::GetInstance(),
@@ -414,8 +422,8 @@ Editor::Editor(const wchar_t* name)
 
 	// Register raw mouse input
 	RAWINPUTDEVICE raw_device = {};
-	raw_device.usUsagePage = 0x01; // mouse page
-	raw_device.usUsage = 0x02; // mouse usage
+	raw_device.usUsagePage = HID_USAGE_PAGE_GENERIC;
+	raw_device.usUsage = HID_USAGE_GENERIC_MOUSE;
 	raw_device.dwFlags = 0;
 	raw_device.hwndTarget = nullptr;
 	if (!RegisterRawInputDevices(&raw_device, 1, sizeof(raw_device))) {
@@ -431,6 +439,10 @@ Editor::Editor(const wchar_t* name)
 	// Show window since default is hidden
 	ShowWindow(hWnd, SW_SHOWMAXIMIZED);
 	UpdateWindow(hWnd);
+
+	//WINDOWPLACEMENT placement;
+	//placement.length = sizeof(placement);
+	//success = GetWindowPlacement(hWnd, &placement);
 
 	ECS_ASSERT(SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE));
 }
@@ -469,10 +481,24 @@ LRESULT WINAPI Editor::HandleMessageForward(HWND hWnd, UINT message, WPARAM wPar
 LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
 
 	switch (message) {
+	//case WM_NCPAINT:
+	//	OutputDebugStringA("BRUH");
+	//	break;
+	//case WM_CAPTURECHANGED:
+	//	ReleaseCapture();
+	//	OutputDebugStringA("BRUH\n");
+	//	break;
+	//case WM_MOUSEACTIVATE:
+	//	OutputDebugStringA("MOUSE_ACTIVATE\n");
+	//	break;
+	//case WM_MOUSELEAVE:
+	//	OutputDebugStringA("LEAVE\n");
+	//	break;
 	case WM_CLOSE:
 		application_quit = EDITOR_APPLICATION_QUIT_NOT_READY;
 		return 0;
 	case WM_ACTIVATEAPP:
+		//SetCapture(hWnd);
 		keyboard.Procedure({ message, wParam, lParam });
 		mouse.Procedure({ message, wParam, lParam });
 		break;
