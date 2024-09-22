@@ -7,8 +7,12 @@ namespace ECSEngine {
 	namespace OS {
 
 		struct MonitorInfo {
-			uint2 origin;
-			uint2 size;
+			int2 origin;
+			int2 size;
+			// These 2 values are for the work area - the area that excludes 
+			// System UI, like the Windows taskbar
+			int2 work_origin;
+			int2 work_size;
 			bool primary_display;
 		};
 

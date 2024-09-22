@@ -19,7 +19,13 @@ namespace ECSEngine {
 				MONITORINFO monitor_info;
 				monitor_info.cbSize = sizeof(monitor_info);
 				if (GetMonitorInfo(monitor, &monitor_info)) {
-					MonitorInfo ecs_monitor_info = { { (unsigned int)transform->left, (unsigned int)transform->top }, { (unsigned int)(transform->right - transform->left), (unsigned int)(transform->bottom - transform->top) }, monitor_info.dwFlags & MONITORINFOF_PRIMARY };
+					MonitorInfo ecs_monitor_info = { 
+						{ transform->left, transform->top }, 
+						{ transform->right - transform->left, transform->bottom - transform->top }, 
+						{ monitor_info.rcWork.left, monitor_info.rcWork.top },
+						{ monitor_info.rcWork.right - monitor_info.rcWork.left, monitor_info.rcWork.bottom - monitor_info.rcWork.top },
+						monitor_info.dwFlags & MONITORINFOF_PRIMARY 
+					};
 					data->stop = !data->callback(&ecs_monitor_info, monitor, data->user_data);
 				}
 			}
@@ -62,16 +68,18 @@ namespace ECSEngine {
 		}
 
 		MonitorInfo RetrieveMonitorInfo(void* monitor_handle) {
+			MonitorInfo ecs_monitor_info = { int2::Splat(INT32_MAX), int2::Splat(0), int2::Splat(INT32_MAX), int2::Splat(0), false };
+
 			MONITORINFO monitor_info;
 			monitor_info.cbSize = sizeof(monitor_info);
 			if (GetMonitorInfo((HMONITOR)monitor_handle, &monitor_info)) {
-				return {
-					{ (unsigned int)monitor_info.rcMonitor.left, (unsigned int)(monitor_info.rcMonitor.top) },
-					{ (unsigned int)(monitor_info.rcMonitor.right - monitor_info.rcMonitor.left), (unsigned int)(monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top) },
-					(monitor_info.dwFlags & MONITORINFOF_PRIMARY) != 0
-				};
+				ecs_monitor_info.origin = { monitor_info.rcMonitor.left, monitor_info.rcMonitor.top };
+				ecs_monitor_info.size = { monitor_info.rcMonitor.right - monitor_info.rcMonitor.left, monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top };
+				ecs_monitor_info.work_origin = { monitor_info.rcWork.left, monitor_info.rcWork.top };
+				ecs_monitor_info.work_size = { monitor_info.rcWork.right - monitor_info.rcWork.left, monitor_info.rcWork.bottom - monitor_info.rcWork.top };
+				ecs_monitor_info.primary_display = (monitor_info.dwFlags & MONITORINFOF_PRIMARY) != 0;
 			}
-			return { uint2(-1, -1), uint2(0, 0), false };
+			return ecs_monitor_info;
 		}
 
 	}
