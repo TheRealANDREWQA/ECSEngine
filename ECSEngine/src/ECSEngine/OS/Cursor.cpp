@@ -15,12 +15,12 @@ namespace ECSEngine {
 			return { point.x, point.y };
 		}
 
-		uint2 GetCursorPosition(void* window_handle) {
+		int2 GetCursorPosition(void* window_handle) {
 			POINT point;
 			ECS_ASSERT(GetCursorPos(&point));
 			// Also convert from screen to client position
 			ECS_ASSERT(ScreenToClient((HWND)window_handle, &point));
-			return { (unsigned int)point.x, (unsigned int)point.y };
+			return { point.x, point.y };
 		}
 
 		void SetCursorPosition(void* window_handle, uint2 position) {
@@ -50,12 +50,22 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		uint2 GetOSWindowPosition(void* window_handle) {
+		int2 GetOSWindowPosition(void* window_handle) {
 			HWND hwnd = (HWND)window_handle;
 			RECT window_rect;
-			ECS_ASSERT(GetClientRect(hwnd, &window_rect));
+			ECS_ASSERT(GetWindowRect(hwnd, &window_rect));
 
-			return { (unsigned int)window_rect.left, (unsigned int)window_rect.top };
+			return { window_rect.left, window_rect.top };
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		int2 GetOSWindowPositionClient(void* window_handle) {
+			HWND hwnd = (HWND)window_handle;
+			POINT client_start = { 0, 0 };
+			ECS_ASSERT(ClientToScreen(hwnd, &client_start));
+
+			return { client_start.x, client_start.y };
 		}
 
 		// -----------------------------------------------------------------------------------------------------
@@ -63,9 +73,31 @@ namespace ECSEngine {
 		uint2 GetOSWindowSize(void* window_handle) {
 			HWND hwnd = (HWND)window_handle;
 			RECT window_rect;
+			ECS_ASSERT(GetWindowRect(hwnd, &window_rect));
+
+			return { (unsigned int)(window_rect.right - window_rect.left), (unsigned int)(window_rect.bottom - window_rect.top) };
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		uint2 GetOSWindowSizeClient(void* window_handle) {
+			HWND hwnd = (HWND)window_handle;
+			RECT window_rect;
 			ECS_ASSERT(GetClientRect(hwnd, &window_rect));
 
 			return { (unsigned int)(window_rect.right - window_rect.left), (unsigned int)(window_rect.bottom - window_rect.top) };
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void ClipCursorToRectangle(int2 position, uint2 size) {
+			if (size.x != 0 && size.y != 0) {
+				RECT rectangle = { position.x, position.y, size.x, size.y };
+				ClipCursor(&rectangle);
+			}
+			else {
+				ClipCursor(nullptr);
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------

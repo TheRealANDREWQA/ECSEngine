@@ -144,20 +144,17 @@ public:
 			auto run_application = [&](EDITOR_APPLICATION_QUIT_RESPONSE application_quit_value) {
 				unsigned int frame_pacing = 0;
 				while (result == 0 && application_quit == application_quit_value) {
-					// Handle the raw input messages
-					//RAWINPUT raw_inputs[100];
+					// Handle the raw input messages - using buffered reads such that we have good performance on high polling rate mices
+					//const size_t MAX_RAW_INPUTS = 128;
+					//RAWINPUT raw_inputs[MAX_RAW_INPUTS];
 					//UINT raw_inputs_size = sizeof(raw_inputs);
 					//UINT read_size = GetRawInputBuffer(raw_inputs, &raw_inputs_size, sizeof(RAWINPUTHEADER));
-					//for (unsigned int index = 0; index < read_size; index++) {
-					//	if (raw_inputs[index].header.dwType == RIM_TYPEMOUSE) {
-					//		editor_state.Mouse()->AddDelta(raw_inputs[index].data.mouse.lLastX, raw_inputs[index].data.mouse.lLastY);
+					//while (read_size == MAX_RAW_INPUTS) {
+					//	for (unsigned int index = 0; index < read_size; index++) {
+					//		if (raw_inputs[index].header.dwType == RIM_TYPEMOUSE) {
+					//			editor_state.Mouse()->AddDelta(raw_inputs[index].data.mouse.lLastX, raw_inputs[index].data.mouse.lLastY);
+					//		}
 					//	}
-					//}
-
-					//POINT cursor;
-					//GetCursorPos(&cursor);
-					//if (cursor.y > 1540) {
-					//	ReleaseCapture();
 					//}
 
 					while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -167,7 +164,24 @@ public:
 							break;
 						}
 						TranslateMessage(&message);
-						DispatchMessage(&message);
+						bool should_process_message = true;
+						if (!editor_state.Mouse()->IsVisible())
+						{
+							// If the mouse is not visible, drop mouse messages - rely only on raw input
+							// Except for wheel message, since these cannot be handled with raw input
+							if (message.message == WM_MOUSEMOVE || message.message == WM_NCMOUSEMOVE || message.message == WM_LBUTTONDOWN ||
+								message.message == WM_LBUTTONUP || message.message == WM_MBUTTONDOWN || message.message == WM_MBUTTONUP ||
+								message.message == WM_RBUTTONUP || message.message == WM_RBUTTONDOWN || message.message == WM_XBUTTONDOWN ||
+								message.message == WM_XBUTTONUP || message.message == WM_NCLBUTTONDOWN || message.message == WM_NCLBUTTONUP ||
+								message.message == WM_NCMBUTTONDOWN || message.message == WM_NCMBUTTONUP || message.message == WM_NCRBUTTONUP ||
+								message.message == WM_NCRBUTTONDOWN || message.message == WM_NCXBUTTONDOWN || message.message == WM_NCXBUTTONUP ||
+								message.message == WM_NCHITTEST || message.message == WM_NCMOUSEHOVER || message.message == WM_MOUSEHOVER) {
+								should_process_message = false;
+							}
+						}
+						if (should_process_message) {
+							DispatchMessage(&message);
+						}
 					}
 
 					auto handle_physical_memory_guards = [this](EXCEPTION_POINTERS* exception_pointers) {
@@ -440,10 +454,6 @@ Editor::Editor(const wchar_t* name)
 	ShowWindow(hWnd, SW_SHOWMAXIMIZED);
 	UpdateWindow(hWnd);
 
-	//WINDOWPLACEMENT placement;
-	//placement.length = sizeof(placement);
-	//success = GetWindowPlacement(hWnd, &placement);
-
 	ECS_ASSERT(SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE));
 }
 
@@ -481,24 +491,10 @@ LRESULT WINAPI Editor::HandleMessageForward(HWND hWnd, UINT message, WPARAM wPar
 LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
 
 	switch (message) {
-	//case WM_NCPAINT:
-	//	OutputDebugStringA("BRUH");
-	//	break;
-	//case WM_CAPTURECHANGED:
-	//	ReleaseCapture();
-	//	OutputDebugStringA("BRUH\n");
-	//	break;
-	//case WM_MOUSEACTIVATE:
-	//	OutputDebugStringA("MOUSE_ACTIVATE\n");
-	//	break;
-	//case WM_MOUSELEAVE:
-	//	OutputDebugStringA("LEAVE\n");
-	//	break;
 	case WM_CLOSE:
 		application_quit = EDITOR_APPLICATION_QUIT_NOT_READY;
 		return 0;
 	case WM_ACTIVATEAPP:
-		//SetCapture(hWnd);
 		keyboard.Procedure({ message, wParam, lParam });
 		mouse.Procedure({ message, wParam, lParam });
 		break;
@@ -513,7 +509,6 @@ LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 	case WM_MOUSEWHEEL:
 	case WM_XBUTTONDOWN:
 	case WM_XBUTTONUP:
-	case WM_MOUSEHOVER:
 		mouse.Procedure({ message, wParam, lParam }); 
 		break;
 	case WM_CHAR:
