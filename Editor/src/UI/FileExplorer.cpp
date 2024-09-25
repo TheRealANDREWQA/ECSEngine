@@ -1997,202 +1997,201 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 	FileExplorerData* data = editor_state->file_explorer_data;
 
 	if (initialize) {
-		if (data->file_functors.m_capacity == 0) {
-			ProjectFile* project_file = editor_state->project_file;
-			data->current_directory.CopyOther(project_file->path);
-			data->current_directory.AddAssert(ECS_OS_PATH_SEPARATOR);
-			data->current_directory.AddStreamAssert(Path(PROJECT_ASSETS_RELATIVE_PATH, wcslen(PROJECT_ASSETS_RELATIVE_PATH)));
-			data->current_directory[data->current_directory.size] = L'\0';
+		ProjectFile* project_file = editor_state->project_file;
+		data->current_directory.CopyOther(project_file->path);
+		data->current_directory.AddAssert(ECS_OS_PATH_SEPARATOR);
+		data->current_directory.AddStreamAssert(Path(PROJECT_ASSETS_RELATIVE_PATH, wcslen(PROJECT_ASSETS_RELATIVE_PATH)));
+		data->current_directory.AssertCapacity(1);
+		data->current_directory[data->current_directory.size] = L'\0';
 
-			void* allocation = drawer.GetMainAllocatorBuffer(data->file_functors.MemoryOf(FILE_FUNCTORS_CAPACITY));
-			data->file_functors.InitializeFromBuffer(allocation, FILE_FUNCTORS_CAPACITY);
+		void* allocation = drawer.GetMainAllocatorBuffer(data->file_functors.MemoryOf(FILE_FUNCTORS_CAPACITY));
+		data->file_functors.InitializeFromBuffer(allocation, FILE_FUNCTORS_CAPACITY);
 
 #pragma region Deselection Handlers - Main
 
-			// The main menu
-			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT);
-			data->deselection_menu_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT);
+		// The main menu
+		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT);
+		data->deselection_menu_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT);
 
-			data->deselection_menu_handlers[DESELECTION_MENU_PASTE] = { FileExplorerPasteElements, editor_state, 0 };
+		data->deselection_menu_handlers[DESELECTION_MENU_PASTE] = { FileExplorerPasteElements, editor_state, 0 };
 
-			auto reset_copied_files = [](ActionData* action_data) {
-				UI_UNPACK_ACTION_DATA;
+		auto reset_copied_files = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
 
-				FileExplorerResetCopiedFiles((FileExplorerData*)_data);
-			};
-			data->deselection_menu_handlers[DESELECTION_MENU_RESET_COPIED_FILES] = { reset_copied_files, data, 0 };
+			FileExplorerResetCopiedFiles((FileExplorerData*)_data);
+		};
+		data->deselection_menu_handlers[DESELECTION_MENU_RESET_COPIED_FILES] = { reset_copied_files, data, 0 };
 			
 #pragma endregion
 
 #pragma region Deselection Handlers - Create submenu
 
-			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
-			data->deselection_create_menu_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
+		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
+		data->deselection_create_menu_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
 
-			constexpr auto create_sampler_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
-				return CreateSamplerFile(editor_state, relative_path);
-			};
+		constexpr auto create_sampler_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
+			return CreateSamplerFile(editor_state, relative_path);
+		};
 
 #define SHADER_INPUT_RESOURCE_NAME "SHADER_TYPE_INPUT"
 
-			constexpr auto create_shader_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
-				ECS_SHADER_TYPE shader_type = *(ECS_SHADER_TYPE*)window_table->GetValue(SHADER_INPUT_RESOURCE_NAME);
-				return CreateShaderFile(editor_state, relative_path, shader_type);
-			};
+		constexpr auto create_shader_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
+			ECS_SHADER_TYPE shader_type = *(ECS_SHADER_TYPE*)window_table->GetValue(SHADER_INPUT_RESOURCE_NAME);
+			return CreateShaderFile(editor_state, relative_path, shader_type);
+		};
 
-			constexpr auto create_material_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
-				return CreateMaterialFile(editor_state, relative_path);
-			};
+		constexpr auto create_material_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
+			return CreateMaterialFile(editor_state, relative_path);
+		};
 
-			constexpr auto create_misc_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
-				return CreateMiscFile(editor_state, relative_path);
-			};
+		constexpr auto create_misc_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
+			return CreateMiscFile(editor_state, relative_path);
+		};
 
-			data->deselection_create_menu_handler_data = (TextInputWizardData*)drawer.GetMainAllocatorBuffer(sizeof(TextInputWizardData) * FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
-			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SAMPLER] = { "Sampler name", "Choose a name", CreateAssetFileStruct<create_sampler_file>::Function, editor_state, 0 };
-			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER] = { "Shader name", "Choose a name", CreateAssetFileStruct<create_shader_file>::Function, editor_state, 0 };
-			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MATERIAL] = { "Material name", "Choose a name", CreateAssetFileStruct<create_material_file>::Function, editor_state, 0 };
-			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MISC] = { "Misc name", "Choose a name", CreateAssetFileStruct<create_misc_file>::Function, editor_state, 0 };;
+		data->deselection_create_menu_handler_data = (TextInputWizardData*)drawer.GetMainAllocatorBuffer(sizeof(TextInputWizardData) * FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
+		data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SAMPLER] = { "Sampler name", "Choose a name", CreateAssetFileStruct<create_sampler_file>::Function, editor_state, 0 };
+		data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER] = { "Shader name", "Choose a name", CreateAssetFileStruct<create_shader_file>::Function, editor_state, 0 };
+		data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MATERIAL] = { "Material name", "Choose a name", CreateAssetFileStruct<create_material_file>::Function, editor_state, 0 };
+		data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MISC] = { "Misc name", "Choose a name", CreateAssetFileStruct<create_misc_file>::Function, editor_state, 0 };;
 			
-			auto shader_file_input = [](ActionData* action_data) {
-				UI_UNPACK_ACTION_DATA;
+		auto shader_file_input = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
 
-				UIDrawer* drawer = (UIDrawer*)_data;
-				EditorState* editor_state = (EditorState*)_additional_data;
-				ECS_SHADER_TYPE* shader_type = nullptr;
-				if (drawer->initializer) {
-					shader_type = drawer->GetMainAllocatorBufferAndStoreAsResource<ECS_SHADER_TYPE>(SHADER_INPUT_RESOURCE_NAME);
-					*shader_type = ECS_SHADER_VERTEX;
-				}
-				else {
-					shader_type = (ECS_SHADER_TYPE*)drawer->GetResource(SHADER_INPUT_RESOURCE_NAME);
-				}
+			UIDrawer* drawer = (UIDrawer*)_data;
+			EditorState* editor_state = (EditorState*)_additional_data;
+			ECS_SHADER_TYPE* shader_type = nullptr;
+			if (drawer->initializer) {
+				shader_type = drawer->GetMainAllocatorBufferAndStoreAsResource<ECS_SHADER_TYPE>(SHADER_INPUT_RESOURCE_NAME);
+				*shader_type = ECS_SHADER_VERTEX;
+			}
+			else {
+				shader_type = (ECS_SHADER_TYPE*)drawer->GetResource(SHADER_INPUT_RESOURCE_NAME);
+			}
 
-				UIConfigWindowDependentSize window_dependent_size;
-				UIDrawConfig config;
-				config.AddFlag(window_dependent_size);
+			UIConfigWindowDependentSize window_dependent_size;
+			UIDrawConfig config;
+			config.AddFlag(window_dependent_size);
 
-				Stream<Stream<char>> shader_type_labels = editor_state->EditorReflectionManager()->GetEnum(STRING(ECS_SHADER_TYPE))->fields;
-				drawer->ComboBox(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Shader Type", shader_type_labels, shader_type_labels.size, (unsigned char*)shader_type);
-			};
+			Stream<Stream<char>> shader_type_labels = editor_state->EditorReflectionManager()->GetEnum(STRING(ECS_SHADER_TYPE))->fields;
+			drawer->ComboBox(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Shader Type", shader_type_labels, shader_type_labels.size, (unsigned char*)shader_type);
+		};
 
-			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER].AddExtraElement(shader_file_input, editor_state, 0);
+		data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER].AddExtraElement(shader_file_input, editor_state, 0);
 
-			data->deselection_create_menu_handlers[DESELECTION_MENU_CREATE_SCENE] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->deselection_create_menu_handlers[DESELECTION_MENU_CREATE_SCENE] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 
 #define SET_HANDLER(index) data->deselection_create_menu_handlers[index] = { CreateTextInputWizardAction, data->deselection_create_menu_handler_data + index, 0, ECS_UI_DRAW_SYSTEM };
 			
-			SET_HANDLER(DESELECTION_MENU_CREATE_SAMPLER);
-			SET_HANDLER(DESELECTION_MENU_CREATE_SHADER);
-			SET_HANDLER(DESELECTION_MENU_CREATE_MATERIAL);
-			SET_HANDLER(DESELECTION_MENU_CREATE_MISC);
+		SET_HANDLER(DESELECTION_MENU_CREATE_SAMPLER);
+		SET_HANDLER(DESELECTION_MENU_CREATE_SHADER);
+		SET_HANDLER(DESELECTION_MENU_CREATE_MATERIAL);
+		SET_HANDLER(DESELECTION_MENU_CREATE_MISC);
 
 #undef SET_HANDLER
 
-			data->deselection_menu_create_state.row_count = FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT;
-			data->deselection_menu_create_state.submenu_index = 1;
-			data->deselection_menu_create_state.left_characters = FILE_EXPLORER_DESELECTION_MENU_CREATE_CHARACTERS;
-			data->deselection_menu_create_state.click_handlers = data->deselection_create_menu_handlers.buffer;
+		data->deselection_menu_create_state.row_count = FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT;
+		data->deselection_menu_create_state.submenu_index = 1;
+		data->deselection_menu_create_state.left_characters = FILE_EXPLORER_DESELECTION_MENU_CREATE_CHARACTERS;
+		data->deselection_menu_create_state.click_handlers = data->deselection_create_menu_handlers.buffer;
 
 #pragma endregion
 
 #pragma region File Right Click Handlers
 
-			auto CopyPath = [](ActionData* action_data) {
-				UI_UNPACK_ACTION_DATA;
+		auto CopyPath = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
 
-				ECS_STACK_CAPACITY_STREAM(char, ascii_path, 256);
-				Stream<wchar_t>* path = (Stream<wchar_t>*)_data;
-				ConvertWideCharsToASCII(*path, ascii_path);
-				system->m_application->WriteTextToClipboard(ascii_path);
-			};
+			ECS_STACK_CAPACITY_STREAM(char, ascii_path, 256);
+			Stream<wchar_t>* path = (Stream<wchar_t>*)_data;
+			ConvertWideCharsToASCII(*path, ascii_path);
+			system->m_application->WriteTextToClipboard(ascii_path);
+		};
 
-			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_RIGHT_CLICK_ROW_COUNT);
-			data->file_right_click_handlers.InitializeFromBuffer(allocation, FILE_RIGHT_CLICK_ROW_COUNT, FILE_RIGHT_CLICK_ROW_COUNT);
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_SYSTEM };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { FileExplorerMenuRenameCallback, editor_state, 0, ECS_UI_DRAW_SYSTEM };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
+		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_RIGHT_CLICK_ROW_COUNT);
+		data->file_right_click_handlers.InitializeFromBuffer(allocation, FILE_RIGHT_CLICK_ROW_COUNT, FILE_RIGHT_CLICK_ROW_COUNT);
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_SYSTEM };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { FileExplorerMenuRenameCallback, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
 
 #pragma endregion
 
 #pragma region Folder Right Click Handlers
 
-			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FOLDER_RIGHT_CLICK_ROW_COUNT);
-			data->folder_right_click_handlers.InitializeFromBuffer(allocation, FOLDER_RIGHT_CLICK_ROW_COUNT, FOLDER_RIGHT_CLICK_ROW_COUNT);
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_OPEN] = { FileExplorerChangeDirectoryFromFile, editor_state, 0 };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_SYSTEM };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { FileExplorerMenuRenameCallback, editor_state, 0, ECS_UI_DRAW_SYSTEM };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
+		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FOLDER_RIGHT_CLICK_ROW_COUNT);
+		data->folder_right_click_handlers.InitializeFromBuffer(allocation, FOLDER_RIGHT_CLICK_ROW_COUNT, FOLDER_RIGHT_CLICK_ROW_COUNT);
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_OPEN] = { FileExplorerChangeDirectoryFromFile, editor_state, 0 };
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_SYSTEM };
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { FileExplorerMenuRenameCallback, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
 
 #pragma endregion
 
 #pragma region Mesh Export Materials Click Handlers
 
-			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT);
-			data->mesh_export_materials_click_handlers.InitializeFromBuffer(allocation, MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT, MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT);
+		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT);
+		data->mesh_export_materials_click_handlers.InitializeFromBuffer(allocation, MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT, MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT);
 
-			size_t mesh_exports_total_data_size = sizeof(MeshExportAllActionData) + sizeof(MeshExportSelectionActionData);
-			allocation = drawer.GetMainAllocatorBuffer(mesh_exports_total_data_size);
-			MeshExportAllActionData* export_all_data = (MeshExportAllActionData*)allocation;
-			export_all_data->editor_state = editor_state;
-			export_all_data->explorer_data = data;
-			MeshExportSelectionActionData* export_selection_data = (MeshExportSelectionActionData*)OffsetPointer(export_all_data, sizeof(*export_all_data));
-			export_selection_data->editor_state = editor_state;
-			export_selection_data->explorer_data = data;
+		size_t mesh_exports_total_data_size = sizeof(MeshExportAllActionData) + sizeof(MeshExportSelectionActionData);
+		allocation = drawer.GetMainAllocatorBuffer(mesh_exports_total_data_size);
+		MeshExportAllActionData* export_all_data = (MeshExportAllActionData*)allocation;
+		export_all_data->editor_state = editor_state;
+		export_all_data->explorer_data = data;
+		MeshExportSelectionActionData* export_selection_data = (MeshExportSelectionActionData*)OffsetPointer(export_all_data, sizeof(*export_all_data));
+		export_selection_data->editor_state = editor_state;
+		export_selection_data->explorer_data = data;
 
-			data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_ALL_HERE] = { MeshExportAllAction<false>, export_all_data, 0 };
-			data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_ALL_TO_FOLDER] = { MeshExportAllAction<true>, export_all_data, 0 };
-			data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_SELECTION_HERE] = { MeshExportSelectionAction<false>, export_selection_data, 0 };
-			data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_SELECTION_TO_FOLDER] = { MeshExportSelectionAction<true>, export_selection_data, 0 };
+		data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_ALL_HERE] = { MeshExportAllAction<false>, export_all_data, 0 };
+		data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_ALL_TO_FOLDER] = { MeshExportAllAction<true>, export_all_data, 0 };
+		data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_SELECTION_HERE] = { MeshExportSelectionAction<false>, export_selection_data, 0 };
+		data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_SELECTION_TO_FOLDER] = { MeshExportSelectionAction<true>, export_selection_data, 0 };
 
 #pragma endregion
 
-			ResourceIdentifier identifier;
-			unsigned int hash;
+		ResourceIdentifier identifier;
+		unsigned int hash;
 
 #define ADD_FUNCTOR(action, string) identifier = ResourceIdentifier(string); \
 data->file_functors.Insert(action, identifier);
 
-			ADD_FUNCTOR(FileCDraw, L".c");
-			ADD_FUNCTOR(FileCppDraw, L".cpp");
-			ADD_FUNCTOR(FileCppDraw, L".h");
-			ADD_FUNCTOR(FileCppDraw, L".hpp");
-			ADD_FUNCTOR(FileConfigDraw, L".config");
-			ADD_FUNCTOR(FileTextDraw, L".txt");
-			ADD_FUNCTOR(FileTextDraw, L".doc");
-			ADD_FUNCTOR(FileShaderDraw, ECS_SHADER_EXTENSION);
-			ADD_FUNCTOR(FileShaderDraw, ECS_SHADER_INCLUDE_EXTENSION);
-			for (size_t index = 0; index < std::size(ASSET_SHADER_EXTENSIONS); index++) {
-				ADD_FUNCTOR(FileAssetShaderDraw, ASSET_SHADER_EXTENSIONS[index]);
-			}
-			for (size_t index = 0; index < std::size(ASSET_GPU_SAMPLER_EXTENSIONS); index++) {
-				ADD_FUNCTOR(FileAssetGPUSamplerDraw, ASSET_GPU_SAMPLER_EXTENSIONS[index]);
-			}
-			for (size_t index = 0; index < std::size(ASSET_MISC_EXTENSIONS); index++) {
-				ADD_FUNCTOR(FileAssetMiscDraw, ASSET_MISC_EXTENSIONS[index]);
-			}
-			for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
-				ADD_FUNCTOR(FileMeshDraw, ASSET_MESH_EXTENSIONS[index]);
-			}
-			for (size_t index = 0; index < std::size(ASSET_TEXTURE_EXTENSIONS); index++) {
-				ADD_FUNCTOR(FileTextureDraw, ASSET_TEXTURE_EXTENSIONS[index]);
-			}
-			for (size_t index = 0; index < std::size(ASSET_MATERIAL_EXTENSIONS); index++) {
-				ADD_FUNCTOR(FileMaterialDraw, ASSET_MATERIAL_EXTENSIONS[index]);
-			}
-			ADD_FUNCTOR(FileSceneDraw, EDITOR_SCENE_EXTENSION);
-			ADD_FUNCTOR(FileInputRecordingFileDraw, EDITOR_INPUT_RECORDING_FILE_EXTENSION);
-			ADD_FUNCTOR(FileStateRecordingFileDraw, EDITOR_STATE_RECORDING_FILE_EXTENSION);
+		ADD_FUNCTOR(FileCDraw, L".c");
+		ADD_FUNCTOR(FileCppDraw, L".cpp");
+		ADD_FUNCTOR(FileCppDraw, L".h");
+		ADD_FUNCTOR(FileCppDraw, L".hpp");
+		ADD_FUNCTOR(FileConfigDraw, L".config");
+		ADD_FUNCTOR(FileTextDraw, L".txt");
+		ADD_FUNCTOR(FileTextDraw, L".doc");
+		ADD_FUNCTOR(FileShaderDraw, ECS_SHADER_EXTENSION);
+		ADD_FUNCTOR(FileShaderDraw, ECS_SHADER_INCLUDE_EXTENSION);
+		for (size_t index = 0; index < std::size(ASSET_SHADER_EXTENSIONS); index++) {
+			ADD_FUNCTOR(FileAssetShaderDraw, ASSET_SHADER_EXTENSIONS[index]);
+		}
+		for (size_t index = 0; index < std::size(ASSET_GPU_SAMPLER_EXTENSIONS); index++) {
+			ADD_FUNCTOR(FileAssetGPUSamplerDraw, ASSET_GPU_SAMPLER_EXTENSIONS[index]);
+		}
+		for (size_t index = 0; index < std::size(ASSET_MISC_EXTENSIONS); index++) {
+			ADD_FUNCTOR(FileAssetMiscDraw, ASSET_MISC_EXTENSIONS[index]);
+		}
+		for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
+			ADD_FUNCTOR(FileMeshDraw, ASSET_MESH_EXTENSIONS[index]);
+		}
+		for (size_t index = 0; index < std::size(ASSET_TEXTURE_EXTENSIONS); index++) {
+			ADD_FUNCTOR(FileTextureDraw, ASSET_TEXTURE_EXTENSIONS[index]);
+		}
+		for (size_t index = 0; index < std::size(ASSET_MATERIAL_EXTENSIONS); index++) {
+			ADD_FUNCTOR(FileMaterialDraw, ASSET_MATERIAL_EXTENSIONS[index]);
+		}
+		ADD_FUNCTOR(FileSceneDraw, EDITOR_SCENE_EXTENSION);
+		ADD_FUNCTOR(FileInputRecordingFileDraw, EDITOR_INPUT_RECORDING_FILE_EXTENSION);
+		ADD_FUNCTOR(FileStateRecordingFileDraw, EDITOR_STATE_RECORDING_FILE_EXTENSION);
 
 #undef ADD_FUNCTOR
-		}
 
 		// Reduce the next roy y offset
 		drawer.layout.next_row_y_offset *= 0.5f;
