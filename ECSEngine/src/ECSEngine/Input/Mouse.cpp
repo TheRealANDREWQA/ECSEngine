@@ -25,37 +25,24 @@ namespace ECSEngine {
 		m_wrap_position = false;
 		m_has_wrapped = false;
 		m_window_handle = nullptr;
+		m_restore_position = { 0, 0 };
 	}
 
-	void Mouse::SetCursorVisibility(bool visible) {
-		/*CURSORINFO info = { sizeof(CURSORINFO), 0, nullptr, {} };
-		if (!GetCursorInfo(&info))
-		{
-			ECS_ASSERT(false, "Could not change cursor visibility");
-		}
-
-		bool is_visible = (info.flags & CURSOR_SHOWING) != 0;
-		if (is_visible != visible)
-		{
-			ShowCursor(visible);
-			m_is_visible = visible;
-		}*/
-
+	void Mouse::SetCursorVisibility(bool visible, bool restore_position) {
 		ShowCursor(visible);
 		m_is_visible = visible;
 
 		if (!visible) {
-			uint2 bounds = OS::GetOSWindowSize(m_window_handle);
-			// Reduce the y bounds by a bit since it will show the cursor for some reason
-			if (bounds.y >= 10) {
-				bounds.y -= 10;
-			}/*
-			RECT rectangle;
-			ClipCursor(&rectangle);*/
-			ActivateWrap(bounds);
+			m_restore_position = m_current_position;
+			// Enable clipping
+			OS::ClipCursorToRectangle(OS::GetOSWindowPositionClient(m_window_handle), OS::GetOSWindowSizeClient(m_window_handle));
 		}
 		else {
-			DeactivateWrap();
+			if (restore_position) {
+				SetPosition(m_restore_position.x, m_restore_position.y);
+			}
+			// Disable clipping
+			OS::ClipCursorToRectangle({ 0,0 }, { 0, 0 });
 		}
 	}
 
@@ -112,6 +99,7 @@ namespace ECSEngine {
 		m_previous_scroll = other_mouse->m_previous_scroll;
 		m_has_wrapped = other_mouse->m_has_wrapped;
 		m_before_wrap_position = other_mouse->m_before_wrap_position;
+		m_restore_position = other_mouse->m_restore_position;
 	}
 
 	void Mouse::Procedure(const MouseProcedureInfo& info) {

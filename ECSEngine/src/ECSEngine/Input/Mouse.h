@@ -91,7 +91,10 @@ namespace ECSEngine {
 			return m_has_wrapped;
 		}
 
-		void SetCursorVisibility(bool visible);
+		// The second boolean is taken into consideration when visible is set to true -
+		// In that case, if set, it will restore the mouse location to where the mouse was
+		// Before the visibility was turned off
+		void SetCursorVisibility(bool visible, bool restore_position = true);
 
 		void SetPreviousPositionAndScroll();
 
@@ -131,6 +134,9 @@ namespace ECSEngine {
 		int m_previous_scroll;
 		int2 m_current_position;
 		int2 m_position_delta;
+		// This is the position to restore the cursor after the visibility is restored to the cursor
+		// (If the user wants this behaviour). It records the position when the visibility is turned off
+		int2 m_restore_position;
 		int m_current_scroll;
 		uint2 m_wrap_pixel_bounds;
 		// This is set to true when the mouse has wrapped in order to not
