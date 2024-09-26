@@ -4918,6 +4918,26 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Timeline
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// The timeline pointer can be nullptr, in case all the data remained the same. This will skip the check
+			// For new data. The name is used just as a unique key, it is not displayed anywhere. 
+			// Returns the normalized scrubber time position, in the [0-1] range
+			float Timeline(Stream<char> name, const UIDrawerTimeline* timeline);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// The timeline pointer can be nullptr, in case all the data remained the same. This will skip the check
+			// For new data. The name is used just as a unique key, it is not displayed anywhere. 
+			// Returns the normalized scrubber time position, in the [0-1] range
+			float Timeline(size_t configuration, const UIDrawConfig& config, Stream<char> name, const UIDrawerTimeline* timeline);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// The default base data is center horizontal_x true, offset_scale_y true, offset.y a small offset
@@ -5219,6 +5239,10 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void InitializeDirectoryInputElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void InitializeTimelineElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
 
 		// --------------------------------------------------------------------------------------------------------------
 

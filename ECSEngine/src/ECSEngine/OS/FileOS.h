@@ -133,7 +133,6 @@ namespace ECSEngine {
 
 		ECSENGINE_API size_t GetFileLastWrite(Stream<wchar_t> path);
 
-
 		// Capacity<char>*, Capacity<wchar_t>* or size_t*
 		template<typename PointerType>
 		ECSENGINE_API void GetFileTimesWithError(

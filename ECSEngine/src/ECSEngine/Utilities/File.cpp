@@ -385,6 +385,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	size_t GetFileLastWrite(ECS_FILE_HANDLE file_handle) {
+		size_t last_write = 0;
+		GetFileTimes(file_handle, nullptr, nullptr, &last_write);
+		return last_write;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	bool HasSubdirectories(Stream<wchar_t> directory)
 	{
 		bool has_subdirectory = false;
