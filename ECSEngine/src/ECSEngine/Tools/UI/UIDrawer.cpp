@@ -16589,6 +16589,8 @@ namespace ECSEngine {
 
 #pragma region TextWide
 
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void UIDrawer::TextWide(Stream<wchar_t> characters) {
 			UIDrawConfig config;
 			TextWide(0, config, characters);
@@ -16603,6 +16605,23 @@ namespace ECSEngine {
 			Text(configuration, config, ascii);
 		}
 
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		float UIDrawer::Timeline(Stream<char> name, const UIDrawerTimeline* timeline) {
+
+		}
+
+		float UIDrawer::Timeline(size_t configuration, const UIDrawConfig& config, Stream<char> name, const UIDrawerTimeline* timeline) {
+
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
 #pragma endregion
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

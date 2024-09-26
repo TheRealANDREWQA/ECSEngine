@@ -685,6 +685,76 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ActionWrapperWithCallback(ActionData* action_data);
 
+		struct UIDrawerTimelineElement {
+			float time;
+			Color color;
+			// This is an index into the textures passed into the timeline
+			unsigned int texture_index;
+		};
+
+		struct UIDrawerTimelineChannel {
+			Stream<UIDrawerTimelineElement> elements;
+			Stream<char> description;
+			// Used only if use_background_color is set to true
+			Color background_color;
+			bool has_background_color = false;
+			// A size of 0.0f means use the default, i.e. scale.y that is passed to the timeline drawer
+			float row_y_size = 0.0f;
+		};
+
+		struct UIDrawerTimeline {
+			Stream<UIDrawerTimelineChannel> channels;
+			// A pointer that can be passed to the drawer which will be modified when the user scrubs the timeline
+			float* cursor_position = nullptr;
+			// This field is used only if use_background_color is set to true
+			Color background_color = ECS_COLOR_BLACK;
+			bool use_background_color = false;
+			// If set to true, the cursor will be in the normalized range [0-1], instead of the absolute value
+			// Only used if cursor position is not nullptr
+			bool use_normalized_cursor = false;
+
+			// Time indication
+			struct {
+				// A normalized value ([0-1] range) which describes the increment where text scrubber indications are written
+				float time_indication_increment = 0.0f;
+				// The minimum amount in absolute values in between 2 consecutive indications
+				float time_indication_smallest_increment = 0.0f;
+			};
+
+			// Border
+			struct {
+				// Used only if draw_border is set to true
+				Color border_color = ECS_COLOR_WHITE;
+				// The default is a small value (1-2 pixels)
+				float border_size = 0.0f;
+				// If you want to draw a border, set this boolean alongside the other border parameters, as needed
+				bool draw_border = false;
+			};
+
+			// Callback
+			struct {
+				// An optional callback that is called when the timeline cursor is changed
+				UIActionHandler callback = { nullptr };
+				// If set to true, it will copy the callback data just once, in the beginning, without doing this again during the followup draws
+				bool copy_callback_data_on_initialize = false;
+				// By default, it will call the callback every time the cursor position is changed, but if this is set, it will
+				// Trigger the callback only after the scrubber location settles
+				bool trigger_callback_on_release = false;
+				// By default, it allow the arrow keys to move the scrubber
+				bool allow_key_movement = true;
+			};
+		};
+
+		struct UIDrawerTimelineData : UIDrawerTimeline {
+			// The location of the scrubber, in the normalized [0-1] range
+			float cursor_normalized_range;
+			// The minimun (x) and the maximum (y) time values
+			float2 time_range;
+			// The render offset to offset the contents of the timeline
+			float2 offset;
+			// The zoom for the horizontal X axis
+			float zoom;
+		};
 
 	}
 

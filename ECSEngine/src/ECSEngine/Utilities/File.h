@@ -222,6 +222,8 @@ namespace ECSEngine {
 		size_t* last_write_time = nullptr
 	);
 
+	ECSENGINE_API size_t GetFileLastWrite(ECS_FILE_HANDLE file_handle);
+
 	ECSENGINE_API bool HasSubdirectories(Stream<wchar_t> directory);
 
 	ECSENGINE_API bool ClearFile(Stream<wchar_t> path);

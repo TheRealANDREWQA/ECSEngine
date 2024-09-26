@@ -1,10 +1,12 @@
 #include "editorpch.h"
 #include "InspectorUtilities.h"
 #include "../../Sandbox/SandboxRecordingFileExtension.h"
+#include "../../Editor/EditorPalette.h"
 
 using namespace ECSEngine;
 
 #define ERROR_MESSAGE_CAPACITY (ECS_KB * 4)
+#define RETAINED_TIMER_TICK_MS 500
 
 struct DrawWindowData {
 	Stream<wchar_t> path;
@@ -12,15 +14,12 @@ struct DrawWindowData {
 	ResizableLinearAllocator temporary_allocator;
 	CapacityStream<char> error_message;
 	size_t file_time_stamp;
-	// This flag indicates that there was an error in opening the 
+	size_t file_byte_size;
+	// This flag indicates that there was an error in opening the file. If true, the file could not be opened
 	bool reader_not_initialized;
+	// Used to check the timestamp of the file to check for changes
+	Timer retained_timer;
 };
-
-static void InspectorCleanRecordingFile(EditorState* editor_state, unsigned int inspector_index, void* _data) {
-	DrawWindowData* data = (DrawWindowData*)_data;
-	// Only the allocator must be freed
-	data->temporary_allocator.Free();
-}
 
 static void ReadFileInfo(DrawWindowData* draw_data) {
 	// Reset the allocator
@@ -31,12 +30,14 @@ static void ReadFileInfo(DrawWindowData* draw_data) {
 	// The path is already the absolute path
 	ECS_FILE_HANDLE file = -1;
 	ECS_FILE_STATUS_FLAGS status = OpenFile(draw_data->path, &file, ECS_FILE_ACCESS_READ_BINARY_SEQUENTIAL, &draw_data->error_message);
-	
+
 	if (status != ECS_FILE_STATUS_OK) {
 		draw_data->reader_not_initialized = true;
 		return;
 	}
 
+	draw_data->file_time_stamp = GetFileLastWrite(file);
+	draw_data->file_byte_size = GetFileByteSize(file);
 	FileScopeDeleter scope_deleter = { file };
 
 	// Use a stack buffering for reading the file
@@ -51,6 +52,27 @@ static void ReadFileInfo(DrawWindowData* draw_data) {
 	initialize_info.allocator = &draw_data->temporary_allocator;
 	initialize_info.read_instrument = &read_instrument;
 	draw_data->reader.Initialize(initialize_info);
+}
+
+static void InspectorRecordingFileClean(EditorState* editor_state, unsigned int inspector_index, void* _data) {
+	DrawWindowData* data = (DrawWindowData*)_data;
+	// Only the allocator must be freed
+	data->temporary_allocator.Free();
+}
+
+static bool InspectorRecordingFileRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+	DrawWindowData* data = (DrawWindowData*)window_data;
+	if (data->retained_timer.GetDurationFloat(ECS_TIMER_DURATION_MS) >= RETAINED_TIMER_TICK_MS) {
+		data->retained_timer.SetNewStart();
+
+		size_t current_time_stamp = OS::GetFileLastWrite(data->path);
+		if (current_time_stamp != data->file_time_stamp) {
+			data->file_time_stamp = current_time_stamp;
+			ReadFileInfo(data);
+			return false;
+		}
+	}
+	return true;
 }
 
 void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
@@ -70,12 +92,42 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, icon_path);
 	InspectorDefaultFileInfo(editor_state, drawer, data->path);
 
-	// TODO: Better rew input handling - by removing legacy messages
+	UIDrawConfig config;
+	if (data->error_message.size > 0) {
+		// This includes the case when the file could not be opened
+		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, data->error_message);
+		drawer->NextRow();
+	}
+	else {
+		// Display the number of entire states and delta states
+		ECS_STACK_CAPACITY_STREAM(char, temp_characters, 256);
+		temp_characters.CopyOther("Byte size: ");
+		ConvertByteSizeToString(data->file_byte_size, temp_characters);
+		drawer->Text(temp_characters);
+		drawer->NextRow();
+
+		temp_characters.CopyOther("Entire state count: ");
+		ConvertIntToChars(temp_characters, data->reader.entire_state_indices.size);
+		drawer->Text(temp_characters);
+		drawer->NextRow();
+
+		temp_characters.CopyOther("Delta state count: ");
+		ConvertIntToChars(temp_characters, data->reader.state_infos.size - data->reader.entire_state_indices.size);
+		drawer->Text(temp_characters);
+		drawer->NextRow();
+
+		// TODO: Add the timeline
+	}
+}
+
+static InspectorFunctions GetInspectorFunctions() {
+	return { InspectorDrawRecordingFile, InspectorRecordingFileClean, InspectorRecordingFileRetainedMode };
 }
 
 void InspectorRecordingFileAddFunctors(InspectorTable* table) {
-	AddInspectorTableFunction(table, { InspectorDrawRecordingFile, InspectorCleanRecordingFile }, EDITOR_INPUT_RECORDING_FILE_EXTENSION);
-	AddInspectorTableFunction(table, { InspectorDrawRecordingFile, InspectorCleanRecordingFile }, EDITOR_STATE_RECORDING_FILE_EXTENSION);
+	AddInspectorTableFunction(table, GetInspectorFunctions(), EDITOR_INPUT_RECORDING_FILE_EXTENSION);
+	AddInspectorTableFunction(table, GetInspectorFunctions(), EDITOR_STATE_RECORDING_FILE_EXTENSION);
 }
 
 void ChangeInspectorToRecordingFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
@@ -88,7 +140,7 @@ void ChangeInspectorToRecordingFile(EditorState* editor_state, Stream<wchar_t> p
 	inspector_index = ChangeInspectorDrawFunctionWithSearch(
 		editor_state,
 		inspector_index,
-		{ InspectorDrawRecordingFile, InspectorCleanRecordingFile },
+		GetInspectorFunctions(),
 		&data,
 		sizeof(data) + sizeof(wchar_t) * (path.size + 1),
 		-1,

@@ -423,15 +423,15 @@ static void InspectorDrawSandboxModuleSection(
 			switch (info->load_status) {
 			case EDITOR_MODULE_LOAD_GOOD:
 				status_texture = ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK;
-				status_color = ECS_COLOR_GREEN;
+				status_color = EDITOR_GREEN_COLOR;
 				break;
 			case EDITOR_MODULE_LOAD_OUT_OF_DATE:
 				status_texture = ECS_TOOLS_UI_TEXTURE_CLOCK;
-				status_color = ECS_COLOR_YELLOW;
+				status_color = EDITOR_YELLOW_COLOR;
 				break;
 			case EDITOR_MODULE_LOAD_FAILED:
 				status_texture = ECS_TOOLS_UI_TEXTURE_MINUS;
-				status_color = ECS_COLOR_RED;
+				status_color = EDITOR_RED_COLOR;
 				break;
 			default:
 				ECS_ASSERT(false, "Invalid load status for module");
