@@ -754,6 +754,8 @@ namespace ECSEngine {
 			float2 offset;
 			// The zoom for the horizontal X axis
 			float zoom;
+			// The identifier of the dynamic resource, used to lookup the resource index
+			Stream<char> identifier;
 		};
 
 	}

@@ -527,6 +527,14 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			float TimelineDrawer(size_t configuration, const UIDrawConfig& config, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, float2 position, float2 scale);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			UIDrawerTimelineData* TimelineInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, const UIDrawerTimeline* timeline, float2 position, float2 scale);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			UIDrawerSlider* SliderInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
@@ -1630,6 +1638,10 @@ namespace ECSEngine {
 				void* data = init(label_identifier);
 				AddWindowResourceToTable(data, identifier);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void AddWindowResource(void* resource);
 
 			void AddWindowResourceToTable(void* resource, ResourceIdentifier identifier);
 			
@@ -3846,13 +3858,22 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void* GetMainAllocatorBuffer(size_t size, size_t alignment = 8);
+			void* GetMainAllocatorBuffer(size_t size, size_t alignment = alignof(void*));
+
+			// Returns a buffer that it will register for the given dynamic index
+			void* GetMainAllocatorBuffer(unsigned int dynamic_index, size_t size, size_t alignment = alignof(void*));
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename T>
 			ECS_INLINE T* GetMainAllocatorBuffer() {
 				return (T*)GetMainAllocatorBuffer(sizeof(T), alignof(T));
+			}
+
+			// Returns a buffer that it will register for the given dynamic index
+			template<typename T>
+			ECS_INLINE T* GetMainAllocatorBuffer(unsigned int dynamic_index) {
+				return (T*)GetMainAllocatorBuffer(dynamic_index, sizeof(T), alignof(T));
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3865,7 +3886,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void* GetMainAllocatorBufferAndStoreAsResource(Stream<char> name, size_t size, size_t alignment = 8);
+			void* GetMainAllocatorBufferAndStoreAsResource(Stream<char> name, size_t size, size_t alignment = alignof(void*));
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4160,7 +4181,29 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// For dynamic allocations, it will either allocate a new buffer if the buffer does not exist or it will reallocate the buffer
+			// To hold the given capacity. Copy_size can be used to transfer data from the previous data to the new buffer, can be set to 0
+			// If nothing is to be kept. It works for unallocated buffers as well, in which case it will simply allocate a new buffer.
+			void* AllocateOrResizeAllocation(const void* existing_allocation, size_t new_size, size_t copy_size, unsigned int dynamic_index);
+
+			// For dynamic allocations, it will either allocate a new buffer if the buffer does not exist or it will reallocate the buffer
+			// To hold the given capacity. Copy_size can be used to transfer data from the previous data to the new buffer, can be set to 0
+			// If nothing is to be kept. It works for unallocated buffers as well, in which case it will simply allocate a new buffer.
+			// This overload returns immediately if the current size is the same as the new size
+			ECS_INLINE void* AllocateOrResizeAllocation(const void* existing_allocation, size_t new_size, size_t copy_size, unsigned int dynamic_index, size_t current_size) {
+				if (current_size == new_size) {
+					return (void*)existing_allocation;
+				}
+				return AllocateOrResizeAllocation(existing_allocation, new_size, copy_size, dynamic_index);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void RemoveAllocation(const void* allocation);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void RemoveDynamicAllocation(const void* allocation, unsigned int dynamic_index);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4181,6 +4224,12 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void RestoreHandlerState(UIDrawerHandlerState state);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Should be used in initializers only, it will set the initializer dynamic index such that functions can use
+			// Agnostically the allocate functions. Returns the initializer index.
+			unsigned int StartDynamicElement(Stream<char> name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -5102,8 +5151,15 @@ namespace ECSEngine {
 			Stream<unsigned char> identifier_stack;
 			Stream<char> current_identifier;
 			UIDrawerAcquireDragDrop acquire_drag_drop;
-			CapacityStream<void*> last_initialized_element_allocations;
-			CapacityStream<ResourceIdentifier> last_initialized_element_table_resources;
+			// The following fields are used by the initializer to create the appropriate dynamic element
+			struct {
+				CapacityStream<void*> last_initialized_element_allocations;
+				CapacityStream<ResourceIdentifier> last_initialized_element_table_resources;
+				// If this field is set to a value different from -1, it means that allocations and dynamic elements
+				// Should go directly to it, without being added to the buffers above
+				unsigned int last_initialize_dynamic_index;
+			};
+
 			ResizableStream<unsigned int> late_hoverables;
 			ResizableStream<unsigned int> late_clickables[ECS_MOUSE_BUTTON_COUNT];
 			ResizableStream<unsigned int> late_generals;

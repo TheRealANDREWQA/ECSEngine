@@ -1441,11 +1441,16 @@ namespace ECSEngine {
 
 			void ReplaceWindowDynamicResourceAllocation(unsigned int window_index, unsigned int index, const void* old_buffer, void* new_buffer);
 
-			// If the dynamic index is -1 it does nothing. If it is different from -1, it will remove it from the dynamic resource
+			// If the dynamic index is -1 it does not replace the dynamic resource allocation. If it is different from -1, it will remove it from the dynamic resource
 			// It also deallocates the old buffer
 			void ReplaceWindowBufferFromAll(unsigned int window_index, const void* old_buffer, const void* new_buffer, unsigned int dynamic_index = -1);
 
 			void ReplaceWindowDynamicResourceTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier old_identifier, ResourceIdentifier new_identifier);
+
+			// If the previous buffer exists in the current window resources, it will replace the entry with the returned buffer, else it will add it.
+			// If the dynamic index is specified, it will perform the operation for dynamic resources as well. If the copy size is specified, 
+			// It will copy from the previous buffer into the newly allocated buffer.
+			void* AllocateWindowMemoryResource(unsigned int window_index, const void* old_buffer, size_t allocation_size, size_t copy_size = 0, unsigned int dynamic_index = -1);
 
 			void RemoveUnrestoredWindows();
 
