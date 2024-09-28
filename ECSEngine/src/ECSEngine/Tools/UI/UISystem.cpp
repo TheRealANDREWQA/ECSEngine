@@ -992,7 +992,7 @@ namespace ECSEngine {
 		void UISystem::AddWindowMemoryResource(void* resource, unsigned int window_index)
 		{
 			m_windows[window_index].memory_resources.Add(resource);
-			size_t size = m_windows[window_index].memory_resources.size;
+			//size_t size = m_windows[window_index].memory_resources.size;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1321,7 +1321,7 @@ namespace ECSEngine {
 		)
 		{
 			// Calculate the total memory needed
-			size_t memory_size = name.size + sizeof(void*) * allocations.size + sizeof(ResourceIdentifier) * table_resources.size;
+			size_t memory_size = name.CopySize() + allocations.CopySize() + table_resources.CopySize();
 			for (size_t index = 0; index < table_resources.size; index++) {
 				memory_size += table_resources[index].size;
 			}
@@ -10170,6 +10170,30 @@ namespace ECSEngine {
 			}
 
 			ECS_ASSERT(false);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void* UISystem::AllocateWindowMemoryResource(unsigned int window_index, const void* old_buffer, size_t allocation_size, size_t copy_size, unsigned int dynamic_index) {
+			void* allocation = m_memory->Allocate(allocation_size);
+			if (copy_size > 0) {
+				memcpy(allocation, old_buffer, copy_size);
+			}
+
+			size_t index = SearchBytes(m_windows[window_index].memory_resources.ToStream(), (void*)old_buffer);
+			if (index != -1) {
+				m_memory->Deallocate(old_buffer);
+				m_windows[window_index].memory_resources[index] = allocation;
+				if (dynamic_index != -1) {
+					ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, old_buffer, allocation);
+				}
+			}
+			else {
+				AddWindowMemoryResource(allocation, window_index);
+				AddWindowDynamicElementAllocation(window_index, dynamic_index, allocation);
+			}
+
+			return allocation;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

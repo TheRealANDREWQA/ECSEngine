@@ -19,7 +19,7 @@ namespace ECSEngine {
 
 	namespace Tools {
 
-		Stream<char> UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS[] = {
+		static Stream<char> UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS[] = {
 			"x",
 			"y",
 			"z",
@@ -29,8 +29,8 @@ namespace ECSEngine {
 			"v"
 		};
 
-		const size_t SLIDER_GROUP_MAX_COUNT = 8;
-		const float NUMBER_INPUT_DRAG_FACTOR = 200.0f;
+#define SLIDER_GROUP_MAX_COUNT 8
+#define NUMBER_INPUT_DRAG_FACTOR 200.0f
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2568,6 +2568,69 @@ namespace ECSEngine {
 				FinalizeRectangle(configuration, position, scale);
 				return element;
 				});
+
+			return element;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		static void UpdateTimelineData(UIDrawer* drawer, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, unsigned int dynamic_index, bool is_initial_update) {
+			// Handle the callback
+			if (timeline->callback.action != nullptr) {
+				if (timeline->callback.data_size > 0) {
+					if (is_initial_update || !timeline->copy_callback_data_on_initialize) {
+						data->callback.data = drawer->AllocateOrResizeAllocation(data->callback.data, timeline->callback.data_size, 0, dynamic_index, data->callback.data_size);
+						memcpy(data->callback.data, timeline->callback.data, timeline->callback.data_size);
+						data->callback.data_size = timeline->callback.data_size;
+					}
+				}
+				else {
+					data->callback.data = timeline->callback.data;
+				}
+			}
+
+			// Handle the channels
+			// Deallocate firstly all the data that is there
+			for (size_t index = 0; index < data->channels.size; index++) {
+				drawer->RemoveDynamicAllocation(data->channels[index].description.buffer, dynamic_index);
+				drawer->RemoveDynamicAllocation(data->channels[index].elements.buffer, dynamic_index);
+			}
+
+			data->channels.buffer = (UIDrawerTimelineChannel*)drawer->AllocateOrResizeAllocation(data->channels.buffer, timeline->channels.CopySize(), 0, dynamic_index, data->channels.CopySize());
+			data->channels.size = timeline->channels.size;
+			for (size_t index = 0; index < data->channels.size; index++) {
+				//data->channels[index].description = (char*)drawer->GetMainAllocatorBuffer()
+			}
+		}
+
+		float UIDrawer::TimelineDrawer(size_t configuration, const UIDrawConfig& config, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, float2 position, float2 scale) {
+			return 0.0f;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		UIDrawerTimelineData* UIDrawer::TimelineInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, const UIDrawerTimeline* timeline, float2 position, float2 scale) {
+			UIDrawerTimelineData* element;
+
+			// Begin recording allocations and table resources for dynamic resources
+			if (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+				BeginElement();
+				configuration |= UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
+			}
+			AddWindowResource(name, [&](Stream<char> identifier) {
+				unsigned int dynamic_index = StartDynamicElement(identifier);
+				element = GetMainAllocatorBuffer<UIDrawerTimelineData>();
+				ZeroOut(element);
+
+				// Allocate the identifier - technically, we could reuse the identifier, since it is stable, but this way is less coupled
+				element->identifier.buffer = (char*)GetMainAllocatorBuffer(identifier.CopySize());
+				identifier.CopyTo(element->identifier.buffer);
+				element->identifier.size = element->identifier.size;
+
+				UpdateTimelineData(this, timeline, element, dynamic_index, true);
+
+				return element;
+			});
 
 			return element;
 		}
@@ -8778,9 +8841,10 @@ namespace ECSEngine {
 				late_generals.Initialize(system_allocator, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
 
 				if (initializer) {
-					// For convinience, use separate allocations
+					// For convenience, use separate allocations
 					last_initialized_element_allocations.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS);
 					last_initialized_element_table_resources.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS);
+					last_initialize_dynamic_index = -1;
 				}
 			}
 			else {
@@ -8851,13 +8915,30 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		void UIDrawer::AddWindowResource(void* resource)
+		{
+			system->AddWindowMemoryResource(resource, window_index);
+			if (initializer) {
+				if (last_initialize_dynamic_index != -1) {
+					system->AddWindowDynamicElementAllocation(window_index, last_initialize_dynamic_index, resource);
+				}
+				else {
+					last_initialized_element_allocations.AddAssert(resource);
+				}
+			}
+		}
+
 		void UIDrawer::AddWindowResourceToTable(void* resource, ResourceIdentifier identifier) {
 			system->AddWindowMemoryResourceToTable(resource, identifier, window_index);
 			if (initializer) {
-				if (last_initialized_element_table_resources.size < last_initialized_element_table_resources.capacity) {
+				if (last_initialize_dynamic_index != -1) {
+					ResourceIdentifier stable_identifier = identifier.Copy(system->Allocator());
+					system->AddWindowDynamicElementAllocation(window_index, last_initialize_dynamic_index, (void*)stable_identifier.ptr);
+				}
+				else {
 					void* temp_identifier = GetTempBuffer(identifier.size);
 					memcpy(temp_identifier, identifier.ptr, identifier.size);
-					last_initialized_element_table_resources.Add({ temp_identifier, identifier.size });
+					last_initialized_element_table_resources.AddAssert({ temp_identifier, identifier.size });
 				}
 			}
 		}
@@ -12040,16 +12121,15 @@ namespace ECSEngine {
 
 		void* UIDrawer::GetMainAllocatorBuffer(size_t size, size_t alignment) {
 			void* allocation = system->m_memory->Allocate(size, alignment);
-			system->AddWindowMemoryResource(allocation, window_index);
-			ECS_ASSERT(allocation != nullptr);
+			AddWindowResource(allocation);
+			return allocation;
+		}
 
-			if (initializer) {
-				ECS_ASSERT(last_initialized_element_allocations.size < last_initialized_element_allocations.capacity);
-				if (last_initialized_element_allocations.size < last_initialized_element_allocations.capacity) {
-					last_initialized_element_allocations.Add(allocation);
-				}
-			}
+		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		void* UIDrawer::GetMainAllocatorBuffer(unsigned int dynamic_index, size_t size, size_t alignment) {
+			void* allocation = system->m_memory->Allocate(size, alignment);
+			system->AddWindowDynamicElementAllocation(window_index, dynamic_index, allocation);
 			return allocation;
 		}
 
@@ -14159,9 +14239,22 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		void* UIDrawer::AllocateOrResizeAllocation(const void* existing_allocation, size_t new_size, size_t copy_size, unsigned int dynamic_index) {
+			return system->AllocateWindowMemoryResource(window_index, existing_allocation, new_size, copy_size, dynamic_index);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void UIDrawer::RemoveAllocation(const void* allocation) {
 			system->m_memory->Deallocate(allocation);
 			system->RemoveWindowMemoryResource(window_index, allocation);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::RemoveDynamicAllocation(const void* allocation, unsigned int dynamic_index) {
+			RemoveAllocation(allocation);
+			system->RemoveWindowDynamicResourceAllocation(window_index, dynamic_index, allocation);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -14233,6 +14326,16 @@ namespace ECSEngine {
 				});
 				dockspace->borders[border_index].general_handler.position_x.size = state.general_count;
 			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UIDrawer::StartDynamicElement(Stream<char> name)
+		{
+			ECS_ASSERT(initializer);
+			system->AddWindowDynamicElement(window_index, name, {}, {});
+			last_initialize_dynamic_index = system->GetWindowDynamicElement(window_index, name);
+			return last_initialize_dynamic_index;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -16614,11 +16717,12 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float UIDrawer::Timeline(Stream<char> name, const UIDrawerTimeline* timeline) {
-
+			UIDrawConfig config;
+			return Timeline(0, config, name, timeline);
 		}
 
 		float UIDrawer::Timeline(size_t configuration, const UIDrawConfig& config, Stream<char> name, const UIDrawerTimeline* timeline) {
-
+			return 0.0f;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -17115,6 +17219,7 @@ namespace ECSEngine {
 			drawer.current_identifier = drawer_to_copy.current_identifier;
 			drawer.last_initialized_element_allocations.Initialize(drawer.system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS);
 			drawer.last_initialized_element_table_resources.Initialize(drawer.system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS);
+			drawer.last_initialize_dynamic_index = -1;
 
 			return drawer;
 		}
@@ -17134,7 +17239,9 @@ namespace ECSEngine {
 
 			Stream<char> identifier = drawer.HandleResourceIdentifier(name);
 			initialize(drawer.window_data, additional_data, &drawer, configuration);
-			drawer.system->AddWindowDynamicElement(drawer.window_index, identifier, drawer.last_initialized_element_allocations, drawer.last_initialized_element_table_resources);
+			if (drawer.last_initialize_dynamic_index == -1) {
+				drawer.system->AddWindowDynamicElement(drawer.window_index, identifier, drawer.last_initialized_element_allocations, drawer.last_initialized_element_table_resources);
+			}
 
 			// The last element initializations buffers must be manually deallocated
 			drawer.system->m_memory->Deallocate(drawer.last_initialized_element_allocations.buffer);
