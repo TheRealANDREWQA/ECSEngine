@@ -144,18 +144,10 @@ public:
 			auto run_application = [&](EDITOR_APPLICATION_QUIT_RESPONSE application_quit_value) {
 				unsigned int frame_pacing = 0;
 				while (result == 0 && application_quit == application_quit_value) {
-					// Handle the raw input messages - using buffered reads such that we have good performance on high polling rate mices
-					//const size_t MAX_RAW_INPUTS = 128;
-					//RAWINPUT raw_inputs[MAX_RAW_INPUTS];
-					//UINT raw_inputs_size = sizeof(raw_inputs);
-					//UINT read_size = GetRawInputBuffer(raw_inputs, &raw_inputs_size, sizeof(RAWINPUTHEADER));
-					//while (read_size == MAX_RAW_INPUTS) {
-					//	for (unsigned int index = 0; index < read_size; index++) {
-					//		if (raw_inputs[index].header.dwType == RIM_TYPEMOUSE) {
-					//			editor_state.Mouse()->AddDelta(raw_inputs[index].data.mouse.lLastX, raw_inputs[index].data.mouse.lLastY);
-					//		}
-					//	}
-					//}
+					if (editor_state.Mouse()->GetRawInputStatus()) {
+						// Process raw input
+						ProcessMouseRawInput(editor_state.Mouse());
+					}
 
 					while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
 						switch (message.message) {
@@ -165,17 +157,22 @@ public:
 						}
 						TranslateMessage(&message);
 						bool should_process_message = true;
-						if (!editor_state.Mouse()->IsVisible())
-						{
-							// If the mouse is not visible, drop mouse messages - rely only on raw input
-							// Except for wheel message, since these cannot be handled with raw input
+						if (editor_state.Mouse()->GetRawInputStatus()) {
+							// Drop mouse messages - rely only on raw input
 							if (message.message == WM_MOUSEMOVE || message.message == WM_NCMOUSEMOVE || message.message == WM_LBUTTONDOWN ||
 								message.message == WM_LBUTTONUP || message.message == WM_MBUTTONDOWN || message.message == WM_MBUTTONUP ||
 								message.message == WM_RBUTTONUP || message.message == WM_RBUTTONDOWN || message.message == WM_XBUTTONDOWN ||
 								message.message == WM_XBUTTONUP || message.message == WM_NCLBUTTONDOWN || message.message == WM_NCLBUTTONUP ||
 								message.message == WM_NCMBUTTONDOWN || message.message == WM_NCMBUTTONUP || message.message == WM_NCRBUTTONUP ||
 								message.message == WM_NCRBUTTONDOWN || message.message == WM_NCXBUTTONDOWN || message.message == WM_NCXBUTTONUP ||
-								message.message == WM_NCHITTEST || message.message == WM_NCMOUSEHOVER || message.message == WM_MOUSEHOVER) {
+								message.message == WM_NCHITTEST || message.message == WM_NCMOUSEHOVER || message.message == WM_MOUSEHOVER ||
+								message.message == WM_MOUSEWHEEL || message.message == WM_MOUSEHWHEEL) {
+								should_process_message = false;
+							}
+						}
+						else {
+							// Drop raw input messages while we do not want them
+							if (message.message == WM_INPUT) {
 								should_process_message = false;
 							}
 						}

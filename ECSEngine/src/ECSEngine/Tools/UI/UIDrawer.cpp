@@ -2574,7 +2574,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		static void UpdateTimelineData(UIDrawer* drawer, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, unsigned int dynamic_index, bool is_initial_update) {
+		static void UpdateTimelineDataCallback(UIDrawer* drawer, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, unsigned int dynamic_index, bool is_initial_update) {
 			// Handle the callback
 			if (timeline->callback.action != nullptr) {
 				if (timeline->callback.data_size > 0) {
@@ -2589,21 +2589,131 @@ namespace ECSEngine {
 				}
 			}
 
-			// Handle the channels
+		}
+
+		static void UpdateTimelineDataChannels(UIDrawer* drawer, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, unsigned int dynamic_index) {
 			// Deallocate firstly all the data that is there
 			for (size_t index = 0; index < data->channels.size; index++) {
 				drawer->RemoveDynamicAllocation(data->channels[index].description.buffer, dynamic_index);
 				drawer->RemoveDynamicAllocation(data->channels[index].elements.buffer, dynamic_index);
 			}
 
+			// Allocate the new data
 			data->channels.buffer = (UIDrawerTimelineChannel*)drawer->AllocateOrResizeAllocation(data->channels.buffer, timeline->channels.CopySize(), 0, dynamic_index, data->channels.CopySize());
 			data->channels.size = timeline->channels.size;
 			for (size_t index = 0; index < data->channels.size; index++) {
-				//data->channels[index].description = (char*)drawer->GetMainAllocatorBuffer()
+				data->channels[index].description.InitializeFromBufferAndCopy(drawer->GetMainAllocatorBufferDynamic(dynamic_index, timeline->channels[index].description.CopySize()), timeline->channels[index].description);
+				data->channels[index].elements.InitializeFromBufferAndCopy(drawer->GetMainAllocatorBufferDynamic(dynamic_index, timeline->channels[index].elements.CopySize()), timeline->channels[index].elements);
 			}
 		}
 
+		static void UpdateTimelineDataTextures(UIDrawer* drawer, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, unsigned int dynamic_index) {
+			// Deallocate them firstly
+			for (size_t index = 0; index < data->texture_paths.size; index++) {
+				drawer->RemoveDynamicAllocation(data->texture_paths[index].buffer, dynamic_index);
+			}
+
+			data->texture_paths.buffer = (Stream<wchar_t>*)drawer->AllocateOrResizeAllocation(data->texture_paths.buffer, timeline->texture_paths.CopySize(), 0, dynamic_index, data->texture_paths.CopySize());
+			data->texture_paths.size = timeline->texture_paths.size;
+			for (size_t index = 0; index < data->texture_paths.size; index++) {
+				data->texture_paths[index].InitializeFromBufferAndCopy(drawer->GetMainAllocatorBufferDynamic(dynamic_index, timeline->texture_paths[index].CopySize()), timeline->texture_paths[index]);
+			}
+		}
+
+		static void UpdateTimelineIntervalRange(UIDrawerTimelineData* data) {
+			if (data->has_time_range) {
+				return;
+			}
+
+			float min_value = 0.0f;
+			float max_value = 0.0f;
+			for (size_t index = 0; index < data->channels.size; index++) {
+				for (size_t subindex = 0; subindex < data->channels[index].elements.size; subindex++) {
+					float time = data->channels[index].elements[subindex].time;
+					min_value = min(min_value, time);
+					max_value = max(max_value, time);
+				}
+			}
+			data->time_range = { min_value, max_value };
+			data->has_time_range = true;
+		}
+
+		static void UpdateTimelineData(UIDrawer* drawer, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, unsigned int dynamic_index, bool is_initial_update) {
+			if (timeline != nullptr) {
+				UIActionHandler callback_handler = data->callback;
+				bool copy_callback_on_initialize = data->copy_callback_data_on_initialize;
+				Stream<UIDrawerTimelineChannel> channels = data->channels;
+				Stream<Stream<wchar_t>> textures = data->texture_paths;
+
+				// Assign to the data the timeline data, all the data that is blittable and then restore the fields which are not blittable
+				*(UIDrawerTimeline*)data = *timeline;
+
+				data->callback = callback_handler;
+				data->copy_callback_data_on_initialize = copy_callback_on_initialize;
+				data->channels = channels;
+				data->texture_paths = textures;
+				
+				UpdateTimelineDataCallback(drawer, timeline, data, dynamic_index, is_initial_update);
+				UpdateTimelineDataChannels(drawer, timeline, data, dynamic_index);
+				UpdateTimelineDataTextures(drawer, timeline, data, dynamic_index);
+				UpdateTimelineIntervalRange(data);
+			}
+
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		// Returns the position of a timeline element by taking into account the zoom and the offset of the timeline. The position must be the initial position
+		// Of the timeline, while relative position is a relative offset starting from that initial position
+		static float2 GetTimelineElementPosition(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 position, float2 relative_position) {
+			return position + relative_position * float2(data->zoom, 1.0f) - drawer->region_render_offset - data->offset;
+		}
+
+		static void TimelineDrawHeader(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, const UIDrawerTimelineData* data, float2 position, float2 scale) {
+			float header_increment = data->time_indication_increment == 0.0f ? 0.1f : data->time_indication_increment;
+			// Divide by the zoom - the larger the zoom, the smaller the increment
+			header_increment /= data->zoom;
+
+			// Determine how many indications we have - always maintain an odd number of internal increments
+			size_t internal_indication_count = (size_t)(1.0f / header_increment);
+			// Perform the subtraction only if the value is greater than 0
+			if (internal_indication_count > 0) {
+				internal_indication_count = (internal_indication_count % 2 == 0) ? internal_indication_count - 1 : internal_indication_count;
+			}
+			header_increment = 1.0f / ((float)internal_indication_count + 1.0f);
+
+			float header_indication_percentage = 0.0f;
+			float header_offset_increment = scale.x * header_increment * data->zoom;
+			float2 header_offset = { 0.0f, 0.0f };
+			ECS_STACK_CAPACITY_STREAM(char, header_indication_chars, 256);
+			
+			drawer->current_row_y_scale = drawer->GetLayoutDescriptor()->default_element_y;
+			float interval_range = data->time_range.y - data->time_range.x;
+			while (header_indication_percentage < 1.0f) {
+				float2 element_position = GetTimelineElementPosition(drawer, data, position, header_offset);
+				
+				header_indication_chars.size = 0;
+				ConvertFloatToChars(header_indication_chars, data->time_range.x + interval_range * header_indication_percentage);
+				drawer->Text(configuration | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, header_indication_chars, element_position);
+
+				header_indication_percentage += header_increment;
+				header_offset.x += header_offset_increment;
+			}
+
+			drawer->FinalizeRectangle(configuration, position, { scale.x, drawer->current_row_y_scale });
+			drawer->NextRow();
+		}
+
 		float UIDrawer::TimelineDrawer(size_t configuration, const UIDrawConfig& config, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, float2 position, float2 scale) {
+			HandleFitSpaceRectangle(configuration, position, scale);
+			
+			float2 initial_position = position;
+
+			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, data->identifier);
+			UpdateTimelineData(this, timeline, data, dynamic_index, false);
+
+			// Draw the header
+			TimelineDrawHeader(this, configuration, config, data, position, scale);
 			return 0.0f;
 		}
 
@@ -2627,7 +2737,7 @@ namespace ECSEngine {
 				identifier.CopyTo(element->identifier.buffer);
 				element->identifier.size = element->identifier.size;
 
-				UpdateTimelineData(this, timeline, element, dynamic_index, true);
+				UpdateTimelineDataCallback(this, timeline, element, dynamic_index, true);
 
 				return element;
 			});
@@ -12127,7 +12237,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void* UIDrawer::GetMainAllocatorBuffer(unsigned int dynamic_index, size_t size, size_t alignment) {
+		void* UIDrawer::GetMainAllocatorBufferDynamic(unsigned int dynamic_index, size_t size, size_t alignment) {
 			void* allocation = system->m_memory->Allocate(size, alignment);
 			system->AddWindowDynamicElementAllocation(window_index, dynamic_index, allocation);
 			return allocation;
@@ -16227,13 +16337,11 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		// single lined text input
 		UIDrawerTextInput* UIDrawer::TextInput(Stream<char> name, CapacityStream<char>* text_to_fill) {
 			UIDrawConfig config;
 			return TextInput(0, config, name, text_to_fill);
 		}
 
-		// single lined text input
 		UIDrawerTextInput* UIDrawer::TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<char>* text_to_fill, UIDrawerTextInputFilter filter) {
 			ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
@@ -16722,7 +16830,34 @@ namespace ECSEngine {
 		}
 
 		float UIDrawer::Timeline(size_t configuration, const UIDrawConfig& config, Stream<char> name, const UIDrawerTimeline* timeline) {
-			return 0.0f;
+			ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
+
+			if (!initializer) {
+				if (configuration & UI_CONFIG_DO_CACHE) {
+					UIDrawerTimelineData* data = (UIDrawerTimelineData*)GetResource(name);
+
+					float value = TimelineDrawer(configuration, config, timeline, data, position, scale);
+					HandleDynamicResource(configuration, name);
+					return value;
+				}
+				else {
+					bool exists = ExistsResource(name);
+					if (!exists) {
+						UIDrawerInitializeTimeline initialize_data;
+						initialize_data.config = &config;
+						initialize_data.name = name;
+						initialize_data.timeline = timeline;
+						InitializeDrawerElement(*this, &initialize_data, name, InitializeTimelineElement, DynamicConfiguration(configuration));
+					}
+					return Timeline(DynamicConfiguration(configuration), config, name, timeline);
+				}
+			}
+			else {
+				if (configuration & UI_CONFIG_DO_CACHE) {
+					TimelineInitializer(configuration, config, name, timeline, position, scale);
+				}
+				return 0.0f;
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -17447,6 +17582,13 @@ namespace ECSEngine {
 		{
 			UIDrawerInitializePathInput* data = (UIDrawerInitializePathInput*)additional_data;
 			drawer_ptr->DirectoryInput(configuration, *data->config, data->name, data->capacity_characters);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void InitializeTimelineElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration) {
+			UIDrawerInitializeTimeline* data = (UIDrawerInitializeTimeline*)additional_data;
+			drawer_ptr->Timeline(configuration, *data->config, data->name, data->timeline);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

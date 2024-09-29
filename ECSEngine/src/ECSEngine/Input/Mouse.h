@@ -104,6 +104,10 @@ namespace ECSEngine {
 			m_current_position += int2(x, y);
 		}
 
+		ECS_INLINE void AddWheelDelta(int delta) {
+			m_current_scroll += delta;
+		}
+
 		void ActivateWrap(uint2 pixel_bounds);
 
 		ECS_INLINE void DeactivateWrap() {
@@ -147,6 +151,11 @@ namespace ECSEngine {
 		bool m_wrap_position;
 		bool m_has_wrapped;
 	};
+
+	// It will query the OS for the raw input events and process them.
+	ECSENGINE_API void ProcessMouseRawInput(Mouse* mouse);
+
+	ECSENGINE_API void HandleMouseRawInput(Mouse* mouse, void* raw_input_structures, size_t structure_count);
 
 }
 

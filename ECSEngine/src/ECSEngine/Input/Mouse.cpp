@@ -29,6 +29,10 @@ namespace ECSEngine {
 	}
 
 	void Mouse::SetCursorVisibility(bool visible, bool restore_position) {
+		if (m_is_visible == visible) {
+			return;
+		}
+
 		ShowCursor(visible);
 		m_is_visible = visible;
 
@@ -105,21 +109,16 @@ namespace ECSEngine {
 	void Mouse::Procedure(const MouseProcedureInfo& info) {
 		// Raw input handled separately
 		if (info.message == WM_INPUT && m_get_raw_input) {
-			RAWINPUT* data = (RAWINPUT*)ECS_STACK_ALLOC(sizeof(RAWINPUT));
-			unsigned int size = 0;
-			if (GetRawInputData((HRAWINPUT)info.lParam, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) == -1) {
+			// We still need to process raw input messages in the message pump because it can happen that
+			// After the raw input retrieval new raw input messages are being added. In order to not add filtering to the message pump,
+			// Process them here
+			RAWINPUT raw_input;
+			unsigned int size = sizeof(raw_input);
+			if (GetRawInputData((HRAWINPUT)info.lParam, RID_INPUT, &raw_input, &size, sizeof(RAWINPUTHEADER)) != size) {
 				return;
 			}
-			// The query failed
-			if (GetRawInputData((HRAWINPUT)info.lParam, RID_INPUT, data, &size, sizeof(RAWINPUTHEADER)) != size) {
-				return;
-			}
-			if (data->header.dwType == RIM_TYPEMOUSE && (data->data.mouse.lLastX != 0 || data->data.mouse.lLastY != 0)) {
-				AddDelta(data->data.mouse.lLastX, data->data.mouse.lLastY);
-				if (m_wrap_position) {
-					HandleWrapping(this);
-				}
-			}
+			HandleMouseRawInput(this, &raw_input, 1);
+
 		}
 		else {
 			if (info.message != WM_CHAR || !m_get_raw_input) {
@@ -194,6 +193,54 @@ namespace ECSEngine {
 			m_current_position = { x, y };
 			if (m_wrap_position) {
 				HandleWrapping(this);
+			}
+		}
+	}
+
+	void ProcessMouseRawInput(Mouse* mouse) {
+		// Handle the raw input messages - using buffered reads such that we have good performance on high polling rate mices
+		const size_t MAX_RAW_INPUTS = 128;
+		RAWINPUT raw_inputs[MAX_RAW_INPUTS];
+		UINT raw_inputs_size = sizeof(raw_inputs);
+		UINT read_size = GetRawInputBuffer(raw_inputs, &raw_inputs_size, sizeof(RAWINPUTHEADER));
+		while (read_size == MAX_RAW_INPUTS) {
+			HandleMouseRawInput(mouse, raw_inputs, read_size);
+			raw_inputs_size = sizeof(raw_inputs);
+			read_size = GetRawInputBuffer(raw_inputs, &raw_inputs_size, sizeof(RAWINPUTHEADER));
+		}
+		HandleMouseRawInput(mouse, raw_inputs, read_size);
+	}
+
+	void HandleMouseRawInput(Mouse* mouse, void* raw_input_structures, size_t structure_count) {
+		RAWINPUT* raw_inputs = (RAWINPUT*)raw_input_structures;
+		for (size_t index = 0; index < structure_count; index++) {
+			if (raw_inputs[index].header.dwType == RIM_TYPEMOUSE) {
+				// Handle the raw input
+				if (raw_inputs[index].data.mouse.lLastX != 0 || raw_inputs[index].data.mouse.lLastY != 0) {
+					mouse->AddDelta(raw_inputs[index].data.mouse.lLastX, raw_inputs[index].data.mouse.lLastY);
+					if (mouse->m_wrap_position) {
+						HandleWrapping(mouse);
+					}
+				}
+
+				// Handle the button states
+				auto handle_flag = [&](int os_flag, ECS_MOUSE_BUTTON button, bool is_released) {
+					if (raw_inputs[index].data.mouse.usButtonFlags & os_flag) {
+						mouse->UpdateButton(button, is_released);
+					}
+				};
+
+				handle_flag(RI_MOUSE_LEFT_BUTTON_DOWN, ECS_MOUSE_LEFT, false);
+				handle_flag(RI_MOUSE_LEFT_BUTTON_UP, ECS_MOUSE_LEFT, true);
+				handle_flag(RI_MOUSE_MIDDLE_BUTTON_DOWN, ECS_MOUSE_MIDDLE, false);
+				handle_flag(RI_MOUSE_MIDDLE_BUTTON_UP, ECS_MOUSE_MIDDLE, true);
+				handle_flag(RI_MOUSE_RIGHT_BUTTON_DOWN, ECS_MOUSE_RIGHT, false);
+				handle_flag(RI_MOUSE_RIGHT_BUTTON_UP, ECS_MOUSE_RIGHT, true);
+
+				// Handle the scroll wheel
+				if (raw_inputs[index].data.mouse.usButtonFlags & RI_MOUSE_WHEEL) {
+					mouse->AddWheelDelta((short)raw_inputs[index].data.mouse.usButtonData);
+				}
 			}
 		}
 	}

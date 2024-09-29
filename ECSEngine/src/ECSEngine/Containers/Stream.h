@@ -410,9 +410,18 @@ namespace ECSEngine {
 			size = _size;
 		}
 
-		void InitializeAndCopy(uintptr_t& _buffer, Stream<T> other) {
+		Stream<T> InitializeAndCopy(uintptr_t& _buffer, Stream<T> other) {
 			InitializeFromBuffer(_buffer, other.size);
 			CopyOther(other);
+
+			return *this;
+		}
+
+		Stream<T> InitializeFromBufferAndCopy(void* _buffer, Stream<T> other) {
+			InitializeFromBuffer(_buffer, other.size);
+			CopyOther(other);
+
+			return *this;
 		}
 
 		Stream<T> InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other, DebugInfo debug_info = ECS_DEBUG_INFO) {
@@ -926,6 +935,13 @@ namespace ECSEngine {
 			InitializeFromBuffer(_buffer, other.size, other.size);
 			CopyOther(other);
 
+			return *this;
+		}
+
+		CapacityStream<T> InitializeFromBufferAndCopy(void* _buffer, Stream<T> other) {
+			InitializeFromBuffer(_buffer, other.size, other.size);
+			CopyOther(other);
+			
 			return *this;
 		}
 

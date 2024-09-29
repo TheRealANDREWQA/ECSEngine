@@ -3861,7 +3861,7 @@ namespace ECSEngine {
 			void* GetMainAllocatorBuffer(size_t size, size_t alignment = alignof(void*));
 
 			// Returns a buffer that it will register for the given dynamic index
-			void* GetMainAllocatorBuffer(unsigned int dynamic_index, size_t size, size_t alignment = alignof(void*));
+			void* GetMainAllocatorBufferDynamic(unsigned int dynamic_index, size_t size, size_t alignment = alignof(void*));
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3872,8 +3872,8 @@ namespace ECSEngine {
 
 			// Returns a buffer that it will register for the given dynamic index
 			template<typename T>
-			ECS_INLINE T* GetMainAllocatorBuffer(unsigned int dynamic_index) {
-				return (T*)GetMainAllocatorBuffer(dynamic_index, sizeof(T), alignof(T));
+			ECS_INLINE T* GetMainAllocatorBufferDynamic(unsigned int dynamic_index) {
+				return (T*)GetMainAllocatorBufferDynamic(dynamic_index, sizeof(T), alignof(T));
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------

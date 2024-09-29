@@ -1167,6 +1167,14 @@ namespace ECSEngine {
 			unsigned int storage_type_size;
 		};
 
+		struct UIDrawerTimeline;
+
+		struct UIDrawerInitializeTimeline {
+			const UIDrawConfig* config;
+			Stream<char> name;
+			const UIDrawerTimeline* timeline;
+		};
+
 		struct UIDrawerLabelList {
 			UIDrawerTextElement name;
 			Stream<UIDrawerTextElement> labels;
