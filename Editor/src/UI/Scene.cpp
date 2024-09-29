@@ -259,6 +259,7 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	bool changed_speed = false;
 
 	bool is_shift_down = editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_SHIFT);
+	bool is_ctrl_down = editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_CTRL);
 	if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_WASD_INCREASE_SPEED)) {
 		if (is_shift_down) {
 			sandbox->camera_wasd_speed *= 2.0f;
@@ -281,6 +282,13 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 		sandbox->camera_wasd_speed = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED;
 		changed_speed = true;
 	}
+	float speed = sandbox->camera_wasd_speed;
+	if (is_shift_down) {
+		speed *= 0.2f;
+	}
+	else if (is_ctrl_down) {
+		speed *= 5.0f;
+	}
 
 	bool camera_was_rotated = HandleCameraRotation(editor_state, sandbox_index, true, true);
 
@@ -294,7 +302,7 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 		EDITOR_INPUT_WASD_A, 
 		EDITOR_INPUT_WASD_S,
 		EDITOR_INPUT_WASD_D, 
-		sandbox->camera_wasd_speed * 0.0002f,
+		speed * 0.0002f,
 		editor_state->ui_system->GetFrameDeltaTime(),
 		camera_forward, 
 		camera_right
@@ -432,21 +440,28 @@ static void ScenePrivateAction(ActionData* action_data) {
 		else {
 			// Check for camera wasd activation first
 			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CAMERA_WALK)) {
-				// Enable the mouse ray input and disable the cursor
-				mouse->EnableRawInput();
-				mouse->SetCursorVisibility(false);
-				sandbox->is_camera_wasd_movement = true;
+				if (sandbox->is_camera_wasd_movement) {
+					mouse->DisableRawInput();
+					mouse->SetCursorVisibility(true);
+					sandbox->is_camera_wasd_movement = false;
+				}
+				else {
+					// Enable the mouse ray input and disable the cursor
+					mouse->EnableRawInput();
+					mouse->SetCursorVisibility(false);
+					sandbox->is_camera_wasd_movement = true;
 
-				// Initialize the camera translation/rotation
-				OrientedPoint camera_point = GetSandboxCameraPoint(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-				data->camera_wasd_initial_translation = camera_point.position;
-				data->camera_wasd_initial_rotation = camera_point.rotation;
-				// We need this to make the camera movement smoother
-				system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
+					// Initialize the camera translation/rotation
+					OrientedPoint camera_point = GetSandboxCameraPoint(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+					data->camera_wasd_initial_translation = camera_point.position;
+					data->camera_wasd_initial_rotation = camera_point.rotation;
+					// We need this to make the camera movement smoother
+					system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 
-				// Disable the axes if they are drawn
-				sandbox->transform_display_axes = false;
-				ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+					// Disable the axes if they are drawn
+					sandbox->transform_display_axes = false;
+					ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+				}
 			}
 			else {
 				// Check the focus on object
@@ -925,7 +940,6 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			data->is_selection_mode = false;
 			data->original_selection.InitializeAndCopy(editor_state->EditorAllocator(), GetSandboxSelectedEntities(editor_state, sandbox_index));
 			data->cpu_framebuffer = { nullptr, {0, 0} };
-			mouse->EnableRawInput();
 
 			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
@@ -1159,7 +1173,6 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			// We need to reset any selected tool info
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 			ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
-			mouse->DisableRawInput();
 			mouse->DeactivateWrap();
 		}
 

@@ -743,13 +743,19 @@ namespace ECSEngine {
 				// By default, it allow the arrow keys to move the scrubber
 				bool allow_key_movement = true;
 			};
+
+			// The minimun (x) and the maximum (y) time values
+			float2 time_range;
+			// If you want to provide the minimum and maximum time values, you must set time_range and this flag to true
+			bool has_time_range = false;
+
+			// The textures to be displayed
+			Stream<Stream<wchar_t>> texture_paths;
 		};
 
 		struct UIDrawerTimelineData : UIDrawerTimeline {
 			// The location of the scrubber, in the normalized [0-1] range
 			float cursor_normalized_range;
-			// The minimun (x) and the maximum (y) time values
-			float2 time_range;
 			// The render offset to offset the contents of the timeline
 			float2 offset;
 			// The zoom for the horizontal X axis

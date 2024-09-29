@@ -118,6 +118,13 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 		drawer->NextRow();
 
 		// TODO: Add the timeline
+		UIDrawerTimeline timeline;
+		ZeroOut(&timeline);
+
+		timeline.time_range.x = 0.0f;
+		timeline.time_range.y = 10.00f;
+		timeline.has_time_range = true;
+		drawer->Timeline("Pog", &timeline);
 	}
 }
 
