@@ -757,6 +757,8 @@ namespace ECSEngine {
 			Stream<ResourceIdentifier> table_resources;
 			// The resource can add allocations without changing the coalesced allocation
 			Stream<void*> added_allocations;
+			// The resource can add table resource without changing the coalesced allocation
+			Stream<ResourceIdentifier> added_table_resources;
 			unsigned int reference_count;
 		};
 

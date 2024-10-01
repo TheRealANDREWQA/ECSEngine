@@ -698,7 +698,7 @@ namespace ECSEngine {
 			// Used only if use_background_color is set to true
 			Color background_color;
 			bool has_background_color = false;
-			// A size of 0.0f means use the default, i.e. scale.y that is passed to the timeline drawer
+			// A size of 0.0f means use an auto scale determined by the timeline based on the scale.y value from the scale transform
 			float row_y_size = 0.0f;
 		};
 
@@ -719,6 +719,8 @@ namespace ECSEngine {
 				float time_indication_increment = 0.0f;
 				// The minimum amount in absolute values in between 2 consecutive indications
 				float time_indication_smallest_increment = 0.0f;
+				// The number of decimals to display for each time indication
+				size_t time_indication_precision = 2;
 			};
 
 			// Border
@@ -755,7 +757,7 @@ namespace ECSEngine {
 
 		struct UIDrawerTimelineData : UIDrawerTimeline {
 			// The location of the scrubber, in the normalized [0-1] range
-			float cursor_normalized_range;
+			float cursor_position_normalized;
 			// The render offset to offset the contents of the timeline
 			float2 offset;
 			// The zoom for the horizontal X axis

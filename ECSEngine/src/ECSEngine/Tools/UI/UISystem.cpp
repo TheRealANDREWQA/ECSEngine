@@ -1354,8 +1354,8 @@ namespace ECSEngine {
 		{
 			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
 			resource->added_allocations.size++;
-			size_t new_buffer_allocation_size = sizeof(void*) * resource->added_allocations.size;
-			size_t buffer_copy_size = new_buffer_allocation_size - sizeof(void*);
+			size_t new_buffer_allocation_size = resource->added_allocations.CopySize();
+			size_t buffer_copy_size = new_buffer_allocation_size - resource->added_allocations.MemoryOf(1);
 
 			void* new_buffer = m_memory->Allocate(new_buffer_allocation_size);
 			memcpy(new_buffer, resource->added_allocations.buffer, buffer_copy_size);
@@ -1365,6 +1365,35 @@ namespace ECSEngine {
 			resource->added_allocations[resource->added_allocations.size - 1] = allocation;
 
 			if (resource->added_allocations.size > 1) {
+				ReplaceWindowMemoryResource(window_index, old_buffer, new_buffer);
+			}
+			else {
+				AddWindowMemoryResource(new_buffer, window_index);
+			}
+		}
+
+		void UISystem::AddWindowDynamicElementTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier identifier, bool is_identifier_allocated)
+		{
+			if (!is_identifier_allocated)
+			{
+				identifier = identifier.Copy(Allocator());
+				AddWindowMemoryResource((void*)identifier.ptr, window_index);
+				AddWindowDynamicElementAllocation(window_index, index, (void*)identifier.ptr);
+			}
+
+			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
+			resource->added_table_resources.size++;
+			size_t new_buffer_allocation_size = resource->added_table_resources.CopySize();
+			size_t buffer_copy_size = new_buffer_allocation_size - resource->added_table_resources.MemoryOf(1);
+
+			void* new_buffer = m_memory->Allocate(new_buffer_allocation_size);
+			memcpy(new_buffer, resource->added_table_resources.buffer, buffer_copy_size);
+
+			void* old_buffer = resource->added_table_resources.buffer;
+			resource->added_table_resources.buffer = (ResourceIdentifier*)new_buffer;
+			resource->added_table_resources[resource->added_table_resources.size - 1] = identifier;
+
+			if (resource->added_table_resources.size > 1) {
 				ReplaceWindowMemoryResource(window_index, old_buffer, new_buffer);
 			}
 			else {
@@ -10017,8 +10046,8 @@ namespace ECSEngine {
 		{
 			const UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
 
-			// cannot simply bump back those allocations because if some are deleted before it can affect
-			// the order in which they were stored, invalidating the index reference
+			// Cannot simply bump back those allocations because if some are deleted before it can affect
+			// The order in which they were stored, invalidating the index reference
 			for (size_t subindex = 0; subindex < resource->element_allocations.size; subindex++) {
 				const void* buffer = resource->element_allocations[subindex];
 				m_memory->Deallocate(buffer);
@@ -10033,6 +10062,11 @@ namespace ECSEngine {
 
 			for (size_t subindex = 0; subindex < resource->table_resources.size; subindex++) {
 				ResourceIdentifier identifier = resource->table_resources[subindex];
+				m_windows[window_index].table.Erase(identifier);
+			}
+
+			for (size_t subindex = 0; subindex < resource->added_table_resources.size; subindex++) {
+				ResourceIdentifier identifier = resource->added_table_resources[subindex];
 				m_windows[window_index].table.Erase(identifier);
 			}
 
@@ -10184,13 +10218,16 @@ namespace ECSEngine {
 			if (index != -1) {
 				m_memory->Deallocate(old_buffer);
 				m_windows[window_index].memory_resources[index] = allocation;
+				ReplaceWindowMemoryResource(window_index, old_buffer, allocation);
 				if (dynamic_index != -1) {
 					ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, old_buffer, allocation);
 				}
 			}
 			else {
 				AddWindowMemoryResource(allocation, window_index);
-				AddWindowDynamicElementAllocation(window_index, dynamic_index, allocation);
+				if (dynamic_index != -1) {
+					AddWindowDynamicElementAllocation(window_index, dynamic_index, allocation);
+				}
 			}
 
 			return allocation;
