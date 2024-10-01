@@ -364,6 +364,9 @@ namespace ECSEngine {
 
 			void AddWindowDynamicElementAllocation(unsigned int window_index, unsigned int index, void* allocation);
 
+			// If the identifier is allocated, it will only add the resource identifier as is. If not, it will make an allocation for it that will be tracked.
+			void AddWindowDynamicElementTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier identifier, bool is_identifier_allocated);
+
 			void BindWindowHandler(Action action, Action data_initializer, size_t data_size);
 
 			void CalculateDockspaceRegionHeaders(

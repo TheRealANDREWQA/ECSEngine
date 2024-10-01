@@ -2669,6 +2669,11 @@ namespace ECSEngine {
 			return position + relative_position * float2(data->zoom, 1.0f) - drawer->region_render_offset - data->offset;
 		}
 
+		// Returns an absolute time value from the given normalized value
+		static float GetTimelineAbsoluteTimeValue(const UIDrawerTimelineData* data, float normalized_value) {
+			return data->time_range.x + (data->time_range.y - data->time_range.x) * normalized_value;
+		}
+
 		static void TimelineDrawHeader(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, const UIDrawerTimelineData* data, float2 position, float2 scale) {
 			float header_increment = data->time_indication_increment == 0.0f ? 0.1f : data->time_indication_increment;
 			// Divide by the zoom - the larger the zoom, the smaller the increment
@@ -2688,12 +2693,11 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, header_indication_chars, 256);
 			
 			drawer->current_row_y_scale = drawer->GetLayoutDescriptor()->default_element_y;
-			float interval_range = data->time_range.y - data->time_range.x;
 			while (header_indication_percentage < 1.0f) {
 				float2 element_position = GetTimelineElementPosition(drawer, data, position, header_offset);
 				
 				header_indication_chars.size = 0;
-				ConvertFloatToChars(header_indication_chars, data->time_range.x + interval_range * header_indication_percentage);
+				ConvertFloatToChars(header_indication_chars, GetTimelineAbsoluteTimeValue(data, header_indication_percentage), data->time_indication_precision);
 				drawer->Text(configuration | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, header_indication_chars, element_position);
 
 				header_indication_percentage += header_increment;
@@ -2704,17 +2708,47 @@ namespace ECSEngine {
 			drawer->NextRow();
 		}
 
+		// Position must be the initial position of the timeline
+		static void TimelineDrawCursor(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, const UIDrawerTimelineData* data, float2 position, float2 scale, float timeline_channel_y_size) {
+			float cursor_normalized_x_offset = scale.x * data->cursor_position_normalized;
+			float2 cursor_top_position = GetTimelineElementPosition(drawer, data, position, { cursor_normalized_x_offset, 0.0f });
+			
+			ECS_STACK_CAPACITY_STREAM(char, cursor_characters, 256);
+			float cursor_absolute_value = GetTimelineAbsoluteTimeValue(data, data->cursor_position_normalized);
+			ConvertFloatToChars(cursor_characters, cursor_absolute_value, data->time_indication_precision);
+
+			drawer->current_row_y_scale = drawer->GetLayoutDescriptor()->default_element_y;
+			float2 label_scale;
+			drawer->Text(ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, cursor_characters, cursor_top_position, label_scale);
+			
+			Color color = drawer->HandleColor(configuration, config);
+			drawer->SolidColorRectangle(configuration, config, cursor_top_position, { label_scale.x, drawer->current_row_y_scale }, color);
+
+			float2 line_start_position = { cursor_top_position.x, cursor_top_position.y + label_scale.y };
+			drawer->Line(configuration, line_start_position, { line_start_position.x, line_start_position.y + timeline_channel_y_size }, color);
+
+			drawer->current_row_y_scale = 0.0f;
+		}
+
 		float UIDrawer::TimelineDrawer(size_t configuration, const UIDrawConfig& config, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, float2 position, float2 scale) {
 			HandleFitSpaceRectangle(configuration, position, scale);
 			
 			float2 initial_position = position;
 
+			// Determine the total size of the timeline on the Y axis
+			float channel_y_size = 0.0f;
+			float default_channel_y_size = scale.y / (float)data->channels.size;
+			for (size_t index = 0; index < data->channels.size; index++) {
+				channel_y_size += data->channels[index].row_y_size == 0.0f ? default_channel_y_size : data->channels[index].row_y_size;
+			}
+
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, data->identifier);
 			UpdateTimelineData(this, timeline, data, dynamic_index, false);
 
-			// Draw the header
 			TimelineDrawHeader(this, configuration, config, data, position, scale);
-			return 0.0f;
+			TimelineDrawCursor(this, configuration, config, data, position, scale, channel_y_size);
+
+			return GetTimelineAbsoluteTimeValue(data, data->cursor_position_normalized);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -2732,10 +2766,11 @@ namespace ECSEngine {
 				element = GetMainAllocatorBuffer<UIDrawerTimelineData>();
 				ZeroOut(element);
 
+				element->zoom = 1.0f;
 				// Allocate the identifier - technically, we could reuse the identifier, since it is stable, but this way is less coupled
 				element->identifier.buffer = (char*)GetMainAllocatorBuffer(identifier.CopySize());
 				identifier.CopyTo(element->identifier.buffer);
-				element->identifier.size = element->identifier.size;
+				element->identifier.size = identifier.size;
 
 				UpdateTimelineDataCallback(this, timeline, element, dynamic_index, true);
 
@@ -9042,8 +9077,7 @@ namespace ECSEngine {
 			system->AddWindowMemoryResourceToTable(resource, identifier, window_index);
 			if (initializer) {
 				if (last_initialize_dynamic_index != -1) {
-					ResourceIdentifier stable_identifier = identifier.Copy(system->Allocator());
-					system->AddWindowDynamicElementAllocation(window_index, last_initialize_dynamic_index, (void*)stable_identifier.ptr);
+					system->AddWindowDynamicElementTableResource(window_index, last_initialize_dynamic_index, identifier, false);
 				}
 				else {
 					void* temp_identifier = GetTempBuffer(identifier.size);
@@ -12239,6 +12273,7 @@ namespace ECSEngine {
 
 		void* UIDrawer::GetMainAllocatorBufferDynamic(unsigned int dynamic_index, size_t size, size_t alignment) {
 			void* allocation = system->m_memory->Allocate(size, alignment);
+			system->AddWindowMemoryResource(allocation, window_index);
 			system->AddWindowDynamicElementAllocation(window_index, dynamic_index, allocation);
 			return allocation;
 		}
@@ -14363,7 +14398,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::RemoveDynamicAllocation(const void* allocation, unsigned int dynamic_index) {
-			RemoveAllocation(allocation);
+			system->m_memory->Deallocate(allocation);
 			system->RemoveWindowDynamicResourceAllocation(window_index, dynamic_index, allocation);
 		}
 
@@ -16825,8 +16860,10 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float UIDrawer::Timeline(Stream<char> name, const UIDrawerTimeline* timeline) {
+			UIConfigWindowDependentSize dependent_size;
 			UIDrawConfig config;
-			return Timeline(0, config, name, timeline);
+			config.AddFlag(dependent_size);
+			return Timeline(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, name, timeline);
 		}
 
 		float UIDrawer::Timeline(size_t configuration, const UIDrawConfig& config, Stream<char> name, const UIDrawerTimeline* timeline) {

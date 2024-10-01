@@ -121,9 +121,17 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 		UIDrawerTimeline timeline;
 		ZeroOut(&timeline);
 
+		ECS_STACK_CAPACITY_STREAM(UIDrawerTimelineChannel, channels, 1);
+		channels.ReserveRange();
+		channels[0].row_y_size = 0.2f;
+		channels[0].description = "My description";
+		channels[0].elements = {};
+
 		timeline.time_range.x = 0.0f;
 		timeline.time_range.y = 10.00f;
 		timeline.has_time_range = true;
+		timeline.channels = channels;
+
 		drawer->Timeline("Pog", &timeline);
 	}
 }

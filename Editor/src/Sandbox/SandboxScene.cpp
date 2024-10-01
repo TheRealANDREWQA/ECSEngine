@@ -204,6 +204,10 @@ void RotateSandboxCamera(
 )
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	// TODO: Sometimes, weird large rotations are added, investigate why
+	if (fabsf(rotation.x) > 100.0f || fabsf(rotation.y) > 100.0f || fabsf(rotation.z) > 100.0f) {
+		__debugbreak();
+	}
 	sandbox->camera_parameters[viewport].rotation += rotation;
 
 	// Also write to the sandbox file this change such that we preserve this change - but only for the scene case
