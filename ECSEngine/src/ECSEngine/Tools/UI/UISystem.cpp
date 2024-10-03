@@ -8533,6 +8533,7 @@ namespace ECSEngine {
 			m_descriptors.color_theme.histogram_hovered_color = ECS_TOOLS_UI_HISTOGRAM_HOVERED_COLOR;
 			m_descriptors.color_theme.histogram_text_color = ECS_TOOLS_UI_HISTOGRAM_TEXT_COLOR;
 			m_descriptors.color_theme.progress_bar = ECS_TOOLS_UI_PROGRESS_BAR_COLOR;
+			m_descriptors.color_theme.timeline_background = ECS_TOOLS_UI_TIMELINE_BACKGROUND_COLOR;
 			m_descriptors.color_theme.darken_inactive_item = ECS_TOOLS_UI_DARKEN_INACTIVE_ITEM_FACTOR;
 			m_descriptors.color_theme.alpha_inactive_item = ECS_TOOLS_UI_ALPHA_INACTIVE_ITEM_FACTOR;
 			SetColorTheme(ECS_TOOLS_UI_THEME_COLOR);
