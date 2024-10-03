@@ -3830,6 +3830,34 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		void TimelineHeaderClickAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerTimelineData* data = (UIDrawerTimelineData*)_data;
+
+			// Determine the normalized coordinate of the cursor given the mouse position
+			float mouse_x_position = Clamp(mouse_position.x, position.x, position.x + scale.x);
+			float normalized_offset = (mouse_x_position - position.x) / scale.x;
+			data->cursor_position_normalized = normalized_offset;
+			if (data->cursor_position != nullptr) {
+				if (data->use_normalized_cursor) {
+					*data->cursor_position = normalized_offset;
+				}
+				else {
+					*data->cursor_position = data->time_range.x + normalized_offset * (data->time_range.y - data->time_range.x);
+				}
+			}
+
+			if (data->callback.action != nullptr) {
+				if (!data->trigger_callback_on_release || mouse->IsReleased(ECS_MOUSE_LEFT)) {
+					action_data->data = data->callback.data;
+					data->callback.action(action_data);
+				}
+			}
+
+			action_data->redraw_window = true;
+		}
+
 		// --------------------------------------------------------------------------------------------------------------
 
 #undef EXPORT

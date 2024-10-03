@@ -204,6 +204,7 @@ namespace ECSEngine {
 			Color histogram_hovered_color;
 			Color histogram_text_color;
 			Color progress_bar;
+			Color timeline_background;
 			float region_header_active_window_factor;
 			float darken_hover_factor;
 			float slider_lighten_factor;
