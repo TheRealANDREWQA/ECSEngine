@@ -656,6 +656,10 @@ namespace ECSEngine {
 			return 2;
 		}
 
+		ECS_INLINE static Rectangle<ValueType> FromScale(ValueType position, ValueType scale) {
+			return { position, position + scale };
+		}
+
 		ValueType top_left;
 		ValueType bottom_right;
 	};

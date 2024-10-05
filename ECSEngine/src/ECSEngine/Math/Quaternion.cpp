@@ -74,7 +74,7 @@ namespace ECSEngine {
 		w = BlendSingleSwitch(w, broadcast_w, index);
 	}
 
-	static ECS_INLINE float sincos(float* cos_value, float radians) {
+	ECS_INLINE static float sincos(float* cos_value, float radians) {
 		*cos_value = cos(radians);
 		return sin(radians);
 	}
@@ -392,7 +392,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------
 
 	template<typename Quaternion>
-	static ECS_INLINE Quaternion ECS_VECTORCALL QuaternionMultiplyImpl(Quaternion a, Quaternion b) {
+	ECS_INLINE static Quaternion ECS_VECTORCALL QuaternionMultiplyImpl(Quaternion a, Quaternion b) {
 		// x = b.x * a.w + b.y * a.z - b.z * a.y + b.w * a.x
 		// y = -b.x * a.z + b.y * a.w + b.z * a.x + b.w * a.y
 		// z = b.x * a.y - b.y * a.x + b.z * a.w + b.w * a.z
@@ -416,7 +416,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector, typename Quaternion>
-	static ECS_INLINE Vector ECS_VECTORCALL QuaternionVectorMultiplyImpl(Quaternion quaternion, Vector vector) {
+	ECS_INLINE static Vector ECS_VECTORCALL QuaternionVectorMultiplyImpl(Quaternion quaternion, Vector vector) {
 		// 2.0f * Dot(quaternion.xyz, vector.xyz) * quaternion.xyz + vector * 
 		// (quaternion.w * quaternion.w - Dot(quaternion.xyz, quaternion.xyz)) + Cross(quaternion.xyz, vector.xyz) * 2.0f * quaternion.w
 	
@@ -438,7 +438,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------
 
 	template<typename Quaternion>
-	static ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNeighbourImpl(Quaternion quat_a, Quaternion quat_b) {
+	ECS_INLINE static Quaternion ECS_VECTORCALL QuaternionNeighbourImpl(Quaternion quat_a, Quaternion quat_b) {
 		// If the dot product between the 2 quaternions is negative, negate b and return it
 		auto mask = QuaternionSameHyperspaceMask(quat_a, quat_b);
 		return Select(mask, quat_b, -quat_b);
@@ -455,7 +455,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------
 
 	template<typename Quaternion, typename PercentageType>
-	static ECS_INLINE Quaternion ECS_VECTORCALL QuaternionMixImpl(Quaternion from, Quaternion to, PercentageType percentage) {
+	ECS_INLINE static Quaternion ECS_VECTORCALL QuaternionMixImpl(Quaternion from, Quaternion to, PercentageType percentage) {
 		PercentageType one_minus_percentage = OneVector<PercentageType>() - percentage;
 		return from * Quaternion::Splat(one_minus_percentage) + to * Quaternion::Splat(percentage);
 	}
@@ -481,7 +481,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector, typename Quaternion, typename PowerType>
-	static ECS_INLINE Quaternion ECS_VECTORCALL QuaternionToPowerImpl(Quaternion quaternion, PowerType power) {
+	ECS_INLINE static Quaternion ECS_VECTORCALL QuaternionToPowerImpl(Quaternion quaternion, PowerType power) {
 		/*
 			Scalar formula
 			angle = acos(quaternion.w) // This is the half angle of the quaternion
@@ -557,7 +557,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------
 
 	template<typename Quaternion, typename Vector>
-	static ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLookRotationNormalizedImpl(Vector direction_normalized, Vector up_normalized, size_t vector_count) {
+	ECS_INLINE static Quaternion ECS_VECTORCALL QuaternionLookRotationNormalizedImpl(Vector direction_normalized, Vector up_normalized, size_t vector_count) {
 		Vector normalized_right = Cross(up_normalized, direction_normalized); // Object Right
 		Vector current_up = Cross(direction_normalized, normalized_right); // Object Up
 
@@ -689,7 +689,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 	
 	template<typename Vector, typename Quaternion>
-	static ECS_INLINE Vector ECS_VECTORCALL QuaternionToEulerRadImpl(Quaternion quaternion) {
+	ECS_INLINE static Vector ECS_VECTORCALL QuaternionToEulerRadImpl(Quaternion quaternion) {
 		// The formula is this one
 		// x_factor_first = qw * qx + qy * qz
 		// x_factor_second = qx * qx + qy * qy
@@ -774,7 +774,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Quaternion>
-	static ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAddToAverageImpl(Quaternion* cumulator, Quaternion current_quaternion, unsigned int count) {
+	ECS_INLINE static Quaternion ECS_VECTORCALL QuaternionAddToAverageImpl(Quaternion* cumulator, Quaternion current_quaternion, unsigned int count) {
 		QuaternionAddToAverageStep(cumulator, current_quaternion);
 		return QuaternionAverageFromCumulator(*cumulator, count);
 	}

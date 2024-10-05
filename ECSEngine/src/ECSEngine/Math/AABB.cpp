@@ -48,7 +48,7 @@ namespace ECSEngine {
 	}
 
 	template<typename RotationStructure>
-	ECS_INLINE RotatedAABB ECS_VECTORCALL RotateAABBImpl(AABB aabb, RotationStructure rotation_structure) {
+	ECS_INLINE static RotatedAABB ECS_VECTORCALL RotateAABBImpl(AABB aabb, RotationStructure rotation_structure) {
 		Vector3 x_axis = RightVector();
 		Vector3 y_axis = UpVector();
 
@@ -222,7 +222,7 @@ namespace ECSEngine {
 	}
 
 	template<typename AABB, typename Vector>
-	static ECS_INLINE AABB ECS_VECTORCALL ScaleAABBImpl(AABB aabb, Vector scale) {
+	ECS_INLINE static AABB ECS_VECTORCALL ScaleAABBImpl(AABB aabb, Vector scale) {
 		Vector center = AABBCenter(aabb);
 		Vector half_extents = AABBHalfExtents(aabb);
 		Vector new_extents = half_extents * scale;
@@ -240,7 +240,7 @@ namespace ECSEngine {
 	}
 
 	template<typename AABBType, typename Vector>
-	static ECS_INLINE AABBType ECS_VECTORCALL TransformAABBImpl(AABBType aabb, Vector translation, Matrix rotation_matrix, Vector scale) {
+	ECS_INLINE static AABBType ECS_VECTORCALL TransformAABBImpl(AABBType aabb, Vector translation, Matrix rotation_matrix, Vector scale) {
 		// Firstly scale the AABB, then rotate and then translate, like a normal transformation
 		auto scaled_aabb = ScaleAABB(aabb, scale);
 		auto rotated_aabb = AABBFromRotation(scaled_aabb, rotation_matrix);
@@ -296,7 +296,7 @@ namespace ECSEngine {
 	}
 
 	template<typename AABB, typename Vector>
-	static ECS_INLINE void GetAABBCornersImpl(AABB aabb, Vector* corners) {
+	ECS_INLINE static void GetAABBCornersImpl(AABB aabb, Vector* corners) {
 		// The left face have the x min
 		corners[0] = aabb.min;
 		corners[1] = { aabb.min.x, aabb.max.y, aabb.max.z };
@@ -314,13 +314,19 @@ namespace ECSEngine {
 		GetAABBCornersImpl(aabb, corners);
 	}
 
-	void GetAABBCorners(AABB aabb, Vector3* corners)
+	void ECS_VECTORCALL GetAABBCorners(AABB aabb, Vector3* corners)
 	{
 		GetAABBCornersImpl(aabb, corners);
 	}
 
+	Vector3 ECS_VECTORCALL GetAABBCornersScalarToSIMD(AABBScalar aabb) {
+		float3 scalar_corners[8];
+		GetAABBCorners(aabb, scalar_corners);
+		return Vector3().Gather(scalar_corners);
+	}
+
 	template<typename ReturnType, typename AABB, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL AABBToPointSquaredDistanceImpl(AABB aabb, Vector point) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL AABBToPointSquaredDistanceImpl(AABB aabb, Vector point) {
 		// The squared distance is the excess positive distance outside
 		// The AABB extents
 		ReturnType zero = SingleZeroVector<ReturnType>();
@@ -337,7 +343,7 @@ namespace ECSEngine {
 		return squared_distance;
 	}
 
-	float AABBToPointSquaredDistance(AABBScalar aabb, float3 point) {
+	float AABBToPointSquaredDistance(const AABBScalar& aabb, float3 point) {
 		return AABBToPointSquaredDistanceImpl<float>(aabb, point);
 	}
 
@@ -346,7 +352,7 @@ namespace ECSEngine {
 	}
 
 	template<typename SingleValue, typename AABB, typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL AABBClosestPointImpl(AABB aabb, Vector point) {
+	ECS_INLINE static Vector ECS_VECTORCALL AABBClosestPointImpl(AABB aabb, Vector point) {
 		// The closest point is found by clamping the point to the min and max of the AABB
 		Vector closest_point;
 		for (size_t index = 0; index < Vector::Count(); index++) {
@@ -358,7 +364,7 @@ namespace ECSEngine {
 		return closest_point;
 	}
 
-	float3 AABBClosestPoint(AABBScalar aabb, float3 point) {
+	float3 AABBClosestPoint(const AABBScalar& aabb, float3 point) {
 		return AABBClosestPointImpl<float>(aabb, point);
 	}
 

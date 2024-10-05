@@ -722,12 +722,18 @@ namespace ECSEngine {
 			size_t text_sprite_count;
 			size_t sprite_count;
 			size_t sprite_cluster_count;
+			size_t line_count;
 		};
 
 		struct UIDrawerHandlerState {
 			size_t hoverable_count;
 			size_t clickable_count[ECS_MOUSE_BUTTON_COUNT];
 			size_t general_count;
+		};
+
+		struct UIDrawerClipState {
+			UIDrawerBufferState buffer_state;
+			UIDrawerHandlerState handler_state;
 		};
 
 		struct UIConfigStateTableNotify {

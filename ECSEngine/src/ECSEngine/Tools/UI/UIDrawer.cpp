@@ -485,7 +485,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIVertexColor* UIDrawer::HandleSolidColorBuffer(size_t configuration) {
+		UIVertexColor* UIDrawer::HandleSolidColorBuffer(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return (UIVertexColor*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SOLID_COLOR];
 			}
@@ -499,7 +499,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t* UIDrawer::HandleSolidColorCount(size_t configuration) {
+		size_t* UIDrawer::HandleSolidColorCount(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SOLID_COLOR;
 			}
@@ -513,7 +513,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UISpriteVertex* UIDrawer::HandleTextSpriteBuffer(size_t configuration) {
+		UISpriteVertex* UIDrawer::HandleTextSpriteBuffer(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return (UISpriteVertex*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_TEXT_SPRITE];
 			}
@@ -527,7 +527,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t* UIDrawer::HandleTextSpriteCount(size_t configuration) {
+		size_t* UIDrawer::HandleTextSpriteCount(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_TEXT_SPRITE;
 			}
@@ -541,7 +541,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UISpriteVertex* UIDrawer::HandleSpriteBuffer(size_t configuration) {
+		UISpriteVertex* UIDrawer::HandleSpriteBuffer(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return (UISpriteVertex*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE];
 			}
@@ -555,7 +555,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t* UIDrawer::HandleSpriteCount(size_t configuration) {
+		size_t* UIDrawer::HandleSpriteCount(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE;
 			}
@@ -569,7 +569,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UISpriteVertex* UIDrawer::HandleSpriteClusterBuffer(size_t configuration) {
+		UISpriteVertex* UIDrawer::HandleSpriteClusterBuffer(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return (UISpriteVertex*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE_CLUSTER];
 			}
@@ -583,7 +583,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t* UIDrawer::HandleSpriteClusterCount(size_t configuration) {
+		size_t* UIDrawer::HandleSpriteClusterCount(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE_CLUSTER;
 			}
@@ -597,7 +597,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIVertexColor* UIDrawer::HandleLineBuffer(size_t configuration) {
+		UIVertexColor* UIDrawer::HandleLineBuffer(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return (UIVertexColor*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_LINE];
 			}
@@ -611,7 +611,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t* UIDrawer::HandleLineCount(size_t configuration) {
+		size_t* UIDrawer::HandleLineCount(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_LINE;
 			}
@@ -754,10 +754,9 @@ namespace ECSEngine {
 			ECS_UI_ALIGN& vertical_alignment
 		) const {
 			if (configuration & UI_CONFIG_TEXT_ALIGNMENT) {
-				const float* params = (const float*)config.GetParameter(UI_CONFIG_TEXT_ALIGNMENT);
-				const ECS_UI_ALIGN* alignments = (ECS_UI_ALIGN*)params;
-				horizontal_alignment = *alignments;
-				vertical_alignment = *(alignments + 1);
+				const UIConfigTextAlignment* params = (const UIConfigTextAlignment*)config.GetParameter(UI_CONFIG_TEXT_ALIGNMENT);
+				horizontal_alignment = params->horizontal;
+				vertical_alignment = params->vertical;
 
 				switch (horizontal_alignment) {
 				case ECS_UI_ALIGN_LEFT:
@@ -2574,6 +2573,16 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		static float TimelineLargestDescriptionSize(const UIDrawer* drawer, const UIDrawerTimelineData* data) {
+			float largest_size = 0.0f;
+			for (size_t index = 0; index < data->channels.size; index++) {
+				if (data->channels[index].description.size > 0) {
+					largest_size = max(largest_size, drawer->TextSpan(data->channels[index].description).x + drawer->element_descriptor.label_padd.x * 2.0f);
+				}
+			}
+			return largest_size;
+		}
+
 		static void UpdateTimelineDataCallback(UIDrawer* drawer, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, unsigned int dynamic_index, bool is_initial_update) {
 			// Handle the callback
 			if (timeline->callback.action != nullptr) {
@@ -2660,26 +2669,67 @@ namespace ECSEngine {
 				UpdateTimelineIntervalRange(data);
 			}
 
+			// Always update the largest description size, because the zoom might have changed and in order to not track that, perform this operation every time
+			data->largest_channel_description_size = TimelineLargestDescriptionSize(drawer, data);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// Returns the position of a timeline element by taking into account the zoom and the offset of the timeline. The position must be the initial position
 		// Of the timeline, while relative position is a relative offset starting from that initial position
-		static float2 GetTimelineElementPosition(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 position, float2 relative_position) {
+		ECS_INLINE static float2 GetTimelineElementPosition(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 position, float2 relative_position) {
 			return position + relative_position * float2(data->zoom, 1.0f) - drawer->region_render_offset - data->offset;
 		}
 
-		// Returns an absolute time value from the given normalized value
-		static float GetTimelineAbsoluteTimeValue(const UIDrawerTimelineData* data, float normalized_value) {
-			return data->time_range.x + (data->time_range.y - data->time_range.x) * normalized_value;
+		// Returns the x position of a timeline element knowing its relative normalized position.
+		ECS_INLINE static float GetTimelineElementPositionFromNormalized(const UIDrawer* drawer, const UIDrawerTimelineData* data, float position, float scale, float relative_normalized_position) {
+			return position + scale * relative_normalized_position * data->zoom - drawer->region_render_offset.x - data->offset.x;
 		}
 
-		static float GetTimelineHeaderSize(const UIDrawer* drawer, const UIDrawerTimelineData* data) {
+		// Returns the Y position of a timeline element knowing its relative Y position. The position parameter is the original timeline Y position
+		ECS_INLINE static float GetTimelineElementPositionY(const UIDrawer* drawer, const UIDrawerTimelineData* data, float position, float relative_position) {
+			return position + relative_position - drawer->region_render_offset.y - data->offset.y;
+		}
+
+		// Returns an absolute time value from the given normalized value
+		ECS_INLINE static float GetTimelineAbsoluteTimeValue(const UIDrawerTimelineData* data, float normalized_value) {
+			return AbsoluteValueFromNormalized(normalized_value, data->time_range.x, data->time_range.y);
+		}
+
+		// Returns the normalized [0-1] value of the given time
+		ECS_INLINE static float GetTimelineNormalizedTimeValue(const UIDrawerTimelineData* data, float time) {
+			return NormalizedValue(time, data->time_range.x, data->time_range.y);
+		}
+
+		ECS_INLINE static float GetTimelineHeaderSize(const UIDrawer* drawer, const UIDrawerTimelineData* data) {
 			return drawer->GetLayoutDescriptor()->default_element_y;
 		}
 
-		static void TimelineDrawHeader(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, UIDrawerTimelineData* data, float2 position, float2 scale) {
+		// Returns the y size of a default sized channel
+		ECS_INLINE static float TimelineDefaultChannelYSize(const UIDrawerTimelineData* data, float2 scale) {
+			return scale.y / (float)data->channels.size;
+		}
+
+		// Returns the y size of a channel
+		ECS_INLINE static float GetTimelineChannelYSize(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 scale, size_t channel_index) {
+			return data->channels[channel_index].row_y_size == 0.0f ? TimelineDefaultChannelYSize(data, scale) : data->channels[channel_index].row_y_size * drawer->zoom_ptr->y;
+		}
+
+		struct TimelineHeaderIndicationInfo {
+			Stream<char> characters;
+			float2 position;
+			float2 scale;
+		};
+
+		static void TimelineFillHeaderIndicationsInfo(
+			const UIDrawer* drawer,
+			const UIDrawerTimelineData* data,
+			float2 position,
+			float2 scale,
+			CapacityStream<char>& header_indication_chars,
+			AdditionStream<TimelineHeaderIndicationInfo> infos
+		)
+		{
 			float header_increment = data->time_indication_increment == 0.0f ? 0.1f : data->time_indication_increment;
 			// Divide by the zoom - the larger the zoom, the smaller the increment
 			header_increment /= data->zoom;
@@ -2693,10 +2743,9 @@ namespace ECSEngine {
 			header_increment = 1.0f / ((float)internal_indication_count + 1.0f);
 
 			float usable_text_space = scale.x;
-			ECS_STACK_CAPACITY_STREAM(char, header_indication_chars, 256);
 			ConvertFloatToChars(header_indication_chars, data->time_range.x, data->time_indication_precision);
 			usable_text_space -= drawer->TextSpan(header_indication_chars).x;
-			
+
 			header_indication_chars.size = 0;
 			ConvertFloatToChars(header_indication_chars, data->time_range.y, data->time_indication_precision);
 			usable_text_space -= drawer->TextSpan(header_indication_chars).x;
@@ -2704,18 +2753,95 @@ namespace ECSEngine {
 			float header_indication_percentage = 0.0f;
 			float header_offset_increment = usable_text_space * header_increment * data->zoom;
 			float2 header_offset = { 0.0f, 0.0f };
-			
-			drawer->current_row_y_scale = GetTimelineHeaderSize(drawer, data);
+
 			// Allow a small drift in order to draw 1.0f
+			header_indication_chars.size = 0;
 			while (header_indication_percentage <= 1.00001f) {
 				float2 element_position = GetTimelineElementPosition(drawer, data, position, header_offset);
-				
-				header_indication_chars.size = 0;
-				ConvertFloatToChars(header_indication_chars, GetTimelineAbsoluteTimeValue(data, header_indication_percentage), data->time_indication_precision);
-				drawer->Text(configuration | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, header_indication_chars, element_position);
+
+				unsigned int previous_char_count = header_indication_chars.size;
+				size_t written_count = ConvertFloatToChars(header_indication_chars, GetTimelineAbsoluteTimeValue(data, header_indication_percentage), data->time_indication_precision);
+				Stream<char> indication_chars = { header_indication_chars.buffer + previous_char_count, written_count };
+				infos.Add({ indication_chars, element_position, drawer->TextSpan(indication_chars) });
 
 				header_indication_percentage += header_increment;
 				header_offset.x += header_offset_increment;
+			}
+		}
+
+		ECS_INLINE static float TimelineCursorLineThickness() {
+			return 0.0035f;
+		}
+
+		ECS_INLINE static size_t TimelineCursorFloatPrecision(const UIDrawerTimelineData* data) {
+			return ClampMin<size_t>(data->time_indication_precision, 1);
+		}
+
+		// Position and scale are the transform of the timeline element. The last argument is an optional value for the text span that can be filled in
+		static UIElementTransform TimelineGetCursorPosition(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 position, float2 scale, float* text_span_value = nullptr) {
+			const float header_cursor_thickness = drawer->element_descriptor.label_padd.x * 0.5f;
+			float cursor_normalized_x_offset = (scale.x - TimelineCursorLineThickness()) * data->cursor_position_normalized;
+			float2 cursor_top_position = GetTimelineElementPosition(drawer, data, position, { cursor_normalized_x_offset, 0.0f });
+
+			ECS_STACK_CAPACITY_STREAM(char, cursor_characters, 256);
+			float cursor_absolute_value = GetTimelineAbsoluteTimeValue(data, data->cursor_position_normalized);
+			ConvertFloatToChars(cursor_characters, cursor_absolute_value, TimelineCursorFloatPrecision(data));
+
+			float2 text_span = drawer->TextSpan(cursor_characters);
+			float2 cursor_label_position = { cursor_top_position.x - text_span.x * 0.5f - TimelineCursorLineThickness() * 0.5f, cursor_top_position.y };
+			float2 cursor_label_size = { text_span.x + header_cursor_thickness * 2.0f, GetTimelineHeaderSize(drawer, data) };
+
+			if (text_span_value != nullptr) {
+				*text_span_value = text_span.x;
+			}
+
+			return { cursor_label_position, cursor_label_size };
+		}
+
+		// Position and scale are the transform of the timeline element
+		static void TimelineDrawHeader(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, UIDrawerTimelineData* data, float2 position, float2 scale) {
+			// Add a small padding to the indications such that indications don't have to physically overlap in order to be skipped
+			const float addition_indication_distancing = 0.0035f;
+
+			drawer->current_row_y_scale = GetTimelineHeaderSize(drawer, data);
+			ECS_STACK_CAPACITY_STREAM(char, header_indication_chars, 256);
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+			ResizableStream<TimelineHeaderIndicationInfo> header_infos(&stack_allocator, 16);
+			TimelineFillHeaderIndicationsInfo(drawer, data, position, scale, header_indication_chars, &header_infos);
+			ECS_ASSERT(header_infos.size >= 2);
+
+			UIElementTransform cursor_transform = TimelineGetCursorPosition(drawer, data, position, scale);
+			// Inflate the cursor scale by a bit to cull the indication a little bit earlier
+			cursor_transform.scale.x += addition_indication_distancing * 2.0f;
+			cursor_transform.position.x -= addition_indication_distancing;
+			auto draw_indication = [&](unsigned int index) {
+				if (!RectangleOverlap(cursor_transform, { header_infos[index].position, header_infos[index].scale })) {
+					drawer->Text(configuration | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, header_infos[index].characters, header_infos[index].position);
+				}
+			};
+
+			float minimum_size_to_draw = header_infos[0].scale.x + header_infos[header_infos.size - 1].scale.x + addition_indication_distancing;
+
+			// If the scale is not as large as this minimum, do not draw any indication
+			if (scale.x >= minimum_size_to_draw) {
+				// The first and the last indications are always drawn
+				draw_indication(0);
+				float2 last_drawn_position = header_infos[0].position;
+				float2 last_drawn_scale = header_infos[0].scale;
+				float2 last_indication_position = header_infos[header_infos.size - 1].position;
+
+				for (unsigned int index = 1; index < header_infos.size - 1; index++) {
+					// Draw the indication if it does not overlap the previous draw indication and that it does not overlap the last indication
+					if (last_drawn_position.x + last_drawn_scale.x + addition_indication_distancing < header_infos[index].position.x) {
+						if (header_infos[index].position.x + header_infos[index].scale.x >= last_indication_position.x - addition_indication_distancing) {
+							break;
+						}
+						draw_indication(index);
+						last_drawn_position = header_infos[index].position;
+						last_drawn_scale = header_infos[index].scale;
+					}
+				}
+				draw_indication(header_infos.size - 1);
 			}
 
 			Color background_color = data->use_background_color ? data->background_color : drawer->GetColorThemeDescriptor()->timeline_background;
@@ -2731,33 +2857,90 @@ namespace ECSEngine {
 
 		// Position must be the initial position of the timeline
 		static void TimelineDrawCursor(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, const UIDrawerTimelineData* data, float2 position, float2 scale, float timeline_channel_y_size) {
-			const float header_cursor_thickness = drawer->element_descriptor.label_padd.x * 0.5f;
-			float cursor_normalized_x_offset = scale.x * data->cursor_position_normalized;
-			float2 cursor_top_position = GetTimelineElementPosition(drawer, data, position, { cursor_normalized_x_offset - header_cursor_thickness , 0.0f });
-			
+			float cursor_text_span = 0.0f;
+			UIElementTransform cursor_transform = TimelineGetCursorPosition(drawer, data, position, scale, &cursor_text_span);
+
 			ECS_STACK_CAPACITY_STREAM(char, cursor_characters, 256);
 			float cursor_absolute_value = GetTimelineAbsoluteTimeValue(data, data->cursor_position_normalized);
-			ConvertFloatToChars(cursor_characters, cursor_absolute_value, data->time_indication_precision);
+			// Clamp the precision to a minimum of 1
+			ConvertFloatToChars(cursor_characters, cursor_absolute_value, TimelineCursorFloatPrecision(data));
 
 			drawer->current_row_y_scale = GetTimelineHeaderSize(drawer, data);
-			float2 label_scale;
-			drawer->Text(ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, cursor_characters, cursor_top_position, label_scale);
+			float2 text_position;
+			text_position.x = AlignMiddle(cursor_transform.position.x, cursor_transform.scale.x, cursor_text_span);
+			text_position.y = cursor_transform.position.y;
+			float2 text_span = cursor_transform.scale;
+			drawer->Text(ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, cursor_characters, text_position, text_span);
 			
 			Color color = drawer->HandleColor(configuration, config);
-			float2 cursor_label_position = { cursor_top_position.x - header_cursor_thickness, cursor_top_position.y };
-			float2 cursor_label_size = { label_scale.x + header_cursor_thickness * 2.0f, drawer->current_row_y_scale };
 			drawer->SolidColorRectangle(
 				configuration, 
-				cursor_label_position, 
-				cursor_label_size, 
+				cursor_transform.position, 
+				cursor_transform.scale, 
 				color
 			);
 
-			float cursor_thickness = 0.0035f;
-			float2 line_start_position = { AlignMiddle(cursor_label_position.x, cursor_label_size.x, cursor_thickness), cursor_top_position.y + drawer->current_row_y_scale };
-			drawer->SolidColorRectangle(configuration, line_start_position, { cursor_thickness, timeline_channel_y_size }, color);
+			float cursor_line_thickness = TimelineCursorLineThickness();
+			float2 line_start_position = { AlignMiddle(cursor_transform.position.x, cursor_transform.scale.x, cursor_line_thickness), cursor_transform.position.y + drawer->current_row_y_scale };
+			drawer->SolidColorRectangle(configuration, line_start_position, { cursor_line_thickness, timeline_channel_y_size }, color);
 
 			drawer->current_row_y_scale = 0.0f;
+		}
+		
+		static void TimelineDrawChannels(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, const UIDrawerTimelineData* data, float2 channel_start_position, float2 scale, float timeline_y_size) {
+			// Draw the background first
+			Color background_color = data->use_background_color ? data->background_color : drawer->color_theme.timeline_background;
+			drawer->SolidColorRectangle(configuration, channel_start_position, { scale.x, timeline_y_size }, background_color);
+			
+			float2 current_channel_position = { channel_start_position.x - data->largest_channel_description_size, GetTimelineElementPositionY(drawer, data, channel_start_position.y, 0.0f) };
+
+			// We need to have 2 passes, to draw the descriptions separately because we don't want them to get clipped
+			if (data->largest_channel_description_size > 0.0f) {
+				for (size_t index = 0; index < data->channels.size; index++) {
+					float channel_y_size = GetTimelineChannelYSize(drawer, data, scale, index);
+					drawer->current_row_y_scale = channel_y_size;
+					if (data->channels[index].description.size > 0) {
+						float2 current_scale;
+						drawer->TextLabel(
+							ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_LABEL_TRANSPARENT,
+							config,
+							data->channels[index].description,
+							current_channel_position,
+							current_scale
+						);
+					}
+					current_channel_position.y += drawer->current_row_y_scale;
+				}
+
+				current_channel_position.y = GetTimelineElementPositionY(drawer, data, channel_start_position.y, 0.0f);
+			}
+
+			UIDrawerClipState clip_state = drawer->BeginClip(configuration);
+
+			for (size_t index = 0; index < data->channels.size; index++) {
+				float channel_y_size = GetTimelineChannelYSize(drawer, data, scale, index);
+				drawer->current_row_y_scale = channel_y_size;
+				float entry_y_size = data->channels[index].entry_y_size == 0.0f ? channel_y_size * 0.5f : data->channels[index].entry_y_size * drawer->zoom_ptr->y;
+				float entry_y_position = AlignMiddle(current_channel_position.y, channel_y_size, entry_y_size);
+				float2 entry_size = drawer->GetSquareScale(entry_y_size);
+
+				// Draw each entry now
+				for (size_t entry_index = 0; entry_index < data->channels[index].elements.size; entry_index++) {
+					const UIDrawerTimelineElement& element = data->channels[index].elements[entry_index];
+					float normalized_x_position = GetTimelineNormalizedTimeValue(data, element.time);
+					float entry_x_position = GetTimelineElementPositionFromNormalized(drawer, data, channel_start_position.x, scale.x, normalized_x_position);
+					entry_x_position -= entry_size.x * 0.5f;
+					drawer->SpriteRectangle(configuration, { entry_x_position, entry_y_position }, entry_size, data->texture_paths[element.texture_index], element.color);
+				}
+
+				current_channel_position.y += drawer->current_row_y_scale;
+				drawer->NextRow(0.0f);
+			}
+
+			float2 timeline_background_scale = { scale.x, timeline_y_size };
+			drawer->EndClip(configuration, clip_state, { channel_start_position, timeline_background_scale });
+			drawer->FinalizeRectangle(configuration | UI_CONFIG_DO_NOT_FIT_SPACE, channel_start_position, timeline_background_scale);
+			//drawer->AddHoverable(configuration, channel_start_position, timeline_background_scale, )
 		}
 
 		float UIDrawer::TimelineDrawer(size_t configuration, const UIDrawConfig& config, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, float2 position, float2 scale) {
@@ -2765,21 +2948,21 @@ namespace ECSEngine {
 			
 			float2 initial_position = position;
 
-			// Determine the total size of the timeline on the Y axis
-			float timeline_y_size = 0.0f;
-			float default_channel_y_size = scale.y / (float)data->channels.size;
-			for (size_t index = 0; index < data->channels.size; index++) {
-				timeline_y_size += data->channels[index].row_y_size == 0.0f ? default_channel_y_size : data->channels[index].row_y_size;
-			}
-
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, data->identifier);
 			UpdateTimelineData(this, timeline, data, dynamic_index, false);
 
-			// Draw the background first
-			Color background_color = data->use_background_color ? data->background_color : color_theme.timeline_background;
-			SolidColorRectangle(configuration, { position.x, position.y + GetTimelineHeaderSize(this, data) }, { scale.x, timeline_y_size }, background_color);
+			position.x += data->largest_channel_description_size;
+			scale.x -= data->largest_channel_description_size;
+
+			// Determine the total size of the timeline on the Y axis
+			float timeline_y_size = 0.0f;
+			float default_channel_y_size = TimelineDefaultChannelYSize(data, scale);
+			for (size_t index = 0; index < data->channels.size; index++) {
+				timeline_y_size += GetTimelineChannelYSize(this, data, scale, index);
+			}
 
 			TimelineDrawHeader(this, configuration, config, data, position, scale);
+			TimelineDrawChannels(this, configuration, config, data, { position.x, position.y + GetTimelineHeaderSize(this, data) }, scale, timeline_y_size);
 			TimelineDrawCursor(this, configuration, config, data, position, scale, timeline_y_size);
 
 			return GetTimelineAbsoluteTimeValue(data, data->cursor_position_normalized);
@@ -9795,6 +9978,10 @@ namespace ECSEngine {
 			last_initialized_element_table_resources.size = 0;
 		}
 
+		UIDrawerClipState UIDrawer::BeginClip(size_t configuration) const {
+			return { GetBufferState(configuration), GetHandlerState() };
+		}
+
 #pragma region Button
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -11210,6 +11397,42 @@ namespace ECSEngine {
 
 #pragma endregion
 
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::EndClip(size_t configuration, const UIDrawerClipState& state, const UIElementTransform& clip_region) {
+			Rectangle2D clip_rectangle = Rectangle2D::FromScale(clip_region.position, clip_region.scale);
+
+			auto handle_rectangle_type = [&clip_rectangle](size_t clip_start_count, size_t current_count, auto* vertices) {
+				// At the moment, do not swap back any rectangles, leave them empty
+				for (size_t index = clip_start_count; index < current_count; index += 6) {
+					Rectangle2D rectangle = GetRectangleFromVertices(vertices + index);
+					Rectangle2D uv_rectangle;
+					if constexpr (std::is_same_v<std::remove_reference_t<decltype(*vertices)>, UISpriteVertex>) {
+						uv_rectangle = GetUVFromVertices(vertices + index);
+						rectangle = ClipRectangleWithUVs(rectangle, clip_rectangle, uv_rectangle);
+						SetUVForRectangle(uv_rectangle.top_left, uv_rectangle.bottom_right, index, vertices);
+					}
+					else {
+						rectangle = ClipRectangle(rectangle, clip_rectangle);
+					}
+					SetTransformForRectangle(rectangle.top_left, rectangle.GetScale(), index, vertices);
+				}
+			};
+
+			handle_rectangle_type(state.buffer_state.solid_color_count, *HandleSolidColorCount(configuration), HandleSolidColorBuffer(configuration));
+			handle_rectangle_type(state.buffer_state.text_sprite_count, *HandleTextSpriteCount(configuration), HandleTextSpriteBuffer(configuration));
+			handle_rectangle_type(state.buffer_state.sprite_count, *HandleSpriteCount(configuration), HandleSpriteBuffer(configuration));
+			handle_rectangle_type(state.buffer_state.sprite_cluster_count, *HandleSpriteClusterCount(configuration), HandleSpriteClusterBuffer(configuration));
+			ECS_ASSERT(state.buffer_state.line_count == *HandleLineCount(configuration), "UI Line clipping is not yet supported.");
+
+			system->ClipHoverables(dockspace, border_index, state.handler_state.hoverable_count, -1, clip_rectangle);
+			for (size_t index = 0; index < ECS_MOUSE_BUTTON_COUNT; index++) {
+				system->ClipClickables(dockspace, border_index, state.handler_state.clickable_count[index], -1, clip_rectangle, (ECS_MOUSE_BUTTON)index);
+			}
+			system->ClipGenerals(dockspace, border_index, state.handler_state.hoverable_count, -1, clip_rectangle);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
 
 #pragma region File Input
 
@@ -12093,7 +12316,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIDrawerBufferState UIDrawer::GetBufferState(size_t configuration) {
+		UIDrawerBufferState UIDrawer::GetBufferState(size_t configuration) const {
 			UIDrawerBufferState state;
 
 			if (!initializer) {
@@ -12101,13 +12324,10 @@ namespace ECSEngine {
 				state.sprite_count = *HandleSpriteCount(configuration);
 				state.text_sprite_count = *HandleTextSpriteCount(configuration);
 				state.sprite_cluster_count = *HandleSpriteClusterCount(configuration);
+				state.line_count = *HandleLineCount(configuration);
 			}
 			else {
-				state.solid_color_count = 0;
-				state.sprite_count = 0;
-				state.text_sprite_count = 0;
-				state.text_sprite_count = 0;
-				state.sprite_cluster_count = 0;
+				memset(&state, 0, sizeof(state));
 			}
 
 			return state;
@@ -12115,7 +12335,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIDrawerHandlerState UIDrawer::GetHandlerState() {
+		UIDrawerHandlerState UIDrawer::GetHandlerState() const {
 			UIDrawerHandlerState state;
 
 			if (!initializer) {
@@ -14309,23 +14529,13 @@ namespace ECSEngine {
 				alignment.horizontal = ECS_UI_ALIGN_LEFT;
 				alignment.vertical = ECS_UI_ALIGN_MIDDLE;
 				UIConfigTextAlignment previous_alignment;
-				if (configuration & UI_CONFIG_TEXT_ALIGNMENT) {
-					config.SetExistingFlag(alignment, previous_alignment);
-				}
-				else {
-					config.AddFlag(alignment);
-				}
+				SetConfigParameter(configuration, config, alignment, previous_alignment);
 
 				FinalizeRectangle(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, position, scale);
 				position.x += scale.x + layout.element_indentation * 0.5f;
 				TextLabel(ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_TRANSPARENT, config, name, position, scale);
 
-				if (configuration & UI_CONFIG_TEXT_ALIGNMENT) {
-					config.SetExistingFlag(previous_alignment, alignment);
-				}
-				else {
-					config.flag_count--;
-				}
+				RemoveConfigParameter(configuration, config, previous_alignment);
 			}
 		}
 
@@ -14459,12 +14669,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::RestoreBufferState(size_t configuration, UIDrawerBufferState state) {
+		void UIDrawer::RestoreBufferState(size_t configuration, const UIDrawerBufferState& state) {
 			if (!initializer) {
 				size_t* solid_color_count = HandleSolidColorCount(configuration);
 				size_t* text_sprite_count = HandleTextSpriteCount(configuration);
 				size_t* sprite_count = HandleSpriteCount(configuration);
 				size_t* sprite_cluster_count = HandleSpriteClusterCount(configuration);
+				size_t* line_count = HandleLineCount(configuration);
 
 				size_t sprite_difference = *sprite_count - state.sprite_count;
 				size_t sprite_cluster_difference = *sprite_cluster_count - state.sprite_cluster_count;
@@ -14492,12 +14703,13 @@ namespace ECSEngine {
 				*text_sprite_count = state.text_sprite_count;
 				*sprite_count = state.sprite_count;
 				*sprite_cluster_count = state.sprite_cluster_count;
+				*line_count = state.line_count;
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::RestoreHandlerState(UIDrawerHandlerState state) {
+		void UIDrawer::RestoreHandlerState(const UIDrawerHandlerState& state) {
 			if (!initializer) {
 				dockspace->borders[border_index].hoverable_handler.position_x.size = state.hoverable_count;
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {

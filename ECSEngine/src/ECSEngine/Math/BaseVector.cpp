@@ -8,7 +8,7 @@ namespace ECSEngine {
 	// It is faster to write the hardcoded version
 
 	/*template<typename Vector>
-	static ECS_INLINE bool ECS_VECTORCALL OperatorEquals(Vector a, Vector b) {
+	ECS_INLINE static bool ECS_VECTORCALL OperatorEquals(Vector a, Vector b) {
 		Vec8fb result = a.x == b.x;
 		for (size_t index = 1; index < Vector::Count(); index++) {
 			result &= a[index] == b[index];
@@ -17,7 +17,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL OperatorPlus(Vector a, Vector b) {
+	ECS_INLINE static Vector ECS_VECTORCALL OperatorPlus(Vector a, Vector b) {
 		Vector result;
 		for (size_t index = 0; index < Vector::Count(); index++) {
 			result[index] = a[index] + b[index];
@@ -26,7 +26,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL OperatorMinus(Vector a, Vector b) {
+	ECS_INLINE static Vector ECS_VECTORCALL OperatorMinus(Vector a, Vector b) {
 		Vector result;
 		for (size_t index = 0; index < Vector::Count(); index++) {
 			result[index] = a[index] - b[index];

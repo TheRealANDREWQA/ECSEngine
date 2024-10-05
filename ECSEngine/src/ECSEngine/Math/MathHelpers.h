@@ -280,4 +280,12 @@ namespace ECSEngine {
 
 	ECSENGINE_API float3 ClampPointToRectangle(float3 point, const Rectangle3D& rectangle);
 
+	// Clips the first parameter such that it doesn't fall outside the clipper rectangle
+	ECSENGINE_API Rectangle2D ClipRectangle(const Rectangle2D& rectangle, const Rectangle2D& clipper);
+
+	// Clips the first parameter such that it doesn't fall outside the clipper rectangle while also
+	// Outputting in the last parameter the uvs of the rectangle such they reflect correctly the clipping
+	// The uvs parameter must contain the current UV coordinates of the rectangle
+	ECSENGINE_API Rectangle2D ClipRectangleWithUVs(const Rectangle2D& rectangle, const Rectangle2D& clipper, Rectangle2D& uvs);
+
 }

@@ -1726,6 +1726,20 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::ClipHoverables(UIDockspace* dockspace, unsigned int border_index, unsigned int first_index, unsigned int last_index, const Rectangle2D& clip_rectangle) {
+			dockspace->borders[border_index].hoverable_handler.Clip(first_index, last_index, clip_rectangle);
+		}
+
+		void UISystem::ClipClickables(UIDockspace* dockspace, unsigned int border_index, unsigned int first_index, unsigned int last_index, const Rectangle2D& clip_rectangle, ECS_MOUSE_BUTTON button) {
+			dockspace->borders[border_index].clickable_handler[button].Clip(first_index, last_index, clip_rectangle);
+		}
+
+		void UISystem::ClipGenerals(UIDockspace* dockspace, unsigned int border_index, unsigned int first_index, unsigned int last_index, const Rectangle2D& clip_rectangle) {
+			dockspace->borders[border_index].general_handler.Clip(first_index, last_index, clip_rectangle);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::ConfigureToolTipBase(UITooltipBaseData* data) const
 		{
 			if (data->default_background) {
@@ -3522,10 +3536,9 @@ namespace ECSEngine {
 							};
 							UIDockspace* hovered_dockspace = &dockspaces[(unsigned int)dockspace_type][hovered_floating_dockspace];
 							if (dockspace_type == DockspaceType::FloatingHorizontal || dockspace_type == DockspaceType::FloatingVertical) {
-								if (IsEmptyFixedDockspace(hovered_dockspace) && m_mouse->IsPressed(ECS_MOUSE_LEFT)
-									&& m_keyboard->IsDown(ECS_KEY_LEFT_SHIFT)
-									)
+								if (IsEmptyFixedDockspace(hovered_dockspace) && m_mouse->IsPressed(ECS_MOUSE_LEFT) && m_keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 									DestroyDockspace(hovered_dockspace->borders.buffer, dockspace_type);
+								}
 							}
 						}
 					}

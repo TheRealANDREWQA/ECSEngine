@@ -258,5 +258,39 @@ namespace ECSEngine {
     // Fills in the keys which have changed their state from the previous state to the current state
     ECSENGINE_API void GetKeyboardButtonDelta(const Keyboard* previous_state, const Keyboard* current_state, CapacityStream<ECS_KEY>& keys);
 
+    // Returns the appropriate factor if the key is down, else a default of 1.0f
+    ECS_INLINE float GetKeyboardModifierValueCustomBoth(const Keyboard* keyboard, float shift_factor, float ctrl_factor) {
+        float factor = 1.0f;
+        factor = keyboard->IsDown(ECS_KEY_LEFT_SHIFT) ? shift_factor : factor;
+        factor = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? ctrl_factor : factor;
+        return factor;
+    }
+
+    // Returns the appropriate factor if the key is down, else a default of 1.0f and then multiplies with the given value
+    ECS_INLINE float GetKeyboardModifierValueCustomBoth(const Keyboard* keyboard, float shift_factor, float ctrl_factor, float value) {
+        return value * GetKeyboardModifierValueCustomBoth(keyboard, shift_factor, ctrl_factor);
+    }
+
+    // Returns a value divided by the custom factor if the left shift is pressed, while the custom_factor if the left_ctrl is pressed, else 1.0f
+    ECS_INLINE float GetKeyboardModifierValueCustom(const Keyboard* keyboard, float custom_factor) {
+        return GetKeyboardModifierValueCustomBoth(keyboard, 1.0f / custom_factor, custom_factor);
+    }
+
+    // Returns a value divided by the custom factor if the left shift is pressed, while the custom_factor if the left_ctrl is pressed, else 1.0f
+    // And then multiplies with the value given
+    ECS_INLINE float GetKeyboardModifierValueCustom(const Keyboard* keyboard, float custom_factor, float value) {
+        return value * GetKeyboardModifierValueCustom(keyboard, custom_factor);
+    }
+    
+    // Returns a modifier value, when left shift is pressed, the factor is smaller, while when left ctrl is pressed it is larger
+    ECS_INLINE float GetKeyboardModifierValue(const Keyboard* keyboard) {
+        return GetKeyboardModifierValueCustom(keyboard, 5.0f);
+    }
+
+    // Returns a value that is smaller when left shift is pressed, while a larger value when the left ctrl is pressed
+    ECS_INLINE float GetKeyboardModifierValue(const Keyboard* keyboard, float value) {
+        return value * GetKeyboardModifierValue(keyboard);
+    }
+
 }
 

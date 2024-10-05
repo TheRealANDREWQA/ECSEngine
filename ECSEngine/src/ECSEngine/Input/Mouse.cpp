@@ -128,27 +128,45 @@ namespace ECSEngine {
 					break;
 
 				case WM_LBUTTONDOWN:
+				{
 					UpdateButton(ECS_MOUSE_LEFT, false);
+					SetCapture((HWND)m_window_handle);
+				}
 					break;
 
 				case WM_LBUTTONUP:
+				{
 					UpdateButton(ECS_MOUSE_LEFT, true);
+					ReleaseCapture();
+				}
 					break;
 
 				case WM_RBUTTONDOWN:
+				{
 					UpdateButton(ECS_MOUSE_RIGHT, false);
+					SetCapture((HWND)m_window_handle);
+				}
 					break;
 
 				case WM_RBUTTONUP:
+				{
 					UpdateButton(ECS_MOUSE_RIGHT, true);
+					ReleaseCapture();
+				}
 					break;
 
 				case WM_MBUTTONDOWN:
+				{
 					UpdateButton(ECS_MOUSE_MIDDLE, false);
+					SetCapture((HWND)m_window_handle);
+				}
 					break;
 
 				case WM_MBUTTONUP:
+				{
 					UpdateButton(ECS_MOUSE_MIDDLE, true);
+					ReleaseCapture();
+				}
 					break;
 
 				case WM_MOUSEWHEEL:
@@ -156,6 +174,7 @@ namespace ECSEngine {
 					return;
 
 				case WM_XBUTTONDOWN:
+				{
 					switch (GET_XBUTTON_WPARAM(info.wParam))
 					{
 					case XBUTTON1:
@@ -166,8 +185,11 @@ namespace ECSEngine {
 						UpdateButton(ECS_MOUSE_X2, false);
 						break;
 					}
+					SetCapture((HWND)m_window_handle);
+				}
 					break;
 				case WM_XBUTTONUP:
+				{
 					switch (GET_XBUTTON_WPARAM(info.wParam))
 					{
 					case XBUTTON1:
@@ -178,6 +200,8 @@ namespace ECSEngine {
 						UpdateButton(ECS_MOUSE_X2, true);
 						break;
 					}
+					ReleaseCapture();
+				}
 					break;
 
 				default:

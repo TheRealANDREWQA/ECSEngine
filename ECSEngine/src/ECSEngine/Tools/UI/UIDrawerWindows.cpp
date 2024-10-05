@@ -1064,9 +1064,8 @@ namespace ECSEngine {
 			}
 			else {
 				if (data->last_frame == system->GetFrameIndex() - 1 && IsPointInRectangle(mouse_position, position, scale)) {
-					float dimming_value = 1.0f;
-					dimming_value = keyboard->IsDown(ECS_KEY_LEFT_SHIFT) ? 0.2f : 1.0f;
-					dimming_value = keyboard->IsDown(ECS_KEY_RIGHT_SHIFT) ? 0.02f : dimming_value;
+					float dimming_value = GetKeyboardModifierValue(keyboard);
+					dimming_value *= keyboard->IsDown(ECS_KEY_RIGHT_SHIFT) ? 0.2f : 1.0f;
 
 					if (scroll_amount != 0.0f) {
 						if (system->m_windows[window_index].drawer_draw_difference.y < ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_THRESHOLD) {

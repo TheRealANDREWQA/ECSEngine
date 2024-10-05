@@ -56,7 +56,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL ProjectPointOnTriangleImpl(Vector triangle_a, Vector triangle_b, Vector triangle_c, Vector point) {
+	ECS_INLINE static Vector ECS_VECTORCALL ProjectPointOnTriangleImpl(Vector triangle_a, Vector triangle_b, Vector triangle_c, Vector point) {
 		auto plane = ComputePlane(triangle_a, triangle_b, triangle_c);
 		return ProjectPointOnPlane(plane, point);
 	}
@@ -378,7 +378,7 @@ namespace ECSEngine {
 	// TODO: Handle the case of very obtuse triangles, for both sliver functions
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL IsTriangleSliverImpl(Vector A, Vector B, Vector C, typename Vector::T squared_edge_ratio) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL IsTriangleSliverImpl(Vector A, Vector B, Vector C, typename Vector::T squared_edge_ratio) {
 		Vector AB = B - A;
 		Vector AC = C - A;
 		Vector BC = C - B;
@@ -445,7 +445,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL IsTriangleSliverByAngleImpl(Vector A, Vector B, Vector C, typename Vector::T degrees) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL IsTriangleSliverByAngleImpl(Vector A, Vector B, Vector C, typename Vector::T degrees) {
 		// PERFORMANCE TODO: Should we use fast normalization? Probably worth
 
 		// In order to avoid using acos, we can calculate the degrees cos and then compare against it

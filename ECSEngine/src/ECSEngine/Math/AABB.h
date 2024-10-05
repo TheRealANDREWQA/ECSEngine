@@ -181,19 +181,22 @@ namespace ECSEngine {
 	// 4 are for the "right" face
 	ECSENGINE_API void GetAABBCorners(const AABBScalar& aabb, float3* corners);
 
+	// Returns the 8 cornerns of the AABB packed into a SIMD vector.
+	ECSENGINE_API Vector3 ECS_VECTORCALL GetAABBCornersScalarToSIMD(AABBScalar aabb);
+
 	// There need to be 8 entries for the corners pointer
 	// The first 4 entries are the "left" face and the other
 	// 4 are for the "right" face
-	ECSENGINE_API void GetAABBCorners(AABB aabb, Vector3* corners);
+	ECSENGINE_API void ECS_VECTORCALL GetAABBCorners(AABB aabb, Vector3* corners);
 
 	// Returns the squared distance from the AABB to the point
-	ECSENGINE_API float AABBToPointSquaredDistance(AABBScalar aabb, float3 point);
+	ECSENGINE_API float AABBToPointSquaredDistance(const AABBScalar& aabb, float3 point);
 
 	// Returns the squared distance from the AABB to the point
 	ECSENGINE_API Vec8f ECS_VECTORCALL AABBToPointSquaredDistance(AABB aabb, Vector3 point);
 
 	// Returns the closest point from the given point to the AABB
-	ECSENGINE_API float3 AABBClosestPoint(AABBScalar aabb, float3 point);
+	ECSENGINE_API float3 AABBClosestPoint(const AABBScalar& aabb, float3 point);
 
 	// Returns the closest point from the given point to the AABB
 	ECSENGINE_API Vector3 ECS_VECTORCALL AABBClosestPoint(AABB aabb, Vector3 point);

@@ -1043,7 +1043,7 @@ namespace ECSEngine {
 
 	// This is only for the scalar version
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL MatrixVectorMultiplyScalarImpl(Vector vector, Matrix matrix) {
+	ECS_INLINE static Vector ECS_VECTORCALL MatrixVectorMultiplyScalarImpl(Vector vector, Matrix matrix) {
 		// Broadcast each vector element and then multiply with the matrix
 		// Here it is probably easier to use 4 wide SSE instead of AVX since
 		// Of the costs of doing operations on the high lane

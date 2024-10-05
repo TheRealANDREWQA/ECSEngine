@@ -63,7 +63,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Plane, typename Vector>
-	static ECS_INLINE Plane ECS_VECTORCALL ComputePlaneImpl(Vector a, Vector b, Vector c) {
+	ECS_INLINE static Plane ECS_VECTORCALL ComputePlaneImpl(Vector a, Vector b, Vector c) {
 		auto normal = Normalize(Cross(b - a, c - a));
 		auto dot = Dot(normal, a);
 		return { normal, dot };
@@ -78,7 +78,7 @@ namespace ECSEngine {
 	}
 
 	template<typename MaskType, typename Plane, typename Vector>
-	static ECS_INLINE Plane ECS_VECTORCALL ComputePlaneAwayImpl(Vector a, Vector b, Vector c, Vector reference_point, MaskType* facing_away) {
+	ECS_INLINE static Plane ECS_VECTORCALL ComputePlaneAwayImpl(Vector a, Vector b, Vector c, Vector reference_point, MaskType* facing_away) {
 		Plane plane = ComputePlane(a, b, c);
 		auto plane_distance = DistanceToPlane(plane, reference_point);
 		*facing_away = plane_distance < SingleZeroVector<Vector>();
@@ -107,7 +107,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Plane, typename Vector, typename OffsetType>
-	static ECS_INLINE Plane ECS_VECTORCALL PlaneFromAxisImpl(Vector normal, OffsetType offset, bool invert_normal) {
+	ECS_INLINE static Plane ECS_VECTORCALL PlaneFromAxisImpl(Vector normal, OffsetType offset, bool invert_normal) {
 		if (invert_normal) {
 			normal = -normal;
 			offset = -offset;
@@ -186,7 +186,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Mask, typename Plane, typename Vector>
-	static ECS_INLINE Mask ECS_VECTORCALL IsAbovePlaneMaskImpl(Plane plane, Vector point) {
+	ECS_INLINE static Mask ECS_VECTORCALL IsAbovePlaneMaskImpl(Plane plane, Vector point) {
 		// If the distance to the plane is above 0.0f, it is above it
 		return DistanceToPlane(plane, point) > SingleZeroVector<Vector>();
 	}
@@ -200,7 +200,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Mask, typename Plane, typename Vector>
-	static ECS_INLINE Mask ECS_VECTORCALL IsOnSamePlaneSideImpl(Plane plane, Vector point, Vector reference_point) {
+	ECS_INLINE static Mask ECS_VECTORCALL IsOnSamePlaneSideImpl(Plane plane, Vector point, Vector reference_point) {
 		auto point_distance = DistanceToPlane(plane, point);
 		auto reference_point_distance = DistanceToPlane(plane, reference_point);
 
@@ -219,7 +219,7 @@ namespace ECSEngine {
 	}
 
 	template<typename ReturnType, typename Plane>
-	static ECS_INLINE ReturnType ECS_VECTORCALL AngleBetweenPlanesRadImpl(Plane plane_a, Plane plane_b) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL AngleBetweenPlanesRadImpl(Plane plane_a, Plane plane_b) {
 		return acos(PlanesDotProduct(plane_a, plane_b));
 	}
 
@@ -308,7 +308,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Plane>
-	static ECS_INLINE Plane ECS_VECTORCALL TransformPlaneImpl(Plane plane, Matrix matrix) {
+	ECS_INLINE static Plane ECS_VECTORCALL TransformPlaneImpl(Plane plane, Matrix matrix) {
 		// Transforming a plane can be viewed as transforming the point plane.normal * plane.dot
 		// The final normal is the normalized vector, while the dot is the length of that vector
 		// This is quite cheap, since for normalization we need to compute the length anyway
@@ -346,7 +346,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Plane, typename Vector>
-	static ECS_INLINE Plane ECS_VECTORCALL ScalePlaneImpl(Plane plane, Vector factor) {
+	ECS_INLINE static Plane ECS_VECTORCALL ScalePlaneImpl(Plane plane, Vector factor) {
 		// The same principle as the Transform. But this case can be handled
 		// More efficiently. Simply scale the dot by the Dot product
 		// Of the normal and the factor

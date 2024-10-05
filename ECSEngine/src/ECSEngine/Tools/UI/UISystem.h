@@ -448,6 +448,18 @@ namespace ECSEngine {
 
 			void ClearFixedDockspace(UIDockspaceBorder* dockspace, DockspaceType type);
 
+			// Clips the rectangles of the hoverable actions starting from the first index to the last index. Last index can be set to -1
+			// To use the current size.
+			void ClipHoverables(UIDockspace* dockspace, unsigned int border_index, unsigned int first_index, unsigned int last_index, const Rectangle2D& clip_rectangle);
+
+			// Clips the rectangles of the clickable actions starting from the first index to the last index. Last index can be set to -1
+			// To use the current size.
+			void ClipClickables(UIDockspace* dockspace, unsigned int border_index, unsigned int first_index, unsigned int last_index, const Rectangle2D& clip_rectangle, ECS_MOUSE_BUTTON button = ECS_MOUSE_LEFT);
+
+			// Clips the rectangles of the general actions starting from the first index to the last index. Last index can be set to -1
+			// To use the current size.
+			void ClipGenerals(UIDockspace* dockspace, unsigned int border_index, unsigned int first_index, unsigned int last_index, const Rectangle2D& clip_rectangle);
+
 			void ConfigureToolTipBase(UITooltipBaseData* data) const;
 
 			// It will convert the characters into a row of text sprites; position represents the x and y of the 
