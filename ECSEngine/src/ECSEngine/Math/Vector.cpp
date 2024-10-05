@@ -58,13 +58,13 @@ namespace ECSEngine {
 		typedef float T;
 	};*/
 
-	static ECS_INLINE float approx_recipr(float value) {
+	ECS_INLINE static float approx_recipr(float value) {
 		__m128 temp_simd = _mm_set1_ps(value);
 		__m128 result = _mm_rcp_ss(temp_simd);
 		return _mm_cvtss_f32(result);
 	}
 
-	static ECS_INLINE float approx_rsqrt(float squared_value) {
+	ECS_INLINE static float approx_rsqrt(float squared_value) {
 		__m128 temp_simd = _mm_set1_ps(squared_value);
 		__m128 result = _mm_rsqrt_ss(temp_simd);
 		return _mm_cvtss_f32(result);
@@ -80,19 +80,19 @@ namespace ECSEngine {
 	};
 
 	// Used to conform to the to_bits vector function
-	static ECS_INLINE SingleMask to_bits(bool value) {
+	ECS_INLINE static SingleMask to_bits(bool value) {
 		return SingleMask{ value };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL DegToRadImpl(Vector angles) {
+	ECS_INLINE static Vector ECS_VECTORCALL DegToRadImpl(Vector angles) {
 		return angles * DEG_TO_RAD_FACTOR;
 	}
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL RadToDegImpl(Vector angles) {
+	ECS_INLINE static Vector ECS_VECTORCALL RadToDegImpl(Vector angles) {
 		return angles * RAD_TO_DEG_FACTOR;
 	}
 
@@ -188,7 +188,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL AbsImpl(Vector vector) {
+	ECS_INLINE static Vector ECS_VECTORCALL AbsImpl(Vector vector) {
 		Vector result;
 		for (size_t index = 0; index < Vector::Count(); index++) {
 			result[index] = abs(vector[index]);
@@ -197,7 +197,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL AbsoluteDifferenceImpl(Vector a, Vector b) {
+	ECS_INLINE static Vector ECS_VECTORCALL AbsoluteDifferenceImpl(Vector a, Vector b) {
 		Vector result;
 		for (size_t index = 0; index < Vector::Count(); index++) {
 			result[index] = abs(a[index] - b[index]);
@@ -240,7 +240,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE Vec8f ECS_VECTORCALL DotImpl(Vector first, Vector second) {
+	ECS_INLINE static Vec8f ECS_VECTORCALL DotImpl(Vector first, Vector second) {
 		Vec8f result = first[0] * second[0];
 		for (size_t index = 1; index < Vector::Count(); index++) {
 			result += first[index] * second[index];
@@ -259,7 +259,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE SIMDVectorMask ECS_VECTORCALL CompareMaskImpl(Vector first, Vector second, Vec8f epsilon) {
+	ECS_INLINE static SIMDVectorMask ECS_VECTORCALL CompareMaskImpl(Vector first, Vector second, Vec8f epsilon) {
 		SIMDVectorMask result = CompareMask(first[0], second[0], epsilon);
 		for (size_t index = 0; index < Vector::Count(); index++) {
 			result &= CompareMask(first[index], second[index], epsilon);
@@ -294,7 +294,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 	
 	template<typename ReturnType, typename Vector, typename SingleValue>
-	static ECS_INLINE ReturnType ECS_VECTORCALL CompareAngleNormalizedCosineMaskImpl(Vector first_normalized, Vector second_normalized, SingleValue cosine) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL CompareAngleNormalizedCosineMaskImpl(Vector first_normalized, Vector second_normalized, SingleValue cosine) {
 		SingleValue direction_cosine = AbsSingle(Dot(first_normalized, second_normalized));
 		return direction_cosine > cosine;
 	}
@@ -341,7 +341,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL ProjectPointOnLineDirectionImpl(Vector line_point, Vector line_direction, Vector point) {
+	ECS_INLINE static Vector ECS_VECTORCALL ProjectPointOnLineDirectionImpl(Vector line_point, Vector line_direction, Vector point) {
 		// Formula A + (dot(AP,line_direction) / dot(line_direction, line_direction)) * line_direction
 		// Where A is a point on the line and P is the point that we want to project
 		// Add a pair of paranthesis such that the dot division is performed before the multiplication
@@ -352,7 +352,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL ProjectPointOnLineDirectionNormalizedImpl(Vector line_point, Vector line_direction_normalized, Vector point) {
+	ECS_INLINE static Vector ECS_VECTORCALL ProjectPointOnLineDirectionNormalizedImpl(Vector line_point, Vector line_direction_normalized, Vector point) {
 		// In this version we don't need to divide by the magnitude of the line direction
 		// Formula A + line_direction * dot(AP,line_direction)
 		// Where A is a point on the line and P is the point that we want to project
@@ -414,7 +414,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL CrossImpl(Vector a, Vector b) {
+	ECS_INLINE static Vector ECS_VECTORCALL CrossImpl(Vector a, Vector b) {
 		// a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
 		return Vector(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 	}
@@ -429,7 +429,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL CrossTripleProductImpl(Vector line_a, Vector line_b, Vector point) {
+	ECS_INLINE static Vector ECS_VECTORCALL CrossTripleProductImpl(Vector line_a, Vector line_b, Vector point) {
 		// This is simply 2 cross products - the line direction with a direction vector from the point
 		// To one of the line points and then cross product with the line direction again
 		Vector line_direction = line_b - line_a;
@@ -455,7 +455,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL LengthImpl(Vector vector) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL LengthImpl(Vector vector) {
 		return sqrt(SquareLength(vector));
 	}
 
@@ -482,7 +482,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename ReturnValue, ECS_VECTOR_PRECISION precision, typename Vector>
-	static ECS_INLINE ReturnValue ECS_VECTORCALL ReciprocalLengthImpl(Vector vector) {
+	ECS_INLINE static ReturnValue ECS_VECTORCALL ReciprocalLengthImpl(Vector vector) {
 		auto square_length = SquareLength(vector);
 		if constexpr (precision == ECS_VECTOR_PRECISE) {
 			return OneVector<Vector>() / sqrt(square_length);
@@ -530,7 +530,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL SquaredDistanceToLineImpl(Vector line_point, Vector line_direction, Vector point) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL SquaredDistanceToLineImpl(Vector line_point, Vector line_direction, Vector point) {
 		Vector projected_point = ProjectPointOnLineDirection(line_point, line_direction, point);
 		return SquareLength(projected_point - point);
 	}
@@ -544,7 +544,7 @@ namespace ECSEngine {
 	}
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL SquaredDistanceToLineNormalizedImpl(Vector line_point, Vector line_direction_normalized, Vector point) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL SquaredDistanceToLineNormalizedImpl(Vector line_point, Vector line_direction_normalized, Vector point) {
 		Vector projected_point = ProjectPointOnLineDirectionNormalized(line_point, line_direction_normalized, point);
 		return SquareLength(projected_point - point);
 	}
@@ -568,7 +568,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<ECS_VECTOR_PRECISION precision, typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL NormalizeImpl(Vector vector) {
+	ECS_INLINE static Vector ECS_VECTORCALL NormalizeImpl(Vector vector) {
 		//if constexpr (precision == ECS_VECTOR_PRECISE) {
 		//	// Don't use reciprocal length so as to not add an extra read to the
 		//	// VectorGlobals::ONE and then a multiplication
@@ -627,7 +627,7 @@ namespace ECSEngine {
 	}
 
 	template<ECS_VECTOR_PRECISION precision, typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL NormalizeIfNotImpl(Vector vector, size_t vector_count) {
+	ECS_INLINE static Vector ECS_VECTORCALL NormalizeIfNotImpl(Vector vector, size_t vector_count) {
 		if constexpr (precision == ECS_VECTOR_PRECISE || precision == ECS_VECTOR_ACCURATE) {
 			auto square_length = SquareLength(vector);
 			auto mask = IsNormalizedSquareLengthMask(square_length);
@@ -781,7 +781,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL ClampImpl(Vector value, Vector min, Vector max) {
+	ECS_INLINE static Vector ECS_VECTORCALL ClampImpl(Vector value, Vector min, Vector max) {
 		Vector return_value;
 		for (size_t index = 0; index < Vector::Count(); index++) {
 			auto is_smaller = value[index] < min[index];
@@ -800,7 +800,7 @@ namespace ECSEngine {
 	}
 
 	template<typename ReturnType, bool equal_min, bool equal_max, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL IsInRangeMaskImpl(Vector value, Vector min, Vector max) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL IsInRangeMaskImpl(Vector value, Vector min, Vector max) {
 		ReturnType all_is_lower, all_is_greater;
 
 		auto compare = [&](ReturnType& is_lower, ReturnType& is_greater, size_t index) {
@@ -860,7 +860,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL ReflectImpl(Vector incident, Vector normal) {
+	ECS_INLINE static Vector ECS_VECTORCALL ReflectImpl(Vector incident, Vector normal) {
 		// result = incident - (2 * Dot(incident, normal)) * normal
 		auto dot = Dot(incident, normal);
 		return incident - Vector::Splat(dot + dot) * normal;
@@ -877,7 +877,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename MaskType, typename Vector, typename RefractionType>
-	static ECS_INLINE Vector ECS_VECTORCALL RefractImpl(Vector incident, Vector normal, RefractionType refraction_index, size_t vector_count) {
+	ECS_INLINE static Vector ECS_VECTORCALL RefractImpl(Vector incident, Vector normal, RefractionType refraction_index, size_t vector_count) {
 		// result = refraction_index * incident - normal * (refraction_index * Dot(incident, normal) +
 		// sqrt(1 - refraction_index * refraction_index * (1 - Dot(incident, normal) * Dot(incident, normal))))
 
@@ -921,7 +921,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL AngleBetweenVectorsNormalizedRadImpl(Vector a_normalized, Vector b_normalized) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL AngleBetweenVectorsNormalizedRadImpl(Vector a_normalized, Vector b_normalized) {
 		// Just take the cosine (dot) between them and return the acos result
 		ReturnType dot = Dot(a_normalized, b_normalized);
 		// We need to clamp the result in the [-1, 1] range. Because of floating point inaccuracies,
@@ -939,7 +939,7 @@ namespace ECSEngine {
 	}
 
 	template<typename ReturnType, ECS_VECTOR_PRECISION precision, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL AngleBetweenVectorsRadImpl(Vector a, Vector b) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL AngleBetweenVectorsRadImpl(Vector a, Vector b) {
 		return AngleBetweenVectorsNormalizedRad(Normalize<precision>(a), Normalize<precision>(b));
 	}
 
@@ -960,7 +960,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL FmaddImpl(Vector a, Vector b, Vector c) {
+	ECS_INLINE static Vector ECS_VECTORCALL FmaddImpl(Vector a, Vector b, Vector c) {
 		Vector result;
 		for (size_t index = 0; index < Vector::Count(); index++) {
 			result[index] = Fmadd(a[index], b[index], c[index]);
@@ -969,7 +969,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL FmsubImpl(Vector a, Vector b, Vector c) {
+	ECS_INLINE static Vector ECS_VECTORCALL FmsubImpl(Vector a, Vector b, Vector c) {
 		Vector result;
 		for (size_t index = 0; index < Vector::Count(); index++) {
 			result[index] = Fmsub(a[index], b[index], c[index]);
@@ -1039,7 +1039,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename SingleValue, typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL DirectionToRotationEulerRadImpl(Vector direction) {
+	ECS_INLINE static Vector ECS_VECTORCALL DirectionToRotationEulerRadImpl(Vector direction) {
 		/* Scalar algorithm
 		float x_angle = fmod(atan2(direction.y, direction.z), PI);
 		float y_angle = fmod(atan2(direction.z, direction.x), PI);
@@ -1143,17 +1143,17 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceXMaskImpl(Vector vector) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL CullClipSpaceXMaskImpl(Vector vector) {
 		return (-vector.w) <= vector.x && vector.x <= vector.w;
 	}
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceYMaskImpl(Vector vector) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL CullClipSpaceYMaskImpl(Vector vector) {
 		return (-vector.w) <= vector.y && vector.y <= vector.w;
 	}
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceZMaskImpl(Vector vector) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL CullClipSpaceZMaskImpl(Vector vector) {
 		if constexpr (std::is_same_v<Vector, float4>) {
 			return 0.0f <= vector.z && vector.z <= vector.w;
 		}
@@ -1163,7 +1163,7 @@ namespace ECSEngine {
 	}
 
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceWMaskImpl(Vector vector) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL CullClipSpaceWMaskImpl(Vector vector) {
 		if constexpr (std::is_same_v<Vector, float4>) {
 			return vector.w > 0.0f;
 		}
@@ -1206,7 +1206,7 @@ namespace ECSEngine {
 
 	// Returns a mask where vertices which should be kept have their lane set to true
 	template<typename ReturnType, typename Vector>
-	static ECS_INLINE ReturnType ECS_VECTORCALL CullClipSpaceMaskImpl(Vector vector) {
+	ECS_INLINE static ReturnType ECS_VECTORCALL CullClipSpaceMaskImpl(Vector vector) {
 		// The entire conditions are like this
 		/*
 			w > 0
@@ -1231,7 +1231,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL ClipSpaceToNDCImpl(Vector vector) {
+	ECS_INLINE static Vector ECS_VECTORCALL ClipSpaceToNDCImpl(Vector vector) {
 		// We just need to divide xyz / w, but here we also divide w by w
 		// so as to not add another masking instruction
 		return vector / Vector::Splat(vector.w);
@@ -1248,7 +1248,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE Vector ECS_VECTORCALL GetVectorForDirectionImpl(Vector direction_normalized, Vector world_compute_product, Vector world_same_direction) {
+	ECS_INLINE static Vector ECS_VECTORCALL GetVectorForDirectionImpl(Vector direction_normalized, Vector world_compute_product, Vector world_same_direction) {
 		// Compute the cross product between the a world axis and the given direction
 		// If they are parallel, then the return vector is the world same direction if the direction
 		// is positive, else the negative world same direction vector if the direction is negative
@@ -1410,7 +1410,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	template<typename Vector>
-	static ECS_INLINE void ECS_VECTORCALL ClosestLinesPointsImpl(
+	ECS_INLINE static void ECS_VECTORCALL ClosestLinesPointsImpl(
 		Vector first_line_point,
 		Vector first_line_direction,
 		Vector second_line_point,
@@ -1506,7 +1506,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Vector>
-	static ECS_INLINE void ECS_VECTORCALL ClosestSegmentPointsImpl(
+	ECS_INLINE static void ECS_VECTORCALL ClosestSegmentPointsImpl(
 		Vector first_line_A,
 		Vector first_line_B,
 		Vector second_line_A,

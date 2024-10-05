@@ -293,20 +293,30 @@ namespace ECSEngine {
 		// In case it is not possible to attain, the
 		float resulting_distance = FLT_MAX;
 		float smallest_difference = FLT_MAX;
-		auto get_aabb_distance_info = [&](float current_distance, bool* is_out_of_frustum, bool* is_smaller, float2* coverage, float* current_difference) {
+		auto get_aabb_distance_info = [&](float current_distance, bool* is_smaller, float2* coverage, float* current_difference) {
 			float3 aabb_translation = camera_forward * current_distance;
 			AABBScalar current_aabb = TranslateAABB(transformed_bounds, aabb_translation);
+			Vector3 aabb_corners = GetAABBCornersScalarToSIMD(current_aabb);
 
-			// Project the min and max point on the screen and determine the percentage of coverage
-			float4 projected_min = TransformPoint(current_aabb.min, view_projection_matrix);
-			float4 projected_max = TransformPoint(current_aabb.max, view_projection_matrix);
-			float4 ndc_min_values = ClipSpaceToNDC(projected_min);
-			float4 ndc_max_values = ClipSpaceToNDC(projected_max);
+			// Project all corners of the aabb on the screen and determine the percentage of coverage
+			Vector4 projected_corners = TransformPoint(aabb_corners, view_projection_matrix);
+			Vector4 ndc_corners = ClipSpaceToNDC(projected_corners);
+			
+			// We are interested in the maximum absolute difference on the x and y coordinates
+			// We cannot perform that operation SIMD friendly, since it involves operations horizontally inside the register
+			float scalar_corners_ndc_x[Vector4::ElementCount()];
+			float scalar_corners_ndc_y[Vector4::ElementCount()];
+			ndc_corners.x.store(scalar_corners_ndc_x);
+			ndc_corners.y.store(scalar_corners_ndc_y);
+			float2 current_coverage = float2(0.0f, 0.0f);
+			for (size_t index = 0; index < Vector4::ElementCount(); index++) {
+				for (size_t subindex = index + 1; subindex < Vector4::ElementCount(); subindex++) {
+					current_coverage.x = max(current_coverage.x, AbsoluteDifferenceSingle(scalar_corners_ndc_x[index], scalar_corners_ndc_x[subindex]));
+					current_coverage.y = max(current_coverage.y, AbsoluteDifferenceSingle(scalar_corners_ndc_y[index], scalar_corners_ndc_y[subindex]));
+				}
+			}
 
-			float2 min_pos = ndc_min_values.xy();
-			float2 max_pos = ndc_max_values.xy();
-			*coverage = BasicTypeAbsoluteDifference(min_pos, max_pos);
-			*is_out_of_frustum = !CullClipSpaceMask(ndc_min_values) || !CullClipSpaceMask(ndc_max_values);
+			*coverage = current_coverage;
 
 			if (view_space_proportion.x == 0.0f) {
 				// The Y proportion is specified
@@ -322,9 +332,8 @@ namespace ECSEngine {
 		auto aabb_compare = [&](float current_distance, float epsilon) {
 			float current_difference = 0.0f;
 			bool is_smaller = false;
-			bool is_out_of_frustum = false;
 			float2 coverage;
-			get_aabb_distance_info(current_distance, &is_out_of_frustum, &is_smaller, &coverage, &current_difference);
+			get_aabb_distance_info(current_distance, &is_smaller, &coverage, &current_difference);
 			if (!isnan(current_difference) && current_difference < epsilon) {
 				return 0;
 			}
@@ -333,11 +342,10 @@ namespace ECSEngine {
 		};
 
 		// Do a precheck. In case this precheck returns that we need to be closer
-		bool initial_is_out_of_frustum;
-		bool initial_is_smaller;
+		bool initial_is_smaller = false;
 		float2 initial_coverage;
-		float initial_difference;
-		get_aabb_distance_info(0.0f, &initial_is_out_of_frustum, &initial_is_smaller, &initial_coverage, &initial_difference);
+		float initial_difference = 0.0f;
+		get_aabb_distance_info(0.0f, &initial_is_smaller, &initial_coverage, &initial_difference);
 		if (initial_is_smaller) {
 			// Move along
 			return transformed_bounds_center - camera_forward * Length(half_extents);

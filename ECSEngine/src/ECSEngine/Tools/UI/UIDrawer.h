@@ -216,43 +216,43 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIVertexColor* HandleSolidColorBuffer(size_t configuration);
+			UIVertexColor* HandleSolidColorBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* HandleSolidColorCount(size_t configuration);
+			size_t* HandleSolidColorCount(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UISpriteVertex* HandleTextSpriteBuffer(size_t configuration);
+			UISpriteVertex* HandleTextSpriteBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* HandleTextSpriteCount(size_t configuration);
+			size_t* HandleTextSpriteCount(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UISpriteVertex* HandleSpriteBuffer(size_t configuration);
+			UISpriteVertex* HandleSpriteBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* HandleSpriteCount(size_t configuration);
+			size_t* HandleSpriteCount(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UISpriteVertex* HandleSpriteClusterBuffer(size_t configuration);
+			UISpriteVertex* HandleSpriteClusterBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* HandleSpriteClusterCount(size_t configuration);
+			size_t* HandleSpriteClusterCount(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIVertexColor* HandleLineBuffer(size_t configuration);
+			UIVertexColor* HandleLineBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* HandleLineCount(size_t configuration);
+			size_t* HandleLineCount(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3107,6 +3107,9 @@ namespace ECSEngine {
 			// Used to track which allocations have been made inside an initialization block
 			void BeginElement();
 
+			// Returns a structure that will be used by the EndClip function to finalize the clipping.
+			UIDrawerClipState BeginClip(size_t configuration) const;
+
 #pragma region Button
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3371,6 +3374,12 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void EndClip(size_t configuration, const UIDrawerClipState& state, const UIElementTransform& clip_region);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 #pragma region File Input
 
@@ -3736,11 +3745,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerBufferState GetBufferState(size_t configuration);
+			UIDrawerBufferState GetBufferState(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerHandlerState GetHandlerState();
+			UIDrawerHandlerState GetHandlerState() const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4219,11 +4228,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void RestoreBufferState(size_t configuration, UIDrawerBufferState state);
+			void RestoreBufferState(size_t configuration, const UIDrawerBufferState& state);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void RestoreHandlerState(UIDrawerHandlerState state);
+			void RestoreHandlerState(const UIDrawerHandlerState& state);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

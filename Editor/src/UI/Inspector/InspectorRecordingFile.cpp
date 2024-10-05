@@ -122,15 +122,30 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 		ZeroOut(&timeline);
 
 		ECS_STACK_CAPACITY_STREAM(UIDrawerTimelineChannel, channels, 1);
+		ECS_STACK_CAPACITY_STREAM(UIDrawerTimelineElement, channel_elements, 256);
+		channel_elements.size = 10;
+		for (unsigned int index = 0; index < channel_elements.size; index++) {
+			channel_elements[index].time = (float)index;
+			channel_elements[index].texture_index = index % 2;
+			channel_elements[index].color = (index % 2) == 0 ? ECS_COLOR_RED : ECS_COLOR_GREEN;
+		}
+
 		channels.ReserveRange();
 		channels[0].row_y_size = 0.2f;
 		channels[0].description = "My description";
-		channels[0].elements = {};
+		channels[0].elements = channel_elements;
+		channels[0].entry_y_size = 0.03f;
+
+		ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, textures, 2);
+		textures.size = 2;
+		textures[0] = ECS_TOOLS_UI_TEXTURE_COG;
+		textures[1] = ECS_TOOLS_UI_TEXTURE_MASK;
 
 		timeline.time_range.x = 0.0f;
 		timeline.time_range.y = 10.00f;
 		timeline.has_time_range = true;
 		timeline.channels = channels;
+		timeline.texture_paths = textures;
 
 		drawer->Timeline("Pog", &timeline);
 	}

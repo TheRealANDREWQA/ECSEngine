@@ -296,13 +296,7 @@ namespace ECSEngine {
 			UIDrawerSlider* slider = data->slider;
 
 			float initial_position = slider->slider_position;
-			float dimming_factor = 1.0f;
-			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-				dimming_factor = 0.2f;
-			}
-			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-				dimming_factor = 5.0f;
-			}
+			float dimming_factor = GetKeyboardModifierValue(keyboard);
 
 			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = true;
@@ -314,9 +308,7 @@ namespace ECSEngine {
 			float factor = slider->is_vertical ? mouse_delta.y : mouse_delta.x;
 			if (data->interpolate_bounds) {
 				slider->slider_position += factor / slider->current_scale.x * dimming_factor;
-
-				slider->slider_position = slider->slider_position < 0.0f ? 0.0f : slider->slider_position;
-				slider->slider_position = slider->slider_position > 1.0f ? 1.0f : slider->slider_position;
+				slider->slider_position = Clamp(slider->slider_position, 0.0f, 1.0f);
 			}
 			else {
 				slider->slider_position += factor * dimming_factor * 150.0f;
@@ -886,9 +878,7 @@ namespace ECSEngine {
 			}
 
 			if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsReleased(ECS_MOUSE_LEFT)) {
-				FloatingPoint shift_value = keyboard->IsDown(ECS_KEY_LEFT_SHIFT) ? 1.0f / 5.0f : 1.0f;
-				FloatingPoint ctrl_value = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? 5.0f : 1.0f;
-				FloatingPoint amount = (FloatingPoint)mouse_delta.x * (FloatingPoint)INPUT_DRAG_FACTOR * shift_value * ctrl_value;
+				FloatingPoint amount = (FloatingPoint)mouse_delta.x * (FloatingPoint)INPUT_DRAG_FACTOR * (FloatingPoint)GetKeyboardModifierValue(keyboard);
 
 				*data->callback_data.number += amount;
 				*data->callback_data.number = Clamp(*data->callback_data.number, data->callback_data.min, data->callback_data.max);
@@ -952,9 +942,7 @@ namespace ECSEngine {
 						delta_to_position -= 2.0f;
 					}
 				}
-				float shift_value = keyboard->IsDown(ECS_KEY_LEFT_SHIFT) ? 1.0f / 5.0f : 1.0f;
-				float ctrl_value = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? 5.0f : 1.0f;
-				float amount = delta_to_position * INPUT_DRAG_FACTOR * INTEGER_INPUT_DRAG_FACTOR * shift_value * ctrl_value;
+				float amount = delta_to_position * INPUT_DRAG_FACTOR * INTEGER_INPUT_DRAG_FACTOR * GetKeyboardModifierValue(keyboard);
 				if (has_wrapped) {
 					// In case there is a wrap around, we need to change the value right now
 					// Since if we don't, the next call will not see the wrap around but the last
@@ -3830,6 +3818,19 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		void TimelineChannelHoverableZoomAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerTimelineData* data = (UIDrawerTimelineData*)_data;
+
+			float scroll_delta = (float)mouse->GetScrollDelta();
+			if (scroll_delta != 0.0f) {
+				//data->zoom += scroll_delta * 0
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
 		void TimelineHeaderClickAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
@@ -3856,6 +3857,7 @@ namespace ECSEngine {
 			}
 
 			action_data->redraw_window = true;
+			system->SetFramePacing(ECS_UI_FRAME_PACING_HIGH);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

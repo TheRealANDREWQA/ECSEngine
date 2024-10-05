@@ -49,10 +49,24 @@ namespace ECSEngine {
 		unsigned int UIHandler::AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function) {
 			unsigned int current_size = position_x.size;
 			if (!Add(position, scale, handler, copy_function)) {
-				Resize(allocator, position_x.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2);
+				Resize(allocator, (float)position_x.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2.0f);
 				Add(position, scale, handler, copy_function);
 			}
 			return current_size;
+		}
+
+		void UIHandler::Clip(unsigned int first_action_index, unsigned int last_action_index, const Rectangle2D& clip_rectangle) {
+			last_action_index = position_x.size;
+
+			// PERFORMANCE TODO: At the moment, we do not have SIMD variants, if need be, those can be implemented
+			for (unsigned int index = first_action_index; index < last_action_index; index++) {
+				Rectangle2D current_rectangle = Rectangle2D::FromScale({ position_x[index], position_y[index] }, { scale_x[index], scale_y[index] });
+				current_rectangle = ClipRectangle(current_rectangle, clip_rectangle);
+				position_x[index] = current_rectangle.top_left.x;
+				position_y[index] = current_rectangle.top_left.y;
+				scale_x[index] = current_rectangle.GetScale().x;
+				scale_y[index] = current_rectangle.GetScale().y;
+			}
 		}
 
 		UIHandler UIHandler::Copy(AllocatorPolymorphic allocator, void** coalesced_action_data) const

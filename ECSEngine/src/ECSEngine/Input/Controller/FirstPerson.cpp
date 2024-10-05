@@ -4,19 +4,8 @@
 
 namespace ECSEngine {
 
-	ECS_INLINE static float GetModifierFactor(const Keyboard* keyboard, float factor) {
-		float modifier = 1.0f;
-		if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-			modifier = 0.2f;
-		}
-		else if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-			modifier = 5.0f;
-		}
-		return modifier * factor;
-	}
-
 	float3 FirstPersonControllerModifiers(const Mouse* mouse, float rotation_factor, float delta_time, const Keyboard* keyboard) {
-		return FirstPersonController(mouse, GetModifierFactor(keyboard, rotation_factor), delta_time);
+		return FirstPersonController(mouse, GetKeyboardModifierValue(keyboard, rotation_factor), delta_time);
 	}
 
 	QuaternionScalar FirstPersonControllerQuaternion(float2 input_delta, float rotation_factor, float delta_time) {
@@ -24,7 +13,7 @@ namespace ECSEngine {
 	}
 
 	QuaternionScalar FirstPersonControllerQuaternionModifiers(const Mouse* mouse, float rotation_factor, float delta_time, const Keyboard* keyboard) {
-		return FirstPersonControllerQuaternion(mouse, GetModifierFactor(keyboard, rotation_factor), delta_time);
+		return FirstPersonControllerQuaternion(mouse, GetKeyboardModifierValue(keyboard, rotation_factor), delta_time);
 	}
 
 	void FirstPersonWASDController(
@@ -58,10 +47,6 @@ namespace ECSEngine {
 		float3& translation,
 		QuaternionScalar& rotation
 	) {
-		//if (fabsf(input_delta.x) > 100.0f || fabsf(input_delta.y) > 100.0f) {
-		//	__debugbreak();
-		//}
-
 		float3 forward_direction = RotateVector(GetForwardVector(), rotation);
 		float3 right_direction = RotateVector(GetRightVector(), rotation);
 		translation += WASDController(w, a, s, d, movement_factor, delta_time, forward_direction, right_direction);
@@ -120,7 +105,7 @@ namespace ECSEngine {
 		float3& translation,
 		float3& rotation
 	) {
-		FirstPersonWASDController(mouse, keyboard, GetModifierFactor(keyboard, movement_factor), GetModifierFactor(keyboard, rotation_factor), delta_time, translation, rotation);
+		FirstPersonWASDController(mouse, keyboard, GetKeyboardModifierValue(keyboard, movement_factor), GetKeyboardModifierValue(keyboard, rotation_factor), delta_time, translation, rotation);
 	}
 
 	void FirstPersonWASDControllerModifiers(
@@ -144,8 +129,8 @@ namespace ECSEngine {
 			a,
 			s,
 			d,
-			GetModifierFactor(keyboard, movement_factor),
-			GetModifierFactor(keyboard, rotation_factor),
+			GetKeyboardModifierValue(keyboard, movement_factor),
+			GetKeyboardModifierValue(keyboard, rotation_factor),
 			delta_time,
 			translation,
 			rotation
@@ -192,8 +177,8 @@ namespace ECSEngine {
 			a,
 			s,
 			d,
-			GetModifierFactor(keyboard, movement_factor),
-			GetModifierFactor(keyboard, rotation_factor),
+			GetKeyboardModifierValue(keyboard, movement_factor),
+			GetKeyboardModifierValue(keyboard, rotation_factor),
 			delta_time,
 			translation,
 			rotation
@@ -234,8 +219,8 @@ namespace ECSEngine {
 		FirstPersonWASDControllerQuaternion(
 			mouse, 
 			keyboard, 
-			GetModifierFactor(keyboard, movement_factor), 
-			GetModifierFactor(keyboard, rotation_factor), 
+			GetKeyboardModifierValue(keyboard, movement_factor),
+			GetKeyboardModifierValue(keyboard, rotation_factor),
 			delta_time, 
 			translation, 
 			rotation

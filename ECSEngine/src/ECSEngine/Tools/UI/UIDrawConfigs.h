@@ -1,4 +1,7 @@
 #pragma once
+#include "../../Core.h"
+
+#define ECS_TOOLS_UI_CONFIGURATION_BYTE_COUNT 16
 
 namespace ECSEngine {
 

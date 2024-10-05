@@ -28,6 +28,27 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
+		template<typename VertexType>
+		static Rectangle2D GetRectangleFromVerticesImpl(const VertexType* vertices) {
+			Rectangle2D rectangle;
+			rectangle.top_left = vertices[0].position;
+			rectangle.bottom_right = vertices[4].position;
+			// Invert the y positions
+			rectangle.top_left.y = -rectangle.top_left.y;
+			rectangle.bottom_right.y = -rectangle.bottom_right.y;
+			return rectangle;
+		}
+
+		Rectangle2D GetRectangleFromVertices(const UIVertexColor* vertices) {
+			return GetRectangleFromVerticesImpl(vertices);
+		}
+
+		Rectangle2D GetRectangleFromVertices(const UISpriteVertex* vertices) {
+			return GetRectangleFromVerticesImpl(vertices);
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
 		void SetTransformForLine(float2 position1, float2 position2, size_t count, UIVertexColor* buffer) {
 			buffer[count].SetTransform(position1);
 			buffer[count + 1].SetTransform(position2);
@@ -195,7 +216,7 @@ namespace ECSEngine {
 			buffer[starting_index + 4].SetUV(second_uv);
 			float2 uvs[2] = { {first_uv.x, second_uv.y}, {second_uv.x, first_uv.y} };
 
-#pragma region Predication Explination
+#pragma region Predication Explanation
 			/*buffer[starting_index + 1].SetUV(float2(second_uv.x, first_uv.y));
 			buffer[starting_index + 2].SetUV(float2(first_uv.x, second_uv.y));
 			buffer[starting_index + 3].SetUV(float2(second_uv.x, first_uv.y));
@@ -242,6 +263,11 @@ namespace ECSEngine {
 		ECS_TEMPLATE_FUNCTION(void, SetUVForRectangle, float2, float2, unsigned int, UISpriteVertex*);
 
 		// -------------------------------------------------------------------------------------------------------
+
+		Rectangle2D GetUVFromVertices(const UISpriteVertex* vertices)
+		{
+			return { vertices[0].uvs, vertices[4].uvs };
+		}
 
 		void SetSolidColorRectangle(
 			float2 position,
@@ -524,27 +550,11 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		template<typename SimdVector>
-		bool ECS_VECTORCALL AVX2RectangleOverlapp(
-			SimdVector first_position_x,
-			SimdVector first_position_y,
-			SimdVector first_width,
-			SimdVector first_height,
-			SimdVector second_position_x,
-			SimdVector second_position_y,
-			SimdVector second_width,
-			SimdVector second_height
-		) {
-			SimdVector first_right = first_position_x + first_width;
-			SimdVector first_bottom = first_position_y + first_height;
-			SimdVector second_right = second_position_x + second_width;
-			SimdVector second_bottom = second_position_y + second_height;
-			return horizontal_count(((first_right >= second_position_x) && (first_right <= second_right)) || ((first_position_x <= second_right) && (first_position_x >= second_position_x))
-				|| ((first_bottom >= second_position_y) && (first_bottom <= second_bottom)) || (((first_position_y <= second_bottom) && (first_position_y >= second_position_y)))) > 0;
+		bool RectangleOverlap(const UIElementTransform& first, const UIElementTransform& second) {
+			bool x_overlap = IsInRange(first.position.x, second.position.x, second.position.x + second.scale.x) || IsInRange(second.position.x, first.position.x, first.position.x + first.scale.x);
+			bool y_overlap = IsInRange(first.position.y, second.position.y, second.position.y + second.scale.y) || IsInRange(second.position.y, first.position.y, first.position.y + first.scale.y);
+			return x_overlap && y_overlap;
 		}
-
-		ECS_TEMPLATE_FUNCTION(bool, AVX2RectangleOverlapp, Vec8f, Vec8f, Vec8f, Vec8f, Vec8f, Vec8f, Vec8f, Vec8f);
-		ECS_TEMPLATE_FUNCTION(bool, AVX2RectangleOverlapp, Vec16us, Vec16us, Vec16us, Vec16us, Vec16us, Vec16us, Vec16us, Vec16us);
 
 		// -------------------------------------------------------------------------------------------------------
 

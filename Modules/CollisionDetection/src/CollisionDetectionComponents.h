@@ -19,11 +19,11 @@ enum ECS_REFLECT COLLIDER_TYPE : unsigned char {
 };
 
 struct ECS_REFLECT_COMPONENT Collider {
-	constexpr static ECS_INLINE short ID() {
+	constexpr ECS_INLINE static short ID() {
 		return COLLISION_DETECTION_COMPONENT_BASE + 0;
 	}
 
-	constexpr static ECS_INLINE bool IsShared() {
+	constexpr ECS_INLINE static bool IsShared() {
 		return false;
 	}
 
@@ -45,11 +45,11 @@ struct ECS_REFLECT_COMPONENT Collider {
 };
 
 struct ECS_REFLECT_COMPONENT SphereCollider {
-	constexpr static ECS_INLINE short ID() {
+	constexpr ECS_INLINE static short ID() {
 		return COLLISION_DETECTION_COMPONENT_BASE + 1;
 	}
 
-	constexpr static ECS_INLINE bool IsShared() {
+	constexpr ECS_INLINE static bool IsShared() {
 		return false;
 	}
 
@@ -59,11 +59,11 @@ struct ECS_REFLECT_COMPONENT SphereCollider {
 };
 
 struct ECS_REFLECT_COMPONENT CapsuleCollider {
-	constexpr static ECS_INLINE short ID() {
+	constexpr ECS_INLINE static short ID() {
 		return COLLISION_DETECTION_COMPONENT_BASE + 2;
 	}
 
-	constexpr static ECS_INLINE bool IsShared() {
+	constexpr ECS_INLINE static bool IsShared() {
 		return false;
 	}
 
@@ -74,15 +74,15 @@ struct ECS_REFLECT_COMPONENT CapsuleCollider {
 };
 
 struct ECS_REFLECT_COMPONENT ConvexCollider {
-	constexpr static ECS_INLINE short ID() {
+	constexpr ECS_INLINE static short ID() {
 		return COLLISION_DETECTION_COMPONENT_BASE + 3;
 	}
 
-	constexpr static ECS_INLINE bool IsShared() {
+	constexpr ECS_INLINE static bool IsShared() {
 		return true;
 	}
 
-	constexpr static ECS_INLINE size_t AllocatorSize() {
+	constexpr ECS_INLINE static size_t AllocatorSize() {
 		return ECS_MB_R * 256;
 	}
 

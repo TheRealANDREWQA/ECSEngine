@@ -15,6 +15,12 @@ namespace ECSEngine {
 			Element* buffer
 		);
 
+		// Rectangle must have 6 vertices that represent a rectangle filled in with SetTransformForRectangle
+		ECSENGINE_API Rectangle2D GetRectangleFromVertices(const UIVertexColor* vertices);
+
+		// Rectangle must have 6 vertices that represent a rectangle filled in with SetTransformForRectangle
+		ECSENGINE_API Rectangle2D GetRectangleFromVertices(const UISpriteVertex* vertices);
+
 		ECSENGINE_API void SetTransformForLine(float2 position1, float2 position2, size_t count, UIVertexColor* buffer);
 
 		ECSENGINE_API void SetTransformForLine(float2 position1, float2 position2, size_t* counts, void** buffers, unsigned int material_offset = 0);
@@ -70,6 +76,10 @@ namespace ECSEngine {
 			unsigned int starting_index,
 			Element* buffer
 		);
+
+		// Returns the uvs for the top left and bottom right only, it is assumed that the other 2 uvs
+		// Can be deduced from the other 2.
+		ECSENGINE_API Rectangle2D GetUVFromVertices(const UISpriteVertex* vertices);
 
 		// manages all the cases or rectangle rotation through predication
 		template<typename Element>
@@ -246,17 +256,20 @@ namespace ECSEngine {
 			unsigned short second_scale_y
 		);
 
-		template<typename SimdVector>
-		bool ECS_VECTORCALL AVX2RectangleOverlapp(
-			SimdVector first_position_x,
-			SimdVector first_position_y,
-			SimdVector first_width,
-			SimdVector first_height,
-			SimdVector second_position_x,
-			SimdVector second_position_y,
-			SimdVector second_width,
-			SimdVector second_height
+		// ElementType must be float, Vec8f or Vec16us
+		template<typename ElementType>
+		bool ECS_VECTORCALL RectangleOverlap(
+			ElementType first_position_x,
+			ElementType first_position_y,
+			ElementType first_width,
+			ElementType first_height,
+			ElementType second_position_x,
+			ElementType second_position_y,
+			ElementType second_width,
+			ElementType second_height
 		);
+
+		ECSENGINE_API bool RectangleOverlap(const UIElementTransform& first, const UIElementTransform& second);
 
 		template<typename SimdVector>
 		int ECS_VECTORCALL AVX2IsPointInRectangle(

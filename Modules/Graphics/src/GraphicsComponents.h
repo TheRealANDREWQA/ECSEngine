@@ -12,11 +12,11 @@
 #define GRAPHICS_GLOBAL_COMPONENT_BASE ECS_CONSTANT_REFLECT(100)
 
 struct ECS_REFLECT_COMPONENT RenderEverything {
-	constexpr static ECS_INLINE short ID() {
+	constexpr ECS_INLINE static short ID() {
 		return GRAPHICS_SHARED_COMPONENT_BASE + 6;
 	}
 
-	constexpr static ECS_INLINE bool IsShared() {
+	constexpr ECS_INLINE static bool IsShared() {
 		return true;
 	}
 
@@ -29,11 +29,11 @@ struct ECS_REFLECT_COMPONENT RenderEverything {
 };
 
 //struct ECS_REFLECT_COMPONENT Colorssss {
-//	constexpr static ECS_INLINE short ID() {
+//	constexpr ECS_INLINE static short ID() {
 //		return GRAPHICS_SHARED_COMPONENT_BASE + 7;
 //	}
 //
-//	constexpr static ECS_INLINE bool IsShared() {
+//	constexpr ECS_INLINE static bool IsShared() {
 //		return true;
 //	}
 //
@@ -57,11 +57,11 @@ struct ECS_REFLECT_COMPONENT RenderEverything {
 //};
 
 //struct ECS_REFLECT_COMPONENT CheckBOXU {
-//	constexpr static ECS_INLINE short ID() {
+//	constexpr ECS_INLINE static short ID() {
 //		return 2313;
 //	}
 //
-//	constexpr static ECS_INLINE bool IsShared() {
+//	constexpr ECS_INLINE static bool IsShared() {
 //		return false;
 //	}
 //
@@ -69,11 +69,11 @@ struct ECS_REFLECT_COMPONENT RenderEverything {
 //};
 
 struct ECS_REFLECT_COMPONENT GTranslation {
-	constexpr static ECS_INLINE short ID() {
+	constexpr ECS_INLINE static short ID() {
 		return GRAPHICS_COMPONENT_BASE + 3;
 	}
 
-	constexpr static ECS_INLINE bool IsShared() {
+	constexpr ECS_INLINE static bool IsShared() {
 		return true;
 	}
 
@@ -83,11 +83,11 @@ struct ECS_REFLECT_COMPONENT GTranslation {
 };
 
 struct ECS_REFLECT_COMPONENT RenderMesh {
-	constexpr static ECS_INLINE short ID() {
+	constexpr ECS_INLINE static short ID() {
 		return GRAPHICS_SHARED_COMPONENT_BASE + 0;
 	}
 
-	constexpr static ECS_INLINE bool IsShared() {
+	constexpr ECS_INLINE static bool IsShared() {
 		return true;
 	}
 

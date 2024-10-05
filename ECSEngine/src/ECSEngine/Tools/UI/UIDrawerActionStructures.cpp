@@ -318,7 +318,6 @@ namespace ECSEngine {
 						*output_text_position = current_sprite_position;
 					}
 
-					memcpy(output_text, text->buffer + *output_text_position, *output_text_count);
 					output_text->AddStreamAssert(Stream<char>(text->buffer + *output_text_position, *output_text_count));
 					output_text->AddAssert('\0');
 					output_text->size--;

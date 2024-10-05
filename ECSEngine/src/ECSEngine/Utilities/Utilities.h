@@ -867,4 +867,21 @@ namespace ECSEngine {
 		return shift_count > 0 ? byte_index + 1 : byte_index;
 	}
 
+	// Returns a normalized [0-1] value knowing the current value and the interval range
+	ECS_INLINE float NormalizedValue(float value, float start, float end) {
+		return (value - start) / (end - start);
+	}
+
+	// Returns the absolute value from the a normalized [0-1] range
+	ECS_INLINE float AbsoluteValueFromNormalized(float normalized_value, float start, float end) {
+		return start + normalized_value * (end - start);
+	}
+
+	// Remaps a value from an interval to a value that corresponds to the other interval, by normalizing the value
+	// From the original interval and then retrieving the absolute value from the second interval.
+	ECS_INLINE float RemapRange(float value, float original_range_start, float original_range_end, float new_range_start, float new_range_end) {
+		float normalized_value = NormalizedValue(value, original_range_start, original_range_end);
+		return AbsoluteValueFromNormalized(normalized_value, new_range_start, new_range_end);
+	}
+
 }

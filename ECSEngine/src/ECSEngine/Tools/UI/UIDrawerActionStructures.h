@@ -700,6 +700,8 @@ namespace ECSEngine {
 			bool has_background_color = false;
 			// A size of 0.0f means use an auto scale determined by the timeline based on the scale.y value from the scale transform
 			float row_y_size = 0.0f;
+			// A size of 0.0f means use an auto scale that is half of the row's y size
+			float entry_y_size = 0.0f;
 		};
 
 		struct UIDrawerTimeline {
@@ -762,6 +764,8 @@ namespace ECSEngine {
 			float2 offset;
 			// The zoom for the horizontal X axis
 			float zoom;
+			// Computed before each draw, stores the largest channel description size
+			float largest_channel_description_size;
 			// The identifier of the dynamic resource, used to lookup the resource index
 			Stream<char> identifier;
 		};

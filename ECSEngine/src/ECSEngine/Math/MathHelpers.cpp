@@ -1083,4 +1083,27 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	Rectangle2D ClipRectangle(const Rectangle2D& rectangle, const Rectangle2D& clipper) {
+		Rectangle2D result;
+		result.top_left = BasicTypeClampMin(rectangle.top_left, clipper.top_left);
+		result.bottom_right = BasicTypeClampMax(rectangle.bottom_right, clipper.bottom_right);
+		// Clamp the top left such that it is smaller or equal to bottom right
+		result.top_left = BasicTypeClampMax(result.top_left, result.bottom_right);
+		return result;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	Rectangle2D ClipRectangleWithUVs(const Rectangle2D& rectangle, const Rectangle2D& clipper, Rectangle2D& uvs) {
+		Rectangle2D result = ClipRectangle(rectangle, clipper);
+		// We can obtain the uvs from the position of the result
+		uvs.top_left.x = RemapRange(result.top_left.x, rectangle.top_left.x, rectangle.bottom_right.x, uvs.top_left.x, uvs.bottom_right.x);
+		uvs.top_left.y = RemapRange(result.top_left.y, rectangle.top_left.y, rectangle.bottom_right.y, uvs.top_left.y, uvs.bottom_right.y);
+		uvs.bottom_right.x = RemapRange(result.bottom_right.x, rectangle.top_left.x, rectangle.bottom_right.x, uvs.top_left.x, uvs.bottom_right.x);
+		uvs.bottom_right.y = RemapRange(result.bottom_right.y, rectangle.top_left.y, rectangle.bottom_right.y, uvs.top_left.y, uvs.bottom_right.y);
+		return result;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 }

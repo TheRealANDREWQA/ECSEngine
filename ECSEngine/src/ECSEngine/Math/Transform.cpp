@@ -7,7 +7,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------
 
 	template<typename Transform>
-	static ECS_INLINE Transform TransformCombineImpl(const Transform* parent, const Transform* child) {
+	ECS_INLINE static Transform TransformCombineImpl(const Transform* parent, const Transform* child) {
 		Transform result;
 
 		// Rotation and scale can be composed by multiplication
@@ -32,7 +32,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------
 
 	template<typename SingleValue, typename Transform>
-	static ECS_INLINE Transform TransformInverseImpl(const Transform* transform) {
+	ECS_INLINE static Transform TransformInverseImpl(const Transform* transform) {
 		Transform result;
 
 		result.rotation = QuaternionInverse(transform->rotation, Vec8f::size());
@@ -67,7 +67,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------
 
 	template<typename Transform, typename PercentageType>
-	static ECS_INLINE Transform TransformMixImpl(const Transform* from, const Transform* to, PercentageType percentage) {
+	ECS_INLINE static Transform TransformMixImpl(const Transform* from, const Transform* to, PercentageType percentage) {
 		Transform result;
 
 		result.position = Lerp(from->position, to->position, percentage);

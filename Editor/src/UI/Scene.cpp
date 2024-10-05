@@ -111,13 +111,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 	break;
 	case ECS_TRANSFORM_ROTATION:
 	{
-		float factor = 0.5f;
-		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-			factor *= 0.2f;
-		}
-		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-			factor *= 5.0f;
-		}
+		float factor = GetKeyboardModifierValue(keyboard, 0.5f);
 		QuaternionScalar rotation_delta = HandleRotationToolDeltaCircleMapping(
 			&camera,
 			*descriptor->translation_midpoint,
@@ -140,14 +134,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 	break;
 	case ECS_TRANSFORM_SCALE:
 	{
-		float factor = 0.006f;
-		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-			factor *= 0.2f;
-		}
-		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-			factor *= 5.0f;
-		}
-
+		float factor = GetKeyboardModifierValue(keyboard, 0.006f);
 		float3 scale_delta = HandleScaleToolDelta(
 			&camera,
 			*descriptor->translation_midpoint,
@@ -233,12 +220,7 @@ static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox
 	float2 delta = system->GetMouseDelta(mouse_position);
 
 	if (!disable_modifiers) {
-		if (editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_SHIFT)) {
-			rotation_factor *= 0.33f;
-		}
-		else if (editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_CTRL)) {
-			rotation_factor *= 3.0f;
-		}
+		rotation_factor *= GetKeyboardModifierValueCustom(editor_state->Keyboard(), 3.0f);
 	}
 
 	float3 rotation = { delta.y * rotation_factor, delta.x * rotation_factor, 0.0f };
@@ -845,15 +827,7 @@ static void SceneTranslationAction(ActionData* action_data) {
 				float3 right_vector = scene_camera.GetRightVector();
 				float3 up_vector = scene_camera.GetUpVector();
 
-				float translation_factor = 10.0f;
-
-				if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-					translation_factor = 2.5f;
-				}
-				else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-					translation_factor = 30.0f;
-				}
-
+				float translation_factor = GetKeyboardModifierValueCustom(keyboard, 4.0f, 10.0f);
 				float3 translation = right_vector * float3::Splat(-mouse_delta.x * translation_factor) + up_vector * float3::Splat(mouse_delta.y * translation_factor);
 				TranslateSandboxCamera(editor_state, data->sandbox_index, translation, EDITOR_SANDBOX_VIEWPORT_SCENE);
 				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
@@ -873,14 +847,7 @@ static void SceneZoomAction(ActionData* action_data) {
 	if (!sandbox->is_camera_wasd_movement) {
 		int scroll_delta = mouse->GetScrollDelta();
 		if (scroll_delta != 0) {
-			float factor = 0.015f;
-
-			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-				factor = 0.0015f;
-			}
-			else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-				factor = 0.06f;
-			}
+			float factor = GetKeyboardModifierValueCustomBoth(keyboard, 0.1f, 4.0f, 0.015f);
 
 			float3 camera_rotation = GetSandboxCameraPoint(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).rotation;
 			float3 forward_vector = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).GetForwardVector();

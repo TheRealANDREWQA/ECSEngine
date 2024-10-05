@@ -419,6 +419,10 @@ namespace ECSEngine {
 
 			unsigned int AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function);
 
+			// Clips the rectangles for the actions specified by the first and last indices. Last index can be set to -1
+			// To use the current size
+			void Clip(unsigned int first_action_index, unsigned int last_action_index, const Rectangle2D& clip_rectangle);
+
 			// Copies all the data that is currently stored here. If you want to use a coalesced allocation
 			// For the action data, specify the pointer and it will give it to you back to know when to deallocate
 			UIHandler Copy(AllocatorPolymorphic allocator, void** coalesced_action_data = nullptr) const;

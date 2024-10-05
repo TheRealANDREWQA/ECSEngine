@@ -64,6 +64,7 @@ namespace ECSEngine {
 						ConfigFlag* ptr = (ConfigFlag*)(parameters + parameter_start[index]);
 						previous_flag = *ptr;
 						*ptr = flag;
+						break;
 					}
 				}
 			}
@@ -75,7 +76,7 @@ namespace ECSEngine {
 					if (associated_bits[index] == bit_flag) {
 						ConfigFlag* flag = (ConfigFlag*)(parameters + parameter_start[index]);
 						*flag = previous_flag;
-						return;
+						break;
 					}
 				}
 			}
