@@ -38,7 +38,7 @@ static void ReadFileInfo(DrawWindowData* draw_data) {
 
 	draw_data->file_time_stamp = GetFileLastWrite(file);
 	draw_data->file_byte_size = GetFileByteSize(file);
-	FileScopeDeleter scope_deleter = { file };
+	ScopedFile scope_deleter = { { file } };
 
 	// Use a stack buffering for reading the file
 	ECS_STACK_VOID_STREAM(stack_buffering, ECS_KB * 64);
@@ -123,7 +123,7 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 
 		ECS_STACK_CAPACITY_STREAM(UIDrawerTimelineChannel, channels, 1);
 		ECS_STACK_CAPACITY_STREAM(UIDrawerTimelineElement, channel_elements, 256);
-		channel_elements.size = 10;
+		channel_elements.size = 11;
 		for (unsigned int index = 0; index < channel_elements.size; index++) {
 			channel_elements[index].time = (float)index;
 			channel_elements[index].texture_index = index % 2;
@@ -146,6 +146,7 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 		timeline.has_time_range = true;
 		timeline.channels = channels;
 		timeline.texture_paths = textures;
+		timeline.time_indication_precision = 1;
 
 		drawer->Timeline("Pog", &timeline);
 	}

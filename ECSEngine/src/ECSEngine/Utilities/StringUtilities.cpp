@@ -1835,30 +1835,42 @@ namespace ECSEngine {
 		static_assert(std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>> ||
 			std::is_same_v<StreamType, Stream<wchar_t>> || std::is_same_v<StreamType, CapacityStream<wchar_t>>);
 
+
 		// ASCII implementation
 		if constexpr (std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>>) {
+			auto add_character = [&chars](char character) {
+				if constexpr (std::is_same_v<StreamType, Stream<char>>)
+				{
+					chars.Add(character);
+				}
+				else {
+					chars.AddAssert(character);
+				}
+			};
+			
 			size_t initial_size = chars.size;
 
 			if (value < 0) {
-				chars.Add('-');
+				add_character('-');
 				value = -value;
 			}
 
 			size_t starting_swap_index = chars.size;
 
 			if (value == 0) {
-				chars.Add('0');
+				add_character('0');
 			}
 			else {
 				while (value != 0) {
-					chars.Add(value % 10 + '0');
+					add_character(value % 10 + '0');
 					value /= 10;
 				}
 			}
 			for (size_t index = 0; index < (chars.size - starting_swap_index) >> 1; index++) {
 				chars.Swap(index + starting_swap_index, chars.size - 1 - index);
 			}
-			chars[chars.size] = '\0';
+			add_character('\0');
+			chars.size--;
 
 			return chars.size - initial_size;
 		}
@@ -2106,6 +2118,10 @@ namespace ECSEngine {
 			if (precision > 0) {
 				if (chars.size - starting_swap_index <= precision) {
 					size_t swap_count = precision + 2 + starting_swap_index - chars.size;
+					if constexpr (std::is_same_v<StreamType, CapacityStream<char>>) {
+						chars.AssertCapacity(swap_count);
+					}
+
 					for (int64_t index = chars.size - 1; index >= (int64_t)starting_swap_index; index--) {
 						chars[index + swap_count] = chars[index];
 					}
@@ -2118,6 +2134,10 @@ namespace ECSEngine {
 				}
 				else {
 					if (integer == 0) {
+						if constexpr (std::is_same_v<StreamType, CapacityStream<char>>) {
+							chars.AssertCapacity(precision + 1);
+						}
+
 						chars[chars.size] = '.';
 						for (size_t index = chars.size + 1; index < chars.size + 1 + precision; index++) {
 							chars[index] = '0';
@@ -2125,6 +2145,10 @@ namespace ECSEngine {
 						chars.size += precision + 1;
 					}
 					else {
+						if constexpr (std::is_same_v<StreamType, CapacityStream<char>>) {
+							chars.AssertCapacity(1);
+						}
+
 						for (size_t index = chars.size - 1; index >= chars.size - precision; index--) {
 							chars[index + 1] = chars[index];
 						}
@@ -2132,6 +2156,9 @@ namespace ECSEngine {
 						chars.size += 1;
 					}
 				}
+			}
+			if constexpr (std::is_same_v<StreamType, CapacityStream<char>>) {
+				chars.AssertCapacity(1);
 			}
 			chars[chars.size] = '\0';
 

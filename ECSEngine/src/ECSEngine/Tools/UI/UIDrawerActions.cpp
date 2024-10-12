@@ -3825,7 +3825,15 @@ namespace ECSEngine {
 
 			float scroll_delta = (float)mouse->GetScrollDelta();
 			if (scroll_delta != 0.0f) {
-				//data->zoom += scroll_delta * 0
+				float factor = GetKeyboardModifierValue(keyboard, scroll_delta * 0.001f);
+				// The render offset must be adjusted in order to remain fixated on the same point
+				float previous_zoom = data->zoom;
+				data->zoom += factor;
+				// Clamp the zoom, such that it doesn't go into negative territory
+				data->zoom = ClampMin(data->zoom, 0.01f);
+				data->offset *= data->zoom / previous_zoom;
+
+				action_data->redraw_window = true;
 			}
 		}
 
@@ -3834,30 +3842,63 @@ namespace ECSEngine {
 		void TimelineHeaderClickAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			UIDrawerTimelineData* data = (UIDrawerTimelineData*)_data;
+			UIDrawerTimelineHeaderClickActionData* data = (UIDrawerTimelineHeaderClickActionData*)_data;
+			UIDrawerTimelineData* timeline = data->data;
 
 			// Determine the normalized coordinate of the cursor given the mouse position
 			float mouse_x_position = Clamp(mouse_position.x, position.x, position.x + scale.x);
 			float normalized_offset = (mouse_x_position - position.x) / scale.x;
-			data->cursor_position_normalized = normalized_offset;
-			if (data->cursor_position != nullptr) {
-				if (data->use_normalized_cursor) {
-					*data->cursor_position = normalized_offset;
+			if (timeline->zoom > 1.0f) {
+				normalized_offset /= timeline->zoom;
+			}
+			normalized_offset += data->normalized_offset;
+
+			timeline->cursor_position_normalized = normalized_offset;
+			if (timeline->cursor_position != nullptr) {
+				if (timeline->use_normalized_cursor) {
+					*timeline->cursor_position = normalized_offset;
 				}
 				else {
-					*data->cursor_position = data->time_range.x + normalized_offset * (data->time_range.y - data->time_range.x);
+					*timeline->cursor_position = timeline->time_range.x + normalized_offset * (timeline->time_range.y - timeline->time_range.x);
 				}
 			}
 
-			if (data->callback.action != nullptr) {
-				if (!data->trigger_callback_on_release || mouse->IsReleased(ECS_MOUSE_LEFT)) {
-					action_data->data = data->callback.data;
-					data->callback.action(action_data);
+			if (timeline->callback.action != nullptr) {
+				if (!timeline->trigger_callback_on_release || mouse->IsReleased(ECS_MOUSE_LEFT)) {
+					action_data->data = timeline->callback.data;
+					timeline->callback.action(action_data);
 				}
 			}
 
 			action_data->redraw_window = true;
 			system->SetFramePacing(ECS_UI_FRAME_PACING_HIGH);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void TimelineChannelMiddleClickOffsetAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerTimelineData* data = (UIDrawerTimelineData*)_data;
+			data->offset.x -= mouse_delta.x;
+			if (mouse_delta.x != 0.0f || mouse_delta.y != 0.0f) {
+				action_data->redraw_window = true;
+			}
+			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void TimelineChannelRightClickResetAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerTimelineData* data = (UIDrawerTimelineData*)_data;
+			if (IsPointInRectangle(mouse_position, position, scale) && mouse->IsReleased(ECS_MOUSE_RIGHT)) {
+				float previous_zoom = data->zoom;
+				data->zoom = 1.0f;
+				data->offset = float2::Splat(0.0f);
+				action_data->redraw_window = true;
+			}
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
