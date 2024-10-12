@@ -1782,10 +1782,9 @@ namespace ECSEngine {
 			size_t configuration,
 			float2 position,
 			float2 scale,
-			Stream<wchar_t> texture,
+			Color color,
 			float2 top_left_uv,
-			float2 bottom_right_uv,
-			Color color
+			float2 bottom_right_uv
 		) {
 			auto buffer = HandleSpriteClusterBuffer(configuration);
 			auto count = HandleSpriteClusterCount(configuration);
@@ -1799,7 +1798,6 @@ namespace ECSEngine {
 			size_t configuration,
 			float2 position,
 			float2 scale,
-			Stream<wchar_t> texture,
 			const Color* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv
@@ -1816,7 +1814,6 @@ namespace ECSEngine {
 			size_t configuration,
 			float2 position,
 			float2 scale,
-			Stream<wchar_t> texture,
 			const ColorFloat* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv
@@ -2970,14 +2967,37 @@ namespace ECSEngine {
 				float entry_y_position = AlignMiddle(current_channel_position.y, channel_y_size, entry_y_size);
 				float2 entry_size = drawer->GetSquareScale(entry_y_size);
 
-				// Draw each entry now
-				for (size_t entry_index = 0; entry_index < data->channels[index].elements.size; entry_index++) {
-					const UIDrawerTimelineElement& element = data->channels[index].elements[entry_index];
-					float normalized_x_position = GetTimelineNormalizedTimeValue(data, element.time);
-					float entry_x_position = GetTimelineElementPositionFromNormalized(drawer, data, channel_start_position.x, scale.x, normalized_x_position);
-					entry_x_position -= entry_size.x * 0.5f;
-					drawer->SpriteRectangle(configuration, { entry_x_position, entry_y_position }, entry_size, data->texture_paths[element.texture_index], element.color);
-				}
+				struct Extractor : UIDrawerSpriteClusterAggregatorExtractor {
+					ECS_INLINE Stream<wchar_t> GetTexture(unsigned int index) const {
+						return data->texture_paths[data->channels[channel_index].elements[index].texture_index];
+					}
+
+					UIDrawerSpriteClusterAggregateInfo GetInfo(unsigned int index) const {
+						const UIDrawerTimelineElement& element = data->channels[channel_index].elements[index];
+						float normalized_x_position = GetTimelineNormalizedTimeValue(data, element.time);
+						float entry_x_position = GetTimelineElementPositionFromNormalized(drawer, data, channel_start_position_x, scale_x, normalized_x_position);
+						float2 position = { entry_x_position - entry_size.x * 0.5f, entry_y_position };
+						return { position, entry_size, element.color };
+					}
+
+					float2 entry_size;
+					float entry_y_position;
+					const UIDrawer* drawer;
+					const UIDrawerTimelineData* data;
+					float channel_start_position_x;
+					float scale_x;
+					size_t channel_index;
+				};
+
+				Extractor extractor;
+				extractor.entry_size = entry_size;
+				extractor.entry_y_position = entry_y_position;
+				extractor.drawer = drawer;
+				extractor.data = data;
+				extractor.channel_start_position_x = channel_start_position.x;
+				extractor.scale_x = scale.x;
+				extractor.channel_index = index;
+				UIDrawerAddAggregatedSpriteClusters(drawer, configuration, data->channels[index].elements.size, extractor);
 
 				current_channel_position.y += drawer->current_row_y_scale;
 				drawer->NextRow(0.0f);
@@ -11899,7 +11919,6 @@ namespace ECSEngine {
 
 					ColorFloat top_left(colors[0]), top_right(colors[1]), bottom_left(colors[2]), bottom_right(colors[3]);
 
-					const wchar_t* texture;
 					float2 top_left_uv;
 					float2 uv_delta;
 					float2 current_top_left_uv;
@@ -11907,13 +11926,12 @@ namespace ECSEngine {
 
 					if (configuration & UI_CONFIG_SPRITE_GRADIENT) {
 						const UIConfigSpriteGradient* sprite_info = (const UIConfigSpriteGradient*)config.GetParameter(UI_CONFIG_SPRITE_GRADIENT);
-						texture = sprite_info->texture;
 						top_left_uv = sprite_info->top_left_uv;
 						uv_delta = { sprite_info->bottom_right_uv.x - top_left_uv.x, sprite_info->bottom_right_uv.y - top_left_uv.y };
 						uv_delta.x /= horizontal_count;
 						uv_delta.y /= vertical_count;
 
-						SetSpriteClusterTexture(configuration, texture, horizontal_count * vertical_count);
+						SetSpriteClusterTexture(configuration, sprite_info->texture, horizontal_count * vertical_count);
 					}
 
 					float2 rectangle_position = position;
@@ -11932,7 +11950,7 @@ namespace ECSEngine {
 						if (configuration & UI_CONFIG_SPRITE_GRADIENT) {
 							current_top_left_uv = { top_left_uv.x, top_left_uv.y + uv_delta.y * row };
 							current_bottom_right_uv = { top_left_uv.x + uv_delta.x, current_top_left_uv.y + uv_delta.y };
-							VertexColorSpriteClusterRectangle(configuration | UI_CONFIG_DO_NOT_ADVANCE, rectangle_position, rectangle_scale, texture, current_colors, current_top_left_uv, current_bottom_right_uv);
+							VertexColorSpriteClusterRectangle(configuration | UI_CONFIG_DO_NOT_ADVANCE, rectangle_position, rectangle_scale, current_colors, current_top_left_uv, current_bottom_right_uv);
 							current_top_left_uv.x += uv_delta.x;
 							current_bottom_right_uv.x += uv_delta.x;
 						}
@@ -11952,7 +11970,6 @@ namespace ECSEngine {
 									configuration | UI_CONFIG_DO_NOT_ADVANCE,
 									rectangle_position,
 									rectangle_scale,
-									texture,
 									current_colors,
 									current_top_left_uv,
 									current_bottom_right_uv

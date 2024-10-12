@@ -465,10 +465,9 @@ namespace ECSEngine {
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				Stream<wchar_t> texture,
+				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
-				float2 bottom_right_uv = { 1.0f, 1.0f },
-				Color color = ECS_COLOR_WHITE
+				float2 bottom_right_uv = { 1.0f, 1.0f }
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -477,7 +476,6 @@ namespace ECSEngine {
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				Stream<wchar_t> texture,
 				const Color* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -489,7 +487,6 @@ namespace ECSEngine {
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				Stream<wchar_t> texture,
 				const ColorFloat* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -5398,6 +5395,66 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		struct UIDrawerSpriteClusterAggregateInfo {
+			float2 position;
+			float2 scale;
+			Color color;
+		};
+
+		struct UIDrawerSpriteClusterAggregatorExtractor {
+			// Returns the texture that corresponds for the element at the given index
+			Stream<wchar_t> GetTexture(unsigned int index) const;
+
+			// Returns the info for the given index
+			UIDrawerSpriteClusterAggregateInfo GetInfo(unsigned int index) const;
+		};
+
+		// Extractor must have the static interface of UIDrawerSpriteClusterAggregatorExtractor
+		// The texture paths for the infos must point to the same underlying buffer, they are not checked
+		// For full equality.
+		template<typename Extractor>
+		void UIDrawerAddAggregatedSpriteClusters(UIDrawer* drawer, size_t configuration, unsigned int sprite_count, Extractor&& extractor) {
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 32);
+			Stream<unsigned int> iterate_indices;
+			iterate_indices.Initialize(&stack_allocator, sprite_count);
+			for (size_t index = 0; index < iterate_indices.size; index++) {
+				iterate_indices[index] = index;
+			}
+
+			ResizableStream<unsigned int> batches_counts;
+			batches_counts.Initialize(&stack_allocator, 8);
+
+			unsigned int matched_sprite_count = 0;
+			while (matched_sprite_count < sprite_count) {
+				Stream<wchar_t> batch_texture = extractor.GetTexture(iterate_indices[matched_sprite_count]);
+				unsigned int batch_start_index = matched_sprite_count;
+				matched_sprite_count++;
+				for (unsigned int subindex = matched_sprite_count; subindex < sprite_count; subindex++) {
+					Stream<wchar_t> current_texture = extractor.GetTexture(iterate_indices[subindex]);
+					if (current_texture.buffer == batch_texture.buffer) {
+						if (matched_sprite_count != subindex) {
+							iterate_indices.Swap(matched_sprite_count, subindex);
+						}
+						matched_sprite_count++;
+					}
+				}
+				batches_counts.Add(matched_sprite_count - batch_start_index);
+			}
+
+			unsigned int index = 0;
+			for (unsigned int batch_index = 0; batch_index < batches_counts.size; batch_index++) {
+				unsigned int batch_count = batches_counts[batch_index];
+				drawer->SetSpriteClusterTexture(configuration, extractor.GetTexture(iterate_indices[index]), batch_count);
+				for (unsigned int subindex = 0; subindex < batch_count; subindex++) {
+					UIDrawerSpriteClusterAggregateInfo current_info = extractor.GetInfo(iterate_indices[index]);
+					drawer->SpriteClusterRectangle(configuration, current_info.position, current_info.scale, current_info.color);
+					index++;
+				}
+			}
+		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
