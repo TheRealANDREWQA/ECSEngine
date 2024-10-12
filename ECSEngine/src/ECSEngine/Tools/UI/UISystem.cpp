@@ -3201,6 +3201,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::DecrementLastSpriteClusterCount(UIDockspace* dockspace, unsigned int border_index, unsigned int decrement_count) {
+			// The substreams contain the vertex count
+			dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams.Last() -= decrement_count * 6;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DecrementWindowDynamicResource(unsigned int window_index)
 		{
 			m_windows[window_index].dynamic_resources.ForEachIndex([&](unsigned int index) {

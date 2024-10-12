@@ -1472,6 +1472,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// Reduces the number of entries in the last sprite cluster reservation
+			void DecrementSpriteClusterCount(unsigned int decrement_count = 1);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			Stream<UIVertexColor> GetSolidColorStream(size_t configuration, size_t size);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3105,7 +3110,7 @@ namespace ECSEngine {
 			void BeginElement();
 
 			// Returns a structure that will be used by the EndClip function to finalize the clipping.
-			UIDrawerClipState BeginClip(size_t configuration) const;
+			UIDrawerClipState BeginClip(size_t configuration, const UIElementTransform& clip_region);
 
 #pragma region Button
 
@@ -3374,7 +3379,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void EndClip(size_t configuration, const UIDrawerClipState& state, const UIElementTransform& clip_region);
+			void EndClip(const UIDrawerClipState& state);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -5450,7 +5455,13 @@ namespace ECSEngine {
 				drawer->SetSpriteClusterTexture(configuration, extractor.GetTexture(iterate_indices[index]), batch_count);
 				for (unsigned int subindex = 0; subindex < batch_count; subindex++) {
 					UIDrawerSpriteClusterAggregateInfo current_info = extractor.GetInfo(iterate_indices[index]);
-					drawer->SpriteClusterRectangle(configuration, current_info.position, current_info.scale, current_info.color);
+					if (drawer->ValidatePosition(configuration, current_info.position, current_info.scale)) {
+						drawer->SpriteClusterRectangle(configuration, current_info.position, current_info.scale, current_info.color);
+					}
+					else {
+						// Reduce the cluster count
+						drawer->DecrementSpriteClusterCount();
+					}
 					index++;
 				}
 			}

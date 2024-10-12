@@ -285,6 +285,14 @@ namespace ECSEngine {
 			size++;
 		}
 
+		ECS_INLINE T& Last() {
+			return buffer[size - 1];
+		}
+
+		ECS_INLINE const T& Last() const {
+			return buffer[size - 1];
+		}
+
 		// Set the count to the count of elements that you want to be removed
 		ECS_INLINE void Remove(size_t index, size_t count = 1) {
 			memmove(buffer + index, buffer + index + count, (size - index - count) * sizeof(T));
@@ -791,6 +799,14 @@ namespace ECSEngine {
 			AssertCapacity();
 		}
 
+		ECS_INLINE T& Last() {
+			return buffer[size - 1];
+		}
+
+		ECS_INLINE const T& Last() const {
+			return buffer[size - 1];
+		}
+
 		void Resize(AllocatorPolymorphic allocator, unsigned int new_capacity) {
 			if (capacity > 0) {
 				void* allocation = ReallocateEx(allocator, buffer, MemoryOf(new_capacity), alignof(T));
@@ -1153,6 +1169,14 @@ namespace ECSEngine {
 			ReserveRange();
 			DisplaceElements(index, 1);
 			buffer[index] = value;
+		}
+
+		ECS_INLINE T& Last() {
+			return buffer[size - 1];
+		}
+
+		ECS_INLINE const T& Last() const {
+			return buffer[size - 1];
 		}
 
 		ECS_INLINE void Reset() {

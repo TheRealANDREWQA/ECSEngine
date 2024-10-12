@@ -32,6 +32,7 @@
 #define ECS_TOOLS_UI_TEXTURE_FILLED_CUBE L"Resources/FilledCube.png"
 #define ECS_TOOLS_UI_TEXTURE_MULTIPLE_CUBES L"Resources/MultipleCubes.png"
 #define ECS_TOOLS_UI_TEXTURE_SHADED_SPHERE L"Resources/ShadedSphere.png"
+#define ECS_TOOLS_UI_TEXTURE_RHOMBUS L"Resources/Rhombus.png"
 
 #define ECS_TOOLS_UI_TEXTURE_COLOR_PICKER L"Resources/ColorPicker.png"
 #define ECS_TOOLS_UI_TEXTURE_PAINTBRUSH L"Resources/Paintbrush.png"

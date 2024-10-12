@@ -685,6 +685,9 @@ namespace ECSEngine {
 			// Deallocates the snapshots for all windows that have one
 			void DeallocateAllWindowSnapshots();
 
+			// Reduces the number of sprites to be drawn for the last added cluster. The number should be expresed in the number of sprites to be eliminated
+			void DecrementLastSpriteClusterCount(UIDockspace* dockspace, unsigned int border_index, unsigned int decrement_count = 1);
+
 			void DecrementWindowDynamicResource(unsigned int window_index);
 
 			// this is the safe way of destroying dockspaces since if in the same frame have been destroyed

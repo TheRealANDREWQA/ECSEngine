@@ -3,6 +3,7 @@
 #include "../Inspector.h"
 #include "../../Sandbox/SandboxRecordingFileExtension.h"
 #include "../../Editor/EditorPalette.h"
+#include "../../Editor/EditorState.h"
 
 using namespace ECSEngine;
 
@@ -124,38 +125,41 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 		drawer->Text(temp_characters);
 		drawer->NextRow();
 
-		// TODO: Add the timeline
 		UIDrawerTimeline timeline;
 		ZeroOut(&timeline);
-
-		ECS_STACK_CAPACITY_STREAM(UIDrawerTimelineChannel, channels, 1);
-		ECS_STACK_CAPACITY_STREAM(UIDrawerTimelineElement, channel_elements, 256);
-		channel_elements.size = 11;
-		for (unsigned int index = 0; index < channel_elements.size; index++) {
-			channel_elements[index].time = (float)index;
-			channel_elements[index].texture_index = index % 2;
-			channel_elements[index].color = (index % 2) == 0 ? ECS_COLOR_RED : ECS_COLOR_GREEN;
+		
+		// Use the global memory manager of the editor because this can get quite large
+		Stream<UIDrawerTimelineElement> channel_elements;
+		channel_elements.Initialize(editor_state->GlobalMemoryManager(), data->reader.state_infos.size);
+		for (size_t index = 0; index < channel_elements.size; index++) {
+			bool is_entire_state = data->reader.IsEntireState(index);
+			channel_elements[index].time = data->reader.state_infos[index].elapsed_seconds;
+			channel_elements[index].texture_index = is_entire_state;
+			channel_elements[index].color = is_entire_state ? EDITOR_DEEP_BLUE_COLOR : EDITOR_YELLOW_COLOR;
 		}
 
+		ECS_STACK_CAPACITY_STREAM(UIDrawerTimelineChannel, channels, 1);
 		channels.ReserveRange();
 		channels[0].row_y_size = 0.2f;
-		channels[0].description = "My description";
+		channels[0].description = "";
 		channels[0].elements = channel_elements;
 		channels[0].entry_y_size = 0.03f;
 
 		ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, textures, 2);
 		textures.size = 2;
-		textures[0] = ECS_TOOLS_UI_TEXTURE_COG;
+		textures[0] = ECS_TOOLS_UI_TEXTURE_RHOMBUS;
 		textures[1] = ECS_TOOLS_UI_TEXTURE_MASK;
 
 		timeline.time_range.x = 0.0f;
-		timeline.time_range.y = 10.00f;
+		timeline.time_range.y = data->reader.state_infos[data->reader.state_infos.size - 1].elapsed_seconds;
 		timeline.has_time_range = true;
 		timeline.channels = channels;
 		timeline.texture_paths = textures;
-		timeline.time_indication_precision = 1;
+		timeline.time_indication_precision = 2;
 
-		drawer->Timeline("Pog", &timeline);
+		drawer->Timeline("Timeline", &timeline);
+
+		channel_elements.Deallocate(editor_state->GlobalMemoryManager());
 	}
 }
 
