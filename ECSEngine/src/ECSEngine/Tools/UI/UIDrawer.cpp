@@ -2835,7 +2835,17 @@ namespace ECSEngine {
 				return draw_position;
 			};
 
-			UIDrawerClipState clip_state = drawer->BeginClip(configuration);
+			float2 header_position = position;
+			float2 header_scale = { scale.x, drawer->current_row_y_scale };
+			if (data->zoom < 1.0f) {
+				header_scale.x *= data->zoom;
+			}
+
+			float2 clip_position = header_position;
+			float2 clip_scale = header_scale;
+			clip_scale.x += (header_infos[header_infos.size - 1].scale.x - data->largest_channel_entry_x_size) * 0.5f;
+
+			UIDrawerClipState clip_state = drawer->BeginClip(configuration, { clip_position, clip_scale });
 
 			float minimum_size_to_draw = header_infos[0].scale.x + header_infos[header_infos.size - 1].scale.x + addition_indication_distancing;
 
@@ -2860,16 +2870,7 @@ namespace ECSEngine {
 				draw_indication(header_infos.size - 1);
 			}
 
-			float2 header_position = position;
-			float2 header_scale = { scale.x, drawer->current_row_y_scale };
-			if (data->zoom < 1.0f) {
-				header_scale.x *= data->zoom;
-			}
-
-			float2 clip_position = header_position;
-			float2 clip_scale = header_scale;
-			clip_scale.x += (header_infos[header_infos.size - 1].scale.x - data->largest_channel_entry_x_size) * 0.5f;
-			drawer->EndClip(configuration, clip_state, { clip_position, clip_scale });
+			drawer->EndClip(clip_state);
 
 			Color background_color = data->use_background_color ? data->background_color : drawer->GetColorThemeDescriptor()->timeline_background;
 			Color header_color = DarkenColor(background_color, 0.75f);
@@ -2896,8 +2897,9 @@ namespace ECSEngine {
 			// Clamp the precision to a minimum of 1
 			ConvertFloatToChars(cursor_characters, cursor_absolute_value, TimelineCursorFloatPrecision(data));
 
-			UIDrawerClipState normal_clip_state = drawer->BeginClip(configuration);
-			UIDrawerClipState late_clip_state = drawer->BeginClip(configuration | UI_CONFIG_LATE_DRAW);
+			UIElementTransform clip_region = { position, { scale.x, cursor_transform.scale.y + timeline_channel_y_size } };
+			UIDrawerClipState normal_clip_state = drawer->BeginClip(configuration, clip_region);
+			UIDrawerClipState late_clip_state = drawer->BeginClip(configuration | UI_CONFIG_LATE_DRAW, clip_region);
 
 			drawer->current_row_y_scale = GetTimelineHeaderSize(drawer, data);
 			float2 text_position;
@@ -2918,9 +2920,9 @@ namespace ECSEngine {
 			float2 line_start_position = { AlignMiddle(cursor_transform.position.x, cursor_transform.scale.x, cursor_line_thickness), cursor_transform.position.y + drawer->current_row_y_scale };
 			drawer->SolidColorRectangle(configuration, line_start_position, { cursor_line_thickness, timeline_channel_y_size }, color);
 
-			UIElementTransform clip_region = { position, { scale.x, cursor_transform.scale.y + timeline_channel_y_size } };
-			drawer->EndClip(configuration, normal_clip_state, clip_region);
-			drawer->EndClip(configuration | UI_CONFIG_LATE_DRAW, late_clip_state, clip_region);
+			// These must be retired in the reverse order of the creation
+			drawer->EndClip(late_clip_state);
+			drawer->EndClip(normal_clip_state);
 
 			drawer->current_row_y_scale = 0.0f;
 		}
@@ -2958,7 +2960,7 @@ namespace ECSEngine {
 				current_channel_position.y = GetTimelineElementPositionY(drawer, data, channel_start_position.y, 0.0f);
 			}
 
-			UIDrawerClipState clip_state = drawer->BeginClip(configuration);
+			UIDrawerClipState clip_state = drawer->BeginClip(configuration, { channel_start_position, timeline_background_scale });
 
 			for (size_t index = 0; index < data->channels.size; index++) {
 				float channel_y_size = GetTimelineChannelYSize(drawer, data, scale, index);
@@ -3003,7 +3005,7 @@ namespace ECSEngine {
 				drawer->NextRow(0.0f);
 			}
 
-			drawer->EndClip(configuration, clip_state, { channel_start_position, timeline_background_scale });
+			drawer->EndClip(clip_state);
 			drawer->FinalizeRectangle(configuration | UI_CONFIG_DO_NOT_FIT_SPACE, channel_start_position, timeline_background_scale);
 			drawer->AddHoverable(configuration, channel_start_position, timeline_background_scale, { TimelineChannelHoverableZoomAction, data, 0 });
 			drawer->AddClickable(configuration, channel_start_position, timeline_background_scale, { TimelineChannelMiddleClickOffsetAction, data, 0 }, ECS_MOUSE_MIDDLE);
@@ -8674,6 +8676,12 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		void UIDrawer::DecrementSpriteClusterCount(unsigned int decrement_count) {
+			system->DecrementLastSpriteClusterCount(dockspace, border_index, decrement_count);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		Stream<UIVertexColor> UIDrawer::GetSolidColorStream(size_t configuration, size_t size) {
 			return Stream<UIVertexColor>(HandleSolidColorBuffer(configuration) + *HandleSolidColorCount(configuration), size);
 		}
@@ -10045,8 +10053,19 @@ namespace ECSEngine {
 			last_initialized_element_table_resources.size = 0;
 		}
 
-		UIDrawerClipState UIDrawer::BeginClip(size_t configuration) const {
-			return { GetBufferState(configuration), GetHandlerState() };
+		UIDrawerClipState UIDrawer::BeginClip(size_t configuration, const UIElementTransform& clip_region) {
+			UIDrawerClipState clip_state;
+			clip_state.buffer_state = GetBufferState(configuration);
+			clip_state.handler_state = GetHandlerState();
+			clip_state.min_region_limit = min_region_render_limit;
+			clip_state.max_region_limit = max_region_render_limit;
+			clip_state.clip_region = clip_region;
+			clip_state.configuration = configuration;
+
+			min_region_render_limit = BasicTypeMax(min_region_render_limit, clip_region.position);
+			max_region_render_limit = BasicTypeMin(max_region_render_limit, clip_region.position + clip_region.scale);
+
+			return clip_state;
 		}
 
 #pragma region Button
@@ -11466,8 +11485,8 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::EndClip(size_t configuration, const UIDrawerClipState& state, const UIElementTransform& clip_region) {
-			Rectangle2D clip_rectangle = Rectangle2D::FromScale(clip_region.position, clip_region.scale);
+		void UIDrawer::EndClip(const UIDrawerClipState& state) {
+			Rectangle2D clip_rectangle = Rectangle2D::FromScale(state.clip_region.position, state.clip_region.scale);
 
 			auto handle_rectangle_type = [&clip_rectangle](size_t clip_start_count, size_t current_count, auto* vertices) {
 				// At the moment, do not swap back any rectangles, leave them empty
@@ -11486,6 +11505,7 @@ namespace ECSEngine {
 				}
 			};
 
+			size_t configuration = state.configuration;
 			handle_rectangle_type(state.buffer_state.solid_color_count, *HandleSolidColorCount(configuration), HandleSolidColorBuffer(configuration));
 			handle_rectangle_type(state.buffer_state.text_sprite_count, *HandleTextSpriteCount(configuration), HandleTextSpriteBuffer(configuration));
 			handle_rectangle_type(state.buffer_state.sprite_count, *HandleSpriteCount(configuration), HandleSpriteBuffer(configuration));
@@ -11497,6 +11517,10 @@ namespace ECSEngine {
 				system->ClipClickables(dockspace, border_index, state.handler_state.clickable_count[index], -1, clip_rectangle, (ECS_MOUSE_BUTTON)index);
 			}
 			system->ClipGenerals(dockspace, border_index, state.handler_state.hoverable_count, -1, clip_rectangle);
+
+			// Restore the min and max region render limits
+			max_region_render_limit = state.max_region_limit;
+			min_region_render_limit = state.min_region_limit;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

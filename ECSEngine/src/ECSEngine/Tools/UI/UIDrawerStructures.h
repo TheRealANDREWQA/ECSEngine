@@ -734,6 +734,14 @@ namespace ECSEngine {
 		struct UIDrawerClipState {
 			UIDrawerBufferState buffer_state;
 			UIDrawerHandlerState handler_state;
+			// These 2 fields are the original window values for the min and max limits.
+			// When activating clipping, we temporarly hijack these to make the elements
+			// Aware that they should not render outside these bounds
+			float2 min_region_limit;
+			float2 max_region_limit;
+
+			UIElementTransform clip_region;
+			size_t configuration;
 		};
 
 		struct UIConfigStateTableNotify {
