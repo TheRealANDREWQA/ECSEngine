@@ -766,8 +766,17 @@ namespace ECSEngine {
 			float zoom;
 			// Computed before each draw, stores the largest channel description size
 			float largest_channel_description_size;
+			// Stores the largest size of a channel entry on the X axis
+			float largest_channel_entry_x_size;
 			// The identifier of the dynamic resource, used to lookup the resource index
 			Stream<char> identifier;
+		};
+
+		struct UIDrawerTimelineHeaderClickActionData {
+			UIDrawerTimelineData* data;
+			// This value contains the normalized offset that must be added to the calculation
+			// Of the cursor position that comes from the timeline offset
+			float normalized_offset;
 		};
 
 	}

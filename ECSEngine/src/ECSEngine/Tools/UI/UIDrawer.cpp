@@ -2583,6 +2583,32 @@ namespace ECSEngine {
 			return largest_size;
 		}
 
+		// Returns the y size of a default sized channel
+		ECS_INLINE static float TimelineDefaultChannelYSize(const UIDrawerTimelineData* data, float2 scale) {
+			return scale.y / (float)data->channels.size;
+		}
+
+		// Returns the y size of a channel
+		ECS_INLINE static float GetTimelineChannelYSize(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 scale, size_t channel_index) {
+			return data->channels[channel_index].row_y_size == 0.0f ? TimelineDefaultChannelYSize(data, scale) : data->channels[channel_index].row_y_size * drawer->zoom_ptr->y;
+		}
+
+		ECS_INLINE static float2 GetTimelineChannelEntrySize(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 scale, size_t channel_index) {
+			float entry_y_size = data->channels[channel_index].entry_y_size;
+			if (data->channels[channel_index].entry_y_size == 0.0f) {
+				entry_y_size = GetTimelineChannelYSize(drawer, data, scale, channel_index) * 0.5f;
+			}
+			return drawer->GetSquareScaleScaled(entry_y_size);
+		}
+
+		static float TimelineLargestChannelEntryXSize(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 scale) {
+			float largest_size = 0.0f;
+			for (size_t index = 0; index < data->channels.size; index++) {
+				largest_size = max(largest_size, GetTimelineChannelEntrySize(drawer, data, scale, index).x);
+			}
+			return largest_size;
+		}
+
 		static void UpdateTimelineDataCallback(UIDrawer* drawer, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, unsigned int dynamic_index, bool is_initial_update) {
 			// Handle the callback
 			if (timeline->callback.action != nullptr) {
@@ -2683,7 +2709,7 @@ namespace ECSEngine {
 
 		// Returns the x position of a timeline element knowing its relative normalized position.
 		ECS_INLINE static float GetTimelineElementPositionFromNormalized(const UIDrawer* drawer, const UIDrawerTimelineData* data, float position, float scale, float relative_normalized_position) {
-			return position + scale * relative_normalized_position * data->zoom - drawer->region_render_offset.x - data->offset.x;
+			return position + data->largest_channel_entry_x_size * 0.5f + (scale - data->largest_channel_entry_x_size) * relative_normalized_position * data->zoom - drawer->region_render_offset.x - data->offset.x;
 		}
 
 		// Returns the Y position of a timeline element knowing its relative Y position. The position parameter is the original timeline Y position
@@ -2705,16 +2731,6 @@ namespace ECSEngine {
 			return drawer->GetLayoutDescriptor()->default_element_y;
 		}
 
-		// Returns the y size of a default sized channel
-		ECS_INLINE static float TimelineDefaultChannelYSize(const UIDrawerTimelineData* data, float2 scale) {
-			return scale.y / (float)data->channels.size;
-		}
-
-		// Returns the y size of a channel
-		ECS_INLINE static float GetTimelineChannelYSize(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 scale, size_t channel_index) {
-			return data->channels[channel_index].row_y_size == 0.0f ? TimelineDefaultChannelYSize(data, scale) : data->channels[channel_index].row_y_size * drawer->zoom_ptr->y;
-		}
-
 		struct TimelineHeaderIndicationInfo {
 			Stream<char> characters;
 			float2 position;
@@ -2734,6 +2750,16 @@ namespace ECSEngine {
 			// Divide by the zoom - the larger the zoom, the smaller the increment
 			header_increment /= data->zoom;
 
+			// Determine what is the change per each increment, such that we allow increments to be in the order of the precision
+			float min_precision = 1.0f / CalculateFloatPrecisionPower(data->time_indication_precision);
+			float header_increment_absolute_value = GetTimelineAbsoluteTimeValue(data, header_increment);
+			float precision_factor = header_increment_absolute_value / min_precision;
+			size_t precision_factor_integer = (size_t)precision_factor;
+			precision_factor_integer = ClampMin<size_t>(precision_factor_integer, 1);
+			header_increment_absolute_value = (float)precision_factor_integer * min_precision;
+			// Scale the header increment such that it goes in precision increments
+			header_increment *= header_increment_absolute_value / GetTimelineAbsoluteTimeValue(data, header_increment);
+
 			// Determine how many indications we have - always maintain an odd number of internal increments
 			size_t internal_indication_count = (size_t)(1.0f / header_increment);
 			// Perform the subtraction only if the value is greater than 0
@@ -2742,30 +2768,20 @@ namespace ECSEngine {
 			}
 			header_increment = 1.0f / ((float)internal_indication_count + 1.0f);
 
-			float usable_text_space = scale.x;
-			ConvertFloatToChars(header_indication_chars, data->time_range.x, data->time_indication_precision);
-			usable_text_space -= drawer->TextSpan(header_indication_chars).x;
-
-			header_indication_chars.size = 0;
-			ConvertFloatToChars(header_indication_chars, data->time_range.y, data->time_indication_precision);
-			usable_text_space -= drawer->TextSpan(header_indication_chars).x;
-
 			float header_indication_percentage = 0.0f;
-			float header_offset_increment = usable_text_space * header_increment * data->zoom;
 			float2 header_offset = { 0.0f, 0.0f };
 
 			// Allow a small drift in order to draw 1.0f
 			header_indication_chars.size = 0;
 			while (header_indication_percentage <= 1.00001f) {
-				float2 element_position = GetTimelineElementPosition(drawer, data, position, header_offset);
+				float element_position = GetTimelineElementPositionFromNormalized(drawer, data, position.x, scale.x, header_indication_percentage);
 
 				unsigned int previous_char_count = header_indication_chars.size;
 				size_t written_count = ConvertFloatToChars(header_indication_chars, GetTimelineAbsoluteTimeValue(data, header_indication_percentage), data->time_indication_precision);
 				Stream<char> indication_chars = { header_indication_chars.buffer + previous_char_count, written_count };
-				infos.Add({ indication_chars, element_position, drawer->TextSpan(indication_chars) });
+				infos.Add({ indication_chars, { element_position, position.y }, drawer->TextSpan(indication_chars) });
 
 				header_indication_percentage += header_increment;
-				header_offset.x += header_offset_increment;
 			}
 		}
 
@@ -2779,17 +2795,17 @@ namespace ECSEngine {
 
 		// Position and scale are the transform of the timeline element. The last argument is an optional value for the text span that can be filled in
 		static UIElementTransform TimelineGetCursorPosition(const UIDrawer* drawer, const UIDrawerTimelineData* data, float2 position, float2 scale, float* text_span_value = nullptr) {
-			const float header_cursor_thickness = drawer->element_descriptor.label_padd.x * 0.5f;
-			float cursor_normalized_x_offset = (scale.x - TimelineCursorLineThickness()) * data->cursor_position_normalized;
-			float2 cursor_top_position = GetTimelineElementPosition(drawer, data, position, { cursor_normalized_x_offset, 0.0f });
+			const float header_cursor_label_thickness = drawer->element_descriptor.label_padd.x * 0.5f;
+			float cursor_x_position = GetTimelineElementPositionFromNormalized(drawer, data, position.x, scale.x, data->cursor_position_normalized);
+			float cursor_y_position = position.y;
 
 			ECS_STACK_CAPACITY_STREAM(char, cursor_characters, 256);
 			float cursor_absolute_value = GetTimelineAbsoluteTimeValue(data, data->cursor_position_normalized);
 			ConvertFloatToChars(cursor_characters, cursor_absolute_value, TimelineCursorFloatPrecision(data));
 
 			float2 text_span = drawer->TextSpan(cursor_characters);
-			float2 cursor_label_position = { cursor_top_position.x - text_span.x * 0.5f - TimelineCursorLineThickness() * 0.5f, cursor_top_position.y };
-			float2 cursor_label_size = { text_span.x + header_cursor_thickness * 2.0f, GetTimelineHeaderSize(drawer, data) };
+			float2 cursor_label_position = { cursor_x_position - text_span.x * 0.5f - header_cursor_label_thickness * 0.5f, cursor_y_position };
+			float2 cursor_label_size = { text_span.x + header_cursor_label_thickness, GetTimelineHeaderSize(drawer, data) };
 
 			if (text_span_value != nullptr) {
 				*text_span_value = text_span.x;
@@ -2804,54 +2820,72 @@ namespace ECSEngine {
 			const float addition_indication_distancing = 0.0035f;
 
 			drawer->current_row_y_scale = GetTimelineHeaderSize(drawer, data);
-			ECS_STACK_CAPACITY_STREAM(char, header_indication_chars, 256);
+
+			ECS_STACK_CAPACITY_STREAM(char, header_indication_chars, ECS_KB * 32);
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 			ResizableStream<TimelineHeaderIndicationInfo> header_infos(&stack_allocator, 16);
 			TimelineFillHeaderIndicationsInfo(drawer, data, position, scale, header_indication_chars, &header_infos);
 			ECS_ASSERT(header_infos.size >= 2);
 
-			UIElementTransform cursor_transform = TimelineGetCursorPosition(drawer, data, position, scale);
-			// Inflate the cursor scale by a bit to cull the indication a little bit earlier
-			cursor_transform.scale.x += addition_indication_distancing * 2.0f;
-			cursor_transform.position.x -= addition_indication_distancing;
-			auto draw_indication = [&](unsigned int index) {
-				if (!RectangleOverlap(cursor_transform, { header_infos[index].position, header_infos[index].scale })) {
-					drawer->Text(configuration | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, header_infos[index].characters, header_infos[index].position);
-				}
+			auto adjust_indication_position = [](float2 position, float2 scale) {
+				return float2{ position.x - scale.x * 0.5f, position.y };
 			};
+
+			// Returns the actual draw position of the text
+			auto draw_indication = [&](unsigned int index) {
+				float2 draw_position = adjust_indication_position(header_infos[index].position, header_infos[index].scale);
+				drawer->Text(configuration | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, header_infos[index].characters, draw_position);
+				return draw_position;
+			};
+
+			UIDrawerClipState clip_state = drawer->BeginClip(configuration);
 
 			float minimum_size_to_draw = header_infos[0].scale.x + header_infos[header_infos.size - 1].scale.x + addition_indication_distancing;
 
 			// If the scale is not as large as this minimum, do not draw any indication
 			if (scale.x >= minimum_size_to_draw) {
 				// The first and the last indications are always drawn
-				draw_indication(0);
-				float2 last_drawn_position = header_infos[0].position;
+				float2 last_drawn_position = draw_indication(0);
 				float2 last_drawn_scale = header_infos[0].scale;
-				float2 last_indication_position = header_infos[header_infos.size - 1].position;
+				float2 last_indication_position = adjust_indication_position(header_infos[header_infos.size - 1].position, header_infos[header_infos.size - 1].scale);
 
 				for (unsigned int index = 1; index < header_infos.size - 1; index++) {
-					// Draw the indication if it does not overlap the previous draw indication and that it does not overlap the last indication
+					// Draw the indication if it does not overlap the previously drawn indication
 					if (last_drawn_position.x + last_drawn_scale.x + addition_indication_distancing < header_infos[index].position.x) {
-						if (header_infos[index].position.x + header_infos[index].scale.x >= last_indication_position.x - addition_indication_distancing) {
+						float2 adjusted_position = adjust_indication_position(header_infos[index].position, header_infos[index].scale);
+						if (adjusted_position.x + header_infos[index].scale.x >= last_indication_position.x - addition_indication_distancing) {
 							break;
 						}
-						draw_indication(index);
-						last_drawn_position = header_infos[index].position;
+						last_drawn_position = draw_indication(index);
 						last_drawn_scale = header_infos[index].scale;
 					}
 				}
 				draw_indication(header_infos.size - 1);
 			}
 
+			float2 header_position = position;
+			float2 header_scale = { scale.x, drawer->current_row_y_scale };
+			if (data->zoom < 1.0f) {
+				header_scale.x *= data->zoom;
+			}
+
+			float2 clip_position = header_position;
+			float2 clip_scale = header_scale;
+			clip_scale.x += (header_infos[header_infos.size - 1].scale.x - data->largest_channel_entry_x_size) * 0.5f;
+			drawer->EndClip(configuration, clip_state, { clip_position, clip_scale });
+
 			Color background_color = data->use_background_color ? data->background_color : drawer->GetColorThemeDescriptor()->timeline_background;
 			Color header_color = DarkenColor(background_color, 0.75f);
 
-			float2 header_position = position;
-			float2 header_scale = { scale.x, drawer->current_row_y_scale };
+			float timeline_final_position = GetTimelineElementPositionFromNormalized(drawer, data, header_position.x, header_scale.x, 1.0f);
+			float timeline_start_position = GetTimelineElementPositionFromNormalized(drawer, data, header_position.x, header_scale.x, 0.0f);
+			UIDrawerTimelineHeaderClickActionData click_data;
+			click_data.data = data;
+			click_data.normalized_offset = data->offset.x / (timeline_final_position - timeline_start_position);
+
 			drawer->SolidColorRectangle(configuration, header_position, header_scale, header_color);
-			drawer->AddClickable(configuration, header_position, header_scale, { TimelineHeaderClickAction, data, 0, data->callback.phase });
-			drawer->FinalizeRectangle(configuration, position, { scale.x, drawer->current_row_y_scale });
+			drawer->AddClickable(configuration, header_position, header_scale, { TimelineHeaderClickAction, &click_data, sizeof(click_data), data->callback.phase });
+			drawer->FinalizeRectangle(configuration, header_position, header_scale);
 			drawer->NextRow();
 		}
 
@@ -2865,16 +2899,19 @@ namespace ECSEngine {
 			// Clamp the precision to a minimum of 1
 			ConvertFloatToChars(cursor_characters, cursor_absolute_value, TimelineCursorFloatPrecision(data));
 
+			UIDrawerClipState normal_clip_state = drawer->BeginClip(configuration);
+			UIDrawerClipState late_clip_state = drawer->BeginClip(configuration | UI_CONFIG_LATE_DRAW);
+
 			drawer->current_row_y_scale = GetTimelineHeaderSize(drawer, data);
 			float2 text_position;
 			text_position.x = AlignMiddle(cursor_transform.position.x, cursor_transform.scale.x, cursor_text_span);
 			text_position.y = cursor_transform.position.y;
 			float2 text_span = cursor_transform.scale;
-			drawer->Text(ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, cursor_characters, text_position, text_span);
+			drawer->Text(ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_LATE_DRAW | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, cursor_characters, text_position, text_span);
 			
 			Color color = drawer->HandleColor(configuration, config);
 			drawer->SolidColorRectangle(
-				configuration, 
+				configuration | UI_CONFIG_LATE_DRAW,
 				cursor_transform.position, 
 				cursor_transform.scale, 
 				color
@@ -2884,13 +2921,22 @@ namespace ECSEngine {
 			float2 line_start_position = { AlignMiddle(cursor_transform.position.x, cursor_transform.scale.x, cursor_line_thickness), cursor_transform.position.y + drawer->current_row_y_scale };
 			drawer->SolidColorRectangle(configuration, line_start_position, { cursor_line_thickness, timeline_channel_y_size }, color);
 
+			UIElementTransform clip_region = { position, { scale.x, cursor_transform.scale.y + timeline_channel_y_size } };
+			drawer->EndClip(configuration, normal_clip_state, clip_region);
+			drawer->EndClip(configuration | UI_CONFIG_LATE_DRAW, late_clip_state, clip_region);
+
 			drawer->current_row_y_scale = 0.0f;
 		}
 		
-		static void TimelineDrawChannels(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, const UIDrawerTimelineData* data, float2 channel_start_position, float2 scale, float timeline_y_size) {
+		static void TimelineDrawChannels(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, UIDrawerTimelineData* data, float2 channel_start_position, float2 scale, float timeline_y_size) {
+			float2 timeline_background_scale = { scale.x, timeline_y_size };
+			if (data->zoom < 1.0f) {
+				timeline_background_scale.x *= data->zoom;
+			}
+			
 			// Draw the background first
 			Color background_color = data->use_background_color ? data->background_color : drawer->color_theme.timeline_background;
-			drawer->SolidColorRectangle(configuration, channel_start_position, { scale.x, timeline_y_size }, background_color);
+			drawer->SolidColorRectangle(configuration, channel_start_position, timeline_background_scale, background_color);
 			
 			float2 current_channel_position = { channel_start_position.x - data->largest_channel_description_size, GetTimelineElementPositionY(drawer, data, channel_start_position.y, 0.0f) };
 
@@ -2937,19 +2983,20 @@ namespace ECSEngine {
 				drawer->NextRow(0.0f);
 			}
 
-			float2 timeline_background_scale = { scale.x, timeline_y_size };
 			drawer->EndClip(configuration, clip_state, { channel_start_position, timeline_background_scale });
 			drawer->FinalizeRectangle(configuration | UI_CONFIG_DO_NOT_FIT_SPACE, channel_start_position, timeline_background_scale);
-			//drawer->AddHoverable(configuration, channel_start_position, timeline_background_scale, )
+			drawer->AddHoverable(configuration, channel_start_position, timeline_background_scale, { TimelineChannelHoverableZoomAction, data, 0 });
+			drawer->AddClickable(configuration, channel_start_position, timeline_background_scale, { TimelineChannelMiddleClickOffsetAction, data, 0 }, ECS_MOUSE_MIDDLE);
+			drawer->AddClickable(configuration, channel_start_position, timeline_background_scale, { TimelineChannelRightClickResetAction, data, 0 }, ECS_MOUSE_RIGHT);
 		}
 
 		float UIDrawer::TimelineDrawer(size_t configuration, const UIDrawConfig& config, const UIDrawerTimeline* timeline, UIDrawerTimelineData* data, float2 position, float2 scale) {
 			HandleFitSpaceRectangle(configuration, position, scale);
 			
-			float2 initial_position = position;
-
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, data->identifier);
 			UpdateTimelineData(this, timeline, data, dynamic_index, false);
+
+			data->largest_channel_entry_x_size = TimelineLargestChannelEntryXSize(this, data, scale);
 
 			position.x += data->largest_channel_description_size;
 			scale.x -= data->largest_channel_description_size;

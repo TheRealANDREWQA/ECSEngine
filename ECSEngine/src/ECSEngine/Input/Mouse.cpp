@@ -82,7 +82,7 @@ namespace ECSEngine {
 			new_position = { current_position.x, current_position.y - window_size.y + 1 };
 		}
 		else if (current_position.y <= 0) {
-			new_position = { current_position.x, window_size.y + current_position.x - 1 };
+			new_position = { current_position.x, window_size.y + current_position.y - 1 };
 		}
 
 		if (new_position.x != current_position.x || new_position.y != current_position.y) {

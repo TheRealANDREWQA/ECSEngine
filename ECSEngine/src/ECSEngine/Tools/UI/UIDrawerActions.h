@@ -335,6 +335,14 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		ECSENGINE_API void TimelineChannelMiddleClickOffsetAction(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void TimelineChannelRightClickResetAction(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
 	}
 
 }

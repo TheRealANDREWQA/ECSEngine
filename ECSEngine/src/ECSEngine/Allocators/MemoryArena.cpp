@@ -63,11 +63,13 @@ namespace ECSEngine {
 		size_t current_index = arena->m_current_index;
 		if constexpr (thread_safe) {
 			arena->Lock();
-			arena->m_current_index = arena->m_current_index + 1 == arena->m_allocator_count ? 0 : arena->m_current_index + 1;
-			current_index = arena->m_current_index;
+		}
+		arena->m_current_index = arena->m_current_index + 1 == arena->m_allocator_count ? 0 : arena->m_current_index + 1;
+		current_index = arena->m_current_index;
+		if constexpr (thread_safe) {
 			arena->Unlock();
 		}
-		
+
 		auto loop = [&](size_t index, size_t bound) {
 			while (index < bound) {
 				AllocatorPolymorphic current_allocator = arena->GetAllocator(index);

@@ -4,7 +4,7 @@
 #include "SandboxFile.h"
 
 // More than enough for normal use cases
-#define PROFILING_ENTRIES ECS_KB * 4
+#define PROFILING_ENTRIES ECS_KB
 
 void ChangeSandboxCPUStatisticsType(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_TYPE type) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
