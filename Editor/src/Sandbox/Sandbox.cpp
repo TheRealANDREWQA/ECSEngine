@@ -2493,6 +2493,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		TaskScheduler* runtime_task_scheduler = sandbox->sandbox_world.task_scheduler;
 		TaskManager* runtime_task_manager = sandbox->sandbox_world.task_manager;
 		float previous_sandbox_delta_time = sandbox->sandbox_world.delta_time;
+		float previous_sandbox_elapsed_seconds = sandbox->sandbox_world.elapsed_seconds;
 
 		sandbox->sandbox_world.task_manager = editor_state->render_task_manager;
 		sandbox->sandbox_world.task_scheduler = &viewport_task_scheduler;
@@ -2602,6 +2603,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		editor_state->render_task_manager->ResetStaticTasks();
 
 		sandbox->sandbox_world.SetDeltaTime(previous_sandbox_delta_time);
+		sandbox->sandbox_world.elapsed_seconds = previous_sandbox_elapsed_seconds;
 
 		//ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
 		// Restore the resource manager first

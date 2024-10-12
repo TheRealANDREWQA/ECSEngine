@@ -1,5 +1,6 @@
 #include "editorpch.h"
 #include "InspectorUtilities.h"
+#include "../Inspector.h"
 #include "../../Sandbox/SandboxRecordingFileExtension.h"
 #include "../../Editor/EditorPalette.h"
 
@@ -77,6 +78,12 @@ static bool InspectorRecordingFileRetainedMode(void* window_data, WindowRetained
 
 void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	DrawWindowData* data = (DrawWindowData*)_data;
+
+	// If the file no longer exists, change the inspector to nothing
+	if (!ExistsFileOrFolder(data->path)) {
+		ChangeInspectorToNothing(editor_state, inspector_index);
+		return;
+	}
 
 	Stream<wchar_t> extension = PathExtension(data->path);
 	// This is not very "nice" to check manually what the extension is and display the icon according to it, but it makes for an easy API

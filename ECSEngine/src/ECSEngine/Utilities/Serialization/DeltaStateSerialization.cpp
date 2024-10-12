@@ -154,6 +154,7 @@ namespace ECSEngine {
 					state_infos.Add({ elapsed_seconds, current_instrument_offset - instrument_offset });
 				}
 			}
+			last_entire_state_write_seconds = elapsed_seconds;
 			return success;
 		}
 		else {
@@ -371,7 +372,7 @@ namespace ECSEngine {
 		}
 
 		// Seek to the start of the footer and start deserializing from there
-		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_CURRENT, -(int64_t)footer.size)) {
+		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_CURRENT, -((int64_t)footer.size + (int64_t)sizeof(footer)))) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the beginning of the footer data.");
 			return;
 		}
