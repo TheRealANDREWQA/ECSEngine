@@ -525,10 +525,10 @@ namespace ECSEngine {
 		if (use_filename_from) {
 			complete_to_path.CopyOther(to);
 			bool is_absolute = PathIsAbsolute(complete_to_path);
-			complete_to_path.Add(is_absolute ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
+			complete_to_path.AddAssert(is_absolute ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
 			Stream<wchar_t> from_filename = PathFilenameBoth(from);
-			complete_to_path.AddStream(from_filename);
-			complete_to_path.Add(L'\0');
+			complete_to_path.AddStreamAssert(from_filename);
+			complete_to_path.AddAssert(L'\0');
 
 			to_path = complete_to_path.buffer;
 		}

@@ -76,13 +76,9 @@ CrashHandler SandboxSetCrashHandler(EditorState* editor_state, unsigned int sand
 	PostCrashCallbackData post_callback_data = { editor_state, sandbox_index };
 	descriptor.post_callback = { PostCrashCallback, &post_callback_data, sizeof(post_callback_data) };
 
-	CapacityStream<SerializeEntityManagerComponentInfo> unique_infos;
-	CapacityStream<SerializeEntityManagerSharedComponentInfo> shared_infos;
-	CapacityStream<SerializeEntityManagerGlobalComponentInfo> global_infos;
-
-	unique_infos.Initialize(temporary_allocator, 0, ECS_KB);
-	shared_infos.Initialize(temporary_allocator, 0, ECS_KB);
-	global_infos.Initialize(temporary_allocator, 0, ECS_KB);
+	ResizableStream<SerializeEntityManagerComponentInfo> unique_infos(temporary_allocator, 32);
+	ResizableStream<SerializeEntityManagerSharedComponentInfo> shared_infos(temporary_allocator, 32);
+	ResizableStream<SerializeEntityManagerGlobalComponentInfo> global_infos(temporary_allocator, 32);
 
 	CrashHandler previous_handler;
 	bool success = GetEditorSceneSerializeOverrides(

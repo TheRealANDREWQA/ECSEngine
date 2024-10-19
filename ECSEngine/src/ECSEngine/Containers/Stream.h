@@ -1284,6 +1284,11 @@ namespace ECSEngine {
 			ResizeImpl<false>(new_capacity, debug_info);
 		}
 
+		// Returns the stream starting at the given offset until the end of the stream
+		ECS_INLINE Stream<T> SliceAt(unsigned int offset) const {
+			return { buffer + offset, size - offset };
+		}
+
 		ECS_INLINE void Swap(unsigned int first, unsigned int second) {
 			swap(buffer[first], buffer[second]);
 		}
@@ -1294,31 +1299,36 @@ namespace ECSEngine {
 			}
 		}
 		
-		// It will leave another additional_elements over the current size
+		// It performs a trim if the difference between capacity and size is greater than additional_elements.
+		// If that is the case, it will resize the stream to contain size + additional_elements entries.
 		// Returns true if a resizing was performed, else false
-		bool Trim(unsigned int additional_elements, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		bool Trim(unsigned int additional_elements = 0, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (additional_elements < capacity - size) {
 				unsigned int elements_to_copy = size + additional_elements;
-
-				void* allocation = nullptr;
-				if (buffer != nullptr && elements_to_copy > 0) {
-					allocation = ReallocateEx(allocator, buffer, MemoryOf(elements_to_copy), alignof(T), debug_info);
-					ECS_ASSERT(allocation != nullptr);
-
-					if (allocation != buffer) {
-						memcpy(allocation, buffer, sizeof(T) * elements_to_copy);
-					}
-				}
-
-				buffer = (T*)allocation;
-				capacity = elements_to_copy;
+				Resize(size + additional_elements, debug_info);
 				return true;
 			}
 			return false;
 		}
 
-		ECS_INLINE void Trim() {
-			Trim(0);
+		// It is the same as Trim, the difference being that it uses relative values, percentages in the range [0-1]
+		// Instead of flat values. The first parameter describes the minimum capacity for which this should be performed.
+		// If the capacity is less than that value, it won't perform a trim. Returns true if a resizing was performed, else false
+		bool TrimPercentage(unsigned int minimum_capacity, float threshold_percentage, float additional_percentage = 0.0f, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			if (capacity > minimum_capacity) {
+				float current_percentage = (float)size / (float)capacity;
+				if (current_percentage < threshold_percentage) {
+					unsigned int additional_elements = (unsigned int)((float)capacity * additional_percentage);
+					Resize(size + additional_elements, debug_info);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		// Performs a trim percentage with default values - 16 for minimum capacity, 0.5f for the threshold and 0.1f for additional elements
+		ECS_INLINE bool TrimPercentageDefault() {
+			return TrimPercentage(16, 0.5f, 0.1f);
 		}
 
 		ECS_INLINE Stream<T> ToStream() const {
