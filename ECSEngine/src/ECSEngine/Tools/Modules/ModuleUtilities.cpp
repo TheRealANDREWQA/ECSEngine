@@ -9,31 +9,31 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ModuleGatherSerializeOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<SerializeEntityManagerComponentInfo>& infos)
+	void ModuleGatherSerializeOverrides(Stream<const AppliedModule*> applied_modules, AdditionStream<SerializeEntityManagerComponentInfo> infos)
 	{
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<SerializeEntityManagerComponentInfo> current_infos = applied_modules[index]->serialize_streams.serialize_components;
-			infos.AddStreamAssert(current_infos);
+			infos.AddStream(current_infos);
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ModuleGatherSerializeSharedOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<SerializeEntityManagerSharedComponentInfo>& infos)
+	void ModuleGatherSerializeSharedOverrides(Stream<const AppliedModule*> applied_modules, AdditionStream<SerializeEntityManagerSharedComponentInfo> infos)
 	{
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<SerializeEntityManagerSharedComponentInfo> current_infos = applied_modules[index]->serialize_streams.serialize_shared_components;
-			infos.AddStreamAssert(current_infos);
+			infos.AddStream(current_infos);
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ModuleGatherSerializeGlobalOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<SerializeEntityManagerGlobalComponentInfo>& infos)
+	void ModuleGatherSerializeGlobalOverrides(Stream<const AppliedModule*> applied_modules, AdditionStream<SerializeEntityManagerGlobalComponentInfo> infos)
 	{
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<SerializeEntityManagerGlobalComponentInfo> current_infos = applied_modules[index]->serialize_streams.serialize_global_components;
-			infos.AddStreamAssert(current_infos);
+			infos.AddStream(current_infos);
 		}
 	}
 
@@ -41,9 +41,9 @@ namespace ECSEngine {
 
 	void ModuleGatherSerializeAllOverrides(
 		Stream<const AppliedModule*> applied_modules, 
-		CapacityStream<SerializeEntityManagerComponentInfo>& unique_infos, 
-		CapacityStream<SerializeEntityManagerSharedComponentInfo>& shared_infos, 
-		CapacityStream<SerializeEntityManagerGlobalComponentInfo>& global_infos
+		AdditionStream<SerializeEntityManagerComponentInfo> unique_infos, 
+		AdditionStream<SerializeEntityManagerSharedComponentInfo> shared_infos, 
+		AdditionStream<SerializeEntityManagerGlobalComponentInfo> global_infos
 	)
 	{
 		ModuleGatherSerializeOverrides(applied_modules, unique_infos);
@@ -53,31 +53,31 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ModuleGatherDeserializeOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<DeserializeEntityManagerComponentInfo>& infos)
+	void ModuleGatherDeserializeOverrides(Stream<const AppliedModule*> applied_modules, AdditionStream<DeserializeEntityManagerComponentInfo> infos)
 	{
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<DeserializeEntityManagerComponentInfo> current_infos = applied_modules[index]->serialize_streams.deserialize_components;
-			infos.AddStreamAssert(current_infos);
+			infos.AddStream(current_infos);
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ModuleGatherDeserializeSharedOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<DeserializeEntityManagerSharedComponentInfo>& infos)
+	void ModuleGatherDeserializeSharedOverrides(Stream<const AppliedModule*> applied_modules, AdditionStream<DeserializeEntityManagerSharedComponentInfo> infos)
 	{
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<DeserializeEntityManagerSharedComponentInfo> current_infos = applied_modules[index]->serialize_streams.deserialize_shared_components;
-			infos.AddStreamAssert(current_infos);
+			infos.AddStream(current_infos);
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ModuleGatherDeserializeGlobalOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<DeserializeEntityManagerGlobalComponentInfo>& infos)
+	void ModuleGatherDeserializeGlobalOverrides(Stream<const AppliedModule*> applied_modules, AdditionStream<DeserializeEntityManagerGlobalComponentInfo> infos)
 	{
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<DeserializeEntityManagerGlobalComponentInfo> current_infos = applied_modules[index]->serialize_streams.deserialize_global_components;
-			infos.AddStreamAssert(current_infos);
+			infos.AddStream(current_infos);
 		}
 	}
 
@@ -85,9 +85,9 @@ namespace ECSEngine {
 
 	void ModuleGatherDeserializeAllOverrides(
 		Stream<const AppliedModule*> applied_modules, 
-		CapacityStream<DeserializeEntityManagerComponentInfo>& unique_infos, 
-		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& shared_infos, 
-		CapacityStream<DeserializeEntityManagerGlobalComponentInfo>& global_infos
+		AdditionStream<DeserializeEntityManagerComponentInfo> unique_infos, 
+		AdditionStream<DeserializeEntityManagerSharedComponentInfo> shared_infos, 
+		AdditionStream<DeserializeEntityManagerGlobalComponentInfo> global_infos
 	)
 	{
 		ModuleGatherDeserializeOverrides(applied_modules, unique_infos);
@@ -186,7 +186,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<SerializeEntityManagerComponentInfo>& infos,
+		AdditionStream<SerializeEntityManagerComponentInfo> infos,
 		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
@@ -195,9 +195,7 @@ namespace ECSEngine {
 				GetUniqueLinkComponents(reflection_manager, unique_link_types);
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
-				ECS_ASSERT(infos.size + unique_link_types.size <= infos.capacity);
-				ConvertLinkTypesToSerializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, infos.buffer + infos.size);
-				infos.size += unique_link_types.size;
+				ConvertLinkTypesToSerializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, infos.Reserve(unique_link_types.size));
 			}
 		);
 	}
@@ -209,7 +207,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<SerializeEntityManagerSharedComponentInfo>& infos,
+		AdditionStream<SerializeEntityManagerSharedComponentInfo> infos,
 		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
@@ -218,9 +216,7 @@ namespace ECSEngine {
 				GetSharedLinkComponents(reflection_manager, shared_link_types);
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
-				ECS_ASSERT(infos.size + shared_link_types.size <= infos.capacity);
-				ConvertLinkTypesToSerializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, infos.buffer + infos.size);
-				infos.size += shared_link_types.size;
+				ConvertLinkTypesToSerializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, infos.Reserve(shared_link_types.size));
 			}
 		);
 	}
@@ -232,7 +228,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const AssetDatabase* database, 
 		AllocatorPolymorphic temp_allocator, 
-		CapacityStream<SerializeEntityManagerGlobalComponentInfo>& infos, 
+		AdditionStream<SerializeEntityManagerGlobalComponentInfo> infos, 
 		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
@@ -241,9 +237,7 @@ namespace ECSEngine {
 				GetGlobalLinkComponents(reflection_manager, global_link_types);
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
-				ECS_ASSERT(infos.size + global_link_types.size <= infos.capacity);
-				ConvertLinkTypesToSerializeEntityManagerGlobal(reflection_manager, database, temp_allocator, global_link_types, global_link_type_targets, infos.buffer + infos.size);
-				infos.size += global_link_types.size;
+				ConvertLinkTypesToSerializeEntityManagerGlobal(reflection_manager, database, temp_allocator, global_link_types, global_link_type_targets, infos.Reserve(global_link_types.size));
 			}
 		);
 	}
@@ -255,9 +249,9 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<SerializeEntityManagerComponentInfo>& unique_infos, 
-		CapacityStream<SerializeEntityManagerSharedComponentInfo>& shared_infos,
-		CapacityStream<SerializeEntityManagerGlobalComponentInfo>& global_infos,
+		AdditionStream<SerializeEntityManagerComponentInfo> unique_infos, 
+		AdditionStream<SerializeEntityManagerSharedComponentInfo> shared_infos,
+		AdditionStream<SerializeEntityManagerGlobalComponentInfo> global_infos,
 		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
@@ -266,16 +260,9 @@ namespace ECSEngine {
 				GetAllLinkComponents(reflection_manager, unique_link_types, shared_link_types, global_link_types);
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
-				ECS_ASSERT(unique_infos.size + unique_link_types.size <= unique_infos.capacity);
-				ECS_ASSERT(shared_infos.size + shared_link_types.size <= shared_infos.capacity);
-				ECS_ASSERT(global_infos.size + global_link_types.size <= global_infos.capacity);
-
-				ConvertLinkTypesToSerializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, unique_infos.buffer + unique_infos.size);
-				ConvertLinkTypesToSerializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, shared_infos.buffer + shared_infos.size);
-				ConvertLinkTypesToSerializeEntityManagerGlobal(reflection_manager, database, temp_allocator, global_link_types, global_link_type_targets, global_infos.buffer + global_infos.size);
-				unique_infos.size += unique_link_types.size;
-				shared_infos.size += shared_link_types.size;
-				global_infos.size += global_link_types.size;
+				ConvertLinkTypesToSerializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, unique_infos.Reserve(unique_link_types.size));
+				ConvertLinkTypesToSerializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, shared_infos.Reserve(shared_link_types.size));
+				ConvertLinkTypesToSerializeEntityManagerGlobal(reflection_manager, database, temp_allocator, global_link_types, global_link_type_targets, global_infos.Reserve(global_link_types.size));
 			}
 		);
 	}
@@ -287,7 +274,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<DeserializeEntityManagerComponentInfo>& infos,
+		AdditionStream<DeserializeEntityManagerComponentInfo> infos,
 		Stream<ModuleLinkComponentTarget> extra_targets,
 		Stream<ModuleComponentFunctions> component_functions
 	)
@@ -297,7 +284,6 @@ namespace ECSEngine {
 				GetUniqueLinkComponents(reflection_manager, unique_link_types);
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
-				ECS_ASSERT(infos.size + unique_link_types.size <= infos.capacity);
 				ConvertLinkTypesToDeserializeEntityManagerUnique(
 					reflection_manager, 
 					database, 
@@ -305,9 +291,8 @@ namespace ECSEngine {
 					unique_link_types, 
 					unique_link_type_targets,
 					component_functions,
-					infos.buffer + infos.size
+					infos.Reserve(unique_link_types.size)
 				);
-				infos.size += unique_link_types.size;
 			}
 		);
 	}
@@ -319,7 +304,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& infos,
+		AdditionStream<DeserializeEntityManagerSharedComponentInfo> infos,
 		Stream<ModuleLinkComponentTarget> extra_targets,
 		Stream<ModuleComponentFunctions> component_functions
 	)
@@ -329,17 +314,15 @@ namespace ECSEngine {
 				GetSharedLinkComponents(reflection_manager, shared_link_types);
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
-				ECS_ASSERT(infos.size + shared_link_types.size <= infos.capacity);
 				ConvertLinkTypesToDeserializeEntityManagerShared(
-					reflection_manager, 
-					database, 
-					temp_allocator, 
-					shared_link_types, 
-					shared_link_type_targets, 
+					reflection_manager,
+					database,
+					temp_allocator,
+					shared_link_types,
+					shared_link_type_targets,
 					component_functions,
-					infos.buffer + infos.size
+					infos.Reserve(shared_link_types.size)
 				);
-				infos.size += shared_link_types.size;
 			}
 		);
 	}
@@ -351,7 +334,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const AssetDatabase* database, 
 		AllocatorPolymorphic temp_allocator, 
-		CapacityStream<DeserializeEntityManagerGlobalComponentInfo>& infos, 
+		AdditionStream<DeserializeEntityManagerGlobalComponentInfo> infos, 
 		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
@@ -360,18 +343,16 @@ namespace ECSEngine {
 				GetGlobalLinkComponents(reflection_manager, shared_link_types);
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
-				ECS_ASSERT(infos.size + global_link_types.size <= infos.capacity);
 				ConvertLinkTypesToDeserializeEntityManagerGlobal(
 					reflection_manager, 
 					database, 
 					temp_allocator, 
 					global_link_types, 
 					global_link_type_targets, 
-					infos.buffer + infos.size
+					infos.Reserve(global_link_types.size)
 				);
-				infos.size += global_link_types.size;
 			}
-			);
+		);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -381,9 +362,9 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<DeserializeEntityManagerComponentInfo>& unique_infos,
-		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& shared_infos,
-		CapacityStream<DeserializeEntityManagerGlobalComponentInfo>& global_infos,
+		AdditionStream<DeserializeEntityManagerComponentInfo> unique_infos,
+		AdditionStream<DeserializeEntityManagerSharedComponentInfo> shared_infos,
+		AdditionStream<DeserializeEntityManagerGlobalComponentInfo> global_infos,
 		Stream<ModuleLinkComponentTarget> extra_targets,
 		Stream<ModuleComponentFunctions> component_functions
 	)
@@ -393,10 +374,6 @@ namespace ECSEngine {
 				GetAllLinkComponents(reflection_manager, unique_link_types, shared_link_types, global_link_types);
 			},
 			[&](auto unique_link_types, auto shared_link_types, auto global_link_types, auto unique_link_type_targets, auto shared_link_type_targets, auto global_link_type_targets) {
-				ECS_ASSERT(unique_infos.size + unique_link_types.size <= unique_infos.capacity);
-				ECS_ASSERT(shared_infos.size + shared_link_types.size <= shared_infos.capacity);
-				ECS_ASSERT(global_infos.size + global_link_types.size <= global_infos.capacity);
-
 				ConvertLinkTypesToDeserializeEntityManagerUnique(
 					reflection_manager, 
 					database, 
@@ -404,7 +381,7 @@ namespace ECSEngine {
 					unique_link_types, 
 					unique_link_type_targets, 
 					component_functions,
-					unique_infos.buffer + unique_infos.size
+					unique_infos.Reserve(unique_link_types.size)
 				);
 				ConvertLinkTypesToDeserializeEntityManagerShared(
 					reflection_manager, 
@@ -413,7 +390,7 @@ namespace ECSEngine {
 					shared_link_types, 
 					shared_link_type_targets, 
 					component_functions,
-					shared_infos.buffer + shared_infos.size
+					shared_infos.Reserve(shared_link_types.size)
 				);
 				ConvertLinkTypesToDeserializeEntityManagerGlobal(
 					reflection_manager, 
@@ -421,11 +398,8 @@ namespace ECSEngine {
 					temp_allocator, 
 					global_link_types, 
 					global_link_type_targets, 
-					global_infos.buffer + global_infos.size
+					global_infos.Reserve(global_link_types.size)
 				);
-				unique_infos.size += unique_link_types.size;
-				shared_infos.size += shared_link_types.size;
-				global_infos.size += global_link_types.size;
 			}
 		);
 	}

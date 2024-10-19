@@ -329,7 +329,7 @@ namespace ECSEngine {
 				float mask
 			);
 
-			void AddWindowMemoryResource(void* resource, unsigned int window_index);
+			void AddWindowMemoryResource(const void* resource, unsigned int window_index);
 
 			void AddWindowMemoryResourceToTable(void* resource, ResourceIdentifier identifier, unsigned int window_index);
 
@@ -360,9 +360,9 @@ namespace ECSEngine {
 				DockspaceType type
 			);
 
-			void AddWindowDynamicElement(unsigned int window_index, Stream<char> name, Stream<void*> allocations, Stream<ResourceIdentifier> table_resources);
+			void AddWindowDynamicElement(unsigned int window_index, Stream<char> name, Stream<const void*> allocations, Stream<ResourceIdentifier> table_resources);
 
-			void AddWindowDynamicElementAllocation(unsigned int window_index, unsigned int index, void* allocation);
+			void AddWindowDynamicElementAllocation(unsigned int window_index, unsigned int index, const void* allocation);
 
 			// If the identifier is allocated, it will only add the resource identifier as is. If not, it will make an allocation for it that will be tracked.
 			void AddWindowDynamicElementTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier identifier, bool is_identifier_allocated);
@@ -686,7 +686,7 @@ namespace ECSEngine {
 			void DeallocateAllWindowSnapshots();
 
 			// Reduces the number of sprites to be drawn for the last added cluster. The number should be expresed in the number of sprites to be eliminated
-			void DecrementLastSpriteClusterCount(UIDockspace* dockspace, unsigned int border_index, unsigned int decrement_count = 1);
+			void DecrementLastSpriteClusterCount(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, unsigned int decrement_count = 1);
 
 			void DecrementWindowDynamicResource(unsigned int window_index);
 
@@ -776,12 +776,12 @@ namespace ECSEngine {
 			);
 
 			void DrawPass(
-				CapacityStream<VertexBuffer>& buffers,
-				CapacityStream<UIDynamicStream<UISpriteTexture>>& sprite_textures,
+				CapacityStream<VertexBuffer> buffers,
+				CapacityStream<UIDynamicStream<UISpriteTexture>> sprite_textures,
 				ConstantBuffer& viewport_buffer,
 				const size_t* counts,
 				GraphicsContext* context,
-				void* extra_information,
+				Stream<UIDynamicStream<unsigned int>> sprite_cluster_counts,
 				unsigned int material_offset
 			);
 

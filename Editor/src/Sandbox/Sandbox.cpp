@@ -2993,7 +2993,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	if (!is_step) {
 		// Render the scene if it is visible - the runtime is rendered by the game now		
-		EnableSceneUIRendering(editor_state, sandbox_index, false);
+		EnableSceneUIRendering(editor_state, sandbox_index, true);
 	}
 
 	RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);

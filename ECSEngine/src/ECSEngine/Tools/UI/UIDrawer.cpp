@@ -2963,25 +2963,47 @@ namespace ECSEngine {
 			UIDrawerClipState clip_state = drawer->BeginClip(configuration, { channel_start_position, timeline_background_scale });
 
 			for (size_t index = 0; index < data->channels.size; index++) {
+				// Draw the sprite if it has a minimum separation from the last sprite
+				const float min_sprite_separation = 0.003f;
+
 				float channel_y_size = GetTimelineChannelYSize(drawer, data, scale, index);
 				drawer->current_row_y_scale = channel_y_size;
 				float entry_y_size = data->channels[index].entry_y_size == 0.0f ? channel_y_size * 0.5f : data->channels[index].entry_y_size * drawer->zoom_ptr->y;
 				float entry_y_position = AlignMiddle(current_channel_position.y, channel_y_size, entry_y_size);
 				float2 entry_size = drawer->GetSquareScale(entry_y_size);
 
+				// Determine the x positions of each entry and eliminate those that are too close together
+				// Because they can overwhelm the drawing resources
+				ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 64);
+				Stream<unsigned int> indices_to_iterate;
+				
+				float last_drawn_position = -FLT_MAX;
+				indices_to_iterate.Initialize(&stack_allocator, data->channels[index].elements.size);
+				indices_to_iterate.size = 0;
+				for (size_t subindex = 0; subindex < data->channels[index].elements.size; subindex++) {
+					float normalized_x_position = GetTimelineNormalizedTimeValue(data, data->channels[index].elements[subindex].time);
+					float current_x_position = GetTimelineElementPositionFromNormalized(drawer, data, channel_start_position.x, scale.x, normalized_x_position);
+					// Don't cull sprites that are at least entry_size.x apart - that would result in very few entries.
+					if (last_drawn_position + min_sprite_separation < current_x_position) {
+						indices_to_iterate.Add(subindex);
+						last_drawn_position = current_x_position;
+					}
+				}
+
 				struct Extractor : UIDrawerSpriteClusterAggregatorExtractor {
 					ECS_INLINE Stream<wchar_t> GetTexture(unsigned int index) const {
-						return data->texture_paths[data->channels[channel_index].elements[index].texture_index];
+						return data->texture_paths[data->channels[channel_index].elements[indices_to_iterate[index]].texture_index];
 					}
 
 					UIDrawerSpriteClusterAggregateInfo GetInfo(unsigned int index) const {
-						const UIDrawerTimelineElement& element = data->channels[channel_index].elements[index];
+						const UIDrawerTimelineElement& element = data->channels[channel_index].elements[indices_to_iterate[index]];
 						float normalized_x_position = GetTimelineNormalizedTimeValue(data, element.time);
 						float entry_x_position = GetTimelineElementPositionFromNormalized(drawer, data, channel_start_position_x, scale_x, normalized_x_position);
 						float2 position = { entry_x_position - entry_size.x * 0.5f, entry_y_position };
 						return { position, entry_size, element.color };
 					}
 
+					Stream<unsigned int> indices_to_iterate;
 					float2 entry_size;
 					float entry_y_position;
 					const UIDrawer* drawer;
@@ -2999,7 +3021,8 @@ namespace ECSEngine {
 				extractor.channel_start_position_x = channel_start_position.x;
 				extractor.scale_x = scale.x;
 				extractor.channel_index = index;
-				UIDrawerAddAggregatedSpriteClusters(drawer, configuration, data->channels[index].elements.size, extractor);
+				extractor.indices_to_iterate = indices_to_iterate;
+				UIDrawerAddAggregatedSpriteClusters(drawer, configuration, indices_to_iterate.size, extractor);
 
 				current_channel_position.y += drawer->current_row_y_scale;
 				drawer->NextRow(0.0f);
@@ -8676,8 +8699,8 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::DecrementSpriteClusterCount(unsigned int decrement_count) {
-			system->DecrementLastSpriteClusterCount(dockspace, border_index, decrement_count);
+		void UIDrawer::DecrementSpriteClusterCount(size_t configuration, unsigned int decrement_count) {
+			system->DecrementLastSpriteClusterCount(dockspace, border_index, HandlePhase(configuration), decrement_count);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -14731,6 +14754,7 @@ namespace ECSEngine {
 
 		void UIDrawer::RemoveDynamicAllocation(const void* allocation, unsigned int dynamic_index) {
 			system->m_memory->Deallocate(allocation);
+			system->RemoveWindowMemoryResource(window_index, allocation);
 			system->RemoveWindowDynamicResourceAllocation(window_index, dynamic_index, allocation);
 		}
 
@@ -14776,16 +14800,18 @@ namespace ECSEngine {
 					system->RemoveSpriteTexture(dockspace, border_index, phase);
 				}
 				size_t sprite_cluster_current_count = 0;
-				int64_t current_cluster_index = (int64_t)dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams.size - 1;
+				UIDynamicStream<unsigned int>& sprite_cluster_substream = phase == ECS_UI_DRAW_SYSTEM ? system->m_resources.system_draw.sprite_cluster_subtreams[0]
+					: dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams[phase];
+				int64_t current_cluster_index = (int64_t)sprite_cluster_substream.size - 1;
 				while (sprite_cluster_current_count < sprite_cluster_difference && current_cluster_index >= 0) {
-					sprite_cluster_current_count += dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams[current_cluster_index];
+					sprite_cluster_current_count += sprite_cluster_substream[current_cluster_index];
 					current_cluster_index--;
 				}
 
-				for (size_t index = current_cluster_index; index < dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams.size; index++) {
+				for (size_t index = current_cluster_index; index < sprite_cluster_substream.size; index++) {
 					system->RemoveSpriteTexture(dockspace, border_index, phase, ECS_UI_SPRITE_CLUSTER);
 				}
-				dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams.size = current_cluster_index;
+				sprite_cluster_substream.size = current_cluster_index;
 
 				*solid_color_count = state.solid_color_count;
 				*text_sprite_count = state.text_sprite_count;

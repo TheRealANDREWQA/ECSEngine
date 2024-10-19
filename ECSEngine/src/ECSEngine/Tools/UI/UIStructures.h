@@ -387,8 +387,8 @@ namespace ECSEngine {
 
 			CapacityStream<VertexBuffer> buffers;
 			CapacityStream<UIDynamicStream<UISpriteTexture>> sprite_textures;
+			CapacityStream<UIDynamicStream<unsigned int>> sprite_cluster_subtreams;
 			ConstantBuffer region_viewport_info;
-			UIDynamicStream<unsigned int> sprite_cluster_subtreams;
 		};
 
 		struct UIRenderResources
@@ -516,9 +516,11 @@ namespace ECSEngine {
 			const void** system_buffers;
 			const size_t* system_counts;
 			const size_t* previous_system_counts;
+			unsigned int previous_system_cluster_count;
 			Stream<Stream<UISpriteTexture>> border_sprite_textures;
 			Stream<Stream<UISpriteTexture>> system_sprite_textures;
-			Stream<unsigned int> border_cluster_sprite_count;
+			Stream<UIDynamicStream<unsigned int>> border_cluster_sprite_count;
+			Stream<UIDynamicStream<unsigned int>> system_cluster_sprite_count;
 			const UIHandler* hoverable_handler;
 			Stream<UIHandler> clickable_handlers; // There must be ECS_MOUSE_BUTTON_COUNT
 			const UIHandler* general_handler;
@@ -537,7 +539,8 @@ namespace ECSEngine {
 			size_t* system_counts;
 			Stream<UIDynamicStream<UISpriteTexture>> border_sprite_textures;
 			Stream<UIDynamicStream<UISpriteTexture>> system_sprite_textures;
-			ResizableStream<unsigned int>* border_cluster_sprite_count;
+			Stream<UIDynamicStream<unsigned int>> border_cluster_sprite_count;
+			Stream<UIDynamicStream<unsigned int>> system_cluster_sprite_count;
 
 			UIHandler* hoverable_handler;
 			Stream<UIHandler> clickable_handlers; // There must be ECS_MOUSE_BUTTON_COUNT
@@ -758,12 +761,12 @@ namespace ECSEngine {
 		typedef HashTableDefault<void*> WindowTable;
 
 		struct UIWindowDynamicResource {
-			Stream<void*> element_allocations;
+			Stream<const void*> element_allocations;
 			Stream<ResourceIdentifier> table_resources;
 			// The resource can add allocations without changing the coalesced allocation
-			Stream<void*> added_allocations;
+			ResizableStream<const void*> added_allocations;
 			// The resource can add table resource without changing the coalesced allocation
-			Stream<ResourceIdentifier> added_table_resources;
+			ResizableStream<ResourceIdentifier> added_table_resources;
 			unsigned int reference_count;
 		};
 
@@ -796,7 +799,7 @@ namespace ECSEngine {
 			Stream<char> name;
 			void* window_data;
 			size_t window_data_size;
-			UIDynamicStream<void*> memory_resources;
+			UIDynamicStream<const void*> memory_resources;
 			HashTableDefault<UIWindowDynamicResource> dynamic_resources;
 			WindowDraw draw;
 			WindowRetainedMode retained_mode;

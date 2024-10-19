@@ -488,7 +488,9 @@ namespace ECSEngine {
 			for (size_t index = 0; index < draw_resources.sprite_textures.size; index++) {
 				draw_resources.sprite_textures[index].Reset();
 			}
-			draw_resources.sprite_cluster_subtreams.Reset();
+			for (size_t index = 0; index < draw_resources.sprite_cluster_subtreams.size; index++) {
+				draw_resources.sprite_cluster_subtreams[index].Reset();
+			}
 			// We don't need to deallocate the data pointers since they were allocated
 			// Using the temporary allocator
 			snapshot_runnables.FreeBuffer();
@@ -863,12 +865,13 @@ namespace ECSEngine {
 				restore_info->system_counts[index] += counts[offset + index];
 			}
 
-			restore_info->border_cluster_sprite_count->AddStream(cluster_sprite_counts[ECS_UI_DRAW_NORMAL]);
-			restore_info->border_cluster_sprite_count->AddStream(cluster_sprite_counts[ECS_UI_DRAW_LATE]);
-
+			
 			for (size_t pass_index = 0; pass_index < ECS_TOOLS_UI_PASSES; pass_index++) {
+				restore_info->border_cluster_sprite_count[pass_index].AddStream(cluster_sprite_counts[pass_index]);
+				
 				for (size_t index = 0; index < ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS; index++) {
 					size_t current_index = pass_index * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + index;
+					Stream<UISpriteTexture> textures = sprites[current_index];					
 					restore_info->border_sprite_textures[current_index].AddStream(sprites[current_index]);
 				}
 			}
@@ -877,6 +880,7 @@ namespace ECSEngine {
 				size_t offset = ECS_TOOLS_UI_PASSES * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS;
 				restore_info->system_sprite_textures[index].AddStream(sprites[offset + index]);
 			}
+			restore_info->system_cluster_sprite_count[0].AddStream(cluster_sprite_counts[ECS_TOOLS_UI_PASSES]);
 
 			restore_info->hoverable_handler->CopyData(
 				&hoverables,
@@ -1016,22 +1020,9 @@ namespace ECSEngine {
 
 				cluster_sprite_counts[pass_index] = {};
 				// For the cluster sprites, also copy the cluster count
-				size_t cluster_count = info->counts[pass_index * ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE_CLUSTER] / 6;
+				size_t cluster_count = info->border_cluster_sprite_count[pass_index].size;
 				if (cluster_count > 0) {
-					if (pass_index == 0) {
-						size_t allocation_size = sizeof(unsigned int) * cluster_count;
-						void* allocation = AllocateEx(allocator, sizeof(unsigned int) * cluster_count);
-						cluster_sprite_counts[pass_index].InitializeFromBuffer(allocation, cluster_count);
-						memcpy(
-							cluster_sprite_counts[pass_index].buffer,
-							info->border_cluster_sprite_count.buffer,
-							allocation_size
-						);
-					}
-					else {
-						// At the moment, the late draws cannot be distinguished
-						ECS_ASSERT(false);
-					}
+					cluster_sprite_counts[pass_index].InitializeAndCopy(allocator, info->border_cluster_sprite_count[pass_index]);
 				}
 
 				copy_sprite_textures(cluster_count, 0, pass_index, ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX);
@@ -1046,10 +1037,14 @@ namespace ECSEngine {
 				ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFER_INDEX
 			);
 
-			// The cluster sprites for the system draw cannot be deduced at the moment
-			ECS_ASSERT(info->system_counts[ECS_TOOLS_UI_SPRITE_CLUSTER] == 0);
+			// Copy the sprite cluster information
 			cluster_sprite_counts[ECS_TOOLS_UI_PASSES] = {};
 			sprites[ECS_TOOLS_UI_PASSES * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX] = {};
+			if (info->system_counts[ECS_TOOLS_UI_SPRITE_CLUSTER] - info->previous_system_counts[ECS_TOOLS_UI_SPRITE_CLUSTER] > 0) {
+				Stream<unsigned int> added_clusters_slice = info->system_cluster_sprite_count[0].SliceAt(info->previous_system_cluster_count);
+				cluster_sprite_counts[ECS_TOOLS_UI_PASSES].InitializeAndCopy(allocator, added_clusters_slice);
+				copy_sprite_textures(added_clusters_slice.size, info->previous_system_cluster_count, 0, ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX);
+			}
 
 			// Copy the handlers now
 			hoverables = info->hoverable_handler->Copy(allocator, &hoverables_action_allocated_data);

@@ -78,9 +78,9 @@ bool SaveEditorSceneRuntime(
 bool GetEditorSceneSerializeOverrides(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
-	ECSEngine::CapacityStream<ECSEngine::SerializeEntityManagerComponentInfo>* unique_overrides,
-	ECSEngine::CapacityStream<ECSEngine::SerializeEntityManagerSharedComponentInfo>* shared_overrides,
-	ECSEngine::CapacityStream<ECSEngine::SerializeEntityManagerGlobalComponentInfo>* global_overrides,
+	ECSEngine::AdditionStream<ECSEngine::SerializeEntityManagerComponentInfo> unique_overrides,
+	ECSEngine::AdditionStream<ECSEngine::SerializeEntityManagerSharedComponentInfo> shared_overrides,
+	ECSEngine::AdditionStream<ECSEngine::SerializeEntityManagerGlobalComponentInfo> global_overrides,
 	ECSEngine::AllocatorPolymorphic temporary_allocator
 );
 
@@ -89,9 +89,9 @@ bool GetEditorSceneSerializeOverrides(
 bool GetEditorSceneDeserializeOverrides(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
-	ECSEngine::CapacityStream<ECSEngine::DeserializeEntityManagerComponentInfo>* unique_overrides,
-	ECSEngine::CapacityStream<ECSEngine::DeserializeEntityManagerSharedComponentInfo>* shared_overrides,
-	ECSEngine::CapacityStream<ECSEngine::DeserializeEntityManagerGlobalComponentInfo>* global_overrides,
+	ECSEngine::AdditionStream<ECSEngine::DeserializeEntityManagerComponentInfo> unique_overrides,
+	ECSEngine::AdditionStream<ECSEngine::DeserializeEntityManagerSharedComponentInfo> shared_overrides,
+	ECSEngine::AdditionStream<ECSEngine::DeserializeEntityManagerGlobalComponentInfo> global_overrides,
 	ECSEngine::AllocatorPolymorphic temporary_allocator
 );
 

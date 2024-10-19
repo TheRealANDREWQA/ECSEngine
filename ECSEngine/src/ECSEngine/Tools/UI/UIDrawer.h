@@ -1473,7 +1473,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Reduces the number of entries in the last sprite cluster reservation
-			void DecrementSpriteClusterCount(unsigned int decrement_count = 1);
+			void DecrementSpriteClusterCount(size_t configuration, unsigned int decrement_count = 1);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -5164,7 +5164,7 @@ namespace ECSEngine {
 			UIDrawerAcquireDragDrop acquire_drag_drop;
 			// The following fields are used by the initializer to create the appropriate dynamic element
 			struct {
-				CapacityStream<void*> last_initialized_element_allocations;
+				CapacityStream<const void*> last_initialized_element_allocations;
 				CapacityStream<ResourceIdentifier> last_initialized_element_table_resources;
 				// If this field is set to a value different from -1, it means that allocations and dynamic elements
 				// Should go directly to it, without being added to the buffers above
@@ -5460,7 +5460,7 @@ namespace ECSEngine {
 					}
 					else {
 						// Reduce the cluster count
-						drawer->DecrementSpriteClusterCount();
+						drawer->DecrementSpriteClusterCount(configuration);
 					}
 					index++;
 				}

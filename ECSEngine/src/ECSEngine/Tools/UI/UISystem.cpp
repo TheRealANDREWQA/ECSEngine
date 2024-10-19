@@ -240,6 +240,8 @@ namespace ECSEngine {
 
 			m_resources.system_draw.sprite_textures = CapacityStream<UIDynamicStream<UISpriteTexture>>((void*)buffer, 1, ECS_TOOLS_UI_PASSES);
 			m_resources.system_draw.sprite_textures[0] = UIDynamicStream<UISpriteTexture>(m_memory, 0);
+			m_resources.system_draw.sprite_cluster_subtreams.Initialize(m_memory, 1, 1);
+			m_resources.system_draw.sprite_cluster_subtreams[0].Initialize(m_memory, ECS_TOOLS_UI_CLUSTER_SPRITE_SUBSTREAM_INITIAL_COUNT);
 
 			buffer += sizeof(UIDynamicStream<UISpriteTexture>) * ECS_TOOLS_UI_PASSES;
 
@@ -989,7 +991,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::AddWindowMemoryResource(void* resource, unsigned int window_index)
+		void UISystem::AddWindowMemoryResource(const void* resource, unsigned int window_index)
 		{
 			m_windows[window_index].memory_resources.Add(resource);
 			//size_t size = m_windows[window_index].memory_resources.size;
@@ -1316,7 +1318,7 @@ namespace ECSEngine {
 		void UISystem::AddWindowDynamicElement(
 			unsigned int window_index,
 			Stream<char> name,
-			Stream<void*> allocations,
+			Stream<const void*> allocations,
 			Stream<ResourceIdentifier> table_resources
 		)
 		{
@@ -1334,6 +1336,8 @@ namespace ECSEngine {
 			dynamic_resource.element_allocations.InitializeAndCopy(ptr, allocations);
 			dynamic_resource.table_resources.InitializeFromBuffer(ptr, table_resources.size);
 			dynamic_resource.reference_count = 2;
+			dynamic_resource.added_allocations.Initialize(m_memory, 0);
+			dynamic_resource.added_table_resources.Initialize(m_memory, 0);
 
 			// Copy the identifiers and place them inside the table resources buffer
 			for (size_t index = 0; index < table_resources.size; index++) {
@@ -1350,55 +1354,28 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::AddWindowDynamicElementAllocation(unsigned int window_index, unsigned int index, void* allocation)
+		void UISystem::AddWindowDynamicElementAllocation(unsigned int window_index, unsigned int index, const void* allocation)
 		{
+			// We don't need to record the added_allocations buffer into the window memory resources,
+			// Since this buffer is deallocated when the dynamic resource is destroyed
 			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
-			resource->added_allocations.size++;
-			size_t new_buffer_allocation_size = resource->added_allocations.CopySize();
-			size_t buffer_copy_size = new_buffer_allocation_size - resource->added_allocations.MemoryOf(1);
-
-			void* new_buffer = m_memory->Allocate(new_buffer_allocation_size);
-			memcpy(new_buffer, resource->added_allocations.buffer, buffer_copy_size);
-
-			void* old_buffer = resource->added_allocations.buffer;
-			resource->added_allocations.buffer = (void**)new_buffer;
-			resource->added_allocations[resource->added_allocations.size - 1] = allocation;
-
-			if (resource->added_allocations.size > 1) {
-				ReplaceWindowMemoryResource(window_index, old_buffer, new_buffer);
-			}
-			else {
-				AddWindowMemoryResource(new_buffer, window_index);
-			}
+			resource->added_allocations.Add(allocation);
 		}
 
 		void UISystem::AddWindowDynamicElementTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier identifier, bool is_identifier_allocated)
 		{
 			if (!is_identifier_allocated)
 			{
+				// Because we are adding this allocation to the memory resource and dynamic allocation, it won't be missed on remove
 				identifier = identifier.Copy(Allocator());
 				AddWindowMemoryResource((void*)identifier.ptr, window_index);
 				AddWindowDynamicElementAllocation(window_index, index, (void*)identifier.ptr);
 			}
 
+			// We don't need to record the added_allocations buffer into the window memory resources,
+			// Since this buffer is deallocated when the dynamic resource is destroyed
 			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
-			resource->added_table_resources.size++;
-			size_t new_buffer_allocation_size = resource->added_table_resources.CopySize();
-			size_t buffer_copy_size = new_buffer_allocation_size - resource->added_table_resources.MemoryOf(1);
-
-			void* new_buffer = m_memory->Allocate(new_buffer_allocation_size);
-			memcpy(new_buffer, resource->added_table_resources.buffer, buffer_copy_size);
-
-			void* old_buffer = resource->added_table_resources.buffer;
-			resource->added_table_resources.buffer = (ResourceIdentifier*)new_buffer;
-			resource->added_table_resources[resource->added_table_resources.size - 1] = identifier;
-
-			if (resource->added_table_resources.size > 1) {
-				ReplaceWindowMemoryResource(window_index, old_buffer, new_buffer);
-			}
-			else {
-				AddWindowMemoryResource(new_buffer, window_index);
-			}
+			resource->added_table_resources.Add(identifier);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3048,7 +3025,8 @@ namespace ECSEngine {
 			total_memory += sizeof(unsigned short) * m_descriptors.dockspaces.max_windows_border;
 			total_memory += sizeof(VertexBuffer) * vertex_buffer_count;
 			total_memory += sizeof(UIDynamicStream<UISpriteTexture>) * ECS_TOOLS_UI_PASSES * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS;
-			total_memory += 8;
+			total_memory += sizeof(UIDynamicStream<unsigned int>) * ECS_TOOLS_UI_PASSES;
+			total_memory += alignof(void*);
 
 			void* allocation = m_memory->Allocate(total_memory, alignof(VertexBuffer));
 			memset(allocation, 0, total_memory);
@@ -3084,16 +3062,20 @@ namespace ECSEngine {
 				);
 			}
 
-			border.draw_resources.sprite_cluster_subtreams = UIDynamicStream<unsigned int>(
-				m_memory,
-				ECS_TOOLS_UI_CLUSTER_SPRITE_SUBSTREAM_INITIAL_COUNT
-				);
+			border.draw_resources.sprite_cluster_subtreams.InitializeFromBuffer(
+				buffer,
+				ECS_TOOLS_UI_PASSES,
+				ECS_TOOLS_UI_PASSES
+			);
+			for (unsigned int index = 0; index < border.draw_resources.sprite_cluster_subtreams.size; index++) {
+				border.draw_resources.sprite_cluster_subtreams[index].Initialize(m_memory, ECS_TOOLS_UI_CLUSTER_SPRITE_SUBSTREAM_INITIAL_COUNT);
+			}
 
 			border.window_indices = CapacityStream<unsigned short>(
 				(void*)buffer,
 				1,
 				m_descriptors.dockspaces.max_windows_border
-				);
+			);
 			buffer += sizeof(unsigned short) * m_descriptors.dockspaces.max_windows_border;
 
 			ECS_ASSERT(buffer - (uintptr_t)allocation <= total_memory);
@@ -3201,9 +3183,15 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::DecrementLastSpriteClusterCount(UIDockspace* dockspace, unsigned int border_index, unsigned int decrement_count) {
+		void UISystem::DecrementLastSpriteClusterCount(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, unsigned int decrement_count) {
 			// The substreams contain the vertex count
-			dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams.Last() -= decrement_count * 6;
+			if (phase == ECS_UI_DRAW_SYSTEM)
+			{
+				m_resources.system_draw.sprite_cluster_subtreams[0].Last() -= decrement_count * 6;
+			}
+			else {
+				dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams[phase].Last() -= decrement_count * 6;
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -4322,6 +4310,8 @@ namespace ECSEngine {
 					snapshot_info.system_counts = data->system_count;
 					snapshot_info.previous_system_counts = previous_system_counts;
 					snapshot_info.border_cluster_sprite_count = border.draw_resources.sprite_cluster_subtreams;
+					snapshot_info.system_cluster_sprite_count = m_resources.system_draw.sprite_cluster_subtreams;
+					snapshot_info.previous_system_cluster_count = m_resources.system_draw.sprite_cluster_subtreams[0].size;
 					ECS_STACK_CAPACITY_STREAM(Stream<UISpriteTexture>, sprite_textures, ECS_TOOLS_UI_PASSES * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS);
 					for (size_t sprite_texture_index = 0; sprite_texture_index < sprite_textures.capacity; sprite_texture_index++) {
 						sprite_textures[sprite_texture_index] = border.draw_resources.sprite_textures[sprite_texture_index];
@@ -4355,9 +4345,10 @@ namespace ECSEngine {
 				restore_info.counts = vertex_count;
 				restore_info.system_buffers = data->system_buffers;
 				restore_info.system_counts = data->system_count;
-				restore_info.border_cluster_sprite_count = &border.draw_resources.sprite_cluster_subtreams;
+				restore_info.border_cluster_sprite_count = border.draw_resources.sprite_cluster_subtreams;
 				restore_info.border_sprite_textures = border.draw_resources.sprite_textures;
 				restore_info.system_sprite_textures = m_resources.system_draw.sprite_textures;
+				restore_info.system_cluster_sprite_count = m_resources.system_draw.sprite_cluster_subtreams;
 				restore_info.hoverable_handler = &border.hoverable_handler;
 				restore_info.clickable_handlers = { border.clickable_handler, ECS_COUNTOF(border.clickable_handler) };
 				restore_info.general_handler = &border.general_handler;
@@ -5466,12 +5457,12 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DrawPass(
-			CapacityStream<VertexBuffer>& buffers,
-			CapacityStream<UIDynamicStream<UISpriteTexture>>& sprite_textures,
+			CapacityStream<VertexBuffer> buffers,
+			CapacityStream<UIDynamicStream<UISpriteTexture>> sprite_textures,
 			ConstantBuffer& viewport_buffer,
 			const size_t* counts,
 			GraphicsContext* context,
-			void* extra_information,
+			Stream<UIDynamicStream<unsigned int>> sprite_cluster_counts,
 			unsigned int material_offset
 		) {
 			BindVertexConstantBuffer(viewport_buffer, context);
@@ -5498,7 +5489,7 @@ namespace ECSEngine {
 				// drawing each sprite one by one
 				unsigned int sprite_texture_material_offset = material_offset / ECS_TOOLS_UI_MATERIALS;
 				size_t sprite_texture_count = sprite_textures[ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFER_INDEX + sprite_texture_material_offset * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS].size;
-				UIDynamicStream<UISpriteTexture>* textures = &sprite_textures[ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFER_INDEX + sprite_texture_material_offset * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS];
+				const UIDynamicStream<UISpriteTexture>* textures = &sprite_textures[ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFER_INDEX + sprite_texture_material_offset * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS];
 
 				for (size_t index = 0; index < sprite_texture_count; index++) {
 					BindPixelResourceView(textures->buffer[index].view, context);
@@ -5511,14 +5502,14 @@ namespace ECSEngine {
 				SetSpriteRenderState(context);
 
 				// drawing each cluster one by one
-				const UIDynamicStream<unsigned int>* substream = (const UIDynamicStream<unsigned int>*)extra_information;
-				size_t offset = 0;
 				unsigned int sprite_texture_material_offset = material_offset / ECS_TOOLS_UI_MATERIALS;
-				UIDynamicStream<UISpriteTexture>* textures = &sprite_textures[ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX + sprite_texture_material_offset * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS];
-				for (size_t index = 0; index < substream->size; index++) {
+				Stream<unsigned int> current_sprite_cluster_counts = sprite_cluster_counts[sprite_texture_material_offset];
+				size_t offset = 0;
+				const UIDynamicStream<UISpriteTexture>* textures = &sprite_textures[ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX + sprite_texture_material_offset * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS];
+				for (size_t index = 0; index < current_sprite_cluster_counts.size; index++) {
 					BindPixelResourceView(textures->buffer[index].view, context);
-					ECSEngine::Draw(substream->buffer[index], context, offset);
-					offset += substream->buffer[index];
+					ECSEngine::Draw(current_sprite_cluster_counts[index], context, offset);
+					offset += current_sprite_cluster_counts[index];
 				}
 			}
 
@@ -5553,10 +5544,10 @@ namespace ECSEngine {
 			UnmapBuffer(resources.region_viewport_info.buffer, context);
 
 			if constexpr (phase == ECS_UI_DRAW_SYSTEM) {
-				DrawPass(resources.buffers, resources.sprite_textures, resources.region_viewport_info, counts, context, &resources.sprite_cluster_subtreams, 0);
+				DrawPass(resources.buffers, resources.sprite_textures, resources.region_viewport_info, counts, context, resources.sprite_cluster_subtreams, 0);
 			}
 			else {
-				DrawPass(resources.buffers, resources.sprite_textures, resources.region_viewport_info, counts, context, &resources.sprite_cluster_subtreams, (unsigned int)phase * ECS_TOOLS_UI_MATERIALS);
+				DrawPass(resources.buffers, resources.sprite_textures, resources.region_viewport_info, counts, context, resources.sprite_cluster_subtreams, (unsigned int)phase * ECS_TOOLS_UI_MATERIALS);
 			}
 		}
 
@@ -5577,7 +5568,7 @@ namespace ECSEngine {
 		bool UISystem::ExistsWindowMemoryResource(unsigned int window_index, const void* pointer) const
 		{
 			// The cast is used to match the types to that of the stream
-			return SearchBytes(m_windows[window_index].memory_resources.ToStream(), (void*)pointer) != -1;
+			return SearchBytes(m_windows[window_index].memory_resources.ToStream(), pointer) != -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9635,7 +9626,13 @@ namespace ECSEngine {
 			ECS_UI_DRAW_PHASE phase
 		)
 		{
-			dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams.Add(count * 6);
+			if (phase == ECS_UI_DRAW_SYSTEM)
+			{
+				m_resources.system_draw.sprite_cluster_subtreams[0].Add(count * 6);
+			}
+			else {
+				dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams[phase].Add(count * 6);
+			}
 			SetSpriteTextureToDraw(
 				dockspace,
 				border_index,
@@ -10040,7 +10037,7 @@ namespace ECSEngine {
 		void UISystem::RemoveWindowMemoryResource(unsigned int window_index, const void* buffer)
 		{
 			// The type stored is void*, the cast is just to make the compiler happy let us continue
-			size_t index = SearchBytes(m_windows[window_index].memory_resources.ToStream(), (void*)buffer);
+			size_t index = SearchBytes(m_windows[window_index].memory_resources.ToStream(), buffer);
 			ECS_ASSERT(index != -1);
 			RemoveWindowMemoryResource(window_index, index);
 		}
@@ -10050,6 +10047,7 @@ namespace ECSEngine {
 		void UISystem::RemoveWindowMemoryResource(unsigned int window_index, unsigned int buffer_index)
 		{
 			m_windows[window_index].memory_resources.RemoveSwapBack(buffer_index);
+			m_windows[window_index].memory_resources.TrimPercentageDefault();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10065,7 +10063,7 @@ namespace ECSEngine {
 
 		void UISystem::RemoveWindowDynamicResource(unsigned int window_index, unsigned int index)
 		{
-			const UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
+			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
 
 			// Cannot simply bump back those allocations because if some are deleted before it can affect
 			// The order in which they were stored, invalidating the index reference
@@ -10086,6 +10084,8 @@ namespace ECSEngine {
 				m_windows[window_index].table.Erase(identifier);
 			}
 
+			// We don't need to deallocate the identifier ptr if it was allocated by us because it
+			// Was added to the added allocations as an extra allocation, and the code before handled it
 			for (size_t subindex = 0; subindex < resource->added_table_resources.size; subindex++) {
 				ResourceIdentifier identifier = resource->added_table_resources[subindex];
 				m_windows[window_index].table.Erase(identifier);
@@ -10093,6 +10093,8 @@ namespace ECSEngine {
 
 			// The element allocations contains the starting coalesced allocation
 			m_memory->Deallocate(resource->element_allocations.buffer);
+			resource->added_allocations.FreeBuffer();
+			resource->added_table_resources.FreeBuffer();
 			m_windows[window_index].dynamic_resources.EraseFromIndex(index);
 		}
 
@@ -10114,31 +10116,14 @@ namespace ECSEngine {
 			UIWindowDynamicResource* resource = GetWindowDynamicElement(window_index, index);
 
 			// The cast is used to make the type match that of the stream
-			size_t buffer_index = SearchBytes(resource->element_allocations, (void*)buffer);
+			size_t buffer_index = SearchBytes(resource->element_allocations, buffer);
 			if (buffer_index == -1) {
 				// Might be in the added allocations
-				buffer_index = SearchBytes(resource->added_allocations, (void*)buffer);
+				buffer_index = SearchBytes(resource->added_allocations.ToStream(), buffer);
 
 				if (buffer_index != -1) {
 					resource->added_allocations.RemoveSwapBack(buffer_index);
-					// Relocate the buffer
-					if (resource->added_allocations.size > 0) {
-						void* new_allocation = m_memory->Allocate(resource->added_allocations.MemoryOf(resource->added_allocations.size));
-						resource->added_allocations.CopyTo(new_allocation);
-
-						void* old_buffer = resource->added_allocations.buffer;
-						resource->added_allocations.buffer = (void**)new_allocation;
-						ReplaceWindowMemoryResource(window_index, old_buffer, new_allocation);
-
-						// Deallocate the previous buffer
-						m_memory->Deallocate(old_buffer);
-					}
-					else {
-						RemoveWindowMemoryResource(window_index, resource->added_allocations.buffer);
-						m_memory->Deallocate(resource->added_allocations.buffer);
-						resource->added_allocations.buffer = nullptr;
-					}
-
+					resource->added_allocations.TrimPercentageDefault();
 					return true;
 				}
 				else {
@@ -10164,6 +10149,14 @@ namespace ECSEngine {
 					return true;
 				}
 			}
+			// If it wasn't in the main table resources, check added table resources
+			for (size_t index = 0; index < resource->added_table_resources.size; index++) {
+				if (resource->added_table_resources[index].Compare(identifier)) {
+					resource->added_table_resources.RemoveSwapBack(index);
+					resource->added_table_resources.TrimPercentageDefault();
+					return true;
+				}
+			}
 			return false;
 		}
 
@@ -10172,9 +10165,9 @@ namespace ECSEngine {
 		void UISystem::ReplaceWindowMemoryResource(unsigned int window_index, const void* old_buffer, const void* new_buffer)
 		{
 			// The cast is used to make the type match that of the stream
-			size_t index = SearchBytes(m_windows[window_index].memory_resources.ToStream(), (void*)old_buffer);
+			size_t index = SearchBytes(m_windows[window_index].memory_resources.ToStream(), old_buffer);
 			ECS_ASSERT(index != -1);
-			m_windows[window_index].memory_resources[index] = (void*)new_buffer;
+			m_windows[window_index].memory_resources[index] = new_buffer;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10189,10 +10182,10 @@ namespace ECSEngine {
 				}
 			}
 			// The cast is to used to match the type to that one of the stream
-			size_t resource_index = SearchBytes(resource->element_allocations, (void*)old_buffer);
+			size_t resource_index = SearchBytes(resource->element_allocations, old_buffer);
 			if (resource_index == -1) {
 				// Might be an added allocation
-				resource_index = SearchBytes(resource->added_allocations, (void*)old_buffer);
+				resource_index = SearchBytes(resource->added_allocations.ToStream(), old_buffer);
 				ECS_ASSERT(resource_index != -1);
 				resource->added_allocations[resource_index] = new_buffer;
 			}
@@ -10230,24 +10223,34 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void* UISystem::AllocateWindowMemoryResource(unsigned int window_index, const void* old_buffer, size_t allocation_size, size_t copy_size, unsigned int dynamic_index) {
-			void* allocation = m_memory->Allocate(allocation_size);
+			void* allocation = allocation_size == 0 ? nullptr : m_memory->Allocate(allocation_size);
 			if (copy_size > 0) {
 				memcpy(allocation, old_buffer, copy_size);
 			}
 
-			size_t index = SearchBytes(m_windows[window_index].memory_resources.ToStream(), (void*)old_buffer);
+			size_t index = SearchBytes(m_windows[window_index].memory_resources.ToStream(), old_buffer);
 			if (index != -1) {
 				m_memory->Deallocate(old_buffer);
-				m_windows[window_index].memory_resources[index] = allocation;
-				ReplaceWindowMemoryResource(window_index, old_buffer, allocation);
-				if (dynamic_index != -1) {
-					ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, old_buffer, allocation);
+				if (allocation != nullptr) {
+					m_windows[window_index].memory_resources[index] = allocation;
+					ReplaceWindowMemoryResource(window_index, old_buffer, allocation);
+					if (dynamic_index != -1) {
+						ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, old_buffer, allocation);
+					}
+				}
+				else {
+					RemoveWindowMemoryResource(window_index, index);
+					if (dynamic_index != -1) {
+						RemoveWindowDynamicResourceAllocation(window_index, dynamic_index, old_buffer);
+					}
 				}
 			}
 			else {
-				AddWindowMemoryResource(allocation, window_index);
-				if (dynamic_index != -1) {
-					AddWindowDynamicElementAllocation(window_index, dynamic_index, allocation);
+				if (allocation != nullptr) {
+					AddWindowMemoryResource(allocation, window_index);
+					if (dynamic_index != -1) {
+						AddWindowDynamicElementAllocation(window_index, dynamic_index, allocation);
+					}
 				}
 			}
 
