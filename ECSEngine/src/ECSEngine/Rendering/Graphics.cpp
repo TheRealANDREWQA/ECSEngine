@@ -344,11 +344,17 @@ namespace ECSEngine {
 			quad_positions,
 			true
 		);
+
+		const unsigned int INITIAL_TABLE_CAPACITY = 16;
+
+		graphics->m_cached_resources.blend_states.Initialize(graphics->Allocator(), INITIAL_TABLE_CAPACITY);
+		graphics->m_cached_resources.depth_stencil_states.Initialize(graphics->Allocator(), INITIAL_TABLE_CAPACITY);
+		graphics->m_cached_resources.rasterizer_states.Initialize(graphics->Allocator(), INITIAL_TABLE_CAPACITY);
+		graphics->m_cached_resources.sampler_states.Initialize(graphics->Allocator(), INITIAL_TABLE_CAPACITY);
 	}
 
 	static void InitializeGraphicsHelpers(Graphics* graphics) {
 		graphics->m_shader_helpers.Initialize(graphics->Allocator(), ECS_GRAPHICS_SHADER_HELPER_COUNT, ECS_GRAPHICS_SHADER_HELPER_COUNT);
-		graphics->m_depth_stencil_helpers.Initialize(graphics->Allocator(), ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT, ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT);
 
 		// The shader helpers
 		auto load_source_code = [&](const wchar_t* path) {
@@ -422,18 +428,8 @@ namespace ECSEngine {
 		sampler_descriptor.address_type_v = ECS_SAMPLER_ADDRESS_CLAMP;
 		sampler_descriptor.address_type_w = ECS_SAMPLER_ADDRESS_CLAMP;
 		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
-			graphics->m_shader_helpers[index].pixel_sampler = graphics->CreateSamplerState(sampler_descriptor, true);
+			graphics->m_shader_helpers[index].pixel_sampler = graphics->CreateSamplerState(sampler_descriptor);
 		}
-
-		// The depth stencil helpers
-		D3D11_DEPTH_STENCIL_DESC depth_stencil_state = {};
-		depth_stencil_state.DepthEnable = FALSE;
-		depth_stencil_state.StencilEnable = TRUE;
-		depth_stencil_state.StencilWriteMask = 0xFF;
-		SetDepthStencilDescOP(&depth_stencil_state, true, D3D11_COMPARISON_ALWAYS, D3D11_STENCIL_OP_REPLACE, D3D11_STENCIL_OP_REPLACE, D3D11_STENCIL_OP_REPLACE);
-		SetDepthStencilDescOP(&depth_stencil_state, false, D3D11_COMPARISON_NEVER, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP);
-		
-		graphics->m_depth_stencil_helpers[ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT] = graphics->CreateDepthStencilState(depth_stencil_state, true);
 	}
 
 	static void EnumGPU(CapacityStream<IDXGIAdapter1*>& adapters, DXGI_GPU_PREFERENCE preference) {
@@ -593,17 +589,15 @@ namespace ECSEngine {
 
 		ChangeMainRenderTargetToInitial(true);
 
-		DepthStencilState depth_stencil_state = CreateDepthStencilStateDefault(true);
-		RasterizerState rasterizer_state = CreateRasterizerStateDefault(true);
-		BlendState blend_state = CreateBlendStateDefault(true);
+		DepthStencilState depth_stencil_state = CreateDepthStencilState({});
+		RasterizerState rasterizer_state = CreateRasterizerState({});
+		BlendDescriptor blend_descriptor;
+		blend_descriptor.enabled = true;
+		BlendState blend_state = CreateBlendState(blend_descriptor);
 
 		BindDepthStencilState(depth_stencil_state);
 		BindRasterizerState(rasterizer_state);
 		BindBlendState(blend_state);
-		
-		depth_stencil_state.Release();
-		rasterizer_state.Release();
-		blend_state.Release();
 
 		BindViewport(0, 0, m_window_size.x, m_window_size.y, 0.0f, 1.0f);
 
@@ -2035,26 +2029,25 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	SamplerState Graphics::CreateSamplerState(const SamplerDescriptor& descriptor, bool temporary, DebugInfo debug_info)
+	SamplerState Graphics::CreateSamplerState(const SamplerDescriptor& descriptor, DebugInfo debug_info)
 	{
-		D3D11_SAMPLER_DESC sampler_desc;
-		sampler_desc.MaxAnisotropy = descriptor.max_anisotropic_level;
-		sampler_desc.Filter = GetGraphicsNativeFilter(descriptor.filter_type);
-		sampler_desc.AddressU = GetGraphicsNativeAddressMode(descriptor.address_type_u);
-		sampler_desc.AddressV = GetGraphicsNativeAddressMode(descriptor.address_type_v);
-		sampler_desc.AddressW = GetGraphicsNativeAddressMode(descriptor.address_type_w);
-
-		sampler_desc.MaxLOD = descriptor.max_lod;
-		sampler_desc.MinLOD = descriptor.min_lod;
-		sampler_desc.MipLODBias = descriptor.mip_bias;
-
-		memcpy(sampler_desc.BorderColor, &descriptor.border_color, sizeof(descriptor.border_color));
-
 		SamplerState state;
-		HRESULT result = m_device->CreateSamplerState(&sampler_desc, &state.sampler);
+		
+		// Check the cached resources
+		if (m_cached_resources.sampler_states.TryGetValue(descriptor, state)) {
+			// Increase the ref count
+			//state.Interface()->AddRef();
+			//AddInternalResource(state, temporary, debug_info);
+			return state;
+		}
 
+		D3D11_SAMPLER_DESC native_descriptor = GetGraphicsNativeSamplerDescriptor(descriptor);
+		HRESULT result = m_device->CreateSamplerState(&native_descriptor, &state.sampler);
 		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Creating sampler state failed!");
-		AddInternalResource(state, temporary, debug_info);
+		
+		AddInternalResource(state, false, debug_info);
+		// Add it to the cached resources as well
+		m_cached_resources.sampler_states.InsertDynamic(Allocator(), state, descriptor);
 		return state;
 	}
 
@@ -2936,88 +2929,80 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	RasterizerState Graphics::CreateRasterizerState(const D3D11_RASTERIZER_DESC& descriptor, bool temporary, DebugInfo debug_info)
+	RasterizerState Graphics::CreateRasterizerState(const RasterizerDescriptor& descriptor, DebugInfo debug_info)
 	{
 		RasterizerState state;
 
-		HRESULT result = m_device->CreateRasterizerState(&descriptor, &state.state);
+		// Check the cached resources
+		for (unsigned int index = 0; index < m_cached_resources.rasterizer_states.size; index++) {
+			if (m_cached_resources.rasterizer_states[index].descriptor == descriptor) {
+				// Increment the reference count
+				state = m_cached_resources.rasterizer_states[index].state;
+				//state.Interface()->AddRef();
+				//AddInternalResource(state, temporary, debug_info);
+				return state;
+			}
+		}
+
+		D3D11_RASTERIZER_DESC native_descriptor = GetGraphicsNativeRasterizerDescriptor(descriptor);
+
+		HRESULT result = m_device->CreateRasterizerState(&native_descriptor, &state.state);
 		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Creating Rasterizer state failed.");
 
-		AddInternalResource(state, temporary, debug_info);
+		AddInternalResource(state, false, debug_info);
+		// Add it to the cached resources as well
+		m_cached_resources.rasterizer_states.Add({ state, descriptor });
 		return state;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	RasterizerState Graphics::CreateRasterizerStateDefault(bool temporary, DebugInfo debug_info)
-	{
-		D3D11_RASTERIZER_DESC descriptor = {};
-		descriptor.AntialiasedLineEnable = TRUE;
-		descriptor.CullMode = D3D11_CULL_BACK;
-		descriptor.FillMode = D3D11_FILL_SOLID;
-		
-		return CreateRasterizerState(descriptor, temporary, debug_info);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	DepthStencilState Graphics::CreateDepthStencilState(const D3D11_DEPTH_STENCIL_DESC& descriptor, bool temporary, DebugInfo debug_info)
+	DepthStencilState Graphics::CreateDepthStencilState(const DepthStencilDescriptor& descriptor, DebugInfo debug_info)
 	{
 		DepthStencilState state;
 
-		HRESULT result = m_device->CreateDepthStencilState(&descriptor, &state.state);
+		// Check the cached resources
+		if (m_cached_resources.depth_stencil_states.TryGetValue(descriptor, state)) {
+			// Increase the ref count and add it to the internal resources
+			//state.Interface()->AddRef();
+			//AddInternalResource(state, temporary, debug_info);
+			return state;
+		}
+
+		D3D11_DEPTH_STENCIL_DESC native_descriptor = GetGraphicsNativeDepthStencilDescriptor(descriptor);
+
+		HRESULT result = m_device->CreateDepthStencilState(&native_descriptor, &state.state);
 		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Creating Depth Stencil State failed.");
 
-		AddInternalResource(state, temporary, debug_info);
+		AddInternalResource(state, false, debug_info);
+		// Add it to the cached resources as well
+		m_cached_resources.depth_stencil_states.InsertDynamic(Allocator(), state, descriptor);
 		return state;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	DepthStencilState Graphics::CreateDepthStencilStateDefault(bool temporary, DebugInfo debug_info)
-	{
-		D3D11_DEPTH_STENCIL_DESC descriptor = {};
-		descriptor.DepthEnable = TRUE;
-		descriptor.DepthFunc = D3D11_COMPARISON_LESS;
-		descriptor.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-		descriptor.StencilEnable = FALSE;
-
-		return CreateDepthStencilState(descriptor, temporary, debug_info);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	BlendState Graphics::CreateBlendState(const D3D11_BLEND_DESC& descriptor, bool temporary, DebugInfo debug_info)
+	BlendState Graphics::CreateBlendState(const BlendDescriptor& descriptor, DebugInfo debug_info)
 	{
 		BlendState state;
 
-		HRESULT result = m_device->CreateBlendState(&descriptor, &state.state);
+		// Check the cached resources
+		if (m_cached_resources.blend_states.TryGetValue(descriptor, state)) {
+			//state.Interface()->AddRef();
+			//AddInternalResource(state, temporary, debug_info);
+			D3D11_BLEND_DESC native_descriptor;
+			state.state->GetDesc(&native_descriptor);
+			return state;
+		}
+		
+		D3D11_BLEND_DESC native_descriptor = GetGraphicsNativeBlendDescriptor(descriptor);
+		HRESULT result = m_device->CreateBlendState(&native_descriptor, &state.state);
 		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Creating Blend State failed.");
 
-		AddInternalResource(state, temporary, debug_info);
+		AddInternalResource(state, false, debug_info);
+		// Add it to the cached resources as well
+		m_cached_resources.blend_states.InsertDynamic(Allocator(), state, descriptor);
 		return state;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	BlendState Graphics::CreateBlendStateDefault(bool temporary, DebugInfo debug_info)
-	{
-		D3D11_BLEND_DESC descriptor = {};
-		descriptor.AlphaToCoverageEnable = FALSE;
-		descriptor.IndependentBlendEnable = FALSE;
-		
-		D3D11_RENDER_TARGET_BLEND_DESC render_target_descriptor = {};
-		render_target_descriptor.BlendEnable = FALSE;
-		render_target_descriptor.SrcBlend = D3D11_BLEND_SRC_ALPHA;
-		render_target_descriptor.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-		render_target_descriptor.BlendOp = D3D11_BLEND_OP_ADD;
-		render_target_descriptor.SrcBlendAlpha = D3D11_BLEND_ZERO;
-		render_target_descriptor.DestBlendAlpha = D3D11_BLEND_ZERO;
-		render_target_descriptor.BlendOpAlpha = D3D11_BLEND_OP_ADD;
-		render_target_descriptor.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-
-		descriptor.RenderTarget[0] = render_target_descriptor;
-		return CreateBlendState(descriptor, temporary, debug_info);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3096,21 +3081,10 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DisableAlphaBlending(GraphicsContext* context) {
-		GraphicsPipelineBlendState state = ECSEngine::GetBlendState(context);
-
-		D3D11_BLEND_DESC blend_desc;
-		if (state.blend_state.Interface() != nullptr) {
-			state.blend_state.state->GetDesc(&blend_desc);
-		}
-		else {
-			blend_desc = CD3D11_BLEND_DESC(D3D11_DEFAULT);
-		}
-		blend_desc.RenderTarget[0].BlendEnable = FALSE;
-
-		BlendState new_state = CreateBlendState(blend_desc, true);
+		BlendDescriptor blend_desc;
+		blend_desc.enabled = false;
+		BlendState new_state = CreateBlendState(blend_desc);
 		ECSEngine::BindBlendState(new_state, context);
-		// This will be kept alive by the binding
-		unsigned int count = new_state.Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3131,44 +3105,33 @@ namespace ECSEngine {
 
 	void Graphics::DisableDepth(GraphicsContext* context)
 	{
-		D3D11_DEPTH_STENCIL_DESC depth_desc;
+		DepthStencilDescriptor depth_desc;
+
 		GraphicsPipelineDepthStencilState depth_stencil_state = ECSEngine::GetDepthStencilState(context);
-
 		if (depth_stencil_state.depth_stencil_state.Interface() != nullptr) {
-			depth_stencil_state.depth_stencil_state.state->GetDesc(&depth_desc);
+			depth_desc = depth_stencil_state.depth_stencil_state.GetDescriptor();
 		}
-		else {
-			depth_desc = CD3D11_DEPTH_STENCIL_DESC(D3D11_DEFAULT);
-		}
-		depth_desc.DepthEnable = FALSE;
+		depth_desc.depth_enabled = false;
 
-		DepthStencilState state = CreateDepthStencilState(depth_desc, true);
+		DepthStencilState state = CreateDepthStencilState(depth_desc);
 		ECSEngine::BindDepthStencilState(state, context);
-		// This will be kept alive by the binding
-		unsigned int count = state.Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DisableCulling(GraphicsContext* context, bool wireframe)
 	{
-		D3D11_RASTERIZER_DESC rasterizer_desc;
-
+		RasterizerDescriptor descriptor;
+		
 		GraphicsPipelineRasterizerState raster_state = ECSEngine::GetRasterizerState(context);
 		if (raster_state.rasterizer_state.Interface() != nullptr) {
-			raster_state.rasterizer_state.state->GetDesc(&rasterizer_desc);
-		}
-		else {
-			rasterizer_desc = CD3D11_RASTERIZER_DESC(D3D11_DEFAULT);
-		}
-		
-		rasterizer_desc.CullMode = D3D11_CULL_NONE;
-		rasterizer_desc.FillMode = wireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
+			descriptor = raster_state.rasterizer_state.GetDescriptor();
+		}		
+		descriptor.cull_mode = ECS_CULL_NONE;
+		descriptor.solid_fill = !wireframe;
 
-		RasterizerState new_state = CreateRasterizerState(rasterizer_desc, true);
+		RasterizerState new_state = CreateRasterizerState(descriptor);
 		ECSEngine::BindRasterizerState(new_state, context);
-		// The binding will keep the state alive
-		unsigned int count = new_state.Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3182,23 +3145,18 @@ namespace ECSEngine {
 
 	void Graphics::DisableWireframe(GraphicsContext* context)
 	{
-		D3D11_RASTERIZER_DESC rasterizer_desc;
+		RasterizerDescriptor rasterizer_desc;
 
 		GraphicsPipelineRasterizerState raster_state = ECSEngine::GetRasterizerState(context);
 		if (raster_state.rasterizer_state.Interface() != nullptr) {
-			raster_state.rasterizer_state.state->GetDesc(&rasterizer_desc);
-		}
-		else {
-			rasterizer_desc = CD3D11_RASTERIZER_DESC(D3D11_DEFAULT);
+			rasterizer_desc = raster_state.rasterizer_state.GetDescriptor();
 		}
 
-		if (rasterizer_desc.FillMode == D3D11_FILL_WIREFRAME) {
-			rasterizer_desc.FillMode = D3D11_FILL_SOLID;
+		if (!rasterizer_desc.solid_fill) {
+			rasterizer_desc.solid_fill = true;
 
-			RasterizerState new_state = CreateRasterizerState(rasterizer_desc, true);
+			RasterizerState new_state = CreateRasterizerState(rasterizer_desc);
 			ECSEngine::BindRasterizerState(new_state, context);
-			// The binding will keep the state alive
-			unsigned int count = new_state.Release();
 		}
 	}
 
@@ -3308,29 +3266,10 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::EnableAlphaBlending(GraphicsContext* context) {
-		GraphicsPipelineBlendState state = ECSEngine::GetBlendState(context);
-
-		D3D11_BLEND_DESC blend_desc;
-		if (state.blend_state.state != nullptr) {
-			state.blend_state.state->GetDesc(&blend_desc);
-		}
-		else {
-			blend_desc = CD3D11_BLEND_DESC(D3D11_DEFAULT);
-		}
-		
-		blend_desc.RenderTarget[0].BlendEnable = TRUE;
-		blend_desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
-		blend_desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-		blend_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-		blend_desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
-		blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
-		blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-		blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-
-		BlendState new_state = CreateBlendState(blend_desc, true);
+		BlendDescriptor blend_desc;
+		blend_desc.enabled = true;
+		BlendState new_state = CreateBlendState(blend_desc);
 		ECSEngine::BindBlendState(new_state, context);
-		// The binding will keep the state alive
-		unsigned int count = new_state.Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3344,23 +3283,19 @@ namespace ECSEngine {
 
 	void Graphics::EnableDepth(GraphicsContext* context)
 	{
-		D3D11_DEPTH_STENCIL_DESC depth_desc;
+		DepthStencilDescriptor depth_desc;
+
 		GraphicsPipelineDepthStencilState depth_stencil_state = ECSEngine::GetDepthStencilState(context);
 		if (depth_stencil_state.depth_stencil_state.Interface() != nullptr) {
-			depth_stencil_state.depth_stencil_state.state->GetDesc(&depth_desc);
-		}
-		else {
-			depth_desc = CD3D11_DEPTH_STENCIL_DESC(D3D11_DEFAULT);
+			depth_desc = depth_stencil_state.depth_stencil_state.GetDescriptor();
 		}
 
-		depth_desc.DepthEnable = TRUE;
-		depth_desc.DepthFunc = D3D11_COMPARISON_LESS;
-		depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		depth_desc.depth_enabled = TRUE;
+		depth_desc.depth_op = ECS_COMPARISON_LESS;
+		depth_desc.write_depth = true;
 
-		DepthStencilState state = CreateDepthStencilState(depth_desc, true);
+		DepthStencilState state = CreateDepthStencilState(depth_desc);
 		ECSEngine::BindDepthStencilState(state, context);
-		// The binding will keep the resource alive
-		unsigned int count = state.Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3374,23 +3309,18 @@ namespace ECSEngine {
 
 	void Graphics::EnableCulling(GraphicsContext* context, bool wireframe)
 	{
-		D3D11_RASTERIZER_DESC rasterizer_desc;
+		RasterizerDescriptor rasterizer_desc;
 
 		GraphicsPipelineRasterizerState raster_state = ECSEngine::GetRasterizerState(GetContext());
 		if (raster_state.rasterizer_state.Interface() != nullptr) {
-			raster_state.rasterizer_state.state->GetDesc(&rasterizer_desc);
-		}
-		else {
-			rasterizer_desc = CD3D11_RASTERIZER_DESC(D3D11_DEFAULT);
+			rasterizer_desc = raster_state.rasterizer_state.GetDescriptor();
 		}
 		
-		rasterizer_desc.CullMode = D3D11_CULL_BACK;
-		rasterizer_desc.FillMode = wireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
+		rasterizer_desc.cull_mode = ECS_CULL_BACK;
+		rasterizer_desc.solid_fill = !wireframe;
 
-		RasterizerState new_state = CreateRasterizerState(rasterizer_desc, true);
+		RasterizerState new_state = CreateRasterizerState(rasterizer_desc);
 		ECSEngine::BindRasterizerState(new_state, context);
-		// The binding will keep the resource alive
-		unsigned int count = new_state.Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3404,23 +3334,18 @@ namespace ECSEngine {
 
 	void Graphics::EnableWireframe(GraphicsContext* context)
 	{
-		D3D11_RASTERIZER_DESC rasterizer_desc;
+		RasterizerDescriptor rasterizer_desc;
 
 		GraphicsPipelineRasterizerState raster_state = ECSEngine::GetRasterizerState(context);
 		if (raster_state.rasterizer_state.Interface() != nullptr) {
-			raster_state.rasterizer_state.state->GetDesc(&rasterizer_desc);
-		}
-		else {
-			rasterizer_desc = CD3D11_RASTERIZER_DESC(D3D11_DEFAULT);
+			rasterizer_desc = raster_state.rasterizer_state.GetDescriptor();
 		}
 
-		if (rasterizer_desc.FillMode != D3D11_FILL_WIREFRAME) {
-			rasterizer_desc.FillMode = D3D11_FILL_WIREFRAME;
+		if (rasterizer_desc.solid_fill) {
+			rasterizer_desc.solid_fill = false;
 
-			RasterizerState new_state = CreateRasterizerState(rasterizer_desc, true);
+			RasterizerState new_state = CreateRasterizerState(rasterizer_desc);
 			ECSEngine::BindRasterizerState(new_state, context);
-			// The binding will keep the resource alive
-			unsigned int count = new_state.Release();
 		}
 	}
 
@@ -4423,10 +4348,6 @@ namespace ECSEngine {
 			}
 		}
 
-		for (size_t index = 0; index < ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT; index++) {
-			decrement_count(graphics->m_depth_stencil_helpers[index].Interface());
-		}
-
 		for (size_t index = 0; index < ECS_GRAPHICS_CACHED_VERTEX_BUFFER_COUNT; index++) {
 			decrement_count(graphics->m_cached_resources.vertex_buffer[index].Interface());
 		}
@@ -4551,17 +4472,12 @@ namespace ECSEngine {
 			}
 		}
 
-		for (size_t index = 0; index < ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT; index++) {
-			graphics->m_depth_stencil_helpers[index].Release();
-		}
-
 		for (size_t index = 0; index < ECS_GRAPHICS_CACHED_VERTEX_BUFFER_COUNT; index++) {
 			graphics->m_cached_resources.vertex_buffer[index].Release();
 		}
 
 		// Deallocate the helper resources array
 		graphics->m_allocator->Deallocate(graphics->m_shader_helpers.buffer);
-		graphics->m_allocator->Deallocate(graphics->m_depth_stencil_helpers.buffer);
 
 		graphics->m_context->Flush();
 

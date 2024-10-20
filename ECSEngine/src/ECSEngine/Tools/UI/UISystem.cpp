@@ -5467,6 +5467,8 @@ namespace ECSEngine {
 		) {
 			BindVertexConstantBuffer(viewport_buffer, context);
 
+			m_graphics->DisableCulling();
+
 			if (counts[ECS_TOOLS_UI_SOLID_COLOR + material_offset] > 0) {
 				BindVertexBuffer(buffers[ECS_TOOLS_UI_SOLID_COLOR + material_offset], context);
 				SetSolidColorRenderState(context);
@@ -5518,6 +5520,8 @@ namespace ECSEngine {
 				SetTextSpriteRenderState(context);
 				ECSEngine::Draw(counts[ECS_TOOLS_UI_TEXT_SPRITE + material_offset], context);
 			}
+
+			m_graphics->EnableCulling();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

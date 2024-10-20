@@ -75,12 +75,6 @@ namespace ECSEngine {
 		uint3 compute_shader_dispatch_size;
 	};
 
-	// TODO: This is not used anymore, decide if we want to keep this or not
-	enum GraphicsDepthStencilHelpers : unsigned char {
-		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT,
-		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT
-	};
-
 	enum ECS_GRAPHICS_DEVICE_ERROR : unsigned char {
 		ECS_GRAPHICS_DEVICE_ERROR_NONE,
 		ECS_GRAPHICS_DEVICE_ERROR_HUNG,
@@ -758,7 +752,8 @@ namespace ECSEngine {
 
 		ConsumeStructuredBuffer CreateConsumeStructuredBuffer(size_t element_size, size_t element_count, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		SamplerState CreateSamplerState(const SamplerDescriptor& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The state should not be released afterwards - it is managed by the Graphics object
+		SamplerState CreateSamplerState(const SamplerDescriptor& descriptor, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		Texture1D CreateTexture(const Texture1DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -885,17 +880,14 @@ namespace ECSEngine {
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		RasterizerState CreateRasterizerState(const D3D11_RASTERIZER_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The state should not be released afterwards - it is managed by the Graphics object
+		RasterizerState CreateRasterizerState(const RasterizerDescriptor& descriptor, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		RasterizerState CreateRasterizerStateDefault(bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The state should not be released afterwards - it is managed by the Graphics object
+		DepthStencilState CreateDepthStencilState(const DepthStencilDescriptor& descriptor, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		DepthStencilState CreateDepthStencilState(const D3D11_DEPTH_STENCIL_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		DepthStencilState CreateDepthStencilStateDefault(bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		BlendState CreateBlendState(const D3D11_BLEND_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		BlendState CreateBlendStateDefault(bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The state should not be released afterwards - it is managed by the Graphics object
+		BlendState CreateBlendState(const BlendDescriptor& descriptor, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		GPUQuery CreateQuery(bool temporary = false);
 
@@ -1287,9 +1279,24 @@ namespace ECSEngine {
 		bool VerifyLeaksAndValidateInternalState(bool& internal_state_valid, CapacityStream<GraphicsLiveObject>* leaks);
 
 #pragma endregion
+		
+		struct RasterizerStatePair {
+			RasterizerState state;
+			RasterizerDescriptor descriptor;
+		};
+
+		typedef HashTable<SamplerState, SamplerDescriptor, HashFunctionPowerOfTwo> CachedSamplerStates;
+		typedef HashTable<BlendState, BlendDescriptor, HashFunctionPowerOfTwo> CachedBlendStates;
+		typedef HashTable<DepthStencilState, DepthStencilDescriptor, HashFunctionPowerOfTwo> CachedDepthStencilStates;
+		// Because there are few permutations for rasterizer states, use an array instead of a hash table
+		typedef ResizableStream<RasterizerStatePair> CachedRasterizerStates;
 
 		struct CachedResources {
 			VertexBuffer vertex_buffer[ECS_GRAPHICS_CACHED_VERTEX_BUFFER_COUNT];
+			CachedSamplerStates sampler_states;
+			CachedBlendStates blend_states;
+			CachedDepthStencilStates depth_stencil_states;
+			CachedRasterizerStates rasterizer_states;
 		};
 
 		uint2 m_window_size;
@@ -1319,7 +1326,6 @@ namespace ECSEngine {
 		ShaderReflection* m_shader_reflection;
 		MemoryManager* m_allocator;
 		CapacityStream<GraphicsShaderHelper> m_shader_helpers;
-		CapacityStream<DepthStencilState> m_depth_stencil_helpers;
 		// Keep a track of the created resources, for leaks and for winking out the device
 		// For some reason DX11 does not provide a winking method for the device!!!
 		AtomicStream<GraphicsInternalResource> m_internal_resources;

@@ -1753,6 +1753,253 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	D3D11_BLEND GetGraphicsNativeBlendFactor(ECS_BLEND_FACTOR blend_factor)
+	{
+		switch (blend_factor)
+		{
+		case ECS_BLEND_ZERO:
+			return D3D11_BLEND_ZERO;
+		case ECS_BLEND_ONE:
+			return D3D11_BLEND_ONE;
+		case ECS_BLEND_SRC_COLOR:
+			return D3D11_BLEND_SRC_COLOR;
+		case ECS_BLEND_INV_SRC_COLOR:
+			return D3D11_BLEND_INV_SRC_COLOR;
+		case ECS_BLEND_SRC_ALPHA:
+			return D3D11_BLEND_SRC_ALPHA;
+		case ECS_BLEND_INV_SRC_ALPHA:
+			return D3D11_BLEND_INV_SRC_ALPHA;
+		case ECS_BLEND_DEST_COLOR:
+			return D3D11_BLEND_DEST_COLOR;
+		case ECS_BLEND_INV_DEST_COLOR:
+			return D3D11_BLEND_INV_DEST_COLOR;
+		case ECS_BLEND_DEST_ALPHA:
+			return D3D11_BLEND_DEST_ALPHA;
+		case ECS_BLEND_INV_DEST_ALPHA:
+			return D3D11_BLEND_INV_DEST_ALPHA;
+		}
+
+		ECS_ASSERT(false);
+		return D3D11_BLEND_ZERO;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ECS_BLEND_FACTOR GetGraphicsBlendFactorFromNative(D3D11_BLEND blend_factor)
+	{
+		switch (blend_factor)
+		{
+		case D3D11_BLEND_ZERO:
+			return ECS_BLEND_ZERO;
+		case D3D11_BLEND_ONE:
+			return ECS_BLEND_ONE;
+		case D3D11_BLEND_SRC_COLOR:
+			return ECS_BLEND_SRC_COLOR;
+		case D3D11_BLEND_INV_SRC_COLOR:
+			return ECS_BLEND_INV_SRC_COLOR;
+		case D3D11_BLEND_SRC_ALPHA:
+			return ECS_BLEND_SRC_ALPHA;
+		case D3D11_BLEND_INV_SRC_ALPHA:
+			return ECS_BLEND_INV_SRC_ALPHA;
+		case D3D11_BLEND_DEST_COLOR:
+			return ECS_BLEND_DEST_COLOR;
+		case D3D11_BLEND_INV_DEST_COLOR:
+			return ECS_BLEND_INV_DEST_COLOR;
+		case D3D11_BLEND_DEST_ALPHA:
+			return ECS_BLEND_DEST_ALPHA;
+		case D3D11_BLEND_INV_DEST_ALPHA:
+			return ECS_BLEND_INV_DEST_ALPHA;
+		}
+
+		ECS_ASSERT(false);
+		return ECS_BLEND_ZERO;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	D3D11_BLEND_OP GetGraphicsNativeBlendOp(ECS_BLEND_OP blend_op) {
+		switch (blend_op) {
+		case ECS_BLEND_OP_ADD:
+			return D3D11_BLEND_OP_ADD;
+		case ECS_BLEND_OP_SUBTRACT:
+			return D3D11_BLEND_OP_SUBTRACT;
+		case ECS_BLEND_OP_INVERTED_SUBTRACT:
+			return D3D11_BLEND_OP_REV_SUBTRACT;
+		case ECS_BLEND_OP_MIN:
+			return D3D11_BLEND_OP_MIN;
+		case ECS_BLEND_OP_MAX:
+			return D3D11_BLEND_OP_MAX;
+		}
+
+		ECS_ASSERT(false);
+		return D3D11_BLEND_OP_ADD;
+	}
+	
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ECS_BLEND_OP GetGraphicsBlendOpFromNative(D3D11_BLEND_OP blend_op) {
+		switch (blend_op) {
+		case D3D11_BLEND_OP_ADD:
+			return ECS_BLEND_OP_ADD;
+		case D3D11_BLEND_OP_SUBTRACT:
+			return ECS_BLEND_OP_SUBTRACT;
+		case D3D11_BLEND_OP_REV_SUBTRACT:
+			return ECS_BLEND_OP_INVERTED_SUBTRACT;
+		case D3D11_BLEND_OP_MIN:
+			return ECS_BLEND_OP_MIN;
+		case D3D11_BLEND_OP_MAX:
+			return ECS_BLEND_OP_MAX;
+		}
+
+		ECS_ASSERT(false);
+		return ECS_BLEND_OP_ADD;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	D3D11_SAMPLER_DESC GetGraphicsNativeSamplerDescriptor(const SamplerDescriptor& descriptor) {
+		D3D11_SAMPLER_DESC native_descriptor;
+		native_descriptor.MaxAnisotropy = descriptor.max_anisotropic_level;
+		native_descriptor.Filter = GetGraphicsNativeFilter(descriptor.filter_type);
+		native_descriptor.AddressU = GetGraphicsNativeAddressMode(descriptor.address_type_u);
+		native_descriptor.AddressV = GetGraphicsNativeAddressMode(descriptor.address_type_v);
+		native_descriptor.AddressW = GetGraphicsNativeAddressMode(descriptor.address_type_w);
+
+		native_descriptor.MaxLOD = descriptor.max_lod;
+		native_descriptor.MinLOD = descriptor.min_lod;
+		native_descriptor.MipLODBias = descriptor.mip_bias;
+
+		memcpy(native_descriptor.BorderColor, &descriptor.border_color, sizeof(descriptor.border_color));
+		return native_descriptor;
+	}
+
+	SamplerDescriptor GetGraphicsSamplerDescriptorFromNative(const D3D11_SAMPLER_DESC& descriptor) {
+		SamplerDescriptor ecs_descriptor;
+
+		ecs_descriptor.max_anisotropic_level = descriptor.MaxAnisotropy;
+		ecs_descriptor.filter_type = GetGraphicsFilterFromNative(descriptor.Filter);
+		ecs_descriptor.address_type_u = GetGraphicsAddressModeFromNative(descriptor.AddressU);
+		ecs_descriptor.address_type_v = GetGraphicsAddressModeFromNative(descriptor.AddressV);
+		ecs_descriptor.address_type_w = GetGraphicsAddressModeFromNative(descriptor.AddressW);
+		ecs_descriptor.max_lod = descriptor.MaxLOD;
+		ecs_descriptor.min_lod = descriptor.MinLOD;
+		ecs_descriptor.mip_bias = descriptor.MipLODBias;
+		memcpy(&ecs_descriptor.border_color, &descriptor.BorderColor, sizeof(descriptor.BorderColor));
+
+		return ecs_descriptor;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	D3D11_BLEND_DESC GetGraphicsNativeBlendDescriptor(const BlendDescriptor& descriptor) {
+		D3D11_BLEND_DESC native_descriptor;
+
+		native_descriptor.AlphaToCoverageEnable = FALSE;
+		native_descriptor.IndependentBlendEnable = FALSE;
+		
+		D3D11_RENDER_TARGET_BLEND_DESC& render_desc = native_descriptor.RenderTarget[0];
+		render_desc.BlendEnable = descriptor.enabled;
+		render_desc.BlendOp = GetGraphicsNativeBlendOp(descriptor.color_op);
+		render_desc.BlendOpAlpha = GetGraphicsNativeBlendOp(descriptor.alpha_op);
+		render_desc.DestBlend = GetGraphicsNativeBlendFactor(descriptor.color_destination_factor);
+		render_desc.DestBlendAlpha = GetGraphicsNativeBlendFactor(descriptor.alpha_destination_factor);
+		render_desc.RenderTargetWriteMask = GetGraphicsNativeBlendColorChannel(descriptor.write_mask);
+		render_desc.SrcBlend = GetGraphicsNativeBlendFactor(descriptor.color_source_factor);
+		render_desc.SrcBlendAlpha = GetGraphicsNativeBlendFactor(descriptor.alpha_source_factor);
+
+		return native_descriptor;
+	}
+
+	BlendDescriptor GetGraphicsBlendDescriptorFromNative(const D3D11_BLEND_DESC& descriptor) {
+		BlendDescriptor ecs_descriptor;
+
+		const D3D11_RENDER_TARGET_BLEND_DESC& render_desc = descriptor.RenderTarget[0];
+		ecs_descriptor.enabled = render_desc.BlendEnable;
+		ecs_descriptor.alpha_destination_factor = GetGraphicsBlendFactorFromNative(render_desc.DestBlendAlpha);
+		ecs_descriptor.alpha_op = GetGraphicsBlendOpFromNative(render_desc.BlendOpAlpha);
+		ecs_descriptor.alpha_source_factor = GetGraphicsBlendFactorFromNative(render_desc.SrcBlendAlpha);
+		ecs_descriptor.color_destination_factor = GetGraphicsBlendFactorFromNative(render_desc.DestBlend);
+		ecs_descriptor.color_op = GetGraphicsBlendOpFromNative(render_desc.BlendOp);
+		ecs_descriptor.color_source_factor = GetGraphicsBlendFactorFromNative(render_desc.SrcBlend);
+		ecs_descriptor.write_mask = GetGraphicsBlendColorChannelFromNative(render_desc.RenderTargetWriteMask);
+
+		return ecs_descriptor;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	D3D11_DEPTH_STENCIL_DESC GetGraphicsNativeDepthStencilDescriptor(const DepthStencilDescriptor& descriptor) {
+		auto convert_to_native_face = [](const DepthStencilDescriptor::FaceStencilOp& face) {
+			D3D11_DEPTH_STENCILOP_DESC native_descriptor;
+			native_descriptor.StencilFailOp = GetGraphicsNativeStencilOp(face.stencil_fail);
+			native_descriptor.StencilDepthFailOp = GetGraphicsNativeStencilOp(face.depth_fail);
+			native_descriptor.StencilPassOp = GetGraphicsNativeStencilOp(face.pass);
+			native_descriptor.StencilFunc = GetGraphicsNativeComparisonOp(face.stencil_comparison);
+			return native_descriptor;
+		};
+
+		D3D11_DEPTH_STENCIL_DESC native_descriptor;
+		native_descriptor.DepthEnable = descriptor.depth_enabled;
+		native_descriptor.DepthWriteMask = descriptor.write_depth ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
+		native_descriptor.DepthFunc = GetGraphicsNativeComparisonOp(descriptor.depth_op);
+		native_descriptor.StencilEnable = descriptor.stencil_enabled;
+		native_descriptor.StencilReadMask = descriptor.stencil_read_mask;
+		native_descriptor.StencilWriteMask = descriptor.stencil_write_mask;
+		native_descriptor.FrontFace = convert_to_native_face(descriptor.stencil_front_face);
+		native_descriptor.BackFace = convert_to_native_face(descriptor.stencil_back_face);
+		return native_descriptor;
+	}
+
+	DepthStencilDescriptor GetGraphicsDepthStencilDescriptorFromNative(const D3D11_DEPTH_STENCIL_DESC& descriptor) {
+		auto convert_face_from_native = [](const D3D11_DEPTH_STENCILOP_DESC& face) {
+			DepthStencilDescriptor::FaceStencilOp native_descriptor;
+			native_descriptor.stencil_fail = GetGraphicsStencilOpFromNative(face.StencilFailOp);
+			native_descriptor.depth_fail = GetGraphicsStencilOpFromNative(face.StencilDepthFailOp);
+			native_descriptor.pass = GetGraphicsStencilOpFromNative(face.StencilPassOp);
+			native_descriptor.stencil_comparison = GetGraphicsComparisonOpFromNative(face.StencilFunc);
+			return native_descriptor;
+		};
+
+		DepthStencilDescriptor ecs_descriptor;
+		ecs_descriptor.depth_enabled = descriptor.DepthEnable;
+		ecs_descriptor.write_depth = descriptor.DepthWriteMask == D3D11_DEPTH_WRITE_MASK_ALL;
+		ecs_descriptor.depth_op = GetGraphicsComparisonOpFromNative(descriptor.DepthFunc);
+		ecs_descriptor.stencil_enabled = descriptor.StencilEnable;
+		ecs_descriptor.stencil_read_mask = descriptor.StencilReadMask;
+		ecs_descriptor.stencil_write_mask = descriptor.StencilWriteMask;
+		ecs_descriptor.stencil_front_face = convert_face_from_native(descriptor.FrontFace);
+		ecs_descriptor.stencil_back_face = convert_face_from_native(descriptor.BackFace);
+		return ecs_descriptor;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	D3D11_RASTERIZER_DESC GetGraphicsNativeRasterizerDescriptor(const RasterizerDescriptor& descriptor) {
+		D3D11_RASTERIZER_DESC native_descriptor;
+		native_descriptor.FillMode = descriptor.solid_fill ? D3D11_FILL_SOLID : D3D11_FILL_WIREFRAME;
+		native_descriptor.CullMode = GetGraphicsNativeCullMode(descriptor.cull_mode);
+		native_descriptor.FrontCounterClockwise = descriptor.front_face_is_counter_clockwise;
+		native_descriptor.DepthBias = 0;
+		native_descriptor.DepthBiasClamp = 0.0f;
+		native_descriptor.SlopeScaledDepthBias = 0.0f;
+		native_descriptor.ScissorEnable = descriptor.enable_scissor;
+		native_descriptor.DepthClipEnable = TRUE;
+		native_descriptor.MultisampleEnable = FALSE;
+		native_descriptor.AntialiasedLineEnable = FALSE;
+		return native_descriptor;
+	}
+
+	RasterizerDescriptor GetGraphicsRasterizerDescriptorFromNative(const D3D11_RASTERIZER_DESC& descriptor) {
+		RasterizerDescriptor ecs_descriptor;
+		ecs_descriptor.cull_mode = GetGraphicsCullModeFromNative(descriptor.CullMode);
+		ecs_descriptor.enable_scissor = descriptor.ScissorEnable;
+		ecs_descriptor.front_face_is_counter_clockwise = descriptor.FrontCounterClockwise;
+		ecs_descriptor.solid_fill = descriptor.FillMode == D3D11_FILL_SOLID;
+		return ecs_descriptor;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	unsigned char Material::AddTag(
 		Stream<char> tag, 
 		unsigned short byte_offset,

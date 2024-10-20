@@ -1024,7 +1024,8 @@ namespace ECSEngine {
 
 	void DeallocateSamplerFromMetadata(ResourceManager* resource_manager, const GPUSamplerMetadata* metadata)
 	{
-		resource_manager->m_graphics->FreeResource(metadata->sampler);
+		// We don't need to deallocate the sampler - it is automatically managed by the Graphics object
+		//resource_manager->m_graphics->FreeResource(metadata->sampler);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------

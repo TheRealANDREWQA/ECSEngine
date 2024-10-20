@@ -3706,20 +3706,18 @@ namespace ECSEngine {
 		// Initialize the raster states
 
 		// Wireframe
-		D3D11_RASTERIZER_DESC rasterizer_desc = {};
-		rasterizer_desc.AntialiasedLineEnable = TRUE;
-		rasterizer_desc.CullMode = D3D11_CULL_NONE;
-		rasterizer_desc.DepthClipEnable = TRUE;
-		rasterizer_desc.FillMode = D3D11_FILL_WIREFRAME;
+		RasterizerDescriptor rasterizer_desc = {};
+		rasterizer_desc.cull_mode = ECS_CULL_NONE;
+		rasterizer_desc.solid_fill = false;
 		rasterizer_states[ECS_DEBUG_RASTERIZER_WIREFRAME] = graphics->CreateRasterizerState(rasterizer_desc);
 
 		// Solid - disable the back face culling
-		rasterizer_desc.FillMode = D3D11_FILL_SOLID;
-		rasterizer_desc.CullMode = D3D11_CULL_NONE;
+		rasterizer_desc.solid_fill = true;
+		rasterizer_desc.cull_mode = ECS_CULL_NONE;
 		rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID] = graphics->CreateRasterizerState(rasterizer_desc);
 
 		// Solid - with back face culling
-		rasterizer_desc.CullMode = D3D11_CULL_BACK;
+		rasterizer_desc.cull_mode = ECS_CULL_BACK;
 		rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID_CULL] = graphics->CreateRasterizerState(rasterizer_desc);
 
 		InitializeMemoryResources(this, thread_count);
