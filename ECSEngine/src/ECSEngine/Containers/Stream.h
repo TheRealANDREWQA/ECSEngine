@@ -266,7 +266,7 @@ namespace ECSEngine {
 		template<typename Value, typename ProjectionFunctor>
 		size_t Find(const Value* value, ProjectionFunctor&& functor) const {
 			for (size_t index = 0; index < size; index++) {
-				if (value == functor(buffer[index])) {
+				if (*value == functor(buffer[index])) {
 					return index;
 				}
 			}
@@ -1152,7 +1152,7 @@ namespace ECSEngine {
 		template<typename Value, typename ProjectionFunctor>
 		unsigned int Find(const Value* value, ProjectionFunctor&& functor) const {
 			for (unsigned int index = 0; index < size; index++) {
-				if (value == functor(buffer[index])) {
+				if (*value == functor(buffer[index])) {
 					return index;
 				}
 			}

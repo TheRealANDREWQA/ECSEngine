@@ -6,6 +6,14 @@
 
 namespace ECSEngine {
 
+	template<typename U, typename T>
+	ECS_INLINE U BitCast(T value) {
+		// To please the C++ "Standard Comittee", use memcpy to avoid "Undefined behaviour" of using *(U*)
+		U u_value;
+		memcpy(&u_value, &value, sizeof(value));
+		return u_value;
+	}
+
 	ECS_INLINE bool IsPowerOfTwo(size_t x) {
 		return (x & (x - 1)) == 0;
 	}

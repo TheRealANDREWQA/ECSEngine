@@ -2,11 +2,13 @@
 #pragma once
 #include "../Core.h"
 #include "../Containers/Stream.h"
+#include "../Containers/Hashing.h"
 #include "../Math/AABB.h"
 #include "../Allocators/AllocatorTypes.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/StringUtilities.h"
 #include "ColorUtilities.h"
+#include "../Utilities/Utilities.h"
 
 #ifdef ECSENGINE_PLATFORM_WINDOWS
 #include <d3d11.h>
@@ -386,6 +388,103 @@ namespace ECSEngine {
 
 	ECSENGINE_API ECS_SAMPLER_ADDRESS_TYPE GetGraphicsAddressModeFromNative(D3D11_TEXTURE_ADDRESS_MODE address_mode);
 
+	enum ECS_BLEND_FACTOR : unsigned char {
+		ECS_BLEND_ZERO,
+		ECS_BLEND_ONE,
+		ECS_BLEND_SRC_COLOR,
+		ECS_BLEND_INV_SRC_COLOR,
+		ECS_BLEND_SRC_ALPHA,
+		ECS_BLEND_INV_SRC_ALPHA,
+		ECS_BLEND_DEST_COLOR,
+		ECS_BLEND_INV_DEST_COLOR,
+		ECS_BLEND_DEST_ALPHA,
+		ECS_BLEND_INV_DEST_ALPHA
+	};
+
+	ECSENGINE_API D3D11_BLEND GetGraphicsNativeBlendFactor(ECS_BLEND_FACTOR blend_factor);
+
+	ECSENGINE_API ECS_BLEND_FACTOR GetGraphicsBlendFactorFromNative(D3D11_BLEND blend_factor);
+
+	enum ECS_BLEND_COLOR_CHANNEL : unsigned char {
+		ECS_BLEND_COLOR_CHANNEL_RED = D3D11_COLOR_WRITE_ENABLE_RED,
+		ECS_BLEND_COLOR_CHANNEL_GREEN = D3D11_COLOR_WRITE_ENABLE_GREEN,
+		ECS_BLEND_COLOR_CHANNEL_BLUE = D3D11_COLOR_WRITE_ENABLE_BLUE,
+		ECS_BLEND_COLOR_CHANNEL_ALPHA = D3D11_COLOR_WRITE_ENABLE_ALPHA,
+		ECS_BLEND_COLOR_CHANNEL_ALL = D3D11_COLOR_WRITE_ENABLE_ALL
+	};
+
+	ECS_INLINE unsigned char GetGraphicsNativeBlendColorChannel(ECS_BLEND_COLOR_CHANNEL channel) {
+		return channel;
+	}
+
+	ECS_INLINE ECS_BLEND_COLOR_CHANNEL GetGraphicsBlendColorChannelFromNative(unsigned char channel) {
+		return (ECS_BLEND_COLOR_CHANNEL)channel;
+	}
+
+	enum ECS_BLEND_OP : unsigned char {
+		ECS_BLEND_OP_ADD,
+		ECS_BLEND_OP_SUBTRACT,			// Subtract source 1 from source 2
+		ECS_BLEND_OP_INVERTED_SUBTRACT, // Subtracts source 2 from source 1
+		ECS_BLEND_OP_MIN,
+		ECS_BLEND_OP_MAX
+	};
+
+	ECSENGINE_API D3D11_BLEND_OP GetGraphicsNativeBlendOp(ECS_BLEND_OP blend_op);
+
+	ECSENGINE_API ECS_BLEND_OP GetGraphicsBlendOpFromNative(D3D11_BLEND_OP blend_op);
+
+	enum ECS_COMPARISON_OP : unsigned char {
+		ECS_COMPARISON_NEVER = D3D11_COMPARISON_NEVER,
+		ECS_COMPARISON_LESS = D3D11_COMPARISON_LESS,
+		ECS_COMPARISON_EQUAL = D3D11_COMPARISON_EQUAL,
+		ECS_COMPARISON_LESS_EQUAL = D3D11_COMPARISON_LESS_EQUAL,
+		ECS_COMPARISON_GREATER = D3D11_COMPARISON_GREATER,
+		ECS_COMPARISON_NOT_EQUAL = D3D11_COMPARISON_NOT_EQUAL,
+		ECS_COMPARISON_GREATER_EQUAL = D3D11_COMPARISON_GREATER_EQUAL,
+		ECS_COMPARISON_ALWAYS = D3D11_COMPARISON_ALWAYS
+	};
+
+	ECS_INLINE D3D11_COMPARISON_FUNC GetGraphicsNativeComparisonOp(ECS_COMPARISON_OP op) {
+		return (D3D11_COMPARISON_FUNC)op;
+	}
+
+	ECS_INLINE ECS_COMPARISON_OP GetGraphicsComparisonOpFromNative(D3D11_COMPARISON_FUNC op) {
+		return (ECS_COMPARISON_OP)op;
+	}
+
+	enum ECS_STENCIL_OP : unsigned char {
+		ECS_STENCIL_OP_KEEP = D3D11_STENCIL_OP_KEEP,
+		ECS_STENCIL_OP_ZERO = D3D11_STENCIL_OP_ZERO,
+		ECS_STENCIL_OP_REPLACE = D3D11_STENCIL_OP_REPLACE,
+		ECS_STENCIL_OP_INCR_SAT = D3D11_STENCIL_OP_INCR_SAT,
+		ECS_STENCIL_OP_DECR_SAT = D3D11_STENCIL_OP_DECR_SAT,
+		ECS_STENCIL_OP_INVERT = D3D11_STENCIL_OP_INVERT,
+		ECS_STENCIL_OP_INCR = D3D11_STENCIL_OP_INCR,
+		ECS_STENCIL_OP_DECR = D3D11_STENCIL_OP_DECR
+	};
+
+	ECS_INLINE D3D11_STENCIL_OP GetGraphicsNativeStencilOp(ECS_STENCIL_OP op) {
+		return (D3D11_STENCIL_OP)op;
+	}
+
+	ECS_INLINE ECS_STENCIL_OP GetGraphicsStencilOpFromNative(D3D11_STENCIL_OP op) {
+		return (ECS_STENCIL_OP)op;
+	}
+
+	enum ECS_CULL_MODE : unsigned char {
+		ECS_CULL_NONE = D3D11_CULL_NONE,
+		ECS_CULL_FRONT = D3D11_CULL_FRONT,
+		ECS_CULL_BACK = D3D11_CULL_BACK
+	};
+
+	ECS_INLINE D3D11_CULL_MODE GetGraphicsNativeCullMode(ECS_CULL_MODE mode) {
+		return (D3D11_CULL_MODE)mode;
+	}
+
+	ECS_INLINE ECS_CULL_MODE GetGraphicsCullModeFromNative(D3D11_CULL_MODE mode) {
+		return (ECS_CULL_MODE)mode;
+	}
+
 	struct ECS_REFLECT ShaderMacro {
 		ECS_INLINE bool Compare(ShaderMacro other) const {
 			return name == other.name && definition == other.definition;
@@ -523,6 +622,16 @@ namespace ECSEngine {
 			address_type_w = type;
 		}
 
+		ECS_INLINE unsigned int Hash() const {
+			// We could theoretically cast the type into an array of unsigned ints, but for safety, let it hand roll all of its members
+			return CantorVariableLength(filter_type, address_type_u, address_type_v, address_type_w, max_anisotropic_level, BitCast<unsigned int>(mip_bias), min_lod, max_lod,
+				BitCast<unsigned int>(border_color.red), BitCast<unsigned int>(border_color.green), BitCast<unsigned int>(border_color.blue), BitCast<unsigned int>(border_color.alpha));
+		}
+
+		ECS_INLINE bool operator ==(const SamplerDescriptor& other) const {
+			return memcmp(this, &other, sizeof(*this)) == 0;
+		}
+
 		ECS_SAMPLER_FILTER_TYPE filter_type = ECS_SAMPLER_FILTER_LINEAR;
 		ECS_SAMPLER_ADDRESS_TYPE address_type_u = ECS_SAMPLER_ADDRESS_WRAP;
 		ECS_SAMPLER_ADDRESS_TYPE address_type_v = ECS_SAMPLER_ADDRESS_WRAP;
@@ -542,6 +651,89 @@ namespace ECSEngine {
 		// Used when address_type_u/v/w is set to ECS_SAMPLER_ADDRESS_BORDER
 		ColorFloat border_color;
 	};
+
+	ECSENGINE_API D3D11_SAMPLER_DESC GetGraphicsNativeSamplerDescriptor(const SamplerDescriptor& descriptor);
+
+	ECSENGINE_API SamplerDescriptor GetGraphicsSamplerDescriptorFromNative(const D3D11_SAMPLER_DESC& descriptor);
+
+	// At the moment, leave this as a single render target. When we will need multiple render targets, adapt then
+	struct BlendDescriptor {
+		ECS_INLINE unsigned int Hash() const {
+			// Can cast this type as an array of unsigned int and use cantor on that
+			static_assert(sizeof(BlendDescriptor) % sizeof(unsigned int) == 0);
+			return Cantor(Stream<unsigned int>(this, sizeof(*this) / sizeof(unsigned int)));
+		}
+
+		ECS_INLINE bool operator ==(const BlendDescriptor& other) const {
+			return memcmp(this, &other, sizeof(*this)) == 0;
+		}
+
+		bool enabled = false;
+		ECS_BLEND_OP color_op = ECS_BLEND_OP_ADD;
+		ECS_BLEND_FACTOR color_source_factor = ECS_BLEND_SRC_ALPHA;
+		ECS_BLEND_FACTOR color_destination_factor = ECS_BLEND_INV_SRC_ALPHA;
+		ECS_BLEND_OP alpha_op = ECS_BLEND_OP_ADD;
+		ECS_BLEND_FACTOR alpha_source_factor = ECS_BLEND_ZERO;
+		ECS_BLEND_FACTOR alpha_destination_factor = ECS_BLEND_ONE;
+		ECS_BLEND_COLOR_CHANNEL write_mask = ECS_BLEND_COLOR_CHANNEL_ALL;
+	};
+
+	ECSENGINE_API D3D11_BLEND_DESC GetGraphicsNativeBlendDescriptor(const BlendDescriptor& descriptor);
+
+	ECSENGINE_API BlendDescriptor GetGraphicsBlendDescriptorFromNative(const D3D11_BLEND_DESC& descriptor);
+
+	struct DepthStencilDescriptor {
+		ECS_INLINE unsigned int Hash() const {
+			// We can use cantor adaptive for this case
+			return CantorAdaptive(this);
+		}
+
+		ECS_INLINE bool operator ==(const DepthStencilDescriptor& other) const {
+			return memcmp(this, &other, sizeof(*this)) == 0;
+		}
+
+		struct FaceStencilOp {
+			ECS_STENCIL_OP stencil_fail = ECS_STENCIL_OP_KEEP;
+			ECS_STENCIL_OP depth_fail = ECS_STENCIL_OP_KEEP;
+			ECS_STENCIL_OP pass = ECS_STENCIL_OP_KEEP;
+			ECS_COMPARISON_OP stencil_comparison = ECS_COMPARISON_NEVER;
+		};
+
+		bool depth_enabled = false;
+		bool write_depth = false;
+		ECS_COMPARISON_OP depth_op = ECS_COMPARISON_LESS;
+		bool stencil_enabled = false;
+		unsigned char stencil_read_mask = 0xFF;
+		unsigned char stencil_write_mask = 0xFF;
+		FaceStencilOp stencil_front_face = {};
+		FaceStencilOp stencil_back_face = {};
+	};
+
+	ECSENGINE_API D3D11_DEPTH_STENCIL_DESC GetGraphicsNativeDepthStencilDescriptor(const DepthStencilDescriptor& descriptor);
+
+	ECSENGINE_API DepthStencilDescriptor GetGraphicsDepthStencilDescriptorFromNative(const D3D11_DEPTH_STENCIL_DESC& descriptor);
+
+	struct RasterizerDescriptor {
+		ECS_INLINE bool operator ==(const RasterizerDescriptor& other) const {
+			return memcmp(this, &other, sizeof(*this)) == 0;
+		}
+
+		ECS_INLINE unsigned int Hash() const {
+			// Use a cantor on bytes for this - we don't want to return the hash as is like an unsigned int since that
+			// Doesn't work well for power of two hashes
+			return Cantor(Stream<unsigned char>(this, sizeof(*this)));
+		}
+		
+		// If set to true, the shape will be solid, else wireframe
+		bool solid_fill = true;
+		ECS_CULL_MODE cull_mode = ECS_CULL_BACK;
+		bool front_face_is_counter_clockwise = false;
+		bool enable_scissor = false;
+	};
+
+	ECSENGINE_API D3D11_RASTERIZER_DESC GetGraphicsNativeRasterizerDescriptor(const RasterizerDescriptor& descriptor);
+
+	ECSENGINE_API RasterizerDescriptor GetGraphicsRasterizerDescriptorFromNative(const D3D11_RASTERIZER_DESC& descriptor);
 
 	struct ECSENGINE_API VertexBuffer {
 		ECS_INLINE VertexBuffer() : buffer(nullptr), stride(0), size(0) {}
@@ -1232,6 +1424,12 @@ namespace ECSEngine {
 			return sampler->Release();
 		}
 
+		ECS_INLINE SamplerDescriptor GetDescriptor() const {
+			D3D11_SAMPLER_DESC desc;
+			sampler->GetDesc(&desc);
+			return GetGraphicsSamplerDescriptorFromNative(desc);
+		}
+
 		static SamplerState RawCreate(GraphicsDevice* device, const D3D11_SAMPLER_DESC* descriptor);
 
 		ID3D11SamplerState* sampler;
@@ -1252,6 +1450,12 @@ namespace ECSEngine {
 			return state->Release();
 		}
 
+		ECS_INLINE BlendDescriptor GetDescriptor() const {
+			D3D11_BLEND_DESC desc;
+			state->GetDesc(&desc);
+			return GetGraphicsBlendDescriptorFromNative(desc);
+		}
+
 		ID3D11BlendState* state;
 	};
 
@@ -1270,6 +1474,12 @@ namespace ECSEngine {
 			return state->Release();
 		}
 
+		ECS_INLINE RasterizerDescriptor GetDescriptor() const {
+			D3D11_RASTERIZER_DESC desc;
+			state->GetDesc(&desc);
+			return GetGraphicsRasterizerDescriptorFromNative(desc);
+		}
+
 		ID3D11RasterizerState* state;
 	};
 
@@ -1286,6 +1496,12 @@ namespace ECSEngine {
 
 		ECS_INLINE unsigned int Release() {
 			return state->Release();
+		}
+
+		ECS_INLINE DepthStencilDescriptor GetDescriptor() const {
+			D3D11_DEPTH_STENCIL_DESC desc;
+			state->GetDesc(&desc);
+			return GetGraphicsDepthStencilDescriptorFromNative(desc);
 		}
 
 		ID3D11DepthStencilState* state;

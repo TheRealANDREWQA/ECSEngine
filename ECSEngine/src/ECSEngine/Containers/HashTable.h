@@ -41,6 +41,8 @@ namespace ECSEngine {
 
 		typedef T Value;
 		typedef Identifier Identifier;
+		typedef std::conditional_t<sizeof(Identifier) <= sizeof(void*), Identifier, const Identifier&> IdentifierParameter;
+		typedef std::conditional_t<sizeof(Value) <= sizeof(void*), Value, const Value&> ValueParameter;
 
 		struct Pair {
 			T value;
@@ -88,7 +90,7 @@ namespace ECSEngine {
 			}
 		}
 
-		unsigned int Find(Identifier identifier) const {
+		unsigned int Find(IdentifierParameter identifier) const {
 			if (GetCount() == 0) {
 				return -1;
 			}
@@ -257,7 +259,7 @@ namespace ECSEngine {
 		private:
 			// Returns true if a resize needs to take place, else false.
 			// If the crash if_not_space is set to true, it will crash if there is not
-			// Enough space for the entry
+			// Enough space for the entry. The parameters are on purpose passed by value, since that's how they are needed
 			template<bool crash_if_not_space>
 			bool InsertImpl(T value, Identifier identifier, unsigned int& position) {
 				if constexpr (crash_if_not_space) {
@@ -352,18 +354,18 @@ namespace ECSEngine {
 		public:
 
 		// It will assert if there is not enough space
-		void Insert(T value, Identifier identifier, unsigned int& position) {
+		void Insert(ValueParameter value, IdentifierParameter identifier, unsigned int& position) {
 			InsertImpl<true>(value, identifier, position);
 		}
 
 		// It will assert if there is not enough space
-		void Insert(T value, Identifier identifier) {
+		void Insert(ValueParameter value, IdentifierParameter identifier) {
 			unsigned int dummy;
 			Insert(value, identifier, dummy);
 		}
 
 		template<typename Allocator>
-		bool InsertDynamic(Allocator* allocator, Value value, Identifier identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		bool InsertDynamic(Allocator* allocator, ValueParameter value, IdentifierParameter identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			auto grow = [&]() {
 				unsigned int old_capacity = GetCapacity();
 
@@ -388,7 +390,7 @@ namespace ECSEngine {
 
 		// It will grow the hash table to accomodate the new entry
 		// Returns true if it grew, else false
-		bool InsertDynamic(AllocatorPolymorphic allocator, Value value, Identifier identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		bool InsertDynamic(AllocatorPolymorphic allocator, ValueParameter value, IdentifierParameter identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			auto grow = [&]() {
 				unsigned int old_capacity = GetCapacity();
 
@@ -411,7 +413,7 @@ namespace ECSEngine {
 			return initial_capacity != GetCapacity();
 		}
 
-		void Erase(Identifier identifier) {
+		void Erase(IdentifierParameter identifier) {
 			// determining the next index and clearing the current slot
 			int index = Find(identifier);
 			ECS_ASSERT(index != -1);
@@ -644,21 +646,21 @@ namespace ECSEngine {
 		}
 
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		T GetValue(Identifier identifier) const {
+		T GetValue(IdentifierParameter identifier) const {
 			unsigned int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			return GetValueFromIndex(index);
 		}
 
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		T* GetValuePtr(Identifier identifier) {
+		T* GetValuePtr(IdentifierParameter identifier) {
 			unsigned int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			return GetValuePtrFromIndex(index);
 		}
 
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		const T* GetValuePtr(Identifier identifier) const {
+		const T* GetValuePtr(IdentifierParameter identifier) const {
 			unsigned int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			return GetValuePtrFromIndex(index);
@@ -702,7 +704,7 @@ namespace ECSEngine {
 			identifier = GetIdentifierFromIndex(index);
 		}
 
-		ECS_INLINE void SetEntry(unsigned int index, T value, Identifier identifier) {
+		ECS_INLINE void SetEntry(unsigned int index, ValueParameter value, IdentifierParameter identifier) {
 			if constexpr (!std::is_same_v<T, HashTableEmptyValue>) {
 				*GetValuePtrFromIndex(index) = value;
 			}
@@ -710,7 +712,7 @@ namespace ECSEngine {
 		}
 
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		void SetValue(T value, Identifier identifier) {
+		void SetValue(ValueParameter value, IdentifierParameter identifier) {
 			int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			SetValue(index, value);
@@ -718,12 +720,12 @@ namespace ECSEngine {
 
 		// The extended capacity is used to check bounds validity
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		ECS_INLINE void SetValueByIndex(unsigned int index, T value) {
+		ECS_INLINE void SetValueByIndex(unsigned int index, ValueParameter value) {
 			*GetValuePtrFromIndex(index) = value;
 		}
 
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		bool TryGetValue(Identifier identifier, T& value) const {
+		bool TryGetValue(IdentifierParameter identifier, T& value) const {
 			if (GetCount() == 0) {
 				return false;
 			}
@@ -739,7 +741,7 @@ namespace ECSEngine {
 		}
 
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		bool TryGetValuePtr(Identifier identifier, T*& pointer) {
+		bool TryGetValuePtr(IdentifierParameter identifier, T*& pointer) {
 			if (GetCount() == 0) {
 				return false;
 			}
@@ -757,7 +759,7 @@ namespace ECSEngine {
 		// This is provided for some edge cases when you use templates and you know
 		// That the target type is fine and just wanna retrieve the pointer
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		bool TryGetValuePtrUntyped(Identifier identifier, void*& pointer) {
+		bool TryGetValuePtrUntyped(IdentifierParameter identifier, void*& pointer) {
 			T* ptr = nullptr;
 			if (TryGetValuePtr(identifier, ptr)) {
 				pointer = (void*)ptr;
@@ -767,7 +769,7 @@ namespace ECSEngine {
 		}
 
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		bool TryGetValuePtr(Identifier identifier, const T*& pointer) const {
+		bool TryGetValuePtr(IdentifierParameter identifier, const T*& pointer) const {
 			if (GetCount() == 0) {
 				return false;
 			}
@@ -785,7 +787,7 @@ namespace ECSEngine {
 		// This is provided for some edge cases when you use templates and you know
 		// That the target type is fine and just wanna retrieve the pointer
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		bool TryGetValuePtrUntyped(Identifier identifier, const void*& pointer) const {
+		bool TryGetValuePtrUntyped(IdentifierParameter identifier, const void*& pointer) const {
 			const T* ptr = nullptr;
 			if (TryGetValuePtr(identifier, ptr)) {
 				pointer = (const void*)ptr;

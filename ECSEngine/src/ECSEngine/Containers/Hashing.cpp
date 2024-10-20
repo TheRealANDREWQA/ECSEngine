@@ -122,6 +122,50 @@ namespace ECSEngine {
 		return Cantor(a, Cantor(b, c));
 	}
 
+	template<typename IntType>
+	ECS_INLINE static unsigned int CantorArrayImpl(Stream<IntType> values) {
+		unsigned int value = 0;
+		if (values.size == 0) {
+			return value;
+		}
+		else if (values.size == 1) {
+			return values[0];
+		}
+		else {
+			value = Cantor(values[0], values[1]);
+			for (size_t index = 2; index < values.size; index++) {
+				value = Cantor(value, values[index]);
+			}
+			return value;
+		}
+	}
+
+	unsigned int Cantor(Stream<unsigned char> values) {
+		return CantorArrayImpl(values);
+	}
+
+	unsigned int Cantor(Stream<unsigned short> values) {
+		return CantorArrayImpl(values);
+	}
+
+	unsigned int Cantor(Stream<unsigned int> values) {
+		return CantorArrayImpl(values);
+	}
+
+	unsigned int CantorAdaptive(Stream<void> values) {
+		Stream<unsigned int> unsigned_values = { values.buffer, values.size / sizeof(unsigned int) };
+		unsigned int value = Cantor(unsigned_values);
+		if (unsigned_values.size * sizeof(unsigned int) < values.size) {
+			// There are some remaining bytes - coalesce these into an unsigned int
+			unsigned int last_value = 0;
+			values.SliceAt(unsigned_values.size * sizeof(unsigned int)).CopyTo(&last_value);
+			value = Cantor(value, last_value);
+		}
+		return value;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z)
 	{
 		// This function doesn't seem to work that well, since for linear

@@ -41,7 +41,7 @@ namespace ECSEngine {
 
 		SamplerDescriptor sampler_descriptor;
 		sampler_descriptor.SetAddressType(ECS_SAMPLER_ADDRESS_CLAMP);
-		SamplerState sampler = graphics->CreateSamplerState(sampler_descriptor, true);
+		SamplerState sampler = graphics->CreateSamplerState(sampler_descriptor);
 
 		graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_CREATE_DIFFUSE_ENVIRONMENT);
 		graphics->BindVertexBuffer(cube_v_buffer);
@@ -74,7 +74,6 @@ namespace ECSEngine {
 		cube_i_buffer.Release();
 		vc_buffer.Release();
 		pc_buffer.Release();
-		sampler.Release();
 
 		for (size_t index = 0; index < 6; index++) {
 			target_views[index].Release();
@@ -113,7 +112,7 @@ namespace ECSEngine {
 
 		SamplerDescriptor sampler_desc;
 		sampler_desc.SetAddressType(ECS_SAMPLER_ADDRESS_CLAMP);
-		SamplerState sampler_state = graphics->CreateSamplerState(sampler_desc, true);
+		SamplerState sampler_state = graphics->CreateSamplerState(sampler_desc);
 
 		// The format of the cube texture is RGBA16F
 		TextureCubeDescriptor cube_descriptor;
@@ -196,7 +195,6 @@ namespace ECSEngine {
 		roughness_buffer.Release();
 		sample_buffer.Release();
 		resolution_buffer.Release();
-		sampler_state.Release();
 
 		return cube;
 	}

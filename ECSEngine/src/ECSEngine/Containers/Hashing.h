@@ -511,10 +511,38 @@ namespace ECSEngine {
 
 	ECSENGINE_API unsigned int Cantor(unsigned int x, unsigned int y, unsigned int z);
 
+	// Performs a cantor on a series of bytes and treats each individual byte as a new cantor entry
+	ECSENGINE_API unsigned int Cantor(Stream<unsigned char> values);
+
+	// Performs a cantor on a series of bytes and treats each individual short as a new cantor entry
+	ECSENGINE_API unsigned int Cantor(Stream<unsigned short> values);
+
+	// Performs a cantor on a series of bytes and treats each individual int as a new cantor entry
+	ECSENGINE_API unsigned int Cantor(Stream<unsigned int> values);
+
+	// It will use as many unsigned int values as possible for a normal Stream<unsigned int> cantor call,
+	// And then it will handle any remaining values
+	ECSENGINE_API unsigned int CantorAdaptive(Stream<void> values);
+
 	// It will give the same hash for x-y and y-x, but it can
 	// result in more collisions than normal
 	ECS_INLINE unsigned int CantorPair(unsigned int x, unsigned int y) {
 		return Cantor(x, y) + Cantor(y, x);
+	}
+
+	// Performs a generalized version of sequential Cantors
+	template<typename FirstArg, typename SecondArg, typename... Args>
+	ECS_INLINE unsigned int CantorVariableLength(FirstArg first_arg, SecondArg second_arg, Args... args) {
+		unsigned int value = Cantor(first_arg, second_arg);
+		if constexpr (sizeof...(Args) == 0) {
+			return value;
+		}
+		else if constexpr (sizeof...(Args) == 1) {
+			return Cantor(value, args);
+		}
+		else {
+			return Cantor(value, CantorVariableLength(args...));
+		}
 	}
 
 	ECSENGINE_API unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z);
