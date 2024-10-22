@@ -3290,7 +3290,7 @@ namespace ECSEngine {
 			depth_desc = depth_stencil_state.depth_stencil_state.GetDescriptor();
 		}
 
-		depth_desc.depth_enabled = TRUE;
+		depth_desc.depth_enabled = true;
 		depth_desc.depth_op = ECS_COMPARISON_LESS;
 		depth_desc.write_depth = true;
 

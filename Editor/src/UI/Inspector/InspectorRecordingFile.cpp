@@ -19,6 +19,8 @@ struct DrawWindowData {
 	size_t file_byte_size;
 	// This flag indicates that there was an error in opening the file. If true, the file could not be opened
 	bool reader_not_initialized;
+	// This is set to false for the very first draw, after which it is set to true.
+	bool initial_draw;
 	// Used to check the timestamp of the file to check for changes
 	Timer retained_timer;
 };
@@ -74,7 +76,7 @@ static bool InspectorRecordingFileRetainedMode(void* window_data, WindowRetained
 			return false;
 		}
 	}
-	return true;
+	return data->initial_draw;
 }
 
 void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
@@ -86,6 +88,7 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 		return;
 	}
 
+	data->initial_draw = true;
 	Stream<wchar_t> extension = PathExtension(data->path);
 	// This is not very "nice" to check manually what the extension is and display the icon according to it, but it makes for an easy API
 	// Where the user does not have to specify the icon manually
@@ -175,7 +178,7 @@ void InspectorRecordingFileAddFunctors(InspectorTable* table) {
 void ChangeInspectorToRecordingFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
 	DrawWindowData data;
 	data.path = path;
-	ZeroOut(&data.reader);
+	ZeroOut(&data);
 
 	// Allocate the data and embedd the path in it
 	// Later on. It is fine to read from the stack more bytes
