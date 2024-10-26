@@ -1,5 +1,6 @@
 #pragma once
 #include "SandboxTypes.h"
+#include "SandboxCount.h"
 #include "../Editor/EditorState.h"
 
 // -------------------------------------------------------------------------------------------------------------

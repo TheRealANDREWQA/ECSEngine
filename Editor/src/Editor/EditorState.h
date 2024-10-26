@@ -7,6 +7,7 @@
 #include "../UI/FileExplorerData.h"
 #include "../UI/HubData.h"
 #include "../Modules/ModuleDefinition.h"
+#include "../Sandbox/SandboxCount.h"
 #include "../Sandbox/SandboxTypes.h"
 #include "EditorComponents.h"
 #include "EditorEventDef.h"

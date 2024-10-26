@@ -783,7 +783,7 @@ namespace ECSEngine {
 			}
 			else
 			{
-				current_bit_count -= (size_t)first_byte_remaining_bits >= current_bit_count ? 0 : current_bit_count - (size_t)first_byte_remaining_bits;
+				current_bit_count = (size_t)first_byte_remaining_bits >= current_bit_count ? 0 : current_bit_count - (size_t)first_byte_remaining_bits;
 			}
 			functor_value >>= first_byte_remaining_bits;
 

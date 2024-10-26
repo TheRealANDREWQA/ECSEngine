@@ -201,6 +201,7 @@
     <ClInclude Include="src\Project\ProjectRenameFile.h" />
     <ClInclude Include="src\Project\ProjectSettings.h" />
     <ClInclude Include="src\Sandbox\Sandbox.h" />
+    <ClInclude Include="src\Sandbox\SandboxCount.h" />
     <ClInclude Include="src\Sandbox\SandboxCrashHandler.h" />
     <ClInclude Include="src\Sandbox\SandboxEntityOperations.h" />
     <ClInclude Include="src\Sandbox\SandboxFile.h" />
@@ -316,6 +317,7 @@
     <ClCompile Include="src\Sandbox\SandboxModule.cpp" />
     <ClCompile Include="src\Sandbox\SandboxProfiling.cpp" />
     <ClCompile Include="src\Sandbox\SandboxRecording.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxRecordingFileExtension.cpp" />
     <ClCompile Include="src\Sandbox\SandboxReplay.cpp" />
     <ClCompile Include="src\Sandbox\SandboxScene.cpp" />
     <ClCompile Include="src\UI\HelperWindows.cpp" />

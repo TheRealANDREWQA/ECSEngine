@@ -112,6 +112,10 @@ namespace ECSEngine {
 		// Returns the user pointer data that you can initialize to certain values. It is memsetted to 0 by default
 		void Initialize(const DeltaStateWriterInitializeInfo& initialize_info);
 
+		ECS_INLINE bool IsFailed() const {
+			return is_failed;
+		}
+
 		// Register a new state to be written, for the given time. Returns true if it succeeded in writing the state,
 		// Else false
 		bool Write(float elapsed_seconds);
@@ -139,6 +143,9 @@ namespace ECSEngine {
 		float entire_state_write_seconds_tick;
 		// The elapsed second duration of the last entire write
 		float last_entire_state_write_seconds;
+
+		// This boolean will be set when a write call fails to serialize correctly.
+		bool is_failed;
 	};
 
 	struct DeltaStateReaderInitializeFunctorInfo {
@@ -181,11 +188,11 @@ namespace ECSEngine {
 
 		// Calls the entire state with the given overall state index and returns what the functor returned.
 		// It assumes that the read instrument is already at the start of this state.
-		bool CallEntireState(size_t overall_state_index, CapacityStream<char>* error_message = nullptr) const;
+		bool CallEntireState(size_t overall_state_index, CapacityStream<char>* error_message = nullptr);
 
 		// Calls the entire state with the given overall state index and returns what the functor returned.
 		// It assumes that the read instrument is already at the start of this state.
-		bool CallDeltaState(size_t overall_state_index, CapacityStream<char>* error_message = nullptr) const;
+		bool CallDeltaState(size_t overall_state_index, CapacityStream<char>* error_message = nullptr);
 
 		void Deallocate();
 
@@ -202,10 +209,14 @@ namespace ECSEngine {
 		// Returns true if the given overall state index is an entire state, else false
 		bool IsEntireState(size_t index) const;
 
+		ECS_INLINE bool IsFailed() const {
+			return is_failed;
+		}
+
 		// Returns the pointer to the user data such that you can initialize the data properly. It will be 0'ed.
-		// Returns nullptr if it failed to read the header portion of the state. The read instrument must be stable
+		// Returns false if it failed to read the header portion of the state. The read instrument must be stable
 		// For the entire duration of using this reader
-		void Initialize(const DeltaStateReaderInitializeInfo& initialize_info);
+		bool Initialize(const DeltaStateReaderInitializeInfo& initialize_info);
 
 		// Returns true if it succeeded in seeking at the beginning of the given state, else false.
 		bool SeekInstrumentAtState(size_t state_index, CapacityStream<char>* error_message = nullptr) const;
@@ -229,6 +240,9 @@ namespace ECSEngine {
 		// The following field is used for the fast execution of sequential frames
 		// This field indicates that the state at this index is the next one to be read
 		size_t current_state_index;
+
+		// This boolean is set when a Seek or Advance operation fails
+		bool is_failed;
 	};
 
 }

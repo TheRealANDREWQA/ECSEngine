@@ -123,7 +123,7 @@ namespace ECSEngine {
 	// The is out of range boolean is set to true if at least one entry is out of range
 	template<typename FirstInteger, typename... Integers>
 	ECS_INLINE bool DeserializeIntVariableLengthBoolMultiple(ReadInstrument* read_instrument, bool& is_out_of_range, FirstInteger& first_integer, Integers&... integers) {
-		if (!DeserializeIntVariableLengthBoolMultiple(read_instrument, is_out_of_range, first_integer)) {
+		if (!DeserializeIntVariableLengthBool(read_instrument, is_out_of_range, first_integer)) {
 			return false;
 		}
 

@@ -6,16 +6,16 @@ namespace ECSEngine {
 
 	template<typename Functor>
 	void AddressFlagBit(void* value, unsigned char bit_index, Functor&& functor) {
-		if (bit_index <= sizeof(unsigned char) * 8) {
+		if (bit_index < sizeof(unsigned char) * 8) {
 			functor((unsigned char*)value);
 		}
-		else if (bit_index <= sizeof(unsigned short) * 8) {
+		else if (bit_index < sizeof(unsigned short) * 8) {
 			functor((unsigned short*)value);
 		}
-		else if (bit_index <= sizeof(unsigned int) * 8) {
+		else if (bit_index < sizeof(unsigned int) * 8) {
 			functor((unsigned int*)value);
 		}
-		else if (bit_index <= sizeof(size_t) * 8) {
+		else if (bit_index < sizeof(size_t) * 8) {
 			functor((size_t*)value);
 		}
 		else {

@@ -246,12 +246,12 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 				unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 
 				// Now the game/scene
-				matched_index = get_indexed_window(GAME_WINDOW_NAME, std::min(sandbox_count, MAX_GAME_WINDOWS), GameSetDecriptor);
+				matched_index = get_indexed_window(GAME_WINDOW_NAME, min<unsigned int>(sandbox_count, MAX_GAME_WINDOWS), GameSetDecriptor);
 				if (matched_index != -1) {
 					continue;
 				}
 
-				matched_index = get_indexed_window(SCENE_WINDOW_NAME, std::min(sandbox_count, MAX_SCENE_WINDOWS), SceneUISetDecriptor);
+				matched_index = get_indexed_window(SCENE_WINDOW_NAME, min<unsigned int>(sandbox_count, MAX_SCENE_WINDOWS), SceneUISetDecriptor);
 				if (matched_index != -1) {
 					continue;
 				}

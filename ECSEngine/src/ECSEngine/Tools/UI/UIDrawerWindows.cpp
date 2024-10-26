@@ -9,7 +9,7 @@ namespace ECSEngine {
 	namespace Tools {
 
 		constexpr float2 CONSOLE_WINDOW_SIZE = { 1.0f, 0.4f };
-#define CONSOLE_RETAINED_COUNT 50
+#define CONSOLE_RETAINED_MS 50
 
 		static unsigned int FindWindowByDrawerDescriptor(const UISystem* system, const UIWindowDrawerDescriptor* descriptor) {
 			for (unsigned int index = 0; index < system->m_windows.size; index++) {
@@ -2319,11 +2319,7 @@ namespace ECSEngine {
 
 		static bool ConsoleWindowRetainedMode(void* window_data, WindowRetainedModeInfo* retained_info) {
 			ConsoleWindowData* data = (ConsoleWindowData*)window_data;
-			if (data->retained_timer.GetDuration(ECS_TIMER_DURATION_MS) >= CONSOLE_RETAINED_COUNT) {
-				data->retained_timer.SetNewStart();
-				return false;
-			}
-			return true;
+			return !data->retained_timer.HasPassedAndReset(ECS_TIMER_DURATION_MS, CONSOLE_RETAINED_MS);
 		}
 
 		unsigned int CreateConsoleWindow(UISystem* system) {

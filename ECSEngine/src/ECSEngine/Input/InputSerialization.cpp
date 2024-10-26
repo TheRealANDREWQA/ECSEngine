@@ -233,6 +233,7 @@ namespace ECSEngine {
 		ECS_ASSERT(state->m_character_queue.GetSize() <= MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT);
 		ECS_ASSERT(state->m_alphanumeric_keys.size <= MAX_KEYBOARD_ALPHANUMERIC_ENTIRE_COUNT);
 
+		size_t offset = write_instrument->GetOffset();
 		ECS_INPUT_SERIALIZE_TYPE input_type = ECS_INPUT_SERIALIZE_KEYBOARD;
 		if (!write_instrument->Write(&input_type)) {
 			return false;
@@ -270,6 +271,7 @@ namespace ECSEngine {
 			return false;
 		}
 
+		size_t new_offset = write_instrument->GetOffset();
 		return true;
 	}
 
@@ -331,12 +333,15 @@ namespace ECSEngine {
 		if (header.version != VERSION) {
 			return false;
 		}
-		state->Reset();
 
 		unsigned short button_states = 0;
 		if (!read_instrument->Read(&button_states)) {
 			return false;
 		}
+
+		// TODO: We need to write the previous values as well.
+
+		memset(state->m_states, 0, sizeof(state->m_states));
 		ReadBits(&button_states, 2, ECS_MOUSE_BUTTON_COUNT, [state](size_t index, const void* value) {
 			const ECS_BUTTON_STATE* button_value = (const ECS_BUTTON_STATE*)value;
 			state->m_states[index] = *button_value;
@@ -480,7 +485,7 @@ namespace ECSEngine {
 
 		bool is_type_found = true;
 		if (accepted_input_types.size > 0) {
-			is_type_found = accepted_input_types.Find(type);
+			is_type_found = accepted_input_types.Find(type) != -1;
 		}
 
 		if (is_type_found) {
@@ -517,7 +522,7 @@ namespace ECSEngine {
 
 		bool is_type_found = true;
 		if (accepted_input_types.size > 0) {
-			is_type_found = accepted_input_types.Find(type);
+			is_type_found = accepted_input_types.Find(type) != -1;
 		}
 
 		if (is_type_found) {
@@ -654,6 +659,7 @@ namespace ECSEngine {
 					// An input is repeated, which means that the data is corrupted.
 					return false;
 				}
+				valid_types.RemoveSwapBack(valid_type_index);
 
 				if (serialized_type == ECS_INPUT_SERIALIZE_MOUSE) {
 					data->previous_mouse = *data->mouse;

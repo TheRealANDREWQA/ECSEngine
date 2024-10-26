@@ -131,7 +131,11 @@ namespace ECSEngine {
 
 		void Procedure(const MouseProcedureInfo& info);
 
-		void Reset();
+		// It will reset only the current values, leaving everything else intact
+		void ResetCurrentValues();
+
+		// If the parameter is true, it will zero out the window handle as well, else it will maintain it
+		void Reset(bool reset_window_handle);
 
 		void* m_window_handle;
 		int2 m_previous_position;

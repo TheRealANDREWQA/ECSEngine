@@ -2,8 +2,11 @@
 #include "InspectorUtilities.h"
 #include "../Inspector.h"
 #include "../../Sandbox/SandboxRecordingFileExtension.h"
+#include "../../Sandbox/SandboxReplay.h"
 #include "../../Editor/EditorPalette.h"
 #include "../../Editor/EditorState.h"
+#include "../../Sandbox/SandboxAccessor.h"
+#include "../../Project/ProjectFolders.h"
 
 using namespace ECSEngine;
 
@@ -21,6 +24,7 @@ struct DrawWindowData {
 	bool reader_not_initialized;
 	// This is set to false for the very first draw, after which it is set to true.
 	bool initial_draw;
+	unsigned char set_recording_sandbox_index;
 	// Used to check the timestamp of the file to check for changes
 	Timer retained_timer;
 };
@@ -55,7 +59,9 @@ static void ReadFileInfo(DrawWindowData* draw_data) {
 	initialize_info.error_message = &draw_data->error_message;
 	initialize_info.allocator = &draw_data->temporary_allocator;
 	initialize_info.read_instrument = &read_instrument;
-	draw_data->reader.Initialize(initialize_info);
+	if (!draw_data->reader.Initialize(initialize_info)) {
+		draw_data->reader_not_initialized = true;
+	}
 }
 
 static void InspectorRecordingFileClean(EditorState* editor_state, unsigned int inspector_index, void* _data) {
@@ -90,13 +96,14 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 
 	data->initial_draw = true;
 	Stream<wchar_t> extension = PathExtension(data->path);
+	EDITOR_SANDBOX_RECORDING_TYPE recording_type = GetRecordingTypeFromExtension(extension);
 	// This is not very "nice" to check manually what the extension is and display the icon according to it, but it makes for an easy API
 	// Where the user does not have to specify the icon manually
 	Stream<wchar_t> icon_path = ECS_TOOLS_UI_TEXTURE_FILE_BLANK;
-	if (extension == EDITOR_INPUT_RECORDING_FILE_EXTENSION) {
+	if (recording_type == EDITOR_SANDBOX_RECORDING_INPUT) {
 		icon_path = ECS_TOOLS_UI_TEXTURE_KEYBOARD_SQUARE;
 	}
-	else if (extension == EDITOR_STATE_RECORDING_FILE_EXTENSION) {
+	else if (recording_type == EDITOR_SANDBOX_RECORDING_STATE) {
 		icon_path = ECS_TOOLS_UI_TEXTURE_REPLAY;
 	}
 
@@ -163,6 +170,49 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 		drawer->Timeline("Timeline", &timeline);
 
 		channel_elements.Deallocate(editor_state->GlobalMemoryManager());
+
+		UIConfigComboBoxPrefix prefix;
+		prefix.prefix = "Sandbox ";
+		config.AddFlag(prefix);
+
+		ECS_STACK_CAPACITY_STREAM(char, sandbox_label_storage, ECS_KB * 4);
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, sandbox_labels, EDITOR_MAX_SANDBOX_COUNT);
+		unsigned int sandbox_count = GetSandboxCount(editor_state, true);
+		for (unsigned int index = 0; index < sandbox_count; index++) {
+			unsigned int initial_storage_size = sandbox_label_storage.size;
+			ConvertIntToChars(sandbox_label_storage, index);
+			sandbox_labels.AddAssert(sandbox_label_storage.SliceAt(initial_storage_size));
+		}
+		drawer->ComboBox(UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_COMBO_BOX_PREFIX, config, "Set recording", sandbox_labels, sandbox_labels.size, &data->set_recording_sandbox_index);
+
+		struct SetRecordingActionData {
+			EditorState* editor_state;
+			DrawWindowData* data;
+		};
+
+		auto set_recording_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+			
+			SetRecordingActionData* data = (SetRecordingActionData*)_data;
+			EDITOR_SANDBOX_RECORDING_TYPE type = GetRecordingTypeFromExtension(PathExtension(data->data->path));
+			SandboxReplayInfo replay_info = GetSandboxReplayInfo(data->editor_state, data->data->set_recording_sandbox_index, type);
+			
+			ECS_STACK_CAPACITY_STREAM(wchar_t, relative_path_storage, 512);
+			Stream<wchar_t> relative_path = GetProjectAssetRelativePathWithSeparatorReplacement(data->editor_state, data->data->path, relative_path_storage);
+			// Remove the extension as well
+			relative_path = PathNoExtension(relative_path, ECS_OS_PATH_SEPARATOR_REL);
+			replay_info.file_path->CopyOther(relative_path);
+			
+			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->data->set_recording_sandbox_index);
+			sandbox->flags = SetFlag(sandbox->flags, replay_info.flag);
+		};
+
+		UIConfigActiveState active_state;
+		active_state.state = sandbox_count > 0 && data->set_recording_sandbox_index < sandbox_count;
+		config.AddFlag(active_state);
+
+		SetRecordingActionData action_data = { editor_state, data };
+		drawer->Button(UI_CONFIG_ACTIVE_STATE, config, "Set", { set_recording_action, &action_data, sizeof(action_data) });
 	}
 }
 

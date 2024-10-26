@@ -65,7 +65,12 @@ void GetProjectPrefabFolder(const EditorState* editor_state, ECSEngine::Capacity
 void GetProjectRootPath(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 // Returns { nullptr, 0 } if the path is not relative to the assets folder
+// It does not replace absolute path separators with relative separators
 ECSEngine::Stream<wchar_t> GetProjectAssetRelativePath(const EditorState* editor_state, ECSEngine::Stream<wchar_t> path);
+
+// This function is the same as GetProjectAssetRelativePath, with the difference that it will replace the absolute path separators
+// Into relative ones, which requires a storage parameter to be passed in
+ECSEngine::Stream<wchar_t> GetProjectAssetRelativePathWithSeparatorReplacement(const EditorState* editor_state, ECSEngine::Stream<wchar_t> path, ECSEngine::CapacityStream<wchar_t>& storage);
 
 // Returns the path from the storage
 ECSEngine::Stream<wchar_t> GetProjectPathFromAssetRelative(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& storage, ECSEngine::Stream<wchar_t> relative_path);

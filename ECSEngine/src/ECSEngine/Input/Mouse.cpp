@@ -6,7 +6,7 @@
 namespace ECSEngine {
 
 	Mouse::Mouse() {
-		Reset();
+		Reset(true);
 	}
 
 	void Mouse::ActivateWrap(uint2 pixel_bounds) {
@@ -14,7 +14,12 @@ namespace ECSEngine {
 		m_wrap_position = true;
 	}
 
-	void Mouse::Reset() {
+	void Mouse::ResetCurrentValues() {
+		m_current_position = { 0, 0 };
+		m_current_scroll = 0;
+	}
+
+	void Mouse::Reset(bool reset_window_handle) {
 		memset(m_states, ECS_BUTTON_RAISED, sizeof(m_states));
 		m_current_position = { 0, 0 };
 		m_current_scroll = 0;
@@ -24,7 +29,7 @@ namespace ECSEngine {
 		m_is_visible = true;
 		m_wrap_position = false;
 		m_has_wrapped = false;
-		m_window_handle = nullptr;
+		m_window_handle = reset_window_handle ? nullptr : m_window_handle;
 		m_restore_position = { 0, 0 };
 	}
 

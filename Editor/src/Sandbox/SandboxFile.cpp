@@ -11,7 +11,6 @@
 using namespace ECSEngine;
 
 #define SANDBOX_FILE_HEADER_VERSION (0)
-#define SANDBOX_FILE_MAX_SANDBOXES (16)
 
 struct SandboxFileHeader {
 	size_t version;
@@ -68,9 +67,9 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 			return false;
 		}
 
-		if (header.count > SANDBOX_FILE_MAX_SANDBOXES) {
+		if (header.count > EDITOR_MAX_SANDBOX_COUNT) {
 			// Error, too many sandboxes
-			ECS_FORMAT_TEMP_STRING(console_error, "Sandbox file has been corrupted. Maximum supported count is {#}, but file says {#}.", SANDBOX_FILE_MAX_SANDBOXES, header.count);
+			ECS_FORMAT_TEMP_STRING(console_error, "Sandbox file has been corrupted. Maximum supported count is {#}, but file says {#}.", EDITOR_MAX_SANDBOX_COUNT, header.count);
 			EditorSetConsoleError(console_error);
 			return false;
 		}
