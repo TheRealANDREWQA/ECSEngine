@@ -825,6 +825,8 @@ void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsi
 
 void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	unsigned int sandbox_index = editor_state->sandboxes.ReserveRange();
+	ECS_ASSERT(sandbox_index <= EDITOR_MAX_SANDBOX_COUNT, "The maximum number of sandboxes was reached!");
+
 	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
 	// Zero out the memory since most fields require zero initialization
 	memset(sandbox, 0, sizeof(*sandbox));
@@ -1379,9 +1381,8 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	// Clear the waiting compilation flag
 	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
-	// Reset the mouse and set again the window handle
-	sandbox->sandbox_world.mouse->Reset();
-	sandbox->sandbox_world.mouse->m_window_handle = editor_state->Mouse()->m_window_handle;
+	// Reset the mouse
+	sandbox->sandbox_world.mouse->Reset(false);
 	// Reset the keyboard as well
 	sandbox->sandbox_world.keyboard->Reset();
 	// Clear the crashed status as well
@@ -3268,12 +3269,22 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 
 	// Else if we are in the paused state we just need to change the state
 	if (success) {
+		// Try to initialize the recordings and the replays. If any of them fails, then abort the start.
+		success = InitializeSandboxRecordings(editor_state, sandbox_index, true);
+		if (!success) {
+			return false;
+		}
+
+		success = InitializeSandboxReplays(editor_state, sandbox_index, true);
+		if (!success) {
+			return false;
+		}
+
 		// Disable the rendering of the scene and game windows - we will draw them every frame
 		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 		sandbox->run_state = EDITOR_SANDBOX_RUNNING;
 
-		InitializeSandboxRecordings(editor_state, sandbox_index, true);
 
 		// We need to record the snapshot of the current sandbox state
 		// We also need to bind the module runtime settings

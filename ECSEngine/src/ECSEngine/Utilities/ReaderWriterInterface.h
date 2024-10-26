@@ -36,7 +36,7 @@ namespace ECSEngine {
 		ECS_INLINE bool WriteWithSize(Stream<void> data) {
 			static_assert(std::is_integral_v<IntegerType>, "WriteWithSize template parameter must be an integer!");
 			IntegerType integer_size = data.size;
-			if (!Write(&data.size)) {
+			if (!Write(&integer_size)) {
 				return false;
 			}
 			return Write(data.buffer, data.size);

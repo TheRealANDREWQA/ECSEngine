@@ -4915,11 +4915,12 @@ namespace ECSEngine {
 			UIDrawerTextInput* TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<char>* text_to_fill, UIDrawerTextInputFilter filter = UIDrawerTextInputFilterAll);
 
 			// Single lined text input
-			void TextInput(Stream<char> name, CapacityStream<wchar_t>* text_to_fill);
+			// At the moment, it doesn't support filtering. It returns UI ASCII representation
+			UIDrawerTextInput* TextInput(Stream<char> name, CapacityStream<wchar_t>* text_to_fill);
 
 			// Single lined text input
-			// At the moment, it doesn't support filtering
-			void TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<wchar_t>* text_to_fill);
+			// At the moment, it doesn't support filtering. It returns UI ASCII representation 
+			UIDrawerTextInput* TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<wchar_t>* text_to_fill);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

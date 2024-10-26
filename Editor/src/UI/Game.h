@@ -1,8 +1,9 @@
 #pragma once
 #include "ECSEngineUI.h"
+#include "../Sandbox/SandboxCount.h"
 
 #define GAME_WINDOW_NAME "Game "
-#define MAX_GAME_WINDOWS 8u
+#define MAX_GAME_WINDOWS EDITOR_MAX_SANDBOX_COUNT
 
 struct EditorState;
 ECS_TOOLS;

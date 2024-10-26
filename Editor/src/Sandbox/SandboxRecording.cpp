@@ -1,6 +1,7 @@
 #include "editorpch.h"
 #include "SandboxRecording.h"
 #include "SandboxAccessor.h"
+#include "Sandbox.h"
 #include "../Project/ProjectFolders.h"
 
 #define PATH_MAX_CAPACITY 512
@@ -189,6 +190,12 @@ static bool InitializeSandboxRecording(
 		}
 	}
 
+	// Update the file bool status - if it is not set, then don't continue
+	UpdateValidFileBoolRecording(editor_state, info);
+	if (!*info.is_recording_file_valid) {
+		return true;
+	}
+
 	*info.is_delta_writer_initialized = false;
 	// Open the file for write
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_file_path_storage, 512);
@@ -350,10 +357,13 @@ bool RunSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, 
 	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_index, type);
 	if (*info.is_delta_writer_initialized) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		if (HasFlag(sandbox->flags, info.flag)) {
+		if (HasFlag(sandbox->flags, info.flag) && !info.delta_writer->IsFailed()) {
 			if (!info.delta_writer->Write()) {
 				ECS_FORMAT_TEMP_STRING(console_message, "Failed to write {#} recording at moment {#}", info.type_string, sandbox->sandbox_world.elapsed_seconds);
-				EditorSetConsoleWarn(console_message);
+				EditorSetConsoleError(console_message);
+
+				// Pause all sandboxes to let the user know
+				PauseSandboxWorlds(editor_state);
 				return false;
 			}
 		}

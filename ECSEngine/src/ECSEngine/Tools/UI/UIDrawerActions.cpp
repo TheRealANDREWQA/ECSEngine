@@ -3826,6 +3826,8 @@ namespace ECSEngine {
 			float scroll_delta = (float)mouse->GetScrollDelta();
 			if (scroll_delta != 0.0f) {
 				float factor = GetKeyboardModifierValue(keyboard, scroll_delta * 0.001f);
+				// Use sort of an exponential zoom curve - such that we can reach large zoom levels fast
+				factor *= ClampMin(data->zoom * 0.33f, 1.0f);
 				// The render offset must be adjusted in order to remain fixated on the same point
 				float previous_zoom = data->zoom;
 				data->zoom += factor;

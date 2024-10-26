@@ -122,6 +122,7 @@ namespace ECSEngine {
 		extract_function = initialize_info.functor_info.self_contained_extract;
 		entire_state_write_seconds_tick = initialize_info.entire_state_write_seconds_tick;
 		last_entire_state_write_seconds = 0.0f;
+		is_failed = false;
 		
 		size_t user_header_size = initialize_info.functor_info.header.size;
 		if (user_header_size > 0) {
@@ -154,6 +155,9 @@ namespace ECSEngine {
 					state_infos.Add({ elapsed_seconds, current_instrument_offset - instrument_offset });
 				}
 			}
+			else {
+				is_failed = true;
+			}
 			last_entire_state_write_seconds = elapsed_seconds;
 			return success;
 		}
@@ -171,6 +175,9 @@ namespace ECSEngine {
 				if (current_instrument_offset > instrument_offset) {
 					state_infos.Add({ elapsed_seconds, current_instrument_offset - instrument_offset });
 				}
+			}
+			else {
+				is_failed = true;
 			}
 			return success;
 		}
@@ -211,6 +218,7 @@ namespace ECSEngine {
 				// Seek to that location - unless it is the current state
 				if (last_entire_state != -1 && last_entire_state != current_state_index) {
 					if (!SeekInstrumentAtState(last_entire_state, error_message)) {
+						is_failed = true;
 						return false;
 					}
 
@@ -229,6 +237,7 @@ namespace ECSEngine {
 						return false;
 					}
 				}
+				current_state_index = next_state_index;
 			}
 		}
 
@@ -253,7 +262,17 @@ namespace ECSEngine {
 		return true;
 	}
 
-	bool DeltaStateReader::CallEntireState(size_t overall_state_index, CapacityStream<char>* error_message) const {
+	bool DeltaStateReader::CallEntireState(size_t overall_state_index, CapacityStream<char>* error_message) {
+		size_t before_read_offset = read_instrument->GetOffset();
+
+		//size_t suposed_offset = 0;
+		//for (size_t index = 0; index < overall_state_index; index++) {
+		//	suposed_offset += state_infos[index].write_size;
+		//}
+		//if (before_read_offset != suposed_offset) {
+		//	OutputDebugStringA("");
+		//}
+
 		DeltaStateReaderEntireFunctionData entire_data;
 		entire_data.elapsed_seconds = state_infos[overall_state_index].elapsed_seconds;
 		entire_data.write_size = state_infos[overall_state_index].write_size;
@@ -263,12 +282,33 @@ namespace ECSEngine {
 		if (!entire_function(&entire_data)) {
 			ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to read entire state with index {#}, elapsed seconds {#} with write size of {#}.", overall_state_index,
 				entire_data.elapsed_seconds, entire_data.write_size);
+			is_failed = true;
+			return false;
+		}
+
+		size_t after_read_offset = read_instrument->GetOffset();
+		// Ensure that it advanced the right amount of bytes
+		size_t read_difference = after_read_offset - before_read_offset;
+		if (read_difference != state_infos[overall_state_index].write_size) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "The entire state with index {#}, elapsed seconds {#} was read, but the read size is mismatched: functor read {#} - expected {#}.", overall_state_index,
+				entire_data.elapsed_seconds, read_difference, state_infos[overall_state_index].write_size);
+			is_failed = true;
 			return false;
 		}
 		return true;
 	}
 
-	bool DeltaStateReader::CallDeltaState(size_t overall_state_index, CapacityStream<char>* error_message) const {
+	bool DeltaStateReader::CallDeltaState(size_t overall_state_index, CapacityStream<char>* error_message) {
+		size_t before_read_offset = read_instrument->GetOffset();
+		
+		//size_t suposed_offset = 0;
+		//for (size_t index = 0; index < overall_state_index; index++) {
+		//	suposed_offset += state_infos[index].write_size;
+		//}
+		//if (before_read_offset != suposed_offset) {
+		//	OutputDebugStringA("");
+		//}
+
 		DeltaStateReaderDeltaFunctionData delta_data;
 		delta_data.elapsed_seconds = state_infos[overall_state_index].elapsed_seconds;
 		delta_data.write_size = state_infos[overall_state_index].write_size;
@@ -278,6 +318,19 @@ namespace ECSEngine {
 		if (!delta_function(&delta_data)) {
 			ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to read delta state with index {#}, elapsed seconds {#} with write size of {#}.", overall_state_index,
 				delta_data.elapsed_seconds, delta_data.write_size);
+			is_failed = true;
+			return false;
+		}
+
+		size_t after_read_offset = read_instrument->GetOffset();
+		size_t read_difference = after_read_offset - before_read_offset;
+		if (read_difference != state_infos[overall_state_index].write_size) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "The delta state with index {#}, elapsed seconds {#} was read, but the read size is mismatched: functor read {#} - expected {#}.", overall_state_index,
+				delta_data.elapsed_seconds, read_difference, state_infos[overall_state_index].write_size);
+			is_failed = true;
+
+			//read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, before_read_offset);
+			//delta_function(&delta_data);
 			return false;
 		}
 		return true;
@@ -302,7 +355,7 @@ namespace ECSEngine {
 		}
 
 		for (unsigned int index = 0; index < entire_state_indices.size; index++) {
-			if (state_infos[entire_state_indices[index]].elapsed_seconds > elapsed_seconds) {
+			if (state_infos[entire_state_indices[index]].elapsed_seconds >= elapsed_seconds) {
 				// If the current index is 0, it means that we don't have an entire state before, fail
 				if (index == 0) {
 					return -1;
@@ -316,12 +369,9 @@ namespace ECSEngine {
 	}
 
 	size_t DeltaStateReader::GetStateIndexFromCurrentIndex(float elapsed_seconds) const {
-		if (state_infos[current_state_index].elapsed_seconds > elapsed_seconds) {
-			return current_state_index - 1;
-		}
 		for (size_t index = current_state_index; index < state_infos.size; index++) {
-			if (state_infos[index].elapsed_seconds > elapsed_seconds) {
-				return index;
+			if (state_infos[index].elapsed_seconds >= elapsed_seconds) {
+				return index == 0 ? 0 : index - 1;
 			}
 		}
 
@@ -350,36 +400,36 @@ namespace ECSEngine {
 		return false;
 	}
 
-	void DeltaStateReader::Initialize(const DeltaStateReaderInitializeInfo& initialize_info) {
+	bool DeltaStateReader::Initialize(const DeltaStateReaderInitializeInfo& initialize_info) {
 		read_instrument = initialize_info.read_instrument;
 		allocator = initialize_info.allocator;
 
 		// Try to deserialize the footer. If we cannot deserialize it, then we must abort
 		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_END, -(int64_t)sizeof(Footer))) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek at the footer location.");
-			return;
+			return false;
 		}
 
 		Footer footer;
 		if (!read_instrument->Read(&footer)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not read the written footer or it is corrupted.");
-			return;
+			return false;
 		}
 
 		if (footer.version != VERSION) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Written version {#} is not accepted.", footer.version);
-			return;
+			return false;
 		}
 
 		// Seek to the start of the footer and start deserializing from there
 		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_CURRENT, -((int64_t)footer.size + (int64_t)sizeof(footer)))) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the beginning of the footer data.");
-			return;
+			return false;
 		}
 
 		if (!DeserializeIntVariableLengthBool(read_instrument, state_infos.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the state infos size or it is corrupted.");
-			return;
+			return false;
 		}
 
 		state_infos.Initialize(allocator, state_infos.size, state_infos.size);
@@ -387,19 +437,19 @@ namespace ECSEngine {
 			if (!DeserializeIntVariableLengthBool(read_instrument, state_infos[index].write_size)) {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize state info {#} write size or it is corrupted.", index);
 				state_infos.Deallocate(allocator);
-				return;
+				return false;
 			}
 			if (!read_instrument->Read(&state_infos[index].elapsed_seconds)) {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize state info {#} elapsed seconds.", index);
 				state_infos.Deallocate(allocator);
-				return;
+				return false;
 			}
 		}
 
 		if (!DeserializeIntVariableLengthBool(read_instrument, entire_state_indices.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the entire state indices size or it is corrupted.");
 			state_infos.Deallocate(allocator);
-			return;
+			return false;
 		}
 		entire_state_indices.Initialize(allocator, entire_state_indices.size, entire_state_indices.size);
 		for (unsigned int index = 0; index < entire_state_indices.size; index++) {
@@ -407,7 +457,7 @@ namespace ECSEngine {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize entire state index {#} or it is corrupted.", index);
 				state_infos.Deallocate(allocator);
 				entire_state_indices.Deallocate(allocator);
-				return;
+				return false;
 			}
 		}
 
@@ -416,7 +466,7 @@ namespace ECSEngine {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user header size.");
 			state_infos.Deallocate(allocator);
 			entire_state_indices.Deallocate(allocator);
-			return;
+			return false;
 		}
 
 		if (header.size > 0) {
@@ -426,10 +476,19 @@ namespace ECSEngine {
 				state_infos.Deallocate(allocator);
 				entire_state_indices.Deallocate(allocator);
 				header.Deallocate(allocator);
-				return;
+				return false;
 			}
 		}
 
+		// Seek to the beginning of the instrument, such that it starts on the first state.
+		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, 0)) {
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the start of the read instrument after reading the initialize data.");
+			state_infos.Deallocate(allocator);
+			entire_state_indices.Deallocate(allocator);
+			return false;
+		}
+
+		is_failed = false;
 		current_state_index = 0;
 		delta_function = initialize_info.functor_info.delta_function;
 		entire_function = initialize_info.functor_info.entire_function;
@@ -451,6 +510,7 @@ namespace ECSEngine {
 			initialize_info.functor_info.user_data_allocator_initialize(user_data.buffer, allocator);
 		}
 		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;
+		return true;
 	}
 
 	bool DeltaStateReader::SeekInstrumentAtState(size_t state_index, CapacityStream<char>* error_message) const {
@@ -467,11 +527,13 @@ namespace ECSEngine {
 		size_t entire_state_index = GetEntireStateIndexForTime(elapsed_seconds);
 		if (entire_state_index == -1) {
 			ECS_FORMAT_ERROR_MESSAGE(error_message, "Found no matching entire state for moment {#}.", elapsed_seconds);
+			is_failed = true;
 			return false;
 		}
 
 		// Seek to its offset
 		if (!SeekInstrumentAtState(entire_state_index, error_message)) {
+			is_failed = true;
 			return false;
 		}
 

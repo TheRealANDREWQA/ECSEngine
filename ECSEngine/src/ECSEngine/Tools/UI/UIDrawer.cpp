@@ -2776,7 +2776,17 @@ namespace ECSEngine {
 				unsigned int previous_char_count = header_indication_chars.size;
 				size_t written_count = ConvertFloatToChars(header_indication_chars, GetTimelineAbsoluteTimeValue(data, header_indication_percentage), data->time_indication_precision);
 				Stream<char> indication_chars = { header_indication_chars.buffer + previous_char_count, written_count };
-				infos.Add({ indication_chars, { element_position, position.y }, drawer->TextSpan(indication_chars) });
+				
+				float2 indication_size = drawer->TextSpan(indication_chars);
+				float2 indication_position = { element_position, position.y };
+				// Do a check to see if it is in bounds - if it is not, we can erase the characters such that they don't take space
+				// Which can fill up the buffer at large zoom levels
+				if (drawer->ValidatePosition(0, indication_position, indication_size)) {
+					infos.Add({ indication_chars, indication_position, indication_size });
+				}
+				else {
+					header_indication_chars.size -= written_count;
+				}
 
 				header_indication_percentage += header_increment;
 			}
@@ -3056,6 +3066,7 @@ namespace ECSEngine {
 			TimelineDrawHeader(this, configuration, config, data, position, scale);
 			TimelineDrawChannels(this, configuration, config, data, { position.x, position.y + GetTimelineHeaderSize(this, data) }, scale, timeline_y_size);
 			TimelineDrawCursor(this, configuration, config, data, position, scale, timeline_y_size);
+			NextRow();
 
 			return GetTimelineAbsoluteTimeValue(data, data->cursor_position_normalized);
 		}
@@ -14808,6 +14819,7 @@ namespace ECSEngine {
 					current_cluster_index--;
 				}
 
+				current_cluster_index = ClampMin<int64_t>(current_cluster_index, 0);
 				for (size_t index = current_cluster_index; index < sprite_cluster_substream.size; index++) {
 					system->RemoveSpriteTexture(dockspace, border_index, phase, ECS_UI_SPRITE_CLUSTER);
 				}
@@ -16770,12 +16782,12 @@ namespace ECSEngine {
 			}
 		}
 
-		void UIDrawer::TextInput(Stream<char> name, CapacityStream<wchar_t>* text_to_fill) {
+		UIDrawerTextInput* UIDrawer::TextInput(Stream<char> name, CapacityStream<wchar_t>* text_to_fill) {
 			UIDrawConfig config;
-			TextInput(0, config, name, text_to_fill);
+			return TextInput(0, config, name, text_to_fill);
 		}
 
-		void UIDrawer::TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<wchar_t>* text_to_fill) {
+		UIDrawerTextInput* UIDrawer::TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<wchar_t>* text_to_fill) {
 			struct CallbackData {
 				// This must be the first field, such that we can alias this structure with the normal text input
 				UIDrawerTextInput* text_input;
@@ -16821,7 +16833,7 @@ namespace ECSEngine {
 
 					SetConfigParameter(configuration, config, current_callback, previous_callback);
 
-					TextInput(configuration | UI_CONFIG_TEXT_INPUT_CALLBACK, config, name, &callback_data->ascii_text);
+					UIDrawerTextInput* text_input = TextInput(configuration | UI_CONFIG_TEXT_INPUT_CALLBACK, config, name, &callback_data->ascii_text);
 					RemoveConfigParameter(configuration, config, previous_callback);
 
 					callback_data->trigger_on_release = previous_callback.trigger_only_on_release;
@@ -16847,6 +16859,8 @@ namespace ECSEngine {
 						}
 						return false;
 						});
+
+					return text_input;
 				}
 				else {
 					bool exists = ExistsResource(internal_resource_name);
@@ -16860,7 +16874,7 @@ namespace ECSEngine {
 						// We must register manually the extra window resource
 						system->AddWindowDynamicElement(window_index, internal_resource_full_name, {}, {});
 					}
-					TextInput(DynamicConfiguration(configuration), config, name, text_to_fill);
+					return TextInput(DynamicConfiguration(configuration), config, name, text_to_fill);
 				}
 			}
 			else {
@@ -16904,6 +16918,7 @@ namespace ECSEngine {
 
 				data->text_input = TextInput(configuration | UI_CONFIG_TEXT_INPUT_CALLBACK, config, name, &data->ascii_text);
 				RemoveConfigParameter(configuration, config, previous_callback);
+				return data->text_input;
 			}
 		}
 
@@ -16983,8 +16998,6 @@ namespace ECSEngine {
 
 		// non cached drawer
 		void UIDrawer::Text(size_t configuration, const UIDrawConfig& config, Stream<char> characters, float2 position) {
-			float2 text_span;
-
 			characters.size = ParseStringIdentifier(characters);
 			Color color;
 			float2 font_size;
@@ -16993,27 +17006,28 @@ namespace ECSEngine {
 			auto text_sprites = HandleTextSpriteBuffer(configuration);
 			auto text_sprite_count = HandleTextSpriteCount(configuration);
 
+			float2 text_span = TextSpan(characters, font_size, character_spacing);
+			if (~configuration & UI_CONFIG_DO_NOT_FIT_SPACE) {
+				HandleFitSpaceRectangle(configuration, position, text_span);
+			}
+
 			Stream<UISpriteVertex> vertices = Stream<UISpriteVertex>(text_sprites + *text_sprite_count, characters.size * 6);
 			ECS_UI_ALIGN horizontal_alignment, vertical_alignment;
 			GetTextLabelAlignment(configuration, config, horizontal_alignment, vertical_alignment);
 
-			float text_y_scale = system->GetTextSpriteYScale(font_size.y);
 			if (configuration & UI_CONFIG_ALIGN_TO_ROW_Y) {
-				float row_scale = current_row_y_scale < text_y_scale ? text_y_scale : current_row_y_scale;
-				position.y = AlignMiddle(position.y, row_scale, text_y_scale);
+				float row_scale = current_row_y_scale < text_span.y ? text_span.y : current_row_y_scale;
+				position.y = AlignMiddle(position.y, row_scale, text_span.y);
 			}
 
 			ECS_UI_ALIGN text_horizontal_alignment, text_vertical_alignment;
 			GetElementAlignment(configuration, config, text_horizontal_alignment, text_vertical_alignment);
 			if (text_horizontal_alignment != ECS_UI_ALIGN_LEFT || text_vertical_alignment != ECS_UI_ALIGN_TOP) {
 				// Get the text span
-				text_span = TextSpan(characters, font_size, character_spacing);
 				GetElementAlignedPosition(configuration, config, position, text_span);
 			}
 
-			size_t before_count = *text_sprite_count;
-			bool did_draw = true;
-			if (ValidatePositionY(configuration, position, { 0.0f, text_y_scale })) {
+			if (ValidatePosition(configuration, position, text_span)) {
 				if (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 					bool invert_order = (vertical_alignment == ECS_UI_ALIGN_BOTTOM) || (horizontal_alignment == ECS_UI_ALIGN_RIGHT);
 					if (configuration & UI_CONFIG_VERTICAL) {
@@ -17044,7 +17058,6 @@ namespace ECSEngine {
 							true,
 							invert_order
 						);
-						text_span = GetTextSpan(GetTextStream(configuration, characters.size * 6), true, invert_order);
 					}
 				}
 				else {
@@ -17073,28 +17086,10 @@ namespace ECSEngine {
 							font_size,
 							character_spacing
 						);
-						text_span = GetTextSpan(GetTextStream(configuration, characters.size * 6));
 					}
 				}
 
 				*text_sprite_count += characters.size * 6;
-			}
-			else {
-				text_span = TextSpan(characters, font_size, character_spacing);
-				did_draw = false;
-			}
-
-			if (~configuration & UI_CONFIG_DO_NOT_FIT_SPACE) {
-				float2 copy = position;
-				bool is_moved = HandleFitSpaceRectangle(configuration, position, text_span);
-				if (is_moved && did_draw) {
-					float x_translation = position.x - copy.x;
-					float y_translation = position.y - copy.y;
-					for (size_t index = before_count; index < *text_sprite_count; index++) {
-						text_sprites[index].position.x += x_translation;
-						text_sprites[index].position.y -= y_translation;
-					}
-				}
 			}
 
 			FinalizeRectangle(configuration, position, text_span);

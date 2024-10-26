@@ -1,6 +1,7 @@
 #include "editorpch.h"
 #include "SandboxReplay.h"
 #include "SandboxAccessor.h"
+#include "Sandbox.h"
 #include "../Project/ProjectFolders.h"
 
 #define PATH_MAX_CAPACITY 512
@@ -9,27 +10,20 @@
 #define REPLAY_INSTRUMENT_BUFFERING_CAPACITY ECS_MB
 
 static void UpdateValidFileBoolReplay(const EditorState* editor_state, const SandboxReplayInfo& info) {
-	*info.is_replay_file_valid = true;
+	*info.is_replay_file_valid = false;
 
 	// Verify that the parent path is valid
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 	Stream<wchar_t> parent_path = PathParent(*info.file_path, ECS_OS_PATH_SEPARATOR_REL);
 	GetProjectPathFromAssetRelative(editor_state, absolute_path, parent_path);
-	if (!ExistsFileOrFolder(absolute_path)) {
-		*info.is_replay_file_valid = false;
-	}
-	else {
-		// If it not automatic, then verify that a file with the same name does not exist already
+	if (ExistsFileOrFolder(absolute_path)) {
 		Stream<wchar_t> file_stem = PathStem(*info.file_path, ECS_OS_PATH_SEPARATOR_REL);
 		if (file_stem.size > 0) {
 			absolute_path.AddStreamAssert(file_stem);
 			absolute_path.AddStreamAssert(EDITOR_INPUT_RECORDING_FILE_EXTENSION);
 			if (ExistsFileOrFolder(absolute_path)) {
-				*info.is_replay_file_valid = false;
+				*info.is_replay_file_valid = true;
 			}
-		}
-		else {
-			*info.is_replay_file_valid = false;
 		}
 	}
 }
@@ -66,6 +60,12 @@ static bool InitializeSandboxReplayImpl(
 		}
 	}
 
+	// Update the file bool status - if it is not set, then don't continue
+	UpdateValidFileBoolReplay(editor_state, info);
+	if (!*info.is_replay_file_valid) {
+		return true;
+	}
+
 	*info.is_delta_reader_initialized = false;
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_file_path_storage, 1024);
 	Stream<wchar_t> absolute_file_path = GetSandboxReplayFileImpl(editor_state, info, absolute_file_path_storage);
@@ -73,7 +73,7 @@ static bool InitializeSandboxReplayImpl(
 
 	// Try to open the file firstly
 	ECS_FILE_HANDLE file_handle = -1;
-	ECS_FILE_STATUS_FLAGS status = OpenFile(absolute_file_path, &file_handle, ECS_FILE_ACCESS_READ_ONLY, &error_message);
+	ECS_FILE_STATUS_FLAGS status = OpenFile(absolute_file_path, &file_handle, ECS_FILE_ACCESS_READ_BINARY_SEQUENTIAL, &error_message);
 	if (status != ECS_FILE_STATUS_OK) {
 		ECS_FORMAT_TEMP_STRING(console_message, "Opening {#} replay file {#} failed. Reason: {#}", info.type_string, *info.file_path, error_message);
 		EditorSetConsoleError(console_message);
@@ -97,10 +97,17 @@ static bool InitializeSandboxReplayImpl(
 
 	initialize_info.read_instrument = read_instrument;
 	initialize_info.allocator = replay_allocator;
+	initialize_info.error_message = &error_message;
 
-	info.delta_reader->Initialize(initialize_info);
-	*info.is_delta_reader_initialized = true;
-	return true;
+	bool success = info.delta_reader->Initialize(initialize_info);
+	if (success) {
+		*info.is_delta_reader_initialized = true;
+	}
+	else {
+		ECS_FORMAT_TEMP_STRING(console_message, "Failed to initialize {#} replay for sandbox {#}. Reason: {#}", info.type_string, sandbox_index, error_message);
+		EditorSetConsoleError(console_message);
+	}
+	return success;
 }
 
 SandboxReplayInfo GetSandboxReplayInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
@@ -226,11 +233,14 @@ bool RunSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDI
 	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
 	if (*info.is_delta_reader_initialized) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		if (HasFlag(sandbox->flags, info.flag)) {
+		if (HasFlag(sandbox->flags, info.flag) && !info.delta_reader->IsFailed()) {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB);
 			if (!info.delta_reader->Advance(sandbox->sandbox_world.elapsed_seconds, &error_message)) {
 				ECS_FORMAT_TEMP_STRING(console_message, "Failed to read {#} replay at moment {#}. (Reason: {#})", info.type_string, sandbox->sandbox_world.elapsed_seconds, error_message);
-				EditorSetConsoleWarn(console_message);
+				EditorSetConsoleError(console_message);
+
+				// Pause the sandbox worlds to let the user know
+				PauseSandboxWorlds(editor_state);
 				return false;
 			}
 		}
