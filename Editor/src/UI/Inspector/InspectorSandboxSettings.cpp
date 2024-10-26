@@ -10,6 +10,7 @@
 #include "../../Sandbox/SandboxProfiling.h"
 #include "../../Sandbox/SandboxEntityOperations.h"
 #include "../../Sandbox/SandboxRecording.h"
+#include "../../Sandbox/SandboxReplay.h"
 #include "../Common.h"
 #include "../../Project/ProjectFolders.h"
 
@@ -27,7 +28,11 @@
 // From other input sources and this window might miss them
 #define RETAINED_MODE_REFRESH_MS 250
 
+// How many ms it takes to validate that the recording path is valid
 #define RECORDING_FILE_VALID_STATUS_LAZY_MS 300
+
+// How many ms it takes to validate that the replay path is valid
+#define REPLAY_FILE_VALID_STATUS_LAZY_MS 300
 
 #define MAX_SANDBOX_ENTRIES 32
 
@@ -60,8 +65,10 @@ struct DrawSandboxSettingsData {
 	CapacityStream<AvailableModuleSettings> available_module_settings;
 
 	Timer retained_timer;
-	// Used to lazy update the valid status
+	// Used to lazy update the valid status for the recording files
 	Timer update_recording_valid_status_timer;
+	// Used to lazy update the valid status for the replay files
+	Timer update_replay_valid_status_timer;
 
 	unsigned char sandbox_to_copy;
 	unsigned char sandbox_mappings[MAX_SANDBOX_ENTRIES];
@@ -963,12 +970,9 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 		
 		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
 
-		bool is_valid_lazy_update = data->update_recording_valid_status_timer.GetDurationFloat(ECS_TIMER_DURATION_MS) >= RECORDING_FILE_VALID_STATUS_LAZY_MS;
-		if (is_valid_lazy_update) {
-			data->update_recording_valid_status_timer.SetNewStart();
-		}
+		bool is_valid_lazy_update = data->update_recording_valid_status_timer.HasPassedAndReset(ECS_TIMER_DURATION_MS, RECORDING_FILE_VALID_STATUS_LAZY_MS);
 		
-		auto block = [=](const BlockInfo& block_info, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+		auto draw_block = [=](const BlockInfo& block_info, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
 			UIDrawConfig config;
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
@@ -1014,10 +1018,10 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 		input_block.entire_state_tick_seconds = &sandbox->input_recorder_entire_state_tick_seconds;
 		input_block.file_path = &sandbox->input_recorder_file;
 		input_block.type_extension = EDITOR_INPUT_RECORDING_FILE_EXTENSION;
-		input_block.type_string = "Input";
+		input_block.type_string = EDITOR_INPUT_RECORDER_TYPE_STRING;
 		input_block.automatic_boolean = &sandbox->is_input_recorder_file_automatic;
 		input_block.is_file_valid = sandbox->is_input_recorder_file_valid;
-		block(input_block, EDITOR_SANDBOX_RECORDING_INPUT);
+		draw_block(input_block, EDITOR_SANDBOX_RECORDING_INPUT);
 		drawer->CrossLine();
 
 		BlockInfo state_block;
@@ -1025,10 +1029,10 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 		state_block.entire_state_tick_seconds = &sandbox->input_recorder_entire_state_tick_seconds;
 		state_block.file_path = &sandbox->state_recorder_file;
 		state_block.type_extension = EDITOR_STATE_RECORDING_FILE_EXTENSION;
-		state_block.type_string = "State";
+		state_block.type_string = EDITOR_STATE_RECORDER_TYPE_STRING;
 		state_block.automatic_boolean = &sandbox->is_state_recorder_file_automatic;
 		state_block.is_file_valid = sandbox->is_state_recorder_file_valid;
-		block(state_block, EDITOR_SANDBOX_RECORDING_STATE);
+		draw_block(state_block, EDITOR_SANDBOX_RECORDING_STATE);
 		
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
 	});
@@ -1038,22 +1042,17 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 	drawer->CollapsingHeader("Replay", &data->collapsing_replay_state, [&]() {
 		struct BlockInfo {
 			EDITOR_SANDBOX_FLAG flag;
-			float* entire_state_tick_seconds;
 			CapacityStream<wchar_t>* file_path;
 			const char* type_string;
 			const wchar_t* type_extension;
-			bool* automatic_boolean;
 			bool is_file_valid;
 		};
 
 		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
 
-		bool is_valid_lazy_update = data->update_recording_valid_status_timer.GetDurationFloat(ECS_TIMER_DURATION_MS) >= RECORDING_FILE_VALID_STATUS_LAZY_MS;
-		if (is_valid_lazy_update) {
-			data->update_recording_valid_status_timer.SetNewStart();
-		}
+		bool is_valid_lazy_update = data->update_replay_valid_status_timer.HasPassedAndReset(ECS_TIMER_DURATION_MS, REPLAY_FILE_VALID_STATUS_LAZY_MS);
 
-		auto block = [=](const BlockInfo& block_info, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+		auto draw_block = [=](const BlockInfo& block_info, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
 			UIDrawConfig config;
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
@@ -1063,7 +1062,7 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 			name_padding.total_length = NAME_PADDING_LENGTH;
 			config.AddFlag(name_padding);
 
-			ECS_FORMAT_TEMP_STRING(enabled_box_name, "{#} recording", block_info.type_string);
+			ECS_FORMAT_TEMP_STRING(enabled_box_name, "{#} replay", block_info.type_string);
 			drawer->CheckBox(CONFIGURATION, config, enabled_box_name, &sandbox->flags, FirstLSB64(block_info.flag));
 
 			CONFIGURATION |= UI_CONFIG_ACTIVE_STATE;
@@ -1072,14 +1071,11 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 			active_state.state = HasFlag(sandbox->flags, block_info.flag);
 			config.AddFlag(active_state);
 
-			ECS_FORMAT_TEMP_STRING(automatic_box_name, "{#} automatic mode", block_info.type_string);
-			drawer->CheckBox(CONFIGURATION, config, automatic_box_name, block_info.automatic_boolean);
-
 			UIConfigWindowDependentSize dependent_size;
 			config.AddFlag(dependent_size);
 
 			if (is_valid_lazy_update) {
-				UpdateSandboxValidFileBoolRecording(editor_state, sandbox_index, recording_type);
+				UpdateSandboxValidFileBoolReplay(editor_state, sandbox_index, recording_type);
 			}
 
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
@@ -1088,7 +1084,7 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 
 			config.AddFlag(text_parameters);
 
-			ECS_FORMAT_TEMP_STRING(file_path_name, "{#} recording file", block_info.type_string);
+			ECS_FORMAT_TEMP_STRING(file_path_name, "{#} replay file", block_info.type_string);
 			Stream<wchar_t> recording_extension = block_info.type_extension;
 			drawer->TextInput(CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_PARAMETERS, config, file_path_name, block_info.file_path);
 		};
@@ -1096,27 +1092,23 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		BlockInfo input_block;
 		input_block.flag = EDITOR_SANDBOX_FLAG_RECORD_INPUT;
-		input_block.entire_state_tick_seconds = &sandbox->input_recorder_entire_state_tick_seconds;
-		input_block.file_path = &sandbox->input_recorder_file;
+		input_block.file_path = &sandbox->input_replay_file;
 		input_block.type_extension = EDITOR_INPUT_RECORDING_FILE_EXTENSION;
-		input_block.type_string = "Input";
-		input_block.automatic_boolean = &sandbox->is_input_recorder_file_automatic;
-		input_block.is_file_valid = sandbox->is_input_recorder_file_valid;
-		block(input_block, EDITOR_SANDBOX_RECORDING_INPUT);
+		input_block.type_string = EDITOR_INPUT_RECORDER_TYPE_STRING;
+		input_block.is_file_valid = sandbox->is_input_replay_valid;
+		draw_block(input_block, EDITOR_SANDBOX_RECORDING_INPUT);
 		drawer->CrossLine();
 
 		BlockInfo state_block;
 		state_block.flag = EDITOR_SANDBOX_FLAG_RECORD_STATE;
-		state_block.entire_state_tick_seconds = &sandbox->input_recorder_entire_state_tick_seconds;
-		state_block.file_path = &sandbox->state_recorder_file;
+		state_block.file_path = &sandbox->state_replay_file;
 		state_block.type_extension = EDITOR_STATE_RECORDING_FILE_EXTENSION;
-		state_block.type_string = "State";
-		state_block.automatic_boolean = &sandbox->is_state_recorder_file_automatic;
-		state_block.is_file_valid = sandbox->is_state_recorder_file_valid;
-		block(state_block, EDITOR_SANDBOX_RECORDING_STATE);
+		state_block.type_string = EDITOR_STATE_RECORDER_TYPE_STRING;
+		state_block.is_file_valid = sandbox->is_state_replay_valid;
+		draw_block(state_block, EDITOR_SANDBOX_RECORDING_STATE);
 
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
-		});
+	});
 }
 
 static void InspectorDrawSandboxCopySection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
@@ -1285,6 +1277,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	InspectorDrawSandboxModifiersSection(editor_state, sandbox_index, drawer, data);
 	InspectorDrawSandboxStatisticsSection(editor_state, sandbox_index, drawer, data);
 	InspectorDrawSandboxRecordingSection(editor_state, sandbox_index, drawer, data);
+	InspectorDrawSandboxReplaySection(editor_state, sandbox_index, drawer, data);
 	InspectorDrawSandboxCopySection(editor_state, sandbox_index, drawer, data);
 }
 

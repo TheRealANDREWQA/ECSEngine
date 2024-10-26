@@ -8,9 +8,6 @@
 #define RECORDER_ALLOCATOR_CAPACITY ECS_MB * 32
 #define RECORDER_BUFFERING_CAPACITY ECS_MB
 
-#define INPUT_RECORDER_TYPE_STRING "input"
-#define STATE_RECORDER_TYPE_STRING "state"
-
 // Choose a reasonable default - 15 seconds seems a decent value
 #define DEFAULT_ENTIRE_STATE_TICK_SECONDS 15.0f
 
@@ -52,10 +49,10 @@ static Stream<wchar_t> UpdateAutomaticIndexRecording(const EditorState* editor_s
 static void UpdateValidFileBoolRecording(const EditorState* editor_state, const SandboxRecordingInfo& info) {
 	*info.is_recording_file_valid = true;
 
-	// Verify that the path parent is valid
+	// Verify that the parent path is valid
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-	Stream<wchar_t> path_parent = PathParent(*info.file_path, ECS_OS_PATH_SEPARATOR_REL);
-	GetProjectPathFromAssetRelative(editor_state, absolute_path, path_parent);
+	Stream<wchar_t> parent_path = PathParent(*info.file_path, ECS_OS_PATH_SEPARATOR_REL);
+	GetProjectPathFromAssetRelative(editor_state, absolute_path, parent_path);
 	if (!ExistsFileOrFolder(absolute_path)) {
 		*info.is_recording_file_valid = false;
 	}
@@ -101,25 +98,17 @@ static void DeallocateSandboxRecording(DeltaStateWriter& delta_writer, Allocator
 	// Just deallocate the recorder allocator - all else will be deallocated as well
 	// The file should have been closed by the Finish call
 
+	FreeAllocator(delta_writer.allocator);
 	// The allocator pointer must be deallocated as well
 	Deallocate(sandbox_allocator, delta_writer.allocator.allocator);
-	FreeAllocator(delta_writer.allocator);
 	ZeroOut(&delta_writer);
 }
 
 static bool FinishSandboxRecording(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	bool check_that_it_is_enabled,
 	const SandboxRecordingInfo& info
 ) {
-	if (check_that_it_is_enabled) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		if (!HasFlag(sandbox->flags, info.flag)) {
-			return true;
-		}
-	}
-
 	auto deallocate_stack_scope = StackScope([&]() {
 		if (*info.is_delta_writer_initialized) {
 			DeallocateSandboxRecording(*info.delta_writer, GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager());
@@ -200,6 +189,7 @@ static bool InitializeSandboxRecording(
 		}
 	}
 
+	*info.is_delta_writer_initialized = false;
 	// Open the file for write
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_file_path_storage, 512);
 	Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, absolute_file_path_storage);
@@ -215,21 +205,21 @@ static bool InitializeSandboxRecording(
 
 	// Create an allocator just for the recorder, such that we can wink it at the end
 	GlobalMemoryManager* sandbox_allocator = sandbox->GlobalMemoryManager();
-	MemoryManager* input_recorder_allocator = (MemoryManager*)sandbox_allocator->Allocate(sizeof(MemoryManager));
-	*input_recorder_allocator = MemoryManager(allocator_size, ECS_KB * 4, allocator_size, sandbox_allocator);
+	MemoryManager* recorder_allocator = (MemoryManager*)sandbox_allocator->Allocate(sizeof(MemoryManager));
+	*recorder_allocator = MemoryManager(allocator_size, ECS_KB * 4, allocator_size, sandbox_allocator);
 
 	// Allocate the write instrument out of it
 	CapacityStream<void> write_instrument_buffering;
-	write_instrument_buffering.Initialize(input_recorder_allocator, buffering_size);
+	write_instrument_buffering.Initialize(recorder_allocator, buffering_size);
 
-	BufferedFileWriteInstrument* write_instrument = AllocateAndConstruct<BufferedFileWriteInstrument>(input_recorder_allocator, input_file, write_instrument_buffering, 0);
+	BufferedFileWriteInstrument* write_instrument = AllocateAndConstruct<BufferedFileWriteInstrument>(recorder_allocator, input_file, write_instrument_buffering, 0);
 
 	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 32);
 	DeltaStateWriterInitializeInfo initialize_info;
 	initialize_functor(initialize_info.functor_info, &sandbox->sandbox_world, stack_memory);
 
 	initialize_info.write_instrument = write_instrument;
-	initialize_info.allocator = input_recorder_allocator;
+	initialize_info.allocator = recorder_allocator;
 	initialize_info.entire_state_write_seconds_tick = *info.entire_state_tick_seconds;
 
 	info.delta_writer->Initialize(initialize_info);
@@ -261,7 +251,7 @@ SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned
 			&sandbox->input_recorder_file_automatic_index,
 			&sandbox->input_recorder_entire_state_tick_seconds, 
 			&sandbox->input_recorder_file, 
-			INPUT_RECORDER_TYPE_STRING,
+			EDITOR_INPUT_RECORDER_TYPE_STRING,
 			EDITOR_INPUT_RECORDING_FILE_EXTENSION,
 			EDITOR_SANDBOX_FLAG_RECORD_INPUT 
 		};
@@ -277,7 +267,7 @@ SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned
 			&sandbox->state_recorder_file_automatic_index,
 			&sandbox->state_recorder_entire_state_tick_seconds, 
 			&sandbox->state_recorder_file,
-			STATE_RECORDER_TYPE_STRING,
+			EDITOR_STATE_RECORDER_TYPE_STRING,
 			EDITOR_STATE_RECORDING_FILE_EXTENSION,
 			EDITOR_SANDBOX_FLAG_RECORD_STATE
 		};
@@ -307,14 +297,14 @@ void EnableSandboxRecording(EditorState* editor_state, unsigned int sandbox_inde
 	sandbox->flags = SetFlag(sandbox->flags, info.flag);
 }
 
-bool FinishSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled) {
-	return FinishSandboxRecording(editor_state, sandbox_index, check_that_it_is_enabled, GetSandboxRecordingInfo(editor_state, sandbox_index, type));
+bool FinishSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	return FinishSandboxRecording(editor_state, sandbox_index, GetSandboxRecordingInfo(editor_state, sandbox_index, type));
 }
 
-bool FinishSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index, bool check_that_it_is_enabled) {
+bool FinishSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index) {
 	bool success = true;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		success &= FinishSandboxRecording(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index, check_that_it_is_enabled);
+		success &= FinishSandboxRecording(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 	return success;
 }
@@ -333,7 +323,7 @@ bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_
 	}
 	break;
 	default:
-		ECS_ASSERT(false, "Invalid sandbox recording type enum in initialize");
+		ECS_ASSERT(false, "Invalid sandbox recording type enum in initialize recording");
 	}
 	return InitializeSandboxRecording(editor_state, sandbox_index, check_that_it_is_enabled, GetSandboxRecordingInfo(editor_state, sandbox_index, type), RECORDER_ALLOCATOR_CAPACITY, RECORDER_BUFFERING_CAPACITY, initialize_functor);
 }

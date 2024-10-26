@@ -34,11 +34,11 @@ void EnableSandboxRecording(EditorState* editor_state, unsigned int sandbox_inde
 
 // It writes the remaining data to be written by the delta writer and closes the file. It will then deallocate the recorder.
 // It returns true if it succeeded, else false. Outputs a console error message if it fails.
-bool FinishSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled);
+bool FinishSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
 
 // Calls this functor for each recording type. Returns true if all of them succeeded, else false.
 // Outputs console error messages if a recording failed.
-bool FinishSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index, bool check_that_it_is_enabled);
+bool FinishSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index);
 
 // Initializes the writer for the given data and creates the file which will hold the recorded data
 bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled);

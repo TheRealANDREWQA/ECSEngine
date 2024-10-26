@@ -72,6 +72,9 @@ void InitializeInputMapping(EditorState* editor_state) {
 	mappings[EDITOR_INPUT_STEP_CURRENT_SANDBOX].SetCtrlWith(ECS_KEY_F7, ECS_BUTTON_PRESSED);
 
 	mappings[EDITOR_INPUT_OPEN_SANDBOX_SETTINGS].SetCtrlWith(ECS_KEY_M, ECS_BUTTON_PRESSED);
+	
+	mappings[EDITOR_INPUT_OPEN_SANDBOX_SETTINGS_WITH_MOUSE].SetFirstKey(ECS_KEY_LEFT_CTRL, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_OPEN_SANDBOX_SETTINGS_WITH_MOUSE].SetSecondMouse(ECS_MOUSE_X1, ECS_BUTTON_HELD);
 
 	editor_state->input_mapping.ChangeMapping(mappings);
 }

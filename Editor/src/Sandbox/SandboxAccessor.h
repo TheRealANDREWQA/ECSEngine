@@ -22,6 +22,16 @@ unsigned int GetActiveSandboxIncludeScene(const EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns the index of the sandbox that is currently hovered by the mouse, but only for the Game windows.
+// Returns -1 if there is no Game window hovered
+unsigned int GetHoveredSandbox(const EditorState* editor_state);
+
+// Returns the index of the sandbox that is currently hovered by the mouse, including both Game and Scene windows.
+// Returns -1 if there is no such window hovered
+unsigned int GetHoveredSandboxIncludeScene(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
 ECS_INLINE EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index) {
 	return editor_state->sandboxes.buffer + sandbox_index;
 }

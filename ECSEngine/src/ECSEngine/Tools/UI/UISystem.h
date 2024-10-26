@@ -436,7 +436,7 @@ namespace ECSEngine {
 			bool CheckDockspaceResize(unsigned int dockspace_index, DockspaceType type, float2 mouse_position);
 
 			bool CheckParentInnerBorders(
-				float2 mouse_position,
+				float2 position,
 				const unsigned int* dockspace_indices,
 				const DockspaceType* dockspace_types,
 				unsigned int parent_count
@@ -978,15 +978,15 @@ namespace ECSEngine {
 			) const;
 
 			// searches only inner borders, not the first one and the last one which are outer
-			unsigned int GetDockspaceBorderFromMouseCoordinates(
-				float2 mouse_position,
+			unsigned int GetDockspaceBorderFromPosition(
+				float2 position,
 				UIDockspace** dockspace, 
 				float& mask
 			) const;
 
 			// searches only inner borders, not the first one and the last one which are outer
-			unsigned int GetDockspaceBorderFromMouseCoordinates(
-				float2 mouse_position, 
+			unsigned int GetDockspaceBorderFromPosition(
+				float2 position, 
 				UIDockspace** dockspace, 
 				float& mask, 
 				unsigned int floating_dockspace, 
@@ -994,8 +994,8 @@ namespace ECSEngine {
 			) const;
 
 			// searches only inner borders, not the first one and the last one which are outer
-			unsigned int GetDockspaceBorderFromMouseCoordinates(
-				float2 mouse_position,
+			unsigned int GetDockspaceBorderFromPosition(
+				float2 position,
 				UIDockspace** dockspace,
 				float& mask,
 				UIDockspace* dockspace_to_search,
@@ -1005,7 +1005,7 @@ namespace ECSEngine {
 			unsigned int GetDockspaceIndex(const UIDockspace* dockspace, DockspaceType type) const;
 
 			// only horizontal and vertical are searched, not floating
-			unsigned int GetDockspaceIndexFromMouseCoordinates(float2 mouse_position, DockspaceType& dockspace_type) const;
+			unsigned int GetDockspaceIndexFromPosition(float2 position, DockspaceType& dockspace_type) const;
 
 			UIDockspace* GetDockspaceFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type);
 
@@ -1019,11 +1019,11 @@ namespace ECSEngine {
 
 			float2 GetDockspaceBorderOffset(const UIDockspace* dockspace, unsigned int border_index, float offset_mask) const;
 
-			// only floating horizontal and floating vertical are searched, not children dockspaces
-			unsigned int GetFloatingDockspaceIndexFromMouseCoordinates(float2 mouse_position, DockspaceType& dockspace_type) const;
+			// Only floating horizontal and floating vertical are searched, not children dockspaces
+			unsigned int GetFloatingDockspaceIndexFromPosition(float2 position, DockspaceType& dockspace_type) const;
 
-			unsigned int GetDockspaceIndexFromMouseCoordinatesWithChildren(
-				float2 mouse_position,
+			unsigned int GetDockspaceIndexFromPositionWithChildren(
+				float2 position,
 				DockspaceType& dockspace_type,
 				CapacityStream<unsigned int>* parent_indicies,
 				CapacityStream<DockspaceType>* dockspace_types,
@@ -1107,7 +1107,7 @@ namespace ECSEngine {
 			);
 
 			// Returns the border index of the region, -1 if it doesn't exist
-			unsigned int GetDockspaceRegionFromMouse(float2 mouse_position, UIDockspace** dockspace, DockspaceType& type) const;
+			unsigned int GetDockspaceRegionFromPosition(float2 position, UIDockspace** dockspace, DockspaceType& type) const;
 
 			// Returns the border index of the region, -1 if it doesn't exist
 			unsigned int GetDockspaceRegionFromDockspace(
@@ -1123,23 +1123,21 @@ namespace ECSEngine {
 			UIDockspace* GetDockspaceParent(const UIDockspace* dockspace, DockspaceType type, DockspaceType& parent_type, unsigned int& border_index);
 
 			// they will be placed in order of layers, from the foreground to the background
-			void GetDockspaceRegionsFromMouse(
-				float2 mouse_position,
-				UIDockspace** dockspaces, 
-				unsigned int* border_indices,
-				DockspaceType* types,
-				unsigned int& count
+			unsigned int GetDockspaceRegionsFromPosition(
+				float2 position,
+				CapacityStream<UIDockspace*>* dockspaces, 
+				CapacityStream<unsigned int>* border_indices,
+				CapacityStream<DockspaceType>* types
 			) const;
 
 			// recursive solver
-			void GetDockspaceRegionsFromMouse(
-				float2 mouse_position,
+			unsigned int GetDockspaceRegionsFromPosition(
+				float2 position,
 				UIDockspace* dockspace_to_search,
 				DockspaceType type,
-				UIDockspace** dockspaces,
-				unsigned int* border_indices,
-				DockspaceType* types,
-				unsigned int& count
+				CapacityStream<UIDockspace*>* dockspaces,
+				CapacityStream<unsigned int>* border_indices,
+				CapacityStream<DockspaceType>* types
 			) const;
 
 			float2 GetDockspaceRegionHorizontalRenderSliderPosition(
@@ -1211,11 +1209,10 @@ namespace ECSEngine {
 
 			void* GetLastGeneralData(const UIDockspace* dockspace, unsigned int border_index) const;
 
-			void GetFixedDockspaceRegionsFromMouse(
-				float2 mouse_position,
-				UIDockspace** dockspaces,
-				DockspaceType* types,
-				unsigned int& count
+			unsigned int GetFixedDockspaceRegionsFromPosition(
+				float2 position,
+				CapacityStream<UIDockspace*>* dockspaces,
+				CapacityStream<DockspaceType>* types
 			) const;
 
 			ActionData GetFilledActionData(unsigned int window_index);
@@ -1230,9 +1227,14 @@ namespace ECSEngine {
 				return m_descriptors.title_y_scale;
 			}
 
-			unsigned int GetWindowFromMouse(float2 mouse_position) const;
+			unsigned int GetWindowFromPosition(float2 position) const;
 
-			unsigned int GetWindowFromDockspace(float2 mouse_position, unsigned int dockspace_index, DockspaceType type) const;
+			unsigned int GetWindowFromDockspace(float2 position, unsigned int dockspace_index, DockspaceType type) const;
+
+			// Returns the index of the window that is being hovered by the mouse. Returns -1 if no window is hovered
+			ECS_INLINE unsigned int GetHoveredWindow() const {
+				return GetWindowFromPosition(GetNormalizeMousePosition());
+			}
 
 			unsigned int GetWindowFromName(Stream<char> name) const;
 
@@ -1544,7 +1546,7 @@ namespace ECSEngine {
 
 			// returns the index of the child that is being hovered at that level
 			unsigned int SearchDockspaceForChildrenDockspaces(
-				float2 mouse_position,
+				float2 position,
 				unsigned int dockspace_index,
 				DockspaceType dockspace_type,
 				DockspaceType& children_type,

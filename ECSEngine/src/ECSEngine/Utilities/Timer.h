@@ -75,6 +75,34 @@ namespace ECSEngine {
 
 		float GetDurationSinceMarkerFloat(ECS_TIMER_DURATION type) const;
 
+		// Returns true if the main duration is larger or equal to the duration parameter
+		ECS_INLINE bool HasPassed(ECS_TIMER_DURATION type, float duration) const {
+			return GetDurationFloat(type) >= duration;
+		}
+
+		// Returns true if the marker duration is larger or equal to the duration parameter 
+		ECS_INLINE bool HasPassedMarker(ECS_TIMER_DURATION type, float duration) const {
+			return GetDurationSinceMarkerFloat(type) >= duration;
+		}
+
+		// Returns true if the main duration is larger or equal to the duration parameter. If it is, it will set a new start as well
+		ECS_INLINE bool HasPassedAndReset(ECS_TIMER_DURATION type, float duration) {
+			bool has_passed = HasPassed(type, duration);
+			if (has_passed) {
+				SetNewStart();
+			}
+			return has_passed;
+		}
+
+		// Returns true if the marker duration is larger or equal to the duration parameter. If it is, it will set a new marker as well
+		ECS_INLINE bool HasPassedMarkerAndReset(ECS_TIMER_DURATION type, float duration) {
+			bool has_passed = HasPassedMarker(type, duration);
+			if (has_passed) {
+				SetMarker();
+			}
+			return has_passed;
+		}
+
 		std::chrono::high_resolution_clock::time_point m_start;
 		std::chrono::high_resolution_clock::time_point m_marker;
 	};

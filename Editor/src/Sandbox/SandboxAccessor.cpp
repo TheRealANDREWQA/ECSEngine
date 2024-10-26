@@ -39,9 +39,24 @@ unsigned int GetActiveSandbox(const EditorState* editor_state) {
 unsigned int GetActiveSandboxIncludeScene(const EditorState* editor_state) {
 	unsigned int active_sandbox = GetActiveSandbox(editor_state);
 	if (active_sandbox == -1) {
-		return SceneUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
+		active_sandbox = SceneUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
 	}
 	return active_sandbox;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+unsigned int GetHoveredSandbox(const EditorState* editor_state) {
+	return GameUITargetSandbox(editor_state, editor_state->ui_system->GetHoveredWindow());
+}
+
+unsigned int GetHoveredSandboxIncludeScene(const EditorState* editor_state) {
+	unsigned int hovered_window = editor_state->ui_system->GetHoveredWindow();
+	unsigned int hovered_sandbox = GameUITargetSandbox(editor_state, hovered_window);
+	if (hovered_sandbox == -1) {
+		hovered_sandbox = SceneUITargetSandbox(editor_state, hovered_window);
+	}
+	return hovered_sandbox;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
