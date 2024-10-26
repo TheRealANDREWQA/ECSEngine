@@ -6,6 +6,7 @@
 #include "SandboxProfiling.h"
 #include "SandboxFile.h"
 #include "SandboxRecording.h"
+#include "SandboxReplay.h"
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorEvent.h"
 #include "../Editor/EditorPalette.h"
@@ -997,7 +998,8 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	UnloadSandboxAssets(editor_state, sandbox_index);
 
 	// Finish any recordings that are still valid
-	FinishSandboxRecordings(editor_state, sandbox_index, true);
+	FinishSandboxRecordings(editor_state, sandbox_index);
+	DeallocateSandboxReplays(editor_state, sandbox_index);
 
 	// We also need to remove the prefab component references
 
@@ -1369,7 +1371,9 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	}
 
 	// Finish the sandbox recorders
-	FinishSandboxRecordings(editor_state, sandbox_index, true);
+	FinishSandboxRecordings(editor_state, sandbox_index);
+	// Deallocate the sandbox replays as well
+	DeallocateSandboxReplays(editor_state, sandbox_index);
 
 	ClearWorld(&sandbox->sandbox_world);
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
@@ -2193,6 +2197,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	}
 
 	ResetSandboxRecordings(editor_state, sandbox_index);
+	ResetSandboxReplays(editor_state, sandbox_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2882,6 +2887,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(protect_resources, editor_state->asset_database, editor_state->RuntimeResourceManager());
 
 	RunSandboxRecordings(editor_state, sandbox_index);
+	RunSandboxReplays(editor_state, sandbox_index);
 
 	// Add the sandbox debug elements
 	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);

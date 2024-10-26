@@ -1620,13 +1620,13 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::CheckParentInnerBorders(
-			float2 mouse_position,
+			float2 position,
 			const unsigned int* dockspace_indices,
 			const DockspaceType* dockspace_types,
 			unsigned int parent_count
 		) {
 			for (size_t index = 0; index < parent_count; index++) {
-				if (CheckDockspaceInnerBorders(mouse_position, dockspace_indices[index], dockspace_types[index])) {
+				if (CheckDockspaceInnerBorders(position, dockspace_indices[index], dockspace_types[index])) {
 					return true;
 				}
 			}
@@ -3494,7 +3494,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(DockspaceType, dockspace_types, 64);
 			ECS_STACK_CAPACITY_STREAM(unsigned int, dockspaces_to_search, 64);
 			unsigned int parent_count = 0;
-			unsigned int hovered_floating_dockspace = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, dockspace_type);
+			unsigned int hovered_floating_dockspace = GetFloatingDockspaceIndexFromPosition(mouse_position, dockspace_type);
 			bool succeded;
 
 			if (hovered_floating_dockspace == -1) {
@@ -3512,7 +3512,7 @@ namespace ECSEngine {
 				succeded = CheckDockspaceResize(hovered_floating_dockspace, dockspace_type, mouse_position);
 				if (!succeded) {
 					DockspaceType copy = dockspace_type;
-					unsigned int hovered_dockspace = GetDockspaceIndexFromMouseCoordinatesWithChildren(
+					unsigned int hovered_dockspace = GetDockspaceIndexFromPositionWithChildren(
 						mouse_position,
 						dockspace_type,
 						&dockspaces_to_search,
@@ -3765,7 +3765,7 @@ namespace ECSEngine {
 			UIDrawDockspaceRegionData* data_allocation = (UIDrawDockspaceRegionData*)ECS_STACK_ALLOC(sizeof(UIDrawDockspaceRegionData) * visible_regions.size);
 			UIDockspace* mouse_dockspace = nullptr;
 			DockspaceType mouse_type;
-			unsigned int mouse_dockspace_region = GetDockspaceRegionFromMouse(mouse_position, &mouse_dockspace, mouse_type);
+			unsigned int mouse_dockspace_region = GetDockspaceRegionFromPosition(mouse_position, &mouse_dockspace, mouse_type);
 
 			unsigned int active_region_index = 0;
 			for (size_t index = 0; index < visible_regions.size; index++) {
@@ -5801,12 +5801,12 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetDockspaceIndexFromMouseCoordinates(float2 mouse_position, DockspaceType& dockspace_type) const {
+		unsigned int UISystem::GetDockspaceIndexFromPosition(float2 position, DockspaceType& dockspace_type) const {
 
 			float2 minimum_scale = float2(10.0f, 10.f);
 			for (size_t index = 0; index < m_horizontal_dockspaces.size; index++) {
 				if (IsPointInRectangle(
-					mouse_position,
+					position,
 					m_horizontal_dockspaces[index].transform.position,
 					m_horizontal_dockspaces[index].transform.scale
 				)) {
@@ -5816,7 +5816,7 @@ namespace ECSEngine {
 			}
 			for (size_t index = 0; index < m_vertical_dockspaces.size; index++) {
 				if (IsPointInRectangle(
-					mouse_position,
+					position,
 					m_vertical_dockspaces[index].transform.position,
 					m_vertical_dockspaces[index].transform.scale
 				)) {
@@ -5824,7 +5824,7 @@ namespace ECSEngine {
 					return index;
 				}
 			}
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -5868,15 +5868,15 @@ namespace ECSEngine {
 						}
 					}
 				}
-				return 0xFFFFFFFF;
+				return (unsigned int)-1;
 			};
 
 			unsigned int index = search_lambda(m_floating_horizontal_dockspaces, DockspaceType::FloatingHorizontal);
-			if (index == 0xFFFFFFFF) {
+			if (index == -1) {
 				index = search_lambda(m_floating_vertical_dockspaces, DockspaceType::FloatingVertical);
-				if (index == 0xFFFFFFFF) {
+				if (index == -1) {
 					index = search_lambda(m_horizontal_dockspaces, DockspaceType::Horizontal);
-					if (index == 0xFFFFFFFF) {
+					if (index == -1) {
 						index = search_lambda(m_vertical_dockspaces, DockspaceType::Vertical);
 					}
 				}
@@ -5989,19 +5989,19 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetDockspaceBorderFromMouseCoordinates(float2 mouse_position, UIDockspace** dockspace, float& mask) const {
+		unsigned int UISystem::GetDockspaceBorderFromPosition(float2 position, UIDockspace** dockspace, float& mask) const {
 			DockspaceType type;
-			unsigned int floating_dockspace = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, type);
-			if (floating_dockspace != 0xFFFFFFFF) {
-				return GetDockspaceBorderFromMouseCoordinates(mouse_position, dockspace, mask, floating_dockspace, type);
+			unsigned int floating_dockspace = GetFloatingDockspaceIndexFromPosition(position, type);
+			if (floating_dockspace != -1) {
+				return GetDockspaceBorderFromPosition(position, dockspace, mask, floating_dockspace, type);
 			}
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetDockspaceBorderFromMouseCoordinates(
-			float2 mouse_position,
+		unsigned int UISystem::GetDockspaceBorderFromPosition(
+			float2 position,
 			UIDockspace** dockspace,
 			float& mask,
 			unsigned int floating_dockspace,
@@ -6011,8 +6011,8 @@ namespace ECSEngine {
 				m_floating_horizontal_dockspaces.buffer,
 				m_floating_vertical_dockspaces.buffer
 			};
-			return GetDockspaceBorderFromMouseCoordinates(
-				mouse_position,
+			return GetDockspaceBorderFromPosition(
+				position,
 				dockspace,
 				mask,
 				&dockspaces[(unsigned int)type - 2][floating_dockspace],
@@ -6022,8 +6022,8 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetDockspaceBorderFromMouseCoordinates(
-			float2 mouse_position,
+		unsigned int UISystem::GetDockspaceBorderFromPosition(
+			float2 position,
 			UIDockspace** dockspace,
 			float& mask,
 			UIDockspace* dockspace_to_search,
@@ -6053,7 +6053,7 @@ namespace ECSEngine {
 				float2 border_position = GetDockspaceBorderPosition(dockspace_to_search, index, masks[(unsigned int)type_to_search]);
 				float2 border_scale = GetDockspaceBorderScale(dockspace_to_search, index, masks[(unsigned int)type_to_search]);
 				if (IsPointInRectangle(
-					mouse_position,
+					position,
 					border_position,
 					border_scale
 				)) {
@@ -6064,19 +6064,19 @@ namespace ECSEngine {
 			}
 			for (size_t index = 0; index < dockspace_to_search->borders.size - 1; index++) {
 				if (dockspace_to_search->borders[index].is_dock) {
-					unsigned int value = GetDockspaceBorderFromMouseCoordinates(
-						mouse_position,
+					unsigned int value = GetDockspaceBorderFromPosition(
+						position,
 						dockspace,
 						mask,
 						&dockspaces[(unsigned int)children_type[(unsigned int)type_to_search]][dockspace_to_search->borders[index].window_indices[0]],
 						children_type[(unsigned int)type_to_search]
 					);
-					if (value != 0xFFFFFFFF) {
+					if (value != -1) {
 						return value;
 					}
 				}
 			}
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6094,11 +6094,11 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetFloatingDockspaceIndexFromMouseCoordinates(float2 mouse_position, DockspaceType& dockspace_type) const {
+		unsigned int UISystem::GetFloatingDockspaceIndexFromPosition(float2 position, DockspaceType& dockspace_type) const {
 			const UIDockspace* dockspaces[2] = { m_floating_horizontal_dockspaces.buffer, m_floating_vertical_dockspaces.buffer };
 			for (size_t index = 0; index < m_dockspace_layers.size; index++) {
 				if (IsPointInRectangle(
-					mouse_position,
+					position,
 					dockspaces[(unsigned int)m_dockspace_layers[index].type - 2][m_dockspace_layers[index].index].transform.position,
 					dockspaces[(unsigned int)m_dockspace_layers[index].type - 2][m_dockspace_layers[index].index].transform.scale
 				)) {
@@ -6106,20 +6106,20 @@ namespace ECSEngine {
 					return m_dockspace_layers[index].index;
 				}
 			}
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetDockspaceIndexFromMouseCoordinatesWithChildren(
-			float2 mouse_position,
+		unsigned int UISystem::GetDockspaceIndexFromPositionWithChildren(
+			float2 position,
 			DockspaceType& dockspace_type,
 			CapacityStream<unsigned int>* parent_indices,
 			CapacityStream<DockspaceType>* dockspace_types,
 			unsigned int& parent_count
 		) {
 			// get the floating dockspace index
-			unsigned int floating_dockspace_index = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, dockspace_type);
+			unsigned int floating_dockspace_index = GetFloatingDockspaceIndexFromPosition(position, dockspace_type);
 
 			parent_count = 0;
 			// if hovering over a floating dockspace
@@ -6131,7 +6131,7 @@ namespace ECSEngine {
 						// if it a dock search its children
 						if (m_floating_horizontal_dockspaces[floating_dockspace_index].borders[index].is_dock) {
 							child_index = SearchDockspaceForChildrenDockspaces(
-								mouse_position,
+								position,
 								m_floating_horizontal_dockspaces[floating_dockspace_index].borders[index].window_indices[0],
 								DockspaceType::Vertical,
 								dockspace_type,
@@ -6160,7 +6160,7 @@ namespace ECSEngine {
 						// if it a dock search its children
 						if (m_floating_vertical_dockspaces[floating_dockspace_index].borders[index].is_dock) {
 							child_index = SearchDockspaceForChildrenDockspaces(
-								mouse_position,
+								position,
 								m_floating_vertical_dockspaces[floating_dockspace_index].borders[index].window_indices[0],
 								DockspaceType::Horizontal,
 								dockspace_type,
@@ -6796,11 +6796,11 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetDockspaceRegionFromMouse(float2 mouse_position, UIDockspace** dockspace, DockspaceType& type) const {
-			unsigned int floating_dockspace_index = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, type);
+		unsigned int UISystem::GetDockspaceRegionFromPosition(float2 position, UIDockspace** dockspace, DockspaceType& type) const {
+			unsigned int floating_dockspace_index = GetFloatingDockspaceIndexFromPosition(position, type);
 			if (floating_dockspace_index != -1) {
 				unsigned int index = GetDockspaceRegionFromDockspace(
-					mouse_position,
+					position,
 					dockspace,
 					type,
 					floating_dockspace_index,
@@ -6814,7 +6814,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetDockspaceRegionFromDockspace(
-			float2 mouse_position,
+			float2 position,
 			UIDockspace** dockspace,
 			DockspaceType& type,
 			unsigned int dockspace_index,
@@ -6844,7 +6844,7 @@ namespace ECSEngine {
 				if (!dockspace_to_search->borders[index].is_dock) {
 					float2 region_position = GetDockspaceRegionPosition(dockspace_to_search, index, mask);
 					float2 region_scale = GetDockspaceRegionScale(dockspace_to_search, index, mask);
-					if (IsPointInRectangle(mouse_position, region_position, region_scale)) {
+					if (IsPointInRectangle(position, region_position, region_scale)) {
 						*dockspace = dockspace_to_search;
 						type = type_to_search;
 						return index;
@@ -6852,18 +6852,18 @@ namespace ECSEngine {
 				}
 				else {
 					unsigned int children_index = GetDockspaceRegionFromDockspace(
-						mouse_position,
+						position,
 						dockspace,
 						type,
 						dockspace_to_search->borders[index].window_indices[0],
 						children_types[(unsigned int)type_to_search]
 					);
-					if (children_index != 0xFFFFFFFF) {
+					if (children_index != -1) {
 						return children_index;
 					}
 				}
 			}
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6997,15 +6997,14 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::GetDockspaceRegionsFromMouse(
-			float2 mouse_position,
-			UIDockspace** dockspaces,
-			unsigned int* border_indices,
-			DockspaceType* types,
-			unsigned int& count
+		unsigned int UISystem::GetDockspaceRegionsFromPosition(
+			float2 position,
+			CapacityStream<UIDockspace*>* dockspaces,
+			CapacityStream<unsigned int>* border_indices,
+			CapacityStream<DockspaceType>* types
 		) const
 		{
-			count = 0;
+			unsigned int count = 0;
 			UIDockspace* docks[] = {
 				m_horizontal_dockspaces.buffer,
 				m_vertical_dockspaces.buffer,
@@ -7013,43 +7012,44 @@ namespace ECSEngine {
 				m_floating_vertical_dockspaces.buffer
 			};
 			for (size_t index = 0; index < m_dockspace_layers.size; index++) {
-				GetDockspaceRegionsFromMouse(
-					mouse_position,
+				count += GetDockspaceRegionsFromPosition(
+					position,
 					&docks[(unsigned int)m_dockspace_layers[index].type][m_dockspace_layers[index].index],
 					m_dockspace_layers[index].type,
 					dockspaces,
 					border_indices,
-					types,
-					count
+					types
 				);
 			}
+			return count;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::GetDockspaceRegionsFromMouse(
-			float2 mouse_position,
+		unsigned int UISystem::GetDockspaceRegionsFromPosition(
+			float2 position,
 			UIDockspace* dockspace_to_search,
 			DockspaceType type,
-			UIDockspace** dockspaces,
-			unsigned int* border_indices,
-			DockspaceType* types,
-			unsigned int& count
+			CapacityStream<UIDockspace*>* dockspaces,
+			CapacityStream<unsigned int>* border_indices,
+			CapacityStream<DockspaceType>* types
 		) const
 		{
+			unsigned int count = 0;
 			const float masks[] = { 1.0f, 0.0f, 1.0f, 0.0f };
 			for (size_t index = 0; index < dockspace_to_search->borders.size - 1; index++) {
 				if (!dockspace_to_search->borders[index].is_dock) {
 					float2 region_position = GetDockspaceRegionPosition(dockspace_to_search, index, masks[(unsigned int)type]);
 					float2 region_scale = GetDockspaceRegionScale(dockspace_to_search, index, masks[(unsigned int)type]);
 					if (IsPointInRectangle(
-						mouse_position,
+						position,
 						region_position,
 						region_scale
 					)) {
-						dockspaces[count] = dockspace_to_search;
-						border_indices[count] = index;
-						types[count++] = type;
+						dockspaces->AddAssert(dockspace_to_search);
+						border_indices->AddAssert(index);
+						types->AddAssert(type);
+						count++;
 					}
 				}
 				else {
@@ -7065,17 +7065,18 @@ namespace ECSEngine {
 						DockspaceType::Vertical,
 						DockspaceType::Horizontal
 					};
-					GetDockspaceRegionsFromMouse(
-						mouse_position,
+					count += GetDockspaceRegionsFromPosition(
+						position,
 						&docks[(unsigned int)type][dockspace_to_search->borders[index].window_indices[0]],
 						children_types[(unsigned int)type],
 						dockspaces,
 						border_indices,
-						types,
-						count
+						types
 					);
 				}
 			}
+
+			return count;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7307,8 +7308,10 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::GetFixedDockspaceRegionsFromMouse(float2 mouse_position, UIDockspace** output_dockspaces, DockspaceType* types, unsigned int& count) const
+		unsigned int UISystem::GetFixedDockspaceRegionsFromPosition(float2 position, CapacityStream<UIDockspace*>* output_dockspaces, CapacityStream<DockspaceType>* types) const
 		{
+			unsigned int count = 0;
+
 			UIDockspace* dockspaces[] = {
 				m_horizontal_dockspaces.buffer,
 				m_vertical_dockspaces.buffer,
@@ -7320,15 +7323,18 @@ namespace ECSEngine {
 					UIDockspace* current_dockspace = &dockspaces[(unsigned int)m_fixed_dockspaces[subindex].type][m_fixed_dockspaces[subindex].index];
 					if (m_dockspace_layers[index].index == m_fixed_dockspaces[subindex].index && m_dockspace_layers[index].type == m_fixed_dockspaces[subindex].type) {
 						if (current_dockspace->borders.size == 1 && IsPointInRectangle(
-							mouse_position,
+							position,
 							current_dockspace->transform
 						)) {
-							output_dockspaces[count] = current_dockspace;
-							types[count++] = m_fixed_dockspaces[subindex].type;
+							output_dockspaces->AddAssert(current_dockspace);
+							types->AddAssert(m_fixed_dockspaces[subindex].type);
+							count++;
 						}
 					}
 				}
 			}
+
+			return count;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7367,18 +7373,18 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetWindowFromMouse(float2 mouse_position) const {
+		unsigned int UISystem::GetWindowFromPosition(float2 position) const {
 			DockspaceType type;
-			unsigned int floating_dockspace_index = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, type);
-			if (floating_dockspace_index != 0xFFFFFFFF) {
+			unsigned int floating_dockspace_index = GetFloatingDockspaceIndexFromPosition(position, type);
+			if (floating_dockspace_index != -1) {
 				unsigned int index = GetWindowFromDockspace(
-					mouse_position,
+					position,
 					floating_dockspace_index,
 					type
 				);
 				return index;
 			}
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7614,7 +7620,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetWindowFromDockspace(float2 mouse_position, unsigned int dockspace_index, DockspaceType type) const {
+		unsigned int UISystem::GetWindowFromDockspace(float2 position, unsigned int dockspace_index, DockspaceType type) const {
 			const UIDockspace* dockspaces[] = {
 				m_horizontal_dockspaces.buffer,
 				m_vertical_dockspaces.buffer,
@@ -7639,13 +7645,13 @@ namespace ECSEngine {
 				if (!dockspace->borders[index].is_dock) {
 					float2 region_position = GetDockspaceRegionPosition(dockspace, index, mask);
 					float2 region_scale = GetDockspaceRegionScale(dockspace, index, mask);
-					if (IsPointInRectangle(mouse_position, region_position, region_scale)) {
+					if (IsPointInRectangle(position, region_position, region_scale)) {
 						return dockspace->borders[index].window_indices[dockspace->borders[index].active_window];
 					}
 				}
 				else {
 					unsigned int children_index = GetWindowFromDockspace(
-						mouse_position,
+						position,
 						dockspace->borders[index].window_indices[0],
 						children_types[(unsigned int)type]
 					);
@@ -7654,7 +7660,7 @@ namespace ECSEngine {
 					}
 				}
 			}
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7819,7 +7825,7 @@ namespace ECSEngine {
 		uint2 UISystem::GetMousePositionHoveredWindowTexelPosition() const
 		{
 			float2 mouse_position = GetNormalizeMousePosition();
-			unsigned int hovered_window = GetWindowFromMouse(mouse_position);
+			unsigned int hovered_window = GetWindowFromPosition(mouse_position);
 			if (hovered_window != -1) {
 				return GetWindowTexelPosition(hovered_window, mouse_position);
 			}
@@ -11505,7 +11511,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::SearchDockspaceForChildrenDockspaces(
-			float2 mouse_position,
+			float2 position,
 			unsigned int dockspace_index,
 			DockspaceType dockspace_type,
 			DockspaceType& children_type,
@@ -11518,7 +11524,7 @@ namespace ECSEngine {
 				for (size_t index = 0; child_index == 0xFFFFFFFF && index < m_horizontal_dockspaces[dockspace_index].borders.size - 1; index++) {
 					if (m_horizontal_dockspaces[dockspace_index].borders[index].is_dock) {
 						child_index = SearchDockspaceForChildrenDockspaces(
-							mouse_position,
+							position,
 							m_horizontal_dockspaces[dockspace_index].borders[index].window_indices[0],
 							DockspaceType::Vertical,
 							children_type,
@@ -11529,7 +11535,7 @@ namespace ECSEngine {
 					}
 				}
 				if (IsPointInRectangle(
-					mouse_position,
+					position,
 					m_horizontal_dockspaces[dockspace_index].transform.position,
 					m_horizontal_dockspaces[dockspace_index].transform.scale)
 					) {
@@ -11550,7 +11556,7 @@ namespace ECSEngine {
 				for (size_t index = 0; child_index == 0xFFFFFFFF && index < m_vertical_dockspaces[dockspace_index].borders.size - 1; index++) {
 					if (m_vertical_dockspaces[dockspace_index].borders[index].is_dock) {
 						child_index = SearchDockspaceForChildrenDockspaces(
-							mouse_position,
+							position,
 							m_vertical_dockspaces[dockspace_index].borders[index].window_indices[0],
 							DockspaceType::Horizontal,
 							children_type,
@@ -11561,7 +11567,7 @@ namespace ECSEngine {
 					}
 				}
 				if (IsPointInRectangle(
-					mouse_position,
+					position,
 					m_vertical_dockspaces[dockspace_index].transform.position,
 					m_vertical_dockspaces[dockspace_index].transform.scale)
 					) {
@@ -12722,13 +12728,12 @@ namespace ECSEngine {
 			UIDragDockspaceData* data = (UIDragDockspaceData*)_data;
 
 			if (data->floating_dockspace != nullptr && !system->IsFixedDockspace(data->floating_dockspace) && dockspace->allow_docking) {
-				DockspaceType types[32];
-				UIDockspace* dockspaces[32];
-				unsigned int border_indices[32];
-				unsigned int regions_count;
-				system->GetDockspaceRegionsFromMouse(mouse_position, dockspaces, border_indices, types, regions_count);
+				ECS_STACK_CAPACITY_STREAM(DockspaceType, types, 32);
+				ECS_STACK_CAPACITY_STREAM(UIDockspace*, dockspaces, 32);
+				ECS_STACK_CAPACITY_STREAM(unsigned int, border_indices, 32);
+				unsigned int regions_count = system->GetDockspaceRegionsFromPosition(mouse_position, &dockspaces, &border_indices, &types);
 				unsigned int normal_region_count = regions_count;
-				system->GetFixedDockspaceRegionsFromMouse(mouse_position, dockspaces, types, regions_count);
+				regions_count += system->GetFixedDockspaceRegionsFromPosition(mouse_position, &dockspaces, &types);
 				for (size_t index = normal_region_count; index < regions_count; index++) {
 					border_indices[index] = 0;
 				}
@@ -12988,6 +12993,7 @@ namespace ECSEngine {
 								false
 							);
 							dockspace_to_drag = &system->m_floating_horizontal_dockspaces[system->m_floating_horizontal_dockspaces.size - 1];
+							floating_type = DockspaceType::FloatingHorizontal;
 						}
 						else {
 							system->CreateDockspace(
@@ -13012,6 +13018,7 @@ namespace ECSEngine {
 								false
 							);
 							dockspace_to_drag = &system->m_floating_horizontal_dockspaces[system->m_floating_horizontal_dockspaces.size - 1];
+							floating_type = DockspaceType::FloatingHorizontal;
 						}
 						else {
 							system->CreateDockspace(

@@ -96,10 +96,18 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 	}
 
 	// Check the sandbox settings shortcut
-	if (input_mapping.IsTriggered(EDITOR_INPUT_OPEN_SANDBOX_SETTINGS)) {
+	bool is_open_settings_mouse = input_mapping.IsTriggered(EDITOR_INPUT_OPEN_SANDBOX_SETTINGS_WITH_MOUSE);
+	if (input_mapping.IsTriggered(EDITOR_INPUT_OPEN_SANDBOX_SETTINGS) || is_open_settings_mouse) {
 		unsigned int active_sandbox = GetActiveSandboxIncludeScene(editor_state);
 		if (active_sandbox != -1) {
 			ChangeInspectorToSandboxSettings(editor_state, -1, active_sandbox);
+		}
+		else if (is_open_settings_mouse) {
+			// If the mouse shortcut was the one selected, check the hovered sandbox as well
+			active_sandbox = GetHoveredSandboxIncludeScene(editor_state);
+			if (active_sandbox != -1) {
+				ChangeInspectorToSandboxSettings(editor_state, -1, active_sandbox);
+			}
 		}
 	}
 }

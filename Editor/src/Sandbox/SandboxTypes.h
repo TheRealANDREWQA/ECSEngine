@@ -357,32 +357,44 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::Stream<ECSEngine::TaskSchedulerTransferStaticData> sandbox_world_transfer_data;
 
 	// The input recorder structure - should be used only when the flag EDITOR_SANDBOX_FLAG_RECORD_INPUT is set
-	ECSEngine::DeltaStateWriter input_recorder;
-	ECSEngine::CapacityStream<wchar_t> input_recorder_file;
-	bool is_input_recorder_initialized;
-	// This value caches the validity of the recorder file. It takes into account automatic recording as well
-	bool is_input_recorder_file_valid;
-	// Records the highest index that is being used by the automatic sequence. If no entry exists, it will be -1
-	unsigned int input_recorder_file_automatic_index;
+	struct {
+		ECSEngine::DeltaStateWriter input_recorder;
+		ECSEngine::CapacityStream<wchar_t> input_recorder_file;
+		bool is_input_recorder_initialized;
+		// This value caches the validity of the recorder file. It takes into account automatic recording as well
+		bool is_input_recorder_file_valid;
+		// Records the highest index that is being used by the automatic sequence. If no entry exists, it will be -1
+		unsigned int input_recorder_file_automatic_index;
+	};
 
 	// The input replay structure - should be used only when the flag EDITOR_SANDBOX_FLAG_REPLAY_INPUT is set
-	ECSEngine::DeltaStateReader input_replay;
-	ECSEngine::CapacityStream<wchar_t> input_replay_file;
-	bool is_input_replay_initialized;
+	struct {
+		ECSEngine::DeltaStateReader input_replay;
+		ECSEngine::CapacityStream<wchar_t> input_replay_file;
+		bool is_input_replay_initialized;
+		// This boolean caches the validity of the replay file
+		bool is_input_replay_valid;
+	};
 
 	// The state recorder structure - should be used only when the flag EDITOR_SANDBOX_FLAG_RECORD_STATE is set
-	ECSEngine::DeltaStateWriter state_recorder;
-	ECSEngine::CapacityStream<wchar_t> state_recorder_file;
-	bool is_state_recorder_initialized;
-	// This value caches the validity of the recorder file. It takes into account automatic recording as well
-	bool is_state_recorder_file_valid;
-	// Records the highest index that is being used by the automatic sequence. If no entry exists, it will be -1
-	unsigned int state_recorder_file_automatic_index;
+	struct {
+		ECSEngine::DeltaStateWriter state_recorder;
+		ECSEngine::CapacityStream<wchar_t> state_recorder_file;
+		bool is_state_recorder_initialized;
+		// This value caches the validity of the recorder file. It takes into account automatic recording as well
+		bool is_state_recorder_file_valid;
+		// Records the highest index that is being used by the automatic sequence. If no entry exists, it will be -1
+		unsigned int state_recorder_file_automatic_index;
+	};
 
 	// The state replay structure - should be used only when the flag EDITOR_SANDBOX_FLAG_REPLAY_STATE is set
-	ECSEngine::DeltaStateReader state_replay;
-	ECSEngine::CapacityStream<wchar_t> state_replay_file;
-	bool is_state_replay_initialized;
+	struct {
+		ECSEngine::DeltaStateReader state_replay;
+		ECSEngine::CapacityStream<wchar_t> state_replay_file;
+		bool is_state_replay_initialized;
+		// This boolean caches the validity of the replay file
+		bool is_state_replay_valid;
+	};
 
 	// Miscellaneous flags
 	size_t flags;
