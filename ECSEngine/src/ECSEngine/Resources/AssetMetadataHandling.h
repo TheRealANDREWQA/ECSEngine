@@ -531,11 +531,11 @@ namespace ECSEngine {
 	);
 
 	ECS_INLINE void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code) {
-		metadata->source_code = source_code;
+		//metadata->source_code = source_code;
 	}
 
 	ECS_INLINE void SetShaderMetadataByteCode(ShaderMetadata* metadata, Stream<void> byte_code) {
-		metadata->byte_code = byte_code;
+		//metadata->byte_code = byte_code;
 	}
 
 	ECS_INLINE void SetMiscData(MiscAsset* misc_asset, Stream<void> data) {

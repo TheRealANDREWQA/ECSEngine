@@ -369,10 +369,11 @@ namespace ECSEngine {
 				ECS_ASSERT(vertex_source.buffer != nullptr);
 
 				Stream<void> vertex_byte_code;
-				graphics->m_shader_helpers[index].vertex = graphics->CreateVertexShaderFromSource(vertex_source, &include, {}, &vertex_byte_code, true);
-				graphics->m_shader_helpers[index].input_layout = graphics->ReflectVertexShaderInput(vertex_source, vertex_byte_code, true, true);
+				graphics->m_shader_helpers[index].vertex = graphics->CreateVertexShaderFromSource(vertex_source, &include, {}, &vertex_byte_code, graphics->Allocator(), true);
+				graphics->m_shader_helpers[index].input_layout = graphics->ReflectVertexShaderInput(vertex_source, vertex_byte_code, true);
 				ECS_ASSERT(graphics->m_shader_helpers[index].input_layout.layout != nullptr);
 				graphics->m_allocator->Deallocate(vertex_source.buffer);
+				vertex_byte_code.Deallocate(graphics->Allocator());
 			}
 			else {
 				graphics->m_shader_helpers[index].vertex = nullptr;
@@ -1344,6 +1345,7 @@ namespace ECSEngine {
 		ID3DInclude* include_policy, 
 		ShaderCompileOptions options,
 		Stream<void>* vertex_byte_code,
+		AllocatorPolymorphic byte_code_allocator,
 		bool temporary,
 		DebugInfo debug_info
 	) {
@@ -1355,14 +1357,16 @@ namespace ECSEngine {
 		VertexShader shader = CreateVertexShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
 
 		if (shader.shader == nullptr) {
+			if (vertex_byte_code != nullptr) {
+				*vertex_byte_code = {};
+			}
 			return shader;
 		}
 
 		if (vertex_byte_code != nullptr) {
-			void* allocation = m_allocator->Allocate_ts(byte_code->GetBufferSize());
-			vertex_byte_code->buffer = allocation;
-			memcpy(allocation, byte_code->GetBufferPointer(), byte_code->GetBufferSize());
-			vertex_byte_code->size = byte_code->GetBufferSize();
+			ECS_ASSERT(byte_code_allocator.allocator != nullptr, "Vertex shader byte code allocator is empty!");
+			*vertex_byte_code = { byte_code->GetBufferPointer(), byte_code->GetBufferSize() };
+			*vertex_byte_code = vertex_byte_code->Copy(byte_code_allocator);
 		}
 
 		byte_code->Release();
@@ -1513,22 +1517,22 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void* Graphics::CreateShader(Stream<void> path, ECS_SHADER_TYPE type, bool temporary, DebugInfo debug_info)
+	void* Graphics::CreateShader(Stream<void> byte_code, ECS_SHADER_TYPE type, bool temporary, DebugInfo debug_info)
 	{
 		switch (type)
 		{
 		case ECS_SHADER_VERTEX:
-			return CreateVertexShader(path, temporary, debug_info).shader;
+			return CreateVertexShader(byte_code, temporary, debug_info).shader;
 		case ECS_SHADER_PIXEL:
-			return CreatePixelShader(path, temporary, debug_info).shader;
+			return CreatePixelShader(byte_code, temporary, debug_info).shader;
 		case ECS_SHADER_DOMAIN:
-			return CreateDomainShader(path, temporary, debug_info).shader;
+			return CreateDomainShader(byte_code, temporary, debug_info).shader;
 		case ECS_SHADER_HULL:
-			return CreateHullShader(path, temporary, debug_info).shader;
+			return CreateHullShader(byte_code, temporary, debug_info).shader;
 		case ECS_SHADER_GEOMETRY:
-			return CreateGeometryShader(path, temporary, debug_info).shader;
+			return CreateGeometryShader(byte_code, temporary, debug_info).shader;
 		case ECS_SHADER_COMPUTE:
-			return CreateComputeShader(path, temporary, debug_info).shader;
+			return CreateComputeShader(byte_code, temporary, debug_info).shader;
 		default:
 			ECS_ASSERT(false);
 		}
@@ -1544,6 +1548,7 @@ namespace ECSEngine {
 		ID3DInclude* include_policy,
 		ShaderCompileOptions options,
 		Stream<void>* byte_code,
+		AllocatorPolymorphic byte_code_allocator,
 		bool temporary, 
 		DebugInfo debug_info
 	)
@@ -1551,7 +1556,7 @@ namespace ECSEngine {
 		switch (type)
 		{
 		case ECS_SHADER_VERTEX:
-			return CreateVertexShaderFromSource(source_code, include_policy, options, byte_code, temporary, debug_info).shader;
+			return CreateVertexShaderFromSource(source_code, include_policy, options, byte_code, byte_code_allocator, temporary, debug_info).shader;
 		case ECS_SHADER_PIXEL:
 			return CreatePixelShaderFromSource(source_code, include_policy, options, temporary, debug_info).shader;
 		case ECS_SHADER_DOMAIN:
@@ -1573,10 +1578,7 @@ namespace ECSEngine {
 
 	Stream<void> Graphics::CompileShaderToByteCode(Stream<char> source_code, ECS_SHADER_TYPE type, ID3DInclude* include_policy, AllocatorPolymorphic allocator, ShaderCompileOptions options)
 	{
-		if (allocator.allocator == nullptr) {
-			allocator = m_allocator;
-			allocator.allocation_type = ECS_ALLOCATION_MULTI;
-		}
+		ECS_ASSERT(allocator.allocator != nullptr, "Compiling shader to byte code cannot have empty allocator!");
 
 		ID3DBlob* blob = ShaderByteCode(GetDevice(), source_code, options, include_policy, type);
 		if (blob == nullptr) {
@@ -1584,8 +1586,10 @@ namespace ECSEngine {
 		}
 
 		void* allocation = AllocateTs(allocator.allocator, allocator.allocator_type, blob->GetBufferSize());
-		memcpy(allocation, blob->GetBufferPointer(), blob->GetBufferSize());
-		return { allocation, blob->GetBufferSize() };
+		size_t byte_code_size = blob->GetBufferSize();
+		memcpy(allocation, blob->GetBufferPointer(), byte_code_size);
+		blob->Release();
+		return { allocation, byte_code_size };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1593,7 +1597,6 @@ namespace ECSEngine {
 	InputLayout Graphics::CreateInputLayout(
 		Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, 
 		Stream<void> vertex_byte_code,
-		bool deallocate_byte_code,
 		bool temporary,
 		DebugInfo debug_info
 	)
@@ -1610,9 +1613,6 @@ namespace ECSEngine {
 		);
 		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), layout, "Creating input layout failed");
 		
-		if (deallocate_byte_code) {
-			m_allocator->Deallocate_ts(vertex_byte_code.buffer);
-		}
 		AddInternalResource(layout, temporary, debug_info);
 		return layout;
 	}
@@ -4210,7 +4210,6 @@ namespace ECSEngine {
 	InputLayout Graphics::ReflectVertexShaderInput(
 		Stream<char> source_code,
 		Stream<void> vertex_byte_code,
-		bool deallocate_byte_code,
 		bool temporary,
 		DebugInfo debug_info
 	)
@@ -4226,7 +4225,7 @@ namespace ECSEngine {
 			return {};
 		}
 
-		InputLayout layout = CreateInputLayout(element_descriptors, vertex_byte_code, deallocate_byte_code, temporary, debug_info);
+		InputLayout layout = CreateInputLayout(element_descriptors, vertex_byte_code, temporary, debug_info);
 		return layout;
 	}
 

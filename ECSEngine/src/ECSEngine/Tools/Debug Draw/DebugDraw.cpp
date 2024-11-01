@@ -3663,22 +3663,22 @@ namespace ECSEngine {
 		output_large_id_structured_buffer = graphics->CreateStructuredBuffer(sizeof(unsigned int), LARGE_BUFFER_CAPACITY);
 		output_large_id_buffer_view = graphics->CreateBufferView(output_large_id_structured_buffer);
 
-		Stream<char> shader_source;
-		Stream<void> byte_code;
+		InputLayout loaded_shader_input_layout;
+		LoadShaderExtraInformation load_shader_extra_information;
+		load_shader_extra_information.input_layout = &loaded_shader_input_layout;
 
 #define REGISTER_VERTEX_SHADER(type, output_type, source_name) vertex_shaders[type][output_type] = \
 		resource_manager->LoadShaderImplementation( \
 			ECS_VERTEX_SHADER_SOURCE(source_name), \
 			ECS_SHADER_VERTEX, \
-			&shader_source, \
-			&byte_code \
+			false, \
+			load_shader_extra_information \
 		); \
-		shader_source = PreprocessCFile(shader_source); \
-		layout_shaders[type][output_type] = resource_manager->m_graphics->ReflectVertexShaderInput(shader_source, byte_code); \
-		resource_manager->Deallocate(shader_source.buffer);
+		/*shader_source = PreprocessCFile(shader_source);*/ \
+		layout_shaders[type][output_type] = loaded_shader_input_layout;
 
 #define REGISTER_SHADER(index, output_type, name) REGISTER_VERTEX_SHADER(index, output_type, name); \
-		pixel_shaders[index][output_type] = resource_manager->LoadShaderImplementation(ECS_PIXEL_SHADER_SOURCE(name), ECS_SHADER_PIXEL); \
+		pixel_shaders[index][output_type] = resource_manager->LoadShaderImplementation(ECS_PIXEL_SHADER_SOURCE(name), ECS_SHADER_PIXEL, false); \
 
 
 		// Initialize the shaders and input layouts
@@ -3689,7 +3689,8 @@ namespace ECSEngine {
 		REGISTER_VERTEX_SHADER(ECS_DEBUG_SHADER_TRANSFORM, ECS_DEBUG_SHADER_OUTPUT_ID, DebugTransformInstance);
 		pixel_shaders[ECS_DEBUG_SHADER_TRANSFORM][ECS_DEBUG_SHADER_OUTPUT_ID] = resource_manager->LoadShaderImplementation(
 			ECS_PIXEL_SHADER_SOURCE(DebugMousePick),
-			ECS_SHADER_PIXEL
+			ECS_SHADER_PIXEL,
+			false
 		);
 
 		REGISTER_VERTEX_SHADER(ECS_DEBUG_SHADER_STRUCTURED_INSTANCED_DATA, ECS_DEBUG_SHADER_OUTPUT_ID, DebugStructuredInstance);

@@ -548,14 +548,16 @@ namespace ECSEngine {
 		VertexShader CreateVertexShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Returns a nullptr shader if it fails
-		// The byte code is allocated from the graphics allocator. The reason for that pointer
-		// is such that you can create an input layout from it.
+		// If you want to maintain the byte code, you must provide a pointer to the byte code parameter and an allocator for it.
+		// You must ensure that the allocator is multithreaded if this allocator is used across multiple calls.
+		// The reason for that pointer is such that you can create an input layout from it.
 		// It is automatically deallocated when creating an input layout.
 		VertexShader CreateVertexShaderFromSource(
 			Stream<char> source_code, 
 			ID3DInclude* include_policy, 
 			ShaderCompileOptions options = {},
 			Stream<void>* byte_code = nullptr,
+			AllocatorPolymorphic byte_code_allocator = { nullptr },
 			bool temporary = false,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
@@ -614,13 +616,14 @@ namespace ECSEngine {
 
 		// Returns a nullptr shader if it fails
 		// Returns only the interface
-		// The byte code is relevant only when the shader is a vertex shader
+		// The byte code and byte_code_allocator are relevant only when the shader is a vertex shader
 		void* CreateShaderFromSource(
 			Stream<char> source_code,
 			ECS_SHADER_TYPE type, 
 			ID3DInclude* include_policy,
 			ShaderCompileOptions options = {},
 			Stream<void>* byte_code = nullptr,
+			AllocatorPolymorphic byte_code_allocator = { nullptr },
 			bool temporary = false, 
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
@@ -638,7 +641,6 @@ namespace ECSEngine {
 		InputLayout CreateInputLayout(
 			Stream<D3D11_INPUT_ELEMENT_DESC> descriptor,
 			Stream<void> vertex_shader_byte_code, 
-			bool deallocate_byte_code = true,
 			bool temporary = false,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
@@ -1033,7 +1035,6 @@ namespace ECSEngine {
 		InputLayout ReflectVertexShaderInput(
 			Stream<char> source_code, 
 			Stream<void> vertex_byte_code,
-			bool deallocate_byte_code = true,
 			bool temporary = false,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);

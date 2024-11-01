@@ -341,8 +341,6 @@ namespace ECSEngine {
 
 		// The Graphics object interface
 		void* shader_interface; ECS_SKIP_REFLECTION()
-		Stream<char> source_code; ECS_SKIP_REFLECTION()
-		Stream<void> byte_code; ECS_SKIP_REFLECTION()
 	};
 
 	struct MaterialAssetResource {

@@ -13,6 +13,7 @@
 
 #define ECS_RESOURCE_MANAGER_FLAG_DEFAULT 1
 
+// Used by the shader creation
 #define ECS_RESOURCE_MANAGER_TEMPORARY (1 << 16)
 #define ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT (1 << 17)
 
@@ -57,6 +58,7 @@ namespace ECSEngine {
 		// If a resource is protected, it means that any decrement or increment reference count call on this resource will
 		// Fail with a soft crash.
 		bool is_protected = false;
+		bool multithreaded_allocation = false;
 	};
 
 	typedef HashTableDefault<ResourceManagerEntry> ResourceManagerTable;
@@ -84,13 +86,13 @@ namespace ECSEngine {
 	struct GLTFMesh;
 
 	struct ResourceManagerLoadDesc {
-		ECS_INLINE void GPULock() {
+		ECS_INLINE void GPULock() const {
 			if (gpu_lock != nullptr) {
 				gpu_lock->Lock();
 			}
 		}
 
-		ECS_INLINE void GPUUnlock() {
+		ECS_INLINE void GPUUnlock() const {
 			if (gpu_lock != nullptr) {
 				gpu_lock->Unlock();
 			}
@@ -159,6 +161,22 @@ namespace ECSEngine {
 		Stream<Resource> resources[(unsigned int)ResourceType::TypeCount];
 	};
 
+	struct ResourceManager;
+
+	// This contains extra information that you can extract from the LoadShader functions, in case you need it
+	struct ECSENGINE_API LoadShaderExtraInformation {
+		AllocatorPolymorphic GetAllocator(ResourceManager* resource_manager, bool multithreaded_allocation) const;
+
+		Stream<char>* source_code = nullptr;
+		Stream<void>* byte_code = nullptr;
+		// This is an optional field that is used only when either source code or byte code is specified.
+		// If it is left as nullptr, the allocation for those buffers will be made from the 
+		// ResourceManager's multithreaded allocator, else from this allocator
+		AllocatorPolymorphic allocator = { nullptr };
+		// This will be used only when the shader type is the vertex shader, else it will be ignored
+		InputLayout* input_layout = nullptr;
+	};
+
 	struct EvictOutdatedResourcesOptions {
 		AllocatorPolymorphic allocator = {};
 		AdditionStream<ResourceIdentifier> removed_identifiers = {};
@@ -176,12 +194,16 @@ namespace ECSEngine {
 		ResourceManager(const ResourceManager& other) = default;
 		ResourceManager& operator = (const ResourceManager& other) = default;
 
-		// Inserts the resource into the table without loading - it might allocate in order to maintain resource invariation
+		// Inserts the resource into the table without loading - you must specify if the element's allocations were done
+		// Using the single threaded or the multithreaded resource manager allocator - this argument should be the same as the
+		// One passed to the Implementation calls. Be careful when using resources that were not returned from Load***Implementation
+		// calls, if you don't use the proper allocator, a crash might result.
 		// Reference count USHORT_MAX means no reference counting. The time stamp is optional (0 if the stamp is not needed)
 		void AddResource(
 			ResourceIdentifier identifier, 
 			ResourceType resource_type,
-			void* resource, 
+			void* resource,
+			bool multithreaded_allocation,
 			size_t time_stamp = 0,
 			Stream<void> suffix = {},
 			unsigned short reference_count = USHORT_MAX
@@ -198,32 +220,17 @@ namespace ECSEngine {
 
 		void AddShaderDirectory(Stream<wchar_t> directory);
 
-		ECS_INLINE void* Allocate(size_t size) {
-			return m_memory->Allocate(size);
-		}
-
-		ECS_INLINE void* AllocateTs(size_t size) {
-			return m_memory->Allocate_ts(size);
-		}
-
 		ECS_INLINE AllocatorPolymorphic Allocator() const {
 			return m_memory;
 		}
 
-		ECS_INLINE AllocatorPolymorphic AllocatorTs() const {
-			return AllocatorPolymorphic(m_memory).AsMulti();
+		// The multithreaded allocator is relatively small, shouldn't be used for large allocations
+		ECS_INLINE AllocatorPolymorphic AllocatorTs() {
+			return AllocatorPolymorphic(&m_multithreaded_allocator).AsMulti();
 		}
 
 		// Returns the old time stamp
 		size_t ChangeTimeStamp(ResourceIdentifier identifier, ResourceType resource_type, size_t new_time_stamp, Stream<void> suffix = {});
-
-		ECS_INLINE void Deallocate(const void* data) {
-			m_memory->Deallocate(data);
-		}
-
-		ECS_INLINE void DeallocateTs(const void* data) {
-			m_memory->Deallocate_ts(data);
-		}
 
 		// Decrements the reference count all resources of that type
 		template<bool delete_if_zero = true>
@@ -358,11 +365,11 @@ namespace ECSEngine {
 		template<bool reference_counted = false>
 		Stream<char>* LoadTextFile(
 			Stream<wchar_t> filename,
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// The file is allocated from the current allocator of the resource manager
-		Stream<char> LoadTextFileImplementation(Stream<wchar_t> file);
+		Stream<char> LoadTextFileImplementation(Stream<wchar_t> file, bool multithreaded_allocation);
 
 		// In order to generate mip-maps, the context must be supplied
 		// FLAGS: ECS_RESOURCE_MANAGER_TEXTURE_HDR_TONEMAP
@@ -370,7 +377,7 @@ namespace ECSEngine {
 		ResourceView LoadTexture(
 			Stream<wchar_t> filename,
 			const ResourceManagerTextureDesc* descriptor,
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// In order to generate mip-maps, the context must be supplied
@@ -378,7 +385,7 @@ namespace ECSEngine {
 		ResourceView LoadTextureImplementation(
 			Stream<wchar_t> filename, 
 			const ResourceManagerTextureDesc* descriptor,
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// A more detailed version that doesn't load the file data nor deallocate it when it's done using it
@@ -386,7 +393,7 @@ namespace ECSEngine {
 		ResourceView LoadTextureImplementationEx(
 			DecodedTexture decoded_texture,
 			const ResourceManagerTextureDesc* descriptor,
-			ResourceManagerLoadDesc load_descriptor = {},
+			const ResourceManagerLoadDesc& load_descriptor = {},
 			ResourceManagerExDesc* ex_desc = {}
 		);
 
@@ -396,21 +403,22 @@ namespace ECSEngine {
 		Stream<Mesh>* LoadMeshes(
 			Stream<wchar_t> filename,
 			float scale_factor = 1.0f,
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// Loads all meshes from a gltf file
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		Stream<Mesh>* LoadMeshImplementation(Stream<wchar_t> filename, float scale_factor = 1.0f, ResourceManagerLoadDesc load_descriptor = {});
+		Stream<Mesh>* LoadMeshImplementation(Stream<wchar_t> filename, bool multithreaded_allocation, float scale_factor = 1.0f, const ResourceManagerLoadDesc& load_descriptor = {});
 
 		// A more detailed version that directly takes the data and does not deallocate it
 		// If it fails it returns nullptr. It allocates memory from the allocator
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT.
 		// It will also insert it into the table if the filename is not { nullptr, 0 }
 		Stream<Mesh>* LoadMeshImplementationEx(
-			const GLTFData* data, 
+			const GLTFData* data,
+			bool multithreaded_allocation,
 			float scale_factor = 1.0f,
-			ResourceManagerLoadDesc load_descriptor = {},
+			const ResourceManagerLoadDesc& load_descriptor = {},
 			ResourceManagerExDesc* ex_desc = {}
 		);
 
@@ -420,8 +428,9 @@ namespace ECSEngine {
 		// It will also insert it into the table
 		Stream<Mesh>* LoadMeshImplementationEx(
 			Stream<GLTFMesh> meshes,
+			bool multithreaded_allocation,
 			float scale_factor = 1.0f, 
-			ResourceManagerLoadDesc load_descriptor = {}, 
+			const ResourceManagerLoadDesc& load_descriptor = {}, 
 			ResourceManagerExDesc* ex_desc = {}
 		);
 
@@ -430,12 +439,12 @@ namespace ECSEngine {
 		CoalescedMesh* LoadCoalescedMesh(
 			Stream<wchar_t> filename,
 			float scale_factor = 1.0f,
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// Loads all meshes from a gltf file and creates a coalesced mesh
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		CoalescedMesh* LoadCoalescedMeshImplementation(Stream<wchar_t> filename, float scale_factor = 1.0f, ResourceManagerLoadDesc load_descriptor = {});
+		CoalescedMesh* LoadCoalescedMeshImplementation(Stream<wchar_t> filename, bool multithreaded_allocation, float scale_factor = 1.0f, const ResourceManagerLoadDesc& load_descriptor = {});
 
 		// A more detailed version that directly takes the data and does not deallocate it
 		// If it fails it returns nullptr. It allocates memory from the allocator
@@ -443,8 +452,9 @@ namespace ECSEngine {
 		// It will also insert it into the table if the filename is not { nullptr, 0 }
 		CoalescedMesh* LoadCoalescedMeshImplementationEx(
 			const GLTFData* data,
+			bool multithreaded_allocation,
 			float scale_factor = 1.0f,
-			ResourceManagerLoadDesc load_descriptor = {},
+			const ResourceManagerLoadDesc& load_descriptor = {},
 			ResourceManagerExDesc* ex_desc = {}
 		);
 
@@ -454,8 +464,9 @@ namespace ECSEngine {
 		// It will also insert it into the table if the filename is not { nullptr, 0 }
 		CoalescedMesh* LoadCoalescedMeshImplementationEx(
 			Stream<GLTFMesh> gltf_meshes,
+			bool multithreaded_allocation,
 			float scale_factor = 1.0f,
-			ResourceManagerLoadDesc load_descriptor = {},
+			const ResourceManagerLoadDesc& load_descriptor = {},
 			ResourceManagerExDesc* ex_desc = {}
 		);
 
@@ -467,8 +478,9 @@ namespace ECSEngine {
 		CoalescedMesh* LoadCoalescedMeshImplementationEx(
 			const GLTFMesh* gltf_mesh,
 			Stream<Submesh> submeshes,
+			bool multithreaded_allocation,
 			float scale_factor = 1.0f,
-			ResourceManagerLoadDesc load_descriptor = {},
+			const ResourceManagerLoadDesc& load_descriptor = {},
 			ResourceManagerExDesc* ex_desc = {}
 		);
 
@@ -476,31 +488,31 @@ namespace ECSEngine {
 		template<bool reference_counted = false>
 		Stream<PBRMaterial>* LoadMaterials(
 			Stream<wchar_t> filename,
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// Loads all materials from a gltf file
-		Stream<PBRMaterial>* LoadMaterialsImplementation(Stream<wchar_t> filename, ResourceManagerLoadDesc load_descriptor = {});
+		Stream<PBRMaterial>* LoadMaterialsImplementation(Stream<wchar_t> filename, bool multithreaded_allocation, const ResourceManagerLoadDesc& load_descriptor = {});
 
 		// Converts a list of textures into a material. If it fails (a path doesn't exist, or a shader is invalid)
-		// it returns false and rolls back any loads that have been done.
+		// it returns false and rolls back any loads that have been done. It must be called from a single thread.
 		// Flags: ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS
 		bool LoadUserMaterial(
 			const UserMaterial* user_material,
 			Material* converted_material,
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
 		template<bool reference_counted = false>
 		PBRMesh* LoadPBRMesh(
 			Stream<wchar_t> filename,
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		PBRMesh* LoadPBRMeshImplementation(Stream<wchar_t> filename, ResourceManagerLoadDesc load_descriptor = {});
+		PBRMesh* LoadPBRMeshImplementation(Stream<wchar_t> filename, bool multithreaded_allocation, const ResourceManagerLoadDesc& load_descriptor = {});
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -508,51 +520,54 @@ namespace ECSEngine {
 		// If a .hlsl is specified, it will be compiled into binary using shader compile options and then passed to D3D
 		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
 		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		// Returns a pointer to the shader type (for vertex shader a VertexShader*)
+		// Returns a pointer to the shader type (for vertex shader a VertexShader*). If you provide values in the extra_information,
+		// You are responsible for deallocating those buffers.
 		template<bool reference_counted = false>
 		ShaderInterface LoadShader(
 			Stream<wchar_t> filename,
 			ECS_SHADER_TYPE shader_type,
-			Stream<char>* shader_source_code = nullptr,
-			Stream<void>* byte_code = nullptr,
+			const LoadShaderExtraInformation& extra_information = {},
 			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
 		// If a .hlsl is specified, it will be compiled into binary using shader compile options and then passed to D3D
 		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
 		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		// Returns a pointer to the shader type (for vertex shader a VertexShader*)
+		// Returns a pointer to the shader type (for vertex shader a VertexShader*). If you provide values in the extra_information,
+		// You are responsible for deallocating those buffers.
 		ShaderInterface LoadShaderImplementation(
 			Stream<wchar_t> filename,
 			ECS_SHADER_TYPE shader_type,
-			Stream<char>* shader_source_code = nullptr,
-			Stream<void>* byte_code = nullptr,
+			bool multithreaded_allocation,
+			const LoadShaderExtraInformation& extra_information = {},
 			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {}
 		);
 
 		// Returns a pointer to the interface type (for vertex shader a ID3D11VertexShader*)
 		// A more detailed version that directly takes the data and does not deallocate it
-		// If it fails it returns nullptr. It allocates memory from the allocator if the filename is specified
+		// If it fails it returns nullptr. It allocates memory from the main allocator if the filename is specified.
+		// If you provide values in the extra_information, you are responsible for deallocating those buffers.
 		ShaderInterface LoadShaderImplementationEx(
 			Stream<char> source_code,
 			ECS_SHADER_TYPE shader_type,
-			Stream<void>* byte_code = nullptr,
+			bool multithreaded_allocation,
+			const LoadShaderExtraInformation& extra_information = {},
 			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {},
+			const ResourceManagerLoadDesc& load_descriptor = {},
 			ResourceManagerExDesc* ex_desc = {}
 		);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		// If it fails, it returns { nullptr, 0 }. This is the same as reading a binary file and storing it
-		// such that it doesn't get loaded multiple times.
+		// Such that it doesn't get loaded multiple times.
 		template<bool reference_counted = false>
-		ResizableStream<void>* LoadMisc(Stream<wchar_t> filename, AllocatorPolymorphic allocator = { nullptr }, ResourceManagerLoadDesc load_descriptor = {});
+		ResizableStream<void>* LoadMisc(Stream<wchar_t> filename, AllocatorPolymorphic allocator = { nullptr }, const ResourceManagerLoadDesc& load_descriptor = {});
 		
-		ResizableStream<void> LoadMiscImplementation(Stream<wchar_t> filename, AllocatorPolymorphic allocator = { nullptr }, ResourceManagerLoadDesc load_descriptor = {});
+		ResizableStream<void> LoadMiscImplementation(Stream<wchar_t> filename, AllocatorPolymorphic allocator = { nullptr }, const ResourceManagerLoadDesc& load_descriptor = {});
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -577,10 +592,12 @@ namespace ECSEngine {
 		bool RestoreSnapshot(const ResourceManagerSnapshot& snapshot, CapacityStream<char>* mismatch_string = nullptr);
 
 		// Reassigns a value to a resource that has been loaded; the resource is first destroyed then reassigned
-		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix = {});
+		// You must specify the resource's allocations from which resource manager allocator come from
+		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, bool multithreaded_allocation, Stream<void> suffix = {});
 
 		// Reassigns a value to a resource that has been loaded; no destruction is being done
-		void RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix = {});
+		// You must specify the resource's allocations from which resource manager allocator come from
+		void RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, bool multithreaded_allocation, Stream<void> suffix = {});
 
 		void RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix = {});
 
@@ -590,17 +607,17 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadTextFile(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadTextFile(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
 		void UnloadTextFile(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
-		void UnloadTextFileImplementation(char* data, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadTextFileImplementation(char* data, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadTexture(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadTexture(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
 		void UnloadTexture(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
@@ -610,7 +627,7 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadMeshes(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadMeshes(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
 		void UnloadMeshes(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
@@ -620,73 +637,73 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadCoalescedMesh(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadCoalescedMesh(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
 		void UnloadCoalescedMesh(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
-		void UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 			
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadMaterials(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadMaterials(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
 		void UnloadMaterials(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
-		void UnloadMaterialsImplementation(Stream<PBRMaterial>* materials, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadMaterialsImplementation(Stream<PBRMaterial>* materials, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		// The material will have the textures and the buffers removed from the material
 		// Flags: ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE
 		// (the latter in conjunction with the first flag)
-		void UnloadUserMaterial(const UserMaterial* user_material, Material* material, ResourceManagerLoadDesc load_desc = {});
+		void UnloadUserMaterial(const UserMaterial* user_material, Material* material, const ResourceManagerLoadDesc& load_desc = {});
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadPBRMesh(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadPBRMesh(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
 		void UnloadPBRMesh(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
-		void UnloadPBRMeshImplementation(PBRMesh* mesh, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadPBRMeshImplementation(PBRMesh* mesh, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadShader(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
 		void UnloadShader(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
-		void UnloadShaderImplementation(void* shader, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadShaderImplementation(void* shader, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadMisc(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadMisc(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
 		void UnloadMisc(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
-		void UnloadMiscImplementation(ResizableStream<void> data, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadMiscImplementation(ResizableStream<void>& data, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadResource(Stream<wchar_t> filename, ResourceType type, ResourceManagerLoadDesc load_desc = {});
+		void UnloadResource(Stream<wchar_t> filename, ResourceType type, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
 		void UnloadResource(unsigned int index, ResourceType type, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
-		void UnloadResourceImplementation(void* resource, ResourceType type, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadResourceImplementation(void* resource, ResourceType type, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
 		// Returns true if the resource was unloaded
 		template<bool reference_counted = false>
-		bool TryUnloadResource(Stream<wchar_t> filename, ResourceType type, ResourceManagerLoadDesc load_desc = {});
+		bool TryUnloadResource(Stream<wchar_t> filename, ResourceType type, const ResourceManagerLoadDesc& load_desc = {});
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -700,6 +717,8 @@ namespace ECSEngine {
 
 		Graphics* m_graphics;
 		ResourceManagerAllocator* m_memory;
+		// 
+		MemoryManager m_multithreaded_allocator;
 		Stream<ResourceManagerTable> m_resource_types;
 		ResizableStream<Stream<wchar_t>> m_shader_directory;
 	};

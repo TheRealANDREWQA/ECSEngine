@@ -89,7 +89,7 @@ namespace ECSEngine {
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
 			ex_desc.push_lock = ex_data->resource_manager_lock;
-			return resource_manager->LoadCoalescedMeshImplementationEx(meshes, metadata->scale_factor, load_descriptor, &ex_desc);
+			return resource_manager->LoadCoalescedMeshImplementationEx(meshes, true, metadata->scale_factor, load_descriptor, &ex_desc);
 		});
 	}
 
@@ -110,7 +110,7 @@ namespace ECSEngine {
 			ex_desc.time_stamp = time_stamp;
 			ex_desc.push_lock = ex_data->resource_manager_lock;
 			ex_desc.reference_count = ex_data->reference_count;
-			return resource_manager->LoadCoalescedMeshImplementationEx(coalesced_mesh, submeshes, metadata->scale_factor, load_descriptor, &ex_desc);
+			return resource_manager->LoadCoalescedMeshImplementationEx(coalesced_mesh, submeshes, true, metadata->scale_factor, load_descriptor, &ex_desc);
 		}));
 	}
 
@@ -222,7 +222,7 @@ namespace ECSEngine {
 	{
 		return CreateShaderHelper(metadata, mount_point, [&](auto file_path, auto compile_options, auto load_desc) {
 			// Use reference counting
-			return resource_manager->LoadShader<true>(file_path, metadata->shader_type, &metadata->source_code, &metadata->byte_code, compile_options, load_desc);
+			return resource_manager->LoadShader<true>(file_path, metadata->shader_type, {}, compile_options, load_desc);
 		});
 	}
 
@@ -242,8 +242,7 @@ namespace ECSEngine {
 			ex_desc.time_stamp = time_stamp;
 			ex_desc.push_lock = ex_data->resource_manager_lock;
 			ex_desc.reference_count = ex_data->reference_count;
-			metadata->source_code = source_code;
-			return resource_manager->LoadShaderImplementationEx(source_code, metadata->shader_type, &metadata->byte_code, compile_options, load_desc, &ex_desc);
+			return resource_manager->LoadShaderImplementationEx(source_code, metadata->shader_type, true, {}, compile_options, load_desc, &ex_desc);
 		});
 	}
 
