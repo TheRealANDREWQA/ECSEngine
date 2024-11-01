@@ -40,10 +40,10 @@ void InspectorCleanMeshFile(EditorState* editor_state, unsigned int inspector_in
 
 	// Unload the mesh and free the resources only if the mesh was previously loaded
 	FileExplorerMeshThumbnail file_explorer_thumbnail;
-	if (editor_state->file_explorer_data->mesh_thumbnails.TryGetValue(ResourceIdentifier(data->path.buffer, data->path.size), file_explorer_thumbnail)) {
+	if (editor_state->file_explorer_data->mesh_thumbnails.TryGetValue(ResourceIdentifier(data->path), file_explorer_thumbnail)) {
 		if (file_explorer_thumbnail.could_be_read) {
-			editor_state->ui_resource_manager->UnloadCoalescedMeshImplementation(data->mesh);
-			// Release the texture aswell
+			editor_state->ui_resource_manager->UnloadCoalescedMeshImplementation(data->mesh, false);
+			// Release the texture as well
 			Graphics* graphics = editor_state->UIGraphics();
 			Texture2D texture = data->thumbnail.texture.GetResource();
 			graphics->FreeResource(texture);
@@ -197,7 +197,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 			uint2 texture_size = calculate_texture_size_from_region(window_size, drawer->GetRegionScale());
 
 			// Load the mesh
-			CoalescedMesh* mesh = editor_state->ui_resource_manager->LoadCoalescedMeshImplementation(data->path.buffer);
+			CoalescedMesh* mesh = editor_state->ui_resource_manager->LoadCoalescedMeshImplementation(data->path, false);
 			data->mesh = mesh;
 			data->thumbnail = GLTFGenerateThumbnail(graphics, texture_size, &mesh->mesh);
 		}

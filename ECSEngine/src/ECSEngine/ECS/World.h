@@ -49,10 +49,10 @@ namespace ECSEngine {
 		// without having to reinitialize it, this is the way to do it
 		TaskManager* task_manager = nullptr; ECS_SKIP_REFLECTION()
 		GraphicsDescriptor* graphics_descriptor = nullptr; ECS_SKIP_REFLECTION()
-		// The resource manager is optional. If you want to give one from the outside can do.
+		// The resource manager is optional. If you want to give one from the outside, there is the option.
 		// If it is nullptr then it will create an internal one
 		ResourceManager* resource_manager = nullptr; ECS_SKIP_REFLECTION()
-		// This is optional. If you want 
+		// This is optional
 		DebugDrawer* debug_drawer = nullptr; ECS_SKIP_REFLECTION()
 	};
 

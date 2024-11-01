@@ -13,8 +13,14 @@
 
 #define ECS_RESOURCE_MANAGER_CHECK_RESOURCE
 
-#define ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_INITIAL_SIZE ECS_MB
+#define ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_INITIAL_SIZE ECS_MB * 2
 #define ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE (ECS_MB * 10)
+
+#define ECS_RESOURCE_MANAGER_MULTITHREADED_ALLOCATOR_CAPACITY ECS_MB
+#define ECS_RESOURCE_MANAGER_MULTITHREADED_ALLOCATOR_BACKUP_CAPACITY ECS_MB * 5
+
+#define ECS_RESOURCE_MANAGER_INCLUDE_ALLOCATOR_CAPACITY ECS_KB * 32
+#define ECS_RESOURCE_MANAGER_INCLUDE_ALLOCATOR_BACKUP_CAPACITY ECS_MB
 
 namespace ECSEngine {
 
@@ -23,11 +29,11 @@ namespace ECSEngine {
 	// The handler must implement a void* parameter for additional info and must return void*
 	// If it returns a nullptr, it means the load failed so do not add it to the table
 	template<bool reference_counted, typename Handler>
-	void* LoadResource(
+	static void* LoadResource(
 		ResourceManager* resource_manager,
 		Stream<wchar_t> path,
 		ResourceType type,
-		ResourceManagerLoadDesc load_descriptor,
+		const ResourceManagerLoadDesc& load_descriptor,
 		Handler&& handler
 	) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_name, 512);
@@ -93,12 +99,12 @@ namespace ECSEngine {
 
 	// The handler must implement a void* parameter for additional info and a void* for its allocation and must return void*
 	template<bool reference_counted, typename Handler>
-	void* LoadResource(
+	static void* LoadResource(
 		ResourceManager* resource_manager,
 		Stream<wchar_t> path,
 		ResourceType type,
 		size_t allocation_size,
-		ResourceManagerLoadDesc load_descriptor,
+		const ResourceManagerLoadDesc& load_descriptor,
 		Handler&& handler
 	) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
@@ -108,7 +114,7 @@ namespace ECSEngine {
 
 		auto register_resource = [=](unsigned short initial_increment) {
 			// plus 7 bytes for padding and account for the L'\0'
-			void* allocation = resource_manager->Allocate(allocation_size + identifier.size + sizeof(wchar_t) + 7);
+			void* allocation = resource_manager->m_memory->Allocate(allocation_size + identifier.size + sizeof(wchar_t) + 7);
 			ECS_ASSERT(allocation != nullptr, "Allocating memory for a resource failed");
 			memcpy(allocation, identifier.ptr, identifier.size + sizeof(wchar_t));
 
@@ -134,7 +140,7 @@ namespace ECSEngine {
 			}
 			// The load failed, release the allocation
 			else {
-				resource_manager->Deallocate(allocation);
+				resource_manager->m_memory->Deallocate(allocation);
 			}
 
 			return data;
@@ -173,19 +179,18 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void DeleteResource(ResourceManager* resource_manager, unsigned int index, ResourceType type, size_t flags) {
+	static void DeleteResource(ResourceManager* resource_manager, unsigned int index, ResourceType type, size_t flags) {
 		unsigned int type_int = (unsigned int)type;
 
 		ResourceManagerEntry* entry = resource_manager->m_resource_types[type_int].GetValuePtrFromIndex(index);
 		ECS_ASSERT_FORMAT(!entry->is_protected, "ResourceManager: Trying to unload protected resource {#} of type {#}.", resource_manager->m_resource_types[type_int].GetIdentifierFromIndex(index), ResourceTypeString(type));
 
-		void (*handler)(void*, ResourceManager*) = UNLOAD_FUNCTIONS[type_int];
+		UnloadFunction handler = UNLOAD_FUNCTIONS[type_int];
 
 		auto delete_resource = [=]() {
-			void* data = entry->data;
-			handler(data, resource_manager);
+			handler(entry->data, resource_manager, entry->multithreaded_allocation);
 			ResourceIdentifier identifier = resource_manager->m_resource_types[type_int].GetIdentifierFromIndex(index);
-			resource_manager->Deallocate(identifier.ptr);
+			resource_manager->m_memory->Deallocate(identifier.ptr);
 			resource_manager->m_resource_types[type_int].EraseFromIndex(index);
 		};
 		if constexpr (!reference_counted) {
@@ -203,7 +208,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void DeleteResource(ResourceManager* resource_manager, ResourceIdentifier identifier, ResourceType type, size_t flags) {
+	static void DeleteResource(ResourceManager* resource_manager, ResourceIdentifier identifier, ResourceType type, size_t flags) {
 		unsigned int type_int = (unsigned int)type;
 
 		unsigned int hashed_position = resource_manager->m_resource_types[type_int].Find(identifier);
@@ -214,61 +219,61 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	typedef void (*DeleteFunction)(ResourceManager*, unsigned int, size_t);
-	typedef void (*UnloadFunction)(void*, ResourceManager*);
+	typedef void (*DeleteFunction)(ResourceManager* resource_manager, unsigned int index, size_t flags);
+	typedef void (*UnloadFunction)(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadTextureHandler(void* parameter, ResourceManager* resource_manager) {
+	static void UnloadTextureHandler(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {
 		ID3D11ShaderResourceView* reinterpretation = (ID3D11ShaderResourceView*)parameter;
 		resource_manager->m_graphics->FreeView(ResourceView(reinterpretation));
 	}
 
-	void DeleteTexture(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeleteTexture(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadTexture<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadTextFileHandler(void* parameter, ResourceManager* resource_manager) { resource_manager->m_memory->Deallocate(parameter); }
+	static void UnloadTextFileHandler(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) { Deallocate(multithreaded_allocation ? resource_manager->AllocatorTs() : resource_manager->Allocator(), parameter); }
 
-	void DeleteTextFile(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeleteTextFile(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadTextFile<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadMeshesHandler(void* parameter, ResourceManager* resource_manager) {
+	static void UnloadMeshesHandler(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {
 		Stream<Mesh>* data = (Stream<Mesh>*)parameter;
 		for (size_t index = 0; index < data->size; index++) {
 			resource_manager->m_graphics->FreeMesh(data->buffer[index]);
 		}
 	}
 
-	void DeleteMeshes(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeleteMeshes(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadMeshes<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadMaterialsHandler(void* parameter, ResourceManager* resource_manager) {
+	static void UnloadMaterialsHandler(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {
 		Stream<PBRMaterial>* data = (Stream<PBRMaterial>*)parameter;
-		AllocatorPolymorphic allocator = resource_manager->Allocator();
+		AllocatorPolymorphic allocator = multithreaded_allocation ? resource_manager->AllocatorTs() : resource_manager->AllocatorTs();
 
 		for (size_t index = 0; index < data->size; index++) {
 			FreePBRMaterial(data->buffer[index], allocator);
 		}
 	}
 
-	void DeleteMaterials(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeleteMaterials(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadMaterials(index, flags);
 	}
 	
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadPBRMeshHandler(void* parameter, ResourceManager* resource_manager) {
+	static void UnloadPBRMeshHandler(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {
 		PBRMesh* data = (PBRMesh*)parameter;
-		AllocatorPolymorphic allocator = resource_manager->Allocator();
+		AllocatorPolymorphic allocator = multithreaded_allocation ? resource_manager->AllocatorTs() : resource_manager->Allocator();
 
 		// The mesh must be released, alongside the pbr materials
 		for (size_t index = 0; index < data->mesh.submeshes.size; index++) {
@@ -277,53 +282,53 @@ namespace ECSEngine {
 		FreeCoalescedMesh(resource_manager->m_graphics, &data->mesh, true, allocator);
 	}
 
-	void DeletePBRMesh(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeletePBRMesh(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadPBRMesh<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadCoalescedMeshHandler(void* parameter, ResourceManager* resource_manager) {
+	static void UnloadCoalescedMeshHandler(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {
 		// Free the coalesced mesh - the submeshes get the deallocated at the same time as this resource
 		CoalescedMesh* mesh = (CoalescedMesh*)parameter;
-		FreeCoalescedMesh(resource_manager->m_graphics, mesh, true, resource_manager->Allocator());
+		FreeCoalescedMesh(resource_manager->m_graphics, mesh, true, multithreaded_allocation ? resource_manager->AllocatorTs() : resource_manager->Allocator());
 	}
 
-	void DeleteCoalescedMesh(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeleteCoalescedMesh(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadCoalescedMesh<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadShaderHandler(void* parameter, ResourceManager* resource_manager) {
+	static void UnloadShaderHandler(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {
 		VertexShaderStorage* storage = (VertexShaderStorage*)parameter;
 		resource_manager->m_graphics->FreeResource(storage->shader);
-		AllocatorPolymorphic allocator = resource_manager->Allocator();
-		DeallocateIfBelongs(allocator, storage->source_code.buffer);
-		DeallocateIfBelongs(allocator, storage->byte_code.buffer);
+		AllocatorPolymorphic allocator = multithreaded_allocation ? resource_manager->AllocatorTs() : resource_manager->Allocator();
+		storage->source_code.Deallocate(allocator);
+		storage->byte_code.Deallocate(allocator);
 	}
 
-	void DeleteShader(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeleteShader(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadShader<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadMisc(void* parameter, ResourceManager* resource_manager) {
+	static void UnloadMisc(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {
 		ResizableStream<void>* data = (ResizableStream<void>*)parameter;
 		data->FreeBuffer();
 	}
 
-	void DeleteMisc(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeleteMisc(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadMisc<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	// These are just placeholders - they shouldn't be called
-	void UnloadTimeStamp(void* parameter, ResourceManager* resource_manager) {}
+	static void UnloadTimeStamp(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {}
 
-	void DeleteTimeStamp(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeleteTimeStamp(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->EvictResource(index, ResourceType::TimeStamp);
 	}
 
@@ -358,16 +363,33 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	static void AddResourceEx(ResourceManager* resource_manager, ResourceType type, void* data, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc) {
+	static void AddResourceEx(ResourceManager* resource_manager, ResourceType type, void* data, bool multithreaded_allocation, const ResourceManagerLoadDesc& load_descriptor, ResourceManagerExDesc* ex_desc) {
 		if (ex_desc != nullptr && ex_desc->HasFilename()) {
 			ex_desc->Lock();
 			__try {
-				resource_manager->AddResource(ex_desc->filename, type, data, ex_desc->time_stamp, load_descriptor.identifier_suffix, ex_desc->reference_count);
+				resource_manager->AddResource(ex_desc->filename, type, data, multithreaded_allocation, ex_desc->time_stamp, load_descriptor.identifier_suffix, ex_desc->reference_count);
 			}
 			__finally {
 				// Always release the lock in case of a crash
 				ex_desc->Unlock();
 			}
+		}
+	}
+
+	AllocatorPolymorphic LoadShaderExtraInformation::GetAllocator(ResourceManager* resource_manager, bool multithreaded_allocator) const {
+		return allocator.allocator != nullptr ? allocator : (multithreaded_allocator ? resource_manager->AllocatorTs() : resource_manager->Allocator());
+	}
+
+	static void LoadShaderExtraInformationHandleInputLayout(
+		void* shader_interface, 
+		Stream<char> source_code, 
+		Stream<void> byte_code, 
+		ECS_SHADER_TYPE shader_type, 
+		ResourceManager* resource_manager, 
+		const LoadShaderExtraInformation& extra_information
+	) {
+		if (shader_interface != nullptr && shader_type == ECS_SHADER_VERTEX && extra_information.input_layout != nullptr && byte_code.size > 0) {
+			*extra_information.input_layout = resource_manager->m_graphics->ReflectVertexShaderInput(source_code, byte_code);
 		}
 	}
 
@@ -387,6 +409,9 @@ namespace ECSEngine {
 		// Set the initial shader directory
 		AddShaderDirectory(ECS_SHADER_DIRECTORY);
 
+		// Initialize the multithreaded allocator with a small size
+		m_multithreaded_allocator = MemoryManager(ECS_RESOURCE_MANAGER_MULTITHREADED_ALLOCATOR_CAPACITY, ECS_KB, ECS_RESOURCE_MANAGER_MULTITHREADED_ALLOCATOR_BACKUP_CAPACITY, m_memory);
+
 //		// initializing WIC loader
 //#if (_WIN32_WINNT >= 0x0A00 /*_WIN32_WINNT_WIN10*/)
 //		Microsoft::WRL::Wrappers::RoInitializeWrapper initialize(RO_INIT_MULTITHREADED);
@@ -405,7 +430,8 @@ namespace ECSEngine {
 	void ResourceManager::AddResource(
 		ResourceIdentifier identifier, 
 		ResourceType resource_type, 
-		void* resource, 
+		void* resource,
+		bool multithreaded_allocation,
 		size_t time_stamp, 
 		Stream<void> suffix, 
 		unsigned short reference_count
@@ -417,6 +443,7 @@ namespace ECSEngine {
 		entry.time_stamp = time_stamp;
 		entry.suffix_size = suffix.size;
 		entry.is_protected = false;
+		entry.multithreaded_allocation = multithreaded_allocation;
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
 		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
@@ -441,7 +468,7 @@ namespace ECSEngine {
 			unsigned int index = GetResourceIndex(identifier, ResourceType::TimeStamp, suffix);
 			if (index == -1) {
 				time_stamp = time_stamp == 0 ? OS::GetFileLastWrite(identifier.AsWide()) : time_stamp;
-				AddResource(identifier, ResourceType::TimeStamp, nullptr, time_stamp, suffix, 1);
+				AddResource(identifier, ResourceType::TimeStamp, nullptr, false, time_stamp, suffix, 1);
 				return true;
 			}
 			else {
@@ -451,7 +478,7 @@ namespace ECSEngine {
 		}
 		else {
 			time_stamp = time_stamp == 0 ? OS::GetFileLastWrite(identifier.AsWide()) : time_stamp;
-			AddResource(identifier, ResourceType::TimeStamp, nullptr, time_stamp, suffix);
+			AddResource(identifier, ResourceType::TimeStamp, nullptr, false, time_stamp, suffix);
 		}
 		return false;
 	}
@@ -581,7 +608,7 @@ namespace ECSEngine {
 		ResourceIdentifier identifier = m_resource_types[type_int].GetIdentifierFromIndex(index);
 		ECS_ASSERT_FORMAT(!entry.is_protected, "ResourceManager: Trying to evict protected resource {#} of type {#}.", identifier, ResourceTypeString(type));
 
-		Deallocate(identifier.ptr);
+		Deallocate(Allocator(), identifier.ptr);
 		m_resource_types[type_int].EraseFromIndex(index);
 	}
 
@@ -797,13 +824,14 @@ namespace ECSEngine {
 		for (size_t index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
 			auto& table = other->m_resource_types[index];
 
+			// TODO: Determine what to do about the element's allocations - they might need to be copied over to this instance's allocator
 			unsigned int other_capacity = table.GetCapacity();
 			if (other_capacity > 0) {
 				// Now insert all the resources
 				if (other->m_graphics == m_graphics) {
 					// Can just reference the resource
 					table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
-						AddResource(identifier, (ResourceType)index, entry.data, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+						AddResource(identifier, (ResourceType)index, entry.data, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
 					});
 				}
 				else {
@@ -812,12 +840,12 @@ namespace ECSEngine {
 					case ResourceType::PBRMaterial:
 						// These types don't need to be transferred on the other graphics object
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
-							AddResource(identifier, (ResourceType)index, entry.data, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							AddResource(identifier, (ResourceType)index, entry.data, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
 						});
 						break;
 					case ResourceType::Shader:
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
-							// Need to transfer the shader
+							// TODO: Need to transfer the shader
 						});
 						break;
 					case ResourceType::CoalescedMesh:
@@ -825,7 +853,7 @@ namespace ECSEngine {
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 							CoalescedMesh* mesh = (CoalescedMesh*)entry.data;
 							CoalescedMesh new_mesh = m_graphics->TransferCoalescedMesh(mesh);
-							AddResource(identifier, (ResourceType)index, &new_mesh, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							AddResource(identifier, (ResourceType)index, &new_mesh, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
 						});
 						break;
 					case ResourceType::Mesh:
@@ -833,21 +861,21 @@ namespace ECSEngine {
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 							Mesh* mesh = (Mesh*)entry.data;
 							Mesh new_mesh = m_graphics->TransferMesh(mesh);
-							AddResource(identifier, (ResourceType)index, &new_mesh, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							AddResource(identifier, (ResourceType)index, &new_mesh, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
 						});
 						break;
 					case ResourceType::PBRMesh:
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 							PBRMesh* pbr_mesh = (PBRMesh*)entry.data;
 							PBRMesh new_mesh = m_graphics->TransferPBRMesh(pbr_mesh);
-							AddResource(identifier, (ResourceType)index, &new_mesh, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							AddResource(identifier, (ResourceType)index, &new_mesh, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
 						});
 						break;
 					case ResourceType::Texture:
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 							ResourceView view = (ID3D11ShaderResourceView*)entry.data;
 							ResourceView new_view = TransferGPUView(view, m_graphics->GetDevice());
-							AddResource(identifier, (ResourceType)index, new_view.view, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							AddResource(identifier, (ResourceType)index, new_view.view, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
 						});
 						break;
 					}
@@ -861,7 +889,7 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	Stream<char>* ResourceManager::LoadTextFile(
 		Stream<wchar_t> filename,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	)
 	{
 		return (Stream<char>*)LoadResource<reference_counted>(
@@ -871,7 +899,7 @@ namespace ECSEngine {
 			sizeof(Stream<char>),
 			load_descriptor,
 			[=](void* allocation) {
-				Stream<char> data = LoadTextFileImplementation(filename);
+				Stream<char> data = LoadTextFileImplementation(filename, false);
 				if (data.buffer != nullptr) {
 					Stream<char>* stream = (Stream<char>*)allocation;
 					*stream = data;
@@ -881,13 +909,13 @@ namespace ECSEngine {
 		);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Stream<char>*, ResourceManager::LoadTextFile, Stream<wchar_t>, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(Stream<char>*, ResourceManager::LoadTextFile, Stream<wchar_t>, const ResourceManagerLoadDesc&);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	Stream<char> ResourceManager::LoadTextFileImplementation(Stream<wchar_t> file)
+	Stream<char> ResourceManager::LoadTextFileImplementation(Stream<wchar_t> file, bool multithreaded_allocation)
 	{
-		return ReadWholeFileText(file, Allocator());
+		return ReadWholeFileText(file, multithreaded_allocation ? AllocatorTs() : Allocator());
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -896,7 +924,7 @@ namespace ECSEngine {
 	ResourceView ResourceManager::LoadTexture(
 		Stream<wchar_t> filename,
 		const ResourceManagerTextureDesc* descriptor,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	)
 	{
 		void* texture_view = LoadResource<reference_counted>(
@@ -911,14 +939,14 @@ namespace ECSEngine {
 		return (ID3D11ShaderResourceView*)texture_view;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(ResourceView, ResourceManager::LoadTexture, Stream<wchar_t>, const ResourceManagerTextureDesc*, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(ResourceView, ResourceManager::LoadTexture, Stream<wchar_t>, const ResourceManagerTextureDesc*, const ResourceManagerLoadDesc&);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	ResourceView ResourceManager::LoadTextureImplementation(
 		Stream<wchar_t> filename,
 		const ResourceManagerTextureDesc* descriptor,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	)
 	{
 		NULL_TERMINATE_WIDE(filename);
@@ -975,7 +1003,7 @@ namespace ECSEngine {
 	ResourceView ResourceManager::LoadTextureImplementationEx(
 		DecodedTexture decoded_texture,
 		const ResourceManagerTextureDesc* descriptor,
-		ResourceManagerLoadDesc load_descriptor,
+		const ResourceManagerLoadDesc& load_descriptor,
 		ResourceManagerExDesc* ex_desc
 	)
 	{
@@ -1051,7 +1079,7 @@ namespace ECSEngine {
 			}
 		}
 
-		AddResourceEx(this, ResourceType::Texture, texture_view.view, load_descriptor, ex_desc);
+		AddResourceEx(this, ResourceType::Texture, texture_view.view, false, load_descriptor, ex_desc);
 		return texture_view;
 	}
 
@@ -1062,7 +1090,7 @@ namespace ECSEngine {
 	Stream<Mesh>* ResourceManager::LoadMeshes(
 		Stream<wchar_t> filename,
 		float scale_factor,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		void* meshes = LoadResource<reference_counted>(
 			this,
@@ -1070,18 +1098,18 @@ namespace ECSEngine {
 			ResourceType::Mesh,
 			load_descriptor,
 			[=]() {
-				return LoadMeshImplementation(filename, scale_factor, load_descriptor);
+				return LoadMeshImplementation(filename, false, scale_factor, load_descriptor);
 		});
 
 		return (Stream<Mesh>*)meshes;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Stream<Mesh>*, ResourceManager::LoadMeshes, Stream<wchar_t>, float, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(Stream<Mesh>*, ResourceManager::LoadMeshes, Stream<wchar_t>, float, const ResourceManagerLoadDesc&);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	// Loads all meshes from a gltf file
-	Stream<Mesh>* ResourceManager::LoadMeshImplementation(Stream<wchar_t> filename, float scale_factor, ResourceManagerLoadDesc load_descriptor) {
+	Stream<Mesh>* ResourceManager::LoadMeshImplementation(Stream<wchar_t> filename, bool multithreaded_allocation, float scale_factor, const ResourceManagerLoadDesc& load_descriptor) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, _path, 512);
 		GLTFData data = LoadGLTFFile(filename);
 		// The load failed
@@ -1090,7 +1118,7 @@ namespace ECSEngine {
 		}
 
 		// This call should not insert it
-		Stream<Mesh>* meshes = LoadMeshImplementationEx(&data, scale_factor, load_descriptor);
+		Stream<Mesh>* meshes = LoadMeshImplementationEx(&data, multithreaded_allocation, scale_factor, load_descriptor);
 
 		// Free the gltf file data and the gltf meshes
 		FreeGLTFFile(data);
@@ -1099,14 +1127,14 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	Stream<Mesh>* ResourceManager::LoadMeshImplementationEx(const GLTFData* data, float scale_factor, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc)
+	Stream<Mesh>* ResourceManager::LoadMeshImplementationEx(const GLTFData* data, bool multithreaded_allocation, float scale_factor, const ResourceManagerLoadDesc& load_descriptor, ResourceManagerExDesc* ex_desc)
 	{
 		ECS_ASSERT(data->mesh_count < 200);
 
 		GLTFMesh* gltf_meshes = (GLTFMesh*)ECS_STACK_ALLOC(sizeof(GLTFMesh) * data->mesh_count);
 		// Nullptr and 0 everything
 		memset(gltf_meshes, 0, sizeof(GLTFMesh) * data->mesh_count);
-		AllocatorPolymorphic allocator = Allocator();
+		AllocatorPolymorphic allocator = multithreaded_allocation ? AllocatorTs() : Allocator();
 
 		bool has_invert = !HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
 		bool success = LoadMeshesFromGLTF(*data, gltf_meshes, allocator, has_invert);
@@ -1115,8 +1143,9 @@ namespace ECSEngine {
 			return nullptr;
 		}
 
-		load_descriptor.load_flags |= ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK;
-		Stream<Mesh>* meshes = LoadMeshImplementationEx({ gltf_meshes, data->mesh_count }, scale_factor, load_descriptor, ex_desc);
+		ResourceManagerLoadDesc load_descriptor_modified = load_descriptor;
+		load_descriptor_modified.load_flags |= ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK;
+		Stream<Mesh>* meshes = LoadMeshImplementationEx({ gltf_meshes, data->mesh_count }, multithreaded_allocation, scale_factor, load_descriptor_modified, ex_desc);
 		FreeGLTFMeshes({ gltf_meshes, data->mesh_count }, allocator);
 
 		return meshes;
@@ -1124,7 +1153,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	Stream<Mesh>* ResourceManager::LoadMeshImplementationEx(Stream<GLTFMesh> gltf_meshes, float scale_factor, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc)
+	Stream<Mesh>* ResourceManager::LoadMeshImplementationEx(Stream<GLTFMesh> gltf_meshes, bool multithreaded_allocation, float scale_factor, const ResourceManagerLoadDesc& load_descriptor, ResourceManagerExDesc* ex_desc)
 	{
 		// Scale the meshes, the function already checks for scale of 1.0f
 		ScaleGLTFMeshes(gltf_meshes, scale_factor);
@@ -1134,8 +1163,10 @@ namespace ECSEngine {
 		size_t allocation_size = sizeof(Stream<Mesh>);
 		allocation_size += sizeof(Mesh) * gltf_meshes.size;
 
+		AllocatorPolymorphic allocator = multithreaded_allocation ? AllocatorTs() : Allocator();
+
 		// Allocate the needed memeory
-		allocation = Allocate(allocation_size);
+		allocation = Allocate(allocator, allocation_size);
 		Stream<Mesh>* meshes = (Stream<Mesh>*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(Stream<Mesh>);
@@ -1150,7 +1181,7 @@ namespace ECSEngine {
 			ScaleGLTFMeshes(gltf_meshes, 1.0f / scale_factor);
 		}
 
-		AddResourceEx(this, ResourceType::Mesh, meshes, load_descriptor, ex_desc);
+		AddResourceEx(this, ResourceType::Mesh, meshes, multithreaded_allocation, load_descriptor, ex_desc);
 
 		return meshes;
 	}
@@ -1158,7 +1189,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	CoalescedMesh* ResourceManager::LoadCoalescedMesh(Stream<wchar_t> filename, float scale_factor, ResourceManagerLoadDesc load_descriptor)
+	CoalescedMesh* ResourceManager::LoadCoalescedMesh(Stream<wchar_t> filename, float scale_factor, const ResourceManagerLoadDesc& load_descriptor)
 	{
 		void* meshes = LoadResource<reference_counted>(
 			this,
@@ -1166,17 +1197,17 @@ namespace ECSEngine {
 			ResourceType::CoalescedMesh,
 			load_descriptor,
 			[=]() {
-				return LoadCoalescedMeshImplementation(filename, scale_factor, load_descriptor);
+				return LoadCoalescedMeshImplementation(filename, false, scale_factor, load_descriptor);
 			});
 
 		return (CoalescedMesh*)meshes;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(CoalescedMesh*, ResourceManager::LoadCoalescedMesh, Stream<wchar_t>, float, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(CoalescedMesh*, ResourceManager::LoadCoalescedMesh, Stream<wchar_t>, float, const ResourceManagerLoadDesc&);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementation(Stream<wchar_t> filename, float scale_factor, ResourceManagerLoadDesc load_descriptor)
+	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementation(Stream<wchar_t> filename, bool multithreaded_allocation, float scale_factor, const ResourceManagerLoadDesc& load_descriptor)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, _path, 512);
 		GLTFData data = LoadGLTFFile(filename);
@@ -1184,7 +1215,7 @@ namespace ECSEngine {
 		if (data.data == nullptr || data.mesh_count == 0) {
 			return nullptr;
 		}
-		CoalescedMesh* coalesced_mesh = LoadCoalescedMeshImplementationEx(&data, scale_factor, load_descriptor);
+		CoalescedMesh* coalesced_mesh = LoadCoalescedMeshImplementationEx(&data, multithreaded_allocation, scale_factor, load_descriptor);
 		FreeGLTFFile(data);
 		return coalesced_mesh;
 	}
@@ -1193,18 +1224,21 @@ namespace ECSEngine {
 
 	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementationEx(
 		const GLTFData* data,
+		bool multithreaded_allocation,
 		float scale_factor, 
-		ResourceManagerLoadDesc load_descriptor, 
+		const ResourceManagerLoadDesc& load_descriptor, 
 		ResourceManagerExDesc* ex_desc
 	)
 	{
 		bool has_invert = !HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
 		bool has_origin_to_center = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALESCED_MESH_ORIGIN_TO_CENTER);
 
+		AllocatorPolymorphic allocator = multithreaded_allocation ? AllocatorTs() : Allocator();
+
 		// Calculate the allocation size
 		size_t allocation_size = sizeof(CoalescedMesh) + sizeof(Submesh) * data->mesh_count;
 		// Allocate the needed memory
-		void* allocation = AllocateTs(allocation_size);
+		void* allocation = Allocate(allocator, allocation_size);
 		CoalescedMesh* mesh = (CoalescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(CoalescedMesh);
@@ -1212,12 +1246,12 @@ namespace ECSEngine {
 
 		LoadCoalescedMeshFromGLTFOptions options;
 		options.allocate_submesh_name = true;
-		options.permanent_allocator = AllocatorTs();
+		options.permanent_allocator = allocator;
 		options.scale_factor = scale_factor;
 		options.center_object_midpoint = has_origin_to_center;
 		bool success = LoadCoalescedMeshFromGLTFToGPU(m_graphics, *data, mesh, has_invert, &options);
 		if (!success) {
-			Deallocate(allocation);
+			Deallocate(allocator, allocation);
 			mesh = nullptr;
 		}
 
@@ -1227,16 +1261,19 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementationEx(
-		Stream<GLTFMesh> gltf_meshes, 
+		Stream<GLTFMesh> gltf_meshes,
+		bool multithreaded_allocation,
 		float scale_factor, 
-		ResourceManagerLoadDesc load_descriptor, 
+		const ResourceManagerLoadDesc& load_descriptor, 
 		ResourceManagerExDesc* ex_desc
 	)
 	{
+		AllocatorPolymorphic allocator = multithreaded_allocation ? AllocatorTs() : Allocator();
+
 		// Calculate the allocation size
 		size_t allocation_size = sizeof(CoalescedMesh) + sizeof(Submesh) * gltf_meshes.size;
 		// Allocate the needed memory
-		void* allocation = AllocateTs(allocation_size);
+		void* allocation = Allocate(allocator, allocation_size);
 		CoalescedMesh* mesh = (CoalescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(CoalescedMesh);
@@ -1248,7 +1285,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE;
 		mesh->mesh = GLTFMeshesToMergedMesh(m_graphics, gltf_meshes, mesh->submeshes.buffer, misc_flags);
 
-		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, load_descriptor, ex_desc);
+		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, multithreaded_allocation, load_descriptor, ex_desc);
 
 		if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
@@ -1261,17 +1298,20 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementationEx(
-		const GLTFMesh* gltf_mesh, 
+		const GLTFMesh* gltf_mesh,
 		Stream<Submesh> submeshes,
+		bool multithreaded_allocation,
 		float scale_factor,
-		ResourceManagerLoadDesc load_descriptor, 
+		const ResourceManagerLoadDesc& load_descriptor, 
 		ResourceManagerExDesc* ex_desc
 	)
 	{
+		AllocatorPolymorphic allocator = multithreaded_allocation ? AllocatorTs() : Allocator();
+
 		// Calculate the allocation size
 		size_t allocation_size = sizeof(CoalescedMesh) + sizeof(Submesh) * submeshes.size;
 		// Allocate the needed memory
-		void* allocation = AllocateTs(allocation_size);
+		void* allocation = Allocate(allocator, allocation_size);
 		CoalescedMesh* mesh = (CoalescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(CoalescedMesh);
@@ -1288,7 +1328,7 @@ namespace ECSEngine {
 		
 		mesh->mesh = GLTFMeshToMesh(m_graphics, *gltf_mesh);
 
-		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, load_descriptor, ex_desc);
+		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, multithreaded_allocation, load_descriptor, ex_desc);
 
 		if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
@@ -1304,7 +1344,7 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	Stream<PBRMaterial>* ResourceManager::LoadMaterials(
 		Stream<wchar_t> filename,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		void* materials = LoadResource<reference_counted>(
 			this,
@@ -1312,18 +1352,18 @@ namespace ECSEngine {
 			ResourceType::PBRMaterial,
 			load_descriptor,
 			[=]() {
-				return LoadMaterialsImplementation(filename, load_descriptor);
+				return LoadMaterialsImplementation(filename, false, load_descriptor);
 			});
 
 		return (Stream<PBRMaterial>*)materials;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Stream<PBRMaterial>*, ResourceManager::LoadMaterials, Stream<wchar_t>, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(Stream<PBRMaterial>*, ResourceManager::LoadMaterials, Stream<wchar_t>, const ResourceManagerLoadDesc&);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	// Loads all materials from a gltf file
-	Stream<PBRMaterial>* ResourceManager::LoadMaterialsImplementation(Stream<wchar_t> filename, ResourceManagerLoadDesc load_descriptor) {
+	Stream<PBRMaterial>* ResourceManager::LoadMaterialsImplementation(Stream<wchar_t> filename, bool multithreaded_allocation, const ResourceManagerLoadDesc& load_descriptor) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, _path, 512);
 		GLTFData data = LoadGLTFFile(filename);
 		// The load failed
@@ -1336,7 +1376,7 @@ namespace ECSEngine {
 		Stream<PBRMaterial> materials(_materials, 0);
 		Stream<unsigned int> material_mask(OffsetPointer(_materials, sizeof(PBRMaterial) * data.mesh_count), 0);
 
-		AllocatorPolymorphic allocator = Allocator();
+		AllocatorPolymorphic allocator = multithreaded_allocation ? AllocatorTs() : Allocator();
 		bool success = LoadDisjointMaterialsFromGLTF(data, materials, material_mask, allocator);
 
 		// The load failed
@@ -1351,7 +1391,7 @@ namespace ECSEngine {
 		size_t allocation_size = sizeof(Stream<PBRMaterial>);
 		allocation_size += sizeof(PBRMaterial) * materials.size;
 
-		void* allocation = Allocate(allocation_size);
+		void* allocation = Allocate(allocator, allocation_size);
 		Stream<PBRMaterial>* pbr_materials = (Stream<PBRMaterial>*)allocation;
 		pbr_materials->InitializeFromBuffer(OffsetPointer(allocation, sizeof(Stream<PBRMaterial>)), materials.size);
 		memcpy(pbr_materials->buffer, materials.buffer, sizeof(PBRMaterial) * materials.size);
@@ -1368,7 +1408,7 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	PBRMesh* ResourceManager::LoadPBRMesh(
 		Stream<wchar_t> filename,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		void* mesh = LoadResource<reference_counted>(
 			this,
@@ -1376,21 +1416,21 @@ namespace ECSEngine {
 			ResourceType::PBRMesh,
 			load_descriptor,
 			[=]() {
-				return LoadPBRMeshImplementation(filename, load_descriptor);
+				return LoadPBRMeshImplementation(filename, false, load_descriptor);
 		});
 
 		return (PBRMesh*)mesh;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(PBRMesh*, ResourceManager::LoadPBRMesh, Stream<wchar_t>, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(PBRMesh*, ResourceManager::LoadPBRMesh, Stream<wchar_t>, const ResourceManagerLoadDesc&);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 #pragma region Unload User Material Individual Functions
 
-// ---------------------------------------------------------------------------------------------------------------------------
+	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadUserMaterialShader(
+	static void UnloadUserMaterialShader(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Stream<wchar_t> shader_path,
@@ -1426,7 +1466,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadUserMaterialVertexShader(
+	static void UnloadUserMaterialVertexShader(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* material,
@@ -1446,7 +1486,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadUserMaterialPixelShader(
+	static void UnloadUserMaterialPixelShader(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* material,
@@ -1467,7 +1507,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Entry, typename Entries, typename Slots>
-	Entry RemoveUserMaterialEntry(unsigned char slot, Entries& entries, Slots& slots) {
+	static Entry RemoveUserMaterialEntry(unsigned char slot, Entries& entries, Slots& slots) {
 		unsigned char index = 0;
 
 		// When using decltype(*buffers), the compiler actually generates a reference type instead of a value type
@@ -1488,7 +1528,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadUserMaterialTextures(
+	static void UnloadUserMaterialTextures(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* material,
@@ -1540,7 +1580,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadUserMaterialSamplers(
+	static void UnloadUserMaterialSamplers(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material
 	) {
@@ -1553,7 +1593,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadUserMaterialBuffers(
+	static void UnloadUserMaterialBuffers(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* material,
@@ -1591,24 +1631,28 @@ namespace ECSEngine {
 #pragma region Load User Material Individual Functions
 
 	// Returns true if it succeded else false
-	bool LoadUserMaterialVertexShader(
+	static bool LoadUserMaterialVertexShader(
 		ResourceManager* resource_manager, 
 		const UserMaterial* user_material, 
-		Material* converted_material, 
+		Material* converted_material,
 		ResourceManagerLoadDesc load_descriptor
 	) {
 		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 
-		Stream<char> source_code = { nullptr, 0 };
+		Stream<char> source_code;
 		Stream<void> byte_code;
+
+		LoadShaderExtraInformation load_extra_information;
+		load_extra_information.source_code = &source_code;
+		load_extra_information.byte_code = &byte_code;
 
 		ShaderInterface vertex_shader = { nullptr };
 		if (dont_load) {
 			vertex_shader = resource_manager->LoadShaderImplementation(
 				user_material->vertex_shader, 
-				ECS_SHADER_VERTEX, 
-				&source_code, 
-				&byte_code, 
+				ECS_SHADER_VERTEX,
+				false,
+				load_extra_information,
 				user_material->vertex_compile_options, 
 				load_descriptor
 			);
@@ -1623,12 +1667,17 @@ namespace ECSEngine {
 			vertex_shader = resource_manager->LoadShader<true>(
 				user_material->vertex_shader, 
 				ECS_SHADER_VERTEX, 
-				&source_code, 
-				&byte_code, 
+				load_extra_information,
 				user_material->vertex_compile_options, 
 				current_desc
 			);
 		}
+
+		auto code_deallocator = StackScope([&]() {
+			source_code.Deallocate(resource_manager->Allocator());
+			byte_code.Deallocate(resource_manager->Allocator());
+		});
+
 		converted_material->vertex_shader = vertex_shader;
 
 		if (converted_material->vertex_shader.Interface() == nullptr) {
@@ -1638,7 +1687,6 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(ECS_MESH_INDEX, mesh_indices, ECS_MESH_BUFFER_COUNT);
 		bool success = resource_manager->m_graphics->ReflectVertexBufferMapping(source_code, mesh_indices);
 		if (!success) {
-			resource_manager->Deallocate(source_code.buffer);
 			// Unload the vertex shader
 			UnloadUserMaterialVertexShader(resource_manager, user_material, converted_material, load_descriptor);
 			return false;
@@ -1647,10 +1695,8 @@ namespace ECSEngine {
 		converted_material->vertex_buffer_mapping_count = mesh_indices.size;
 		mesh_indices.CopyTo(converted_material->vertex_buffer_mappings);
 
-		InputLayout input_layout = resource_manager->m_graphics->ReflectVertexShaderInput(source_code, byte_code, false);
+		InputLayout input_layout = resource_manager->m_graphics->ReflectVertexShaderInput(source_code, byte_code);
 		if (input_layout.layout == nullptr) {
-			// Release the source code before
-			resource_manager->Deallocate(source_code.buffer);
 			// Unload the vertex shader
 			UnloadUserMaterialVertexShader(resource_manager, user_material, converted_material, load_descriptor);
 			return false;
@@ -1663,10 +1709,10 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	// Returns true if it succeded, else false
-	bool LoadUserMaterialPixelShader(
+	static bool LoadUserMaterialPixelShader(
 		ResourceManager* resource_manager, 
 		const UserMaterial* user_material, 
-		Material* converted_material, 
+		Material* converted_material,
 		ResourceManagerLoadDesc load_descriptor
 	) {
 		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
@@ -1674,9 +1720,9 @@ namespace ECSEngine {
 		if (dont_load) {
 			converted_material->pixel_shader = resource_manager->LoadShaderImplementation(
 				user_material->pixel_shader, 
-				ECS_SHADER_PIXEL, 
-				nullptr, 
-				nullptr, 
+				ECS_SHADER_PIXEL,
+				false,
+				{},
 				user_material->pixel_compile_options, 
 				load_descriptor
 			);
@@ -1691,8 +1737,7 @@ namespace ECSEngine {
 			converted_material->pixel_shader = resource_manager->LoadShader<true>(
 				user_material->pixel_shader, 
 				ECS_SHADER_PIXEL, 
-				nullptr, 
-				nullptr, 
+				{},
 				user_material->pixel_compile_options, 
 				current_desc
 			);
@@ -1776,7 +1821,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void LoadUserMaterialSamplers(
+	static void LoadUserMaterialSamplers(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* converted_material,
@@ -1791,7 +1836,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void LoadUserMaterialBuffers(
+	static void LoadUserMaterialBuffers(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* converted_material,
@@ -1835,7 +1880,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	bool ResourceManager::LoadUserMaterial(const UserMaterial* user_material, Material* converted_material, ResourceManagerLoadDesc load_descriptor)
+	bool ResourceManager::LoadUserMaterial(const UserMaterial* user_material, Material* converted_material, const ResourceManagerLoadDesc& load_descriptor)
 	{
 		memset(converted_material, 0, sizeof(*converted_material));
 
@@ -1866,7 +1911,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
-	PBRMesh* ResourceManager::LoadPBRMeshImplementation(Stream<wchar_t> filename, ResourceManagerLoadDesc load_descriptor) {
+	PBRMesh* ResourceManager::LoadPBRMeshImplementation(Stream<wchar_t> filename, bool multithreaded_allocation, const ResourceManagerLoadDesc& load_descriptor) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, _path, 512);
 		GLTFData data = LoadGLTFFile(filename);
 		// The load failed
@@ -1875,11 +1920,12 @@ namespace ECSEngine {
 		}
 		ECS_ASSERT(data.mesh_count < 200);
 
-		void* initial_allocation = Allocate((sizeof(GLTFMesh) + sizeof(PBRMaterial) + sizeof(unsigned int)) * data.mesh_count);
+		AllocatorPolymorphic allocator = multithreaded_allocation ? AllocatorTs() : Allocator();
+
+		void* initial_allocation = Allocate(allocator, (sizeof(GLTFMesh) + sizeof(PBRMaterial) + sizeof(unsigned int)) * data.mesh_count);
 		GLTFMesh* gltf_meshes = (GLTFMesh*)initial_allocation;
 		Stream<PBRMaterial> pbr_materials(OffsetPointer(gltf_meshes, sizeof(GLTFMesh) * data.mesh_count), 0);
 		unsigned int* material_masks = (unsigned int*)OffsetPointer(pbr_materials.buffer, sizeof(PBRMaterial) * data.mesh_count);
-		AllocatorPolymorphic allocator = Allocator();
 		// Make every stream 0 for the gltf meshes
 		memset(gltf_meshes, 0, sizeof(GLTFMesh) * data.mesh_count);
 
@@ -1889,7 +1935,7 @@ namespace ECSEngine {
 		if (!success) {
 			// Free the gltf data and the initial allocation
 			FreeGLTFFile(data);
-			Deallocate(initial_allocation);
+			Deallocate(allocator, initial_allocation);
 			return nullptr;
 		}
 
@@ -1898,7 +1944,7 @@ namespace ECSEngine {
 		allocation_size += (sizeof(Submesh) + sizeof(PBRMaterial)) * pbr_materials.size;
 
 		// Allocate the instance
-		void* allocation = Allocate(allocation_size);
+		void* allocation = Allocate(allocator, allocation_size);
 		PBRMesh* mesh = (PBRMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(PBRMesh);
@@ -1918,53 +1964,93 @@ namespace ECSEngine {
 		// Free the gltf data, the gltf meshes and the initial allocation
 		FreeGLTFFile(data);
 		FreeGLTFMeshes({ gltf_meshes, data.mesh_count }, allocator);
-		Deallocate(initial_allocation);
+		Deallocate(allocator, initial_allocation);
 
 		return mesh;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	ShaderInterface LoadShaderInternalImplementation(ResourceManager* manager, Stream<wchar_t> filename, ShaderCompileOptions options, ResourceManagerLoadDesc load_descriptor,
-		Stream<char>* shader_source_code, Stream<void>* byte_code, ECS_SHADER_TYPE type) {
+	// The shader source code or byte code are allocated from the multithreaded allocator
+	static ShaderInterface LoadShaderInternalImplementation(ResourceManager* manager, Stream<wchar_t> filename, bool multithreaded_allocation, ShaderCompileOptions options, const ResourceManagerLoadDesc& load_descriptor,
+		const LoadShaderExtraInformation& extra_information, ECS_SHADER_TYPE type) {
 		Path path_extension = PathExtensionBoth(filename);
 		bool is_byte_code = path_extension == L".cso";
 
 		void* shader = nullptr;
-		Stream<void> contents = { nullptr, 0 };
-		AllocatorPolymorphic allocator_polymorphic = manager->AllocatorTs();
+		AllocatorPolymorphic allocator_polymorphic = extra_information.GetAllocator(manager, multithreaded_allocation);
 
 		if (is_byte_code) {
-			ECS_ASSERT(shader_source_code == nullptr, "Cannot retrieve shader source code from binary shader.");
-			contents = ReadWholeFileBinary(filename, allocator_polymorphic);
-			shader = manager->m_graphics->CreateShader(filename, type, HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
+			ECS_ASSERT(extra_information.source_code == nullptr, "Cannot retrieve shader source code from a binary shader.");
+			ECS_ASSERT(type != ECS_SHADER_VERTEX || extra_information.input_layout == nullptr, "Cannot create vertex shader input layout from a binary file.");
+			Stream<void> byte_code = ReadWholeFileBinary(filename, allocator_polymorphic);
+			if (byte_code.size > 0) {
+				shader = manager->m_graphics->CreateShader(byte_code, type, HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
+				if (extra_information.byte_code != nullptr) {
+					if (shader != nullptr) {
+						*extra_information.byte_code = byte_code;
+					}
+					else {
+						// Deallocate the byte code
+						DeallocateEx(allocator_polymorphic, byte_code.buffer);
+					}
+				}
+				else {
+					// Deallocate the byte code
+					DeallocateEx(allocator_polymorphic, byte_code.buffer);
+				}
+			}
 		}
 		else {
-			Stream<char> source_code = ReadWholeFileText(filename, allocator_polymorphic);
-			ShaderIncludeFiles include(manager->m_memory, manager->m_shader_directory);
-			shader = manager->m_graphics->CreateShaderFromSource(
-				source_code,
-				type,
-				&include,
-				options,
-				byte_code,
-				HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
-			);
-			contents = source_code;
-		}
+			// Create a temporary allocator for the include allocator, that takes its data from the multithreaded allocator
+			MemoryManager temporary_allocator(ECS_RESOURCE_MANAGER_INCLUDE_ALLOCATOR_CAPACITY, 128, ECS_RESOURCE_MANAGER_INCLUDE_ALLOCATOR_BACKUP_CAPACITY, manager->AllocatorTs());
 
-		if (shader_source_code == nullptr) {
-			if (contents.size > 0) {
-				manager->m_memory->Deallocate_ts(contents.buffer);
-			}
-		}
-		else {
-			if (shader != nullptr) {
-				*shader_source_code = contents.As<char>();
-			}
-			else {
-				if (contents.size > 0) {
-					manager->m_memory->Deallocate_ts(contents.buffer);
+			Stream<char> source_code = ReadWholeFileText(filename, allocator_polymorphic);
+			if (source_code.size > 0) {
+				Stream<void> byte_code;
+				bool should_retrieve_byte_code = extra_information.byte_code != nullptr || extra_information.input_layout != nullptr;
+				
+				ShaderIncludeFiles include(&temporary_allocator, manager->m_shader_directory);
+				__try {
+					shader = manager->m_graphics->CreateShaderFromSource(
+						source_code,
+						type,
+						&include,
+						options,
+						should_retrieve_byte_code ? &byte_code : nullptr,
+						allocator_polymorphic,
+						HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
+					);
+				}
+				__finally {
+					// Deallocate the allocator even when the creation fails
+					temporary_allocator.Free();
+				}
+
+				// Create the input layout
+				LoadShaderExtraInformationHandleInputLayout(shader, source_code, byte_code, type, manager, extra_information);
+
+				if (extra_information.source_code != nullptr) {
+					if (shader != nullptr) {
+						*extra_information.source_code = source_code;
+					}
+					else {
+						// Deallocate the source code
+						DeallocateEx(allocator_polymorphic, source_code.buffer);
+					}
+				}
+				else {
+					// Deallocate the source code
+					DeallocateEx(allocator_polymorphic, source_code.buffer);
+				}
+
+				if (byte_code.size > 0) {
+					if (extra_information.byte_code != nullptr) {
+						*extra_information.byte_code = byte_code;
+					}
+					else {
+						DeallocateEx(allocator_polymorphic, byte_code.buffer);
+					}
 				}
 			}
 		}
@@ -1973,31 +2059,60 @@ namespace ECSEngine {
 	}
 
 	// Convert from source code to shader
-	ShaderInterface LoadShaderInternalImplementationEx(
+	static ShaderInterface LoadShaderInternalImplementationEx(
 		ResourceManager* manager,
 		Stream<char> source_code,
 		ECS_SHADER_TYPE shader_type,
-		Stream<void>* byte_code,
+		bool multithreaded_allocation,
+		const LoadShaderExtraInformation& extra_information,
 		ShaderCompileOptions options,
-		ResourceManagerLoadDesc load_descriptor,
+		const ResourceManagerLoadDesc& load_descriptor,
 		ResourceManagerExDesc* ex_desc
 	) {
-		ShaderIncludeFiles include(manager->m_memory, manager->m_shader_directory);
-		void* shader = manager->m_graphics->CreateShaderFromSource(
-			source_code,
-			shader_type,
-			&include,
-			options,
-			byte_code,
-			HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
-		);
+		// Create a special allocator for the include policy, we cannot use the main manager allocator
+		// Even with multithreaded access because there are still single threaded functions that run on
+		// It and those are not aware of the multithreaded aspect. We cannot use it as a backup allocator either
+		// Because of the same reason. This is why we are using the multithreaded allocator as a backup
+		MemoryManager include_allocator(ECS_RESOURCE_MANAGER_INCLUDE_ALLOCATOR_CAPACITY, 128, ECS_RESOURCE_MANAGER_INCLUDE_ALLOCATOR_BACKUP_CAPACITY, manager->AllocatorTs());
+		ShaderIncludeFiles include(&include_allocator, manager->m_shader_directory);
+		void* shader = nullptr;
+		__try {
+			AllocatorPolymorphic byte_code_allocator = extra_information.GetAllocator(manager, multithreaded_allocation);
+
+			Stream<void> byte_code;
+			bool should_retrieve_byte_code = extra_information.byte_code != nullptr || extra_information.input_layout != nullptr;
+			shader = manager->m_graphics->CreateShaderFromSource(
+				source_code,
+				shader_type,
+				&include,
+				options,
+				should_retrieve_byte_code ? &byte_code : nullptr,
+				byte_code_allocator,
+				HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
+			);
+			LoadShaderExtraInformationHandleInputLayout(shader, source_code, byte_code, shader_type, manager, extra_information);
+
+			if (byte_code.size > 0) {
+				if (extra_information.byte_code != nullptr) {
+					*extra_information.byte_code = byte_code;
+				}
+				else {
+					DeallocateEx(byte_code_allocator, byte_code.buffer);
+				}
+			}
+		}
+		__finally {
+			// Deallocate the allocator - even when the create fails
+			include_allocator.Free();
+		}
 
 		if (shader != nullptr) {
 			if (ex_desc != nullptr && ex_desc->HasFilename()) {
 				ex_desc->Lock();
 
 				__try {
-					void* allocation = manager->Allocate(sizeof(VertexShaderStorage));
+					// We are in a locked section code, can use the main allocator
+					void* allocation = manager->m_memory->Allocate(sizeof(VertexShaderStorage));
 					VertexShaderStorage* storage = (VertexShaderStorage*)allocation;
 
 					// Doesn't matter the type here
@@ -2008,6 +2123,7 @@ namespace ECSEngine {
 						ex_desc->filename,
 						ResourceType::Shader,
 						allocation,
+						false,
 						ex_desc->time_stamp,
 						load_descriptor.identifier_suffix,
 						ex_desc->reference_count
@@ -2029,10 +2145,9 @@ namespace ECSEngine {
 	ShaderInterface ResourceManager::LoadShader(
 		Stream<wchar_t> filename, 
 		ECS_SHADER_TYPE shader_type, 
-		Stream<char>* shader_source_code,
-		Stream<void>* byte_code,
+		const LoadShaderExtraInformation& extra_information,
 		ShaderCompileOptions options,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	)
 	{
 		bool _is_loaded_first_time = false;
@@ -2047,18 +2162,13 @@ namespace ECSEngine {
 			load_descriptor,
 			[=](void* allocation) {
 				VertexShaderStorage* shader = (VertexShaderStorage*)allocation;
-				shader->shader = LoadShaderImplementation(filename, shader_type, shader_source_code, byte_code, options, load_descriptor);
+				shader->shader = LoadShaderImplementation(filename, shader_type, false, extra_information, options, load_descriptor);
 
-				if (shader->shader.shader != nullptr) {
-					if (shader_source_code != nullptr) {
-						shader->source_code = *shader_source_code;
-					}
-					else {
-						shader->source_code = { nullptr, 0 };
-					}
+				if (shader->shader.Interface() != nullptr) {
+					shader->source_code = extra_information.source_code != nullptr ? extra_information.source_code->Copy(Allocator()) : Stream<char>();
 
-					if (byte_code != nullptr && shader_type == ECS_SHADER_VERTEX) {
-						shader->byte_code = *byte_code;
+					if (shader_type == ECS_SHADER_VERTEX) {
+						shader->byte_code = extra_information.byte_code != nullptr ? extra_information.byte_code->Copy(Allocator()) : Stream<void>();
 					}
 					else {
 						shader->byte_code = { nullptr, 0 };
@@ -2070,26 +2180,48 @@ namespace ECSEngine {
 
 		if (shader != nullptr) {
 			if constexpr (reference_counted) {
-				if (shader_source_code != nullptr || byte_code != nullptr) {
+				if (extra_information.source_code != nullptr || extra_information.byte_code != nullptr) {
 					if (!*is_loaded_first_time) {
 						// Need to get the source code or the byte code
 						// For byte code we need the source code as well
-						if (shader_source_code != nullptr || byte_code != nullptr) {
-							if (shader->source_code.size == 0) {
-								// Load the file and store it inside the current storage
-								Stream<char> source_code = ReadWholeFileText(filename, Allocator());
-								shader->source_code = source_code;
-							}
-							if (shader_source_code != nullptr) {
-								*shader_source_code = shader->source_code;
-							}
+						if (shader->source_code.size == 0) {
+							// Load the file and store it inside the current storage
+							// Use the multithreaded allocator in order to remain consistent
+							// With the other load functions that use it as well
+							Stream<char> source_code = ReadWholeFileText(filename, Allocator());
+							shader->source_code = source_code;
 						}
-						if (byte_code != nullptr) {
+						if (extra_information.source_code != nullptr) {
+							// Make a copy, such that the caller is the owner of the data
+							*extra_information.source_code = shader->source_code.Copy(extra_information.GetAllocator(this, false));
+						}
+
+						if ((extra_information.byte_code != nullptr || extra_information.input_layout != nullptr) && shader_type == ECS_SHADER_VERTEX) {
 							if (shader->byte_code.size == 0) {
-								ShaderIncludeFiles include_files(m_memory, m_shader_directory);
-								shader->byte_code = m_graphics->CompileShaderToByteCode(shader->source_code, shader_type, &include_files, Allocator(), options);
+								MemoryManager include_allocator(ECS_RESOURCE_MANAGER_INCLUDE_ALLOCATOR_CAPACITY, 128, ECS_RESOURCE_MANAGER_INCLUDE_ALLOCATOR_BACKUP_CAPACITY, Allocator());
+								ShaderIncludeFiles include_files(&include_allocator, m_shader_directory);
+								__try {
+									if (shader->source_code.size > 0) {
+										shader->byte_code = m_graphics->CompileShaderToByteCode(shader->source_code, shader_type, &include_files, Allocator(), options);
+									}
+									else {
+										shader->byte_code = {};
+									}
+								}
+								__finally {
+									include_allocator.Free();
+								}
 							}
-							*byte_code = shader->byte_code;
+							// Make a copy, such that the caller is the owner of the data
+							if (extra_information.byte_code != nullptr) {
+								*extra_information.byte_code = shader->byte_code.Copy(extra_information.GetAllocator(this, false));
+							}
+
+							if (extra_information.input_layout != nullptr) {
+								if (shader->source_code.size > 0 && shader->byte_code.size > 0) {
+									LoadShaderExtraInformationHandleInputLayout(shader, shader->source_code, shader->byte_code, shader_type, this, extra_information);
+								}
+							}
 						}
 					}
 				}
@@ -2100,40 +2232,41 @@ namespace ECSEngine {
 		return { nullptr };
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(ShaderInterface, ResourceManager::LoadShader, Stream<wchar_t>, ECS_SHADER_TYPE, Stream<char>*, Stream<void>*, ShaderCompileOptions, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(ShaderInterface, ResourceManager::LoadShader, Stream<wchar_t>, ECS_SHADER_TYPE, const LoadShaderExtraInformation& extra_information, ShaderCompileOptions, const ResourceManagerLoadDesc&);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	ShaderInterface ResourceManager::LoadShaderImplementation(
 		Stream<wchar_t> filename, 
-		ECS_SHADER_TYPE shader_type, 
-		Stream<char>* shader_source_code, 
-		Stream<void>* byte_code,
+		ECS_SHADER_TYPE shader_type,
+		bool multithreaded_allocation,
+		const LoadShaderExtraInformation& extra_information,
 		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	)
 	{
-		return LoadShaderInternalImplementation(this, filename, options, load_descriptor, shader_source_code, byte_code, shader_type);
+		return LoadShaderInternalImplementation(this, filename, multithreaded_allocation, options, load_descriptor, extra_information, shader_type);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	ShaderInterface ResourceManager::LoadShaderImplementationEx(
 		Stream<char> source_code,
-		ECS_SHADER_TYPE shader_type, 
-		Stream<void>* byte_code,
+		ECS_SHADER_TYPE shader_type,
+		bool multithreaded_allocation,
+		const LoadShaderExtraInformation& extra_information,
 		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor,
+		const ResourceManagerLoadDesc& load_descriptor,
 		ResourceManagerExDesc* ex_desc
 	)
 	{
-		return LoadShaderInternalImplementationEx(this, source_code, shader_type, byte_code, options, load_descriptor, ex_desc);
+		return LoadShaderInternalImplementationEx(this, source_code, shader_type, multithreaded_allocation, extra_information, options, load_descriptor, ex_desc);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	ResizableStream<void>* ResourceManager::LoadMisc(Stream<wchar_t> filename, AllocatorPolymorphic allocator, ResourceManagerLoadDesc load_descriptor)
+	ResizableStream<void>* ResourceManager::LoadMisc(Stream<wchar_t> filename, AllocatorPolymorphic allocator, const ResourceManagerLoadDesc& load_descriptor)
 	{
 		return (ResizableStream<void>*)LoadResource<reference_counted>(
 			this,
@@ -2148,9 +2281,9 @@ namespace ECSEngine {
 		});
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(ResizableStream<void>*, ResourceManager::LoadMisc, Stream<wchar_t>, AllocatorPolymorphic, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(ResizableStream<void>*, ResourceManager::LoadMisc, Stream<wchar_t>, AllocatorPolymorphic, const ResourceManagerLoadDesc&);
 
-	ResizableStream<void> ResourceManager::LoadMiscImplementation(Stream<wchar_t> filename, AllocatorPolymorphic allocator, ResourceManagerLoadDesc load_descriptor)
+	ResizableStream<void> ResourceManager::LoadMiscImplementation(Stream<wchar_t> filename, AllocatorPolymorphic allocator, const ResourceManagerLoadDesc& load_descriptor)
 	{
 		Stream<void> data = ReadWholeFileBinary(filename, allocator);
 		ResizableStream<void> resizable_data;
@@ -2278,7 +2411,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix)
+	void ResourceManager::RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, bool multithreaded_allocation, Stream<void> suffix)
 	{
 		unsigned int int_type = (unsigned int)resource_type;
 		ResourceManagerEntry* entry;
@@ -2286,18 +2419,19 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
 		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
 		bool success = m_resource_types[int_type].TryGetValuePtr(identifier, entry);
-		ECS_ASSERT(success, "Could not rebind resource");
+		ECS_ASSERT_FORMAT(success, "Could not rebind resource of type {#}", ResourceTypeString(resource_type));
 
-		UNLOAD_FUNCTIONS[int_type](entry->data, this);
+		UNLOAD_FUNCTIONS[int_type](entry->data, this, entry->multithreaded_allocation);
 
 		//if (success) {
 		entry->data = new_resource;
+		entry->multithreaded_allocation = multithreaded_allocation;
 		//}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix)
+	void ResourceManager::RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, bool multithreaded_allocation, Stream<void> suffix)
 	{
 		unsigned int int_type = (unsigned int)resource_type;
 		ResourceManagerEntry* entry;
@@ -2306,9 +2440,10 @@ namespace ECSEngine {
 		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
 		bool success = m_resource_types[int_type].TryGetValuePtr(identifier, entry);
 
-		ECS_ASSERT(success, "Could not rebind resource");
+		ECS_ASSERT_FORMAT(success, "Could not rebind resource of type {#}", ResourceTypeString(resource_type));
 		//if (success) {
 		entry->data = new_resource;
+		entry->multithreaded_allocation = multithreaded_allocation;
 		//}
 	}
 
@@ -2323,7 +2458,7 @@ namespace ECSEngine {
 		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
 		bool success = m_resource_types[type_index].TryGetValuePtr(identifier, entry);
 
-		ECS_ASSERT(success, "Could not remove reference count for resource");
+		ECS_ASSERT_FORMAT(success, "Could not remove reference count for resource of type {#}", ResourceTypeString(resource_type));
 		entry->reference_count = USHORT_MAX;
 	}
 
@@ -2332,7 +2467,7 @@ namespace ECSEngine {
 	bool ResourceManager::RemoveTimeStamp(ResourceIdentifier identifier, bool reference_count, Stream<void> suffix)
 	{
 		unsigned int resource_index = GetResourceIndex(identifier, ResourceType::TimeStamp, suffix);
-		ECS_ASSERT(resource_index != -1);
+		ECS_ASSERT(resource_index != -1, "Failed to remove time stamp");
 
 		if (reference_count) {
 			if (DecrementReferenceCount(ResourceType::TimeStamp, resource_index, 1)) {
@@ -2348,10 +2483,10 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-#define EXPORT_UNLOAD(name) ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::name, Stream<wchar_t>, ResourceManagerLoadDesc); ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::name, unsigned int, size_t);
+#define EXPORT_UNLOAD(name) ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::name, Stream<wchar_t>, const ResourceManagerLoadDesc&); ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::name, unsigned int, size_t);
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadTextFile(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadTextFile(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc)
 	{
 		UnloadResource<reference_counted>(filename, ResourceType::TextFile, load_desc);
 	}
@@ -2361,9 +2496,9 @@ namespace ECSEngine {
 		UnloadResource<reference_counted>(index, ResourceType::TextFile, flags);
 	}
 
-	void ResourceManager::UnloadTextFileImplementation(char* data, size_t flags)
+	void ResourceManager::UnloadTextFileImplementation(char* data, bool multithreaded_allocation, size_t flags)
 	{
-		UnloadTextFileHandler(data, this);
+		UnloadTextFileHandler(data, this, multithreaded_allocation);
 	}
 
 	EXPORT_UNLOAD(UnloadTextFile);
@@ -2371,7 +2506,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadTexture(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadTexture(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc)
 	{
 		UnloadResource<reference_counted>(filename, ResourceType::Texture, load_desc);
 	}
@@ -2383,7 +2518,8 @@ namespace ECSEngine {
 
 	void ResourceManager::UnloadTextureImplementation(ResourceView texture, size_t flags)
 	{
-		UnloadTextureHandler(texture.view, this);
+		// The multithreaded flag has no relevancy here
+		UnloadTextureHandler(texture.view, this, false);
 	}
 
 	EXPORT_UNLOAD(UnloadTexture);
@@ -2391,7 +2527,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadMeshes(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc) {
+	void ResourceManager::UnloadMeshes(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc) {
 		UnloadResource<reference_counted>(filename, ResourceType::Mesh, load_desc);
 	}
 
@@ -2402,7 +2538,8 @@ namespace ECSEngine {
 
 	void ResourceManager::UnloadMeshesImplementation(Stream<Mesh>* meshes, size_t flags)
 	{
-		UnloadMeshesHandler(meshes, this);
+		// The multithreaded flag has no relevancy here
+		UnloadMeshesHandler(meshes, this, false);
 	}
 
 	EXPORT_UNLOAD(UnloadMeshes);
@@ -2410,7 +2547,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadCoalescedMesh(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadCoalescedMesh(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc)
 	{
 		UnloadResource<reference_counted>(filename, ResourceType::CoalescedMesh, load_desc);
 	}
@@ -2421,9 +2558,9 @@ namespace ECSEngine {
 		UnloadResource<reference_counted>(index, ResourceType::CoalescedMesh, flags);
 	}
 
-	void ResourceManager::UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, size_t flags)
+	void ResourceManager::UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, bool multithreaded_allocation, size_t flags)
 	{
-		UnloadCoalescedMeshHandler(mesh, this);
+		UnloadCoalescedMeshHandler(mesh, this, multithreaded_allocation);
 	}
 
 	EXPORT_UNLOAD(UnloadCoalescedMesh);
@@ -2431,7 +2568,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadMaterials(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc) {
+	void ResourceManager::UnloadMaterials(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc) {
 		UnloadResource<reference_counted>(filename, ResourceType::PBRMaterial, load_desc);
 	}
 
@@ -2440,16 +2577,16 @@ namespace ECSEngine {
 		UnloadResource<reference_counted>(index, ResourceType::PBRMaterial, flags);
 	}
 
-	void ResourceManager::UnloadMaterialsImplementation(Stream<PBRMaterial>* materials, size_t flags)
+	void ResourceManager::UnloadMaterialsImplementation(Stream<PBRMaterial>* materials, bool multithreaded_allocation, size_t flags)
 	{
-		UnloadMaterialsHandler(materials, this);
+		UnloadMaterialsHandler(materials, this, multithreaded_allocation);
 	}
 
 	EXPORT_UNLOAD(UnloadMaterials);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::UnloadUserMaterial(const UserMaterial* user_material, Material* material, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadUserMaterial(const UserMaterial* user_material, Material* material, const ResourceManagerLoadDesc& load_desc)
 	{
 		UnloadUserMaterialVertexShader(this, user_material, material, load_desc);
 		UnloadUserMaterialPixelShader(this, user_material, material, load_desc);
@@ -2466,7 +2603,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadPBRMesh(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc) {
+	void ResourceManager::UnloadPBRMesh(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc) {
 		UnloadResource<reference_counted>(filename, ResourceType::PBRMesh, load_desc);
 	}
 
@@ -2475,9 +2612,9 @@ namespace ECSEngine {
 		UnloadResource<reference_counted>(index, ResourceType::PBRMesh, flags);
 	}
 
-	void ResourceManager::UnloadPBRMeshImplementation(PBRMesh* mesh, size_t flags)
+	void ResourceManager::UnloadPBRMeshImplementation(PBRMesh* mesh, bool multithreaded_allocation, size_t flags)
 	{
-		UnloadPBRMeshHandler(mesh, this);
+		UnloadPBRMeshHandler(mesh, this, multithreaded_allocation);
 	}
 
 	EXPORT_UNLOAD(UnloadPBRMesh);
@@ -2485,7 +2622,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadShader(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc)
 	{
 		UnloadResource<reference_counted>(filename, ResourceType::Shader, load_desc);
 	}
@@ -2498,7 +2635,7 @@ namespace ECSEngine {
 
 	EXPORT_UNLOAD(UnloadShader);
 
-	void ResourceManager::UnloadShaderImplementation(void* shader_interface, size_t flags)
+	void ResourceManager::UnloadShaderImplementation(void* shader_interface, bool multithreaded_allocation, size_t flags)
 	{
 		UnloadResourceImplementation(shader_interface, ResourceType::Shader, flags);
 	}
@@ -2506,7 +2643,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadMisc(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadMisc(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc)
 	{
 		UnloadResource<reference_counted>(filename, ResourceType::Misc, load_desc);
 	}
@@ -2517,7 +2654,7 @@ namespace ECSEngine {
 		UnloadResource<reference_counted>(index, ResourceType::Misc, flags);
 	}
 
-	void ResourceManager::UnloadMiscImplementation(ResizableStream<void> data, size_t flags)
+	void ResourceManager::UnloadMiscImplementation(ResizableStream<void>& data, size_t flags)
 	{
 		data.FreeBuffer();
 	}
@@ -2527,14 +2664,14 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadResource(Stream<wchar_t> filename, ResourceType type, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadResource(Stream<wchar_t> filename, ResourceType type, const ResourceManagerLoadDesc& load_desc)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
 		ResourceIdentifier identifier = ResourceIdentifier::WithSuffix(filename, fully_specified_identifier, load_desc.identifier_suffix);
 		DeleteResource<reference_counted>(this, identifier, type, load_desc.load_flags);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadResource, Stream<wchar_t>, ResourceType, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadResource, Stream<wchar_t>, ResourceType, const ResourceManagerLoadDesc&);
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadResource(unsigned int index, ResourceType type, size_t flags)
@@ -2544,15 +2681,15 @@ namespace ECSEngine {
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadResource, unsigned int, ResourceType, size_t);
 
-	void ResourceManager::UnloadResourceImplementation(void* resource, ResourceType type, size_t flags)
+	void ResourceManager::UnloadResourceImplementation(void* resource, ResourceType type, bool multithreaded_allocation, size_t flags)
 	{
-		UNLOAD_FUNCTIONS[(unsigned int)type](resource, this);
+		UNLOAD_FUNCTIONS[(unsigned int)type](resource, this, multithreaded_allocation);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	bool ResourceManager::TryUnloadResource(Stream<wchar_t> filename, ResourceType type, ResourceManagerLoadDesc load_desc)
+	bool ResourceManager::TryUnloadResource(Stream<wchar_t> filename, ResourceType type, const ResourceManagerLoadDesc& load_desc)
 	{
 		unsigned int index = GetResourceIndex(filename, type, load_desc.identifier_suffix);
 		if (index != -1) {
@@ -2562,7 +2699,7 @@ namespace ECSEngine {
 		return false;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, ResourceManager::TryUnloadResource, Stream<wchar_t>, ResourceType, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, ResourceManager::TryUnloadResource, Stream<wchar_t>, ResourceType, const ResourceManagerLoadDesc&);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -2576,8 +2713,8 @@ namespace ECSEngine {
 				unsigned int unload_count = 0;
 				for (size_t subindex = 0; subindex < table_capacity && unload_count < type_resource_count; subindex++) {
 					if (m_resource_types[index].IsItemAt(subindex)) {
-						ResourceManagerEntry entry = m_resource_types[index].GetValueFromIndex(subindex);
-						UnloadResourceImplementation(entry.data, (ResourceType)index);
+						ResourceManagerEntry* entry = m_resource_types[index].GetValuePtrFromIndex(subindex);
+						UnloadResourceImplementation(entry->data, (ResourceType)index, entry->multithreaded_allocation);
 
 						// Helps to early exit if the resources are clumped together towards the beginning of the table
 						unload_count++;

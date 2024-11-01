@@ -1713,7 +1713,7 @@ void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 				);
 			}
 			else {
-				resource_manager->RebindResource(identifier, ResourceType::Texture, data->staging_preloaded_textures[index].texture.view);
+				resource_manager->RebindResource(identifier, ResourceType::Texture, data->staging_preloaded_textures[index].texture.view, false);
 				resource_manager->RemoveReferenceCountForResource(identifier, ResourceType::Texture);
 			}
 		}
@@ -1922,7 +1922,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 			FileExplorerMeshThumbnail thumbnail;
 
 			//Try to read the mesh here and create it's buffers GPU buffers
-			CoalescedMesh* mesh = data->resource_manager->LoadCoalescedMeshImplementation(path);
+			CoalescedMesh* mesh = data->resource_manager->LoadCoalescedMeshImplementation(path, false);
 			// If the mesh is nullptr, the read failed
 			thumbnail.could_be_read = mesh != nullptr;
 			thumbnail.last_write_time = OS::GetFileLastWrite(path);
@@ -1933,7 +1933,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 				thumbnail.texture = gltf_thumbnail.texture;
 
 				// Free the coalesced mesh
-				data->resource_manager->UnloadCoalescedMeshImplementation(mesh);
+				data->resource_manager->UnloadCoalescedMeshImplementation(mesh, false);
 			}
 
 			// Update the hash table

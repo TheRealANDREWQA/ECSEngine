@@ -9346,7 +9346,7 @@ namespace ECSEngine {
 		void UISystem::ReadFontDescriptionFile(Stream<wchar_t> filename) {
 			// loading font uv descriptor;
 			size_t size = 2000;
-			Stream<char> uv_buffer = m_resource_manager->LoadTextFileImplementation(filename);
+			Stream<char> uv_buffer = m_resource_manager->LoadTextFileImplementation(filename, false);
 			ECS_STACK_CAPACITY_STREAM(unsigned int, uvs, 1024);
 			size_t numbers = ParseNumbersFromCharString(uv_buffer, &uvs);
 
@@ -9380,6 +9380,8 @@ namespace ECSEngine {
 			// For the unknown character copy the one from the space
 			m_font_character_uvs[(unsigned int)AlphabetIndex::Unknown * 2] = m_font_character_uvs[(unsigned int)AlphabetIndex::Space * 2];
 			m_font_character_uvs[(unsigned int)AlphabetIndex::Unknown * 2 + 1] = m_font_character_uvs[(unsigned int)AlphabetIndex::Space * 2 + 1];
+
+			m_resource_manager->UnloadTextFileImplementation(uv_buffer.buffer, false);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9941,7 +9943,7 @@ namespace ECSEngine {
 
 		void UISystem::RegisterPixelShader(wchar_t* filename) {
 			ECS_ASSERT(m_resources.pixel_shaders.size < m_resources.pixel_shaders.capacity);
-			m_resources.pixel_shaders[m_resources.pixel_shaders.size++] = m_resource_manager->LoadShaderImplementation(filename, ECS_SHADER_PIXEL);
+			m_resources.pixel_shaders[m_resources.pixel_shaders.size++] = m_resource_manager->LoadShaderImplementation(filename, ECS_SHADER_PIXEL, false);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9985,16 +9987,17 @@ namespace ECSEngine {
 
 		void UISystem::RegisterVertexShaderAndLayout(wchar_t* filename) {
 			ECS_ASSERT(m_resources.vertex_shaders.size < m_resources.vertex_shaders.capacity);
-			Stream<char> shader_source;
-			Stream<void> byte_code;
+
+			InputLayout input_layout = nullptr;
+			LoadShaderExtraInformation extra_information;
+			extra_information.input_layout = &input_layout;
 			m_resources.vertex_shaders[m_resources.vertex_shaders.size++] = m_resource_manager->LoadShaderImplementation(
 				filename,
 				ECS_SHADER_VERTEX,
-				&shader_source,
-				&byte_code
+				false,
+				extra_information
 			);
-			m_resources.input_layouts[m_resources.input_layouts.size] = m_graphics->ReflectVertexShaderInput(shader_source, byte_code);
-			m_resources.input_layouts.size++;
+			m_resources.input_layouts[m_resources.input_layouts.size++] = input_layout;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -12243,7 +12246,7 @@ namespace ECSEngine {
 						// at the same time
 						ResourceIdentifier identifier(data->filename);
 						UISpriteTexture previous_view = *data->texture;
-						data->system->m_resource_manager->RebindResource(identifier, ResourceType::Texture, new_view.view);
+						data->system->m_resource_manager->RebindResource(identifier, ResourceType::Texture, new_view.view, false);
 						data->system->m_resource_manager->RemoveReferenceCountForResource(identifier, ResourceType::Texture);
 						*data->texture = new_view;
 
