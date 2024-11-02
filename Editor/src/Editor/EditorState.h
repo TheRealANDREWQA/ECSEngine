@@ -90,16 +90,6 @@ struct EditorState {
 		return allocator;
 	}
 
-	ECS_INLINE void AcquireFrameLocks() {
-		gpu_lock.Lock();
-		resource_manager_lock.Lock();
-	}
-
-	ECS_INLINE void ReleaseFrameLocks() {
-		gpu_lock.Unlock();
-		resource_manager_lock.Unlock();
-	}
-
 	EditorSettings settings;
 	EditorStateTick editor_tick;
 	ECSEngine::Tools::UISystem* ui_system;
@@ -207,21 +197,18 @@ struct EditorState {
 	ECSEngine::Timer frame_timer;
 	float frame_delta_time;
 
-private:
-	char padding[ECS_CACHE_LINE_SIZE];
-
-public:
-	// These are locks that are used in conjunction with the LoadAssets such that background loading threads
-	// Don't interfere with the main thread. For an easier management, the main thread will lock each individual lock
-	// For the entire duration of the frame, since it allows the main thread to not have to worry about when to lock,
-	// And there is not much of an issue if the background threads get delayed a bit.
-	ECSEngine::SpinLock gpu_lock;
-	ECSEngine::SpinLock resource_manager_lock;
-
 	// TODO: Implement an "event" like system where functions can be subscribed to certain
 	// Actions? This is helpful for less coupling between systems. At the moment, the first
 	// Use case would be the entity inspector that needs to be notified when the scene is changed
 	// Or when en entity is deleted
+
+private:
+	char padding0[ECS_CACHE_LINE_SIZE];
+public:
+	// This field is a lock for the GPU that is used by the main thread to synchronize with background threads
+	SpinLock frame_gpu_lock;
+private:
+	char padding1[ECS_CACHE_LINE_SIZE];
 };
 
 void EditorSetConsoleError(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_IMPORTANT);

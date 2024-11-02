@@ -973,31 +973,31 @@ namespace ECSEngine {
 	};
 
 	struct ShaderInterface {
-		ECS_INLINE operator void*() {
+		ECS_INLINE operator void*() const {
 			return interface_;
 		}
 
-		ECS_INLINE operator VertexShader() {
+		ECS_INLINE operator VertexShader() const {
 			return VertexShader::FromInterface(interface_);
 		}
 
-		ECS_INLINE operator PixelShader() {
+		ECS_INLINE operator PixelShader() const {
 			return PixelShader::FromInterface(interface_);
 		}
 
-		ECS_INLINE operator GeometryShader() {
+		ECS_INLINE operator GeometryShader() const {
 			return GeometryShader::FromInterface(interface_);
 		}
 
-		ECS_INLINE operator DomainShader() {
+		ECS_INLINE operator DomainShader() const {
 			return DomainShader::FromInterface(interface_);
 		}
 
-		ECS_INLINE operator HullShader() {
+		ECS_INLINE operator HullShader() const {
 			return HullShader::FromInterface(interface_);
 		}
 
-		ECS_INLINE operator ComputeShader() {
+		ECS_INLINE operator ComputeShader() const {
 			return ComputeShader::FromInterface(interface_);
 		}
 

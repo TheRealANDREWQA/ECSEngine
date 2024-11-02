@@ -45,7 +45,7 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	bool CreateMeshHelper(MeshMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
+	static bool CreateMeshHelper(MeshMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
 		if (metadata->file.size == 0) {
 			// There is no path, fail
 			return false;
@@ -73,7 +73,7 @@ namespace ECSEngine {
 
 	bool CreateMeshFromMetadata(ResourceManager* resource_manager, MeshMetadata* metadata, Stream<wchar_t> mount_point)
 	{
-		return CreateMeshHelper(metadata, mount_point, [&](Stream<wchar_t> file_path, ResourceManagerLoadDesc load_descriptor) {
+		return CreateMeshHelper(metadata, mount_point, [&](Stream<wchar_t> file_path, const ResourceManagerLoadDesc& load_descriptor) {
 			// Use reference counting
 			return resource_manager->LoadCoalescedMesh<true>(file_path, metadata->scale_factor, load_descriptor);
 		});
@@ -83,13 +83,13 @@ namespace ECSEngine {
 
 	bool CreateMeshFromMetadataEx(ResourceManager* resource_manager, MeshMetadata* metadata, Stream<GLTFMesh> meshes, CreateAssetFromMetadataExData* ex_data)
 	{
-		return CreateMeshHelper(metadata, ex_data->mount_point, [&](Stream<wchar_t> file_path, ResourceManagerLoadDesc load_descriptor) {
+		return CreateMeshHelper(metadata, ex_data->mount_point, [&](Stream<wchar_t> file_path, const ResourceManagerLoadDesc& load_descriptor) {
 			size_t time_stamp = GetTimeStamp(ex_data->time_stamp, file_path);
 			ResourceManagerExDesc ex_desc;
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
-			ex_desc.push_lock = ex_data->resource_manager_lock;
-			return resource_manager->LoadCoalescedMeshImplementationEx(meshes, true, metadata->scale_factor, load_descriptor, &ex_desc);
+			ex_desc.multithreaded = ex_data->multithreaded;
+			return resource_manager->LoadCoalescedMeshImplementationEx(meshes, ex_data->multithreaded, metadata->scale_factor, load_descriptor, &ex_desc);
 		});
 	}
 
@@ -103,21 +103,21 @@ namespace ECSEngine {
 		CreateAssetFromMetadataExData* ex_data
 	)
 	{
-		ECS_ASSERT(CreateMeshHelper(metadata, ex_data->mount_point, [&](Stream<wchar_t> file_path, ResourceManagerLoadDesc load_descriptor) {
+		ECS_ASSERT(CreateMeshHelper(metadata, ex_data->mount_point, [&](Stream<wchar_t> file_path, const ResourceManagerLoadDesc& load_descriptor) {
 			size_t time_stamp = GetTimeStamp(ex_data->time_stamp, file_path);
 			ResourceManagerExDesc ex_desc;
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
-			ex_desc.push_lock = ex_data->resource_manager_lock;
+			ex_desc.multithreaded = ex_data->multithreaded;
 			ex_desc.reference_count = ex_data->reference_count;
-			return resource_manager->LoadCoalescedMeshImplementationEx(coalesced_mesh, submeshes, true, metadata->scale_factor, load_descriptor, &ex_desc);
+			return resource_manager->LoadCoalescedMeshImplementationEx(coalesced_mesh, submeshes, ex_data->multithreaded, metadata->scale_factor, load_descriptor, &ex_desc);
 		}));
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	bool CreateTextureHelper(ResourceManager* resource_manager, TextureMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
+	static bool CreateTextureHelper(ResourceManager* resource_manager, TextureMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
 		if (metadata->file.size == 0) {
 			// There is no file, fail
 			return false;
@@ -147,7 +147,7 @@ namespace ECSEngine {
 
 	bool CreateTextureFromMetadata(ResourceManager* resource_manager, TextureMetadata* metadata, Stream<wchar_t> mount_point)
 	{
-		return CreateTextureHelper(resource_manager, metadata, mount_point, [&](auto file_path, const auto* texture_descriptor, auto load_desc) {
+		return CreateTextureHelper(resource_manager, metadata, mount_point, [&](Stream<wchar_t> file_path, const ResourceManagerTextureDesc* texture_descriptor, const ResourceManagerLoadDesc& load_desc) {
 			// Use reference counting
 			return resource_manager->LoadTexture<true>(file_path, texture_descriptor, load_desc);
 		});
@@ -159,18 +159,18 @@ namespace ECSEngine {
 		ResourceManager* resource_manager,
 		TextureMetadata* metadata,
 		DecodedTexture texture,
-		SpinLock* gpu_spin_lock,
+		SpinLock* gpu_lock,
 		CreateAssetFromMetadataExData* ex_data
 	)
 	{
-		return CreateTextureHelper(resource_manager, metadata, ex_data->mount_point, [&](auto file_path, const auto* texture_descriptor, auto load_desc) {
+		return CreateTextureHelper(resource_manager, metadata, ex_data->mount_point, [&](Stream<wchar_t> file_path, const ResourceManagerTextureDesc* texture_descriptor, ResourceManagerLoadDesc& load_desc) {
 			size_t time_stamp = GetTimeStamp(ex_data->time_stamp, file_path);
-			load_desc.gpu_lock = gpu_spin_lock;
+			load_desc.gpu_lock = gpu_lock;
 
 			ResourceManagerExDesc ex_desc;
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
-			ex_desc.push_lock = ex_data->resource_manager_lock;
+			ex_desc.multithreaded = ex_data->multithreaded;
 			ex_desc.reference_count = ex_data->reference_count;
 			return resource_manager->LoadTextureImplementationEx(texture, texture_descriptor, load_desc, &ex_desc);
 		});
@@ -192,7 +192,7 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	bool CreateShaderHelper(ShaderMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
+	static bool CreateShaderHelper(ShaderMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
 		if (metadata->file.size == 0) {
 			// Return false, no file assigned
 			return false;
@@ -220,7 +220,7 @@ namespace ECSEngine {
 
 	bool CreateShaderFromMetadata(ResourceManager* resource_manager, ShaderMetadata* metadata, Stream<wchar_t> mount_point)
 	{
-		return CreateShaderHelper(metadata, mount_point, [&](auto file_path, auto compile_options, auto load_desc) {
+		return CreateShaderHelper(metadata, mount_point, [&](Stream<wchar_t> file_path, ShaderCompileOptions compile_options, const ResourceManagerLoadDesc& load_desc) {
 			// Use reference counting
 			return resource_manager->LoadShader<true>(file_path, metadata->shader_type, {}, compile_options, load_desc);
 		});
@@ -235,14 +235,14 @@ namespace ECSEngine {
 		CreateAssetFromMetadataExData* ex_data
 	)
 	{
-		return CreateShaderHelper(metadata, ex_data->mount_point, [&](auto file_path, auto compile_options, auto load_desc) {
+		return CreateShaderHelper(metadata, ex_data->mount_point, [&](Stream<wchar_t> file_path, ShaderCompileOptions compile_options, const ResourceManagerLoadDesc& load_desc) {
 			size_t time_stamp = GetTimeStamp(ex_data->time_stamp, file_path);
 			ResourceManagerExDesc ex_desc;
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
-			ex_desc.push_lock = ex_data->resource_manager_lock;
+			ex_desc.multithreaded = ex_data->multithreaded;
 			ex_desc.reference_count = ex_data->reference_count;
-			return resource_manager->LoadShaderImplementationEx(source_code, metadata->shader_type, true, {}, compile_options, load_desc, &ex_desc);
+			return resource_manager->LoadShaderImplementationEx(source_code, metadata->shader_type, ex_data->multithreaded, {}, compile_options, load_desc, &ex_desc);
 		});
 	}
 
@@ -2148,6 +2148,38 @@ namespace ECSEngine {
 		ProtectUnprotectAssetDatabaseResources(database, [resource_manager](const void* asset_pointer, ResourceType resource_type) {
 			resource_manager->UnprotectResource(asset_pointer, resource_type, false);
 		});
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	void AssetTypeLockGPU(ECS_ASSET_TYPE type, SpinLock* gpu_lock) {
+		// Only textures and materials need this lock
+		switch (type) {
+		case ECS_ASSET_TEXTURE:
+		case ECS_ASSET_MATERIAL:
+			gpu_lock->Lock();
+			break;
+		case ECS_ASSET_MESH:
+		case ECS_ASSET_GPU_SAMPLER:
+		case ECS_ASSET_SHADER:
+		case ECS_ASSET_MISC:
+			break;
+		}
+	}
+
+	void AssetTypeUnlockGPU(ECS_ASSET_TYPE type, SpinLock* gpu_lock) {
+		// Only textures and materials need this lock
+		switch (type) {
+		case ECS_ASSET_TEXTURE:
+		case ECS_ASSET_MATERIAL:
+			gpu_lock->Unlock();
+			break;
+		case ECS_ASSET_MESH:
+		case ECS_ASSET_GPU_SAMPLER:
+		case ECS_ASSET_SHADER:
+		case ECS_ASSET_MISC:
+			break;
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------

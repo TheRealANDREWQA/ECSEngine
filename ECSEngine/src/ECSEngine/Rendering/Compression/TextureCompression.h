@@ -10,14 +10,23 @@ namespace ECSEngine {
 	struct Graphics;
 	struct SpinLock;
 
-	struct ECSENGINE_API CompressTextureDescriptor {
-		void GPULock();
+	struct CompressTextureDescriptor {
+		ECS_INLINE void GPULock() const {
+			if (gpu_lock != nullptr) {
+				gpu_lock->Lock();
+			}
+		}
 
-		void GPUUnlock();
+		ECS_INLINE void GPUUnlock() const {
+			if (gpu_lock != nullptr) {
+				gpu_lock->Unlock();
+			}
+		}
 
 		AllocatorPolymorphic allocator = { nullptr };
 		ECS_TEXTURE_COMPRESS_FLAGS flags = ECS_TEXTURE_COMPRESS_NONE;
 		CapacityStream<char>* error_message = nullptr;
+		// If set, it will acquire lock it to synchronize the access to the immediate context
 		SpinLock* gpu_lock = nullptr;
 	};
 
@@ -30,7 +39,7 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Texture2D& texture, 
 		ECS_TEXTURE_COMPRESSION compression_type, 
-		CompressTextureDescriptor descriptor = {},
+		const CompressTextureDescriptor& descriptor = {},
 		DebugInfo debug_info = ECS_DEBUG_INFO
 	);
 
@@ -40,7 +49,7 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Texture2D& texture, 
 		ECS_TEXTURE_COMPRESSION_EX explicit_compression_type,
-		CompressTextureDescriptor descriptor = {},
+		const CompressTextureDescriptor& descriptor = {},
 		DebugInfo debug_info = ECS_DEBUG_INFO
 	);
 
@@ -56,7 +65,7 @@ namespace ECSEngine {
 		size_t height,
 		ECS_TEXTURE_COMPRESSION compression_type,
 		bool temporary_texture = false,
-		CompressTextureDescriptor descriptor = {},
+		const CompressTextureDescriptor& descriptor = {},
 		DebugInfo debug_info = ECS_DEBUG_INFO
 	);
 
@@ -70,7 +79,7 @@ namespace ECSEngine {
 		size_t height,
 		ECS_TEXTURE_COMPRESSION_EX compression_type,
 		bool temporary_texture = false,
-		CompressTextureDescriptor descriptor = {},
+		const CompressTextureDescriptor& descriptor = {},
 		DebugInfo debug_info = ECS_DEBUG_INFO
 	);
 
@@ -85,7 +94,7 @@ namespace ECSEngine {
 		size_t width,
 		size_t height,
 		ECS_TEXTURE_COMPRESSION compression_type,
-		CompressTextureDescriptor descriptor = {}
+		const CompressTextureDescriptor& descriptor = {}
 	);
 
 	// It doesn't relly on the immediate context - if no allocator is specified, it will use Malloc to generate the temporary data
@@ -99,7 +108,7 @@ namespace ECSEngine {
 		size_t width,
 		size_t height,
 		ECS_TEXTURE_COMPRESSION_EX compression_type,
-		CompressTextureDescriptor descriptor = {}
+		const CompressTextureDescriptor& descriptor = {}
 	);
 
 	// Converts the extended types to their underlying compression type

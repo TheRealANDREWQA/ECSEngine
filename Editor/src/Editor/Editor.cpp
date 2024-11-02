@@ -217,7 +217,11 @@ public:
 					// So, we need to wrap this code into a section and check all sandboxes for their
 					// physical memory profilers in case the exception is of type PAGE_GUARD
 					__try {
+						// We need to acquire the proper locks for the frame. When rendering the UI, we need
+						// The lock only on the Graphics object, when running the ticks, we also need the resource manager lock.
 						if (!IsIconic(hWnd)) {
+							editor_state.frame_gpu_lock.Lock();
+
 							// Change the main render target to that of the swap chain
 							graphics->ChangeMainRenderTargetToInitial();
 
@@ -279,11 +283,21 @@ public:
 							if (count == 10000) {
 								__debugbreak();
 							}*/
+
+							editor_state.frame_gpu_lock.Unlock();
 						}
+
+						// Acquire both the resource manager and the Graphics locks, in this order
+						editor_state.RuntimeResourceManager()->Lock();
+						editor_state.frame_gpu_lock.Lock();
 
 						// Run the tick after the UI. At the moment, the mouse/keyboard sandbox
 						// Input is based on this ordering
 						editor_state.Tick();
+
+						// Release the locks
+						editor_state.frame_gpu_lock.Unlock();
+						editor_state.RuntimeResourceManager()->Unlock();
 
 						mouse.Update();
 						keyboard.Update();

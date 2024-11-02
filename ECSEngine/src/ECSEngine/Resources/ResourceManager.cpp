@@ -363,15 +363,15 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	static void AddResourceEx(ResourceManager* resource_manager, ResourceType type, void* data, bool multithreaded_allocation, const ResourceManagerLoadDesc& load_descriptor, ResourceManagerExDesc* ex_desc) {
+	static void AddResourceEx(ResourceManager* resource_manager, ResourceType type, void* data, bool multithreaded_allocation, const ResourceManagerLoadDesc& load_descriptor, const ResourceManagerExDesc* ex_desc) {
 		if (ex_desc != nullptr && ex_desc->HasFilename()) {
-			ex_desc->Lock();
+			ex_desc->Lock(resource_manager);
 			__try {
 				resource_manager->AddResource(ex_desc->filename, type, data, multithreaded_allocation, ex_desc->time_stamp, load_descriptor.identifier_suffix, ex_desc->reference_count);
 			}
 			__finally {
 				// Always release the lock in case of a crash
-				ex_desc->Unlock();
+				ex_desc->Unlock(resource_manager);
 			}
 		}
 	}
@@ -1004,7 +1004,7 @@ namespace ECSEngine {
 		DecodedTexture decoded_texture,
 		const ResourceManagerTextureDesc* descriptor,
 		const ResourceManagerLoadDesc& load_descriptor,
-		ResourceManagerExDesc* ex_desc
+		const ResourceManagerExDesc* ex_desc
 	)
 	{
 		ResourceView texture_view;
@@ -1025,10 +1025,17 @@ namespace ECSEngine {
 
 			if (HasFlag(descriptor->misc_flags, ECS_GRAPHICS_MISC_GENERATE_MIPS) || descriptor->context != nullptr) {
 				void* new_allocation = Malloc(new_image.slicePitch);
-				memcpy(new_allocation, new_image.pixels, new_image.slicePitch);
-				new_image.pixels = (uint8_t*)new_allocation;
-				HRESULT result = DirectX::GenerateMipMaps(new_image, DirectX::TEX_FILTER_LINEAR, 0, image);
-				Free(new_allocation);
+				HRESULT result = S_OK;
+				__try {
+					memcpy(new_allocation, new_image.pixels, new_image.slicePitch);
+					new_image.pixels = (uint8_t*)new_allocation;
+					result = DirectX::GenerateMipMaps(new_image, DirectX::TEX_FILTER_LINEAR, 0, image);
+				}
+				__finally {
+					// Always deallocate this allocation, such that we don't leak it in case of a crash, since this can be quite large
+					Free(new_allocation);
+				}
+
 				if (FAILED(result)) {
 					return nullptr;
 				}
@@ -1127,7 +1134,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	Stream<Mesh>* ResourceManager::LoadMeshImplementationEx(const GLTFData* data, bool multithreaded_allocation, float scale_factor, const ResourceManagerLoadDesc& load_descriptor, ResourceManagerExDesc* ex_desc)
+	Stream<Mesh>* ResourceManager::LoadMeshImplementationEx(const GLTFData* data, bool multithreaded_allocation, float scale_factor, const ResourceManagerLoadDesc& load_descriptor, const ResourceManagerExDesc* ex_desc)
 	{
 		ECS_ASSERT(data->mesh_count < 200);
 
@@ -1153,7 +1160,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	Stream<Mesh>* ResourceManager::LoadMeshImplementationEx(Stream<GLTFMesh> gltf_meshes, bool multithreaded_allocation, float scale_factor, const ResourceManagerLoadDesc& load_descriptor, ResourceManagerExDesc* ex_desc)
+	Stream<Mesh>* ResourceManager::LoadMeshImplementationEx(Stream<GLTFMesh> gltf_meshes, bool multithreaded_allocation, float scale_factor, const ResourceManagerLoadDesc& load_descriptor, const ResourceManagerExDesc* ex_desc)
 	{
 		// Scale the meshes, the function already checks for scale of 1.0f
 		ScaleGLTFMeshes(gltf_meshes, scale_factor);
@@ -1227,7 +1234,7 @@ namespace ECSEngine {
 		bool multithreaded_allocation,
 		float scale_factor, 
 		const ResourceManagerLoadDesc& load_descriptor, 
-		ResourceManagerExDesc* ex_desc
+		const ResourceManagerExDesc* ex_desc
 	)
 	{
 		bool has_invert = !HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
@@ -1265,7 +1272,7 @@ namespace ECSEngine {
 		bool multithreaded_allocation,
 		float scale_factor, 
 		const ResourceManagerLoadDesc& load_descriptor, 
-		ResourceManagerExDesc* ex_desc
+		const ResourceManagerExDesc* ex_desc
 	)
 	{
 		AllocatorPolymorphic allocator = multithreaded_allocation ? AllocatorTs() : Allocator();
@@ -1303,7 +1310,7 @@ namespace ECSEngine {
 		bool multithreaded_allocation,
 		float scale_factor,
 		const ResourceManagerLoadDesc& load_descriptor, 
-		ResourceManagerExDesc* ex_desc
+		const ResourceManagerExDesc* ex_desc
 	)
 	{
 		AllocatorPolymorphic allocator = multithreaded_allocation ? AllocatorTs() : Allocator();
@@ -1438,7 +1445,7 @@ namespace ECSEngine {
 		ShaderCompileOptions compile_options,
 		Stream<char> shader_name,
 		ECS_SHADER_TYPE shader_type,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		bool check_resource_before_unload = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
 
@@ -1451,7 +1458,7 @@ namespace ECSEngine {
 				resource_manager->UnloadShaderImplementation(shader_interface, shader_type);
 			}
 			else {
-				ResourceManagerLoadDesc current_desc;
+				ResourceManagerLoadDesc current_desc = load_descriptor;
 				ECS_STACK_VOID_STREAM(suffix, 512);
 				if (user_material->generate_unique_name_from_setting) {
 					GenerateShaderCompileOptionsSuffix(compile_options, suffix, shader_name);
@@ -1470,7 +1477,7 @@ namespace ECSEngine {
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* material,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		UnloadUserMaterialShader(
 			resource_manager,
@@ -1490,7 +1497,7 @@ namespace ECSEngine {
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* material,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		UnloadUserMaterialShader(
 			resource_manager,
@@ -1532,7 +1539,7 @@ namespace ECSEngine {
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* material,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 		bool check_resource_before_unload = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
@@ -1596,8 +1603,7 @@ namespace ECSEngine {
 	static void UnloadUserMaterialBuffers(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
-		Material* material,
-		ResourceManagerLoadDesc load_descriptor
+		Material* material
 	) {
 		ECS_STACK_CAPACITY_STREAM(ConstantBuffer, temporary_p_buffers, 16);
 		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_p_buffer_slots, 16);
@@ -1635,7 +1641,7 @@ namespace ECSEngine {
 		ResourceManager* resource_manager, 
 		const UserMaterial* user_material, 
 		Material* converted_material,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 
@@ -1648,6 +1654,7 @@ namespace ECSEngine {
 
 		ShaderInterface vertex_shader = { nullptr };
 		if (dont_load) {
+			// We use the single-threaded load because the main UserMaterial function should acquire the lock for us
 			vertex_shader = resource_manager->LoadShaderImplementation(
 				user_material->vertex_shader, 
 				ECS_SHADER_VERTEX,
@@ -1658,7 +1665,7 @@ namespace ECSEngine {
 			);
 		}
 		else {
-			ResourceManagerLoadDesc current_desc;
+			ResourceManagerLoadDesc current_desc = load_descriptor;
 			ECS_STACK_VOID_STREAM(suffix, 512);
 			if (user_material->generate_unique_name_from_setting) {
 				GenerateShaderCompileOptionsSuffix(user_material->vertex_compile_options, suffix, user_material->vertex_shader_name);
@@ -1713,11 +1720,12 @@ namespace ECSEngine {
 		ResourceManager* resource_manager, 
 		const UserMaterial* user_material, 
 		Material* converted_material,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 
 		if (dont_load) {
+			// We use the single-threaded load because the main UserMaterial function should acquire the lock for us
 			converted_material->pixel_shader = resource_manager->LoadShaderImplementation(
 				user_material->pixel_shader, 
 				ECS_SHADER_PIXEL,
@@ -1728,7 +1736,7 @@ namespace ECSEngine {
 			);
 		}
 		else {
-			ResourceManagerLoadDesc current_desc;
+			ResourceManagerLoadDesc current_desc = load_descriptor;
 			ECS_STACK_VOID_STREAM(suffix, 512);
 			if (user_material->generate_unique_name_from_setting) {
 				GenerateShaderCompileOptionsSuffix(user_material->pixel_compile_options, suffix, user_material->pixel_shader_name);
@@ -1748,11 +1756,11 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadUserMaterialTextures(
+	static bool LoadUserMaterialTextures(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
 		Material* converted_material,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor
 	) {
 		converted_material->ResetTextures();
 		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
@@ -1767,7 +1775,7 @@ namespace ECSEngine {
 				texture_desc.misc_flags = user_material->textures[index].generate_mips ? ECS_GRAPHICS_MISC_GENERATE_MIPS : ECS_GRAPHICS_MISC_NONE;
 				texture_desc.srgb = user_material->textures[index].srgb;
 
-				ResourceManagerLoadDesc manager_desc;
+				ResourceManagerLoadDesc manager_desc = load_descriptor;
 				ECS_STACK_VOID_STREAM(settings_suffix, 512);
 				Stream<void> suffix = load_descriptor.identifier_suffix;
 				if (user_material->generate_unique_name_from_setting) {
@@ -1824,8 +1832,7 @@ namespace ECSEngine {
 	static void LoadUserMaterialSamplers(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
-		Material* converted_material,
-		ResourceManagerLoadDesc load_descriptor
+		Material* converted_material
 	) {
 		converted_material->ResetSamplers();
 		for (size_t index = 0; index < user_material->samplers.size; index++) {
@@ -1839,8 +1846,7 @@ namespace ECSEngine {
 	static void LoadUserMaterialBuffers(
 		ResourceManager* resource_manager,
 		const UserMaterial* user_material,
-		Material* converted_material,
-		ResourceManagerLoadDesc load_descriptor
+		Material* converted_material
 	) {
 		converted_material->ResetConstantBuffers();
 		for (size_t index = 0; index < user_material->buffers.size; index++) {
@@ -1880,30 +1886,47 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	bool ResourceManager::LoadUserMaterial(const UserMaterial* user_material, Material* converted_material, const ResourceManagerLoadDesc& load_descriptor)
+	bool ResourceManager::LoadUserMaterial(const UserMaterial* user_material, Material* converted_material, const ResourceManagerLoadDesc& load_descriptor, const ResourceManagerUserMaterialExtraInfo& extra_info)
 	{
 		memset(converted_material, 0, sizeof(*converted_material));
 
 		ECS_ASSERT(user_material->vertex_shader.size > 0, "User material needs vertex shader.");
 		ECS_ASSERT(user_material->pixel_shader.size > 0, "User material needs pixel shader.");
 
-		if (!LoadUserMaterialVertexShader(this, user_material, converted_material, load_descriptor)) {
+		// The shaders and textures require multithreaded resource manager locking, if specified in the extra info
+		extra_info.Lock(this);
+		bool success = true;
+		__try {
+			if (!LoadUserMaterialVertexShader(this, user_material, converted_material, load_descriptor)) {
+				success = false;
+				__leave;
+			}
+
+			if (!LoadUserMaterialPixelShader(this, user_material, converted_material, load_descriptor)) {
+				UnloadUserMaterialVertexShader(this, user_material, converted_material, load_descriptor);
+				success = false;
+				__leave;
+			}
+
+			if (!LoadUserMaterialTextures(this, user_material, converted_material, load_descriptor)) {
+				UnloadUserMaterialVertexShader(this, user_material, converted_material, load_descriptor);
+				UnloadUserMaterialPixelShader(this, user_material, converted_material, load_descriptor);
+				success = false;
+				__leave;
+			}
+		}
+		__finally {
+			// Always release the lock
+			extra_info.Unlock(this);
+		}
+
+		if (!success) {
 			return false;
 		}
 
-		if (!LoadUserMaterialPixelShader(this, user_material, converted_material, load_descriptor)) {
-			UnloadUserMaterialVertexShader(this, user_material, converted_material, load_descriptor);
-			return false;
-		}
-
-		if (!LoadUserMaterialTextures(this, user_material, converted_material, load_descriptor)) {
-			UnloadUserMaterialVertexShader(this, user_material, converted_material, load_descriptor);
-			UnloadUserMaterialPixelShader(this, user_material, converted_material, load_descriptor);
-			return false;
-		}
-
-		LoadUserMaterialBuffers(this, user_material, converted_material, load_descriptor);
-		LoadUserMaterialSamplers(this, user_material, converted_material, load_descriptor);
+		// The buffers and samplers don't require any resource manager locking
+		LoadUserMaterialBuffers(this, user_material, converted_material);
+		LoadUserMaterialSamplers(this, user_material, converted_material);
 
 		return true;
 	}
@@ -2067,7 +2090,7 @@ namespace ECSEngine {
 		const LoadShaderExtraInformation& extra_information,
 		ShaderCompileOptions options,
 		const ResourceManagerLoadDesc& load_descriptor,
-		ResourceManagerExDesc* ex_desc
+		const ResourceManagerExDesc* ex_desc
 	) {
 		// Create a special allocator for the include policy, we cannot use the main manager allocator
 		// Even with multithreaded access because there are still single threaded functions that run on
@@ -2108,7 +2131,7 @@ namespace ECSEngine {
 
 		if (shader != nullptr) {
 			if (ex_desc != nullptr && ex_desc->HasFilename()) {
-				ex_desc->Lock();
+				ex_desc->Lock(manager);
 
 				__try {
 					// We are in a locked section code, can use the main allocator
@@ -2131,7 +2154,7 @@ namespace ECSEngine {
 				}
 				__finally {
 					// Perform the unlock even when faced with a crash
-					ex_desc->Unlock();
+					ex_desc->Unlock(manager);
 				}
 			}
 		}
@@ -2257,7 +2280,7 @@ namespace ECSEngine {
 		const LoadShaderExtraInformation& extra_information,
 		ShaderCompileOptions options, 
 		const ResourceManagerLoadDesc& load_descriptor,
-		ResourceManagerExDesc* ex_desc
+		const ResourceManagerExDesc* ex_desc
 	)
 	{
 		return LoadShaderInternalImplementationEx(this, source_code, shader_type, multithreaded_allocation, extra_information, options, load_descriptor, ex_desc);
@@ -2586,13 +2609,20 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::UnloadUserMaterial(const UserMaterial* user_material, Material* material, const ResourceManagerLoadDesc& load_desc)
+	void ResourceManager::UnloadUserMaterial(const UserMaterial* user_material, Material* material, const ResourceManagerLoadDesc& load_desc, const ResourceManagerUserMaterialExtraInfo& extra_info)
 	{
-		UnloadUserMaterialVertexShader(this, user_material, material, load_desc);
-		UnloadUserMaterialPixelShader(this, user_material, material, load_desc);
+		// Acquire the lock for the shaders and textures, the samplers and buffers don't need locking
+		extra_info.Lock(this);
+		__try {
+			UnloadUserMaterialVertexShader(this, user_material, material, load_desc);
+			UnloadUserMaterialPixelShader(this, user_material, material, load_desc);
+			UnloadUserMaterialTextures(this, user_material, material, load_desc);
+		}
+		__finally {
+			extra_info.Unlock(this);
+		}
 
-		UnloadUserMaterialTextures(this, user_material, material, load_desc);
-		UnloadUserMaterialBuffers(this, user_material, material, load_desc);
+		UnloadUserMaterialBuffers(this, user_material, material);
 
 		bool free_samplers = !HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS);
 		if (free_samplers) {
@@ -2758,6 +2788,18 @@ namespace ECSEngine {
 	size_t DefaultResourceManagerAllocatorSize()
 	{
 		return ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_INITIAL_SIZE;
+	}
+
+	void ResourceManagerUserMaterialExtraInfo::Lock(ResourceManager* resource_manager) const {
+		if (multithreaded) {
+			resource_manager->Lock();
+		}
+	}
+
+	void ResourceManagerUserMaterialExtraInfo::Unlock(ResourceManager* resource_manager) const {
+		if (multithreaded) {
+			resource_manager->Unlock();
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -2932,7 +2974,8 @@ namespace ECSEngine {
 		const UserMaterial* new_user_material,
 		Material* material,
 		ReloadUserMaterialOptions options,
-		ResourceManagerLoadDesc load_descriptor
+		const ResourceManagerLoadDesc& load_descriptor,
+		const ResourceManagerUserMaterialExtraInfo& extra_info
 	)
 	{
 		Material temporary_material;
@@ -2950,47 +2993,63 @@ namespace ECSEngine {
 		// if some resources have not changed loading will increment the reference count
 		// and prevent them from being released from memory.
 
-		if (options.reload_vertex_shader) {
-			bool success = LoadUserMaterialVertexShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
-			if (!success) {
-				// Deallocate the material
-				//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
-				return false;
+		// Acquire the multithreading lock, if needed. It is required by the shaders and textures, the samplers
+		// And the buffers don't need that.
+		bool success = true;
+		extra_info.Lock(resource_manager);
+		__try {
+			if (options.reload_vertex_shader) {
+				bool success = LoadUserMaterialVertexShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
+				if (!success) {
+					// Deallocate the material
+					//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
+					success = false;
+					__leave;
+				}
+
+				UnloadUserMaterialVertexShader(resource_manager, old_user_material, material, load_descriptor);
 			}
 
-			UnloadUserMaterialVertexShader(resource_manager, old_user_material, material, load_descriptor);
+			if (options.reload_pixel_shader) {
+				bool success = LoadUserMaterialPixelShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
+				if (!success) {
+					// We don't have to unload the vertex shader if it was reloaded - that is not the correct behaviour
+					// Deallocate the material
+					//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
+					success = false;
+					__leave;
+				}
+
+				UnloadUserMaterialPixelShader(resource_manager, old_user_material, material, load_descriptor);
+			}
+
+			if (options.reload_textures) {
+				bool success = LoadUserMaterialTextures(resource_manager, new_user_material, &temporary_material, load_descriptor);
+				if (!success) {
+					// We don't have to unload the shaders if they were reloaded - that is not the correct behaviour
+					// Deallocate the material
+					//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
+					success = false;
+					__leave;
+				}
+
+				UnloadUserMaterialTextures(resource_manager, old_user_material, material, load_descriptor);
+			}
+		}
+		__finally {
+			extra_info.Unlock(resource_manager);
 		}
 
-		if (options.reload_pixel_shader) {
-			bool success = LoadUserMaterialPixelShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
-			if (!success) {
-				// We don't have to unload the vertex shader if it was reloaded - that is not the correct behaviour
-				// Deallocate the material
-				//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
-				return false;
-			}
-
-			UnloadUserMaterialPixelShader(resource_manager, old_user_material, material, load_descriptor);
-		}
-
-		if (options.reload_textures) {
-			bool success = LoadUserMaterialTextures(resource_manager, new_user_material, &temporary_material, load_descriptor);
-			if (!success) {
-				// We don't have to unload the shaders if they were reloaded - that is not the correct behaviour
-				// Deallocate the material
-				//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
-				return false;
-			}
-
-			UnloadUserMaterialTextures(resource_manager, old_user_material, material, load_descriptor);
+		if (!success) {
+			return false;
 		}
 
 		if (options.reload_buffers) {
 			// Here we can unload and then load since these are not affected by reference counts
-			UnloadUserMaterialBuffers(resource_manager, old_user_material, material, load_descriptor);
+			UnloadUserMaterialBuffers(resource_manager, old_user_material, material);
 			// Reset the buffers
 			material->ResetConstantBuffers();
-			LoadUserMaterialBuffers(resource_manager, new_user_material, material, load_descriptor);
+			LoadUserMaterialBuffers(resource_manager, new_user_material, material);
 		}
 
 		if (options.reload_samplers) {
@@ -2999,7 +3058,7 @@ namespace ECSEngine {
 				UnloadUserMaterialSamplers(resource_manager, old_user_material);
 			}
 			material->ResetSamplers();
-			LoadUserMaterialSamplers(resource_manager, new_user_material, material, load_descriptor);
+			LoadUserMaterialSamplers(resource_manager, new_user_material, material);
 		}
 
 		// Copy now the values from the temporary material - only for shaders and textures

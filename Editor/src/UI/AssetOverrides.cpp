@@ -475,38 +475,6 @@ static UIDrawerMenuState GetMenuForSelection(const BaseDrawData* base_data, ECS_
 	return menu_state;
 }
 
-struct AcquireCallbackData {
-	EditorState* editor_state;
-	ECS_ASSET_TYPE asset_type;
-	unsigned int handle;
-	CapacityStream<char>* selection;
-};
-
-static void AcquireCallback(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	AcquireCallbackData* data = (AcquireCallbackData*)_data;
-	bool success = CreateAsset(data->editor_state, data->handle, data->asset_type);
-
-	if (success) {
-		Stream<char> asset_name = data->editor_state->asset_database->GetAssetName(data->handle, data->asset_type);
-		Stream<wchar_t> asset_file = data->editor_state->asset_database->GetAssetPath(data->handle, data->asset_type);
-
-		Stream<char> final_selection = asset_name;
-		ECS_STACK_CAPACITY_STREAM(char, converted_name, 256);
-
-		if (asset_file.size > 0) {
-			ConvertMetadataNameAndFileToSelection(asset_name, asset_file, converted_name);
-			final_selection = converted_name;
-
-		}
-		data->selection->CopyOther(final_selection);
-	}
-	else {
-		EditorSetConsoleError("Failed to acquire the drag.");
-	}
-}
-
 // Stack allocation needs to be at least ECS_KB * 4 large
 struct DrawBaseReturn {
 	CapacityStream<wchar_t> absolute_path;

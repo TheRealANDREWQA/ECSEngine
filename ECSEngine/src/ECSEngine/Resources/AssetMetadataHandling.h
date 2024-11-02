@@ -11,7 +11,7 @@ namespace ECSEngine {
 	struct GLTFMesh;
 
 	struct CreateAssetFromMetadataExData {
-		SpinLock* resource_manager_lock = nullptr;
+		bool multithreaded = false;
 		size_t time_stamp = 0;
 		Stream<wchar_t> mount_point = { nullptr, 0 };
 		
@@ -22,6 +22,7 @@ namespace ECSEngine {
 
 #pragma region Create and Identifiers
 
+	// SINGLE THREADED
 	// Returns true if it managed to create the asset according to the metadata, else false
 	// It does not modify the underlying CoalescedMesh* pointer if it fails
 	ECSENGINE_API bool CreateMeshFromMetadata(
@@ -55,6 +56,7 @@ namespace ECSEngine {
 	// The combination of settings that form an identifier
 	ECSENGINE_API void MeshMetadataIdentifier(const MeshMetadata* metadata, CapacityStream<void>& identifier);
 
+	// SINGLE THREADED
 	// Returns true if it managed to create the asset according to the metadata, else false
 	// It does not modify the underlying ResourceView if it fails
 	ECSENGINE_API bool CreateTextureFromMetadata(
@@ -70,7 +72,7 @@ namespace ECSEngine {
 		ResourceManager* resource_manager,
 		TextureMetadata* metadata,
 		DecodedTexture texture,
-		SpinLock* gpu_spin_lock = nullptr,
+		SpinLock* gpu_lock = nullptr,
 		CreateAssetFromMetadataExData* ex_data = {}
 	);
 	
@@ -79,6 +81,7 @@ namespace ECSEngine {
 	// Receives a resource manager instead of a graphics object in order to keep the API the same for all these types
 	ECSENGINE_API void CreateSamplerFromMetadata(ResourceManager* resource_manager, GPUSamplerMetadata* metadata);
 
+	// SINGLE THREADED
 	// Returns true if it managed to create the asset according to the metadata, else false
 	// It does not modify the underlying Shader Interface if it fails
 	ECSENGINE_API bool CreateShaderFromMetadata(
@@ -97,13 +100,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API void ShaderMetadataIdentifier(const ShaderMetadata* metadata, CapacityStream<void>& identifier);
 
+	// SINGLE THREADED
 	// Returns true if it managed to create the asset according to the metadata, else false
 	// It does not modify the underlying Material pointer if it fails (if the pointer is nullptr
 	// and it succeeds then it will make an allocation from the asset database allocator)
 	ECSENGINE_API bool CreateMaterialFromMetadata(
 		ResourceManager* resource_manager, 
 		AssetDatabase* asset_database,
-		MaterialAsset* material, 
+		MaterialAsset* material,
 		Stream<wchar_t> mount_point = { nullptr, 0 },
 		bool dont_load_referenced = false
 	);
@@ -117,6 +121,7 @@ namespace ECSEngine {
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
 
+	// SINGLE THREADED
 	// It does not modify the underlying Stream<void> from the misc asset if it fails.
 	ECSENGINE_API bool CreateMiscAssetFromMetadata(
 		ResourceManager* resource_manager,
@@ -126,8 +131,7 @@ namespace ECSEngine {
 
 	ECSENGINE_API void MiscMetadataIdentifier(const MiscAsset* misc, CapacityStream<void>& identifier);
 	
-	// If the copy_instead_of_reference flag is set then for meshes and materials
-	// it will memcpy into the existing 
+	// SINGLE THREADED
 	ECSENGINE_API bool CreateAssetFromMetadata(
 		ResourceManager* resource_manager,
 		AssetDatabase* database,
@@ -244,20 +248,25 @@ namespace ECSEngine {
 
 #pragma region Deallocate
 
+	// SINGLE THREADED
 	// Returns true if the resource reference counted was decremented (by default it checks to see if it exists,
 	// if it doesn't it does nothing)
 	ECSENGINE_API bool DeallocateMeshFromMetadata(ResourceManager* resource_manager, const MeshMetadata* metadata, Stream<wchar_t> mount_point = { nullptr, 0 });
 
+	// SINGLE THREADED
 	// Returns true if the resource reference counted was decremented (by default it checks to see if it exists,
 	// if it doesn't it does nothing)
 	ECSENGINE_API bool DeallocateTextureFromMetadata(ResourceManager* resource_manager, const TextureMetadata* metadata, Stream<wchar_t> mount_point = { nullptr, 0 });
 
+	// Can be used by from multiple threads
 	ECSENGINE_API void DeallocateSamplerFromMetadata(ResourceManager* resource_manager, const GPUSamplerMetadata* metadata);
 
+	// SINGLE THREADED
 	// Returns true if the resource reference counted was decremented (by default it checks to see if it exists,
 	// if it doesn't it does nothing)
 	ECSENGINE_API bool DeallocateShaderFromMetadata(ResourceManager* resource_manager, const ShaderMetadata* metadata, Stream<wchar_t> mount_point = { nullptr, 0 });
 
+	// SINGLE THREADED
 	// If the check_resource is set to true, it will check to see that the texture/shader exists in the resource
 	// manager and attempt to unload if it does
 	ECSENGINE_API void DeallocateMaterialFromMetadata(
@@ -268,6 +277,7 @@ namespace ECSEngine {
 		bool check_resource = false
 	);
 
+	// SINGLE THREADED
 	// Returns true if the resource reference counted was decremented (by default it checks to see if it exists,
 	// if it doesn't it does nothing)
 	ECSENGINE_API bool DeallocateMiscAssetFromMetadata(ResourceManager* resource_manager, const MiscAsset* misc, Stream<wchar_t> mount_point = { nullptr, 0 });
@@ -277,6 +287,7 @@ namespace ECSEngine {
 		bool material_check_resource = false;
 	};
 
+	// SINGLE THREADED
 	// Returns true if the resource reference counted was decremented (by default it checks to see if it exists,
 	// if it doesn't it does nothing). For materials and samplers it always returns true
 	ECSENGINE_API bool DeallocateAssetFromMetadata(
@@ -292,6 +303,7 @@ namespace ECSEngine {
 
 #pragma region Reload functions
 
+	// SINGLE THREADED
 	// It will reload the entire asset. In the x return true if the deallocation was successful
 	// and in the y if the creation was successful
 	ECSENGINE_API bool2 ReloadAssetFromMetadata(
@@ -310,6 +322,7 @@ namespace ECSEngine {
 		bool2 success;
 	};
 
+	// SINGLE THREADED
 	// It will calculate the difference between the assets and then perform a minimal reload
 	// (For assets that have dependencies if they have not changed then it will not unload them
 	// and then reload them). It returns the compare result and the success status (this is valid
@@ -341,6 +354,7 @@ namespace ECSEngine {
 		CapacityStream<AssetTypedHandle>* handles = nullptr;
 	};
 
+	// SINGLE THREADED
 	// Reloads the buffers, textures and samplers to conform to the new shader file
 	// Returns the status of the reload.
 	// Remove dependencies can be specified such that when an asset with dependencies has one of
@@ -530,13 +544,13 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	);
 
-	ECS_INLINE void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code) {
+	//ECS_INLINE void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code) {
 		//metadata->source_code = source_code;
-	}
+	//}
 
-	ECS_INLINE void SetShaderMetadataByteCode(ShaderMetadata* metadata, Stream<void> byte_code) {
+	//ECS_INLINE void SetShaderMetadataByteCode(ShaderMetadata* metadata, Stream<void> byte_code) {
 		//metadata->byte_code = byte_code;
-	}
+	//}
 
 	ECS_INLINE void SetMiscData(MiscAsset* misc_asset, Stream<void> data) {
 		misc_asset->data = data;
@@ -547,6 +561,14 @@ namespace ECSEngine {
 
 	// Unprotects all the assets from the database into the resource manager
 	ECSENGINE_API void UnprotectAssetDatabaseResources(const AssetDatabase* database, ResourceManager* resource_manager);
+
+	// If you want to protect the GPU from being used by multiple threads at the same time, you can call this
+	// Function and it will lock the GPU only if the asset actually requires it, else it won't touch it
+	ECSENGINE_API void AssetTypeLockGPU(ECS_ASSET_TYPE type, SpinLock* gpu_lock);
+
+	// If you want to protect the GPU from being used by multiple threads at the same time, you can call this
+	// Function and it will unlock the GPU only if the asset actually requires it, else it won't touch it
+	ECSENGINE_API void AssetTypeUnlockGPU(ECS_ASSET_TYPE type, SpinLock* gpu_lock);
 
 	// Helper that based upon a boolean will protect/unprotect the resources in the resource manager
 	// From the asset database. They will be unprotected upon leaving the scope, using a stack scope.

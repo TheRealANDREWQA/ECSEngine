@@ -84,6 +84,8 @@ namespace ECSEngine {
 
 	struct GLTFData;
 	struct GLTFMesh;
+	struct ResourceManager;
+	struct ResourceManagerExDesc;
 
 	struct ResourceManagerLoadDesc {
 		ECS_INLINE void GPULock() const {
@@ -108,35 +110,18 @@ namespace ECSEngine {
 		// You need to come up in a way to differentiate between the parameters and the identifier
 		// (a byte concatenation should be good enough)
 		Stream<void> identifier_suffix = { nullptr, 0 };
-		// Only for graphics resources. If they need access to the immediate context then they will acquire this
-		// lock before doing the operation
+		// Only for graphics resources. If they need access to the immediate context then they will acquire the
+		// Graphics object lock before proceeding to use the immediate context
 		SpinLock* gpu_lock = nullptr;
 	};
 
-	struct ResourceManagerExDesc {
-		ECS_INLINE bool HasFilename() const {
-			return filename.size > 0;
-		}
+	struct ECSENGINE_API ResourceManagerUserMaterialExtraInfo {
+		void Lock(ResourceManager* resource_manager) const;
 
-		ECS_INLINE void Lock() {
-			if (push_lock != nullptr) {
-				push_lock->Lock();
-			}
-		}
+		void Unlock(ResourceManager* resource_manager) const;
 
-		ECS_INLINE void Unlock() {
-			if (push_lock != nullptr) {
-				push_lock->Unlock();
-			}
-		}
-
-		Stream<wchar_t> filename = { nullptr, 0 };
-		size_t time_stamp = 0;
-		SpinLock* push_lock = nullptr;
-
-		// Can optionally specify the reference count for the resource to be inserted
-		// If it is left at default, it will be non-reference counted
-		unsigned int reference_count = USHORT_MAX;
+		// This flag should be used if multithreading is used to add resources to the resource manager
+		bool multithreaded = false;
 	};
 
 	struct ResourceManagerSnapshot {
@@ -160,8 +145,6 @@ namespace ECSEngine {
 
 		Stream<Resource> resources[(unsigned int)ResourceType::TypeCount];
 	};
-
-	struct ResourceManager;
 
 	// This contains extra information that you can extract from the LoadShader functions, in case you need it
 	struct ECSENGINE_API LoadShaderExtraInformation {
@@ -394,7 +377,7 @@ namespace ECSEngine {
 			DecodedTexture decoded_texture,
 			const ResourceManagerTextureDesc* descriptor,
 			const ResourceManagerLoadDesc& load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
+			const ResourceManagerExDesc* ex_desc = {}
 		);
 
 		// Loads all meshes from a gltf file. If it fails it returns nullptr. It allocates memory from the allocator
@@ -419,7 +402,7 @@ namespace ECSEngine {
 			bool multithreaded_allocation,
 			float scale_factor = 1.0f,
 			const ResourceManagerLoadDesc& load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
+			const ResourceManagerExDesc* ex_desc = {}
 		);
 
 		// A more detailed version that directly takes the data and does not deallocate it
@@ -431,7 +414,7 @@ namespace ECSEngine {
 			bool multithreaded_allocation,
 			float scale_factor = 1.0f, 
 			const ResourceManagerLoadDesc& load_descriptor = {}, 
-			ResourceManagerExDesc* ex_desc = {}
+			const ResourceManagerExDesc* ex_desc = {}
 		);
 
 		// Loads all meshes from a gltf file and creates a coalesced mesh
@@ -455,7 +438,7 @@ namespace ECSEngine {
 			bool multithreaded_allocation,
 			float scale_factor = 1.0f,
 			const ResourceManagerLoadDesc& load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
+			const ResourceManagerExDesc* ex_desc = {}
 		);
 
 		// A more detailed version that directly takes the data and does not deallocate it
@@ -467,7 +450,7 @@ namespace ECSEngine {
 			bool multithreaded_allocation,
 			float scale_factor = 1.0f,
 			const ResourceManagerLoadDesc& load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
+			const ResourceManagerExDesc* ex_desc = {}
 		);
 
 		// A more detailed version that directly takes the data and does not deallocate it
@@ -481,7 +464,7 @@ namespace ECSEngine {
 			bool multithreaded_allocation,
 			float scale_factor = 1.0f,
 			const ResourceManagerLoadDesc& load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
+			const ResourceManagerExDesc* ex_desc = {}
 		);
 
 		// Loads all materials from a gltf file
@@ -495,12 +478,14 @@ namespace ECSEngine {
 		Stream<PBRMaterial>* LoadMaterialsImplementation(Stream<wchar_t> filename, bool multithreaded_allocation, const ResourceManagerLoadDesc& load_descriptor = {});
 
 		// Converts a list of textures into a material. If it fails (a path doesn't exist, or a shader is invalid)
-		// it returns false and rolls back any loads that have been done. It must be called from a single thread.
+		// it returns false and rolls back any loads that have been done. If you want to synchronize this with multiple threads,
+		// You can provide the boolean flag in the extra info in order for the ResourceManager's lock to be used.
 		// Flags: ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS
 		bool LoadUserMaterial(
 			const UserMaterial* user_material,
 			Material* converted_material,
-			const ResourceManagerLoadDesc& load_descriptor = {}
+			const ResourceManagerLoadDesc& load_descriptor = {},
+			const ResourceManagerUserMaterialExtraInfo& extra_info = {}
 		);
 
 		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
@@ -557,7 +542,7 @@ namespace ECSEngine {
 			const LoadShaderExtraInformation& extra_information = {},
 			ShaderCompileOptions options = {},
 			const ResourceManagerLoadDesc& load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
+			const ResourceManagerExDesc* ex_desc = {}
 		);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
@@ -568,6 +553,20 @@ namespace ECSEngine {
 		ResizableStream<void>* LoadMisc(Stream<wchar_t> filename, AllocatorPolymorphic allocator = { nullptr }, const ResourceManagerLoadDesc& load_descriptor = {});
 		
 		ResizableStream<void> LoadMiscImplementation(Stream<wchar_t> filename, AllocatorPolymorphic allocator = { nullptr }, const ResourceManagerLoadDesc& load_descriptor = {});
+
+		// ---------------------------------------------------------------------------------------------------------------------------
+
+		// This will lock the general push lock - the other threads must use this lock as well
+		// In order for the synchronization to work
+		ECS_INLINE void Lock() {
+			m_lock.Lock();
+		}
+
+		// This will unlock the general push lock - the other threads must use this lock as well
+		// In order for the synchronization to work
+		ECS_INLINE void Unlock() {
+			m_lock.Unlock();
+		}
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -656,10 +655,11 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
-		// The material will have the textures and the buffers removed from the material
+		// The material will have the textures and the buffers removed from the material.
+		// If you want this to be used in a multithreading context, pass the multithreaded flag in the extra info as true
 		// Flags: ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE
 		// (the latter in conjunction with the first flag)
-		void UnloadUserMaterial(const UserMaterial* user_material, Material* material, const ResourceManagerLoadDesc& load_desc = {});
+		void UnloadUserMaterial(const UserMaterial* user_material, Material* material, const ResourceManagerLoadDesc& load_desc = {}, const ResourceManagerUserMaterialExtraInfo& extra_info = {});
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -717,15 +717,41 @@ namespace ECSEngine {
 
 		Graphics* m_graphics;
 		ResourceManagerAllocator* m_memory;
-		// 
 		MemoryManager m_multithreaded_allocator;
 		Stream<ResourceManagerTable> m_resource_types;
 		ResizableStream<Stream<wchar_t>> m_shader_directory;
+		// This lock is used as a push lock in order to protect Load***ImplementationEx additions
+		SpinLock m_lock;
+	};
+
+	struct ResourceManagerExDesc {
+		ECS_INLINE bool HasFilename() const {
+			return filename.size > 0;
+		}
+
+		ECS_INLINE void Lock(ResourceManager* resource_manager) const {
+			if (multithreaded) {
+				resource_manager->Lock();
+			}
+		}
+
+		ECS_INLINE void Unlock(ResourceManager* resource_manager) const {
+			if (multithreaded) {
+				resource_manager->Unlock();
+			}
+		}
+
+		Stream<wchar_t> filename = { nullptr, 0 };
+		size_t time_stamp = 0;
+		// If this flag is set, it will acquire the resource manager's lock in order to push the addition to the main table entries
+		bool multithreaded = false;
+
+		// Can optionally specify the reference count for the resource to be inserted
+		// If it is left at default, it will be non-reference counted
+		unsigned int reference_count = USHORT_MAX;
 	};
 
 #pragma region Free functions
-
-	
 
 	// --------------------------------------------------------------------------------------------------------------------
 
@@ -745,6 +771,7 @@ namespace ECSEngine {
 	// this material pointer. It returns true if it succeeded, else false. When it fails it will maintain a consistent
 	// state (a state where all the old_user_material resources were deallocated and no new resources are loaded) - the
 	// same state as calling deallocate on the old material. If it fails simply discard the contents in the material
+	// If you want this to be used in a multithreading context, pass the extra_info multithreaded flag as true
 	// Flags:
 	// ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS
 	// ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE
@@ -754,7 +781,8 @@ namespace ECSEngine {
 		const UserMaterial* new_user_material,
 		Material* material, 
 		ReloadUserMaterialOptions options,
-		ResourceManagerLoadDesc load_descriptor = {}
+		const ResourceManagerLoadDesc& load_descriptor = {},
+		const ResourceManagerUserMaterialExtraInfo& extra_info = {}
 	);
 
 	// --------------------------------------------------------------------------------------------------------------------

@@ -10,7 +10,7 @@
 
 namespace ECSEngine {
 
-	ECS_GRAPHICS_FORMAT COMPRESSED_FORMATS[] = {
+	static ECS_GRAPHICS_FORMAT COMPRESSED_FORMATS[] = {
 		ECS_GRAPHICS_FORMAT_UNKNOWN,
 		ECS_GRAPHICS_FORMAT_BC1,
 		ECS_GRAPHICS_FORMAT_BC3,
@@ -21,7 +21,7 @@ namespace ECSEngine {
 	};
 
 	// Only BC1, BC3 and BC7 are affected
-	ECS_GRAPHICS_FORMAT COMPRESSED_FORMATS_SRGB[] = {
+	static ECS_GRAPHICS_FORMAT COMPRESSED_FORMATS_SRGB[] = {
 		ECS_GRAPHICS_FORMAT_UNKNOWN,
 		ECS_GRAPHICS_FORMAT_BC1_SRGB,
 		ECS_GRAPHICS_FORMAT_BC3_SRGB,
@@ -31,7 +31,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_FORMAT_BC7_SRGB
 	};
 
-	ECS_TEXTURE_COMPRESSION EXPLICIT_COMPRESSION_MAPPING[] = {
+	static ECS_TEXTURE_COMPRESSION EXPLICIT_COMPRESSION_MAPPING[] = {
 		ECS_TEXTURE_COMPRESSION_NONE,
 		ECS_TEXTURE_COMPRESSION_BC1,
 		ECS_TEXTURE_COMPRESSION_BC1,
@@ -44,7 +44,7 @@ namespace ECSEngine {
 		ECS_TEXTURE_COMPRESSION_BC7
 	};
 
-	ECS_TEXTURE_COMPRESS_FLAGS EXPLICIT_COMPRESSION_FLAGS[] = {
+	static ECS_TEXTURE_COMPRESS_FLAGS EXPLICIT_COMPRESSION_FLAGS[] = {
 		ECS_TEXTURE_COMPRESS_NONE,
 		ECS_TEXTURE_COMPRESS_NONE,
 		ECS_TEXTURE_COMPRESS_NONE,
@@ -56,7 +56,7 @@ namespace ECSEngine {
 		ECS_TEXTURE_COMPRESS_NONE
 	};
 
-	DXGI_FORMAT ToSignedFormat(DXGI_FORMAT format) {
+	static DXGI_FORMAT ToSignedFormat(DXGI_FORMAT format) {
 		switch (format) {
 		case DXGI_FORMAT_BC4_UNORM:
 			return DXGI_FORMAT_BC4_SNORM;
@@ -70,18 +70,17 @@ namespace ECSEngine {
 	}
 
 	// the format must come from the UNORM formats
-	ECS_INLINE DXGI_FORMAT ToTypelessFormat(DXGI_FORMAT format) {
+	ECS_INLINE static DXGI_FORMAT ToTypelessFormat(DXGI_FORMAT format) {
 		return (DXGI_FORMAT)(format - 1);
 	}
 
-	static void SetErrorMessageInternal(CapacityStream<char>* error_message, Stream<char> error) {
+	ECS_INLINE static void SetErrorMessageInternal(CapacityStream<char>* error_message, Stream<char> error) {
 		if (error_message != nullptr) {
 			error_message->CopyOther(error);
-			error_message->AssertCapacity();
 		}
 	}
 
-	ECS_INLINE DirectX::TEX_COMPRESS_FLAGS AddCompressionFlag(DirectX::TEX_COMPRESS_FLAGS initial, DirectX::TEX_COMPRESS_FLAGS flag, bool state) {
+	ECS_INLINE static DirectX::TEX_COMPRESS_FLAGS AddCompressionFlag(DirectX::TEX_COMPRESS_FLAGS initial, DirectX::TEX_COMPRESS_FLAGS flag, bool state) {
 		return (DirectX::TEX_COMPRESS_FLAGS)((unsigned int)initial | ((unsigned int)flag * state));
 	}
 
@@ -96,7 +95,7 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Texture2D& texture, 
 		ECS_TEXTURE_COMPRESSION compression_type,
-		CompressTextureDescriptor descriptor,
+		const CompressTextureDescriptor& descriptor,
 		DebugInfo debug_info
 	) {
 		// Get the texture descriptor and fill the DirectX image
@@ -149,6 +148,7 @@ namespace ECSEngine {
 		// For compression
 		descriptor.GPULock();
 		bool is_locked = true;
+		bool success = true;
 
 		HRESULT compress_result = 0;
 		Texture2D staging_texture;
@@ -159,7 +159,8 @@ namespace ECSEngine {
 				SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Could not create staging texture");
 				descriptor.GPUUnlock();
 				is_locked = false;
-				return false;
+				success = false;
+				__leave;
 			}
 
 			for (size_t index = 0; index < texture_descriptor.mip_levels; index++) {
@@ -168,7 +169,8 @@ namespace ECSEngine {
 					SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Mapping a mip level failed");
 					descriptor.GPUUnlock();
 					is_locked = false;
-					return false;
+					success = false;
+					__leave;
 				}
 				const DirectX::Image* image = initial_image.GetImage(index, 0, 0);
 				if (image->rowPitch == mapping.RowPitch) {
@@ -189,6 +191,7 @@ namespace ECSEngine {
 			// CPU codec
 			if (IsCPUCodec(compression_type)) {
 				descriptor.GPUUnlock();
+				is_locked = false;
 
 				compress_result = DirectX::Compress(
 					initial_image.GetImages(),
@@ -217,12 +220,14 @@ namespace ECSEngine {
 			}
 			else {
 				SetErrorMessageInternal(descriptor.error_message, "Invalid compression codec for texture compression");
-				return false;
+				success = false;
+				__leave;
 			}
 
 			if (FAILED(compress_result)) {
 				SetErrorMessageInternal(descriptor.error_message, "Texture compression failed during codec");
-				return false;
+				success = false;
+				__leave;
 			}
 		}
 		__finally {
@@ -235,6 +240,10 @@ namespace ECSEngine {
 					staging_texture.Release();
 				}
 			}
+		}
+
+		if (!success) {
+			return false;
 		}
 
 		ECS_STACK_CAPACITY_STREAM(Stream<void>, mip_data, 32);
@@ -270,16 +279,17 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Texture2D& texture, 
 		ECS_TEXTURE_COMPRESSION_EX explicit_compression_type, 
-		CompressTextureDescriptor descriptor,
+		const CompressTextureDescriptor& descriptor,
 		DebugInfo debug_info
 	) {
-		descriptor.flags |= EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type];
+		CompressTextureDescriptor modified_descriptor = descriptor;
+		modified_descriptor.flags |= EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type];
 		
 		return CompressTexture(
 			graphics,
 			texture, 
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)explicit_compression_type], 
-			descriptor,
+			modified_descriptor,
 			debug_info
 		);
 	}
@@ -293,7 +303,7 @@ namespace ECSEngine {
 		size_t height, 
 		ECS_TEXTURE_COMPRESSION compression_type,
 		bool temporary_texture,
-		CompressTextureDescriptor descriptor,
+		const CompressTextureDescriptor& descriptor,
 		DebugInfo debug_info
 	)
 	{
@@ -417,11 +427,12 @@ namespace ECSEngine {
 		size_t height, 
 		ECS_TEXTURE_COMPRESSION_EX compression_type,
 		bool temporary_texture,
-		CompressTextureDescriptor descriptor,
+		const CompressTextureDescriptor& descriptor,
 		DebugInfo debug_info
 	)
 	{
-		descriptor.flags |= EXPLICIT_COMPRESSION_FLAGS[(unsigned int)compression_type];
+		CompressTextureDescriptor modified_descriptor = descriptor;
+		modified_descriptor.flags |= EXPLICIT_COMPRESSION_FLAGS[(unsigned int)compression_type];
 
 		return CompressTexture(
 			graphics, 
@@ -430,7 +441,7 @@ namespace ECSEngine {
 			height,
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)compression_type],
 			temporary_texture,
-			descriptor,
+			modified_descriptor,
 			debug_info
 		);
 	}
@@ -443,7 +454,7 @@ namespace ECSEngine {
 		size_t width,
 		size_t height, 
 		ECS_TEXTURE_COMPRESSION compression_type,
-		CompressTextureDescriptor descriptor
+		const CompressTextureDescriptor& descriptor
 	)
 	{
 		// Get the texture descriptor and fill the DirectX image
@@ -533,10 +544,11 @@ namespace ECSEngine {
 		size_t width,
 		size_t height, 
 		ECS_TEXTURE_COMPRESSION_EX compression_type,
-		CompressTextureDescriptor descriptor
+		const CompressTextureDescriptor& descriptor
 	)
 	{
-		descriptor.flags |= EXPLICIT_COMPRESSION_FLAGS[(unsigned int)compression_type];
+		CompressTextureDescriptor modified_descriptor = descriptor;
+		modified_descriptor.flags |= EXPLICIT_COMPRESSION_FLAGS[(unsigned int)compression_type];
 
 		return CompressTexture(
 			data,
@@ -544,7 +556,7 @@ namespace ECSEngine {
 			width,
 			height,
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)compression_type],
-			descriptor
+			modified_descriptor
 		);
 	}
 
@@ -632,22 +644,6 @@ namespace ECSEngine {
 	ECS_GRAPHICS_FORMAT GetCompressedRenderFormat(ECS_TEXTURE_COMPRESSION_EX compression, bool srgb)
 	{
 		return GetCompressedRenderFormat(EXPLICIT_COMPRESSION_MAPPING[(unsigned int)compression], srgb);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------------
-
-	void CompressTextureDescriptor::GPULock()
-	{
-		if (gpu_lock != nullptr) {
-			gpu_lock->Lock();
-		}
-	}
-
-	void CompressTextureDescriptor::GPUUnlock()
-	{
-		if (gpu_lock != nullptr) {
-			gpu_lock->Unlock();
-		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------------

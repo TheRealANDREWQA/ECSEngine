@@ -771,7 +771,7 @@ bool RegisterSandboxAsset(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void FinishReloadAsset(EditorState* editor_state, Stream<UpdateAssetToComponentElement> update_elements, Stream<unsigned int> dirty_sandboxes) {
+static void FinishReloadAsset(EditorState* editor_state, Stream<UpdateAssetToComponentElement> update_elements, Stream<unsigned int> dirty_sandboxes) {
 	if (update_elements.size > 0) {
 		UpdateAssetsToComponents(editor_state, update_elements);
 
@@ -808,7 +808,7 @@ void FinishReloadAsset(EditorState* editor_state, Stream<UpdateAssetToComponentE
 }
 
 // Returns a component with type ECS_ASSET_TYPE_COUNT when there is nothing to be update
-UpdateAssetToComponentElement ReloadAssetTaskIteration(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE asset_type, Stream<wchar_t> assets_folder) {
+static UpdateAssetToComponentElement ReloadAssetTaskIteration(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE asset_type, Stream<wchar_t> assets_folder) {
 	void* metadata = editor_state->asset_database->GetAsset(handle, asset_type);
 	Stream<void> old_asset = GetAssetFromMetadata(metadata, asset_type);
 
@@ -862,7 +862,7 @@ struct ReloadEventData {
 	Stream<Stream<unsigned int>> asset_handles;
 };
 
-EDITOR_EVENT(ReloadEvent) {
+static EDITOR_EVENT(ReloadEvent) {
 	ReloadEventData* data = (ReloadEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
@@ -920,7 +920,7 @@ struct ReloadAssetsMetadataChangeEventData {
 	Stream<Stream<unsigned int>> asset_handles;
 };
 
-EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
+static EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 	ReloadAssetsMetadataChangeEventData* data = (ReloadAssetsMetadataChangeEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {

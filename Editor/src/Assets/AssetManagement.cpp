@@ -26,20 +26,30 @@ struct CreateAssetAsyncTaskData {
 
 ECS_THREAD_TASK(CreateAssetAsyncTask) {
 	CreateAssetAsyncTaskData* data = (CreateAssetAsyncTaskData*)_data;
+	EditorState* editor_state = data->editor_state;
 
-	bool success = CreateAsset(data->editor_state, data->handle, data->asset_type);
-	if (!success) {
-		const char* type_string = ConvertAssetTypeString(data->asset_type);
-		Stream<char> asset_name = data->editor_state->asset_database->GetAssetName(data->handle, data->asset_type);
-		bool is_valid = ValidateAssetMetadataOptions(data->editor_state->asset_database->GetAssetConst(data->handle, data->asset_type), data->asset_type);
-		if (is_valid) {
-			ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-			FormatString(error_message, "Failed to create asset {#}, type {#}. Possible causes: invalid path or the processing failed.", asset_name, type_string);
-			EditorSetConsoleError(error_message);
+	// We need to acquire the resource lock and possibly the GPU lock
+	AssetLock(editor_state, data->asset_type);
+
+	bool success = false;
+	__try {
+		success = CreateAsset(editor_state, data->handle, data->asset_type);
+		if (!success) {
+			const char* type_string = ConvertAssetTypeString(data->asset_type);
+			Stream<char> asset_name = editor_state->asset_database->GetAssetName(data->handle, data->asset_type);
+			bool is_valid = ValidateAssetMetadataOptions(editor_state->asset_database->GetAssetConst(data->handle, data->asset_type), data->asset_type);
+			if (is_valid) {
+				ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+				FormatString(error_message, "Failed to create asset {#}, type {#}. Possible causes: invalid path or the processing failed.", asset_name, type_string);
+				EditorSetConsoleError(error_message);
+			}
+
+			// We should still try to create its dependencies that were loaded for the first time
+			CreateAssetInternalDependencies(editor_state, data->handle, data->asset_type);
 		}
-
-		// We should still try to create its dependencies that were loaded for the first time
-		CreateAssetInternalDependencies(data->editor_state, data->handle, data->asset_type);
+	}
+	__finally {
+		AssetUnlock(editor_state, data->asset_type);
 	}
 
 	if (data->callback.action != nullptr) {
@@ -57,21 +67,21 @@ ECS_THREAD_TASK(CreateAssetAsyncTask) {
 
 		// Deallocate the data if it has the size > 0
 		if (data->callback.data_size > 0) {
-			data->editor_state->editor_allocator->Deallocate(data->callback.data);
+			editor_state->editor_allocator->Deallocate(data->callback.data);
 		}
 	}
 
 	// Release the editor state flags
-	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_LAUNCH);
-	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+	EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+	EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
 
 	if (data->sandbox_index != -1) {
-		UnlockSandbox(data->editor_state, data->sandbox_index);
+		UnlockSandbox(editor_state, data->sandbox_index);
 	}
 
 	// Add an event to remove the loading asset entry
 	AssetTypedHandle typed_handle = { data->handle, data->asset_type };
-	RegisterRemoveLoadingAssetsEvent(data->editor_state, Stream<AssetTypedHandle>(&typed_handle, 1));
+	RegisterRemoveLoadingAssetsEvent(editor_state, Stream<AssetTypedHandle>(&typed_handle, 1));
 }
 
 struct CreateAssetAsyncEventData {
@@ -651,7 +661,21 @@ bool AddRegisterAssetEvent(
 
 // ----------------------------------------------------------------------------------------------
 
-bool CreateAssetFileImpl(const EditorState* editor_state, Stream<wchar_t> relative_path, Stream<wchar_t> extension) {
+void AssetLock(EditorState* editor_state, ECS_ASSET_TYPE type) {
+	// Acquire the locks in this order, the resource manager and then the graphics
+	editor_state->RuntimeResourceManager()->Lock();
+	AssetTypeLockGPU(type, &editor_state->frame_gpu_lock);
+}
+
+void AssetUnlock(EditorState* editor_state, ECS_ASSET_TYPE type) {
+	// Release the locks in the reverse order.
+	AssetTypeUnlockGPU(type, &editor_state->frame_gpu_lock);
+	editor_state->RuntimeResourceManager()->Unlock();
+}
+
+// ----------------------------------------------------------------------------------------------
+
+static bool CreateAssetFileImpl(const EditorState* editor_state, Stream<wchar_t> relative_path, Stream<wchar_t> extension) {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 	GetProjectAssetsFolder(editor_state, absolute_path);
 	absolute_path.Add(ECS_OS_PATH_SEPARATOR);
@@ -1796,8 +1820,6 @@ static LoadAssetInfo LoadInfoFromEventData(EditorState* editor_state, LoadSandbo
 	info.load_failures = event_data->failures;
 	info.mount_point = mount_point;
 	info.success = &event_data->success;
-	info.graphics_lock = &editor_state->gpu_lock;
-	info.resource_manager_lock = &editor_state->resource_manager_lock;
 
 	return info;
 }
