@@ -109,13 +109,13 @@ namespace ECSEngine {
 
 		// Returns the index inside the textures stream where the given handle is located
 		// It returns -1 if the slot could not be loaded/processed
-		unsigned int FindTexture(unsigned int handle) const {
+		ECS_INLINE unsigned int FindTexture(unsigned int handle) const {
 			return FindIndex(textures, handle, ECS_ASSET_TEXTURE);
 		}
 
 		// Returns the index inside the shaders stream where the given handle is located
 		// It returns -1 if the slot could not be loaded/processed
-		unsigned int FindShader(unsigned int handle) const {
+		ECS_INLINE unsigned int FindShader(unsigned int handle) const {
 			return FindIndex(shaders, handle, ECS_ASSET_SHADER);
 		}
 
@@ -138,11 +138,10 @@ namespace ECSEngine {
 
 		ControlBlockExtra extra;
 
-		// These pointers are hoisted here because they can point
-		// To locks that the user supplies in the load_info. The ones
-		// that follow are used in case the user does not supply any lock
+		// This pointer is hoisted here because it can point
+		// To a lock that the user supplies in the load_info.
+		// The field gpu_lock is used in case no user supplied lock is provided.
 		SpinLock* gpu_lock_ptr;
-		SpinLock* resource_manager_lock_ptr;
 
 		// This lock is used to syncronize access to the immediate GPU context
 	private:
@@ -151,8 +150,6 @@ namespace ECSEngine {
 		SpinLock gpu_lock;
 	private:
 		char padding2[ECS_CACHE_LINE_SIZE];
-	public:
-		SpinLock resource_manager_lock;
 	};
 
 	// It is the same for all types of preload - meshes, textures, shaders or miscs
@@ -169,7 +166,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void CallCallback(
+	static void CallCallback(
 		AssetLoadingControlBlock* control_block, 
 		ThreadTask* tasks, 
 		unsigned int thread_id, 
@@ -183,7 +180,6 @@ namespace ECSEngine {
 			data.handle = handle;
 			data.database = control_block->database;
 			data.resource_manager = control_block->resource_manager;
-			data.spin_lock = control_block->resource_manager_lock_ptr;
 			data.type = asset_type;
 			data.data = tasks[asset_type].data;
 
@@ -191,11 +187,11 @@ namespace ECSEngine {
 		}
 	}
 
-	void CallOnPreloadCallback(AssetLoadingControlBlock* control_block, unsigned int thread_id, unsigned int handle, void* metadata, ECS_ASSET_TYPE asset_type) {
+	static void CallOnPreloadCallback(AssetLoadingControlBlock* control_block, unsigned int thread_id, unsigned int handle, void* metadata, ECS_ASSET_TYPE asset_type) {
 		CallCallback(control_block, control_block->load_info.preload_on_success, thread_id, handle, metadata, asset_type);
 	}
 
-	void CallOnProcessCallback(AssetLoadingControlBlock* control_block, unsigned int thread_id, unsigned int handle, void* metadata, ECS_ASSET_TYPE asset_type) {
+	static void CallOnProcessCallback(AssetLoadingControlBlock* control_block, unsigned int thread_id, unsigned int handle, void* metadata, ECS_ASSET_TYPE asset_type) {
 		CallCallback(control_block, control_block->load_info.process_on_success, thread_id, handle, metadata, asset_type);
 	}
 
@@ -203,7 +199,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(ProcessMesh) {
+	static ECS_THREAD_TASK(ProcessMesh) {
 		ProcessTaskData* data = (ProcessTaskData*)_data;
 		auto* meshes = &data->control_block->meshes[data->write_index];
 		unsigned int handle = meshes->different_handles[data->subhandle_index];
@@ -211,7 +207,7 @@ namespace ECSEngine {
 
 		// Use the reference count from the database
 		CreateAssetFromMetadataExData ex_data = {
-			data->control_block->resource_manager_lock_ptr,
+			true,
 			meshes->time_stamp,
 			data->control_block->load_info.mount_point,
 			data->control_block->database->GetReferenceCountStandalone(handle, ECS_ASSET_MESH)
@@ -246,7 +242,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(ProcessTexture) {
+	static ECS_THREAD_TASK(ProcessTexture) {
 		ProcessTaskData* data = (ProcessTaskData*)_data;
 		auto* textures = &data->control_block->textures[data->write_index];
 		unsigned int handle = textures->different_handles[data->subhandle_index];
@@ -254,7 +250,7 @@ namespace ECSEngine {
 
 		// Use the reference count from the database
 		CreateAssetFromMetadataExData ex_data = {
-			data->control_block->resource_manager_lock_ptr,
+			true,
 			textures->time_stamp,
 			data->control_block->load_info.mount_point,
 			data->control_block->database->GetReferenceCountStandalone(handle, ECS_ASSET_TEXTURE)
@@ -288,7 +284,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(ProcessShader) {
+	static ECS_THREAD_TASK(ProcessShader) {
 		ProcessTaskData* data = (ProcessTaskData*)_data;
 		auto* shaders = &data->control_block->shaders[data->write_index];
 		unsigned int handle = shaders->different_handles[data->subhandle_index];
@@ -296,7 +292,7 @@ namespace ECSEngine {
 
 		// Use the reference count from the database
 		CreateAssetFromMetadataExData ex_data = {
-			data->control_block->resource_manager_lock_ptr,
+			true,
 			shaders->time_stamp,
 			data->control_block->load_info.mount_point,
 			data->control_block->database->GetReferenceCountStandalone(handle, ECS_ASSET_SHADER)
@@ -335,7 +331,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void SpawnProcessingTasks(
+	static void SpawnProcessingTasks(
 		AssetLoadingControlBlock* block,
 		TaskManager* task_manager,
 		ThreadFunction thread_function,
@@ -362,7 +358,7 @@ namespace ECSEngine {
 
 	// The functor only reads the data in the appropriate way
 	template<typename Functor>
-	void PreloadMeshHelper(World* world, void* _data, unsigned int thread_index, Functor&& functor) {
+	static void PreloadMeshHelper(World* world, void* _data, unsigned int thread_index, Functor&& functor) {
 		PreloadTaskData* data = (PreloadTaskData*)_data;
 
 		auto* mesh_block_pointer = &data->control_block->meshes[data->write_index];
@@ -426,7 +422,7 @@ namespace ECSEngine {
 
 	// The functor only reads the data in the appropriate way
 	template<typename Functor>
-	void PreloadTextureHelper(World* world, void* _data, unsigned int thread_index, Functor&& functor) {
+	static void PreloadTextureHelper(World* world, void* _data, unsigned int thread_index, Functor&& functor) {
 		PreloadTaskData* data = (PreloadTaskData*)_data;
 
 		auto* texture_block_pointer = &data->control_block->textures[data->write_index];
@@ -484,7 +480,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	void PreloadShaderHelper(World* world, void* _data, unsigned int thread_index, Functor&& functor) {
+	static void PreloadShaderHelper(World* world, void* _data, unsigned int thread_index, Functor&& functor) {
 		PreloadTaskData* data = (PreloadTaskData*)_data;
 
 		auto* shader_block_pointer = &data->control_block->shaders[data->write_index];
@@ -526,7 +522,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	void PreloadMiscHelper(World* world, void* _data, unsigned int thread_index, Functor&& functor) {
+	static void PreloadMiscHelper(World* world, void* _data, unsigned int thread_index, Functor&& functor) {
 		PreloadTaskData* data = (PreloadTaskData*)_data;
 
 		auto* misc_block_pointer = &data->control_block->miscs[data->write_index];
@@ -561,9 +557,13 @@ namespace ECSEngine {
 		misc_data_resizable.capacity = file_data.size;
 
 		// Insert the resource into the resource manager
-		data->control_block->resource_manager_lock_ptr->Lock();
-		data->control_block->resource_manager->AddResource(file_path, ResourceType::Misc, &misc_data_resizable, misc_block_pointer->time_stamp);
-		data->control_block->resource_manager_lock_ptr->Unlock();
+		data->control_block->resource_manager->Lock();
+		__try {
+			data->control_block->resource_manager->AddResource(file_path, ResourceType::Misc, &misc_data_resizable, false, misc_block_pointer->time_stamp);
+		}
+		__finally {
+			data->control_block->resource_manager->Unlock();
+		}
 
 		// Go through all the misc handles and set their data
 		for (size_t index = 0; index < misc_block_pointer->different_handles.size; index++) {
@@ -586,7 +586,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadMeshTask) {
+	static ECS_THREAD_TASK(PreloadMeshTask) {
 		PreloadMeshHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, const auto* control_block) {
 			return LoadGLTFFile(file_path, allocator);
 		});
@@ -594,7 +594,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadTextureTask) {
+	static ECS_THREAD_TASK(PreloadTextureTask) {
 		PreloadTextureHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, const auto* control_block) {
 			return ReadWholeFileBinary(file_path, allocator);
 		});
@@ -602,7 +602,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadShaderTask) {
+	static ECS_THREAD_TASK(PreloadShaderTask) {
 		PreloadShaderHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, const auto* control_block) {
 			return ReadWholeFileText(file_path, allocator);
 		});
@@ -610,7 +610,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadMiscTask) {
+	static ECS_THREAD_TASK(PreloadMiscTask) {
 		PreloadMiscHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, const auto* control_block) {
 			return ReadWholeFileBinary(file_path);
 		});
@@ -624,7 +624,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadPackedMeshTask) {
+	static ECS_THREAD_TASK(PreloadPackedMeshTask) {
 		PreloadMeshHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, AssetLoadingControlBlock* control_block) {
 			Stream<void> data = UnpackFile(file_path, control_block->extra.packed_file, allocator);
 			GLTFData gltf_data = LoadGLTFFileFromMemory(data, allocator);
@@ -635,7 +635,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadPackedTextureTask) {
+	static ECS_THREAD_TASK(PreloadPackedTextureTask) {
 		PreloadTextureHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, AssetLoadingControlBlock* control_block) {
 			return UnpackFile(file_path, control_block->extra.packed_file, allocator);
 		});
@@ -643,7 +643,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadPackedShaderTask) {
+	static ECS_THREAD_TASK(PreloadPackedShaderTask) {
 		PreloadShaderHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, AssetLoadingControlBlock* control_block) {
 			Stream<void> source_code = UnpackFile(file_path, control_block->extra.packed_file, allocator);
 			return Stream<char>(source_code.buffer, source_code.size);
@@ -652,7 +652,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadPackedMiscTask) {
+	static ECS_THREAD_TASK(PreloadPackedMiscTask) {
 		PreloadMiscHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AssetLoadingControlBlock* control_block) {
 			return UnpackFile(file_path, control_block->extra.packed_file);
 		});
@@ -668,7 +668,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadMultiPackedMeshTask) {
+	static ECS_THREAD_TASK(PreloadMultiPackedMeshTask) {
 		PreloadMeshHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, AssetLoadingControlBlock* control_block) {
 			unsigned int packed_index = GetMultiPackedFileIndex(file_path, control_block->extra.multi_packed_file);
 			Stream<void> data = UnpackFile(file_path, &control_block->extra.multi_packed_inputs[packed_index], allocator);
@@ -680,7 +680,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadMultiPackedTextureTask) {
+	static ECS_THREAD_TASK(PreloadMultiPackedTextureTask) {
 		PreloadTextureHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, AssetLoadingControlBlock* control_block) {
 			unsigned int packed_index = GetMultiPackedFileIndex(file_path, control_block->extra.multi_packed_file);
 			return UnpackFile(file_path, &control_block->extra.multi_packed_inputs[packed_index], allocator);
@@ -689,7 +689,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadMultiPackedShaderTask) {
+	static ECS_THREAD_TASK(PreloadMultiPackedShaderTask) {
 		PreloadShaderHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, AssetLoadingControlBlock* control_block) {
 			unsigned int packed_index = GetMultiPackedFileIndex(file_path, control_block->extra.multi_packed_file);
 			Stream<void> data = UnpackFile(file_path, &control_block->extra.multi_packed_inputs[packed_index], allocator);
@@ -699,7 +699,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(PreloadMultiPackedMiscTask) {
+	static ECS_THREAD_TASK(PreloadMultiPackedMiscTask) {
 		PreloadMiscHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AssetLoadingControlBlock* control_block) {
 			unsigned int packed_index = GetMultiPackedFileIndex(file_path, control_block->extra.multi_packed_file);
 			return UnpackFile(file_path, &control_block->extra.multi_packed_inputs[packed_index]);
@@ -714,7 +714,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(ProcessFinalTask) {
+	static ECS_THREAD_TASK(ProcessFinalTask) {
 		AssetLoadingControlBlock* data = (AssetLoadingControlBlock*)_data;
 		
 		// Create the samplers - this can be done in parallel with other tasks
@@ -739,10 +739,10 @@ namespace ECSEngine {
 		}
 
 		// Wait until all threads have finished - the value is 2 since
-		// by default the semaphore should have 1 and another one incremented for this task
+		// By default the semaphore should have 1 and another one incremented for this task
 		data->load_info.finish_semaphore->TickWait(15, 2);
 
-		auto materials = data->database->material_asset.ToStream();
+		Stream<ReferenceCounted<MaterialAsset>> materials = data->database->material_asset.ToStream();
 
 		auto fail = [data](size_t index, bool dependency) {
 			LoadAssetFailure failure;
@@ -754,51 +754,62 @@ namespace ECSEngine {
 			data->Fail(failure);
 		};
 
-		for (size_t index = 0; index < materials.size; index++) {
-			MaterialAsset* material_asset = &materials[index].value;
-			unsigned int material_handle = data->database->GetAssetHandleFromIndex(index, ECS_ASSET_MATERIAL);
-			bool is_valid = ValidateAssetMetadataOptions(material_asset, ECS_ASSET_MATERIAL);
-			
-			if (is_valid) {
-				// Check to see that the corresponding shaders and textures have been loaded
-				bool exists_pixel_shader = data->FindShader(material_asset->pixel_shader_handle);
-				if (!exists_pixel_shader) {
-					fail(index, true);
-					continue;
-				}
+		// Currently, we don't to acquire the GPU lock because the resources that the
+		// Materials use should already be loaded, we only need the resource manager to be locked
+		// Because the lookup of the resources needs to be protected
+		data->resource_manager->Lock();
 
-				bool exists_vertex_shader = data->FindShader(material_asset->vertex_shader_handle);
-				if (!exists_vertex_shader) {
-					fail(index, true);
-					continue;
-				}
+		__try {
+			for (size_t index = 0; index < materials.size; index++) {
+				MaterialAsset* material_asset = &materials[index].value;
+				unsigned int material_handle = data->database->GetAssetHandleFromIndex(index, ECS_ASSET_MATERIAL);
+				bool is_valid = ValidateAssetMetadataOptions(material_asset, ECS_ASSET_MATERIAL);
 
-				bool texture_failure = false;
-				Stream<MaterialAssetResource> combined_textures = material_asset->GetCombinedTextures();
-				size_t subindex = 0;
-				for (; subindex < combined_textures.size; subindex++) {
-					if (combined_textures[subindex].metadata_handle != -1) {
-						bool exists_texture = data->FindTexture(combined_textures[subindex].metadata_handle);
-						if (!exists_texture) {
-							fail(index, true);
-							texture_failure = true;
-							break;
+				if (is_valid) {
+					// Check to see that the corresponding shaders and textures have been loaded
+					bool exists_pixel_shader = data->FindShader(material_asset->pixel_shader_handle);
+					if (!exists_pixel_shader) {
+						fail(index, true);
+						continue;
+					}
+
+					bool exists_vertex_shader = data->FindShader(material_asset->vertex_shader_handle);
+					if (!exists_vertex_shader) {
+						fail(index, true);
+						continue;
+					}
+
+					bool texture_failure = false;
+					Stream<MaterialAssetResource> combined_textures = material_asset->GetCombinedTextures();
+					size_t subindex = 0;
+					for (; subindex < combined_textures.size; subindex++) {
+						if (combined_textures[subindex].metadata_handle != -1) {
+							bool exists_texture = data->FindTexture(combined_textures[subindex].metadata_handle);
+							if (!exists_texture) {
+								fail(index, true);
+								texture_failure = true;
+								break;
+							}
+						}
+					}
+
+					if (!texture_failure) {
+						// Everything is in order. Can pass the material to the creation call
+						bool success = CreateMaterialFromMetadata(data->resource_manager, data->database, material_asset, data->load_info.mount_point);
+						if (!success) {
+							fail(index, false);
+						}
+						else {
+							// Call the callback
+							CallOnPreloadCallback(data, thread_id, material_handle, material_asset, ECS_ASSET_MATERIAL);
 						}
 					}
 				}
-
-				if (!texture_failure) {
-					// Everything is in order. Can pass the material to the creation call
-					bool success = CreateMaterialFromMetadata(data->resource_manager, data->database, material_asset, data->load_info.mount_point);
-					if (!success) {
-						fail(index, false);
-					}
-					else {
-						// Call the callback
-						CallOnPreloadCallback(data, thread_id, material_handle, material_asset, ECS_ASSET_MATERIAL);
-					}
-				}
 			}
+		}
+		__finally {
+			// Release the lock
+			data->resource_manager->Unlock();
 		}
 
 		// Deallocate all resources - starting with the thread allocators
@@ -884,7 +895,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	// Must be deallocated by the last thread task
-	AssetLoadingControlBlock* InitializeControlBlock(
+	static AssetLoadingControlBlock* InitializeControlBlock(
 		AssetDatabase* database, 
 		ResourceManager* resource_manager,
 		const LoadAssetInfo* load_info, 
@@ -945,14 +956,12 @@ namespace ECSEngine {
 		}
 
 		control_block->gpu_lock.Clear();
-		control_block->resource_manager_lock.Clear();
 		control_block->database = database;
 		control_block->resource_manager = resource_manager;
 		control_block->extra = *extra;
 
 		// Determine if the user supplied locks, else use these ones allocated
-		control_block->gpu_lock_ptr = load_info->graphics_lock != nullptr ? load_info->graphics_lock : &control_block->gpu_lock;
-		control_block->resource_manager_lock_ptr = load_info->resource_manager_lock != nullptr ? load_info->resource_manager_lock : &control_block->resource_manager_lock;
+		control_block->gpu_lock_ptr = load_info->gpu_lock != nullptr ? load_info->gpu_lock : &control_block->gpu_lock;
 
 		if (extra->dimension == CONTROL_BLOCK_PACKED) {
 			PackedFile* allocated_packed_file = (PackedFile*)persistent_allocator.Allocate(sizeof(PackedFile));
@@ -1031,7 +1040,7 @@ namespace ECSEngine {
 		PreloadTaskFunctions functions;
 	};
 
-	void LaunchPreloadTasks(LaunchPreloadTasksData* task_data) {
+	static void LaunchPreloadTasks(LaunchPreloadTasksData* task_data) {
 		// It doesn't matter the order of the preloads - except for the shaders
 		// They must be loaded first such that when the process material thread task is executed
 		// the most amount (likely all) shaders are already loaded
@@ -1056,7 +1065,7 @@ namespace ECSEngine {
 		task_data->control_block->load_info.finish_semaphore->Enter();
 	}
 
-	void LoadAssetsImpl(
+	static void LoadAssetsImpl(
 		AssetDatabase* database, 
 		ResourceManager* resource_manager, 
 		TaskManager* task_manager,

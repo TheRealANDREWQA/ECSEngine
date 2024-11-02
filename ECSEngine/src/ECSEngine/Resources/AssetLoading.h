@@ -37,7 +37,6 @@ namespace ECSEngine {
 	};
 
 	struct LoadAssetOnSuccessData {
-		SpinLock* spin_lock;
 		unsigned int handle;
 		ECS_ASSET_TYPE type;
 		void* metadata;
@@ -52,10 +51,8 @@ namespace ECSEngine {
 		bool* success = nullptr;
 		AtomicStream<LoadAssetFailure>* load_failures = nullptr;
 		Stream<wchar_t> mount_point = { nullptr, 0 };
-		// An optional lock. Can be used to synchronize the access to the resource manager when pushing the entries.
-		SpinLock* resource_manager_lock = nullptr;
-		// An optional lock. Can be used to synchronize the access to the graphics object when pushing the entries.
-		SpinLock* graphics_lock = nullptr;
+
+		SpinLock* gpu_lock = nullptr;
 
 		// With this mask can specify which actual handles should be loaded
 		// There must be ECS_ASSET_TYPE_COUNT streams
@@ -69,8 +66,8 @@ namespace ECSEngine {
 		//bool assets_with_dependencies_assume_valid_as_loaded = true;
 
 		// The function must cast the data into a LoadAssetOnSuccessData* and then cast to its own data
-		// The spin lock can be used to get exclusive access to the resource manager and reference the
-		// asset that was successfully preloaded/processed. Also the thread task data will also be copied
+		// You must acquire manually the resource manager lock in order to perform thread-safe operations on it
+		// and reference the asset that was successfully preloaded/processed. Also the thread task data will also be copied
 
 		// These are callbacks that will be called when an asset was successfully preloaded.
 		ThreadTask preload_on_success[ECS_ASSET_TYPE_COUNT] = { {} };
@@ -79,10 +76,15 @@ namespace ECSEngine {
 		ThreadTask process_on_success[ECS_ASSET_TYPE_COUNT] = { {} };
 	};
 
+	// All LoadAssets functions will Lock/Unlock the ResourceManager, in order to synchronize
+	// The additions. If you plan on using the ResourceManager object in the meantime as well, make sure
+	// To use its lock to synchronize with the asset threads.
+
 	// Loads all the corresponding assets from disk with the appropriate settings applied.
 	// The database must not have the assets already loaded. When the count of the semaphore
 	// Reaches 0 then all tasks have finished (if one task fails the other will continue their processing,
-	// unless a dependent resource failed to load as well). It uses the database allocator internally
+	// unless a dependent resource failed to load as well). It uses the database allocator internally.
+	// It will use the resource manager lock in order to synchronize the additions to the resource manager
 	ECSENGINE_API void LoadAssets(
 		AssetDatabase* database,
 		ResourceManager* resource_manager,
@@ -95,7 +97,8 @@ namespace ECSEngine {
 	// Reaches 0 then all tasks have finished (if one task fails the other will continue their processing,
 	// unless a dependent resource failed to load as well). The packed file is copied internally
 	// so it can be a temporary packed file. It will close the packed file at the end.
-	// It uses the database allocator internally
+	// It uses the database allocator internally.
+	// It will use the resource manager lock in order to synchronize the additions to the resource manager
 	ECSENGINE_API void LoadAssetsPacked(
 		AssetDatabase* database,
 		ResourceManager* resource_manager,
@@ -109,7 +112,8 @@ namespace ECSEngine {
 	// Reaches 0 then all tasks have finished (if one task fails the other will continue their processing,
 	// unless a dependent resource failed to load as well). The multi packed file and its inputs are
 	// copied internally so these can be temporary. It will close the multi packed files at the end.
-	// It uses the database allocator internally
+	// It uses the database allocator internally.
+	// It will use the resource manager lock in order to synchronize the additions to the resource manager
 	ECSENGINE_API void LoadAssetsPacked(
 		AssetDatabase* database,
 		ResourceManager* resource_manager, 

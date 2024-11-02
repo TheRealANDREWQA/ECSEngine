@@ -341,9 +341,6 @@ void EditorStateProjectTick(EditorState* editor_state) {
 	TickLazyEvaluationCounters(editor_state);
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_FREEZE_TICKS)) {
-		// Acquire the frame locks
-		editor_state->AcquireFrameLocks();
-
 		if (ProjectNeedsBackup(editor_state)) {
 			bool autosave_success = SaveProjectBackup(editor_state);
 			// Reset the project backup anyway, since it will cause an explosion of error messages if left to retry
@@ -377,8 +374,6 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickEditorGeneralInput(editor_state);
 		TickPrefabFileChange(editor_state);
 		TickPrefabUpdateActiveIDs(editor_state);
-
-		editor_state->ReleaseFrameLocks();
 	}
 }
 

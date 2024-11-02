@@ -354,7 +354,8 @@ void CreateMiscellaneousBar(EditorState* editor_state) {
 	descriptor.initial_size_x = 2.0f;
 	descriptor.initial_size_y = MISCELLANEOUS_BAR_SIZE_Y;
 
-	MiscellaneousBarSetDescriptor(descriptor, editor_state, nullptr);
+	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB);
+	MiscellaneousBarSetDescriptor(descriptor, editor_state, &stack_memory);
 
 	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BORDER_NOTHING | UI_DOCKSPACE_FIXED 
 		| UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_BACKGROUND);

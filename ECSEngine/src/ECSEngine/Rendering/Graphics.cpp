@@ -473,7 +473,7 @@ namespace ECSEngine {
 	{
 		// The internal resources
 		m_internal_resources.Initialize(descriptor->allocator, GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT);
-		m_internal_resources_lock.Unlock();
+		m_internal_resources_lock.Clear();
 
 		unsigned int flags = 0;
 //#ifdef ECSENGINE_DEBUG

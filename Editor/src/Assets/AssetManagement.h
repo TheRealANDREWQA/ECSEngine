@@ -99,6 +99,12 @@ bool AddRegisterAssetEvent(
 	UIActionHandler callback = {}
 );
 
+// It will acquire the resource manager lock and possibly the GPU lock if the asset type requires it.
+void AssetLock(EditorState* editor_state, ECS_ASSET_TYPE type);
+
+// It will unlock the resource manager lock and possibly the GPU lock if the asset type requires it.
+void AssetUnlock(EditorState* editor_state, ECS_ASSET_TYPE type);
+
 // The path does not need to have the extension. It will be appended automatically
 // This is a thunk file (it does not contain anything)
 bool CreateMaterialFile(const EditorState* editor_state, Stream<wchar_t> relative_path);
@@ -342,7 +348,6 @@ enum LOAD_EDITOR_ASSETS_STATE : unsigned char {
 	LOAD_EDITOR_ASSETS_FAILURE,
 	LOAD_EDITOR_ASSETS_PENDING
 };
-
 
 struct LoadEditorAssetsOptionalData {
 	// If specified, it will update the link components
