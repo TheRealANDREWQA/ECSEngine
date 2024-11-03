@@ -141,7 +141,6 @@ namespace ECSEngine {
 		int2 m_previous_position;
 		int m_previous_scroll;
 		int2 m_current_position;
-		int2 m_position_delta;
 		// This is the position to restore the cursor after the visibility is restored to the cursor
 		// (If the user wants this behaviour). It records the position when the visibility is turned off
 		int2 m_restore_position;

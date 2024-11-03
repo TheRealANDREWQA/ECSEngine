@@ -31,6 +31,7 @@ namespace ECSEngine {
 		m_has_wrapped = false;
 		m_window_handle = reset_window_handle ? nullptr : m_window_handle;
 		m_restore_position = { 0, 0 };
+		m_wrap_pixel_bounds = { 0, 0 };
 	}
 
 	void Mouse::SetCursorVisibility(bool visible, bool restore_position) {
