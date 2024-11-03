@@ -3221,6 +3221,17 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 
 	// If we are in the scene state, we need to construct the scheduling order and prepare the world
 	if (sandbox->run_state == EDITOR_SANDBOX_SCENE) {
+		// Try to initialize the recordings and the replays. If any of them fails, then abort the start.
+		success = InitializeSandboxRecordings(editor_state, sandbox_index, true);
+		if (!success) {
+			return false;
+		}
+
+		success = InitializeSandboxReplays(editor_state, sandbox_index, true);
+		if (!success) {
+			return false;
+		}
+
 		if (!waiting_sandbox_compile) {
 			success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, disable_error_messages);
 		}
@@ -3269,22 +3280,10 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 
 	// Else if we are in the paused state we just need to change the state
 	if (success) {
-		// Try to initialize the recordings and the replays. If any of them fails, then abort the start.
-		success = InitializeSandboxRecordings(editor_state, sandbox_index, true);
-		if (!success) {
-			return false;
-		}
-
-		success = InitializeSandboxReplays(editor_state, sandbox_index, true);
-		if (!success) {
-			return false;
-		}
-
 		// Disable the rendering of the scene and game windows - we will draw them every frame
 		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 		sandbox->run_state = EDITOR_SANDBOX_RUNNING;
-
 
 		// We need to record the snapshot of the current sandbox state
 		// We also need to bind the module runtime settings
@@ -3408,17 +3407,23 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 					was_input_synchronized = true;
 					SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 						EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-						if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-							sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
-							if (!project_settings->unfocused_keyboard_input) {
-								sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+						// Update the HID inputs only if the sandbox does not have an active input replay
+						if (!DoesSandboxReplayInput(editor_state, sandbox_index)) {
+							if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+								sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
+								if (!project_settings->unfocused_keyboard_input) {
+									sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+								}
 							}
 						}
 					});
 				}
 				else {
-					sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
-					sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+					// Update the HID inputs only if the sandbox does not have an active input replay
+					if (!DoesSandboxReplayInput(editor_state, sandbox_index)) {
+						sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
+						sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+					}
 				}
 				active_sandbox_index = sandbox_index;
 				return true;
@@ -3430,15 +3435,18 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 	if (!was_input_synchronized) {
 		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-				if (active_sandbox_index != sandbox_index) {
-					// We need to update release these controls
-					sandbox->sandbox_world.mouse->UpdateRelease();
-					if (project_settings->unfocused_keyboard_input) {
-						sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
-					}
-					else {
-						sandbox->sandbox_world.keyboard->UpdateRelease();
+			// Update the HID inputs only if the sandbox does not have an active input replay
+			if (!DoesSandboxReplayInput(editor_state, sandbox_index)) {
+				if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+					if (active_sandbox_index != sandbox_index) {
+						// We need to update release these controls
+						sandbox->sandbox_world.mouse->UpdateRelease();
+						if (project_settings->unfocused_keyboard_input) {
+							sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+						}
+						else {
+							sandbox->sandbox_world.keyboard->UpdateRelease();
+						}
 					}
 				}
 			}

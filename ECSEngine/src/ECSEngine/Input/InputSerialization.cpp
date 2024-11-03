@@ -19,6 +19,11 @@
 #define MOUSE_DELTA_Y_BIT ECS_BIT(6)
 #define MOUSE_DELTA_SCROLL_BIT ECS_BIT(7)
 
+#define MOUSE_ENTIRE_RAW_STATE_BIT ECS_BIT(0)
+#define MOUSE_ENTIRE_IS_VISIBLE_BIT ECS_BIT(1)
+#define MOUSE_ENTIRE_WRAP_POSITION_BIT ECS_BIT(2)
+#define MOUSE_ENTIRE_HAS_WRAPPED_BIT ECS_BIT(3)
+
 #define KEYBOARD_DELTA_CHARACTER_QUEUE_BIT ECS_BIT(0)
 #define KEYBOARD_DELTA_PROCESS_CHARACTERS_BIT ECS_BIT(1)
 #define KEYBOARD_DELTA_PUSHED_CHARACTER_COUNT_BIT ECS_BIT(2)
@@ -148,12 +153,35 @@ namespace ECSEngine {
 		WriteBits(&button_states, 2, ECS_MOUSE_BUTTON_COUNT, [state](size_t index, void* value) {
 			unsigned char* byte = (unsigned char*)value;
 			*byte = state->m_states[index];
-		});
+			});
 		if (!write_instrument->Write(&button_states)) {
 			return false;
 		}
 
-		return SerializeIntVariableLengthBoolMultiple(write_instrument, state->GetPosition().x, state->GetPosition().y, state->GetScrollValue());
+		// Write the boolean flags as a single byte
+		unsigned char combined_boolean_flags = 0;
+		combined_boolean_flags |= state->m_get_raw_input ? MOUSE_ENTIRE_RAW_STATE_BIT : 0;
+		combined_boolean_flags |= state->m_is_visible ? MOUSE_ENTIRE_IS_VISIBLE_BIT : 0;
+		combined_boolean_flags |= state->m_wrap_position ? MOUSE_ENTIRE_WRAP_POSITION_BIT : 0;
+		combined_boolean_flags |= state->m_has_wrapped ? MOUSE_ENTIRE_HAS_WRAPPED_BIT : 0;
+		if (!write_instrument->Write(&combined_boolean_flags)) {
+			return false;
+		}
+
+		// Write all integer values with variable length serialization - the only exception are the wrap integers, 
+		// Do that only if the wrap position boolean is set
+		if (!SerializeIntVariableLengthBoolMultiple(write_instrument, state->GetPosition().x, state->GetPosition().y, state->GetScrollValue(),
+			state->GetPreviousPosition().x, state->GetPreviousPosition().y, state->GetPreviousScroll())) {
+			return false;
+		}
+
+		if (state->m_wrap_position) {
+			if (!SerializeIntVariableLengthBoolMultiple(write_instrument, state->m_wrap_pixel_bounds.x, state->m_wrap_pixel_bounds.y, state->m_before_wrap_position.x, state->m_before_wrap_position.y)) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -339,22 +367,40 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// TODO: We need to write the previous values as well.
-
 		memset(state->m_states, 0, sizeof(state->m_states));
 		ReadBits(&button_states, 2, ECS_MOUSE_BUTTON_COUNT, [state](size_t index, const void* value) {
 			const ECS_BUTTON_STATE* button_value = (const ECS_BUTTON_STATE*)value;
 			state->m_states[index] = *button_value;
 		});
 
+		unsigned char combined_boolean_flags = 0;
+		if (!read_instrument->Read(&combined_boolean_flags)) {
+			return false;
+		}
+
 		int2 position;
 		int scroll_value;
-		if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(read_instrument, position.x, position.y, scroll_value)) {
+		if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(read_instrument, position.x, position.y, scroll_value, state->m_previous_position.x, state->m_previous_position.y, state->m_previous_scroll)) {
 			return false;
 		}
 
 		state->SetPosition(position.x, position.y);
 		state->SetCursorWheel(scroll_value);
+
+		// Process the flags at last, after all fields are set
+		state->m_get_raw_input = HasFlag(combined_boolean_flags, MOUSE_ENTIRE_RAW_STATE_BIT);
+		bool is_visible = HasFlag(combined_boolean_flags, MOUSE_ENTIRE_IS_VISIBLE_BIT);
+		state->m_wrap_position = HasFlag(combined_boolean_flags, MOUSE_ENTIRE_WRAP_POSITION_BIT);
+		state->m_has_wrapped = HasFlag(combined_boolean_flags, MOUSE_ENTIRE_HAS_WRAPPED_BIT);
+
+		if (state->m_wrap_position) {
+			if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(read_instrument, state->m_wrap_pixel_bounds.x, state->m_wrap_pixel_bounds.y, state->m_before_wrap_position.x, state->m_before_wrap_position.y)) {
+				return false;
+			}
+		}
+
+		// Set the visible status flag
+		state->SetCursorVisibility(is_visible, false);
 
 		return true;
 	}

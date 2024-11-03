@@ -106,6 +106,8 @@ static bool InitializeSandboxReplayImpl(
 	else {
 		ECS_FORMAT_TEMP_STRING(console_message, "Failed to initialize {#} replay for sandbox {#}. Reason: {#}", info.type_string, sandbox_index, error_message);
 		EditorSetConsoleError(console_message);
+		// Close the file handle, such that it can be removed
+		CloseFile(file_handle);
 	}
 	return success;
 }
