@@ -906,6 +906,7 @@ namespace ECSEngine {
 			UIActionHandler copy_handler = { nullptr };
 			UIActionHandler cut_handler = { nullptr };
 			UIActionHandler delete_handler = { nullptr };
+			bool trigger_when_window_is_focused_only = true;
 		};
 
 		struct UIConfigLabelHierarchyMonitorSelection;
@@ -1656,6 +1657,9 @@ namespace ECSEngine {
 			// This is set to true when we need to call the callback
 			// When the mouse is dragging the label, not only on release
 			bool drag_callback_when_held;
+			// This boolean flag indicates whether or not the Ctrl actions
+			// Should trigger only when the window is focused or all the time
+			bool are_basic_operations_on_focus_only;
 
 			// The byte size of the label. If default behaviour is used, this will be 0
 			unsigned short label_size;
@@ -1684,12 +1688,15 @@ namespace ECSEngine {
 			// Basic operations - the next 3 handlers
 			Action copy_action;
 			void* copy_data;
+			unsigned int copy_data_size;
 
 			Action cut_action;
 			void* cut_data;
+			unsigned int cut_data_size;
 
 			Action delete_action;
 			void* delete_data;
+			unsigned int delete_data_size;
 		};
 
 		template<typename UIDrawerLabelHierarchyActionData>

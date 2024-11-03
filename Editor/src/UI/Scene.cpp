@@ -209,6 +209,9 @@ struct ScenePrivateActionData {
 	QuaternionScalar rotation_delta;
 	// This is the total scale change
 	float3 scale_delta;
+
+	// This id is used to know when we should handle the Ctrl shortcuts
+	unsigned int basic_operations_focus_id;
 };
 
 // The disable modifiers will make the rotation not change based on shift/ctrl
@@ -609,54 +612,60 @@ static void ScenePrivateAction(ActionData* action_data) {
 			}
 		}
 
-		// Returns true if there are entities to be deleted, else false
-		auto delete_current_selection = [&]() {
-			Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-			for (size_t index = 0; index < current_selected_entities.size; index++) {
-				DeleteSandboxEntity(editor_state, sandbox_index, current_selected_entities[index]);
-			}
-			return current_selected_entities.size > 0;
-		};
+		// Handle the Ctrl+C,X,V, D and Delete actions
+		data->basic_operations_focus_id = editor_state->shortcut_focus.IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_index, EDITOR_SHORTCUT_FOCUS_PRIORITY0, data->basic_operations_focus_id);
 
-		bool control_action_trigger_rerender = false;
-		// Handle the Ctrl+C,X,V, D and Delete actions as well
-		if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-			if (keyboard->IsPressed(ECS_KEY_C)) {
-				// Make a new allocation and deallocate the old
+		// Only if we are the active shortcut handler we should perform this operations
+		if (editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_index, data->basic_operations_focus_id)) {
+			// Returns true if there are entities to be deleted, else false
+			auto delete_current_selection = [&]() {
 				Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-				copied_entities.Resize(editor_state->EditorAllocator(), current_selected_entities.size, false, true);
-				copied_entities.CopyOther(current_selected_entities);
+				for (size_t index = 0; index < current_selected_entities.size; index++) {
+					DeleteSandboxEntity(editor_state, sandbox_index, current_selected_entities[index]);
+				}
+				return current_selected_entities.size > 0;
+			};
+
+
+			bool control_action_trigger_rerender = false;
+			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+				if (keyboard->IsPressed(ECS_KEY_C)) {
+					// Make a new allocation and deallocate the old
+					Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+					copied_entities.DeallocateEx(editor_state->EditorAllocator());
+					copied_entities.InitializeAndCopy(editor_state->EditorAllocator(), current_selected_entities);
+				}
+				else if (keyboard->IsPressed(ECS_KEY_X)) {
+					// Delete the selected entities
+					control_action_trigger_rerender = delete_current_selection();
+				}
+				else if (keyboard->IsPressed(ECS_KEY_V)) {
+					for (size_t index = 0; index < copied_entities.size; index++) {
+						CopySandboxEntity(editor_state, sandbox_index, copied_entities[index]);
+					}
+					control_action_trigger_rerender = copied_entities.size > 0;
+				}
+				else if (keyboard->IsPressed(ECS_KEY_D)) {
+					Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+					if (current_selected_entities.size > 0) {
+						for (size_t index = 0; index < current_selected_entities.size; index++) {
+							// Also replace the selected entities with the new one
+							current_selected_entities[index] = CopySandboxEntity(editor_state, sandbox_index, current_selected_entities[index]);
+						}
+						// We need to signal the selected entities counter
+						SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
+						control_action_trigger_rerender = true;
+					}
+				}
 			}
-			else if (keyboard->IsPressed(ECS_KEY_X)) {
-				// Delete the selected entities
+
+			if (keyboard->IsPressed(ECS_KEY_DELETE)) {
 				control_action_trigger_rerender = delete_current_selection();
 			}
-			else if (keyboard->IsPressed(ECS_KEY_V)) {
-				for (size_t index = 0; index < copied_entities.size; index++) {
-					CopySandboxEntity(editor_state, sandbox_index, copied_entities[index]);
-				}
-				control_action_trigger_rerender = copied_entities.size > 0;
+			if (control_action_trigger_rerender) {
+				// We need to re-render both views
+				RenderSandboxViewports(editor_state, sandbox_index);
 			}
-			else if (keyboard->IsPressed(ECS_KEY_D)) {
-				Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-				if (current_selected_entities.size > 0) {
-					for (size_t index = 0; index < current_selected_entities.size; index++) {
-						// Also replace the selected entities with the new one
-						current_selected_entities[index] = CopySandboxEntity(editor_state, sandbox_index, current_selected_entities[index]);
-					}
-					// We need to signal the selected entities counter
-					SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
-					control_action_trigger_rerender = true;
-				}
-			}
-		}
-
-		if (keyboard->IsPressed(ECS_KEY_DELETE)) {
-			control_action_trigger_rerender = delete_current_selection();
-		}
-		if (control_action_trigger_rerender) {
-			// We need to re-render both views
-			RenderSandboxViewports(editor_state, sandbox_index);
 		}
 	}
 
@@ -737,6 +746,8 @@ void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_sta
 
 	ScenePrivateActionData* private_data = stack_memory->Reserve<ScenePrivateActionData>();
 	private_data->editor_state = editor_state;
+	// Set this to -1 to signal that we don't have an id yet
+	private_data->basic_operations_focus_id = -1;
 	descriptor.private_action = ScenePrivateAction;
 	descriptor.private_action_data = private_data;
 	descriptor.private_action_data_size = sizeof(*private_data);

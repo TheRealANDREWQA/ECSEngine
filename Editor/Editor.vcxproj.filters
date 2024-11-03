@@ -90,6 +90,7 @@
     <ClInclude Include="src\Sandbox\SandboxRecordingFileExtension.h" />
     <ClInclude Include="src\Sandbox\SandboxReplay.h" />
     <ClInclude Include="src\Sandbox\SandboxCount.h" />
+    <ClInclude Include="src\Editor\EditorShortcutFocus.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -170,6 +171,7 @@
     <ClCompile Include="src\UI\Inspector\InspectorRecordingFile.cpp" />
     <ClCompile Include="src\Sandbox\SandboxReplay.cpp" />
     <ClCompile Include="src\Sandbox\SandboxRecordingFileExtension.cpp" />
+    <ClCompile Include="src\Editor\EditorShortcutFocus.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
