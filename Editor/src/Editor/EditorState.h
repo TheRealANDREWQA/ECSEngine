@@ -15,6 +15,7 @@
 #include "ECSEngineInput.h"
 #include "EditorVisualizeTexture.h"
 #include "EditorSettings.h"
+#include "EditorShortcutFocus.h"
 #include "../Assets/Prefab.h"
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
@@ -196,6 +197,8 @@ struct EditorState {
 	// Value such that all sandboxes receive the same input
 	ECSEngine::Timer frame_timer;
 	float frame_delta_time;
+
+	EditorShortcutFocus shortcut_focus;
 
 	// TODO: Implement an "event" like system where functions can be subscribed to certain
 	// Actions? This is helpful for less coupling between systems. At the moment, the first

@@ -37,6 +37,9 @@ struct EntitiesUIData {
 	// These are SoA streams
 	Stream<Entity> virtual_global_components_entities;
 	Component* virtual_global_component;
+
+	// Used to know if we are the active shortcut handler
+	unsigned int basic_operations_shortcut_id;
 };
 
 #define ITERATOR_LABEL_CAPACITY 128
@@ -470,16 +473,19 @@ static void CopyEntityCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchyCopyData* copy_data = (UIDrawerLabelHierarchyCopyData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)copy_data->data;
 
-	Entity* given_parent = (Entity*)copy_data->destination_label;
-	Entity parent = given_parent != nullptr ? *given_parent : Entity((unsigned int)-1);
+	// Perform the operation only if we are the active shortcut handler
+	if (data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
+		Entity* given_parent = (Entity*)copy_data->destination_label;
+		Entity parent = given_parent != nullptr ? *given_parent : Entity((unsigned int)-1);
 
-	Stream<Entity> source_labels = copy_data->source_labels.AsIs<Entity>();
-	if (IsNormalEntity(data, parent)) {
-		for (size_t index = 0; index < copy_data->source_labels.size; index++) {
-			if (IsNormalEntity(data, source_labels[index])) {
-				Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
-				if (parent.value != -1) {
-					ParentSandboxEntity(data->editor_state, data->sandbox_index, copied_entity, parent);
+		Stream<Entity> source_labels = copy_data->source_labels.AsIs<Entity>();
+		if (IsNormalEntity(data, parent)) {
+			for (size_t index = 0; index < copy_data->source_labels.size; index++) {
+				if (IsNormalEntity(data, source_labels[index])) {
+					Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
+					if (parent.value != -1) {
+						ParentSandboxEntity(data->editor_state, data->sandbox_index, copied_entity, parent);
+					}
 				}
 			}
 		}
@@ -494,20 +500,23 @@ static void CutEntityCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchyCutData* cut_data = (UIDrawerLabelHierarchyCutData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)cut_data->data;
 
-	Stream<Entity> entities = cut_data->source_labels.AsIs<Entity>();
-	Entity parent = *(Entity*)cut_data->destination_label;
-	if (IsNormalEntity(data, parent)) {
-		if (entities.size > 0) {
-			// Determine which labels are valid labels
-			Stream<Entity> copy = entities.Copy(data->editor_state->EditorAllocator());
-			for (size_t index = 0; index < copy.size; index++) {
-				if (!IsNormalEntity(data, copy[index])) {
-					copy.RemoveSwapBack(index);
-					index--;
+	// Perform the operation only if we are the active shortcut handler
+	if (data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
+		Stream<Entity> entities = cut_data->source_labels.AsIs<Entity>();
+		Entity parent = cut_data->destination_label == nullptr ? Entity::Invalid() : *(Entity*)cut_data->destination_label;
+		if (IsNormalEntity(data, parent)) {
+			if (entities.size > 0) {
+				// Determine which labels are valid labels
+				Stream<Entity> copy = entities.Copy(data->editor_state->EditorAllocator());
+				for (size_t index = 0; index < copy.size; index++) {
+					if (!IsNormalEntity(data, copy[index])) {
+						copy.RemoveSwapBack(index);
+						index--;
+					}
 				}
+				ParentSandboxEntities(data->editor_state, data->sandbox_index, copy, parent);
+				data->editor_state->editor_allocator->Deallocate(copy.buffer);
 			}
-			ParentSandboxEntities(data->editor_state, data->sandbox_index, copy, parent);
-			data->editor_state->editor_allocator->Deallocate(copy.buffer);
 		}
 	}
 }
@@ -520,20 +529,23 @@ static void DeleteEntityCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchyDeleteData* delete_data = (UIDrawerLabelHierarchyDeleteData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)delete_data->data;
 
-	Stream<Entity> source_labels = delete_data->source_labels.AsIs<Entity>();
-	for (size_t index = 0; index < delete_data->source_labels.size; index++) {
-		// We shouldn't delete the global parent
-		// The global components we have to delete
-		if (source_labels[index] != GlobalComponentsParent()) {
-			Component global_component = DecodeVirtualEntityToComponent(data, source_labels[index]);
-			if (global_component.Valid()) {
-				RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_index, global_component);
-				// We must also remove it from our internal list of components
-				size_t component_index = SearchBytes(data->virtual_global_components_entities, source_labels[index]);
-				data->virtual_global_components_entities.RemoveSwapBack(component_index);
-			}
-			else {
-				DeleteSandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
+	// Perform the operation only if we are the active shortcut handler
+	if (data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
+		Stream<Entity> source_labels = delete_data->source_labels.AsIs<Entity>();
+		for (size_t index = 0; index < delete_data->source_labels.size; index++) {
+			// We shouldn't delete the global parent
+			// The global components we have to delete
+			if (source_labels[index] != GlobalComponentsParent()) {
+				Component global_component = DecodeVirtualEntityToComponent(data, source_labels[index]);
+				if (global_component.Valid()) {
+					RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_index, global_component);
+					// We must also remove it from our internal list of components
+					size_t component_index = SearchBytes(data->virtual_global_components_entities, source_labels[index]);
+					data->virtual_global_components_entities.RemoveSwapBack(component_index);
+				}
+				else {
+					DeleteSandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
+				}
 			}
 		}
 	}
@@ -639,6 +651,8 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 	data->editor_state = editor_state;
 	data->sandbox_index = 0;
 	data->virtual_global_components_entities.InitializeFromBuffer(nullptr, 0);
+	// Signal that we don't have an ID yet
+	data->basic_operations_shortcut_id = -1;
 
 	CapacityStream<char> window_name(OffsetPointer(data, sizeof(*data)), 0, 128);
 	GetEntitiesUIWindowName(window_index, window_name);
@@ -687,6 +701,8 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 	// Include temporary sandboxes as well
 	if (GetSandboxCount(editor_state) > 0) {
 		const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+		// Update the shortcut focus ID
+		data->basic_operations_shortcut_id = editor_state->shortcut_focus.IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_index, EDITOR_SHORTCUT_FOCUS_PRIORITY1, data->basic_operations_shortcut_id);
 
 		// Get the count of global components and update the virtual mapping of the global components if the count is different
 		unsigned int global_component_count = entity_manager->GetGlobalComponentCount();
@@ -864,8 +880,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 				config.AddFlag(filter);
 
 				size_t LABEL_HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_FILTER | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK 
-					| UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK | UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS 
-					| UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL | UI_CONFIG_LABEL_HIERARCHY_MONITOR_SELECTION;
+					| UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK | UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL | UI_CONFIG_LABEL_HIERARCHY_MONITOR_SELECTION;
 
 				UIConfigLabelHierarchySelectableCallback selectable;
 				selectable.callback = SelectableCallback;
@@ -913,7 +928,9 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 				basic_operations.copy_handler = { CopyEntityCallback, data, 0 };
 				basic_operations.cut_handler = { CutEntityCallback, data, 0 };
 				basic_operations.delete_handler = { DeleteEntityCallback, data, 0 };
+				basic_operations.trigger_when_window_is_focused_only = false;
 				config.AddFlag(basic_operations);
+				LABEL_HIERARCHY_CONFIGURATION |= UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS;
 
 				UIConfigLabelHierarchyRenameCallback rename_callback;
 				rename_callback.callback = RenameCallback;

@@ -374,6 +374,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickEditorGeneralInput(editor_state);
 		TickPrefabFileChange(editor_state);
 		TickPrefabUpdateActiveIDs(editor_state);
+		TickEditorShortcutFocus(editor_state);
 	}
 }
 
@@ -675,6 +676,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// Permanently redirect all asserts to the general crash handler
 	ECS_GLOBAL_ASSERT_CRASH = true;
 	SetCrashHandler(EditorCrashHandler, nullptr);
+
+	// Initialize the shortcut focus
+	editor_state->shortcut_focus.Initialize(editor_state->EditorAllocator());
 
 	editor_state->frame_timer.SetNewStart();
 	editor_state->frame_delta_time = 0.0f;

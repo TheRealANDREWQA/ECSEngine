@@ -13728,13 +13728,46 @@ namespace ECSEngine {
 			}
 
 			if (configuration & UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS) {
+				const UIConfigLabelHierarchyBasicOperations* operations = (const UIConfigLabelHierarchyBasicOperations*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS);
+				data->are_basic_operations_on_focus_only = operations->trigger_when_window_is_focused_only;
+				
+				data->cut_action = operations->cut_handler.action;
+				ECS_ASSERT(operations->cut_handler.data_size <= data->cut_data_size, "UIDrawerLabelHierarchy cut handler data size changed!");
+				if (operations->cut_handler.data_size > 0) {
+					memcpy(data->cut_data, operations->cut_handler.data, operations->cut_handler.data_size);
+				}
+				else {
+					ECS_ASSERT(data->cut_data_size == 0, "UIDrawerLabelHierarchy attempting to switch cut handler from non pointer data to pointer data!");
+					data->cut_data = operations->cut_handler.data;
+				}
+
+				data->copy_action = operations->copy_handler.action;
+				ECS_ASSERT(operations->copy_handler.data_size <= data->copy_data_size, "UIDrawerLabelHierarchy copy handler data size changed!");
+				if (operations->copy_handler.data_size > 0) {
+					memcpy(data->copy_data, operations->copy_handler.data, operations->copy_handler.data_size);
+				}
+				else {
+					ECS_ASSERT(data->copy_data_size == 0, "UIDrawerLabelHierarchy attempting to switch copy handler from non pointer data to pointer data!");
+					data->copy_data = operations->copy_handler.data;
+				}
+
+				data->delete_action = operations->delete_handler.action;
+				ECS_ASSERT(operations->delete_handler.data_size <= data->delete_data_size, "UIDrawerLabelHierarchy delete handler data size changed!");
+				if (operations->delete_handler.data_size > 0) {
+					memcpy(data->delete_data, operations->delete_handler.data, operations->delete_handler.data_size);
+				}
+				else {
+					ECS_ASSERT(data->delete_data_size == 0, "UIDrawerLabelHierarchy attempting to switch delete handler from non pointer data to pointer data!");
+					data->delete_data = operations->delete_handler.data;
+				}
+
 				SnapshotRunnable(data, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
 					UIDrawerLabelHierarchyData* data = (UIDrawerLabelHierarchyData*)_data;
 
 					UISystem* system = action_data->system;
 					Keyboard* keyboard = action_data->keyboard;
 					// Check if the window is focused
-					if (system->GetActiveWindow() == system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index)) {
+					if (!data->are_basic_operations_on_focus_only || (system->GetActiveWindow() == system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index))) {
 						// Check for Ctrl+C, Ctrl+X, Ctrl+V and delete
 						if (!keyboard->IsCaptureCharacters()) {
 							if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
@@ -13862,6 +13895,7 @@ namespace ECSEngine {
 					if (operations->copy_handler.action != nullptr) {
 						data->copy_action = operations->copy_handler.action;
 						data->copy_data = operations->copy_handler.data;
+						data->copy_data_size = operations->copy_handler.data_size;
 						if (operations->copy_handler.data_size > 0) {
 							data->copy_data = GetMainAllocatorBuffer(operations->copy_handler.data_size);
 							memcpy(data->copy_data, operations->copy_handler.data, operations->copy_handler.data_size);
@@ -13871,6 +13905,7 @@ namespace ECSEngine {
 					if (operations->cut_handler.action != nullptr) {
 						data->cut_action = operations->cut_handler.action;
 						data->cut_data = operations->cut_handler.data;
+						data->cut_data_size = operations->cut_handler.data_size;
 						if (operations->cut_handler.data_size > 0) {
 							data->cut_data = GetMainAllocatorBuffer(operations->cut_handler.data_size);
 							memcpy(data->cut_data, operations->cut_handler.data, operations->cut_handler.data_size);
@@ -13880,11 +13915,13 @@ namespace ECSEngine {
 					if (operations->delete_handler.action != nullptr) {
 						data->delete_action = operations->delete_handler.action;
 						data->delete_data = operations->delete_handler.data;
+						data->delete_data_size = operations->delete_handler.data_size;
 						if (operations->delete_handler.data_size > 0) {
 							data->delete_data = GetMainAllocatorBuffer(operations->delete_handler.data_size);
 							memcpy(data->delete_data, operations->delete_handler.data, operations->delete_handler.data_size);
 						}
 					}
+					data->are_basic_operations_on_focus_only = operations->trigger_when_window_is_focused_only;
 				}
 
 				// For dynamic resources we need to record the identifier to update the allocations made
