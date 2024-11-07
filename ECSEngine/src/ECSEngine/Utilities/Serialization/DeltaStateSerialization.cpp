@@ -192,16 +192,31 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	bool DeltaStateReader::Advance(float elapsed_seconds, CapacityStream<char>* error_message) {
+		// If it is finished, return true directly
+		if (IsFinished()) {
+			return true;
+		}
+
 		// Determine the entire state that corresponds to that moment
 		size_t next_state_index = GetStateIndexFromCurrentIndex(elapsed_seconds);
 		if (next_state_index != current_state_index - 1) {
 			// We switched to a new state - verify how many states we need to deserialize
 			size_t deserialize_state_count = next_state_index - current_state_index + 1;
 			if (deserialize_state_count == 1) {
+				// If the next state index surpasses the state info count, then don't advance
+				if (next_state_index == state_infos.size) {
+					// Don't report this as a failure
+					current_state_index = state_infos.size;
+					return true;
+				}
+
 				// Just one state to be applied, no seeking is needed
 				return AdvanceOneState(error_message);
 			}
 			else {
+				// Clamp the next state to the last state
+				next_state_index = ClampMax<size_t>(next_state_index, state_infos.size);
+
 				// There are more states to be deserialized. Determine the last entire state
 				// And go from there.
 				size_t last_entire_state = -1;
@@ -245,6 +260,11 @@ namespace ECSEngine {
 	}
 
 	bool DeltaStateReader::AdvanceOneState(CapacityStream<char>* error_message) {
+		if (current_state_index == state_infos.size) {
+			// If it surpasses the last state, then don't continue, but don't report as a failure
+			return true;
+		}
+
 		bool is_entire_state = IsEntireState(current_state_index);
 
 		if (is_entire_state) {
@@ -264,14 +284,6 @@ namespace ECSEngine {
 
 	bool DeltaStateReader::CallEntireState(size_t overall_state_index, CapacityStream<char>* error_message) {
 		size_t before_read_offset = read_instrument->GetOffset();
-
-		//size_t suposed_offset = 0;
-		//for (size_t index = 0; index < overall_state_index; index++) {
-		//	suposed_offset += state_infos[index].write_size;
-		//}
-		//if (before_read_offset != suposed_offset) {
-		//	OutputDebugStringA("");
-		//}
 
 		DeltaStateReaderEntireFunctionData entire_data;
 		entire_data.elapsed_seconds = state_infos[overall_state_index].elapsed_seconds;
@@ -300,14 +312,6 @@ namespace ECSEngine {
 
 	bool DeltaStateReader::CallDeltaState(size_t overall_state_index, CapacityStream<char>* error_message) {
 		size_t before_read_offset = read_instrument->GetOffset();
-		
-		//size_t suposed_offset = 0;
-		//for (size_t index = 0; index < overall_state_index; index++) {
-		//	suposed_offset += state_infos[index].write_size;
-		//}
-		//if (before_read_offset != suposed_offset) {
-		//	OutputDebugStringA("");
-		//}
 
 		DeltaStateReaderDeltaFunctionData delta_data;
 		delta_data.elapsed_seconds = state_infos[overall_state_index].elapsed_seconds;
@@ -328,9 +332,6 @@ namespace ECSEngine {
 			ECS_FORMAT_ERROR_MESSAGE(error_message, "The delta state with index {#}, elapsed seconds {#} was read, but the read size is mismatched: functor read {#} - expected {#}.", overall_state_index,
 				delta_data.elapsed_seconds, read_difference, state_infos[overall_state_index].write_size);
 			is_failed = true;
-
-			//read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, before_read_offset);
-			//delta_function(&delta_data);
 			return false;
 		}
 		return true;

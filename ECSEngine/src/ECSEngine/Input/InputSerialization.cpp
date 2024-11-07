@@ -15,14 +15,13 @@
 #define MAX_KEYBOARD_ALPHANUMERIC_DELTA_COUNT 32
 #define MAX_KEYBOARD_ALPHANUMERIC_ENTIRE_COUNT 64
 
-#define MOUSE_DELTA_X_BIT ECS_BIT(5)
-#define MOUSE_DELTA_Y_BIT ECS_BIT(6)
-#define MOUSE_DELTA_SCROLL_BIT ECS_BIT(7)
-
-#define MOUSE_ENTIRE_RAW_STATE_BIT ECS_BIT(0)
-#define MOUSE_ENTIRE_IS_VISIBLE_BIT ECS_BIT(1)
-#define MOUSE_ENTIRE_WRAP_POSITION_BIT ECS_BIT(2)
-#define MOUSE_ENTIRE_HAS_WRAPPED_BIT ECS_BIT(3)
+#define MOUSE_RAW_STATE_BIT ECS_BIT(0)
+#define MOUSE_IS_VISIBLE_BIT ECS_BIT(1)
+#define MOUSE_WRAP_POSITION_BIT ECS_BIT(2)
+#define MOUSE_HAS_WRAPPED_BIT ECS_BIT(3)
+#define MOUSE_DELTA_X_BIT ECS_BIT(4)
+#define MOUSE_DELTA_Y_BIT ECS_BIT(5)
+#define MOUSE_DELTA_SCROLL_BIT ECS_BIT(6)
 
 #define KEYBOARD_DELTA_CHARACTER_QUEUE_BIT ECS_BIT(0)
 #define KEYBOARD_DELTA_PROCESS_CHARACTERS_BIT ECS_BIT(1)
@@ -82,6 +81,29 @@ namespace ECSEngine {
 		return button_states;
 	};
 
+	struct MouseDeltaValues {
+		int2 position_delta;
+		int scroll_delta;
+	};
+
+	// Computes the compressed boolean mask byte and outputs delta values for the integer coordinates
+	static unsigned char GetMouseBooleanBits(const Mouse* current_mouse, const Mouse* previous_mouse, MouseDeltaValues& delta_values) {
+		unsigned char bits = 0;
+
+		delta_values.position_delta = current_mouse->GetPosition() - previous_mouse->GetPosition();
+		delta_values.scroll_delta = current_mouse->GetScrollValue() - previous_mouse->GetScrollValue();
+
+		bits |= (current_mouse->m_get_raw_input != previous_mouse->m_get_raw_input) ? MOUSE_RAW_STATE_BIT : 0;
+		bits |= (current_mouse->m_is_visible != previous_mouse->m_is_visible) ? MOUSE_IS_VISIBLE_BIT : 0;
+		bits |= (current_mouse->m_wrap_position != previous_mouse->m_wrap_position) ? MOUSE_WRAP_POSITION_BIT : 0;
+		bits |= (current_mouse->m_has_wrapped != previous_mouse->m_has_wrapped) ? MOUSE_HAS_WRAPPED_BIT : 0;
+		bits |= delta_values.position_delta.x != 0 ? MOUSE_DELTA_X_BIT : 0;
+		bits |= delta_values.position_delta.y != 0 ? MOUSE_DELTA_Y_BIT : 0;
+		bits |= delta_values.scroll_delta != 0 ? MOUSE_DELTA_SCROLL_BIT : 0;
+
+		return bits;
+	}
+
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	unsigned char SerializeInputVersion() {
@@ -97,46 +119,69 @@ namespace ECSEngine {
 
 	bool SerializeMouseInputDelta(const Mouse* previous_state, const Mouse* current_state, WriteInstrument* write_instrument) {
 		// Determine if there is any difference at all between the two states. If there is not, we can simply skip the entry all together.
-		int x_delta = current_state->GetPosition().x - previous_state->GetPosition().x;
-		int y_delta = current_state->GetPosition().y - previous_state->GetPosition().y;
-		int scroll_delta = current_state->GetScrollValue() - previous_state->GetScrollValue();
-
 		unsigned char previous_button_states = GetMouseButtonStates(previous_state);
 		unsigned char current_button_states = GetMouseButtonStates(current_state);
-		
-		if (x_delta != 0 || y_delta != 0 || scroll_delta != 0 || previous_button_states != current_button_states) {
-			// One of the values changed
-			
-			// There are 3 bits that in the button states that can be used to indicate whether or not the deltas are 0 or not
-			current_button_states |= x_delta != 0 ? MOUSE_DELTA_X_BIT : 0;
-			current_button_states |= y_delta != 0 ? MOUSE_DELTA_Y_BIT : 0;
-			current_button_states |= scroll_delta != 0 ? MOUSE_DELTA_SCROLL_BIT : 0;
 
+		MouseDeltaValues delta_values;
+		unsigned char boolean_change_mask = GetMouseBooleanBits(current_state, previous_state, delta_values);
+		
+		if (boolean_change_mask != 0 || previous_button_states != current_button_states) {
+			// One of the values changed
 			ECS_INPUT_SERIALIZE_TYPE type = ECS_INPUT_SERIALIZE_MOUSE;
 			if (!write_instrument->Write(&type)) {
 				return false;
 			}
 
-			// Write the button states (with the additional delta bits) followed by the variable length deltas.
+			// Write the button states, then the boolean change mask followed by the variable length deltas.
 			if (!write_instrument->Write(&current_button_states)) {
 				return false;
 			}
 
-			if (x_delta != 0) {
-				if (!SerializeIntVariableLengthBool(write_instrument, x_delta)) {
+			if (!write_instrument->Write(&boolean_change_mask)) {
+				return false;
+			}
+
+			if (boolean_change_mask & MOUSE_DELTA_X_BIT) {
+				if (!SerializeIntVariableLengthBool(write_instrument, delta_values.position_delta.x)) {
 					return false;
 				}
 			}
-			if (y_delta != 0) {
-				if (!SerializeIntVariableLengthBool(write_instrument, y_delta)) {
+			if (boolean_change_mask & MOUSE_DELTA_Y_BIT) {
+				if (!SerializeIntVariableLengthBool(write_instrument, delta_values.position_delta.y)) {
 					return false;
 				}
 			}
-			if (scroll_delta != 0) {
-				if (!SerializeIntVariableLengthBool(write_instrument, scroll_delta)) {
+			if (boolean_change_mask & MOUSE_DELTA_SCROLL_BIT) {
+				if (!SerializeIntVariableLengthBool(write_instrument, delta_values.scroll_delta)) {
 					return false;
 				}
 			}
+
+			//// Now the more exotic flags
+			//if (boolean_change_mask & MOUSE_IS_VISIBLE_BIT) {
+			//	// When this transitions to non visible, write the restore position as well
+			//	if (!current_state->IsVisible()) {
+			//		if (!SerializeIntVariableLengthBool(write_instrument, current_state->m_restore_position)) {
+			//			return false;
+			//		}
+			//	}
+			//}
+
+			//if (boolean_change_mask & MOUSE_WRAP_POSITION_BIT) {
+			//	if (current_state->m_wrap_position) {
+			//		if (!SerializeIntVariableLengthBool(write_instrument, current_state->m_wrap_pixel_bounds)) {
+			//			return false;
+			//		}
+			//	}
+			//}
+
+			//if (boolean_change_mask & MOUSE_HAS_WRAPPED_BIT) {
+			//	if (current_state->m_has_wrapped) {
+			//		if (!SerializeIntVariableLengthBool(write_instrument, current_state->m_before_wrap_position)) {
+			//			return false;
+			//		}
+			//	}
+			//}
 		}
 		return true;
 	}
@@ -160,23 +205,22 @@ namespace ECSEngine {
 
 		// Write the boolean flags as a single byte
 		unsigned char combined_boolean_flags = 0;
-		combined_boolean_flags |= state->m_get_raw_input ? MOUSE_ENTIRE_RAW_STATE_BIT : 0;
-		combined_boolean_flags |= state->m_is_visible ? MOUSE_ENTIRE_IS_VISIBLE_BIT : 0;
-		combined_boolean_flags |= state->m_wrap_position ? MOUSE_ENTIRE_WRAP_POSITION_BIT : 0;
-		combined_boolean_flags |= state->m_has_wrapped ? MOUSE_ENTIRE_HAS_WRAPPED_BIT : 0;
+		combined_boolean_flags |= state->m_get_raw_input ? MOUSE_RAW_STATE_BIT : 0;
+		combined_boolean_flags |= state->m_is_visible ? MOUSE_IS_VISIBLE_BIT : 0;
+		combined_boolean_flags |= state->m_wrap_position ? MOUSE_WRAP_POSITION_BIT : 0;
+		combined_boolean_flags |= state->m_has_wrapped ? MOUSE_HAS_WRAPPED_BIT : 0;
 		if (!write_instrument->Write(&combined_boolean_flags)) {
 			return false;
 		}
 
 		// Write all integer values with variable length serialization - the only exception are the wrap integers, 
 		// Do that only if the wrap position boolean is set
-		if (!SerializeIntVariableLengthBoolMultiple(write_instrument, state->GetPosition().x, state->GetPosition().y, state->GetScrollValue(),
-			state->GetPreviousPosition().x, state->GetPreviousPosition().y, state->GetPreviousScroll())) {
+		if (!SerializeIntVariableLengthBoolMultiple(write_instrument, state->GetPosition(), state->GetScrollValue(), state->GetPreviousPosition(), state->GetPreviousScroll())) {
 			return false;
 		}
 
 		if (state->m_wrap_position) {
-			if (!SerializeIntVariableLengthBoolMultiple(write_instrument, state->m_wrap_pixel_bounds.x, state->m_wrap_pixel_bounds.y, state->m_before_wrap_position.x, state->m_before_wrap_position.y)) {
+			if (!SerializeIntVariableLengthBoolMultiple(write_instrument, state->m_wrap_pixel_bounds, state->m_before_wrap_position)) {
 				return false;
 			}
 		}
@@ -312,10 +356,19 @@ namespace ECSEngine {
 		}
 
 		current_state->UpdateFromOther(previous_state);
+		// Set the previous mouse position to the current one, before reading the changes, otherwise the
+		// Last position won't be updated
+		current_state->m_previous_position = current_state->m_current_position;
+		current_state->m_previous_scroll = current_state->m_current_scroll;
 
 		// Read the combined bit mask
 		unsigned char button_states = 0;
 		if (!read_instrument->Read(&button_states)) {
+			return false;
+		}
+
+		unsigned char boolean_change_mask = 0;
+		if (!read_instrument->Read(&boolean_change_mask)) {
 			return false;
 		}
 
@@ -327,8 +380,8 @@ namespace ECSEngine {
 			}
 		}
 
-		// Retrieve the upper 3 MSBs in order to determine if we have delta values
-		if (HasFlag(button_states, MOUSE_DELTA_X_BIT)) {
+		// Use the change mask to determine what other data to read
+		if (HasFlag(boolean_change_mask, MOUSE_DELTA_X_BIT)) {
 			// There is a x delta
 			int x_delta = 0;
 			if (!DeserializeIntVariableLengthBool(read_instrument, x_delta)) {
@@ -336,7 +389,7 @@ namespace ECSEngine {
 			}
 			current_state->AddDelta(x_delta, 0);
 		}
-		if (HasFlag(button_states, MOUSE_DELTA_Y_BIT)) {
+		if (HasFlag(boolean_change_mask, MOUSE_DELTA_Y_BIT)) {
 			// There is a y delta
 			int y_delta = 0;
 			if (!DeserializeIntVariableLengthBool(read_instrument, y_delta)) {
@@ -344,7 +397,7 @@ namespace ECSEngine {
 			}
 			current_state->AddDelta(0, y_delta);
 		}
-		if (HasFlag(button_states, MOUSE_DELTA_SCROLL_BIT)) {
+		if (HasFlag(boolean_change_mask, MOUSE_DELTA_SCROLL_BIT)) {
 			// There is a scroll delta
 			int scroll_delta = 0;
 			if (!DeserializeIntVariableLengthBool(read_instrument, scroll_delta)) {
@@ -352,6 +405,39 @@ namespace ECSEngine {
 			}
 			current_state->SetCursorWheel(current_state->GetScrollValue() + scroll_delta);
 		}
+
+		// Update the "exotic" flags
+		//if (boolean_change_mask & MOUSE_IS_VISIBLE_BIT) {
+		//	current_state->SetCursorVisibility(!current_state->IsVisible(), false);
+		//	// When this transitions to non visible, write the restore position as well
+		//	if (!current_state->IsVisible()) {
+		//		if (!DeserializeIntVariableLengthBool(read_instrument, current_state->m_restore_position)) {
+		//			return false;
+		//		}
+		//	}
+		//}
+
+		//if (boolean_change_mask & MOUSE_WRAP_POSITION_BIT) {
+		//	current_state->m_wrap_position = !current_state->m_wrap_position;
+		//	if (current_state->m_wrap_position) {
+		//		if (!DeserializeIntVariableLengthBool(read_instrument, current_state->m_wrap_pixel_bounds)) {
+		//			return false;
+		//		}
+		//	}
+		//}
+
+		//if (boolean_change_mask & MOUSE_HAS_WRAPPED_BIT) {
+		//	current_state->m_has_wrapped = !current_state->m_has_wrapped;
+		//	if (current_state->m_has_wrapped) {
+		//		if (!DeserializeIntVariableLengthBool(read_instrument, current_state->m_before_wrap_position)) {
+		//			return false;
+		//		}
+		//	}
+		//}
+
+		//if (boolean_change_mask & MOUSE_RAW_STATE_BIT) {
+		//	current_state->m_get_raw_input = !current_state->m_get_raw_input;
+		//}
 
 		return true;
 	}
@@ -380,7 +466,7 @@ namespace ECSEngine {
 
 		int2 position;
 		int scroll_value;
-		if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(read_instrument, position.x, position.y, scroll_value, state->m_previous_position.x, state->m_previous_position.y, state->m_previous_scroll)) {
+		if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(read_instrument, position, scroll_value, state->m_previous_position, state->m_previous_scroll)) {
 			return false;
 		}
 
@@ -388,13 +474,13 @@ namespace ECSEngine {
 		state->SetCursorWheel(scroll_value);
 
 		// Process the flags at last, after all fields are set
-		state->m_get_raw_input = HasFlag(combined_boolean_flags, MOUSE_ENTIRE_RAW_STATE_BIT);
-		bool is_visible = HasFlag(combined_boolean_flags, MOUSE_ENTIRE_IS_VISIBLE_BIT);
-		state->m_wrap_position = HasFlag(combined_boolean_flags, MOUSE_ENTIRE_WRAP_POSITION_BIT);
-		state->m_has_wrapped = HasFlag(combined_boolean_flags, MOUSE_ENTIRE_HAS_WRAPPED_BIT);
+		state->m_get_raw_input = HasFlag(combined_boolean_flags, MOUSE_RAW_STATE_BIT);
+		bool is_visible = HasFlag(combined_boolean_flags, MOUSE_IS_VISIBLE_BIT);
+		state->m_wrap_position = HasFlag(combined_boolean_flags, MOUSE_WRAP_POSITION_BIT);
+		state->m_has_wrapped = HasFlag(combined_boolean_flags, MOUSE_HAS_WRAPPED_BIT);
 
 		if (state->m_wrap_position) {
-			if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(read_instrument, state->m_wrap_pixel_bounds.x, state->m_wrap_pixel_bounds.y, state->m_before_wrap_position.x, state->m_before_wrap_position.y)) {
+			if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(read_instrument, state->m_wrap_pixel_bounds, state->m_before_wrap_position)) {
 				return false;
 			}
 		}

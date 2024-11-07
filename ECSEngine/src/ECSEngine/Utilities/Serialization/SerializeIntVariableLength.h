@@ -20,7 +20,7 @@ namespace ECSEngine {
 	// If the template parameter write_data is false, it will ignore the first parameter
 	template<bool write_data, typename IntType>
 	ECS_INLINE size_t SerializeIntVariableLength(WriteInstrument* write_instrument, IntType value) {
-		static_assert(std::is_integral_v<IntType>, "SerializeIntVariableLength accepts only integers");
+		static_assert(std::is_integral_v<IntType>, "SerializeIntVariableLength accepts only scalar integers");
 
 		if constexpr (std::is_unsigned_v<IntType>) {
 			return SerializeIntVariableLengthUnsigned<write_data>(write_instrument, (size_t)value);
@@ -30,13 +30,15 @@ namespace ECSEngine {
 		}
 	}
 
-	// Returns true if the serialization succeeded, else false
+	// Returns true if the serialization succeeded, else false. This variant accepts basic type integers as well
 	template<typename IntType>
 	ECS_INLINE bool SerializeIntVariableLengthBool(WriteInstrument* write_instrument, IntType value) {
-		return SerializeIntVariableLength<true, IntType>(write_instrument, value) != 0;
+		return BasicTypeLogicalOpEarlyExit<ECS_BASIC_TYPE_LOGIC_AND>(value, [write_instrument](auto scalar_value) {
+			return SerializeIntVariableLength<true>(write_instrument, scalar_value);
+		});
 	}
 
-	// Returns true if the serialization succeeded for all integers, else false
+	// Returns true if the serialization succeeded for all integers, else false. This variant accepts basic type integers as well
 	template<typename FirstInteger, typename... Integers>
 	ECS_INLINE bool SerializeIntVariableLengthBoolMultiple(WriteInstrument* write_instrument, FirstInteger first_integer, Integers... integers) {
 		if (!SerializeIntVariableLengthBool(write_instrument, first_integer)) {
@@ -52,6 +54,8 @@ namespace ECSEngine {
 	// Returns the maximum number of bytes the variable length serialization can use for the given integer type.
 	template<typename IntType>
 	ECS_INLINE size_t SerializeIntVariableLengthMaxSize() {
+		static_assert(std::is_integral_v<IntType>, "Serialize int variable length max size accepts only scalar integers!");
+
 		if constexpr (sizeof(IntType) == 1) {
 			// At maximum 2 bytes for a single byte integer
 			return 2;
@@ -103,13 +107,16 @@ namespace ECSEngine {
 		}
 	}
 
-	// Returns true if the deserialization succeeded, else false
+	// Returns true if the deserialization succeeded, else false. This version accepts basic type integers
 	template<typename IntType>
 	ECS_INLINE bool DeserializeIntVariableLengthBool(ReadInstrument* read_instrument, bool& is_out_of_range, IntType& value) {
-		return DeserializeIntVariableLength<true, IntType>(read_instrument, is_out_of_range, value);
+		return BasicTypeLogicalOpEarlyExitMutable<ECS_BASIC_TYPE_LOGIC_AND>(value, [read_instrument, &is_out_of_range](auto& scalar_value) {
+			return DeserializeIntVariableLength<true>(read_instrument, is_out_of_range, scalar_value);
+			});
 	}
 
 	// Returns true if the deserialization succeeded (i.e. there is enough space in the buffer capacity) and the value is in range, else false
+	// Accepts basic type integers
 	template<typename IntType>
 	ECS_INLINE bool DeserializeIntVariableLengthBool(ReadInstrument* read_instrument, IntType& value) {
 		bool is_out_of_range = false;
@@ -121,6 +128,7 @@ namespace ECSEngine {
 
 	// Returns true if the serialization succeeded for all integers, else false
 	// The is out of range boolean is set to true if at least one entry is out of range
+	// Accepts basic type integers
 	template<typename FirstInteger, typename... Integers>
 	ECS_INLINE bool DeserializeIntVariableLengthBoolMultiple(ReadInstrument* read_instrument, bool& is_out_of_range, FirstInteger& first_integer, Integers&... integers) {
 		if (!DeserializeIntVariableLengthBool(read_instrument, is_out_of_range, first_integer)) {
@@ -134,6 +142,7 @@ namespace ECSEngine {
 	}
 
 	// Returns true if the serialization succeeded for all integers and all integers are in their range, else false
+	// Accepts basic type integers
 	template<typename FirstInteger, typename... Integers>
 	ECS_INLINE bool DeserializeIntVariableLengthBoolMultipleEnsureRange(ReadInstrument* read_instrument, FirstInteger& first_integer, Integers&... integers) {
 		bool is_out_of_range = false;
