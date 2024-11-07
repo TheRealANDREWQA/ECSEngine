@@ -235,7 +235,7 @@ bool RunSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDI
 	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
 	if (*info.is_delta_reader_initialized) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		if (HasFlag(sandbox->flags, info.flag) && !info.delta_reader->IsFailed()) {
+		if (HasFlag(sandbox->flags, info.flag) && !info.delta_reader->IsFailed() && !info.delta_reader->IsFinished()) {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB);
 			if (!info.delta_reader->Advance(sandbox->sandbox_world.elapsed_seconds, &error_message)) {
 				ECS_FORMAT_TEMP_STRING(console_message, "Failed to read {#} replay at moment {#}. (Reason: {#})", info.type_string, sandbox->sandbox_world.elapsed_seconds, error_message);

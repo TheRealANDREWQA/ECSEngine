@@ -213,6 +213,11 @@ namespace ECSEngine {
 			return is_failed;
 		}
 
+		// Returns true if the states from this reader have been sequentially finished, else false
+		ECS_INLINE bool IsFinished() const {
+			return current_state_index >= state_infos.size;
+		}
+
 		// Returns the pointer to the user data such that you can initialize the data properly. It will be 0'ed.
 		// Returns false if it failed to read the header portion of the state. The read instrument must be stable
 		// For the entire duration of using this reader

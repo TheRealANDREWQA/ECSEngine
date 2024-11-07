@@ -875,8 +875,10 @@ namespace ECSEngine {
 
 	// This function accepts normal arithmetic values like float, double
 	// The functor must convert the given value into a boolean
-	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
-	ECS_INLINE bool BasicTypeLogicalOp(BasicType value, Functor&& functor) {
+	// Can choose whether or not to use early exiting to stop evaluating the members
+	// When the condition result is known
+	template<bool early_exit, BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	bool BasicTypeLogicalOpImplementation(BasicType value, Functor&& functor) {
 		bool logic_values[4];
 		size_t iterate_count = 0;
 
@@ -889,16 +891,342 @@ namespace ECSEngine {
 			}
 
 			logic_values[0] = functor(value.x);
+			if constexpr (early_exit) {
+				if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+					if (!logic_values[0]) {
+						return false;
+					}
+				}
+				else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+					if (logic_values[0]) {
+						return true;
+					}
+				}
+			}
+
 			logic_values[1] = functor(value.y);
+			if constexpr (early_exit) {
+				if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+					if (!logic_values[1]) {
+						return false;
+					}
+				}
+				else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+					if (logic_values[1]) {
+						return true;
+					}
+				}
+			}
+
 			if constexpr (BasicType::Count() == 3) {
 				logic_values[2] = functor(value.z);
+				if constexpr (early_exit) {
+					if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+						if (!logic_values[2]) {
+							return false;
+						}
+					}
+					else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+						if (logic_values[2]) {
+							return true;
+						}
+					}
+				}
 			}
 			if constexpr (BasicType::Count() == 4) {
 				logic_values[3] = functor(value.w);
+				if constexpr (early_exit) {
+					if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+						if (!logic_values[3]) {
+							return false;
+						}
+					}
+					else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+						if (logic_values[3]) {
+							return true;
+						}
+					}
+				}
 			}
 			iterate_count = BasicType::Count() - 1;
 		}
-		
+
+		for (size_t index = 0; index < iterate_count; index++) {
+			if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+				logic_values[0] &= logic_values[index + 1];
+			}
+			else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+				logic_values[0] |= logic_values[index + 1];
+			}
+			else {
+				static_assert(false);
+			}
+		}
+		return logic_values[0];
+	}
+
+	// This function accepts normal arithmetic values like float, double by reference
+	// The functor must convert the given value into a boolean
+	// Can choose whether or not to use early exiting to stop evaluating the members
+	// When the condition result is known
+	template<bool early_exit, BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	bool BasicTypeLogicalOpImplementationMutable(BasicType& value, Functor&& functor) {
+		bool logic_values[4];
+		size_t iterate_count = 0;
+
+		if constexpr (std::is_arithmetic_v<BasicType>) {
+			logic_values[0] = functor(value);
+		}
+		else {
+			if constexpr (BasicType::Count() > 4) {
+				static_assert(false, "Invalid basic type for logical op");
+			}
+
+			logic_values[0] = functor(value.x);
+			if constexpr (early_exit) {
+				if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+					if (!logic_values[0]) {
+						return false;
+					}
+				}
+				else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+					if (logic_values[0]) {
+						return true;
+					}
+				}
+			}
+
+			logic_values[1] = functor(value.y);
+			if constexpr (early_exit) {
+				if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+					if (!logic_values[1]) {
+						return false;
+					}
+				}
+				else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+					if (logic_values[1]) {
+						return true;
+					}
+				}
+			}
+
+			if constexpr (BasicType::Count() == 3) {
+				logic_values[2] = functor(value.z);
+				if constexpr (early_exit) {
+					if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+						if (!logic_values[2]) {
+							return false;
+						}
+					}
+					else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+						if (logic_values[2]) {
+							return true;
+						}
+					}
+				}
+			}
+			if constexpr (BasicType::Count() == 4) {
+				logic_values[3] = functor(value.w);
+				if constexpr (early_exit) {
+					if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+						if (!logic_values[3]) {
+							return false;
+						}
+					}
+					else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+						if (logic_values[3]) {
+							return true;
+						}
+					}
+				}
+			}
+			iterate_count = BasicType::Count() - 1;
+		}
+
+		for (size_t index = 0; index < iterate_count; index++) {
+			if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+				logic_values[0] &= logic_values[index + 1];
+			}
+			else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+				logic_values[0] |= logic_values[index + 1];
+			}
+			else {
+				static_assert(false);
+			}
+		}
+		return logic_values[0];
+	}
+
+	// This function accepts normal arithmetic values like float, double
+	// The functor must convert the given value into a boolean
+	// Can choose whether or not to use early exiting to stop evaluating the members
+	// When the condition result is known
+	template<bool early_exit, BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	bool BasicTypeLogicalOpImplementation(BasicType first, BasicType second, Functor&& functor) {
+		bool logic_values[4];
+		size_t iterate_count = 0;
+
+		if constexpr (std::is_arithmetic_v<BasicType>) {
+			logic_values[0] = functor(first, second);
+		}
+		else {
+			if constexpr (BasicType::Count() > 4) {
+				static_assert(false, "Invalid basic type for logical op");
+			}
+
+			logic_values[0] = functor(first.x, second.x);
+			if constexpr (early_exit) {
+				if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+					if (!logic_values[0]) {
+						return false;
+					}
+				}
+				else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+					if (logic_values[0]) {
+						return true;
+					}
+				}
+			}
+
+			logic_values[1] = functor(first.y, second.y);
+			if constexpr (early_exit) {
+				if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+					if (!logic_values[1]) {
+						return false;
+					}
+				}
+				else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+					if (logic_values[1]) {
+						return true;
+					}
+				}
+			}
+
+			if constexpr (BasicType::Count() == 3) {
+				logic_values[2] = functor(first.z, second.z);
+				if constexpr (early_exit) {
+					if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+						if (!logic_values[2]) {
+							return false;
+						}
+					}
+					else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+						if (logic_values[2]) {
+							return true;
+						}
+					}
+				}
+			}
+			if constexpr (BasicType::Count() == 4) {
+				logic_values[3] = functor(first.w, second.w);
+				if constexpr (early_exit) {
+					if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+						if (!logic_values[3]) {
+							return false;
+						}
+					}
+					else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+						if (logic_values[3]) {
+							return true;
+						}
+					}
+				}
+			}
+			iterate_count = BasicType::Count() - 1;
+		}
+
+		for (size_t index = 0; index < iterate_count; index++) {
+			if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+				logic_values[0] &= logic_values[index + 1];
+			}
+			else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+				logic_values[0] |= logic_values[index + 1];
+			}
+			else {
+				static_assert(false);
+			}
+		}
+		return logic_values[0];
+	}
+
+	// This function accepts normal arithmetic values like float, double by reference
+	// The functor must convert the given value into a boolean
+	// Can choose whether or not to use early exiting to stop evaluating the members
+	// When the condition result is known
+	template<bool early_exit, BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	bool BasicTypeLogicalOpImplementationMutable(BasicType& first, BasicType& second, Functor&& functor) {
+		bool logic_values[4];
+		size_t iterate_count = 0;
+
+		if constexpr (std::is_arithmetic_v<BasicType>) {
+			logic_values[0] = functor(first, second);
+		}
+		else {
+			if constexpr (BasicType::Count() > 4) {
+				static_assert(false, "Invalid basic type for logical op");
+			}
+
+			logic_values[0] = functor(first.x, second.x);
+			if constexpr (early_exit) {
+				if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+					if (!logic_values[0]) {
+						return false;
+					}
+				}
+				else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+					if (logic_values[0]) {
+						return true;
+					}
+				}
+			}
+
+			logic_values[1] = functor(first.y, second.y);
+			if constexpr (early_exit) {
+				if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+					if (!logic_values[1]) {
+						return false;
+					}
+				}
+				else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+					if (logic_values[1]) {
+						return true;
+					}
+				}
+			}
+
+			if constexpr (BasicType::Count() == 3) {
+				logic_values[2] = functor(first.z, second.z);
+				if constexpr (early_exit) {
+					if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+						if (!logic_values[2]) {
+							return false;
+						}
+					}
+					else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+						if (logic_values[2]) {
+							return true;
+						}
+					}
+				}
+			}
+			if constexpr (BasicType::Count() == 4) {
+				logic_values[3] = functor(first.w, second.w);
+				if constexpr (early_exit) {
+					if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+						if (!logic_values[3]) {
+							return false;
+						}
+					}
+					else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+						if (logic_values[3]) {
+							return true;
+						}
+					}
+				}
+			}
+			iterate_count = BasicType::Count() - 1;
+		}
+
 		for (size_t index = 0; index < iterate_count; index++) {
 			if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
 				logic_values[0] &= logic_values[index + 1];
@@ -916,41 +1244,57 @@ namespace ECSEngine {
 	// This function accepts normal arithmetic values like float, double
 	// The functor must convert the given value into a boolean
 	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicalOp(BasicType value, Functor&& functor) {
+		return BasicTypeLogicalOpImplementation<false, logic_op>(value, functor);
+	}
+
+	// This function accepts normal arithmetic values like float, double by reference
+	// The functor must convert the given value into a boolean
+	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicalOpMutable(BasicType& value, Functor&& functor) {
+		return BasicTypeLogicalOpImplementationMutable<false, logic_op>(value, functor);
+	}
+
+	// This function accepts normal arithmetic values like float, double
+	// The functor must convert the given value into a boolean
+	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicalOpEarlyExit(BasicType value, Functor&& functor) {
+		return BasicTypeLogicalOpImplementation<true, logic_op>(value, functor);
+	}
+
+	// This function accepts normal arithmetic values like float, double by reference
+	// The functor must convert the given value into a boolean
+	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicalOpEarlyExitMutable(BasicType& value, Functor&& functor) {
+		return BasicTypeLogicalOpImplementationMutable<true, logic_op>(value, functor);
+	}
+
+	// This function accepts normal arithmetic values like float, double
+	// The functor must convert the given value into a boolean
+	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
 	ECS_INLINE bool BasicTypeLogicalOp(BasicType first, BasicType second, Functor&& functor) {
-		bool logic_values[4];
-		size_t iterate_count = 0;
+		return BasicTypeLogicalOpImplementation<false, logic_op>(first, second, functor);
+	}
 
-		if constexpr (std::is_arithmetic_v<BasicType>) {
-			logic_values[0] = functor(first, second);
-		}
-		else {
-			if constexpr (BasicType::Count() > 4) {
-				static_assert(false, "Invalid basic type for logical op");
-			}
+	// This function accepts normal arithmetic values like float, double by reference
+	// The functor must convert the given value into a boolean
+	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicalOpMutable(BasicType& first, BasicType& second, Functor&& functor) {
+		return BasicTypeLogicalOpImplementationMutable<false, logic_op>(first, second, functor);
+	}
 
-			logic_values[0] = functor(first.x, second.x);
-			logic_values[1] = functor(first.y, second.y);
-			if constexpr (BasicType::Count() == 3) {
-				logic_values[2] = functor(first.z, second.z);
-			}
-			if constexpr (BasicType::Count() == 4) {
-				logic_values[3] = functor(first.w, second.z);
-			}
-			iterate_count = BasicType::Count() - 1;
-		}
+	// This function accepts normal arithmetic values like float, double
+	// The functor must convert the given value into a boolean
+	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicalOpEarlyExit(BasicType first, BasicType second, Functor&& functor) {
+		return BasicTypeLogicalOpImplementation<true, logic_op>(first, second, functor);
+	}
 
-		for (size_t index = 0; index < iterate_count; index++) {
-			if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
-				logic_values[0] &= logic_values[index + 1];
-			}
-			else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
-				logic_values[0] |= logic_values[index + 1];
-			}
-			else {
-				static_assert(false);
-			}
-		}
-		return logic_values[0];
+	// This function accepts normal arithmetic values like float, double by reference
+	// The functor must convert the given value into a boolean
+	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicalOpEarlyExitMutable(BasicType& first, BasicType& second, Functor&& functor) {
+		return BasicTypeLogicalOpImplementationMutable<true, logic_op>(first, second, functor);
 	}
 
 	// This can only be applied to boolean types
@@ -1052,6 +1396,97 @@ namespace ECSEngine {
 		return BasicTypeLogicalOp<ECS_BASIC_TYPE_LOGIC_AND>(a, b, [](auto a, auto b) {
 			return a != b;
 		});
+	}
+
+	// Returns true if the type is a basic type of 2 unsigned integers
+	template<typename T>
+	constexpr bool IsUnsignedInteger2() {
+		return std::is_same_v<T, uchar2> || std::is_same_v<T, ushort2> || std::is_same_v<T, uint2> || std::is_same_v<T, ulong2>;
+	}
+
+	// Returns true if the type is a basic type of 2 signed integers
+	template<typename T>
+	constexpr bool IsSignedInteger2() {
+		return std::is_same_v<T, char2> || std::is_same_v<T, short2> || std::is_same_v<T, int2> || std::is_same_v<T, long2>;
+	}
+
+	// Returns true if the type is a basic type of 2 integers (unsigned or signed)
+	template<typename T>
+	constexpr bool IsInteger2() {
+		return IsUnsignedInteger2<T>() || IsSignedInteger2<T>();
+	}
+
+	// Returns true if the type is a basic type of 3 unsigned integers
+	template<typename T>
+	constexpr bool IsUnsignedInteger3() {
+		return std::is_same_v<T, uchar3> || std::is_same_v<T, ushort3> || std::is_same_v<T, uint3> || std::is_same_v<T, ulong3>;
+	}
+
+	// Returns true if the type is a basic type of 3 signed integers
+	template<typename T>
+	constexpr bool IsSignedInteger3() {
+		return std::is_same_v<T, char3> || std::is_same_v<T, short3> || std::is_same_v<T, int3> || std::is_same_v<T, long3>;
+	}
+
+	// Returns true if the type is a basic type of 3 integers (unsigned or signed)
+	template<typename T>
+	constexpr bool IsInteger3() {
+		return IsUnsignedInteger3<T>() || IsSignedInteger3<T>();
+	}
+
+	// Returns true if the type is a basic type of 4 unsigned integers
+	template<typename T>
+	constexpr bool IsUnsignedInteger4() {
+		return std::is_same_v<T, uchar4> || std::is_same_v<T, ushort4> || std::is_same_v<T, uint4> || std::is_same_v<T, ulong4>;
+	}
+
+	// Returns true if the type is a basic type of 4 signed integers
+	template<typename T>
+	constexpr bool IsSignedInteger4() {
+		return std::is_same_v<T, char4> || std::is_same_v<T, short4> || std::is_same_v<T, int4> || std::is_same_v<T, long4>;
+	}
+
+	// Returns true if the type is a basic type of 4 integers (unsigned or signed)
+	template<typename T>
+	constexpr bool IsInteger4() {
+		return IsUnsignedInteger4<T>() || IsSignedInteger4<T>();
+	}
+
+	// Returns true if the type is a basic type of 2, 3 or 4 unsigned integers
+	template<typename T>
+	constexpr bool IsBasicTypeUnsignedInteger() {
+		return IsUnsignedInteger2<T>() || IsUnsignedInteger3<T>() || IsUnsignedInteger4<T>();
+	}
+
+	// Returns true if the type is a basic type of 1, 2, 3 or 4 unsigned integers
+	template<typename T>
+	constexpr bool IsBasicTypeUnsignedIntegerWithScalar() {
+		return std::is_unsigned_v<T> || IsBasicTypeUnsignedInteger<T>();
+	}
+
+	// Returns true if the type is a basic type of 2, 3 or 4 signed integers
+	template<typename T>
+	constexpr bool IsBasicTypeSignedInteger() {
+		return IsSignedInteger2<T>() || IsSignedInteger3<T>() || IsSignedInteger4<T>();
+	}
+
+	// Returns true if the type is a basic type of 1, 2, 3 or 4 signed integers
+	template<typename T>
+	constexpr bool IsBasicTypeSignedIntegerWithScalar() {
+		return std::is_signed_v<T> || IsBasicTypeSignedInteger<T>();
+	}
+
+	// Returns true if the template parameter is a basic type of 2, 3 or 4 integer components (unsigned or signed)
+	template<typename T>
+	constexpr bool IsBasicTypeInteger() {
+		return IsBasicTypeUnsignedInteger<T>() || IsBasicTypeSignedInteger<T>();
+	}
+
+	// Returns true if the template parameter is a basic type of 2, 3 or 4 integer components (unsigned or signed)
+	// Or it is a singled valued integer type
+	template<typename T>
+	constexpr bool IsBasicTypeIntegerWithScalar() {
+		return std::is_integral_v<T> || IsBasicTypeInteger<T>();
 	}
 
 }

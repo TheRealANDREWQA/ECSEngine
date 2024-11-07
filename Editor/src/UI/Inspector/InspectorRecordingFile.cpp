@@ -161,7 +161,7 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 		textures[1] = ECS_TOOLS_UI_TEXTURE_MASK;
 
 		timeline.time_range.x = 0.0f;
-		timeline.time_range.y = data->reader.state_infos[data->reader.state_infos.size - 1].elapsed_seconds;
+		timeline.time_range.y = data->reader.state_infos.size > 0 ? data->reader.state_infos[data->reader.state_infos.size - 1].elapsed_seconds : 0.0f;
 		timeline.has_time_range = true;
 		timeline.channels = channels;
 		timeline.texture_paths = textures;
