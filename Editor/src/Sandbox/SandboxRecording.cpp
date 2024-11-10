@@ -16,12 +16,12 @@ using namespace ECSEngine;
 
 // Returns the an automatic path that is free, which is filled in the absolute_path_storage
 static Stream<wchar_t> UpdateAutomaticIndexRecording(const EditorState* editor_state, const SandboxRecordingInfo& info, CapacityStream<wchar_t>& absolute_path_storage) {
-	Stream<wchar_t> path_no_extension = PathNoExtension(*info.file_path, ECS_OS_PATH_SEPARATOR_REL);
+	Stream<wchar_t> path_no_extension = PathNoExtension(info.recorder->file, ECS_OS_PATH_SEPARATOR_REL);
 	GetProjectPathFromAssetRelative(editor_state, absolute_path_storage, path_no_extension);
 
 	// Start from the next index and see if the file is available
 	Stream<wchar_t> extension = info.extension;
-	unsigned int automatic_index = *info.recording_automatic_index + 1;
+	unsigned int automatic_index = info.recorder->file_automatic_index + 1;
 	unsigned int absolute_path_base_size = absolute_path_storage.size;
 
 	// Use a maximum number of iteration
@@ -34,7 +34,7 @@ static Stream<wchar_t> UpdateAutomaticIndexRecording(const EditorState* editor_s
 		absolute_path_storage.AddStreamAssert(extension);
 
 		if (!ExistsFileOrFolder(absolute_path_storage)) {
-			*info.recording_automatic_index = index;
+			info.recorder->file_automatic_index = index;
 			return absolute_path_storage;
 		}
 	}
@@ -42,34 +42,34 @@ static Stream<wchar_t> UpdateAutomaticIndexRecording(const EditorState* editor_s
 	if (index == automatic_index + MAX_ITERATIONS) {
 		// Emit a warning
 		ECS_FORMAT_TEMP_STRING(message, "Failed to find an empty automatic index for {#} recording", info.type_string);
-		*info.recording_automatic_index = index;
+		info.recorder->file_automatic_index = index;
 	}
 	return absolute_path_storage;
 }
 
 static void UpdateValidFileBoolRecording(const EditorState* editor_state, const SandboxRecordingInfo& info) {
-	*info.is_recording_file_valid = true;
+	info.recorder->is_file_valid = true;
 
 	// Verify that the parent path is valid
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-	Stream<wchar_t> parent_path = PathParent(*info.file_path, ECS_OS_PATH_SEPARATOR_REL);
+	Stream<wchar_t> parent_path = PathParent(info.recorder->file, ECS_OS_PATH_SEPARATOR_REL);
 	GetProjectPathFromAssetRelative(editor_state, absolute_path, parent_path);
 	if (!ExistsFileOrFolder(absolute_path)) {
-		*info.is_recording_file_valid = false;
+		info.recorder->is_file_valid = false;
 	}
 	else {
 		// If it not automatic, then verify that a file with the same name does not exist already
 		if (!*info.is_recording_automatic) {
-			Stream<wchar_t> file_stem = PathStem(*info.file_path, ECS_OS_PATH_SEPARATOR_REL);
+			Stream<wchar_t> file_stem = PathStem(info.recorder->file, ECS_OS_PATH_SEPARATOR_REL);
 			if (file_stem.size > 0) {
 				absolute_path.AddStreamAssert(file_stem);
 				absolute_path.AddStreamAssert(EDITOR_INPUT_RECORDING_FILE_EXTENSION);
 				if (ExistsFileOrFolder(absolute_path)) {
-					*info.is_recording_file_valid = false;
+					info.recorder->is_file_valid = false;
 				}
 			}
 			else {
-				*info.is_recording_file_valid = false;
+				info.recorder->is_file_valid = false;
 			}
 		}
 	}
@@ -78,13 +78,13 @@ static void UpdateValidFileBoolRecording(const EditorState* editor_state, const 
 static Stream<wchar_t> GetSandboxRecordingFileImpl(EditorState* editor_state, unsigned int sandbox_index, const SandboxRecordingInfo& info, CapacityStream<wchar_t>& storage) {
 	UpdateValidFileBoolRecording(editor_state, info);
 
-	if (*info.is_recording_file_valid && info.file_path->size > 0) {
+	if (info.recorder->is_file_valid && info.recorder->file.size > 0) {
 		if (*info.is_recording_automatic) {
 			// Update the automatic index 
 			return UpdateAutomaticIndexRecording(editor_state, info, storage);
 		}
 		else {
-			Stream<wchar_t> path_no_extension = PathNoExtension(*info.file_path, ECS_OS_PATH_SEPARATOR_REL);
+			Stream<wchar_t> path_no_extension = PathNoExtension(info.recorder->file, ECS_OS_PATH_SEPARATOR_REL);
 			GetProjectPathFromAssetRelative(editor_state, storage, path_no_extension);
 			storage.AddStreamAssert(info.extension);
 			return storage;
@@ -111,19 +111,19 @@ static bool FinishSandboxRecording(
 	const SandboxRecordingInfo& info
 ) {
 	auto deallocate_stack_scope = StackScope([&]() {
-		if (*info.is_delta_writer_initialized) {
-			DeallocateSandboxRecording(*info.delta_writer, GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager());
-			*info.is_delta_writer_initialized = false;
+		if (info.recorder->is_initialized) {
+			DeallocateSandboxRecording(info.recorder->delta_writer, GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager());
+			info.recorder->is_initialized = false;
 		}
 		});
 
 	bool success = true;
-	if (*info.is_delta_writer_initialized) {
-		BufferedFileWriteInstrument* write_instrument = (BufferedFileWriteInstrument*)info.delta_writer->write_instrument;
+	if (info.recorder->is_initialized) {
+		BufferedFileWriteInstrument* write_instrument = (BufferedFileWriteInstrument*)info.recorder->delta_writer.write_instrument;
 		size_t before_flush_offset = write_instrument->GetOffset();
 
 		// Flush the writer
-		success = info.delta_writer->Flush();
+		success = info.recorder->delta_writer.Flush();
 
 		if (success) {
 			// Close the file
@@ -139,25 +139,25 @@ static bool FinishSandboxRecording(
 
 				// Remove the file
 				CloseFile(write_instrument->file);
-				Stream<wchar_t> absolute_file_path = GetProjectPathFromAssetRelative(editor_state, absolute_path_storage, *info.file_path);
+				Stream<wchar_t> absolute_file_path = GetProjectPathFromAssetRelative(editor_state, absolute_path_storage, info.recorder->file);
 				if (!RemoveFile(absolute_file_path)) {
-					ECS_FORMAT_TEMP_STRING(remove_error, "Failed to remove {#} recording file", *info.file_path);
+					ECS_FORMAT_TEMP_STRING(remove_error, "Failed to remove {#} recording file", info.recorder->file);
 					EditorSetConsoleError(remove_error);
 				}
 				return false;
 			}
 
 			// Try again
-			if (!info.delta_writer->Flush()) {
+			if (!info.recorder->delta_writer.Flush()) {
 				// Failed once more, exit
 				ECS_FORMAT_TEMP_STRING(console_error, "Failed to finish {#} recording. Could not flush the contents", info.type_string);
 				EditorSetConsoleError(console_error);
 
 				// Remove the file
 				CloseFile(write_instrument->file);
-				Stream<wchar_t> absolute_file_path = GetProjectPathFromAssetRelative(editor_state, absolute_path_storage, *info.file_path);
+				Stream<wchar_t> absolute_file_path = GetProjectPathFromAssetRelative(editor_state, absolute_path_storage, info.recorder->file);
 				if (!RemoveFile(absolute_file_path)) {
-					ECS_FORMAT_TEMP_STRING(remove_error, "Failed to remove {#} recording file", *info.file_path);
+					ECS_FORMAT_TEMP_STRING(remove_error, "Failed to remove {#} recording file", info.recorder->file);
 					EditorSetConsoleError(remove_error);
 				}
 				return false;
@@ -192,11 +192,11 @@ static bool InitializeSandboxRecording(
 
 	// Update the file bool status - if it is not set, then don't continue
 	UpdateValidFileBoolRecording(editor_state, info);
-	if (!*info.is_recording_file_valid) {
+	if (!info.recorder->is_file_valid) {
 		return true;
 	}
 
-	*info.is_delta_writer_initialized = false;
+	info.recorder->is_initialized = false;
 	// Open the file for write
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_file_path_storage, 512);
 	Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, absolute_file_path_storage);
@@ -205,7 +205,7 @@ static bool InitializeSandboxRecording(
 	ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB);
 	ECS_FILE_STATUS_FLAGS status = FileCreate(absolute_file_path, &input_file, ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE, ECS_FILE_CREATE_READ_WRITE, &error_message);
 	if (status != ECS_FILE_STATUS_OK) {
-		ECS_FORMAT_TEMP_STRING(console_message, "Opening {#} recording file {#} failed. Reason: {#}", info.type_string, *info.file_path, error_message);
+		ECS_FORMAT_TEMP_STRING(console_message, "Opening {#} recording file {#} failed. Reason: {#}", info.type_string, info.recorder->file, error_message);
 		EditorSetConsoleError(console_message);
 		return false;
 	}
@@ -229,20 +229,20 @@ static bool InitializeSandboxRecording(
 	initialize_info.allocator = recorder_allocator;
 	initialize_info.entire_state_write_seconds_tick = *info.entire_state_tick_seconds;
 
-	info.delta_writer->Initialize(initialize_info);
-	*info.is_delta_writer_initialized = true;
+	info.recorder->delta_writer.Initialize(initialize_info);
+	info.recorder->is_initialized = true;
 	return true;
 }
 
 static void ResetSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, const SandboxRecordingInfo& info) {
-	ZeroOut(info.delta_writer);
+	ZeroOut(&info.recorder->delta_writer);
 	*info.entire_state_tick_seconds = DEFAULT_ENTIRE_STATE_TICK_SECONDS;
-	*info.is_delta_writer_initialized = false;
 	*info.is_recording_automatic = false;
-	*info.is_recording_file_valid = false;
+	info.recorder->is_initialized = false;
+	info.recorder->is_file_valid = false;
 	// Indicate that no index is known
-	*info.recording_automatic_index = -1;
-	info.file_path->Initialize(GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager(), 0, PATH_MAX_CAPACITY);
+	info.recorder->file_automatic_index = -1;
+	info.recorder->file.Initialize(GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager(), 0, PATH_MAX_CAPACITY);
 }
 
 SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
@@ -251,13 +251,9 @@ SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned
 	case EDITOR_SANDBOX_RECORDING_INPUT:
 	{
 		return { 
-			&sandbox->input_recorder, 
-			&sandbox->is_input_recorder_initialized, 
+			&sandbox->input_recorder,
 			&sandbox->is_input_recorder_file_automatic,
-			&sandbox->is_input_recorder_file_valid,
-			&sandbox->input_recorder_file_automatic_index,
 			&sandbox->input_recorder_entire_state_tick_seconds, 
-			&sandbox->input_recorder_file, 
 			EDITOR_INPUT_RECORDER_TYPE_STRING,
 			EDITOR_INPUT_RECORDING_FILE_EXTENSION,
 			EDITOR_SANDBOX_FLAG_RECORD_INPUT 
@@ -267,13 +263,9 @@ SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned
 	case EDITOR_SANDBOX_RECORDING_STATE:
 	{
 		return { 
-			&sandbox->state_recorder, 
-			&sandbox->is_state_recorder_initialized, 
+			&sandbox->state_recorder,
 			&sandbox->is_state_recorder_file_automatic,
-			&sandbox->is_state_recorder_file_valid,
-			&sandbox->state_recorder_file_automatic_index,
 			&sandbox->state_recorder_entire_state_tick_seconds, 
-			&sandbox->state_recorder_file,
 			EDITOR_STATE_RECORDER_TYPE_STRING,
 			EDITOR_STATE_RECORDING_FILE_EXTENSION,
 			EDITOR_SANDBOX_FLAG_RECORD_STATE
@@ -355,10 +347,10 @@ void ResetSandboxRecordings(EditorState* editor_state, unsigned int sandbox_inde
 
 bool RunSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
 	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_index, type);
-	if (*info.is_delta_writer_initialized) {
+	if (info.recorder->is_initialized) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		if (HasFlag(sandbox->flags, info.flag) && !info.delta_writer->IsFailed()) {
-			if (!info.delta_writer->Write()) {
+		if (HasFlag(sandbox->flags, info.flag) && !info.recorder->delta_writer.IsFailed()) {
+			if (!info.recorder->delta_writer.Write()) {
 				ECS_FORMAT_TEMP_STRING(console_message, "Failed to write {#} recording at moment {#}", info.type_string, sandbox->sandbox_world.elapsed_seconds);
 				EditorSetConsoleError(console_message);
 

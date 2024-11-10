@@ -286,10 +286,17 @@ namespace ECSEngine {
 			m_startup_descriptors.title_y_scale = m_descriptors.title_y_scale;
 
 			// Call the change dimension function to change the descriptors, if needed
-			float2 current_dimension_ratio = float2(1.0f, 1.0f);
-			float2 new_dimension_ratio = float2(m_window_os_size) / float2(m_monitor_size);
-			ChangeDimensionRatio(current_dimension_ratio, new_dimension_ratio);
-			ChangeAspectRatio(ECS_TOOLS_UI_DESIGN_ASPECT_RATIO, (float)m_monitor_size.x / (float)m_monitor_size.y);
+			//float2 current_dimension_ratio = float2(1.0f, 1.0f);
+			//float2 new_dimension_ratio = float2(m_window_os_size) / float2(m_monitor_size);
+			//ChangeDimensionRatio(current_dimension_ratio, new_dimension_ratio);
+			//ChangeAspectRatio(ECS_TOOLS_UI_DESIGN_ASPECT_RATIO, (float)m_monitor_size.x / (float)m_monitor_size.y);
+			
+			uint2 previous_os_window_size = m_window_os_size;
+			uint2 previous_monitor_size = m_monitor_size;
+			// Set these 2 fields to be equal such that the aspect ratio and the ratios are 1.0f
+			m_monitor_size = uint2(ECS_TOOLS_UI_DESIGN_WIDTH, ECS_TOOLS_UI_DESIGN_HEIGHT);
+			m_window_os_size = m_monitor_size;
+			SetWindowOSSize(previous_os_window_size, previous_monitor_size);
 
 			// Unitialize the timer
 			m_frame_timer.SetUninitialized();
@@ -1480,6 +1487,10 @@ namespace ECSEngine {
 
 		void UISystem::ChangeAspectRatio(float current_ratio, float new_ratio)
 		{
+			// TODO: Probably we should remove this function, as it doesn't make sense
+			ECS_ASSERT(false, "This function doesn't actually make sense. The dimensions of the monitor should be changed only based on the current aspect ratio"
+				" of the window, regardless of the aspect ratio of the monitor");
+
 			if (current_ratio < new_ratio) {
 				// The monitor is wider now or less tall - use the multiplication factor to determine
 				// Which dimension should be changed
@@ -9871,9 +9882,11 @@ namespace ECSEngine {
 			m_window_os_size = new_size;
 			m_monitor_size = monitor_size;
 			float2 new_dimension_ratio = float2(new_size) / float2(monitor_size);
-			float new_aspect_ratio = (float)monitor_size.x / (float)monitor_size.y;
 			ChangeDimensionRatio(current_dimension_ratio, new_dimension_ratio);
-			ChangeAspectRatio(current_aspect_ratio, new_aspect_ratio);
+			
+			// Actually, we shouldn't update the aspect ratio, the window size is sufficient
+			//float new_aspect_ratio = (float)monitor_size.x / (float)monitor_size.y;
+			//ChangeAspectRatio(current_aspect_ratio, new_aspect_ratio);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

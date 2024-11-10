@@ -1,6 +1,7 @@
 #pragma once
 #include "ECSEngineContainersCommon.h"
 #include "SandboxRecordingFileExtension.h"
+#include "SandboxTypes.h"
 
 struct EditorState;
 enum EDITOR_SANDBOX_FLAG : size_t;
@@ -11,13 +12,9 @@ namespace ECSEngine {
 }
 
 struct SandboxRecordingInfo {
-	ECSEngine::DeltaStateWriter* delta_writer;
-	bool* is_delta_writer_initialized;
+	EditorSandbox::Recorder* recorder;
 	bool* is_recording_automatic;
-	bool* is_recording_file_valid;
-	unsigned int* recording_automatic_index;
 	float* entire_state_tick_seconds;
-	ECSEngine::CapacityStream<wchar_t>* file_path;
 	const char* type_string;
 	const wchar_t* extension;
 	EDITOR_SANDBOX_FLAG flag;

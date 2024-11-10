@@ -416,6 +416,19 @@ static void ScenePrivateAction(ActionData* action_data) {
 	// Determine if the transform tool needs to be changed
 	unsigned int target_sandbox = GetActiveWindowSandbox(editor_state);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	auto reset_camera_wasd = [&]() {
+		// End the camera movement
+		sandbox->is_camera_wasd_movement = false;
+		// Disable the mouse raw input and make the cursor visible again
+		mouse->DisableRawInput();
+		mouse->SetCursorVisibility(true);
+
+		// Re-enable the control and shift buttons
+		editor_state->input_mapping.ReenableKey(ECS_KEY_LEFT_SHIFT);
+		editor_state->input_mapping.ReenableKey(ECS_KEY_LEFT_CTRL);
+	};
+
 	// If values are being entered into a field don't change the tool
 	if (target_sandbox == sandbox_index) {
 		// Check to see if the camera wasd movement is activated
@@ -426,9 +439,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 			// Check for camera wasd activation first
 			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CAMERA_WALK)) {
 				if (sandbox->is_camera_wasd_movement) {
-					mouse->DisableRawInput();
-					mouse->SetCursorVisibility(true);
-					sandbox->is_camera_wasd_movement = false;
+					reset_camera_wasd();
 				}
 				else {
 					// Enable the mouse ray input and disable the cursor
@@ -442,6 +453,10 @@ static void ScenePrivateAction(ActionData* action_data) {
 					data->camera_wasd_initial_rotation = camera_point.rotation;
 					// We need this to make the camera movement smoother
 					system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
+
+					// Disable the left control and shift actions
+					editor_state->input_mapping.DisableKey(ECS_KEY_LEFT_SHIFT);
+					editor_state->input_mapping.DisableKey(ECS_KEY_LEFT_CTRL);
 
 					// Disable the axes if they are drawn
 					sandbox->transform_display_axes = false;
@@ -674,14 +689,6 @@ static void ScenePrivateAction(ActionData* action_data) {
 		sandbox->transform_display_axes = false;
 		// We also need to trigger a re-render
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-	};
-
-	auto reset_camera_wasd = [&]() {
-		// End the camera movement
-		sandbox->is_camera_wasd_movement = false;
-		// Disable the mouse raw input and make the cursor visible again
-		mouse->DisableRawInput();
-		mouse->SetCursorVisibility(true);
 	};
 
 	// If the user has clicked somewhere and we have active axes, disable them

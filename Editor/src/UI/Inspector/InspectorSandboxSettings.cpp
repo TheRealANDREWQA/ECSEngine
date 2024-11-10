@@ -999,13 +999,13 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
 			// Make the text with green when the path is valid, else make it red
-			text_parameters.color = *block_info.is_recording_file_valid ? ECS_COLOR_GREEN : ECS_COLOR_RED;
+			text_parameters.color = block_info.recorder->is_file_valid ? ECS_COLOR_GREEN : ECS_COLOR_RED;
 
 			config.AddFlag(text_parameters);
 
 			ECS_FORMAT_TEMP_STRING(file_path_name, "{#} recording file", block_info.type_string);
 			Stream<wchar_t> recording_extension = block_info.extension;
-			UIDrawerTextInput* text_input = drawer->TextInput(CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_PARAMETERS, config, file_path_name, block_info.file_path);
+			UIDrawerTextInput* text_input = drawer->TextInput(CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_PARAMETERS, config, file_path_name, &block_info.recorder->file);
 			data->is_recording_input_selected |= text_input->is_currently_selected;
 		};
 
@@ -1053,15 +1053,18 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 				UpdateSandboxValidFileBoolReplay(editor_state, sandbox_index, recording_type);
 			}
 
+			ECS_FORMAT_TEMP_STRING(enabled_elapsed_seconds_name, "{#} replay drive delta time", block_info.type_string);
+			//drawer->CheckBox(CONFIGURATION, config, enabled_elapsed_seconds_name, &sandbox->)
+
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
 			// Make the text with green when the path is valid, else make it red
-			text_parameters.color = *block_info.is_replay_file_valid ? ECS_COLOR_GREEN : ECS_COLOR_RED;
+			text_parameters.color = block_info.replay->is_file_valid ? ECS_COLOR_GREEN : ECS_COLOR_RED;
 
 			config.AddFlag(text_parameters);
 
 			ECS_FORMAT_TEMP_STRING(file_path_name, "{#} replay file", block_info.type_string);
 			Stream<wchar_t> recording_extension = block_info.extension;
-			UIDrawerTextInput* input = drawer->TextInput(CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_PARAMETERS, config, file_path_name, block_info.file_path);
+			UIDrawerTextInput* input = drawer->TextInput(CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_PARAMETERS, config, file_path_name, &block_info.replay->file);
 			data->is_replay_input_selected |= input->is_currently_selected;
 		};
 

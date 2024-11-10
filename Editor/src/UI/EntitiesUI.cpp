@@ -474,18 +474,25 @@ static void CopyEntityCallback(ActionData* action_data) {
 	EntitiesUIData* data = (EntitiesUIData*)copy_data->data;
 
 	// Perform the operation only if we are the active shortcut handler
-	if (data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
-		Entity* given_parent = (Entity*)copy_data->destination_label;
-		Entity parent = given_parent != nullptr ? *given_parent : Entity((unsigned int)-1);
+	if (!data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
+		return;
+	}
 
-		Stream<Entity> source_labels = copy_data->source_labels.AsIs<Entity>();
-		if (IsNormalEntity(data, parent)) {
-			for (size_t index = 0; index < copy_data->source_labels.size; index++) {
-				if (IsNormalEntity(data, source_labels[index])) {
-					Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
-					if (parent.value != -1) {
-						ParentSandboxEntity(data->editor_state, data->sandbox_index, copied_entity, parent);
-					}
+	// If the editor input mapping left control is disabled, discard this action
+	if (data->editor_state->input_mapping.IsKeyDisabled(ECS_KEY_LEFT_CTRL)) {
+		return;
+	}
+
+	Entity* given_parent = (Entity*)copy_data->destination_label;
+	Entity parent = given_parent != nullptr ? *given_parent : Entity((unsigned int)-1);
+
+	Stream<Entity> source_labels = copy_data->source_labels.AsIs<Entity>();
+	if (IsNormalEntity(data, parent)) {
+		for (size_t index = 0; index < copy_data->source_labels.size; index++) {
+			if (IsNormalEntity(data, source_labels[index])) {
+				Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
+				if (parent.value != -1) {
+					ParentSandboxEntity(data->editor_state, data->sandbox_index, copied_entity, parent);
 				}
 			}
 		}
@@ -502,21 +509,28 @@ static void CutEntityCallback(ActionData* action_data) {
 
 	// Perform the operation only if we are the active shortcut handler
 	if (data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
-		Stream<Entity> entities = cut_data->source_labels.AsIs<Entity>();
-		Entity parent = cut_data->destination_label == nullptr ? Entity::Invalid() : *(Entity*)cut_data->destination_label;
-		if (IsNormalEntity(data, parent)) {
-			if (entities.size > 0) {
-				// Determine which labels are valid labels
-				Stream<Entity> copy = entities.Copy(data->editor_state->EditorAllocator());
-				for (size_t index = 0; index < copy.size; index++) {
-					if (!IsNormalEntity(data, copy[index])) {
-						copy.RemoveSwapBack(index);
-						index--;
-					}
+		return;
+	}
+
+	// If the editor input mapping left control is disabled, discard this action
+	if (data->editor_state->input_mapping.IsKeyDisabled(ECS_KEY_LEFT_CTRL)) {
+		return;
+	}
+
+	Stream<Entity> entities = cut_data->source_labels.AsIs<Entity>();
+	Entity parent = cut_data->destination_label == nullptr ? Entity::Invalid() : *(Entity*)cut_data->destination_label;
+	if (IsNormalEntity(data, parent)) {
+		if (entities.size > 0) {
+			// Determine which labels are valid labels
+			Stream<Entity> copy = entities.Copy(data->editor_state->EditorAllocator());
+			for (size_t index = 0; index < copy.size; index++) {
+				if (!IsNormalEntity(data, copy[index])) {
+					copy.RemoveSwapBack(index);
+					index--;
 				}
-				ParentSandboxEntities(data->editor_state, data->sandbox_index, copy, parent);
-				data->editor_state->editor_allocator->Deallocate(copy.buffer);
 			}
+			ParentSandboxEntities(data->editor_state, data->sandbox_index, copy, parent);
+			data->editor_state->editor_allocator->Deallocate(copy.buffer);
 		}
 	}
 }
@@ -531,21 +545,27 @@ static void DeleteEntityCallback(ActionData* action_data) {
 
 	// Perform the operation only if we are the active shortcut handler
 	if (data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
-		Stream<Entity> source_labels = delete_data->source_labels.AsIs<Entity>();
-		for (size_t index = 0; index < delete_data->source_labels.size; index++) {
-			// We shouldn't delete the global parent
-			// The global components we have to delete
-			if (source_labels[index] != GlobalComponentsParent()) {
-				Component global_component = DecodeVirtualEntityToComponent(data, source_labels[index]);
-				if (global_component.Valid()) {
-					RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_index, global_component);
-					// We must also remove it from our internal list of components
-					size_t component_index = SearchBytes(data->virtual_global_components_entities, source_labels[index]);
-					data->virtual_global_components_entities.RemoveSwapBack(component_index);
-				}
-				else {
-					DeleteSandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
-				}
+		return;
+	}
+
+	if (data->editor_state->input_mapping.IsKeyDisabled(ECS_KEY_LEFT_CTRL)) {
+		return;
+	}
+
+	Stream<Entity> source_labels = delete_data->source_labels.AsIs<Entity>();
+	for (size_t index = 0; index < delete_data->source_labels.size; index++) {
+		// We shouldn't delete the global parent
+		// The global components we have to delete
+		if (source_labels[index] != GlobalComponentsParent()) {
+			Component global_component = DecodeVirtualEntityToComponent(data, source_labels[index]);
+			if (global_component.Valid()) {
+				RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_index, global_component);
+				// We must also remove it from our internal list of components
+				size_t component_index = SearchBytes(data->virtual_global_components_entities, source_labels[index]);
+				data->virtual_global_components_entities.RemoveSwapBack(component_index);
+			}
+			else {
+				DeleteSandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
 			}
 		}
 	}

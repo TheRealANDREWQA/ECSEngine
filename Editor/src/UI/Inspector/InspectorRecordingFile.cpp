@@ -201,7 +201,7 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 			Stream<wchar_t> relative_path = GetProjectAssetRelativePathWithSeparatorReplacement(data->editor_state, data->data->path, relative_path_storage);
 			// Remove the extension as well
 			relative_path = PathNoExtension(relative_path, ECS_OS_PATH_SEPARATOR_REL);
-			replay_info.file_path->CopyOther(relative_path);
+			replay_info.replay->file.CopyOther(relative_path);
 			
 			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->data->set_recording_sandbox_index);
 			sandbox->flags = SetFlag(sandbox->flags, replay_info.flag);
