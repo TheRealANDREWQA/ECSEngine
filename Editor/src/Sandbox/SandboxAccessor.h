@@ -123,12 +123,12 @@ ECS_INLINE bool DoesSandboxRecordState(const EditorState* editor_state, unsigned
 
 ECS_INLINE bool DoesSandboxReplayInput(const EditorState* editor_state, unsigned int sandbox_index) {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_REPLAY_INPUT) && !sandbox->input_replay.IsFinished();
+	return HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_REPLAY_INPUT) && !sandbox->input_replay.delta_reader.IsFinished();
 }
 
 ECS_INLINE bool DoesSandboxReplayState(const EditorState* editor_state, unsigned int sandbox_index) {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_REPLAY_STATE) && !sandbox->state_replay.IsFinished();
+	return HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_REPLAY_STATE) && !sandbox->state_replay.delta_reader.IsFinished();
 }
 
 // -------------------------------------------------------------------------------------------------------------

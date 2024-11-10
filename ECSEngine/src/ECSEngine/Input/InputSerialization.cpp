@@ -157,6 +157,9 @@ namespace ECSEngine {
 				}
 			}
 
+			// TODO: We probably don't need these to be written out by deltas, we should let the
+			// game logic handle it.
+
 			//// Now the more exotic flags
 			//if (boolean_change_mask & MOUSE_IS_VISIBLE_BIT) {
 			//	// When this transitions to non visible, write the restore position as well
@@ -406,7 +409,7 @@ namespace ECSEngine {
 			current_state->SetCursorWheel(current_state->GetScrollValue() + scroll_delta);
 		}
 
-		// Update the "exotic" flags
+		//// Update the "exotic" flags
 		//if (boolean_change_mask & MOUSE_IS_VISIBLE_BIT) {
 		//	current_state->SetCursorVisibility(!current_state->IsVisible(), false);
 		//	// When this transitions to non visible, write the restore position as well
@@ -472,6 +475,9 @@ namespace ECSEngine {
 
 		state->SetPosition(position.x, position.y);
 		state->SetCursorWheel(scroll_value);
+		// Modify the m_current_position to be equal to the position values, the call might change the values,
+		// But we want m_current_position to be exactly the deserialized value
+		state->m_current_position = position;
 
 		// Process the flags at last, after all fields are set
 		state->m_get_raw_input = HasFlag(combined_boolean_flags, MOUSE_RAW_STATE_BIT);

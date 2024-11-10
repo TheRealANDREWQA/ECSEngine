@@ -8,7 +8,13 @@ namespace ECSEngine {
 	struct ECSENGINE_API InputMappingButton {
 		ECS_INLINE InputMappingButton() : exclude(false), is_key(false), mouse_button(ECS_MOUSE_BUTTON_COUNT), state(ECS_BUTTON_STATE_COUNT) {}
 
+		// This overload does not take into consideration disabled keys/buttons
 		bool IsTriggered(const Mouse* mouse, const Keyboard* keyboard) const;
+
+		// This overload takes into consideration disabled keys/buttons
+		bool IsTriggered(const Mouse* mouse, const Keyboard* keyboard, const ECS_KEY* disabled_keys, size_t disabled_key_count, const ECS_MOUSE_BUTTON* disabled_mouse_buttons, size_t disabled_mouse_button_count) const;
+
+		bool IsDisabled(const ECS_KEY* disabled_keys, size_t disabled_key_count, const ECS_MOUSE_BUTTON* disabled_mouse_buttons, size_t disabled_mouse_button_count) const;
 
 		ECS_INLINE bool IsInitialized() const {
 			if (is_key) {
@@ -54,6 +60,12 @@ namespace ECSEngine {
 
 		ECS_INLINE bool IsTriggered(const Mouse* mouse, const Keyboard* keyboard) const {
 			return first.IsTriggered(mouse, keyboard) && second.IsTriggered(mouse, keyboard) && third.IsTriggered(mouse, keyboard);
+		}
+
+		ECS_INLINE bool IsTriggered(const Mouse* mouse, const Keyboard* keyboard, const ECS_KEY* disabled_keys, size_t disabled_key_count, const ECS_MOUSE_BUTTON* disabled_mouse_buttons, size_t disabled_mouse_button_count) const {
+			return first.IsTriggered(mouse, keyboard, disabled_keys, disabled_key_count, disabled_mouse_buttons, disabled_mouse_button_count)
+				&& second.IsTriggered(mouse, keyboard, disabled_keys, disabled_key_count, disabled_mouse_buttons, disabled_mouse_button_count)
+				&& third.IsTriggered(mouse, keyboard, disabled_keys, disabled_key_count, disabled_mouse_buttons, disabled_mouse_button_count);
 		}
 
 		ECS_INLINE void SetFirstKey(ECS_KEY key, ECS_BUTTON_STATE state, bool exclude = false) {
@@ -153,12 +165,44 @@ namespace ECSEngine {
 
 		bool IsTriggered(unsigned int index) const;
 
+		// Returns true if the given key is disabled, else false
+		bool IsKeyDisabled(ECS_KEY key) const;
+
+		// Returns true if the given mouse button is disabled, else false
+		bool IsMouseButtonDisabled(ECS_MOUSE_BUTTON button) const;
+
 		void ChangeMapping(unsigned int index, InputMappingElement mapping_element);
 
 		// Replaces all elements with the ones given
 		void ChangeMapping(const InputMappingElement* elements);
 
+		// Disables a key. Can be called multiple times on the same key, respecting the number
+		// Of disable, requiring the same number of calls to re-enable key to make it active again
+		void DisableKey(ECS_KEY key);
+
+		// Disables a mouse button. Can be called multiple times on the same button, respecting the number
+		// Of disable, requiring the same number of calls to re-enable mouse button to make it active again
+		void DisableMouseButton(ECS_MOUSE_BUTTON button);
+
+		// Reenables a key. If a key has been disabled multiple times, this "counter-acts" only a single disable call.
+		// You need to call this function the same number of times as the disable calls to make the key active again
+		void ReenableKey(ECS_KEY key);
+
+		// Reenables a mouse button. If a button has been disabled multiple times, this "counter-acts" only a single disable call.
+		// You need to call this function the same number of times as the disable calls to make the button active again
+		void ReenableMouseButton(ECS_MOUSE_BUTTON mouse_button);
+
 		Stream<InputMappingElement> mappings;
+		
+		struct {
+			// This is a limited amount of buttons that can be used to disable certain buttons from being counted
+			// As being pressed/held.
+			ECS_KEY disabled_keys[15];
+			unsigned char disabled_key_count;
+			ECS_MOUSE_BUTTON disabled_mouse_buttons[7];
+			unsigned char disabled_mouse_button_count;
+		};
+
 		const Mouse* mouse;
 		const Keyboard* keyboard;
 	};

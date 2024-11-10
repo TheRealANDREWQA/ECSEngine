@@ -1917,6 +1917,7 @@ namespace ECSEngine {
 			uint2 m_monitor_size;
 			// This is a factor that is used to know on which dimension the aspect ratio factor has been
 			// Applied. It strives to maintain a dimension at 1.0f and let the other change (as it should be the case)
+			// TODO: This should probably be removed
 			float2 m_aspect_ratio_factor;
 			// Describes how large a pixel is. Basically, 2.0f / m_window_os_size;
 			float2 m_pixel_size;

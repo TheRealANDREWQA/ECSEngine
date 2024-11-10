@@ -1,6 +1,7 @@
 #pragma once
 #include "ECSEngineContainersCommon.h"
 #include "SandboxRecordingFileExtension.h"
+#include "SandboxTypes.h"
 
 struct EditorState;
 enum EDITOR_SANDBOX_FLAG : size_t;
@@ -11,10 +12,7 @@ namespace ECSEngine {
 }
 
 struct SandboxReplayInfo {
-	ECSEngine::DeltaStateReader* delta_reader;
-	bool* is_delta_reader_initialized;
-	bool* is_replay_file_valid;
-	ECSEngine::CapacityStream<wchar_t>* file_path;
+	EditorSandbox::ReplayPlayer* replay;
 	const char* type_string;
 	const wchar_t* extension;
 	EDITOR_SANDBOX_FLAG flag;
