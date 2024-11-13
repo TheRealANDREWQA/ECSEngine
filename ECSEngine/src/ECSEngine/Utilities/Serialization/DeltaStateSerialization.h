@@ -106,8 +106,9 @@ namespace ECSEngine {
 		// Deallocates all the memory used by this writer
 		void Deallocate();
 
-		// Writes the remaining data that the writer has to write. It returns true if it succeeded, else false
-		bool Flush();
+		// Writes the remaining data that the writer has to write, with the option of writing the elapsed seconds of each call. 
+		// It returns true if it succeeded, else false
+		bool Flush(bool write_frame_elapsed_seconds = true);
 
 		// Returns the user pointer data that you can initialize to certain values. It is memsetted to 0 by default
 		void Initialize(const DeltaStateWriterInitializeInfo& initialize_info);
@@ -139,10 +140,10 @@ namespace ECSEngine {
 		// This array holds the indices of entire states in the state infos. This helps distinguish between delta
 		// And entire states.
 		ResizableStream<unsigned int> entire_state_indices;
+		// This array holds the elapsed seconds of each write - even those that didn't get to write anything in the instrument
+		ResizableStream<float> frame_elapsed_seconds;
 		// How many seconds it takes to write a new entire state again, which helps with seeking time
 		float entire_state_write_seconds_tick;
-		// The elapsed second duration of the last entire write
-		float last_entire_state_write_seconds;
 
 		// This boolean will be set when a write call fails to serialize correctly.
 		bool is_failed;
@@ -206,6 +207,23 @@ namespace ECSEngine {
 		// Returns the offset from the start of the serialized range up until the start of the state
 		size_t GetOffsetForState(size_t index) const;
 
+		// Returns the elapsed seconds for the current state, when advancing sequentially. If the reader has been exhausted,
+		// Then it will return the elapsed seconds of the last state.
+		ECS_INLINE float GetCurrentStateElapsedSeconds() const {
+			return current_state_index < state_infos.size ? state_infos[current_state_index].elapsed_seconds : state_infos.Last().elapsed_seconds;
+		}
+
+		// Intended to be used sequentially and when the function HasFrameElapsedSeconds() returns true. This will return the delta time
+		// Of the current frame, based on what the original writer's frames. In case HasFrameElapsedSeconds() is false, this will return 0.0f
+		ECS_INLINE float GetCurrentFrameDeltaTime() {
+			if (frame_elapsed_seconds.size == 0 || current_frame_index >= frame_elapsed_seconds.size - 1) {
+				return 0.0f;
+			}
+
+			size_t current_frame = current_frame_index++;
+			return frame_elapsed_seconds[current_frame + 1] - frame_elapsed_seconds[current_frame];
+		}
+
 		// Returns true if the given overall state index is an entire state, else false
 		bool IsEntireState(size_t index) const;
 
@@ -216,6 +234,10 @@ namespace ECSEngine {
 		// Returns true if the states from this reader have been sequentially finished, else false
 		ECS_INLINE bool IsFinished() const {
 			return current_state_index >= state_infos.size;
+		}
+
+		ECS_INLINE bool HasFrameElapsedSeconds() const {
+			return frame_elapsed_seconds.size > 0 && current_frame_index < frame_elapsed_seconds.size - 1;
 		}
 
 		// Returns the pointer to the user data such that you can initialize the data properly. It will be 0'ed.
@@ -242,9 +264,14 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator;
 		CapacityStream<DeltaStateInfo> state_infos;
 		CapacityStream<unsigned int> entire_state_indices;
+		// This array holds the elapsed seconds of each write - even those that didn't get to write anything in the instrument
+		// If the original writer did write these
+		CapacityStream<float> frame_elapsed_seconds;
 		// The following field is used for the fast execution of sequential frames
 		// This field indicates that the state at this index is the next one to be read
 		size_t current_state_index;
+		// Intended to be used sequentially, to retrieve the delta times of the original writer's frames
+		size_t current_frame_index;
 
 		// This boolean is set when a Seek or Advance operation fails
 		bool is_failed;

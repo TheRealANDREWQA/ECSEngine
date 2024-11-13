@@ -105,6 +105,8 @@ namespace ECSEngine {
 		float speed_up_factor;
 		// Measures the number of seconds that have elapsed since the simulation start
 		float elapsed_seconds;
+		// Records the number of frames that have been executed since the beginning of the simulation
+		size_t elapsed_frames;
 	};
 
 	// Destroys the graphics object if it was created internally, deallocates the global memory manager

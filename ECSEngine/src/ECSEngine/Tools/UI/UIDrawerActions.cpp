@@ -121,13 +121,13 @@ namespace ECSEngine {
 			float initial_value = slider->slider_position;
 			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = true;
-				if (!slider->is_vertical) {
+				if (!slider->is_vertical && slider->wrap_mouse) {
 					system->ActiveWrapCursorPosition();
 				}
 			}
 			else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = false;
-				if (!slider->is_vertical) {
+				if (!slider->is_vertical && mouse->IsWrap()) {
 					system->DeactiveWrapCursorPosition();
 				}
 			}
@@ -2429,7 +2429,23 @@ namespace ECSEngine {
 
 				size_t new_configuration = ClearFlag(ClearFlag(data->configuration, UI_CONFIG_LATE_DRAW), UI_CONFIG_SYSTEM_DRAW);
 				new_configuration = ClearFlag(new_configuration, UI_CONFIG_ALIGN_TO_ROW_Y);
+
+				float initial_y_position = drawer.GetCurrentPosition().y;
+
+				// Use the same zoom as the parent
+				unsigned int target_window_index = drawer.system->GetWindowFromName(data->target_window_name);
+				ECS_ASSERT(target_window_index != -1, "Combo box target window was lost!");
+				float2 target_window_zoom = drawer.system->m_windows[target_window_index].zoom;
+				drawer.SetZoomXFactor(target_window_zoom.x);
+				drawer.SetZoomYFactor(target_window_zoom.y);
 				drawer.ComboBoxDropDownDrawer(new_configuration, data->config, data->box, data->target_window_name);
+
+				// Update the window Y size based on the new zoom value.
+				float final_y_position = drawer.GetCurrentPosition().y;
+				float y_size = final_y_position - initial_y_position;
+				drawer.system->SetPopUpWindowScale(drawer.window_index, { 0.0f, y_size });
+				// Update this to avoid having a vertical scroll bar appear
+				drawer.region_scale.y = y_size;
 			}
 		}
 

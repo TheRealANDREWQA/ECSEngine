@@ -9712,8 +9712,8 @@ namespace ECSEngine {
 			DockspaceType type;
 			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
 
-			new_scale.x = new_scale.x > 0.0f ? new_scale.x : 0.0f;
-			new_scale.y = new_scale.y > 0.0f ? new_scale.y : 0.0f;
+			new_scale.x = new_scale.x > 0.0f ? new_scale.x : dockspace->transform.scale.x;
+			new_scale.y = new_scale.y > 0.0f ? new_scale.y : dockspace->transform.scale.y;
 			dockspace->transform.scale = new_scale;
 		}
 

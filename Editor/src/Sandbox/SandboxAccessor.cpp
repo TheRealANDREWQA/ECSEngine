@@ -2,6 +2,8 @@
 #include "SandboxAccessor.h"
 #include "../UI/Game.h"
 #include "../UI/Scene.h"
+#include "SandboxReplay.h"
+#include "SandboxRecording.h"
 
 using namespace ECSEngine;
 
@@ -159,6 +161,30 @@ bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sa
 const EntityManager* RuntimeSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_index)
 {
 	return GetSandbox(editor_state, sandbox_index)->sandbox_world.entity_manager;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool DoesSandboxRecord(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+	// It is safe to cast editor_state, since the function does not change the values, only returns mutable pointers that we are not changing
+	SandboxRecordingInfo recording_info = GetSandboxRecordingInfo((EditorState*)editor_state, sandbox_index, recording_type);
+	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, recording_info.flag);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool DoesSandboxReplay(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+	// It is safe to cast editor_state, since the function does not change the values, only returns mutable pointers that we are not changing
+	SandboxReplayInfo replay_info = GetSandboxReplayInfo((EditorState*)editor_state, sandbox_index, recording_type);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return HasFlag(sandbox->flags, replay_info.flag) && !replay_info.replay->delta_reader.IsFinished();
+}
+
+bool DoesSandboxReplayDriveDeltaTime(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+	// It is safe to cast editor_state, since the function does not change the values, only returns mutable pointers that we are not changing
+	SandboxReplayInfo replay_info = GetSandboxReplayInfo((EditorState*)editor_state, sandbox_index, recording_type);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return HasFlag(sandbox->flags, replay_info.flag) && !replay_info.replay->delta_reader.IsFinished() && replay_info.replay->is_driving_delta_time;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
