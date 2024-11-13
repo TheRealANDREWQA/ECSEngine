@@ -42,7 +42,7 @@ namespace ECSEngine {
 		write_instrument = nullptr;
 	}
 
-	bool DeltaStateWriter::Flush() {
+	bool DeltaStateWriter::Flush(bool write_frame_elapsed_seconds) {
 		// Write the footer in a reversed fashion, such that sizes appear after the data itself, so when reading we can read the
 		size_t footer_start_write_offset = write_instrument->GetOffset();
 
@@ -67,6 +67,15 @@ namespace ECSEngine {
 			if (!SerializeIntVariableLengthBool(write_instrument, entire_state_indices[index])) {
 				return false;
 			}
+		}
+
+		// Write the frame elapsed seconds, if the user specified it
+		unsigned int frame_elapsed_seconds_count = write_frame_elapsed_seconds ? frame_elapsed_seconds.size : 0;
+		if (!SerializeIntVariableLengthBool(write_instrument, frame_elapsed_seconds_count)) {
+			return false;
+		}
+		if (!write_instrument->Write(frame_elapsed_seconds.buffer, frame_elapsed_seconds_count * frame_elapsed_seconds.MemoryOf(1))) {
+			return false;
 		}
 
 		// Write the user defined header
@@ -121,7 +130,6 @@ namespace ECSEngine {
 		entire_function = initialize_info.functor_info.entire_function;
 		extract_function = initialize_info.functor_info.self_contained_extract;
 		entire_state_write_seconds_tick = initialize_info.entire_state_write_seconds_tick;
-		last_entire_state_write_seconds = 0.0f;
 		is_failed = false;
 		
 		size_t user_header_size = initialize_info.functor_info.header.size;
@@ -133,10 +141,15 @@ namespace ECSEngine {
 
 		state_infos.Initialize(allocator, 0);
 		entire_state_indices.Initialize(allocator, 0);
+		frame_elapsed_seconds.Initialize(allocator, 0);
 	}
 
 	bool DeltaStateWriter::Write(float elapsed_seconds) {
-		float entire_state_delta = elapsed_seconds - last_entire_state_write_seconds;
+		float last_entire_state_elapsed_seconds = entire_state_indices.size == 0 ? 0.0f : state_infos[entire_state_indices.Last()].elapsed_seconds;
+		float entire_state_delta = elapsed_seconds - last_entire_state_elapsed_seconds;
+
+		// Add the elapsed seconds to the array first
+		frame_elapsed_seconds.Add(elapsed_seconds);
 
 		if (entire_state_delta >= entire_state_write_seconds_tick || entire_state_indices.size == 0) {
 			size_t instrument_offset = write_instrument->GetOffset();
@@ -158,7 +171,6 @@ namespace ECSEngine {
 			else {
 				is_failed = true;
 			}
-			last_entire_state_write_seconds = elapsed_seconds;
 			return success;
 		}
 		else {
@@ -413,7 +425,7 @@ namespace ECSEngine {
 
 		Footer footer;
 		if (!read_instrument->Read(&footer)) {
-			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not read the written footer or it is corrupted.");
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not read the written footer or the data is corrupted.");
 			return false;
 		}
 
@@ -429,14 +441,14 @@ namespace ECSEngine {
 		}
 
 		if (!DeserializeIntVariableLengthBool(read_instrument, state_infos.size)) {
-			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the state infos size or it is corrupted.");
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the state infos size or the data is corrupted.");
 			return false;
 		}
 
 		state_infos.Initialize(allocator, state_infos.size, state_infos.size);
 		for (unsigned int index = 0; index < state_infos.size; index++) {
 			if (!DeserializeIntVariableLengthBool(read_instrument, state_infos[index].write_size)) {
-				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize state info {#} write size or it is corrupted.", index);
+				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize state info {#} write size or the data is corrupted.", index);
 				state_infos.Deallocate(allocator);
 				return false;
 			}
@@ -448,18 +460,34 @@ namespace ECSEngine {
 		}
 
 		if (!DeserializeIntVariableLengthBool(read_instrument, entire_state_indices.size)) {
-			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the entire state indices size or it is corrupted.");
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the entire state indices size or the data is corrupted.");
 			state_infos.Deallocate(allocator);
 			return false;
 		}
 		entire_state_indices.Initialize(allocator, entire_state_indices.size, entire_state_indices.size);
 		for (unsigned int index = 0; index < entire_state_indices.size; index++) {
 			if (!DeserializeIntVariableLengthBool(read_instrument, entire_state_indices[index])) {
-				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize entire state index {#} or it is corrupted.", index);
+				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize entire state index {#} or the data is corrupted.", index);
 				state_infos.Deallocate(allocator);
 				entire_state_indices.Deallocate(allocator);
 				return false;
 			}
+		}
+
+		// Read the frame elapsed seconds - if they are written
+		if (!DeserializeIntVariableLengthBool(read_instrument, frame_elapsed_seconds.size)) {
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the frame elapsed seconds count or the data is corrupted.");
+			state_infos.Deallocate(allocator);
+			entire_state_indices.Deallocate(allocator);
+			return false;
+		}
+		frame_elapsed_seconds.Initialize(allocator, frame_elapsed_seconds.size, frame_elapsed_seconds.size);
+		if (!read_instrument->Read(frame_elapsed_seconds.buffer, frame_elapsed_seconds.size * frame_elapsed_seconds.MemoryOf(1))) {
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the frame elapsed seconds values or the data is corrupted.");
+			state_infos.Deallocate(allocator);
+			entire_state_indices.Deallocate(allocator);
+			frame_elapsed_seconds.Deallocate(allocator);
+			return false;
 		}
 
 		// Read the user defined header
@@ -467,6 +495,7 @@ namespace ECSEngine {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user header size.");
 			state_infos.Deallocate(allocator);
 			entire_state_indices.Deallocate(allocator);
+			frame_elapsed_seconds.Deallocate(allocator);
 			return false;
 		}
 
@@ -476,6 +505,7 @@ namespace ECSEngine {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user header data.");
 				state_infos.Deallocate(allocator);
 				entire_state_indices.Deallocate(allocator);
+				frame_elapsed_seconds.Deallocate(allocator);
 				header.Deallocate(allocator);
 				return false;
 			}
@@ -486,6 +516,8 @@ namespace ECSEngine {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the start of the read instrument after reading the initialize data.");
 			state_infos.Deallocate(allocator);
 			entire_state_indices.Deallocate(allocator);
+			frame_elapsed_seconds.Deallocate(allocator);
+			header.Deallocate(allocator);
 			return false;
 		}
 

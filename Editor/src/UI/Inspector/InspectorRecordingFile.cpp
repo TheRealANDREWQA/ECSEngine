@@ -114,7 +114,7 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 	if (data->error_message.size > 0) {
 		// This includes the case when the file could not be opened
 		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
-		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, data->error_message);
+		drawer->Sentence(UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_SENTENCE_FIT_SPACE, config, data->error_message);
 		drawer->NextRow();
 	}
 	else {

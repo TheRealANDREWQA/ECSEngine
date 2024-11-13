@@ -288,6 +288,7 @@ namespace ECSEngine {
 		world->entity_manager->ClearFrame();
 		world->SetDeltaTime(0.0f);
 		world->elapsed_seconds = 0.0f;
+		world->elapsed_frames = 0;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
@@ -346,8 +347,9 @@ namespace ECSEngine {
 		world->system_manager->ClearFrame();
 
 		world->task_manager->DoFrame(wait_frame);
-		// Update the elapsed seconds
+		// Update the elapsed seconds and frame count
 		world->elapsed_seconds += world->delta_time;
+		world->elapsed_frames++;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

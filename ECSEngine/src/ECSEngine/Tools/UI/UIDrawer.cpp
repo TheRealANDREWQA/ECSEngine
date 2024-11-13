@@ -1493,37 +1493,27 @@ namespace ECSEngine {
 		void UIDrawer::HandleSliderVariables(
 			size_t configuration,
 			const UIDrawConfig& config,
-			float& length, float& padding,
+			float& length, 
+			float& padding,
 			float2& shrink_factor,
 			Color& slider_color,
+			bool& wrap_mouse,
 			Color background_color
 		) {
-			if (configuration & UI_CONFIG_SLIDER_LENGTH) {
-				length = *(const float*)config.GetParameter(UI_CONFIG_SLIDER_LENGTH);
+			if (configuration & UI_CONFIG_SLIDER_PARAMETERS) {
+				const UIConfigSliderParameters* slider_parameters = (const UIConfigSliderParameters*)config.GetParameter(UI_CONFIG_SLIDER_PARAMETERS);
+				length = slider_parameters->length;
+				padding = slider_parameters->padding;
+				shrink_factor = slider_parameters->shrink;
+				slider_color = slider_parameters->color;
+				wrap_mouse = slider_parameters->wrap_mouse;
 			}
 			else {
 				length = HasFlag(configuration, UI_CONFIG_VERTICAL) ? element_descriptor.slider_length.y : element_descriptor.slider_length.x;
-			}
-
-			if (configuration & UI_CONFIG_SLIDER_PADDING) {
-				padding = *(const float*)config.GetParameter(UI_CONFIG_SLIDER_PADDING);
-			}
-			else {
 				padding = HasFlag(configuration, UI_CONFIG_VERTICAL) ? element_descriptor.label_padd.y : element_descriptor.label_padd.x;
-			}
-
-			if (configuration & UI_CONFIG_SLIDER_SHRINK) {
-				shrink_factor = *(const float2*)config.GetParameter(UI_CONFIG_SLIDER_SHRINK);
-			}
-			else {
 				shrink_factor = element_descriptor.slider_shrink;
-			}
-
-			if (configuration & UI_CONFIG_SLIDER_COLOR) {
-				slider_color = *(const Color*)config.GetParameter(UI_CONFIG_SLIDER_COLOR);
-			}
-			else {
 				slider_color = ToneColor(background_color, color_theme.slider_lighten_factor);
+				wrap_mouse = true;
 			}
 		}
 
@@ -3146,8 +3136,9 @@ namespace ECSEngine {
 				float slider_padding, slider_length;
 				float2 slider_shrink;
 				Color slider_color;
+				bool wrap_mouse;
 				// color here is useless
-				HandleSliderVariables(configuration, config, slider_length, slider_padding, slider_shrink, slider_color, ECS_COLOR_WHITE);
+				HandleSliderVariables(configuration, config, slider_length, slider_padding, slider_shrink, slider_color, wrap_mouse, ECS_COLOR_WHITE);
 
 				HandleText(configuration, config, font_color, font_size, character_spacing);
 
@@ -3176,6 +3167,7 @@ namespace ECSEngine {
 				slider->changed_value = false;
 				slider->character_value = false;
 				slider->interpolate_value = false;
+				slider->wrap_mouse = wrap_mouse;
 
 				if (configuration & UI_CONFIG_VERTICAL) {
 					slider->is_vertical = true;
@@ -3290,9 +3282,11 @@ namespace ECSEngine {
 			float slider_padding, slider_length;
 			float2 slider_shrink;
 			Color slider_color;
+			bool wrap_mouse;
 
 			Color color = HandleColor(configuration, config);
-			HandleSliderVariables(configuration, config, slider_length, slider_padding, slider_shrink, slider_color, color);
+			HandleSliderVariables(configuration, config, slider_length, slider_padding, slider_shrink, slider_color, wrap_mouse, color);
+			slider->wrap_mouse = wrap_mouse;
 
 			float2 initial_position = position;
 			float2 initial_scale = scale;
@@ -8359,28 +8353,26 @@ namespace ECSEngine {
 				}
 
 				size_t slider_configuration = UI_CONFIG_SLIDER_NO_NAME | UI_CONFIG_SLIDER_NO_TEXT | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_COLOR
-					| UI_CONFIG_SLIDER_COLOR | UI_CONFIG_LATE_DRAW | UI_CONFIG_SLIDER_SHRINK | UI_CONFIG_SLIDER_LENGTH | UI_CONFIG_SLIDER_PADDING
-					| UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_DO_NOT_FIT_SPACE;
+					| UI_CONFIG_SLIDER_PARAMETERS | UI_CONFIG_LATE_DRAW | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_DO_NOT_FIT_SPACE;
 
 				UIDrawConfig config;
+				
 				UIConfigColor color;
-				UIConfigSliderColor slider_color;
-				UIConfigSliderShrink slider_shrink;
-				UIConfigSliderLength slider_length;
-				UIConfigSliderPadding slider_padding;
 				color.color = color_theme.render_sliders_background;
-				slider_color.color = color_theme.render_sliders_active_part;
-				slider_shrink.value.x = element_descriptor.slider_shrink.x * zoom_inverse.x;
-				slider_shrink.value.y = element_descriptor.slider_shrink.y * zoom_inverse.y;
-				slider_length.value = element_descriptor.slider_length.x * zoom_inverse.x;
-				slider_padding.value = element_descriptor.label_padd.x * zoom_inverse.x;
+
+				UIConfigSliderParameters slider_parameters;
+				slider_parameters.color = color_theme.render_sliders_active_part;
+				slider_parameters.shrink.x = element_descriptor.slider_shrink.x * zoom_inverse.x;
+				slider_parameters.shrink.y = element_descriptor.slider_shrink.y * zoom_inverse.y;
+				slider_parameters.length = element_descriptor.slider_length.x * zoom_inverse.x;
+				slider_parameters.padding = element_descriptor.label_padd.x * zoom_inverse.x;
+				slider_parameters.wrap_mouse = false;
 
 				horizontal_transform.position = horizontal_slider_position;
 
 				horizontal_transform.scale = horizontal_slider_scale;
 
-				config.AddFlags(horizontal_transform, color, slider_color, slider_shrink, slider_length);
-				config.AddFlag(slider_padding);
+				config.AddFlags(horizontal_transform, color, slider_parameters);
 
 				if (system->m_windows[window_index].pin_horizontal_slider_count > 0) {
 					UIDrawerSlider* slider = (UIDrawerSlider*)horizontal_slider;
@@ -8420,27 +8412,25 @@ namespace ECSEngine {
 				}
 
 				constexpr size_t slider_configuration = UI_CONFIG_SLIDER_NO_NAME | UI_CONFIG_SLIDER_NO_TEXT | UI_CONFIG_VERTICAL | UI_CONFIG_COLOR
-					| UI_CONFIG_SLIDER_COLOR | UI_CONFIG_LATE_DRAW | UI_CONFIG_SLIDER_SHRINK | UI_CONFIG_SLIDER_LENGTH | UI_CONFIG_SLIDER_PADDING
-					| UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_DO_NOT_FIT_SPACE;
+					| UI_CONFIG_SLIDER_PARAMETERS | UI_CONFIG_LATE_DRAW | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_DO_NOT_FIT_SPACE;
 
 				UIDrawConfig config;
+
 				UIConfigColor color;
-				UIConfigSliderColor slider_color;
-				UIConfigSliderShrink slider_shrink;
-				UIConfigSliderLength slider_length;
-				UIConfigSliderPadding slider_padding;
 				color.color = color_theme.render_sliders_background;
-				slider_color.color = color_theme.render_sliders_active_part;
-				slider_shrink.value.x = element_descriptor.slider_shrink.x * zoom_inverse.x;
-				slider_shrink.value.y = element_descriptor.slider_shrink.y * zoom_inverse.y;
-				slider_length.value = element_descriptor.slider_length.y * zoom_inverse.y;
-				slider_padding.value = element_descriptor.label_padd.y * zoom_inverse.y;
+
+				UIConfigSliderParameters slider_parameters;
+				slider_parameters.color = color_theme.render_sliders_active_part;
+				slider_parameters.shrink.x = element_descriptor.slider_shrink.x * zoom_inverse.x;
+				slider_parameters.shrink.y = element_descriptor.slider_shrink.y * zoom_inverse.y;
+				slider_parameters.length = element_descriptor.slider_length.y * zoom_inverse.x;
+				slider_parameters.padding = element_descriptor.label_padd.y * zoom_inverse.x;
+				slider_parameters.wrap_mouse = false;
 
 				vertical_transform.position = vertical_slider_position;
 				vertical_transform.scale = vertical_slider_scale;
 
-				config.AddFlags(vertical_transform, color, slider_color, slider_shrink, slider_length);
-				config.AddFlag(slider_padding);
+				config.AddFlags(vertical_transform, color, slider_parameters);
 
 				if (system->m_windows[window_index].pin_vertical_slider_count > 0) {
 					UIDrawerSlider* slider = (UIDrawerSlider*)vertical_slider;
@@ -17327,8 +17317,7 @@ namespace ECSEngine {
 			const UITextTooltipHoverableData* data, 
 			bool stable_characters, 
 			ECS_UI_DRAW_PHASE phase
-		)
-		{
+		) {
 			if (record_actions) {
 				ECS_STACK_VOID_STREAM(total_storage, ECS_KB);
 				unsigned int write_size = sizeof(*data);
@@ -17344,8 +17333,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::HandleTextToolTip(size_t configuration, const UIDrawConfig& config, float2 position, float2 scale)
-		{
+		void UIDrawer::HandleTextToolTip(size_t configuration, const UIDrawConfig& config, float2 position, float2 scale) {
 			if (configuration & UI_CONFIG_TOOL_TIP) {
 				const UIConfigToolTip* tool_tip = (const UIConfigToolTip*)config.GetParameter(UI_CONFIG_TOOL_TIP);
 				TextToolTip(tool_tip->characters, position, scale, tool_tip->is_stable);
@@ -17354,12 +17342,21 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIConfigTextParameters UIDrawer::TextParameters() const
-		{
+		UIConfigTextParameters UIDrawer::TextParameters() const {
 			UIConfigTextParameters parameters;
 			parameters.character_spacing = font.character_spacing;
 			parameters.size = GetFontSize();
 			parameters.color = color_theme.text;
+			return parameters;
+		}
+
+		UIConfigSliderParameters UIDrawer::SliderParameters(bool is_vertical) const {
+			UIConfigSliderParameters parameters;
+			parameters.length = is_vertical ? element_descriptor.slider_length.y : element_descriptor.slider_length.x;
+			parameters.padding = is_vertical ? element_descriptor.label_padd.y : element_descriptor.label_padd.x;
+			parameters.shrink = element_descriptor.slider_shrink;
+			parameters.color = ToneColor(color_theme.background, color_theme.slider_lighten_factor);
+			parameters.wrap_mouse = true;
 			return parameters;
 		}
 

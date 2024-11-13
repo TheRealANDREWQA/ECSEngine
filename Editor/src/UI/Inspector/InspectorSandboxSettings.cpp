@@ -1054,7 +1054,7 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 			}
 
 			ECS_FORMAT_TEMP_STRING(enabled_elapsed_seconds_name, "{#} replay drive delta time", block_info.type_string);
-			//drawer->CheckBox(CONFIGURATION, config, enabled_elapsed_seconds_name, &sandbox->)
+			drawer->CheckBox(CONFIGURATION, config, enabled_elapsed_seconds_name, &block_info.replay->is_driving_delta_time);
 
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
 			// Make the text with green when the path is valid, else make it red

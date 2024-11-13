@@ -113,40 +113,22 @@ const ECSEngine::EntityManager* RuntimeSandboxEntityManager(const EditorState* e
 
 // -------------------------------------------------------------------------------------------------------------
 
-ECS_INLINE bool DoesSandboxRecordInput(const EditorState* editor_state, unsigned int sandbox_index) {
-	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_RECORD_INPUT);
-}
-
-ECS_INLINE bool DoesSandboxRecordState(const EditorState* editor_state, unsigned int sandbox_index) {
-	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_RECORD_STATE);
-}
-
-ECS_INLINE bool DoesSandboxReplayInput(const EditorState* editor_state, unsigned int sandbox_index) {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_REPLAY_INPUT) && !sandbox->input_replay.delta_reader.IsFinished();
-}
-
-ECS_INLINE bool DoesSandboxReplayState(const EditorState* editor_state, unsigned int sandbox_index) {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_REPLAY_STATE) && !sandbox->state_replay.delta_reader.IsFinished();
-}
+bool DoesSandboxRecord(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type);
 
 // -------------------------------------------------------------------------------------------------------------
 
-ECS_INLINE bool CanSandboxRecordInput(const EditorState* editor_state, unsigned int sandbox_index) {
-	return !DoesSandboxReplayInput(editor_state, sandbox_index);
+bool DoesSandboxReplay(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type);
+
+bool DoesSandboxReplayDriveDeltaTime(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type);
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECS_INLINE bool CanSandboxRecord(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+	return !DoesSandboxReplay(editor_state, sandbox_index, recording_type);
 }
 
-ECS_INLINE bool CanSandboxRecordState(const EditorState* editor_state, unsigned int sandbox_index) {
-	return !DoesSandboxReplayState(editor_state, sandbox_index);
-}
-
-ECS_INLINE bool CanSandboxReplayInput(const EditorState* editor_state, unsigned int sandbox_index) {
-	return !DoesSandboxRecordInput(editor_state, sandbox_index);
-}
-
-ECS_INLINE bool CanSandboxReplayState(const EditorState* editor_state, unsigned int sandbox_index) {
-	return !DoesSandboxRecordState(editor_state, sandbox_index);
+ECS_INLINE bool CanSandboxReplay(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+	return !DoesSandboxRecord(editor_state, sandbox_index, recording_type);
 }
 
 // -------------------------------------------------------------------------------------------------------------

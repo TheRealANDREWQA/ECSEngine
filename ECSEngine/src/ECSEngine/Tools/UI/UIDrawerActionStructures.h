@@ -215,6 +215,7 @@ namespace ECSEngine {
 			bool interpolate_value;
 			bool changed_value;
 			bool character_value;
+			bool wrap_mouse;
 			unsigned char value_byte_size;
 			unsigned int text_input_counter;
 			float slider_position;

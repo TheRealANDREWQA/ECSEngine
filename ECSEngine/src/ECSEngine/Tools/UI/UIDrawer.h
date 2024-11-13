@@ -425,6 +425,7 @@ namespace ECSEngine {
 				float& padding,
 				float2& shrink_factor,
 				Color& slider_color,
+				bool& wrap_mouse,
 				Color background_color
 			);
 
@@ -5022,6 +5023,9 @@ namespace ECSEngine {
 
 			// Default values for the parameters
 			UIConfigTextParameters TextParameters() const;
+
+			// Default values for the parameters
+			UIConfigSliderParameters SliderParameters(bool is_vertical) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

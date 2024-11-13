@@ -2500,6 +2500,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		TaskManager* runtime_task_manager = sandbox->sandbox_world.task_manager;
 		float previous_sandbox_delta_time = sandbox->sandbox_world.delta_time;
 		float previous_sandbox_elapsed_seconds = sandbox->sandbox_world.elapsed_seconds;
+		size_t previous_sandbox_frame_count = sandbox->sandbox_world.elapsed_frames;
 
 		sandbox->sandbox_world.task_manager = editor_state->render_task_manager;
 		sandbox->sandbox_world.task_scheduler = &viewport_task_scheduler;
@@ -2610,6 +2611,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		sandbox->sandbox_world.SetDeltaTime(previous_sandbox_delta_time);
 		sandbox->sandbox_world.elapsed_seconds = previous_sandbox_elapsed_seconds;
+		sandbox->sandbox_world.elapsed_frames = previous_sandbox_frame_count;
 
 		//ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
 		// Restore the resource manager first
@@ -2887,9 +2889,6 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	SCOPE_PROTECT_GPU_RESOURCES(&stack_allocator, protect_resources);
 	ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(protect_resources, editor_state->asset_database, editor_state->RuntimeResourceManager());
 
-	RunSandboxRecordings(editor_state, sandbox_index);
-	RunSandboxReplays(editor_state, sandbox_index);
-
 	// Add the sandbox debug elements
 	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
@@ -2922,16 +2921,47 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	//	}
 	//}
 
-	if (is_step) {
-		if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
-			sandbox->sandbox_world.SetDeltaTime(editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor);
+	float delta_time = 0.0f;
+	// Stop at the first replay type that drives the delta time
+	size_t recording_type = 0;
+	for (; recording_type < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; recording_type++) {
+		if (DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type)) {
+			SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type);
+			delta_time = replay_info.replay->delta_reader.GetCurrentFrameDeltaTime();
+			// If the delta reader frames have been exhausted, then don't use the value
+			if (delta_time != 0.0f) {
+				break;
+			}
 		}
-		// In the other case, just use the previous delta time
 	}
-	else {
-		// Use the editor delta time
-		sandbox->sandbox_world.SetDeltaTime(editor_state->frame_delta_time * sandbox->sandbox_world.speed_up_factor);
+
+	if (recording_type == EDITOR_SANDBOX_RECORDING_TYPE_COUNT) {
+		// For the first frame, set a delta time that is really small, such that replays can distinguish between the first frame and second frame
+		if (sandbox->sandbox_world.elapsed_frames == 0) {
+			delta_time = 0.000001f;
+		}
+		else {
+			if (is_step) {
+				if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
+					delta_time = editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor;
+				}
+				else {
+					// In the other case, just use the previous delta time
+					delta_time = sandbox->sandbox_world.delta_time;
+				}
+			}
+			else {
+				// Use the editor delta time
+				delta_time = editor_state->frame_delta_time * sandbox->sandbox_world.speed_up_factor;
+			}
+		}
 	}
+
+	sandbox->sandbox_world.SetDeltaTime(delta_time);
+
+	// Run the replays after the delta time is set
+	RunSandboxRecordings(editor_state, sandbox_index);
+	RunSandboxReplays(editor_state, sandbox_index);
 
 	// Lastly, prepare the simulation stop flag for the Runtime
 	// And record the mouse visibility
@@ -3408,7 +3438,7 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 					SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 						EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 						// Update the HID inputs only if the sandbox does not have an active input replay
-						if (!DoesSandboxReplayInput(editor_state, sandbox_index)) {
+						if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
 							if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 								sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
 								if (!project_settings->unfocused_keyboard_input) {
@@ -3420,7 +3450,7 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 				}
 				else {
 					// Update the HID inputs only if the sandbox does not have an active input replay
-					if (!DoesSandboxReplayInput(editor_state, sandbox_index)) {
+					if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
 						sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
 						sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
 					}
@@ -3436,7 +3466,7 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 			// Update the HID inputs only if the sandbox does not have an active input replay
-			if (!DoesSandboxReplayInput(editor_state, sandbox_index)) {
+			if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
 				if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 					if (active_sandbox_index != sandbox_index) {
 						// We need to update release these controls

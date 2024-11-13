@@ -138,36 +138,17 @@ namespace ECSEngine {
 			UIActionHandler handler;
 		};
 
-		struct UIConfigSliderColor {
+		struct UIConfigSliderParameters {
 			ECS_INLINE static size_t GetAssociatedBit() {
-				return UI_CONFIG_SLIDER_COLOR;
+				return UI_CONFIG_SLIDER_PARAMETERS;
 			}
 
 			Color color = ToneColor(ECS_TOOLS_UI_THEME_COLOR, ECS_TOOLS_UI_SLIDER_LIGHTEN_FACTOR);
-		};
-
-		struct UIConfigSliderShrink {
-			ECS_INLINE static size_t GetAssociatedBit() {
-				return UI_CONFIG_SLIDER_SHRINK;
-			}
-
-			float2 value = { ECS_TOOLS_UI_SLIDER_SHRINK_FACTOR_X, ECS_TOOLS_UI_SLIDER_SHRINK_FACTOR_Y };
-		};
-
-		struct UIConfigSliderPadding {
-			ECS_INLINE static size_t GetAssociatedBit() {
-				return UI_CONFIG_SLIDER_PADDING;
-			}
-
-			float value = ECS_TOOLS_UI_LABEL_HORIZONTAL_PADD;
-		};
-
-		struct UIConfigSliderLength {
-			ECS_INLINE static size_t GetAssociatedBit() {
-				return UI_CONFIG_SLIDER_LENGTH;
-			}
-
-			float value = ECS_TOOLS_UI_SLIDER_LENGTH_X;
+			float2 shrink = { ECS_TOOLS_UI_SLIDER_SHRINK_FACTOR_X, ECS_TOOLS_UI_SLIDER_SHRINK_FACTOR_Y };
+			float padding = ECS_TOOLS_UI_LABEL_HORIZONTAL_PADD;
+			float length = ECS_TOOLS_UI_SLIDER_LENGTH_X;
+			// If enabled, the mouse will wrap around the screen X axis
+			bool wrap_mouse = true;
 		};
 
 		struct UIConfigBorder {

@@ -1682,6 +1682,7 @@ namespace ECSEngine {
 
 			void SetPopUpWindowPosition(unsigned int window_index, float2 new_position);
 
+			// If a scale component is 0.0f, then it will keep the size for that component
 			void SetPopUpWindowScale(unsigned int window_index, float2 new_scale);
 
 			void SetDockspacePosition(UIDockspace* dockspace, float2 new_position);
@@ -1717,7 +1718,7 @@ namespace ECSEngine {
 
 			void SetWindowDrawerDifferenceSpan(unsigned int window_index, float2 span);
 
-			// The monitor size must be supplied as well
+			// The monitor size must be supplied as well. This is the size of the OS window size, not that of an individual UI window
 			void SetWindowOSSize(uint2 new_size, uint2 monitor_size);
 
 			// The position is relative to the window position
