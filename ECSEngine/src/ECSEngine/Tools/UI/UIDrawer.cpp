@@ -13758,8 +13758,8 @@ namespace ECSEngine {
 					Keyboard* keyboard = action_data->keyboard;
 					// Check if the window is focused
 					if (!data->are_basic_operations_on_focus_only || (system->GetActiveWindow() == system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index))) {
-						// Check for Ctrl+C, Ctrl+X, Ctrl+V and delete
-						if (!keyboard->IsCaptureCharacters()) {
+						// Check for Ctrl+C, Ctrl+X, Ctrl+V and delete - without the left shift pressed
+						if (!keyboard->IsCaptureCharacters() && keyboard->IsUp(ECS_KEY_LEFT_SHIFT)) {
 							if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 								if (keyboard->IsPressed(ECS_KEY_C)) {
 									data->SetSelectionCut(false);

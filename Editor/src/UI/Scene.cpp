@@ -643,7 +643,8 @@ static void ScenePrivateAction(ActionData* action_data) {
 
 
 			bool control_action_trigger_rerender = false;
-			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+			// The left shift must not be pressed
+			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) && keyboard->IsUp(ECS_KEY_LEFT_SHIFT)) {
 				if (keyboard->IsPressed(ECS_KEY_C)) {
 					// Make a new allocation and deallocate the old
 					Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
