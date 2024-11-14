@@ -383,7 +383,7 @@ namespace ECSEngine {
 
 	size_t DeltaStateReader::GetStateIndexFromCurrentIndex(float elapsed_seconds) const {
 		for (size_t index = current_state_index; index < state_infos.size; index++) {
-			if (state_infos[index].elapsed_seconds >= elapsed_seconds) {
+			if (state_infos[index].elapsed_seconds > elapsed_seconds) {
 				return index == 0 ? 0 : index - 1;
 			}
 		}

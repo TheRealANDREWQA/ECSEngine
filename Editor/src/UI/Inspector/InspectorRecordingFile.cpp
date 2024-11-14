@@ -205,6 +205,8 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 			
 			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->data->set_recording_sandbox_index);
 			sandbox->flags = SetFlag(sandbox->flags, replay_info.flag);
+			// Set the drive simulation delta time flag as well
+			replay_info.replay->is_driving_delta_time = true;
 		};
 
 		UIConfigActiveState active_state;

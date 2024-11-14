@@ -2591,6 +2591,11 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		DoFrame(&sandbox->sandbox_world);
 		SandboxRestorePreviousCrashHandler(previous_crash_handler);
 
+		// Update the mouse and the keyboard for this sandbox - even tho they will get overwritten by the master devices
+		// But this action matters for the case when the input is replayed.
+		sandbox->sandbox_world.mouse->Update();
+		sandbox->sandbox_world.keyboard->Update();
+
 		if (active_viewport != EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			// Record the changes for the enabled flag
 			UpdateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_index, sandbox->sandbox_world.task_manager);
