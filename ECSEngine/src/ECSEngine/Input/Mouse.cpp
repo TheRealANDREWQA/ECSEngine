@@ -266,6 +266,10 @@ namespace ECSEngine {
 				handle_flag(RI_MOUSE_MIDDLE_BUTTON_UP, ECS_MOUSE_MIDDLE, true);
 				handle_flag(RI_MOUSE_RIGHT_BUTTON_DOWN, ECS_MOUSE_RIGHT, false);
 				handle_flag(RI_MOUSE_RIGHT_BUTTON_UP, ECS_MOUSE_RIGHT, true);
+				handle_flag(RI_MOUSE_BUTTON_4_DOWN, ECS_MOUSE_X1, false);
+				handle_flag(RI_MOUSE_BUTTON_4_UP, ECS_MOUSE_X1, true);
+				handle_flag(RI_MOUSE_BUTTON_5_UP, ECS_MOUSE_X2, false);
+				handle_flag(RI_MOUSE_BUTTON_5_UP, ECS_MOUSE_X2, true);
 
 				// Handle the scroll wheel
 				if (raw_inputs[index].data.mouse.usButtonFlags & RI_MOUSE_WHEEL) {

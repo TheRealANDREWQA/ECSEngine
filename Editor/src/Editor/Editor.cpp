@@ -142,7 +142,7 @@ public:
 
 		while (true) {
 			auto run_application = [&](EDITOR_APPLICATION_QUIT_RESPONSE application_quit_value) {
-				unsigned int frame_pacing = 0;
+				ECS_UI_FRAME_PACING frame_pacing = ECS_UI_FRAME_PACING_NONE;
 				while (result == 0 && application_quit == application_quit_value) {
 					if (editor_state.Mouse()->GetRawInputStatus()) {
 						// Process raw input
@@ -213,6 +213,8 @@ public:
 						}
 					};
 
+					timer.SetNewStart();
+
 					// The main thread might run into page guards that the physical memory places
 					// So, we need to wrap this code into a section and check all sandboxes for their
 					// physical memory profilers in case the exception is of type PAGE_GUARD
@@ -224,9 +226,6 @@ public:
 
 							// Change the main render target to that of the swap chain
 							graphics->ChangeMainRenderTargetToInitial();
-
-							/*static float average = 0.0f;
-							static int average_count = 0;*/
 
 							timer.SetNewStart();
 							// Here write the Game/Scene windows to be focused, i.e. be drawn every single frame,
@@ -271,19 +270,6 @@ public:
 								__debugbreak();
 							}
 
-							/*static double average_duration = 0.0f;
-							static size_t count = 0;
-
-							float duration = timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
-							timer.SetNewStart();
-							average_duration = average_duration * (double)count + (double)duration;
-							average_duration /= (double)count + 1.0f;
-							count += 1;
-
-							if (count == 10000) {
-								__debugbreak();
-							}*/
-
 							editor_state.frame_gpu_lock.Unlock();
 						}
 
@@ -304,7 +290,14 @@ public:
 					}
 					__except (handle_physical_memory_guards(GetExceptionInformation())) {}
 
-					std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_AMOUNT[frame_pacing]));
+					// Use milliseconds as unit of measure
+					float frame_duration_ms = timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
+					frame_pacing = max(frame_pacing, editor_state.elevated_frame_pacing);
+					float target_duration_ms = 1000.0f / (float)FRAME_PACING_FPS[frame_pacing];
+
+					if (frame_duration_ms < target_duration_ms) {
+						std::this_thread::sleep_for(std::chrono::milliseconds((size_t)(target_duration_ms - frame_duration_ms)));
+					}
 				}
 			};
 

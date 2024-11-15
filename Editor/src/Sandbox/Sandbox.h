@@ -40,6 +40,11 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true if the sandboxes are allowed to run, else false
+bool CanSandboxesRun(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // It will call the cleanup functions for the runtime sandbox and register any transfer data that there is
 void CallSandboxRuntimeCleanupFunctions(EditorState* editor_state, unsigned int sandbox_index);
 

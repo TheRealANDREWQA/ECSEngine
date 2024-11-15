@@ -244,6 +244,7 @@
     <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.h" />
     <ClInclude Include="src\ECSEngine\ECS\EntityChangeSet.h" />
+    <ClInclude Include="src\ECSEngine\ECS\EntityManagerChangeSet.h" />
     <ClInclude Include="src\ECSEngine\ECS\WorldCrashHandler.h" />
     <ClInclude Include="src\ECSEngine\ECS\RuntimeCrashPersistence.h" />
     <ClInclude Include="src\ECSEngine\ECS\RuntimeResources.h" />
@@ -513,6 +514,7 @@
     <ClCompile Include="src\ECSEngine\ECS\ComponentRuntimeHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\Components.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\EntityChangeSet.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\EntityManagerChangeSet.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\WorldCrashHandler.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeCrashPersistence.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeResources.cpp" />

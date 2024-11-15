@@ -12,15 +12,9 @@ namespace ECSEngine {
 	
 	struct EntityManager;
 
-	enum ECS_ENTITY_CHANGE_TYPE : unsigned char {
-		ECS_ENTITY_CHANGE_ADD,
-		ECS_ENTITY_CHANGE_REMOVE,
-		ECS_ENTITY_CHANGE_UPDATE
-	};
-
 	struct EntityChange {
 		Component component;
-		ECS_ENTITY_CHANGE_TYPE type;
+		ECS_CHANGE_SET_TYPE type;
 		bool is_shared;
 		// This is relevant only for the update case, where we will record the change set
 		Stream<Reflection::ReflectionTypeChange> updated_fields;

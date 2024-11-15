@@ -228,7 +228,8 @@ void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, Lo
 // The reason for which it takes a pointer to the handle is that this may not run when called
 // due to a prevention of resource loads. It returns true if the resource already exists and no asynchronous load is done
 // Can optionally give a callback to call when the load is finalized. A structure of type RegisterAssetEventCallbackInfo
-// will be given in the additional_data member
+// will be given in the additional_data member. The last parameter indicates whether or not the callback needs to run
+// On the main thread or not. If true, it will run on the main thread, else it can run on worker threads
 bool RegisterSandboxAsset(
 	EditorState* editor_state,
 	unsigned int sandbox_index, 
@@ -237,7 +238,8 @@ bool RegisterSandboxAsset(
 	ECS_ASSET_TYPE type, 
 	unsigned int* handle, 
 	bool unload_if_existing = false,
-	UIActionHandler callback = {}
+	UIActionHandler callback = {},
+	bool callback_is_single_threaded = false
 );
 
 // -------------------------------------------------------------------------------------------------------------

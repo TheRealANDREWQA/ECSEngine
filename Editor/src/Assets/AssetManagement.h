@@ -96,7 +96,8 @@ bool AddRegisterAssetEvent(
 	unsigned int* handle,
 	unsigned int sandbox_index = -1,
 	bool unload_if_existing = false,
-	UIActionHandler callback = {}
+	UIActionHandler callback = {},
+	bool callback_is_single_threaded = false
 );
 
 // It will acquire the resource manager lock and possibly the GPU lock if the asset type requires it.
@@ -133,8 +134,9 @@ bool CreateShaderSetting(const EditorState* editor_state, Stream<char> name, Str
 bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
 // This will run on a background thread. The callback receives as additional_data a structure
-// of type CreateAssetAsyncCallbackInfo.
-void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback = {});
+// of type CreateAssetAsyncCallbackInfo. You can optionally choose to run the callback on the main
+// Thread after the creation succeeds
+void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback = {}, bool callback_is_single_threaded = false);
 
 // Returns true if all internal dependencies were successfully created, else false. You can optionally request
 // the dependency elements to be filled in

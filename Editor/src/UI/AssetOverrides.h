@@ -64,6 +64,8 @@ struct AssetOverrideBindCallbackData {
 	ECSEngine::Tools::UIActionHandler handler;
 	ECSEngine::Tools::UIActionHandler registration_handler = {};
 	bool verify_handler = false;
+	// If set to true, the handler is called on the main thread, not in a worker thread
+	bool callback_is_single_threaded = false;
 	bool callback_before_handle_update = true;
 	bool disable_selection_registering = false;
 };
@@ -84,6 +86,12 @@ struct AssetOverrideSetAllData {
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetAll);
 
+struct AssetOverrideBindInstanceOverridesOptions {
+	ECSEngine::Tools::UIActionHandler registration_modify_action_handler = {};
+	bool disable_selection_unregistering = false;
+	bool modify_handler_is_single_threaded = false;
+};
+
 // If disable_selection_unregistering is set to true, you will need to manually
 // unregister the asset in the modify_action_callback
 void AssetOverrideBindInstanceOverrides(
@@ -91,6 +99,5 @@ void AssetOverrideBindInstanceOverrides(
 	ECSEngine::Tools::UIReflectionInstance* instance,
 	unsigned int sandbox_index,
 	ECSEngine::Tools::UIActionHandler modify_action_handler,
-	ECSEngine::Tools::UIActionHandler registration_modify_action_handler = {},
-	bool disable_selection_unregistering = false
+	const AssetOverrideBindInstanceOverridesOptions& options = {}
 );

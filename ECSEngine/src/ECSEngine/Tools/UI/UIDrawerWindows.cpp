@@ -1052,6 +1052,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
+						// TODO: Don't trigger this when there is a right clickable already on the same location
 						float2 before_zoom = system->m_windows[window_index].zoom;
 						system->m_windows[window_index].zoom.x = 1.0f;
 						system->m_windows[window_index].zoom.y = 1.0f;

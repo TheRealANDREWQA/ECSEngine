@@ -682,6 +682,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	editor_state->frame_timer.SetNewStart();
 	editor_state->frame_delta_time = 0.0f;
+	editor_state->elevated_frame_pacing = ECS_UI_FRAME_PACING_NONE;
 }
 
 // -----------------------------------------------------------------------------------------------------------------

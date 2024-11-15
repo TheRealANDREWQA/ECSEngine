@@ -524,7 +524,7 @@ bool AreAllDefaultSandboxesNotStarted(const EditorState* editor_state)
 
 bool AreSandboxesBeingRun(const EditorState* editor_state)
 {
-	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) && !EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+	if (CanSandboxesRun(editor_state)) {
 		// Exclude temporary sandboxes
 		return SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_index) {
 			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -627,6 +627,12 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 			camera_component->value.aspect_ratio = GetSandboxViewportAspectRatio(editor_state, sandbox_index, viewport);
 		}
 	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool CanSandboxesRun(const EditorState* editor_state) {
+	return !EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) && !EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1994,7 +2000,8 @@ void PauseUnpauseSandboxWorlds(EditorState* editor_state) {
 		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		if (sandbox->should_pause) {
 			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-				PauseSandboxWorld(editor_state, sandbox_index);
+				// Do not restore the mouse, we check the flags by hand after the loop
+				PauseSandboxWorld(editor_state, sandbox_index, false);
 				all_are_paused = false;
 			}
 			else if (sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
@@ -2836,7 +2843,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 
 	// Check the wait build function background counter
-	unsigned int background_build_function_count = sandbox->background_component_build_functions.load(ECS_RELAXED);
+	unsigned int background_build_function_count = GetSandboxBackgroundComponentBuildFunctionCount(editor_state, sandbox_index);
 	if (background_build_function_count > 0) {
 		// Return immediately to signal that we are waiting for the build functions
 		return true;
@@ -3530,7 +3537,7 @@ void TickSandboxRuntimes(EditorState* editor_state)
 	editor_state->frame_timer.SetNewStart();
 
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) && !EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+	if (CanSandboxesRun(editor_state)) {
 		// Allow temporary sandboxes here since they might want to enter the play state
 		// Through some of their actions
 		// Use a pre-check first to see if we have a running sandbox in order to protect the resources outside the loop

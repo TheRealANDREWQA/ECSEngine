@@ -508,7 +508,7 @@ static void CutEntityCallback(ActionData* action_data) {
 	EntitiesUIData* data = (EntitiesUIData*)cut_data->data;
 
 	// Perform the operation only if we are the active shortcut handler
-	if (data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
+	if (!data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
 		return;
 	}
 
@@ -544,7 +544,7 @@ static void DeleteEntityCallback(ActionData* action_data) {
 	EntitiesUIData* data = (EntitiesUIData*)delete_data->data;
 
 	// Perform the operation only if we are the active shortcut handler
-	if (data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
+	if (!data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
 		return;
 	}
 

@@ -11,9 +11,53 @@ using namespace ECSEngine;
 
 // ----------------------------------------------------------------------------------------------
 
+struct CreateAssetSingleThreadedCallbackEventData {
+	UIActionHandler callback;
+	ECS_ASSET_TYPE asset_type;
+	bool success;
+	bool should_release_flags_and_unlock_sandbox;
+	unsigned int handle;
+	unsigned int previous_handle;
+	unsigned int sandbox_index;
+};
+
+static EDITOR_EVENT(CreateAssetSingleThreadedCallbackEvent) {
+	CreateAssetSingleThreadedCallbackEventData* data = (CreateAssetSingleThreadedCallbackEventData*)_data;
+	
+	RegisterAssetEventCallbackInfo info;
+	info.handle = data->handle;
+	info.success = data->success;
+	info.type = data->asset_type;
+	info.previous_handle = data->previous_handle;
+
+	ActionData dummy_data;
+	dummy_data.data = data->callback.data;
+	dummy_data.additional_data = &info;
+	dummy_data.system = editor_state->ui_system;
+	data->callback.action(&dummy_data);
+
+	// Deallocate the data if it has the size > 0
+	if (data->callback.data_size > 0) {
+		Deallocate(editor_state->MultithreadedEditorAllocator(), data->callback.data);
+	}
+
+	// Can release the flags and unlock the sandbox
+	if (data->should_release_flags_and_unlock_sandbox) {
+		EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+		EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+
+		if (data->sandbox_index != -1) {
+			UnlockSandbox(editor_state, data->sandbox_index);
+		}
+	}
+
+	return false;
+}
+
 struct CreateAssetAsyncTaskData {
 	EditorState* editor_state;
 	ECS_ASSET_TYPE asset_type;
+	bool callback_is_single_threaded = true;
 	unsigned int handle;
 	// This value is used only to pass to the callback
 	unsigned int previous_handle;
@@ -24,12 +68,15 @@ struct CreateAssetAsyncTaskData {
 	UIActionHandler callback = {};
 };
 
-ECS_THREAD_TASK(CreateAssetAsyncTask) {
+static ECS_THREAD_TASK(CreateAssetAsyncTask) {
 	CreateAssetAsyncTaskData* data = (CreateAssetAsyncTaskData*)_data;
 	EditorState* editor_state = data->editor_state;
 
 	// We need to acquire the resource lock and possibly the GPU lock
 	AssetLock(editor_state, data->asset_type);
+
+	// Elevate the frame pacing to make this a little bit more snappy
+	editor_state->ElevateFramePacing(ECS_UI_FRAME_PACING_MEDIUM);
 
 	bool success = false;
 	__try {
@@ -52,31 +99,37 @@ ECS_THREAD_TASK(CreateAssetAsyncTask) {
 		AssetUnlock(editor_state, data->asset_type);
 	}
 
+	bool callback_is_single_threaded = false;
 	if (data->callback.action != nullptr) {
-		RegisterAssetEventCallbackInfo info;
-		info.handle = data->handle;
-		info.success = success;
-		info.type = data->asset_type;
-		info.previous_handle = data->previous_handle;
+		CreateAssetSingleThreadedCallbackEventData call_callback_data;
+		call_callback_data.asset_type = data->asset_type;
+		call_callback_data.callback = data->callback;
+		call_callback_data.handle = data->handle;
+		call_callback_data.previous_handle = data->previous_handle;
+		call_callback_data.sandbox_index = data->sandbox_index;
+		call_callback_data.should_release_flags_and_unlock_sandbox = false;
+		call_callback_data.success = success;
 
-		ActionData dummy_data;
-		dummy_data.data = data->callback.data;
-		dummy_data.additional_data = &info;
-		dummy_data.system = data->editor_state->ui_system;
-		data->callback.action(&dummy_data);
-
-		// Deallocate the data if it has the size > 0
-		if (data->callback.data_size > 0) {
-			editor_state->editor_allocator->Deallocate(data->callback.data);
+		if (data->callback_is_single_threaded) {
+			callback_is_single_threaded = true;
+			call_callback_data.should_release_flags_and_unlock_sandbox = true;
+			EditorAddEvent(editor_state, CreateAssetSingleThreadedCallbackEvent, &call_callback_data, sizeof(call_callback_data));
+		} 
+		else {
+			CreateAssetSingleThreadedCallbackEvent(editor_state, &call_callback_data);
 		}
 	}
 
-	// Release the editor state flags
-	EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
-	EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+	editor_state->DeelevateFramePacing();
 
-	if (data->sandbox_index != -1) {
-		UnlockSandbox(editor_state, data->sandbox_index);
+	if (!callback_is_single_threaded) {
+		// Release the editor state flags - only if the callback was not called
+		EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+		EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+
+		if (data->sandbox_index != -1) {
+			UnlockSandbox(editor_state, data->sandbox_index);
+		}
 	}
 
 	// Add an event to remove the loading asset entry
@@ -87,10 +140,11 @@ ECS_THREAD_TASK(CreateAssetAsyncTask) {
 struct CreateAssetAsyncEventData {
 	unsigned int handle;
 	ECS_ASSET_TYPE type;
+	bool callback_is_single_threaded;
 	UIActionHandler callback = {};
 };
 
-EDITOR_EVENT(CreateAssetAsyncEvent) {
+static EDITOR_EVENT(CreateAssetAsyncEvent) {
 	CreateAssetAsyncEventData* data = (CreateAssetAsyncEventData*)_data;
 
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
@@ -107,6 +161,7 @@ EDITOR_EVENT(CreateAssetAsyncEvent) {
 	task_data.handle = data->handle;
 	task_data.sandbox_index = -1;
 	task_data.callback = data->callback;
+	task_data.callback_is_single_threaded = data->callback_is_single_threaded;
 	EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(CreateAssetAsyncTask, &task_data, sizeof(task_data)));
 	return false;
 }
@@ -115,6 +170,7 @@ struct RegisterEventData {
 	unsigned int* handle;
 	ECS_ASSET_TYPE type;
 	bool unregister_if_exists;
+	bool callback_is_single_threaded;
 	unsigned int name_size;
 	unsigned int file_size;
 	// If the sandbox index is -1, then it will registered as a global asset
@@ -176,7 +232,7 @@ EDITOR_EVENT(RegisterEvent) {
 
 				// Deallocate the data, if it has the size > 0
 				if (data->callback.data_size > 0) {
-					editor_state->editor_allocator->Deallocate(data->callback.data);
+					Deallocate(editor_state->MultithreadedEditorAllocator(), data->callback.data);
 				}
 			}
 
@@ -205,6 +261,7 @@ EDITOR_EVENT(RegisterEvent) {
 			task_data.callback = data->callback;
 			task_data.sandbox_index = data->sandbox_index;
 			task_data.previous_handle = previous_handle;
+			task_data.callback_is_single_threaded = data->callback_is_single_threaded;
 			EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(CreateAssetAsyncTask, &task_data, sizeof(task_data)));
 		}
 		return false;
@@ -589,7 +646,8 @@ bool AddRegisterAssetEvent(
 	unsigned int* handle,
 	unsigned int sandbox_index,
 	bool unload_if_existing,
-	UIActionHandler callback
+	UIActionHandler callback,
+	bool callback_is_single_threaded
 )
 {
 	ECS_ASSERT(name.size > 0);
@@ -613,7 +671,9 @@ bool AddRegisterAssetEvent(
 		data->file_size = file.size;
 		data->unregister_if_exists = unload_if_existing;
 		data->callback = callback;
-		data->callback.data = CopyNonZero(editor_state->editor_allocator, data->callback.data, data->callback.data_size);
+		// Use the multithreaded allocator such that this can be deallocated from the async task, if the task can run asynchronously
+		data->callback.data = CopyNonZero(editor_state->MultithreadedEditorAllocator(), data->callback.data, data->callback.data_size);
+		data->callback_is_single_threaded = callback_is_single_threaded;
 
 		EditorAddEvent(editor_state, RegisterEvent, data, write_size);
 		if (sandbox_index != -1) {
@@ -783,9 +843,9 @@ bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 
 // ----------------------------------------------------------------------------------------------
 
-void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback)
+void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback, bool callback_is_single_threaded)
 {
-	callback.data = CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
+	callback.data = CopyNonZero(editor_state->MultithreadedEditorAllocator(), callback.data, callback.data_size);
 	
 	// Add the asset to the loading array
 	AssetTypedHandle typed_handle = { handle, type };
@@ -795,6 +855,7 @@ void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_
 	event_data.handle = handle;
 	event_data.type = type;
 	event_data.callback = callback;
+	event_data.callback_is_single_threaded = callback_is_single_threaded;
 	EditorAddEvent(editor_state, CreateAssetAsyncEvent, &event_data, sizeof(event_data));
 }
 
@@ -1774,7 +1835,7 @@ void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_A
 	size_t metadata_file_stamp = OS::GetFileLastWrite(metadata_file);
 	metadata_file_stamp = metadata_file_stamp == -1 ? 0 : metadata_file_stamp;
 
-	editor_state->runtime_resource_manager->AddTimeStamp(metadata_file, std::max(metadata_file_stamp, runtime_asset_stamp));
+	editor_state->runtime_resource_manager->AddTimeStamp(metadata_file, max(metadata_file_stamp, runtime_asset_stamp));
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -2270,7 +2331,8 @@ void RemoveLoadingAssets(EditorState* editor_state, Stream<AssetTypedHandle> han
 	for (size_t index = 0; index < handles.size; index++) {
 		RemoveLoadingAsset(editor_state, handles[index]);
 	}
-	// We could trim here, but this won't occupy too much memory and it might not be worth it
+	// We can trim here to reduce the memory consumption
+	editor_state->loading_assets.TrimPercentageDefault();
 }
 
 // ----------------------------------------------------------------------------------------------

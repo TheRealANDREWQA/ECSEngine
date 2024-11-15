@@ -31,6 +31,12 @@ namespace ECSEngine {
 		ECS_INT_TYPE_COUNT
 	};
 
+	enum ECS_CHANGE_SET_TYPE : unsigned char {
+		ECS_CHANGE_SET_ADD,
+		ECS_CHANGE_SET_REMOVE,
+		ECS_CHANGE_SET_UPDATE
+	};
+
 	ECSENGINE_API size_t GetIntValueUnsigned(const void* ptr, ECS_INT_TYPE type);
 
 	ECSENGINE_API int64_t GetIntValueSigned(const void* ptr, ECS_INT_TYPE type);
