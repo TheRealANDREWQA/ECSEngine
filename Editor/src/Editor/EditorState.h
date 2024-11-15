@@ -91,6 +91,14 @@ struct EditorState {
 		return allocator;
 	}
 
+	ECS_INLINE void ElevateFramePacing(ECS_UI_FRAME_PACING frame_pacing) {
+		elevated_frame_pacing = max(elevated_frame_pacing, frame_pacing);
+	}
+
+	ECS_INLINE void DeelevateFramePacing() {
+		elevated_frame_pacing = ECS_UI_FRAME_PACING_NONE;
+	}
+
 	EditorSettings settings;
 	EditorStateTick editor_tick;
 	ECSEngine::Tools::UISystem* ui_system;
@@ -199,6 +207,10 @@ struct EditorState {
 	float frame_delta_time;
 
 	EditorShortcutFocus shortcut_focus;
+
+	// This field can be set by asynchronous threads to temporarily elevate the frame pacing 
+	// Without affecting the UI system value. It cannot be used from multiple threads
+	ECS_UI_FRAME_PACING elevated_frame_pacing;
 
 	// TODO: Implement an "event" like system where functions can be subscribed to certain
 	// Actions? This is helpful for less coupling between systems. At the moment, the first

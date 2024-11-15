@@ -17,7 +17,7 @@ namespace ECSEngine {
 
 	struct World;
 
-	enum ECS_UI_FRAME_PACING {
+	enum ECS_UI_FRAME_PACING : unsigned char {
 		ECS_UI_FRAME_PACING_NONE = 0,
 		ECS_UI_FRAME_PACING_LOW = 1,
 		ECS_UI_FRAME_PACING_MEDIUM = 2,

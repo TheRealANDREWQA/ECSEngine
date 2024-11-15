@@ -36,6 +36,7 @@ struct BaseDrawData {
 	bool callback_before_handle_update;
 	// Used only for selection
 	bool callback_disable_selection_unregistering;
+	bool callback_is_single_threaded;
 
 	EditorState* editor_state;
 	AssetDatabase* target_database;
@@ -191,6 +192,7 @@ struct SelectActionData {
 
 	// Used only for deselection
 	bool callback_before_handle_update;
+	bool callback_is_single_threaded;
 };
 
 void SelectAction(ActionData* action_data) {
@@ -265,7 +267,7 @@ void SelectAction(ActionData* action_data) {
 				action_data->additional_data = &additional_info;
 				data->asset_registration_action(action_data);
 			}
-			RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, !data->do_not_unregister_asset, callback_handler);
+			RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, !data->do_not_unregister_asset, callback_handler, data->callback_is_single_threaded);
 		}
 	}
 	else {
@@ -432,6 +434,7 @@ static void CreateSelectActionData(SelectActionData* select_data, const BaseDraw
 	select_data->target_database = base_data->target_database;
 	select_data->callback_before_handle_update = base_data->callback_before_handle_update;
 	select_data->do_not_unregister_asset = base_data->callback_disable_selection_unregistering;
+	select_data->callback_is_single_threaded = base_data->callback_is_single_threaded;
 	select_data->asset_registration_action = base_data->registration_callback_action;
 	select_data->asset_registration_action_data = base_data->registration_callback_action_data;
 }
@@ -878,6 +881,7 @@ struct OverrideBaseData {
 	bool callback_verify;
 	// Used for deselection
 	bool callback_before_handle_update;
+	bool callback_is_single_threaded;
 
 	union {
 		// Embedd the data directly into it
@@ -919,6 +923,7 @@ void OverrideAssetHandle(
 	base_window_data->registration_callback_action = base_data->registration_callback;
 	base_window_data->registration_callback_action_data = base_data->registration_callback_is_ptr ? base_data->registration_callback_data_ptr 
 		: base_data->registration_callback_data;
+	base_window_data->callback_is_single_threaded = base_data->callback_is_single_threaded;
 
 	base_window_data->target_database = base_data->database;
 
@@ -1157,6 +1162,7 @@ ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
 	data->callback_verify = modify_data->verify_handler;
 	data->callback_before_handle_update = modify_data->callback_before_handle_update;
 	data->callback_disable_selection_unregistering = modify_data->disable_selection_registering;
+	data->callback_is_single_threaded = modify_data->callback_is_single_threaded;
 }
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindNewDatabase) {
@@ -1244,15 +1250,15 @@ void AssetOverrideBindInstanceOverrides(
 	UIReflectionInstance* instance, 
 	unsigned int sandbox_index, 
 	UIActionHandler modify_action_handler,
-	UIActionHandler registration_modify_action_handler,
-	bool disable_selection_unregistering
+	const AssetOverrideBindInstanceOverridesOptions& options
 )
 {
 	AssetOverrideSetAllData set_data;
 	set_data.set_index.sandbox_index = sandbox_index;
 	set_data.callback.handler = modify_action_handler;
-	set_data.callback.disable_selection_registering = disable_selection_unregistering;
-	set_data.callback.registration_handler = registration_modify_action_handler;
+	set_data.callback.disable_selection_registering = options.disable_selection_unregistering;
+	set_data.callback.registration_handler = options.registration_modify_action_handler;
+	set_data.callback.callback_is_single_threaded = options.modify_handler_is_single_threaded;
 
 	size_t count = AssetUIOverrideCount();
 	for (size_t index = 0; index < count; index++) {

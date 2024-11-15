@@ -23,7 +23,7 @@ namespace ECSEngine {
 			addition_stream
 		);
 		if (addition_stream.Size() > 0) {
-			change->type = ECS_ENTITY_CHANGE_UPDATE;
+			change->type = ECS_CHANGE_SET_UPDATE;
 			change->updated_fields = changes.ToStream();
 			return true;
 		}
@@ -59,7 +59,7 @@ namespace ECSEngine {
 			for (unsigned char index = 0; index < new_components.count; index++) {
 				if (previous_components.Find(new_components[index]) == UCHAR_MAX) {
 					unsigned int change_index = changes->ReserveRange();
-					changes->buffer[change_index].type = ECS_ENTITY_CHANGE_ADD;
+					changes->buffer[change_index].type = ECS_CHANGE_SET_ADD;
 					changes->buffer[change_index].is_shared = is_shared;
 					changes->buffer[change_index].component = new_components[index];
 				}
@@ -77,7 +77,7 @@ namespace ECSEngine {
 			for (unsigned char index = 0; index < previous_components.count; index++) {
 				if (new_components.Find(previous_components[index]) == UCHAR_MAX) {
 					unsigned int change_index = changes->ReserveRange();
-					changes->buffer[change_index].type = ECS_ENTITY_CHANGE_REMOVE;
+					changes->buffer[change_index].type = ECS_CHANGE_SET_REMOVE;
 					changes->buffer[change_index].is_shared = is_shared;
 					changes->buffer[change_index].component = previous_components[index];
 				}
@@ -162,14 +162,14 @@ namespace ECSEngine {
 		for (size_t index = 0; index < changes.size; index++) {
 			Component component = changes[index].component;
 			if (changes[index].is_shared) {
-				if (changes[index].type == ECS_ENTITY_CHANGE_ADD || changes[index].type == ECS_ENTITY_CHANGE_UPDATE) {
+				if (changes[index].type == ECS_CHANGE_SET_ADD || changes[index].type == ECS_CHANGE_SET_UPDATE) {
 					unsigned char signature_index = shared_component_signature.Find(component);
 					ECS_ASSERT(signature_index != UCHAR_MAX);
 					shared_instances[signature_index] = entity_manager->GetOrCreateSharedComponentInstanceCommit(component, shared_components[signature_index]);
 				}
 			}
 			else {
-				if (changes[index].type == ECS_ENTITY_CHANGE_UPDATE) {
+				if (changes[index].type == ECS_CHANGE_SET_UPDATE) {
 					unsigned char signature_index = unique_component_signature.Find(component);
 					ECS_ASSERT(signature_index != UCHAR_MAX);
 					unique_component_changes[signature_index] = changes[index].updated_fields;
@@ -190,7 +190,7 @@ namespace ECSEngine {
 				Component current_component = changes[index].component;
 				// The update and add can be commased into the same check since we need to make sure
 				// That the integrity is there
-				if (changes[index].type == ECS_ENTITY_CHANGE_ADD || changes[index].type == ECS_ENTITY_CHANGE_UPDATE) {
+				if (changes[index].type == ECS_CHANGE_SET_ADD || changes[index].type == ECS_CHANGE_SET_UPDATE) {
 					if (changes[index].is_shared) {
 						unsigned char signature_index = shared_component_signature.Find(current_component);
 						ECS_ASSERT(signature_index != UCHAR_MAX);
@@ -216,7 +216,7 @@ namespace ECSEngine {
 						}
 					}
 				}
-				else if (changes[index].type == ECS_ENTITY_CHANGE_REMOVE) {
+				else if (changes[index].type == ECS_CHANGE_SET_REMOVE) {
 					// Perform the removal only if the component actually exists
 					if (changes[index].is_shared) {
 						if (entity_manager->HasSharedComponent(current_entity, current_component)) {

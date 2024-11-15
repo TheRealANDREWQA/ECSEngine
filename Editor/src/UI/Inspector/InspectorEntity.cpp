@@ -1067,7 +1067,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 					component_type,
 					data->draw_data->matching_inputs[matching_index].capacity_inputs[index].field_name
 				);
-				ECS_ASSERT_FORMAT(deep_field.field_index != -1, "Critical error - invalid reflection state. Missing deep field for type {#}", type->name);
+				ECS_ASSERT_FORMAT(deep_field.IsValid(), "Critical error - invalid reflection state. Missing deep field for type {#}", type->name);
 				Reflection::SetReflectionTypeInstanceBuffer(
 					deep_field, 
 					component_data, 
@@ -1091,8 +1091,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 	NotifySandboxEntityComponentChange(editor_state, sandbox_index, entity, ecs_component_name);
 
 	// Re-render the sandbox - for the scene and the game as well
-	RenderSandbox(data->editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-	RenderSandbox(data->editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	RenderSandboxViewports(editor_state, data->sandbox_index);
 	system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 }
 
@@ -1482,14 +1481,18 @@ static void DrawComponents(
 					RegisterAssetHandlerChangeData register_handler_data = { editor_state, data };
 					UIActionHandler modify_asset_handler = modify_value_handler;
 					modify_asset_handler.action = modify_asset_value;
+
+					AssetOverrideBindInstanceOverridesOptions override_options;
+					override_options.registration_modify_action_handler = { register_asset_handler_change, &register_handler_data, sizeof(register_handler_data) };
+					override_options.disable_selection_unregistering = true;
+					override_options.modify_handler_is_single_threaded = true;
 					// We must do this after the pointer have been bound
 					AssetOverrideBindInstanceOverrides(
 						ui_drawer, 
 						instance, 
 						sandbox_index, 
 						modify_asset_handler, 
-						{ register_asset_handler_change, &register_handler_data, sizeof(register_handler_data) }, 
-						true
+						override_options
 					);
 				}
 				set_instance_inputs();

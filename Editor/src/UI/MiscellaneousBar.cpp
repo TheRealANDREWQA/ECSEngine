@@ -22,7 +22,7 @@ struct DrawData {
 // ----------------------------------------------------------------------------------------------------------------------
 
 static EDITOR_EVENT(StartUnstartedSandboxEvent) {
-	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+	if (!CanSandboxesRun(editor_state)) {
 		return true;
 	}
 	StartSandboxWorlds(editor_state);
@@ -41,7 +41,7 @@ static void RunProjectAction(ActionData* action_data) {
 		}
 	}
 	else {
-		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		if (!CanSandboxesRun(editor_state)) {
 			EditorAddEvent(editor_state, StartUnstartedSandboxEvent, nullptr, 0);
 		}
 		else {
@@ -54,7 +54,7 @@ static void RunProjectAction(ActionData* action_data) {
 // ----------------------------------------------------------------------------------------------------------------------
 
 static EDITOR_EVENT(StartPausedSandboxEvent) {
-	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+	if (!CanSandboxesRun(editor_state)) {
 		return true;
 	}
 	StartSandboxWorlds(editor_state, true);
@@ -68,7 +68,7 @@ static void PauseProjectAction(ActionData* action_data) {
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
 		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PAUSED);
 		// In case there are assets being loaded, push an event to start the runtimes
-		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		if (!CanSandboxesRun(editor_state)) {
 			EditorAddEvent(editor_state, StartPausedSandboxEvent, nullptr, 0);
 		}
 		else {
@@ -84,7 +84,7 @@ static void PauseProjectAction(ActionData* action_data) {
 // ----------------------------------------------------------------------------------------------------------------------
 
 static EDITOR_EVENT(StepProjectEvent) {
-	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+	if (!CanSandboxesRun(editor_state)) {
 		return true;
 	}
 	RunSandboxWorlds(editor_state, true);
@@ -97,7 +97,7 @@ static void StepProjectAction(ActionData* action_data) {
 	EditorState* editor_state = (EditorState*)_data;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
 		// In case there are assets being loaded, we need to push an event to run a step
-		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		if (!CanSandboxesRun(editor_state)) {
 			EditorAddEvent(editor_state, StepProjectEvent, nullptr, 0);
 		}
 		else {

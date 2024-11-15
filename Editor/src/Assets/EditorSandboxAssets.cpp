@@ -763,10 +763,11 @@ bool RegisterSandboxAsset(
 	ECS_ASSET_TYPE type, 
 	unsigned int* handle,
 	bool unregister_if_exists,
-	UIActionHandler callback
+	UIActionHandler callback,
+	bool callback_is_single_threaded
 )
 {
-	return AddRegisterAssetEvent(editor_state, name, file, type, handle, sandbox_index, unregister_if_exists, callback);
+	return AddRegisterAssetEvent(editor_state, name, file, type, handle, sandbox_index, unregister_if_exists, callback, callback_is_single_threaded);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
