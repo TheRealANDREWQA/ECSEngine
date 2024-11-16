@@ -1450,7 +1450,7 @@ namespace ECSEngine {
 
 			UIDrawerFilesystemHierarchySelectableData* data = (UIDrawerFilesystemHierarchySelectableData*)_data;
 
-			if (mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(mouse_position, position, scale)) {
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				data->hierarchy->active_label.CopyOther(data->label);
 				ECS_ASSERT(data->hierarchy->active_label.size < data->hierarchy->active_label.capacity);
 				data->hierarchy->active_label[data->hierarchy->active_label.size] = '\0';

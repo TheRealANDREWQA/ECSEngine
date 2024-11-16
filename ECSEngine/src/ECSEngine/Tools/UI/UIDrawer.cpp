@@ -12932,8 +12932,8 @@ namespace ECSEngine {
 			size_t table_count = PowerOfTwoGreater(labels.size) * 2;
 			parent_hash_table.InitializeFromBuffer(GetTempBuffer(parent_hash_table.MemoryOf(table_count)), table_count);
 
-			size_t label_configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_FIT_SPACE |
-				UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_ADVANCE;
+			size_t label_configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_FIT_SPACE | 
+				UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_ADVANCE;
 			for (size_t index = 0; index < labels.size; index++) {
 				unsigned int current_parent_index = 0;
 				Stream<char> label_stream = labels[index];
@@ -13055,7 +13055,9 @@ namespace ECSEngine {
 							scale
 						);
 
-						float2 action_scale = { horizontal_bound - initial_label_position.x, scale.y };
+						float horizontal_bound_scale = horizontal_bound - label_position.x;
+						float base_action_scale_x = horizontal_bound_scale < scale.x ? scale.x : horizontal_bound_scale;
+						float2 action_scale = { base_action_scale_x + label_position.x - initial_label_position.x, scale.y };
 
 						auto copy_clickable_function = [](void* _data, AllocatorPolymorphic allocator) {
 							UIDrawerFilesystemHierarchySelectableData* data = (UIDrawerFilesystemHierarchySelectableData*)_data;
@@ -13077,7 +13079,7 @@ namespace ECSEngine {
 							ECS_MOUSE_LEFT, 
 							copy_clickable_function
 						);
-						//AddDefaultHoverable(configuration, initial_label_position, action_scale, current_color);
+						AddDefaultHoverable(configuration, initial_label_position, action_scale, current_color);
 
 						UIDrawerFilesystemHierarchyChangeStateData change_state_data;
 						change_state_data.hierarchy = data;

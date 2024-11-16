@@ -1708,7 +1708,8 @@ void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 				resource_manager->AddResource(
 					identifier,
 					ResourceType::Texture,
-					data->staging_preloaded_textures[index].texture.view, 
+					data->staging_preloaded_textures[index].texture.view,
+					false,
 					data->staging_preloaded_textures[index].last_write_time
 				);
 			}
