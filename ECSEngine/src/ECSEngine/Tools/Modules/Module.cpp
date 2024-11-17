@@ -89,10 +89,8 @@ namespace ECSEngine {
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 		// Read the file as binary, but interpret it as text
-		Stream<void> file = ReadWholeFileBinary(path, (&stack_allocator));
+		Stream<void> file = ReadWholeFileBinary(path, &stack_allocator);
 		if (file.buffer != nullptr) {
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-
 			Stream<char> text = { file.buffer, file.size };
 			Stream<char> token = "<AdditionalDependencies>";
 			Stream<char> end_token = "</AdditionalDependencies>";

@@ -648,8 +648,8 @@ bool OpenProject(ProjectOperationData data)
 		}
 		else {
 			CreateProjectDefaultUI(data.editor_state);
-			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-			bool success = SaveProjectUITemplate(ui_system, ui_template, error_message);
+			ECS_STACK_CAPACITY_STREAM(char, save_error_message, 256);
+			bool success = SaveProjectUITemplate(ui_system, ui_template, save_error_message);
 			if (!success) {
 				return false;
 			}

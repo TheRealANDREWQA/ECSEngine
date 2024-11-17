@@ -84,7 +84,7 @@ namespace ECSEngine {
 			// Also make it a render target
 			dx_descriptor.BindFlags |= D3D11_BIND_RENDER_TARGET;
 
-			HRESULT result = device->CreateTexture2D(&dx_descriptor, nullptr, &texture_interface);
+			result = device->CreateTexture2D(&dx_descriptor, nullptr, &texture_interface);
 			if (FAILED(result)) {
 				return false;
 			}

@@ -185,8 +185,8 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 						ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, external_dependencies, 256);
 
 						// Deallocate the asset and then randomize it (already done in the Deallocate function)
-						bool success = DeallocateAsset(editor_state, metadata, current_type, true, &external_dependencies);
-						if (!success) {
+						bool deallocate_success = DeallocateAsset(editor_state, metadata, current_type, true, &external_dependencies);
+						if (!deallocate_success) {
 							fail("Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", "Failed to unload asset {#}, type {#} or assets that depend on it.");
 						}
 						else {

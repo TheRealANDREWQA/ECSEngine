@@ -520,9 +520,9 @@ static void InspectorDrawSandboxModuleSection(
 			settings_display_row_layout.GetTransform(config, configuration);
 
 			ChangeModuleSettingsData change_setting_data = { data, module_index, index };
-			UIConfigComboBoxCallback combo_callback;
-			combo_callback.handler = { change_module_settings, &change_setting_data, sizeof(change_setting_data) };
-			config.AddFlag(combo_callback);
+			UIConfigComboBoxCallback combo_module_callback;
+			combo_module_callback.handler = { change_module_settings, &change_setting_data, sizeof(change_setting_data) };
+			config.AddFlag(combo_module_callback);
 
 			static unsigned char label_index = 0;
 
@@ -683,7 +683,6 @@ static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state
 			UIConfigWindowDependentSize dependent_size;
 			local_config.AddFlag(dependent_size);
 
-			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 			for (unsigned int index = 0; index < available_settings.size; index++) {
 				SelectData select_data = { data, sandbox_index, available_settings[index] };
 

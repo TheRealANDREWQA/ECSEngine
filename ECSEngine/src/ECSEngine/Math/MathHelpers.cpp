@@ -207,22 +207,22 @@ namespace ECSEngine {
 			Vec8ui current_indices = { 0, 1, 2, 3, 4, 5, 6, 7 };
 			Vec8ui increment = Vec8ui::size();
 			for (size_t index = 0; index < simd_count; index += Vec8f::size()) {
-				Vec8f values[3];
+				Vec8f current_values[3];
 				// The x values
-				values[0] = GatherStride<3, 0>(points.buffer + index);
+				current_values[0] = GatherStride<3, 0>(points.buffer + index);
 				// The y values
-				values[1] = GatherStride<3, 1>(points.buffer + index);
+				current_values[1] = GatherStride<3, 1>(points.buffer + index);
 				// The z values
-				values[2] = GatherStride<3, 2>(points.buffer + index);
+				current_values[2] = GatherStride<3, 2>(points.buffer + index);
 
 				for (size_t axis = 0; axis < 3; axis++) {
-					Vec8fb are_smaller = values[axis] < smallest_values[axis];
-					Vec8fb are_greater = values[axis] > largest_values[axis];
+					Vec8fb are_smaller = current_values[axis] < smallest_values[axis];
+					Vec8fb are_greater = current_values[axis] > largest_values[axis];
 					
-					smallest_values[axis] = select(are_smaller, values[axis], smallest_values[axis]);
+					smallest_values[axis] = select(are_smaller, current_values[axis], smallest_values[axis]);
 					smallest_values_index[axis] = select(are_smaller, current_indices, smallest_values_index[axis]);
 				
-					largest_values[axis] = select(are_greater, values[axis], largest_values[axis]);
+					largest_values[axis] = select(are_greater, current_values[axis], largest_values[axis]);
 					largest_values_index[axis] = select(are_greater, current_indices, largest_values_index[axis]);
 				}
 
@@ -512,14 +512,14 @@ namespace ECSEngine {
 					max_values = max(current_max_values, max_values);
 				}
 			});
-			float2 values;
+			float2 min_max_values;
 			if constexpr (is_min) {
-				values.x = VectorLow(HorizontalMin8(min_values));
+				min_max_values.x = VectorLow(HorizontalMin8(min_values));
 			}
 			if constexpr (is_max) {
-				values.y = VectorLow(HorizontalMax8(min_values));
+				min_max_values.y = VectorLow(HorizontalMax8(min_values));
 			}
-			return values;
+			return min_max_values;
 		}
 		else {
 			Vec8ui current_indices = { 0, 1, 2, 3, 4, 5, 6, 7 };
@@ -558,20 +558,20 @@ namespace ECSEngine {
 				current_indices += increment;
 			});
 
-			float2 values;
+			float2 min_max_values;
 			if constexpr (is_min) {
 				Vec8f splatted_min = HorizontalMin8(min_values);
 				size_t simd_smallest_index = HorizontalMin8Index(min_values, splatted_min);
 				indices->x = min_indices[simd_smallest_index];
-				values.x = VectorLow(splatted_min);
+				min_max_values.x = VectorLow(splatted_min);
 			}
 			if constexpr (is_max) {
 				Vec8f splatted_max = HorizontalMax8(max_values);
 				size_t simd_smallest_index = HorizontalMin8Index(max_values, splatted_max);
 				indices->y = max_indices[simd_smallest_index];
-				values.y = VectorLow(splatted_max);
+				min_max_values.y = VectorLow(splatted_max);
 			}
-			return values;
+			return min_max_values;
 		}
 	}
 
@@ -626,7 +626,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<bool is_min, bool is_max>
-	static void GetFloat3MinMaxImpl(Stream<float3> values, float3* output_min_values, float3* output_max_values, ulong3* min_indices, ulong3* max_indices) {
+	static void GetFloat3MinMaxImpl(Stream<float3> values, float3* output_min_values, float3* output_max_values, ulong3* output_min_indices, ulong3* output_max_indices) {
 		// Read 2 float3's at a time and perform the operation there
 		Vec8f min_values = FLT_MAX;
 		Vec8f max_values = -FLT_MAX;
@@ -635,7 +635,7 @@ namespace ECSEngine {
 		size_t simd_count = GetSimdCount(values.size, simd_increment);
 		float3 scalar_min = float3::Splat(FLT_MAX);
 		float3 scalar_max = float3::Splat(-FLT_MAX);
-		if (min_indices == nullptr && max_indices == nullptr) {
+		if (output_min_indices == nullptr && output_max_indices == nullptr) {
 			// If we don't need the indices, we can speed up the function by a bit
 			// By ommiting that value
 			if (simd_count > 0) {
@@ -748,14 +748,14 @@ namespace ECSEngine {
 
 			if constexpr (is_min) {
 				*output_min_values = scalar_min;
-				if (min_indices != nullptr) {
-					*min_indices = scalar_min_indices;
+				if (output_min_indices != nullptr) {
+					*output_min_indices = scalar_min_indices;
 				}
 			}
 			if constexpr (is_max) {
 				*output_max_values = scalar_max;
-				if (max_indices != nullptr) {
-					*max_indices = scalar_max_indices;
+				if (output_max_indices != nullptr) {
+					*output_max_indices = scalar_max_indices;
 				}
 			}
 		}

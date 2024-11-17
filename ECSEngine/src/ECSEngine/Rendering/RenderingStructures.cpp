@@ -1058,7 +1058,7 @@ namespace ECSEngine {
 
 	bool IsGraphicsFormatUINT(ECS_GRAPHICS_FORMAT format)
 	{
-		return format == ECS_GRAPHICS_FORMAT_R8_UINT || format == ECS_GRAPHICS_FORMAT_R8_UINT || format == ECS_GRAPHICS_FORMAT_RG8_UINT
+		return format == ECS_GRAPHICS_FORMAT_R8_UINT || format == ECS_GRAPHICS_FORMAT_RG8_UINT
 			|| format == ECS_GRAPHICS_FORMAT_RGBA8_UINT || format == ECS_GRAPHICS_FORMAT_R16_UINT || format == ECS_GRAPHICS_FORMAT_RG16_UINT
 			|| format == ECS_GRAPHICS_FORMAT_RGBA16_UINT || format == ECS_GRAPHICS_FORMAT_R32_UINT || format == ECS_GRAPHICS_FORMAT_RG32_UINT
 			|| format == ECS_GRAPHICS_FORMAT_RGB32_UINT || format == ECS_GRAPHICS_FORMAT_RGBA32_UINT;
@@ -1068,7 +1068,7 @@ namespace ECSEngine {
 
 	bool IsGraphicsFormatSINT(ECS_GRAPHICS_FORMAT format)
 	{
-		return format == ECS_GRAPHICS_FORMAT_R8_SINT || format == ECS_GRAPHICS_FORMAT_R8_SINT || format == ECS_GRAPHICS_FORMAT_RG8_SINT
+		return format == ECS_GRAPHICS_FORMAT_R8_SINT || format == ECS_GRAPHICS_FORMAT_RG8_SINT
 			|| format == ECS_GRAPHICS_FORMAT_RGBA8_SINT || format == ECS_GRAPHICS_FORMAT_R16_SINT || format == ECS_GRAPHICS_FORMAT_RG16_SINT
 			|| format == ECS_GRAPHICS_FORMAT_RGBA16_SINT || format == ECS_GRAPHICS_FORMAT_R32_SINT || format == ECS_GRAPHICS_FORMAT_RG32_SINT
 			|| format == ECS_GRAPHICS_FORMAT_RGB32_SINT || format == ECS_GRAPHICS_FORMAT_RGBA32_SINT;
@@ -1881,8 +1881,8 @@ namespace ECSEngine {
 		ecs_descriptor.address_type_u = GetGraphicsAddressModeFromNative(descriptor.AddressU);
 		ecs_descriptor.address_type_v = GetGraphicsAddressModeFromNative(descriptor.AddressV);
 		ecs_descriptor.address_type_w = GetGraphicsAddressModeFromNative(descriptor.AddressW);
-		ecs_descriptor.max_lod = descriptor.MaxLOD;
-		ecs_descriptor.min_lod = descriptor.MinLOD;
+		ecs_descriptor.max_lod = (unsigned int)descriptor.MaxLOD;
+		ecs_descriptor.min_lod = (unsigned int)descriptor.MinLOD;
 		ecs_descriptor.mip_bias = descriptor.MipLODBias;
 		memcpy(&ecs_descriptor.border_color, &descriptor.BorderColor, sizeof(descriptor.BorderColor));
 

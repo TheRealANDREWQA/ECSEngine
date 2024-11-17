@@ -157,7 +157,7 @@ namespace ECSEngine {
 	{
 		ECS_TEXT_DESERIALIZE_STATUS status = ECS_TEXT_DESERIALIZE_OK;
 
-		size_t pointer_data_bytes = DeserializeReadFile(file, allocator, false, [&](uintptr_t& stream) {
+		DeserializeReadFile(file, allocator, false, [&](uintptr_t& stream) {
 			status = TextDeserializeFields(fields, memory_pool, stream);
 			return 0;
 		});
@@ -176,9 +176,8 @@ namespace ECSEngine {
 	{
 		ECS_TEXT_DESERIALIZE_STATUS status = ECS_TEXT_DESERIALIZE_OK;
 
-		size_t pointer_data_bytes = DeserializeReadFile(file, file_allocator, false, [&](uintptr_t& stream) {
+		DeserializeReadFile(file, file_allocator, false, [&](uintptr_t& stream) {
 			status = TextDeserializeFields(fields, pointer_allocator, stream);
-
 			return 0;
 		});
 

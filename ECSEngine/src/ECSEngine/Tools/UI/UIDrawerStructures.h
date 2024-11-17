@@ -324,7 +324,7 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerSentenceNotCached {
-			Stream<unsigned int> whitespace_characters;
+			CapacityStream<unsigned int> whitespace_characters;
 		};
 
 		struct UIDrawerWhitespaceCharacter {

@@ -1615,10 +1615,11 @@ namespace ECSEngine {
 
 		// Returns the subrange inside this entry
 		ECS_INLINE Stream<void> Add(Stream<void> other) {
+			ECS_ASSERT(other.size <= UINT_MAX, "Capacity stream integer overflow on stream addition.");
 			AssertCapacity(other.size);
 			unsigned int previous_size = size;
 			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
-			size += other.size;
+			size += (unsigned int)other.size;
 			return SliceAt(previous_size);
 		}
 
@@ -1799,22 +1800,24 @@ namespace ECSEngine {
 		ECS_INLINE ResizableStream<void>& operator = (const ResizableStream<void>& other) = default;
 
 		unsigned int Add(Stream<void> data) {
-			if (size + data.size >= capacity) {
+			ECS_ASSERT(data.size <= UINT_MAX, "Resizable stream addition of stream overflows the integer range.");
+			if (size + (unsigned int)data.size >= capacity) {
 				Resize((unsigned int)((float)capacity * ECS_RESIZABLE_STREAM_FACTOR + 2));
 			}
 			memcpy((void*)((uintptr_t)buffer + size), data.buffer, data.size);
 			unsigned int offset = size;
-			size += data.size;
+			size += (unsigned int)data.size;
 			return offset;
 		}
 
 		unsigned int Add(Stream<void> data, unsigned int element_byte_size) {
+			ECS_ASSERT(data.size <= UINT_MAX, "Resizable stream addition of stream overflows the integer range.");
 			if (size + data.size >= capacity) {
 				Resize((unsigned int)((float)capacity * ECS_RESIZABLE_STREAM_FACTOR + 2), element_byte_size);
 			}
-			memcpy((void*)((uintptr_t)buffer + size * element_byte_size), data.buffer, data.size * element_byte_size);
+			memcpy((void*)((uintptr_t)buffer + (size_t)size * (size_t)element_byte_size), data.buffer, data.size * element_byte_size);
 			unsigned int offset = size;
-			size += data.size;
+			size += (unsigned int)data.size;
 			return offset;
 		}
 
@@ -1901,7 +1904,7 @@ namespace ECSEngine {
 			if (new_size > capacity) {
 				unsigned int resize_capacity = (unsigned int)(ECS_RESIZABLE_STREAM_FACTOR * capacity + 3);
 				if (resize_capacity < new_size) {
-					resize_capacity = new_size * ECS_RESIZABLE_STREAM_FACTOR;
+					resize_capacity = (unsigned int)((float)new_size * ECS_RESIZABLE_STREAM_FACTOR);
 				}
 				Resize(resize_capacity);
 			}

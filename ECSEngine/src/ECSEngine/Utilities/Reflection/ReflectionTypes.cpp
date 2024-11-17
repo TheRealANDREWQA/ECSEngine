@@ -691,10 +691,10 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int ReflectionType::FindField(Stream<char> name) const
+		unsigned int ReflectionType::FindField(Stream<char> field_name) const
 		{
 			for (size_t index = 0; index < fields.size; index++) {
-				if (name == fields[index].name) {
+				if (field_name == fields[index].name) {
 					return index;
 				}
 			}
@@ -703,10 +703,10 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		double ReflectionType::GetEvaluation(Stream<char> name) const
+		double ReflectionType::GetEvaluation(Stream<char> evaluation_name) const
 		{
 			for (size_t index = 0; index < evaluations.size; index++) {
-				if (evaluations[index].name == name) {
+				if (evaluations[index].name == evaluation_name) {
 					return evaluations[index].value;
 				}
 			}
@@ -779,9 +779,9 @@ namespace ECSEngine {
 				}
 
 				// Verify field tag
-				Stream<char> tag = fields[index].tag;
-				if (tag.size > 0) {
-					copy.fields[index].tag.InitializeAndCopy(ptr, tag);
+				Stream<char> field_tag = fields[index].tag;
+				if (field_tag.size > 0) {
+					copy.fields[index].tag.InitializeAndCopy(ptr, field_tag);
 				}
 				else {
 					copy.fields[index].tag = { nullptr, 0 };

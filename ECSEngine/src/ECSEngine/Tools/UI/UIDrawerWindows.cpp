@@ -83,7 +83,6 @@ namespace ECSEngine {
 		static void SystemParameterColorThemeCallback(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			UIColorThemeDescriptor* theme = &system->m_descriptors.color_theme;
 			system->FinalizeColorTheme();
 			system->DeallocateAllWindowSnapshots();
 		}
@@ -154,7 +153,6 @@ namespace ECSEngine {
 			config.AddFlag(color_input_callback);
 
 			auto system = drawer.GetSystem();
-			const UIColorThemeDescriptor* system_theme = &system->m_descriptors.color_theme;
 
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_descriptors.color_theme;
@@ -197,13 +195,12 @@ namespace ECSEngine {
 			drawer.Button("Default values##1", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
 			UILayoutDescriptor* layout = &descriptor->layout;
-			const UILayoutDescriptor* system_layout = &system->m_descriptors.window_layout;
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Element x", &layout->default_element_x, 0.01f, 0.3f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Element y", &layout->default_element_y, 0.01f, 0.15f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Indentation", &layout->element_indentation, 0.0f, 0.05f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Next row padding", &layout->next_row_padding, 0.0f, 0.05f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Next row offset", &layout->next_row_y_offset, 0.0f, 0.05f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Node indentation", &layout->node_indentation, 0.0f, 0.05f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Element x", &layout->default_element_x, 0.01f, 0.3f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Element y", &layout->default_element_y, 0.01f, 0.15f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Indentation", &layout->element_indentation, 0.0f, 0.05f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Next row padding", &layout->next_row_padding, 0.0f, 0.05f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Next row offset", &layout->next_row_y_offset, 0.0f, 0.05f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Node indentation", &layout->node_indentation, 0.0f, 0.05f);
 
 		}
 
@@ -227,10 +224,10 @@ namespace ECSEngine {
 			drawer.Button("Default values##2", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
 			UIElementDescriptor* elements = &descriptor->element_descriptor;
-			UIElementDescriptor* system_elements = &system->m_descriptors.element_descriptor;
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f);
 			float* float2_values[2];
+			// There is a single entry because of uniform bounds
 			float float2_lower_bounds[1];
 			float float2_upper_bounds[1];
 			Stream<char> float2_names[2];
@@ -454,7 +451,6 @@ namespace ECSEngine {
 			button_data.system_descriptor = theme;
 			drawer.Button("Default values##0", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			const UIColorThemeDescriptor* startup_theme = &system->m_startup_descriptors.color_theme;
 			drawer.ColorInput(input_configuration, config, "Theme", &theme->theme, theme->theme);
 
 			color_input_callback.callback = { SystemParameterColorThemeCallback, nullptr, 0 };
@@ -529,7 +525,6 @@ namespace ECSEngine {
 			auto system = drawer.GetSystem();
 
 			UIElementDescriptor* elements = &system->m_descriptors.element_descriptor;
-			UIElementDescriptor* system_elements = &system->m_startup_descriptors.element_descriptor;
 
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.element_descriptor;
@@ -540,8 +535,8 @@ namespace ECSEngine {
 			drawer.Button("Default values##20", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
 			drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f);
 			float* float2_values[2];
 			// Uniform bounds
 			float float2_lower_bounds[1];
@@ -606,6 +601,7 @@ namespace ECSEngine {
 				&elements->graph_x_axis_space,
 				0.005f,
 				0.05f,
+				0.0f,
 				4
 			);
 
@@ -649,6 +645,7 @@ namespace ECSEngine {
 				&elements->menu_button_padding,
 				0.0f,
 				0.1f,
+				0.0f,
 				4
 			);
 
@@ -682,7 +679,6 @@ namespace ECSEngine {
 			auto system = drawer.GetSystem();
 
 			UIFontDescriptor* font = &system->m_descriptors.font;
-			const UIFontDescriptor* startup_font = &system->m_startup_descriptors.font;
 
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.font;
@@ -705,7 +701,6 @@ namespace ECSEngine {
 			auto system = drawer.GetSystem();
 
 			UIDockspaceDescriptor* dockspace = &system->m_descriptors.dockspaces;
-			const UIDockspaceDescriptor* startup_dockspace = &system->m_startup_descriptors.dockspaces;
 
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.dockspaces;
@@ -740,7 +735,6 @@ namespace ECSEngine {
 			auto system = drawer.GetSystem();
 
 			UIMaterialDescriptor* material = &system->m_descriptors.materials;
-			const UIMaterialDescriptor* startup_material = &system->m_descriptors.materials;
 
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.materials;
@@ -786,7 +780,6 @@ namespace ECSEngine {
 			auto system = drawer.GetSystem();
 
 			UIMiscellaneousDescriptor* misc = &system->m_descriptors.misc;
-			UIMiscellaneousDescriptor* startup_misc = &system->m_startup_descriptors.misc;
 
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.misc;
@@ -877,8 +870,8 @@ namespace ECSEngine {
 
 			drawer.PopIdentifierStack();
 
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Menu x padd", &misc->menu_x_padd, 0.0f, 0.1f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Hierarchy drag node rectangle size", &misc->rectangle_hierarchy_drag_node_dimension, 0.005f, 0.01f, 4);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Menu x padd", &misc->menu_x_padd, 0.0f, 0.1f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Hierarchy drag node rectangle size", &misc->rectangle_hierarchy_drag_node_dimension, 0.005f, 0.01f, 0.0f, 4);
 
 			drawer.ColorInput("Menu arrow color", &misc->menu_arrow_color);
 			drawer.ColorInput("Menu unavailable arrow color", &misc->menu_unavailable_arrow_color);
@@ -1011,7 +1004,8 @@ namespace ECSEngine {
 			int scroll_amount = mouse->GetScrollValue() - data->scroll;
 			float total_scroll = 0.0f;
 			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-				if (keyboard->IsPressed(ECS_KEY_Z)) {
+				// Use alphanumeric key for this in order to be able to perform this action while character input is read
+				if (keyboard->GetAlphanumericKey(ECS_KEY_Z) == ECS_BUTTON_PRESSED) {
 					if (system->GetActiveWindow() == window_index) {
 						HandlerCommand command;
 						bool continue_loop = true;
@@ -1758,7 +1752,7 @@ namespace ECSEngine {
 			// Make sure it's empty on start
 			window_data->file_data = {};
 			// Make sure to trigger a recheck
-			window_data->timer.DelayStart(-window_data->timer_milliseconds_recheck, ECS_TIMER_DURATION_MS);
+			window_data->timer.DelayStart(-(int64_t)window_data->timer_milliseconds_recheck, ECS_TIMER_DURATION_MS);
 
 			return window_index;
 		}
@@ -2065,10 +2059,6 @@ namespace ECSEngine {
 				transform.position.x -= drawer.system->m_descriptors.misc.render_slider_vertical_size + drawer.GetPixelSizeX();
 			}
 
-			size_t initial_text_sprite_count = *drawer.HandleTextSpriteCount(UI_CONFIG_LATE_DRAW);
-			size_t initial_solid_color_count = *drawer.HandleSolidColorCount(UI_CONFIG_LATE_DRAW);
-			size_t initial_sprite_count = *drawer.HandleSpriteCount(UI_CONFIG_LATE_DRAW);
-
 			auto counter_backwards = [&](ECS_CONSOLE_MESSAGE_TYPE type) {
 				const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_FIT_SPACE 
 					| UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_LATE_DRAW;
@@ -2318,7 +2308,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		static bool ConsoleWindowRetainedMode(void* window_data, WindowRetainedModeInfo* retained_info) {
+		bool ConsoleWindowRetainedMode(void* window_data, WindowRetainedModeInfo* retained_info) {
 			ConsoleWindowData* data = (ConsoleWindowData*)window_data;
 			return !data->retained_timer.HasPassedAndReset(ECS_TIMER_DURATION_MS, CONSOLE_RETAINED_MS);
 		}
@@ -2493,11 +2483,11 @@ namespace ECSEngine {
 							}
 							else {
 								if (is_text_input) {
-									void* allocation = Malloc(sizeof(CapacityStream<char>) + sizeof(char) * 128);
+									void* entry_allocation = Malloc(sizeof(CapacityStream<char>) + sizeof(char) * 128);
 									UIReflectionBindTextInput bind;
 									bind.field_name = data->sections[index].elements[subindex].name;
-									bind.stream = (CapacityStream<char>*)allocation;
-									bind.stream->buffer = (char*)OffsetPointer(allocation, sizeof(CapacityStream<char>));
+									bind.stream = (CapacityStream<char>*)entry_allocation;
+									bind.stream->buffer = (char*)OffsetPointer(entry_allocation, sizeof(CapacityStream<char>));
 									bind.stream->size = 0;
 									bind.stream->capacity = 128;
 
@@ -2508,11 +2498,11 @@ namespace ECSEngine {
 									data->ui_reflection->BindInstanceTextInput(instance, { &bind, 1 });
 								}
 								else {
-									void* allocation = Malloc(sizeof(CapacityStream<wchar_t>) + sizeof(wchar_t) * 256);
+									void* entry_allocation = Malloc(sizeof(CapacityStream<wchar_t>) + sizeof(wchar_t) * 256);
 									UIReflectionBindDirectoryInput bind;
 									bind.field_name = data->sections[index].elements[subindex].name;
-									bind.stream = (CapacityStream<wchar_t>*)allocation;
-									bind.stream->buffer = (wchar_t*)OffsetPointer(allocation, sizeof(CapacityStream<wchar_t>));
+									bind.stream = (CapacityStream<wchar_t>*)entry_allocation;
+									bind.stream->buffer = (wchar_t*)OffsetPointer(entry_allocation, sizeof(CapacityStream<wchar_t>));
 									bind.stream->size = 0;
 									bind.stream->capacity = 256;
 

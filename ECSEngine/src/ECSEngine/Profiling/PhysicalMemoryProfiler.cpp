@@ -186,21 +186,21 @@ namespace ECSEngine {
 	{
 		// Update the usage before that since it has a higher chance of not having mismatches
 		// Since the commit is done afterwards
-		Timer my_timer;
+		//Timer my_timer;
 		UpdateExistingRegionsUtilizationIteration();
-		float update_duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
+		//float update_duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 
 		// Commit the pages into the main buffers
 		CommitGuardPagesIntoPhysical();
 
-		float commit_duation = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
+		//float commit_duation = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 
 		size_t total_usage = 0;
 		for (unsigned int index = 0; index < region_entries.size; index++) {
 			total_usage += region_entries[index].current_usage;
 		}
 		memory_usage.Add(total_usage);
-		float duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
+		//float duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 	}
 
 	unsigned int PhysicalMemoryProfiler::FindRegion(const void* page) const

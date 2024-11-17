@@ -126,7 +126,6 @@ void SaveScenePopUpDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 			row_layout.AddSquareLabel();
 			row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
 
-			UIDrawConfig config;
 			size_t check_box_configuration = UI_CONFIG_CHECK_BOX_NO_NAME;
 			row_layout.GetTransform(config, check_box_configuration);
 

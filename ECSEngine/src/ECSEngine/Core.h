@@ -16,6 +16,7 @@
 #pragma warning(disable:26495)
 #pragma warning(disable:4251)
 #pragma warning(disable:4201)
+#pragma warning(disable:6262)
 
 #include <float.h>
 #include <limits.h>
@@ -92,6 +93,12 @@ namespace ECSEngine {
 		a = b;
 		b = copy;
 	}
+
+	template<class T, template<class...> class U>
+	inline constexpr bool is_instance_of_v = std::false_type{};
+
+	template<template<class...> class U, class... Vs>
+	inline constexpr bool is_instance_of_v<U<Vs...>, U> = std::true_type{};
 
 }
 
@@ -216,13 +223,15 @@ ECS_INLINE T& operator|= (T& a, T b) { return (T&)((int&)a |= (int)b); } \
 ECS_INLINE T& operator&= (T& a, T b) { return (T&)((int&)a &= (int)b); } \
 ECS_INLINE T& operator^= (T& a, T b) { return (T&)((int&)a ^= (int)b); }
 
-// Have faith in the optimizer that it will eliminate these dead branches
-#define LOOP_UNROLL_4(count, function, pivot)	if (count >= pivot + 1) { function(pivot); } \
-												if (count >= pivot + 2) { function(pivot + 1); } \
-												if (count >= pivot + 3) { function(pivot + 2); } \
-												if (count >= pivot + 4) { function(pivot + 3); } 
+// Count and pivot must be constant integer values
+#define LOOP_UNROLL_4(count, function, pivot)	if constexpr ((count) >= (pivot) + 1) { function(pivot); } \
+												if constexpr ((count) >= (pivot) + 2) { function(pivot + 1); } \
+												if constexpr ((count) >= (pivot) + 3) { function(pivot + 2); } \
+												if constexpr ((count) >= (pivot) + 4) { function(pivot + 3); } 
 
 
+
+// Count must be a constant integer
 // It goes up to 16
 #define LOOP_UNROLL(count, function)	LOOP_UNROLL_4(count, function, 0); \
 										LOOP_UNROLL_4(count, function, 4); \

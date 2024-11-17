@@ -567,11 +567,11 @@ namespace ECSEngine {
 			position.x += indentation;
 		}
 
-		void UITooltipDrawData::FinalizeRectangle(float2 position, float2 scale)
+		void UITooltipDrawData::FinalizeRectangle(float2 rectangle_position, float2 scale)
 		{
-			position.x += scale.x;
-			max_bounds.x = max(max_bounds.x, position.x);
-			max_bounds.y = max(max_bounds.y, position.y);
+			rectangle_position.x += scale.x;
+			max_bounds.x = max(max_bounds.x, rectangle_position.x);
+			max_bounds.y = max(max_bounds.y, rectangle_position.y);
 			current_scale.x = 0.0f;
 			current_scale.y = max(current_scale.y, scale.y);
 		}

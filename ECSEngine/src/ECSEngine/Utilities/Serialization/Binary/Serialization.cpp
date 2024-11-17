@@ -632,9 +632,9 @@ namespace ECSEngine {
 								size_t basic_count = field->info.basic_type_count;
 								size_t element_byte_size = GetBasicTypeArrayElementSize(field->info);
 
-								for (size_t index = 0; index < basic_count; index++) {
+								for (size_t subindex = 0; subindex < basic_count; subindex++) {
 									// No need to test the return code since if it gets to here it cannot fail
-									SerializeImplementation<write_data>(reflection_manager, &nested_type, OffsetPointer(field_data, index * element_byte_size), stream, nested_options, total_size);
+									SerializeImplementation<write_data>(reflection_manager, &nested_type, OffsetPointer(field_data, subindex * element_byte_size), stream, nested_options, total_size);
 								}
 							}
 							else {
@@ -652,11 +652,11 @@ namespace ECSEngine {
 
 								// Write the size first and then the user defined
 								*total_size += Write<write_data>(&stream, &field_stream.size, sizeof(field_stream.size));
-								for (size_t index = 0; index < field_stream.size; index++) {
+								for (size_t subindex = 0; subindex < field_stream.size; subindex++) {
 									SerializeImplementation<write_data>(
 										reflection_manager, 
 										&nested_type, 
-										OffsetPointer(field_data, index * type_byte_size), 
+										OffsetPointer(field_data, subindex * type_byte_size),
 										stream, 
 										nested_options, 
 										total_size
@@ -982,9 +982,6 @@ namespace ECSEngine {
 			unsigned int file_basic_component_count = BasicTypeComponentCount(file_info.basic_type);
 			unsigned int type_basic_component_count = BasicTypeComponentCount(type_info.basic_type);
 
-			ReflectionBasicFieldType file_single_type = ConvertBasicTypeMultiComponentToSingle(file_info.basic_type);
-			ReflectionBasicFieldType type_single_type = ConvertBasicTypeMultiComponentToSingle(type_info.basic_type);
-
 			double file_data[4];
 
 			unsigned int iteration_count = ClampMin(file_basic_component_count, type_basic_component_count);
@@ -994,7 +991,7 @@ namespace ECSEngine {
 				void* type_data = OffsetPointer(field_data, pointer_increment * index);
 				Read<true>(&data, &file_data, per_component_byte_size);
 
-				ConvertReflectionBasicField(file_info.basic_type, type_info.basic_type, file_data, field_data);
+				ConvertReflectionBasicField(file_info.basic_type, type_info.basic_type, file_data, type_data);
 			}
 		};
 
@@ -1390,9 +1387,6 @@ namespace ECSEngine {
 				// Mismatch - try to solve it
 				else {
 					// If the stream type has changed, then keep in mind that
-					bool is_stream_type_different = file_field_info.stream_type != type_field_info.stream_type;
-					bool is_stream_type_basic_array = type_field_info.stream_type == ReflectionStreamFieldType::BasicTypeArray;
-
 					// If the discrepency is the basic type only, try to solve it
 					if (type_field_info.stream_type == ReflectionStreamFieldType::Basic && file_field_info.stream_type == ReflectionStreamFieldType::Basic) {
 						if constexpr (read_data) {
@@ -1433,7 +1427,7 @@ namespace ECSEngine {
 										size_t elements_to_read = ClampMin(element_count, (size_t)type_field_info.basic_type_count);
 										if (type_field_info.basic_type != file_field_info.basic_type) {
 											if constexpr (read_data) {
-												for (size_t index = 0; index < elements_to_read; index++) {
+												for (size_t element_index = 0; element_index < elements_to_read; element_index++) {
 													deserialize_incompatible_basic(stream, field_data, file_field_info, type_field_info);
 												}
 											}
@@ -1474,8 +1468,8 @@ namespace ECSEngine {
 													allocation = Allocate(options->backup_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 												}
 
-												for (size_t index = 0; index < element_count; index++) {
-													deserialize_incompatible_basic(stream, OffsetPointer(allocation, index), file_field_info, type_field_info);
+												for (size_t element_index = 0; element_index < element_count; element_index++) {
+													deserialize_incompatible_basic(stream, OffsetPointer(allocation, element_index), file_field_info, type_field_info);
 												}
 											}
 											else {
@@ -1985,7 +1979,7 @@ namespace ECSEngine {
 
 			// Only if the type was not yet read do it
 			if (index == field_table.types.size) {
-				size_t read_size = DeserializeFieldTableFromDataImplementation<read_data>(data, field_table.types.buffer + field_table.types.size, allocator, &temp_options);
+				read_size = DeserializeFieldTableFromDataImplementation<read_data>(data, field_table.types.buffer + field_table.types.size, allocator, &temp_options);
 				if (read_size == -1) {
 					field_table.types.size = -1;
 					return field_table;

@@ -277,8 +277,8 @@ namespace ECSEngine {
                         // Print all values
                         report.AddStream(". Values: ");
                         for (size_t iteration = 0; iteration < options.iteration_count; iteration++) {
-                            const char* time_unit;
-                            size_t value = format_value(get_value(step_index, iteration), time_unit);
+                            const char* iteration_time_unit;
+                            size_t value = format_value(get_value(step_index, iteration), iteration_time_unit);
                             ConvertIntToChars(report, value);
                             bool is_valid = false;
                             for (unsigned int valid_index = 0; valid_index < iteration_values.size; valid_index++) {
@@ -289,7 +289,7 @@ namespace ECSEngine {
                             }
 
                             report.Add(' ');
-                            report.AddStream(time_unit);
+                            report.AddStream(iteration_time_unit);
                             report.Add(' ');
                             report.Add('(');
                             report.Add(is_valid ? 'V' : 'S');

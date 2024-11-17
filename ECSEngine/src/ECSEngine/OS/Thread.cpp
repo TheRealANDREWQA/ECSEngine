@@ -122,7 +122,6 @@ namespace ECSEngine {
 		bool SuspendThread(void* handle)
 		{
 			DWORD suspend_count = ::SuspendThread(handle);
-			DWORD last_error = GetLastError();
 			return suspend_count != -1;
 		}
 
@@ -131,7 +130,6 @@ namespace ECSEngine {
 		bool ResumeThread(void* handle)
 		{
 			DWORD suspend_count = ::ResumeThread(handle);
-			DWORD last_error = GetLastError();
 			return suspend_count != -1;
 		}
 
@@ -172,7 +170,6 @@ namespace ECSEngine {
 		size_t GetThreadID(void* handle)
 		{
 			DWORD value = GetThreadId(handle);
-			size_t last_error = GetLastError();
 			return value == 0 ? (size_t)-1 : (size_t)value;
 		}
 

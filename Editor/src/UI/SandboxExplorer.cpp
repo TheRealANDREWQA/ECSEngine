@@ -399,7 +399,6 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			else {
 				EditorSetConsoleError("The current runtime setting is not valid. Increase the global allocator size.");
 				// Copy back all the old values
-				ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 				bool success = LoadRuntimeSettings(data->editor_state, data->selected_runtime_setting, &data->world_descriptor, &error_message);
 				if (!success) {
 					ECS_FORMAT_TEMP_STRING(console_message, "Failed to reload the selected runtime setting {#}. Detailed error: {#}.", data->selected_runtime_setting, error_message);

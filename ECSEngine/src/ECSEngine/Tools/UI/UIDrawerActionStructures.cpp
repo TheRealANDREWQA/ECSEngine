@@ -139,7 +139,6 @@ namespace ECSEngine {
 				right_bound += positions[sprite_render_offset].x - positions[0].x;
 			}
 			for (index = sprite_render_offset; index < text->size; index++) {
-				unsigned int sprite_index = index * 6;
 				if (positions[index].x + scales[index].x > right_bound)
 					break;
 			}

@@ -59,8 +59,8 @@ bool LoadModuleFile(EditorState* editor_state) {
 						EDITOR_MODULE_CONFIGURATION configuration = (EDITOR_MODULE_CONFIGURATION)configuration_index;
 						EditorModuleInfo* info = GetModuleInfo(editor_state, project_modules->size - 1, configuration);
 
-						bool success = HasModuleFunction(editor_state, project_modules->size - 1, configuration);
-						if (success) {
+						bool has_module_function = HasModuleFunction(editor_state, project_modules->size - 1, configuration);
+						if (has_module_function) {
 							if (project_modules->buffer[valid_projects].solution_last_write_time > info->library_last_write_time) {
 								info->load_status = EDITOR_MODULE_LOAD_OUT_OF_DATE;
 							}

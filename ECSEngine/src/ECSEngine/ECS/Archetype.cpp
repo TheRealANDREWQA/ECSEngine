@@ -120,7 +120,6 @@ namespace ECSEngine {
 		for (unsigned char deallocate_index = 0; deallocate_index < m_user_defined_components.count; deallocate_index++) {
 			unsigned char signature_index = m_user_defined_components[deallocate_index];
 			const ComponentInfo* current_info = &m_unique_infos[m_unique_components[signature_index].value];
-			MemoryArena* arena = current_info->allocator;
 
 			unsigned int base_count = GetBaseCount();
 			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
@@ -141,9 +140,7 @@ namespace ECSEngine {
 		for (unsigned char deallocate_index = 0; deallocate_index < m_user_defined_components.count; deallocate_index++) {
 			unsigned char signature_index = m_user_defined_components[deallocate_index];
 			const ComponentInfo* current_info = &m_unique_infos[m_unique_components[signature_index].value];
-			MemoryArena* arena = current_info->allocator;
 
-			unsigned int base_count = GetBaseCount();
 			ArchetypeBase* base = GetBase(base_index);
 			unsigned int entity_count = base->EntityCount();
 			for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {

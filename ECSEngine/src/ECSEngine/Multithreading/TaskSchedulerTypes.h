@@ -247,7 +247,7 @@ namespace ECSEngine {
 		ECS_INLINE void* Allocate(size_t size) {
 			ECS_CRASH_CONDITION_RETURN(frame_data->size + size <= frame_data->capacity, nullptr, "Task initialize data not enough space");
 			void* data = OffsetPointer(frame_data->buffer, frame_data->size);
-			frame_data->size += size;
+			frame_data->size += (unsigned int)size;
 			return data;
 		}
 

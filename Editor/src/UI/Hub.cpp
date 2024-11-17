@@ -480,36 +480,36 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 			bool succeeded = OS::GetRelativeFileTimes(data->projects[index].data.path, nullptr, nullptr, &last_write_time);
 
 			if (succeeded) {
-				UIDrawConfig config;
-				UIConfigAbsoluteTransform transform;
+				UIDrawConfig row_config;
+				UIConfigAbsoluteTransform row_transform;
 
-				row_project_name(config, transform, index);
-				row_platform_and_version(config, transform, index);
+				row_project_name(row_config, row_transform, index);
+				row_platform_and_version(row_config, row_transform, index);
 
-				transform.position.x += transform.scale.x;
-				transform.scale.x = end_table_position - transform.position.x;
-				config.AddFlag(transform);
+				row_transform.position.x += row_transform.scale.x;
+				row_transform.scale.x = end_table_position - row_transform.position.x;
+				row_config.AddFlag(row_transform);
 
-				drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, last_write_time);
-				config.flag_count--;
+				drawer.TextLabel(ROW_LABEL_CONFIGURATION, row_config, last_write_time);
+				row_config.flag_count--;
 				
-				row_cross_line(config, transform);
+				row_cross_line(row_config, row_transform);
 			}
 			else {
-				UIDrawConfig config;
-				UIConfigAbsoluteTransform transform;
+				UIDrawConfig row_config;
+				UIConfigAbsoluteTransform row_transform;
 
-				row_project_name(config, transform, index);
-				row_platform_and_version(config, transform, index);
+				row_project_name(row_config, row_transform, index);
+				row_platform_and_version(row_config, row_transform, index);
 
-				transform.position.x += transform.scale.x;
-				transform.scale.x = end_table_position - transform.position.x;
-				config.AddFlag(transform);
+				row_transform.position.x += transform.scale.x;
+				row_transform.scale.x = end_table_position - row_transform.position.x;
+				row_config.AddFlag(row_transform);
 
-				drawer.TextLabel(ROW_LABEL_CONFIGURATION | UI_CONFIG_UNAVAILABLE_TEXT, config, "Unable to read last write time");
-				config.flag_count--;
+				drawer.TextLabel(ROW_LABEL_CONFIGURATION | UI_CONFIG_UNAVAILABLE_TEXT, row_config, "Unable to read last write time");
+				row_config.flag_count--;
 				
-				row_cross_line(config, transform);
+				row_cross_line(row_config, row_transform);
 			}
 
 			config.flag_count = 0;
@@ -529,34 +529,34 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 			);
 		}
 		else {
-			UIDrawConfig config;
-			UIConfigAbsoluteTransform transform;
+			UIDrawConfig row_config;
+			UIConfigAbsoluteTransform row_transform;
 
-			row_project_name(config, transform, index);
+			row_project_name(row_config, row_transform, index);
 
 			alignment.vertical = ECS_UI_ALIGN_MIDDLE;
 			alignment.horizontal = ECS_UI_ALIGN_MIDDLE;
-			config.AddFlag(alignment);
+			row_config.AddFlag(alignment);
 
-			transform.position.x += transform.scale.x;
-			transform.scale.x = end_table_position - transform.position.x;
-			config.AddFlag(transform);
+			row_transform.position.x += row_transform.scale.x;
+			row_transform.scale.x = end_table_position - row_transform.position.x;
+			row_config.AddFlag(row_transform);
 
-			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, data->projects[index].error_message);
-			config.flag_count--;
+			drawer.TextLabel(ROW_LABEL_CONFIGURATION, row_config, data->projects[index].error_message);
+			row_config.flag_count--;
 			
-			row_cross_line(config, transform);
+			row_cross_line(row_config, row_transform);
 		}
 
 		float2 cross_line_position = drawer.GetLastSolidColorRectanglePosition();
 		float2 cross_line_scale = drawer.GetLastSolidColorRectangleScale();
 
 		config.flag_count = 0;
-		UIConfigAbsoluteTransform transform;
-		transform.position.x = end_table_position - drawer.GetSquareScale(REMOVE_BUTTON_SCALE).x - REMOVE_BUTTON_PADDING;
-		transform.position.y = AlignMiddle(cross_line_position.y, COLUMN_Y_SCALE, REMOVE_BUTTON_SCALE);
-		transform.scale = drawer.GetSquareScale(REMOVE_BUTTON_SCALE);
-		config.AddFlag(transform);
+		UIConfigAbsoluteTransform x_transform;
+		x_transform.position.x = end_table_position - drawer.GetSquareScale(REMOVE_BUTTON_SCALE).x - REMOVE_BUTTON_PADDING;
+		x_transform.position.y = AlignMiddle(cross_line_position.y, COLUMN_Y_SCALE, REMOVE_BUTTON_SCALE);
+		x_transform.scale = drawer.GetSquareScale(REMOVE_BUTTON_SCALE);
+		config.AddFlag(x_transform);
 
 		struct RemoveProjectData {
 			EditorState* editor_state;

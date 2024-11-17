@@ -401,8 +401,6 @@ namespace ECSEngine {
 
 	bool AssetDatabase::DependsUpon(const void* main_asset, ECS_ASSET_TYPE type, const void* referenced_asset, ECS_ASSET_TYPE referenced_type) const
 	{
-		bool return_value = false;
-
 		if (IsAssetTypeReferenceable(referenced_type)) {
 			ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
 			GetAssetDependencies(main_asset, type, &dependencies);
@@ -1343,8 +1341,6 @@ namespace ECSEngine {
 
 	void AssetDatabase::RandomizePointers(AssetDatabaseSnapshot snapshot)
 	{
-		ECS_ASSET_TYPE current_type = ECS_ASSET_MESH;
-
 		unsigned int max_count = 0;
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			unsigned int current_count = GetAssetCount((ECS_ASSET_TYPE)index);

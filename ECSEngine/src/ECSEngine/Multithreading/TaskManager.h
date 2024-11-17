@@ -286,7 +286,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE unsigned int GetThreadCount() const {
-			return m_thread_queue.size;
+			return (unsigned int)m_thread_queue.size;
 		}
 
 		ECS_INLINE ThreadQueue* GetThreadQueue(unsigned int thread_id) {

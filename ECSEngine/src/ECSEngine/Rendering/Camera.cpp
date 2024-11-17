@@ -292,7 +292,6 @@ namespace ECSEngine {
 		
 		// In case it is not possible to attain, the
 		float resulting_distance = FLT_MAX;
-		float smallest_difference = FLT_MAX;
 		auto get_aabb_distance_info = [&](float current_distance, bool* is_smaller, float2* coverage, float* current_difference) {
 			float3 aabb_translation = camera_forward * current_distance;
 			AABBScalar current_aabb = TranslateAABB(transformed_bounds, aabb_translation);

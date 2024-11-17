@@ -816,7 +816,6 @@ namespace ECSEngine {
 					return ReflectionBasicFieldType::Unknown;
 				}
 
-				const char* starting_stream = initial_characters;
 				// For every 2 bytes check that the top one is zero
 				while (initial_characters < characters.buffer + characters.size) {
 					if (initial_characters[0] != '\0') {

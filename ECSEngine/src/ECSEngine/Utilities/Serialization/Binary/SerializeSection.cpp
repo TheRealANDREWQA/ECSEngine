@@ -16,8 +16,6 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------
 
 	void SerializeSection(Stream<SerializeSectionData> data, uintptr_t& stream, Stream<void> header) {
-		bool success = true;
-
 		Write<true>(&stream, &header.size, sizeof(header.size));
 		if (header.buffer != nullptr && header.size > 0) {
 			Write<true>(&stream, header.buffer, header.size);

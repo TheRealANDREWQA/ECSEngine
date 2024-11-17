@@ -41,7 +41,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void ProcessTexture(unsigned int thread_index, World* world, void* data);
+		static void ProcessTexture(unsigned int thread_index, World* world, void* data);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -636,8 +636,6 @@ namespace ECSEngine {
 				click_data.identifier_char_count = data.identifier_char_count;
 			}
 			click_data.identifier = data.identifier;
-			void* first_click_data = data.first_click_handler.data == nullptr ? &click_data : data.first_click_handler.data;
-			void* second_click_data = data.second_click_handler.data == nullptr ? &click_data : data.second_click_handler.data;
 			ECS_UI_DRAW_PHASE phase = data.first_click_handler.phase > data.second_click_handler.phase ? data.first_click_handler.phase : data.second_click_handler.phase;
 			AddGeneralActionToDockspaceRegion(
 				data.dockspace,
@@ -2917,7 +2915,6 @@ namespace ECSEngine {
 			UISpriteVertex* reinterpretation = (UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE];
 			int64_t index = 0;
 			const UIWindow& window = m_windows[dockspace->borders[border_index].window_indices[window_index_in_region]];
-			size_t initial_count = counts[ECS_TOOLS_UI_TEXT_SPRITE];
 			float vertex_added_scale = m_descriptors.dockspaces.region_header_added_scale * 0.5f;
 
 			float2 region_position = GetDockspaceRegionPosition(dockspace, border_index, offset_mask);
@@ -3523,14 +3520,14 @@ namespace ECSEngine {
 				succeded = CheckDockspaceResize(hovered_floating_dockspace, dockspace_type, mouse_position);
 				if (!succeded) {
 					DockspaceType copy = dockspace_type;
-					unsigned int hovered_dockspace = GetDockspaceIndexFromPositionWithChildren(
+					unsigned int hovered_dockspace_index = GetDockspaceIndexFromPositionWithChildren(
 						mouse_position,
 						dockspace_type,
 						&dockspaces_to_search,
 						&dockspace_types,
 						parent_count
 					);
-					succeded = CheckDockspaceInnerBorders(mouse_position, hovered_dockspace, dockspace_type);
+					succeded = CheckDockspaceInnerBorders(mouse_position, hovered_dockspace_index, dockspace_type);
 					if (!succeded) {
 						succeded = CheckParentInnerBorders(mouse_position, dockspaces_to_search.buffer, dockspace_types.buffer, parent_count);
 						if (!succeded) {
@@ -4515,7 +4512,6 @@ namespace ECSEngine {
 
 			// The spin wait for the texture resizing and compression must be done here - because the 
 			// threads use the immediate context
-			unsigned int semaphore_count = m_resources.texture_semaphore.count;
 			m_resources.texture_semaphore.SpinWait();
 
 			border.draw_resources.UnmapNormal(m_graphics->GetContext());
@@ -4686,7 +4682,6 @@ namespace ECSEngine {
 		) {
 			UIVertexColor* solid_color = (UIVertexColor*)(buffers[ECS_TOOLS_UI_SOLID_COLOR]);
 			UISpriteVertex* text_sprites = (UISpriteVertex*)(buffers[ECS_TOOLS_UI_TEXT_SPRITE]);
-			UISpriteVertex* sprites = (UISpriteVertex*)(buffers[ECS_TOOLS_UI_SPRITE]);
 
 			float2 dockspace_region_position = GetDockspaceRegionPosition(dockspace, border_index, offset_mask);
 			float2 dockspace_region_scale = GetDockspaceRegionScale(dockspace, border_index, offset_mask);
@@ -4918,7 +4913,6 @@ namespace ECSEngine {
 		)
 		{
 			UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
-			float offset_mask_inverse = 1 - offset_mask;
 			unsigned int window_index = GetWindowIndexFromBorder(dockspace, border_index);
 			Color background_color = m_windows[window_index].descriptors->color_theme.background;
 			float2 dockspace_region_position = GetDockspaceRegionPosition(dockspace, border_index, offset_mask);
@@ -4932,7 +4926,7 @@ namespace ECSEngine {
 			);
 			UIDragDockspaceData drag_dockspace_data;
 			drag_dockspace_data.floating_dockspace = nullptr;
-			float normalized_margin = NormalizeHorizontalToWindowDimensions(m_descriptors.dockspaces.border_margin);
+			//float normalized_margin = NormalizeHorizontalToWindowDimensions(m_descriptors.dockspaces.border_margin);
 			AddClickableToDockspaceRegion(
 				dockspace,
 				border_index,
@@ -5015,7 +5009,6 @@ namespace ECSEngine {
 
 			ConfigureToolTipBase(data);
 
-			float space_x_scale = GetSpaceXSpan(data->font_size.x);
 			float text_y_span = GetTextSpriteYScale(data->font_size.y);
 
 			position.x = ClampMin(position.x, -0.99f);
@@ -5164,7 +5157,6 @@ namespace ECSEngine {
 
 			ConfigureToolTipBase(data);
 
-			float space_x_scale = GetSpaceXSpan(data->font_size.x);
 			float text_y_span = GetTextSpriteYScale(data->font_size.y);
 
 			position.x = position.x < -0.99f ? -0.99f : position.x;
@@ -5271,15 +5263,15 @@ namespace ECSEngine {
 				if (_word_end_index - _word_start_index > 0) {
 					float2 text_position = { max_bounds.x - m_descriptors.misc.tool_tip_padding.x - right_text_spans[index], current_y };
 
-					Color current_color = data->font_color;
+					Color font_color = data->font_color;
 					if (data->unavailable_rows != nullptr && data->unavailable_rows[row_index] == true) {
-						current_color = data->unavailable_font_color;
+						font_color = data->unavailable_font_color;
 					}
 					ConvertCharactersToTextSprites(
 						{ aligned_to_right_text.buffer + _word_start_index, (size_t)_word_end_index - (size_t)_word_start_index + 1 },
 						text_position,
 						text_vertices,
-						current_color,
+						font_color,
 						*count,
 						data->font_size,
 						data->character_spacing
@@ -5346,7 +5338,6 @@ namespace ECSEngine {
 
 			ConfigureToolTipBase(data);
 
-			float space_x_scale = GetSpaceXSpan(data->font_size.x);
 			float text_y_span = GetTextSpriteYScale(data->font_size.y);
 
 			float2 position = { 0.0f, 0.0f };
@@ -9356,7 +9347,6 @@ namespace ECSEngine {
 
 		void UISystem::ReadFontDescriptionFile(Stream<wchar_t> filename) {
 			// loading font uv descriptor;
-			size_t size = 2000;
 			Stream<char> uv_buffer = m_resource_manager->LoadTextFileImplementation(filename, false);
 			ECS_STACK_CAPACITY_STREAM(unsigned int, uvs, 1024);
 			size_t numbers = ParseNumbersFromCharString(uv_buffer, &uvs);
@@ -10169,16 +10159,16 @@ namespace ECSEngine {
 		bool UISystem::RemoveWindowDynamicResourceTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier identifier)
 		{
 			UIWindowDynamicResource* resource = GetWindowDynamicElement(window_index, index);
-			for (size_t index = 0; index < resource->table_resources.size; index++) {
-				if (resource->table_resources[index].Compare(identifier)) {
-					resource->table_resources.RemoveSwapBack(index);
+			for (size_t table_index = 0; table_index < resource->table_resources.size; table_index++) {
+				if (resource->table_resources[table_index].Compare(identifier)) {
+					resource->table_resources.RemoveSwapBack(table_index);
 					return true;
 				}
 			}
 			// If it wasn't in the main table resources, check added table resources
-			for (size_t index = 0; index < resource->added_table_resources.size; index++) {
-				if (resource->added_table_resources[index].Compare(identifier)) {
-					resource->added_table_resources.RemoveSwapBack(index);
+			for (size_t table_index = 0; index < resource->added_table_resources.size; table_index++) {
+				if (resource->added_table_resources[table_index].Compare(identifier)) {
+					resource->added_table_resources.RemoveSwapBack(table_index);
 					resource->added_table_resources.TrimPercentageDefault();
 					return true;
 				}
@@ -10201,9 +10191,9 @@ namespace ECSEngine {
 		void UISystem::ReplaceWindowDynamicResourceAllocation(unsigned int window_index, unsigned int index, const void* old_buffer, void* new_buffer)
 		{
 			UIWindowDynamicResource* resource = GetWindowDynamicElement(window_index, index);
-			for (size_t index = 0; index < resource->element_allocations.size; index++) {
-				if (resource->element_allocations[index] == old_buffer) {
-					resource->element_allocations[index] = new_buffer;
+			for (size_t table_index = 0; table_index < resource->element_allocations.size; table_index++) {
+				if (resource->element_allocations[table_index] == old_buffer) {
+					resource->element_allocations[table_index] = new_buffer;
 					return;
 				}
 			}
@@ -10236,9 +10226,9 @@ namespace ECSEngine {
 		void UISystem::ReplaceWindowDynamicResourceTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier old_identifier, ResourceIdentifier new_identifier)
 		{
 			UIWindowDynamicResource* resource = GetWindowDynamicElement(window_index, index);
-			for (size_t index = 0; index < resource->table_resources.size; index++) {
-				if (resource->table_resources[index].Compare(old_identifier)) {
-					resource->table_resources[index] = new_identifier;
+			for (size_t table_index = 0; table_index < resource->table_resources.size; table_index++) {
+				if (resource->table_resources[table_index].Compare(old_identifier)) {
+					resource->table_resources[table_index] = new_identifier;
 					return;
 				}
 			}
@@ -10250,7 +10240,7 @@ namespace ECSEngine {
 
 		void* UISystem::AllocateWindowMemoryResource(unsigned int window_index, const void* old_buffer, size_t allocation_size, size_t copy_size, unsigned int dynamic_index) {
 			void* allocation = allocation_size == 0 ? nullptr : m_memory->Allocate(allocation_size);
-			if (copy_size > 0) {
+			if (allocation != nullptr && copy_size > 0) {
 				memcpy(allocation, old_buffer, copy_size);
 			}
 
@@ -10857,7 +10847,6 @@ namespace ECSEngine {
 			ECS_UI_BORDER_TYPE border_type,
 			DockspaceType dockspace_type
 		) {
-			bool should_resize_parent = true;
 			if (dockspace_type == DockspaceType::Horizontal) {
 				ECS_ASSERT(dockspace_index >= 0 && dockspace_index < m_horizontal_dockspaces.size);
 
@@ -11361,10 +11350,6 @@ namespace ECSEngine {
 
 		bool UISystem::RepairWindowReferences(unsigned int window_index)
 		{
-			DockspaceType removed_type;
-			unsigned int removed_border;
-			UIDockspace* removed_dockspace = GetDockspaceFromWindow(window_index, removed_border, removed_type);
-
 			m_windows.RemoveSwapBack(window_index);
 			size_t swapped_index = m_windows.size;
 
@@ -12946,7 +12931,6 @@ namespace ECSEngine {
 			}
 
 			bool is_null = data->floating_dockspace == nullptr;
-			UIDockspace* _dockspace = data->floating_dockspace;
 			if (is_null) {
 				float dockspace_mask = GetDockspaceMaskFromType(dockspace_type);
 				data->floating_dockspace = system->GetFloatingDockspaceFromDockspace(dockspace, dockspace_mask, data->type);

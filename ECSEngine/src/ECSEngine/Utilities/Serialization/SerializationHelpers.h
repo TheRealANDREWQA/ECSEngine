@@ -285,13 +285,14 @@ namespace ECSEngine {
 
 	template<bool read_data>
 	ECS_INLINE size_t Read(CapacityStream<void>& stream, void* data, size_t data_size) {
+		ECS_ASSERT(data_size <= UINT_MAX, "Integer overflow on stream read.");
 		if constexpr (read_data) {
 			memcpy(data, (const void*)((uintptr_t)stream.buffer + stream.size), data_size);
-			stream.size += data_size;
+			stream.size += (unsigned int)data_size;
 			return 0;
 		}
 		else {
-			stream.size += data_size;
+			stream.size += (unsigned int)data_size;
 			return data_size;
 		}
 	}

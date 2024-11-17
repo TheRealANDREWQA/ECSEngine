@@ -1874,7 +1874,6 @@ table.Insert(format, identifier);
 						// We need to record other properties
 						ShaderReflectionConstantBufferField buffer_field;
 						ParseShaderReflectionConstantBufferField(shader_reflection, &buffer_field, identifier.buffer, next_new_line, &current_offset);
-						unsigned int previous_offset = buffer_field.pointer_offset;
 						unsigned int field_count = ConvertConstantBufferFieldToReflectionField(
 							&buffer_field,
 							reflected_fields.buffer + reflected_fields.size,

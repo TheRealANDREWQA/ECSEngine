@@ -197,12 +197,12 @@ namespace ECSEngine {
 		deserialize_options.global_component_table = &global_component_table;
 		deserialize_options.detailed_error_string = load_data->detailed_error_string;
 		deserialize_options.remove_missing_components = load_data->allow_missing_components;
-		ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_status = DeserializeEntityManager(
+		ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_entity_manager_status = DeserializeEntityManager(
 			load_data->entity_manager,
 			ptr,
 			&deserialize_options
 		);	
-		if (deserialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
+		if (deserialize_entity_manager_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
 			// Reset the database
 			database->RestoreSnapshot(asset_database_snapshot);
 			return false;
@@ -428,7 +428,6 @@ namespace ECSEngine {
 		SerializeEntityManagerGlobalComponentTable global_component_table;
 		CreateSerializeEntityManagerGlobalComponentTableAddOverrides(global_component_table, save_data->reflection_manager, stack_allocator, save_data->global_overrides);
 
-		size_t before_size = GetFileCursor(file_handle);
 		SerializeEntityManagerOptions serialize_options;
 		serialize_options.component_table = &component_table;
 		serialize_options.shared_component_table = &shared_component_table;

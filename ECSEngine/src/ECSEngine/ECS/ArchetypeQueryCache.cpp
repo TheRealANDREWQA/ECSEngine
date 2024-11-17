@@ -431,8 +431,8 @@ namespace ECSEngine {
 					query_results.results[index].Initialize(allocator, query_results.results[index].size + new_additions_for_query.size);
 					query_results.results[index].CopyOther(temporary_values);
 
-					for (size_t index = 0; index < new_additions_for_query.size; index++) {
-						query_results.results[index].Add(new_additions_for_query[index]);
+					for (size_t subindex = 0; subindex < new_additions_for_query.size; subindex++) {
+						query_results.results[index].Add(new_additions_for_query[subindex]);
 					}
 				}
 			}

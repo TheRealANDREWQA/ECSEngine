@@ -1228,10 +1228,15 @@ namespace ECSEngine {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(ECS_SIMD_BYTE_SIZE) uint64_t mask[4];
-#define LOOP_ITERATION(index) mask[index] = element_##index ? UINT64_MAX : 0; 
-		LOOP_UNROLL_4(4, LOOP_ITERATION, 0);
 
-#undef LOOP_ITERATION
+#define EXPAND(index) mask[index] = element_##index ? UINT64_MAX : 0
+
+		EXPAND(0);
+		EXPAND(1);
+		EXPAND(2);
+		EXPAND(3);
+
+#undef EXPAND
 
 		return _mm256_load_si256((const __m256i*)mask);
 	}

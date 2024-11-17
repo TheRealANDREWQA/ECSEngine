@@ -1240,7 +1240,6 @@ namespace ECSEngine {
 		const size_t STACK_CAPACITY = ECS_KB;
 
 		ECS_STACK_CAPACITY_STREAM(unsigned int, awaken_threads, STACK_CAPACITY);
-		bool all_are_sleeping = true;
 		// Record the awake threads - such that we do not push a task to a sleeping thread and wake it up
 		// Since this is unnecessary
 		for (unsigned int index = 0; index < thread_count; index++) {

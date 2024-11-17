@@ -24,7 +24,7 @@ namespace ECSEngine {
 
 			unsigned int start_size_min = min(first_start_size, second_start_size);
 			// Compare the start ranges
-			if (memcmp(first.m_queue.buffer + first.m_first_item, second.m_queue.buffer + second.m_first_item, element_size * (size_t)first_start_size) != 0) {
+			if (memcmp(first.m_queue.buffer + first.m_first_item, second.m_queue.buffer + second.m_first_item, element_size * (size_t)start_size_min) != 0) {
 				return false;
 			}
 

@@ -1015,7 +1015,6 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(DataPointer) {
-		size_t write_size = 0;
 		const DataPointer* pointer = (const DataPointer*)data->data;
 		unsigned short byte_size = pointer->GetData();
 		const void* ptr = pointer->GetPointer();

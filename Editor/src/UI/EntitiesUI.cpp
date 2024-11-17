@@ -131,9 +131,9 @@ struct HierarchyIteratorImpl {
 			else {
 				Entity entity = implementation.GetReturnValue(value, allocator);
 				entity_label.size = 0;
-				const void* component = entity_manager->TryGetComponent(entity, name_component);
-				const Name* name = (const Name*)component;
-				if (component != nullptr) {
+				const void* component_data = entity_manager->TryGetComponent(entity, name_component);
+				const Name* name = (const Name*)component_data;
+				if (name != nullptr) {
 					return name->name;
 				}
 
@@ -893,8 +893,6 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			config.flag_count = 0;
 			// Now draw the hierarchy, if there is a sandbox at all
 			if (sandbox_count > 0) {
-				EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
 				UIConfigLabelHierarchyFilter filter;
 				filter.filter = data->filter_string;
 				config.AddFlag(filter);

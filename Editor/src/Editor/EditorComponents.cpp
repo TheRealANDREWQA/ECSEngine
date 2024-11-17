@@ -656,6 +656,7 @@ void EditorComponents::RecoverData(
 			// First functor receives (void* second, const void* source, size_t copy_size) and must return how many bytes it wrote
 			// Second functor receives the void* to the new component memory and a void* to the old data
 			auto resize_archetype = [&](auto same_component_copy, auto same_component_handler) {
+				ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 256, ECS_MB);
 				for (unsigned int index = 0; index < matching_archetypes.size; index++) {
 					if (has_locks) {
 						archetype_locks[matching_archetypes[index]].Lock();
@@ -669,7 +670,7 @@ void EditorComponents::RecoverData(
 					}
 					
 					// Use this to copy the the entities into a temporary buffer since resizing a base will lose the entities
-					ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 256, ECS_MB);
+					temporary_allocator.Clear();
 
 					unsigned int base_count = archetype->GetBaseCount();
 					for (unsigned int base_index = 0; base_index < base_count; base_index++) {
@@ -950,11 +951,12 @@ void EditorComponents::RecoverData(
 		Serialize(internal_manager, old_type, data, ptr, &serialize_options);
 		entity_manager->UnregisterGlobalComponentCommit(component);
 
-		ECS_STACK_VOID_STREAM(stack_allocation, 4096);
-		ECS_ASSERT(new_size < stack_allocation.capacity);
+		ECS_STACK_VOID_STREAM(global_data_stack_allocation, 4096);
+		// We are going to deserialize directly into the component data later on
+		ECS_ASSERT(new_size < global_data_stack_allocation.capacity);
 
 		// Register the component first, such that we have a valid allocator
-		entity_manager->RegisterGlobalComponentCommit(component, new_size, stack_allocation.buffer, current_type->name, new_allocator_size);
+		entity_manager->RegisterGlobalComponentCommit(component, new_size, global_data_stack_allocation.buffer, current_type->name, new_allocator_size);
 
 		if (new_allocator_size != -1) {
 			MemoryArena* arena = entity_manager->GetGlobalComponentAllocator(component);	

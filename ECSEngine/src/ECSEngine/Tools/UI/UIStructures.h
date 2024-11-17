@@ -453,7 +453,7 @@ namespace ECSEngine {
 				return { scale_x[index], scale_y[index] };
 			}
 
-			ECS_INLINE UIActionHandler GetActionFromIndex(unsigned int index) const {
+			ECS_INLINE const UIActionHandler& GetActionFromIndex(unsigned int index) const {
 				return action[index];
 			}
 

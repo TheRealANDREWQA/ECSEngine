@@ -446,9 +446,9 @@ namespace ECSEngine {
 					parse_data->thread_memory.size += before_type_range.size + after_type_range.size + before_name_range.size + after_name_range.size + string_to_add.size + 2;
 				}
 				else {
-					Stream<char> copy_range = { previous_line, PointerDifference(next_line, previous_line) + 1 };
-					copy_range.CopyTo(copy_pointer);
-					parse_data->thread_memory.size += copy_range.size;
+					Stream<char> copy_line_range = { previous_line, PointerDifference(next_line, previous_line) + 1 };
+					copy_line_range.CopyTo(copy_pointer);
+					parse_data->thread_memory.size += copy_line_range.size;
 				}
 			}
 
@@ -1013,11 +1013,11 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 		void ReflectionManager::AddKnownBlittableExceptions()
 		{
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-			ECS_STACK_CAPACITY_STREAM(BlittableType, blittable_types, 64);
-			GetKnownBlittableExceptions(&blittable_types, &stack_allocator);
+			ECS_STACK_CAPACITY_STREAM(BlittableType, known_blittable_types, 64);
+			GetKnownBlittableExceptions(&known_blittable_types, &stack_allocator);
 
-			for (unsigned int index = 0; index < blittable_types.size; index++) {
-				AddBlittableException(blittable_types[index].name, blittable_types[index].byte_size, blittable_types[index].alignment, blittable_types[index].default_data);
+			for (unsigned int index = 0; index < known_blittable_types.size; index++) {
+				AddBlittableException(known_blittable_types[index].name, known_blittable_types[index].byte_size, known_blittable_types[index].alignment, known_blittable_types[index].default_data);
 			}
 		}
 
@@ -1471,14 +1471,15 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 							index--;
 						}
 						else {
-							size_t field_index = 0;
-							for (; field_index < type->fields.size; field_index++) {
+							bool has_user_defined_fields = false;
+							for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
 								if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+									has_user_defined_fields = true;
 									break;
 								}
 							}
 
-							if (field_index == type->fields.size) {
+							if (!has_user_defined_fields) {
 								// No user defined type as basic stream type or basic type array
 								// Can calculate the cached parameters
 								calculate_cached_parameters(type, skipped_fields);
@@ -1575,7 +1576,7 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 												}
 											}
 
-											if (byte_size_alignment.x != 0 && byte_size_alignment.x != 0) {
+											if (byte_size_alignment.x != 0 && byte_size_alignment.y != 0) {
 												if (stream_type == ReflectionStreamFieldType::Basic || stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 													if (stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 														// Update the byte size
@@ -3275,8 +3276,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ReflectionEnum enum_definition;
 			enum_definition.name = name;
 
-			// find next line tokens and exclude the next after the opening paranthese and replace
-			// the closing paranthese with \0 in order to stop searching there
+			// Find next line tokens and exclude the next after the opening paranthese and replace
+			// The closing paranthese with \0 in order to stop searching there
 			ECS_STACK_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
 
 			const char* dummy_space = strchr(opening_parenthese, '\n') + 1;
@@ -3285,9 +3286,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			*closing_paranthese_mutable = '\0';
 			FindToken({ dummy_space, PointerDifference(closing_parenthese, dummy_space) }, '\n', next_line_positions_addition);
 
-			// assign the subname stream and assert enough memory to hold the pointers
+			// Assign the subname stream and assert enough memory to hold the pointers
 			uintptr_t ptr = (uintptr_t)data->thread_memory.buffer + data->thread_memory.size;
-			uintptr_t before_ptr = ptr;
 			ptr = AlignPointer(ptr, alignof(ReflectionEnum));
 			enum_definition.original_fields = Stream<Stream<char>>((void*)ptr, 0);
 
@@ -3550,7 +3550,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				// assigning the field stream
 				uintptr_t ptr = (uintptr_t)data->thread_memory.buffer + data->thread_memory.size;
-				uintptr_t ptr_before = ptr;
 				ptr = AlignPointer(ptr, alignof(ReflectionField));
 				type.fields = Stream<ReflectionField>((void*)ptr, 0);
 				data->thread_memory.size += sizeof(ReflectionField) * semicolon_positions.size + alignof(ReflectionField);
@@ -4338,7 +4337,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			auto processing = [&](const char* basic_type) {
-				size_t type_size = strlen(basic_type);
 				GetReflectionFieldInfo(data, basic_type, field);
 
 				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
@@ -6948,7 +6946,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				size_t soa_index = GetReflectionTypeSoaIndex(deep_field.type, deep_field.field_index);
 				const ReflectionTypeMiscSoa& soa = deep_field.type->misc_info[soa_index].soa;
 				
-				unsigned short initial_offset = deep_field.type_offset_from_original;
 				short size_offset_direction = (short)deep_field.type->fields[soa.size_field].info.pointer_offset -
 					(short)field.info.pointer_offset;
 				size_t soa_size = ConvertToSizetFromBasic(deep_field.type->fields[soa.size_field].info.basic_type, OffsetPointer(pointer_start, size_offset_direction));

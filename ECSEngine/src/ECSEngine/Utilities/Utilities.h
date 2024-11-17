@@ -394,11 +394,11 @@ namespace ECSEngine {
 		return data;
 	}
 
-	// It uses ECS_ALIGNED_MALLOC, it needs to be deallocated with Free
+	// It uses Malloc, it needs to be deallocated with Free
 	ECS_INLINE void* CopyNonZeroMalloc(const void* data, size_t data_size, size_t alignment = alignof(void*)) {
 		if (data_size > 0) {
-			void* allocation = ECS_ALIGNED_MALLOC(data_size, alignment);
-			if (data != nullptr) {
+			void* allocation = Malloc(data_size, alignment);
+			if (allocation != nullptr) {
 				memcpy(allocation, data, data_size);
 			}
 			return allocation;

@@ -540,11 +540,11 @@ static void FileExplorerDeleteSelection(ActionData* action_data) {
 		else {
 			unsigned int copy_index = FindString(data->selected_files[index], data->copied_files);
 			if (copy_index != -1) {
-				for (size_t index = 0; index < valid_copy_files.size; index++) {
-					if (valid_copy_files[index] == copy_index) {
-						valid_copy_files.RemoveSwapBack(index);
-						// exit the loop
-						index = valid_copy_files.size;
+				for (size_t valid_index = 0; valid_index < valid_copy_files.size; valid_index++) {
+					if (valid_copy_files[valid_index] == copy_index) {
+						valid_copy_files.RemoveSwapBack(valid_index);
+						// Exit the loop
+						break;
 					}
 				}
 			}
@@ -601,10 +601,10 @@ static void FileExplorerSelectFromIndexNothing(FileExplorerData* data, unsigned 
 
 static void FileExplorerSelectFromIndexShift(FileExplorerData* data, unsigned int index, Stream<wchar_t> path) {
 	if (data->starting_shift_index <= index && index <= data->ending_shift_index) {
-		unsigned int index = data->selected_files.ReserveRange();
-		void* new_allocation = Allocate(data->selected_files.allocator, data->selected_files[index].MemoryOf(path.size));
-		data->selected_files[index].InitializeFromBuffer(new_allocation, path.size);
-		data->selected_files[index].CopyOther(path);
+		unsigned int selected_index = data->selected_files.ReserveRange();
+		void* new_allocation = Allocate(data->selected_files.allocator, data->selected_files[selected_index].MemoryOf(path.size));
+		data->selected_files[selected_index].InitializeFromBuffer(new_allocation, path.size);
+		data->selected_files[selected_index].CopyOther(path);
 	}
 }
 
@@ -1540,16 +1540,16 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, UIDrawerDescriptor*
 }
 
 unsigned int CreateFileExplorerSelectOverwriteFiles(UISystem* system, FileExplorerSelectOverwriteFilesData data) {
-	constexpr float2 WINDOW_SIZE = { 0.5f, 1.0f };
+	constexpr float2 OVERWITE_WINDOW_SIZE = { 0.5f, 1.0f };
 
 	UIWindowDescriptor descriptor;
 
 	descriptor.draw = FileExplorerSelectOverwriteFilesDraw;
 
-	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.x);
-	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.y);
-	descriptor.initial_size_x = WINDOW_SIZE.x;
-	descriptor.initial_size_y = WINDOW_SIZE.y;
+	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, OVERWITE_WINDOW_SIZE.x);
+	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, OVERWITE_WINDOW_SIZE.y);
+	descriptor.initial_size_x = OVERWITE_WINDOW_SIZE.x;
+	descriptor.initial_size_y = OVERWITE_WINDOW_SIZE.y;
 
 	descriptor.window_data = &data;
 	descriptor.window_data_size = sizeof(data);
@@ -2623,10 +2623,10 @@ data->file_functors.Insert(action, identifier);
 					Stream<wchar_t> path;
 				};
 
-				OnRightClickData action_data;
-				action_data.editor_state = _data->editor_state;
-				action_data.path = stream_path;
-				action_data.index = _data->element_count;
+				OnRightClickData right_click_action_data;
+				right_click_action_data.editor_state = _data->editor_state;
+				right_click_action_data.path = stream_path;
+				right_click_action_data.index = _data->element_count;
 
 				auto OnRightClickAction = [](ActionData* action_data) {
 					UI_UNPACK_ACTION_DATA;
@@ -2649,7 +2649,7 @@ data->file_functors.Insert(action, identifier);
 				clickable_actions.handlers[1] = drawer->PrepareRightClickMenuHandler(
 					right_click_menu_name, 
 					&main_state, 
-					{ OnRightClickAction, &action_data, sizeof(action_data) },
+					{ OnRightClickAction, &right_click_action_data, sizeof(right_click_action_data) },
 					drawer->SnapshotRunnableAllocator()
 				);
 				clickable_actions.button_types[1] = ECS_MOUSE_RIGHT;

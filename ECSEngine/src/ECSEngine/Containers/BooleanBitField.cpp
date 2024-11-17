@@ -38,7 +38,7 @@ namespace ECSEngine {
 	}
 
 	size_t BooleanBitField::MemoryOf(size_t number) {
-		return number >> 3 + ((number & 7) == 0);
+		return (number >> 3) + ((number & 7) != 0);
 	}
 
 
