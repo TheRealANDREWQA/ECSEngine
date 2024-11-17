@@ -2319,8 +2319,16 @@ namespace ECSEngine {
 					input->SetNewZoom(*zoom_ptr);
 				}
 
+				bool was_font_color_changed = true;
 				if (!is_active) {
-					font_color = color_theme.unavailable_text;
+					if (configuration & UI_CONFIG_TEXT_PARAMETERS) {
+						// Reduce the alpha when the color is specified
+						font_color.alpha *= 0.7f;
+					}
+					else {
+						font_color = color_theme.unavailable_text;
+					}
+					was_font_color_changed = true;
 				}
 				input->text_color = font_color;
 
@@ -2334,6 +2342,18 @@ namespace ECSEngine {
 
 				if (input->text->size > 0) {
 					characters_to_draw = { input->text->buffer + input->sprite_render_offset, input->text->size - input->sprite_render_offset };
+					if (was_font_color_changed) {
+						// Change the text color
+						UIConfigTextParameters text_parameters;
+						text_parameters.color = font_color;
+						text_parameters.size = font_size;
+						text_parameters.character_spacing = character_spacing;
+
+						UIConfigTextParameters previous_text_parameters;
+						SetConfigParameter(configuration, label_config, text_parameters, previous_text_parameters);
+						label_configuration |= UI_CONFIG_TEXT_PARAMETERS;
+						// We don't need to restore the parameter because we use a temporary label config
+					}
 				}
 				else {
 					characters_to_draw = input->hint_text;
@@ -2346,9 +2366,10 @@ namespace ECSEngine {
 					text_parameters.size = font_size;
 					text_parameters.character_spacing = character_spacing;
 
-					UIConfigTextParameters previous_parameters;
-					SetConfigParameter(configuration, label_config, text_parameters, previous_parameters);
+					UIConfigTextParameters previous_text_parameters;
+					SetConfigParameter(configuration, label_config, text_parameters, previous_text_parameters);
 					label_configuration |= UI_CONFIG_TEXT_PARAMETERS;
+					// We don't need to restore the parameter because we use a temporary label config
 				}
 
 				UIConfigTextAlignment text_alignment;
