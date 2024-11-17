@@ -1000,7 +1000,6 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			}
 
 			// Check to see if the mouse moved
-			uint2 hovered_texel_offset = system->GetWindowTexelPositionClamped(window_index, mouse_position);
 			if (!data->is_selection_mode) {
 				float2 mouse_difference = BasicTypeAbsoluteDifference(mouse_position, data->click_ui_position);
 				if (mouse_difference.x > CLICK_SELECTION_MARGIN_X || mouse_difference.y > CLICK_SELECTION_MARGIN_Y) {

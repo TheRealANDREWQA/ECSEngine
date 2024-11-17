@@ -999,9 +999,9 @@ namespace ECSEngine {
 		for (size_t index = 0; index < node_count; index++) {
 			if (nodes[index].mesh != nullptr) {
 				// No matter what if the material is present or not, we should
-				bool was_loaded = LoadMaterialFromGLTF(materials->buffer[materials->size], allocator, nodes, index, error_message);
-				materials->size++;
 				materials->AssertCapacity();
+				LoadMaterialFromGLTF(materials->buffer[materials->size], allocator, nodes, index, error_message);
+				materials->size++;
 			}
 		}
 
@@ -1419,7 +1419,6 @@ namespace ECSEngine {
 				ECS_GRAPHICS_CPU_ACCESS_WRITE,
 				misc_flags
 			);
-			size_t vertex_buffer_offset = 0;
 
 			// Map the current buffer and then write into it
 			void* mapped_data = graphics->MapBuffer(vertex_buffer.buffer);

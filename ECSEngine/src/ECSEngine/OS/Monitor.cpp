@@ -62,7 +62,6 @@ namespace ECSEngine {
 			// Enumerate all the positions
 			EnumerateMonitorFromCursorData enumerate_data = { cursor_position, nullptr };
 			bool success = EnumerateMonitors(EnumerateMonitorFromCursor, &enumerate_data);
-			GetLastError();
 			ECS_ASSERT(success);
 			return enumerate_data.monitor_handle;
 		}

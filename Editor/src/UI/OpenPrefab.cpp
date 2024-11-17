@@ -63,8 +63,7 @@ static bool InitializePrefabSandboxInformation(OpenPrefabActionData* action_data
 	}
 	else {
 		DestroySandbox(editor_state, create_sandbox_index);
-		Stream<wchar_t> prefab_path = GetPrefabPath(editor_state, action_data->prefab_id);
-		ECS_FORMAT_TEMP_STRING(message, "Failed to load prefab {#} for preview", prefab_path);
+		ECS_FORMAT_TEMP_STRING(message, "Failed to load prefab {#} for preview", prefab_relative_path);
 		EditorSetConsoleError(message);
 
 		// Unlock the launching sandbox

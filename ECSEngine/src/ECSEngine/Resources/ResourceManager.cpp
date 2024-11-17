@@ -951,9 +951,6 @@ namespace ECSEngine {
 	{
 		NULL_TERMINATE_WIDE(filename);
 
-		ID3D11ShaderResourceView* texture_view = nullptr;
-		ID3D11Resource* resource = nullptr;
-
 		// Determine the texture extension - HDR textures must take a different path
 		Stream<wchar_t> texture_path = filename;
 		Path extension = PathExtensionBoth(texture_path);
@@ -2999,7 +2996,7 @@ namespace ECSEngine {
 		extra_info.Lock(resource_manager);
 		__try {
 			if (options.reload_vertex_shader) {
-				bool success = LoadUserMaterialVertexShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
+				success = LoadUserMaterialVertexShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
 				if (!success) {
 					// Deallocate the material
 					//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
@@ -3011,7 +3008,7 @@ namespace ECSEngine {
 			}
 
 			if (options.reload_pixel_shader) {
-				bool success = LoadUserMaterialPixelShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
+				success = LoadUserMaterialPixelShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
 				if (!success) {
 					// We don't have to unload the vertex shader if it was reloaded - that is not the correct behaviour
 					// Deallocate the material
@@ -3024,7 +3021,7 @@ namespace ECSEngine {
 			}
 
 			if (options.reload_textures) {
-				bool success = LoadUserMaterialTextures(resource_manager, new_user_material, &temporary_material, load_descriptor);
+				success = LoadUserMaterialTextures(resource_manager, new_user_material, &temporary_material, load_descriptor);
 				if (!success) {
 					// We don't have to unload the shaders if they were reloaded - that is not the correct behaviour
 					// Deallocate the material

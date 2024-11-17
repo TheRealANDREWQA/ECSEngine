@@ -214,8 +214,6 @@ namespace ECSEngine {
 	};
 
 	ECS_THREAD_WRAPPER_TASK(StaticTaskSchedulerWrapper) {
-		TaskScheduler* scheduler = world->task_scheduler;
-
 		// The waiting was moved to the task manager - it now has a barrier
 
 		// Can now call the thread function
@@ -530,7 +528,7 @@ namespace ECSEngine {
 				group_string.AddAssert('\n');
 				string.AddStream(group_string);
 
-				for (unsigned int index = start; index < end; index++) {
+				for (index = start; index < end; index++) {
 					ECS_STACK_CAPACITY_STREAM(char, element_string, ECS_KB * 4);
 
 					Stream<char> task_name = elements[index].task_name;

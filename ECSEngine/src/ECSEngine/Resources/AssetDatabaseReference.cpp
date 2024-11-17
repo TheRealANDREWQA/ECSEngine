@@ -140,9 +140,9 @@ namespace ECSEngine {
 		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 		unsigned int handle = database->FindAsset(name, file, type);
 		if (handle != -1) {
-			unsigned int index = (unsigned int)SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(unsigned int));
-			if (index != -1) {
-				return { index, type };
+			unsigned int main_index = (unsigned int)SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(unsigned int));
+			if (main_index != -1) {
+				return { main_index , type };
 			}
 
 			// If it can be referenced, continue
@@ -407,12 +407,12 @@ namespace ECSEngine {
 			new_asset.vertex_shader_handle = get_new_handle(current_asset->vertex_shader_handle, ECS_ASSET_SHADER);
 			new_asset.pixel_shader_handle = get_new_handle(current_asset->pixel_shader_handle, ECS_ASSET_SHADER);
 
-			for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
-				for (size_t subindex = 0; subindex < current_asset->textures[type].size; subindex++) {
-					new_asset.textures[type][subindex].metadata_handle = get_new_handle(current_asset->textures[type][subindex].metadata_handle, ECS_ASSET_TEXTURE);
+			for (size_t shader_type = 0; shader_type < ECS_MATERIAL_SHADER_COUNT; shader_type++) {
+				for (size_t subindex = 0; subindex < current_asset->textures[shader_type].size; subindex++) {
+					new_asset.textures[shader_type][subindex].metadata_handle = get_new_handle(current_asset->textures[shader_type][subindex].metadata_handle, ECS_ASSET_TEXTURE);
 				}
-				for (size_t subindex = 0; subindex < current_asset->samplers[type].size; subindex++) {
-					new_asset.samplers[type][subindex].metadata_handle = get_new_handle(current_asset->samplers[type][subindex].metadata_handle, ECS_ASSET_GPU_SAMPLER);
+				for (size_t subindex = 0; subindex < current_asset->samplers[shader_type].size; subindex++) {
+					new_asset.samplers[shader_type][subindex].metadata_handle = get_new_handle(current_asset->samplers[shader_type][subindex].metadata_handle, ECS_ASSET_GPU_SAMPLER);
 				}
 			}
 			out_database->AddAssetInternal(&new_asset, ECS_ASSET_MATERIAL, reference_count);
@@ -506,7 +506,7 @@ namespace ECSEngine {
 					// to decrement the reference count there as well
 					unsigned int this_database_reference_count = database->GetReferenceCount(this_database_handle, current_type);
 					if (this_database_reference_count - difference > 0) {
-						for (unsigned int index = 0; index < difference; index++) {
+						for (unsigned int increment_index = 0; increment_index < difference; increment_index++) {
 							// Decrement the reference count
 							database->RemoveAsset(this_database_handle, current_type);
 						}

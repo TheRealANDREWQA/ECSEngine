@@ -308,7 +308,6 @@ namespace ECSEngine {
 		ECS_ASSERT(state->m_character_queue.GetSize() <= MAX_KEYBOARD_CHARACTER_QUEUE_ENTIRE_COUNT);
 		ECS_ASSERT(state->m_alphanumeric_keys.size <= MAX_KEYBOARD_ALPHANUMERIC_ENTIRE_COUNT);
 
-		size_t offset = write_instrument->GetOffset();
 		ECS_INPUT_SERIALIZE_TYPE input_type = ECS_INPUT_SERIALIZE_KEYBOARD;
 		if (!write_instrument->Write(&input_type)) {
 			return false;
@@ -346,7 +345,6 @@ namespace ECSEngine {
 			return false;
 		}
 
-		size_t new_offset = write_instrument->GetOffset();
 		return true;
 	}
 

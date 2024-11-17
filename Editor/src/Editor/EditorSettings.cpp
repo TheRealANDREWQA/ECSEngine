@@ -62,9 +62,9 @@ void AutoDetectCompilers(AllocatorPolymorphic allocator, AdditionStream<Compiler
 				unsigned int initial_path_size = default_path.size;
 				// Consider only the directories that are numbers
 				for (unsigned int index = 0; index < folders.size; index++) {
-					bool success = false;
-					int64_t year = ConvertCharactersToIntStrict(folders[index], success);
-					if (success) {
+					bool convert_success = false;
+					int64_t year = ConvertCharactersToIntStrict(folders[index], convert_success);
+					if (convert_success) {
 						// Sanity Clamp
 						if (year >= 2010 && year < 2100) {
 							default_path.size = initial_path_size;
@@ -83,10 +83,10 @@ void AutoDetectCompilers(AllocatorPolymorphic allocator, AdditionStream<Compiler
 									ConvertWideCharsToASCII(available_tiers[subindex], aggregated);
 									Stream<char> tier = aggregated;
 									aggregated.AddAssert(' ');
-									size_t written_count = ConvertIntToChars(aggregated, year);
-									Stream<char> year = aggregated.SliceAt(aggregated.size - written_count);
 
-									compiler_versions.Add({ aggregated, year, tier, default_path.Copy(allocator) });
+									size_t written_count = ConvertIntToChars(aggregated, year);
+									Stream<char> year_string = aggregated.SliceAt(aggregated.size - written_count);
+									compiler_versions.Add({ aggregated, year_string, tier, default_path.Copy(allocator) });
 								}
 							};
 						}

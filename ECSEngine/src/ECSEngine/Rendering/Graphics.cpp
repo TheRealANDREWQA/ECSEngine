@@ -554,7 +554,7 @@ namespace ECSEngine {
 		ECS_CRASH_CONDITION(SUCCEEDED(result), "Creating deferred context failed!");
 
 		if (HasFlag(flags, D3D11_CREATE_DEVICE_DEBUG)) {
-			HRESULT result = m_device->QueryInterface(__uuidof(ID3D11Debug), (void**)(&m_debug_device));
+			result = m_device->QueryInterface(__uuidof(ID3D11Debug), (void**)(&m_debug_device));
 			if (FAILED(result)) {
 				m_debug_device = nullptr;
 			}
@@ -6106,7 +6106,7 @@ namespace ECSEngine {
 				current_mesh.mapping_count = 0;
 			}
 
-			size_t submesh_count = get_submesh_count(meshes[index]);
+			submesh_count = get_submesh_count(meshes[index]);
 			for (size_t submesh_index = 0; submesh_index < submesh_count; submesh_index++) {
 				Submesh current_submesh = get_submesh(meshes[index], submesh_index);
 

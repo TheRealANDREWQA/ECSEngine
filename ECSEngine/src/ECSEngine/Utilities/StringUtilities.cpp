@@ -153,7 +153,6 @@ namespace ECSEngine {
 	size_t ConvertDurationToChars(size_t duration, CapacityStream<char>& characters)
 	{
 		unsigned int initial_size = characters.size;
-		const char* string = nullptr;
 
 		// less than 10 seconds
 		if (duration < 10000) {
@@ -550,7 +549,6 @@ namespace ECSEngine {
 	) {
 		const CharacterType* current_closed = start_character - 1;
 		const CharacterType* current_opened = start_character - 1;
-		bool initial_zero = opened_count == 0;
 
 		auto iteration = [&]() {
 			current_opened = current_closed;
@@ -1794,8 +1792,6 @@ namespace ECSEngine {
 				value = -value;
 			}
 
-			size_t starting_swap_index = chars.size;
-
 			ECS_STACK_CAPACITY_STREAM(char, temp_characters, 128);
 			if (value == 0) {
 				chars[chars.size++] = '0';
@@ -1817,7 +1813,6 @@ namespace ECSEngine {
 				}
 			}
 			chars[chars.size] = '\0';
-
 			return chars.size - initial_size;
 		}
 		// Wide implementation - convert to a ASCII stack buffer then commit wides to the stream
@@ -1976,17 +1971,27 @@ namespace ECSEngine {
 	// it searches for spaces and next line characters
 	template<typename WordStream>
 	void FindWhitespaceCharacters(WordStream& spaces, Stream<char> string, char separator_token) {
-		size_t position = 0;
-
 		Stream<char> token_stream = FindFirstCharacter(string, separator_token);
 		Stream<char> new_line_stream = FindFirstCharacter(string, '\n');
+
+		auto add_value = [&](unsigned int value) {
+			if constexpr (is_instance_of_v<WordStream, Stream> || is_instance_of_v<WordStream, ResizableStream>) {
+				spaces.Add(value);
+			}
+			else if constexpr (is_instance_of_v<WordStream, CapacityStream>) {
+				spaces.AddAssert(value);
+			}
+			else {
+				static_assert(false, "FindWhitespaceCharacters invalid template parameter");
+			}
+		};
 
 		while (token_stream.buffer != nullptr && new_line_stream.buffer != nullptr) {
 			unsigned int token_difference = token_stream.buffer - string.buffer;
 			unsigned int new_line_difference = new_line_stream.buffer - string.buffer;
 
 			if (token_difference < new_line_difference) {
-				spaces.Add(token_difference);
+				add_value(token_difference);
 
 				token_stream.buffer += 1;
 				token_stream.size -= 1;
@@ -1994,7 +1999,7 @@ namespace ECSEngine {
 				token_stream = FindFirstCharacter(token_stream, separator_token);
 			}
 			else {
-				spaces.Add(new_line_difference);
+				add_value(new_line_difference);
 
 				new_line_stream.buffer += 1;
 				new_line_stream.size -= 1;
@@ -2004,7 +2009,7 @@ namespace ECSEngine {
 		}
 
 		while (token_stream.buffer != nullptr) {
-			spaces.Add(token_stream.buffer - string.buffer);
+			add_value(token_stream.buffer - string.buffer);
 
 			token_stream.buffer += 1;
 			token_stream.size -= 1;
@@ -2012,7 +2017,7 @@ namespace ECSEngine {
 		}
 
 		while (new_line_stream.buffer != nullptr) {
-			spaces.Add(new_line_stream.buffer - string.buffer);
+			add_value(new_line_stream.buffer - string.buffer);
 
 			new_line_stream.buffer += 1;
 			new_line_stream.size -= 1;

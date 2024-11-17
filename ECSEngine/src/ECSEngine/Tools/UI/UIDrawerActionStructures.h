@@ -157,7 +157,7 @@ namespace ECSEngine {
 			float bound;
 			Color text_color;
 			unsigned int current_sprite_position;
-			int current_selection;
+			unsigned int current_selection;
 			unsigned int sprite_render_offset;
 			Timer caret_start;
 			Timer key_repeat_start;

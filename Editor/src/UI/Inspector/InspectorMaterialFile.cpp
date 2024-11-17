@@ -1147,8 +1147,6 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 					drawer->NextRow();
 				}
 				else if (data->cbuffers[order].size > 0) {
-					ECS_STACK_CAPACITY_STREAM(char, ui_instance_name, 512);
-
 					unsigned int shader_handle = GetShaderHandle(data, order);
 					for (size_t index = 0; index < data->cbuffers[order].size; index++) {
 						ECS_STACK_CAPACITY_STREAM(char, ui_instance_name, 512);

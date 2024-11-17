@@ -507,8 +507,8 @@ namespace ECSEngine {
 				}
 			}
 
-			unsigned int visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
 			input->current_sprite_position = input->current_sprite_position < input->sprite_render_offset ? input->sprite_render_offset : input->current_sprite_position;
+			//unsigned int visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
 			//input->current_sprite_position = input->current_sprite_position > input->sprite_render_offset + visible_sprites ? input->sprite_render_offset + visible_sprites : input->current_sprite_position;
 
 			auto right_action = [&]() {
@@ -1626,7 +1626,6 @@ namespace ECSEngine {
 					unsigned int visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
 					if (keyboard->IsUp(ECS_KEY_LEFT_SHIFT) && input->current_sprite_position < input->current_selection) {
 						input->current_sprite_position = input->current_selection;
-						unsigned int visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
 						while (input->sprite_render_offset + visible_sprites < input->current_sprite_position) {
 							input->sprite_render_offset++;
 							visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
@@ -1751,14 +1750,12 @@ namespace ECSEngine {
 							remove_info->text_count = *backspace_text_count;
 							remove_info->deallocate_data = true;
 							remove_info->deallocate_buffer = remove_info;
-							unsigned char* info_text = (unsigned char*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo));
-							memcpy(info_text, backspace_text.buffer, *backspace_text_count);
-							info_text[*backspace_text_count] = '\0';
+							unsigned char* command_text = (unsigned char*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo));
+							memcpy(command_text, backspace_text.buffer, *backspace_text_count);
+							command_text[*backspace_text_count] = '\0';
 
 							AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
 						}
-
-						size_t text_size = input->text->size;
 
 						if (input->text->size + characters.size <= input->text->capacity) {
 							unsigned char revert_info_data[revert_command_stack_size];
@@ -1799,9 +1796,9 @@ namespace ECSEngine {
 						remove_info->text_position = input->current_sprite_position;
 						remove_info->deallocate_data = true;
 						remove_info->deallocate_buffer = remove_info;
-						unsigned char* info_text = (unsigned char*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo));
-						memcpy((void*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo)), backspace_text.buffer, *backspace_text_count);
-						info_text[*backspace_text_count] = '\0';
+						unsigned char* command_text = (unsigned char*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo));
+						memcpy(command_text, backspace_text.buffer, *backspace_text_count);
+						command_text[*backspace_text_count] = '\0';
 
 						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
 					}
@@ -1842,9 +1839,9 @@ namespace ECSEngine {
 						remove_info->text_position = input->current_sprite_position;
 						remove_info->deallocate_data = true;
 						remove_info->deallocate_buffer = remove_info;
-						unsigned char* info_text = (unsigned char*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo));
-						memcpy(info_text, backspace_text.buffer, *backspace_text_count);
-						info_text[*backspace_text_count] = '\0';
+						unsigned char* command_text = (unsigned char*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo));
+						memcpy(command_text, backspace_text.buffer, *backspace_text_count);
+						command_text[*backspace_text_count] = '\0';
 
 						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
 					}
@@ -1868,12 +1865,12 @@ namespace ECSEngine {
 
 							replace_info->input = input;
 							replace_info->replaced_text_count = deleted_character_count;
-							char* info_text = (char*)((uintptr_t)replace_info + sizeof(UIDrawerTextInputReplaceCommandInfo));
+							char* command_text = (char*)((uintptr_t)replace_info + sizeof(UIDrawerTextInputReplaceCommandInfo));
 							replace_info->text_position = delete_position;
 							replace_info->text_count = character_count;
 							replace_info->deallocate_buffer = replace_info;
-							memcpy(info_text, deleted_characters.buffer, deleted_character_count);
-							info_text[deleted_character_count] = '\0';
+							memcpy(command_text, deleted_characters.buffer, deleted_character_count);
+							command_text[deleted_character_count] = '\0';
 
 							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, input);
 						}
@@ -1966,7 +1963,7 @@ namespace ECSEngine {
 					slider->enter_value_click = std::chrono::high_resolution_clock::now();
 				}
 				else if (keyboard->IsPressed(ECS_KEY_ENTER)) {
-					bool is_valid_data = terminate_lambda();
+					terminate_lambda();
 					system->m_focused_window_data.ResetGeneralHandler();
 				}
 				else {
@@ -2689,13 +2686,13 @@ namespace ECSEngine {
 					if (current_line_index < state->separation_line_count) {
 						if (index == state->separation_lines[current_line_index]) {
 							UIDrawConfig line_config;
-							UIConfigAbsoluteTransform transform;
-							transform.scale.x = drawer.region_scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x;
-							transform.scale.y = system->GetPixelSizeY();
-							transform.position = drawer.GetCurrentPosition();
-							transform.position.x += system->m_descriptors.misc.tool_tip_padding.x;
+							UIConfigAbsoluteTransform line_transform;
+							line_transform.scale.x = drawer.region_scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x;
+							line_transform.scale.y = system->GetPixelSizeY();
+							line_transform.position = drawer.GetCurrentPosition();
+							line_transform.position.x += system->m_descriptors.misc.tool_tip_padding.x;
 
-							line_config.AddFlag(transform);
+							line_config.AddFlag(line_transform);
 							drawer.CrossLine(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_CROSS_LINE_DO_NOT_INFER | UI_CONFIG_DO_NOT_ADVANCE, line_config);
 							current_line_index++;
 						}
@@ -2718,7 +2715,6 @@ namespace ECSEngine {
 					for (size_t index = 0; index < state->row_count; index++) {
 						float2 current_position = drawer.GetCurrentPositionNonOffset();
 
-						auto system = drawer.GetSystem();
 						if (state->unavailables == nullptr || (state->unavailables != nullptr && !state->unavailables[index])) {
 							LABEL_CONFIGURATION = ClearFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
 							draw_label(index, state->right_row_substreams, state->right_characters);
@@ -2756,9 +2752,9 @@ namespace ECSEngine {
 				if (!UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
 					if (state->windows->size > state->submenu_index) {
 						UIDrawerMenuCleanupSystemHandlerData cleanup_data;
-						unsigned int last_index = state->submenu_index +
-							((state->row_has_submenu != nullptr) && state->row_has_submenu[data->row_index]) *
-							((state->unavailables == nullptr) || (!state->unavailables[data->row_index]));
+						//unsigned int last_index = state->submenu_index +
+						//	((state->row_has_submenu != nullptr) && state->row_has_submenu[data->row_index]) *
+						//	((state->unavailables == nullptr) || (!state->unavailables[data->row_index]));
 						unsigned int first_index = state->submenu_index + 1;
 						if (first_index < state->windows->size) {
 							cleanup_data.window_count = state->windows->size - first_index;
@@ -3291,9 +3287,6 @@ namespace ECSEngine {
 			UIDrawerPathInputFolderActionData* data = (UIDrawerPathInputFolderActionData*)_data;
 			OS::FileExplorerGetFileData get_data;
 
-			const unsigned int FOLDER_PATH_MAX_SIZE = 512;
-			wchar_t folder_path[FOLDER_PATH_MAX_SIZE];
-
 			const unsigned int ERROR_MESSAGE_SIZE = 128;
 			char error_message[ERROR_MESSAGE_SIZE];
 			get_data.path = *data->path;
@@ -3322,7 +3315,7 @@ namespace ECSEngine {
 				if (is_valid) {
 					// Update the input
 					data->input->DeleteAllCharacters();
-					ECS_STACK_CAPACITY_STREAM(char, temp_conversion_characters, FOLDER_PATH_MAX_SIZE);
+					ECS_STACK_CAPACITY_STREAM(char, temp_conversion_characters, 512);
 					ConvertWideCharsToASCII(get_data.path, temp_conversion_characters);
 					data->input->InsertCharacters(temp_conversion_characters.buffer, temp_conversion_characters.size, 0, system);
 					data->path->size = get_data.path.size;
@@ -3343,9 +3336,6 @@ namespace ECSEngine {
 
 			UIDrawerPathInputFolderActionData* data = (UIDrawerPathInputFolderActionData*)_data;
 			OS::FileExplorerGetDirectoryData get_data;
-
-			const unsigned int FOLDER_PATH_MAX_SIZE = 512;
-			wchar_t folder_path[FOLDER_PATH_MAX_SIZE];
 			
 			const unsigned int ERROR_MESSAGE_SIZE = 128;
 			char error_message[ERROR_MESSAGE_SIZE];
@@ -3375,7 +3365,7 @@ namespace ECSEngine {
 				if (is_valid) {
 					// Update the input and copy the characters
 					data->input->DeleteAllCharacters();
-					ECS_STACK_CAPACITY_STREAM(char, temp_conversion_characters, FOLDER_PATH_MAX_SIZE);
+					ECS_STACK_CAPACITY_STREAM(char, temp_conversion_characters, 512);
 					ConvertWideCharsToASCII(get_data.path, temp_conversion_characters);
 					data->input->InsertCharacters(temp_conversion_characters.buffer, temp_conversion_characters.size, 0, system);
 					data->path->size = get_data.path.size;
@@ -3912,7 +3902,6 @@ namespace ECSEngine {
 
 			UIDrawerTimelineData* data = (UIDrawerTimelineData*)_data;
 			if (IsPointInRectangle(mouse_position, position, scale) && mouse->IsReleased(ECS_MOUSE_RIGHT)) {
-				float previous_zoom = data->zoom;
 				data->zoom = 1.0f;
 				data->offset = float2::Splat(0.0f);
 				action_data->redraw_window = true;

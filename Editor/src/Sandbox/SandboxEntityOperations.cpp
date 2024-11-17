@@ -360,16 +360,16 @@ static bool CallModuleComponentBuildFunctionBase(
 
 		for (size_t index = 0; index < build_entry->component_dependencies.size; index++) {
 			ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(build_entry->component_dependencies[index]);
-			Component component = editor_state->editor_components.GetComponentID(build_entry->component_dependencies[index]);
+			Component component_id = editor_state->editor_components.GetComponentID(build_entry->component_dependencies[index]);
 			if (component_type == ECS_COMPONENT_UNIQUE || component_type == ECS_COMPONENT_SHARED) {
-				EditorSandbox::LockedEntityComponent locked_entry = { entity, component, component_type == ECS_COMPONENT_SHARED };
+				EditorSandbox::LockedEntityComponent locked_entry = { entity, component_id , component_type == ECS_COMPONENT_SHARED };
 				sandbox->locked_entity_components.Add(locked_entry);
 				wrapper_data->locked_components[wrapper_data->locked_components_count++] = locked_entry;
 				ECS_ASSERT(wrapper_data->locked_components_count <= std::size(wrapper_data->locked_components));
 			}
 			else {
-				sandbox->locked_global_components.Add(component);
-				wrapper_data->locked_globals[wrapper_data->locked_global_count++] = component;
+				sandbox->locked_global_components.Add(component_id);
+				wrapper_data->locked_globals[wrapper_data->locked_global_count++] = component_id;
 				ECS_ASSERT(wrapper_data->locked_global_count <= std::size(wrapper_data->locked_globals));
 			}
 		}

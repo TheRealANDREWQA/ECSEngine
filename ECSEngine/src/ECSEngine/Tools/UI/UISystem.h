@@ -41,7 +41,7 @@ namespace ECSEngine {
 			unsigned int lazy_update_milliseconds = 25;
 		};
 
-		class ECSENGINE_API UISystem
+		struct ECSENGINE_API UISystem
 		{
 		public:
 			// Can provide a global memory manager in order to have the first big allocation obtained from it

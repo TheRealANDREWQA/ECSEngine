@@ -295,6 +295,7 @@ namespace ECSEngine {
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, &subresource_data, &_new_buffer);
+		ECS_ASSERT(SUCCEEDED(result), "Failed to created GPU immutable buffer with mapping.");
 
 		UnmapBuffer(buffer.buffer, graphics->GetContext());
 

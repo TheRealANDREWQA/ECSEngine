@@ -292,7 +292,7 @@ namespace ECSEngine {
 		template<size_t mode = 0, typename Stream>
 		size_t CullTextSprites(Stream vertices, float bound) {
 			if constexpr (mode == 0) {
-				for (int64_t index = 1; index < vertices.size; index += 6) {
+				for (int64_t index = 1; index < (int64_t)vertices.size; index += 6) {
 					if (vertices[index].position.x > bound) {
 						return index - 1;
 					}
@@ -300,7 +300,7 @@ namespace ECSEngine {
 				return vertices.size;
 			}
 			else if constexpr (mode == 1) {
-				for (int64_t index = 0; index < vertices.size; index += 6) {
+				for (int64_t index = 0; index < (int64_t)vertices.size; index += 6) {
 					if (vertices[index].position.x < bound) {
 						return index;
 					}
@@ -308,7 +308,7 @@ namespace ECSEngine {
 				return vertices.size;
 			}
 			else if constexpr (mode == 2) {
-				for (int64_t index = 2; index < vertices.size; index += 6) {
+				for (int64_t index = 2; index < (int64_t)vertices.size; index += 6) {
 					if (vertices[index].position.y > bound) {
 						return index - 2;
 					}
@@ -316,7 +316,7 @@ namespace ECSEngine {
 				return vertices.size;
 			}
 			else if constexpr (mode == 3) {
-				for (int64_t index = vertices.size - 1; index >= 0; index -= 6) {
+				for (int64_t index = (int64_t)vertices.size - 1; index >= 0; index -= 6) {
 					if (vertices[index].position.y < bound) {
 						return vertices.size - index - 1;
 					}

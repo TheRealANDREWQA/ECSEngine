@@ -2002,7 +2002,6 @@ namespace ECSEngine {
 				UIConfigAbsoluteTransform transform;
 				transform.position = { position.x + region_render_offset.x, position.y + region_render_offset.y };
 				if (~configuration & UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT) {
-					float label_size = GetLabelScale(name).x;
 					transform.scale.x = collapsing_header_size - SIZE_INPUT_X_SCALE * zoom_ptr->x - layout.element_indentation;
 				}
 				else {
@@ -2291,9 +2290,9 @@ namespace ECSEngine {
 								size_t element_byte_size = elements->MemoryOf(1);
 
 								void* temp_allocation = GetTempBuffer(element_byte_size * elements->size);
-								for (size_t index = 0; index < elements->size; index++) {
-									memcpy(OffsetPointer(temp_allocation, index * element_byte_size), &elements->buffer[order_allocation[index]], element_byte_size);
-									//temp_allocation[index] = elements->buffer[order_allocation[index]];
+								for (size_t element_index = 0; element_index < elements->size; element_index++) {
+									memcpy(OffsetPointer(temp_allocation, element_index * element_byte_size), &elements->buffer[order_allocation[element_index]], element_byte_size);
+									//temp_allocation[element_index ] = elements->buffer[order_allocation[element_index]];
 								}
 
 								memcpy(elements->buffer, temp_allocation, element_byte_size * elements->size);

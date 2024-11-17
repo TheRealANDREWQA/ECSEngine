@@ -15,8 +15,6 @@ namespace ECSEngine {
 		// For every 32 byte chunk, use 8 keys inside a SIMD register in order
 		// to have fast encryption and decryption
 		unsigned int chunk_count = data.size >> 5;
-		unsigned int table_capacity_minus_one = TABLE_CAPACITY - 1;
-
 		unsigned int* reinterpretation = (unsigned int*)data.buffer;
 
 		unsigned int keys[SIMD_capacity];

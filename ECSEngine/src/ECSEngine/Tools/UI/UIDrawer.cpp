@@ -1698,7 +1698,7 @@ namespace ECSEngine {
 
 			AlignToRowY(this, configuration, position, scale);
 
-			bool is_moved = HandleFitSpaceRectangle(configuration, position, scale);
+			HandleFitSpaceRectangle(configuration, position, scale);
 
 			HandleBorder(configuration, config, position, scale);
 			if (~configuration & UI_CONFIG_LABEL_TRANSPARENT) {
@@ -2215,8 +2215,8 @@ namespace ECSEngine {
 				ElementName(configuration, config, &input->name, position, scale);
 			}
 
-			bool dependent_size = configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE;
-			if (dependent_size) {
+			bool is_dependent_size = configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+			if (is_dependent_size) {
 				bool is_element_name_after = IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME);
 				if (is_element_name_first) {
 					scale.x -= position.x - initial_position.x;
@@ -2962,7 +2962,10 @@ namespace ECSEngine {
 
 			UIDrawerClipState clip_state = drawer->BeginClip(configuration, { channel_start_position, timeline_background_scale });
 
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 64);
 			for (size_t index = 0; index < data->channels.size; index++) {
+				stack_allocator.Clear();
+
 				// Draw the sprite if it has a minimum separation from the last sprite
 				const float min_sprite_separation = 0.003f;
 
@@ -2974,7 +2977,6 @@ namespace ECSEngine {
 
 				// Determine the x positions of each entry and eliminate those that are too close together
 				// Because they can overwhelm the drawing resources
-				ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 64);
 				Stream<unsigned int> indices_to_iterate;
 				
 				float last_drawn_position = -FLT_MAX;
@@ -3907,9 +3909,9 @@ namespace ECSEngine {
 
 				if (configuration & UI_CONFIG_COMBO_BOX_PREFIX) {
 					const UIConfigComboBoxPrefix* prefix = (const UIConfigComboBoxPrefix*)config.GetParameter(UI_CONFIG_COMBO_BOX_PREFIX);
-					void* allocation = GetMainAllocatorBuffer(sizeof(char) * prefix->prefix.size, alignof(char));
-					prefix->prefix.CopyTo(allocation);
-					data->prefix = { allocation, prefix->prefix.size };
+					void* prefix_allocation = GetMainAllocatorBuffer(sizeof(char) * prefix->prefix.size, alignof(char));
+					prefix->prefix.CopyTo(prefix_allocation);
+					data->prefix = { prefix_allocation , prefix->prefix.size };
 
 					float2 text_span = TextSpan(data->prefix);
 					data->prefix_x_scale = text_span.x / zoom_ptr->x;
@@ -4439,7 +4441,6 @@ namespace ECSEngine {
 			float2 border_position = position;
 			float2 border_scale = scale;
 
-			float prefix_scale = 0.0f;
 			if (ValidatePosition(configuration, position, scale)) {
 				size_t new_configuration = ClearFlag(
 					configuration,
@@ -6565,7 +6566,7 @@ namespace ECSEngine {
 					*sprite_count += line_count * 6;
 				}
 
-				for (int64_t index = starting_index; index < end_index - 1; index++) {
+				for (index = starting_index; index < end_index - 1; index++) {
 					float2 next_point = {
 						convert_to_graph_space_x(get_sample(index + 1, 0), graph_position, graph_scale, min_values, inverse_sample_span),
 						0.0f
@@ -6603,23 +6604,23 @@ namespace ECSEngine {
 					tag_data.graph_position += region_render_offset;
 					tag_data.graph_scale = graph_scale;
 					action_data.data = &tag_data;
-					for (size_t index = 0; index < tags->vertical_tag_count; index++) {
-						float2 position = {
+					for (size_t tag_index = 0; tag_index < tags->vertical_tag_count; tag_index++) {
+						float2 tag_position = {
 							convert_to_graph_space_x(min_x, graph_position, graph_scale, min_values, inverse_sample_span),
-							convert_to_graph_space_y(tags->vertical_values[index], graph_position, graph_scale, min_values, inverse_sample_span)
+							convert_to_graph_space_y(tags->vertical_values[tag_index], graph_position, graph_scale, min_values, inverse_sample_span)
 						};
-						tag_data.position = position;
+						tag_data.position = tag_position;
 						tag_data.position += region_render_offset;
-						tags->vertical_tags[index](&action_data);
+						tags->vertical_tags[tag_index](&action_data);
 					}
-					for (size_t index = 0; index < tags->horizontal_tag_count; index++) {
-						float2 position = {
-							convert_to_graph_space_x(tags->horizontal_values[index], graph_position, graph_scale, min_values, inverse_sample_span),
+					for (size_t tag_index = 0; tag_index < tags->horizontal_tag_count; tag_index++) {
+						float2 tag_position = {
+							convert_to_graph_space_x(tags->horizontal_values[tag_index], graph_position, graph_scale, min_values, inverse_sample_span),
 							convert_to_graph_space_y(min_y, graph_position, graph_scale, min_values, inverse_sample_span)
 						};
-						tag_data.position = position;
+						tag_data.position = tag_position;
 						tag_data.position += region_render_offset;
-						tags->horizontal_tags[index](&action_data);
+						tags->horizontal_tags[tag_index](&action_data);
 					}
 				}
 
@@ -6726,10 +6727,8 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::SentenceNonCachedInitializerKernel(Stream<char> identifier, UIDrawerSentenceNotCached* data, char separator_token) {
-			size_t space_count = ParseWordsFromSentence(identifier, separator_token);
-
 			FindWhitespaceCharacters(data->whitespace_characters, identifier, separator_token);
-			data->whitespace_characters.Add(identifier.size);
+			data->whitespace_characters.AddAssert(identifier.size);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -6771,13 +6770,11 @@ namespace ECSEngine {
 					auto text_sprite_buffer = HandleTextSpriteBuffer(configuration);
 					auto text_sprite_counts = HandleTextSpriteCount(configuration);
 
-					float space_x_scale = system->GetSpaceXSpan(font_size.x);
 					size_t word_end_index = 0;
 					size_t word_start_index = 0;
 
 					Stream<UISpriteVertex> temp_stream = Stream<UISpriteVertex>(nullptr, 0);
 					const bool is_zoom_different = data->zoom.x != zoom_ptr->x || data->zoom.y != zoom_ptr->y;
-					float starting_row_position = position.x;
 
 					for (size_t index = 0; index < data->base.whitespace_characters.size; index++) {
 						if (data->base.whitespace_characters[index].position != 0) {
@@ -6856,8 +6853,6 @@ namespace ECSEngine {
 					whitespace_characters.Add(ParseStringIdentifier(text));
 				}
 
-				float y_row_scale = current_row_y_scale;
-
 				ECS_UI_DRAWER_MODE previous_draw_mode = draw_mode;
 				unsigned int previous_draw_count = draw_mode_count;
 				unsigned int previous_draw_target = draw_mode_target;
@@ -6883,9 +6878,6 @@ namespace ECSEngine {
 				}
 
 				auto draw_word_by_word = [&]() {
-					float starting_row_position = position.x;
-					float token_x_scale = TextSpan({ &separator_token, 1 }, font_size, character_spacing).x * !keep_token;
-
 					size_t text_configuration = configuration;
 					text_configuration |= HasFlag(configuration, UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) ? UI_CONFIG_ALIGN_TO_ROW_Y : 0;
 					for (size_t index = 0; index < whitespace_characters.size; index++) {
@@ -6915,7 +6907,6 @@ namespace ECSEngine {
 
 				if (single_sentence) {
 					float2 text_span = TextSpan(Stream<char>(text.buffer, text_length), font_size, character_spacing);
-					float initial_y_position = position.y;
 					if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
 						position.y = AlignMiddle(position.y, current_row_y_scale, text_span.y);
 					}
@@ -6996,7 +6987,6 @@ namespace ECSEngine {
 					total_memory_size += labels[index].size;
 				}
 
-				size_t total_char_count = total_memory_size;
 				total_memory_size *= 6 * sizeof(UISpriteVertex);
 				total_memory_size += sizeof(Stream<UISpriteVertex>) * cell_count;
 
@@ -7077,7 +7067,6 @@ namespace ECSEngine {
 					HandleTextStreamColorUpdate(font_color, data->labels[index]);
 				}
 
-				unsigned int cell_count = rows * columns;
 				for (size_t index = 0; index < data->labels.size; index++) {
 					ScaleText(data->labels[index], data->zoom, data->inverse_zoom, text_sprite_stream.buffer, &text_sprite_stream.size, zoom_ptr, character_spacing);
 					memcpy(data->labels[index].buffer, text_sprite_stream.buffer, sizeof(UISpriteVertex) * data->labels[index].size);
@@ -7106,9 +7095,10 @@ namespace ECSEngine {
 			if (configuration & UI_CONFIG_BORDER) {
 				const UIConfigBorder* parameters = (const UIConfigBorder*)config.GetParameter(UI_CONFIG_BORDER);
 
-				float2 border_size = GetSquareScale(parameters->thickness);
+				border_size = GetSquareScale(parameters->thickness);
 				border_size.x *= zoom_ptr->x;
 				border_size.y *= zoom_ptr->y;
+				border_color = parameters->color;
 			}
 			else {
 				border_color = color_theme.borders;
@@ -7128,7 +7118,7 @@ namespace ECSEngine {
 						unsigned int cell_index = row * columns + column;
 						float2 text_span = GetTextSpan(data->labels[cell_index]);
 						float x_position, y_position;
-						HandleTextLabelAlignment(text_span, scale, position, x_position, y_position, ECS_UI_ALIGN::ECS_UI_ALIGN_MIDDLE, ECS_UI_ALIGN::ECS_UI_ALIGN_MIDDLE);
+						HandleTextLabelAlignment(text_span, scale, position, x_position, y_position, ECS_UI_ALIGN_MIDDLE, ECS_UI_ALIGN_MIDDLE);
 
 						TranslateText(x_position, y_position, data->labels[cell_index], 0, 0);
 						memcpy(text_sprite_buffer + *text_sprite_count, data->labels[cell_index].buffer, sizeof(UISpriteVertex) * data->labels[cell_index].size);
@@ -7200,9 +7190,10 @@ namespace ECSEngine {
 			if (configuration & UI_CONFIG_BORDER) {
 				const UIConfigBorder* parameters = (const UIConfigBorder*)config.GetParameter(UI_CONFIG_BORDER);
 
-				float2 border_size = GetSquareScale(parameters->thickness);
+				border_size = GetSquareScale(parameters->thickness);
 				border_size.x *= zoom_ptr->x;
 				border_size.y *= zoom_ptr->y;
+				border_color = parameters->color;
 			}
 			else {
 				border_color = color_theme.borders;
@@ -7958,7 +7949,7 @@ namespace ECSEngine {
 					}
 				}
 
-				for (int64_t index = starting_index; index < end_index - 1; index++) {
+				for (index = starting_index; index < end_index - 1; index++) {
 					float2 next_point = convert_absolute_position_to_graph_space(samples[index + 1], graph_position, graph_scale, min_values, inverse_sample_span);
 
 					float2 hoverable_position = { previous_point_position.x, graph_position.y };
@@ -8030,17 +8021,17 @@ namespace ECSEngine {
 					tag_data.graph_scale = graph_scale;
 					action_data.data = &tag_data;
 					action_data.system = system;
-					for (size_t index = 0; index < tags->vertical_tag_count; index++) {
-						float2 position = convert_absolute_position_to_graph_space({ tags->vertical_values[index], min_y }, graph_position, graph_scale, min_values, inverse_sample_span);
-						tag_data.position = position;
+					for (size_t tag_index = 0; tag_index < tags->vertical_tag_count; tag_index++) {
+						float2 tag_position = convert_absolute_position_to_graph_space({ tags->vertical_values[tag_index], min_y }, graph_position, graph_scale, min_values, inverse_sample_span);
+						tag_data.position = tag_position;
 						tag_data.position += region_render_offset;
-						tags->vertical_tags[index](&action_data);
+						tags->vertical_tags[tag_index](&action_data);
 					}
-					for (size_t index = 0; index < tags->horizontal_tag_count; index++) {
-						float2 position = convert_absolute_position_to_graph_space({ min_x, tags->horizontal_values[index] }, graph_position, graph_scale, min_values, inverse_sample_span);
-						tag_data.position = position;
+					for (size_t tag_index = 0; tag_index < tags->horizontal_tag_count; tag_index++) {
+						float2 tag_position = convert_absolute_position_to_graph_space({ min_x, tags->horizontal_values[tag_index] }, graph_position, graph_scale, min_values, inverse_sample_span);
+						tag_data.position = tag_position;
 						tag_data.position += region_render_offset;
-						tags->horizontal_tags[index](&action_data);
+						tags->horizontal_tags[tag_index](&action_data);
 					}
 				}
 
@@ -11006,12 +10997,12 @@ namespace ECSEngine {
 				callback_data->callback = float_color_callback;
 				callback_data->callback_data = float_color_callback_data;
 				callback_data->input = input;
-				UIConfigColorInputCallback callback = { ColorFloatInputCallback, callback_data, size_to_allocate };
+				UIConfigColorInputCallback float_callback = { ColorFloatInputCallback, callback_data, size_to_allocate };
 
 				// Cringe MSVC bug - it does not set the callback data correctly
 				//memset(&callback_data.callback, 0, 16);
 				//memcpy(&callback_data.input, &input, sizeof(input));
-				config.AddFlag(callback);
+				config.AddFlag(float_callback);
 			}
 
 			size_t COLOR_INPUT_CONFIGURATION = configuration | UI_CONFIG_COLOR_INPUT_CALLBACK | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
@@ -11244,8 +11235,8 @@ namespace ECSEngine {
 
 			if (extensions.size > 0) {
 				size_t copy_size = StreamCoalescedDeepCopySize(extensions);
-				void* allocation = drawer->GetMainAllocatorBuffer(copy_size);
-				uintptr_t ptr = (uintptr_t)allocation;
+				void* extensions_allocation = drawer->GetMainAllocatorBuffer(copy_size);
+				uintptr_t ptr = (uintptr_t)extensions_allocation;
 				callback_data->extensions = StreamCoalescedDeepCopy(extensions, ptr);
 			}
 			else {
@@ -11792,9 +11783,9 @@ namespace ECSEngine {
 				uintptr_t ptr = (uintptr_t)data;
 				ptr += sizeof(UIDrawerFilterMenuData);
 
-				char* window_name = (char*)ptr;
-				memcpy(window_name, identifier.buffer, identifier_size);
-				strcat(window_name, "Filter Window");
+				CapacityStream<char> window_name = { (char*)ptr, 0, (unsigned int)window_name_size };
+				window_name.CopyOther(identifier);
+				window_name.AddStreamAssert("Filter Window");
 				data->window_name = window_name;
 				ptr += window_name_size;
 
@@ -12804,9 +12795,9 @@ namespace ECSEngine {
 
 					void* callback_data = callback->data;
 					if (callback->data_size > 0) {
-						void* allocation = GetMainAllocatorBuffer(callback->data_size);
-						memcpy(allocation, callback->data, callback->data_size);
-						callback_data = allocation;
+						void* callback_allocation = GetMainAllocatorBuffer(callback->data_size);
+						memcpy(callback_allocation, callback->data, callback->data_size);
+						callback_data = callback_allocation;
 					}
 					data->selectable_callback = callback->callback;
 					data->selectable_callback_data = callback_data;
@@ -12821,9 +12812,9 @@ namespace ECSEngine {
 
 					void* callback_data = callback->data;
 					if (callback->data_size > 0) {
-						void* allocation = GetMainAllocatorBuffer(callback->data_size);
-						memcpy(allocation, callback->data, callback->data_size);
-						callback_data = allocation;
+						void* callback_allocation = GetMainAllocatorBuffer(callback->data_size);
+						memcpy(callback_allocation, callback->data, callback->data_size);
+						callback_data = callback_allocation;
 					}
 					data->right_click_callback = callback->callback;
 					data->right_click_callback_data = callback_data;
@@ -12957,8 +12948,6 @@ namespace ECSEngine {
 				// stream for insertion or the already existing identifier for existing label
 				Stream<char> table_char_stream;
 
-				const auto* table_pairs = data->label_states.GetPairs();
-
 				if (table_index == -1) {
 					void* allocation = GetMainAllocatorBuffer((label_stream.size + 1) * sizeof(char), alignof(char));
 					memcpy(allocation, label_stream.buffer, (label_stream.size + 1) * sizeof(char));
@@ -12977,9 +12966,9 @@ namespace ECSEngine {
 					current_data->activation_count++;
 					label_state = current_data->state;
 
-					ResourceIdentifier identifier = data->label_states.GetIdentifierFromIndex(table_index);
-					table_char_stream.buffer = (char*)identifier.ptr;
-					table_char_stream.size = identifier.size;
+					ResourceIdentifier existing_identifier = data->label_states.GetIdentifierFromIndex(table_index);
+					table_char_stream.buffer = (char*)existing_identifier.ptr;
+					table_char_stream.size = existing_identifier.size;
 					if (current_parent_index == 0) {
 						label_states[index] = current_data->state;
 					}
@@ -17331,6 +17320,7 @@ namespace ECSEngine {
 				}
 				return { TextTooltipHoverable, (void*)data, write_size, phase };
 			}
+			return {};
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

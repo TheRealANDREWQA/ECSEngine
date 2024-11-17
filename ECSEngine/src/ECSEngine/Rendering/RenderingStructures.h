@@ -1860,7 +1860,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE bool ContainsShader(PixelShader _pixel_shader) const {
-			return pixel_shader.Interface() == pixel_shader.Interface();
+			return pixel_shader.Interface() == _pixel_shader.Interface();
 		}
 
 		bool ContainsSampler(SamplerState sampler_state) const;

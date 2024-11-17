@@ -467,7 +467,6 @@ namespace ECSEngine {
 			const Archetype* archetype = entity_manager->GetArchetype(index);
 			ComponentSignature unique = archetype->GetUniqueSignature();
 			ComponentSignature shared = archetype->GetSharedSignature();
-			unsigned int base_count = archetype->GetBaseCount();
 
 			uintptr_t temp_ptr = (uintptr_t)OffsetPointer(buffering, buffering_size);
 
@@ -1488,7 +1487,6 @@ namespace ECSEngine {
 		// Only the component data of the base archetypes remains to be restored, the entities must be deduces from the entity pool
 		for (unsigned int index = 0; index < header.archetype_count; index++) {
 			Archetype* archetype = entity_manager->GetArchetype(archetype_mappings[index]);
-			unsigned int base_count = archetype->GetBaseCount();
 
 			// We need the unique signature of the current archetype - but we also need the signature for the original
 			// Archetype from the file in order to skip the components that are missing

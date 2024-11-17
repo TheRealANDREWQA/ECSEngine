@@ -440,7 +440,7 @@ namespace ECSEngine {
 		HashFunctionFibonacci() : m_shift_amount(64) {}
 		HashFunctionFibonacci(size_t additional_info) : m_shift_amount(64 - additional_info) {}
 		ECS_INLINE unsigned int operator () (unsigned int key, unsigned int capacity) const {
-			return (key * 11400714819323198485llu) >> m_shift_amount;
+			return (unsigned int)((key * 11400714819323198485llu) >> m_shift_amount);
 		}
 
 		ECS_INLINE static unsigned int Next(unsigned int capacity) {
@@ -456,7 +456,7 @@ namespace ECSEngine {
 		HashFunctionXORFibonacci(size_t additional_info) : m_shift_amount(64 - additional_info) {}
 		ECS_INLINE unsigned int operator() (unsigned int key, unsigned int capacity) const {
 			key ^= key >> m_shift_amount;
-			return (key * 11400714819323198485llu) >> m_shift_amount;
+			return (unsigned int)((key * 11400714819323198485llu) >> m_shift_amount);
 		}
 
 		ECS_INLINE static unsigned int Next(unsigned int capacity) {
@@ -471,7 +471,7 @@ namespace ECSEngine {
 		HashFunctionFolding() {}
 		HashFunctionFolding(size_t additional_info) {}
 		ECS_INLINE unsigned int operator() (unsigned int key, unsigned int capacity) const {
-			return (key & 0x0000FFFF + (key & 0xFFFF0000) >> 16) & (capacity - 1);
+			return ((key & 0x0000FFFF) + ((key & 0xFFFF0000) >> 16)) & (capacity - 1);
 		}
 
 		static unsigned int Next(unsigned int capacity) {
@@ -482,7 +482,7 @@ namespace ECSEngine {
 			unsigned long value = 0;
 			unsigned int index = _BitScanReverse(&value, capacity) == 0 ? -1 : value;
 			// This works out even when index is -1 (that is number is 0, index + 1 will be 0 so the returned value will be 1)
-			return (size_t)1 << (index + 1);
+			return (unsigned int)1 << (index + 1);
 
 			//return PowerOfTwoGreater(capacity);
 		}

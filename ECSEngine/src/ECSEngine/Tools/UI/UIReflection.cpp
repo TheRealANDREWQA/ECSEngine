@@ -2709,39 +2709,37 @@ namespace ECSEngine {
 						break;
 						case UIReflectionElement::UserDefined:
 						{
-							UIReflectionUserDefinedData* data = (UIReflectionUserDefinedData*)instance->data[index];
+							UIReflectionUserDefinedData* field_data = (UIReflectionUserDefinedData*)instance->data[index];
 							// Must create an instance of that user defined type here
 							ECS_STACK_CAPACITY_STREAM(char, nested_instance_name, 512);
 							// Append to the type_and_field_name the current instance name
-							nested_instance_name.CopyOther(data->type_and_field_name);
+							nested_instance_name.CopyOther(field_data->type_and_field_name);
 							nested_instance_name.AddStreamSafe(instance->name);
 
 							// In order to determine the type name, just look for the separator from the type
 							// and whatever its after it will be the type
-							Stream<char> type_name = data->GetTypeName();
+							Stream<char> type_name = field_data->GetTypeName();
 
-							data->instance = CreateInstance(nested_instance_name, type_name);
-							BindInstancePtrs(data->instance, (void*)ptr);
+							field_data->instance = CreateInstance(nested_instance_name, type_name);
+							BindInstancePtrs(field_data->instance, (void*)ptr);
 						}
 						break;
 						}
 					}
 					else {
-						UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)instance->data[index];
-						void* allocation = allocator->Allocate(sizeof(void*) * data->count);
-						data->values = (void**)allocation;
+						UIReflectionGroupData<void>* field_data = (UIReflectionGroupData<void>*)instance->data[index];
+						void* allocation = allocator->Allocate(sizeof(void*) * field_data->count);
+						field_data->values = (void**)allocation;
 		
-						unsigned int type_byte_size = reflect->fields[reflected_type_index].info.byte_size / data->count;
-						for (size_t subindex = 0; subindex < data->count; subindex++) {
-							data->values[subindex] = (void*)ptr;
-							memcpy((void*)((uintptr_t)data->default_values + subindex * type_byte_size), (const void*)ptr, type_byte_size);
+						unsigned int type_byte_size = reflect->fields[reflected_type_index].info.byte_size / field_data->count;
+						for (size_t subindex = 0; subindex < field_data->count; subindex++) {
+							field_data->values[subindex] = (void*)ptr;
+							memcpy((void*)((uintptr_t)field_data->default_values + subindex * type_byte_size), (const void*)ptr, type_byte_size);
 							ptr += type_byte_size;
 						}
 					}
 				}
 				else {
-					ReflectionStreamFieldType reflect_stream_type = reflect->fields[reflected_type_index].info.stream_type;
-
 					// There are other structs that contain this as the first member variable
 					UIInstanceFieldStream* field_value = (UIInstanceFieldStream*)instance->data[index];
 
@@ -4737,7 +4735,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDefaultValueAction(ActionData* action_data);
+		static void UIReflectionDefaultValueAction(ActionData* action_data);
 
 		void UIReflectionDrawer::DrawInstance(
 			UIReflectionInstance* instance,

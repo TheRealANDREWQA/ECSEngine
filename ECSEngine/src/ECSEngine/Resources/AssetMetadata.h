@@ -704,7 +704,8 @@ namespace ECSEngine {
 		if (type >= ECS_ASSET_TYPE_COUNT) {
 			ECS_ASSERT(false, "Invalid asset type");
 		}
-		return (unsigned int)asset_pointer;
+		// Quite weird, if we use just the unsigned int cast, we get C4311 that pollutes many files
+		return (unsigned int)(size_t)asset_pointer;
 	}
 
 	ECSENGINE_API bool CompareAssetPointers(const void* first, const void* second, ECS_ASSET_TYPE type);

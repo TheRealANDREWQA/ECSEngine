@@ -903,8 +903,8 @@ static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 			// If they are, then we can report that there are no imports
 			// Since they are all ready
 			bool all_are_compiled = true;
-			for (unsigned int index = 0; index < import_references.size; index++) {
-				if (GetModuleLoadStatus(editor_state, import_references[index], configuration) != EDITOR_MODULE_LOAD_GOOD) {
+			for (unsigned int import_index = 0; import_index < import_references.size; import_index++) {
+				if (GetModuleLoadStatus(editor_state, import_references[import_index], configuration) != EDITOR_MODULE_LOAD_GOOD) {
 					all_are_compiled = false;
 					break;
 				}
@@ -1628,13 +1628,10 @@ void GetModuleDLLImports(EditorState* editor_state, unsigned int index)
 
 	Stream<Stream<char>> dll_imports = editor_state->project_modules->buffer[index].dll_imports;
 
-	for (size_t index = 0; index < dll_imports.size; index++) {
-		Stream<char> token = FindFirstToken(dll_imports[index], search_token);
+	for (size_t dll_index = 0; dll_index < dll_imports.size; dll_index++) {
+		Stream<char> token = FindFirstToken(dll_imports[dll_index], search_token);
 		if (token.size > 0) {
-			dll_imports[index] = ReplaceToken(dll_imports[index], search_token, "", stack_allocator);
-		}
-		else {
-			dll_imports[index] = dll_imports[index];
+			dll_imports[dll_index] = ReplaceToken(dll_imports[dll_index], search_token, "", stack_allocator);
 		}
 	}
 
@@ -1783,8 +1780,8 @@ bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int 
 	path.Add(ECS_OS_PATH_SEPARATOR);
 
 	size_t base_path_size = path.size;
-	for (size_t index = 0; index < std::size(MODULE_SOURCE_FILES); index++) {
-		path.AddStream(MODULE_SOURCE_FILES[index]);
+	for (size_t source_index = 0; source_index < std::size(MODULE_SOURCE_FILES); source_index++) {
+		path.AddStream(MODULE_SOURCE_FILES[source_index]);
 		if (ExistsFileOrFolder(path)) {
 			path[path.size] = L'\0';
 			return true;
@@ -1960,8 +1957,8 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			unsigned int types_created = editor_state->module_reflection->CreateTypesForHierarchy(folder_hierarchy, search_options);
 
 			// Convert all stream types to resizable
-			for (unsigned int index = 0; index < type_indices.size; index++) {
-				UIReflectionType* type = editor_state->module_reflection->GetType(type_indices[index]);
+			for (unsigned int type_index = 0; type_index < type_indices.size; type_index++) {
+				UIReflectionType* type = editor_state->module_reflection->GetType(type_indices[type_index]);
 				editor_state->module_reflection->ConvertTypeStreamsToResizable(type);
 				// If this is a component, disable its stream writes
 				if (editor_state->editor_components.GetComponentType(type->name) != ECS_COMPONENT_TYPE_COUNT) {

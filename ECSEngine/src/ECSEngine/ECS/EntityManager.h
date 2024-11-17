@@ -2035,22 +2035,22 @@ namespace ECSEngine {
 
 	// Uses the internal indexing of the entity manager
 	ECS_INLINE VectorComponentSignature ECS_VECTORCALL GetEntityManagerUniqueVectorSignature(const VectorComponentSignature* signatures, unsigned int index) {
-		return signatures[index << 1];
+		return signatures[(size_t)index << 1];
 	}
 
 	// Uses the internal indexing of the entity manager
 	ECS_INLINE VectorComponentSignature ECS_VECTORCALL GetEntityManagerSharedVectorSignature(const VectorComponentSignature* signatures, unsigned int index) {
-		return signatures[(index << 1) + 1];
+		return signatures[((size_t)index << 1) + 1];
 	}
 
 	// Uses the internal indexing of the entity manager
 	ECS_INLINE VectorComponentSignature* GetEntityManagerUniqueVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index) {
-		return signatures + (index << 1);
+		return signatures + ((size_t)index << 1);
 	}
 
 	// Uses the internal indexing of the entity manager
 	ECS_INLINE VectorComponentSignature* GetEntityManagerSharedVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index) {
-		return signatures + (index << 1) + 1;
+		return signatures + ((size_t)index << 1) + 1;
 	}
 
 	// Creates the allocator for the entity pool, the entity pool itself, the entity manager allocator,

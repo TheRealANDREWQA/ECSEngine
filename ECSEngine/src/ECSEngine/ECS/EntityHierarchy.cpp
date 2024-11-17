@@ -454,7 +454,6 @@ namespace ECSEngine {
         Write<true>(&ptr, hierarchy->roots.buffer, hierarchy->roots.size);
 
         // Now the children table
-        unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
         hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
             Write<true>(&ptr, &parent, sizeof(Entity));
             Write<true>(&ptr, OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));

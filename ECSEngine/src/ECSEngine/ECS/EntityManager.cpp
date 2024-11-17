@@ -1473,10 +1473,10 @@ namespace ECSEngine {
 			vector_shared.InitializeSharedComponent(data->shared_components);
 			VectorComponentSignature vector_instances;
 			vector_instances.InitializeSharedInstances(data->shared_components);
-			Archetype* archetype = manager->FindArchetypePtr({ data->unique_components, vector_shared });
+			archetype = manager->FindArchetypePtr({ data->unique_components, vector_shared });
 			ECS_CRASH_CONDITION(archetype != nullptr, "EntityManager: Could not find main archetype when trying to delete base from components.");
 
-			unsigned int base_index = archetype->FindBaseIndex(vector_shared, vector_instances);
+			base_index = archetype->FindBaseIndex(vector_shared, vector_instances);
 			ECS_CRASH_CONDITION(base_index != -1, "EntityManager: Could not find base archetype index when trying to delete it from components.");
 		}
 		else {
@@ -4067,7 +4067,6 @@ namespace ECSEngine {
 			}
 
 			if (destroy_main_archetypes) {
-				unsigned int base_count = archetype->GetBaseCount();
 				if (base_count == 0) {
 					DestroyArchetypeCommit(index);
 					index--;
@@ -5772,9 +5771,6 @@ namespace ECSEngine {
 		bool deallocate_previous_buffers
 	)
 	{
-		EntityInfo entity_info = GetEntityInfo(entity);
-		Archetype* archetype = GetArchetype(entity_info.main_archetype);
-
 		for (unsigned char index = 0; index < component_signature.count; index++) {
 			unsigned int component_size = ComponentSize(component_signature[index]);
 			void* component = GetComponent(entity, component_signature[index]);

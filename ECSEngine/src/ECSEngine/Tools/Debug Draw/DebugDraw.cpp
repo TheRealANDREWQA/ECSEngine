@@ -438,7 +438,6 @@ namespace ECSEngine {
 			}
 
 			Matrix gpu_camera = MatrixGPU(drawer->camera_matrix);
-			float init_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
 			timer.SetNewStart();
 
 			InstancedVertex* positions = nullptr;
@@ -540,22 +539,15 @@ namespace ECSEngine {
 
 			// Draw all the Wireframe depth elements
 			draw_call({ true, false }, WIREFRAME_DEPTH);
-			float first_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
-			timer.SetNewStart();
 
 			// Draw all the Wireframe no depth elements
 			draw_call({ true, true }, WIREFRAME_NO_DEPTH);
-			float second_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
-			timer.SetNewStart();
 
 			// Draw all the Solid depth elements
 			draw_call({ false, false }, SOLID_DEPTH);
-			float third_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
-			timer.SetNewStart();
 
 			// Draw all the Solid no depth elements
 			draw_call({ false, true }, SOLID_NO_DEPTH);
-			float fourth_duration = timer.GetDurationFloat(ECS_TIMER_DURATION_US);
 
 			// Release the temporary vertex buffer, structured buffer and the temporary allocation
 			if (instance_count * vertex_count > LARGE_BUFFER_CAPACITY) {

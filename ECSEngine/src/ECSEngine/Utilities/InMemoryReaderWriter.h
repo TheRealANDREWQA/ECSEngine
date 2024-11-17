@@ -110,7 +110,6 @@ namespace ECSEngine {
 				return nullptr;
 			}
 			is_out_of_range = false;
-			void* pointer = (void*)*buffer;
 			*buffer += data_size;
 			*buffer_capacity -= data_size;
 			return nullptr;

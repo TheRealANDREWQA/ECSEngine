@@ -523,8 +523,8 @@ namespace ECSEngine {
 
 		return {
 				result00 * determinant_inverse, result01 * determinant_inverse, result02 * determinant_inverse,
-				result01 * determinant_inverse, result11 * determinant_inverse, result12 * determinant_inverse,
-				result02 * determinant_inverse, result21 * determinant_inverse, result22 * determinant_inverse
+				result10 * determinant_inverse, result11 * determinant_inverse, result12 * determinant_inverse,
+				result20 * determinant_inverse, result21 * determinant_inverse, result22 * determinant_inverse
 		};
 	}
 

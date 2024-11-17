@@ -71,7 +71,7 @@ namespace ECSEngine {
 
 		internal::ForEachMeshInGLTF(gltf_data, [&](const cgltf_node* nodes, size_t node_index, size_t node_count) {
 			PBRMaterial placeholder;
-			bool was_found = internal::ForMaterialFromGLTF(nodes, node_index, placeholder, 
+			internal::ForMaterialFromGLTF(nodes, node_index, placeholder, 
 				[&](Stream<char> material_name, size_t mapping_count, PBRMaterialMapping* mappings, Stream<void>* texture_data, TextureExtension* texture_extensions) {
 					auto add_entries = [&]() {
 						// Occlusion - Roughness - Metallic texture
@@ -156,7 +156,7 @@ namespace ECSEngine {
 
 		internal::ForEachMeshInGLTF(gltf_data, [&](const cgltf_node* nodes, size_t node_index, size_t node_count) {
 			PBRMaterial placeholder;
-			bool was_found = internal::ForMaterialFromGLTF(nodes, node_index, placeholder,
+			internal::ForMaterialFromGLTF(nodes, node_index, placeholder,
 				[&](Stream<char> material_name, size_t mapping_count, PBRMaterialMapping* current_mappings, Stream<void>* texture_data, TextureExtension* texture_extensions) {
 					auto add_entries = [&]() {
 						for (size_t index = 0; index < mapping_count; index++) {
@@ -342,7 +342,7 @@ namespace ECSEngine {
 		bool at_least_one_export = false;
 		internal::ForEachMeshInGLTF(gltf_data, [&](const cgltf_node* nodes, size_t node_index, size_t node_count) {
 			PBRMaterial placeholder;
-			bool was_found = internal::ForMaterialFromGLTF(nodes, node_index, placeholder,
+			internal::ForMaterialFromGLTF(nodes, node_index, placeholder,
 				[&](Stream<char> material_name, size_t mapping_count, PBRMaterialMapping* mappings, Stream<void>* texture_data, TextureExtension* texture_extensions) {
 					auto add_entries = [&]() {
 						Stream<wchar_t> occlusion_name;

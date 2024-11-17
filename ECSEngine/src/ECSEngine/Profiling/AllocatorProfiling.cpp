@@ -41,7 +41,7 @@ namespace ECSEngine {
 				((custom_usage_function != nullptr) && (custom_exit_function != nullptr) && allocator_type == ECS_ALLOCATOR_TYPE_COUNT));
 
 			SoAResizeIfFull(allocator, address_size, address_capacity, &addresses, &entry_data);
-			unsigned int index = address_size;
+			index = address_size;
 			addresses[index] = address;
 			entry_data[index].name = name.Copy(allocator);
 			entry_data[index].allocator_type = allocator_type;
