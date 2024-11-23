@@ -4,6 +4,7 @@
 #include "AssetDatabase.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
 #include "../Allocators/ResizableLinearAllocator.h"
+#include "../Utilities/Reflection/ReflectionCustomTypes.h"
 
 namespace ECSEngine {
 

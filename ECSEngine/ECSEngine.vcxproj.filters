@@ -293,6 +293,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\BufferedFileReaderWriter.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerializationForward.h" />
     <ClInclude Include="src\ECSEngine\ECS\EntityManagerChangeSet.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionCustomTypes.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -471,6 +472,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerialization.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\EntityManagerChangeSet.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionCustomTypes.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

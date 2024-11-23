@@ -1,6 +1,6 @@
 #pragma once
 #include "../Utilities/Serialization/SerializationHelpers.h"
-#include "../Utilities/Reflection/Reflection.h"
+#include "../Utilities/Reflection/ReflectionTypes.h"
 
 namespace ECSEngine {
 

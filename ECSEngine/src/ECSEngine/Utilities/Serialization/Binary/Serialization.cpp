@@ -2,6 +2,7 @@
 #include "Serialization.h"
 #include "../../Reflection/Reflection.h"
 #include "../../Reflection/ReflectionStringFunctions.h"
+#include "../../Reflection/ReflectionCustomTypes.h"
 #include "../SerializationHelpers.h"
 #include "../../../Containers/Stacks.h"
 #include "../../../Allocators/ResizableLinearAllocator.h"

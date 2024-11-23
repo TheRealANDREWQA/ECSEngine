@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "ReferenceCountSerialize.h"
 #include "Reflection/Reflection.h"
+#include "Reflection/ReflectionCustomTypes.h"
 #include "Serialization/Binary/Serialization.h"
 #include "Serialization/SerializationHelpers.h"
 

@@ -947,7 +947,8 @@ namespace ECSEngine {
 		) {
 			if (size > 0) {
 				unsigned int capacity = NextCapacity(((float)size * 100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR) + 1);
-				unsigned int padding_elements = ClampMax<unsigned int>(size - 1, ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
+				// Clamp to the maximum number of padding elements
+				unsigned int padding_elements = size - 1 > ECS_HASH_TABLE_PADDING_ELEMENT_COUNT ? ECS_HASH_TABLE_PADDING_ELEMENT_COUNT : size - 1;
 				unsigned int extended_capacity = capacity + padding_elements;
 
 				size_t metadata_size = sizeof(*m_metadata) * (capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT);
