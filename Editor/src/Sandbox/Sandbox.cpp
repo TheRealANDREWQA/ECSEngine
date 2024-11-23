@@ -751,7 +751,9 @@ void ClearSandboxDebugDrawComponents(EditorState* editor_state, unsigned int san
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void CopySandboxGeneralFields(EditorState* editor_state, unsigned int destination_index, unsigned int source_index) {
+// This function will copy any sandbox related settings that can be copied, like the simulation speed
+// Factor, the should_play flag, the enabled debug draw components and others
+static void CopySandboxGeneralFields(EditorState* editor_state, unsigned int destination_index, unsigned int source_index) {
 	EditorSandbox* destination_sandbox = GetSandbox(editor_state, destination_index);
 	const EditorSandbox* source_sandbox = GetSandbox(editor_state, source_index);
 
@@ -779,8 +781,6 @@ void CopySandboxGeneralFields(EditorState* editor_state, unsigned int destinatio
 
 	RestoreAndSaveEditorSandboxFile(editor_state, disable_sandbox_file);
 }
-
-// -----------------------------------------------------------------------------------------------------------------------------
 
 void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsigned int source_index)
 {
@@ -820,6 +820,8 @@ void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsi
 		EditorSetConsoleError(message);
 	}
 
+	// Copy the recorders and replayers
+
 	CopySandboxGeneralFields(editor_state, destination_index, source_index);
 	// Render the sandbox now again
 	RenderSandboxViewports(editor_state, destination_index);
@@ -829,7 +831,7 @@ void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsi
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
+unsigned int CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	unsigned int sandbox_index = editor_state->sandboxes.ReserveRange();
 	ECS_ASSERT(sandbox_index <= EDITOR_MAX_SANDBOX_COUNT, "The maximum number of sandboxes was reached!");
 
@@ -893,6 +895,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	}
 
 	RegisterInspectorSandboxChange(editor_state);
+	return sandbox_index;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -903,8 +906,7 @@ unsigned int CreateSandboxTemporary(EditorState* editor_state, bool initialize_r
 	// Such that the sandbox will be recognized as a temporary sandbox
 	editor_state->sandboxes_temporary_count++;
 
-	CreateSandbox(editor_state, initialize_runtime);
-	unsigned int sandbox_index = editor_state->sandboxes.size - 1;
+	unsigned int sandbox_index = CreateSandbox(editor_state, initialize_runtime);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 	// Disable profiling and automatic play just in case
@@ -977,6 +979,22 @@ bool ConstructSandboxSchedulingOrder(
 	// Now try to solve the graph
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 	return sandbox->sandbox_world.task_scheduler->Solve(disable_error_message ? nullptr : &error_message);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+	// Create a new sandbox - detect if it is a temporary sandbox and create another temporary accordingly
+	unsigned int duplicated_sandbox_index = -1;
+	if (IsSandboxTemporary(editor_state, sandbox_index)) {
+		duplicated_sandbox_index = CreateSandboxTemporary(editor_state);
+	}
+	else {
+		duplicated_sandbox_index = CreateSandbox(editor_state);
+	}
+
+	// Copy the sandbox
+	CopySandbox(editor_state, duplicated_sandbox_index, sandbox_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

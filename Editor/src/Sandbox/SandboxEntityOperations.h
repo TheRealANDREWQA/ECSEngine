@@ -134,7 +134,7 @@ bool CreateSandboxGlobalComponent(
 );
 
 // Creates an identical copy of the entity and returns it. If for some reason the entity doesn't exist
-// it returns -1
+// It returns -1
 Entity CopySandboxEntity(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -142,8 +142,8 @@ Entity CopySandboxEntity(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-// Creates an identical copy of the entity and returns it. If for some reason the entity doesn't exist
-// it returns false (else true). Can give an entity buffer such that you can do some other operations 
+// Creates an identical copy of the entities. If for some reason the operation failed,
+// It returns false (else true). Can give an entity buffer such that you can do some other operations 
 // on the newly copied entities
 bool CopySandboxEntities(
 	EditorState* editor_state, 
@@ -155,8 +155,8 @@ bool CopySandboxEntities(
 );
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
-// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
+// Mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
+// The non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
 // If not given, the conversion function must deal with this case
 bool ConvertEditorTargetToLinkComponent(
 	const EditorState* editor_state,
@@ -169,8 +169,8 @@ bool ConvertEditorTargetToLinkComponent(
 );
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
-// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
+// Mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
+// The non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
 // If not given, the conversion function must deal with this case
 bool ConvertEditorTargetToLinkComponent(
 	const EditorState* editor_state,
@@ -184,8 +184,8 @@ bool ConvertEditorTargetToLinkComponent(
 );
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
-// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
+// Mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
+// The non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
 // If not given, the conversion function must deal with this case
 bool ConvertSandboxTargetToLinkComponent(
 	const EditorState* editor_state,
@@ -200,8 +200,8 @@ bool ConvertSandboxTargetToLinkComponent(
 );
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
-// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
+// Mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
+// The non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
 // instance directly)
 bool ConvertEditorLinkComponentToTarget(
 	EditorState* editor_state,
@@ -215,8 +215,8 @@ bool ConvertEditorLinkComponentToTarget(
 );
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
-// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
+// Mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
+// The non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
 // instance directly)
 bool ConvertEditorLinkComponentToTarget(
 	EditorState* editor_state,
@@ -231,8 +231,8 @@ bool ConvertEditorLinkComponentToTarget(
 );
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
-// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
+// Mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
+// The non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
 // instance directly)
 bool ConvertSandboxLinkComponentToTarget(
 	EditorState* editor_state,

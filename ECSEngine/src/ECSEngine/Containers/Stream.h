@@ -2496,4 +2496,14 @@ namespace ECSEngine {
 			std::is_same_v<ContainerType, ResizableStream<ElementType>>;
 	}
 
+	ECS_INLINE ECS_ALLOCATOR_TYPE AllocatorTypeFromString(Stream<char> string) {
+		// Conveniece function
+		return AllocatorTypeFromString(string.buffer, string.size);
+	}
+
+	ECS_INLINE void WriteAllocatorTypeToString(ECS_ALLOCATOR_TYPE type, CapacityStream<char>& string) {
+		// Convenience function
+		WriteAllocatorTypeToString(type, string.buffer, string.size, string.capacity);
+	}
+
 }

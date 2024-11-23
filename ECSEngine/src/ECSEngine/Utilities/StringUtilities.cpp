@@ -844,9 +844,9 @@ namespace ECSEngine {
 			return { skipped, PointerDifference(characters.buffer + characters.size, skipped) / sizeof(char) };
 		}
 		else {
-			const char* last = characters.buffer + characters.size;
+			const char* last = characters.buffer + characters.size - 1;
 			const char* skipped = SkipFunction(last, increment);
-			return { characters.buffer, PointerDifference(skipped, characters.buffer) / sizeof(char) };
+			return { characters.buffer, PointerDifference(skipped + 1, characters.buffer) / sizeof(char) };
 		}
 	}
 

@@ -349,6 +349,16 @@ namespace ECSEngine {
 			unsigned int folder_hierarchy;
 		};
 
+		// This is used for replacing typedefs. The structure is the following: typedef definition name;
+		struct ECSENGINE_API ReflectionTypedef {
+			ReflectionTypedef CopyTo(uintptr_t& ptr) const;
+
+			size_t CopySize() const;
+
+			Stream<char> definition;
+			unsigned int folder_hierarchy_index;
+		};
+
 		struct ReflectionManager;
 		
 		struct ReflectionCustomTypeMatchData {

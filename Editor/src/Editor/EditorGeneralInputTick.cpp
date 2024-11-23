@@ -110,4 +110,12 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 			}
 		}
 	}
+
+	// Check the sandbox duplicate shortcut
+	if (input_mapping.IsTriggered(EDITOR_INPUT_DUPLICATE_SANDBOX)) {
+		unsigned int active_sandbox = GetActiveSandboxIncludeScene(editor_state);
+		if (active_sandbox != -1) {
+			//CopySandbox()
+		}
+	}
 }

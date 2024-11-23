@@ -22,6 +22,11 @@ void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int
 
 // -------------------------------------------------------------------------------------------------------------
 
+// TODO: Implement this
+void CopySandboxRuntimeWorldFromOther(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // It will change the UI focus on the Game window first. If the window does not exist,
 // It will try to select the scene window and if that one does not exist as well, then
 // It will do nothing. It returns true if the focus was changed, else false

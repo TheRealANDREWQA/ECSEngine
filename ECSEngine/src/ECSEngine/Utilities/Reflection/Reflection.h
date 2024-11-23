@@ -15,6 +15,7 @@ namespace ECSEngine {
 		typedef HashTableDefault<ReflectionFieldInfo> ReflectionFieldTable;
 		typedef HashTableDefault<ReflectionType> ReflectionTypeTable;
 		typedef HashTableDefault<ReflectionEnum> ReflectionEnumTable;
+		typedef HashTableDefault<ReflectionTypedef> ReflectionTypedefTable;
 
 #define ECS_REFLECTION_MAX_TYPE_COUNT (128)
 #define ECS_REFLECTION_MAX_ENUM_COUNT (32)
@@ -29,6 +30,9 @@ namespace ECSEngine {
 			ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET,
 			ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET,
 			ECS_REFLECTION_CUSTOM_TYPE_DATA_POINTER,
+			// Using a single entry for the allocator in order to reduce the interface bloat that is required,
+			// This type will deal with all types of allocators
+			ECS_REFLECTION_CUSTOM_TYPE_LINEAR_ALLOCATOR,
 			ECS_REFLECTION_CUSTOM_TYPE_COUNT
 		};
 
@@ -42,52 +46,68 @@ namespace ECSEngine {
 
 		ECSENGINE_API Stream<char> ReflectionCustomTypeGetTemplateArgument(Stream<char> definition);
 
-		struct StreamCustomTypeInterface : public Reflection::ReflectionCustomTypeInterface {
-			bool Match(Reflection::ReflectionCustomTypeMatchData* data) override;
+		struct StreamCustomTypeInterface : public ReflectionCustomTypeInterface {
+			bool Match(ReflectionCustomTypeMatchData* data) override;
 
-			ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) override;
+			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
 
-			void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) override;
+			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
 
-			bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) override;
+			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
 
-			void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
+			void Copy(ReflectionCustomTypeCopyData* data) override;
 
-			bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+			bool Compare(ReflectionCustomTypeCompareData* data) override;
 
-			void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) override;
+			void Deallocate(ReflectionCustomTypeDeallocateData* data) override;
 		};
 
-		struct SparseSetCustomTypeInterface : public Reflection::ReflectionCustomTypeInterface {
-			bool Match(Reflection::ReflectionCustomTypeMatchData* data) override;
+		struct SparseSetCustomTypeInterface : public ReflectionCustomTypeInterface {
+			bool Match(ReflectionCustomTypeMatchData* data) override;
 
-			ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) override;
+			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
 
-			void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) override;
+			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
 
-			bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) override;
+			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
 
-			void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
+			void Copy(ReflectionCustomTypeCopyData* data) override;
 
-			bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+			bool Compare(ReflectionCustomTypeCompareData* data) override;
 
-			void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) override;
+			void Deallocate(ReflectionCustomTypeDeallocateData* data) override;
 		};
 
-		struct DataPointerCustomTypeInterface : public Reflection::ReflectionCustomTypeInterface {
-			bool Match(Reflection::ReflectionCustomTypeMatchData* data) override;
+		struct DataPointerCustomTypeInterface : public ReflectionCustomTypeInterface {
+			bool Match(ReflectionCustomTypeMatchData* data) override;
 
-			ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) override;
+			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
 
-			void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) override;
+			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
 
-			bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) override;
+			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
 
-			void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
+			void Copy(ReflectionCustomTypeCopyData* data) override;
 
-			bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+			bool Compare(ReflectionCustomTypeCompareData* data) override;
 
-			void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) override;
+			void Deallocate(ReflectionCustomTypeDeallocateData* data) override;
+		};
+
+		struct AllocatorCustomTypeInterface : public ReflectionCustomTypeInterface {
+			bool Match(ReflectionCustomTypeMatchData* data) override;
+
+			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
+
+			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
+
+			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
+
+			void Copy(ReflectionCustomTypeCopyData* data) override;
+
+			bool Compare(ReflectionCustomTypeCompareData* data) override;
+
+			void Deallocate(ReflectionCustomTypeDeallocateData* data) override;
 		};
 
 		// ---------------------------------------------------------------------------------------------------------------------
@@ -330,6 +350,7 @@ namespace ECSEngine {
 			ReflectionTypeTable type_definitions;
 			ReflectionEnumTable enum_definitions;
 			ReflectionFieldTable field_table;
+			ReflectionTypedefTable typedefs;
 			ResizableStream<FolderHierarchy> folders;
 			ResizableStream<ReflectionConstant> constants;
 			ResizableStream<BlittableType> blittable_types;
@@ -345,7 +366,7 @@ namespace ECSEngine {
 			const char* opening_parenthese,
 			const char* closing_parenthese,
 			const char* name,
-			unsigned int index
+			unsigned int file_index
 		);
 
 		ECSENGINE_API void AddTypeDefinition(
@@ -353,7 +374,14 @@ namespace ECSEngine {
 			const char* opening_parenthese,
 			const char* closing_parenthese,
 			const char* name,
-			unsigned int index
+			unsigned int file_index
+		);
+		
+		ECSENGINE_API void AddTypedefAlias(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			const char* typedef_start,
+			const char* typedef_colon,
+			unsigned int file_index
 		);
 
 		enum ECS_REFLECTION_ADD_TYPE_FIELD_RESULT : unsigned char {
