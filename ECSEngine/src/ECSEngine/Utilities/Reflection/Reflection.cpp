@@ -14,6 +14,10 @@
 #include "../StreamUtilities.h"
 #include "../EvaluateExpression.h"
 
+#include "../../Allocators/StackAllocator.h"
+#include "../../Allocators/MultipoolAllocator.h"
+#include "../../Allocators/MemoryProtectedAllocator.h"
+
 namespace ECSEngine {
 
 	namespace Reflection {
@@ -41,13 +45,22 @@ namespace ECSEngine {
 			unsigned char parallel_stream_count;
 		};
 
+		struct ReflectionParsedTypedef {
+			Stream<char> name;
+			ReflectionTypedef entry;
+		};
+
 		struct ReflectionManagerParseStructuresThreadTaskData {
+			// This is the allocator from which the resizable streams are allocated from.
+			// The thread memory is a separate allocation.
+			ResizableLinearAllocator allocator;
 			CapacityStream<char> thread_memory;
 			Stream<Stream<wchar_t>> paths;
-			CapacityStream<ReflectionType> types;
-			CapacityStream<ReflectionEnum> enums;
-			CapacityStream<ReflectionConstant> constants;
-			CapacityStream<ReflectionEmbeddedArraySize> embedded_array_size;
+			ResizableStream<ReflectionType> types;
+			ResizableStream<ReflectionEnum> enums;
+			ResizableStream<ReflectionConstant> constants;
+			ResizableStream<ReflectionEmbeddedArraySize> embedded_array_size;
+			ResizableStream<ReflectionParsedTypedef> typedefs;
 			HashTableDefault<Stream<ReflectionExpression>> expressions;
 			const ReflectionFieldTable* field_table;
 			CapacityStream<char>* error_message;
@@ -916,6 +929,88 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 
 #pragma endregion
 
+#pragma region Allocator
+
+		// TODO: Finish this
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool AllocatorCustomTypeInterface::Match(ReflectionCustomTypeMatchData* data) {
+			return AllocatorTypeFromString(data->definition) != ECS_ALLOCATOR_TYPE_COUNT;
+		}
+
+		ulong2 AllocatorCustomTypeInterface::GetByteSize(ReflectionCustomTypeByteSizeData* data) {
+			ECS_ALLOCATOR_TYPE type = AllocatorTypeFromString(data->definition);
+
+#define MACRO(allocator) sizeof(allocator),
+
+			// We only need the byte size, the alignment is going to be the maximum for all types
+			static size_t byte_sizes[] = {
+				ECS_EXPAND_ALLOCATOR_MACRO(MACRO)
+			};
+
+#undef MACRO
+
+			static_assert(ECS_COUNTOF(byte_sizes) == ECS_ALLOCATOR_TYPE_COUNT);
+
+			return { sizeof(DataPointer), alignof(DataPointer) };
+		}
+
+		void AllocatorCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {}
+
+		bool AllocatorCustomTypeInterface::IsBlittable(ReflectionCustomTypeIsBlittableData* data) {
+			return false;
+		}
+
+		void AllocatorCustomTypeInterface::Copy(ReflectionCustomTypeCopyData* data) {
+			const DataPointer* source = (const DataPointer*)data->source;
+			DataPointer* destination = (DataPointer*)data->destination;
+
+			if (data->deallocate_existing_data) {
+				destination->Deallocate(data->allocator);
+			}
+
+			unsigned short source_size = source->GetData();
+			void* allocation = nullptr;
+			if (source_size > 0) {
+				allocation = Allocate(data->allocator, source_size);
+				memcpy(allocation, source->GetPointer(), source_size);
+			}
+
+			destination->SetData(source_size);
+			destination->SetPointer(allocation);
+		}
+
+		bool AllocatorCustomTypeInterface::Compare(ReflectionCustomTypeCompareData* data) {
+			const DataPointer* first = (const DataPointer*)data->first;
+			const DataPointer* second = (const DataPointer*)data->second;
+
+			unsigned short first_size = first->GetData();
+			unsigned short second_size = second->GetData();
+			if (first_size == second_size) {
+				return memcmp(first->GetPointer(), second->GetPointer(), first_size) == 0;
+			}
+			return false;
+		}
+
+		void AllocatorCustomTypeInterface::Deallocate(ReflectionCustomTypeDeallocateData* data) {
+			for (size_t index = 0; index < data->element_count; index++) {
+				void* current_source = OffsetPointer(data->source, index * data->element_byte_size);
+				DataPointer* data_pointer = (DataPointer*)current_source;
+				void* pointer = data_pointer->GetPointer();
+				if (pointer != nullptr) {
+					DeallocateEx(data->allocator, pointer);
+				}
+				if (data->reset_buffers) {
+					data_pointer = nullptr;
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		// TODO: move this to another file
@@ -925,7 +1020,8 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 			new ReferenceCountedCustomTypeInterface(),
 			new SparseSetCustomTypeInterface(),
 			new MaterialAssetCustomTypeInterface(),
-			new DataPointerCustomTypeInterface()
+			new DataPointerCustomTypeInterface(),
+			new AllocatorCustomTypeInterface()
 		};
 
 		static_assert(ECS_COUNTOF(ECS_REFLECTION_CUSTOM_TYPES) == ECS_REFLECTION_CUSTOM_TYPE_COUNT, "ECS_REFLECTION_CUSTOM_TYPES is not in sync");
@@ -981,6 +1077,7 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 
 			constants.Initialize(allocator, 0);
 			blittable_types.Initialize(allocator, 0);
+			typedefs.Initialize(allocator, 0);
 
 			AddKnownBlittableExceptions();
 		}
@@ -1103,6 +1200,57 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 
 			uintptr_t ptr = (uintptr_t)allocation;
 
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+
+			// Bind the typedefs firstly
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t typedef_index = 0; typedef_index < data[data_index].typedefs.size; typedef_index++) {
+					// Check to see that this typedef does not conflict with other structures - both enums and types,
+					// But other typedefs as well.
+					const ReflectionParsedTypedef& typedef_entry = data[data_index].typedefs[typedef_index];
+					Stream<char> typedef_name = typedef_entry.name;
+					if (typedefs.Find(typedef_name) != -1) {
+						ECS_FORMAT_TEMP_STRING(message, "Typedef with name {#} conflicts with another typedef!", typedef_name);
+						WriteErrorMessage(data, message.buffer, -1);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+
+					if (type_definitions.Find(typedef_name) != -1) {
+						ECS_FORMAT_TEMP_STRING(message, "Typedef with name {#} conflicts with another type struct!", typedef_name);
+						WriteErrorMessage(data, message.buffer, -1);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+
+					if (enum_definitions.Find(typedef_name) != -1) {
+						ECS_FORMAT_TEMP_STRING(message, "Typedef with name {#} conflicts with another enum!", typedef_name);
+						WriteErrorMessage(data, message.buffer, -1);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+
+					ReflectionTypedef typedef_value = typedef_entry.entry.CopyTo(ptr);
+					typedef_name = typedef_name.CopyTo(ptr);
+					typedef_value.folder_hierarchy_index = folder_index;
+					typedefs.InsertDynamic(folders.allocator, typedef_value, typedef_name);
+				}
+			}
+
+			// After the typedefs are added, change the fields of all user types that reference typedefs - we can reference the memory of the
+			// Typedef directly, no need to adjust the allocation size.
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
+					ReflectionType& type = data[data_index].types[type_index];
+					for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
+						unsigned int typedef_index = typedefs.Find(type.fields[field_index].definition);
+						if (typedef_index != -1) {
+							type.fields[field_index].definition = typedefs.GetValueFromIndex(typedef_index).definition;
+						}
+					}
+				}
+			}
+
 			// Bind all the new constants and add all enums before evaluating basic array sizes for reflection types
 			// since they might refer them
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
@@ -1134,7 +1282,7 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
-					enum_definitions.Insert(enum_, identifier);
+					enum_definitions.InsertDynamic(folders.allocator, enum_, identifier);
 				}
 			}
 
@@ -1220,7 +1368,6 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 			};
 
 			typedef HashTableDefault<Stream<SkippedField>> SkippedFieldsTable;
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 
 			size_t total_type_count = 0;
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
@@ -1333,11 +1480,11 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 						}
 					}
 					
-					type_definitions.Insert(type, identifier);
+					type_definitions.InsertDynamic(folders.allocator, type, identifier);
 				}
 			}
 
-			auto _is_still_to_be_determined = [&](Stream<char> type, auto is_still_to_be_determined) {
+			auto is_type_still_to_be_determined_recursion = [&](Stream<char> type, auto is_still_to_be_determined) {
 				for (size_t index = 0; index < types_to_be_processed.size; index++) {
 					if (data[types_to_be_processed[index].x].types[types_to_be_processed[index].y].name == type) {
 						return true;
@@ -1355,8 +1502,8 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 				return false;
 			};
 
-			auto is_still_to_be_determined = [&](Stream<char> type) {
-				return _is_still_to_be_determined(type, _is_still_to_be_determined);
+			auto is_type_still_to_be_determined = [&](Stream<char> type) {
+				return is_type_still_to_be_determined_recursion(type, is_type_still_to_be_determined_recursion);
 			};
 
 			// Returns true if all skipped fields have had their byte size and alignment determined
@@ -1494,7 +1641,7 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 								bool are_all_user_defined_types_determined = true;
 								for (size_t field_index = 0; field_index < type->fields.size && are_all_user_defined_types_determined; field_index++) {
 									if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
-										if (is_still_to_be_determined(type->fields[field_index].definition)) {
+										if (is_type_still_to_be_determined(type->fields[field_index].definition)) {
 											are_all_user_defined_types_determined = false;
 										}
 									}
@@ -1767,13 +1914,8 @@ if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type ==
 
 		void ReflectionManager::DeallocateThreadTaskData(ReflectionManagerParseStructuresThreadTaskData& data)
 		{
-			Free(data.thread_memory.buffer);
-			Deallocate(folders.allocator, data.types.buffer);
-			Deallocate(folders.allocator, data.enums.buffer);
-			Deallocate(folders.allocator, data.paths.buffer);
-			Deallocate(folders.allocator, data.constants.buffer);
-			Deallocate(folders.allocator, data.embedded_array_size.buffer);
-			Deallocate(folders.allocator, data.expressions.GetAllocatedBuffer());
+			data.thread_memory.DeallocateEx({ nullptr });
+			data.allocator.Free();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -2358,7 +2500,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::InitializeParseThreadTaskData(
-			size_t thread_memory,
+			size_t thread_memory_capacity,
 			size_t path_count, 
 			ReflectionManagerParseStructuresThreadTaskData& data, 
 			CapacityStream<char>* error_message
@@ -2367,22 +2509,20 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.error_message = error_message;
 
 			// Allocate memory for the type and enum stream; speculate some reasonable numbers
-			const size_t max_types = 64;
-			const size_t max_enums = 16;
-			const size_t path_size = 128;
-			const size_t max_constants = 64;
-			const size_t max_expressions = 64;
-			const size_t max_embedded_array_size = 64;
+			const size_t INITIAL_ALLOCATOR_CAPACITY = ECS_KB * 32;
+			const size_t BACKUP_ALLOCATOR_CAPACITY = ECS_MB * 32;
+			data.allocator = ResizableLinearAllocator(Allocate(folders.allocator, INITIAL_ALLOCATOR_CAPACITY), INITIAL_ALLOCATOR_CAPACITY, BACKUP_ALLOCATOR_CAPACITY, { nullptr });
 
-			data.types.Initialize(folders.allocator, 0, max_types);
-			data.enums.Initialize(folders.allocator, 0, max_enums);
-			data.paths.Initialize(folders.allocator, path_count);
-			data.constants.Initialize(folders.allocator, 0, max_constants);
-			data.expressions.Initialize(folders.allocator, max_expressions);
-			data.embedded_array_size.Initialize(folders.allocator, 0, max_embedded_array_size);
+			// Initialize the arrays with a decent small size
+			data.types.Initialize(&data.allocator, 32);
+			data.enums.Initialize(&data.allocator, 16);
+			data.paths.Initialize(&data.allocator, path_count);
+			data.constants.Initialize(&data.allocator, 16);
+			data.expressions.Initialize(&data.allocator, 32);
+			data.embedded_array_size.Initialize(&data.allocator, 128);
+			data.typedefs.Initialize(&data.allocator, 16);
 
-			void* thread_allocation = Malloc(thread_memory);
-			data.thread_memory.InitializeFromBuffer(thread_allocation, 0, thread_memory);
+			data.thread_memory.InitializeEx({ nullptr }, 0, thread_memory_capacity);
 			data.field_table = &field_table;
 			data.success = true;
 			data.total_memory = 0;
@@ -3025,140 +3165,152 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 							// get the type name
 							const char* space = strchr(ecs_reflect_end_position, ' ');
-							// The reflection is tagged, record it for later on
-							if (space != ecs_reflect_end_position) {
-								tag_name = ecs_reflect_end_position[0] == '_' ? ecs_reflect_end_position + 1 : ecs_reflect_end_position;
-							}
 
 							// if no space was found after the token, fail
 							if (space == nullptr) {
 								WriteErrorMessage(data, "Finding type leading space failed. Faulty path: ", index);
 								return;
 							}
-							space++;
 
-							const char* second_space = strchr(space, ' ');
+							// The reflection is tagged, record it for later on
+							if (space != ecs_reflect_end_position) {
+								tag_name = ecs_reflect_end_position[0] == '_' ? ecs_reflect_end_position + 1 : ecs_reflect_end_position;
+							}
+							space = SkipWhitespace(space);
 
-							// if the second space was not found, fail
-							if (second_space == nullptr) {
+							const char* second_space = SkipCodeIdentifier(space);
+							// If the second space was not found, fail
+							if (second_space == nullptr || space == second_space) {
 								WriteErrorMessage(data, "Finding type final space failed. Faulty path: ", index);
 								return;
 							}
 
-							// null terminate 
-							char* second_space_mutable = (char*)(second_space);
-							*second_space_mutable = '\0';
-							data->total_memory += PtrDifference(space, second_space_mutable) + 1;
-
-							file_contents[word_offset] = '\0';
-							// find the last new line character in order to speed up processing
-							const char* last_new_line = strrchr(file_contents + last_position, '\n');
-
-							// if it failed, set it to the start of the processing block
-							last_new_line = last_new_line == nullptr ? file_contents + last_position : last_new_line;
-
-							const char* opening_parenthese = strchr(second_space + 1, '{');
-							// if no opening curly brace was found, fail
-							if (opening_parenthese == nullptr) {
-								WriteErrorMessage(data, "Finding opening curly brace failed. Faulty path: ", index);
-								return;
-							}
-
-							const char* closing_parenthese = strchr(opening_parenthese + 1, '}');
-							// if no closing curly brace was found, fail
-							if (closing_parenthese == nullptr) {
-								WriteErrorMessage(data, "Finding closing curly brace failed. Faulty path: ", index);
-								return;
-							}
-
-							last_position = PtrDifference(file_contents, closing_parenthese + 1);
-
-							// enum declaration
-							const char* enum_ptr = strstr(last_new_line + 1, "enum");
-							if (enum_ptr != nullptr) {
-								AddEnumDefinition(data, opening_parenthese, closing_parenthese, space, index);
-								if (data->success == false) {
+							// Determine whether this is a typedef or type/enum declaration
+							Stream<char> structure_name = { space, PointerDifference(second_space, space) / sizeof(char) };
+							if (structure_name == STRING(typedef)) {
+								const char* typedef_colon = strchr(second_space, ';');
+								if (typedef_colon == nullptr) {
+									WriteErrorMessage(data, "Finding typedef alias colon failed. Faulty path: ", index);
 									return;
 								}
+								AddTypedefAlias(data, structure_name.buffer, typedef_colon, index);
 							}
 							else {
-								closing_parenthese = FindMatchingParenthesis(opening_parenthese + 1, file_contents + bytes_read, '{', '}');
-								if (closing_parenthese == nullptr) {
-									WriteErrorMessage(data, "Finding struct or class closing brace failed. Faulty path: ", index);
+								// null terminate 
+								char* second_space_mutable = (char*)(second_space);
+								*second_space_mutable = '\0';
+								data->total_memory += PtrDifference(space, second_space_mutable) + 1;
+
+								file_contents[word_offset] = '\0';
+								// find the last new line character in order to speed up processing
+								const char* last_new_line = strrchr(file_contents + last_position, '\n');
+
+								// if it failed, set it to the start of the processing block
+								last_new_line = last_new_line == nullptr ? file_contents + last_position : last_new_line;
+
+								const char* opening_parenthese = strchr(second_space + 1, '{');
+								// if no opening curly brace was found, fail
+								if (opening_parenthese == nullptr) {
+									WriteErrorMessage(data, "Finding opening curly brace failed. Faulty path: ", index);
 									return;
 								}
 
-								// Update the last position
+								const char* closing_parenthese = strchr(opening_parenthese + 1, '}');
+								// if no closing curly brace was found, fail
+								if (closing_parenthese == nullptr) {
+									WriteErrorMessage(data, "Finding closing curly brace failed. Faulty path: ", index);
+									return;
+								}
+
 								last_position = PtrDifference(file_contents, closing_parenthese + 1);
 
-								// type definition
-								const char* struct_ptr = strstr(last_new_line + 1, "struct");
-								const char* class_ptr = strstr(last_new_line + 1, "class");
-
-								// if none found, fail
-								if (struct_ptr == nullptr && class_ptr == nullptr) {
-									WriteErrorMessage(data, "Enum and type definition validation failed, didn't find neither", index);
-									return;
-								}
-
-								// Check to see if it is a tagged type with a preparsing handler
-								const char* type_opening_parenthese = opening_parenthese;
-								const char* type_closing_parenthese = closing_parenthese;
-								const char* type_name = space;
-
-								if (tag_name != nullptr) {
-									const char* end_tag_name = SkipCodeIdentifier(tag_name);
-									Stream<char> current_tag = { tag_name, PointerDifference(end_tag_name, tag_name) };
-									for (size_t handler_index = 0; handler_index < ECS_COUNTOF(ECS_REFLECTION_TYPE_TAG_HANDLER); handler_index++) {
-										if (ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].tag == current_tag) {
-											Stream<char> new_range = ProcessTypeTagHandler(data, handler_index, Stream<char>(
-												opening_parenthese,
-												PointerDifference(closing_parenthese, opening_parenthese))
-											);
-											if (new_range.size == 0) {
-												ECS_FORMAT_TEMP_STRING(message, "Failed to preparse the type {#} with the known tag {#}", type_name, current_tag);
-												WriteErrorMessage(data, message.buffer, index);
-												return;
-											}
-											type_opening_parenthese = new_range.buffer;
-											type_closing_parenthese = new_range.buffer + new_range.size - 1;
-											break;
-										}
+								// enum declaration
+								const char* enum_ptr = strstr(last_new_line + 1, "enum");
+								if (enum_ptr != nullptr) {
+									AddEnumDefinition(data, opening_parenthese, closing_parenthese, space, index);
+									if (data->success == false) {
+										return;
 									}
-								}
-
-								AddTypeDefinition(data, type_opening_parenthese, type_closing_parenthese, type_name, index);
-								if (data->success == false) {
-									return;
-								}
-								else if (tag_name != nullptr) {
-									const char* end_tag_name = SkipCodeIdentifier(tag_name);
-
-									if (*end_tag_name == '(') {
-										// variable type macro
-										end_tag_name = SkipCodeIdentifier(end_tag_name + 1);
-										if (*end_tag_name == ')') {
-											end_tag_name++;
-										}
-										else {
-											// Return, invalid variable type macro
-											WriteErrorMessage(data, "Invalid type tag macro, no closing parenthese found. Path index: ", index);
-											return;
-										}
-									}
-
-									char* new_tag_name = data->thread_memory.buffer + data->thread_memory.size;
-									size_t string_size = PtrDifference(tag_name, end_tag_name);
-									data->thread_memory.size += string_size + 1;
-
-									// Record its tag
-									data->total_memory += (string_size + 1) * sizeof(char);
-									memcpy(new_tag_name, tag_name, sizeof(char) * string_size);
-									new_tag_name[string_size] = '\0';
-									data->types[data->types.size - 1].tag = new_tag_name;
 								}
 								else {
-									data->types[data->types.size - 1].tag = { nullptr, 0 };
+									closing_parenthese = FindMatchingParenthesis(opening_parenthese + 1, file_contents + bytes_read, '{', '}');
+									if (closing_parenthese == nullptr) {
+										WriteErrorMessage(data, "Finding struct or class closing brace failed. Faulty path: ", index);
+										return;
+									}
+
+									// Update the last position
+									last_position = PtrDifference(file_contents, closing_parenthese + 1);
+
+									// type definition
+									const char* struct_ptr = strstr(last_new_line + 1, "struct");
+									const char* class_ptr = strstr(last_new_line + 1, "class");
+
+									// if none found, fail
+									if (struct_ptr == nullptr && class_ptr == nullptr) {
+										WriteErrorMessage(data, "Enum and type definition validation failed, didn't find neither", index);
+										return;
+									}
+
+									// Check to see if it is a tagged type with a preparsing handler
+									const char* type_opening_parenthese = opening_parenthese;
+									const char* type_closing_parenthese = closing_parenthese;
+									const char* type_name = space;
+
+									if (tag_name != nullptr) {
+										const char* end_tag_name = SkipCodeIdentifier(tag_name);
+										Stream<char> current_tag = { tag_name, PointerDifference(end_tag_name, tag_name) };
+										for (size_t handler_index = 0; handler_index < ECS_COUNTOF(ECS_REFLECTION_TYPE_TAG_HANDLER); handler_index++) {
+											if (ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].tag == current_tag) {
+												Stream<char> new_range = ProcessTypeTagHandler(data, handler_index, Stream<char>(
+													opening_parenthese,
+													PointerDifference(closing_parenthese, opening_parenthese))
+												);
+												if (new_range.size == 0) {
+													ECS_FORMAT_TEMP_STRING(message, "Failed to preparse the type {#} with the known tag {#}", type_name, current_tag);
+													WriteErrorMessage(data, message.buffer, index);
+													return;
+												}
+												type_opening_parenthese = new_range.buffer;
+												type_closing_parenthese = new_range.buffer + new_range.size - 1;
+												break;
+											}
+										}
+									}
+
+									AddTypeDefinition(data, type_opening_parenthese, type_closing_parenthese, type_name, index);
+									if (data->success == false) {
+										return;
+									}
+									else if (tag_name != nullptr) {
+										const char* end_tag_name = SkipCodeIdentifier(tag_name);
+
+										if (*end_tag_name == '(') {
+											// variable type macro
+											end_tag_name = SkipCodeIdentifier(end_tag_name + 1);
+											if (*end_tag_name == ')') {
+												end_tag_name++;
+											}
+											else {
+												// Return, invalid variable type macro
+												WriteErrorMessage(data, "Invalid type tag macro, no closing parenthese found. Path index: ", index);
+												return;
+											}
+										}
+
+										char* new_tag_name = data->thread_memory.buffer + data->thread_memory.size;
+										size_t string_size = PtrDifference(tag_name, end_tag_name);
+										data->thread_memory.size += string_size + 1;
+
+										// Record its tag
+										data->total_memory += (string_size + 1) * sizeof(char);
+										memcpy(new_tag_name, tag_name, sizeof(char) * string_size);
+										new_tag_name[string_size] = '\0';
+										data->types.Last().tag = new_tag_name;
+									}
+									else {
+										data->types.Last().tag = { nullptr, 0 };
+									}
 								}
 							}
 						}
@@ -3380,7 +3532,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					*stable_expression = expression;
 					data->thread_memory.size += sizeof(ReflectionExpression);
 
-					data->expressions.Insert({ stable_expression, 1 }, type.name);
+					data->expressions.InsertDynamic(&data->allocator, { stable_expression, 1 }, type.name);
 				}
 				else {
 					// Allocate a new buffer and update the expressions
@@ -3820,6 +3972,71 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void AddTypedefAlias(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			const char* typedef_start,
+			const char* typedef_colon,
+			unsigned int file_index
+		) {
+			// The range won't include the colon, and that's the wanted behaviour
+			Stream<char> typedef_range = { typedef_start, PointerDifference(typedef_colon, typedef_start) / sizeof(char) };
+			Stream<char> typedef_whitespace = SkipCodeIdentifier(typedef_range);
+
+			// Skip the type definition
+			if (typedef_whitespace.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find whitespace after typedef.", typedef_range);
+				WriteErrorMessage(data, message.buffer, file_index);
+				return;
+			}
+
+			// Get the definition start. The definition range will be the definition start up until the typedef start,
+			// With whitespaces eliminated. This will take into account template types as well.
+			Stream<char> definition_start = SkipWhitespaceEx(typedef_whitespace);
+			if (definition_start.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find definition start.", typedef_range);
+				WriteErrorMessage(data, message.buffer, file_index);
+				return;
+			}
+
+			// Retrieve the typedef name
+			Stream<char> typedef_name_end = SkipWhitespaceEx(typedef_range, -1);
+			Stream<char> typedef_name_start = SkipCodeIdentifier(typedef_name_end, -1);
+			if (typedef_name_start.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find name start.", typedef_range);
+				WriteErrorMessage(data, message.buffer, file_index);
+				return;
+			}
+
+			Stream<char> typedef_name = { typedef_name_start.buffer + typedef_name_start.size, typedef_name_end.size - typedef_name_start.size };
+			if (typedef_name.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. The name is empty.", typedef_range);
+				WriteErrorMessage(data, message.buffer, file_index);
+				return;
+			}
+
+			Stream<char> definition_end = SkipWhitespaceEx(typedef_name_start, -1);
+			if (definition_end.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could find definition end.", typedef_range);
+				WriteErrorMessage(data, message.buffer, file_index);
+				return;
+			}
+
+			Stream<char> definition = { definition_start.buffer, PointerDifference(definition_end.buffer + definition_end.size, definition_start.buffer) / sizeof(char) };
+			if (definition.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. The definition is empty.", typedef_range);
+				WriteErrorMessage(data, message.buffer, file_index);
+				return;
+			}
+
+			ReflectionParsedTypedef typedef_entry;
+			typedef_entry.name = typedef_name;
+			typedef_entry.entry.definition = definition;
+			data->total_memory += sizeof(typedef_entry) + typedef_name.CopySize() + typedef_entry.entry.CopySize();
+			data->typedefs.Add(typedef_entry);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ECS_REFLECTION_ADD_TYPE_FIELD_RESULT AddTypeField(
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
@@ -4118,7 +4335,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					embedded_size.reflection_type = type.name;
 					embedded_size.body = embedded_array_size_body;
 
-					data->embedded_array_size.AddAssert(embedded_size);
+					data->embedded_array_size.Add(embedded_size);
 				}
 			}
 			return success ? ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS : ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
@@ -4323,7 +4540,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			char* current_character = (char*)last_type_character;
 			if (*current_character == '>') {
 				// Template type - remove
-				unsigned int hey_there = 0;
+				//unsigned int hey_there = 0;
 			}
 
 			current_character[1] = '\0';

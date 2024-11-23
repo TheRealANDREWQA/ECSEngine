@@ -892,7 +892,20 @@ namespace ECSEngine {
 
 		size_t ReflectionConstant::CopySize() const
 		{
-			return name.MemoryOf(name.size);
+			return name.CopySize();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionTypedef ReflectionTypedef::CopyTo(uintptr_t& ptr) const {			
+			ReflectionTypedef type_definition;
+			type_definition.definition = definition.CopyTo(ptr);
+			type_definition.folder_hierarchy_index = folder_hierarchy_index;
+			return type_definition;
+		}
+
+		size_t ReflectionTypedef::CopySize() const {
+			return definition.CopySize();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

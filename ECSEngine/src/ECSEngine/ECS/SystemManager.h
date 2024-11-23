@@ -53,6 +53,9 @@ namespace ECSEngine {
 		// Clears all the memory used by the system settings
 		void ClearSystemSettings();
 
+		// Copies the data from the other system manager into this one.
+		void CopyOther(const SystemManager* other);
+
 		// Frees the memory of the allocators
 		void FreeMemory();
 

@@ -74,6 +74,12 @@ namespace ECSEngine {
 		ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE;
 	};
 
+	// Returns ECS_ALLOCATOR_TYPE_COUNT if the string does not match any allocator.
+	ECSENGINE_API ECS_ALLOCATOR_TYPE AllocatorTypeFromString(const char* string, size_t string_size);
+
+	// It will assert if the string capacity is not large enough
+	ECSENGINE_API void WriteAllocatorTypeToString(ECS_ALLOCATOR_TYPE type, char* string, unsigned int& string_size, unsigned int string_capacity);
+
 	struct ECSENGINE_API Copyable {
 		ECS_INLINE Copyable(size_t _byte_size) : byte_size(_byte_size) {}
 
@@ -157,6 +163,15 @@ namespace ECSEngine {
 		}
 		return allocation;
 	}
+
+#define ECS_EXPAND_ALLOCATOR_MACRO(macro) \
+	macro(LinearAllocator) \
+	macro(StackAllocator) \
+	macro(MultipoolAllocator) \
+	macro(MemoryManager) \
+	macro(MemoryArena) \
+	macro(ResizableLinearAllocator) \
+	macro(MemoryProtectedAllocator)
 
 #define ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(return_type, function_name, ...) template ECSENGINE_API return_type function_name(LinearAllocator*, __VA_ARGS__); \
 template ECSENGINE_API return_type function_name(StackAllocator*, __VA_ARGS__); \

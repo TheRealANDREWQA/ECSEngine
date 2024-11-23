@@ -528,13 +528,13 @@ namespace ECSEngine {
     }
 
 	const char* ALLOCATOR_NAMES[] = {
-		"Linear",
-		"Stack",
-		"Multipool",
-		"Manager",
-		"Arena",
-		"ResizableLinear",
-		"MemoryProtectet"
+		STRING(LinearAllocator),
+		STRING(StackAllocator),
+		STRING(MultipoolAllocator),
+		STRING(MemoryManager),
+		STRING(MemoryArena),
+		STRING(ResizableLinearAllocator),
+		STRING(MemoryProtectedAllocator)
 	};
 
 	static_assert(ECS_COUNTOF(ALLOCATOR_NAMES) == ECS_ALLOCATOR_TYPE_COUNT);
@@ -543,6 +543,22 @@ namespace ECSEngine {
 	{
 		ECS_ASSERT(type < ECS_ALLOCATOR_TYPE_COUNT);
 		return ALLOCATOR_NAMES[type];
+	}
+
+	ECS_ALLOCATOR_TYPE AllocatorTypeFromString(const char* string, size_t string_size) {
+		for (size_t index = 0; index < ECS_COUNTOF(ALLOCATOR_NAMES); index++) {
+			if (strlen(ALLOCATOR_NAMES[index]) == string_size && memcmp(string, ALLOCATOR_NAMES[index], string_size * sizeof(char)) == 0) {
+				return (ECS_ALLOCATOR_TYPE)index;
+			}
+		}
+		return ECS_ALLOCATOR_TYPE_COUNT;
+	}
+
+	void WriteAllocatorTypeToString(ECS_ALLOCATOR_TYPE type, char* string, unsigned int& string_size, unsigned int string_capacity) {
+		unsigned int type_string_size = (unsigned int)strlen(ALLOCATOR_NAMES[type]);
+		ECS_ASSERT(type_string_size + string_size <= string_capacity, "Allocator type string does not fit into the given memory!");
+		memcpy(string + string_size, ALLOCATOR_NAMES[type], type_string_size * sizeof(char));
+		string_size += type_string_size;
 	}
 
 	Copyable* Copyable::Copy(AllocatorPolymorphic allocator) const {

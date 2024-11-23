@@ -360,6 +360,20 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
+	void CopyWorld(World* destination_world, const World* source_world, bool copy_resource_manager_entries) {
+		// We don't want to clear the physical pages, they might be used again in this call
+		ClearWorld(destination_world, false);
+
+		// The structure that need to be copied are the entity manager, the system manager, the task scheduler
+		// And the resource manager, if the user specified so, if the pointers are different. If it is the same resource manager instance,
+		// Then the resources don't need to be copied.
+
+		destination_world->entity_manager->CopyOther(source_world->entity_manager);
+		//destination_world->system_manager->
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------
+
 	void StopSimulation(SystemManager* system_manager) {
 		bool* status = (bool*)system_manager->GetData(STOP_SIMULATION_IDENTIFIER);
 		*status = true;
