@@ -500,8 +500,6 @@ namespace ECSEngine {
 
 #pragma region Allocator
 
-		// TODO: Finish this
-
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool AllocatorCustomTypeInterface::Match(ReflectionCustomTypeMatchData* data) {
@@ -524,6 +522,7 @@ namespace ECSEngine {
 			return { byte_sizes[type], alignof(void*) };
 		}
 
+		// No dependent types
 		void AllocatorCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {}
 
 		bool AllocatorCustomTypeInterface::IsBlittable(ReflectionCustomTypeIsBlittableData* data) {

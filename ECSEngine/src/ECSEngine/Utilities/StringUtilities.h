@@ -315,6 +315,72 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 	// It will search the string from the last character until the starting one
 	ECSENGINE_API Stream<wchar_t> FindCharacterReverse(Stream<wchar_t> characters, wchar_t character);
 
+	// It will return the first appereance of the token inside the character stream
+	// It will not call strchr/strstr, this function being well suited if searching a large string
+	// Returns -1 if it doesn't find the token, else the offset inside the character stream of the first appeareance
+	template<typename CharacterType, typename Token, Stream<CharacterType> (*SearchFunctor)(Stream<CharacterType>, Token)>
+	ECS_INLINE size_t FindFirstTokenOffsetImpl(Stream<CharacterType> characters, Token token) {
+		Stream<CharacterType> result = SearchFunctor(characters, token);
+		return result.size == 0 ? (size_t)-1 : result.buffer - characters.buffer;
+	}
+
+	// It will return the first appereance of the token inside the character stream
+	// It will not call strchr/strstr, this function being well suited if searching a large string
+	// Returns -1 if it doesn't find the token, else the offset inside the character stream of the first appeareance
+	ECS_INLINE size_t FindFirstCharacterOffset(Stream<char> characters, char token) {
+		return FindFirstTokenOffsetImpl<char, char, FindFirstCharacter>(characters, token);
+	}
+
+	// It will return the first appereance of the token inside the character stream
+	// It will not call strchr/strstr, this function being well suited if searching a large string
+	// Returns -1 if it doesn't find the token, else the offset inside the character stream of the first appeareance
+	ECS_INLINE size_t FindFirstCharacterOffset(Stream<wchar_t> characters, wchar_t token) {
+		return FindFirstTokenOffsetImpl<wchar_t, wchar_t, FindFirstCharacter>(characters, token);
+	}
+
+	// It will return the first appereance of the token inside the character stream
+	// It will not call strchr/strstr, this function being well suited if searching a large string
+	// Returns -1 if it doesn't find the token, else the offset inside the character stream of the first appeareance
+	ECS_INLINE size_t FindFirstTokenOffset(Stream<char> characters, Stream<char> token) {
+		return FindFirstTokenOffsetImpl<char, Stream<char>, FindFirstToken>(characters, token);
+	}
+
+	// It will return the first appereance of the token inside the character stream
+	// It will not call strchr/strstr, this function being well suited if searching a large string
+	// Returns -1 if it doesn't find the token, else the offset inside the character stream of the first appeareance
+	ECS_INLINE size_t FindFirstTokenOffset(Stream<wchar_t> characters, Stream<wchar_t> token) {
+		return FindFirstTokenOffsetImpl<wchar_t, Stream<wchar_t>, FindFirstToken>(characters, token);
+	}
+
+	// It will return the first appereance of the token inside the character stream
+	// It will not call strchr/strstr, this function being well suited if searching a large string
+	// Returns -1 if it doesn't find the token, else the offset inside the character stream of the first appeareance
+	ECS_INLINE size_t FindCharacterReverseOffset(Stream<char> characters, char token) {
+		return FindFirstTokenOffsetImpl<char, char, FindCharacterReverse>(characters, token);
+	}
+
+	// It will return the first appereance of the token inside the character stream
+	// It will not call strchr/strstr, this function being well suited if searching a large string
+	// Returns -1 if it doesn't find the token, else the offset inside the character stream of the first appeareance
+	ECS_INLINE size_t FindCharacterReverseOffset(Stream<wchar_t> characters, wchar_t token) {
+		return FindFirstTokenOffsetImpl<wchar_t, wchar_t, FindCharacterReverse>(characters, token);
+	}
+
+	// It will return the first appereance of the token inside the character stream
+	// It will not call strchr/strstr, this function being well suited if searching a large string
+	// Returns -1 if it doesn't find the token, else the offset inside the character stream of the first appeareance
+	ECS_INLINE size_t FindTokenReverseOffset(Stream<char> characters, Stream<char> token) {
+		return FindFirstTokenOffsetImpl<char, Stream<char>, FindTokenReverse>(characters, token);
+	}
+
+	// It will return the first appereance of the token inside the character stream
+	// It will not call strchr/strstr, this function being well suited if searching a large string
+	// Returns -1 if it doesn't find the token, else the offset inside the character stream of the first appeareance
+	ECS_INLINE size_t FindTokenReverseOffset(Stream<wchar_t> characters, Stream<wchar_t> token) {
+		return FindFirstTokenOffsetImpl<wchar_t, Stream<wchar_t>, FindTokenReverse>(characters, token);
+	}
+
+
 	// Returns nullptr if it doesn't find a match or there is an invalid number of parenthesis
 	ECSENGINE_API const char* FindMatchingParenthesis(
 		const char* start_character,

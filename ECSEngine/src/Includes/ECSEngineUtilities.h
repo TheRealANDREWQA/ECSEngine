@@ -14,6 +14,7 @@
 #include "../ECSEngine/Utilities/File.h"
 #include "../ECSEngine/Utilities/ForEachFiles.h"
 #include "../ECSEngine/Utilities/Crash.h"
+#include "../ECSEngine/Utilities/Tokenize.h"
 
 #include "../ECSEngine/Utilities/Encryption.h"
 #include "../ECSEngine/Utilities/FilePackaging.h"

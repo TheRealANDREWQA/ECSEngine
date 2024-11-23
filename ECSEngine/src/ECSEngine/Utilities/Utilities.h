@@ -257,6 +257,16 @@ namespace ECSEngine {
 		return __popcnt64(value);
 	}
 
+	// If the shift count is larger or equal to 32, it will return 0, instead of the truncation behaviour
+	ECS_INLINE unsigned int SafeRightShift(unsigned int value, unsigned int shift_count) {
+		return shift_count >= 32 ? 0 : value >> shift_count;
+	}
+
+	// If the shift count is larger or equal to 64, it will return 0, instead of the truncation behaviour
+	ECS_INLINE size_t SafeRightShift64(size_t value, size_t shift_count) {
+		return shift_count >= 64 ? 0 : value >> shift_count;
+	}
+
 	// Returns a pair of { value, exponent } which represents the actual value which is greater
 	// and the exponent of the base 2 that gives you that number. Example { 16, 4 }
 	ECS_INLINE ulong2 PowerOfTwoGreaterEx(size_t number) {
