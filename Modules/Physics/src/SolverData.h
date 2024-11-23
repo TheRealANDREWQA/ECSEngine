@@ -11,7 +11,7 @@
 // But also to have referential stability, which can be used to accelerate other structures
 ECS_REFLECT typedef HashTable<ContactConstraint*, EntityPair, HashFunctionPowerOfTwo> ContactTable;
 
-struct PHYSICS_API ECS_REFLECT SolverData {
+struct PHYSICS_API SolverData {
 	ECS_INLINE void SetTimeStepTick(float value) {
 		time_step_tick = value;
 		inverse_time_step_tick = 1.0f / time_step_tick;

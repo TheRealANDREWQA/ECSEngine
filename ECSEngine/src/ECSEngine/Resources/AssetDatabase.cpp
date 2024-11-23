@@ -3,6 +3,7 @@
 #include "../Utilities/File.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
 #include "../Utilities/Reflection/Reflection.h"
+#include "../Utilities/Reflection/ReflectionCustomTypes.h"
 #include "../Utilities/Path.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Utilities/ForEachFiles.h"

@@ -4,6 +4,7 @@
 #include "../Reflection/ReflectionStringFunctions.h"
 #include "../Reflection/Reflection.h"
 #include "../Reflection/ReflectionMacros.h"
+#include "../Reflection/ReflectionCustomTypes.h"
 #include "../ReferenceCountSerialize.h"
 #include "../../Resources/AssetMetadataSerialize.h"
 #include "../../Containers/SparseSet.h"
