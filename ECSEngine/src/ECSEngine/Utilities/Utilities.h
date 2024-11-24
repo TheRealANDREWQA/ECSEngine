@@ -334,7 +334,7 @@ namespace ECSEngine {
 		return value;
 	}
 
-	// If the pointer is null, it will commit the message
+	// If the pointer is not null, it will commit the message
 	ECS_INLINE void SetErrorMessage(CapacityStream<char>* error_message, Stream<char> message) {
 		if (error_message != nullptr) {
 			error_message->AddStreamAssert(message);

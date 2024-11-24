@@ -26,9 +26,18 @@ namespace ECSEngine {
 				return { token_start_index + token_index, count - token_index };
 			}
 
+			ECS_INLINE Subrange GetSubrangeAfterUntilEnd(unsigned int token_index) const {
+				return GetSubrangeUntilEnd(token_index).AdvanceReturn();
+			}
+
 			ECS_INLINE Subrange GetSubrange(unsigned int subrange_start_index, unsigned int subrange_count) const {
 				ECS_ASSERT(subrange_count <= count);
 				return { token_start_index + subrange_start_index, subrange_count };
+			}
+
+			// Advances by one token (from the beginning) and returns the subrange
+			ECS_INLINE Subrange AdvanceReturn() const {
+				return { token_start_index + 1, count - 1 };
 			}
 
 			// Returns the overall token index based on the subrange relative index
@@ -36,8 +45,8 @@ namespace ECSEngine {
 				return token_start_index + token_index;
 			}
 
-			unsigned int token_start_index;
-			unsigned int count;
+			unsigned int token_start_index = 0;
+			unsigned int count = 0;
 		};
 
 		// Must be deallocated with DeallocateResizable()
@@ -91,5 +100,160 @@ namespace ECSEngine {
 
 	// Merges the tokens given by the sequence into a single string, allocated from the allocator
 	ECSENGINE_API Stream<char> TokenizeMergeEntries(const TokenizedString& string, TokenizedString::Subrange sequence, AllocatorPolymorphic allocator);
+
+	// Splits the tokens by the given separator
+	ECSENGINE_API void TokenizeSplitBySeparator(const TokenizedString& string, unsigned int separator_type, AdditionStream<TokenizedString::Subrange> token_ranges);
+	
+	// How many tokens for the rule should match
+	enum ECS_TOKENIZE_RULE_COUNT_TYPE : unsigned char {
+		ECS_TOKENIZE_RULE_ZERO_OR_MORE,
+		ECS_TOKENIZE_RULE_ONE_OR_MORE,
+		ECS_TOKENIZE_RULE_ONE,
+		ECS_TOKENIZE_RULE_ZERO_OR_ONE,
+		// This must be used in conjuction with ONE_PAIR_END and only a
+		// It will use a matched find to find the closing pair. Can be used only
+		// With the selection of MATCH_BY_TYPE or MATCH_BY_STRING with a single value
+		ECS_TOKENIZE_RULE_ONE_PAIR_START,
+		// This must be used in conjunction with ONE_PAIR_START
+		ECS_TOKENIZE_RULE_ONE_PAIR_END,
+	};
+
+	// The type of token that it can match
+	enum ECS_TOKENIZE_RULE_SELECTION_TYPE : unsigned char {
+		ECS_TOKENIZE_RULE_SELECTION_ANY,
+		ECS_TOKENIZE_RULE_SELECTION_SEPARATOR,
+		ECS_TOKENIZE_RULE_SELECTION_GENERAL,
+		ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_TYPE,
+		ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING,
+		ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE,
+	};
+
+	struct TokenizeRuleEntry;
+
+	// A structure that describes a sequence of tokens that satisfy a rule. 
+	// Each rule can contain one or more sets, the rule being satisfied if one of the sets is matched
+	struct ECSENGINE_API TokenizeRule {
+		TokenizeRule Copy(AllocatorPolymorphic allocator) const;
+
+		void Deallocate(AllocatorPolymorphic allocator);
+
+		Stream<Stream<TokenizeRuleEntry>> sets;
+	};
+
+	// Extra data for selection rules
+	union TokenizeRuleSelectionData {
+		// Data for ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_TYPE
+		struct {
+			bool is_multiple_type_indices;
+			union {
+				Stream<unsigned int> type_indices;
+				unsigned int type_index;
+			};
+		};
+
+		// Data for ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING
+		struct {
+			bool is_multiple_strings;
+			union {
+				Stream<Stream<char>> strings;
+				Stream<char> string;
+			};
+		};
+
+		// Data for ECS_TOKENIZE_RULE_SELECTION_MATCH_SUBRULE
+		struct {
+			TokenizeRule subrule;
+		};
+	};
+
+	// A structure that contains one element of a rule.
+	struct ECSENGINE_API TokenizeRuleEntry {
+		TokenizeRuleEntry Copy(AllocatorPolymorphic allocator) const;
+
+		void Deallocate(AllocatorPolymorphic allocator);
+
+		ECS_TOKENIZE_RULE_COUNT_TYPE count_type;
+		ECS_TOKENIZE_RULE_SELECTION_TYPE selection_type;
+		bool is_selection_negated;
+		TokenizeRuleSelectionData selection_data;
+	};
+
+	// The rules for a TokenizeRule made out of strings - which is easier to write down than to create each individual
+	// Entry by hand, is the following: 
+	// $T - matches any token
+	// $S - matches any separator
+	// $G - matches any general token
+	// [] - matches any character from inside the brackets. Cannot nest [], () or definitions inside it
+	// If multiple entire strings are to be matched, you must separate them using a comma , which means
+	// that you cannot use comma as a character inside [].
+	// () - enclose a subrule
+	// ! - before an expression, it means to negate that match. For special token types,
+	// like $T, it must be placed before $, i.e. !$T or !$(
+	// $( - match the ( character
+	// $) - match the ) character
+	// $[ - match the [ character
+	// $] - match the ] character
+	// $. - match the . character
+	// $? - match the ? character
+	// $+ - match the + character
+	// $* - match the * character
+	// \\ - when it appears before a character, it signals that this is the start of a paired character
+	// / - when it appears before a character, it signals that this is the end of a paired character
+	// | - logical or between expressions
+	// . - match the previous token selection only once
+	// ? - match the previous token selection once or zero times (optional)
+	// + - match the previous token selection one or more times
+	// * - match the previous token selection zero or more times
+	// !, $, \\, / and | currently cannot be used at all as characters
+	// You can use defines, like 
+	// identifier_no_template = $G.
+	// identifier_template = $G.\\<$T*//>
+	// identifier = identifier_no_template | identifier_template
+	// Each definition must be on its own line. The final rule should be on the last line
+	// If the rule is not valid, like the paired characters could not be determined, it will return an empty rule
+	// And it will optionally fill in an error message. The boolean allocator_is_temporary can be used to tell the
+	// Function that even temporary allocations can be made from it. It will result in a faster call since it will
+	// Avoid having to work on temporaries that are committed in the parameter allocator at the end.
+	ECSENGINE_API TokenizeRule CreateTokenizeRule(Stream<char> string_rule, AllocatorPolymorphic allocator, bool allocator_is_temporary, CapacityStream<char>* error_message = nullptr);
+
+	// Must be kept in sync with the function GetCppFileTokenSeparators
+	// These are the separators that can appear in a CPP file that we are interested in
+	enum ECS_CPP_FILE_SEPARATOR_TYPE : unsigned char {
+		ECS_CPP_FILE_SEPARATOR_PLUS,
+		ECS_CPP_FILE_SEPARATOR_MINUS,
+		ECS_CPP_FILE_SEPARATOR_ASTERISK,
+		ECS_CPP_FILE_SEPARATOR_MODULO,
+		ECS_CPP_FILE_SEPARATOR_XOR,
+		ECS_CPP_FILE_SEPARATOR_DIVIDE,
+		ECS_CPP_FILE_SEPARATOR_OR,
+		ECS_CPP_FILE_SEPARATOR_AND,
+		ECS_CPP_FILE_SEPARATOR_DOT,
+		ECS_CPP_FILE_SEPARATOR_COMMA,
+		ECS_CPP_FILE_SEPARATOR_COLON,
+		ECS_CPP_FILE_SEPARATOR_SEMICOLON,
+		ECS_CPP_FILE_SEPARATOR_EQUALS,
+		ECS_CPP_FILE_SEPARATOR_OPEN_PAREN,
+		ECS_CPP_FILE_SEPARATOR_CLOSED_PAREN,
+		ECS_CPP_FILE_SEPARATOR_OPEN_SCOPE,
+		ECS_CPP_FILE_SEPARATOR_CLOSED_SCOPE,
+		ECS_CPP_FILE_SEPARATOR_OPEN_SQUARE_BRACKET,
+		ECS_CPP_FILE_SEPARATOR_CLOSED_SQUARE_BRACKET,
+	};
+
+	ECS_INLINE Stream<char> GetCppFileTokenSeparators() {
+		// Must be kept in sync with the above enum
+		return "+-*%^/|&.,:;=(){}[]";
+	}
+
+	// Must be kept in sync with the function GetCppEnumTokenSeparators
+	enum ECS_CPP_ENUM_TOKEN_SEPARATOR_TYPE : unsigned char {
+		ECS_CPP_ENUM_TOKEN_SEPARATOR_COMMA,
+		ECS_CPP_ENUM_TOKEN_SEPARATOR_EQUALS
+	};
+
+	ECS_INLINE Stream<char> GetCppEnumTokenSeparators() {
+		// Must be kept in sync with the above enum
+		return ",=";
+	}
 
 }
