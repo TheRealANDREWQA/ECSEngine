@@ -2,6 +2,7 @@
 #include "Tokenize.h"
 #include "StringUtilities.h"
 #include "Utilities.h"
+#include "../Allocators/ResizableLinearAllocator.h"
 
 namespace ECSEngine {
 
@@ -307,6 +308,591 @@ namespace ECSEngine {
 		}
 
 		return merged_string;
+	}
+
+	void TokenizeSplitBySeparator(const TokenizedString& string, unsigned int separator_type, AdditionStream<TokenizedString::Subrange> token_ranges) {
+		unsigned int range_start = 0;
+		TokenizedString::Subrange find_subrange = string.GetSubrangeUntilEnd(0);
+		unsigned int separator_index = TokenizeFindTokenByType(string, separator_type, find_subrange);
+		while (separator_index != -1) {
+			token_ranges.Add({ range_start, separator_index - range_start });
+			range_start = separator_index + 1;
+			find_subrange = find_subrange.GetSubrangeAfterUntilEnd(separator_index);
+			separator_index = TokenizeFindTokenByType(string, separator_type, find_subrange);
+		}
+
+		if (range_start < string.tokens.Size()) {
+			token_ranges.Add({ range_start, string.tokens.Size() - range_start });
+		}
+	}
+
+	// A definition with its parsed contents
+	struct ParsedDefinition {
+		Stream<char> name;
+		TokenizeRule rule;
+	};
+
+	// It will allocate the final stream from the given allocator
+	static Stream<TokenizeRuleEntry> ParseTokenizeRuleSet(Stream<char> string, AllocatorPolymorphic stack_allocator, Stream<ParsedDefinition> definitions, CapacityStream<char>* error_message) {
+		Stream<TokenizeRuleEntry> result;
+
+		// When a new expression is encountered, we must add a new entry to a stack of expressions
+		ResizableStream<ResizableStream<TokenizeRuleEntry>> expression_blocks(stack_allocator, 1);
+		bool last_entry_in_progress = false;
+		bool is_current_string_selection = false;
+		// This is the string that is building up for a [] block or when a normal string is created, like in typedef. (which means the token typedef appears once)
+		ResizableStream<ResizableStream<char>> string_buildup(stack_allocator, 4);
+		TokenizeRuleEntry* last_entry = nullptr;
+		size_t current_index = 0;
+
+		auto skip_whitespaces = [&]() {
+			while (current_index < string.size && (string[current_index] == ' ' || string[current_index] == '\t')) {
+				current_index++;
+			}
+		};
+
+		auto advance_index = [&]() {
+			current_index++;
+			skip_whitespaces();
+		};
+
+		auto reserve_string_buildup = [&]() {
+			string_buildup.Reserve();
+			string_buildup.size++;
+			string_buildup.Last().Initialize(stack_allocator, 4);
+		};
+		// Reserve an initial buildup
+		reserve_string_buildup();
+
+		auto reset_string_buildup = [&]() {
+			string_buildup.size = 1;
+			string_buildup[0].Reset();
+		};
+
+		auto reserve_token = [&]() {
+			ResizableStream<TokenizeRuleEntry>& expression_rule = expression_blocks.Last();
+			expression_rule.Reserve();
+			expression_rule.size++;
+			last_entry = &expression_rule.Last();
+			last_entry->is_selection_negated = false;
+			last_entry_in_progress = false;
+			// By default, it is a string selection
+			last_entry->selection_type = ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING;
+		};
+
+		auto set_char_for_token = [&](char character) {
+			string_buildup.Last().Add(character);
+		};
+
+		auto set_match_string_for_last_token = [&]() {
+			if (string_buildup.size == 1) {
+				last_entry->selection_data.is_multiple_strings = false;
+				last_entry->selection_data.string = string_buildup[0].Copy(stack_allocator);
+			}
+			else {
+				last_entry->selection_data.is_multiple_strings = true;
+				last_entry->selection_data.strings.Initialize(stack_allocator, string_buildup.size);
+				for (size_t index = 0; index < string_buildup.size; index++) {
+					last_entry->selection_data.strings[index].InitializeAndCopy(stack_allocator, string_buildup[index]);
+				}
+			}
+		};
+
+		// Returns false if an error was encountered, else false. If it fails, it will set an error message.
+		// It will advance to the next character as well.
+		auto parse_count_type_character = [&]() {
+			advance_index();
+
+			if (current_index >= string.size) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Expected a count type character, but it is outside the expression block. Rule set: {#}", string);
+				return false;
+			}
+
+			switch (string[current_index]) {
+			case '.':
+				last_entry->count_type = ECS_TOKENIZE_RULE_ONE;
+				break;
+			case '+':
+				last_entry->count_type = ECS_TOKENIZE_RULE_ONE_OR_MORE;
+				break;
+			case '*':
+				last_entry->count_type = ECS_TOKENIZE_RULE_ZERO_OR_MORE;
+				break;
+			case '?':
+				last_entry->count_type = ECS_TOKENIZE_RULE_ZERO_OR_ONE;
+				break;
+			default:
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Expected a count type character, but a non count type character was found. Rule set: {#}", string);
+				return false;
+			}
+			last_entry_in_progress = false;
+
+			return true;
+		};
+
+		// Returns false if an error was encountered, else true
+		auto finish_token = [&](bool is_string_selection) {
+			if (last_entry_in_progress) {
+				// This is an error, an intra token was identified while parsing another token
+				return false;
+			}
+
+			if (is_string_selection) {
+				set_match_string_for_last_token();
+			}
+			reserve_token();
+			reset_string_buildup();
+			return true;
+		};
+
+		// Returns true if it succeeded, else false. It will write an error message if it fails
+		auto enter_expression = [&]() {
+			if (is_current_string_selection) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot use ( without escaping it inside a []. Rule set: {#}", string);
+				return false;
+			}
+
+			if (last_entry_in_progress) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Encountered a ( while the previous token was not finished. Rule set: {#}", string);
+				return false;
+			}
+
+			expression_blocks.Reserve(1);
+			expression_blocks.size++;
+			expression_blocks.Last().Initialize(stack_allocator, 1);
+			// We must also reserve a new token
+			reserve_token();
+			return true;
+		};
+
+		// Returns true if it succeeded, else false. It will write an error message if it fails
+		auto exit_expression = [&]() {
+			Stream<TokenizeRuleEntry> rule = expression_blocks.Last();
+			expression_blocks.size--;
+			// There is always one more entry, because of the reserve
+			rule.size--;
+
+			// Add the rule (subexpression) to the previous expression block, or to the result if it is the last expression
+			if (expression_blocks.size == 0) {
+				result = rule;
+			}
+			else {
+				// We must change the last entry
+				last_entry = &expression_blocks.Last().Last();
+
+				// Add the previous rule as a subexpression
+				last_entry->selection_type = ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE;
+				last_entry->selection_data.subrule.sets.Initialize(stack_allocator, 1);
+				last_entry->selection_data.subrule.sets[0] = rule;
+
+				if (!parse_count_type_character()) {
+					return false;
+				}
+
+				finish_token(false);
+			}
+			return true;
+		};
+
+		// Returns true if it succeeded, else false. It will write an error message if it fails
+		auto enter_selection_block = [&]() {
+			if (is_current_string_selection) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot use [ without escaping it inside a []. Rule set: {#}", string);
+				return false;
+			}
+
+			if (last_entry_in_progress) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Encountered a [ while the previous token was not finished. Rule set: {#}", string);
+				return false;
+			}
+
+			is_current_string_selection = true;
+			return true;
+		};
+
+		// Returns true if it succeeded, else false. It will write an error message if it fails.
+		auto exit_selection_block = [&]() {
+			if (!is_current_string_selection) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Mismatched [] pair. A [ is missing or there is an additional ]. Rule set: {#}", string);
+				return false;
+			}
+
+			is_current_string_selection = false;
+			if (!parse_count_type_character()) {
+				return false;
+			}
+			if (!finish_token(true)) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to finish a [] block. Rule set: {#}", string);
+				return false;
+			}
+			return true;
+		};
+
+		enter_expression();
+
+		// This value is used to determine if we have unmatched character pairs
+		size_t matched_pair_characters = 0;
+
+		// Skip any initial whitespaces
+		skip_whitespaces();
+		while (current_index < string.size) {
+			// Try to match a previous definition first
+			Stream<char> current_string = string.SliceAt(current_index);
+			size_t definition_index = 0;
+			if (is_current_string_selection) {
+				// When inside a [] block, don't match identifiers
+				definition_index = definitions.size;
+			}
+			else {
+				for (; definition_index < definitions.size; definition_index++) {
+					if (current_string.StartsWith(definitions[definition_index].name)) {
+						last_entry->selection_type = ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE;
+						last_entry->selection_data.subrule = definitions[definition_index].rule;
+						current_index += definitions[definition_index].name.size;
+						skip_whitespaces();
+						// This entry is in progress now
+						last_entry_in_progress = true;
+						break;
+					}
+				}
+			}
+
+			if (definition_index == definitions.size) {
+				// It didn't match a definition. Check $ characters first, easier to deal with in a separate branch
+				if (string[current_index] == '$') {
+					advance_index();
+					if (current_index == string.size) {
+						// This is an erroneous case, exit
+						ECS_FORMAT_ERROR_MESSAGE(error_message, "$ at the end of an expression block is not allowed. Rule set: {#}", string);
+						return result;
+					}
+
+					// It is an escaped character or token selection - check to see which one
+					switch (string[current_index]) {
+					case 'T':
+					{
+						if (is_current_string_selection) {
+							// Fail, this shouldn't appear inside a []
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot use $T inside a [] block. Rule set: {#}", string);
+							return result;
+						}
+
+						last_entry->selection_type = ECS_TOKENIZE_RULE_SELECTION_ANY;
+						if (!parse_count_type_character()) {
+							return result;
+						}
+						if (!finish_token(false)) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Found a $T sequence inside another token. Rule set: {#}", string);
+							return result;
+						}
+					}
+					break;
+					case 'G':
+					{
+						if (is_current_string_selection) {
+							// Fail, this shouldn't appear inside a []
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot use $G inside a [] block. Rule set: {#}", string);
+							return result;
+						}
+
+						last_entry->selection_type = ECS_TOKENIZE_RULE_SELECTION_GENERAL;
+						if (!parse_count_type_character()) {
+							return result;
+						}
+						if (!finish_token(false)) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Found a $G sequence inside another token. Rule set: {#}", string);
+							return result;
+						}
+					}
+					break;
+					case 'S':
+					{
+						if (is_current_string_selection) {
+							// Fail, this shouldn't appear inside a []
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot use $S inside a [] block. Rule set: {#}", string);
+							return result;
+						}
+
+						last_entry->selection_type = ECS_TOKENIZE_RULE_SELECTION_SEPARATOR;
+						if (!parse_count_type_character()) {
+							return result;
+						}
+						if (!finish_token(false)) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Found a $S sequence inside another token. Rule set: {#}", string);
+							return result;
+						}
+					}
+					break;
+					// Check the escaped characters
+					case '(':
+					case ')':
+					case '[':
+					case ']':
+					case '.':
+					case '+':
+					case '*':
+					case '?':
+						last_entry_in_progress = true;
+						set_char_for_token(string[current_index]);
+						break;
+
+					default:
+						// Default, error
+						ECS_FORMAT_ERROR_MESSAGE(error_message, "$ is followed by a character that is not allowed. Rule set: {#}", string);
+						return result;
+					}
+				}
+				else {
+					// Not an escaped character. Start by checking other special characters
+					switch (string[current_index]) {
+					case '!':
+						last_entry->is_selection_negated = true;
+						break;
+					case ',':
+					{
+						// If inside a selection block, then reserve the token buildup
+						if (is_current_string_selection) {
+							reserve_string_buildup();
+						}
+						else {
+							last_entry_in_progress = true;
+							// A normal comma character
+							set_char_for_token(string[current_index]);
+						}
+					}
+					break;
+					case '(':
+					{
+						// A new expression should begin
+						if (!enter_expression()) {
+							return result;
+						}
+					}
+					break;
+					case ')':
+					{
+						if (last_entry_in_progress) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Encountered a ) while the previous token was not finished. Rule set: {#}", string);
+							return result;
+						}
+
+						// The existing expression should end
+						if (expression_blocks.size == 1) {
+							// This is invalid, it means that the () are not matched
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Mismatched (). Rule set: {#}", string);
+							return result;
+						}
+						if (!exit_expression()) {
+							return result;
+						}
+					}
+					break;
+					case '[':
+					{
+						// A new selection block
+						if (!enter_selection_block()) {
+							return result;
+						}
+					}
+					break;
+					case ']':
+					{
+						if (!exit_selection_block()) {
+							return result;
+						}
+					}
+					break;
+					case '\\':
+					{
+						// Get the next character
+						advance_index();
+						if (current_index == string.size) {
+							// Erroneous case, exit
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "A \\ is at the end of an expression block, which is not allowed. Rule set: {#}", string);
+							return result;
+						}
+
+						last_entry->count_type = ECS_TOKENIZE_RULE_ONE_PAIR_START;
+						last_entry->selection_type = ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING;
+						matched_pair_characters++;
+
+						set_char_for_token(string[current_index]);
+						// The token can be finished
+						if (!finish_token(true)) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "\\ sequence inside another token. Rule set: {#}", string);
+							return result;
+						}
+					}
+					break;
+					case '/':
+					{
+						// It is a matched pairing.
+						if (matched_pair_characters == 0) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Encountered closed pairing for /, but no previous open pairing exists. Rule set: {#}", string);
+							return result;
+						}
+
+						advance_index();
+						if (current_index == string.size) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Encountered / at the end of the expression block. Rule set: {#}", string);
+							return result;
+						}
+
+						last_entry->count_type = ECS_TOKENIZE_RULE_ONE_PAIR_END;
+						last_entry->selection_type = ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING;
+						matched_pair_characters--;
+
+						set_char_for_token(string[current_index]);
+						// The token can be finished
+						if (!finish_token(true)) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Found a / sequence inside another token. Rule set: {#}", string);
+							return result;
+						}
+					}
+					break;
+					case '.':
+					case '+':
+					case '*':
+					case '?':
+					{
+						if (!last_entry_in_progress) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Found a count type character, but no token was started. Rule set: {#}", string);
+							return result;
+						}
+						last_entry_in_progress = false;
+						switch (string[current_index]) {
+						case '.':
+							last_entry->count_type = ECS_TOKENIZE_RULE_ONE;
+							break;
+						case '+':
+							last_entry->count_type = ECS_TOKENIZE_RULE_ONE_OR_MORE;
+							break;
+						case '*':
+							last_entry->count_type = ECS_TOKENIZE_RULE_ZERO_OR_MORE;
+							break;
+						case '?':
+							last_entry->count_type = ECS_TOKENIZE_RULE_ZERO_OR_ONE;
+							break;
+						default:
+							ECS_ASSERT(false);
+						}
+						// Set the string buildup only if this is not a subrule
+						if (!finish_token(last_entry->selection_type != ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE)) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Could not end token after finding count type character. Rule set: {#}", string);
+							return result;
+						}
+					}
+					break;
+					default:
+						// A normal character
+						last_entry_in_progress = true;
+						set_char_for_token(string[current_index]);
+					}
+
+				}
+
+				advance_index();
+			}
+		}
+
+		// If the last last entry is still in progress, fail
+		if (last_entry_in_progress) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "The final token is still in progress. Rule set: {#}", string);
+			return result;
+		}
+
+		if (!exit_expression()) {
+			return {};
+		}
+		return result;
+	}
+
+	TokenizeRule CreateTokenizeRule(Stream<char> string_rule, AllocatorPolymorphic allocator, bool allocator_is_temporary, CapacityStream<char>* error_message) {
+		AllocatorPolymorphic allocator_to_use = allocator;
+		ResizableLinearAllocator temporary_allocator;
+		if (!allocator_is_temporary) {
+			// Stack alloc survives the scope block
+			temporary_allocator = ResizableLinearAllocator(ECS_STACK_ALLOC(ECS_KB * 32), ECS_KB * 32, ECS_MB * 32, { nullptr });
+			allocator_to_use = &temporary_allocator;
+		}
+		
+		ResizableStream<Stream<char>> lines(allocator_to_use, 8);
+		SplitString(string_rule, '\n', &lines);
+
+		// We are using an array for the definitions, even tho they could be put in a hash table, because
+		// There will be few entries.
+		ResizableStream<ParsedDefinition> parsed_definitions(allocator_to_use, 8);
+		// Parse the definitions first
+		for (unsigned int index = 0; index < lines.size - 1; index++) {
+			// Split the string by the equals - there should be just a single equals, if there are more fail
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, split_string, 8);
+			SplitString(lines[index], '=', &split_string);
+			if (split_string.size != 2) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Definition must have a single equals: {#}", lines[index]);
+				return TokenizeRule();
+			}
+
+			Stream<char> left_part = split_string[0];
+			left_part = SkipWhitespace(left_part);
+			left_part = SkipWhitespace(left_part, -1);
+
+			Stream<char> right_part = split_string[1];
+			right_part = SkipWhitespace(right_part);
+			right_part = SkipWhitespace(right_part, -1);
+
+			ParsedDefinition definition;
+			definition.name = left_part;
+
+			// Split the right part by the number of |s
+			ResizableStream<Stream<char>> right_part_sets(allocator_to_use, 2);
+			SplitString(right_part, '|', &right_part_sets);
+			definition.rule.sets.Initialize(allocator_to_use, right_part_sets.size);
+			for (unsigned int set_index = 0; set_index < right_part_sets.size; set_index++) {
+				definition.rule.sets[set_index] = ParseTokenizeRuleSet(right_part_sets[set_index], allocator_to_use, parsed_definitions, error_message);
+				if (definition.rule.sets[set_index].size == 0) {
+					return TokenizeRule();
+				}
+			}
+
+			parsed_definitions.Add(&definition);
+		}
+
+		TokenizeRule rule;
+		// Parse the main rule set
+		ResizableStream<Stream<char>> main_rule_sets(allocator_to_use, 4);
+		SplitString(lines.Last(), '|', &main_rule_sets);
+		rule.sets.Initialize(allocator_to_use, main_rule_sets.size);
+		for (unsigned int set_index = 0; set_index < main_rule_sets.size; set_index++) {
+			rule.sets[set_index] = ParseTokenizeRuleSet(main_rule_sets[set_index], allocator_to_use, parsed_definitions, error_message);
+			if (rule.sets[set_index].size == 0) {
+				return TokenizeRule();
+			}
+		}
+
+		// If the allocator is already temporary, we can return it directly, else we need to make a copy of it
+		if (allocator_is_temporary) {
+			return rule;
+		}
+		return rule.Copy(allocator);
+	}
+
+	TokenizeRule TokenizeRule::Copy(AllocatorPolymorphic allocator) const {
+		TokenizeRule rule;
+		rule.sets = StreamDeepCopy(sets, allocator);
+		return rule;
+	}
+
+	void TokenizeRule::Deallocate(AllocatorPolymorphic allocator) {
+		StreamDeallocateElements(sets, allocator);
+		sets.Deallocate(allocator);
+	}
+
+	TokenizeRuleEntry TokenizeRuleEntry::Copy(AllocatorPolymorphic allocator) const {
+		return TokenizeRuleEntry{};
+	}
+
+	void TokenizeRuleEntry::Deallocate(AllocatorPolymorphic allocator) {
+
 	}
 
 	void TokenizedString::InitializeResizable(AllocatorPolymorphic allocator) {

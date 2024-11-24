@@ -11,6 +11,7 @@
 #include "../StreamUtilities.h"
 #include "../EvaluateExpression.h"
 #include "ReflectionCustomTypes.h"
+#include "../Tokenize.h"
 
 namespace ECSEngine {
 
@@ -2854,6 +2855,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		{
 			ReflectionEnum enum_definition;
 			enum_definition.name = name;
+
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+			// Tokenize the enum definition, and parse the values from there
+			TokenizedString tokenized_body;
+			tokenized_body.string = { opening_parenthese, (size_t)(closing_parenthese - opening_parenthese) / sizeof(char) };
+			tokenized_body.InitializeResizable(&stack_allocator);
+			TokenizeString(tokenized_body, GetCppEnumTokenSeparators(), true);
+
+			// Parse the body now. Each entry must end when a comma is detected, or when the end of the token stream is passed
+			
 
 			// Find next line tokens and exclude the next after the opening paranthese and replace
 			// The closing paranthese with \0 in order to stop searching there

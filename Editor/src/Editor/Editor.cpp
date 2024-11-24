@@ -140,6 +140,11 @@ public:
 		MSG message;
 		BOOL result = 0;
 
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+		Stream<char> data = ReadWholeFileText(L"file.txt");
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+		TokenizeRule rule = CreateTokenizeRule(data, &stack_allocator, true, &error_message);
+
 		while (true) {
 			auto run_application = [&](EDITOR_APPLICATION_QUIT_RESPONSE application_quit_value) {
 				ECS_UI_FRAME_PACING frame_pacing = ECS_UI_FRAME_PACING_NONE;
