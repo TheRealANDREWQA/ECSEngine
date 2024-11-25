@@ -104,6 +104,8 @@ namespace ECSEngine {
 	// Splits the tokens by the given separator
 	ECSENGINE_API void TokenizeSplitBySeparator(const TokenizedString& string, unsigned int separator_type, AdditionStream<TokenizedString::Subrange> token_ranges);
 	
+#pragma region Tokenize Rule
+
 	// How many tokens for the rule should match
 	enum ECS_TOKENIZE_RULE_COUNT_TYPE : unsigned char {
 		ECS_TOKENIZE_RULE_ZERO_OR_MORE,
@@ -133,15 +135,50 @@ namespace ECSEngine {
 	// A structure that describes a sequence of tokens that satisfy a rule. 
 	// Each rule can contain one or more sets, the rule being satisfied if one of the sets is matched
 	struct ECSENGINE_API TokenizeRule {
+		struct EntrySet {
+			ECS_INLINE EntrySet Copy(AllocatorPolymorphic allocator) const {
+				return { StreamDeepCopy(entries, allocator), minimum_token_count };
+			}
+
+			ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+				StreamDeallocateElements(entries, allocator);
+				entries.Deallocate(allocator);
+			}
+
+			ECS_INLINE TokenizeRuleEntry& operator[](size_t index) {
+				return entries[index];
+			}
+			
+			ECS_INLINE const TokenizeRuleEntry& operator[](size_t index) const {
+				return entries[index];
+			}
+
+			Stream<TokenizeRuleEntry> entries;
+			// This is a cached value that helps in quickly retrieving the minimum amount of tokens for this set
+			unsigned int minimum_token_count;
+		};
+
+		// Returns true if the entries of both rules are of the same type and data, else false
+		bool Compare(const TokenizeRule& other) const;
+
 		TokenizeRule Copy(AllocatorPolymorphic allocator) const;
 
 		void Deallocate(AllocatorPolymorphic allocator);
 
-		Stream<Stream<TokenizeRuleEntry>> sets;
+		// Computes and caches the value of the minimum token count needed by this rule. It will
+		// Call transiently this function on subrules as well
+		void ComputeMinimumTokenCount();
+
+		Stream<EntrySet> sets;
+		// This is a cached value that helps in quickly retrieving the minimum amount of tokens for this rule
+		unsigned int minimum_token_count;
 	};
 
 	// Extra data for selection rules
 	union TokenizeRuleSelectionData {
+		// To satisfy the compiler
+		ECS_INLINE TokenizeRuleSelectionData() {}
+
 		// Data for ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_TYPE
 		struct {
 			bool is_multiple_type_indices;
@@ -168,6 +205,12 @@ namespace ECSEngine {
 
 	// A structure that contains one element of a rule.
 	struct ECSENGINE_API TokenizeRuleEntry {
+		// Returns true if the given entry is of the same type and same data, else false
+		bool Compare(const TokenizeRuleEntry& other) const;
+
+		// The same as Compare, but it doesn't check for the count type field to be the same
+		bool CompareExceptCountType(const TokenizeRuleEntry& other) const;
+
 		TokenizeRuleEntry Copy(AllocatorPolymorphic allocator) const;
 
 		void Deallocate(AllocatorPolymorphic allocator);
@@ -176,6 +219,51 @@ namespace ECSEngine {
 		ECS_TOKENIZE_RULE_SELECTION_TYPE selection_type;
 		bool is_selection_negated;
 		TokenizeRuleSelectionData selection_data;
+	};
+
+	struct TokenizeRuleCallbackData {
+		const TokenizedString* string;
+		TokenizedString::Subrange subrange;
+		Stream<unsigned int> tokens_per_entry;
+		void* user_data;
+	};
+
+	// This is a callback that is called when a rule is matched. It receives the tokenized string and the subrange that matched the rule,
+	// With an extra parameter that describes how many tokens were assigned per each rule entry. It is up to you to interpret this array,
+	// If you need it. It needs to return true if the matcher should continue matching rules, else false.
+	typedef bool (*TokenizeRuleCallback)(const TokenizeRuleCallbackData* data);
+
+	struct TokenizeRuleAction {
+		TokenizeRule rule;
+		TokenizeRuleCallback callback;
+		Stream<void> callback_data;
+	};
+
+	// A structure that encompasses multiple excluding rules and actions to be performed on a tokenized string
+	struct ECSENGINE_API TokenizeRuleMatcher {
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			return actions.allocator;
+		}
+
+		// By default, it will make a deep copy of the rule. You can disable it with the last argument
+		void AddExcludeRule(const TokenizeRule& rule, bool deep_copy = true);
+
+		// By default, it will make a deep copy of both the rule and the callback. You can disable that with the last argument
+		void AddAction(const TokenizeRuleAction& action, bool deep_copy = true);
+
+		// If no deep copies were made per each type, you can omit them from deallocating
+		void Deallocate(bool deallocate_exclude_rules = true, bool deallocate_actions = true);
+
+		void Initialize(AllocatorPolymorphic allocator);
+
+		// It will match the given token string subrange with the stored actions. It returns true if it early existed, else false.
+		bool Match(const TokenizedString& string, TokenizedString::Subrange subrange);
+
+		// This array contains rules that are to be tried before actions. In case one of these rules
+		// Matches a sequence, that sequence is then discarded.
+		ResizableStream<TokenizeRule> exclude_rules;
+		// This array contains the entries that contain actions to be performed.
+		ResizableStream<TokenizeRuleAction> actions;
 	};
 
 	// The rules for a TokenizeRule made out of strings - which is easier to write down than to create each individual
@@ -216,6 +304,13 @@ namespace ECSEngine {
 	// Avoid having to work on temporaries that are committed in the parameter allocator at the end.
 	ECSENGINE_API TokenizeRule CreateTokenizeRule(Stream<char> string_rule, AllocatorPolymorphic allocator, bool allocator_is_temporary, CapacityStream<char>* error_message = nullptr);
 
+	// Returns true if the given rule matches the string, else false. If it matches the string, it can optionally report how many
+	// Tokens each entry used.
+	ECSENGINE_API bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, CapacityStream<unsigned int>* matched_token_counts = nullptr);
+
+	// Returns true if the rule is valid, else false
+	ECSENGINE_API bool ValidateTokenizeRule(const TokenizeRule& rule);
+
 	// Must be kept in sync with the function GetCppFileTokenSeparators
 	// These are the separators that can appear in a CPP file that we are interested in
 	enum ECS_CPP_FILE_SEPARATOR_TYPE : unsigned char {
@@ -255,5 +350,7 @@ namespace ECSEngine {
 		// Must be kept in sync with the above enum
 		return ",=";
 	}
+
+#pragma endregion
 
 }

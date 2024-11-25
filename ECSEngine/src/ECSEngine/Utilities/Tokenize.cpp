@@ -483,7 +483,7 @@ namespace ECSEngine {
 				// Add the previous rule as a subexpression
 				last_entry->selection_type = ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE;
 				last_entry->selection_data.subrule.sets.Initialize(stack_allocator, 1);
-				last_entry->selection_data.subrule.sets[0] = rule;
+				last_entry->selection_data.subrule.sets[0].entries = rule;
 
 				if (!parse_count_type_character()) {
 					return false;
@@ -807,6 +807,82 @@ namespace ECSEngine {
 		return result;
 	}
 
+	// It will try to optimize the tokenize rule, such that the matching can be done faster.
+	// It assumes that the given rule is validated beforehand.
+	static void OptimizeTokenizeRule(TokenizeRule& rule, AllocatorPolymorphic allocator, bool deallocate_existing_entries) {
+		// Pull out subrules that contain a single set with a single entry, these can be safely pulled out.
+		// Another thing that we must perform is to check if we have variable length consecutive entries.
+		// In that case, we need to do the following:
+		// If we have zero or more followed entries intermingled (optionally with one or more entries) with the same target, i.e. general token,
+		// separator or ANY token, then the all but one entry can be removed, because they are engulfed by the remaining entry.
+		// We can do this only if the same target token is used, else it can't be applied.
+		// If one or more entries are intermingled with the same target, all but one can be transformed into match one, since the variable
+		// Length entry will engulf the others. Again, it is important that the same target is used.
+
+		// This is the pass where variable length entries are reduced
+		for (size_t set_index = 0; set_index < rule.sets.size; set_index++) {
+			for (size_t entry_index = 0; entry_index < rule.sets[set_index].entries.size - 1; entry_index++) {
+				TokenizeRuleEntry& current_entry = rule.sets[set_index][entry_index];
+				TokenizeRuleEntry& second_entry = rule.sets[set_index][entry_index + 1];
+				if (current_entry.count_type == ECS_TOKENIZE_RULE_ONE_OR_MORE) {
+					if (second_entry.count_type == ECS_TOKENIZE_RULE_ONE_OR_MORE && current_entry.Compare(second_entry)) {
+						// Change the current entry to be one, such that the cascade can continue
+						current_entry.count_type = ECS_TOKENIZE_RULE_ONE;
+					}
+					else if (second_entry.count_type == ECS_TOKENIZE_RULE_ZERO_OR_MORE && current_entry.Compare(second_entry)) {
+						// Remove the second entry
+						if (deallocate_existing_entries) {
+							rule.sets[set_index][entry_index + 1].Deallocate(allocator);
+						}
+						rule.sets[set_index].entries.Remove(entry_index + 1);
+						// Decrement the index such that we come back again to compare the next entry
+						entry_index--;
+					}
+				}
+				else if (current_entry.count_type == ECS_TOKENIZE_RULE_ZERO_OR_MORE) {
+					if (second_entry.count_type == ECS_TOKENIZE_RULE_ZERO_OR_MORE && current_entry.Compare(second_entry)) {
+						// Remove the second entry
+						if (deallocate_existing_entries) {
+							rule.sets[set_index][entry_index + 1].Deallocate(allocator);
+						}
+						rule.sets[set_index].entries.Remove(entry_index + 1);
+						// Decrement the index such that we come back again to compare the next entry
+						entry_index--;
+					}
+					else if (second_entry.count_type == ECS_TOKENIZE_RULE_ONE_OR_MORE && current_entry.Compare(second_entry)) {
+						// Remove this current entry
+						if (deallocate_existing_entries) {
+							rule.sets[set_index][entry_index].Deallocate(allocator);
+						}
+						rule.sets[set_index].entries.Remove(entry_index);
+						// Decrement the index such that we come back to retest the next entry
+						entry_index--;
+					}
+				}
+			}
+		}
+
+		// This is the single entry subrule pass
+		for (size_t set_index = 0; set_index < rule.sets.size; set_index++) {
+			for (size_t entry_index = 0; entry_index < rule.sets[set_index].entries.size; entry_index++) {
+				TokenizeRuleEntry& entry = rule.sets[set_index][entry_index];
+				if (entry.selection_type == ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE) {
+					OptimizeTokenizeRule(entry.selection_data.subrule, allocator, deallocate_existing_entries);
+					// After it has been optimized, check to see if it has one entry
+					if (entry.selection_data.subrule.sets.size == 1 && entry.selection_data.subrule.sets[0].entries.size == 1
+						&& entry.selection_data.subrule.sets[0][0].selection_type != ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE) {
+						// Can be pulled out
+						TokenizeRuleEntry entry_to_move = entry.selection_data.subrule.sets[0][0];
+						if (deallocate_existing_entries) {
+							entry.selection_data.subrule.sets.Deallocate(allocator);
+						}
+						entry = entry_to_move;
+					}
+				}
+			}
+		}
+	}
+
 	TokenizeRule CreateTokenizeRule(Stream<char> string_rule, AllocatorPolymorphic allocator, bool allocator_is_temporary, CapacityStream<char>* error_message) {
 		AllocatorPolymorphic allocator_to_use = allocator;
 		ResizableLinearAllocator temporary_allocator;
@@ -848,11 +924,21 @@ namespace ECSEngine {
 			SplitString(right_part, '|', &right_part_sets);
 			definition.rule.sets.Initialize(allocator_to_use, right_part_sets.size);
 			for (unsigned int set_index = 0; set_index < right_part_sets.size; set_index++) {
-				definition.rule.sets[set_index] = ParseTokenizeRuleSet(right_part_sets[set_index], allocator_to_use, parsed_definitions, error_message);
-				if (definition.rule.sets[set_index].size == 0) {
+				definition.rule.sets[set_index].entries = ParseTokenizeRuleSet(right_part_sets[set_index], allocator_to_use, parsed_definitions, error_message);
+				if (definition.rule.sets[set_index].entries.size == 0) {
 					return TokenizeRule();
 				}
+
 			}
+
+			// Validate the definition
+			if (!ValidateTokenizeRule(definition.rule)) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Definition {#} is not valid", lines[index]);
+				return TokenizeRule();
+			}
+
+			// Optimize the definition. This is always going to be a temporary allocator
+			OptimizeTokenizeRule(definition.rule, allocator_to_use, false);
 
 			parsed_definitions.Add(&definition);
 		}
@@ -863,11 +949,23 @@ namespace ECSEngine {
 		SplitString(lines.Last(), '|', &main_rule_sets);
 		rule.sets.Initialize(allocator_to_use, main_rule_sets.size);
 		for (unsigned int set_index = 0; set_index < main_rule_sets.size; set_index++) {
-			rule.sets[set_index] = ParseTokenizeRuleSet(main_rule_sets[set_index], allocator_to_use, parsed_definitions, error_message);
-			if (rule.sets[set_index].size == 0) {
+			rule.sets[set_index].entries = ParseTokenizeRuleSet(main_rule_sets[set_index], allocator_to_use, parsed_definitions, error_message);
+			if (rule.sets[set_index].entries.size == 0) {
 				return TokenizeRule();
 			}
 		}
+
+		// Validate the rule
+		if (!ValidateTokenizeRule(rule)) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "The definition {#} is not valid", lines.Last());
+			return TokenizeRule();
+		}
+
+		// Finally, optimize the rule. This is always going to be a temporary allocator
+		OptimizeTokenizeRule(rule, allocator_to_use, false);
+		
+		// Compute the cached rule values
+		rule.ComputeMinimumTokenCount();
 
 		// If the allocator is already temporary, we can return it directly, else we need to make a copy of it
 		if (allocator_is_temporary) {
@@ -876,9 +974,86 @@ namespace ECSEngine {
 		return rule.Copy(allocator);
 	}
 
+	bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, CapacityStream<unsigned int>* matched_token_counts) {
+
+	}
+
+	bool ValidateTokenizeRule(const TokenizeRule& rule) {
+		// At the moment, there is nothing to be validated
+		return true;
+	}
+
+	void TokenizeRuleMatcher::AddExcludeRule(const TokenizeRule& rule, bool deep_copy) {
+		if (deep_copy) {
+			exclude_rules.Add(rule.Copy(Allocator()));
+		}
+		else {
+			exclude_rules.Add(&rule);
+		}
+	}
+
+	void TokenizeRuleMatcher::AddAction(const TokenizeRuleAction& action, bool deep_copy) {
+		TokenizeRuleAction copy;
+		const TokenizeRuleAction* action_pointer = &action;
+		if (deep_copy) {
+			action_pointer = &copy;
+			copy = action;
+			copy.rule = action.rule.Copy(Allocator());
+			copy.callback_data = CopyNonZero(Allocator(), action.callback_data);
+		}
+		actions.Add(action_pointer);
+	}
+
+	void TokenizeRuleMatcher::Deallocate(bool deallocate_exclude_rules, bool deallocate_actions) {
+		if (deallocate_exclude_rules) {
+			StreamDeallocateElements(exclude_rules, Allocator());
+		}
+		if (deallocate_actions) {
+			for (unsigned int index = 0; index < actions.size; index++) {
+				actions[index].callback_data.Deallocate(Allocator());
+				actions[index].rule.Deallocate(Allocator());
+			}
+		}
+
+		exclude_rules.FreeBuffer();
+		actions.FreeBuffer();
+	}
+
+	void TokenizeRuleMatcher::Initialize(AllocatorPolymorphic allocator) {
+		exclude_rules.Initialize(allocator, 0);
+		actions.Initialize(allocator, 0);
+	}
+
+	bool TokenizeRuleMatcher::Match(const TokenizedString& string, TokenizedString::Subrange subrange) {
+		while (subrange.count > 0) {
+			// Try to match
+		}
+	}
+
+	bool TokenizeRule::Compare(const TokenizeRule& other) const {
+		if (sets.size != other.sets.size) {
+			return false;
+		}
+		
+		for (size_t index = 0; index < sets.size; index++) {
+			if (sets[index].entries.size != other.sets[index].entries.size) {
+				return false;
+			}
+
+			for (size_t entry_index = 0; entry_index < sets[index].entries.size; entry_index++) {
+				if (!sets[index][entry_index].Compare(other.sets[index][entry_index])) {
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
 	TokenizeRule TokenizeRule::Copy(AllocatorPolymorphic allocator) const {
 		TokenizeRule rule;
 		rule.sets = StreamDeepCopy(sets, allocator);
+		rule.minimum_token_count = minimum_token_count;
 		return rule;
 	}
 
@@ -887,12 +1062,175 @@ namespace ECSEngine {
 		sets.Deallocate(allocator);
 	}
 
+	void TokenizeRule::ComputeMinimumTokenCount() {
+		unsigned int overall_minimum = UINT_MAX;
+
+		for (size_t set_index = 0; set_index < sets.size; set_index++) {
+			unsigned int set_minimum_count = 0;
+			for (size_t entry_index = 0; entry_index < sets[set_index].entries.size; entry_index++) {
+				TokenizeRuleEntry& entry = sets[set_index][entry_index];
+				// Counts that include zero don't contribute
+				if (entry.count_type == ECS_TOKENIZE_RULE_ONE || entry.count_type == ECS_TOKENIZE_RULE_ONE_OR_MORE ||
+					entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_START || entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_END) {
+					// Subrules are a special case
+					if (entry.selection_type == ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE) {
+						entry.selection_data.subrule.ComputeMinimumTokenCount();
+						set_minimum_count += entry.selection_data.subrule.minimum_token_count;
+					}
+					else {
+						// Normal case, one token required, at the very least
+						set_minimum_count++;
+					}
+				}
+			}
+			sets[set_index].minimum_token_count = set_minimum_count;
+			overall_minimum = min(overall_minimum, set_minimum_count);
+		}
+
+		minimum_token_count = overall_minimum;
+	}
+
+	bool TokenizeRuleEntry::Compare(const TokenizeRuleEntry& other) const {
+		if (count_type != other.count_type) {
+			return false;
+		}
+		return CompareExceptCountType(other);
+	}
+
+	bool TokenizeRuleEntry::CompareExceptCountType(const TokenizeRuleEntry& other) const {
+		if (is_selection_negated != other.is_selection_negated) {
+			return false;
+		}
+		if (selection_type != other.selection_type) {
+			return false;
+		}
+		
+		switch (selection_type) {
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING:
+		{
+			if (selection_data.is_multiple_strings != other.selection_data.is_multiple_strings) {
+				return false;
+			}
+			if (selection_data.is_multiple_strings) {
+				if (selection_data.strings.size != other.selection_data.strings.size) {
+					return false;
+				}
+				for (size_t index = 0; index < selection_data.strings.size; index++) {
+					if (selection_data.strings[index] != other.selection_data.strings[index]) {
+						return false;
+					}
+				}
+			}
+			else {
+				if (selection_data.string != other.selection_data.string) {
+					return false;
+				}
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_TYPE:
+		{
+			if (selection_data.is_multiple_type_indices != other.selection_data.is_multiple_type_indices) {
+				return false;
+			}
+			if (selection_data.is_multiple_type_indices) {
+				if (selection_data.type_indices.size != other.selection_data.type_indices.size) {
+					return false;
+				}
+				if (memcmp(selection_data.type_indices.buffer, other.selection_data.type_indices.buffer, selection_data.type_indices.CopySize()) != 0) {
+					return false;
+				}
+			}
+			else {
+				if (!selection_data.type_index != other.selection_data.type_index) {
+					return false;
+				}
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE:
+		{
+			return selection_data.subrule.Compare(other.selection_data.subrule);
+		}
+		break;
+		default:
+			// The defaults are the same
+			break;
+		}
+
+		return true;
+	}
+
 	TokenizeRuleEntry TokenizeRuleEntry::Copy(AllocatorPolymorphic allocator) const {
-		return TokenizeRuleEntry{};
+		TokenizeRuleEntry entry;
+
+		entry.selection_type = selection_type;
+		entry.is_selection_negated = is_selection_negated;
+		entry.count_type = count_type;
+
+		switch (selection_type) {
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING:
+		{
+			if (selection_data.is_multiple_strings) {
+				entry.selection_data.strings = StreamDeepCopy(selection_data.strings, allocator);
+			}
+			else {
+				entry.selection_data.string = selection_data.string.Copy(allocator);
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_TYPE:
+		{
+			if (selection_data.is_multiple_type_indices) {
+				entry.selection_data.type_indices = selection_data.type_indices.Copy(allocator);
+			}
+			else {
+				entry.selection_data.type_index = selection_data.type_index;
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE:
+		{
+			entry.selection_data.subrule = selection_data.subrule.Copy(allocator);
+		}
+		break;
+		default:
+			// Nothing to be copied
+			break;
+		}
+
+		return entry;
 	}
 
 	void TokenizeRuleEntry::Deallocate(AllocatorPolymorphic allocator) {
-
+		switch (selection_type) {
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING:
+		{
+			if (selection_data.is_multiple_strings) {
+				StreamDeallocateElements(selection_data.strings, allocator);
+				selection_data.strings.Deallocate(allocator);
+			}
+			else {
+				selection_data.string.Deallocate(allocator);
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_TYPE:
+		{
+			if (selection_data.is_multiple_type_indices) {
+				selection_data.type_indices.Deallocate(allocator);
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE:
+		{
+			selection_data.subrule.Deallocate(allocator);
+		}
+		break;
+		default:
+			// Nothing to be deallocated
+			break;
+		}
 	}
 
 	void TokenizedString::InitializeResizable(AllocatorPolymorphic allocator) {
