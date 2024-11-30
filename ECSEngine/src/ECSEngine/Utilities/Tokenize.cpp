@@ -965,7 +965,7 @@ namespace ECSEngine {
 		OptimizeTokenizeRule(rule, allocator_to_use, false);
 		
 		// Compute the cached rule values
-		rule.ComputeMinimumTokenCount();
+		rule.ComputeCachedValues();
 
 		// If the allocator is already temporary, we can return it directly, else we need to make a copy of it
 		if (allocator_is_temporary) {
@@ -974,8 +974,580 @@ namespace ECSEngine {
 		return rule.Copy(allocator);
 	}
 
-	bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, CapacityStream<unsigned int>* matched_token_counts) {
+	struct TokenizeRuleEntryMatchCount {
+		// It is -1 if this is variadic
+		unsigned int count;
+		// It is true if the token can be missing
+		bool is_optional;
+	};
 
+	static TokenizeRuleEntryMatchCount GetTokenizeEntryMatchCount(const TokenizeRuleEntry& entry) {
+		TokenizeRuleEntryMatchCount match_count;
+		switch (entry.count_type) {
+		case ECS_TOKENIZE_RULE_ONE:
+		case ECS_TOKENIZE_RULE_ONE_PAIR_START:
+		case ECS_TOKENIZE_RULE_ONE_PAIR_END:
+		{
+			match_count.count = 1;
+			match_count.is_optional = false;
+		}
+		break;
+		case ECS_TOKENIZE_RULE_ZERO_OR_ONE:
+		{
+			match_count.count = 1;
+			match_count.is_optional = true;
+		}
+		break;
+		case ECS_TOKENIZE_RULE_ZERO_OR_MORE:
+		{
+			match_count.count = -1;
+			match_count.is_optional = true;
+		}
+		break;
+		case ECS_TOKENIZE_RULE_ONE_OR_MORE:
+		{
+			match_count.count = -1;
+			match_count.is_optional = false;
+		}
+		break;
+		default:
+			ECS_ASSERT(false, "Invalid tokenize rule count type");
+		}
+		return match_count;
+	}
+
+	// Returns true if the entry is fixed length, else false
+	static bool IsFixedLengthEntry(const TokenizeRuleEntry& entry) {
+		if (entry.selection_type == ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE) {
+			// Use the already cached value
+			return !entry.selection_data.subrule.is_variable_length;
+		}
+		else {
+			switch (entry.count_type) {
+			case ECS_TOKENIZE_RULE_ONE:
+			case ECS_TOKENIZE_RULE_ONE_PAIR_START:
+			case ECS_TOKENIZE_RULE_ONE_PAIR_END:
+				return true;
+			case ECS_TOKENIZE_RULE_ONE_OR_MORE:
+			case ECS_TOKENIZE_RULE_ZERO_OR_MORE:
+			case ECS_TOKENIZE_RULE_ZERO_OR_ONE:
+				return false;
+			default:
+				ECS_ASSERT(false, "Invalid count type for IsFixedLengthEntry");
+			}
+		}
+		return false;
+	}
+
+	struct FixedLengthEntryInfo {
+		// How many tokens a match requires
+		unsigned int token_count;
+		// How many matches this entry needs
+		unsigned int match_count;
+	};
+
+	// Returns the number of tokens this fixed length entry needs for a match. You must ensure that this entry is fixed length
+	static FixedLengthEntryInfo GetFixedLengthEntryInfo(const TokenizeRuleEntry& entry) {
+		// At the moment, we can have only a match count of 1
+		if (entry.selection_type == ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE) {
+			return { entry.selection_data.subrule.minimum_token_count, 1 };
+		}
+		else {
+			return { 1, 1 };
+		}
+	}
+
+	// The number of selection matches that need to be performed are given by match_count, or you can optionally set this to -1 to indicate that this query is variable length and that there is no set match count.
+	// If you want to match this entry but without exhausting the subrange, provide the last argument and it will tell you how much to advance. If you want to exhaust the range, then leave the final argument as nullptr
+	static bool MatchTokenizeEntry(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRuleEntry& entry, unsigned int match_count, bool is_optional, unsigned int* total_token_matched_count) {
+		if (match_count != -1 && subrange.count < match_count) {
+			return false;
+		}
+
+		// Check this immediately
+		if (is_optional && subrange.count == 0) {
+			return true;
+		}
+
+		// If the match count is -1, then we need to exhaust the range
+		bool exhaustive_search = total_token_matched_count == nullptr || match_count == -1;
+		unsigned int adjusted_match_count = exhaustive_search ? subrange.count : match_count;
+		*total_token_matched_count = match_count;
+
+		switch (entry.selection_type) {
+		case ECS_TOKENIZE_RULE_SELECTION_ANY:
+		{
+			// In this case, we accept any tokens, we can advance further
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_GENERAL:
+		{
+			for (unsigned int token_index = 0; token_index < adjusted_match_count; token_index++) {
+				if (string.tokens[subrange[token_index]].type != ECS_TOKEN_TYPE_GENERAL) {
+					return false;
+				}
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_SEPARATOR:
+		{
+			for (unsigned int token_index = 0; token_index < adjusted_match_count; token_index++) {
+				if (string.tokens[subrange[token_index]].type != ECS_TOKEN_TYPE_SEPARATOR) {
+					return false;
+				}
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING:
+		{
+			for (unsigned int token_index = 0; token_index < adjusted_match_count; token_index++) {
+				Stream<char> current_token = string[subrange[token_index]];
+				if (entry.selection_data.is_multiple_strings) {
+					if (FindString(current_token, entry.selection_data.strings) == -1) {
+						return false;
+					}
+				}
+				else {
+					if (current_token != entry.selection_data.string) {
+						return false;
+					}
+				}
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_TYPE:
+		{
+			for (unsigned int token_index = 0; token_index < adjusted_match_count; token_index++) {
+				unsigned int token_type = string.tokens[subrange[token_index]].type;
+				if (entry.selection_data.is_multiple_type_indices) {
+					if (entry.selection_data.type_indices.Find(token_type) == -1) {
+						return false;
+					}
+				}
+				else {
+					if (token_type != entry.selection_data.type_index) {
+						return false;
+					}
+				}
+			}
+		}
+		break;
+		case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE:
+		{
+			const unsigned int MAX_MATCH_COUNT = 64;
+
+			// Here, we have to handle the variable match count gracefully.
+			unsigned int iteration_count = MAX_MATCH_COUNT;
+			if (match_count != -1) {
+				// It will be incremented once in the loop
+				match_count--;
+				iteration_count = 1;
+			}
+			else {
+				// It will be incremented once in the loop
+				match_count = 0;
+			}
+
+			struct CachedCheck {
+				unsigned short token_offset;
+				unsigned short token_count : 15;
+				// Use a single bit to avoid increasing the memory footprint
+				unsigned short success : 1;
+			};
+
+			// Keep a record of evaluations that were performed for iterations with index larger than 1.
+			// For example, for match_count = 3, we can have 6 3 3 and 5 4 3 as options, and we can avoid
+			// Checking the last entry in that case if we use a cache.
+			ECS_STACK_CAPACITY_STREAM(CachedCheck, cached_checks, 64);
+
+			unsigned int iteration_index = 0;
+			for (; iteration_index < iteration_count; iteration_index++) {
+				match_count++;
+				
+				// Early exit if the minimum amount of tokens per total number of matches is not satisfied
+				if (match_count * entry.selection_data.subrule.minimum_token_count > subrange.count) {
+					continue;
+				}
+
+				// Match the subrule. This is quite involved. But we can try our best to early out as soon as possible.
+
+				// Use unsigned short to reduce the stack consumption
+				ECS_STACK_CAPACITY_STREAM(unsigned short, per_iteration_counts, MAX_MATCH_COUNT);
+				per_iteration_counts.AssertCapacity(match_count);
+				for (unsigned int index = 0; index < match_count; index++) {
+					per_iteration_counts[index] = entry.selection_data.subrule.minimum_token_count;
+				}
+
+				// If the exhaust tokens boolean is true, then it will perform matches only if all the tokens are used
+				auto backtrack_permutations = [&](unsigned int subrange_offset, unsigned int remaining_tokens, CapacityStream<unsigned short> current_counts, unsigned int* matched_token_count, bool exhaust_tokens, const auto& backtrack_permutations) {
+					// Perform the check for the current counts that we have.
+					{
+						// Use a stack scope for this to indicate to the compiler that the stack values should be deallocated at the end of the stack scope
+						// Such that they don't occupy space and risk a stack overflow
+						if (!exhaust_tokens || remaining_tokens == 0) {
+							unsigned int current_token_offset = 0;
+							bool current_state_success = true;
+
+							// Go through the cache and check to see if we already have a failed state. If we do, we can cancel the search already.
+							// Also, keep track of the indices that were successful as per the cache.
+							bool* is_index_skipped = (bool*)ECS_STACK_ALLOC(sizeof(bool) * current_counts.size);
+							memset(is_index_skipped, 0, sizeof(bool) * current_counts.size);
+							for (unsigned int index = 0; index < current_counts.size; index++) {
+								unsigned int cache_index = 0;
+								for (; cache_index < cached_checks.size; cache_index++) {
+									if (cached_checks[cache_index].token_offset == current_token_offset && cached_checks[cache_index].token_count == current_counts[index]) {
+										if (!cached_checks[cache_index].success) {
+											current_state_success = false;
+										}
+										is_index_skipped[index] = true;
+										break;
+									}
+								}
+								current_token_offset += current_counts[index];
+							}
+
+							if (current_state_success) {
+								current_token_offset = 0;
+								for (unsigned int index = 0; index < current_counts.size; index++) {
+									bool success = true;
+
+									// Only entries that are not already in the cache will need to be checked
+									if (!is_index_skipped) {
+										TokenizedString::Subrange current_subrange = subrange.GetSubrange(subrange_offset + current_token_offset, current_counts[index]);
+										success = MatchTokenizeRule(string, current_subrange, entry.selection_data.subrule, nullptr);
+
+										// Add a cached entry, if we have enough space in the cache
+										if (cached_checks.size < cached_checks.capacity) {
+											CachedCheck cached_value;
+											cached_value.success = success;
+											cached_value.token_count = current_counts[index];
+											cached_value.token_offset = current_token_offset;
+											cached_checks.Add(&cached_value);
+										}
+									}
+
+									if (!success) {
+										current_state_success = false;
+										break;
+									}
+
+									current_token_offset += current_counts[index];
+								}
+							}
+
+							// We found a match - all subrules matched a portion
+							if (current_state_success) {
+								*matched_token_count = current_token_offset;
+								return true;
+							}
+						}
+					}
+
+					// Continue the backtrace only if we have remaining tokens
+					if (remaining_tokens > 0) {
+						ECS_STACK_CAPACITY_STREAM(unsigned short, current_iteration_counts, 32);
+						current_iteration_counts.CopyOther(current_counts);
+						// Add one more token to each index and backtrace again
+						for (unsigned int index = 0; index < current_iteration_counts.size; index++) {
+							current_iteration_counts[index]++;
+							if (backtrack_permutations(subrange_offset, remaining_tokens - 1, current_iteration_counts, matched_token_count, exhaust_tokens, backtrack_permutations)) {
+								// Found a match
+								return true;
+							}
+							current_iteration_counts[index]--;
+						}
+					}
+
+					// None matched
+					return false;
+				};
+
+				*total_token_matched_count = 0;
+				unsigned int match_index = 0;
+				for (; match_index < match_count; match_index++) {
+					unsigned int remaining_tokens = subrange.count - *total_token_matched_count;
+
+					// This does not work for one or more matches of variable length subrules perfectly, since
+					// The first version that match for an iteration might not work for the next ones, but
+					// This is the easiest solution and might be enough for our use case
+					unsigned int current_matched_token_count = 0;
+					if (!backtrack_permutations(*total_token_matched_count, remaining_tokens, per_iteration_counts, &current_matched_token_count, exhaustive_search, backtrack_permutations)) {
+						// Could not match any combination
+						break;
+					}
+					*total_token_matched_count += current_matched_token_count;
+				}
+
+				if (match_index == match_count) {
+					break;
+				}
+			}
+
+			if (iteration_index == iteration_count) {
+				return false;
+			}
+		}
+		break;
+		}
+
+		return true;
+	}
+
+	bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, CapacityStream<unsigned int>* matched_token_counts) {
+		// Early exit if the minimum token count is not satisfied
+		if (rule.minimum_token_count > subrange.count) {
+			return false;
+		}
+
+		unsigned int matched_token_counts_initial_size = matched_token_counts != nullptr ? matched_token_counts->size : 0;
+		// Matches a set from the rule that is fixed in length - it contains no variable length elements. Returns true if the set
+		// Was matched, else false
+		auto match_fixed_length_set = [&](size_t set_index) {
+			// We can early exit if the count is different
+			if (rule.sets[set_index].minimum_token_count != subrange.count) {
+				return false;
+			}
+
+			if (matched_token_counts != nullptr) {
+				matched_token_counts->size = matched_token_counts_initial_size;
+			}
+
+			// Keep track of the matched token count
+			unsigned int matched_token_count = 0;
+			for (unsigned int index = 0; index < subrange.count; index++) {
+				const TokenizeRuleEntry& entry = rule.sets[set_index][index];
+
+				// At the moment, the count types that are not variable length have just one
+				// Token. In the future, if this is extended, it will need to be modified. These entries
+				// Are also not optional
+				unsigned int current_token_count = 0;
+				if (!MatchTokenizeEntry(string, subrange.GetSubrangeUntilEnd(matched_token_count), entry, 1, false, &current_token_count)) {
+					return false;
+				}
+
+				if (matched_token_counts != nullptr) {
+					matched_token_counts->AddAssert(current_token_count);
+				}
+				matched_token_count += current_token_count;
+			}
+
+			return true;
+		};
+
+		// If the rule is not variable length, it is easier to match it
+		if (!rule.is_variable_length) {
+			// Try to match each set
+			for (size_t set_index = 0; set_index < rule.sets.size; set_index++) {
+				if (rule.sets[set_index].minimum_token_count > subrange.count) {
+					// Skip this set
+					return false;
+				}
+
+				if (match_fixed_length_set(set_index)) {
+					return true;
+				}
+			}
+
+			// No set matched
+			return false;
+		}
+		else {
+			for (size_t set_index = 0; set_index < rule.sets.size; set_index++) {
+				if (rule.sets[set_index].minimum_token_count > subrange.count) {
+					// Skip this set
+					return false;
+				}
+
+				if (!rule.sets[set_index].is_variable_length) {
+					if (match_fixed_length_set(set_index)) {
+						return true;
+					}
+				}
+				else {
+					Stream<TokenizeRuleEntry> set = rule.sets[set_index].entries;
+					
+					// Returns true if the variable length entry and all the next entries match the sequence, else false.
+					// It will perform a basic form of backtracking, with as much early existing as possible.
+					auto match_variable_length = [&](size_t entry_index, TokenizedString::Subrange current_subrange, const auto& match_variable_length) {
+						TokenizeRuleEntryMatchCount match_count = GetTokenizeEntryMatchCount(set[entry_index]);
+						if (match_count.is_optional && current_subrange.count == 0) {
+							return true;
+						}
+
+						// Determine if we have more entries after us. If not, then we need to match all the remaining tokens
+						if (entry_index == set.size - 1) {
+							// Don't pass a match token count, since we want to exhaust the subrange
+							if (!MatchTokenizeEntry(string, current_subrange, set[entry_index], match_count.count, match_count.is_optional, nullptr)) {
+								return false;
+							}
+						}
+						else {
+							// PERFORMANCE TODO: Determine if a cache could speed this up, but in practice, there shouldn't
+							// Be to many variable length fields one after the other.
+
+							// Use a define such that it can be used inside the match_consecutive_variable_entries_impl lambda
+#define MAX_VARIABLE_LENGTH_COUNT 32
+							ECS_STACK_CAPACITY_STREAM(bool, variable_lengths_are_optional, MAX_VARIABLE_LENGTH_COUNT);
+							ECS_STACK_CAPACITY_STREAM(unsigned int, variable_length_counts, MAX_VARIABLE_LENGTH_COUNT);
+
+							// Returns true if the combination succeeded, else false
+							auto match_consecutive_variable_entries_impl = [&](Stream<unsigned int> variable_counts, unsigned int remaining_tokens, const auto& match_consecutive_variable_entries_impl) {
+								size_t variable_index = 0;
+								unsigned int current_offset = 0;
+								// Check the current configuration, up until the last entry, which needs to handle all the remaining tokens
+								for (; variable_index < variable_counts.size - 1; variable_index++) {
+									if (!MatchTokenizeEntry(string, current_subrange.GetSubrange(current_offset, variable_counts[variable_index]), set[entry_index + variable_index], -1, variable_lengths_are_optional[variable_index], nullptr)) {
+										break;
+									}
+									current_offset += variable_counts[variable_index];
+								}
+
+								if (variable_index == variable_counts.size - 1) {
+									// All matched, test the last entry now
+									if (MatchTokenizeEntry(string, current_subrange.GetSubrangeUntilEnd(current_offset), set[entry_index + variable_counts.size - 1], -1, variable_lengths_are_optional.Last(), nullptr)) {
+										// This combination actually matched
+										return true;
+									}
+								}
+
+								// No more tokens to assign, can exit
+								if (remaining_tokens == 0) {
+									return false;
+								}
+
+								// Recurse - only for the variable indices besides the last, the last one will always be dynamic
+								ECS_STACK_CAPACITY_STREAM(unsigned int, current_counts, MAX_VARIABLE_LENGTH_COUNT);
+								current_counts.CopyOther(variable_counts);
+								for (size_t variable_index = 0; variable_index < variable_counts.size - 1; variable_index++) {
+									current_counts[variable_index]++;
+									if (match_consecutive_variable_entries_impl(current_counts, remaining_tokens - 1, match_consecutive_variable_entries_impl)) {
+										return true;
+									}
+									current_counts[variable_index]--;
+								}
+
+								// No match
+								return false;
+							};
+#undef MAX_VARIABLE_LENGTH_COUNT
+
+							// Returns true if it succeeded, else false. The last_index is exclusive, meaning it will iterate up until it, i.e. the last iterated value is last_index - 1.
+							// Token_match_count must be the number of tokens these consecutive variable entries should match
+							auto match_consecutive_variable_entries = [&](size_t last_index, unsigned int token_match_count) {
+								size_t variable_length_entry_count = last_index - entry_index;
+								// Remember the variable lengths optionality
+								variable_lengths_are_optional.AssertCapacity(variable_length_entry_count);
+								for (unsigned int variable_index = 0; variable_index < variable_length_entry_count; variable_index++) {
+									TokenizeRuleEntryMatchCount variable_match_count = GetTokenizeEntryMatchCount(set[entry_index + variable_index]);
+									variable_lengths_are_optional[variable_index] = variable_match_count.is_optional;
+									variable_length_counts[variable_index] = 0;
+								}
+								variable_length_counts.size = variable_length_entry_count;
+								variable_lengths_are_optional.size = variable_length_entry_count;
+
+								return match_consecutive_variable_entries_impl(variable_length_counts, token_match_count, match_consecutive_variable_entries_impl);
+							};
+
+							// We have more entries after us. Find the first fixed length entry and find the locations that it matches
+							// Then assign to the variable fields up until it the remaining tokens
+							for (size_t next_index = entry_index + 1; next_index < set.size; next_index++) {
+								if (IsFixedLengthEntry(set[next_index])) {
+									FixedLengthEntryInfo fixed_length_info = GetFixedLengthEntryInfo(set[next_index]);
+									// Backtrace, find all valid locations for this entry, then partition to the variable length
+									// Entries before it the counts
+									unsigned int total_token_match_count = fixed_length_info.token_count * fixed_length_info.match_count;
+									if (current_subrange.count < total_token_match_count) {
+										// Cannot match this subrange, it doesn't have enough tokens left
+										return false;
+									}
+
+
+									for (unsigned int index = 0; index < current_subrange.count - total_token_match_count + 1; index++) {
+										// Not actually needed as value, but needed for the function
+										unsigned int matched_token_count = 0;
+										if (MatchTokenizeEntry(string, current_subrange.GetSubrange(index, total_token_match_count), set[next_index], fixed_length_info.match_count, false, &matched_token_count)) {
+											// Found an entry. The variable length entries must match the offset we are currently testing at.
+											if (match_consecutive_variable_entries(next_index, index)) {
+												unsigned int remaining_tokens_to_be_matched_offset = index + total_token_match_count;
+												// If the combination succeeded, go over the entries after the fixed ones. Call the function again when a variable length field is encountered,
+												// Else (it is a fixed entry) it must match the current subrange tokens
+												next_index++;
+												for (; next_index < set.size; next_index++) {
+													if (IsFixedLengthEntry(set[next_index])) {
+														TokenizeRuleEntryMatchCount current_match_count = GetTokenizeEntryMatchCount(set[next_index]);
+														unsigned int fixed_match_count = 0;
+														if (!MatchTokenizeEntry(string, current_subrange.GetSubrangeUntilEnd(remaining_tokens_to_be_matched_offset), set[next_index], current_match_count.count, current_match_count.is_optional, &fixed_match_count)) {
+															break;
+														}
+														remaining_tokens_to_be_matched_offset += fixed_match_count;
+													}
+													else {
+														// If it matched this variable length, it means that it matched all the next entries as well
+														if (match_variable_length(next_index, current_subrange.GetSubrangeUntilEnd(remaining_tokens_to_be_matched_offset), match_variable_length)) {
+															// Set this to the size to signal that we succeeded
+															next_index = set.size;
+														}
+														// If it didn't match, the next index will not be set.size, as it shouldn't
+														break;
+													}
+												}
+
+												if (next_index == set.size) {
+													return true;
+												}
+											}
+										}
+									}
+
+									// This entry could not be matched - we can early exit
+									return false;
+								}
+							}
+
+							// If we haven't early exited up until now, then there are only variable length entries.
+							// Call the appropriate function to handle this
+							if (!match_consecutive_variable_entries(set.size, current_subrange.count)) {
+								return false;
+							}
+						}
+
+						return true;
+					};
+
+					// Start matching from the start of the set. Keep doing this for fixed length entries, up until the first variable length entry.
+					// When that variable length entry is encountered, pivot to the special function that handles it
+					unsigned int token_offset = 0;
+					bool set_matched = false;
+					for (size_t entry_index = 0; entry_index < set.size; entry_index++) {
+						if (IsFixedLengthEntry(set[entry_index])) {
+							TokenizeRuleEntryMatchCount entry_match_count = GetTokenizeEntryMatchCount(set[entry_index]);
+							unsigned int used_token_count = 0;
+							if (!MatchTokenizeEntry(string, subrange.GetSubrangeUntilEnd(token_offset), set[entry_index], entry_match_count.count, entry_match_count.is_optional, &used_token_count)) {
+								// We can return already
+								break;
+							}
+							token_offset += used_token_count;
+						}
+						else {
+							// It is a variable length entry. Returns its result
+							set_matched = match_variable_length(entry_index, subrange.GetSubrangeUntilEnd(token_offset), match_variable_length);
+							break;
+						}
+					}
+
+					// If the set matched, then return now
+					if (set_matched) {
+						return true;
+					}
+				}
+			}
+
+			// No set matched
+			return false;
+		}
+
+		ECS_ASSERT(false, "Shouldn't reach here");
+		return false;
 	}
 
 	bool ValidateTokenizeRule(const TokenizeRule& rule) {
@@ -1028,6 +1600,7 @@ namespace ECSEngine {
 		while (subrange.count > 0) {
 			// Try to match
 		}
+		return true;
 	}
 
 	bool TokenizeRule::Compare(const TokenizeRule& other) const {
@@ -1062,11 +1635,13 @@ namespace ECSEngine {
 		sets.Deallocate(allocator);
 	}
 
-	void TokenizeRule::ComputeMinimumTokenCount() {
+	void TokenizeRule::ComputeCachedValues() {
 		unsigned int overall_minimum = UINT_MAX;
+		bool is_overall_variable_length = false;
 
 		for (size_t set_index = 0; set_index < sets.size; set_index++) {
 			unsigned int set_minimum_count = 0;
+			bool is_set_variable_length = false;
 			for (size_t entry_index = 0; entry_index < sets[set_index].entries.size; entry_index++) {
 				TokenizeRuleEntry& entry = sets[set_index][entry_index];
 				// Counts that include zero don't contribute
@@ -1074,20 +1649,39 @@ namespace ECSEngine {
 					entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_START || entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_END) {
 					// Subrules are a special case
 					if (entry.selection_type == ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE) {
-						entry.selection_data.subrule.ComputeMinimumTokenCount();
+						entry.selection_data.subrule.ComputeCachedValues();
 						set_minimum_count += entry.selection_data.subrule.minimum_token_count;
+						is_set_variable_length |= entry.selection_data.subrule.is_variable_length;
+						// If the set is still not variable length, it can be variable length if the subrule has multiple sets
+						// With different token counts
+						if (!is_set_variable_length) {
+							for (size_t subrule_set_index = 0; subrule_set_index < entry.selection_data.subrule.sets.size - 1; subrule_set_index++) {
+								if (entry.selection_data.subrule.sets[0].minimum_token_count != entry.selection_data.subrule.sets[subrule_set_index + 1].minimum_token_count) {
+									is_set_variable_length = true;
+									break;
+								}
+							}
+						}
 					}
 					else {
 						// Normal case, one token required, at the very least
 						set_minimum_count++;
 					}
 				}
+
+				if (entry.count_type == ECS_TOKENIZE_RULE_ONE_OR_MORE || entry.count_type == ECS_TOKENIZE_RULE_ZERO_OR_MORE || 
+					entry.count_type == ECS_TOKENIZE_RULE_ZERO_OR_ONE) {
+					is_set_variable_length = true;
+				}
 			}
 			sets[set_index].minimum_token_count = set_minimum_count;
+			sets[set_index].is_variable_length = is_set_variable_length;
 			overall_minimum = min(overall_minimum, set_minimum_count);
+			is_overall_variable_length |= is_set_variable_length;
 		}
 
 		minimum_token_count = overall_minimum;
+		is_variable_length = is_overall_variable_length;
 	}
 
 	bool TokenizeRuleEntry::Compare(const TokenizeRuleEntry& other) const {
