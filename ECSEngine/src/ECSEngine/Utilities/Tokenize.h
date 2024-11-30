@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "BasicTypes.h"
 #include "../Containers/Stream.h"
+#include <vector>
 
 namespace ECSEngine {
 
@@ -156,6 +157,7 @@ namespace ECSEngine {
 			Stream<TokenizeRuleEntry> entries;
 			// This is a cached value that helps in quickly retrieving the minimum amount of tokens for this set
 			unsigned int minimum_token_count;
+			bool is_variable_length;
 		};
 
 		// Returns true if the entries of both rules are of the same type and data, else false
@@ -167,11 +169,13 @@ namespace ECSEngine {
 
 		// Computes and caches the value of the minimum token count needed by this rule. It will
 		// Call transiently this function on subrules as well
-		void ComputeMinimumTokenCount();
+		void ComputeCachedValues();
 
 		Stream<EntrySet> sets;
 		// This is a cached value that helps in quickly retrieving the minimum amount of tokens for this rule
 		unsigned int minimum_token_count;
+		// This is a cached value for the info of 
+		bool is_variable_length;
 	};
 
 	// Extra data for selection rules
