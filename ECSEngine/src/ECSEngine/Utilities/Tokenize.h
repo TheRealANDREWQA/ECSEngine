@@ -60,6 +60,10 @@ namespace ECSEngine {
 			return { token_index, tokens.Size() - token_index };
 		}
 
+		ECS_INLINE Subrange AsSubrange() const {
+			return GetSubrangeUntilEnd(0);
+		}
+
 		// Returns the token string at the given token index
 		ECS_INLINE Stream<char> operator[](size_t token_index) const {
 			return { string.buffer + tokens[token_index].offset, tokens[token_index].size };
@@ -92,12 +96,14 @@ namespace ECSEngine {
 	ECSENGINE_API unsigned int TokenizeFindTokenByType(const TokenizedString& string, unsigned int token_type, TokenizedString::Subrange token_subrange);
 
 	// Returns the indices of the tokens that matched the open and the closed token pair. Returns { -1, -1 } if no such pair was found.
-	// You must specify the offset where the search starts from
-	ECSENGINE_API uint2 TokenizeFindMatchingPair(const TokenizedString& string, Stream<char> open_token, Stream<char> closed_token, TokenizedString::Subrange token_subrange);
+	// You must specify the offset where the search starts from. If the search_closed_only option is enablend, then it considers that one open
+	// Token was already found, and only the search for its pair is needed
+	ECSENGINE_API uint2 TokenizeFindMatchingPair(const TokenizedString& string, Stream<char> open_token, Stream<char> closed_token, TokenizedString::Subrange token_subrange, bool search_closed_only = false);
 
 	// Returns the indices of the tokens that matched the open and the closed token pair. Returns { -1, -1 } if no such pair was found.
-	// This version uses only the token types to distinguish between entries. You must specify the offset where the search starts from
-	ECSENGINE_API uint2 TokenizeFindMatchingPairByType(const TokenizedString& string, unsigned int open_type, unsigned int closed_type, TokenizedString::Subrange token_subrange);
+	// This version uses only the token types to distinguish between entries. You must specify the offset where the search starts from. 
+	// If the search_closed_only option is enablend, then it considers that one open token was already found, and only the search for its pair is needed
+	ECSENGINE_API uint2 TokenizeFindMatchingPairByType(const TokenizedString& string, unsigned int open_type, unsigned int closed_type, TokenizedString::Subrange token_subrange, bool search_closed_only = false);
 
 	// Merges the tokens given by the sequence into a single string, allocated from the allocator
 	ECSENGINE_API Stream<char> TokenizeMergeEntries(const TokenizedString& string, TokenizedString::Subrange sequence, AllocatorPolymorphic allocator);
@@ -170,6 +176,10 @@ namespace ECSEngine {
 		// Computes and caches the value of the minimum token count needed by this rule. It will
 		// Call transiently this function on subrules as well
 		void ComputeCachedValues();
+
+		ECS_INLINE bool IsEmpty() const {
+			return sets.size == 0;
+		}
 
 		Stream<EntrySet> sets;
 		// This is a cached value that helps in quickly retrieving the minimum amount of tokens for this rule
@@ -309,11 +319,14 @@ namespace ECSEngine {
 	ECSENGINE_API TokenizeRule CreateTokenizeRule(Stream<char> string_rule, AllocatorPolymorphic allocator, bool allocator_is_temporary, CapacityStream<char>* error_message = nullptr);
 
 	// Returns true if the given rule matches the string, else false. If it matches the string, it can optionally report how many
-	// Tokens each entry used.
+	// Tokens each entry used. The cached values for the rule must be computed beforehand!
 	ECSENGINE_API bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, CapacityStream<unsigned int>* matched_token_counts = nullptr);
 
-	// Returns true if the rule is valid, else false
-	ECSENGINE_API bool ValidateTokenizeRule(const TokenizeRule& rule);
+	// A function for testing the matching
+	ECSENGINE_API void MatchTokenizeRuleTest();
+
+	// Returns true if the rule is valid, else false. It can optionally fill in an error message in case it is not valid
+	ECSENGINE_API bool ValidateTokenizeRule(const TokenizeRule& rule, CapacityStream<char>* error_message = nullptr);
 
 	// Must be kept in sync with the function GetCppFileTokenSeparators
 	// These are the separators that can appear in a CPP file that we are interested in
@@ -341,7 +354,7 @@ namespace ECSEngine {
 
 	ECS_INLINE Stream<char> GetCppFileTokenSeparators() {
 		// Must be kept in sync with the above enum
-		return "+-*%^/|&.,:;=(){}[]";
+		return "+-*%^/|&.,:;=()<>{}[]";
 	}
 
 	// Must be kept in sync with the function GetCppEnumTokenSeparators

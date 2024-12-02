@@ -231,11 +231,14 @@ namespace ECSEngine {
 		return -1;
 	}
 
-	uint2 TokenizeFindMatchingPair(const TokenizedString& string, Stream<char> open_token, Stream<char> closed_token, TokenizedString::Subrange token_subrange) {
+	uint2 TokenizeFindMatchingPair(const TokenizedString& string, Stream<char> open_token, Stream<char> closed_token, TokenizedString::Subrange token_subrange, bool search_closed_only) {
 		unsigned int token_count = token_subrange.count;
-		unsigned int first_open_index = TokenizeFindToken(string, open_token, token_subrange);
-		if (first_open_index == -1) {
-			return { (unsigned int)-1, (unsigned int)-1 };
+		unsigned int first_open_index = -1;
+		if (!search_closed_only) {
+			first_open_index = TokenizeFindToken(string, open_token, token_subrange);
+			if (first_open_index == -1) {
+				return { (unsigned int)-1, (unsigned int)-1 };
+			}
 		}
 
 		size_t open_count = 1;
@@ -262,11 +265,14 @@ namespace ECSEngine {
 		return { first_open_index, index - 1 };
 	}
 
-	uint2 TokenizeFindMatchingPairByType(const TokenizedString& string, unsigned int open_type, unsigned int closed_type, TokenizedString::Subrange token_subrange) {
+	uint2 TokenizeFindMatchingPairByType(const TokenizedString& string, unsigned int open_type, unsigned int closed_type, TokenizedString::Subrange token_subrange, bool search_closed_only) {
 		unsigned int token_count = token_subrange.count;
-		unsigned int first_open_index = TokenizeFindTokenByType(string, open_type, token_subrange);
-		if (first_open_index == -1) {
-			return { (unsigned int)-1, (unsigned int)-1 };
+		unsigned int first_open_index = -1;
+		if (!search_closed_only) {
+			first_open_index = TokenizeFindTokenByType(string, open_type, token_subrange);
+			if (first_open_index == -1) {
+				return { (unsigned int)-1, (unsigned int)-1 };
+			}
 		}
 
 		size_t open_count = 1;
@@ -858,6 +864,15 @@ namespace ECSEngine {
 						// Decrement the index such that we come back to retest the next entry
 						entry_index--;
 					}
+					else if (second_entry.count_type == ECS_TOKENIZE_RULE_ONE && current_entry.Compare(second_entry)) {
+						// Remove the next entry, and change this one to a one or more
+						if (deallocate_existing_entries) {
+							rule.sets[set_index][entry_index].Deallocate(allocator);
+						}
+						current_entry.count_type = ECS_TOKENIZE_RULE_ONE_OR_MORE;
+						rule.sets[set_index].entries.Remove(entry_index + 1);
+						entry_index--;
+					}
 				}
 			}
 		}
@@ -932,8 +947,9 @@ namespace ECSEngine {
 			}
 
 			// Validate the definition
-			if (!ValidateTokenizeRule(definition.rule)) {
-				ECS_FORMAT_ERROR_MESSAGE(error_message, "Definition {#} is not valid", lines[index]);
+			ECS_STACK_CAPACITY_STREAM(char, validate_error_message, 512);
+			if (!ValidateTokenizeRule(definition.rule, &validate_error_message)) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Definition at line {#} is not valid. Reason: {#}", lines[index], validate_error_message);
 				return TokenizeRule();
 			}
 
@@ -956,8 +972,9 @@ namespace ECSEngine {
 		}
 
 		// Validate the rule
-		if (!ValidateTokenizeRule(rule)) {
-			ECS_FORMAT_ERROR_MESSAGE(error_message, "The definition {#} is not valid", lines.Last());
+		ECS_STACK_CAPACITY_STREAM(char, validate_error_message, 512);
+		if (!ValidateTokenizeRule(rule, &validate_error_message)) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "The definition at line {#} is not valid. Reason: {#}", lines.Last(), validate_error_message);
 			return TokenizeRule();
 		}
 
@@ -979,10 +996,13 @@ namespace ECSEngine {
 		unsigned int count;
 		// It is true if the token can be missing
 		bool is_optional;
+		// Set to true if the character requires pairing
+		bool requires_pairing;
 	};
 
 	static TokenizeRuleEntryMatchCount GetTokenizeEntryMatchCount(const TokenizeRuleEntry& entry) {
 		TokenizeRuleEntryMatchCount match_count;
+		match_count.requires_pairing = false;
 		switch (entry.count_type) {
 		case ECS_TOKENIZE_RULE_ONE:
 		case ECS_TOKENIZE_RULE_ONE_PAIR_START:
@@ -990,6 +1010,7 @@ namespace ECSEngine {
 		{
 			match_count.count = 1;
 			match_count.is_optional = false;
+			match_count.requires_pairing = entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_START || entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_END;
 		}
 		break;
 		case ECS_TOKENIZE_RULE_ZERO_OR_ONE:
@@ -1044,35 +1065,51 @@ namespace ECSEngine {
 		unsigned int token_count;
 		// How many matches this entry needs
 		unsigned int match_count;
+		// Set to true if it is a character of type PAIR_START or PAIR_END
+		bool requires_pairing;
 	};
 
 	// Returns the number of tokens this fixed length entry needs for a match. You must ensure that this entry is fixed length
 	static FixedLengthEntryInfo GetFixedLengthEntryInfo(const TokenizeRuleEntry& entry) {
 		// At the moment, we can have only a match count of 1
+		bool requires_pairing = entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_START || 
+			entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_END;
 		if (entry.selection_type == ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE) {
-			return { entry.selection_data.subrule.minimum_token_count, 1 };
+			return { entry.selection_data.subrule.minimum_token_count, 1, requires_pairing };
 		}
 		else {
-			return { 1, 1 };
+			return { 1, 1, requires_pairing };
 		}
+	}
+
+	// For an entry that is the beginning of pairing, it will return the index of the end pairing, or -1 if there is no such pairing
+	static size_t GetEntryPairing(Stream<TokenizeRuleEntry> set, size_t entry_start_index) {
+		for (size_t index = entry_start_index + 1; index < set.size; index++) {
+			if (set[index].count_type == ECS_TOKENIZE_RULE_ONE_PAIR_END) {
+				return index;
+			}
+		}
+		return -1;
 	}
 
 	// The number of selection matches that need to be performed are given by match_count, or you can optionally set this to -1 to indicate that this query is variable length and that there is no set match count.
 	// If you want to match this entry but without exhausting the subrange, provide the last argument and it will tell you how much to advance. If you want to exhaust the range, then leave the final argument as nullptr
 	static bool MatchTokenizeEntry(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRuleEntry& entry, unsigned int match_count, bool is_optional, unsigned int* total_token_matched_count) {
+		// Check this immediately
+		if (subrange.count == 0) {
+			return is_optional;
+		}
+		
 		if (match_count != -1 && subrange.count < match_count) {
 			return false;
-		}
-
-		// Check this immediately
-		if (is_optional && subrange.count == 0) {
-			return true;
 		}
 
 		// If the match count is -1, then we need to exhaust the range
 		bool exhaustive_search = total_token_matched_count == nullptr || match_count == -1;
 		unsigned int adjusted_match_count = exhaustive_search ? subrange.count : match_count;
-		*total_token_matched_count = match_count;
+		if (total_token_matched_count != nullptr) {
+			*total_token_matched_count = match_count;
+		}
 
 		switch (entry.selection_type) {
 		case ECS_TOKENIZE_RULE_SELECTION_ANY:
@@ -1166,7 +1203,8 @@ namespace ECSEngine {
 				
 				// Early exit if the minimum amount of tokens per total number of matches is not satisfied
 				if (match_count * entry.selection_data.subrule.minimum_token_count > subrange.count) {
-					continue;
+					iteration_index = iteration_count;
+					break;
 				}
 
 				// Match the subrule. This is quite involved. But we can try our best to early out as soon as possible.
@@ -1177,6 +1215,7 @@ namespace ECSEngine {
 				for (unsigned int index = 0; index < match_count; index++) {
 					per_iteration_counts[index] = entry.selection_data.subrule.minimum_token_count;
 				}
+				per_iteration_counts.size = match_count;
 
 				// If the exhaust tokens boolean is true, then it will perform matches only if all the tokens are used
 				auto backtrack_permutations = [&](unsigned int subrange_offset, unsigned int remaining_tokens, CapacityStream<unsigned short> current_counts, unsigned int* matched_token_count, bool exhaust_tokens, const auto& backtrack_permutations) {
@@ -1184,7 +1223,12 @@ namespace ECSEngine {
 					{
 						// Use a stack scope for this to indicate to the compiler that the stack values should be deallocated at the end of the stack scope
 						// Such that they don't occupy space and risk a stack overflow
-						if (!exhaust_tokens || remaining_tokens == 0) {
+						if (!exhaust_tokens || remaining_tokens == 0 || current_counts.size == 1) {
+							if (current_counts.size == 1) {
+								current_counts[0] += remaining_tokens;
+								remaining_tokens = 0;
+							}
+
 							unsigned int current_token_offset = 0;
 							bool current_state_success = true;
 
@@ -1212,7 +1256,7 @@ namespace ECSEngine {
 									bool success = true;
 
 									// Only entries that are not already in the cache will need to be checked
-									if (!is_index_skipped) {
+									if (!is_index_skipped[index]) {
 										TokenizedString::Subrange current_subrange = subrange.GetSubrange(subrange_offset + current_token_offset, current_counts[index]);
 										success = MatchTokenizeRule(string, current_subrange, entry.selection_data.subrule, nullptr);
 
@@ -1245,16 +1289,14 @@ namespace ECSEngine {
 
 					// Continue the backtrace only if we have remaining tokens
 					if (remaining_tokens > 0) {
-						ECS_STACK_CAPACITY_STREAM(unsigned short, current_iteration_counts, 32);
-						current_iteration_counts.CopyOther(current_counts);
 						// Add one more token to each index and backtrace again
-						for (unsigned int index = 0; index < current_iteration_counts.size; index++) {
-							current_iteration_counts[index]++;
-							if (backtrack_permutations(subrange_offset, remaining_tokens - 1, current_iteration_counts, matched_token_count, exhaust_tokens, backtrack_permutations)) {
+						for (unsigned int index = 0; index < current_counts.size; index++) {
+							current_counts[index]++;
+							if (backtrack_permutations(subrange_offset, remaining_tokens - 1, current_counts, matched_token_count, exhaust_tokens, backtrack_permutations)) {
 								// Found a match
 								return true;
 							}
-							current_iteration_counts[index]--;
+							current_counts[index]--;
 						}
 					}
 
@@ -1262,23 +1304,26 @@ namespace ECSEngine {
 					return false;
 				};
 
-				*total_token_matched_count = 0;
+				unsigned int token_offset = 0;
 				unsigned int match_index = 0;
 				for (; match_index < match_count; match_index++) {
-					unsigned int remaining_tokens = subrange.count - *total_token_matched_count;
+					unsigned int remaining_tokens = subrange.count - token_offset - entry.selection_data.subrule.minimum_token_count * match_count;
 
 					// This does not work for one or more matches of variable length subrules perfectly, since
 					// The first version that match for an iteration might not work for the next ones, but
 					// This is the easiest solution and might be enough for our use case
 					unsigned int current_matched_token_count = 0;
-					if (!backtrack_permutations(*total_token_matched_count, remaining_tokens, per_iteration_counts, &current_matched_token_count, exhaustive_search, backtrack_permutations)) {
+					if (!backtrack_permutations(token_offset, remaining_tokens, per_iteration_counts, &current_matched_token_count, exhaustive_search, backtrack_permutations)) {
 						// Could not match any combination
 						break;
 					}
-					*total_token_matched_count += current_matched_token_count;
+					token_offset += current_matched_token_count;
 				}
 
 				if (match_index == match_count) {
+					if (total_token_matched_count != nullptr) {
+						*total_token_matched_count = token_offset;
+					}
 					break;
 				}
 			}
@@ -1306,10 +1351,6 @@ namespace ECSEngine {
 			// We can early exit if the count is different
 			if (rule.sets[set_index].minimum_token_count != subrange.count) {
 				return false;
-			}
-
-			if (matched_token_counts != nullptr) {
-				matched_token_counts->size = matched_token_counts_initial_size;
 			}
 
 			// Keep track of the matched token count
@@ -1340,7 +1381,11 @@ namespace ECSEngine {
 			for (size_t set_index = 0; set_index < rule.sets.size; set_index++) {
 				if (rule.sets[set_index].minimum_token_count > subrange.count) {
 					// Skip this set
-					return false;
+					continue;
+				}
+
+				if (matched_token_counts != nullptr) {
+					matched_token_counts->size = matched_token_counts_initial_size;
 				}
 
 				if (match_fixed_length_set(set_index)) {
@@ -1355,7 +1400,11 @@ namespace ECSEngine {
 			for (size_t set_index = 0; set_index < rule.sets.size; set_index++) {
 				if (rule.sets[set_index].minimum_token_count > subrange.count) {
 					// Skip this set
-					return false;
+					continue;
+				}
+
+				if (matched_token_counts != nullptr) {
+					matched_token_counts->size = matched_token_counts_initial_size;
 				}
 
 				if (!rule.sets[set_index].is_variable_length) {
@@ -1366,13 +1415,81 @@ namespace ECSEngine {
 				else {
 					Stream<TokenizeRuleEntry> set = rule.sets[set_index].entries;
 					
+					auto match_consecutive_entries = [matched_token_counts, &string](Stream<TokenizeRuleEntry> set, TokenizedString::Subrange subrange, size_t set_start_index, size_t set_end_index, const auto& match_variable_length) {
+						// Start matching from the start of the set. Keep doing this for fixed length entries, up until the first variable length entry.
+						// When that variable length entry is encountered, pivot to the special function that handles it
+						unsigned int token_offset = 0;
+						for (size_t entry_index = set_start_index; entry_index < set_end_index; entry_index++) {
+							if (IsFixedLengthEntry(set[entry_index])) {
+								TokenizeRuleEntryMatchCount entry_match_count = GetTokenizeEntryMatchCount(set[entry_index]);
+								unsigned int used_token_count = 0;
+								if (!MatchTokenizeEntry(string, subrange.GetSubrangeUntilEnd(token_offset), set[entry_index], entry_match_count.count, entry_match_count.is_optional, &used_token_count)) {
+									// We can return already
+									return false;
+								}
+								token_offset += used_token_count;
+								if (matched_token_counts != nullptr) {
+									matched_token_counts->AddAssert(used_token_count);
+								}
+
+								if (entry_match_count.requires_pairing) {
+									// Find its pairing
+									size_t pairing_index = GetEntryPairing(set, entry_index);
+									ECS_ASSERT(pairing_index != -1, "Could not find pairing for tokenize pair start entry.");
+
+									// Find if any characters match this token
+									uint2 matched_pair_index = TokenizeFindMatchingPair(string, set[entry_index].selection_data.string, set[pairing_index].selection_data.string, subrange.GetSubrangeUntilEnd(token_offset), true);
+									if (matched_pair_index.y == -1) {
+										// There is no matching end token, we can exit
+										return false;
+									}
+									unsigned int in_between_pairing_token_count = matched_pair_index.y;
+
+									if (pairing_index > entry_index + 1) {
+										// Create a "virtual" rule that contains the entries in between the start and the end pairing characters
+										TokenizeRule::EntrySet virtual_entry_set;
+										virtual_entry_set.entries.buffer = set.buffer + entry_index + 1;
+										virtual_entry_set.entries.size = pairing_index - entry_index - 1;
+										TokenizeRule virtual_match_rule;
+										virtual_match_rule.sets = { &virtual_entry_set, 1 };
+										// Compute its cached values, the match function requires it
+										virtual_match_rule.ComputeCachedValues();
+
+										// The matched_pair_index is already relative to the subrange that starts from token offset
+										if (!MatchTokenizeRule(string, subrange.GetSubrange(token_offset, in_between_pairing_token_count), virtual_match_rule, matched_token_counts)) {
+											return false;
+										}
+
+										// The inner portion matched the pairing, can continue
+										if (matched_token_counts != nullptr) {
+											// The pairing end uses another token
+											matched_token_counts->AddAssert(1);
+										}
+
+										// Jump to this entry, the increment will advance to the next entry
+										entry_index = pairing_index;
+									}
+									else if (in_between_pairing_token_count > 0) {
+										// There are no in between entries between the pairing, but there are tokens
+										return false;
+									}
+									token_offset += in_between_pairing_token_count + 1;
+								}
+							}
+							else {
+								// It is a variable length entry. Returns its result
+								return match_variable_length(entry_index, subrange.GetSubrangeUntilEnd(token_offset), match_variable_length);
+							}
+						}
+
+						// It means that there were only fixed length entries, return as success
+						return true;
+					};
+
 					// Returns true if the variable length entry and all the next entries match the sequence, else false.
 					// It will perform a basic form of backtracking, with as much early existing as possible.
 					auto match_variable_length = [&](size_t entry_index, TokenizedString::Subrange current_subrange, const auto& match_variable_length) {
 						TokenizeRuleEntryMatchCount match_count = GetTokenizeEntryMatchCount(set[entry_index]);
-						if (match_count.is_optional && current_subrange.count == 0) {
-							return true;
-						}
 
 						// Determine if we have more entries after us. If not, then we need to match all the remaining tokens
 						if (entry_index == set.size - 1) {
@@ -1389,6 +1506,7 @@ namespace ECSEngine {
 #define MAX_VARIABLE_LENGTH_COUNT 32
 							ECS_STACK_CAPACITY_STREAM(bool, variable_lengths_are_optional, MAX_VARIABLE_LENGTH_COUNT);
 							ECS_STACK_CAPACITY_STREAM(unsigned int, variable_length_counts, MAX_VARIABLE_LENGTH_COUNT);
+							ECS_STACK_CAPACITY_STREAM(unsigned int, variable_lengths_match_count, MAX_VARIABLE_LENGTH_COUNT);
 
 							// Returns true if the combination succeeded, else false
 							auto match_consecutive_variable_entries_impl = [&](Stream<unsigned int> variable_counts, unsigned int remaining_tokens, const auto& match_consecutive_variable_entries_impl) {
@@ -1396,7 +1514,14 @@ namespace ECSEngine {
 								unsigned int current_offset = 0;
 								// Check the current configuration, up until the last entry, which needs to handle all the remaining tokens
 								for (; variable_index < variable_counts.size - 1; variable_index++) {
-									if (!MatchTokenizeEntry(string, current_subrange.GetSubrange(current_offset, variable_counts[variable_index]), set[entry_index + variable_index], -1, variable_lengths_are_optional[variable_index], nullptr)) {
+									if (!MatchTokenizeEntry(
+										string, 
+										current_subrange.GetSubrange(current_offset, variable_counts[variable_index]), 
+										set[entry_index + variable_index], 
+										variable_lengths_match_count[variable_index], 
+										variable_lengths_are_optional[variable_index], 
+										nullptr
+									)) {
 										break;
 									}
 									current_offset += variable_counts[variable_index];
@@ -1404,14 +1529,25 @@ namespace ECSEngine {
 
 								if (variable_index == variable_counts.size - 1) {
 									// All matched, test the last entry now
-									if (MatchTokenizeEntry(string, current_subrange.GetSubrangeUntilEnd(current_offset), set[entry_index + variable_counts.size - 1], -1, variable_lengths_are_optional.Last(), nullptr)) {
+									if (MatchTokenizeEntry(
+										string, 
+										current_subrange.GetSubrange(current_offset, variable_counts.Last() + remaining_tokens), 
+										set[entry_index + variable_counts.size - 1], 
+										variable_lengths_match_count.Last(), 
+										variable_lengths_are_optional.Last(), 
+										nullptr
+									)) {
 										// This combination actually matched
+										if (matched_token_counts != nullptr) {
+											// Add the counts to the user passed argument
+											matched_token_counts->AddStreamAssert(variable_counts);
+										}
 										return true;
 									}
 								}
 
 								// No more tokens to assign, can exit
-								if (remaining_tokens == 0) {
+								if (remaining_tokens == 0 || variable_counts.size == 1) {
 									return false;
 								}
 
@@ -1440,10 +1576,12 @@ namespace ECSEngine {
 								for (unsigned int variable_index = 0; variable_index < variable_length_entry_count; variable_index++) {
 									TokenizeRuleEntryMatchCount variable_match_count = GetTokenizeEntryMatchCount(set[entry_index + variable_index]);
 									variable_lengths_are_optional[variable_index] = variable_match_count.is_optional;
+									variable_lengths_match_count[variable_index] = variable_match_count.count;
 									variable_length_counts[variable_index] = 0;
 								}
 								variable_length_counts.size = variable_length_entry_count;
 								variable_lengths_are_optional.size = variable_length_entry_count;
+								variable_lengths_match_count.size = variable_length_entry_count;
 
 								return match_consecutive_variable_entries_impl(variable_length_counts, token_match_count, match_consecutive_variable_entries_impl);
 							};
@@ -1461,39 +1599,25 @@ namespace ECSEngine {
 										return false;
 									}
 
-
 									for (unsigned int index = 0; index < current_subrange.count - total_token_match_count + 1; index++) {
 										// Not actually needed as value, but needed for the function
 										unsigned int matched_token_count = 0;
 										if (MatchTokenizeEntry(string, current_subrange.GetSubrange(index, total_token_match_count), set[next_index], fixed_length_info.match_count, false, &matched_token_count)) {
 											// Found an entry. The variable length entries must match the offset we are currently testing at.
+											unsigned int matched_tokens_current_count = matched_token_counts != nullptr ? matched_token_counts->size : 0;
 											if (match_consecutive_variable_entries(next_index, index)) {
 												unsigned int remaining_tokens_to_be_matched_offset = index + total_token_match_count;
-												// If the combination succeeded, go over the entries after the fixed ones. Call the function again when a variable length field is encountered,
-												// Else (it is a fixed entry) it must match the current subrange tokens
-												next_index++;
-												for (; next_index < set.size; next_index++) {
-													if (IsFixedLengthEntry(set[next_index])) {
-														TokenizeRuleEntryMatchCount current_match_count = GetTokenizeEntryMatchCount(set[next_index]);
-														unsigned int fixed_match_count = 0;
-														if (!MatchTokenizeEntry(string, current_subrange.GetSubrangeUntilEnd(remaining_tokens_to_be_matched_offset), set[next_index], current_match_count.count, current_match_count.is_optional, &fixed_match_count)) {
-															break;
-														}
-														remaining_tokens_to_be_matched_offset += fixed_match_count;
-													}
-													else {
-														// If it matched this variable length, it means that it matched all the next entries as well
-														if (match_variable_length(next_index, current_subrange.GetSubrangeUntilEnd(remaining_tokens_to_be_matched_offset), match_variable_length)) {
-															// Set this to the size to signal that we succeeded
-															next_index = set.size;
-														}
-														// If it didn't match, the next index will not be set.size, as it shouldn't
-														break;
-													}
+												// We don't need to add to the token counts the current matched fixed length entry, that will happen inside the match consecutive entries
+
+												// Call the function that resolves the consecutive entries. We must include the next_index as well such
+												// That it can pickup on the fact that it might be a pairing token
+												if (match_consecutive_entries(set, current_subrange.GetSubrangeUntilEnd(index), next_index, set.size, match_variable_length)) {
+													return true;
 												}
 
-												if (next_index == set.size) {
-													return true;
+												// Walk back the counts that were added
+												if (matched_token_counts != nullptr) {
+													matched_token_counts->size = matched_tokens_current_count;
 												}
 											}
 										}
@@ -1514,29 +1638,8 @@ namespace ECSEngine {
 						return true;
 					};
 
-					// Start matching from the start of the set. Keep doing this for fixed length entries, up until the first variable length entry.
-					// When that variable length entry is encountered, pivot to the special function that handles it
-					unsigned int token_offset = 0;
-					bool set_matched = false;
-					for (size_t entry_index = 0; entry_index < set.size; entry_index++) {
-						if (IsFixedLengthEntry(set[entry_index])) {
-							TokenizeRuleEntryMatchCount entry_match_count = GetTokenizeEntryMatchCount(set[entry_index]);
-							unsigned int used_token_count = 0;
-							if (!MatchTokenizeEntry(string, subrange.GetSubrangeUntilEnd(token_offset), set[entry_index], entry_match_count.count, entry_match_count.is_optional, &used_token_count)) {
-								// We can return already
-								break;
-							}
-							token_offset += used_token_count;
-						}
-						else {
-							// It is a variable length entry. Returns its result
-							set_matched = match_variable_length(entry_index, subrange.GetSubrangeUntilEnd(token_offset), match_variable_length);
-							break;
-						}
-					}
-
 					// If the set matched, then return now
-					if (set_matched) {
+					if (match_consecutive_entries(set, subrange, 0, set.size, match_variable_length)) {
 						return true;
 					}
 				}
@@ -1550,8 +1653,108 @@ namespace ECSEngine {
 		return false;
 	}
 
-	bool ValidateTokenizeRule(const TokenizeRule& rule) {
-		// At the moment, there is nothing to be validated
+	void MatchTokenizeRuleTest() {
+		const char* typedef_definition = R"DELIMITER(identifier_no_template = $G.
+				identifier_template = $G.\<$T*/>
+				identifier = identifier_no_template. | identifier_template.
+				typedef. identifier. identifier_no_template.;.)DELIMITER";
+
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+		TokenizeRule typedef_rule = CreateTokenizeRule(typedef_definition, &stack_allocator, true, &error_message);
+		ECS_ASSERT(!typedef_rule.IsEmpty());
+
+		ResizableStream<Token> tokens(&stack_allocator, 0);
+		TokenizedString string;
+		string.string = "typedef valid valid;";
+		string.tokens = &tokens;
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+
+		string.string = "typedef template<MyTemplate, Value> valid;";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+
+		string.string = "typedef . valid;";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+
+		string.string = "void myFunction();";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+
+		string.string = "typedef template<MyValue, YourValue valid;";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+
+		string.string = "typedef template>MyValue, <YourValue valid;";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+
+		const char* function_definition = R"DELIMITER(template_header = template. \< $T* />
+														template_header? $G. $G* $G. \( $T* /) $G*;. | template_header? $G. $G* $G. \( $T* /) $G* \{ $T* /} )DELIMITER";
+		TokenizeRule function_rule = CreateTokenizeRule(function_definition, &stack_allocator, true, &error_message);
+		ECS_ASSERT(!function_rule.IsEmpty());
+
+		string.string = "void MyFunction();";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+
+		string.string = "void FunctionWithBody(A a, B b, C* const MyPOinter) { // It has a nested scope {} int myVariable; }";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+
+		string.string = "template<class my_template> ECS_INLINE static constexpr void TemplateFunction() const;";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+
+		string.string = "template<class my_template> ECS_INLINE static constexpr void TemplateFunction() const override { int my_array[50]; { another scope; } }";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+
+		string.string = "int my_member_field;";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+
+		string.string = "ECS_REFLECT_SOA(10, 20, 30)";
+		string.tokens.resizable_stream->FreeBuffer();
+		TokenizeString(string, GetCppFileTokenSeparators(), true);
+		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+	}
+
+	bool ValidateTokenizeRule(const TokenizeRule& rule, CapacityStream<char>* error_message) {
+		// At the moment, the only thing to validate is that the begin/end pairings are conforming
+		for (size_t set_index = 0; set_index < rule.sets.size; set_index++) {
+			size_t pairing_count = 0;
+			for (size_t entry_index = 0; entry_index < rule.sets[set_index].entries.size; entry_index++) {
+				ECS_TOKENIZE_RULE_COUNT_TYPE count_type = rule.sets[set_index][entry_index].count_type;
+				if (count_type == ECS_TOKENIZE_RULE_ONE_PAIR_START) {
+					pairing_count++;
+				}
+				else if (count_type == ECS_TOKENIZE_RULE_ONE_PAIR_END) {
+					if (pairing_count == 0) {
+						SetErrorMessage(error_message, "A pairing end character was encountered before any start character");
+						return false;
+					}
+					pairing_count--;
+				}
+			}
+
+			if (pairing_count != 0) {
+				SetErrorMessage(error_message, "Pairing characters are not properly matched");
+				return false;
+			}
+		}
 		return true;
 	}
 
@@ -1644,24 +1847,17 @@ namespace ECSEngine {
 			bool is_set_variable_length = false;
 			for (size_t entry_index = 0; entry_index < sets[set_index].entries.size; entry_index++) {
 				TokenizeRuleEntry& entry = sets[set_index][entry_index];
+				if (entry.selection_type == ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE) {
+					entry.selection_data.subrule.ComputeCachedValues();
+				}
+
 				// Counts that include zero don't contribute
 				if (entry.count_type == ECS_TOKENIZE_RULE_ONE || entry.count_type == ECS_TOKENIZE_RULE_ONE_OR_MORE ||
 					entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_START || entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_END) {
 					// Subrules are a special case
 					if (entry.selection_type == ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE) {
-						entry.selection_data.subrule.ComputeCachedValues();
 						set_minimum_count += entry.selection_data.subrule.minimum_token_count;
 						is_set_variable_length |= entry.selection_data.subrule.is_variable_length;
-						// If the set is still not variable length, it can be variable length if the subrule has multiple sets
-						// With different token counts
-						if (!is_set_variable_length) {
-							for (size_t subrule_set_index = 0; subrule_set_index < entry.selection_data.subrule.sets.size - 1; subrule_set_index++) {
-								if (entry.selection_data.subrule.sets[0].minimum_token_count != entry.selection_data.subrule.sets[subrule_set_index + 1].minimum_token_count) {
-									is_set_variable_length = true;
-									break;
-								}
-							}
-						}
 					}
 					else {
 						// Normal case, one token required, at the very least
@@ -1678,6 +1874,16 @@ namespace ECSEngine {
 			sets[set_index].is_variable_length = is_set_variable_length;
 			overall_minimum = min(overall_minimum, set_minimum_count);
 			is_overall_variable_length |= is_set_variable_length;
+		}
+		// If no set contains variable length entries, this rule can be variable length if the sets
+		// Have different token counts
+		if (!is_overall_variable_length) {
+			for (size_t set_index = 0; set_index < sets.size - 1; set_index++) {
+				if (sets[0].minimum_token_count != sets[set_index + 1].minimum_token_count) {
+					is_overall_variable_length = true;
+					break;
+				}
+			}
 		}
 
 		minimum_token_count = overall_minimum;
