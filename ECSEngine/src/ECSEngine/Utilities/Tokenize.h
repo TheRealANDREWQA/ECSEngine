@@ -271,13 +271,20 @@ namespace ECSEngine {
 		void Initialize(AllocatorPolymorphic allocator);
 
 		// It will match the given token string subrange with the stored actions. It returns true if it early existed, else false.
-		bool Match(const TokenizedString& string, TokenizedString::Subrange subrange);
+		bool Match(const TokenizedString& string, TokenizedString::Subrange subrange) const;
+
+		// If you want to iterate certain token counts before others, you can specify them here, such that the relative ordering is maintained.
+		// You can use the value of -1 as a last value to indicate to start matching from count 1 to the max, without retesting existing counts
+		void SetCustomSubrangeOrder(Stream<unsigned int> counts);
 
 		// This array contains rules that are to be tried before actions. In case one of these rules
 		// Matches a sequence, that sequence is then discarded.
 		ResizableStream<TokenizeRule> exclude_rules;
 		// This array contains the entries that contain actions to be performed.
 		ResizableStream<TokenizeRuleAction> actions;
+		// The user can supplies the order the subranges are tested in, such that the rule has a chance
+		// To be called on a subrange count value before another one
+		ResizableStream<unsigned int> custom_subrange_order;
 	};
 
 	// The rules for a TokenizeRule made out of strings - which is easier to write down than to create each individual

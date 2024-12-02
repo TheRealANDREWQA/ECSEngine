@@ -1792,18 +1792,114 @@ namespace ECSEngine {
 
 		exclude_rules.FreeBuffer();
 		actions.FreeBuffer();
+		custom_subrange_order.FreeBuffer();
 	}
 
 	void TokenizeRuleMatcher::Initialize(AllocatorPolymorphic allocator) {
 		exclude_rules.Initialize(allocator, 0);
 		actions.Initialize(allocator, 0);
+		custom_subrange_order.Initialize(allocator, 0);
 	}
 
-	bool TokenizeRuleMatcher::Match(const TokenizedString& string, TokenizedString::Subrange subrange) {
-		while (subrange.count > 0) {
-			// Try to match
+	bool TokenizeRuleMatcher::Match(const TokenizedString& string, TokenizedString::Subrange subrange) const {
+		bool iterate_increasing = true;
+		Stream<unsigned int> order_to_iterate;
+		if (custom_subrange_order.size > 0) {
+			order_to_iterate = custom_subrange_order;
+			if (custom_subrange_order.Last() == -1) {
+				order_to_iterate.size--;
+			}
+			else {
+				iterate_increasing = false;
+			}
 		}
-		return true;
+
+		while (subrange.count > 0) {
+			// Returns 2 boolean values. The first one indicates whether the subrange was matched, and the second one
+			// If the action callback returned true, to early exit
+			auto test_subrange_count = [&](unsigned int sequence_count) -> bool2 {
+				TokenizedString::Subrange current_subrange = subrange.GetSubrange(0, sequence_count);
+				
+				// Try to match the exclude rules first
+				unsigned int exclude_index = 0;
+				for (; exclude_index < exclude_rules.size; exclude_index++) {
+					if (MatchTokenizeRule(string, current_subrange, exclude_rules[exclude_index])) {
+						return { true, false };
+					}
+				}
+
+				// The exclude rules did not match this subrange, try to normal rules
+				unsigned int action_rule_index = 0;
+				for (; action_rule_index < actions.size; action_rule_index++) {
+					ECS_STACK_CAPACITY_STREAM(unsigned int, token_count_per_entry, 128);
+					if (MatchTokenizeRule(string, current_subrange, actions[action_rule_index].rule, &token_count_per_entry)) {
+						TokenizeRuleCallbackData callback_data;
+						callback_data.string = &string;
+						callback_data.subrange = current_subrange;
+						callback_data.tokens_per_entry = token_count_per_entry;
+						callback_data.user_data = actions[action_rule_index].callback_data.buffer;
+						if (actions[action_rule_index].callback(&callback_data)) {
+							return { true, true };
+						}
+						else {
+							return { true, false };
+						}
+					}
+				}
+
+				return { false, false };
+			};
+
+			// Start with the custom order sequence counts
+			size_t custom_index = 0;
+			for (; custom_index < order_to_iterate.size; custom_index++) {
+				bool2 success = test_subrange_count(order_to_iterate[custom_index]);
+				if (success.x) {
+					if (success.y) {
+						return true;
+					}
+					else {
+						subrange = subrange.GetSubrangeUntilEnd(order_to_iterate[custom_index]);
+						break;
+					}
+				}
+			}
+
+			// The custom order could not be verified
+			if (custom_index == order_to_iterate.size) {
+				if (iterate_increasing) {
+					unsigned int sequence_count = 1;
+					for (; sequence_count <= subrange.count; sequence_count++) {
+						if (order_to_iterate.Find(sequence_count) == -1) {
+							bool2 success = test_subrange_count(sequence_count);
+							if (success.x) {
+								if (success.y) {
+									return true;
+								}
+								else {
+									subrange = subrange.GetSubrangeUntilEnd(sequence_count);
+									break;
+								}
+							}
+						}
+					}
+
+					if (sequence_count > subrange.count) {
+						// No subrange matched, exit the while
+						break;
+					}
+				}
+				else {
+					// Exit the loop, we could not match the custom counts, and the user did not specify increasing test order
+					break;
+				}
+			}
+		}
+		return false;
+	}
+
+	void TokenizeRuleMatcher::SetCustomSubrangeOrder(Stream<unsigned int> counts) {
+		custom_subrange_order.CopyOther(counts);
 	}
 
 	bool TokenizeRule::Compare(const TokenizeRule& other) const {
