@@ -68,6 +68,16 @@ namespace ECSEngine {
 		ECS_INLINE Stream<char> operator[](size_t token_index) const {
 			return { string.buffer + tokens[token_index].offset, tokens[token_index].size };
 		}
+		
+		// Returns the contiguous characters that correspond to the given subrange
+		ECS_INLINE Stream<char> GetStreamForSubrange(Subrange subrange) const {
+			if (subrange.count == 0) {
+				return {};
+			}
+
+			unsigned int first_offset = tokens[subrange[0]].offset;
+			return { string.buffer + first_offset, tokens[subrange[subrange.count - 1]].offset - first_offset + tokens[subrange[subrange.count - 1]].size };
+		}
 
 		Stream<char> string;
 		AdditionStream<Token> tokens;
@@ -87,6 +97,10 @@ namespace ECSEngine {
 	// You must specify the offset where the search starts from. This will iterate over all tokens, irrespective of their type.
 	ECSENGINE_API unsigned int TokenizeFindToken(const TokenizedString& string, Stream<char> token, TokenizedString::Subrange token_subrange);
 
+	// Returns the index of the first occurence inside the tokens array of the string of the token in reverse order, if it finds it, else -1
+	// You must specify the offset where the search starts from. This will iterate over all tokens, irrespective of their type.
+	ECSENGINE_API unsigned int TokenizeFindTokenReverse(const TokenizedString& string, Stream<char> token, TokenizedString::Subrange token_subrange);
+
 	// Returns the index of the first occurence inside the tokens array of the string of the token, if it finds it, else -1
 	// You must specify the offset where the search starts from. It will take into consideration only the specified token type.
 	ECSENGINE_API unsigned int TokenizeFindToken(const TokenizedString& string, Stream<char> token, unsigned int token_type, TokenizedString::Subrange token_subrange);
@@ -94,6 +108,10 @@ namespace ECSEngine {
 	// Returns the index of the first occurence inside the tokens array of the string of the token, if it finds it, else -1
 	// You must specify the offset where the search starts from. Only the token type is compared, without the string itself.
 	ECSENGINE_API unsigned int TokenizeFindTokenByType(const TokenizedString& string, unsigned int token_type, TokenizedString::Subrange token_subrange);
+
+	// Returns the index of the first occurence inside the tokens array of the string of the token in reverse order, if it finds it, else -1
+	// You must specify the offset where the search starts from. Only the token type is compared, without the string itself.
+	ECSENGINE_API unsigned int TokenizeFindTokenByTypeReverse(const TokenizedString& string, unsigned int token_type, TokenizedString::Subrange token_subrange);
 
 	// Returns the indices of the tokens that matched the open and the closed token pair. Returns { -1, -1 } if no such pair was found.
 	// You must specify the offset where the search starts from. If the search_closed_only option is enablend, then it considers that one open
@@ -108,8 +126,11 @@ namespace ECSEngine {
 	// Merges the tokens given by the sequence into a single string, allocated from the allocator
 	ECSENGINE_API Stream<char> TokenizeMergeEntries(const TokenizedString& string, TokenizedString::Subrange sequence, AllocatorPolymorphic allocator);
 
-	// Splits the tokens by the given separator
-	ECSENGINE_API void TokenizeSplitBySeparator(const TokenizedString& string, unsigned int separator_type, AdditionStream<TokenizedString::Subrange> token_ranges);
+	// Splits the tokens by the given separator. The token ranges are relative to the original string, not to the token subrange
+	ECSENGINE_API void TokenizeSplitBySeparator(const TokenizedString& string, Stream<char> separator, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges);
+
+	// Splits the tokens by the given separator. The token ranges are relative to the original string, not to the token subrange
+	ECSENGINE_API void TokenizeSplitBySeparator(const TokenizedString& string, unsigned int separator_type, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges);
 	
 #pragma region Tokenize Rule
 
@@ -236,17 +257,36 @@ namespace ECSEngine {
 	};
 
 	struct TokenizeRuleCallbackData {
-		const TokenizedString* string;
+		// Only the string is assigned
+		ECS_INLINE TokenizeRuleCallbackData(const TokenizedString& string) : string(string) {}
+
+		const TokenizedString& string;
 		TokenizedString::Subrange subrange;
 		Stream<unsigned int> tokens_per_entry;
+		// This is data that is assigned at matcher time
 		void* user_data;
+		// This is data that is given at the Match call
+		void* call_specific_data;
+		// The index of the set that matched
+		unsigned int set_index_that_matched;
+	};
+
+	enum ECS_TOKENIZE_RULE_CALLBACK_RESULT : unsigned char {
+		// When this value is returned, the matching is abandoned
+		ECS_TOKENIZE_RULE_CALLBACK_EXIT,
+		// This should be returned always on success by the post exclude callbacks, while for pre exclude callbacks
+		// This indicates that this rule matched the input and it handled it
+		ECS_TOKENIZE_RULE_CALLBACK_MATCHED,
+		// This should be used by the pre exclude callbacks only, it signals that the tokens matched the rule, but the
+		// Callback decided to not handle this and that matching should continue forwards
+		ECS_TOKENIZE_RULE_CALLBACK_UNMATCHED,
 	};
 
 	// This is a callback that is called when a rule is matched. It receives the tokenized string and the subrange that matched the rule,
 	// With an extra parameter that describes how many tokens were assigned per each rule entry. It is up to you to interpret this array,
-	// If you need it. It needs to return true if the matcher should continue matching rules, else false.
-	typedef bool (*TokenizeRuleCallback)(const TokenizeRuleCallbackData* data);
-
+	// If you need it. It needs to return an appropriate result type.
+	typedef ECS_TOKENIZE_RULE_CALLBACK_RESULT (*TokenizeRuleCallback)(const TokenizeRuleCallbackData* data);
+	
 	struct TokenizeRuleAction {
 		TokenizeRule rule;
 		TokenizeRuleCallback callback;
@@ -256,14 +296,17 @@ namespace ECSEngine {
 	// A structure that encompasses multiple excluding rules and actions to be performed on a tokenized string
 	struct ECSENGINE_API TokenizeRuleMatcher {
 		ECS_INLINE AllocatorPolymorphic Allocator() const {
-			return actions.allocator;
+			return pre_exclude_actions.allocator;
 		}
 
 		// By default, it will make a deep copy of the rule. You can disable it with the last argument
 		void AddExcludeRule(const TokenizeRule& rule, bool deep_copy = true);
 
 		// By default, it will make a deep copy of both the rule and the callback. You can disable that with the last argument
-		void AddAction(const TokenizeRuleAction& action, bool deep_copy = true);
+		void AddPreExcludeAction(const TokenizeRuleAction& action, bool deep_copy = true);
+
+		// By default, it will make a deep copy of both the rule and the callback. You can disable that with the last argument
+		void AddPostExcludeAction(const TokenizeRuleAction& action, bool deep_copy = true);
 
 		// If no deep copies were made per each type, you can omit them from deallocating
 		void Deallocate(bool deallocate_exclude_rules = true, bool deallocate_actions = true);
@@ -271,17 +314,18 @@ namespace ECSEngine {
 		void Initialize(AllocatorPolymorphic allocator);
 
 		// It will match the given token string subrange with the stored actions. It returns true if it early existed, else false.
-		bool Match(const TokenizedString& string, TokenizedString::Subrange subrange) const;
+		// The call specific data will be passed to callbacks, to use it as they see fit
+		bool Match(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const;
 
 		// If you want to iterate certain token counts before others, you can specify them here, such that the relative ordering is maintained.
 		// You can use the value of -1 as a last value to indicate to start matching from count 1 to the max, without retesting existing counts
 		void SetCustomSubrangeOrder(Stream<unsigned int> counts);
 
-		// This array contains rules that are to be tried before actions. In case one of these rules
-		// Matches a sequence, that sequence is then discarded.
+		// This array contains rules that discard sequences of tokens.
 		ResizableStream<TokenizeRule> exclude_rules;
-		// This array contains the entries that contain actions to be performed.
-		ResizableStream<TokenizeRuleAction> actions;
+		// This array contains the entries that contain actions to be performed, which are checked before the exclude rules
+		ResizableStream<TokenizeRuleAction> pre_exclude_actions;
+		ResizableStream<TokenizeRuleAction> post_exclude_actions;
 		// The user can supplies the order the subranges are tested in, such that the rule has a chance
 		// To be called on a subrange count value before another one
 		ResizableStream<unsigned int> custom_subrange_order;
@@ -306,17 +350,17 @@ namespace ECSEngine {
 	// $? - match the ? character
 	// $+ - match the + character
 	// $* - match the * character
-	// \\ - when it appears before a character, it signals that this is the start of a paired character
+	// \ - when it appears before a character, it signals that this is the start of a paired character
 	// / - when it appears before a character, it signals that this is the end of a paired character
 	// | - logical or between expressions
 	// . - match the previous token selection only once
 	// ? - match the previous token selection once or zero times (optional)
 	// + - match the previous token selection one or more times
 	// * - match the previous token selection zero or more times
-	// !, $, \\, / and | currently cannot be used at all as characters
+	// !, $, \, / and | currently cannot be used at all as characters
 	// You can use defines, like 
 	// identifier_no_template = $G.
-	// identifier_template = $G.\\<$T*//>
+	// identifier_template = $G.\<$T*/>
 	// identifier = identifier_no_template | identifier_template
 	// Each definition must be on its own line. The final rule should be on the last line
 	// If the rule is not valid, like the paired characters could not be determined, it will return an empty rule
@@ -326,14 +370,32 @@ namespace ECSEngine {
 	ECSENGINE_API TokenizeRule CreateTokenizeRule(Stream<char> string_rule, AllocatorPolymorphic allocator, bool allocator_is_temporary, CapacityStream<char>* error_message = nullptr);
 
 	// Returns true if the given rule matches the string, else false. If it matches the string, it can optionally report how many
-	// Tokens each entry used. The cached values for the rule must be computed beforehand!
-	ECSENGINE_API bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, CapacityStream<unsigned int>* matched_token_counts = nullptr);
+	// Tokens each entry used. The cached values for the rule must be computed beforehand! You can optionally retrieve the set that matched the rule
+	ECSENGINE_API bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, unsigned int* set_index_that_matched = nullptr, CapacityStream<unsigned int>* matched_token_counts = nullptr);
 
 	// A function for testing the matching
 	ECSENGINE_API void MatchTokenizeRuleTest();
 
 	// Returns true if the rule is valid, else false. It can optionally fill in an error message in case it is not valid
 	ECSENGINE_API bool ValidateTokenizeRule(const TokenizeRule& rule, CapacityStream<char>* error_message = nullptr);
+
+	// This adds the definition for qualifier, which you can reference later one. Qualifier handles the existence of & or **
+	ECSENGINE_API void AddTokenizeRuleQualifiers(CapacityStream<char>& rule_string);
+
+	// Adds the definitions for type identifiers, which include the & and * qualifiers as well (by adding the qualifier definition).
+	ECSENGINE_API void AddTokenizeRuleIdentifierDefinitions(CapacityStream<char>& rule_string);
+
+	// Returns a rule that matches function definitions/declarations. You can decide to allow only definitions, only declarations, both,
+	// And whether or not templates should be accepted or not
+	ECSENGINE_API TokenizeRule GetTokenizeRuleForFunctions(AllocatorPolymorphic allocator, bool allocator_is_temporary, bool include_declarations = true, bool include_definitions = true, bool include_template = true);
+
+	// Returns a rule that matches struct operators, like operator+, operator ==, while taking into account
+	// The fact that the operators can be made default (like for =)
+	ECSENGINE_API TokenizeRule GetTokenizeRuleForStructOperators(AllocatorPolymorphic allocator, bool allocator_is_temporary);
+
+	// Returns a rule that matches struct constructors, including the case of = default, and takes care of inline
+	// Definition of the constructor
+	ECSENGINE_API TokenizeRule GetTokenizeRuleForStructConstructors(AllocatorPolymorphic allocator, bool allocator_is_temporary);
 
 	// Must be kept in sync with the function GetCppFileTokenSeparators
 	// These are the separators that can appear in a CPP file that we are interested in
