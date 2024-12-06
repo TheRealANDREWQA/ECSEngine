@@ -17,6 +17,9 @@ namespace ECSEngine {
 
 	namespace Reflection {
 
+#define MAX_PARSING_ENUM_ENTRIES 32
+#define MAX_PARSING_TYPE_ENTRIES 64
+
 		// These are pending expressions to be evaluated
 		struct ReflectionExpression {
 			Stream<char> name;
@@ -46,10 +49,14 @@ namespace ECSEngine {
 		};
 
 		struct ReflectionManagerParseStructuresThreadTaskData {
+			// This is the parse matcher used for enums
+			const TokenizeRuleMatcher* enum_rule_matcher;
+			// This is the parse matcher used for structs
+			const TokenizeRuleMatcher* struct_rule_matcher;
+
 			// This is the allocator from which the resizable streams are allocated from.
-			// The thread memory is a separate allocation.
+			// The allocator is local to this thread, it is not shared
 			ResizableLinearAllocator allocator;
-			CapacityStream<char> thread_memory;
 			Stream<Stream<wchar_t>> paths;
 			ResizableStream<ReflectionType> types;
 			ResizableStream<ReflectionEnum> enums;
@@ -64,6 +71,9 @@ namespace ECSEngine {
 			ConditionVariable* condition_variable;
 			void* allocated_buffer;
 			bool success;
+
+			// When parsing, this field will indicate the current path that is being processed
+			size_t current_file_index;
 		};
 
 		struct ReflectionManagerHasReflectStructuresThreadTaskData {
@@ -169,14 +179,941 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		// The body must be the block enclosed by the pair of { and }
-		// It returns the new region to be parsed, allocated from the thread memory. If an error occurs it returns { nullptr, 0 }
-		Stream<char> ProcessTypeTagHandler(ReflectionManagerParseStructuresThreadTaskData* parse_data, size_t handler_index, Stream<char> type_body) {
+		// If the path index is -1 it won't write it
+		static void WriteErrorMessage(ReflectionManagerParseStructuresThreadTaskData* data, Stream<char> message) {
+			data->success = false;
+			data->error_message_lock.Lock();
+			data->error_message->AddStreamAssert(message);
+			if (data->current_file_index != -1) {
+				ConvertWideCharsToASCII((data->paths[data->current_file_index]), *data->error_message);
+			}
+			data->error_message->AddAssert('\n');
+			data->error_message_lock.Unlock();
+
+			data->condition_variable->Notify();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static bool IsTypeCharacter(char character) {
+			if (IsCodeIdentifierCharacter(character) || character == '<' || character == '>') {
+				return true;
+			}
+			return false;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static void AddEnumDefinition(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			const char* opening_parenthese,
+			const char* closing_parenthese,
+			const char* name,
+			unsigned int file_index
+		) {
+			ReflectionEnum enum_definition;
+			enum_definition.name = name;
+
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+			// Tokenize the enum definition, and parse the values from there
+			TokenizedString tokenized_body;
+			tokenized_body.string = { opening_parenthese, (size_t)(closing_parenthese - opening_parenthese) / sizeof(char) };
+			tokenized_body.InitializeResizable(&stack_allocator);
+			TokenizeString(tokenized_body, GetCppEnumTokenSeparators(), true);
+
+			// Set the original fields buffer. This is the only buffer we will need as temporary allocation
+			enum_definition.original_fields.Initialize(&data->allocator, MAX_PARSING_ENUM_ENTRIES);
+			data->enums.Add(&enum_definition);
+			
+			// We early exit only if an error was encountered, but the early exit matcher
+			// Should write the appropriate error message
+			data->enum_rule_matcher->Match(tokenized_body, tokenized_body.AsSubrange(), data);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static void AddTypedefAlias(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			const char* typedef_start,
+			const char* typedef_colon,
+			unsigned int file_index
+		) {
+			// The range won't include the colon, and that's the wanted behaviour
+			Stream<char> typedef_range = { typedef_start, PointerDifference(typedef_colon, typedef_start) / sizeof(char) };
+			Stream<char> typedef_whitespace = SkipCodeIdentifier(typedef_range);
+
+			// Skip the type definition
+			if (typedef_whitespace.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find whitespace after typedef.", typedef_range);
+				WriteErrorMessage(data, message);
+				return;
+			}
+
+			// Get the definition start. The definition range will be the definition start up until the typedef start,
+			// With whitespaces eliminated. This will take into account template types as well.
+			Stream<char> definition_start = SkipWhitespaceEx(typedef_whitespace);
+			if (definition_start.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find definition start.", typedef_range);
+				WriteErrorMessage(data, message);
+				return;
+			}
+
+			// Retrieve the typedef name
+			Stream<char> typedef_name_end = SkipWhitespaceEx(typedef_range, -1);
+			Stream<char> typedef_name_start = SkipCodeIdentifier(typedef_name_end, -1);
+			if (typedef_name_start.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find name start.", typedef_range);
+				WriteErrorMessage(data, message);
+				return;
+			}
+
+			Stream<char> typedef_name = { typedef_name_start.buffer + typedef_name_start.size, typedef_name_end.size - typedef_name_start.size };
+			if (typedef_name.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. The name is empty.", typedef_range);
+				WriteErrorMessage(data, message);
+				return;
+			}
+
+			Stream<char> definition_end = SkipWhitespaceEx(typedef_name_start, -1);
+			if (definition_end.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could find definition end.", typedef_range);
+				WriteErrorMessage(data, message);
+				return;
+			}
+
+			Stream<char> definition = { definition_start.buffer, PointerDifference(definition_end.buffer + definition_end.size, definition_start.buffer) / sizeof(char) };
+			if (definition.size == 0) {
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. The definition is empty.", typedef_range);
+				WriteErrorMessage(data, message);
+				return;
+			}
+
+			ReflectionParsedTypedef typedef_entry;
+			typedef_entry.name = typedef_name;
+			typedef_entry.entry.definition = definition;
+			data->total_memory += sizeof(typedef_entry) + typedef_name.CopySize() + typedef_entry.entry.CopySize();
+			data->typedefs.Add(typedef_entry);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		// It will eliminate const, namespace tokens and the final colon from the field token subrange. Returns an empty subrange if there is an error
+		static TokenizedString::Subrange GetCuratedStructFieldTokens(const TokenizedString& string, TokenizedString::Subrange subrange) {
+			TokenizedString::Subrange final_subrange = subrange;
+			final_subrange.count--;
+			if (string[subrange[0]] == "const") {
+				final_subrange = final_subrange.AdvanceReturn();
+			}
+
+			unsigned int first_colon_index = TokenizeFindToken(string, ":", final_subrange);
+			if (first_colon_index != -1) {
+				unsigned int final_colon_index = TokenizeFindTokenReverse(string, ":", final_subrange);
+				if (final_colon_index == first_colon_index) {
+					// This is an error, shouldn't happen
+					return {};
+				}
+
+				final_subrange = final_subrange.GetSubrangeAfterUntilEnd(final_colon_index);
+			}
+
+			return final_subrange;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		// It partitions the subrange into its components, the tag subrange (which doesn't include the tag brackets), the type and name portion,
+		// And the final default value section
+		static void GetStructFieldTokensPartitions(
+			const TokenizedString& string, 
+			TokenizedString::Subrange subrange, 
+			TokenizedString::Subrange& type_and_name_tokens,
+			TokenizedString::Subrange& default_value_tokens,
+			TokenizedString::Subrange& tag_tokens,
+			TokenizedString::Subrange& embedded_array_tokens
+		) {
+			// Start by checking to see if we have a tag. Tags are enclosed in [[]] and should be the first to appear, before the field type
+			tag_tokens = {};
+			embedded_array_tokens = {};
+			if (string[subrange[0]] == "[") {
+				// This is a tag
+				uint2 tag_brackets = TokenizeFindMatchingPair(string, "[", "]", subrange);
+				if (tag_brackets.y != -1) {
+					// Must start from the second token, and subtract 3 from the final position to remove those bracket entries
+					tag_tokens = subrange.GetSubrange(2, tag_brackets.y - 3);
+					subrange = subrange.GetSubrangeAfterUntilEnd(tag_brackets.y);
+				}
+			}
+
+			type_and_name_tokens = subrange;
+			default_value_tokens = {};
+
+			unsigned int equals_index = TokenizeFindToken(string, "=", subrange);
+			if (equals_index != -1) {
+				type_and_name_tokens = subrange.GetSubrange(0, equals_index);
+				default_value_tokens = subrange.GetSubrangeAfterUntilEnd(equals_index);
+			}
+
+			uint2 embedded_array_indices = TokenizeFindMatchingPair(string, "[", "]", type_and_name_tokens);
+			if (embedded_array_indices.x != -1 && embedded_array_indices.y != -1) {
+				// Split this subrange
+				type_and_name_tokens.count = embedded_array_indices.x;
+				embedded_array_tokens = { type_and_name_tokens.token_start_index + embedded_array_indices.x + 1, embedded_array_indices.y - embedded_array_indices.x - 1 };
+				// The embedded array tokens must have length 1, otherwise it means that it is malformed
+				if (embedded_array_tokens.count != 1) {
+					embedded_array_tokens = {};
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static void GetReflectionFieldInfo(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			Stream<char> basic_type,
+			ReflectionField& field
+		) {
+			Stream<char> field_name = field.name;
+			field = GetReflectionFieldInfo(data->field_table, basic_type);
+			field.name = field_name;
+			if (field.info.stream_type == ReflectionStreamFieldType::Unknown || field.info.basic_type == ReflectionBasicFieldType::UserDefined) {
+				data->total_memory += basic_type.size;
+				field.info.byte_size = 0;
+				field.info.basic_type_count = 1;
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static void DeduceFieldTypeExtended(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			unsigned short& pointer_offset,
+			const TokenizedString& string,
+			TokenizedString::Subrange field_type_tokens,
+			ReflectionField& field
+		) {
+			// Consider only the first 2 tokens, if there are 2 or more. No need to check for const, that is dealt with
+			// By the curation function.
+			Stream<char> first_token = string[field_type_tokens[0]];
+			Stream<char> type_characters = first_token;
+			if (field_type_tokens.count >= 2) {
+				// Extend the type characters to contain the second word as well
+				type_characters.size = string[field_type_tokens[1]].buffer - first_token.buffer + string[field_type_tokens[1]].size;
+			}
+
+			GetReflectionFieldInfo(data, type_characters, field);
+			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
+				field.info.pointer_offset = pointer_offset;
+				pointer_offset += field.info.byte_size;
+			}
+			else {
+				field.info.pointer_offset = pointer_offset;
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+		
+		// For a field token subrange that contains the type definition and the name, it returns the corresponding name
+		ECS_INLINE static Stream<char> GetStructFieldName(const TokenizedString& string, TokenizedString::Subrange field_tokens) {
+			// The name is the last entry
+			return string[field_tokens[field_tokens.count - 1]];
+		}
+
+		// Checks to see if it is a pointer type, not from macros. The field tokens subrange should not include the default value tokens
+		// Or the final ;
+		static bool DeduceFieldTypePointer(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			ReflectionType& type,
+			unsigned short& pointer_offset,
+			const TokenizedString& string,
+			TokenizedString::Subrange field_tokens
+		) {
+			unsigned int first_star_index = TokenizeFindToken(string, "*", field_tokens);
+
+			if (first_star_index != -1) {
+				ReflectionField field;
+				// The field name is the second to last token
+				field.name = GetStructFieldName(string, field_tokens);
+
+				unsigned int final_star_index = first_star_index + 1;
+				while (final_star_index < field_tokens.count && string[field_tokens[final_star_index]] == "*") {
+					final_star_index++;
+				}
+				size_t pointer_level = final_star_index - first_star_index;
+
+				unsigned short before_pointer_offset = pointer_offset;
+				DeduceFieldTypeExtended(
+					data,
+					pointer_offset,
+					string,
+					field_tokens.GetSubrange(0, first_star_index),
+					field
+				);
+
+				field.info.basic_type_count = pointer_level;
+				field.info.stream_type = ReflectionStreamFieldType::Pointer;
+				field.info.stream_byte_size = field.info.byte_size;
+				field.info.stream_alignment = field.info.byte_size;
+				field.info.byte_size = sizeof(void*);
+
+				pointer_offset = AlignPointer(before_pointer_offset, alignof(void*));
+				field.info.pointer_offset = pointer_offset;
+				pointer_offset += sizeof(void*);
+
+				data->total_memory += field.name.size;
+				type.fields.Add(field);
+				return true;
+			}
+			return false;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static bool DeduceFieldTypeStream(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			ReflectionType& type,
+			unsigned short& pointer_offset,
+			const TokenizedString& string,
+			TokenizedString::Subrange field_tokens
+		) {
+			// Test each keyword
+
+			auto parse_stream_type = [&](ReflectionStreamFieldType stream_type, size_t byte_size, const char* stream_name) {
+				ReflectionField field;
+				field.name = string[field_tokens[field_tokens.count - 1]];
+
+				unsigned short before_pointer_offset = pointer_offset;
+				uint2 bracket_indices = TokenizeFindMatchingPair(string, "<", ">", field_tokens);
+				if (bracket_indices.x == -1 || bracket_indices.y == -1) {
+					ECS_FORMAT_TEMP_STRING(temp_message, "Incorrect {#} field, missing > or unmatched template brackets.", stream_name);
+					WriteErrorMessage(data, temp_message);
+					return;
+				}
+
+				DeduceFieldTypeExtended(
+					data,
+					pointer_offset,
+					string,
+					field_tokens,
+					field
+				);
+
+				// All streams have maximal alignment
+				pointer_offset = AlignPointer(before_pointer_offset, alignof(Stream<void>));
+				field.info.pointer_offset = pointer_offset;
+				field.info.stream_type = stream_type;
+				field.info.stream_byte_size = field.info.byte_size;
+				field.info.stream_alignment = field.info.byte_size;
+				field.info.byte_size = byte_size;
+				// We must combine all tokens besides the final one, which is the name token
+				field.definition = TokenizeMergeEntries(string, field_tokens.GetSubrange(0, field_tokens.count - 1), &data->allocator);
+
+				pointer_offset += byte_size;
+
+				data->total_memory += field.name.size + 1;
+				data->total_memory += field.definition.size + 1;
+				type.fields.Add(field);
+			};
+
+			Stream<char> first_token = string[field_tokens[0]];
+			if (first_token == STRING(ResizableStream)) {
+				parse_stream_type(ReflectionStreamFieldType::ResizableStream, sizeof(ResizableStream<void>), STRING(ResizableStream));
+				return true;
+			}
+
+			if (first_token == STRING(CapacityStream)) {
+				parse_stream_type(ReflectionStreamFieldType::CapacityStream, sizeof(CapacityStream<void>), STRING(CapacityStream));
+				return true;
+			}
+
+			if (first_token == STRING(Stream)) {
+				parse_stream_type(ReflectionStreamFieldType::Stream, sizeof(Stream<void>), STRING(Stream));
+				return true;
+			}
+
+			return false;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static bool DeduceFieldType(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			ReflectionType& type,
+			unsigned short& pointer_offset,
+			const TokenizedString& string,
+			TokenizedString::Subrange field_tokens
+		) {
+			bool success = DeduceFieldTypePointer(data, type, pointer_offset, string, field_tokens);
+			if (data->error_message->size > 0) {
+				return false;
+			}
+			else if (!success) {
+				success = DeduceFieldTypeStream(data, type, pointer_offset, string, field_tokens);
+				if (data->error_message->size > 0) {
+					return false;
+				}
+
+				if (!success) {
+					// If this is not a pointer type, extended type then
+					ReflectionField field;
+					DeduceFieldTypeExtended(
+						data,
+						pointer_offset,
+						string,
+						field_tokens,
+						field
+					);
+
+					field.name = GetStructFieldName(string, field_tokens);
+					field.tag = type.fields[type.fields.size].tag;
+					data->total_memory += field.name.size + 1;
+					type.fields.Add(field);
+					success = true;
+				}
+			}
+			return success;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		enum ECS_REFLECTION_ADD_TYPE_FIELD_RESULT : unsigned char {
+			ECS_REFLECTION_ADD_TYPE_FIELD_FAILED,
+			ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS,
+			ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED
+		};
+
+		// Returns whether or not the field read succeded
+		static ECS_REFLECTION_ADD_TYPE_FIELD_RESULT AddTypeField(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			ReflectionType& type,
+			unsigned short& pointer_offset,
+			const TokenizedString& string,
+			TokenizedString::Subrange field_tokens
+		) {
+			// Curate the tokens. Obtain the type and name portion and the default value portion
+			field_tokens = GetCuratedStructFieldTokens(string, field_tokens);
+
+			TokenizedString::Subrange type_and_name_tokens;
+			TokenizedString::Subrange default_value_tokens;
+			TokenizedString::Subrange tag_tokens;
+			TokenizedString::Subrange embedded_array_tokens;
+			GetStructFieldTokensPartitions(string, field_tokens, type_and_name_tokens, default_value_tokens, tag_tokens, embedded_array_tokens);
+
+			ReflectionField& field = type.fields[type.fields.size];
+			// Check to see if the field has a tag - all tags must appear after the semicolon
+			// Make the tag default to nullptr
+			field.tag = { nullptr, 0 };
+
+			// Some field determination functions write the field without knowing the tag. When the function exits, set the tag accordingly to 
+			// what was determined here
+			if (tag_tokens.count > 0) {
+				// We have a tag
+
+				// Check for the special case of ECS_SKIP_REFLECTION
+				if (string[tag_tokens[0]] == STRING(ECS_SKIP_REFLECTION)) {
+					field.tag = string.GetStreamForSubrange(type_and_name_tokens.GetSubrange(0, type_and_name_tokens.count - 1));
+					type.fields.size++;
+					return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
+				}
+
+				// Find the individual tags and write them separated with a delimiter character
+				const char* final_tag_character = &string.GetStreamForSubrange(tag_tokens).Last();
+				unsigned int current_token = 1;
+				while (current_token < tag_tokens.count) {
+					if (string[tag_tokens[current_token]] == "(") {
+						// Find its pair
+						uint2 parenthese_pair_indices = TokenizeFindMatchingPair(string, "(", ")", tag_tokens.GetSubrangeUntilEnd(current_token));
+						if (parenthese_pair_indices.y == -1) {
+							// Error
+							ECS_FORMAT_TEMP_STRING(error_message, "Unmatched parenthese for tag a for type {#}", type.name);
+							WriteErrorMessage(data, error_message);
+							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+						}
+						// Advance to that token
+						current_token += parenthese_pair_indices.y + 1;
+					}
+
+					// Tags are separated by comma, when a tag separation comma is detected, change the characters
+					if (string[tag_tokens[current_token]] == ",") {
+						char* current_character = string[tag_tokens[current_token]].buffer;
+						while (current_character < final_tag_character && !IsCodeIdentifierCharacter(*current_character)) {
+							*current_character = ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR;
+							current_character++;
+						}
+					}
+
+				}
+				field.tag = string.GetStreamForSubrange(tag_tokens);
+				data->total_memory += field.tag.size;
+			}
+
+			bool success = DeduceFieldType(data, type, pointer_offset, string, type_and_name_tokens);
+			if (success) {
+				if (field.definition.size == 0 || field.name.size == 0) {
+					// There was nothing to be reflected - just mark it as omitted
+					return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
+				}
+
+				ReflectionFieldInfo& info = type.fields[type.fields.size - 1].info;
+				// Set the default value to false initially
+				info.has_default_value = false;
+
+				if (embedded_array_tokens.count > 0) {
+					// Parse the value
+					Stream<char> embedded_array_string = string[embedded_array_tokens[0]];
+					if (IsIntegerNumber(embedded_array_string)) {
+						info.stream_byte_size = info.byte_size;
+						info.stream_alignment = GetReflectionFieldTypeAlignment(info.basic_type);
+						int64_t basic_type_count = ConvertCharactersToInt(embedded_array_string);
+						if (basic_type_count > USHORT_MAX) {
+							ECS_FORMAT_TEMP_STRING(error_message, "Type {#} has field {#} with an embedded array size that is too large.", type.name, field.name);
+							WriteErrorMessage(data, error_message);
+							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+						}
+						info.basic_type_count = (unsigned short)basic_type_count;
+						pointer_offset -= info.byte_size;
+						info.byte_size *= basic_type_count;
+						pointer_offset += info.byte_size;
+
+						// Change the extended type to array
+						info.stream_type = ReflectionStreamFieldType::BasicTypeArray;
+					}
+					else {
+						// Register the text for constant evaluation later on
+						ReflectionEmbeddedArraySize embedded_size;
+						embedded_size.field_name = field.name;
+						embedded_size.reflection_type = type.name;
+						embedded_size.body = embedded_array_string;
+
+						data->embedded_array_size.Add(embedded_size);
+						//ECS_FORMAT_TEMP_STRING(error_message, "Type {#} has field {#} with a possible embedded array but the size is not a number.", type.name, field.name);
+						//WriteErrorMessage(data, error_message);
+						//return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+					}
+				}
+
+				// Get the default value if possible
+				if (default_value_tokens.count > 0 && info.stream_type == ReflectionStreamFieldType::Basic) {
+					uint2 brace_pair_indices = TokenizeFindMatchingPair(string, "{", "}", default_value_tokens);
+					if (brace_pair_indices.x != -1 && brace_pair_indices.y != -1) {
+						// Initializer list default value
+						Stream<char> default_value_string = string.GetStreamForSubrange(default_value_tokens.GetSubrange(brace_pair_indices.x + 1, brace_pair_indices.y - brace_pair_indices.x - 1));
+						if (default_value_string.size > 0) {
+							// Use the parse function, any member from the union can be used
+							CapacityStream<void> default_value = { &info.default_bool, 0, sizeof(info.default_double4) };
+							info.has_default_value = ParseReflectionBasicFieldType(
+								info.basic_type,
+								default_value_string,
+								&default_value
+							);
+						}
+					}
+					else {
+						uint2 parenthesis_pair_indices = TokenizeFindMatchingPair(string, "(", ")", default_value_tokens);
+						if (parenthesis_pair_indices.x != -1 && parenthesis_pair_indices.y != -1) {
+							// Default constructor
+							Stream<char> default_value_string = string.GetStreamForSubrange(default_value_tokens.GetSubrange(parenthesis_pair_indices.x + 1, parenthesis_pair_indices.y - parenthesis_pair_indices.x - 1));
+							if (default_value_string.size > 0) {
+								CapacityStream<void> default_value = { &info.default_bool, 0, sizeof(info.default_double4) };
+								info.has_default_value = ParseReflectionBasicFieldType(
+									info.basic_type,
+									default_value_string,
+									&default_value
+								);
+							}
+						}
+						else {
+							// Plain value
+							Stream<char> default_value_string = string.GetStreamForSubrange(default_value_tokens);
+							if (default_value_string.size > 0) {
+								CapacityStream<void> default_value = { &info.default_bool, 0, sizeof(info.default_double4) };
+								info.has_default_value = ParseReflectionBasicFieldType(
+									info.basic_type,
+									default_value_string,
+									&default_value
+								);
+							}
+						}
+					}
+				}
+			}
+			return success ? ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS : ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		struct StructMatcherArgumentData {
+			ReflectionManagerParseStructuresThreadTaskData* data;
+			CapacityStream<ReflectionTypeMiscNamedSoa> last_type_named_soa;
+			bool has_omitted_fields;
+
+			struct {
+				// If the call is in regards to a type tag handler, the handler index will be specified here
+				// While the tokenized string that represents the body is set in the following field
+				size_t type_tag_handler = -1;
+				TokenizedString* type_tag_tokenized_body = nullptr;
+			};
+		};
+
+		static void AddTypeDefinition(
+			ReflectionManagerParseStructuresThreadTaskData* data,
+			const char* opening_parenthese,
+			const char* closing_parenthese,
+			const char* name,
+			unsigned int file_index
+		) {
+			// Add the type directly
+			data->types.ReserveRange();
+			ReflectionType& type = data->types.Last();
+			type.name = name;
+			type.byte_size = 0;
+			data->total_memory += sizeof(ReflectionType);
+
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+			// Tokenize the body definition
+			TokenizedString body_string;
+			body_string.string = { opening_parenthese + 1, PointerDifference(closing_parenthese, opening_parenthese + 1) / sizeof(char) };
+			body_string.InitializeResizable(&stack_allocator);
+			TokenizeString(body_string, GetCppFileTokenSeparators(), true);
+
+			// find next line tokens and exclude the next after the opening paranthese and replace
+			// the closing paranthese with \0 in order to stop searching there
+			ECS_STACK_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
+
+			// semicolon positions will help in getting the field name
+			ECS_STACK_ADDITION_STREAM(unsigned int, semicolon_positions, 512);
+
+			opening_parenthese++;
+			char* closing_paranthese_mutable = (char*)closing_parenthese;
+			*closing_paranthese_mutable = '\0';
+
+			// Check all expression evaluations
+			unsigned int evaluate_function_token_index = TokenizeFindToken(body_string, STRING(ECS_EVALUATE_FUNCTION_REFLECT), body_string.AsSubrange());
+			while (evaluate_function_token_index != -1) {
+				TokenizedString::Subrange remaining_function_tokens = body_string.GetSubrangeUntilEnd(evaluate_function_token_index).AdvanceReturn();
+				unsigned int open_parenthesis_index = TokenizeFindToken(body_string, "(", remaining_function_tokens);
+				if (open_parenthesis_index != -1) {
+					// Retrieve the name as the first token before the parenthesis
+					if (open_parenthesis_index != 0) {
+						Stream<char> function_name = body_string[remaining_function_tokens[open_parenthesis_index - 1]];
+						// The body to be evaluated is everything in between the return and the first colon
+						unsigned int return_token_index = TokenizeFindToken(body_string, "return", remaining_function_tokens);
+						if (return_token_index != -1) {
+							unsigned int semicolon_index = TokenizeFindToken(body_string, ";", remaining_function_tokens);
+							if (semicolon_index != -1) {
+								ReflectionExpression expression;
+								expression.name = function_name;
+								expression.body = body_string.GetStreamForSubrange(remaining_function_tokens.GetSubrange(return_token_index + 1, semicolon_index - return_token_index - 1));
+
+								unsigned int type_table_index = data->expressions.Find(type.name);
+								if (type_table_index == -1) {
+									// Insert it
+									ReflectionExpression* stable_expression = (ReflectionExpression*)Allocate(&data->allocator, sizeof(ReflectionExpression));
+									*stable_expression = expression;
+									data->expressions.InsertDynamic(&data->allocator, { stable_expression, 1 }, type.name);
+								}
+								else {
+									// Allocate a new buffer and update the expressions
+									Stream<ReflectionExpression>* previous_expressions = data->expressions.GetValuePtrFromIndex(type_table_index);
+									ReflectionExpression* expressions = (ReflectionExpression*)Allocate(&data->allocator, (previous_expressions->size + 1) * sizeof(ReflectionExpression));
+									previous_expressions->CopyTo(expressions);
+									expressions[previous_expressions->size] = expression;
+
+									previous_expressions->buffer = expressions;
+									previous_expressions->size++;
+								}
+
+								// Don't forget to update the total memory needed for the folder hierarchy
+								// The slot in the stream + the string for the name (the body doesn't need to be copied since 
+								// it will be evaluated and then discarded)
+								data->total_memory += expression.name.size + sizeof(ReflectionEvaluation);
+							}
+						}
+					}
+				}
+
+				// Get the next expression
+				evaluate_function_token_index = TokenizeFindToken(body_string, STRING(ECS_EVALUATE_FUNCTION_REFLECT), remaining_function_tokens);
+			}
+
+			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscNamedSoa, type_named_soa, 32);
+			StructMatcherArgumentData struct_matcher_data;
+			struct_matcher_data.has_omitted_fields = false;
+			struct_matcher_data.last_type_named_soa = type_named_soa;
+			struct_matcher_data.data = data;
+
+			type.fields.Initialize(&data->allocator, MAX_PARSING_TYPE_ENTRIES);
+
+			// Look for field_start and field_end macros
+			TokenizedString::Subrange fields_reflect_subrange = body_string.AsSubrange();
+			unsigned int fields_start_macro_index = TokenizeFindToken(body_string, STRING(ECS_FIELDS_START_REFLECT), fields_reflect_subrange);
+			if (fields_start_macro_index != -1) {
+				while (fields_start_macro_index != -1) {
+					// Get the fields end macro if there is one
+					unsigned int fields_end_macro_index = TokenizeFindToken(
+						body_string,
+						STRING(ECS_FIELDS_END_REFLECT),
+						fields_reflect_subrange
+					);
+					if (fields_end_macro_index == -1) {
+						ECS_FORMAT_TEMP_STRING(error_message, "Unmatched ECS_FIELDS_START_REFLECT for type {#}", type.name);
+						WriteErrorMessage(data, error_message);
+						return;
+					}
+
+					TokenizedString::Subrange match_subrange = fields_reflect_subrange.GetSubrange(fields_start_macro_index + 1, fields_end_macro_index - fields_start_macro_index - 1);
+					bool success = data->struct_rule_matcher->Match(body_string, match_subrange, &struct_matcher_data);
+					if (!success) {
+						return;
+					}
+
+					fields_reflect_subrange = fields_reflect_subrange.GetSubrangeAfterUntilEnd(fields_end_macro_index);
+					fields_start_macro_index = TokenizeFindToken(body_string, STRING(ECS_FIELDS_START_REFLECT), fields_reflect_subrange);
+				}
+			}
+			else {
+				bool success = data->struct_rule_matcher->Match(body_string, body_string.AsSubrange(), &struct_matcher_data);
+				if (!success) {
+					return;
+				}
+			}
+
+			// Fail if there were no fields to be reflected
+			if (type.fields.size == 0 && !struct_matcher_data.has_omitted_fields) {
+				WriteErrorMessage(data, "There were no fields to reflect: ");
+				return;
+			}
+
+			// We can validate the SoA fields here, such that we don't continue in case there
+			// Is a mismatch between the fields
+			type.misc_info.Initialize(&data->allocator, type_named_soa.size);
+			data->total_memory += type_named_soa.MemoryOf(type_named_soa.size);
+			for (unsigned int index = 0; index < type_named_soa.size; index++) {
+				auto output_error = [&](Stream<char> field_type, Stream<char> field_name) {
+					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: {#} {#} doesn't exist. ", type.name, field_type, field_name);
+					WriteErrorMessage(data, message.buffer);
+				};
+				auto output_type_error = [&](Stream<char> field_name) {
+					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: field {#} invalid type {#} for size/capacity. ", type.name, field_name);
+					WriteErrorMessage(data, message.buffer);
+				};
+
+				const ReflectionTypeMiscNamedSoa* named_soa = &type_named_soa[index];
+
+				// Build the entry along the way
+				ReflectionTypeMiscInfo* misc_soa = &type.misc_info[index];
+				misc_soa->type = ECS_REFLECTION_TYPE_MISC_INFO_SOA;
+				misc_soa->soa.name = named_soa->name;
+				misc_soa->soa.parallel_stream_count = named_soa->parallel_stream_count;
+
+				unsigned int size_field_index = type.FindField(named_soa->size_field);
+				if (size_field_index == -1) {
+					output_error("size", named_soa->size_field);
+					return;
+				}
+				ECS_ASSERT(size_field_index <= UCHAR_MAX);
+				if (!IsIntegralSingleComponent(type.fields[size_field_index].info.basic_type)) {
+					output_type_error(named_soa->size_field);
+					return;
+				}
+				misc_soa->soa.size_field = size_field_index;
+
+				unsigned int capacity_field_index = -1;
+				if (named_soa->capacity_field != "\"\"") {
+					capacity_field_index = type.FindField(named_soa->capacity_field);
+					if (capacity_field_index == -1) {
+						output_error("capacity", named_soa->capacity_field);
+						return;
+					}
+					ECS_ASSERT(capacity_field_index <= UCHAR_MAX);
+					if (!IsIntegralSingleComponent(type.fields[capacity_field_index].info.basic_type)) {
+						output_type_error(named_soa->capacity_field);
+					}
+				}
+				misc_soa->soa.capacity_field = capacity_field_index;
+				for (unsigned char subindex = 0; subindex < named_soa->parallel_stream_count; subindex++) {
+					unsigned int current_field_index = type.FindField(named_soa->parallel_streams[subindex]);
+					if (current_field_index == -1) {
+						output_error("stream", named_soa->parallel_streams[subindex]);
+						return;
+					}
+					ECS_ASSERT(current_field_index <= UCHAR_MAX);
+					// Verify that this is a pointer field
+					if (type.fields[current_field_index].info.stream_type != ReflectionStreamFieldType::Pointer) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: field {#} is not a pointer. ", type.name, type.fields[current_field_index].name);
+						WriteErrorMessage(data, message.buffer);
+						return;
+					}
+					// Change the pointer type to PointerSoA
+					type.fields[current_field_index].info.stream_type = ReflectionStreamFieldType::PointerSoA;
+					misc_soa->soa.parallel_streams[subindex] = current_field_index;
+
+				}
+
+				// We need to add to the total memory the misc copy size
+				data->total_memory += misc_soa->CopySize();
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+#pragma region Tokenize Matcher callbacks
+
+		static ECS_TOKENIZE_RULE_CALLBACK_RESULT EnumMatcherCallback(const TokenizeRuleCallbackData* data) {
+			ReflectionManagerParseStructuresThreadTaskData* parse_data = (ReflectionManagerParseStructuresThreadTaskData*)data->call_specific_data;
+			ReflectionEnum& enum_ = parse_data->enums.Last();
+
+			// Always the first entry will be the name of the entry
+			if (enum_.original_fields.size == MAX_PARSING_ENUM_ENTRIES) {
+				// Exit the parsing, we have an error
+				ECS_FORMAT_TEMP_STRING(error_message, "Enum {#} reached the maximum number of entries allowed of {#}.", enum_.name, MAX_PARSING_ENUM_ENTRIES);
+				WriteErrorMessage(parse_data, error_message);
+				return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+			}
+			enum_.original_fields.Add(data->string[data->subrange[0]]);
+			// Add the memory size to the total count needed. Take into account the fact that we have both original and final fields
+			parse_data->total_memory += enum_.original_fields.MemoryOf(1) + enum_.fields.MemoryOf(1) + enum_.original_fields.Last().size * 2;
+
+			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
+		}
+
+		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructGeneralMacrosCallback(const TokenizeRuleCallbackData* data) {
+			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
+			ReflectionManagerParseStructuresThreadTaskData* parse_data = call_data->data;
+
+			if (call_data->type_tag_handler == -1) {
+				Stream<char> type_name = parse_data->types.Last().name;
+				if (data->string[data->subrange[0]] == STRING(ECS_SOA_REFLECT)) {
+					// If this macro is properly written, accept it.
+					// It needs to have at least 5 arguments - a name, a size field and a capacity field and at least 2
+					// Parallel streams. Early exit if it doesn't have the appropriate token count
+					unsigned int minimum_token_count = 1 /* ECS_SOA_REFLECT */ + 2 /* () */ + 5 /*arguments*/ + 4 /*separating commas*/;
+					if (data->subrange.count < minimum_token_count) {
+						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. The minimum amount of parameters is not satisfied", type_name);
+						WriteErrorMessage(parse_data, error_message);
+						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+					}
+
+					// If the parenthesis are not at their appropriate locations, fail
+					if (data->string[data->subrange[1]] != "(" || data->string[data->subrange[data->subrange.count - 1]] != ")") {
+						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. The parenthesis are missing", type_name);
+						WriteErrorMessage(parse_data, error_message);
+						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+					}
+
+					ECS_STACK_CAPACITY_STREAM(TokenizedString::Subrange, soa_parameters, 32);
+					// Don't add the initial token and the () into consideration
+					TokenizeSplitBySeparator(data->string, ',', data->subrange.GetSubrange(2, data->subrange.count - 3), &soa_parameters);
+
+					if (soa_parameters.size <= ECS_COUNTOF(ReflectionTypeMiscNamedSoa::parallel_streams)) {
+						// If the splits contain more than 1 token each, error.
+						for (unsigned int index = 0; index < soa_parameters.size; index++) {
+							if (soa_parameters[index].count != 1) {
+								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFELCT for type {#}. A parameter contain multiple tokens", type_name);
+								WriteErrorMessage(parse_data, error_message);
+								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+							}
+						}
+
+						// Add a new entry. We don't need to allocate anything since the
+						// Names are all stable
+						ReflectionTypeMiscNamedSoa named_soa;
+						named_soa.type_name = type_name;
+						named_soa.name = data->string[soa_parameters[0][0]];
+						named_soa.size_field = data->string[soa_parameters[1][0]];
+						named_soa.capacity_field = data->string[soa_parameters[2][0]];
+						named_soa.parallel_stream_count = soa_parameters.size - 3;
+						for (unsigned int index = 3; index < soa_parameters.size; index++) {
+							named_soa.parallel_streams[index - 3] = data->string[soa_parameters[index][0]];
+						}
+						call_data->last_type_named_soa.AddAssert(&named_soa);
+					}
+					else {
+						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. It exceeded the maximum amount of parallel streams allowed", type_name);
+						WriteErrorMessage(parse_data, error_message);
+						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+					}
+
+					return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
+				}
+			}
+
+			return ECS_TOKENIZE_RULE_CALLBACK_UNMATCHED;
+		}
+
+		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructMatcherFieldCallback(const TokenizeRuleCallbackData* data) {
+			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
+			ReflectionManagerParseStructuresThreadTaskData* parse_data = call_data->data;
+			ReflectionType& type = parse_data->types.Last();
+
+
+
+			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
+		}
+
+#pragma endregion
+
+		// It will create an enum rule matcher that will have callbacks to process the tokens
+		static void CreateTokenizeEnumMatcher(TokenizeRuleMatcher* matcher, AllocatorPolymorphic temporary_allocator) {
+			const char* enum_rule_string = R"DELIMITER( $G. ,? )DELIMITER";
+
+			TokenizeRule enum_rule = CreateTokenizeRule(enum_rule_string, temporary_allocator, true);
+			ECS_ASSERT(!enum_rule.IsEmpty());
+
+			TokenizeRuleAction action;
+			action.callback = EnumMatcherCallback;
+			action.callback_data = {};
+			action.rule = enum_rule;
+			matcher->AddPreExcludeAction(action, false);
+		}
+
+		static void CreateTokenizeStructFieldAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
+			ECS_STACK_CAPACITY_STREAM(char, field_rule_string, 512);
+			AddTokenizeRuleIdentifierDefinitions(field_rule_string);
+			field_rule_string.AddStreamAssert(R"DELIMITER(default_value = /{ ($G. ,.)* $G. \} | $G.
+														  basic_field = identifier. $G.;.
+														  with_default = identifier. $G. =. default_value. ;.
+														  tag = /[ $[ $T+ $] \]
+														  basic_field. | with_default. | tag. basic_field. | tag. with_default.)DELIMITER");
+
+			TokenizeRule field_rule = CreateTokenizeRule(field_rule_string, temporary_allocator, true);
+			ECS_ASSERT(!field_rule.IsEmpty());
+		
+			TokenizeRuleAction action;
+			action.callback = StructMatcherFieldCallback;
+			action.callback_data = {};
+			action.rule = field_rule;
+			struct_matcher->AddPostExcludeAction(action, false);
+		}
+
+		static void CreateTokenizeStructExcludeRules(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
+			TokenizeRule function_rule = GetTokenizeRuleForFunctions(temporary_allocator, true);
+			struct_matcher->AddExcludeRule(function_rule, false);
+
+			// This will also cover some off chance macros that might appear
+			TokenizeRule constructor_rule = GetTokenizeRuleForStructConstructors(temporary_allocator, true);
+			struct_matcher->AddExcludeRule(constructor_rule, false);
+
+			TokenizeRule operator_rule = GetTokenizeRuleForStructOperators(temporary_allocator, true);
+			struct_matcher->AddExcludeRule(operator_rule, false);
+		}
+
+		static void CreateTokenizeStructMatcher(TokenizeRuleMatcher* matcher, AllocatorPolymorphic temporary_allocator) {
+			CreateTokenizeStructExcludeRules(matcher, temporary_allocator);
+
+			// We have only a single action, the one for fields
+			CreateTokenizeStructFieldAction(matcher, temporary_allocator);
+		}
+
+		// It will copy the contents of the tokenized body while adding new tokens such that the type tags are satisfied. The location
+		// Of the tag that are added are at the end of the string, since we can insert a token which points at a later offset, there is
+		// No hard rule that states that tokens must be sorted in their appearance order, although using TokenizeString guarantees that
+		static void ProcessTypeTagHandler(ReflectionManagerParseStructuresThreadTaskData* parse_data, size_t handler_index, TokenizedString& tokenized_body) {
 			// Check for functions first - lines with a () and no semicolon
-			char* region_start = parse_data->thread_memory.buffer + parse_data->thread_memory.size;
+			size_t total_size_needed = 0;
+			char* region_start = (char*)Allocate(&parse_data->allocator, 0);
 
 			*region_start = '{';
-			parse_data->thread_memory.size++;
+			total_size_needed++;
 			const char* last_copied_value = type_body.buffer + 1;
 
 			char FUNCTION_REPLACE_SEMICOLON_CHAR = '`';
@@ -235,13 +1172,13 @@ namespace ECSEngine {
 						type_tag_function.string_to_add = &string_to_add;
 						auto tag_position = ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].function_functor(type_tag_function);
 
-						char* copy_start = parse_data->thread_memory.buffer + parse_data->thread_memory.size;
+						char* copy_start = region_start + total_size_needed;
 
 						// Copy everything until the start of the previous line of the function
 						Stream<char> before_function_copy = { last_copied_value, PointerDifference(previous_new_line.buffer, last_copied_value) };
 						before_function_copy.CopyTo(copy_start);
 						copy_start += before_function_copy.size;
-						parse_data->thread_memory.size += before_function_copy.size;
+						total_size_needed += before_function_copy.size;
 
 						if (string_to_add.size > 0) {
 							const char* prename_region_end = SkipWhitespace(previous_new_line.buffer + 1);
@@ -320,12 +1257,12 @@ namespace ECSEngine {
 							}
 
 							// 2 spaces to padd the string
-							parse_data->thread_memory.size += prename_region.size + name_and_qualifiers.size + current_function_body.size + string_to_add.size + 2;
+							total_size_needed += prename_region.size + name_and_qualifiers.size + current_function_body.size + string_to_add.size + 2;
 						}
 						else {
 							Stream<char> copy_range = { previous_new_line.buffer + 1, PointerDifference(function_body_end, previous_new_line.buffer + 1) + 1 };
 							copy_range.CopyTo(copy_start);
-							parse_data->thread_memory.size += copy_range.size;
+							total_size_needed += copy_range.size;
 							last_copied_value = function_body_end + 1;
 						}
 					}
@@ -392,7 +1329,7 @@ namespace ECSEngine {
 				Stream<char> before_name_range = { definition_end, PointerDifference(name_start, definition_end) };
 				Stream<char> after_name_range = { name_start, PointerDifference(next_line, name_start) + 1 };
 
-				char* copy_pointer = parse_data->thread_memory.buffer + parse_data->thread_memory.size;
+				char* copy_pointer = region_start + total_size_needed;
 
 				auto copy_range = [&](Stream<char> range) {
 					range.CopyTo(copy_pointer);
@@ -451,21 +1388,22 @@ namespace ECSEngine {
 					}
 
 					// 2 values for the spaces for the string
-					parse_data->thread_memory.size += before_type_range.size + after_type_range.size + before_name_range.size + after_name_range.size + string_to_add.size + 2;
+					total_size_needed += before_type_range.size + after_type_range.size + before_name_range.size + after_name_range.size + string_to_add.size + 2;
 				}
 				else {
 					Stream<char> copy_line_range = { previous_line, PointerDifference(next_line, previous_line) + 1 };
 					copy_line_range.CopyTo(copy_pointer);
-					parse_data->thread_memory.size += copy_line_range.size;
+					total_size_needed += copy_line_range.size;
 				}
 			}
 
-			char* last_parenthese = parse_data->thread_memory.buffer + parse_data->thread_memory.size;
+			char* last_parenthese = region_start + total_size_needed;
 			*last_parenthese = '}';
-			parse_data->thread_memory.size++;
-			parse_data->thread_memory.AssertCapacity();
+			total_size_needed++;
+			// After we constructed
+			Allocate(&parse_data->allocator, total_size_needed);
 
-			Stream<char> return_value = { region_start, PointerDifference(parse_data->thread_memory.buffer + parse_data->thread_memory.size, region_start) };
+			Stream<char> return_value = { region_start, PointerDifference(last_parenthese, region_start) / sizeof(char) };
 			// Replace any semicolons that were previously inside functions with their original semicolon
 			ReplaceCharacter(return_value, FUNCTION_REPLACE_SEMICOLON_CHAR, ';');
 			return return_value;
@@ -479,21 +1417,6 @@ namespace ECSEngine {
 		void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* _data);
 
 		void ReflectionManagerStylizeEnum(ReflectionEnum& enum_);
-
-		// If the path index is -1 it won't write it
-		void WriteErrorMessage(ReflectionManagerParseStructuresThreadTaskData* data, const char* message, unsigned int path_index) {
-			data->success = false;
-			data->error_message_lock.Lock();
-			data->error_message->AddStream(message);
-			if (path_index != -1) {
-				ConvertWideCharsToASCII((data->paths[path_index]), *data->error_message);
-			}
-			data->error_message->Add('\n');
-			data->error_message->AssertCapacity();
-			data->error_message_lock.Unlock();
-
-			data->condition_variable->Notify();
-		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
@@ -622,6 +1545,9 @@ namespace ECSEngine {
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				total_memory += data[data_index].total_memory;
 			}
+			// We will use this entry when writing error messages, and setting the value of -1 indicates
+			// That we are no longer in a per thread context, but in an overall context
+			data[0].current_file_index = -1;
 
 			void* allocation = Allocate(folders.allocator, total_memory);
 			folders[folder_index].allocated_buffer = allocation;
@@ -639,21 +1565,21 @@ namespace ECSEngine {
 					Stream<char> typedef_name = typedef_entry.name;
 					if (typedefs.Find(typedef_name) != -1) {
 						ECS_FORMAT_TEMP_STRING(message, "Typedef with name {#} conflicts with another typedef!", typedef_name);
-						WriteErrorMessage(data, message.buffer, -1);
+						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
 
 					if (type_definitions.Find(typedef_name) != -1) {
 						ECS_FORMAT_TEMP_STRING(message, "Typedef with name {#} conflicts with another type struct!", typedef_name);
-						WriteErrorMessage(data, message.buffer, -1);
+						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
 
 					if (enum_definitions.Find(typedef_name) != -1) {
 						ECS_FORMAT_TEMP_STRING(message, "Typedef with name {#} conflicts with another enum!", typedef_name);
-						WriteErrorMessage(data, message.buffer, -1);
+						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
@@ -706,7 +1632,7 @@ namespace ECSEngine {
 					if (enum_definitions.Find(identifier) != -1) {
 						// If the enum already exists, fail
 						ECS_FORMAT_TEMP_STRING(message, "Enum {#} was already reflect - conflict detected", enum_.name);
-						WriteErrorMessage(data, message.buffer, -1);
+						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
@@ -741,7 +1667,7 @@ namespace ECSEngine {
 								embedded_size.reflection_type,
 								embedded_size.field_name
 							);
-							WriteErrorMessage(data, error_message.buffer, -1);
+							WriteErrorMessage(data, error_message);
 							return false;
 						}
 					}
@@ -761,7 +1687,7 @@ namespace ECSEngine {
 							embedded_size.field_name,
 							embedded_size.reflection_type
 						);
-						WriteErrorMessage(data, error_message.buffer, -1);
+						WriteErrorMessage(data, error_message);
 						return false;
 					}
 
@@ -831,7 +1757,7 @@ namespace ECSEngine {
 									// Fail if couldn't determine
 									ECS_FORMAT_TEMP_STRING(message, "Failed to determine byte size and alignment for | {#} {#}; |, type {#}",
 										data_type->fields[field_index].definition, data_type->fields[field_index].name, data_type->name);
-									WriteErrorMessage(data, message.buffer, -1);
+									WriteErrorMessage(data, message);
 									FreeFolderHierarchy(folder_index);
 									return false;
 								}
@@ -883,7 +1809,7 @@ namespace ECSEngine {
 					// If the type already exists, fail
 					if (type_definitions.Find(identifier) != -1) {
 						ECS_FORMAT_TEMP_STRING(message, "The reflection type {#} was already reflected - a conflict was detected", type.name);
-						WriteErrorMessage(data, message.buffer, -1);
+						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
@@ -1145,7 +2071,7 @@ namespace ECSEngine {
 													// Some error has happened
 													// Fail
 													ECS_FORMAT_TEMP_STRING(message, "Cannot determine user defined type for field | {#} {#}; | for type {#}", field->definition, field->name, type->name);
-													WriteErrorMessage(data, message.buffer, -1);
+													WriteErrorMessage(data, message);
 													FreeFolderHierarchy(folder_index);
 													return false;
 												}
@@ -1200,7 +2126,7 @@ namespace ECSEngine {
 							FreeFolderHierarchy(folder_index);
 							evaluate_success = false;
 							ECS_FORMAT_TEMP_STRING(error_message, "Failed to parse function {#} for type {#}.", expressions[expression_index].name, type_ptr->name);
-							WriteErrorMessage(data, error_message.buffer, -1);
+							WriteErrorMessage(data, error_message);
 
 							// Return true to exit the loop
 							return true;
@@ -1937,7 +2863,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.error_message = error_message;
 
 			// Allocate memory for the type and enum stream; speculate some reasonable numbers
-			const size_t INITIAL_ALLOCATOR_CAPACITY = ECS_KB * 32;
+			const size_t INITIAL_ALLOCATOR_CAPACITY = ECS_KB * 256 + thread_memory_capacity;
 			const size_t BACKUP_ALLOCATOR_CAPACITY = ECS_MB * 32;
 			data.allocator = ResizableLinearAllocator(Allocate(folders.allocator, INITIAL_ALLOCATOR_CAPACITY), INITIAL_ALLOCATOR_CAPACITY, BACKUP_ALLOCATOR_CAPACITY, { nullptr });
 
@@ -1949,8 +2875,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.expressions.Initialize(&data.allocator, 32);
 			data.embedded_array_size.Initialize(&data.allocator, 128);
 			data.typedefs.Initialize(&data.allocator, 16);
+			data.last_type_names_soa.Initialize(&data.allocator, 0, 32);
 
-			data.thread_memory.InitializeEx({ nullptr }, 0, thread_memory_capacity);
 			data.field_table = &field_table;
 			data.success = true;
 			data.total_memory = 0;
@@ -2366,24 +3292,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool IsTypeCharacter(char character)
-		{
-			if ((character >= '0' && character <= '9') || (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') 
-				|| character == '_' || character == '<' || character == '>') {
-				return true;
-			}
-			return false;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		size_t PtrDifference(const void* start, const void* end)
-		{
-			return (uintptr_t)end - (uintptr_t)start;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* _data) {
 			ReflectionManagerHasReflectStructuresThreadTaskData* data = (ReflectionManagerHasReflectStructuresThreadTaskData*)_data;
 			for (unsigned int path_index = data->starting_path_index; path_index < data->ending_path_index; path_index++) {
@@ -2412,6 +3320,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				ECS_FILE_HANDLE file = 0;
 				// open the file from the beginning
 				ECS_FILE_STATUS_FLAGS status = OpenFile(data->paths[index], &file, ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_READ_ONLY);
+				data->current_file_index = index;
 
 				// if access was granted
 				if (status == ECS_FILE_STATUS_OK) {
@@ -2421,7 +3330,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					// Assume that the first line is at most MAX_FIRST_LINE characters
 					unsigned int first_line_count = ReadFromFile(file, { first_line_characters.buffer, first_line_characters.capacity - 1 });
 					if (first_line_count == -1) {
-						WriteErrorMessage(data, "Could not read first line. Faulty path: ", index);
+						WriteErrorMessage(data, "Could not read first line. Faulty path: ");
 						return;
 					}
 					first_line_characters[first_line_count] = '\0';
@@ -2437,7 +3346,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 						size_t file_size = GetFileByteSize(file);
 						if (file_size == 0) {
-							WriteErrorMessage(data, "Could not deduce file size. Faulty path: ", index);
+							WriteErrorMessage(data, "Could not deduce file size. Faulty path: ");
 							return;
 						}
 						// Reset the file pointer and read again
@@ -2458,14 +3367,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						data->thread_memory.size += bytes_read + 1;
 						// if there's not enough memory, fail
 						if (data->thread_memory.size > data->thread_memory.capacity) {
-							WriteErrorMessage(data, "Not enough memory to read file contents. Faulty path: ", index);
+							WriteErrorMessage(data, "Not enough memory to read file contents. Faulty path: ");
 							return;
 						}
 
 						// Skip the first line - it contains the flag ECS_REFLECT
 						const char* new_line = strchr(file_contents, '\n');
 						if (new_line == nullptr) {
-							WriteErrorMessage(data, "Could not skip ECS_REFLECT flag on first line. Faulty path: ", index);
+							WriteErrorMessage(data, "Could not skip ECS_REFLECT flag on first line. Faulty path: ");
 							return;
 						}
 						file_contents = (char*)new_line + 1;
@@ -2482,7 +3391,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							const char* last_line = FindCharacterReverse(search_space, '\n').buffer;
 							if (last_line == nullptr) {
 								// Fail if no new line before it
-								WriteErrorMessage(data, "Could not find new line before ECS_CONSTANT_REFLECT. Faulty path: ", index);
+								WriteErrorMessage(data, "Could not find new line before ECS_CONSTANT_REFLECT. Faulty path: ");
 								return;
 							}
 
@@ -2502,18 +3411,18 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								const char* ecs_constant_macro_start = SkipWhitespace(constant_name_end);
 								if (ecs_constant_macro_start != file_stream.buffer + constant_offsets[constant_index]) {
 									// Fail if the macro definition does not contain the constant reflect
-									WriteErrorMessage(data, "ECS_CONSTANT_REFLECT definition fail. The macro could not be found after the macro name. Faulty path: ", index);
+									WriteErrorMessage(data, "ECS_CONSTANT_REFLECT definition fail. The macro could not be found after the macro name. Faulty path: ");
 									return;
 								}
 
 								const char* opened_parenthese = strchr(ecs_constant_macro_start, '(');
 								if (opened_parenthese == nullptr) {
-									WriteErrorMessage(data, "ECS_CONSTANT_REFLECT is missing opened parenthese. Faulty path: ", index);
+									WriteErrorMessage(data, "ECS_CONSTANT_REFLECT is missing opened parenthese. Faulty path: ");
 									return;
 								}
 								const char* closed_parenthese = strchr(opened_parenthese, ')');
 								if (closed_parenthese == nullptr) {
-									WriteErrorMessage(data, "ECS_CONSTANT_REFLECT is missing closed parenthese. Faulty path: ", index);
+									WriteErrorMessage(data, "ECS_CONSTANT_REFLECT is missing closed parenthese. Faulty path: ");
 									return;
 								}
 
@@ -2537,7 +3446,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							}
 							else {
 								// Error, no define
-								WriteErrorMessage(data, "Could not find #define before ECS_CONSTANT_REFLECT. Faulty path: ", index);
+								WriteErrorMessage(data, "Could not find #define before ECS_CONSTANT_REFLECT. Faulty path: ");
 								return;
 							}
 						}
@@ -2572,7 +3481,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							//Stream<char> comment_space = { file_contents, PointerDifference(verify_comment_char, file_contents) + 1 };
 							//const char* verify_comment_last_new_line = FindCharacterReverse(comment_space, '\n').buffer;
 							//if (verify_comment_last_new_line == nullptr) {
-							//	WriteErrorMessage(data, "Last new line could not be found when checking ECS_REFLECT for comment", index);
+							//	WriteErrorMessage(data, "Last new line could not be found when checking ECS_REFLECT for comment");
 							//	return;
 							//}
 							//const char* comment_char = FindCharacterReverse(comment_space, '/').buffer;
@@ -2596,7 +3505,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 							// if no space was found after the token, fail
 							if (space == nullptr) {
-								WriteErrorMessage(data, "Finding type leading space failed. Faulty path: ", index);
+								WriteErrorMessage(data, "Finding type leading space failed. Faulty path: ");
 								return;
 							}
 
@@ -2609,7 +3518,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							const char* second_space = SkipCodeIdentifier(space);
 							// If the second space was not found, fail
 							if (second_space == nullptr || space == second_space) {
-								WriteErrorMessage(data, "Finding type final space failed. Faulty path: ", index);
+								WriteErrorMessage(data, "Finding type final space failed. Faulty path: ");
 								return;
 							}
 
@@ -2618,7 +3527,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							if (structure_name == STRING(typedef)) {
 								const char* typedef_colon = strchr(second_space, ';');
 								if (typedef_colon == nullptr) {
-									WriteErrorMessage(data, "Finding typedef alias colon failed. Faulty path: ", index);
+									WriteErrorMessage(data, "Finding typedef alias colon failed. Faulty path: ");
 									return;
 								}
 								AddTypedefAlias(data, structure_name.buffer, typedef_colon, index);
@@ -2627,7 +3536,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// null terminate 
 								char* second_space_mutable = (char*)(second_space);
 								*second_space_mutable = '\0';
-								data->total_memory += PtrDifference(space, second_space_mutable) + 1;
+								data->total_memory += PointerDifference(space, second_space_mutable) + 1;
 
 								file_contents[word_offset] = '\0';
 								// find the last new line character in order to speed up processing
@@ -2639,14 +3548,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								const char* opening_parenthese = strchr(second_space + 1, '{');
 								// if no opening curly brace was found, fail
 								if (opening_parenthese == nullptr) {
-									WriteErrorMessage(data, "Finding opening curly brace failed. Faulty path: ", index);
+									WriteErrorMessage(data, "Finding opening curly brace failed. Faulty path: ");
 									return;
 								}
 
 								const char* closing_parenthese = strchr(opening_parenthese + 1, '}');
 								// if no closing curly brace was found, fail
 								if (closing_parenthese == nullptr) {
-									WriteErrorMessage(data, "Finding closing curly brace failed. Faulty path: ", index);
+									WriteErrorMessage(data, "Finding closing curly brace failed. Faulty path: ");
 									return;
 								}
 
@@ -2663,7 +3572,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								else {
 									closing_parenthese = FindMatchingParenthesis(opening_parenthese + 1, file_contents + bytes_read, '{', '}');
 									if (closing_parenthese == nullptr) {
-										WriteErrorMessage(data, "Finding struct or class closing brace failed. Faulty path: ", index);
+										WriteErrorMessage(data, "Finding struct or class closing brace failed. Faulty path: ");
 										return;
 									}
 
@@ -2676,7 +3585,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 									// if none found, fail
 									if (struct_ptr == nullptr && class_ptr == nullptr) {
-										WriteErrorMessage(data, "Enum and type definition validation failed, didn't find neither", index);
+										WriteErrorMessage(data, "Enum and type definition validation failed, didn't find neither");
 										return;
 									}
 
@@ -2696,7 +3605,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 												);
 												if (new_range.size == 0) {
 													ECS_FORMAT_TEMP_STRING(message, "Failed to preparse the type {#} with the known tag {#}", type_name, current_tag);
-													WriteErrorMessage(data, message.buffer, index);
+													WriteErrorMessage(data, message.buffer);
 													return;
 												}
 												type_opening_parenthese = new_range.buffer;
@@ -2721,7 +3630,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 											}
 											else {
 												// Return, invalid variable type macro
-												WriteErrorMessage(data, "Invalid type tag macro, no closing parenthese found. Path index: ", index);
+												WriteErrorMessage(data, "Invalid type tag macro, no closing parenthese found. Path index: ");
 												return;
 											}
 										}
@@ -2842,1197 +3751,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 					}
 				}
-			}
-		}
-
-		void AddEnumDefinition(
-			ReflectionManagerParseStructuresThreadTaskData* data,
-			const char* opening_parenthese, 
-			const char* closing_parenthese,
-			const char* name,
-			unsigned int index
-		)
-		{
-			ReflectionEnum enum_definition;
-			enum_definition.name = name;
-
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-			// Tokenize the enum definition, and parse the values from there
-			TokenizedString tokenized_body;
-			tokenized_body.string = { opening_parenthese, (size_t)(closing_parenthese - opening_parenthese) / sizeof(char) };
-			tokenized_body.InitializeResizable(&stack_allocator);
-			TokenizeString(tokenized_body, GetCppEnumTokenSeparators(), true);
-
-			// Parse the body now. Each entry must end when a comma is detected, or when the end of the token stream is passed
-			
-
-			// Find next line tokens and exclude the next after the opening paranthese and replace
-			// The closing paranthese with \0 in order to stop searching there
-			ECS_STACK_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
-
-			const char* dummy_space = strchr(opening_parenthese, '\n') + 1;
-
-			char* closing_paranthese_mutable = (char*)closing_parenthese;
-			*closing_paranthese_mutable = '\0';
-			FindToken({ dummy_space, PointerDifference(closing_parenthese, dummy_space) }, '\n', next_line_positions_addition);
-
-			// Assign the subname stream and assert enough memory to hold the pointers
-			uintptr_t ptr = (uintptr_t)data->thread_memory.buffer + data->thread_memory.size;
-			ptr = AlignPointer(ptr, alignof(ReflectionEnum));
-			enum_definition.original_fields = Stream<Stream<char>>((void*)ptr, 0);
-
-			size_t memory_size = sizeof(Stream<char>) * next_line_positions.size + alignof(ReflectionEnum);
-			// We need to double this since we are doing stylized fields and original fields
-			memory_size *= 2;
-			data->thread_memory.size += memory_size;
-			data->total_memory += memory_size;
-			if (data->thread_memory.size > data->thread_memory.capacity) {
-				WriteErrorMessage(data, "Not enough memory to assign enum definition stream", index);
-				return;
-			}
-
-			for (size_t next_line_index = 0; next_line_index < next_line_positions.size; next_line_index++) {
-				const char* current_character = dummy_space + next_line_positions[next_line_index];
-				while (!IsTypeCharacter(*current_character)) {
-					current_character--;
-				}
-
-				char* final_character = (char*)(current_character + 1);
-				// null terminate the type
-				*final_character = '\0';
-				while (IsTypeCharacter(*current_character)) {
-					current_character--;
-				}
-
-				enum_definition.original_fields.Add(current_character + 1);
-				// We multiply by 2 since we have original fields and stylized fields
-				data->total_memory += PtrDifference(current_character + 1, final_character) * 2;
-			}
-
-			data->enums.Add(enum_definition);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void AddTypeDefinition(
-			ReflectionManagerParseStructuresThreadTaskData* data,
-			const char* opening_parenthese,
-			const char* closing_parenthese, 
-			const char* name,
-			unsigned int file_index
-		)
-		{
-			ReflectionType type;
-			type.name = name;
-			type.byte_size = 0;
-
-			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscNamedSoa, type_named_soa, 32);
-
-			// find next line tokens and exclude the next after the opening paranthese and replace
-			// the closing paranthese with \0 in order to stop searching there
-			ECS_STACK_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
-
-			// semicolon positions will help in getting the field name
-			ECS_STACK_ADDITION_STREAM(unsigned int, semicolon_positions, 512);
-
-			opening_parenthese++;
-			char* closing_paranthese_mutable = (char*)closing_parenthese;
-			*closing_paranthese_mutable = '\0';
-
-			// Check all expression evaluations
-			Stream<char> type_body = { opening_parenthese, PointerDifference(closing_parenthese, opening_parenthese) };
-			Stream<char> evaluate_expression_token = FindFirstToken(type_body, STRING(ECS_EVALUATE_FUNCTION_REFLECT));
-			while (evaluate_expression_token.buffer != nullptr) {
-				// Go down the line to get the name
-				// Its right before the parenthesis
-				const char* function_parenthese = FindFirstCharacter(evaluate_expression_token, '(').buffer;
-				const char* end_function_name = SkipWhitespace(function_parenthese - 1, -1);
-				const char* start_function_name = SkipCodeIdentifier(end_function_name, -1) + 1;
-
-				ReflectionExpression expression;
-				expression.name = { start_function_name, PointerDifference(end_function_name, start_function_name) + 1 };
-
-				// Get the body now - look for the return
-				const char* return_string = FindFirstToken(evaluate_expression_token, "return").buffer;
-				ECS_ASSERT(return_string != nullptr);
-				return_string += sizeof("return") - 1;
-
-				// Everything until the semicolon is the body
-				const char* semicolon = strchr(return_string, ';');
-				ECS_ASSERT(semicolon != nullptr);
-
-				// The removal of '\n' will be done when binding the data, for now just reference this part of the code
-				expression.body = { return_string, PointerDifference(semicolon, return_string) };
-				unsigned int type_table_index = data->expressions.Find(type.name);
-				if (type_table_index == -1) {
-					// Insert it
-					ReflectionExpression* stable_expression = (ReflectionExpression*)OffsetPointer(data->thread_memory.buffer, data->thread_memory.size);
-					*stable_expression = expression;
-					data->thread_memory.size += sizeof(ReflectionExpression);
-
-					data->expressions.InsertDynamic(&data->allocator, { stable_expression, 1 }, type.name);
-				}
-				else {
-					// Allocate a new buffer and update the expressions
-					ReflectionExpression* expressions = (ReflectionExpression*)OffsetPointer(data->thread_memory.buffer, data->thread_memory.size);
-					Stream<ReflectionExpression>* previous_expressions = data->expressions.GetValuePtrFromIndex(type_table_index);
-					previous_expressions->CopyTo(expressions);
-
-					data->thread_memory.size += sizeof(ReflectionExpression) * (previous_expressions->size + 1);
-					expressions[previous_expressions->size] = expression;
-
-					previous_expressions->buffer = expressions;
-					previous_expressions->size++;
-				}
-
-				// Get the next expression
-				Stream<char> remaining_part = { semicolon, PointerDifference(closing_parenthese, semicolon) };
-				evaluate_expression_token = FindFirstToken(remaining_part, STRING(ECS_EVALUATE_FUNCTION_REFLECT));
-
-				// Don't forget to update the total memory needed for the folder hierarchy
-				// The slot in the stream + the string for the name (the body doesn't need to be copied since 
-				// it will be evaluated and then discarded)
-				data->total_memory += expression.name.size + sizeof(ReflectionEvaluation);
-			}
-
-			bool omitted_fields = false;
-
-			// Returns false if an error has happened, else true.
-			// The fields will be added directly into the type on the stack
-			auto get_fields_from_section = [&](const char* start) {
-				next_line_positions.size = 0;
-				semicolon_positions.size = 0;
-
-				size_t start_size = strlen(start);
-
-				// Get all the new lines in between the two macros
-				FindToken({ start, start_size }, '\n', next_line_positions_addition);
-
-				// Get all the semicolons
-				FindToken({ start, start_size }, ';', semicolon_positions_addition);
-
-				// Process the inline function declarations such that they get rejected.
-				// Do this by removing the semicolons inside them
-				const char* function_body_start = strchr(start, '{');
-				const char* closed_bracket = nullptr;
-
-
-				while (function_body_start != nullptr) {
-					// Get the first character before the bracket. If it is ), then we have a function declaration
-					const char* first_character_before = function_body_start - 1;
-					while (first_character_before >= start && (*first_character_before == ' ' || *first_character_before == '\t' || *first_character_before == '\n')) {
-						first_character_before--;
-					}
-
-					if (first_character_before < start) {
-						WriteErrorMessage(data, "Type contains brace tokens {} in an unexpected fashion. Faulty path: ", file_index);
-						return false;
-					}
-
-					// Check for const placed before { and after ()
-					if (*first_character_before == 't') {
-						while (first_character_before >= start && IsCodeIdentifierCharacter(*first_character_before)) {
-							first_character_before--;
-						}
-						first_character_before++;
-
-						if (memcmp(first_character_before, STRING(const), sizeof(STRING(const)) - 1) == 0) {
-							// We have a const modifier. Exclude it
-							first_character_before = SkipWhitespace(first_character_before - 1, -1);
-							if (first_character_before < start) {
-								// An error has happened, fail
-								WriteErrorMessage(data, "Possible inline function declaration with const contains unexpected {} tokens. Faulty path: ", file_index);
-								return false;
-							}
-						}
-					}
-
-					if (*first_character_before == ')' || *first_character_before == 't') {
-						// Remove all the semicolons in between the two declarations
-						unsigned int opened_bracket_count = 0;
-						const char* opened_bracket = function_body_start;
-						closed_bracket = strchr(opened_bracket + 1, '}');
-
-						if (closed_bracket == nullptr) {
-							// Fail. Invalid match of brackets
-							WriteErrorMessage(data, "Determining inline function declaration body failed. Invalid mismatch of brackets.", file_index);
-							return false;
-						}
-
-						auto get_opened_bracket_count = [&opened_bracket_count](Stream<char> search_space) {
-							Stream<char> new_opened_bracket = FindFirstCharacter(search_space, '{');
-							while (new_opened_bracket.buffer != nullptr) {
-								opened_bracket_count++;
-								new_opened_bracket.buffer += 1;
-								new_opened_bracket.size -= 1;
-								new_opened_bracket = FindFirstCharacter(new_opened_bracket, '{');
-							}
-						};
-
-						Stream<char> search_space = { opened_bracket + 1, PointerDifference(closed_bracket, opened_bracket) - 1 };
-						get_opened_bracket_count(search_space);
-
-						// Now search for more '}'
-						while (opened_bracket_count > 0) {
-							opened_bracket_count--;
-
-							const char* old_closed_bracket = closed_bracket;
-							opened_bracket = strchr(closed_bracket + 1, '{');
-							closed_bracket = strchr(closed_bracket + 1, '}');
-							if (closed_bracket == nullptr) {
-								// Fail. Invalid match of brackets
-								WriteErrorMessage(data, "Determining inline function declaration body failed. Invalid mismatch of brackets.", file_index);
-								return false;
-							}
-							
-							if (old_closed_bracket < opened_bracket && opened_bracket < closed_bracket) {
-								search_space = { opened_bracket + 1, PointerDifference(closed_bracket, opened_bracket) - 1 };
-								get_opened_bracket_count(search_space);
-							}
-						}
-
-						// Now remove the semicolons and new lines in between
-						unsigned int body_start_offset = function_body_start - start;
-						unsigned int body_end_offset = closed_bracket - start;
-						for (unsigned int index = 0; index < semicolon_positions.size; index++) {
-							if (body_start_offset < semicolon_positions[index] && semicolon_positions[index] < body_end_offset) {
-								semicolon_positions.Remove(index);
-								index--;
-							}
-						}
-						for (unsigned int index = 0; index < next_line_positions.size; index++) {
-							if (body_start_offset < next_line_positions[index] && next_line_positions[index] < body_end_offset) {
-								next_line_positions.Remove(index);
-								index--;
-							}
-						}
-
-						function_body_start = strchr(closed_bracket + 1, '{');
-					}
-					else {
-						// It can be a pair of {} for default value declaration.
-						// Look for an equals before. If it is found on the same line, then we have a default value
-						const char* previous_equals = function_body_start;
-						if (closed_bracket != nullptr) {
-							previous_equals = closed_bracket + 1;
-							while (previous_equals < function_body_start && *previous_equals != '=') {
-								previous_equals++;
-							}
-						}
-
-						if (previous_equals != function_body_start) {
-							// Possible default value if it has a closing }
-							closed_bracket = strchr(function_body_start + 1, '}');
-							if (closed_bracket == nullptr) {
-								// Error. Unidentified meaning of {
-								WriteErrorMessage(data, "Unrecognized meaning of { inside type definition.", file_index);
-								return false;
-							}
-							function_body_start = strchr(closed_bracket + 1, '{');
-						}
-						else {
-							// Error. Unidentified meaning of {
-							WriteErrorMessage(data, "Unrecognized meaning of { inside type definition.", file_index);
-							return false;
-						}
-					}
-				}
-
-				// assigning the field stream
-				uintptr_t ptr = (uintptr_t)data->thread_memory.buffer + data->thread_memory.size;
-				ptr = AlignPointer(ptr, alignof(ReflectionField));
-				type.fields = Stream<ReflectionField>((void*)ptr, 0);
-				data->thread_memory.size += sizeof(ReflectionField) * semicolon_positions.size + alignof(ReflectionField);
-				data->total_memory += sizeof(ReflectionField) * semicolon_positions.size + alignof(ReflectionField);
-				if (data->thread_memory.size > data->thread_memory.capacity) {
-					WriteErrorMessage(data, "Assigning type field stream failed, insufficient memory.", file_index);
-					return false;
-				}
-
-				if (next_line_positions.size > 0 && semicolon_positions.size > 0) {
-					// determining each field
-					unsigned short pointer_offset = 0;
-					unsigned int last_new_line = next_line_positions[0];
-
-					unsigned int current_semicolon_index = 0;
-					for (size_t index = 0; index < next_line_positions.size - 1 && current_semicolon_index < semicolon_positions.size; index++) {
-						// Check to see if a semicolon is in between the two new lines - if it is, then a definition might exist
-						// for a data member or for a member function
-						while (current_semicolon_index < semicolon_positions.size && semicolon_positions[current_semicolon_index] < last_new_line) {
-							current_semicolon_index++;
-						}
-						// Exit if we have no more semicolons that fit the blocks
-						if (current_semicolon_index >= semicolon_positions.size) {
-							break;
-						}
-
-						unsigned int current_new_line = next_line_positions[index + 1];
-						if (semicolon_positions[current_semicolon_index] > last_new_line && semicolon_positions[current_semicolon_index] < current_new_line) {
-							const char* field_start = start + next_line_positions[index];
-							char* field_end = (char*)start + semicolon_positions[current_semicolon_index];
-
-							field_end[0] = '\0';
-
-							// Must check if it is a function definition - if it is then skip it
-							// Also, some misc macros could fit in here
-							const char* opened_paranthese = strchr(field_start, '(');
-							field_end[0] = ';';
-
-							if (opened_paranthese == nullptr) {
-								// Now check to see if this line is a typedef. In such cases, simply ignore this line
-								bool is_typedef = false;
-								const char* first_line_character = SkipWhitespaceEx(field_start);
-								if (first_line_character != nullptr) {
-									const char* first_word_end = SkipCodeIdentifier(first_line_character);
-									Stream<char> first_word = { first_line_character, PointerDifference(first_word_end, first_line_character) / sizeof(char) };
-									is_typedef = first_word == "typedef";
-								}
-
-								if (!is_typedef) {
-									// Check to see if this line contains only const and possibly a semicolon
-									// If this is all that there is on the line, consider this to be a const from a method
-									bool is_const_method_line = false;
-									Stream<char> line = { field_start, PointerDifference(field_end, field_start) / sizeof(*field_start) };
-									Stream<char> const_line_start = FindFirstToken(line, "const");
-									if (const_line_start.size > 0) {
-										const char* const_start = const_line_start.buffer;
-										const_start--;
-										while (const_start > field_start && (*const_start == '(' || *const_start == ')' || *const_start == '{' ||
-											*const_start == '}' || IsWhitespaceEx(*const_start))) {
-											const_start--;
-										}
-
-										if (const_start == field_start) {
-											const char* const_end = const_line_start.buffer + strlen("const");
-											const_end++;
-											while (const_end < field_end && (*const_end == '(' || *const_end == ')' || *const_end == '{' ||
-												*const_end == '}' || IsWhitespaceEx(*const_end))) {
-												const_end++;
-											}
-
-											// Greater or equal in case const is at the very end of the line, before the semicolon
-											is_const_method_line = const_end >= field_end;
-										}
-									}
-
-									if (!is_const_method_line) {
-										ECS_REFLECTION_ADD_TYPE_FIELD_RESULT result = AddTypeField(data, type, pointer_offset, field_start, field_end);
-
-										if (result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
-											WriteErrorMessage(data, "An error occured during field type determination.", file_index);
-											return false;
-										}
-										else if (result == ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED) {
-											omitted_fields = true;
-										}
-									}
-								}
-							}
-							else {
-								// Check to see if this is a misc macro
-								Stream<char> misc_macro_parse_range = { field_start + 1, PointerDifference(field_end, field_start + 1) / sizeof(char) };
-								Stream<char> misc_macro = SkipWhitespaceEx(misc_macro_parse_range);
-								if (misc_macro.size > 0) {
-									// Check to see if this is a misc macro
-									if (misc_macro.StartsWith(STRING(ECS_SOA_REFLECT))) {
-										// If this macro is properly written, accept it
-										// It needs to have at least 5 arguments - a name,
-										// a size field and a capacity field and at least 2
-										// parallel streams
-										Stream<char> argument_string = GetStringParameter(misc_macro);
-										if (argument_string.size > 0) {
-											ECS_STACK_CAPACITY_STREAM(Stream<char>, soa_parameters, 32);
-											SplitString(argument_string, ',', &soa_parameters);
-											if (soa_parameters.size >= 5) {
-												// Eliminate leading or trailing whitespace
-												for (unsigned int soa_index = 0; soa_index < soa_parameters.size; soa_index++) {
-													soa_parameters[soa_index] = SkipWhitespace(soa_parameters[soa_index]);
-													soa_parameters[soa_index] = SkipWhitespace(soa_parameters[soa_index], -1);
-												}
-												
-												if (soa_parameters.size <= ECS_COUNTOF(ReflectionTypeMiscNamedSoa::parallel_streams)) {
-													// Add a new entry. We don't need to allocate anything since the
-													// Names are all stable
-													ReflectionTypeMiscNamedSoa named_soa;
-													named_soa.type_name = type.name;
-													named_soa.name = soa_parameters[0];
-													named_soa.size_field = soa_parameters[1];
-													named_soa.capacity_field = soa_parameters[2];
-													named_soa.parallel_stream_count = soa_parameters.size - 3;
-													memcpy(named_soa.parallel_streams, soa_parameters.buffer + 3, soa_parameters.MemoryOf(named_soa.parallel_stream_count));
-													type_named_soa.AddAssert(&named_soa);
-												}
-												else {
-													WriteErrorMessage(data, "Invalid SoA type specification.", file_index);
-													return false;
-												}
-											}
-											else {
-												WriteErrorMessage(data, "Invalid SoA type specification.", file_index);
-												return false;
-											}
-										}
-										else {
-											WriteErrorMessage(data, "Invalid SoA type specification.", file_index);
-											return false;
-										}
-									}
-								}
-							}
-							current_semicolon_index++;
-						}
-						last_new_line = current_new_line;
-					}
-				}
-				return true;
-			};
-
-			// Look for field_start and field_end macros
-			const char* field_start_macro = FindFirstToken(type_body, STRING(ECS_FIELDS_START_REFLECT)).buffer;
-			if (field_start_macro != nullptr) {
-				while (field_start_macro != nullptr) {
-					// Get the fields end macro if there is one
-					char* field_end_macro = (char*)FindFirstToken(
-						Stream<char>(field_start_macro, PointerDifference(closing_parenthese, field_start_macro)), 
-						STRING(ECS_FIELDS_END_REFLECT)
-					).buffer;
-					if (field_end_macro != nullptr) {
-						// Put a '\0' before the macro - it will stop all the searches there
-						field_end_macro[-1] = '\0';
-					}
-
-					bool success = get_fields_from_section(field_start_macro);
-					if (!success) {
-						return;
-					}
-
-					// Advance to the next
-					if (field_end_macro != nullptr) {
-						field_start_macro = FindFirstToken(
-							Stream<char>(field_end_macro, PointerDifference(closing_parenthese, field_end_macro)), 
-							STRING(ECS_FIELDS_START_REFLECT)
-						).buffer;
-					}
-					else {
-						// There was no end macro specified, we searched everything
-						field_start_macro = nullptr;
-					}
-				}
-			}
-			else {
-				bool success = get_fields_from_section(opening_parenthese);
-				if (!success) {
-					return;
-				}
-			}
-
-			// Fail if there were no fields to be reflected
-			if (type.fields.size == 0 && !omitted_fields) {
-				WriteErrorMessage(data, "There were no fields to reflect: ", file_index);
-				return;
-			}
-
-			// We can validate the SoA fields here, such that we don't continue in case there
-			// Is a mismatch between the fields
-			// Allocate memory for the type misc info
-			type.misc_info.InitializeFromBuffer(OffsetPointer(data->thread_memory), type_named_soa.size);
-			data->thread_memory.size += type_named_soa.MemoryOf(type_named_soa.size);
-			data->total_memory += type_named_soa.MemoryOf(type_named_soa.size);
-			for (unsigned int index = 0; index < type_named_soa.size; index++) {
-				auto output_error = [&](Stream<char> field_type, Stream<char> field_name) {
-					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: {#} {#} doesn't exist. ", type.name, field_type, field_name);
-					WriteErrorMessage(data, message.buffer, file_index);
-				};
-				auto output_type_error = [&](Stream<char> field_name) {
-					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: field {#} invalid type {#} for size/capacity. ", type.name, field_name);
-					WriteErrorMessage(data, message.buffer, file_index);
-				};
-
-				const ReflectionTypeMiscNamedSoa* named_soa = &type_named_soa[index];
-
-				// Build the entry along the way
-				ReflectionTypeMiscInfo* misc_soa = &type.misc_info[index];
-				misc_soa->type = ECS_REFLECTION_TYPE_MISC_INFO_SOA;
-				misc_soa->soa.name = named_soa->name;
-				misc_soa->soa.parallel_stream_count = named_soa->parallel_stream_count;
-
-				unsigned int size_field_index = type.FindField(named_soa->size_field);
-				if (size_field_index == -1) {
-					output_error("size", named_soa->size_field);
-					return;
-				}
-				ECS_ASSERT(size_field_index <= UCHAR_MAX);
-				if (!IsIntegralSingleComponent(type.fields[size_field_index].info.basic_type)) {
-					output_type_error(named_soa->size_field);
-					return;
-				}
-				misc_soa->soa.size_field = size_field_index;
-
-				unsigned int capacity_field_index = -1;
-				if (named_soa->capacity_field != "\"\"") {
-					capacity_field_index = type.FindField(named_soa->capacity_field);
-					if (capacity_field_index == -1) {
-						output_error("capacity", named_soa->capacity_field);
-						return;
-					}
-					ECS_ASSERT(capacity_field_index <= UCHAR_MAX);
-					if (!IsIntegralSingleComponent(type.fields[capacity_field_index].info.basic_type)) {
-						output_type_error(named_soa->capacity_field);
-					}
-				}
-				misc_soa->soa.capacity_field = capacity_field_index;
-				for (unsigned char subindex = 0; subindex < named_soa->parallel_stream_count; subindex++) {
-					unsigned int current_field_index = type.FindField(named_soa->parallel_streams[subindex]);
-					if (current_field_index == -1) {
-						output_error("stream", named_soa->parallel_streams[subindex]);
-						return;
-					}
-					ECS_ASSERT(current_field_index <= UCHAR_MAX);
-					// Verify that this is a pointer field
-					if (type.fields[current_field_index].info.stream_type != ReflectionStreamFieldType::Pointer) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: field {#} is not a pointer. ", type.name, type.fields[current_field_index].name);
-						WriteErrorMessage(data, message.buffer, file_index);
-						return;
-					}
-					// Change the pointer type to PointerSoA
-					type.fields[current_field_index].info.stream_type = ReflectionStreamFieldType::PointerSoA;
-					misc_soa->soa.parallel_streams[subindex] = current_field_index;
-
-				}
-
-				// We need to add to the total memory the misc copy size
-				data->total_memory += misc_soa->CopySize();
-			}
-
-			data->types.Add(type);
-			data->total_memory += sizeof(ReflectionType);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void AddTypedefAlias(
-			ReflectionManagerParseStructuresThreadTaskData* data,
-			const char* typedef_start,
-			const char* typedef_colon,
-			unsigned int file_index
-		) {
-			// The range won't include the colon, and that's the wanted behaviour
-			Stream<char> typedef_range = { typedef_start, PointerDifference(typedef_colon, typedef_start) / sizeof(char) };
-			Stream<char> typedef_whitespace = SkipCodeIdentifier(typedef_range);
-
-			// Skip the type definition
-			if (typedef_whitespace.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find whitespace after typedef.", typedef_range);
-				WriteErrorMessage(data, message.buffer, file_index);
-				return;
-			}
-
-			// Get the definition start. The definition range will be the definition start up until the typedef start,
-			// With whitespaces eliminated. This will take into account template types as well.
-			Stream<char> definition_start = SkipWhitespaceEx(typedef_whitespace);
-			if (definition_start.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find definition start.", typedef_range);
-				WriteErrorMessage(data, message.buffer, file_index);
-				return;
-			}
-
-			// Retrieve the typedef name
-			Stream<char> typedef_name_end = SkipWhitespaceEx(typedef_range, -1);
-			Stream<char> typedef_name_start = SkipCodeIdentifier(typedef_name_end, -1);
-			if (typedef_name_start.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find name start.", typedef_range);
-				WriteErrorMessage(data, message.buffer, file_index);
-				return;
-			}
-
-			Stream<char> typedef_name = { typedef_name_start.buffer + typedef_name_start.size, typedef_name_end.size - typedef_name_start.size };
-			if (typedef_name.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. The name is empty.", typedef_range);
-				WriteErrorMessage(data, message.buffer, file_index);
-				return;
-			}
-
-			Stream<char> definition_end = SkipWhitespaceEx(typedef_name_start, -1);
-			if (definition_end.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could find definition end.", typedef_range);
-				WriteErrorMessage(data, message.buffer, file_index);
-				return;
-			}
-
-			Stream<char> definition = { definition_start.buffer, PointerDifference(definition_end.buffer + definition_end.size, definition_start.buffer) / sizeof(char) };
-			if (definition.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. The definition is empty.", typedef_range);
-				WriteErrorMessage(data, message.buffer, file_index);
-				return;
-			}
-
-			ReflectionParsedTypedef typedef_entry;
-			typedef_entry.name = typedef_name;
-			typedef_entry.entry.definition = definition;
-			data->total_memory += sizeof(typedef_entry) + typedef_name.CopySize() + typedef_entry.entry.CopySize();
-			data->typedefs.Add(typedef_entry);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		ECS_REFLECTION_ADD_TYPE_FIELD_RESULT AddTypeField(
-			ReflectionManagerParseStructuresThreadTaskData* data,
-			ReflectionType& type,
-			unsigned short& pointer_offset,
-			const char* last_line_character, 
-			const char* semicolon_character
-		)
-		{
-			// Check to see if the field has a tag - all tags must appear after the semicolon
-			// Make the tag default to nullptr
-			type.fields[type.fields.size].tag = { nullptr, 0 };
-
-			const char* tag_character = semicolon_character + 1;
-			const char* next_line_character = strchr(tag_character, '\n');
-			if (next_line_character == nullptr) {
-				return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
-			}
-			const char* parsed_tag_character = SkipWhitespace(tag_character);
-			// Some field determination functions write the field without knowing the tag. When the function exits, set the tag accordingly to 
-			// what was determined here
-			const char* final_field_tag = nullptr;
-			// If they are the same, no tag
-			if (parsed_tag_character != next_line_character) {
-				// Check comments at the end of the line
-				if (parsed_tag_character[0] != '/' || (parsed_tag_character[1] != '/' && parsed_tag_character[1] != '*')) {
-					// Look for tag - there can be more tags separated by a space - change the space into a
-					// ~ when writing the tag
-					
-					// A special case to handle is the ECS_SKIP_REFLECTION
-					if (memcmp(parsed_tag_character, STRING(ECS_SKIP_REFLECTION), sizeof(STRING(ECS_SKIP_REFLECTION)) - 1) == 0) {
-						// If it doesn't have an argument, then try to deduce the byte size
-						Stream<char> argument_range = { parsed_tag_character, PointerDifference(next_line_character, parsed_tag_character) / sizeof(char) + 1 };
-						Stream<char> parenthese = FindFirstCharacter(argument_range, '(');
-						if (parenthese.size == 0) {
-							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
-						}
-
-						Stream<char> end_parenthese = FindMatchingParenthesis(parenthese.AdvanceReturn(), '(', ')');
-						if (end_parenthese.size == 0) {
-							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
-						}
-
-						// We will forward the deduction at the end.
-						size_t field_index = type.fields.size;
-						type.fields[field_index].tag = { parsed_tag_character, PointerDifference(end_parenthese.buffer, parsed_tag_character) / sizeof(char) + 1 };
-						const char* definition_start = SkipWhitespaceEx(last_line_character);
-						// Skip the namespace qualification
-						const char* colons = strstr(definition_start, "::");
-						while (colons != nullptr && colons < semicolon_character) {
-							definition_start = SkipWhitespace(colons + 2);
-							colons = strstr(definition_start, "::");
-						}
-
-						// We need to take into account types that contain multiple words
-						// like unsigned int. So determine the name and go reverse
-						const char* equals = strchr(last_line_character, '=');
-						const char* name_end = equals != nullptr && equals < semicolon_character ? equals : semicolon_character;
-						while (!IsCodeIdentifierCharacter(*name_end)) {
-							name_end--;
-						}
-						const char* name_start = name_end;
-						while (IsCodeIdentifierCharacter(*name_start)) {
-							name_start--;
-						}
-
-						const char* definition_end = name_start;
-						// We need to have the pointer * included as well
-						while (IsWhitespace(*definition_end)) {
-							definition_end--;
-						}
-
-						type.fields[field_index].definition = { definition_start, PointerDifference(definition_end, definition_start) + 1 };
-						type.fields.size++;
-						return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
-					}
-
-					char* ending_tag_character = (char*)SkipCodeIdentifier(parsed_tag_character);
-					char* skipped_ending_tag_character = (char*)SkipWhitespace(ending_tag_character);
-
-					// If there are more tags separated by spaces, then transform the spaces or the tabs into
-					// ~ when writing the tag
-					while (skipped_ending_tag_character != next_line_character) {
-						if (*skipped_ending_tag_character == '(') {
-							// Parameter macro - find all opened pairs
-							unsigned int opened_count = 1;
-							const char* last_opened = skipped_ending_tag_character;
-							const char* last_closed = skipped_ending_tag_character;
-							while (opened_count > 0) {
-								// Search for ')' and '('
-								const char* opened = strchr(last_opened + 1, '(');
-								if (opened != nullptr && opened < next_line_character) {
-									last_opened = opened;
-									opened_count++;
-								}
-
-								const char* closed = strchr(last_closed + 1, ')');
-								if (closed == nullptr) {
-									return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
-								}
-
-								if (closed < next_line_character) {
-									opened_count--;
-								}
-								last_closed = closed;
-							}
-							skipped_ending_tag_character = (char*)last_closed + 1;
-							ending_tag_character = (char*)SkipWhitespace(skipped_ending_tag_character);
-						}
-
-						while (ending_tag_character < skipped_ending_tag_character) {
-							*ending_tag_character = ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR;
-							ending_tag_character++;
-						}
-
-						if (*skipped_ending_tag_character != '\n') {
-							ending_tag_character = (char*)SkipCodeIdentifier(skipped_ending_tag_character);
-						}
-						skipped_ending_tag_character = (char*)SkipWhitespace(ending_tag_character);
-					}
-
-					*ending_tag_character = '\0';
-
-					type.fields[type.fields.size].tag = parsed_tag_character;
-					data->total_memory += type.fields[type.fields.size].tag.size;
-
-					final_field_tag = parsed_tag_character;
-				}
-			}
-
-			// null terminate the semicolon;
-			char* last_field_character = (char*)semicolon_character;
-			*last_field_character = '\0';
-
-			// check to see if the field has a default value by looking for =
-			// If it does bump it back to the space before it		
-			char* equal_character = (char*)strchr(last_line_character, '=');
-			if (equal_character != nullptr) {
-				semicolon_character = equal_character - 1;
-				equal_character--;
-				*equal_character = '\0';
-			}
-
-			const char* current_character = semicolon_character - 1;
-
-			Stream<char> embedded_array_size_body = {};
-			unsigned short embedded_array_size = 0;
-			// take into consideration embedded arrays
-			if (*current_character == ']') {
-				const char* closing_bracket = current_character;
-				while (*current_character != '[') {
-					current_character--;
-				}
-
-				Stream<char> parse_characters = Stream<char>((void*)(current_character + 1), PtrDifference(current_character + 1, closing_bracket));
-				parse_characters = SkipWhitespace(parse_characters);
-				parse_characters = SkipWhitespace(parse_characters, -1);
-				// Check to see if this is a constant or the number is specified as is
-				if (IsIntegerNumber(parse_characters, true)) {
-					embedded_array_size = ConvertCharactersToInt(parse_characters);
-				}
-				else {
-					embedded_array_size_body = parse_characters;
-				}
-				char* mutable_ptr = (char*)current_character;
-				*mutable_ptr = '\0';
-				current_character--;
-			}
-
-			// getting the field name
-			while (IsTypeCharacter(*current_character)) {
-				current_character--;
-			}
-			current_character++;
-
-			bool success = DeduceFieldType(data, type, pointer_offset, current_character, last_line_character, last_field_character - 1);
-			if (success) {
-				if (type.fields[type.fields.size - 1].definition.size == 0 || type.fields[type.fields.size - 1].name.size == 0) {
-					// There was nothing to be reflected - just mark it as omitted
-					return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
-				}
-
-				ReflectionFieldInfo& info = type.fields[type.fields.size - 1].info;
-				// Set the default value to false initially
-				info.has_default_value = false;
-
-				if (embedded_array_size > 0) {
-					info.stream_byte_size = info.byte_size;
-					info.stream_alignment = GetReflectionFieldTypeAlignment(info.basic_type);
-					info.basic_type_count = embedded_array_size;
-					pointer_offset -= info.byte_size;
-					info.byte_size *= embedded_array_size;
-					pointer_offset += info.byte_size;
-
-					// change the extended type to array
-					info.stream_type = ReflectionStreamFieldType::BasicTypeArray;
-				}
-				// Get the default value if possible
-				if (equal_character != nullptr && info.stream_type == ReflectionStreamFieldType::Basic) {
-					// it was decremented before to place a '\0'
-					equal_character += 2;
-
-					const char* default_value_parse = SkipWhitespace(equal_character);
-
-					auto parse_default_value = [&](const char* default_value_parse, char value_to_stop) {
-						// Continue until the closing brace
-						const char* start_default_value = default_value_parse + 1;
-
-						const char* ending_default_value = start_default_value;
-						while (*ending_default_value != value_to_stop && *ending_default_value != '\0' && *ending_default_value != '\n') {
-							ending_default_value++;
-						}
-						if (*ending_default_value == '\0' || *ending_default_value == '\n') {
-							// Abort. Can't deduce default value
-							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
-						}
-						// Use the parse function, any member from the union can be used
-						CapacityStream<void> default_value = { &info.default_bool, 0, sizeof(info.default_double4) };
-						bool parse_success = ParseReflectionBasicFieldType(
-							info.basic_type, 
-							Stream<char>(start_default_value, ending_default_value - start_default_value),
-							&default_value
-						);
-						info.has_default_value = parse_success;
-						return ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS;
-					};
-					// If it is an opening brace, it's ok.
-					if (*default_value_parse == '{') {
-						ECS_REFLECTION_ADD_TYPE_FIELD_RESULT result = parse_default_value(default_value_parse, '}');
-						if (result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
-							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
-						}
-					}
-					else if (IsCodeIdentifierCharacter(*default_value_parse)) {
-						// Check to see that it is the constructor type - else it is the actual value
-						const char* start_parse_value = default_value_parse;
-						while (IsCodeIdentifierCharacter(*default_value_parse)) {
-							default_value_parse++;
-						}
-
-						// If it is an open paranthese, it is a constructor
-						if (*default_value_parse == '(') {
-							// Look for the closing paranthese
-							ECS_REFLECTION_ADD_TYPE_FIELD_RESULT result = parse_default_value(default_value_parse, ')');
-							if (result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
-								return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
-							}
-						}
-						else {
-							// If it is a space, tab or semicolon, it means that we skipped the value
-							CapacityStream<void> default_value = { &info.default_bool, 0, sizeof(info.default_double4) };
-							info.has_default_value = ParseReflectionBasicFieldType(
-								info.basic_type, 
-								Stream<char>(start_parse_value, default_value_parse - start_parse_value),
-								&default_value
-							);
-						}
-					}
-				}
-
-				ReflectionField& field = type.fields[type.fields.size - 1];
-				if (final_field_tag != nullptr) {
-					field.tag = final_field_tag;
-				}
-				else {
-					field.tag = { nullptr, 0 };
-				}
-
-				Stream<char> namespace_string = "ECSEngine::";
-
-				// Need remove the namespace ECSEngine for template types and basic types
-				if (memcmp(field.definition.buffer, namespace_string.buffer, namespace_string.size) == 0) {
-					field.definition.buffer += namespace_string.size;
-					field.definition.size -= namespace_string.size;
-
-					// Don't forget to remove this from the total memory pool
-					data->total_memory -= namespace_string.size;
-				}
-				Stream<char> ecsengine_namespace = FindFirstToken(field.definition, namespace_string);
-				while (ecsengine_namespace.buffer != nullptr) {
-					// Move back all the characters over the current characters
-					char* after_characters = ecsengine_namespace.buffer + namespace_string.size;
-					size_t after_character_count = strlen(after_characters);
-					memcpy(ecsengine_namespace.buffer, after_characters, after_character_count * sizeof(char));
-					ecsengine_namespace[after_character_count] = '\0';
-
-					ecsengine_namespace = FindFirstToken(ecsengine_namespace, namespace_string);
-					// Don't forget to remove this from the total memory pool
-					data->total_memory -= namespace_string.size;
-					field.definition.size -= namespace_string.size;
-				}
-
-				if (embedded_array_size_body.size > 0) {
-					// Register the text for constant evaluation later on
-					ReflectionEmbeddedArraySize embedded_size;
-					embedded_size.field_name = field.name;
-					embedded_size.reflection_type = type.name;
-					embedded_size.body = embedded_array_size_body;
-
-					data->embedded_array_size.Add(embedded_size);
-				}
-			}
-			return success ? ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS : ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool DeduceFieldType(
-			ReflectionManagerParseStructuresThreadTaskData* data,
-			ReflectionType& type,
-			unsigned short& pointer_offset,
-			const char* field_name,
-			const char* last_line_character,
-			const char* last_valid_character
-		)
-		{
-			bool success = DeduceFieldTypePointer(data, type, pointer_offset, field_name, last_line_character);
-			if (data->error_message->size > 0) {
-				return false;
-			}
-			else if (!success) {
-				success = DeduceFieldTypeStream(data, type, pointer_offset, field_name, last_line_character);
-				if (data->error_message->size > 0) {
-					return false;
-				}
-
-				if (!success) {
-					// if this is not a pointer type, extended type then
-					ReflectionField field;
-					DeduceFieldTypeExtended(
-						data,
-						pointer_offset,
-						field_name - 2,
-						field
-					);
-
-					field.name = field_name;
-					field.tag = type.fields[type.fields.size].tag;
-					data->total_memory += strlen(field_name) + 1;
-					type.fields.Add(field);
-					success = true;
-				}
-			}
-			return success;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool DeduceFieldTypePointer(
-			ReflectionManagerParseStructuresThreadTaskData* data,
-			ReflectionType& type,
-			unsigned short& pointer_offset,
-			const char* field_name,
-			const char* last_line_character
-		)
-		{
-			// Test first pointer type
-			const char* star_ptr = strchr(last_line_character + 1, '*');
-			if (star_ptr != nullptr) {
-				ReflectionField field;
-				field.name = field_name;
-				
-				size_t pointer_level = 1;
-				char* first_star = (char*)star_ptr;
-				star_ptr++;
-				while (*star_ptr == '*') {
-					pointer_level++;
-					star_ptr++;
-				}
-
-				unsigned short before_pointer_offset = pointer_offset;
-				DeduceFieldTypeExtended(
-					data,
-					pointer_offset,
-					SkipWhitespace(first_star - 1, -1),
-					field
-				);
-
-				field.info.basic_type_count = pointer_level;
-				field.info.stream_type = ReflectionStreamFieldType::Pointer;
-				field.info.stream_byte_size = field.info.byte_size;
-				field.info.stream_alignment = field.info.byte_size;
-				field.info.byte_size = sizeof(void*);
-				
-				pointer_offset = AlignPointer(before_pointer_offset, alignof(void*));
-				field.info.pointer_offset = pointer_offset;
-				pointer_offset += sizeof(void*);
-
-				data->total_memory += field.name.size;
-				type.fields.Add(field);
-				return true;
-			}
-			return false;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		// The stream will store the contained element byte size inside the additional flags component
-		bool DeduceFieldTypeStream(
-			ReflectionManagerParseStructuresThreadTaskData* data,
-			ReflectionType& type,
-			unsigned short& pointer_offset, 
-			const char* field_name, 
-			const char* new_line_character
-		)
-		{
-			// Test each keyword
-			
-			// Start with resizable and capacity, because these contain the stream keyword
-			// Must search new line character + 1 since it might be made \0 for tags
-			const char* stream_ptr = strstr(new_line_character + 1, STRING(ResizableStream));
-
-			auto parse_stream_type = [&](ReflectionStreamFieldType stream_type, size_t byte_size, const char* stream_name) {
-				ReflectionField field;
-				field.name = field_name;
-
-				unsigned short before_pointer_offset = pointer_offset;
-				char* left_bracket = (char*)strchr(stream_ptr, '<');
-				if (left_bracket == nullptr) {
-					ECS_FORMAT_TEMP_STRING(temp_message, "Incorrect {#}, missing <.", stream_name);
-					WriteErrorMessage(data, temp_message.buffer, -1);
-					return;
-				}
-
-				char* right_bracket = (char*)strchr(left_bracket, '>');
-				if (right_bracket == nullptr) {
-					ECS_FORMAT_TEMP_STRING(temp_message, "Incorrect {#}, missing >.", stream_name);
-					WriteErrorMessage(data, temp_message.buffer, -1);
-					return;
-				}
-
-				// if nested templates, we need to find the last '>'
-				char* next_right_bracket = (char*)strchr(right_bracket + 1, '>');
-				while (next_right_bracket != nullptr) {
-					right_bracket = next_right_bracket;
-					next_right_bracket = (char*)strchr(right_bracket + 1, '>');
-				}
-
-				// Make the left bracket \0 because otherwise it will continue to get parsed
-				char left_bracket_before = left_bracket[-1];
-				left_bracket[0] = '\0';
-				left_bracket[-1] = '\0';
-				*right_bracket = '\0';
-				DeduceFieldTypeExtended(
-					data,
-					pointer_offset,
-					right_bracket - 1,
-					field
-				);
-				left_bracket[0] = '<';
-				left_bracket[-1] = left_bracket_before;
-				right_bracket[0] = '>';
-				right_bracket[1] = '\0';
-
-				// All streams have aligned 8, the highest
-				pointer_offset = AlignPointer(before_pointer_offset, alignof(Stream<void>));
-				field.info.pointer_offset = pointer_offset;
-				field.info.stream_type = stream_type;
-				field.info.stream_byte_size = field.info.byte_size;
-				field.info.stream_alignment = field.info.byte_size;
-				field.info.byte_size = byte_size;
-				field.definition = SkipWhitespace(new_line_character + 1);
-
-				pointer_offset += byte_size;
-
-				data->total_memory += field.name.size + 1;
-				data->total_memory += field.definition.size + 1;
-				type.fields.Add(field);
-			};
-
-			if (stream_ptr != nullptr) {
-				parse_stream_type(ReflectionStreamFieldType::ResizableStream, sizeof(ResizableStream<void>), STRING(ResizableStream));
-				return true;
-			}
-
-			// Must search new line character + 1 since it might be made \0 for tags
-			stream_ptr = strstr(new_line_character + 1, STRING(CapacityStream));
-			if (stream_ptr != nullptr) {
-				parse_stream_type(ReflectionStreamFieldType::CapacityStream, sizeof(CapacityStream<void>), STRING(CapacityStream));
-				return true;
-			}
-
-			// Must search new line character + 1 since it might be made \0 for tags
-			stream_ptr = strstr(new_line_character + 1, STRING(Stream));
-			if (stream_ptr != nullptr) {
-				parse_stream_type(ReflectionStreamFieldType::Stream, sizeof(Stream<void>), STRING(Stream));
-				return true;
-			}
-
-			return false;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void DeduceFieldTypeExtended(
-			ReflectionManagerParseStructuresThreadTaskData* data,
-			unsigned short& pointer_offset,
-			const char* last_type_character, 
-			ReflectionField& field
-		)
-		{
-			char* current_character = (char*)last_type_character;
-			if (*current_character == '>') {
-				// Template type - remove
-				//unsigned int hey_there = 0;
-			}
-
-			current_character[1] = '\0';
-			while (IsTypeCharacter(*current_character)) {
-				current_character--;
-			}
-			char* first_space = current_character;
-			current_character--;
-			while (IsTypeCharacter(*current_character)) {
-				current_character--;
-			}
-
-			auto processing = [&](const char* basic_type) {
-				GetReflectionFieldInfo(data, basic_type, field);
-
-				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
-					field.info.pointer_offset = pointer_offset;
-					pointer_offset += field.info.byte_size;
-				}
-				else {
-					field.info.pointer_offset = pointer_offset;
-				}
-			};
-
-			// if there is no second word to process
-			if (PtrDifference(current_character, first_space) == 1) {
-				processing(first_space + 1);
-			}
-			// if there are two words
-			else {
-				// if there is a const, ignore it
-				const char* const_ptr = strstr(current_character, "const");
-
-				if (const_ptr != nullptr) {
-					processing(first_space + 1);
-				}
-				// not a const type, possibly unsigned something, so process it normaly
-				else {
-					processing(current_character + 1);
-				}
-			}
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void GetReflectionFieldInfo(ReflectionManagerParseStructuresThreadTaskData* data, Stream<char> basic_type, ReflectionField& field)
-		{
-			Stream<char> field_name = field.name;
-			field = GetReflectionFieldInfo(data->field_table, basic_type);
-			field.name = field_name;
-			if (field.info.stream_type == ReflectionStreamFieldType::Unknown || field.info.basic_type == ReflectionBasicFieldType::UserDefined) {
-				data->total_memory += basic_type.size;
-				field.info.byte_size = 0;
-				field.info.basic_type_count = 1;
 			}
 		}
 

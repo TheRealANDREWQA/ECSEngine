@@ -211,6 +211,15 @@ namespace ECSEngine {
 		return -1;
 	}
 
+	unsigned int TokenizeFindTokenReverse(const TokenizedString& string, Stream<char> token, TokenizedString::Subrange token_subrange) {
+		for (int64_t index = (int64_t)token_subrange.count - 1; index >= 0; index--) {
+			if (string[token_subrange[index]] == token) {
+				return index;
+			}
+		}
+		return -1;
+	}
+
 	unsigned int TokenizeFindToken(const TokenizedString& string, Stream<char> token, unsigned int token_type, TokenizedString::Subrange token_subrange) {
 		unsigned int token_count = token_subrange.count;
 		for (unsigned int index = 0; index < token_count; index++) {
@@ -226,6 +235,15 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < token_count; index++) {
 			if (string.tokens[token_subrange[index]].type == token_type) {
 				return index;
+			}
+		}
+		return -1;
+	}
+
+	unsigned int TokenizeFindTokenByTypeReverse(const TokenizedString& string, unsigned int token_type, TokenizedString::Subrange token_subrange) {
+		for (int64_t index = (int64_t)token_subrange.count - 1; index >= 0; index--) {
+			if (string.tokens[token_subrange[index]].type == token_type) {
+				return (unsigned int)index;
 			}
 		}
 		return -1;
@@ -316,19 +334,33 @@ namespace ECSEngine {
 		return merged_string;
 	}
 
-	void TokenizeSplitBySeparator(const TokenizedString& string, unsigned int separator_type, AdditionStream<TokenizedString::Subrange> token_ranges) {
+	void TokenizeSplitBySeparator(const TokenizedString& string, Stream<char> separator, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges) {
 		unsigned int range_start = 0;
-		TokenizedString::Subrange find_subrange = string.GetSubrangeUntilEnd(0);
-		unsigned int separator_index = TokenizeFindTokenByType(string, separator_type, find_subrange);
+		unsigned int separator_index = TokenizeFindToken(string, separator, token_subrange);
 		while (separator_index != -1) {
-			token_ranges.Add({ range_start, separator_index - range_start });
+			token_ranges.Add({ range_start + token_subrange.token_start_index, separator_index - range_start });
 			range_start = separator_index + 1;
-			find_subrange = find_subrange.GetSubrangeAfterUntilEnd(separator_index);
-			separator_index = TokenizeFindTokenByType(string, separator_type, find_subrange);
+			token_subrange = token_subrange.GetSubrangeAfterUntilEnd(separator_index);
+			separator_index = TokenizeFindToken(string, separator, token_subrange);
 		}
 
-		if (range_start < string.tokens.Size()) {
-			token_ranges.Add({ range_start, string.tokens.Size() - range_start });
+		if (range_start < token_subrange.count) {
+			token_ranges.Add({ range_start + token_subrange.token_start_index, token_subrange.count - range_start });
+		}
+	}
+
+	void TokenizeSplitBySeparator(const TokenizedString& string, unsigned int separator_type, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges) {
+		unsigned int range_start = 0;
+		unsigned int separator_index = TokenizeFindTokenByType(string, separator_type, token_subrange);
+		while (separator_index != -1) {
+			token_ranges.Add({ range_start + token_subrange.token_start_index, separator_index - range_start });
+			range_start = separator_index + 1;
+			token_subrange = token_subrange.GetSubrangeAfterUntilEnd(separator_index);
+			separator_index = TokenizeFindTokenByType(string, separator_type, token_subrange);
+		}
+
+		if (range_start < token_subrange.count) {
+			token_ranges.Add({ range_start + token_subrange.token_start_index, token_subrange.count - range_start });
 		}
 	}
 
@@ -1338,7 +1370,7 @@ namespace ECSEngine {
 		return true;
 	}
 
-	bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, CapacityStream<unsigned int>* matched_token_counts) {
+	bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, unsigned int* set_index_that_matched, CapacityStream<unsigned int>* matched_token_counts) {
 		// Early exit if the minimum token count is not satisfied
 		if (rule.minimum_token_count > subrange.count) {
 			return false;
@@ -1389,6 +1421,9 @@ namespace ECSEngine {
 				}
 
 				if (match_fixed_length_set(set_index)) {
+					if (set_index_that_matched != nullptr) {
+						*set_index_that_matched = set_index;
+					}
 					return true;
 				}
 			}
@@ -1456,7 +1491,8 @@ namespace ECSEngine {
 										virtual_match_rule.ComputeCachedValues();
 
 										// The matched_pair_index is already relative to the subrange that starts from token offset
-										if (!MatchTokenizeRule(string, subrange.GetSubrange(token_offset, in_between_pairing_token_count), virtual_match_rule, matched_token_counts)) {
+										// The set that matched should always be nullptr for subrules
+										if (!MatchTokenizeRule(string, subrange.GetSubrange(token_offset, in_between_pairing_token_count), virtual_match_rule, nullptr, matched_token_counts)) {
 											return false;
 										}
 
@@ -1640,6 +1676,9 @@ namespace ECSEngine {
 
 					// If the set matched, then return now
 					if (match_consecutive_entries(set, subrange, 0, set.size, match_variable_length)) {
+						if (set_index_that_matched != nullptr) {
+							*set_index_that_matched = set_index;
+						}
 						return true;
 					}
 				}
@@ -1758,6 +1797,62 @@ namespace ECSEngine {
 		return true;
 	}
 
+	void AddTokenizeRuleQualifiers(CapacityStream<char>& rule_string) {
+		rule_string.AddStreamAssert("qualifier = &. | $** &?\n");
+	}
+
+	void AddTokenizeRuleIdentifierDefinitions(CapacityStream<char>& rule_string) {
+		AddTokenizeRuleQualifiers(rule_string);
+		rule_string.AddStreamAssert("identifier_no_template = const? unsigned? ($G. ::.)* $G. qualifier?\n");
+		rule_string.AddStreamAssert("identifier_template = const? unsigned? ($G. ::.)* $G. /< $T+ \\> qualifier?\n");
+		rule_string.AddStreamAssert("identifier = identifier_no_template. | identifier_template.\n");
+	}
+
+	TokenizeRule GetTokenizeRuleForFunctions(AllocatorPolymorphic allocator, bool allocator_is_temporary, bool include_declarations, bool include_definitions, bool include_template) {
+		ECS_ASSERT(include_declarations || include_definitions, "Tokenize rule for functions requires declarations, definitions or both to be used.");
+
+		ECS_STACK_CAPACITY_STREAM(char, rule_characters, 512);
+		if (include_template) {
+			// Add the template header
+			rule_characters.AddStreamAssert("template_header = template. /< $T+ \\>\n");
+		}
+		AddTokenizeRuleIdentifierDefinitions(rule_characters);
+
+		if (include_declarations) {
+			if (include_template) {
+				rule_characters.AddStreamAssert("template_header? ");
+			}
+			rule_characters.AddStreamAssert("$G* identifier. $G./( $T* \\) $G*;.");
+		}
+
+		if (include_definitions) {
+			if (include_declarations) {
+				rule_characters.AddStreamAssert(" | ");
+			}
+
+			if (include_template) {
+				rule_characters.AddStreamAssert("template_header? ");
+			}
+			rule_characters.AddStreamAssert("$G* identifier. $G./( $T* \\) $G* /{ $T* \\}");
+		}
+
+		return CreateTokenizeRule(rule_characters, allocator, allocator_is_temporary);
+	}
+
+	TokenizeRule GetTokenizeRuleForStructOperators(AllocatorPolymorphic allocator, bool allocator_is_temporary) {
+		ECS_STACK_CAPACITY_STREAM(char, rule_string, 512);
+		AddTokenizeRuleIdentifierDefinitions(rule_string);
+		rule_string.AddStreamAssert("operator_signature = $G* identifier. operator. $S. $S? /( $T* \\) $G*\n");
+		rule_string.AddStreamAssert("operator_signature. (=. default.)? ;. | operator_signature. /{ $T* \\}");
+		return CreateTokenizeRule(rule_string, allocator, allocator_is_temporary);
+	}
+
+	TokenizeRule GetTokenizeRuleForStructConstructors(AllocatorPolymorphic allocator, bool allocator_is_temporary) {
+		const char* rule_string = R"DELIMITER(argument_list = :. ($G.$(.$G.$). ,.)* $G.$(.$G.$).
+												$G+ /( $T* \\) (=. default.)? ;. | $G+ /( $T* \\) argument_list? /{ $T* \\} )DELIMITER";
+		return CreateTokenizeRule(rule_string, allocator, allocator_is_temporary);
+	}
+
 	void TokenizeRuleMatcher::AddExcludeRule(const TokenizeRule& rule, bool deep_copy) {
 		if (deep_copy) {
 			exclude_rules.Add(rule.Copy(Allocator()));
@@ -1767,7 +1862,7 @@ namespace ECSEngine {
 		}
 	}
 
-	void TokenizeRuleMatcher::AddAction(const TokenizeRuleAction& action, bool deep_copy) {
+	void TokenizeRuleMatcher::AddPreExcludeAction(const TokenizeRuleAction& action, bool deep_copy) {
 		TokenizeRuleAction copy;
 		const TokenizeRuleAction* action_pointer = &action;
 		if (deep_copy) {
@@ -1776,7 +1871,19 @@ namespace ECSEngine {
 			copy.rule = action.rule.Copy(Allocator());
 			copy.callback_data = CopyNonZero(Allocator(), action.callback_data);
 		}
-		actions.Add(action_pointer);
+		pre_exclude_actions.Add(action_pointer);
+	}
+
+	void TokenizeRuleMatcher::AddPostExcludeAction(const TokenizeRuleAction& action, bool deep_copy) {
+		TokenizeRuleAction copy;
+		const TokenizeRuleAction* action_pointer = &action;
+		if (deep_copy) {
+			action_pointer = &copy;
+			copy = action;
+			copy.rule = action.rule.Copy(Allocator());
+			copy.callback_data = CopyNonZero(Allocator(), action.callback_data);
+		}
+		post_exclude_actions.Add(action_pointer);
 	}
 
 	void TokenizeRuleMatcher::Deallocate(bool deallocate_exclude_rules, bool deallocate_actions) {
@@ -1784,24 +1891,30 @@ namespace ECSEngine {
 			StreamDeallocateElements(exclude_rules, Allocator());
 		}
 		if (deallocate_actions) {
-			for (unsigned int index = 0; index < actions.size; index++) {
-				actions[index].callback_data.Deallocate(Allocator());
-				actions[index].rule.Deallocate(Allocator());
+			for (unsigned int index = 0; index < pre_exclude_actions.size; index++) {
+				pre_exclude_actions[index].callback_data.Deallocate(Allocator());
+				pre_exclude_actions[index].rule.Deallocate(Allocator());
+			}
+			for (unsigned int index = 0; index < post_exclude_actions.size; index++) {
+				post_exclude_actions[index].callback_data.Deallocate(Allocator());
+				post_exclude_actions[index].rule.Deallocate(Allocator());
 			}
 		}
 
 		exclude_rules.FreeBuffer();
-		actions.FreeBuffer();
+		pre_exclude_actions.FreeBuffer();
+		post_exclude_actions.FreeBuffer();
 		custom_subrange_order.FreeBuffer();
 	}
 
 	void TokenizeRuleMatcher::Initialize(AllocatorPolymorphic allocator) {
 		exclude_rules.Initialize(allocator, 0);
-		actions.Initialize(allocator, 0);
+		pre_exclude_actions.Initialize(allocator, 0);
+		post_exclude_actions.Initialize(allocator, 0);
 		custom_subrange_order.Initialize(allocator, 0);
 	}
 
-	bool TokenizeRuleMatcher::Match(const TokenizedString& string, TokenizedString::Subrange subrange) const {
+	bool TokenizeRuleMatcher::Match(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const {
 		bool iterate_increasing = true;
 		Stream<unsigned int> order_to_iterate;
 		if (custom_subrange_order.size > 0) {
@@ -1820,7 +1933,29 @@ namespace ECSEngine {
 			auto test_subrange_count = [&](unsigned int sequence_count) -> bool2 {
 				TokenizedString::Subrange current_subrange = subrange.GetSubrange(0, sequence_count);
 				
-				// Try to match the exclude rules first
+				// Try the pre exclude rules first
+				unsigned int pre_action_rule_index = 0;
+				for (; pre_action_rule_index < pre_exclude_actions.size; pre_action_rule_index++) {
+					ECS_STACK_CAPACITY_STREAM(unsigned int, token_count_per_entry, 128);
+					unsigned int set_index_that_matched = -1;
+					if (MatchTokenizeRule(string, current_subrange, pre_exclude_actions[pre_action_rule_index].rule, &set_index_that_matched, &token_count_per_entry)) {
+						TokenizeRuleCallbackData callback_data(string);
+						callback_data.subrange = current_subrange;
+						callback_data.tokens_per_entry = token_count_per_entry;
+						callback_data.user_data = pre_exclude_actions[pre_action_rule_index].callback_data.buffer;
+						callback_data.call_specific_data = call_specific_data;
+						callback_data.set_index_that_matched = set_index_that_matched;
+						ECS_TOKENIZE_RULE_CALLBACK_RESULT callback_result = pre_exclude_actions[pre_action_rule_index].callback(&callback_data);
+						if (callback_result == ECS_TOKENIZE_RULE_CALLBACK_EXIT) {
+							return { true, true };
+						}
+						else if (callback_result == ECS_TOKENIZE_RULE_CALLBACK_MATCHED) {
+							return { true, false };
+						}
+					}
+				}
+
+				// Try to match the exclude rules now
 				unsigned int exclude_index = 0;
 				for (; exclude_index < exclude_rules.size; exclude_index++) {
 					if (MatchTokenizeRule(string, current_subrange, exclude_rules[exclude_index])) {
@@ -1828,17 +1963,19 @@ namespace ECSEngine {
 					}
 				}
 
-				// The exclude rules did not match this subrange, try to normal rules
-				unsigned int action_rule_index = 0;
-				for (; action_rule_index < actions.size; action_rule_index++) {
+				// The exclude rules did not match this subrange, try the post exclude rules
+				unsigned int post_action_rule_index = 0;
+				for (; post_action_rule_index < post_exclude_actions.size; post_action_rule_index++) {
 					ECS_STACK_CAPACITY_STREAM(unsigned int, token_count_per_entry, 128);
-					if (MatchTokenizeRule(string, current_subrange, actions[action_rule_index].rule, &token_count_per_entry)) {
-						TokenizeRuleCallbackData callback_data;
-						callback_data.string = &string;
+					unsigned int set_index_that_matched = -1;
+					if (MatchTokenizeRule(string, current_subrange, post_exclude_actions[post_action_rule_index].rule, &set_index_that_matched, &token_count_per_entry)) {
+						TokenizeRuleCallbackData callback_data(string);
 						callback_data.subrange = current_subrange;
 						callback_data.tokens_per_entry = token_count_per_entry;
-						callback_data.user_data = actions[action_rule_index].callback_data.buffer;
-						if (actions[action_rule_index].callback(&callback_data)) {
+						callback_data.user_data = post_exclude_actions[post_action_rule_index].callback_data.buffer;
+						callback_data.call_specific_data = call_specific_data;
+						callback_data.set_index_that_matched = set_index_that_matched;
+						if (post_exclude_actions[post_action_rule_index].callback(&callback_data) == ECS_TOKENIZE_RULE_CALLBACK_EXIT) {
 							return { true, true };
 						}
 						else {
@@ -2132,7 +2269,7 @@ namespace ECSEngine {
 	void TokenizedString::InitializeResizable(AllocatorPolymorphic allocator) {
 		ResizableStream<Token>* allocated_tokens = (ResizableStream<Token>*)Allocate(allocator, sizeof(ResizableStream<Token>));
 		// Set an initial small size
-		allocated_tokens->Initialize(allocator, 8);
+		allocated_tokens->Initialize(allocator, 32);
 		tokens = allocated_tokens;
 	}
 
