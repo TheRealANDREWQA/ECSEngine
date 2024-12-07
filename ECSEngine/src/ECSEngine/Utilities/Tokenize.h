@@ -262,7 +262,6 @@ namespace ECSEngine {
 
 		const TokenizedString& string;
 		TokenizedString::Subrange subrange;
-		Stream<unsigned int> tokens_per_entry;
 		// This is data that is assigned at matcher time
 		void* user_data;
 		// This is data that is given at the Match call
@@ -283,8 +282,7 @@ namespace ECSEngine {
 	};
 
 	// This is a callback that is called when a rule is matched. It receives the tokenized string and the subrange that matched the rule,
-	// With an extra parameter that describes how many tokens were assigned per each rule entry. It is up to you to interpret this array,
-	// If you need it. It needs to return an appropriate result type.
+	// It needs to return an appropriate result type.
 	typedef ECS_TOKENIZE_RULE_CALLBACK_RESULT (*TokenizeRuleCallback)(const TokenizeRuleCallbackData* data);
 	
 	struct TokenizeRuleAction {
@@ -313,9 +311,13 @@ namespace ECSEngine {
 
 		void Initialize(AllocatorPolymorphic allocator);
 
-		// It will match the given token string subrange with the stored actions. It returns true if it early existed, else false.
+		// It will match the given token string subrange with the stored actions, by using a backtracking search. It returns true if it early existed, else false.
 		// The call specific data will be passed to callbacks, to use it as they see fit
-		bool Match(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const;
+		bool MatchBacktracking(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const;
+
+		// It will find the rule that matches the highest amount of tokens and use that one. It returns true if it early existed, else false.
+		// The call specific data will be passed to callbacks, to use it as they see fit
+		bool MatchRulesWithFind(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const;
 
 		// If you want to iterate certain token counts before others, you can specify them here, such that the relative ordering is maintained.
 		// You can use the value of -1 as a last value to indicate to start matching from count 1 to the max, without retesting existing counts
@@ -371,7 +373,11 @@ namespace ECSEngine {
 
 	// Returns true if the given rule matches the string, else false. If it matches the string, it can optionally report how many
 	// Tokens each entry used. The cached values for the rule must be computed beforehand! You can optionally retrieve the set that matched the rule
-	ECSENGINE_API bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, unsigned int* set_index_that_matched = nullptr, CapacityStream<unsigned int>* matched_token_counts = nullptr);
+	ECSENGINE_API bool MatchTokenizeRuleBacktracking(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, unsigned int* set_index_that_matched = nullptr, CapacityStream<unsigned int>* matched_token_counts = nullptr);
+
+	// Returns the longest range of consecutive tokens that matches the rule that starts from the beginning of the subrange, or -1 if there is no such range.
+	// You can optionally retrieve the index of the set that matched the range, in case a match is found
+	ECSENGINE_API unsigned int FindTokenizeRuleMatchingRange(const TokenizedString& string, const TokenizeRule& rule, TokenizedString::Subrange subrange, unsigned int* set_index_that_matched = nullptr);
 
 	// A function for testing the matching
 	ECSENGINE_API void MatchTokenizeRuleTest();
