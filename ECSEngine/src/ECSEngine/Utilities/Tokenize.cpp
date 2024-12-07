@@ -3,6 +3,7 @@
 #include "StringUtilities.h"
 #include "Utilities.h"
 #include "../Allocators/ResizableLinearAllocator.h"
+#include "Algorithms.h"
 
 namespace ECSEngine {
 
@@ -948,18 +949,17 @@ namespace ECSEngine {
 		// Parse the definitions first
 		for (unsigned int index = 0; index < lines.size - 1; index++) {
 			// Split the string by the equals - there should be just a single equals, if there are more fail
-			ECS_STACK_CAPACITY_STREAM(Stream<char>, split_string, 8);
-			SplitString(lines[index], '=', &split_string);
-			if (split_string.size != 2) {
-				ECS_FORMAT_ERROR_MESSAGE(error_message, "Definition must have a single equals: {#}", lines[index]);
+			Stream<char> first_equals = FindFirstCharacter(lines[index], '=');
+			if (first_equals.size == 0) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Definition must have an equals sign after the definition name: {#}", lines[index]);
 				return TokenizeRule();
 			}
 
-			Stream<char> left_part = split_string[0];
+			Stream<char> left_part = lines[index].StartDifference(first_equals);
 			left_part = SkipWhitespace(left_part);
 			left_part = SkipWhitespace(left_part, -1);
 
-			Stream<char> right_part = split_string[1];
+			Stream<char> right_part = first_equals.AdvanceReturn(1);
 			right_part = SkipWhitespace(right_part);
 			right_part = SkipWhitespace(right_part, -1);
 
@@ -1147,12 +1147,20 @@ namespace ECSEngine {
 		case ECS_TOKENIZE_RULE_SELECTION_ANY:
 		{
 			// In this case, we accept any tokens, we can advance further
+			if (entry.is_selection_negated) {
+				// This doesn't make too much sense
+				return false;
+			}
 		}
 		break;
 		case ECS_TOKENIZE_RULE_SELECTION_GENERAL:
 		{
 			for (unsigned int token_index = 0; token_index < adjusted_match_count; token_index++) {
-				if (string.tokens[subrange[token_index]].type != ECS_TOKEN_TYPE_GENERAL) {
+				bool is_different_token = string.tokens[subrange[token_index]].type != ECS_TOKEN_TYPE_GENERAL;
+				if (entry.is_selection_negated) {
+					is_different_token = !is_different_token;
+				}
+				if (is_different_token) {
 					return false;
 				}
 			}
@@ -1161,7 +1169,11 @@ namespace ECSEngine {
 		case ECS_TOKENIZE_RULE_SELECTION_SEPARATOR:
 		{
 			for (unsigned int token_index = 0; token_index < adjusted_match_count; token_index++) {
-				if (string.tokens[subrange[token_index]].type != ECS_TOKEN_TYPE_SEPARATOR) {
+				bool is_different_token = string.tokens[subrange[token_index]].type != ECS_TOKEN_TYPE_SEPARATOR;
+				if (entry.is_selection_negated) {
+					is_different_token = !is_different_token;
+				}
+				if (is_different_token) {
 					return false;
 				}
 			}
@@ -1171,15 +1183,19 @@ namespace ECSEngine {
 		{
 			for (unsigned int token_index = 0; token_index < adjusted_match_count; token_index++) {
 				Stream<char> current_token = string[subrange[token_index]];
+				bool is_different_token = false;
 				if (entry.selection_data.is_multiple_strings) {
-					if (FindString(current_token, entry.selection_data.strings) == -1) {
-						return false;
-					}
+					is_different_token = FindString(current_token, entry.selection_data.strings) == -1;
 				}
 				else {
-					if (current_token != entry.selection_data.string) {
-						return false;
-					}
+					is_different_token = current_token != entry.selection_data.string;
+				}
+
+				if (entry.is_selection_negated) {
+					is_different_token = !is_different_token;
+				}
+				if (is_different_token) {
+					return false;
 				}
 			}
 		}
@@ -1188,15 +1204,20 @@ namespace ECSEngine {
 		{
 			for (unsigned int token_index = 0; token_index < adjusted_match_count; token_index++) {
 				unsigned int token_type = string.tokens[subrange[token_index]].type;
+				bool is_different_token = false;
 				if (entry.selection_data.is_multiple_type_indices) {
-					if (entry.selection_data.type_indices.Find(token_type) == -1) {
-						return false;
-					}
+					is_different_token = entry.selection_data.type_indices.Find(token_type) == -1;
 				}
 				else {
-					if (token_type != entry.selection_data.type_index) {
-						return false;
-					}
+					is_different_token = token_type != entry.selection_data.type_index;
+				}
+
+				if (entry.is_selection_negated) {
+					is_different_token = !is_different_token;
+				}
+
+				if (is_different_token) {
+					return false;
 				}
 			}
 		}
@@ -1290,7 +1311,7 @@ namespace ECSEngine {
 									// Only entries that are not already in the cache will need to be checked
 									if (!is_index_skipped[index]) {
 										TokenizedString::Subrange current_subrange = subrange.GetSubrange(subrange_offset + current_token_offset, current_counts[index]);
-										success = MatchTokenizeRule(string, current_subrange, entry.selection_data.subrule, nullptr);
+										success = MatchTokenizeRuleBacktracking(string, current_subrange, entry.selection_data.subrule, nullptr);
 
 										// Add a cached entry, if we have enough space in the cache
 										if (cached_checks.size < cached_checks.capacity) {
@@ -1370,7 +1391,7 @@ namespace ECSEngine {
 		return true;
 	}
 
-	bool MatchTokenizeRule(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, unsigned int* set_index_that_matched, CapacityStream<unsigned int>* matched_token_counts) {
+	bool MatchTokenizeRuleBacktracking(const TokenizedString& string, TokenizedString::Subrange subrange, const TokenizeRule& rule, unsigned int* set_index_that_matched, CapacityStream<unsigned int>* matched_token_counts) {
 		// Early exit if the minimum token count is not satisfied
 		if (rule.minimum_token_count > subrange.count) {
 			return false;
@@ -1492,7 +1513,7 @@ namespace ECSEngine {
 
 										// The matched_pair_index is already relative to the subrange that starts from token offset
 										// The set that matched should always be nullptr for subrules
-										if (!MatchTokenizeRule(string, subrange.GetSubrange(token_offset, in_between_pairing_token_count), virtual_match_rule, nullptr, matched_token_counts)) {
+										if (!MatchTokenizeRuleBacktracking(string, subrange.GetSubrange(token_offset, in_between_pairing_token_count), virtual_match_rule, nullptr, matched_token_counts)) {
 											return false;
 										}
 
@@ -1692,6 +1713,222 @@ namespace ECSEngine {
 		return false;
 	}
 
+	unsigned int FindTokenizeRuleMatchingRange(const TokenizedString& string, const TokenizeRule& rule, TokenizedString::Subrange subrange, unsigned int* set_index_that_matched) {
+		if (set_index_that_matched != nullptr) {
+			*set_index_that_matched = -1;
+		}
+		
+		if (rule.minimum_token_count > subrange.count) {
+			// Early exit if the minimum amount of tokens is not satisfied
+			return -1;
+		}
+
+		unsigned int maximum_match_count = 0;
+		for (size_t set_index = 0; set_index < rule.sets.size; set_index++) {
+			unsigned int current_set_match_count = 0;
+			
+			if (rule.sets[set_index].minimum_token_count > subrange.count) {
+				// Don't analyse this set
+				continue;
+			}
+
+			Stream<TokenizeRuleEntry> set = rule.sets[set_index].entries;
+			for (size_t entry_index = 0; entry_index < set.size; entry_index++) {
+				// The pair start is a special case
+				const TokenizeRuleEntry& entry = set[entry_index];
+
+				if (entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_START) {
+					if (string[subrange[current_set_match_count]] != entry.selection_data.string) {
+						// This token did not match, quit
+						current_set_match_count = 0;
+						break;
+					}
+					
+					// Find the end token
+					size_t end_token_entry_index = GetEntryPairing(set, entry_index);
+					
+					// Find the pairing
+					uint2 pairing_indices = TokenizeFindMatchingPair(string, entry.selection_data.string, set[end_token_entry_index].selection_data.string, subrange.GetSubrangeUntilEnd(current_set_match_count), true);
+					if (pairing_indices.y == -1) {
+						// The pairing could not be established
+						current_set_match_count = 0;
+						break;
+					}
+
+					size_t in_between_pairing_count = end_token_entry_index - entry_index - 1;
+					if (in_between_pairing_count > 0) {
+						// Create a pseudo tokenize rule that contains the subsection that must match the tokens in between
+						TokenizeRule::EntrySet pair_rule_set;
+						pair_rule_set.is_variable_length = false;
+						pair_rule_set.minimum_token_count = 0;
+						pair_rule_set.entries = { set.buffer + entry_index + 1, in_between_pairing_count };
+						
+						TokenizeRule in_between_pair_rule;
+						in_between_pair_rule.sets = { &pair_rule_set, 1 };
+
+						TokenizedString::Subrange in_between_subrange = subrange.GetSubrange(current_set_match_count + 1, pairing_indices.y - 1);
+						if (FindTokenizeRuleMatchingRange(string, in_between_pair_rule, in_between_subrange) != in_between_subrange.count) {
+							// The in between subrange didn't match, fail
+							current_set_match_count = 0;
+							break;
+						}
+					}
+
+					// Advance to the end pairing character
+					current_set_match_count += pairing_indices.y + 1;
+				}
+				else {
+					// Returns the number of tokens that it matched, or -1 if the current tokens couldn't be matched
+					auto match_entry = [&]() -> unsigned int {
+						switch (entry.selection_type) {
+						case ECS_TOKENIZE_RULE_SELECTION_ANY:
+							return entry.is_selection_negated ? 0 : 1;
+						case ECS_TOKENIZE_RULE_SELECTION_GENERAL:
+						{
+							bool is_different_token = string.tokens[subrange[current_set_match_count]].type != ECS_TOKEN_TYPE_GENERAL;
+							if (entry.is_selection_negated) {
+								is_different_token = !is_different_token;
+							}
+							return is_different_token ? -1 : 1;
+						}
+						case ECS_TOKENIZE_RULE_SELECTION_SEPARATOR:
+						{
+							bool is_different_token = string.tokens[subrange[current_set_match_count]].type != ECS_TOKEN_TYPE_SEPARATOR;
+							if (entry.is_selection_negated) {
+								is_different_token = !is_different_token;
+							}
+							return is_different_token ? -1 : 1;
+						}
+						case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_STRING:
+						{
+							Stream<char> current_token = string[subrange[current_set_match_count]];
+							bool is_different_token = false;
+							if (entry.selection_data.is_multiple_strings) {
+								is_different_token = FindString(current_token, entry.selection_data.strings) == -1;
+							}
+							else {
+								is_different_token = current_token != entry.selection_data.string;
+							}
+
+							if (entry.is_selection_negated) {
+								is_different_token = !is_different_token;
+							}
+							return is_different_token ? -1 : 1;
+						}
+						case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_TYPE:
+						{
+							unsigned int token_type = string.tokens[subrange[current_set_match_count]].type;
+							bool is_different_token = false;
+							if (entry.selection_data.is_multiple_type_indices) {
+								is_different_token = entry.selection_data.type_indices.Find(token_type) == -1;
+							}
+							else {
+								is_different_token = token_type != entry.selection_data.type_index;
+							}
+
+							if (entry.is_selection_negated) {
+								is_different_token = !is_different_token;
+							}
+
+							return is_different_token ? -1 : 1;
+						}
+						case ECS_TOKENIZE_RULE_SELECTION_MATCH_BY_SUBRULE:
+						{
+							return FindTokenizeRuleMatchingRange(string, entry.selection_data.subrule, subrange.GetSubrangeUntilEnd(current_set_match_count));
+						}
+						}
+
+						return 0;
+					};
+
+					if (current_set_match_count == subrange.count) {
+						// There are no more tokens to be matched, these entries must be optional
+						if (!GetTokenizeEntryMatchCount(entry).is_optional) {
+							// Exit
+							current_set_match_count = 0;
+							break;
+						}
+					}
+					else {
+						// We cannot exit from the loop using break inside the switch since it will exit from the switch
+						// So use a temporary boolean variable
+						bool failed = false;
+						switch (entry.count_type) {
+						case ECS_TOKENIZE_RULE_ONE:
+						{
+							unsigned int matched_token_count = match_entry();
+							if (matched_token_count == -1) {
+								// It failed, exit
+								failed = true;
+							}
+							else {
+								current_set_match_count += matched_token_count;
+							}
+						}
+						break;
+						case ECS_TOKENIZE_RULE_ZERO_OR_ONE:
+						{
+							unsigned int matched_token_count = match_entry();
+							current_set_match_count += matched_token_count == -1 ? 0 : matched_token_count;
+						}
+						break;
+						case ECS_TOKENIZE_RULE_ONE_OR_MORE:
+						{
+							unsigned int matched_token_count = match_entry();
+							if (matched_token_count == -1) {
+								// We need to match at least once
+								failed = true;
+							}
+							else {
+								while (matched_token_count != -1) {
+									current_set_match_count += matched_token_count;
+									// If we got to the end, exit
+									if (current_set_match_count == subrange.count) {
+										matched_token_count = -1;
+									}
+									else {
+										matched_token_count = match_entry();
+									}
+								}
+							}
+						}
+						break;
+						case ECS_TOKENIZE_RULE_ZERO_OR_MORE:
+						{
+							unsigned int matched_token_count = match_entry();
+							while (matched_token_count != -1) {
+								current_set_match_count += matched_token_count;
+								// If we got to the end, exit
+								if (current_set_match_count == subrange.count) {
+									matched_token_count = -1;
+								}
+								else {
+									matched_token_count = match_entry();
+								}
+							}
+						}
+						break;
+						}
+
+						if (failed) {
+							current_set_match_count = 0;
+							break;
+						}
+					}
+				}
+			}
+
+			if (current_set_match_count > maximum_match_count) {
+				maximum_match_count = current_set_match_count;
+				if (set_index_that_matched != nullptr) {
+					*set_index_that_matched = set_index;
+				}
+			}
+		}
+
+		return maximum_match_count == 0 ? -1 : maximum_match_count;
+	}
+
 	void MatchTokenizeRuleTest() {
 		const char* typedef_definition = R"DELIMITER(identifier_no_template = $G.
 				identifier_template = $G.\<$T*/>
@@ -1708,32 +1945,32 @@ namespace ECSEngine {
 		string.string = "typedef valid valid;";
 		string.tokens = &tokens;
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+		ECS_ASSERT(MatchTokenizeRuleBacktracking(string, string.AsSubrange(), typedef_rule));
 
 		string.string = "typedef template<MyTemplate, Value> valid;";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+		ECS_ASSERT(MatchTokenizeRuleBacktracking(string, string.AsSubrange(), typedef_rule));
 
 		string.string = "typedef . valid;";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+		ECS_ASSERT(!MatchTokenizeRuleBacktracking(string, string.AsSubrange(), typedef_rule));
 
 		string.string = "void myFunction();";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+		ECS_ASSERT(!MatchTokenizeRuleBacktracking(string, string.AsSubrange(), typedef_rule));
 
 		string.string = "typedef template<MyValue, YourValue valid;";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+		ECS_ASSERT(!MatchTokenizeRuleBacktracking(string, string.AsSubrange(), typedef_rule));
 
 		string.string = "typedef template>MyValue, <YourValue valid;";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), typedef_rule));
+		ECS_ASSERT(!MatchTokenizeRuleBacktracking(string, string.AsSubrange(), typedef_rule));
 
 		const char* function_definition = R"DELIMITER(template_header = template. \< $T* />
 														template_header? $G. $G* $G. \( $T* /) $G*;. | template_header? $G. $G* $G. \( $T* /) $G* \{ $T* /} )DELIMITER";
@@ -1743,32 +1980,32 @@ namespace ECSEngine {
 		string.string = "void MyFunction();";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+		ECS_ASSERT(MatchTokenizeRuleBacktracking(string, string.AsSubrange(), function_rule));
 
 		string.string = "void FunctionWithBody(A a, B b, C* const MyPOinter) { // It has a nested scope {} int myVariable; }";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+		ECS_ASSERT(MatchTokenizeRuleBacktracking(string, string.AsSubrange(), function_rule));
 
 		string.string = "template<class my_template> ECS_INLINE static constexpr void TemplateFunction() const;";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+		ECS_ASSERT(MatchTokenizeRuleBacktracking(string, string.AsSubrange(), function_rule));
 
 		string.string = "template<class my_template> ECS_INLINE static constexpr void TemplateFunction() const override { int my_array[50]; { another scope; } }";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+		ECS_ASSERT(MatchTokenizeRuleBacktracking(string, string.AsSubrange(), function_rule));
 
 		string.string = "int my_member_field;";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+		ECS_ASSERT(!MatchTokenizeRuleBacktracking(string, string.AsSubrange(), function_rule));
 
 		string.string = "ECS_REFLECT_SOA(10, 20, 30)";
 		string.tokens.resizable_stream->FreeBuffer();
 		TokenizeString(string, GetCppFileTokenSeparators(), true);
-		ECS_ASSERT(!MatchTokenizeRule(string, string.AsSubrange(), function_rule));
+		ECS_ASSERT(!MatchTokenizeRuleBacktracking(string, string.AsSubrange(), function_rule));
 	}
 
 	bool ValidateTokenizeRule(const TokenizeRule& rule, CapacityStream<char>* error_message) {
@@ -1804,7 +2041,7 @@ namespace ECSEngine {
 	void AddTokenizeRuleIdentifierDefinitions(CapacityStream<char>& rule_string) {
 		AddTokenizeRuleQualifiers(rule_string);
 		rule_string.AddStreamAssert("identifier_no_template = const? unsigned? ($G. ::.)* $G. qualifier?\n");
-		rule_string.AddStreamAssert("identifier_template = const? unsigned? ($G. ::.)* $G. /< $T+ \\> qualifier?\n");
+		rule_string.AddStreamAssert("identifier_template = const? unsigned? ($G. ::.)* $G. \\< $T+ /> qualifier?\n");
 		rule_string.AddStreamAssert("identifier = identifier_no_template. | identifier_template.\n");
 	}
 
@@ -1814,15 +2051,18 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, rule_characters, 512);
 		if (include_template) {
 			// Add the template header
-			rule_characters.AddStreamAssert("template_header = template. /< $T+ \\>\n");
+			rule_characters.AddStreamAssert("template_header = template. \\< $T+ />\n");
 		}
 		AddTokenizeRuleIdentifierDefinitions(rule_characters);
+
+#define FUNCTION_DECLARATION "$G* identifier. $G. \\( $T* /) $G*;."
+#define FUNCTION_DEFINITION "$G* identifier. $G. \\( $T* /) $G* \\{ $T* /}"
 
 		if (include_declarations) {
 			if (include_template) {
 				rule_characters.AddStreamAssert("template_header? ");
 			}
-			rule_characters.AddStreamAssert("$G* identifier. $G./( $T* \\) $G*;.");
+			rule_characters.AddStreamAssert(FUNCTION_DECLARATION);
 		}
 
 		if (include_definitions) {
@@ -1833,8 +2073,11 @@ namespace ECSEngine {
 			if (include_template) {
 				rule_characters.AddStreamAssert("template_header? ");
 			}
-			rule_characters.AddStreamAssert("$G* identifier. $G./( $T* \\) $G* /{ $T* \\}");
+			rule_characters.AddStreamAssert(FUNCTION_DEFINITION);
 		}
+
+#undef FUNCTION_DECLARATION
+#undef FUNCTION_DEFINITION
 
 		return CreateTokenizeRule(rule_characters, allocator, allocator_is_temporary);
 	}
@@ -1914,7 +2157,7 @@ namespace ECSEngine {
 		custom_subrange_order.Initialize(allocator, 0);
 	}
 
-	bool TokenizeRuleMatcher::Match(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const {
+	bool TokenizeRuleMatcher::MatchBacktracking(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const {
 		bool iterate_increasing = true;
 		Stream<unsigned int> order_to_iterate;
 		if (custom_subrange_order.size > 0) {
@@ -1936,12 +2179,10 @@ namespace ECSEngine {
 				// Try the pre exclude rules first
 				unsigned int pre_action_rule_index = 0;
 				for (; pre_action_rule_index < pre_exclude_actions.size; pre_action_rule_index++) {
-					ECS_STACK_CAPACITY_STREAM(unsigned int, token_count_per_entry, 128);
 					unsigned int set_index_that_matched = -1;
-					if (MatchTokenizeRule(string, current_subrange, pre_exclude_actions[pre_action_rule_index].rule, &set_index_that_matched, &token_count_per_entry)) {
+					if (MatchTokenizeRuleBacktracking(string, current_subrange, pre_exclude_actions[pre_action_rule_index].rule, &set_index_that_matched)) {
 						TokenizeRuleCallbackData callback_data(string);
 						callback_data.subrange = current_subrange;
-						callback_data.tokens_per_entry = token_count_per_entry;
 						callback_data.user_data = pre_exclude_actions[pre_action_rule_index].callback_data.buffer;
 						callback_data.call_specific_data = call_specific_data;
 						callback_data.set_index_that_matched = set_index_that_matched;
@@ -1958,7 +2199,7 @@ namespace ECSEngine {
 				// Try to match the exclude rules now
 				unsigned int exclude_index = 0;
 				for (; exclude_index < exclude_rules.size; exclude_index++) {
-					if (MatchTokenizeRule(string, current_subrange, exclude_rules[exclude_index])) {
+					if (MatchTokenizeRuleBacktracking(string, current_subrange, exclude_rules[exclude_index])) {
 						return { true, false };
 					}
 				}
@@ -1966,12 +2207,10 @@ namespace ECSEngine {
 				// The exclude rules did not match this subrange, try the post exclude rules
 				unsigned int post_action_rule_index = 0;
 				for (; post_action_rule_index < post_exclude_actions.size; post_action_rule_index++) {
-					ECS_STACK_CAPACITY_STREAM(unsigned int, token_count_per_entry, 128);
 					unsigned int set_index_that_matched = -1;
-					if (MatchTokenizeRule(string, current_subrange, post_exclude_actions[post_action_rule_index].rule, &set_index_that_matched, &token_count_per_entry)) {
+					if (MatchTokenizeRuleBacktracking(string, current_subrange, post_exclude_actions[post_action_rule_index].rule, &set_index_that_matched)) {
 						TokenizeRuleCallbackData callback_data(string);
 						callback_data.subrange = current_subrange;
-						callback_data.tokens_per_entry = token_count_per_entry;
 						callback_data.user_data = post_exclude_actions[post_action_rule_index].callback_data.buffer;
 						callback_data.call_specific_data = call_specific_data;
 						callback_data.set_index_that_matched = set_index_that_matched;
@@ -1990,14 +2229,16 @@ namespace ECSEngine {
 			// Start with the custom order sequence counts
 			size_t custom_index = 0;
 			for (; custom_index < order_to_iterate.size; custom_index++) {
-				bool2 success = test_subrange_count(order_to_iterate[custom_index]);
-				if (success.x) {
-					if (success.y) {
-						return true;
-					}
-					else {
-						subrange = subrange.GetSubrangeUntilEnd(order_to_iterate[custom_index]);
-						break;
+				if (order_to_iterate[custom_index] <= subrange.count) {
+					bool2 success = test_subrange_count(order_to_iterate[custom_index]);
+					if (success.x) {
+						if (success.y) {
+							return true;
+						}
+						else {
+							subrange = subrange.GetSubrangeUntilEnd(order_to_iterate[custom_index]);
+							break;
+						}
 					}
 				}
 			}
@@ -2032,6 +2273,114 @@ namespace ECSEngine {
 				}
 			}
 		}
+		return false;
+	}
+
+	bool TokenizeRuleMatcher::MatchRulesWithFind(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const {
+		enum MATCHER_TYPE : unsigned char {
+			PRE_EXCLUDE,
+			EXCLUDE,
+			POST_EXCLUDE
+		};
+
+		struct MatchedEntries {
+			ECS_INLINE bool operator < (const MatchedEntries& other) const {
+				// If this is missing, then return now
+				if (match_count == -1) {
+					return true;
+				}
+
+				if (other.match_count) {
+					return false;
+				}
+
+				if (match_count < other.match_count) {
+					return true;
+				}
+
+				return type < other.type || ((type == other.type) && action_index < other.action_index);
+			}
+
+			ECS_INLINE bool operator == (const MatchedEntries& other) const {
+				return type == other.type && match_count == other.match_count && action_index == other.action_index && set_index == other.set_index;
+			}
+
+			MATCHER_TYPE type;
+			unsigned int match_count;
+			unsigned int action_index;
+			unsigned int set_index;
+		};
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+		ResizableStream<MatchedEntries> matched_entries(&stack_allocator, 32);
+
+		while (subrange.count > 0) {
+			matched_entries.Reset();
+
+			for (size_t index = 0; index < pre_exclude_actions.size; index++) {
+				unsigned int set_index = 0;
+				unsigned int current_count = FindTokenizeRuleMatchingRange(string, pre_exclude_actions[index].rule, subrange, &set_index);
+				matched_entries.Add({ PRE_EXCLUDE, current_count, (unsigned int)index, set_index });
+			}
+
+			for (size_t index = 0; index < exclude_rules.size; index++) {
+				unsigned int set_index = 0;
+				unsigned int current_count = FindTokenizeRuleMatchingRange(string, exclude_rules[index], subrange, &set_index);
+				matched_entries.Add({ EXCLUDE, current_count, (unsigned int)index, set_index });
+			}
+
+			for (size_t index = 0; index < post_exclude_actions.size; index++) {
+				unsigned int set_index = 0;
+				unsigned int current_count = FindTokenizeRuleMatchingRange(string, post_exclude_actions[index].rule, subrange, &set_index);
+				matched_entries.Add({ POST_EXCLUDE, current_count, (unsigned int)index, set_index });
+			}
+
+			// Sort the entries
+			InsertionSort(matched_entries.buffer, matched_entries.size);
+
+			// Get the first entry that accepts the parsed range. Exclude and post exclude
+			// Actions are automatically accepting, pre-exclude can reject
+			int64_t index = matched_entries.size - 1;
+			for (; index >= 0; index--) {
+				if (matched_entries[index].match_count == -1) {
+					// We can exit if we got to this type of entries
+					index = -1;
+					break;
+				}
+
+				TokenizeRuleCallbackData callback_data(string);
+				callback_data.subrange = subrange.GetSubrange(0, matched_entries[index].match_count);
+				callback_data.call_specific_data = call_specific_data;
+				callback_data.set_index_that_matched = matched_entries[index].set_index;
+
+				ECS_TOKENIZE_RULE_CALLBACK_RESULT result;
+				if (matched_entries[index].type == PRE_EXCLUDE) {
+					callback_data.user_data = pre_exclude_actions[matched_entries[index].action_index].callback_data.buffer;
+					result = pre_exclude_actions[matched_entries[index].action_index].callback(&callback_data);
+				}
+				else if (matched_entries[index].type == EXCLUDE) {
+					result = ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
+				}
+				else if (matched_entries[index].type == POST_EXCLUDE) {
+					callback_data.user_data = post_exclude_actions[matched_entries[index].action_index].callback_data.buffer;
+					result = post_exclude_actions[matched_entries[index].action_index].callback(&callback_data);
+				}
+
+				if (result == ECS_TOKENIZE_RULE_CALLBACK_EXIT) {
+					return true;
+				}
+				else if (result == ECS_TOKENIZE_RULE_CALLBACK_MATCHED) {
+					subrange = subrange.GetSubrangeUntilEnd(matched_entries[index].match_count);
+					break;
+				}
+			}
+
+			if (index < 0) {
+				// No entry matched, exit
+				return true;
+			}
+		}
+
 		return false;
 	}
 

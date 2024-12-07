@@ -234,20 +234,12 @@ void SortHubProjects(EditorState* editor_state)
 	HubData* data = editor_state->hub_data;
 
 	struct SortElement {
-		bool operator < (const SortElement& other) const {
+		ECS_INLINE bool operator < (const SortElement& other) const {
 			return file_time < other.file_time;
 		}
 
-		bool operator <= (const SortElement& other) const {
-			return file_time <= other.file_time;
-		}
-
-		bool operator > (const SortElement& other) const {
-			return file_time > other.file_time;
-		}
-
-		bool operator >= (const SortElement& other) const {
-			return file_time >= other.file_time;
+		ECS_INLINE bool operator == (const SortElement& other) const {
+			return file_time == other.file_time;
 		}
 
 		size_t file_time;

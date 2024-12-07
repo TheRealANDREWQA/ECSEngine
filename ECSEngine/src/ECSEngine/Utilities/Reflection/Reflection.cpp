@@ -19,6 +19,7 @@ namespace ECSEngine {
 
 #define MAX_PARSING_ENUM_ENTRIES 32
 #define MAX_PARSING_TYPE_ENTRIES 64
+#define MAX_PARSING_TYPE_TAG_ADDITIONAL_CHARACTERS 500
 
 		// These are pending expressions to be evaluated
 		struct ReflectionExpression {
@@ -49,11 +50,6 @@ namespace ECSEngine {
 		};
 
 		struct ReflectionManagerParseStructuresThreadTaskData {
-			// This is the parse matcher used for enums
-			const TokenizeRuleMatcher* enum_rule_matcher;
-			// This is the parse matcher used for structs
-			const TokenizeRuleMatcher* struct_rule_matcher;
-
 			// This is the allocator from which the resizable streams are allocated from.
 			// The allocator is local to this thread, it is not shared
 			ResizableLinearAllocator allocator;
@@ -69,7 +65,6 @@ namespace ECSEngine {
 			SpinLock error_message_lock;
 			size_t total_memory;
 			ConditionVariable* condition_variable;
-			void* allocated_buffer;
 			bool success;
 
 			// When parsing, this field will indicate the current path that is being processed
@@ -133,8 +128,9 @@ namespace ECSEngine {
 		};
 
 		enum ReflectionTypeTagHandlerForFieldAppendPosition : unsigned char {
+			// If there is a tag present, it will add the entry to the end of the tag, else it will create a tag and add it there
+			REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_TAG,
 			REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_BEFORE_TYPE,
-			REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_AFTER_TYPE,
 			REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_BEFORE_NAME,
 			REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_AFTER_NAME
 		};
@@ -177,6 +173,15 @@ namespace ECSEngine {
 			{ ECS_GLOBAL_COMPONENT_TAG, TypeTagComponent, TypeTagComponent }
 		};
 
+		// These are not exposed to the outside interface. They are needed locally only
+		static TokenizeRuleMatcher StructRuleMatcher;
+		static TokenizeRuleMatcher EnumRuleMatcher;
+		// This allows lazily initializing the struct and enum rule matchers
+		static bool AreRuleMatchersInitialized = false;
+		// The allocations that are needed for the rule matchers are being made from this allocator, such that we don't use the
+		// Memory of a specific reflection manager
+		static ResizableLinearAllocator RuleMatchersAllocator;
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		// If the path index is -1 it won't write it
@@ -217,17 +222,18 @@ namespace ECSEngine {
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 			// Tokenize the enum definition, and parse the values from there
 			TokenizedString tokenized_body;
-			tokenized_body.string = { opening_parenthese, (size_t)(closing_parenthese - opening_parenthese) / sizeof(char) };
+			tokenized_body.string = { opening_parenthese + 1, (size_t)(closing_parenthese - opening_parenthese) / sizeof(char) - 2 };
 			tokenized_body.InitializeResizable(&stack_allocator);
 			TokenizeString(tokenized_body, GetCppEnumTokenSeparators(), true);
 
 			// Set the original fields buffer. This is the only buffer we will need as temporary allocation
 			enum_definition.original_fields.Initialize(&data->allocator, MAX_PARSING_ENUM_ENTRIES);
+			enum_definition.original_fields.size = 0;
 			data->enums.Add(&enum_definition);
 			
 			// We early exit only if an error was encountered, but the early exit matcher
 			// Should write the appropriate error message
-			data->enum_rule_matcher->Match(tokenized_body, tokenized_body.AsSubrange(), data);
+			EnumRuleMatcher.MatchRulesWithFind(tokenized_body, tokenized_body.AsSubrange(), data);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -744,20 +750,29 @@ namespace ECSEngine {
 		struct StructMatcherArgumentData {
 			ReflectionManagerParseStructuresThreadTaskData* data;
 			CapacityStream<ReflectionTypeMiscNamedSoa> last_type_named_soa;
-			bool has_omitted_fields;
+			bool last_type_has_omitted_fields = false;
+			unsigned short last_type_pointer_offset = 0;
 
 			struct {
+				struct InsertedToken {
+					unsigned int insert_index;
+					Stream<char> characters;
+				};
+
 				// If the call is in regards to a type tag handler, the handler index will be specified here
 				// While the tokenized string that represents the body is set in the following field
 				size_t type_tag_handler = -1;
-				TokenizedString* type_tag_tokenized_body = nullptr;
+				// From here the characters for the added tokens will be "allocated"
+				CapacityStream<char> type_tag_added_characters = {};
+				// In this array the tokens to be added are placed. The final addition to the final
+				// String is performed separately
+				ResizableStream<InsertedToken> type_tag_added_tokens = {};
 			};
 		};
 
 		static void AddTypeDefinition(
 			ReflectionManagerParseStructuresThreadTaskData* data,
-			const char* opening_parenthese,
-			const char* closing_parenthese,
+			const TokenizedString& body_tokens,
 			const char* name,
 			unsigned int file_index
 		) {
@@ -769,11 +784,6 @@ namespace ECSEngine {
 			data->total_memory += sizeof(ReflectionType);
 
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-			// Tokenize the body definition
-			TokenizedString body_string;
-			body_string.string = { opening_parenthese + 1, PointerDifference(closing_parenthese, opening_parenthese + 1) / sizeof(char) };
-			body_string.InitializeResizable(&stack_allocator);
-			TokenizeString(body_string, GetCppFileTokenSeparators(), true);
 
 			// find next line tokens and exclude the next after the opening paranthese and replace
 			// the closing paranthese with \0 in order to stop searching there
@@ -782,27 +792,23 @@ namespace ECSEngine {
 			// semicolon positions will help in getting the field name
 			ECS_STACK_ADDITION_STREAM(unsigned int, semicolon_positions, 512);
 
-			opening_parenthese++;
-			char* closing_paranthese_mutable = (char*)closing_parenthese;
-			*closing_paranthese_mutable = '\0';
-
 			// Check all expression evaluations
-			unsigned int evaluate_function_token_index = TokenizeFindToken(body_string, STRING(ECS_EVALUATE_FUNCTION_REFLECT), body_string.AsSubrange());
+			unsigned int evaluate_function_token_index = TokenizeFindToken(body_tokens, STRING(ECS_EVALUATE_FUNCTION_REFLECT), body_tokens.AsSubrange());
 			while (evaluate_function_token_index != -1) {
-				TokenizedString::Subrange remaining_function_tokens = body_string.GetSubrangeUntilEnd(evaluate_function_token_index).AdvanceReturn();
-				unsigned int open_parenthesis_index = TokenizeFindToken(body_string, "(", remaining_function_tokens);
+				TokenizedString::Subrange remaining_function_tokens = body_tokens.GetSubrangeUntilEnd(evaluate_function_token_index).AdvanceReturn();
+				unsigned int open_parenthesis_index = TokenizeFindToken(body_tokens, "(", remaining_function_tokens);
 				if (open_parenthesis_index != -1) {
 					// Retrieve the name as the first token before the parenthesis
 					if (open_parenthesis_index != 0) {
-						Stream<char> function_name = body_string[remaining_function_tokens[open_parenthesis_index - 1]];
+						Stream<char> function_name = body_tokens[remaining_function_tokens[open_parenthesis_index - 1]];
 						// The body to be evaluated is everything in between the return and the first colon
-						unsigned int return_token_index = TokenizeFindToken(body_string, "return", remaining_function_tokens);
+						unsigned int return_token_index = TokenizeFindToken(body_tokens, "return", remaining_function_tokens);
 						if (return_token_index != -1) {
-							unsigned int semicolon_index = TokenizeFindToken(body_string, ";", remaining_function_tokens);
+							unsigned int semicolon_index = TokenizeFindToken(body_tokens, ";", remaining_function_tokens);
 							if (semicolon_index != -1) {
 								ReflectionExpression expression;
 								expression.name = function_name;
-								expression.body = body_string.GetStreamForSubrange(remaining_function_tokens.GetSubrange(return_token_index + 1, semicolon_index - return_token_index - 1));
+								expression.body = body_tokens.GetStreamForSubrange(remaining_function_tokens.GetSubrange(return_token_index + 1, semicolon_index - return_token_index - 1));
 
 								unsigned int type_table_index = data->expressions.Find(type.name);
 								if (type_table_index == -1) {
@@ -832,25 +838,26 @@ namespace ECSEngine {
 				}
 
 				// Get the next expression
-				evaluate_function_token_index = TokenizeFindToken(body_string, STRING(ECS_EVALUATE_FUNCTION_REFLECT), remaining_function_tokens);
+				evaluate_function_token_index = TokenizeFindToken(body_tokens, STRING(ECS_EVALUATE_FUNCTION_REFLECT), remaining_function_tokens);
 			}
 
 			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscNamedSoa, type_named_soa, 32);
 			StructMatcherArgumentData struct_matcher_data;
-			struct_matcher_data.has_omitted_fields = false;
+			struct_matcher_data.last_type_has_omitted_fields = false;
+			struct_matcher_data.last_type_pointer_offset = 0;
 			struct_matcher_data.last_type_named_soa = type_named_soa;
 			struct_matcher_data.data = data;
 
 			type.fields.Initialize(&data->allocator, MAX_PARSING_TYPE_ENTRIES);
 
 			// Look for field_start and field_end macros
-			TokenizedString::Subrange fields_reflect_subrange = body_string.AsSubrange();
-			unsigned int fields_start_macro_index = TokenizeFindToken(body_string, STRING(ECS_FIELDS_START_REFLECT), fields_reflect_subrange);
+			TokenizedString::Subrange fields_reflect_subrange = body_tokens.AsSubrange();
+			unsigned int fields_start_macro_index = TokenizeFindToken(body_tokens, STRING(ECS_FIELDS_START_REFLECT), fields_reflect_subrange);
 			if (fields_start_macro_index != -1) {
 				while (fields_start_macro_index != -1) {
 					// Get the fields end macro if there is one
 					unsigned int fields_end_macro_index = TokenizeFindToken(
-						body_string,
+						body_tokens,
 						STRING(ECS_FIELDS_END_REFLECT),
 						fields_reflect_subrange
 					);
@@ -861,24 +868,24 @@ namespace ECSEngine {
 					}
 
 					TokenizedString::Subrange match_subrange = fields_reflect_subrange.GetSubrange(fields_start_macro_index + 1, fields_end_macro_index - fields_start_macro_index - 1);
-					bool success = data->struct_rule_matcher->Match(body_string, match_subrange, &struct_matcher_data);
+					bool success = StructRuleMatcher.MatchRulesWithFind(body_tokens, match_subrange, &struct_matcher_data);
 					if (!success) {
 						return;
 					}
 
 					fields_reflect_subrange = fields_reflect_subrange.GetSubrangeAfterUntilEnd(fields_end_macro_index);
-					fields_start_macro_index = TokenizeFindToken(body_string, STRING(ECS_FIELDS_START_REFLECT), fields_reflect_subrange);
+					fields_start_macro_index = TokenizeFindToken(body_tokens, STRING(ECS_FIELDS_START_REFLECT), fields_reflect_subrange);
 				}
 			}
 			else {
-				bool success = data->struct_rule_matcher->Match(body_string, body_string.AsSubrange(), &struct_matcher_data);
+				bool success = StructRuleMatcher.MatchRulesWithFind(body_tokens, body_tokens.AsSubrange(), &struct_matcher_data);
 				if (!success) {
 					return;
 				}
 			}
 
 			// Fail if there were no fields to be reflected
-			if (type.fields.size == 0 && !struct_matcher_data.has_omitted_fields) {
+			if (type.fields.size == 0 && !struct_matcher_data.last_type_has_omitted_fields) {
 				WriteErrorMessage(data, "There were no fields to reflect: ");
 				return;
 			}
@@ -976,6 +983,78 @@ namespace ECSEngine {
 			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
 		}
 
+		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructFunctionCallback(const TokenizeRuleCallbackData* data) {
+			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
+			ReflectionManagerParseStructuresThreadTaskData* parse_data = call_data->data;
+
+			// Only perform something if the type handler is specified
+			if (call_data->type_tag_handler != -1) {
+				TokenizedString::Subrange parse_subrange = data->subrange;
+				// If this is a template function, skip over the template part
+				if (data->string[parse_subrange[0]] == "template") {
+					uint2 template_bracket_indices = TokenizeFindMatchingPair(data->string, "<", ">", parse_subrange);
+					if (template_bracket_indices.x != 1 && template_bracket_indices.y != -1) {
+						parse_subrange = parse_subrange.GetSubrangeAfterUntilEnd(template_bracket_indices.y);
+					}
+					else {
+						// This is an error
+						WriteErrorMessage(parse_data, "A type has a type tag handler but there is a malformed template function");
+						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+					}
+				}
+
+				// No need to check for errors, since it matched the rule
+				unsigned int opened_parenthesis_index = TokenizeFindToken(data->string, "(", parse_subrange);
+				// The name is the previous token before the opened parenthesis
+				Stream<char> function_name = data->string[parse_subrange[opened_parenthesis_index - 1]];
+
+				ECS_STACK_CAPACITY_STREAM(char, string_to_add, ECS_KB);
+				ReflectionTypeTagHandlerForFunctionData type_tag_function;
+				type_tag_function.function_name = function_name;
+				type_tag_function.string_to_add = &string_to_add;
+				ReflectionTypeTagHandlerForFunctionAppendPosition tag_position = ECS_REFLECTION_TYPE_TAG_HANDLER[call_data->type_tag_handler].function_functor(type_tag_function);
+				
+				if (string_to_add.size > 0) {
+					if (string_to_add.size + call_data->type_tag_added_characters.size > call_data->type_tag_added_characters.capacity) {
+						WriteErrorMessage(parse_data, "A type has exceeded the maximum amount of additional type tag characters");
+						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+					}
+
+					unsigned int add_index = call_data->type_tag_added_characters.AddStream(string_to_add);
+					Stream<char> allocated_string = { call_data->type_tag_added_characters.buffer + add_index, string_to_add.size };
+
+					if (tag_position == REFLECTION_TYPE_TAG_HANDLER_FOR_FUNCTION_APPEND_BEFORE_NAME) {
+						// Add it before all the tokens in the current parse subrange
+						call_data->type_tag_added_tokens.Add({ parse_subrange.token_start_index, allocated_string });
+					}
+					else if (tag_position == REFLECTION_TYPE_TAG_HANDLER_FOR_FUNCTION_APPEND_BEFORE_BODY) {
+						// Find the first brace
+						unsigned int brace_index = TokenizeFindToken(data->string, "{", parse_subrange);
+						if (brace_index == -1) {
+							// Fail
+							WriteErrorMessage(parse_data, "A type has a type tag handler but a function which expected an inline body was missing the body");
+							return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+						}
+						call_data->type_tag_added_tokens.Add({ parse_subrange.token_start_index + brace_index, allocated_string });
+					}
+					else if (tag_position == REFLECTION_TYPE_TAG_HANDLER_FOR_FUNCTION_APPEND_AFTER_BODY) {
+						uint2 scope_brace_indices = TokenizeFindMatchingPair(data->string, "{", "}", parse_subrange);
+						if (scope_brace_indices.x == -1 || scope_brace_indices.y == -1) {
+							WriteErrorMessage(parse_data, "A type has a type tag handler but a function which expected an inline body was missing the body");
+							return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+						}
+						call_data->type_tag_added_tokens.Add({ parse_subrange.token_start_index + scope_brace_indices.y + 1, allocated_string });
+					}
+					else {
+						ECS_ASSERT(false);
+					}
+				}
+			}
+
+			// We always match the token sequence
+			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
+		}
+
 		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructGeneralMacrosCallback(const TokenizeRuleCallbackData* data) {
 			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
 			ReflectionManagerParseStructuresThreadTaskData* parse_data = call_data->data;
@@ -1045,7 +1124,90 @@ namespace ECSEngine {
 			ReflectionManagerParseStructuresThreadTaskData* parse_data = call_data->data;
 			ReflectionType& type = parse_data->types.Last();
 
+			if (call_data->type_tag_handler != -1) {
+				TokenizedString::Subrange curated_field_tokens = GetCuratedStructFieldTokens(data->string, data->subrange);
 
+				TokenizedString::Subrange type_and_name_tokens;
+				TokenizedString::Subrange default_value_tokens;
+				TokenizedString::Subrange tag_tokens;
+				TokenizedString::Subrange embedded_array_tokens;
+				GetStructFieldTokensPartitions(data->string, curated_field_tokens, type_and_name_tokens, default_value_tokens, tag_tokens, embedded_array_tokens);
+
+				ECS_STACK_CAPACITY_STREAM(char, string_to_add, 512);
+				ReflectionTypeTagHandlerForFieldData type_tag_field;
+				// The definition is everything besides the final token, which is the name
+				type_tag_field.definition = data->string.GetStreamForSubrange(type_and_name_tokens.GetSubrange(0, type_and_name_tokens.count - 1));
+				// The name is the last token
+				type_tag_field.field_name = data->string[type_and_name_tokens[type_and_name_tokens.count - 1]];
+				type_tag_field.string_to_add = &string_to_add;
+				ReflectionTypeTagHandlerForFieldAppendPosition position_to_add = ECS_REFLECTION_TYPE_TAG_HANDLER[call_data->type_tag_handler].field_functor(type_tag_field);
+				
+				if (string_to_add.size > 0) {
+					if (string_to_add.size + call_data->type_tag_added_characters.size > call_data->type_tag_added_characters.capacity) {
+						WriteErrorMessage(parse_data, "A type has exceeded the maximum amount of additional type tag characters");
+						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+					}
+
+					unsigned int add_index = call_data->type_tag_added_characters.AddStream(string_to_add);
+					Stream<char> allocated_string = { call_data->type_tag_added_characters.buffer + add_index, string_to_add.size };
+
+					if (position_to_add == REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_TAG) {
+						// Check to see if we need to add the tag itself
+						if (tag_tokens.count == 0) {
+							// We will need to insert 4 extra tokens, but we need only 2 characters
+							if (2 + call_data->type_tag_added_characters.size > call_data->type_tag_added_characters.capacity) {
+								WriteErrorMessage(parse_data, "A type has exceeded the maximum amount of additional type tag characters");
+								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+							}
+							call_data->type_tag_added_characters.Add('[');
+							call_data->type_tag_added_characters.Add(']');
+
+							Stream<char> open_brace = { allocated_string.buffer + allocated_string.size, 1 };
+							Stream<char> closed_brace = { allocated_string.buffer + allocated_string.size + 1, 1 };
+							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, open_brace });
+							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, open_brace });
+							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, allocated_string });
+							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, closed_brace });
+							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, closed_brace });
+						}
+						else {
+							// Insert an additional comma as well
+							if (call_data->type_tag_added_characters.size + 1 > call_data->type_tag_added_characters.capacity) {
+								WriteErrorMessage(parse_data, "A type has exceeded the maximum amount of additional type tag characters");
+								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+							}
+							call_data->type_tag_added_characters.Add(',');
+							
+							Stream<char> comma = { allocated_string.buffer + allocated_string.size, 1 };
+							call_data->type_tag_added_tokens.Add({ tag_tokens.token_start_index + tag_tokens.count, comma });
+							call_data->type_tag_added_tokens.Add({ tag_tokens.token_start_index + tag_tokens.count, allocated_string });
+						}
+					}
+					else if (position_to_add == REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_BEFORE_TYPE) {
+						// Add it before all the tokens in the current parse subrange
+						call_data->type_tag_added_tokens.Add({ type_and_name_tokens.token_start_index, allocated_string });
+					}
+					else if (position_to_add == REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_BEFORE_NAME) {
+						call_data->type_tag_added_tokens.Add({ type_and_name_tokens.token_start_index + type_and_name_tokens.count - 1, allocated_string });
+					}
+					else if (position_to_add == REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_AFTER_NAME) {
+						call_data->type_tag_added_tokens.Add({ type_and_name_tokens.token_start_index + type_and_name_tokens.count, allocated_string });
+					}
+					else {
+						ECS_ASSERT(false);
+					}
+				}
+			}
+			else {
+				// This is the normal case of parsing
+				ECS_REFLECTION_ADD_TYPE_FIELD_RESULT add_result = AddTypeField(parse_data, type, call_data->last_type_pointer_offset, data->string, data->subrange);
+				if (add_result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
+					return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+				}
+				else if (add_result == ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED) {
+					call_data->last_type_has_omitted_fields = true;
+				}
+			}
 
 			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
 		}
@@ -1069,13 +1231,14 @@ namespace ECSEngine {
 		static void CreateTokenizeStructFieldAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
 			ECS_STACK_CAPACITY_STREAM(char, field_rule_string, 512);
 			AddTokenizeRuleIdentifierDefinitions(field_rule_string);
-			field_rule_string.AddStreamAssert(R"DELIMITER(default_value = /{ ($G. ,.)* $G. \} | $G.
+			field_rule_string.AddStreamAssert(R"DELIMITER(default_value = \{ ($G. ,.)* $G. /} | $G.
 														  basic_field = identifier. $G.;.
 														  with_default = identifier. $G. =. default_value. ;.
-														  tag = /[ $[ $T+ $] \]
+														  tag = \[ $[. $T+ $]. /]
 														  basic_field. | with_default. | tag. basic_field. | tag. with_default.)DELIMITER");
 
-			TokenizeRule field_rule = CreateTokenizeRule(field_rule_string, temporary_allocator, true);
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+			TokenizeRule field_rule = CreateTokenizeRule(field_rule_string, temporary_allocator, true, &error_message);
 			ECS_ASSERT(!field_rule.IsEmpty());
 		
 			TokenizeRuleAction action;
@@ -1104,309 +1267,98 @@ namespace ECSEngine {
 			CreateTokenizeStructFieldAction(matcher, temporary_allocator);
 		}
 
+		static void InitializeRuleMatchers() {
+			if (!AreRuleMatchersInitialized) {
+				AreRuleMatchersInitialized = true;
+				RuleMatchersAllocator = ResizableLinearAllocator(ECS_KB * 64, ECS_MB, { nullptr });
+				CreateTokenizeStructMatcher(&StructRuleMatcher, &RuleMatchersAllocator);
+				CreateTokenizeEnumMatcher(&EnumRuleMatcher, &RuleMatchersAllocator);
+			}
+		}
+
 		// It will copy the contents of the tokenized body while adding new tokens such that the type tags are satisfied. The location
 		// Of the tag that are added are at the end of the string, since we can insert a token which points at a later offset, there is
 		// No hard rule that states that tokens must be sorted in their appearance order, although using TokenizeString guarantees that
 		static void ProcessTypeTagHandler(ReflectionManagerParseStructuresThreadTaskData* parse_data, size_t handler_index, TokenizedString& tokenized_body) {
-			// Check for functions first - lines with a () and no semicolon
-			size_t total_size_needed = 0;
-			char* region_start = (char*)Allocate(&parse_data->allocator, 0);
+			// Use the struct matcher to process functions and the fields
+			StructMatcherArgumentData argument_data;
+			argument_data.type_tag_handler = handler_index;
+			argument_data.type_tag_added_characters.Initialize(&parse_data->allocator, 0, MAX_PARSING_TYPE_TAG_ADDITIONAL_CHARACTERS);
+			// Use a small initial size
+			argument_data.type_tag_added_tokens.Initialize(&parse_data->allocator, 8);
+			argument_data.last_type_named_soa = {};
+			argument_data.data = parse_data;
 
-			*region_start = '{';
-			total_size_needed++;
-			const char* last_copied_value = type_body.buffer + 1;
+			StructRuleMatcher.MatchRulesWithFind(tokenized_body, tokenized_body.AsSubrange(), &argument_data);
 
-			char FUNCTION_REPLACE_SEMICOLON_CHAR = '`';
+			// The total number of characters that are needed for the merged string is the number of characters added,
+			// Plus one separating space for each token that there is plus the previous characters
+			size_t total_string_size = argument_data.type_tag_added_characters.size + argument_data.type_tag_added_tokens.size + tokenized_body.string.size;
+			Stream<char> final_string;
+			final_string.Initialize(&parse_data->allocator, total_string_size);
+			final_string.size = 0;
 
-			Stream<char> parenthese = FindFirstCharacter(type_body, '(');
-			while (parenthese.size > 0) {
-				Stream<char> previous_line_range = { last_copied_value, PointerDifference(parenthese.buffer, last_copied_value) };
-				Stream<char> previous_new_line = FindCharacterReverse(previous_line_range, '\n');
-				Stream<char> next_new_line = FindFirstCharacter(parenthese, '\n');
+			Stream<Token> final_tokens;
+			final_tokens.Initialize(&parse_data->allocator, tokenized_body.tokens.Size() + argument_data.type_tag_added_tokens.size);
+			final_tokens.size = 0;
 
-				if (previous_new_line.buffer != nullptr && next_new_line.buffer != nullptr) {
-					Stream<char> semicolon_range = { previous_new_line.buffer, PointerDifference(next_new_line.buffer, previous_new_line.buffer) };
-					Stream<char> semicolon = FindFirstCharacter(semicolon_range, ';');
-					if (semicolon.buffer == nullptr) {
-						// This is a function definition
-						// Get the name
-						const char* name_end = SkipWhitespace(parenthese.buffer - 1, -1);
-						if (name_end <= previous_new_line.buffer) {
-							// An error, this is thought to be a function but the name is malformed
-							return {};
-						}
+			// After the matching was performed, we can safely perform the final merge of the added values
+			// The added tokens are already in the ascending order, no need to sort them
+			size_t last_copied_character_index = 0;
+			size_t last_copied_token_index = 0;
+			size_t added_character_count = 0;
+			for (size_t index = 0; index < argument_data.type_tag_added_tokens.size; index++) {
+				size_t token_insert_index = argument_data.type_tag_added_tokens[index].insert_index;
+				Stream<char> token_characters = argument_data.type_tag_added_tokens[index].characters;
 
-						const char* name_start = SkipCodeIdentifier(name_end, -1) + 1;
-						if (name_start > name_end) {
-							// An error, this is thought to be a function but the name is malformed
-							return {};
-						}
-
-						// Get the body of the function
-						Stream<char> function_body_start = FindFirstCharacter(parenthese, '{');
-						if (function_body_start.size == 0) {
-							// An error, malformed function or something else
-							return {};
-						}
-
-						const char* function_body_end = FindMatchingParenthesis(function_body_start.buffer + 1, function_body_start.buffer + function_body_start.size, '{', '}');
-						if (function_body_end == nullptr) {
-							// An error, malformed function or something else
-							return {};
-						}
-
-						Stream<char> closing_parenthese = FindFirstCharacter(parenthese, ')');
-						if (closing_parenthese.size == 0 || closing_parenthese.buffer > function_body_start.buffer) {
-							// An error, malformed function or something else
-							return {};
-						}
-
-						// Go and remove all semicolons inside the function body such that it won't interfere with the field determination
-						Stream<char> current_function_body = { function_body_start.buffer, PointerDifference(function_body_end, function_body_start.buffer) + 1 };
-						ReplaceCharacter(current_function_body, ';', FUNCTION_REPLACE_SEMICOLON_CHAR);
-
-						ECS_STACK_CAPACITY_STREAM(char, string_to_add, ECS_KB);
-						Stream<char> function_name = { name_start, PointerDifference(name_end, name_start) + 1 };
-						ReflectionTypeTagHandlerForFunctionData type_tag_function;
-						type_tag_function.function_name = function_name;
-						type_tag_function.string_to_add = &string_to_add;
-						auto tag_position = ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].function_functor(type_tag_function);
-
-						char* copy_start = region_start + total_size_needed;
-
-						// Copy everything until the start of the previous line of the function
-						Stream<char> before_function_copy = { last_copied_value, PointerDifference(previous_new_line.buffer, last_copied_value) };
-						before_function_copy.CopyTo(copy_start);
-						copy_start += before_function_copy.size;
-						total_size_needed += before_function_copy.size;
-
-						if (string_to_add.size > 0) {
-							const char* prename_region_end = SkipWhitespace(previous_new_line.buffer + 1);
-							Stream<char> prename_region = { last_copied_value, PointerDifference(prename_region_end, last_copied_value) };
-
-							Stream<char> name_and_qualifiers = { prename_region_end, PointerDifference(closing_parenthese.buffer, prename_region_end) + 1 };
-
-							auto copy_string = [&]() {
-								*copy_start = ' ';
-								copy_start++;
-
-								string_to_add.CopyTo(copy_start);
-								copy_start += string_to_add.size;
-
-								*copy_start = ' ';
-								copy_start++;
-							};
-
-							auto copy_prename = [&]() {
-								prename_region.CopyTo(copy_start);
-								copy_start += prename_region.size;
-							};
-
-							auto copy_name_and_qualifiers = [&]() {
-								name_and_qualifiers.CopyTo(copy_start);
-								copy_start += name_and_qualifiers.size;
-							};
-
-							auto copy_function_body = [&]() {
-								current_function_body.CopyTo(copy_start);
-								copy_start += current_function_body.size;
-							};
-
-							last_copied_value = function_body_end + 1;
-
-							if (tag_position == REFLECTION_TYPE_TAG_HANDLER_FOR_FUNCTION_APPEND_BEFORE_NAME) {
-								// Copy the prename region
-								copy_prename();
-								
-								copy_string();
-
-								// Copy the name region
-								copy_name_and_qualifiers();
-
-								// Copy the current function body
-								copy_function_body();
-							}
-							else if (tag_position == REFLECTION_TYPE_TAG_HANDLER_FOR_FUNCTION_APPEND_BEFORE_BODY) {
-								// Copy the prename region
-								copy_prename();
-
-								// Copy the name region
-								copy_name_and_qualifiers();
-								
-								copy_string();
-
-								// Copy the current function body
-								copy_function_body();
-							}
-							else if (tag_position == REFLECTION_TYPE_TAG_HANDLER_FOR_FUNCTION_APPEND_AFTER_BODY) {
-								// Copy the prename region
-								copy_prename();
-
-								// Copy the name region
-								copy_name_and_qualifiers();
-
-								// Copy the current function body
-								copy_function_body();
-								
-								copy_string();
-
-								last_copied_value += string_to_add.size + 2;
-							}
-							else {
-								ECS_ASSERT(false);
-							}
-
-							// 2 spaces to padd the string
-							total_size_needed += prename_region.size + name_and_qualifiers.size + current_function_body.size + string_to_add.size + 2;
-						}
-						else {
-							Stream<char> copy_range = { previous_new_line.buffer + 1, PointerDifference(function_body_end, previous_new_line.buffer + 1) + 1 };
-							copy_range.CopyTo(copy_start);
-							total_size_needed += copy_range.size;
-							last_copied_value = function_body_end + 1;
-						}
-					}
-					else {
-						last_copied_value = next_new_line.buffer;
-					}
+				size_t current_token_character_offset = tokenized_body.tokens[token_insert_index].offset;
+				if (current_token_character_offset > last_copied_character_index) {
+					// Add the characters that are before the insertion
+					final_string.AddStream({ tokenized_body.string.buffer + last_copied_character_index, current_token_character_offset - last_copied_character_index });
+					last_copied_character_index = current_token_character_offset;
 				}
 
-				Stream<char> search_next_function = { last_copied_value, PointerDifference(type_body.buffer + type_body.size, last_copied_value) };
-				parenthese = FindFirstCharacter(search_next_function, '(');
+				// Add the current characters
+				size_t added_token_offset = final_string.AddStream(token_characters);
+				// And add one more space
+				final_string.Add(' ');
+
+				if (token_insert_index > last_copied_token_index) {
+					// Copy all tokens up to the insertion point
+					size_t token_copy_count = token_insert_index - last_copied_token_index;
+					size_t token_add_offset = final_tokens.AddStream({ tokenized_body.tokens.GetBuffer() + last_copied_token_index, token_copy_count });
+					// Adjust the offsets of the added tokens based on the total added character count
+					for (size_t token_index = 0; token_index < token_copy_count; token_index++) {
+						final_tokens[token_add_offset + token_index].offset += added_character_count;
+					}
+					last_copied_token_index = token_insert_index;
+				}
+
+				// Add the token now
+				final_tokens.Add({ (unsigned int)added_token_offset, (unsigned int)token_characters.size, ECS_TOKEN_TYPE_GENERAL });
+				added_character_count += token_characters.size + 1;
 			}
 
-			// Now go through all lines that have semicolons remaining and see if they have fields
-			ECS_STACK_ADDITION_STREAM(unsigned int, semicolons, 512);
-			FindToken(type_body, ';', semicolons_addition);
-
-			for (unsigned int index = 0; index < semicolons.size; index++) {
-				// If the line is empty, skip it
-				Stream<char> previous_range = { type_body.buffer, semicolons[index] };
-				Stream<char> next_range = { type_body.buffer + semicolons[index], type_body.size - semicolons[index] };
-
-				const char* previous_line = FindCharacterReverse(previous_range, '\n').buffer;
-				const char* next_line = FindFirstCharacter(next_range, '\n').buffer;
-
-				if (previous_line == nullptr || next_line == nullptr) {
-					// Fail
-					return {};
-				}
-
-				// Find the definition and the name
-				const char* definition_start = SkipWhitespace(previous_line + 1);
-				const char* initial_definition_start = definition_start;
-				// If there are double colons for namespace separation, account for them
-				Stream<char> definition_range = { definition_start, PointerDifference(next_line, definition_start) };
-				Stream<char> double_colon = FindFirstToken(definition_range, "::");
-				while (double_colon.size > 0) {
-					double_colon.Advance(2);
-					definition_start = SkipWhitespace(double_colon.buffer);
-					double_colon = FindFirstToken(double_colon, "::");
-				}
-
-				const char* definition_end = SkipCodeIdentifier(definition_start);
-				Stream<char> definition = { definition_start, PointerDifference(definition_end, definition_start) };
-
-				// Skip pointer asterisks on both ends
-				const char* name_start = SkipWhitespace(definition_end);
-				name_start = SkipCharacter(name_start, '*');
-				name_start = SkipWhitespace(name_start);
-				name_start = SkipCharacter(name_start, '*');
-
-				const char* name_end = SkipCodeIdentifier(name_start);
-				Stream<char> name = { name_start, PointerDifference(name_end, name_start) };
-
-				ECS_STACK_CAPACITY_STREAM(char, string_to_add, 512);
-				ReflectionTypeTagHandlerForFieldData type_tag_field;
-				type_tag_field.definition = definition;
-				type_tag_field.field_name = name;
-				type_tag_field.string_to_add = &string_to_add;
-				auto position_to_add = ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].field_functor(type_tag_field);
-
-				// Include the new lines
-				Stream<char> before_type_range = { previous_line, PointerDifference(initial_definition_start, previous_line) };
-				Stream<char> after_type_range = { initial_definition_start, PointerDifference(definition_end, initial_definition_start) };
-				Stream<char> before_name_range = { definition_end, PointerDifference(name_start, definition_end) };
-				Stream<char> after_name_range = { name_start, PointerDifference(next_line, name_start) + 1 };
-
-				char* copy_pointer = region_start + total_size_needed;
-
-				auto copy_range = [&](Stream<char> range) {
-					range.CopyTo(copy_pointer);
-					copy_pointer += range.size;
-				};
-
-				auto copy_string = [&]() {
-					// Add a space before and after
-					*copy_pointer = ' ';
-					copy_pointer++;
-
-					string_to_add.CopyTo(copy_pointer);
-					copy_pointer += string_to_add.size;
-
-					*copy_pointer = ' ';
-					copy_pointer++;
-				};
-				
-				if (string_to_add.size > 0) {
-					copy_range(before_type_range);
-
-					if (position_to_add == REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_BEFORE_TYPE) {
-						copy_string();
-						copy_range(after_type_range);
-						copy_range(before_name_range);
-						copy_range(after_name_range);
-					}
-					else if (position_to_add == REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_AFTER_TYPE) {
-						copy_range(after_type_range);
-						copy_string();
-						copy_range(before_name_range);
-						copy_range(after_name_range);
-					}
-					else if (position_to_add == REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_BEFORE_NAME) {
-						copy_range(after_type_range);
-						copy_range(before_name_range);
-						copy_string();
-						copy_range(after_name_range);
-					}
-					else if (position_to_add == REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_AFTER_NAME) {
-						// This will add a new line before the tag itself and we want the new line to appear after the string
-						after_name_range.size -= 1;
-
-						copy_range(after_type_range);
-						copy_range(before_name_range);
-						copy_range(after_name_range);
-						copy_string();
-
-						*copy_pointer = '\n';
-
-						// Restore the size because it will be added later on
-						after_name_range.size += 1;
-					}
-					else {
-						ECS_ASSERT(false);
-					}
-
-					// 2 values for the spaces for the string
-					total_size_needed += before_type_range.size + after_type_range.size + before_name_range.size + after_name_range.size + string_to_add.size + 2;
-				}
-				else {
-					Stream<char> copy_line_range = { previous_line, PointerDifference(next_line, previous_line) + 1 };
-					copy_line_range.CopyTo(copy_pointer);
-					total_size_needed += copy_line_range.size;
+			// If we still have entries that are left over, copy them
+			if (last_copied_character_index < tokenized_body.string.size) {
+				final_string.AddStream({ tokenized_body.string.buffer + last_copied_character_index, tokenized_body.string.size - last_copied_character_index });
+			}
+			if (last_copied_token_index < tokenized_body.tokens.Size()) {
+				size_t token_copy_count = tokenized_body.tokens.Size() - last_copied_token_index;
+				size_t token_add_offset = final_tokens.AddStream({ tokenized_body.tokens.GetBuffer() + last_copied_token_index, token_copy_count });
+				for (size_t token_index = 0; token_index < token_copy_count; token_index++) {
+					final_tokens[token_add_offset + token_index].offset += added_character_count;
 				}
 			}
 
-			char* last_parenthese = region_start + total_size_needed;
-			*last_parenthese = '}';
-			total_size_needed++;
-			// After we constructed
-			Allocate(&parse_data->allocator, total_size_needed);
-
-			Stream<char> return_value = { region_start, PointerDifference(last_parenthese, region_start) / sizeof(char) };
-			// Replace any semicolons that were previously inside functions with their original semicolon
-			ReplaceCharacter(return_value, FUNCTION_REPLACE_SEMICOLON_CHAR, ';');
-			return return_value;
+			// Ensure that we haven't gone overbounds
+			ECS_ASSERT(final_string.size == total_string_size);
+			ECS_ASSERT(final_tokens.size == tokenized_body.tokens.Size() + argument_data.type_tag_added_tokens.size);
+			
+			tokenized_body.string = final_string;
+			tokenized_body.tokens.resizable_stream->buffer = final_tokens.buffer;
+			tokenized_body.tokens.resizable_stream->size = final_tokens.size;
+			tokenized_body.tokens.resizable_stream->capacity = final_tokens.size;
 		}
 
 #pragma endregion
@@ -2268,7 +2220,6 @@ namespace ECSEngine {
 
 		void ReflectionManager::DeallocateThreadTaskData(ReflectionManagerParseStructuresThreadTaskData& data)
 		{
-			data.thread_memory.DeallocateEx({ nullptr });
 			data.allocator.Free();
 		}
 
@@ -2865,7 +2816,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Allocate memory for the type and enum stream; speculate some reasonable numbers
 			const size_t INITIAL_ALLOCATOR_CAPACITY = ECS_KB * 256 + thread_memory_capacity;
 			const size_t BACKUP_ALLOCATOR_CAPACITY = ECS_MB * 32;
-			data.allocator = ResizableLinearAllocator(Allocate(folders.allocator, INITIAL_ALLOCATOR_CAPACITY), INITIAL_ALLOCATOR_CAPACITY, BACKUP_ALLOCATOR_CAPACITY, { nullptr });
+			data.allocator = ResizableLinearAllocator(INITIAL_ALLOCATOR_CAPACITY, BACKUP_ALLOCATOR_CAPACITY, { nullptr });
 
 			// Initialize the arrays with a decent small size
 			data.types.Initialize(&data.allocator, 32);
@@ -2875,7 +2826,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.expressions.Initialize(&data.allocator, 32);
 			data.embedded_array_size.Initialize(&data.allocator, 128);
 			data.typedefs.Initialize(&data.allocator, 16);
-			data.last_type_names_soa.Initialize(&data.allocator, 0, 32);
 
 			data.field_table = &field_table;
 			data.success = true;
@@ -2913,6 +2863,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		bool ProcessFolderHierarchyImplementation(ReflectionManager* manager, unsigned int folder_index, CapacityStream<Stream<wchar_t>> files, CapacityStream<char>* error_message) {			
 			ReflectionManagerParseStructuresThreadTaskData thread_data;
 
+			InitializeRuleMatchers();
 			constexpr size_t thread_memory = 5'000'000;
 			// Paths that need to be searched will not be assigned here
 			ECS_STACK_CAPACITY_STREAM(char, temp_error_message, 1024);
@@ -2982,6 +2933,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return ProcessFolderHierarchyImplementation(this, folder_index, *files.capacity_stream, error_message);
 			}
 
+			InitializeRuleMatchers();
 			unsigned int* path_indices_buffer = (unsigned int*)Allocate(folders.allocator, sizeof(unsigned int) * files_count, alignof(unsigned int));
 			AtomicStream<unsigned int> path_indices = AtomicStream<unsigned int>(path_indices_buffer, 0, files_count);
 
@@ -3058,7 +3010,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			condition_variable.Reset();
 
 			// Push thread execution
-			for (size_t thread_index = 0; thread_index < parse_thread_count; thread_index++) {
+			for (size_t thread_index = 0; thread_index < 1; thread_index++) {
 				ThreadTask task = ECS_THREAD_TASK_NAME(ReflectionManagerParseThreadTask, parse_thread_data + thread_index, 0);
 				task_manager->AddDynamicTaskAndWake(task);
 			}
@@ -3352,7 +3304,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						// Reset the file pointer and read again
 						SetFileCursor(file, 0, ECS_FILE_SEEK_BEG);
 
-						char* file_contents = data->thread_memory.buffer + data->thread_memory.size;
+						// Add one for the null terminator
+						char* file_contents = (char*)Allocate(&data->allocator, file_size + 1);
 						unsigned int bytes_read = ReadFromFile(file, { file_contents, file_size });
 						Stream<char> content = { file_contents, bytes_read };
 
@@ -3362,14 +3315,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 						bytes_read = content.size;
 						file_contents[bytes_read] = '\0';
-						
-						// Add one for the null terminator
-						data->thread_memory.size += bytes_read + 1;
-						// if there's not enough memory, fail
-						if (data->thread_memory.size > data->thread_memory.capacity) {
-							WriteErrorMessage(data, "Not enough memory to read file contents. Faulty path: ");
-							return;
-						}
 
 						// Skip the first line - it contains the flag ECS_REFLECT
 						const char* new_line = strchr(file_contents, '\n');
@@ -3536,7 +3481,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// null terminate 
 								char* second_space_mutable = (char*)(second_space);
 								*second_space_mutable = '\0';
-								data->total_memory += PointerDifference(space, second_space_mutable) + 1;
+								data->total_memory += PointerDifference(second_space_mutable, space) / sizeof(char) + 1;
 
 								file_contents[word_offset] = '\0';
 								// find the last new line character in order to speed up processing
@@ -3559,7 +3504,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									return;
 								}
 
-								last_position = PtrDifference(file_contents, closing_parenthese + 1);
+								last_position = PointerDifference(closing_parenthese + 1, file_contents);
 
 								// enum declaration
 								const char* enum_ptr = strstr(last_new_line + 1, "enum");
@@ -3577,7 +3522,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									}
 
 									// Update the last position
-									last_position = PtrDifference(file_contents, closing_parenthese + 1);
+									last_position = PointerDifference(closing_parenthese + 1, file_contents);
 
 									// type definition
 									const char* struct_ptr = strstr(last_new_line + 1, "struct");
@@ -3594,28 +3539,25 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									const char* type_closing_parenthese = closing_parenthese;
 									const char* type_name = space;
 
+									ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+									TokenizedString tokenized_body;
+									// Don't include the parentheses into the tokenized string
+									tokenized_body.string = Stream<char>(opening_parenthese + 1, PointerDifference(closing_parenthese - 1, opening_parenthese + 1) / sizeof(char));
+									tokenized_body.InitializeResizable(&stack_allocator);
+									TokenizeString(tokenized_body, GetCppFileTokenSeparators(), false);
+
 									if (tag_name != nullptr) {
 										const char* end_tag_name = SkipCodeIdentifier(tag_name);
 										Stream<char> current_tag = { tag_name, PointerDifference(end_tag_name, tag_name) };
 										for (size_t handler_index = 0; handler_index < ECS_COUNTOF(ECS_REFLECTION_TYPE_TAG_HANDLER); handler_index++) {
 											if (ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].tag == current_tag) {
-												Stream<char> new_range = ProcessTypeTagHandler(data, handler_index, Stream<char>(
-													opening_parenthese,
-													PointerDifference(closing_parenthese, opening_parenthese))
-												);
-												if (new_range.size == 0) {
-													ECS_FORMAT_TEMP_STRING(message, "Failed to preparse the type {#} with the known tag {#}", type_name, current_tag);
-													WriteErrorMessage(data, message.buffer);
-													return;
-												}
-												type_opening_parenthese = new_range.buffer;
-												type_closing_parenthese = new_range.buffer + new_range.size - 1;
+												ProcessTypeTagHandler(data, handler_index, tokenized_body);
 												break;
 											}
 										}
 									}
 
-									AddTypeDefinition(data, type_opening_parenthese, type_closing_parenthese, type_name, index);
+									AddTypeDefinition(data, tokenized_body, type_name, index);
 									if (data->success == false) {
 										return;
 									}
@@ -3635,15 +3577,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 											}
 										}
 
-										char* new_tag_name = data->thread_memory.buffer + data->thread_memory.size;
-										size_t string_size = PtrDifference(tag_name, end_tag_name);
-										data->thread_memory.size += string_size + 1;
+										size_t string_size = PointerDifference(end_tag_name, tag_name) / sizeof(char);
+										Stream<char> allocated_tag;
+										allocated_tag.Initialize(&data->allocator, string_size + 1);
+										allocated_tag.CopyOther({ tag_name, string_size });
+										allocated_tag[allocated_tag.size] = '\0';
 
 										// Record its tag
-										data->total_memory += (string_size + 1) * sizeof(char);
-										memcpy(new_tag_name, tag_name, sizeof(char) * string_size);
-										new_tag_name[string_size] = '\0';
-										data->types.Last().tag = new_tag_name;
+										data->types.Last().tag = allocated_tag;
 									}
 									else {
 										data->types.Last().tag = { nullptr, 0 };

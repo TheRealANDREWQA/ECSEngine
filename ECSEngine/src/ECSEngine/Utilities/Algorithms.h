@@ -135,10 +135,14 @@ namespace ECSEngine {
 
 	template<bool ascending = true, typename T>
 	void InsertionSort(T* buffer, size_t size, int increment = 1) {
+		auto smaller_or_equal = [](const T& first, const T& second) {
+			return first < second || first == second;
+		};
+
 		size_t i = 0;
 		while (i + increment < size) {
 			if constexpr (ascending) {
-				while (i + increment < size && buffer[i] <= buffer[i + increment]) {
+				while (i + increment < size && smaller_or_equal(buffer[i], buffer[i + increment])) {
 					i += increment;
 				}
 				int64_t j = i + increment;
@@ -153,14 +157,14 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				while (i + increment < size && buffer[i] >= buffer[i + increment]) {
+				while (i + increment < size && smaller_or_equal(buffer[i + increment], buffer[i])) {
 					i += increment;
 				}
 				int64_t j = i + increment;
 				if (j >= size) {
 					return;
 				}
-				while (j - increment >= 0 && buffer[j] > buffer[j - increment]) {
+				while (j - increment >= 0 && buffer[j - increment] < buffer[j]) {
 					T temp = buffer[j];
 					buffer[j] = buffer[j - increment];
 					buffer[j - increment] = temp;

@@ -793,10 +793,10 @@ namespace ECSEngine {
 		}
 
 		void Insert(unsigned int index, T value) {
+			AssertCapacity(1);
 			DisplaceElements(index, 1);
 			buffer[index] = value;
 			size++;
-			AssertCapacity();
 		}
 
 		ECS_INLINE T& Last() {
@@ -2427,6 +2427,15 @@ namespace ECSEngine {
 			}
 		}
 
+		ECS_INLINE void Insert(unsigned int index, T element) {
+			if (is_capacity) {
+				capacity_stream->Insert(index, element);
+			}
+			else {
+				resizable_stream->Insert(index, element);
+			}
+		}
+
 		ECS_INLINE unsigned int Size() const {
 			// Both of them have the same layout, we can return the size directly
 			return capacity_stream->size;
@@ -2469,6 +2478,16 @@ namespace ECSEngine {
 
 		ECS_INLINE bool IsInitialized() const {
 			return is_capacity ? capacity_stream && capacity_stream->capacity > 0 : resizable_stream && resizable_stream->allocator.allocator != nullptr;
+		}
+
+		ECS_INLINE T* GetBuffer() {
+			// We can safely alias both structures
+			return capacity_stream->buffer;
+		}
+		
+		ECS_INLINE const T* GetBuffer() const {
+			// We can safely alias both structures
+			return capacity_stream->buffer;
 		}
 		
 		ECS_INLINE T& operator[](unsigned int index) {

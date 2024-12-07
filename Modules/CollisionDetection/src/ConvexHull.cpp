@@ -982,8 +982,8 @@ void ConvexHull::SimplifyTrianglesAndQuads(float area_factor, AllocatorPolymorph
 					return distance < other.distance;
 				}
 
-				ECS_INLINE bool operator <= (SortPoint other) const {
-					return distance <= other.distance;
+				ECS_INLINE bool operator == (SortPoint other) const {
+					return distance == other.distance;
 				}
 
 				float distance;
