@@ -102,7 +102,7 @@ namespace ECSEngine {
 			{ STRING(VertexShader), sizeof(void*) },
 			{ STRING(PixelShader), sizeof(void*) },
 			{ STRING(ComputeShader), sizeof(void*) },
-			{ STRING(Material), sizeof(void*) },
+			{ STRING(Material*), sizeof(void*) },
 			{ STRING(MiscAssetData), sizeof(Stream<void>) }
 		};
 
@@ -148,7 +148,7 @@ namespace ECSEngine {
 		TYPE_TAG_HANDLER_FOR_FUNCTION(TypeTagComponent) {
 			for (size_t index = 0; index < ECS_COUNTOF(ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_FUNCTIONS); index++) {
 				if (data.function_name == ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_FUNCTIONS[index]) {
-					data.string_to_add->CopyOther(STRING(ECS_EVALUATE_FUNCTION_REFLECT) " ");
+					data.string_to_add->CopyOther(STRING(ECS_EVALUATE_FUNCTION_REFLECT));
 					break;
 				}
 			}
@@ -238,6 +238,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		// Adds an alias that is global, not tied to a specific struct
 		static void AddTypedefAlias(
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			const char* typedef_start,
@@ -303,25 +304,12 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		// It will eliminate const, namespace tokens and the final colon from the field token subrange. Returns an empty subrange if there is an error
-		static TokenizedString::Subrange GetCuratedStructFieldTokens(const TokenizedString& string, TokenizedString::Subrange subrange) {
+		// It will eliminate the const token. Returns an empty subrange if there is an error
+		static TokenizedString::Subrange GetCuratedStructFieldTypeTokens(const TokenizedString& string, TokenizedString::Subrange subrange) {
 			TokenizedString::Subrange final_subrange = subrange;
-			final_subrange.count--;
 			if (string[subrange[0]] == "const") {
 				final_subrange = final_subrange.AdvanceReturn();
 			}
-
-			unsigned int first_colon_index = TokenizeFindToken(string, ":", final_subrange);
-			if (first_colon_index != -1) {
-				unsigned int final_colon_index = TokenizeFindTokenReverse(string, ":", final_subrange);
-				if (final_colon_index == first_colon_index) {
-					// This is an error, shouldn't happen
-					return {};
-				}
-
-				final_subrange = final_subrange.GetSubrangeAfterUntilEnd(final_colon_index);
-			}
-
 			return final_subrange;
 		}
 
@@ -335,11 +323,13 @@ namespace ECSEngine {
 			TokenizedString::Subrange& type_and_name_tokens,
 			TokenizedString::Subrange& default_value_tokens,
 			TokenizedString::Subrange& tag_tokens,
-			TokenizedString::Subrange& embedded_array_tokens
+			TokenizedString::Subrange& embedded_array_tokens,
+			TokenizedString::Subrange& special_tag_tokens
 		) {
 			// Start by checking to see if we have a tag. Tags are enclosed in [[]] and should be the first to appear, before the field type
 			tag_tokens = {};
 			embedded_array_tokens = {};
+			special_tag_tokens = {};
 			if (string[subrange[0]] == "[") {
 				// This is a tag
 				uint2 tag_brackets = TokenizeFindMatchingPair(string, "[", "]", subrange);
@@ -369,6 +359,20 @@ namespace ECSEngine {
 					embedded_array_tokens = {};
 				}
 			}
+
+			// Determine if we have special tokens
+			unsigned int initial_subrange_semicolon_index = TokenizeFindToken(string, ";", subrange);
+			if (initial_subrange_semicolon_index != subrange.count - 1) {
+				// It means that we have the special tags
+				special_tag_tokens = subrange.GetSubrangeAfterUntilEnd(initial_subrange_semicolon_index);
+			}
+
+			unsigned int type_and_name_semicolon_index = TokenizeFindToken(string, ";", type_and_name_tokens);
+			if (type_and_name_semicolon_index != -1) {
+				// Cut the subrange at that index
+				type_and_name_tokens.count = type_and_name_semicolon_index;
+			}
+			type_and_name_tokens = GetCuratedStructFieldTypeTokens(string, type_and_name_tokens);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -390,6 +394,50 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		struct StructMatcherArgumentData {
+			ReflectionManagerParseStructuresThreadTaskData* data;
+			CapacityStream<ReflectionTypeMiscNamedSoa> last_type_named_soa;
+			// Store local typedefs for the type that is being processed here
+			CapacityStream<ReplaceOccurence<char>> last_type_typedefs;
+			bool last_type_has_omitted_fields = false;
+			unsigned short last_type_pointer_offset = 0;
+
+			struct {
+				struct InsertedToken {
+					unsigned int insert_index;
+					Stream<char> characters;
+				};
+
+				// If the call is in regards to a type tag handler, the handler index will be specified here
+				// While the tokenized string that represents the body is set in the following field
+				size_t type_tag_handler = -1;
+				// From here the characters for the added tokens will be "allocated"
+				CapacityStream<char> type_tag_added_characters = {};
+				// In this array the tokens to be added are placed. The final addition to the final
+				// String is performed separately
+				ResizableStream<InsertedToken> type_tag_added_tokens = {};
+			};
+		};
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		// Removes the string in place
+		static Stream<char> RemoveECSEngineNamespace(Stream<char> string) {
+			// Helps with RVO
+			Stream<char> processed_string = string;
+
+			// Eliminate ECSEngine:: namespaces
+			Stream<char> namespace_string = "ECSEngine::";
+			Stream<char> in_definition_namespace = FindFirstToken(processed_string, namespace_string);
+			while (in_definition_namespace.size > 0) {
+				processed_string.Remove(in_definition_namespace.buffer - processed_string.buffer, namespace_string.size);
+				in_definition_namespace = FindFirstToken(processed_string, namespace_string);
+			}
+			return processed_string;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		static void DeduceFieldTypeExtended(
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			unsigned short& pointer_offset,
@@ -397,16 +445,21 @@ namespace ECSEngine {
 			TokenizedString::Subrange field_type_tokens,
 			ReflectionField& field
 		) {
-			// Consider only the first 2 tokens, if there are 2 or more. No need to check for const, that is dealt with
-			// By the curation function.
-			Stream<char> first_token = string[field_type_tokens[0]];
-			Stream<char> type_characters = first_token;
-			if (field_type_tokens.count >= 2) {
-				// Extend the type characters to contain the second word as well
-				type_characters.size = string[field_type_tokens[1]].buffer - first_token.buffer + string[field_type_tokens[1]].size;
+			// The definition of the field is all tokens except the final one which is the name. But also remove tokens that are * or &, 
+			// Since those are special
+			TokenizedString::Subrange definition_tokens = field_type_tokens;
+			Stream<char> last_token = string[definition_tokens[definition_tokens.count - 1]];
+			while (definition_tokens.count > 1 && (last_token == "*" || last_token == "&")) {
+				definition_tokens.count--;
+				last_token = string[definition_tokens[definition_tokens.count - 1]];
 			}
 
-			GetReflectionFieldInfo(data, type_characters, field);
+			Stream<char> definition = string.GetStreamForSubrange(definition_tokens);
+			// Copy the definition in order to not modify the actual string
+			definition = definition.Copy(&data->allocator);
+			definition = RemoveECSEngineNamespace(definition);
+
+			GetReflectionFieldInfo(data, definition, field);
 			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
 				field.info.pointer_offset = pointer_offset;
 				pointer_offset += field.info.byte_size;
@@ -499,7 +552,7 @@ namespace ECSEngine {
 					data,
 					pointer_offset,
 					string,
-					field_tokens,
+					field_tokens.GetSubrange(bracket_indices.x + 1, bracket_indices.y - bracket_indices.x - 1),
 					field
 				);
 
@@ -512,6 +565,7 @@ namespace ECSEngine {
 				field.info.byte_size = byte_size;
 				// We must combine all tokens besides the final one, which is the name token
 				field.definition = TokenizeMergeEntries(string, field_tokens.GetSubrange(0, field_tokens.count - 1), &data->allocator);
+				field.definition = RemoveECSEngineNamespace(field.definition);
 
 				pointer_offset += byte_size;
 
@@ -521,6 +575,20 @@ namespace ECSEngine {
 			};
 
 			Stream<char> first_token = string[field_tokens[0]];
+			// If we have sequences of general token, colon, colon and another general token,
+			// Consider that as a namespace and keep discarding that until we get to the real type
+			TokenizedString::Subrange namespace_process_subrange = field_tokens;
+			while (namespace_process_subrange.count >= 4) {
+				if (string.tokens[namespace_process_subrange[0]].type == ECS_TOKEN_TYPE_GENERAL && string[namespace_process_subrange[1]] == ":" &&
+					string[namespace_process_subrange[2]] == ":" && string.tokens[namespace_process_subrange[3]].type == ECS_TOKEN_TYPE_GENERAL) {
+					first_token = string[namespace_process_subrange[3]];
+					namespace_process_subrange = namespace_process_subrange.GetSubrangeUntilEnd(3);
+				}
+				else {
+					break;
+				}
+			}
+			
 			if (first_token == STRING(ResizableStream)) {
 				parse_stream_type(ReflectionStreamFieldType::ResizableStream, sizeof(ResizableStream<void>), STRING(ResizableStream));
 				return true;
@@ -565,7 +633,7 @@ namespace ECSEngine {
 						data,
 						pointer_offset,
 						string,
-						field_tokens,
+						field_tokens.GetSubrange(0, field_tokens.count - 1),
 						field
 					);
 
@@ -589,37 +657,46 @@ namespace ECSEngine {
 
 		// Returns whether or not the field read succeded
 		static ECS_REFLECTION_ADD_TYPE_FIELD_RESULT AddTypeField(
-			ReflectionManagerParseStructuresThreadTaskData* data,
+			StructMatcherArgumentData* call_data,
 			ReflectionType& type,
-			unsigned short& pointer_offset,
 			const TokenizedString& string,
 			TokenizedString::Subrange field_tokens
 		) {
-			// Curate the tokens. Obtain the type and name portion and the default value portion
-			field_tokens = GetCuratedStructFieldTokens(string, field_tokens);
+			ReflectionManagerParseStructuresThreadTaskData* data = call_data->data;
 
 			TokenizedString::Subrange type_and_name_tokens;
 			TokenizedString::Subrange default_value_tokens;
 			TokenizedString::Subrange tag_tokens;
 			TokenizedString::Subrange embedded_array_tokens;
-			GetStructFieldTokensPartitions(string, field_tokens, type_and_name_tokens, default_value_tokens, tag_tokens, embedded_array_tokens);
+			TokenizedString::Subrange special_tag_tokens;
+			GetStructFieldTokensPartitions(string, field_tokens, type_and_name_tokens, default_value_tokens, tag_tokens, embedded_array_tokens, special_tag_tokens);
 
 			ReflectionField& field = type.fields[type.fields.size];
 			// Check to see if the field has a tag - all tags must appear after the semicolon
 			// Make the tag default to nullptr
 			field.tag = { nullptr, 0 };
 
+			if (special_tag_tokens.count > 0) {
+				// Check for the special case of ECS_SKIP_REFLECTION
+				if (string[special_tag_tokens[0]] == STRING(ECS_SKIP_REFLECTION)) {
+					field.tag = string.GetStreamForSubrange(special_tag_tokens);
+					field.definition = string.GetStreamForSubrange(type_and_name_tokens.GetSubrange(0, type_and_name_tokens.count - 1));
+					field.definition = RemoveECSEngineNamespace(field.definition);
+					type.fields.size++;
+					return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
+				}
+			}
+
+			if (type.fields.size > MAX_PARSING_TYPE_ENTRIES) {
+				ECS_FORMAT_TEMP_STRING(error_message, "Type {#} exceeded the maximum amount of reflection fields.", type.name);
+				WriteErrorMessage(data, error_message);
+				return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+			}
+
 			// Some field determination functions write the field without knowing the tag. When the function exits, set the tag accordingly to 
 			// what was determined here
 			if (tag_tokens.count > 0) {
 				// We have a tag
-
-				// Check for the special case of ECS_SKIP_REFLECTION
-				if (string[tag_tokens[0]] == STRING(ECS_SKIP_REFLECTION)) {
-					field.tag = string.GetStreamForSubrange(type_and_name_tokens.GetSubrange(0, type_and_name_tokens.count - 1));
-					type.fields.size++;
-					return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
-				}
 
 				// Find the individual tags and write them separated with a delimiter character
 				const char* final_tag_character = &string.GetStreamForSubrange(tag_tokens).Last();
@@ -652,14 +729,46 @@ namespace ECSEngine {
 				data->total_memory += field.tag.size;
 			}
 
-			bool success = DeduceFieldType(data, type, pointer_offset, string, type_and_name_tokens);
+			if (special_tag_tokens.count > 0) {
+				// Otherwise it must be the ECS_GIVE_SIZE_REFLECTION macro
+				if (string[special_tag_tokens[0]] == STRING(ECS_GIVE_SIZE_REFLECTION)) {
+					// We must append this tag to the existing tag
+					Stream<char> tag_to_append = string.GetStreamForSubrange(special_tag_tokens);
+
+					Stream<char> new_tag;
+					// We need to add one more character for the delimiter
+					new_tag.Initialize(&data->allocator, field.tag.size + tag_to_append.size + 1);
+					new_tag.size = 0;
+					
+					new_tag.CopyOther(field.tag);
+					if (new_tag.size > 0) {
+						new_tag.Add(ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR);
+					}
+					new_tag.AddStream(tag_to_append);
+					field.tag = new_tag;
+					data->total_memory += tag_to_append.size + 1;
+				}
+			}
+			
+			bool success = DeduceFieldType(data, type, call_data->last_type_pointer_offset, string, type_and_name_tokens);
 			if (success) {
 				if (field.definition.size == 0 || field.name.size == 0) {
 					// There was nothing to be reflected - just mark it as omitted
 					return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
 				}
 
-				ReflectionFieldInfo& info = type.fields[type.fields.size - 1].info;
+				if (field.info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					// Check to see if we have a local typedef that appears in the definition. If it does, replace it
+					ECS_STACK_CAPACITY_STREAM(char, replaced_field_definition, 512);
+					CapacityStream<char> field_definition = field.definition;
+					ReplaceOccurrences(field_definition, call_data->last_type_typedefs, &replaced_field_definition);
+					if (field.definition != replaced_field_definition) {
+						// Allocate a new definition and copy it there
+						field.definition.InitializeAndCopy(&data->allocator, replaced_field_definition);
+					}
+				}
+
+				ReflectionFieldInfo& info = field.info;
 				// Set the default value to false initially
 				info.has_default_value = false;
 
@@ -676,9 +785,9 @@ namespace ECSEngine {
 							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 						}
 						info.basic_type_count = (unsigned short)basic_type_count;
-						pointer_offset -= info.byte_size;
+						call_data->last_type_pointer_offset -= info.byte_size;
 						info.byte_size *= basic_type_count;
-						pointer_offset += info.byte_size;
+						call_data->last_type_pointer_offset += info.byte_size;
 
 						// Change the extended type to array
 						info.stream_type = ReflectionStreamFieldType::BasicTypeArray;
@@ -745,31 +854,6 @@ namespace ECSEngine {
 			return success ? ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS : ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 		}
 
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		struct StructMatcherArgumentData {
-			ReflectionManagerParseStructuresThreadTaskData* data;
-			CapacityStream<ReflectionTypeMiscNamedSoa> last_type_named_soa;
-			bool last_type_has_omitted_fields = false;
-			unsigned short last_type_pointer_offset = 0;
-
-			struct {
-				struct InsertedToken {
-					unsigned int insert_index;
-					Stream<char> characters;
-				};
-
-				// If the call is in regards to a type tag handler, the handler index will be specified here
-				// While the tokenized string that represents the body is set in the following field
-				size_t type_tag_handler = -1;
-				// From here the characters for the added tokens will be "allocated"
-				CapacityStream<char> type_tag_added_characters = {};
-				// In this array the tokens to be added are placed. The final addition to the final
-				// String is performed separately
-				ResizableStream<InsertedToken> type_tag_added_tokens = {};
-			};
-		};
-
 		static void AddTypeDefinition(
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			const TokenizedString& body_tokens,
@@ -793,22 +877,23 @@ namespace ECSEngine {
 			ECS_STACK_ADDITION_STREAM(unsigned int, semicolon_positions, 512);
 
 			// Check all expression evaluations
-			unsigned int evaluate_function_token_index = TokenizeFindToken(body_tokens, STRING(ECS_EVALUATE_FUNCTION_REFLECT), body_tokens.AsSubrange());
+			TokenizedString::Subrange evaluate_remaining_function_tokens = body_tokens.AsSubrange();
+			unsigned int evaluate_function_token_index = TokenizeFindToken(body_tokens, STRING(ECS_EVALUATE_FUNCTION_REFLECT), evaluate_remaining_function_tokens);
 			while (evaluate_function_token_index != -1) {
-				TokenizedString::Subrange remaining_function_tokens = body_tokens.GetSubrangeUntilEnd(evaluate_function_token_index).AdvanceReturn();
-				unsigned int open_parenthesis_index = TokenizeFindToken(body_tokens, "(", remaining_function_tokens);
+				evaluate_remaining_function_tokens = evaluate_remaining_function_tokens.GetSubrangeAfterUntilEnd(evaluate_function_token_index);
+				unsigned int open_parenthesis_index = TokenizeFindToken(body_tokens, "(", evaluate_remaining_function_tokens);
 				if (open_parenthesis_index != -1) {
 					// Retrieve the name as the first token before the parenthesis
 					if (open_parenthesis_index != 0) {
-						Stream<char> function_name = body_tokens[remaining_function_tokens[open_parenthesis_index - 1]];
+						Stream<char> function_name = body_tokens[evaluate_remaining_function_tokens[open_parenthesis_index - 1]];
 						// The body to be evaluated is everything in between the return and the first colon
-						unsigned int return_token_index = TokenizeFindToken(body_tokens, "return", remaining_function_tokens);
+						unsigned int return_token_index = TokenizeFindToken(body_tokens, "return", evaluate_remaining_function_tokens);
 						if (return_token_index != -1) {
-							unsigned int semicolon_index = TokenizeFindToken(body_tokens, ";", remaining_function_tokens);
+							unsigned int semicolon_index = TokenizeFindToken(body_tokens, ";", evaluate_remaining_function_tokens);
 							if (semicolon_index != -1) {
 								ReflectionExpression expression;
 								expression.name = function_name;
-								expression.body = body_tokens.GetStreamForSubrange(remaining_function_tokens.GetSubrange(return_token_index + 1, semicolon_index - return_token_index - 1));
+								expression.body = body_tokens.GetStreamForSubrange(evaluate_remaining_function_tokens.GetSubrange(return_token_index + 1, semicolon_index - return_token_index - 1));
 
 								unsigned int type_table_index = data->expressions.Find(type.name);
 								if (type_table_index == -1) {
@@ -838,17 +923,21 @@ namespace ECSEngine {
 				}
 
 				// Get the next expression
-				evaluate_function_token_index = TokenizeFindToken(body_tokens, STRING(ECS_EVALUATE_FUNCTION_REFLECT), remaining_function_tokens);
+				evaluate_function_token_index = TokenizeFindToken(body_tokens, STRING(ECS_EVALUATE_FUNCTION_REFLECT), evaluate_remaining_function_tokens);
 			}
 
 			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscNamedSoa, type_named_soa, 32);
+			ECS_STACK_CAPACITY_STREAM(ReplaceOccurence<char>, type_typedefs, 32);
+
 			StructMatcherArgumentData struct_matcher_data;
 			struct_matcher_data.last_type_has_omitted_fields = false;
 			struct_matcher_data.last_type_pointer_offset = 0;
 			struct_matcher_data.last_type_named_soa = type_named_soa;
+			struct_matcher_data.last_type_typedefs = type_typedefs;
 			struct_matcher_data.data = data;
 
 			type.fields.Initialize(&data->allocator, MAX_PARSING_TYPE_ENTRIES);
+			type.fields.size = 0;
 
 			// Look for field_start and field_end macros
 			TokenizedString::Subrange fields_reflect_subrange = body_tokens.AsSubrange();
@@ -868,8 +957,15 @@ namespace ECSEngine {
 					}
 
 					TokenizedString::Subrange match_subrange = fields_reflect_subrange.GetSubrange(fields_start_macro_index + 1, fields_end_macro_index - fields_start_macro_index - 1);
-					bool success = StructRuleMatcher.MatchRulesWithFind(body_tokens, match_subrange, &struct_matcher_data);
-					if (!success) {
+					if (body_tokens[match_subrange[0]] == ";") {
+						match_subrange = match_subrange.AdvanceReturn();
+					}
+					ECS_TOKENIZE_MATCHER_RESULT match_result = StructRuleMatcher.MatchRulesWithFind(body_tokens, match_subrange, &struct_matcher_data);
+					if (match_result != ECS_TOKENIZE_MATCHER_SUCCESS) {
+						if (match_result == ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL) {
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to match the type {#} tokens", type.name);
+							WriteErrorMessage(data, error_message);
+						}
 						return;
 					}
 
@@ -878,8 +974,12 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				bool success = StructRuleMatcher.MatchRulesWithFind(body_tokens, body_tokens.AsSubrange(), &struct_matcher_data);
-				if (!success) {
+				ECS_TOKENIZE_MATCHER_RESULT match_result = StructRuleMatcher.MatchRulesWithFind(body_tokens, body_tokens.AsSubrange(), &struct_matcher_data);
+				if (match_result != ECS_TOKENIZE_MATCHER_SUCCESS) {
+					if (match_result == ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL) {
+						ECS_FORMAT_TEMP_STRING(error_message, "Failed to match the type {#} tokens", type.name);
+						WriteErrorMessage(data, error_message);
+					}
 					return;
 				}
 			}
@@ -889,6 +989,8 @@ namespace ECSEngine {
 				WriteErrorMessage(data, "There were no fields to reflect: ");
 				return;
 			}
+
+			data->total_memory += type.fields.CopySize();
 
 			// We can validate the SoA fields here, such that we don't continue in case there
 			// Is a mismatch between the fields
@@ -983,6 +1085,20 @@ namespace ECSEngine {
 			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
 		}
 
+		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructTypedefCallback(const TokenizeRuleCallbackData* data) {
+			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
+
+			if (call_data->type_tag_handler == -1) {
+				// Add the typedef - the first token is typedef, the last one is the name,
+				// While the remaining characters are the definition
+				Stream<char> name = data->string[data->subrange[data->subrange.count - 1]];
+				Stream<char> definition = data->string.GetStreamForSubrange(data->subrange.GetSubrange(1, data->subrange.count - 2));
+				call_data->last_type_typedefs.Add({ name, definition });
+			}
+
+			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
+		}
+
 		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructFunctionCallback(const TokenizeRuleCallbackData* data) {
 			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
 			ReflectionManagerParseStructuresThreadTaskData* parse_data = call_data->data;
@@ -1072,8 +1188,14 @@ namespace ECSEngine {
 						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 					}
 
+					TokenizedString::Subrange parse_subrange = data->subrange;
+					// If the last token is a semicolon, discard it
+					if (data->string[parse_subrange[parse_subrange.count - 1]] == ";") {
+						parse_subrange.count--;
+					}
+
 					// If the parenthesis are not at their appropriate locations, fail
-					if (data->string[data->subrange[1]] != "(" || data->string[data->subrange[data->subrange.count - 1]] != ")") {
+					if (data->string[parse_subrange[1]] != "(" || data->string[parse_subrange[parse_subrange.count - 1]] != ")") {
 						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. The parenthesis are missing", type_name);
 						WriteErrorMessage(parse_data, error_message);
 						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
@@ -1081,7 +1203,7 @@ namespace ECSEngine {
 
 					ECS_STACK_CAPACITY_STREAM(TokenizedString::Subrange, soa_parameters, 32);
 					// Don't add the initial token and the () into consideration
-					TokenizeSplitBySeparator(data->string, ',', data->subrange.GetSubrange(2, data->subrange.count - 3), &soa_parameters);
+					TokenizeSplitBySeparator(data->string, ",", parse_subrange.GetSubrange(2, parse_subrange.count - 3), &soa_parameters);
 
 					if (soa_parameters.size <= ECS_COUNTOF(ReflectionTypeMiscNamedSoa::parallel_streams)) {
 						// If the splits contain more than 1 token each, error.
@@ -1111,12 +1233,11 @@ namespace ECSEngine {
 						WriteErrorMessage(parse_data, error_message);
 						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 					}
-
-					return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
 				}
 			}
 
-			return ECS_TOKENIZE_RULE_CALLBACK_UNMATCHED;
+			// We should match the token sequence even when it isn't one of our macros
+			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
 		}
 
 		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructMatcherFieldCallback(const TokenizeRuleCallbackData* data) {
@@ -1125,18 +1246,21 @@ namespace ECSEngine {
 			ReflectionType& type = parse_data->types.Last();
 
 			if (call_data->type_tag_handler != -1) {
-				TokenizedString::Subrange curated_field_tokens = GetCuratedStructFieldTokens(data->string, data->subrange);
-
 				TokenizedString::Subrange type_and_name_tokens;
 				TokenizedString::Subrange default_value_tokens;
 				TokenizedString::Subrange tag_tokens;
 				TokenizedString::Subrange embedded_array_tokens;
-				GetStructFieldTokensPartitions(data->string, curated_field_tokens, type_and_name_tokens, default_value_tokens, tag_tokens, embedded_array_tokens);
+				TokenizedString::Subrange special_tag_tokens;
+				GetStructFieldTokensPartitions(data->string, data->subrange, type_and_name_tokens, default_value_tokens, tag_tokens, embedded_array_tokens, special_tag_tokens);
 
 				ECS_STACK_CAPACITY_STREAM(char, string_to_add, 512);
 				ReflectionTypeTagHandlerForFieldData type_tag_field;
 				// The definition is everything besides the final token, which is the name
-				type_tag_field.definition = data->string.GetStreamForSubrange(type_and_name_tokens.GetSubrange(0, type_and_name_tokens.count - 1));
+				// Remove the namespaces - do this on a temporary
+				ECS_STACK_CAPACITY_STREAM(char, curated_definition, 1024);
+				curated_definition.CopyOther(data->string.GetStreamForSubrange(type_and_name_tokens.GetSubrange(0, type_and_name_tokens.count - 1)));
+				type_tag_field.definition = RemoveECSEngineNamespace(curated_definition);
+
 				// The name is the last token
 				type_tag_field.field_name = data->string[type_and_name_tokens[type_and_name_tokens.count - 1]];
 				type_tag_field.string_to_add = &string_to_add;
@@ -1191,7 +1315,9 @@ namespace ECSEngine {
 						call_data->type_tag_added_tokens.Add({ type_and_name_tokens.token_start_index + type_and_name_tokens.count - 1, allocated_string });
 					}
 					else if (position_to_add == REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_AFTER_NAME) {
-						call_data->type_tag_added_tokens.Add({ type_and_name_tokens.token_start_index + type_and_name_tokens.count, allocated_string });
+						// Find the semicolon, and add it after it
+						unsigned int subrange_semicolon_index = TokenizeFindToken(data->string, ";", data->subrange);
+						call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index + subrange_semicolon_index + 1, allocated_string });
 					}
 					else {
 						ECS_ASSERT(false);
@@ -1200,7 +1326,7 @@ namespace ECSEngine {
 			}
 			else {
 				// This is the normal case of parsing
-				ECS_REFLECTION_ADD_TYPE_FIELD_RESULT add_result = AddTypeField(parse_data, type, call_data->last_type_pointer_offset, data->string, data->subrange);
+				ECS_REFLECTION_ADD_TYPE_FIELD_RESULT add_result = AddTypeField(call_data, type, data->string, data->subrange);
 				if (add_result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
 					return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 				}
@@ -1229,16 +1355,21 @@ namespace ECSEngine {
 		}
 
 		static void CreateTokenizeStructFieldAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
-			ECS_STACK_CAPACITY_STREAM(char, field_rule_string, 512);
+			ECS_STACK_CAPACITY_STREAM(char, field_rule_string, 1024);
 			AddTokenizeRuleIdentifierDefinitions(field_rule_string);
-			field_rule_string.AddStreamAssert(R"DELIMITER(default_value = \{ ($G. ,.)* $G. /} | $G.
-														  basic_field = identifier. $G.;.
-														  with_default = identifier. $G. =. default_value. ;.
-														  tag = \[ $[. $T+ $]. /]
-														  basic_field. | with_default. | tag. basic_field. | tag. with_default.)DELIMITER");
+			// default_value_entry covers the case of floating point values. We need to use double matched pairing
+			// For tags because $T can match any token and we don't know when to stop. Adding the pairing will ensure
+			// That only inside tokens will be matched
+			field_rule_string.AddStreamAssert(R"DELIMITER(default_value_entry = $G. | $G. $.. $G.
+														  default_value = default_value_entry. | \{ (default_value_entry. ,.)* default_value_entry. /}
+														  embedded_array = \[ $G. /]
+														  basic_field = identifier. $G.
+														  with_default = identifier. $G. =. default_value. 
+														  tag = \[ \[ $T+ /] /]
+														  special_tags = ECS_SKIP_REFLECTION. \( $T* /) | ECS_GIVE_SIZE_REFLECTION. \( $T* /)
+														  tag? basic_field. embedded_array? ;. special_tags? | tag? with_default. ;. special_tags?)DELIMITER");
 
-			ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-			TokenizeRule field_rule = CreateTokenizeRule(field_rule_string, temporary_allocator, true, &error_message);
+			TokenizeRule field_rule = CreateTokenizeRule(field_rule_string, temporary_allocator, true);
 			ECS_ASSERT(!field_rule.IsEmpty());
 		
 			TokenizeRuleAction action;
@@ -1248,10 +1379,40 @@ namespace ECSEngine {
 			struct_matcher->AddPostExcludeAction(action, false);
 		}
 
-		static void CreateTokenizeStructExcludeRules(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
-			TokenizeRule function_rule = GetTokenizeRuleForFunctions(temporary_allocator, true);
-			struct_matcher->AddExcludeRule(function_rule, false);
+		static void CreateTokenizeStructTypedefAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
+			const char* typedef_rule_string = "typedef. $G. $G. ;. | typedef. $G. \\< $T+ /> $G. ;.";
+			TokenizeRule typedef_rule = CreateTokenizeRule(typedef_rule_string, temporary_allocator, true);
+			ECS_ASSERT(!typedef_rule.IsEmpty());
 
+			TokenizeRuleAction action;
+			action.callback = StructTypedefCallback;
+			action.callback_data = {};
+			action.rule = typedef_rule;
+			struct_matcher->AddPostExcludeAction(action, false);
+		}
+
+		static void CreateTokenizeFunctionAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
+			TokenizeRule function_rule = GetTokenizeRuleForFunctions(temporary_allocator, true);
+			TokenizeRuleAction action;
+			action.callback = StructFunctionCallback;
+			action.callback_data = {};
+			action.rule = function_rule;
+			struct_matcher->AddPreExcludeAction(action, false);
+		}
+
+		static void CreateTokenizeGeneralMacrosAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
+			const char* macro_rule_string = "$G. \\( $T* /) ;?";
+			TokenizeRule macro_rule = CreateTokenizeRule(macro_rule_string, temporary_allocator, true);
+			ECS_ASSERT(!macro_rule.IsEmpty());
+
+			TokenizeRuleAction action;
+			action.callback = StructGeneralMacrosCallback;
+			action.callback_data = {};
+			action.rule = macro_rule;
+			struct_matcher->AddPreExcludeAction(action, false);
+		}
+
+		static void CreateTokenizeStructExcludeRules(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
 			// This will also cover some off chance macros that might appear
 			TokenizeRule constructor_rule = GetTokenizeRuleForStructConstructors(temporary_allocator, true);
 			struct_matcher->AddExcludeRule(constructor_rule, false);
@@ -1262,9 +1423,10 @@ namespace ECSEngine {
 
 		static void CreateTokenizeStructMatcher(TokenizeRuleMatcher* matcher, AllocatorPolymorphic temporary_allocator) {
 			CreateTokenizeStructExcludeRules(matcher, temporary_allocator);
-
-			// We have only a single action, the one for fields
+			CreateTokenizeGeneralMacrosAction(matcher, temporary_allocator);
+			CreateTokenizeFunctionAction(matcher, temporary_allocator);
 			CreateTokenizeStructFieldAction(matcher, temporary_allocator);
+			CreateTokenizeStructTypedefAction(matcher, temporary_allocator);
 		}
 
 		static void InitializeRuleMatchers() {
@@ -1298,20 +1460,15 @@ namespace ECSEngine {
 			final_string.Initialize(&parse_data->allocator, total_string_size);
 			final_string.size = 0;
 
-			Stream<Token> final_tokens;
-			final_tokens.Initialize(&parse_data->allocator, tokenized_body.tokens.Size() + argument_data.type_tag_added_tokens.size);
-			final_tokens.size = 0;
-
 			// After the matching was performed, we can safely perform the final merge of the added values
 			// The added tokens are already in the ascending order, no need to sort them
 			size_t last_copied_character_index = 0;
-			size_t last_copied_token_index = 0;
-			size_t added_character_count = 0;
 			for (size_t index = 0; index < argument_data.type_tag_added_tokens.size; index++) {
 				size_t token_insert_index = argument_data.type_tag_added_tokens[index].insert_index;
 				Stream<char> token_characters = argument_data.type_tag_added_tokens[index].characters;
 
-				size_t current_token_character_offset = tokenized_body.tokens[token_insert_index].offset;
+				// In case the insert is at the end of string, set the final offset at the end of the string
+				size_t current_token_character_offset = token_insert_index == tokenized_body.tokens.Size() ? tokenized_body.string.size : tokenized_body.tokens[token_insert_index].offset;
 				if (current_token_character_offset > last_copied_character_index) {
 					// Add the characters that are before the insertion
 					final_string.AddStream({ tokenized_body.string.buffer + last_copied_character_index, current_token_character_offset - last_copied_character_index });
@@ -1322,43 +1479,21 @@ namespace ECSEngine {
 				size_t added_token_offset = final_string.AddStream(token_characters);
 				// And add one more space
 				final_string.Add(' ');
-
-				if (token_insert_index > last_copied_token_index) {
-					// Copy all tokens up to the insertion point
-					size_t token_copy_count = token_insert_index - last_copied_token_index;
-					size_t token_add_offset = final_tokens.AddStream({ tokenized_body.tokens.GetBuffer() + last_copied_token_index, token_copy_count });
-					// Adjust the offsets of the added tokens based on the total added character count
-					for (size_t token_index = 0; token_index < token_copy_count; token_index++) {
-						final_tokens[token_add_offset + token_index].offset += added_character_count;
-					}
-					last_copied_token_index = token_insert_index;
-				}
-
-				// Add the token now
-				final_tokens.Add({ (unsigned int)added_token_offset, (unsigned int)token_characters.size, ECS_TOKEN_TYPE_GENERAL });
-				added_character_count += token_characters.size + 1;
 			}
 
 			// If we still have entries that are left over, copy them
 			if (last_copied_character_index < tokenized_body.string.size) {
 				final_string.AddStream({ tokenized_body.string.buffer + last_copied_character_index, tokenized_body.string.size - last_copied_character_index });
 			}
-			if (last_copied_token_index < tokenized_body.tokens.Size()) {
-				size_t token_copy_count = tokenized_body.tokens.Size() - last_copied_token_index;
-				size_t token_add_offset = final_tokens.AddStream({ tokenized_body.tokens.GetBuffer() + last_copied_token_index, token_copy_count });
-				for (size_t token_index = 0; token_index < token_copy_count; token_index++) {
-					final_tokens[token_add_offset + token_index].offset += added_character_count;
-				}
-			}
 
 			// Ensure that we haven't gone overbounds
 			ECS_ASSERT(final_string.size == total_string_size);
-			ECS_ASSERT(final_tokens.size == tokenized_body.tokens.Size() + argument_data.type_tag_added_tokens.size);
-			
+
+			// Retokenize the string. The characters that are added by the tag handlers can introduce more than one token, and it simpler
+			// To just create the compound string and then retokenize.
 			tokenized_body.string = final_string;
-			tokenized_body.tokens.resizable_stream->buffer = final_tokens.buffer;
-			tokenized_body.tokens.resizable_stream->size = final_tokens.size;
-			tokenized_body.tokens.resizable_stream->capacity = final_tokens.size;
+			tokenized_body.tokens.resizable_stream->Reset();
+			TokenizeString(tokenized_body, GetCppFileTokenSeparators(), false);
 		}
 
 #pragma endregion
@@ -1694,7 +1829,6 @@ namespace ECSEngine {
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				for (size_t index = 0; index < data[data_index].types.size; index++) {
 					types_to_be_processed.Add({ data_index, index });
-
 					current_skipped_fields.size = 0;
 
 					ReflectionType* data_type = &data[data_index].types[index];
@@ -1785,7 +1919,7 @@ namespace ECSEngine {
 							}
 						}
 					}
-					
+
 					type_definitions.InsertDynamic(folders.allocator, type, identifier);
 				}
 			}
@@ -3010,9 +3144,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			condition_variable.Reset();
 
 			// Push thread execution
-			for (size_t thread_index = 0; thread_index < 1; thread_index++) {
+			for (size_t thread_index = 0; thread_index < parse_thread_count; thread_index++) {
 				ThreadTask task = ECS_THREAD_TASK_NAME(ReflectionManagerParseThreadTask, parse_thread_data + thread_index, 0);
-				task_manager->AddDynamicTaskAndWake(task);
+				task_manager->AddDynamicTaskAndWakeWithAffinity(task, 0);
 			}
 
 			// Wait until threads are done
@@ -3266,6 +3400,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			size_t ecs_reflect_size = strlen(STRING(ECS_REFLECT));
 			ECS_STACK_CAPACITY_STREAM(char, first_line_characters, 512);
+
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 
 			// search every path
 			for (size_t index = 0; index < data->paths.size; index++) {
@@ -3539,7 +3675,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									const char* type_closing_parenthese = closing_parenthese;
 									const char* type_name = space;
 
-									ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+									stack_allocator.Clear();
+
 									TokenizedString tokenized_body;
 									// Don't include the parentheses into the tokenized string
 									tokenized_body.string = Stream<char>(opening_parenthese + 1, PointerDifference(closing_parenthese - 1, opening_parenthese + 1) / sizeof(char));

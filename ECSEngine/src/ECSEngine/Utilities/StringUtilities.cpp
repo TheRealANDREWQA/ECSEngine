@@ -1408,11 +1408,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename CharacterType>
-	static void ReplaceOccurencesImpl(CapacityStream<CharacterType>& string, Stream<ReplaceOccurence<CharacterType>> occurences, CapacityStream<CharacterType>* output_string) {
-		// Null terminate the string
-		CharacterType previous_character = string[string.size];
-		string[string.size] = Character<CharacterType>('\0');
-
+	static void ReplaceOccurrencesImpl(CapacityStream<CharacterType>& string, Stream<ReplaceOccurence<CharacterType>> occurences, CapacityStream<CharacterType>* output_string) {
 		// Get the list of occurences for all types
 		ECS_STACK_CAPACITY_STREAM(uint2, replacement_positions, 512);
 		ECS_STACK_ADDITION_STREAM(unsigned int, current_occurence_positions, 1024);
@@ -1476,22 +1472,25 @@ namespace ECSEngine {
 				}
 			}
 		}
-
-		string[string.size] = previous_character;
+		
+		// If we have remaining characters, copy them
+		if (copy_start_index < string.size && output_string != nullptr) {
+			output_string->AddStream(string.SliceAt(copy_start_index));
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
 	void ReplaceOccurrences(CapacityStream<char>& string, Stream<ReplaceOccurence<char>> occurences, CapacityStream<char>* output_string)
 	{
-		ReplaceOccurencesImpl(string, occurences, output_string);
+		ReplaceOccurrencesImpl(string, occurences, output_string);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	void ReplaceOccurences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string)
+	void ReplaceOccurrences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string)
 	{
-		ReplaceOccurencesImpl(string, occurences, output_string);
+		ReplaceOccurrencesImpl(string, occurences, output_string);
 	}
 
 	// --------------------------------------------------------------------------------------------------

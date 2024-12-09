@@ -540,7 +540,7 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 
 	// If the output_string is nullptr, it will do the replacement in-place
 	// Else it will use the output string
-	ECSENGINE_API void ReplaceOccurences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string = nullptr);
+	ECSENGINE_API void ReplaceOccurrences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string = nullptr);
 
 	// These splits will only reference the content inside the string
 	ECSENGINE_API void SplitString(Stream<char> string, char delimiter, AdditionStream<Stream<char>> splits);

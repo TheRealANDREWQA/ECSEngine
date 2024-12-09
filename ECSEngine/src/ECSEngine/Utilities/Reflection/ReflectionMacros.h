@@ -3,7 +3,6 @@
 #pragma warning(disable: 4003)
 
 #define ECS_REFLECT
-#define ECS_ENUM_REFLECT
 
 #define ECS_FIELDS_START_REFLECT
 #define ECS_FIELDS_END_REFLECT
@@ -59,9 +58,6 @@
 // Together with the link modifier code
 #define ECS_LINK_MODIFIER_FIELD
 #define ECS_LINK_COMPONENT_NEEDS_BUTTON_FUNCTION "NeedsButton"
-
-// Used to describe the type of element that the data pointer is used for
-#define ECS_DATA_POINTER_TAG(a)
 
 // When a type is changed and you want to keep the old data, use this tag in order
 // tell the runtime what name it should map to. It will ignore this tag if it doesn't
