@@ -398,7 +398,7 @@ namespace ECSEngine {
 			ReflectionManagerParseStructuresThreadTaskData* data;
 			CapacityStream<ReflectionTypeMiscNamedSoa> last_type_named_soa;
 			// Store local typedefs for the type that is being processed here
-			CapacityStream<ReplaceOccurence<char>> last_type_typedefs;
+			CapacityStream<ReplaceOccurrence<char>> last_type_typedefs;
 			bool last_type_has_omitted_fields = false;
 			unsigned short last_type_pointer_offset = 0;
 
@@ -760,12 +760,33 @@ namespace ECSEngine {
 				if (field.info.basic_type == ReflectionBasicFieldType::UserDefined) {
 					// Check to see if we have a local typedef that appears in the definition. If it does, replace it
 					ECS_STACK_CAPACITY_STREAM(char, replaced_field_definition, 512);
-					CapacityStream<char> field_definition = field.definition;
-					ReplaceOccurrences(field_definition, call_data->last_type_typedefs, &replaced_field_definition);
-					if (field.definition != replaced_field_definition) {
-						// Allocate a new definition and copy it there
-						field.definition.InitializeAndCopy(&data->allocator, replaced_field_definition);
+					// We have to tokenize the definition, and replace only general tokens, otherwise we risk
+					// Replacing intra-type
+					ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 8, ECS_MB);
+					TokenizedString tokenized_field_definition;
+					tokenized_field_definition.string = field.definition;
+					tokenized_field_definition.InitializeResizable(&stack_allocator);
+					TokenizeString(tokenized_field_definition, GetCppFileTokenSeparators(), false);
+
+					Stream<Token> field_tokens = tokenized_field_definition.tokens.ToStream();
+					for (size_t index = 0; index < field_tokens.size; index++) {
+						if (field_tokens[index].type == ECS_TOKEN_TYPE_GENERAL) {
+							// Check the aliases
+							unsigned int alias_index = FindString(tokenized_field_definition[index], call_data->last_type_typedefs.ToStream(), [](const ReplaceOccurrence<char>& alias) {
+								return alias.string;
+							});
+							if (alias_index != -1) {
+								replaced_field_definition.AddStreamAssert(call_data->last_type_typedefs[alias_index].replacement);
+							}
+							else {
+								replaced_field_definition.AddStreamAssert(tokenized_field_definition[index]);
+							}
+						}
+						else {
+							replaced_field_definition.AddStreamAssert(tokenized_field_definition[index]);
+						}
 					}
+					field.definition = replaced_field_definition.Copy(&data->allocator);
 				}
 
 				ReflectionFieldInfo& info = field.info;
@@ -927,7 +948,7 @@ namespace ECSEngine {
 			}
 
 			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscNamedSoa, type_named_soa, 32);
-			ECS_STACK_CAPACITY_STREAM(ReplaceOccurence<char>, type_typedefs, 32);
+			ECS_STACK_CAPACITY_STREAM(ReplaceOccurrence<char>, type_typedefs, 32);
 
 			StructMatcherArgumentData struct_matcher_data;
 			struct_matcher_data.last_type_has_omitted_fields = false;
@@ -1089,10 +1110,12 @@ namespace ECSEngine {
 			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
 
 			if (call_data->type_tag_handler == -1) {
+				// The final token is the ;
+				TokenizedString::Subrange token_range = data->subrange.GetSubrange(0, data->subrange.count - 1);
 				// Add the typedef - the first token is typedef, the last one is the name,
 				// While the remaining characters are the definition
-				Stream<char> name = data->string[data->subrange[data->subrange.count - 1]];
-				Stream<char> definition = data->string.GetStreamForSubrange(data->subrange.GetSubrange(1, data->subrange.count - 2));
+				Stream<char> name = data->string[token_range[token_range.count - 1]];
+				Stream<char> definition = data->string.GetStreamForSubrange(token_range.GetSubrange(1, token_range.count - 2));
 				call_data->last_type_typedefs.Add({ name, definition });
 			}
 

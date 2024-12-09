@@ -1408,7 +1408,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename CharacterType>
-	static void ReplaceOccurrencesImpl(CapacityStream<CharacterType>& string, Stream<ReplaceOccurence<CharacterType>> occurences, CapacityStream<CharacterType>* output_string) {
+	static void ReplaceOccurrencesImpl(CapacityStream<CharacterType>& string, Stream<ReplaceOccurrence<CharacterType>> occurences, CapacityStream<CharacterType>* output_string) {
 		// Get the list of occurences for all types
 		ECS_STACK_CAPACITY_STREAM(uint2, replacement_positions, 512);
 		ECS_STACK_ADDITION_STREAM(unsigned int, current_occurence_positions, 1024);
@@ -1481,14 +1481,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	void ReplaceOccurrences(CapacityStream<char>& string, Stream<ReplaceOccurence<char>> occurences, CapacityStream<char>* output_string)
+	void ReplaceOccurrences(CapacityStream<char>& string, Stream<ReplaceOccurrence<char>> occurences, CapacityStream<char>* output_string)
 	{
 		ReplaceOccurrencesImpl(string, occurences, output_string);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	void ReplaceOccurrences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string)
+	void ReplaceOccurrences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurrence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string)
 	{
 		ReplaceOccurrencesImpl(string, occurences, output_string);
 	}
