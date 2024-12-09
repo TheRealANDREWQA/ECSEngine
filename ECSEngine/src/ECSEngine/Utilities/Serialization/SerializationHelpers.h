@@ -674,6 +674,10 @@ namespace ECSEngine {
 
 							*pointer = allocation;
 						}
+						else {
+							// This improves the readability
+							*pointer = nullptr;
+						}
 						update_stream_capacity = true;
 					}
 					else {
@@ -687,6 +691,10 @@ namespace ECSEngine {
 								Read<true>(&stream, allocation, byte_size);
 
 								*pointer = allocation;
+							}
+							else {
+								// This improves the readability
+								*pointer = nullptr;
 							}
 							update_stream_capacity = true;
 						}

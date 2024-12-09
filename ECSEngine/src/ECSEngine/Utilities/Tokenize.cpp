@@ -147,7 +147,7 @@ namespace ECSEngine {
 
 		// If we still have a set token start, then it means it spans until the end of the string
 		if (token_start != -1) {
-			string.tokens.Add({ token_start, (unsigned int)string.string.size - token_start });
+			string.tokens.Add({ token_start, (unsigned int)string.string.size - token_start, ECS_TOKEN_TYPE_GENERAL });
 		}
 
 		// We can't have any remaining separators left, those are automatically found inside the loop
@@ -336,32 +336,28 @@ namespace ECSEngine {
 	}
 
 	void TokenizeSplitBySeparator(const TokenizedString& string, Stream<char> separator, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges) {
-		unsigned int range_start = 0;
 		unsigned int separator_index = TokenizeFindToken(string, separator, token_subrange);
 		while (separator_index != -1) {
-			token_ranges.Add({ range_start + token_subrange.token_start_index, separator_index - range_start });
-			range_start = separator_index + 1;
+			token_ranges.Add({ token_subrange.token_start_index, separator_index });
 			token_subrange = token_subrange.GetSubrangeAfterUntilEnd(separator_index);
 			separator_index = TokenizeFindToken(string, separator, token_subrange);
 		}
 
-		if (range_start < token_subrange.count) {
-			token_ranges.Add({ range_start + token_subrange.token_start_index, token_subrange.count - range_start });
+		if (token_subrange.count > 0 ) {
+			token_ranges.Add({ token_subrange.token_start_index, token_subrange.count });
 		}
 	}
 
-	void TokenizeSplitBySeparator(const TokenizedString& string, unsigned int separator_type, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges) {
-		unsigned int range_start = 0;
+	void TokenizeSplitBySeparatorType(const TokenizedString& string, unsigned int separator_type, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges) {
 		unsigned int separator_index = TokenizeFindTokenByType(string, separator_type, token_subrange);
 		while (separator_index != -1) {
-			token_ranges.Add({ range_start + token_subrange.token_start_index, separator_index - range_start });
-			range_start = separator_index + 1;
+			token_ranges.Add({ token_subrange.token_start_index, separator_index });
 			token_subrange = token_subrange.GetSubrangeAfterUntilEnd(separator_index);
 			separator_index = TokenizeFindTokenByType(string, separator_type, token_subrange);
 		}
 
-		if (range_start < token_subrange.count) {
-			token_ranges.Add({ range_start + token_subrange.token_start_index, token_subrange.count - range_start });
+		if (token_subrange.count > 0) {
+			token_ranges.Add({ token_subrange.token_start_index, token_subrange.count });
 		}
 	}
 
@@ -1116,9 +1112,16 @@ namespace ECSEngine {
 
 	// For an entry that is the beginning of pairing, it will return the index of the end pairing, or -1 if there is no such pairing
 	static size_t GetEntryPairing(Stream<TokenizeRuleEntry> set, size_t entry_start_index) {
+		size_t match_count = 0;
 		for (size_t index = entry_start_index + 1; index < set.size; index++) {
-			if (set[index].count_type == ECS_TOKENIZE_RULE_ONE_PAIR_END) {
-				return index;
+			if (set[index].count_type == ECS_TOKENIZE_RULE_ONE_PAIR_START) {
+				match_count++;
+			}
+			else if (set[index].count_type == ECS_TOKENIZE_RULE_ONE_PAIR_END) {
+				if (match_count == 0) {
+					return index;
+				}
+				match_count--;
 			}
 		}
 		return -1;
@@ -1723,12 +1726,13 @@ namespace ECSEngine {
 			return -1;
 		}
 
-		unsigned int maximum_match_count = 0;
+		unsigned int maximum_match_count = -1;
 		for (size_t set_index = 0; set_index < rule.sets.size; set_index++) {
 			unsigned int current_set_match_count = 0;
 			
 			if (rule.sets[set_index].minimum_token_count > subrange.count) {
 				// Don't analyse this set
+				current_set_match_count = -1;
 				continue;
 			}
 
@@ -1740,7 +1744,7 @@ namespace ECSEngine {
 				if (entry.count_type == ECS_TOKENIZE_RULE_ONE_PAIR_START) {
 					if (string[subrange[current_set_match_count]] != entry.selection_data.string) {
 						// This token did not match, quit
-						current_set_match_count = 0;
+						current_set_match_count = -1;
 						break;
 					}
 					
@@ -1748,10 +1752,10 @@ namespace ECSEngine {
 					size_t end_token_entry_index = GetEntryPairing(set, entry_index);
 					
 					// Find the pairing
-					uint2 pairing_indices = TokenizeFindMatchingPair(string, entry.selection_data.string, set[end_token_entry_index].selection_data.string, subrange.GetSubrangeUntilEnd(current_set_match_count), true);
+					uint2 pairing_indices = TokenizeFindMatchingPair(string, entry.selection_data.string, set[end_token_entry_index].selection_data.string, subrange.GetSubrangeUntilEnd(current_set_match_count));
 					if (pairing_indices.y == -1) {
 						// The pairing could not be established
-						current_set_match_count = 0;
+						current_set_match_count = -1;
 						break;
 					}
 
@@ -1765,17 +1769,21 @@ namespace ECSEngine {
 						
 						TokenizeRule in_between_pair_rule;
 						in_between_pair_rule.sets = { &pair_rule_set, 1 };
+						// Compute the cached values, otherwise the call fails
+						in_between_pair_rule.ComputeCachedValues();
 
 						TokenizedString::Subrange in_between_subrange = subrange.GetSubrange(current_set_match_count + 1, pairing_indices.y - 1);
 						if (FindTokenizeRuleMatchingRange(string, in_between_pair_rule, in_between_subrange) != in_between_subrange.count) {
 							// The in between subrange didn't match, fail
-							current_set_match_count = 0;
+							current_set_match_count = -1;
 							break;
 						}
 					}
 
 					// Advance to the end pairing character
 					current_set_match_count += pairing_indices.y + 1;
+					// Change the entry index, such that we skip over this section
+					entry_index = end_token_entry_index;
 				}
 				else {
 					// Returns the number of tokens that it matched, or -1 if the current tokens couldn't be matched
@@ -1845,7 +1853,7 @@ namespace ECSEngine {
 						// There are no more tokens to be matched, these entries must be optional
 						if (!GetTokenizeEntryMatchCount(entry).is_optional) {
 							// Exit
-							current_set_match_count = 0;
+							current_set_match_count = -1;
 							break;
 						}
 					}
@@ -1911,14 +1919,14 @@ namespace ECSEngine {
 						}
 
 						if (failed) {
-							current_set_match_count = 0;
+							current_set_match_count = -1;
 							break;
 						}
 					}
 				}
 			}
 
-			if (current_set_match_count > maximum_match_count) {
+			if (current_set_match_count != -1 && (current_set_match_count > maximum_match_count || maximum_match_count == -1)) {
 				maximum_match_count = current_set_match_count;
 				if (set_index_that_matched != nullptr) {
 					*set_index_that_matched = set_index;
@@ -1926,12 +1934,19 @@ namespace ECSEngine {
 			}
 		}
 
-		return maximum_match_count == 0 ? -1 : maximum_match_count;
+		// Allow to return 0 in one case only, when the subrange count is 0 as well. This indicates that the optional
+		// Field was matched
+		if (maximum_match_count == 0 && subrange.count != 0) {
+			// Returns -1, this is an error
+			return -1;
+		}
+
+		return maximum_match_count;
 	}
 
 	void MatchTokenizeRuleTest() {
 		const char* typedef_definition = R"DELIMITER(identifier_no_template = $G.
-				identifier_template = $G.\<$T*/>
+				identifier_template = $G.\<$T+/>
 				identifier = identifier_no_template. | identifier_template.
 				typedef. identifier. identifier_no_template.;.)DELIMITER";
 
@@ -2034,29 +2049,31 @@ namespace ECSEngine {
 		return true;
 	}
 
+#define FUNCTION_MODIFIERS "[ECS_INLINE, ECS_NOINLINE, static, constexpr, inline]*"
+
 	void AddTokenizeRuleQualifiers(CapacityStream<char>& rule_string) {
 		rule_string.AddStreamAssert("qualifier = &. | $** &?\n");
 	}
 
 	void AddTokenizeRuleIdentifierDefinitions(CapacityStream<char>& rule_string) {
 		AddTokenizeRuleQualifiers(rule_string);
-		rule_string.AddStreamAssert("identifier_no_template = const? unsigned? ($G. ::.)* $G. qualifier?\n");
-		rule_string.AddStreamAssert("identifier_template = const? unsigned? ($G. ::.)* $G. \\< $T+ /> qualifier?\n");
+		rule_string.AddStreamAssert("identifier_no_template = const? unsigned? ($G. :.:.)* $G. qualifier?\n");
+		rule_string.AddStreamAssert("identifier_template = const? unsigned? ($G. :.:.)* $G. \\< $T+ /> qualifier?\n");
 		rule_string.AddStreamAssert("identifier = identifier_no_template. | identifier_template.\n");
 	}
 
 	TokenizeRule GetTokenizeRuleForFunctions(AllocatorPolymorphic allocator, bool allocator_is_temporary, bool include_declarations, bool include_definitions, bool include_template) {
 		ECS_ASSERT(include_declarations || include_definitions, "Tokenize rule for functions requires declarations, definitions or both to be used.");
 
-		ECS_STACK_CAPACITY_STREAM(char, rule_characters, 512);
+		ECS_STACK_CAPACITY_STREAM(char, rule_characters, 1024);
 		if (include_template) {
 			// Add the template header
 			rule_characters.AddStreamAssert("template_header = template. \\< $T+ />\n");
 		}
 		AddTokenizeRuleIdentifierDefinitions(rule_characters);
 
-#define FUNCTION_DECLARATION "$G* identifier. $G. \\( $T* /) $G*;."
-#define FUNCTION_DEFINITION "$G* identifier. $G. \\( $T* /) $G* \\{ $T* /}"
+#define FUNCTION_DECLARATION FUNCTION_MODIFIERS " identifier. ECS_VECTORCALL? $G. \\( $T* /) $G*;."
+#define FUNCTION_DEFINITION FUNCTION_MODIFIERS " identifier. ECS_VECTORCALL? $G. \\( $T* /) $G* \\{ $T* /}"
 
 		if (include_declarations) {
 			if (include_template) {
@@ -2085,14 +2102,16 @@ namespace ECSEngine {
 	TokenizeRule GetTokenizeRuleForStructOperators(AllocatorPolymorphic allocator, bool allocator_is_temporary) {
 		ECS_STACK_CAPACITY_STREAM(char, rule_string, 512);
 		AddTokenizeRuleIdentifierDefinitions(rule_string);
-		rule_string.AddStreamAssert("operator_signature = $G* identifier. operator. $S. $S? /( $T* \\) $G*\n");
-		rule_string.AddStreamAssert("operator_signature. (=. default.)? ;. | operator_signature. /{ $T* \\}");
+		// Take into consideration normal = or ==, < or > operators, and type conversion operators
+		rule_string.AddStreamAssert("operator_signature = " FUNCTION_MODIFIERS " identifier. operator. $S. $S? \\( $T* /) const? | " FUNCTION_MODIFIERS " operator. $G. $(. $). const?\n");
+		rule_string.AddStreamAssert("operator_signature. (=. default.)? ;. | operator_signature. \\{ $T* /}");
 		return CreateTokenizeRule(rule_string, allocator, allocator_is_temporary);
 	}
 
 	TokenizeRule GetTokenizeRuleForStructConstructors(AllocatorPolymorphic allocator, bool allocator_is_temporary) {
-		const char* rule_string = R"DELIMITER(argument_list = :. ($G.$(.$G.$). ,.)* $G.$(.$G.$).
-												$G+ /( $T* \\) (=. default.)? ;. | $G+ /( $T* \\) argument_list? /{ $T* \\} )DELIMITER";
+		// The second set for the argument list is handling calls to another constructor
+		const char* rule_string = R"DELIMITER(argument_list = :. ($G. \( $T* /) ,.)* $G. \( $T* /)
+												$G+ \( $T* /) (=. default.)? ;. | $G+ \( $T* /) argument_list? \{ $T* /} )DELIMITER";
 		return CreateTokenizeRule(rule_string, allocator, allocator_is_temporary);
 	}
 
@@ -2157,7 +2176,7 @@ namespace ECSEngine {
 		custom_subrange_order.Initialize(allocator, 0);
 	}
 
-	bool TokenizeRuleMatcher::MatchBacktracking(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const {
+	ECS_TOKENIZE_MATCHER_RESULT TokenizeRuleMatcher::MatchBacktracking(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const {
 		bool iterate_increasing = true;
 		Stream<unsigned int> order_to_iterate;
 		if (custom_subrange_order.size > 0) {
@@ -2233,7 +2252,7 @@ namespace ECSEngine {
 					bool2 success = test_subrange_count(order_to_iterate[custom_index]);
 					if (success.x) {
 						if (success.y) {
-							return true;
+							return ECS_TOKENIZE_MATCHER_EARLY_EXIT;
 						}
 						else {
 							subrange = subrange.GetSubrangeUntilEnd(order_to_iterate[custom_index]);
@@ -2252,7 +2271,7 @@ namespace ECSEngine {
 							bool2 success = test_subrange_count(sequence_count);
 							if (success.x) {
 								if (success.y) {
-									return true;
+									return ECS_TOKENIZE_MATCHER_EARLY_EXIT;
 								}
 								else {
 									subrange = subrange.GetSubrangeUntilEnd(sequence_count);
@@ -2264,19 +2283,19 @@ namespace ECSEngine {
 
 					if (sequence_count > subrange.count) {
 						// No subrange matched, exit the while
-						break;
+						return ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL;
 					}
 				}
 				else {
 					// Exit the loop, we could not match the custom counts, and the user did not specify increasing test order
-					break;
+					ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL;
 				}
 			}
 		}
-		return false;
+		return ECS_TOKENIZE_MATCHER_SUCCESS;
 	}
 
-	bool TokenizeRuleMatcher::MatchRulesWithFind(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const {
+	ECS_TOKENIZE_MATCHER_RESULT TokenizeRuleMatcher::MatchRulesWithFind(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const {
 		enum MATCHER_TYPE : unsigned char {
 			PRE_EXCLUDE,
 			EXCLUDE,
@@ -2284,13 +2303,13 @@ namespace ECSEngine {
 		};
 
 		struct MatchedEntries {
-			ECS_INLINE bool operator < (const MatchedEntries& other) const {
+			bool operator < (const MatchedEntries& other) const {
 				// If this is missing, then return now
 				if (match_count == -1) {
 					return true;
 				}
 
-				if (other.match_count) {
+				if (other.match_count == -1) {
 					return false;
 				}
 
@@ -2298,7 +2317,7 @@ namespace ECSEngine {
 					return true;
 				}
 
-				return type < other.type || ((type == other.type) && action_index < other.action_index);
+				return type > other.type || ((type == other.type) && action_index < other.action_index);
 			}
 
 			ECS_INLINE bool operator == (const MatchedEntries& other) const {
@@ -2320,19 +2339,25 @@ namespace ECSEngine {
 			for (size_t index = 0; index < pre_exclude_actions.size; index++) {
 				unsigned int set_index = 0;
 				unsigned int current_count = FindTokenizeRuleMatchingRange(string, pre_exclude_actions[index].rule, subrange, &set_index);
-				matched_entries.Add({ PRE_EXCLUDE, current_count, (unsigned int)index, set_index });
+				if (current_count != -1) {
+					matched_entries.Add({ PRE_EXCLUDE, current_count, (unsigned int)index, set_index });
+				}
 			}
 
 			for (size_t index = 0; index < exclude_rules.size; index++) {
 				unsigned int set_index = 0;
 				unsigned int current_count = FindTokenizeRuleMatchingRange(string, exclude_rules[index], subrange, &set_index);
-				matched_entries.Add({ EXCLUDE, current_count, (unsigned int)index, set_index });
+				if (current_count != -1) {
+					matched_entries.Add({ EXCLUDE, current_count, (unsigned int)index, set_index });
+				}
 			}
 
 			for (size_t index = 0; index < post_exclude_actions.size; index++) {
 				unsigned int set_index = 0;
 				unsigned int current_count = FindTokenizeRuleMatchingRange(string, post_exclude_actions[index].rule, subrange, &set_index);
-				matched_entries.Add({ POST_EXCLUDE, current_count, (unsigned int)index, set_index });
+				if (current_count != -1) {
+					matched_entries.Add({ POST_EXCLUDE, current_count, (unsigned int)index, set_index });
+				}
 			}
 
 			// Sort the entries
@@ -2340,14 +2365,8 @@ namespace ECSEngine {
 
 			// Get the first entry that accepts the parsed range. Exclude and post exclude
 			// Actions are automatically accepting, pre-exclude can reject
-			int64_t index = matched_entries.size - 1;
+			int64_t index = (int64_t)matched_entries.size - 1;
 			for (; index >= 0; index--) {
-				if (matched_entries[index].match_count == -1) {
-					// We can exit if we got to this type of entries
-					index = -1;
-					break;
-				}
-
 				TokenizeRuleCallbackData callback_data(string);
 				callback_data.subrange = subrange.GetSubrange(0, matched_entries[index].match_count);
 				callback_data.call_specific_data = call_specific_data;
@@ -2367,7 +2386,7 @@ namespace ECSEngine {
 				}
 
 				if (result == ECS_TOKENIZE_RULE_CALLBACK_EXIT) {
-					return true;
+					return ECS_TOKENIZE_MATCHER_EARLY_EXIT;
 				}
 				else if (result == ECS_TOKENIZE_RULE_CALLBACK_MATCHED) {
 					subrange = subrange.GetSubrangeUntilEnd(matched_entries[index].match_count);
@@ -2377,11 +2396,11 @@ namespace ECSEngine {
 
 			if (index < 0) {
 				// No entry matched, exit
-				return true;
+				return ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL;
 			}
 		}
 
-		return false;
+		return ECS_TOKENIZE_MATCHER_SUCCESS;
 	}
 
 	void TokenizeRuleMatcher::SetCustomSubrangeOrder(Stream<unsigned int> counts) {

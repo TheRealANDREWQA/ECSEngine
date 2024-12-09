@@ -18,31 +18,31 @@ enum ECS_REFLECT COLLIDER_TYPE : unsigned char {
 	COLLIDER_TYPE_COUNT
 };
 
-struct ECS_REFLECT_COMPONENT Collider {
-	constexpr ECS_INLINE static short ID() {
-		return COLLISION_DETECTION_COMPONENT_BASE + 0;
-	}
-
-	constexpr ECS_INLINE static bool IsShared() {
-		return false;
-	}
-
-	COLLIDER_TYPE type;
-	union {
-		struct {
-			float3 center_offset;
-			float radius;
-		};
-		struct {
-			float3 center_offset;
-			float radius;
-			float length;
-		};
-		struct {
-			// Convex hull
-		};
-	};
-};
+//struct ECS_REFLECT_COMPONENT Collider {
+//	constexpr ECS_INLINE static short ID() {
+//		return COLLISION_DETECTION_COMPONENT_BASE + 0;
+//	}
+//
+//	constexpr ECS_INLINE static bool IsShared() {
+//		return false;
+//	}
+//
+//	COLLIDER_TYPE type;
+//	union {
+//		struct {
+//			float3 center_offset;
+//			float radius;
+//		};
+//		struct {
+//			float3 center_offset;
+//			float radius;
+//			float length;
+//		};
+//		struct {
+//			// Convex hull
+//		};
+//	};
+//};
 
 struct ECS_REFLECT_COMPONENT SphereCollider {
 	constexpr ECS_INLINE static short ID() {

@@ -103,10 +103,12 @@ namespace ECSEngine {
 
 		// This is a unique identifier that is to be implemented
 		// Inside the editor to keep track of each instance
-		unsigned int id; ECS_UI_OMIT_FIELD_REFLECT
+		[[ECS_UI_OMIT_FIELD_REFLECT]]
+		unsigned int id;
 		// This value indicates whether or not the entity is detached
 		// From its prefab (the entity is no longer updated when the prefab is)
-		bool detached; ECS_UI_OMIT_FIELD_REFLECT
+		[[ECS_UI_OMIT_FIELD_REFLECT]]
+		bool detached;
 	};
 
 	struct EntityManager;

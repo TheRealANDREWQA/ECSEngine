@@ -25,7 +25,8 @@ struct ECS_REFLECT_COMPONENT Rigidbody {
 
 	float mass_inverse;
 	Matrix3x3 inertia_tensor_inverse;
-	Matrix3x3 world_space_inertia_tensor_inverse; ECS_SERIALIZATION_OMIT_FIELD
+	[[ECS_SERIALIZATION_OMIT_FIELD]]
+	Matrix3x3 world_space_inertia_tensor_inverse;
 	float3 center_of_mass;
 	float3 velocity;
 	float3 angular_velocity;

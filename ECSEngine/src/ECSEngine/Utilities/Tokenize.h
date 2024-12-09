@@ -130,7 +130,7 @@ namespace ECSEngine {
 	ECSENGINE_API void TokenizeSplitBySeparator(const TokenizedString& string, Stream<char> separator, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges);
 
 	// Splits the tokens by the given separator. The token ranges are relative to the original string, not to the token subrange
-	ECSENGINE_API void TokenizeSplitBySeparator(const TokenizedString& string, unsigned int separator_type, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges);
+	ECSENGINE_API void TokenizeSplitBySeparatorType(const TokenizedString& string, unsigned int separator_type, TokenizedString::Subrange token_subrange, AdditionStream<TokenizedString::Subrange> token_ranges);
 	
 #pragma region Tokenize Rule
 
@@ -291,6 +291,12 @@ namespace ECSEngine {
 		Stream<void> callback_data;
 	};
 
+	enum ECS_TOKENIZE_MATCHER_RESULT : unsigned char {
+		ECS_TOKENIZE_MATCHER_EARLY_EXIT,
+		ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL,
+		ECS_TOKENIZE_MATCHER_SUCCESS
+	};
+
 	// A structure that encompasses multiple excluding rules and actions to be performed on a tokenized string
 	struct ECSENGINE_API TokenizeRuleMatcher {
 		ECS_INLINE AllocatorPolymorphic Allocator() const {
@@ -313,11 +319,11 @@ namespace ECSEngine {
 
 		// It will match the given token string subrange with the stored actions, by using a backtracking search. It returns true if it early existed, else false.
 		// The call specific data will be passed to callbacks, to use it as they see fit
-		bool MatchBacktracking(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const;
+		ECS_TOKENIZE_MATCHER_RESULT MatchBacktracking(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const;
 
 		// It will find the rule that matches the highest amount of tokens and use that one. It returns true if it early existed, else false.
 		// The call specific data will be passed to callbacks, to use it as they see fit
-		bool MatchRulesWithFind(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const;
+		ECS_TOKENIZE_MATCHER_RESULT MatchRulesWithFind(const TokenizedString& string, TokenizedString::Subrange subrange, void* call_specific_data) const;
 
 		// If you want to iterate certain token counts before others, you can specify them here, such that the relative ordering is maintained.
 		// You can use the value of -1 as a last value to indicate to start matching from count 1 to the max, without retesting existing counts
