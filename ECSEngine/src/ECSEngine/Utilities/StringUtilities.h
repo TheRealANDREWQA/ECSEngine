@@ -529,18 +529,18 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 	ECSENGINE_API Stream<wchar_t> ReplaceToken(CapacityStream<wchar_t>& string, Stream<wchar_t> token, Stream<wchar_t> replacement);
 
 	template<typename CharacterType>
-	struct ReplaceOccurence {
+	struct ReplaceOccurrence {
 		Stream<CharacterType> string;
 		Stream<CharacterType> replacement;
 	};
 
 	// If the output_string is nullptr, it will do the replacement in-place
 	// Else it will use the output string
-	ECSENGINE_API void ReplaceOccurrences(CapacityStream<char>& string, Stream<ReplaceOccurence<char>> occurences, CapacityStream<char>* output_string = nullptr);
+	ECSENGINE_API void ReplaceOccurrences(CapacityStream<char>& string, Stream<ReplaceOccurrence<char>> occurences, CapacityStream<char>* output_string = nullptr);
 
 	// If the output_string is nullptr, it will do the replacement in-place
 	// Else it will use the output string
-	ECSENGINE_API void ReplaceOccurrences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string = nullptr);
+	ECSENGINE_API void ReplaceOccurrences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurrence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string = nullptr);
 
 	// These splits will only reference the content inside the string
 	ECSENGINE_API void SplitString(Stream<char> string, char delimiter, AdditionStream<Stream<char>> splits);
