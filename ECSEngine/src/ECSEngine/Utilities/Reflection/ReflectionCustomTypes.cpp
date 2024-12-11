@@ -24,12 +24,27 @@ namespace ECSEngine {
 			new SparseSetCustomTypeInterface(),
 			new MaterialAssetCustomTypeInterface(),
 			new DataPointerCustomTypeInterface(),
-			new AllocatorCustomTypeInterface()
+			new AllocatorCustomTypeInterface(),
+			new HashTableCustomTypeInterface()
 		};
 
 		static_assert(ECS_COUNTOF(ECS_REFLECTION_CUSTOM_TYPES) == ECS_REFLECTION_CUSTOM_TYPE_COUNT, "ECS_REFLECTION_CUSTOM_TYPES is not in sync");
 
 		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionCustomTypeAddDependentType(ReflectionCustomTypeDependentTypesData* data, Stream<char> definition) {
+			// Check to see if it is a trivial type or not - do not report trivial types as dependent types
+			ReflectionBasicFieldType basic_field_type;
+			ReflectionStreamFieldType stream_field_type;
+			ConvertStringToPrimitiveType(definition, basic_field_type, stream_field_type);
+			if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type == ReflectionBasicFieldType::UserDefined
+				|| stream_field_type == ReflectionStreamFieldType::Unknown) {
+				// One more exception here, void, treat it as a special case
+				if (definition != "void") {
+					data->dependent_types.AddAssert(definition);
+				}
+			}
+		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
@@ -41,17 +56,17 @@ namespace ECSEngine {
 			Stream<char> closed_bracket = FindCharacterReverse(opened_bracket, '>');
 			ECS_ASSERT(closed_bracket.buffer != nullptr);
 
-			// Check to see if it is a trivial type or not - do not report trivial types as dependent types
 			Stream<char> type_name = { opened_bracket.buffer + 1, PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 };
-			ReflectionBasicFieldType basic_field_type;
-			ReflectionStreamFieldType stream_field_type;
-			ConvertStringToPrimitiveType(type_name, basic_field_type, stream_field_type);
-			if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type == ReflectionBasicFieldType::UserDefined
-				|| stream_field_type == ReflectionStreamFieldType::Unknown) {
-				// One more exception here, void, treat it as a special case
-				if (type_name != "void") {
-					data->dependent_types.AddAssert(type_name);
-				}
+			ReflectionCustomTypeAddDependentType(data, type_name);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionCustomTypeDependentTypes_MultiTemplate(ReflectionCustomTypeDependentTypesData* data) {
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 16);
+			ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
+			for (unsigned int index = 0; index < template_arguments.size; index++) {
+				ReflectionCustomTypeAddDependentType(data, template_arguments[index]);
 			}
 		}
 
@@ -86,6 +101,50 @@ namespace ECSEngine {
 			Stream<char> type = { opened_bracket.buffer + 1, PointerDifference(closed_bracket.buffer, opened_bracket.buffer) / sizeof(char) - 1 };
 			return type;
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionCustomTypeGetTemplateArguments(Stream<char> definition, CapacityStream<Stream<char>>& arguments) {
+			Stream<char> opened_bracket = FindFirstCharacter(definition, '<');
+			Stream<char> closed_bracket = FindCharacterReverse(definition, '>');
+			ECS_ASSERT(opened_bracket.buffer != nullptr && closed_bracket.buffer != nullptr);
+
+			const char* parse_character = opened_bracket.buffer + 1;
+			
+			// Retrieves a single template parameter, starting from the location of parse character
+			auto parse_template_type = [closed_bracket, parse_character]() {
+				// Go through the characters in between the brackets and keep track of how many templates we encountered.
+				// Stop when we get to a comma and the template counter is 0, or we got to the closed bracket
+				size_t template_count = 0;
+				Stream<char> type = { parse_character, PointerElementDifference(parse_character, closed_bracket.buffer) };
+
+				const char* iterate_character = parse_character;
+				while (iterate_character < closed_bracket.buffer) {
+					if (*iterate_character == '<') {
+						template_count++;
+					}
+					else if (*iterate_character == '>') {
+						template_count--;
+					}
+					else if (*iterate_character == ',' && template_count == 0) {
+						type.size = iterate_character - type.buffer;
+						break;
+					}
+
+					iterate_character++;
+				}
+
+				type = SkipWhitespace(type);
+				type = SkipWhitespace(type, -1);
+				return type;
+			};
+
+			while (parse_character < closed_bracket.buffer) {
+				arguments.AddAssert(parse_template_type());
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int FindReflectionCustomType(Stream<char> definition)
 		{
@@ -158,8 +217,7 @@ namespace ECSEngine {
 
 		void StreamCustomTypeInterface::Copy(ReflectionCustomTypeCopyData* data) {
 			Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
-			size_t element_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
-			bool blittable = Reflection::SearchIsBlittable(data->reflection_manager, data->definition);
+			ReflectionDefinitionInfo element_info = SearchReflectionDefinitionInfo(data->reflection_manager, template_type);
 
 			ECS_INT_TYPE size_type = ECS_INT_TYPE_COUNT;
 			if (data->definition.StartsWith("Stream<")) {
@@ -176,7 +234,7 @@ namespace ECSEngine {
 			void** destination = (void**)data->destination;
 			size_t source_size = GetIntValueUnsigned(OffsetPointer(data->source, sizeof(void*)), size_type);
 
-			size_t allocation_size = element_size * source_size;
+			size_t allocation_size = element_info.byte_size * source_size;
 			void* allocation = nullptr;
 			if (allocation_size > 0) {
 				allocation = Allocate(data->allocator, allocation_size);
@@ -184,29 +242,33 @@ namespace ECSEngine {
 			}
 
 			if (data->deallocate_existing_data) {
+				size_t destination_size = GetIntValueUnsigned(OffsetPointer(data->destination, sizeof(void*)), size_type);
 				if (*destination != nullptr) {
-					ECSEngine::Deallocate(data->allocator, *destination);
+					if (destination_size > 0) {
+						DeallocateReflectionInstanceBuffers(data->reflection_manager, template_type, *destination, data->allocator, destination_size, element_info.byte_size, false);
+					}
+					ECSEngine::DeallocateEx(data->allocator, *destination);
 				}
 			}
 
 			*destination = allocation;
 			SetIntValueUnsigned(OffsetPointer(data->destination, sizeof(void*)), size_type, source_size);
 
-			if (!blittable) {
+			if (!element_info.is_blittable) {
 				size_t count = source_size;
 				ReflectionType nested_type;
 				CopyReflectionDataOptions copy_options;
 				copy_options.allocator = data->allocator;
 				copy_options.always_allocate_for_buffers = true;
-				copy_options.deallocate_existing_buffers = data->deallocate_existing_data;
+				copy_options.deallocate_existing_buffers = false;
 
 				if (data->reflection_manager->TryGetType(template_type, nested_type)) {
 					for (size_t index = 0; index < count; index++) {
 						CopyReflectionTypeInstance(
 							data->reflection_manager,
 							&nested_type,
-							OffsetPointer(source, index * element_size),
-							OffsetPointer(allocation, element_size * index),
+							OffsetPointer(source, index * element_info.byte_size),
+							OffsetPointer(allocation, element_info.byte_size * index),
 							&copy_options
 						);
 					}
@@ -217,8 +279,8 @@ namespace ECSEngine {
 					data->definition = template_type;
 
 					for (size_t index = 0; index < count; index++) {
-						data->source = OffsetPointer(source, index * element_size);
-						data->destination = OffsetPointer(allocation, element_size * index);
+						data->source = OffsetPointer(source, index * element_info.byte_size);
+						data->destination = OffsetPointer(allocation, element_info.byte_size * index);
 						ECS_REFLECTION_CUSTOM_TYPES[custom_type_index]->Copy(data);
 					}
 				}
@@ -252,14 +314,15 @@ namespace ECSEngine {
 		}
 
 		void StreamCustomTypeInterface::Deallocate(ReflectionCustomTypeDeallocateData* data) {
-			// Deallocate firstly the elements, if they require deallocation
-			Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 			// This is a special case. The given source and the given element count
 			// Reflect the actual Stream<void> data for this instance.
 			// So, we must not iterate
 			Stream<void> stream_data = { data->source, data->element_count };
 
 			if (stream_data.size > 0) {
+				// Deallocate firstly the elements, if they require deallocation
+				Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
+
 				DeallocateReflectionInstanceBuffers(
 					data->reflection_manager,
 					template_type,
@@ -318,6 +381,7 @@ namespace ECSEngine {
 			size_t element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
 
 			if (data->deallocate_existing_data) {
+				// TODO: Deallocate elements individually
 				SparseSetDeallocateUntyped(data->destination, data->allocator);
 			}
 
@@ -573,6 +637,329 @@ namespace ECSEngine {
 					data_pointer = nullptr;
 				}
 			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Hash table
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		// Describes the type of hash table definition
+		enum HASH_TABLE_TYPE : unsigned char {
+			HASH_TABLE_NORMAL,
+			HASH_TABLE_DEFAULT,
+			HASH_TABLE_EMPTY
+		};
+
+		static Stream<char> HashTableExtractValueType(Stream<char> definition) {
+			Stream<char> opened_bracket = FindFirstCharacter(definition, '<');
+			Stream<char> closed_bracket = FindMatchingParenthesis(opened_bracket.AdvanceReturn(), '<', '>');
+
+			// Go through the characters in between the brackets and keep track of how many templates we encountered.
+			// Stop when we get to a comma and the template counter is 0, or we got to the closed bracket
+			const char* iterate_character = opened_bracket.buffer + 1;
+			size_t template_count = 0;
+			Stream<char> value_type = opened_bracket.AdvanceReturn().StartDifference(closed_bracket);
+			while (iterate_character < closed_bracket.buffer) {
+				if (*iterate_character == '<') {
+					template_count++;
+				}
+				else if (*iterate_character == '>') {
+					template_count--;
+				}
+				else if (*iterate_character == ',' && template_count == 0) {
+					value_type.size = iterate_character - value_type.buffer;
+					break;
+				}
+				
+				iterate_character++;
+			}
+
+			value_type = SkipWhitespace(value_type);
+			value_type = SkipWhitespace(value_type, -1);
+			return value_type;
+		}
+
+		struct HashTableTemplateArguments {
+			Stream<char> value_type;
+			Stream<char> identifier_type;
+			Stream<char> hash_function_type;
+			bool is_soa = false;
+			HASH_TABLE_TYPE table_type;
+		};
+
+		static HashTableTemplateArguments HashTableExtractTemplateArguments(Stream<char> definition) {
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, string_template_arguments, 8);
+			ReflectionCustomTypeGetTemplateArguments(definition, string_template_arguments);
+
+			HashTableTemplateArguments template_arguments;
+
+			// Each hash table type must be handled separately
+			if (definition.StartsWith("HashTable<")) {
+				template_arguments.table_type = HASH_TABLE_NORMAL;
+
+				// There have to be at least 3 template arguments
+				template_arguments.value_type = string_template_arguments[0];
+				template_arguments.identifier_type = string_template_arguments[1];
+				template_arguments.hash_function_type = string_template_arguments[2];
+				
+				// We don't care about the object hasher, it doesn't internally occupy space.
+				// Check the soa parameter tho, it is optional
+				if (string_template_arguments.size == 5) {
+					// It has the SoA parameter
+					template_arguments.is_soa = ConvertCharactersToBool(definition);
+				}
+			}
+			else if (definition.StartsWith("HashTableDefault<")) {
+				template_arguments.table_type = HASH_TABLE_DEFAULT;
+
+				// Only the value type is needed, the other entries are known
+				template_arguments.value_type = string_template_arguments[0];
+				template_arguments.identifier_type = STRING(ResourceIdentifier);
+				template_arguments.hash_function_type = STRING(HashFunctionPowerOfTwo);
+			}
+			else if (definition.StartsWith("HashTableEmpty<")) {
+				template_arguments.table_type = HASH_TABLE_EMPTY;
+
+				// 2 mandatory arguments, and one optional that is the object hasher
+				template_arguments.value_type = STRING(HashTableEmpty);
+				template_arguments.identifier_type = string_template_arguments[0];
+				template_arguments.hash_function_type = string_template_arguments[1];
+				template_arguments.is_soa = false;
+			}
+
+			return template_arguments;
+		}
+
+		bool HashTableCustomTypeInterface::Match(ReflectionCustomTypeMatchData* data) {
+			if (data->definition.size < sizeof("HashTable<")) {
+				return false;
+			}
+
+			if (data->definition[data->definition.size - 1] != '>') {
+				return false;
+			}
+
+			if (data->definition.StartsWith("HashTable<") || data->definition.StartsWith("HashTableDefault<") || data->definition.StartsWith("HashTableEmpty")) {
+				return true;
+			}
+
+			return false;
+		}
+
+		ulong2 HashTableCustomTypeInterface::GetByteSize(ReflectionCustomTypeByteSizeData* data) {
+			// All hash tables have the same byte size and alignment. Technically, the size can depend on the hasher
+			// Being used, but the ones we provide are at max 8 bytes long, which is the limit of the alignment
+			HashTableTemplateArguments template_arguments = HashTableExtractTemplateArguments(data->definition);
+			
+			static Stream<char> known_hash_functions[] = {
+				STRING(HashFunctionPowerOfTwo),
+				STRING(HashFunctionPrimeNumber), 
+				STRING(HashFunctionFibonacci),
+				STRING(HashFunctionFolding),
+				STRING(HashFunctionXORFibonacci)
+			};
+
+			// Assert that the hash function is known, otherwise we don't know how much space it takes
+			ECS_ASSERT(FindString(template_arguments.hash_function_type, { known_hash_functions, ECS_COUNTOF(known_hash_functions) }) != -1, "The hash table reflection can't cope with custom hash functions.");
+			return { sizeof(HashTableDefault<char>), alignof(HashTableDefault<char>) };
+		}
+
+		void HashTableCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {
+			// Can't use ReflectionCustomTypeDependentTypes_MultiTemplate because we need to handle the special
+			// Case of ResourceIdentifier being used
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 16);
+			ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
+			for (unsigned int index = 0; index < template_arguments.size; index++) {
+				if (template_arguments[index] != STRING(ResourceIdentifier)) {
+					ReflectionCustomTypeAddDependentType(data, template_arguments[index]);
+				}
+			}
+		}
+
+		bool HashTableCustomTypeInterface::IsBlittable(ReflectionCustomTypeIsBlittableData* data) {
+			// Never blittable
+			return false;
+		}
+
+		void HashTableCustomTypeInterface::Copy(ReflectionCustomTypeCopyData* data) {
+			HashTableTemplateArguments template_parameters = HashTableExtractTemplateArguments(data->definition);
+
+			// We need to have separate branches for SoA
+			ReflectionDefinitionInfo value_info;
+			if (template_parameters.table_type == HASH_TABLE_EMPTY) {
+				value_info.alignment = 0;
+				value_info.byte_size = 0;
+				value_info.is_blittable = true;
+			}
+			else {
+				value_info = SearchReflectionDefinitionInfo(data->reflection_manager, data->definition);
+			}
+			
+			// Use a special case for handling the ResourceIdentifier
+			ReflectionDefinitionInfo identifier_info;
+			if (template_parameters.table_type == HASH_TABLE_DEFAULT || template_parameters.identifier_type == STRING(ResourceIdentifier)) {
+				identifier_info.byte_size = sizeof(ResourceIdentifier);
+				identifier_info.alignment = alignof(ResourceIdentifier);
+				identifier_info.is_blittable = false;
+				// Change the template parameter string type into Stream<void> as well, in order to have generic handling for this parameter later on
+				template_parameters.identifier_type = STRING(Stream<void>);
+			}
+			else {
+				identifier_info = SearchReflectionDefinitionInfo(data->reflection_manager, data->definition);
+			}
+
+			// Cast the two table sources to a random table specialization, to have easy access to the fields
+			HashTableDefault<char>* destination = (HashTableDefault<char>*)data->destination;
+			const HashTableDefault<char>* source = (const HashTableDefault<char>*)data->source;
+
+			if (data->deallocate_existing_data) {
+				if (destination->GetCapacity() > 0) {
+					ECSEngine::DeallocateEx(data->allocator, (void*)destination->GetAllocatedBuffer());
+				}
+			}
+
+			unsigned int source_extended_capacity = source->GetExtendedCapacity();
+			if (template_parameters.is_soa) {
+				// Compute the total byte size for the destination. We must use the extended capacity
+				size_t total_allocation_size = (value_info.byte_size + identifier_info.byte_size + sizeof(unsigned char)) * source_extended_capacity;
+				void* allocation = AllocateEx(data->allocator, total_allocation_size);
+				
+				// The metadata buffer is set last
+				ECS_ASSERT(source->m_metadata > (void*)source->m_identifiers && source->m_identifiers > source->m_buffer, "Hash table reflection copy must be changed!");
+				destination->m_buffer = (char*)allocation;
+				destination->m_identifiers = (ResourceIdentifier*)OffsetPointer(destination->m_buffer, value_info.byte_size * source_extended_capacity);
+				destination->m_metadata = (unsigned char*)OffsetPointer(destination->m_identifiers, identifier_info.byte_size * source_extended_capacity);
+			}
+			else {
+
+			}
+
+			destination->m_capacity = source->m_capacity;
+			destination->m_count = source->m_count;
+			// Copy the hasher as well, it has to be at max a void*
+			memcpy(&destination->m_function, &source->m_function, sizeof(void*));
+
+			ECS_INT_TYPE size_type = ECS_INT_TYPE_COUNT;
+			if (data->definition.StartsWith("Stream<")) {
+				size_type = ECS_INT64;
+			}
+			else if (data->definition.StartsWith("CapacityStream<") || data->definition.StartsWith("ResizableStream<")) {
+				size_type = ECS_INT32;
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+
+			/*const void* source = *(const void**)data->source;
+			void** destination = (void**)data->destination;
+			size_t source_size = GetIntValueUnsigned(OffsetPointer(data->source, sizeof(void*)), size_type);
+
+			size_t allocation_size = element_size * source_size;
+			void* allocation = nullptr;
+			if (allocation_size > 0) {
+				allocation = Allocate(data->allocator, allocation_size);
+				memcpy(allocation, source, allocation_size);
+			}
+
+			*destination = allocation;
+			SetIntValueUnsigned(OffsetPointer(data->destination, sizeof(void*)), size_type, source_size);
+
+			if (!blittable) {
+				size_t count = source_size;
+				ReflectionType nested_type;
+				CopyReflectionDataOptions copy_options;
+				copy_options.allocator = data->allocator;
+				copy_options.always_allocate_for_buffers = true;
+				copy_options.deallocate_existing_buffers = data->deallocate_existing_data;
+
+				if (data->reflection_manager->TryGetType(template_type, nested_type)) {
+					for (size_t index = 0; index < count; index++) {
+						CopyReflectionTypeInstance(
+							data->reflection_manager,
+							&nested_type,
+							OffsetPointer(source, index * element_size),
+							OffsetPointer(allocation, element_size * index),
+							&copy_options
+						);
+					}
+				}
+				else {
+					unsigned int custom_type_index = FindReflectionCustomType(template_type);
+					ECS_ASSERT(custom_type_index != -1);
+					data->definition = template_type;
+
+					for (size_t index = 0; index < count; index++) {
+						data->source = OffsetPointer(source, index * element_size);
+						data->destination = OffsetPointer(allocation, element_size * index);
+						ECS_REFLECTION_CUSTOM_TYPES[custom_type_index]->Copy(data);
+					}
+				}
+			}*/
+		}
+
+		bool HashTableCustomTypeInterface::Compare(ReflectionCustomTypeCompareData* data) {
+			Stream<void> first;
+			Stream<void> second;
+
+			if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
+				first = *(Stream<void>*)data->first;
+				second = *(Stream<void>*)data->second;
+			}
+			// The resizable stream can be type punned with the capacity stream
+			else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0 ||
+				memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
+				first = *(CapacityStream<void>*)data->first;
+				second = *(CapacityStream<void>*)data->second;
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+
+			if (first.size != second.size) {
+				return false;
+			}
+
+			Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
+			return CompareReflectionTypeInstances(data->reflection_manager, template_type, first.buffer, second.buffer, first.size);
+		}
+
+		void HashTableCustomTypeInterface::Deallocate(ReflectionCustomTypeDeallocateData* data) {
+			// Deallocate firstly the elements, if they require deallocation
+			Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
+			// This is a special case. The given source and the given element count
+			// Reflect the actual Stream<void> data for this instance.
+			// So, we must not iterate
+			Stream<void> stream_data = { data->source, data->element_count };
+
+			if (stream_data.size > 0) {
+				DeallocateReflectionInstanceBuffers(
+					data->reflection_manager,
+					template_type,
+					stream_data.buffer,
+					data->allocator,
+					stream_data.size,
+					data->element_byte_size,
+					data->reset_buffers
+				);
+			}
+
+			// The main function will call the deallocate for this type
+			// Of streams as well. We cannot memset the correct pointer,
+			// So leave it to that function to perform the deallocation
+			// And the reset
+
+			//if (stream_data.buffer != nullptr) {
+			//	DeallocateEx(data->allocator, stream_data.buffer);
+			//}
+			//// For the resizable stream, we need to memset only the first 3 fields
+			//static_assert(sizeof(Stream<void>) == sizeof(CapacityStream<void>));
+			//if (data->reset_buffers) {
+			//	memset(data->source, 0, sizeof(Stream<void>));
+			//}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
