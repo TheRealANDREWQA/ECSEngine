@@ -259,6 +259,12 @@ namespace ECSEngine {
 			ResizableStream<BlittableType> blittable_types;
 		};
 
+		struct ReflectionDefinitionInfo {
+			size_t byte_size;
+			size_t alignment;
+			bool is_blittable;
+		};
+
 		// If there are no user defined types, this version will work
 		ECSENGINE_API void SetInstanceFieldDefaultData(const ReflectionField* field, void* data, bool offset_data = true);
 
@@ -355,6 +361,14 @@ namespace ECSEngine {
 		// Returns true if it can be copied with memcpy, else false
 		// It returns true when all fields are fundamental types or pointers
 		ECSENGINE_API bool SearchIsBlittableWithPointer(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition
+		);
+
+		// This call combines a separate call to SearchReflectionUserDefinedTypeByteSizeAlignment and SearchIsBlittable
+		// Into a single search, making it faster than calling separately those 2 functions. If an error is encountered,
+		// The byte size and the alignment returned are -1.
+		ECSENGINE_API ReflectionDefinitionInfo SearchReflectionDefinitionInfo(
 			const ReflectionManager* reflection_manager,
 			Stream<char> definition
 		);
@@ -659,7 +673,7 @@ namespace ECSEngine {
 		// If the last boolean parameter is set to true, it will
 		// Reset the buffers (as it is by default). By default, it will deallocate
 		// A single element. But you can specify a contiguous array as well
-		// In order to increase the performance for buffers
+		// In order to increase the performance for buffers, in which case you must specify the element byte size
 		ECSENGINE_API void DeallocateReflectionInstanceBuffers(
 			const ReflectionManager* reflection_manager,
 			Stream<char> definition,

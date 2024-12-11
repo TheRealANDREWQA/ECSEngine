@@ -18,18 +18,29 @@ namespace ECSEngine {
 			// Using a single entry for the allocator in order to reduce the interface bloat that is required,
 			// This type will deal with all types of allocators
 			ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR,
+			ECS_REFLECTION_CUSTOM_TYPE_HASH_TABLE,
 			ECS_REFLECTION_CUSTOM_TYPE_COUNT
 		};
 
 		// Must be kept in sync with the ECS_SERIALIZE_CUSTOM_TYPES
 		extern ReflectionCustomTypeInterface* ECS_REFLECTION_CUSTOM_TYPES[];
 
+		// This function will add the definition as a dependency unless the given definition is not a known basic type
+		ECSENGINE_API void ReflectionCustomTypeAddDependentType(ReflectionCustomTypeDependentTypesData* data, Stream<char> definition);
+
 		ECSENGINE_API void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependentTypesData* data);
+
+		// When the type has multiple template parameters, call this function, since it will handle all of them correctly
+		ECSENGINE_API void ReflectionCustomTypeDependentTypes_MultiTemplate(ReflectionCustomTypeDependentTypesData* data);
 
 		// E.g. for Template<Type> string should be Template
 		ECSENGINE_API bool ReflectionCustomTypeMatchTemplate(ReflectionCustomTypeMatchData* data, const char* string);
 
 		ECSENGINE_API Stream<char> ReflectionCustomTypeGetTemplateArgument(Stream<char> definition);
+
+		// Fills in the template parameters for the given definition, while taking into consideration
+		// That each individual parameter can contain nested templates
+		ECSENGINE_API void ReflectionCustomTypeGetTemplateArguments(Stream<char> definition, CapacityStream<Stream<char>>& arguments);
 
 		struct StreamCustomTypeInterface : public ReflectionCustomTypeInterface {
 			bool Match(ReflectionCustomTypeMatchData* data) override;
@@ -80,6 +91,22 @@ namespace ECSEngine {
 		};
 
 		struct AllocatorCustomTypeInterface : public ReflectionCustomTypeInterface {
+			bool Match(ReflectionCustomTypeMatchData* data) override;
+
+			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
+
+			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
+
+			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
+
+			void Copy(ReflectionCustomTypeCopyData* data) override;
+
+			bool Compare(ReflectionCustomTypeCompareData* data) override;
+
+			void Deallocate(ReflectionCustomTypeDeallocateData* data) override;
+		};
+
+		struct HashTableCustomTypeInterface : ReflectionCustomTypeInterface {
 			bool Match(ReflectionCustomTypeMatchData* data) override;
 
 			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;

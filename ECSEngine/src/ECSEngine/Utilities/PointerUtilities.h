@@ -9,6 +9,12 @@ namespace ECSEngine {
 		return (uintptr_t)a - (uintptr_t)b;
 	}
 
+	// Returns the number of elements from start until end
+	template<typename T>
+	ECS_INLINE size_t PointerElementDifference(const T* start, const T* end) {
+		return PointerDifference(end, start) / sizeof(T);
+	}
+
 	ECS_INLINE void* OffsetPointer(const void* pointer, int64_t offset) {
 		return (void*)((int64_t)pointer + offset);
 	}

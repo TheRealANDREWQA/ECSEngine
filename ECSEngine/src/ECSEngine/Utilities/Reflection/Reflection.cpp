@@ -4284,8 +4284,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// -----------------------------------------------------------------------------------------
 
 		bool SearchIsBlittableImplementation(
-			const Reflection::ReflectionManager* reflection_manager,
-			const Reflection::ReflectionType* type,
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
 			bool pointers_are_copyable
 		) {
 			// If it has a SoA specification, then it is not blittable
@@ -4342,8 +4342,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// -----------------------------------------------------------------------------------------
 
 		bool SearchIsBlittable(
-			const Reflection::ReflectionManager* reflection_manager,
-			const Reflection::ReflectionType* type
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type
 		) {
 			return SearchIsBlittableImplementation(reflection_manager, type, false);
 		}
@@ -4351,7 +4351,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// -----------------------------------------------------------------------------------------
 
 		bool SearchIsBlittableImplementation(
-			const Reflection::ReflectionManager* reflection_manager,
+			const ReflectionManager* reflection_manager,
 			Stream<char> definition,
 			bool pointers_are_copyable
 		) {
@@ -4402,7 +4402,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// -----------------------------------------------------------------------------------------
 
 		bool SearchIsBlittable(
-			const Reflection::ReflectionManager* reflection_manager,
+			const ReflectionManager* reflection_manager,
 			Stream<char> definition
 		)
 		{
@@ -4421,6 +4421,70 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		bool SearchIsBlittableWithPointer(const ReflectionManager* reflection_manager, Stream<char> definition)
 		{
 			return SearchIsBlittableImplementation(reflection_manager, definition, true);
+		}
+
+		// -----------------------------------------------------------------------------------------
+
+		ReflectionDefinitionInfo SearchReflectionDefinitionInfo(const ReflectionManager* reflection_manager, Stream<char> definition) {
+			// Check pointers
+			if (FindFirstCharacter(definition, '*').size > 0) {
+				return { sizeof(void*), alignof(void*), false };
+			}
+
+			// Check stream types
+			const char* stream_string = STRING(Stream);
+			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
+				return { sizeof(Stream<void>), alignof(Stream<void>), false };
+			}
+
+			stream_string = STRING(CapacityStream);
+			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
+				return { sizeof(CapacityStream<void>), alignof(CapacityStream<void>), false };
+			}
+
+			stream_string = STRING(ResizableStream);
+			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
+				return { sizeof(ResizableStream<char>), alignof(ResizableStream<char>), false };
+			}
+
+			ulong2 blittable_exception = reflection_manager->FindBlittableException(definition);
+			if (blittable_exception.x != -1) {
+				return { blittable_exception.x, blittable_exception.y, true };
+			}
+
+			// Check fundamental type
+			ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
+			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
+				return { field.info.byte_size, GetReflectionFieldTypeAlignment(field.info.basic_type), true };
+			}
+
+			ReflectionType type;
+			ReflectionEnum enum_;
+			unsigned int custom_type = -1;
+
+			SearchReflectionUserDefinedType(reflection_manager, definition, type, custom_type, enum_);
+			if (type.name.size > 0) {
+				return { GetReflectionTypeByteSize(&type), GetReflectionTypeAlignment(&type), IsBlittable(&type) };
+			}
+			else if (custom_type != -1) {
+				ReflectionCustomTypeByteSizeData byte_size_data;
+				byte_size_data.reflection_manager = reflection_manager;
+				byte_size_data.definition = definition;
+
+				ReflectionCustomTypeIsBlittableData is_blittable_data;
+				is_blittable_data.definition = definition;
+				is_blittable_data.reflection_manager = reflection_manager;
+
+				ReflectionCustomTypeInterface* custom_type_interface = GetReflectionCustomType(custom_type);
+				ulong2 byte_size_alignment = custom_type_interface->GetByteSize(&byte_size_data);
+				return { byte_size_alignment.x, byte_size_alignment.y, custom_type_interface->IsBlittable(&is_blittable_data) };
+			}
+			else if (enum_.name.size > 0) {
+				return { sizeof(unsigned char), alignof(unsigned char), true };
+			}
+
+			// Signal an error
+			return { (size_t)-1, (size_t)-1, false };
 		}
 
 		// -----------------------------------------------------------------------------------------
