@@ -33,7 +33,7 @@ namespace ECSEngine {
 		{ STRING(PixelShader), ECS_ASSET_SHADER, ECS_SHADER_PIXEL },
 		{ STRING(ComputeShader), ECS_ASSET_SHADER, ECS_SHADER_COMPUTE },
 		{ STRING(Material), ECS_ASSET_MATERIAL },
-		{ STRING(Stream<void>), ECS_ASSET_MISC }
+		{ STRING(MiscAssetData), ECS_ASSET_MISC }
 	};
 
 	size_t ECS_ASSET_TARGET_FIELD_NAMES_SIZE()

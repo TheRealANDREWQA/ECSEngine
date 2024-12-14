@@ -181,6 +181,8 @@ namespace ECSEngine {
 			bool HasValidDependencies(const ReflectionType* type) const;
 
 			bool TryGetType(Stream<char> name, ReflectionType& type) const;
+			// This version allows you to reference the pointer directly, in case you need it to reference it above in the stack scopes
+			bool TryGetTypePtr(Stream<char> name, const ReflectionType*& type) const;
 			bool TryGetEnum(Stream<char> name, ReflectionEnum& enum_) const;
 
 			// Copies the constants reflected from another manager into this one
@@ -359,7 +361,7 @@ namespace ECSEngine {
 		ECSENGINE_API void SearchReflectionUserDefinedType(
 			const ReflectionManager* reflection_manager,
 			Stream<char> definition,
-			ReflectionType& type,
+			const ReflectionType*& type,
 			unsigned int& custom_type_index,
 			ReflectionEnum& enum_
 		);
@@ -408,8 +410,8 @@ namespace ECSEngine {
 
 		// Copies all blittable fields from one type instance to the other
 		ECSENGINE_API void CopyReflectionTypeBlittableFields(
-			const Reflection::ReflectionManager* reflection_manager,
-			const Reflection::ReflectionType* type,
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
 			const void* source,
 			void* destination
 		);

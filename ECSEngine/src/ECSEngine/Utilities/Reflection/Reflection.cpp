@@ -102,7 +102,7 @@ namespace ECSEngine {
 			{ STRING(VertexShader), sizeof(void*) },
 			{ STRING(PixelShader), sizeof(void*) },
 			{ STRING(ComputeShader), sizeof(void*) },
-			{ STRING(Material*), sizeof(void*) },
+			{ STRING(Material), sizeof(void*) },
 			{ STRING(MiscAssetData), sizeof(Stream<void>) }
 		};
 
@@ -438,6 +438,17 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		// Returns the subrange of tokens with qualifiers (& or *) removed
+		static TokenizedString::Subrange RemoveFieldTypeQualifiers(const TokenizedString& string, TokenizedString::Subrange field_type_tokens) {
+			TokenizedString::Subrange definition_tokens = field_type_tokens;
+			Stream<char> last_token = string[definition_tokens[definition_tokens.count - 1]];
+			while (definition_tokens.count > 1 && (last_token == "*" || last_token == "&")) {
+				definition_tokens.count--;
+				last_token = string[definition_tokens[definition_tokens.count - 1]];
+			}
+			return definition_tokens;
+		}
+
 		static void DeduceFieldTypeExtended(
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			unsigned short& pointer_offset,
@@ -447,12 +458,7 @@ namespace ECSEngine {
 		) {
 			// The definition of the field is all tokens except the final one which is the name. But also remove tokens that are * or &, 
 			// Since those are special
-			TokenizedString::Subrange definition_tokens = field_type_tokens;
-			Stream<char> last_token = string[definition_tokens[definition_tokens.count - 1]];
-			while (definition_tokens.count > 1 && (last_token == "*" || last_token == "&")) {
-				definition_tokens.count--;
-				last_token = string[definition_tokens[definition_tokens.count - 1]];
-			}
+			TokenizedString::Subrange definition_tokens = RemoveFieldTypeQualifiers(string, field_type_tokens);
 
 			Stream<char> definition = string.GetStreamForSubrange(definition_tokens);
 			// Copy the definition in order to not modify the actual string
@@ -563,8 +569,8 @@ namespace ECSEngine {
 				field.info.stream_byte_size = field.info.byte_size;
 				field.info.stream_alignment = field.info.byte_size;
 				field.info.byte_size = byte_size;
-				// We must combine all tokens besides the final one, which is the name token
-				field.definition = TokenizeMergeEntries(string, field_tokens.GetSubrange(0, field_tokens.count - 1), &data->allocator);
+				// Copy this entry in order to remove the ecsengine namespaces inside it
+				field.definition = string.GetStreamForSubrange(field_tokens.GetSubrange(0, field_tokens.count - 1)).Copy(&data->allocator);
 				field.definition = RemoveECSEngineNamespace(field.definition);
 
 				pointer_offset += byte_size;
@@ -638,7 +644,6 @@ namespace ECSEngine {
 					);
 
 					field.name = GetStructFieldName(string, field_tokens);
-					field.tag = type.fields[type.fields.size].tag;
 					data->total_memory += field.name.size + 1;
 					type.fields.Add(field);
 					success = true;
@@ -692,69 +697,69 @@ namespace ECSEngine {
 				WriteErrorMessage(data, error_message);
 				return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 			}
-
-			// Some field determination functions write the field without knowing the tag. When the function exits, set the tag accordingly to 
-			// what was determined here
-			if (tag_tokens.count > 0) {
-				// We have a tag
-
-				// Find the individual tags and write them separated with a delimiter character
-				const char* final_tag_character = &string.GetStreamForSubrange(tag_tokens).Last();
-				unsigned int current_token = 1;
-				while (current_token < tag_tokens.count) {
-					if (string[tag_tokens[current_token]] == "(") {
-						// Find its pair
-						uint2 parenthese_pair_indices = TokenizeFindMatchingPair(string, "(", ")", tag_tokens.GetSubrangeUntilEnd(current_token));
-						if (parenthese_pair_indices.y == -1) {
-							// Error
-							ECS_FORMAT_TEMP_STRING(error_message, "Unmatched parenthese for tag a for type {#}", type.name);
-							WriteErrorMessage(data, error_message);
-							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
-						}
-						// Advance to that token
-						current_token += parenthese_pair_indices.y + 1;
-					}
-
-					// Tags are separated by comma, when a tag separation comma is detected, change the characters
-					if (string[tag_tokens[current_token]] == ",") {
-						char* current_character = string[tag_tokens[current_token]].buffer;
-						while (current_character < final_tag_character && !IsCodeIdentifierCharacter(*current_character)) {
-							*current_character = ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR;
-							current_character++;
-						}
-					}
-
-				}
-				field.tag = string.GetStreamForSubrange(tag_tokens);
-				data->total_memory += field.tag.size;
-			}
-
-			if (special_tag_tokens.count > 0) {
-				// Otherwise it must be the ECS_GIVE_SIZE_REFLECTION macro
-				if (string[special_tag_tokens[0]] == STRING(ECS_GIVE_SIZE_REFLECTION)) {
-					// We must append this tag to the existing tag
-					Stream<char> tag_to_append = string.GetStreamForSubrange(special_tag_tokens);
-
-					Stream<char> new_tag;
-					// We need to add one more character for the delimiter
-					new_tag.Initialize(&data->allocator, field.tag.size + tag_to_append.size + 1);
-					new_tag.size = 0;
-					
-					new_tag.CopyOther(field.tag);
-					if (new_tag.size > 0) {
-						new_tag.Add(ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR);
-					}
-					new_tag.AddStream(tag_to_append);
-					field.tag = new_tag;
-					data->total_memory += tag_to_append.size + 1;
-				}
-			}
 			
 			bool success = DeduceFieldType(data, type, call_data->last_type_pointer_offset, string, type_and_name_tokens);
 			if (success) {
 				if (field.definition.size == 0 || field.name.size == 0) {
 					// There was nothing to be reflected - just mark it as omitted
 					return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
+				}
+
+				// Handle the tag after the field was written by the deduce function, which would otherwise override the tag
+				if (tag_tokens.count > 0) {
+					// We have a tag
+
+					// Find the individual tags and write them separated with a delimiter character
+					const char* final_tag_character = &string.GetStreamForSubrange(tag_tokens).Last();
+					unsigned int current_token = 1;
+					while (current_token < tag_tokens.count) {
+						if (string[tag_tokens[current_token]] == "(") {
+							// Find its pair
+							uint2 parenthese_pair_indices = TokenizeFindMatchingPair(string, "(", ")", tag_tokens.GetSubrangeUntilEnd(current_token));
+							if (parenthese_pair_indices.y == -1) {
+								// Error
+								ECS_FORMAT_TEMP_STRING(error_message, "Unmatched parenthese for tag a for type {#}", type.name);
+								WriteErrorMessage(data, error_message);
+								return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+							}
+							// Advance to that token
+							current_token += parenthese_pair_indices.y + 1;
+						}
+
+						// Tags are separated by comma, when a tag separation comma is detected, change the characters
+						if (string[tag_tokens[current_token]] == ",") {
+							char* current_character = string[tag_tokens[current_token]].buffer;
+							while (current_character < final_tag_character && !IsCodeIdentifierCharacter(*current_character)) {
+								*current_character = ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR;
+								current_character++;
+							}
+						}
+
+					}
+					field.tag = string.GetStreamForSubrange(tag_tokens);
+					data->total_memory += field.tag.size;
+				}
+
+				// Handle the remaining special tag tokens now
+				if (special_tag_tokens.count > 0) {
+					// Otherwise it must be the ECS_GIVE_SIZE_REFLECTION macro
+					if (string[special_tag_tokens[0]] == STRING(ECS_GIVE_SIZE_REFLECTION)) {
+						// We must append this tag to the existing tag
+						Stream<char> tag_to_append = string.GetStreamForSubrange(special_tag_tokens);
+
+						Stream<char> new_tag;
+						// We need to add one more character for the delimiter
+						new_tag.Initialize(&data->allocator, field.tag.size + tag_to_append.size + 1);
+						new_tag.size = 0;
+
+						new_tag.CopyOther(field.tag);
+						if (new_tag.size > 0) {
+							new_tag.Add(ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR);
+						}
+						new_tag.AddStream(tag_to_append);
+						field.tag = new_tag;
+						data->total_memory += tag_to_append.size + 1;
+					}
 				}
 
 				if (field.info.basic_type == ReflectionBasicFieldType::UserDefined) {
@@ -1281,7 +1286,8 @@ namespace ECSEngine {
 				// The definition is everything besides the final token, which is the name
 				// Remove the namespaces - do this on a temporary
 				ECS_STACK_CAPACITY_STREAM(char, curated_definition, 1024);
-				curated_definition.CopyOther(data->string.GetStreamForSubrange(type_and_name_tokens.GetSubrange(0, type_and_name_tokens.count - 1)));
+				TokenizedString::Subrange type_definition_subrange = RemoveFieldTypeQualifiers(data->string, type_and_name_tokens.GetSubrange(0, type_and_name_tokens.count - 1));
+				curated_definition.CopyOther(data->string.GetStreamForSubrange(type_definition_subrange));
 				type_tag_field.definition = RemoveECSEngineNamespace(curated_definition);
 
 				// The name is the last token
@@ -1478,7 +1484,7 @@ namespace ECSEngine {
 
 			// The total number of characters that are needed for the merged string is the number of characters added,
 			// Plus one separating space for each token that there is plus the previous characters
-			size_t total_string_size = argument_data.type_tag_added_characters.size + argument_data.type_tag_added_tokens.size + tokenized_body.string.size;
+			size_t total_string_size = (size_t)argument_data.type_tag_added_characters.size + (size_t)argument_data.type_tag_added_tokens.size + tokenized_body.string.size;
 			Stream<char> final_string;
 			final_string.Initialize(&parse_data->allocator, total_string_size);
 			final_string.size = 0;
@@ -2840,6 +2846,13 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		bool ReflectionManager::TryGetTypePtr(Stream<char> name, const ReflectionType*& type) const {
+			ResourceIdentifier identifier(name);
+			return type_definitions.TryGetValuePtr(name, type);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ReflectionManager::TryGetEnum(Stream<char> name, ReflectionEnum& enum_) const {
 			ResourceIdentifier identifier(name);
 			return enum_definitions.TryGetValue(identifier, enum_);
@@ -4164,97 +4177,22 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			Stream<char> definition
 		)
 		{
-			// Check pointers
-			if (FindFirstCharacter(definition, '*').size > 0) {
-				return { sizeof(void*), alignof(void*) };
-			}
-
-			// Check stream types
-			const char* stream_string = STRING(Stream);
-			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
-				return { sizeof(Stream<void>), alignof(Stream<void>) };
-			}
-
-			stream_string = STRING(CapacityStream);
-			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
-				return { sizeof(CapacityStream<void>), alignof(CapacityStream<void>) };
-			}
-
-			stream_string = STRING(ResizableStream);
-			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
-				return { sizeof(ResizableStream<char>), alignof(ResizableStream<char>) };
-			}
-
-			ulong2 blittable_exception = reflection_manager->FindBlittableException(definition);
-			if (blittable_exception.x != -1) {
-				return blittable_exception;
-			}
-
-			// Check fundamental type
-			ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
-			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
-				return { field.info.byte_size, GetReflectionFieldTypeAlignment(field.info.basic_type) };
-			}
-
-			ReflectionType type;
-			ReflectionEnum enum_;
-			unsigned int custom_type = -1;
-
-			SearchReflectionUserDefinedType(reflection_manager, definition, type, custom_type, enum_);
-			if (type.name.size > 0) {
-				return { GetReflectionTypeByteSize(&type), GetReflectionTypeAlignment(&type) };
-			}
-			else if (custom_type != -1) {
-				ReflectionCustomTypeByteSizeData byte_size_data;
-				byte_size_data.reflection_manager = reflection_manager;
-				byte_size_data.definition = definition;
-				return GetReflectionCustomType(custom_type)->GetByteSize(&byte_size_data);
-			}
-			else if (enum_.name.size > 0) {
-				return { sizeof(unsigned char), alignof(unsigned char) };
-			}
-
-			// Signal an error
-			return { (size_t)-1, (size_t)-1 };
+			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(reflection_manager, definition);
+			return { definition_info.byte_size, definition_info.alignment };
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		size_t SearchReflectionUserDefinedTypeAlignment(const ReflectionManager* reflection_manager, Stream<char> definition)
 		{
-			ReflectionType type;
-			ReflectionEnum enum_;
-			unsigned int custom_type = -1;
-
-			SearchReflectionUserDefinedType(reflection_manager, definition, type, custom_type, enum_);
-			if (type.name.size > 0) {
-				return GetReflectionTypeAlignment(&type);
-			}
-			else if (custom_type != -1) {
-				ReflectionCustomTypeByteSizeData byte_size_data;
-				byte_size_data.reflection_manager = reflection_manager;
-				byte_size_data.definition = definition;
-				return GetReflectionCustomType(custom_type)->GetByteSize(&byte_size_data).y;
-			}
-			else if (enum_.name.size > 0) {
-				return alignof(unsigned char);
-			}
-			else {
-				ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
-				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
-					return GetReflectionFieldTypeAlignment(field.info.basic_type);
-				}
-			}
-
-			// Signal an error
-			return -1;
+			return SearchReflectionUserDefinedTypeByteSizeAlignment(reflection_manager, definition).y;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void SearchReflectionUserDefinedType(const ReflectionManager* reflection_manager, Stream<char> definition, ReflectionType& type, unsigned int& container_index, ReflectionEnum& enum_)
+		void SearchReflectionUserDefinedType(const ReflectionManager* reflection_manager, Stream<char> definition, const ReflectionType*& type, unsigned int& container_index, ReflectionEnum& enum_)
 		{
-			if (reflection_manager->TryGetType(definition, type)) {
+			if (reflection_manager->TryGetTypePtr(definition, type)) {
 				container_index = -1;
 				enum_.name = { nullptr, 0 };
 				return;
@@ -4262,19 +4200,20 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			else {
 				container_index = FindReflectionCustomType(definition);
 				if (container_index != -1) {
-					type.name = { nullptr, 0 };
+					type = nullptr;
 					enum_.name = { nullptr, 0 };
 					return;
 				}
 				else {
 					if (reflection_manager->TryGetEnum(definition, enum_)) {
-						type.name = { nullptr, 0 };
+						type = nullptr;
 						// Container index is already -1
 						return;
 					}
 					else {
 						// None matches
-						type.name = { nullptr, 0 };
+						type = nullptr;
+						// The container index is set to -1 already above
 						enum_.name = { nullptr, 0 };
 					}
 				}
@@ -4487,16 +4426,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return definition_info;
 			}
 
-			ReflectionType type;
+			const ReflectionType* type;
 			ReflectionEnum enum_;
 			unsigned int custom_type = -1;
 
 			SearchReflectionUserDefinedType(reflection_manager, definition, type, custom_type, enum_);
-			if (type.name.size > 0) {
-				definition_info.byte_size = GetReflectionTypeByteSize(&type);
-				definition_info.alignment = GetReflectionTypeAlignment(&type);
-				definition_info.is_blittable = IsBlittable(&type);
-				definition_info.type = &type;
+			if (type != nullptr) {
+				definition_info.byte_size = GetReflectionTypeByteSize(type);
+				definition_info.alignment = GetReflectionTypeAlignment(type);
+				definition_info.is_blittable = IsBlittable(type);
+				definition_info.type = type;
 				return definition_info;
 			}
 			else if (custom_type != -1) {
@@ -6179,7 +6118,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						// Merging of the SoA pointers
 						ResizableStream<void> previous_data = GetReflectionFieldResizableStreamVoid(field->info, source, false);
 						size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * previous_data.size;
-						void* allocation = Allocate(options->allocator, allocation_size, field->info.stream_alignment);
+						void* allocation = allocation_size == 0 ? nullptr : Allocate(options->allocator, allocation_size, field->info.stream_alignment);
 						memcpy(allocation, previous_data.buffer, allocation_size);
 
 						previous_data.buffer = allocation;
@@ -6233,7 +6172,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							// Check to see if we need to allocate
 							if (options->always_allocate_for_buffers) {
 								size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * source_data.size;
-								void* allocation = Allocate(options->allocator, allocation_size, field->info.stream_alignment);
+								void* allocation = allocation_size == 0 ? nullptr : Allocate(options->allocator, allocation_size, field->info.stream_alignment);
 								memcpy(allocation, source_data.buffer, allocation_size);
 								source_data.buffer = allocation;
 								source_data.capacity = source_data.size;
