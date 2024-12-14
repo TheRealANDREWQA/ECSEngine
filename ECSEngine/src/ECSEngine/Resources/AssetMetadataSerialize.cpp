@@ -47,7 +47,7 @@ namespace ECSEngine {
 
 	void MaterialAssetCustomTypeInterface::Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) {
 		for (size_t index = 0; index < data->element_count; index++) {
-			void* current_source = OffsetPointer(data->source, index * data->element_byte_size);
+			void* current_source = OffsetPointer(data->source, index * sizeof(MaterialAsset));
 			MaterialAsset* asset = (MaterialAsset*)current_source;
 			asset->DeallocateMemory(data->allocator);
 		}

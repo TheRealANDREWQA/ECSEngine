@@ -268,6 +268,12 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		bool IsReflectionFieldTypeBlittable(const ReflectionFieldInfo* info) {
+			return info->stream_type == ReflectionStreamFieldType::Basic || info->stream_type == ReflectionStreamFieldType::BasicTypeArray;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		Stream<char> GetBasicFieldDefinition(ReflectionBasicFieldType basic_type)
 		{
 			return ECS_BASIC_FIELD_TYPE_STRING[(unsigned int)basic_type];

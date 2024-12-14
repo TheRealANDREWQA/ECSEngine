@@ -321,7 +321,7 @@ namespace ECSEngine {
 		void* destination,
 		size_t element_byte_size,
 		AllocatorPolymorphic allocator,
-		void (*copy_function)(const void* source_element, void* destination_element, AllocatorPolymorphic allocator, void* extra_data),
+		void (*copy_function)(const void* source_element, void* destination_element, void* extra_data),
 		void* extra_data
 	);
 
@@ -329,6 +329,14 @@ namespace ECSEngine {
 	ECSENGINE_API void SparseSetInitializeUntyped(void* destination, unsigned int capacity, unsigned int element_byte_size, void* _buffer);
 
 	ECSENGINE_API void SparseSetDeallocateUntyped(void* sparse_set, AllocatorPolymorphic allocator);
+
+	// Will call the deallocate function for each individual element, it doesn't deallocate the sparse set itself
+	ECSENGINE_API void SparseSetDeallocateUntypedElements(
+		void* sparse_set, 
+		size_t element_byte_size,
+		void (*deallocate_function)(void* element, void* extra_data), 
+		void* extra_data
+	);
 
 	template<typename T>
 	struct ResizableSparseSet {

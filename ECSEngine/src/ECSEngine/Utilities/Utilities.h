@@ -352,11 +352,11 @@ namespace ECSEngine {
 	ECSENGINE_API size_t SearchBytesReversed(const void* data, size_t element_count, size_t value_to_search, size_t byte_size);
 
 	// Uses a more generalized approach to comparing. It will use the fast SIMD compare for sizes of 1, 2, 4 and 8
-	// but for all the others is going to fall back on memcmp. Returns -1 if it doesn't find the value
+	// but for all the others is going to fall back on a slower path. Returns -1 if it doesn't find the value
 	ECSENGINE_API size_t SearchBytesEx(const void* data, size_t element_count, const void* value_to_search, size_t byte_size);
 
 	// Uses a more generalized approach to comparing. It will use the fast SIMD compare for sizes of 1, 2, 4 and 8
-	// but for all the others is going to fall back on memcmp. Returns -1 if it doesn't find the value
+	// but for all the others is going to fall back on a slower path. Returns -1 if it doesn't find the value
 	ECSENGINE_API size_t SearchBytesExReversed(const void* data, size_t element_count, const void* value_to_search, size_t byte_size);
 
 	template<typename StreamValue>

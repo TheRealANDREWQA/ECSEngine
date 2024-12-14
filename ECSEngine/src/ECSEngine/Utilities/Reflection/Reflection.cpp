@@ -4426,36 +4426,65 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// -----------------------------------------------------------------------------------------
 
 		ReflectionDefinitionInfo SearchReflectionDefinitionInfo(const ReflectionManager* reflection_manager, Stream<char> definition) {
+			ReflectionDefinitionInfo definition_info;
+
 			// Check pointers
 			if (FindFirstCharacter(definition, '*').size > 0) {
-				return { sizeof(void*), alignof(void*), false };
+				definition_info.byte_size = sizeof(void*);
+				definition_info.alignment = alignof(void*);
+				definition_info.is_blittable = false;
+				definition_info.is_basic_field = true;
+				// Set the field basic type as UserDefined, since we are currently not detecting the target pointer type
+				definition_info.field_stream_type = ReflectionStreamFieldType::Pointer;
+				return definition_info;
 			}
 
 			// Check stream types
-			const char* stream_string = STRING(Stream);
-			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
-				return { sizeof(Stream<void>), alignof(Stream<void>), false };
+			if (definition.StartsWith(STRING(Stream))) {
+				definition_info.byte_size = sizeof(Stream<void>);
+				definition_info.alignment = alignof(Stream<void>);
+				definition_info.is_blittable = false;
+				definition_info.custom_type = ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_STREAM];
+				return definition_info;
 			}
 
-			stream_string = STRING(CapacityStream);
-			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
-				return { sizeof(CapacityStream<void>), alignof(CapacityStream<void>), false };
+			if (definition.StartsWith(STRING(CapacityStream))) {
+				definition_info.byte_size = sizeof(CapacityStream<void>);
+				definition_info.alignment = alignof(CapacityStream<void>);
+				definition_info.is_blittable = false;
+				definition_info.custom_type = ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_STREAM];
+				return definition_info;
 			}
 
-			stream_string = STRING(ResizableStream);
-			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
-				return { sizeof(ResizableStream<char>), alignof(ResizableStream<char>), false };
+			if (definition.StartsWith(STRING(ResizableStream))) {
+				definition_info.byte_size = sizeof(ResizableStream<void>);
+				definition_info.alignment = alignof(ResizableStream<void>);
+				definition_info.is_blittable = false;
+				definition_info.custom_type = ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_STREAM];
+				return definition_info;
 			}
 
 			ulong2 blittable_exception = reflection_manager->FindBlittableException(definition);
 			if (blittable_exception.x != -1) {
-				return { blittable_exception.x, blittable_exception.y, true };
+				definition_info.byte_size = blittable_exception.x;
+				definition_info.alignment = blittable_exception.y;
+				definition_info.is_blittable = true;
+				return definition_info;
 			}
 
 			// Check fundamental type
 			ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
 			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
-				return { field.info.byte_size, GetReflectionFieldTypeAlignment(field.info.basic_type), true };
+				definition_info.byte_size = field.info.byte_size;
+				definition_info.alignment = GetReflectionFieldTypeAlignment(&field.info);
+				definition_info.is_blittable = IsReflectionFieldTypeBlittable(&field.info);
+				if (!definition_info.is_blittable) {
+					definition_info.field_basic_type = field.info.basic_type;
+					definition_info.field_stream_type = field.info.stream_type;
+					definition_info.field_stream_alignment = field.info.stream_alignment;
+					definition_info.field_stream_byte_size = field.info.stream_byte_size;
+				}
+				return definition_info;
 			}
 
 			ReflectionType type;
@@ -4464,7 +4493,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			SearchReflectionUserDefinedType(reflection_manager, definition, type, custom_type, enum_);
 			if (type.name.size > 0) {
-				return { GetReflectionTypeByteSize(&type), GetReflectionTypeAlignment(&type), IsBlittable(&type) };
+				definition_info.byte_size = GetReflectionTypeByteSize(&type);
+				definition_info.alignment = GetReflectionTypeAlignment(&type);
+				definition_info.is_blittable = IsBlittable(&type);
+				definition_info.type = &type;
+				return definition_info;
 			}
 			else if (custom_type != -1) {
 				ReflectionCustomTypeByteSizeData byte_size_data;
@@ -4477,14 +4510,26 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				ReflectionCustomTypeInterface* custom_type_interface = GetReflectionCustomType(custom_type);
 				ulong2 byte_size_alignment = custom_type_interface->GetByteSize(&byte_size_data);
-				return { byte_size_alignment.x, byte_size_alignment.y, custom_type_interface->IsBlittable(&is_blittable_data) };
+
+				definition_info.byte_size = byte_size_alignment.x;
+				definition_info.alignment = byte_size_alignment.y;
+				definition_info.is_blittable = custom_type_interface->IsBlittable(&is_blittable_data);
+				definition_info.custom_type = custom_type_interface;
+				return definition_info;
 			}
 			else if (enum_.name.size > 0) {
-				return { sizeof(unsigned char), alignof(unsigned char), true };
+				definition_info.byte_size = sizeof(unsigned char);
+				definition_info.alignment = alignof(unsigned char);
+				definition_info.is_blittable = true;
+				return definition_info;
 			}
 
+			ECS_ASSERT(false, "Invalid reflection definition search!");
 			// Signal an error
-			return { (size_t)-1, (size_t)-1, false };
+			definition_info.byte_size = -1;
+			definition_info.alignment = -1;
+			definition_info.is_blittable = false;
+			return definition_info;
 		}
 
 		// -----------------------------------------------------------------------------------------
@@ -4668,6 +4713,44 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 					*destination_ptr = allocation;
 					SetReflectionFieldPointerSoASize(*info, OffsetPointer(destination, -(int64_t)info->pointer_offset), source_ptr_size);
+				}
+				else {
+					ECS_ASSERT(false, "Unknown stream type");
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator, bool reset_buffers) {
+			ReflectionStreamFieldType stream_type = info->stream_type;
+			if (stream_type != ReflectionStreamFieldType::Basic && stream_type != ReflectionStreamFieldType::BasicTypeArray) {
+				// Here the source needs to be passed in, it will offset it manually
+				if (stream_type == ReflectionStreamFieldType::Stream) {
+					Stream<void>* destination_stream = (Stream<void>*)destination;
+					destination_stream->Deallocate(allocator);
+					if (reset_buffers) {
+						destination_stream->InitializeFromBuffer(nullptr, 0);
+					}
+				}
+				else if (stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream) {
+					// TODO: Determine if we should use the resizable stream allocator or not
+					CapacityStream<void>* destination_stream = (CapacityStream<void>*)destination;
+					destination_stream->Deallocate(allocator);
+					if (reset_buffers) {
+						*destination_stream = { nullptr, 0, 0 };
+					}
+				}
+				else if (stream_type == ReflectionStreamFieldType::Pointer) {
+					// For pointers, don't do anything, since we can't know exactly if it is allocated or not
+				}
+				else if (stream_type == ReflectionStreamFieldType::PointerSoA) {
+					void** destination_ptr = (void**)destination;
+					DeallocateEx(allocator, *destination_ptr);
+					if (reset_buffers) {
+						// Set the size to 0
+						SetReflectionFieldPointerSoASize(*info, OffsetPointer(destination, -(int64_t)info->pointer_offset), 0);
+					}
 				}
 				else {
 					ECS_ASSERT(false, "Unknown stream type");
@@ -5277,77 +5360,46 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const CompareReflectionTypeInstancesOptions* options
 		)
 		{
-			// Try with a reflection type
-			ReflectionType nested_type;
-			if (reflection_manager->TryGetType(definition, nested_type)) {
-				// Check to see if it is blittable
-				bool is_blittable = IsBlittable(&nested_type);
-				size_t nested_byte_size = GetReflectionTypeByteSize(&nested_type);
+			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(reflection_manager, definition);
+			if (definition_info.is_blittable) {
+				// Use a fast path for this
+				return memcmp(first, second, count * definition_info.byte_size) == 0;
+			}
+			return CompareReflectionTypeInstances(reflection_manager, definition, definition_info, first, second, options);
+		}
 
-				if (is_blittable) {
-					return memcmp(first, second, count * nested_byte_size) == 0;
-				}
-				else {
-					const void* current_first = first;
-					const void* current_second = second;
-					for (size_t index = 0; index < count; index++) {
-						if (!CompareReflectionTypeInstances(reflection_manager, &nested_type, current_first, current_second, options)) {
-							return false;
-						}
-						current_first = OffsetPointer(current_first, nested_byte_size);
-						current_second = OffsetPointer(current_second, nested_byte_size);
-					}
-					return true;
-				}
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool CompareReflectionTypeInstances(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
+			const void* first,
+			const void* second,
+			const CompareReflectionTypeInstancesOptions* options
+		) {
+			if (definition_info.is_blittable) {
+				// Can use memcmp directly
+				return memcmp(first, second, definition_info.byte_size);
 			}
 			else {
-				// Might be a custom type
-				ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(definition);
-				if (custom_type != nullptr) {
-					ReflectionCustomTypeByteSizeData byte_size_data;
-					byte_size_data.definition = definition;
-					byte_size_data.reflection_manager = reflection_manager;
-					ulong2 byte_size = custom_type->GetByteSize(&byte_size_data);
-
-					ReflectionCustomTypeIsBlittableData is_blittable_data;
-					is_blittable_data.definition = definition;
-					is_blittable_data.reflection_manager = reflection_manager;
-					bool is_blittable = custom_type->IsBlittable(&is_blittable_data);
-					if (is_blittable) {
-						return memcmp(first, second, count * byte_size.x) == 0;
-					}
-					else {
-						ReflectionCustomTypeCompareData compare_data;
-						compare_data.definition = definition;
-						compare_data.second = second;
-						compare_data.first = first;
-						compare_data.reflection_manager = reflection_manager;
-						for (size_t index = 0; index < count; index++) {
-							if (!custom_type->Compare(&compare_data)) {
-								return false;
-							}
-							compare_data.first = OffsetPointer(compare_data.first, byte_size.x);
-							compare_data.second = OffsetPointer(compare_data.second, byte_size.x);
-						}
-						return true;
-					}
+				if (definition_info.type != nullptr) {
+					return CompareReflectionTypeInstances(reflection_manager, definition_info.type, first, second, options);
+				}
+				else if (definition_info.custom_type != nullptr) {
+					ReflectionCustomTypeCompareData compare_data;
+					compare_data.definition = definition;
+					compare_data.second = second;
+					compare_data.first = first;
+					compare_data.reflection_manager = reflection_manager;
+					return definition_info.custom_type->Compare(&compare_data);
 				}
 				else {
-					// Not a custom type or user defined. Check blittable types
-					ulong2 blittable_type = reflection_manager->FindBlittableException(definition);
-					if (blittable_type.x != -1) {
-						return memcmp(first, second, count * blittable_type.x) == 0;
-					}
-					else {
-						// Unrecognized type - assert false
-						ECS_ASSERT(false);
-						return false;
-					}
+					// Use the basic field
+					ReflectionField field = definition_info.GetBasicField();
+					return CompareReflectionFieldInfoInstances(&field.info, first, second, false);
 				}
 			}
-
-			// Shouldn't be reached
-			return false;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -5516,62 +5568,45 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			void* destination,
 			const CopyReflectionDataOptions* options
 		) {
-			// Start with blittable types
-			ulong2 exception_index = reflection_manager->FindBlittableException(definition);
-			if (exception_index.x != -1) {
-				memcpy(destination, source, exception_index.x);
+			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(reflection_manager, definition);
+			return CopyReflectionTypeInstance(reflection_manager, definition, definition_info, source, destination, options);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void CopyReflectionTypeInstance(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
+			const void* source,
+			void* destination,
+			const CopyReflectionDataOptions* options
+		) {
+			if (definition_info.is_blittable) {
+				// Can memcpy directly
+				memcpy(destination, source, definition_info.byte_size);
 			}
 			else {
 				// Check fundamental type
-				ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
-				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
+				if (definition_info.is_basic_field) {
+					// Create a mock reflection field
+					ReflectionField field = definition_info.GetBasicField();
 					CopyReflectionFieldBasic(&field.info, source, destination, options->allocator);
 				}
+				else if (definition_info.type != nullptr) {
+					// Forward the call
+					CopyReflectionTypeInstance(reflection_manager, definition_info.type, source, destination, options);
+				}
 				else {
-					// Check blittable exception
-					ReflectionType reflection_type;
-					if (reflection_manager->TryGetType(definition, reflection_type)) {
-						// Forward the call
-						CopyReflectionTypeInstance(reflection_manager, &reflection_type, source, destination, options);
-					}
-					else {
-						// Check to see if it is a custom type
-						ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(definition);
-						if (custom_type != nullptr) {
-							ReflectionCustomTypeIsBlittableData trivially_data;
-							trivially_data.definition = definition;
-							trivially_data.reflection_manager = reflection_manager;
-							bool is_blittable = custom_type->IsBlittable(&trivially_data);
-							if (is_blittable) {
-								ReflectionCustomTypeByteSizeData byte_size_data;
-								byte_size_data.definition = definition;
-								byte_size_data.reflection_manager = reflection_manager;
-								size_t byte_size = custom_type->GetByteSize(&byte_size_data).x;
-								memcpy(destination, source, byte_size);
-							}
-							else {
-								ReflectionCustomTypeCopyData copy_data;
-								copy_data.allocator = options->allocator;
-								copy_data.definition = definition;
-								copy_data.destination = destination;
-								copy_data.source = source;
-								copy_data.reflection_manager = reflection_manager;
+					// It has to be the custom type
+					ReflectionCustomTypeCopyData copy_data;
+					copy_data.allocator = options->allocator;
+					copy_data.definition = definition;
+					copy_data.destination = destination;
+					copy_data.source = source;
+					copy_data.reflection_manager = reflection_manager;
 
-								custom_type->Copy(&copy_data);
-							}
-						}
-						else {
-							// Try with an enum
-							ReflectionEnum enum_;
-							if (reflection_manager->TryGetEnum(definition, enum_)) {
-								memcpy(destination, source, sizeof(unsigned char));
-							}
-							else {
-								// Error - no type matched
-								ECS_ASSERT(false, "Copy reflection type unexpected error.");
-							}
-						}
-					}
+					definition_info.custom_type->Copy(&copy_data);
 				}
 			}
 		}
@@ -6278,29 +6313,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			void* source,
 			AllocatorPolymorphic allocator,
 			size_t element_count,
-			size_t element_byte_size,
 			bool reset_buffers
 		) {
-			ReflectionType user_type;
-			if (reflection_manager->TryGetType(definition, user_type)) {
-				DeallocateReflectionTypeInstanceBuffers(reflection_manager, &user_type, source, allocator, element_count, element_byte_size, reset_buffers);
+			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(reflection_manager, definition);
+			if (definition_info.is_blittable) {
+				// Early exit if the type is blittable
+				return;
 			}
-			else {
-				ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(definition);
-				if (custom_type != nullptr) {
-					ReflectionCustomTypeDeallocateData deallocate_data;
-					deallocate_data.definition = definition;
-					deallocate_data.allocator = allocator;
-					deallocate_data.reflection_manager = reflection_manager;
-					deallocate_data.reset_buffers = reset_buffers;
-					deallocate_data.source = source;
-					deallocate_data.element_count = element_count;
-					deallocate_data.element_byte_size = element_byte_size;
-					custom_type->Deallocate(&deallocate_data);
-				}
-				else {
-					// Blittable type/exception or enum or error
-				}
+			
+			for (size_t index = 0; index < element_count; index++) {
+				DeallocateReflectionInstanceBuffers(reflection_manager, definition, definition_info, OffsetPointer(source, index * definition_info.byte_size), allocator, reset_buffers);
 			}
 		}
 
@@ -6364,10 +6386,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[field_index].definition);
 					if (custom_type != nullptr) {
 						deallocate_buffers([&](Stream<void> user_defined_stream, size_t current_element_byte_size) {
+							// We are not interested in the element byte size here
+
 							ReflectionCustomTypeDeallocateData deallocate_data;
 							deallocate_data.allocator = allocator;
 							deallocate_data.definition = type->fields[field_index].definition;
-							deallocate_data.element_byte_size = current_element_byte_size;
 							deallocate_data.element_count = user_defined_stream.size;
 							deallocate_data.reflection_manager = reflection_manager;
 							deallocate_data.reset_buffers = reset_buffers;
@@ -6404,6 +6427,37 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							SetReflectionFieldSoaStream(type, &type->misc_info[misc_index].soa, current_source, empty_data);
 						}
 					}
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void DeallocateReflectionInstanceBuffers(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
+			void* source,
+			AllocatorPolymorphic allocator,
+			bool reset_buffers
+		) {
+			if (!definition_info.is_blittable) {
+				if (definition_info.is_basic_field) {
+					ReflectionField field = definition_info.GetBasicField();
+					DeallocateReflectionFieldBasic(&field.info, source, allocator, reset_buffers);
+				}
+				else if (definition_info.type != nullptr) {
+					DeallocateReflectionTypeInstanceBuffers(reflection_manager, definition_info.type, source, allocator, 1, 0, reset_buffers);
+				}
+				else {
+					ReflectionCustomTypeDeallocateData deallocate_data;
+					deallocate_data.definition = definition;
+					deallocate_data.allocator = allocator;
+					deallocate_data.reflection_manager = reflection_manager;
+					deallocate_data.reset_buffers = reset_buffers;
+					deallocate_data.source = source;
+					deallocate_data.element_count = 1;
+					definition_info.custom_type->Deallocate(&deallocate_data);
 				}
 			}
 		}

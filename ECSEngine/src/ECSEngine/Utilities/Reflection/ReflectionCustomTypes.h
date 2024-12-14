@@ -90,6 +90,7 @@ namespace ECSEngine {
 			void Deallocate(ReflectionCustomTypeDeallocateData* data) override;
 		};
 
+		// This interface handles AllocatorPolymorphic as well
 		struct AllocatorCustomTypeInterface : public ReflectionCustomTypeInterface {
 			bool Match(ReflectionCustomTypeMatchData* data) override;
 
