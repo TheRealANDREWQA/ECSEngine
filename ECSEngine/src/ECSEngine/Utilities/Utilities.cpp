@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "Utilities.h"
 #include "PointerUtilities.h"
+#include "StringUtilities.h"
 
 namespace ECSEngine {
 
@@ -295,19 +296,15 @@ namespace ECSEngine {
 			return SearchBytesImpl<reversed>(data, element_count, *(size_t*)value_to_search, byte_size);
 		}
 
-		// Not in the fast case, use memcmp
-		for (size_t index = 0; index < element_count; index++) {
-			size_t current_index = index;
-			if constexpr (reversed) {
-				current_index = element_count - 1 - index;
-			}
-
-			const void* pointer = OffsetPointer(data, byte_size * current_index);
-			if (memcmp(pointer, value_to_search, byte_size) == 0) {
-				return current_index;
-			}
+		// Not in the fast case, use FindFirstTokenOffset or FindTokenReverseOffset, since this is what essentially we need to do
+		size_t offset = -1;
+		if constexpr (reversed) {
+			offset = FindTokenReverseOffset(Stream<char>(data, element_count * byte_size), Stream<char>(value_to_search, byte_size));
 		}
-		return -1;
+		else {
+			offset = FindFirstTokenOffset(Stream<char>(data, element_count * byte_size), Stream<char>(value_to_search, byte_size)) / byte_size;
+		}
+		return offset == -1 ? -1 : offset / byte_size;
 	}
 
 	size_t SearchBytesEx(const void* data, size_t element_count, const void* value_to_search, size_t byte_size)

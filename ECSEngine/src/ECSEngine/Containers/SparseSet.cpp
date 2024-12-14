@@ -30,7 +30,7 @@ namespace ECSEngine {
 		void* destination,
 		size_t element_byte_size,
 		AllocatorPolymorphic allocator,
-		void (*copy_function)(const void* source_element, void* destination_element, AllocatorPolymorphic allocator, void* extra_data),
+		void (*copy_function)(const void* source_element, void* destination_element, void* extra_data),
 		void* extra_data
 	) {
 		SparseSetCopyTypeErased(source, destination, element_byte_size, allocator);
@@ -41,7 +41,7 @@ namespace ECSEngine {
 		unsigned int size = source_set->size;
 		unsigned int int_byte_size = (unsigned int)element_byte_size;
 		for (unsigned int index = 0; index < size; index++) {
-			copy_function(OffsetPointer(source_set->buffer, index * int_byte_size), OffsetPointer(destination_set->buffer, index * int_byte_size), allocator, extra_data);
+			copy_function(OffsetPointer(source_set->buffer, index * int_byte_size), OffsetPointer(destination_set->buffer, index * int_byte_size), extra_data);
 		}
 	}
 
@@ -66,6 +66,16 @@ namespace ECSEngine {
 		// It is fine to type cast to any type
 		SparseSet<char>* typed_sparse_set = (SparseSet<char>*)sparse_set;
 		typed_sparse_set->Deallocate(allocator);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void SparseSetDeallocateUntypedElements(void* sparse_set, size_t element_byte_size, void (*deallocate_function)(void* element, void* extra_data), void* extra_data) {
+		SparseSet<char>* typed_sparse_set = (SparseSet<char>*)sparse_set;
+		// The elements are contiguous, one after the other
+		for (unsigned int index = 0; index < typed_sparse_set->size; index++) {
+			deallocate_function(OffsetPointer(typed_sparse_set->buffer, element_byte_size * (size_t)index), extra_data);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

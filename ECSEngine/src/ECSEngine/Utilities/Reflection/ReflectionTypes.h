@@ -403,7 +403,6 @@ namespace ECSEngine {
 			void* source;
 			AllocatorPolymorphic allocator;
 			size_t element_count = 1;
-			size_t element_byte_size = 0;
 			bool reset_buffers = true;
 		};
 
@@ -493,6 +492,9 @@ namespace ECSEngine {
 
 		// Works only for non user-defined types
 		ECSENGINE_API size_t GetReflectionFieldTypeAlignment(const ReflectionFieldInfo* info);
+
+		// Works only for non user-defined types - fundamental types
+		ECSENGINE_API bool IsReflectionFieldTypeBlittable(const ReflectionFieldInfo* info);
 
 		// Returns a stable value
 		ECSENGINE_API Stream<char> GetBasicFieldDefinition(ReflectionBasicFieldType basic_type);

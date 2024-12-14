@@ -76,7 +76,7 @@ namespace ECSEngine {
 
 	void ReferenceCountedCustomTypeInterface::Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) {
 		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
-		DeallocateReflectionInstanceBuffers(data->reflection_manager, template_type, data->source, data->allocator, data->element_count, data->element_byte_size, data->reset_buffers);
+		DeallocateReflectionInstanceBuffers(data->reflection_manager, template_type, data->source, data->allocator, data->element_count, data->reset_buffers);
 	}
 
 	// --------------------------------------------------------------------------------------

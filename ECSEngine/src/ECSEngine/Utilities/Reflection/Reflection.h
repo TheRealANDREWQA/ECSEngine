@@ -260,9 +260,36 @@ namespace ECSEngine {
 		};
 
 		struct ReflectionDefinitionInfo {
+			// Should be called only when is_basic_field is set to true
+			ReflectionField GetBasicField() const {
+				ReflectionField field;
+				field.info.byte_size = byte_size;
+				field.info.basic_type = field_basic_type;
+				field.info.stream_type = field_stream_type;
+				field.info.stream_alignment = field_stream_alignment;
+				field.info.stream_byte_size = field_stream_byte_size;
+				return field;
+			}
+
 			size_t byte_size;
 			size_t alignment;
+			// When it is not blittable, one of the reflection type, custom type or basic field must be filled in
 			bool is_blittable;
+			// When this is set, the basic field properties are filled in
+			bool is_basic_field = false;
+
+			struct {
+				// We cannot obtain SoA pointers from definitions, so no need to handle that case
+
+				ReflectionBasicFieldType field_basic_type = ReflectionBasicFieldType::UserDefined;
+				ReflectionStreamFieldType field_stream_type = ReflectionStreamFieldType::Basic;
+				unsigned char field_stream_alignment = 0;
+				unsigned short field_stream_byte_size = 0;
+			};
+
+			// These will be filled in case the definition is a reflection type or a custom type
+			const ReflectionType* type = nullptr;
+			ReflectionCustomTypeInterface* custom_type = nullptr;
 		};
 
 		// If there are no user defined types, this version will work
@@ -390,8 +417,11 @@ namespace ECSEngine {
 		// Works for user defined types as well
 		ECSENGINE_API size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, const ReflectionField& field);
 
-		// Copies non used defined field
+		// Copies non user defined fields
 		ECSENGINE_API void CopyReflectionFieldBasic(const ReflectionFieldInfo* info, const void* source, void* destination, AllocatorPolymorphic allocator);
+
+		// Deallocates non user defined fields. By default, it will reset buffers, but you can disable this option
+		ECSENGINE_API void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator, bool reset_buffers = true);
 
 		ECSENGINE_API size_t GetBasicTypeArrayElementSize(const ReflectionFieldInfo& info);
 
@@ -560,7 +590,18 @@ namespace ECSEngine {
 			const void* first,
 			const void* second,
 			size_t count,
-			const CompareReflectionTypeInstancesOptions* options = {}
+			const CompareReflectionTypeInstancesOptions* options = nullptr
+		);
+
+		// Compares two instances of a certain type to see if they contain the same data.
+		// Returns true in case they contain the same data
+		ECSENGINE_API bool CompareReflectionTypeInstances(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
+			const void* first,
+			const void* second,
+			const CompareReflectionTypeInstancesOptions* options = nullptr
 		);
 
 		struct CopyReflectionDataOptions {
@@ -613,6 +654,20 @@ namespace ECSEngine {
 		ECSENGINE_API void CopyReflectionTypeInstance(
 			const ReflectionManager* reflection_manager,
 			Stream<char> definition,
+			const void* source,
+			void* destination,
+			const CopyReflectionDataOptions* options
+		);
+
+		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
+		// for buffers it will always allocate even when the type is the same
+		// The reflection manager can be made nullptr if you are sure there are no nested types or custom types. 
+		// By default, it will copy matching padding bytes between instances, but you can specify
+		// The last boolean in order to ignore that and set the padding bytes to zero for the new type
+		ECSENGINE_API void CopyReflectionTypeInstance(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
 			const void* source,
 			void* destination,
 			const CopyReflectionDataOptions* options
@@ -680,7 +735,6 @@ namespace ECSEngine {
 			void* source,
 			AllocatorPolymorphic allocator,
 			size_t element_count = 1,
-			size_t element_byte_size = 0,
 			bool reset_buffers = true
 		);
 
@@ -695,6 +749,19 @@ namespace ECSEngine {
 			AllocatorPolymorphic allocator,
 			size_t element_count = 1,
 			size_t element_byte_size = 0,
+			bool reset_buffers = true
+		);
+
+		// This function deallocates only a single entry. It functions similarly
+		// To the other 2 overloads, the difference is that it extracts its information
+		// From the definition info. If the last boolean parameter is set to true, it will
+		// Reset the buffers (as it is by default)
+		ECSENGINE_API void DeallocateReflectionInstanceBuffers(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
+			void* source,
+			AllocatorPolymorphic allocator,
 			bool reset_buffers = true
 		);
 
