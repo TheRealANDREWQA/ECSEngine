@@ -410,27 +410,30 @@ namespace ECSEngine {
 
 			void BindInstanceTextInput(Stream<char> instance_name, Stream<UIReflectionBindTextInput> data);
 			void BindInstanceTextInput(UIReflectionInstance* instance, Stream<UIReflectionBindTextInput> data);
-			void BindInstanceTextInput(UIReflectionInstance* instance, Stream<unsigned int> field_indices, CapacityStream<char>* inputs);
+			// There must be field_indices.size inputs
+			void BindInstanceTextInput(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, CapacityStream<char>* inputs);
 
 			void BindInstanceDirectoryInput(Stream<char> instance_name, Stream<UIReflectionBindDirectoryInput> data);
 			void BindInstanceDirectoryInput(UIReflectionInstance* instance, Stream<UIReflectionBindDirectoryInput> data);
-			void BindInstanceDirectoryInput(UIReflectionInstance* instance, Stream<unsigned int> field_indices, CapacityStream<wchar_t>* inputs);
+			// There must be field_indices.size inputs
+			void BindInstanceDirectoryInput(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, CapacityStream<wchar_t>* inputs);
 
 			void BindInstanceFileInput(Stream<char> instance_name, Stream<UIReflectionBindFileInput> data);
 			void BindInstanceFileInput(UIReflectionInstance* instance, Stream<UIReflectionBindFileInput> data);
-			void BindInstanceFileInput(UIReflectionInstance* instance, Stream<unsigned int> field_indices, CapacityStream<wchar_t>* inputs);
+			// There must be field_indices.size inputs
+			void BindInstanceFileInput(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, CapacityStream<wchar_t>* inputs);
 
 			void BindInstanceStreamCapacity(Stream<char> instance_name, Stream<UIReflectionBindStreamCapacity> data);
 			void BindInstanceStreamCapacity(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
-			void BindInstanceStreamCapacity(UIReflectionInstance* instance, Stream<unsigned int> field_indices, unsigned int* capacities);
+			void BindInstanceStreamCapacity(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, unsigned int* capacities);
 
 			void BindInstanceStreamSize(Stream<char> instance_name, Stream<UIReflectionBindStreamCapacity> data);
 			void BindInstanceStreamSize(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
-			void BindInstanceStreamSize(UIReflectionInstance* instance, Stream<unsigned int> field_indices, unsigned int* sizes);
+			void BindInstanceStreamSize(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, unsigned int* sizes);
 
 			void BindInstanceStreamBuffer(Stream<char> instance_name, Stream<UIReflectionBindStreamBuffer> data);
 			void BindInstanceStreamBuffer(UIReflectionInstance* instance, Stream<UIReflectionBindStreamBuffer> data);
-			void BindInstanceStreamBuffer(UIReflectionInstance* instance, Stream<unsigned int> field_indices, void** buffers);
+			void BindInstanceStreamBuffer(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, void** buffers);
 
 			void BindInstanceResizableStreamAllocator(Stream<char> instance_name, Stream<UIReflectionBindResizableStreamAllocator> data);
 			void BindInstanceResizableStreamAllocator(UIReflectionInstance* instance, Stream<UIReflectionBindResizableStreamAllocator> data);
@@ -496,32 +499,32 @@ namespace ECSEngine {
 			// It will create a type for each reflected type from the given hierarchy.
 			// Returns how many types were created
 			// Options used: all except the suffix.
-			unsigned int CreateTypesForHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options = {});
+			unsigned int CreateTypesForHierarchy(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options = {});
 			// It will create a type for each reflected type from the given hierarchy.
 			// Returns how many types were created
 			// Options used: all except the suffix.
-			unsigned int CreateTypesForHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options = {});
+			unsigned int CreateTypesForHierarchy(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options = {});
 
 			// It will create an instance for each type with the given hierarchy.
 			// Returns how many instances were created
 			// Options used: all.
-			unsigned int CreateInstanceForHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options = {});
+			unsigned int CreateInstanceForHierarchy(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options = {});
 			// It will create an instance for each type with the given hierarchy.
 			// Returns how many instances were created
 			// Options used: all.
-			unsigned int CreateInstanceForHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options = {});
+			unsigned int CreateInstanceForHierarchy(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options = {});
 
 			// It will create a type and an instance for each reflected type from the given hierarchy.
 			// The name of the instance is identical to that of the type
 			// Returns how many instances were created
 			// Options used: all except the suffix. The indices buffer will be populated with the instances' indices
-			unsigned int CreateTypesAndInstancesForHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options = {});
+			unsigned int CreateTypesAndInstancesForHierarchy(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options = {});
 
 			// It will create a type and an instance for each reflected type from the given hierarchy.
 			// The name of the instance is identical to that of the type
 			// Returns how many instances were created
 			// Options used: all except the suffix. The indices buffer will be populated with the instances' indices
-			unsigned int CreateTypesAndInstancesForHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options = {});
+			unsigned int CreateTypesAndInstancesForHierarchy(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options = {});
 
 			// Disables the default write of the values into the target
 			// Useful if you want to have a callback do the actual job
@@ -583,12 +586,12 @@ namespace ECSEngine {
 			// Destroys all instances from the given hierarchy. If a suffix is provided, only those instances
 			// that match the name of the type with the suffix appended will be deleted.
 			// The include and exclude tags are used for the instance's parent type tags
-			void DestroyAllInstancesFromFolderHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options = {});
+			void DestroyAllInstancesFromFolderHierarchy(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options = {});
 			
 			// Destroys all instances from the given hierarchy. If a suffix is provided, only those instances
 			// that match the name of the type with the suffix appended will be deleted.
 			// The include and exclude tags are used for the instance's parent type tags
-			void DestroyAllInstancesFromFolderHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options = {});
+			void DestroyAllInstancesFromFolderHierarchy(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options = {});
 
 			// Returns -1 if it doesn't find it
 			unsigned int FindFieldOverride(Stream<char> tag) const;
@@ -598,13 +601,13 @@ namespace ECSEngine {
 			// It will fill in the capacity field
 			void GetInstanceStreamSizes(const UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
 
-			void GetHierarchyTypes(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options);
-			void GetHierarchyTypes(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options);
+			void GetHierarchyTypes(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options);
+			void GetHierarchyTypes(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options);
 
 			// If a suffix is provided, only those instances which match a type name with the appended suffix will be provided
-			void GetHierarchyInstances(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options);
+			void GetHierarchyInstances(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options);
 			// If a suffix is provided, only those instances which match a type name with the appended suffix will be provided
-			void GetHierarchyInstances(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options);
+			void GetHierarchyInstances(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options);
 
 			// Returns nullptr if it doesn't exist
 			UIReflectionInstance* GetInstance(Stream<char> name);

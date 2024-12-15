@@ -408,7 +408,7 @@ namespace ECSEngine {
 			}
 
 			// We don't need this pointer, but we need to have one
-			// Since, when using BindInstancePtrs, the first field will always
+			// Since, when using BindInstancePtrs, the first field will always be set
 			void* field_pointer;
 			
 			// This is filled by CreateType
@@ -2047,6 +2047,26 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
+		
+		struct InstanceNestedField {
+			const UIReflectionTypeField* field;
+			void* data;
+		};
+
+		static InstanceNestedField GetInstanceNestedField(const UIReflectionDrawer* drawer, const UIReflectionInstance* instance, Reflection::ReflectionNestedFieldIndex nested_field) {
+			ECS_ASSERT(nested_field.count > 0);
+			const UIReflectionInstance* final_instance = instance;
+			for (unsigned int type_index = 0; type_index < nested_field.count - 1; type_index++) {
+				const UIReflectionUserDefinedData* user_defined_field = (UIReflectionUserDefinedData*)instance->data[nested_field.indices[type_index]];
+				final_instance = user_defined_field->instance;
+			}
+
+			unsigned int final_index = nested_field.indices[nested_field.count - 1];
+			const UIReflectionType* final_type = drawer->GetType(final_instance->type_name);
+			return { final_type->fields.buffer + final_index, final_instance->data[final_index] };
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
 
 		UIReflectionDrawer::UIReflectionDrawer(
 			UIToolsAllocator* _allocator, 
@@ -2789,13 +2809,12 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::BindInstanceTextInput(UIReflectionInstance* instance, Stream<unsigned int> field_indices, CapacityStream<char>* inputs)
+		void UIReflectionDrawer::BindInstanceTextInput(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, CapacityStream<char>* inputs)
 		{
-			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
-				unsigned int field_index = field_indices[index];
-				if (type->fields[field_indices[index]].element_index == UIReflectionElement::TextInput) {
-					CapacityStream<char>** input_data = (CapacityStream<char>**)instance->data[field_index];
+				InstanceNestedField nested_field = GetInstanceNestedField(this, instance, field_indices[index]);
+				if (nested_field.field->element_index == UIReflectionElement::TextInput) {
+					CapacityStream<char>** input_data = (CapacityStream<char>**)nested_field.data;
 					*input_data = inputs + index;
 				}
 			}
@@ -2822,13 +2841,12 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::BindInstanceDirectoryInput(UIReflectionInstance* instance, Stream<unsigned int> field_indices, CapacityStream<wchar_t>* inputs)
+		void UIReflectionDrawer::BindInstanceDirectoryInput(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, CapacityStream<wchar_t>* inputs)
 		{
-			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
-				unsigned int field_index = field_indices[index];
-				if (type->fields[field_index].element_index == UIReflectionElement::DirectoryInput) {
-					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)instance->data[field_index];
+				InstanceNestedField nested_field = GetInstanceNestedField(this, instance, field_indices[index]);
+				if (nested_field.field->element_index == UIReflectionElement::DirectoryInput) {
+					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)nested_field.data;
 					*input_data = inputs + index;
 				}
 			}
@@ -2855,13 +2873,12 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::BindInstanceFileInput(UIReflectionInstance* instance, Stream<unsigned int> field_indices, CapacityStream<wchar_t>* inputs)
+		void UIReflectionDrawer::BindInstanceFileInput(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, CapacityStream<wchar_t>* inputs)
 		{
-			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
-				unsigned int field_index = field_indices[index];
-				if (type->fields[field_index].element_index == UIReflectionElement::FileInput) {
-					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)instance->data[field_index];
+				InstanceNestedField nested_field = GetInstanceNestedField(this, instance, field_indices[index]);
+				if (nested_field.field->element_index == UIReflectionElement::FileInput) {
+					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)nested_field.data;
 					*input_data = inputs + index;
 				}
 			}
@@ -2893,15 +2910,14 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::BindInstanceStreamCapacity(UIReflectionInstance* instance, Stream<unsigned int> field_indices, unsigned int* capacities)
+		void UIReflectionDrawer::BindInstanceStreamCapacity(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, unsigned int* capacities)
 		{
-			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
-				unsigned int field_index = field_indices[index];
-				ECS_ASSERT(IsStream(type->fields[field_index].stream_type) || IsStreamInput(type->fields[field_index].element_index));
+				InstanceNestedField nested_field = GetInstanceNestedField(this, instance, field_indices[index]);
+				ECS_ASSERT(IsStream(nested_field.field->stream_type) || IsStreamInput(nested_field.field->element_index));
 
 				// It is ok to alias the resizable stream with the capacity stream, same layout
-				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
+				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)nested_field.data;
 				field_stream->capacity->capacity = capacities[index];
 				field_stream->WriteTarget();
 			}
@@ -2933,15 +2949,14 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::BindInstanceStreamSize(UIReflectionInstance* instance, Stream<unsigned int> field_indices, unsigned int* sizes)
+		void UIReflectionDrawer::BindInstanceStreamSize(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, unsigned int* sizes)
 		{
-			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
-				unsigned int field_index = field_indices[index];
-				ECS_ASSERT(IsStream(type->fields[field_index].stream_type));
+				InstanceNestedField nested_field = GetInstanceNestedField(this, instance, field_indices[index]);
+				ECS_ASSERT(IsStream(nested_field.field->stream_type));
 
-				// It is ok to alias the capacity stream with the resizable stream, same layout
-				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
+				// It is ok to alias the resizable stream with the capacity stream, same layout
+				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)nested_field.data;
 				field_stream->capacity->size = sizes[index];
 				field_stream->WriteTarget();
 			}
@@ -2971,15 +2986,14 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::BindInstanceStreamBuffer(UIReflectionInstance* instance, Stream<unsigned int> field_indices, void** buffers)
+		void UIReflectionDrawer::BindInstanceStreamBuffer(UIReflectionInstance* instance, Stream<Reflection::ReflectionNestedFieldIndex> field_indices, void** buffers)
 		{
-			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
-				unsigned int field_index = field_indices[index];
-				ECS_ASSERT(IsStream(type->fields[field_index].stream_type));
+				InstanceNestedField nested_field = GetInstanceNestedField(this, instance, field_indices[index]);
+				ECS_ASSERT(IsStream(nested_field.field->stream_type));
 
 				// It is ok to alias the resizable stream with the capacity stream, same layout
-				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
+				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)nested_field.data;
 				field_stream->capacity->buffer = buffers[index];
 				field_stream->WriteTarget();
 			}
@@ -4302,10 +4316,10 @@ namespace ECSEngine {
 
 #pragma region CreateForHierarchy helpers
 
-		void CreateForHierarchyCheckIncludeIndex(
+		static void CreateForHierarchyCheckIncludeIndex(
 			const ReflectionType* type, 
 			size_t& include_index, 
-			UIReflectionDrawerSearchOptions options
+			const UIReflectionDrawerSearchOptions& options
 		) {
 			if (options.include_tags.size > 0) {
 				include_index = 0;
@@ -4327,10 +4341,10 @@ namespace ECSEngine {
 			}
 		}
 
-		void CreateForHierarchyCheckExcludeIndex(
+		static void CreateForHierarchyCheckExcludeIndex(
 			const ReflectionType* type,
 			size_t& exclude_index,
-			UIReflectionDrawerSearchOptions options
+			const UIReflectionDrawerSearchOptions& options
 		) {
 			if (options.exclude_tags.size > 0) {
 				exclude_index = 0;
@@ -4351,11 +4365,11 @@ namespace ECSEngine {
 			}
 		}
 
-		bool CreateForHierarchyIsValid(size_t include_index, size_t exclude_index, UIReflectionDrawerSearchOptions options) {
+		static bool CreateForHierarchyIsValid(size_t include_index, size_t exclude_index, const UIReflectionDrawerSearchOptions& options) {
 			return exclude_index == options.exclude_tags.size && include_index <= options.include_tags.size;
 		}
 
-		bool CreateForHierarchyVerifyIncludeExclude(const ReflectionType* type, UIReflectionDrawerSearchOptions options) {
+		static bool CreateForHierarchyVerifyIncludeExclude(const ReflectionType* type, const UIReflectionDrawerSearchOptions& options) {
 			size_t include_index = options.include_tags.size;
 			size_t exclude_index = options.exclude_tags.size;
 
@@ -4366,7 +4380,7 @@ namespace ECSEngine {
 		}
 
 		// Returns the full name
-		Stream<char> CreateForHierarchyGetSuffixName(CapacityStream<char>& full_name, Stream<char> name, UIReflectionDrawerSearchOptions options) {
+		static Stream<char> CreateForHierarchyGetSuffixName(CapacityStream<char>& full_name, Stream<char> name, const UIReflectionDrawerSearchOptions& options) {
 			if (options.suffix.size > 0) {
 				full_name.CopyOther(name);
 				full_name.AddStreamSafe(options.suffix);
@@ -4377,7 +4391,7 @@ namespace ECSEngine {
 			return name;
 		}
 
-		void CreateForHierarchyAddIndex(unsigned int index, UIReflectionDrawerSearchOptions options) {
+		static void CreateForHierarchyAddIndex(unsigned int index, const UIReflectionDrawerSearchOptions& options) {
 			if (options.indices != nullptr) {
 				options.indices->AddAssert(index);
 			}
@@ -4387,7 +4401,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UIReflectionDrawer::CreateTypesForHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options)
+		unsigned int UIReflectionDrawer::CreateTypesForHierarchy(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options)
 		{
 			unsigned int count = 0;
 			reflection->type_definitions.ForEach([&](const ReflectionType& type, ResourceIdentifier identifier) {
@@ -4404,7 +4418,7 @@ namespace ECSEngine {
 			return count;
 		}
 
-		unsigned int UIReflectionDrawer::CreateTypesForHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options)
+		unsigned int UIReflectionDrawer::CreateTypesForHierarchy(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options)
 		{
 			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
 			if (hierarchy_index != -1) {
@@ -4416,7 +4430,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UIReflectionDrawer::CreateInstanceForHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options)
+		unsigned int UIReflectionDrawer::CreateInstanceForHierarchy(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options)
 		{
 			unsigned int count = 0;
 			type_definition.ForEachIndexConst([&](unsigned int index) {
@@ -4439,7 +4453,7 @@ namespace ECSEngine {
 			return count;
 		}
 
-		unsigned int UIReflectionDrawer::CreateInstanceForHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options)
+		unsigned int UIReflectionDrawer::CreateInstanceForHierarchy(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options)
 		{
 			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
 			if (hierarchy_index != -1) {
@@ -4451,7 +4465,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UIReflectionDrawer::CreateTypesAndInstancesForHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options) {
+		unsigned int UIReflectionDrawer::CreateTypesAndInstancesForHierarchy(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options) {
 			unsigned int count = 0;
 
 			reflection->type_definitions.ForEachIndexConst([&](unsigned int index) {
@@ -4471,7 +4485,7 @@ namespace ECSEngine {
 			return count;
 		}
 
-		unsigned int UIReflectionDrawer::CreateTypesAndInstancesForHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options) {
+		unsigned int UIReflectionDrawer::CreateTypesAndInstancesForHierarchy(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options) {
 			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
 			if (hierarchy_index != -1) {
 				return CreateTypesAndInstancesForHierarchy(hierarchy_index, options);
@@ -5030,7 +5044,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::DestroyAllInstancesFromFolderHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options)
+		void UIReflectionDrawer::DestroyAllInstancesFromFolderHierarchy(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options)
 		{
 			unsigned int extended_capacity = instances.GetExtendedCapacity();
 			if (options.suffix.size == 0) {
@@ -5066,7 +5080,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::DestroyAllInstancesFromFolderHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options)
+		void UIReflectionDrawer::DestroyAllInstancesFromFolderHierarchy(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options)
 		{
 			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
 			if (hierarchy_index != -1) {
@@ -5111,7 +5125,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::GetHierarchyTypes(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options) {
+		void UIReflectionDrawer::GetHierarchyTypes(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options) {
 			type_definition.ForEachIndexConst([&](unsigned int index) {
 				UIReflectionType ui_type = type_definition.GetValueFromIndex(index);
 				const ReflectionType* type = reflection->GetType(ui_type.name);
@@ -5124,7 +5138,7 @@ namespace ECSEngine {
 		}
 
 
-		void UIReflectionDrawer::GetHierarchyTypes(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options) {
+		void UIReflectionDrawer::GetHierarchyTypes(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options) {
 			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
 			if (hierarchy_index != -1) {
 				GetHierarchyTypes(hierarchy_index, options);
@@ -5135,7 +5149,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::GetHierarchyInstances(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options) {
+		void UIReflectionDrawer::GetHierarchyInstances(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options) {
 			instances.ForEachIndexConst([&](unsigned int index) {
 				UIReflectionInstance instance = instances.GetValueFromIndex(index);
 				const ReflectionType* type = reflection->GetType(instance.type_name);
@@ -5156,7 +5170,7 @@ namespace ECSEngine {
 			});
 		}
 
-		void UIReflectionDrawer::GetHierarchyInstances(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options) {
+		void UIReflectionDrawer::GetHierarchyInstances(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options) {
 			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
 			if (hierarchy_index != -1) {
 				GetHierarchyInstances(hierarchy_index, options);

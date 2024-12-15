@@ -1055,7 +1055,8 @@ void InspectorComponentCallback(ActionData* action_data) {
 
 			// Use the module reflection manager
 			const Reflection::ReflectionManager* reflection_manager = editor_state->ModuleReflectionManager();
-			const Reflection::ReflectionType* component_type = reflection_manager->GetType(component_name);
+			// Must use the target type, if this is a link component
+			const Reflection::ReflectionType* component_type = reflection_manager->GetType(target.size > 0 ? target : component_name);
 			Reflection::SetReflectionTypeInstanceBufferOptions set_buffer_options;
 			set_buffer_options.allocator = arena;
 			set_buffer_options.checked_copy = true;
@@ -1292,16 +1293,16 @@ static void DrawComponents(
 					unsigned int file_input_count = input_indices.size - text_input_count - directory_input_count;
 					data->SetComponentInputCount(editor_state, current_component_name, input_indices.size);
 
-					auto bind_text_input = [&](unsigned int index, CapacityStream<void>* capacity_stream) {
-						ui_drawer->BindInstanceTextInput(instance, { &index, 1 }, (CapacityStream<char>*)capacity_stream);
+					auto bind_text_input = [ui_drawer, instance](const Reflection::ReflectionNestedFieldIndex& field_index, CapacityStream<void>* capacity_stream) {
+						ui_drawer->BindInstanceTextInput(instance, { &field_index, 1 }, (CapacityStream<char>*)capacity_stream);
 					};
 
-					auto bind_directory_input = [&](unsigned int index, CapacityStream<void>* capacity_stream) {
-						ui_drawer->BindInstanceDirectoryInput(instance, { &index, 1 }, (CapacityStream<wchar_t>*)capacity_stream);
+					auto bind_directory_input = [ui_drawer, instance](const Reflection::ReflectionNestedFieldIndex& field_index, CapacityStream<void>* capacity_stream) {
+						ui_drawer->BindInstanceDirectoryInput(instance, { &field_index, 1 }, (CapacityStream<wchar_t>*)capacity_stream);
 					};
 
-					auto bind_file_input = [&](unsigned int index, CapacityStream<void>* capacity_stream) {
-						ui_drawer->BindInstanceFileInput(instance, { &index, 1 }, (CapacityStream<wchar_t>*)capacity_stream);
+					auto bind_file_input = [ui_drawer, instance](const Reflection::ReflectionNestedFieldIndex& field_index, CapacityStream<void>* capacity_stream) {
+						ui_drawer->BindInstanceFileInput(instance, { &field_index, 1 }, (CapacityStream<wchar_t>*)capacity_stream);
 					};
 
 					auto create_input_stream = [&](unsigned int count, unsigned int base_offset, size_t element_size, auto bind_function) {
@@ -1318,7 +1319,7 @@ static void DrawComponents(
 								memcpy(capacity_stream->buffer, current_stream.buffer, current_stream.size * element_size);
 								capacity_stream->size = copy_size;
 							}
-							bind_function(index + base_offset, capacity_stream);
+							bind_function(input_indices[index + base_offset], capacity_stream);
 						}
 					};
 

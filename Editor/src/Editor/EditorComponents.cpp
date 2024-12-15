@@ -526,7 +526,7 @@ void EditorComponents::RecoverData(
 				}
 			}
 
-			ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY);
+			ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY, "Editor components: recovering unique component data exceeded temporary buffer!");
 
 			if (has_locks) {
 				// Lock the memory manager allocator
@@ -845,6 +845,7 @@ void EditorComponents::RecoverData(
 				ptr = (uintptr_t)temporary_allocation;
 				entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
 					Serialize(internal_manager, old_type, data, ptr, &serialize_options);
+					ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY, "Editor components reallocating shared component failed: temporary memory size exceeded (same size, with buffers branch)!");
 				});
 
 				// Deallocate the arena or resize it
@@ -905,6 +906,8 @@ void EditorComponents::RecoverData(
 				entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
 					ptr = (uintptr_t)temporary_allocation;
 					Serialize(internal_manager, old_type, data, ptr, &serialize_options);
+					ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY, "Editor components reallocating shared component failed: temporary memory size exceeded (same size, no buffers branch)!");
+
 					ptr = (uintptr_t)temporary_allocation;
 					ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, current_type, data, ptr, &deserialize_options);
 					ECS_ASSERT(code == ECS_DESERIALIZE_OK);
@@ -917,6 +920,7 @@ void EditorComponents::RecoverData(
 			ptr = (uintptr_t)temporary_allocation;
 			entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
 				Serialize(internal_manager, old_type, data, ptr, &serialize_options);
+				ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY, "Editor components reallocating shared component failed: temporary memory size exceeded (different size branch)!");
 			});
 
 			MemoryArena* arena = nullptr;

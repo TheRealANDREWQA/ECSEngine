@@ -128,27 +128,30 @@ namespace ECSEngine {
 	{
 		ComponentFunctions component_functions;
 		if (!IsBlittableWithPointer(type)) {
-			component_functions.copy_function = ReflectionTypeRuntimeComponentCopy;
-			component_functions.deallocate_function = ReflectionTypeRuntimeComponentDeallocate;
+			// If the allocator size is missing, then don't set this entry as having buffers
 			component_functions.allocator_size = GetReflectionComponentAllocatorSize(type);
+			if (component_functions.allocator_size > 0) {
+				component_functions.copy_function = ReflectionTypeRuntimeComponentCopy;
+				component_functions.deallocate_function = ReflectionTypeRuntimeComponentDeallocate;
 
-			RuntimeComponentCopyDeallocateData* copyable = AllocateAndConstruct<RuntimeComponentCopyDeallocateData>(allocator);
+				RuntimeComponentCopyDeallocateData* copyable = AllocateAndConstruct<RuntimeComponentCopyDeallocateData>(allocator);
 
-			copyable->type = type->CopyCoalesced(allocator);
-			memset(&copyable->reflection_manager, 0, sizeof(copyable->reflection_manager));
+				copyable->type = type->CopyCoalesced(allocator);
+				memset(&copyable->reflection_manager, 0, sizeof(copyable->reflection_manager));
 
-			ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 512);
-			GetReflectionTypeDependentTypes(reflection_manager, type, dependent_types);
-			if (dependent_types.size != 0) {
-				// Allocate the reflection manager hash table
-				copyable->reflection_manager.type_definitions.InitializeSmallFixed(allocator, dependent_types.size);
-				for (unsigned int index = 0; index < dependent_types.size; index++) {
-					const ReflectionType* current_type = reflection_manager->GetType(dependent_types[index]);
-					copyable->reflection_manager.AddType(current_type, allocator);
+				ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 512);
+				GetReflectionTypeDependentTypes(reflection_manager, type, dependent_types);
+				if (dependent_types.size != 0) {
+					// Allocate the reflection manager hash table
+					copyable->reflection_manager.type_definitions.InitializeSmallFixed(allocator, dependent_types.size);
+					for (unsigned int index = 0; index < dependent_types.size; index++) {
+						const ReflectionType* current_type = reflection_manager->GetType(dependent_types[index]);
+						copyable->reflection_manager.AddType(current_type, allocator);
+					}
 				}
-			}
 
-			component_functions.data = copyable;
+				component_functions.data = copyable;
+			}
 		}
 
 		return component_functions;

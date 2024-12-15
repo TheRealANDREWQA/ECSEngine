@@ -3075,6 +3075,7 @@ namespace ECSEngine {
 		}
 		else {
 			DeallocateAllocatorForComponent(this, previous_allocator);
+			m_shared_components[component.value].info.allocator = nullptr;
 			m_shared_components[component.value].info.ResetComponentFunctions();
 		}
 		m_shared_components[component.value].compare_entry = compare_entry;
