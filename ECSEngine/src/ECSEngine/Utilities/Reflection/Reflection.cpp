@@ -4244,7 +4244,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				if (type->fields[index].info.stream_type != ReflectionStreamFieldType::Basic && type->fields[index].info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
 					// Stream type or pointer type, not trivially copyable
-					return pointers_are_copyable && type->fields[index].info.stream_type == ReflectionStreamFieldType::Pointer;
+					if (!pointers_are_copyable || type->fields[index].info.stream_type != ReflectionStreamFieldType::Pointer) {
+						return false;
+					}
 				}
 
 				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
@@ -6550,7 +6552,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					else {
 						// We don't have to set this to nullptr since
 						// We are overriding this field anyway
-						DeallocateEx(options->allocator, current_data.buffer);
+						if (current_data.buffer != nullptr) {
+							DeallocateEx(options->allocator, current_data.buffer);
+						}
 						// Reset the buffer - needed for the ResizeNoCopy call
 						// Later on to not think that we have data
 						current_data.buffer = nullptr;
