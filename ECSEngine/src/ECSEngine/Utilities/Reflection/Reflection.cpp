@@ -4385,6 +4385,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				definition_info.byte_size = sizeof(Stream<void>);
 				definition_info.alignment = alignof(Stream<void>);
 				definition_info.is_blittable = false;
+				definition_info.custom_type_index = ECS_REFLECTION_CUSTOM_TYPE_STREAM;
 				definition_info.custom_type = ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_STREAM];
 				return definition_info;
 			}
@@ -4393,6 +4394,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				definition_info.byte_size = sizeof(CapacityStream<void>);
 				definition_info.alignment = alignof(CapacityStream<void>);
 				definition_info.is_blittable = false;
+				definition_info.custom_type_index = ECS_REFLECTION_CUSTOM_TYPE_STREAM;
 				definition_info.custom_type = ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_STREAM];
 				return definition_info;
 			}
@@ -4401,6 +4403,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				definition_info.byte_size = sizeof(ResizableStream<void>);
 				definition_info.alignment = alignof(ResizableStream<void>);
 				definition_info.is_blittable = false;
+				definition_info.custom_type_index = ECS_REFLECTION_CUSTOM_TYPE_STREAM;
 				definition_info.custom_type = ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_STREAM];
 				return definition_info;
 			}
@@ -4419,6 +4422,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				definition_info.byte_size = field.info.byte_size;
 				definition_info.alignment = GetReflectionFieldTypeAlignment(&field.info);
 				definition_info.is_blittable = IsReflectionFieldTypeBlittable(&field.info);
+				definition_info.is_basic_field = true;
 				if (!definition_info.is_blittable) {
 					definition_info.field_basic_type = field.info.basic_type;
 					definition_info.field_stream_type = field.info.stream_type;
@@ -4456,6 +4460,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				definition_info.alignment = byte_size_alignment.y;
 				definition_info.is_blittable = custom_type_interface->IsBlittable(&is_blittable_data);
 				definition_info.custom_type = custom_type_interface;
+				definition_info.custom_type_index = custom_type;
 				return definition_info;
 			}
 			else if (enum_.name.size > 0) {

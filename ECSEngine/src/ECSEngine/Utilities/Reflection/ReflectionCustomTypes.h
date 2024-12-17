@@ -6,6 +6,7 @@ namespace ECSEngine {
 
 	namespace Reflection {
 
+		struct ReflectionManager;
 
 #pragma region Reflection Container Type functions
 
@@ -135,6 +136,35 @@ namespace ECSEngine {
 		ECS_INLINE ReflectionCustomTypeInterface* GetReflectionCustomType(unsigned int custom_index) {
 			return custom_index == -1 ? nullptr : ECS_REFLECTION_CUSTOM_TYPES[custom_index];
 		}
+
+		// ---------------------------------------------------------------------------------------------------------------------
+
+		// Describes the type of hash table definition
+		enum HASH_TABLE_TYPE : unsigned char {
+			HASH_TABLE_NORMAL,
+			HASH_TABLE_DEFAULT,
+			HASH_TABLE_EMPTY
+		};
+
+		struct HashTableTemplateArguments {
+			Stream<char> value_type;
+			Stream<char> identifier_type;
+			Stream<char> hash_function_type;
+			bool is_soa = false;
+			HASH_TABLE_TYPE table_type;
+		};
+
+		HashTableTemplateArguments HashTableExtractTemplateArguments(Stream<char> definition);
+
+		// Returns a definition info for the value template type, while taking into account the special case of HashTableEmpty
+		ReflectionDefinitionInfo HashTableGetValueDefinitionInfo(const ReflectionManager* reflection_manager, const HashTableTemplateArguments& template_arguments);
+
+		// Returns a definition info for the identifier template type, while taking into account the special case of ResourceIdentifier
+		ReflectionDefinitionInfo HashTableGetIdentifierDefinitionInfo(const ReflectionManager* reflection_manager, HashTableTemplateArguments& template_arguments);
+
+		// Returns in the x component the byte size of the pair, while in the y component the offset that must be added to the value byte size
+		// In order to correctly address the identifier inside the pair
+		ulong2 HashTableComputePairByteSizeAndAlignmentOffset(const ReflectionDefinitionInfo& value_definition_info, const ReflectionDefinitionInfo& identifier_definition_info);
 
 		// ---------------------------------------------------------------------------------------------------------------------
 
