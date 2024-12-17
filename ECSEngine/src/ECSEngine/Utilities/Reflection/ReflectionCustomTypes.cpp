@@ -651,14 +651,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		// Describes the type of hash table definition
-		enum HASH_TABLE_TYPE : unsigned char {
-			HASH_TABLE_NORMAL,
-			HASH_TABLE_DEFAULT,
-			HASH_TABLE_EMPTY
-		};
-
-		static Stream<char> HashTableExtractValueType(Stream<char> definition) {
+		Stream<char> HashTableExtractValueType(Stream<char> definition) {
 			Stream<char> opened_bracket = FindFirstCharacter(definition, '<');
 			Stream<char> closed_bracket = FindMatchingParenthesis(opened_bracket.AdvanceReturn(), '<', '>');
 
@@ -687,15 +680,7 @@ namespace ECSEngine {
 			return value_type;
 		}
 
-		struct HashTableTemplateArguments {
-			Stream<char> value_type;
-			Stream<char> identifier_type;
-			Stream<char> hash_function_type;
-			bool is_soa = false;
-			HASH_TABLE_TYPE table_type;
-		};
-
-		static HashTableTemplateArguments HashTableExtractTemplateArguments(Stream<char> definition) {
+		HashTableTemplateArguments HashTableExtractTemplateArguments(Stream<char> definition) {
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, string_template_arguments, 8);
 			ReflectionCustomTypeGetTemplateArguments(definition, string_template_arguments);
 
@@ -739,7 +724,7 @@ namespace ECSEngine {
 		}
 
 		// Returns a definition info for the value template type, while taking into account the special case of HashTableEmpty
-		static ReflectionDefinitionInfo HashTableGetValueDefinitionInfo(const ReflectionManager* reflection_manager, const HashTableTemplateArguments& template_arguments) {
+		ReflectionDefinitionInfo HashTableGetValueDefinitionInfo(const ReflectionManager* reflection_manager, const HashTableTemplateArguments& template_arguments) {
 			ReflectionDefinitionInfo value_info;
 			if (template_arguments.table_type == HASH_TABLE_EMPTY) {
 				value_info.alignment = 0;
@@ -754,7 +739,7 @@ namespace ECSEngine {
 		}
 
 		// Returns a definition info for the identifier template type, while taking into account the special case of ResourceIdentifier
-		static ReflectionDefinitionInfo HashTableGetIdentifierDefinitionInfo(const ReflectionManager* reflection_manager, HashTableTemplateArguments& template_arguments) {
+		ReflectionDefinitionInfo HashTableGetIdentifierDefinitionInfo(const ReflectionManager* reflection_manager, HashTableTemplateArguments& template_arguments) {
 			ReflectionDefinitionInfo identifier_info;
 			if (template_arguments.table_type == HASH_TABLE_DEFAULT || template_arguments.identifier_type == STRING(ResourceIdentifier)) {
 				identifier_info.byte_size = sizeof(ResourceIdentifier);
@@ -774,7 +759,7 @@ namespace ECSEngine {
 
 		// Returns in the x component the byte size of the pair, while in the y component the offset that must be added to the value byte size
 		// In order to correctly address the identifier inside the pair
-		static ulong2 HashTableComputePairByteSizeAndAlignmentOffset(const ReflectionDefinitionInfo& value_definition_info, const ReflectionDefinitionInfo& identifier_definition_info) {
+		ulong2 HashTableComputePairByteSizeAndAlignmentOffset(const ReflectionDefinitionInfo& value_definition_info, const ReflectionDefinitionInfo& identifier_definition_info) {
 			size_t pair_size = value_definition_info.byte_size + identifier_definition_info.byte_size;
 			size_t identifier_pair_offset = 0;
 			if (value_definition_info.alignment < identifier_definition_info.alignment) {

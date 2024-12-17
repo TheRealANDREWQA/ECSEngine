@@ -424,6 +424,42 @@ namespace ECSEngine {
 			virtual void Deallocate(ReflectionCustomTypeDeallocateData* data) = 0;
 		};
 
+		struct ReflectionDefinitionInfo {
+			// Should be called only when is_basic_field is set to true
+			ReflectionField GetBasicField() const {
+				ReflectionField field;
+				field.info.byte_size = byte_size;
+				field.info.basic_type = field_basic_type;
+				field.info.stream_type = field_stream_type;
+				field.info.stream_alignment = field_stream_alignment;
+				field.info.stream_byte_size = field_stream_byte_size;
+				return field;
+			}
+
+			size_t byte_size;
+			size_t alignment;
+			// When it is not blittable, one of the reflection type, custom type or basic field must be filled in
+			bool is_blittable;
+			// When this is set, the basic field properties are filled in
+			bool is_basic_field = false;
+			// This gives the same information as custom type. The custom type field is provided for convenience,
+			// While this can be used to address external structures that mirror the one from the reflection custom types
+			unsigned int custom_type_index = -1;
+
+			struct {
+				// We cannot obtain SoA pointers from definitions, so no need to handle that case
+
+				ReflectionBasicFieldType field_basic_type = ReflectionBasicFieldType::UserDefined;
+				ReflectionStreamFieldType field_stream_type = ReflectionStreamFieldType::Basic;
+				unsigned char field_stream_alignment = 0;
+				unsigned short field_stream_byte_size = 0;
+			};
+
+			// These will be filled in case the definition is a reflection type or a custom type
+			const ReflectionType* type = nullptr;
+			ReflectionCustomTypeInterface* custom_type = nullptr;
+		};
+
 		// This structure can be used to reference fields from a type, including nested fields
 		// Such that you can pinpoint the exact field
 		struct ReflectionNestedFieldIndex {

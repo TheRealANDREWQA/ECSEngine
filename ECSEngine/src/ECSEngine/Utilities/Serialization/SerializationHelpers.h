@@ -12,193 +12,6 @@ namespace ECSEngine {
 		struct ReflectionManager;
 	}
 
-	struct SerializeOptions;
-
-	struct SerializeCustomTypeWriteFunctionData {
-		uintptr_t* stream;
-		const Reflection::ReflectionManager* reflection_manager;
-		const void* data;
-		Stream<char> definition;
-		bool write_data;
-
-		SerializeOptions* options;
-	};
-
-	// If write data is false, just determine how many buffer bytes are needed
-	typedef size_t (*SerializeCustomTypeWriteFunction)(SerializeCustomTypeWriteFunctionData* data);
-
-#define ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name) size_t SerializeCustomTypeWrite_##name(SerializeCustomTypeWriteFunctionData* data)
-
-	struct DeserializeOptions;
-
-	struct SerializeCustomTypeReadFunctionData {
-		unsigned int version;
-		bool read_data;
-		// This can be used by custom serializers to take into consideration that this field
-		// was allocated prior - fields should be considered invalid
-		bool was_allocated;
-
-		uintptr_t* stream;
-		const Reflection::ReflectionManager* reflection_manager;
-		void* data;
-		Stream<char> definition;
-
-		DeserializeOptions* options;
-	};
-
-	// If read_data is false, just determine how many buffer bytes are needed
-	typedef size_t (*SerializeCustomTypeReadFunction)(SerializeCustomTypeReadFunctionData* data);
-
-#define ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name) size_t SerializeCustomTypeRead_##name(SerializeCustomTypeReadFunctionData* data)
-
-#define ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(name) ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name); \
-														ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name);
-
-#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, version, STRING(name), nullptr } 
-
-#define ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY 8
-
-	struct SerializeCustomType {
-		SerializeCustomTypeWriteFunction write;
-		SerializeCustomTypeReadFunction read;
-		unsigned int version;
-		// This is used to restore the mapping for the serialization in case 
-		// new serialization types are added or some are removed
-		Stream<char> name;
-
-		// Can modify the behaviour of the serializer
-		void* user_data;
-		bool switches[ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY] = { false };
-	};
-
-	// Must be kept in sync with the ECS_REFLECTION_CUSTOM_TYPES
-	extern SerializeCustomType ECS_SERIALIZE_CUSTOM_TYPES[];
-
-	struct SerializeCustomTypeDeduceTypeHelperData {
-		Stream<char>* template_type;
-		const Reflection::ReflectionManager* reflection_manager;
-	};
-
-	struct SerializeCustomTypeDeduceTypeHelperResult {
-		Reflection::ReflectionType type;
-		unsigned int custom_serializer_index;
-		Reflection::ReflectionBasicFieldType basic_type;
-		Reflection::ReflectionStreamFieldType stream_type;
-		size_t byte_size;
-		size_t alignment;
-	};
-
-	// Returns the byte size of the element in between the template parenthesis.
-	// It also finds out if the template parameter is a user defined type, it has a serialize functor
-	// or it is just a basic type
-	// At the moment, pointers cannot be detected (is that a case for someone?)
-	ECSENGINE_API SerializeCustomTypeDeduceTypeHelperResult SerializeCustomTypeDeduceTypeHelper(SerializeCustomTypeDeduceTypeHelperData* data);
-
-	struct SerializeCustomWriteHelperData {
-		Reflection::ReflectionBasicFieldType basic_type;
-		Reflection::ReflectionStreamFieldType stream_type;
-		const Reflection::ReflectionType* reflection_type;
-		unsigned int custom_serializer_index;
-		SerializeCustomTypeWriteFunctionData* write_data;
-		Stream<void> data_to_write;
-		size_t element_byte_size;
-		Stream<size_t> indices = { nullptr, 0 };
-	};
-
-	// Element_byte_size should be for stream_type different from basic
-	// the byte size of the target, not of the stream's
-	// It does not prefix the stream with its size - should be done outside. Returns the number of bytes written
-	ECSENGINE_API size_t SerializeCustomWriteHelper(SerializeCustomWriteHelperData* data);
-
-	// All the fields that can be filled in from the result will be filled
-	ECSENGINE_API SerializeCustomWriteHelperData FillSerializeCustomWriteHelper(const SerializeCustomTypeDeduceTypeHelperResult* result);
-
-	struct SerializeCustomWriteHelperExData {
-		Stream<char> template_type;
-		SerializeCustomTypeWriteFunctionData* write_data;
-		Stream<void> data_to_write;
-		size_t element_byte_size = -1; // -1 Means use the return value of the deduce type helper
-	};
-
-	// Combines SerializeCustomTypeDeduceTypeHelper with a SerializeCustomWriteHelper call
-	// into a single step. Returns what SerializeCustomWriteHelper would return, the number of bytes written
-	ECSENGINE_API size_t SerializeCustomWriteHelperEx(SerializeCustomWriteHelperExData* data);
-
-	struct DeserializeCustomReadHelperData {
-		Reflection::ReflectionBasicFieldType basic_type;
-		Reflection::ReflectionStreamFieldType stream_type;
-		const Reflection::ReflectionType* reflection_type;
-		unsigned int custom_serializer_index;
-		SerializeCustomTypeReadFunctionData* read_data;
-		size_t element_count;
-
-		// If this is 0 and the element_count is 1 then it will assume that a single instance is to be deserialized
-		// and no buffer will be allocated
-		size_t elements_to_allocate;
-		size_t element_byte_size;
-		size_t element_alignment;
-
-		union {
-			void** allocated_buffer;
-			void* deserialize_target;
-		};
-		AllocatorPolymorphic override_allocator = { nullptr };
-		Stream<size_t> indices = { nullptr, 0 };
-	};
-
-	// The element_byte_size should be the size of the target for streams.
-	// Field data should be initialized with the element count to be read
-	// Can provide an allocator such that it will allocate from it instead 
-	// of the backup allocator. Can be useful for resizable containers
-	ECSENGINE_API size_t DeserializeCustomReadHelper(DeserializeCustomReadHelperData* data);
-
-	// All the fields that can be filled in from the result will be filled
-	ECSENGINE_API DeserializeCustomReadHelperData FillDeserializeCustomReadHelper(const SerializeCustomTypeDeduceTypeHelperResult* result);
-
-	struct DeserializeCustomReadHelperExData {
-		Stream<char> definition;
-		SerializeCustomTypeReadFunctionData* data;
-		size_t element_count;
-		
-		// -1 means the same as the element count
-		// This can also be 0 if you want to deserialize a single instance
-		// and the element count is 1
-		size_t elements_to_allocate = -1; 
-
-		union {
-			void** allocated_buffer;
-			void* deserialize_target;
-		};
-	};
-
-	// Combines SerializeCustomTypeDeduceTypeHelper with a DeserializeCustomReadHelper call
-	// into a single step. Returns what DeserializeCustomReadHelper would return, the number of buffer bytes
-	ECSENGINE_API size_t DeserializeCustomReadHelperEx(DeserializeCustomReadHelperExData* data);
-
-	ECSENGINE_API void SerializeCustomTypeCopyBlit(Reflection::ReflectionCustomTypeCopyData* data, size_t byte_size);
-
-	// Returns -1 if it doesn't exist
-	ECSENGINE_API unsigned int FindSerializeCustomType(Stream<char> definition);
-
-	ECSENGINE_API unsigned int SerializeCustomTypeCount();
-
-#pragma region User defined influence
-
-	// Activates the mode for the sparse set where it writes only the T data
-	// without the indirection buffer
-	ECSENGINE_API void SetSerializeCustomSparsetSet();
-
-	// Only references it, needs to be stable for the duration it is being used.
-	// After the data is no longer needed, clear using the ClearSerializeCustomTypeUserData
-	ECSENGINE_API void SetSerializeCustomTypeUserData(unsigned int index, void* buffer);
-
-	ECSENGINE_API void ClearSerializeCustomTypeUserData(unsigned int index);
-
-	// Sets the switch to the new value and returns the old value
-	ECSENGINE_API bool SetSerializeCustomTypeSwitch(unsigned int index, unsigned char switch_index, bool new_status);
-
-#pragma endregion
-
 	// -----------------------------------------------------------------------------------------
 
 	template<bool write_data>
@@ -267,7 +80,7 @@ namespace ECSEngine {
 	}
 
 	// -----------------------------------------------------------------------------------------
-	
+
 	template<bool write_data>
 	ECS_INLINE size_t WriteWithSizeShort(uintptr_t* stream, const void* data, unsigned short data_size) {
 		return Write<write_data>(stream, &data_size, sizeof(data_size)) + Write<write_data>(stream, data, data_size);
@@ -491,6 +304,158 @@ namespace ECSEngine {
 	ECS_INLINE size_t ReadOrReferenceDataWithSizeShort(uintptr_t* stream, void** data, unsigned short& data_size, bool reference_data, bool read_data) {
 		return read_data ? ReadOrReferenceDataWithSizeShort<true>(stream, data, data_size, reference_data) : ReadOrReferenceDataWithSizeShort<false>(stream, data, data_size, reference_data);
 	}
+
+	// -----------------------------------------------------------------------------------------
+
+	struct SerializeOptions;
+
+	struct SerializeCustomTypeWriteFunctionData {
+		ECS_INLINE size_t Write(const void* data, size_t write_size) const {
+			return ECSEngine::Write(stream, data, write_size, write_data);
+		}
+
+		template<typename T>
+		ECS_INLINE size_t Write(const T* data) const {
+			return WriteDeduce(stream, data, write_data);
+		}
+
+		uintptr_t* stream;
+		const Reflection::ReflectionManager* reflection_manager;
+		const void* data;
+		Stream<char> definition;
+		bool write_data;
+
+		SerializeOptions* options;
+	};
+
+	// If write data is false, just determine how many buffer bytes are needed
+	typedef size_t (*SerializeCustomTypeWriteFunction)(SerializeCustomTypeWriteFunctionData* data);
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name) size_t SerializeCustomTypeWrite_##name(SerializeCustomTypeWriteFunctionData* data)
+
+	struct DeserializeOptions;
+
+	struct SerializeCustomTypeReadFunctionData {
+		ECS_INLINE size_t Read(void* data, size_t data_size) const {
+			return ECSEngine::Read(stream, data, data_size, read_data);
+		}
+
+		template<typename T>
+		ECS_INLINE size_t Read(T* data) const {
+			return ReadDeduce(stream, data, read_data);
+		}
+
+		unsigned int version;
+		bool read_data;
+		// This can be used by custom serializers to take into consideration that this field
+		// was allocated prior - fields should be considered invalid
+		bool was_allocated;
+
+		uintptr_t* stream;
+		const Reflection::ReflectionManager* reflection_manager;
+		void* data;
+		Stream<char> definition;
+
+		DeserializeOptions* options;
+	};
+
+	// If read_data is false, just determine how many buffer bytes are needed
+	typedef size_t (*SerializeCustomTypeReadFunction)(SerializeCustomTypeReadFunctionData* data);
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name) size_t SerializeCustomTypeRead_##name(SerializeCustomTypeReadFunctionData* data)
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(name) ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name); \
+														ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name);
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, version, STRING(name), nullptr } 
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY 8
+
+	struct SerializeCustomType {
+		SerializeCustomTypeWriteFunction write;
+		SerializeCustomTypeReadFunction read;
+		unsigned int version;
+		// This is used to restore the mapping for the serialization in case 
+		// new serialization types are added or some are removed
+		Stream<char> name;
+
+		// Can modify the behaviour of the serializer
+		void* user_data;
+		bool switches[ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY] = { false };
+	};
+
+	// Must be kept in sync with the ECS_REFLECTION_CUSTOM_TYPES
+	extern SerializeCustomType ECS_SERIALIZE_CUSTOM_TYPES[];
+
+	struct ECSENGINE_API SerializeCustomWriteHelperData {
+		// Initializes the 2 fields alongside the definition info
+		void Set(SerializeCustomTypeWriteFunctionData* write_data, Stream<char> definition);
+		
+		Reflection::ReflectionDefinitionInfo definition_info;
+		SerializeCustomTypeWriteFunctionData* write_data;
+		Stream<void> data_to_write;
+		Stream<char> definition;
+		// This is an optional field, in case you want to address a subfield from a larger structure.
+		// If left at 0, it will use the definition info byte size
+		size_t element_stride = 0;
+		Stream<size_t> indices = { nullptr, 0 };
+	};
+
+	// Element_byte_size should be for stream_type different from basic
+	// the byte size of the target, not of the stream's
+	// It does not prefix the stream with its size - should be done outside. Returns the number of bytes written
+	ECSENGINE_API size_t SerializeCustomWriteHelper(SerializeCustomWriteHelperData* data);
+
+	struct ECSENGINE_API DeserializeCustomReadHelperData {
+		// Initializes the 2 fields alongside the definition info
+		void Set(SerializeCustomTypeReadFunctionData* read_data, Stream<char> definition);
+
+		Stream<char> definition;
+		Reflection::ReflectionDefinitionInfo definition_info;
+		SerializeCustomTypeReadFunctionData* read_data;
+		size_t element_count;
+
+		// If this is 0 and the element_count is 1 then it will assume that a single instance is to be deserialized
+		// and no buffer will be allocated
+		size_t elements_to_allocate;
+
+		union {
+			void** allocated_buffer;
+			void* deserialize_target;
+		};
+		AllocatorPolymorphic override_allocator = { nullptr };
+		Stream<size_t> indices = { nullptr, 0 };
+	};
+
+	// The element_byte_size should be the size of the target for streams.
+	// Field data should be initialized with the element count to be read
+	// Can provide an allocator such that it will allocate from it instead 
+	// of the backup allocator. Can be useful for resizable containers
+	ECSENGINE_API size_t DeserializeCustomReadHelper(DeserializeCustomReadHelperData* data);
+
+	ECSENGINE_API void SerializeCustomTypeCopyBlit(Reflection::ReflectionCustomTypeCopyData* data, size_t byte_size);
+
+	// Returns -1 if it doesn't exist
+	ECSENGINE_API unsigned int FindSerializeCustomType(Stream<char> definition);
+
+	ECSENGINE_API unsigned int SerializeCustomTypeCount();
+
+#pragma region User defined influence
+
+	// Activates the mode for the sparse set where it writes only the T data
+	// without the indirection buffer
+	ECSENGINE_API void SetSerializeCustomSparsetSet();
+
+	// Only references it, needs to be stable for the duration it is being used.
+	// After the data is no longer needed, clear using the ClearSerializeCustomTypeUserData
+	ECSENGINE_API void SetSerializeCustomTypeUserData(unsigned int index, void* buffer);
+
+	ECSENGINE_API void ClearSerializeCustomTypeUserData(unsigned int index);
+
+	// Sets the switch to the new value and returns the old value
+	ECSENGINE_API bool SetSerializeCustomTypeSwitch(unsigned int index, unsigned char switch_index, bool new_status);
+
+#pragma endregion
 
 	// -----------------------------------------------------------------------------------------
 

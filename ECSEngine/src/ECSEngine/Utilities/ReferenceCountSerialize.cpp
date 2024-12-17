@@ -84,20 +84,14 @@ namespace ECSEngine {
 	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(ReferenceCounted) {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 
-		SerializeCustomWriteHelperExData ex_data;
+		SerializeCustomWriteHelperData ex_data;
+		ex_data.Set(data, template_type);
 		ex_data.data_to_write = { data->data, 1 };
-		ex_data.template_type = template_type;
-		ex_data.write_data = data;
-		size_t written_size = SerializeCustomWriteHelperEx(&ex_data);
+		size_t written_size = SerializeCustomWriteHelper(&ex_data);
 
 		// We need the helper to tell us the byte size of the original type
 		// In order to write the reference count
-		SerializeCustomTypeDeduceTypeHelperData helper_data;
-		helper_data.reflection_manager = data->reflection_manager;
-		helper_data.template_type = &template_type;
-
-		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&helper_data);
-		unsigned int* reference_count = (unsigned int*)OffsetPointer(data->data, result.byte_size);
+		unsigned int* reference_count = (unsigned int*)OffsetPointer(data->data, ex_data.definition_info.byte_size);
 		return written_size + Write(data->stream, reference_count, sizeof(unsigned int), data->write_data);
 	}
 
@@ -111,21 +105,16 @@ namespace ECSEngine {
 		// Determine if it is a trivial type - including streams
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 
-		DeserializeCustomReadHelperExData ex_data;
-		ex_data.data = data;
-		ex_data.definition = template_type;
+		DeserializeCustomReadHelperData ex_data;
+		ex_data.Set(data, template_type);
 		ex_data.deserialize_target = data->data;
 		ex_data.elements_to_allocate = 0;
 		ex_data.element_count = 1;
-		size_t buffer_size = DeserializeCustomReadHelperEx(&ex_data);
+
+		size_t buffer_size = DeserializeCustomReadHelper(&ex_data);
 
 		// We need the byte size of the template type in order to read the reference count
-		SerializeCustomTypeDeduceTypeHelperData helper_data;
-		helper_data.reflection_manager = data->reflection_manager;
-		helper_data.template_type = &template_type;
-
-		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&helper_data);
-		Read(data->stream, OffsetPointer(data->data, result.byte_size), sizeof(unsigned int), data->read_data);
+		buffer_size += Read(data->stream, OffsetPointer(data->data, ex_data.definition_info.byte_size), sizeof(unsigned int), data->read_data);
 
 		return buffer_size;
 	}

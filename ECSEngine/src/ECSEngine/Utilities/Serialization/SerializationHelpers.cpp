@@ -64,299 +64,128 @@ namespace ECSEngine {
 
 	using namespace Reflection;
 
-	SerializeCustomTypeDeduceTypeHelperResult SerializeCustomTypeDeduceTypeHelper(SerializeCustomTypeDeduceTypeHelperData* data) {
-		SerializeCustomTypeDeduceTypeHelperResult result;
-
-		size_t min_size = sizeof("Stream<");
-		unsigned int string_offset = 0;
-
-		ulong2 current_type_byte_size_alignment = { 0, 0 };
-		result.stream_type = ReflectionStreamFieldType::Basic;
-
-		auto compare = [&](auto string, size_t byte_size, size_t alignment, ReflectionStreamFieldType stream_type) {
-			if (memcmp(data->template_type->buffer, string, sizeof(string)) == 0) {
-				string_offset = sizeof(string) - 1;
-				current_type_byte_size_alignment = { byte_size, alignment };
-				result.stream_type = stream_type;
-				return true;
-			}
-			return false;
-		};
-
-		if (data->template_type->size < min_size) {
-			string_offset = 0;
-		}
-		else if (!compare("Stream<", sizeof(Stream<void>), alignof(Stream<void>), ReflectionStreamFieldType::Stream)) {
-			if (!compare("CapacityStream<", sizeof(CapacityStream<void>), alignof(CapacityStream<void>), ReflectionStreamFieldType::CapacityStream)) {
-				compare("ResizableStream<", sizeof(ResizableStream<void>), alignof(ResizableStream<void>), ReflectionStreamFieldType::ResizableStream);
-			}
-		}
-		//else {
-		//	// Verify pointers 
-		//	Stream<char> asterisk = FindFirstCharacter(template_type, '*');
-		//	if (asterisk.buffer != nullptr) {
-		//		stream_type = ReflectionStreamFieldType::Pointer;
-		//	}
-		//}
-
-		ReflectionCustomTypeByteSizeData byte_data;
-		byte_data.definition = *data->template_type;
-		byte_data.reflection_manager = data->reflection_manager;
-
-		*data->template_type = { data->template_type->buffer + string_offset, data->template_type->size - string_offset - (string_offset > 0) };
-		result.basic_type = ConvertStringToBasicFieldType(*data->template_type);
-
-		result.type.name = { nullptr, 0 };
-		result.custom_serializer_index = -1;
-
-		// It is not a trivial type - try with a reflected type or with a type from the custom serializers
-		if (result.basic_type == ReflectionBasicFieldType::Unknown) {
-			// It is not a reflected type
-			if (!data->reflection_manager->TryGetType(*data->template_type, result.type)) {
-				// Custom serializer
-				result.custom_serializer_index = FindSerializeCustomType(*data->template_type);
-
-				// This should not fail
-				ECS_ASSERT(result.custom_serializer_index != -1, "Failed to serialize custom stream");
-				current_type_byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[result.custom_serializer_index]->GetByteSize(&byte_data);
-			}
-			else {
-				result.basic_type = ReflectionBasicFieldType::UserDefined;
-				current_type_byte_size_alignment = { GetReflectionTypeByteSize(&result.type), GetReflectionTypeAlignment(&result.type) };
-			}
-		}
-		else {
-			current_type_byte_size_alignment = { GetReflectionBasicFieldTypeByteSize(result.basic_type), GetReflectionFieldTypeAlignment(result.basic_type) };
-		}
-
-		result.byte_size = current_type_byte_size_alignment.x;
-		result.alignment = current_type_byte_size_alignment.y;
-		return result;
-	}
-
 	// -----------------------------------------------------------------------------------------
 
 	size_t SerializeCustomWriteHelper(SerializeCustomWriteHelperData* data) {
 		size_t serialize_size = 0;
 
 		size_t element_count = data->indices.buffer == nullptr ? data->data_to_write.size : data->indices.size;
+		size_t element_stride = data->element_stride == 0 ? data->definition_info.byte_size : data->element_stride;
+		size_t element_byte_size = data->definition_info.byte_size;
 
-		if (data->reflection_type->name.size > 0) {
-			// It is a reflected type
-			SerializeOptions options;
-			options.write_type_table = false;
-			options.verify_dependent_types = false;
-			options.write_type_table_tags = false;
-
-			if (data->write_data->options != nullptr) {
-				options.error_message = data->write_data->options->error_message;
-				options.omit_fields = data->write_data->options->omit_fields;
-				options.write_type_table_tags = data->write_data->options->write_type_table_tags;
+		// This lambda helps in hoisting the has indices check outside the loop and calls the functor with a (void* element) parameter
+		auto iterate_elements = [data, element_count, element_stride](auto call_functor) {
+			if (data->indices.buffer != nullptr) {
+				for (size_t index = 0; index < element_count; index++) {
+					void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * element_stride);
+					call_functor(element);
+				}
 			}
+			else {
+				for (size_t index = 0; index < element_count; index++) {
+					void* element = OffsetPointer(data->data_to_write.buffer, index * element_stride);
+					call_functor(element);
+				}
+			}
+		};
 
+		if (data->definition_info.is_blittable) {
 			if (data->write_data->write_data) {
-				// Hoist the indices check outside the for
 				if (data->indices.buffer == nullptr) {
-					// Use a fast path for blittable types
-					bool is_blittable = IsBlittable(data->reflection_type);
-					if (is_blittable) {
-						Write<true>(data->write_data->stream, data->data_to_write.buffer, element_count * data->element_byte_size);
+					if (element_stride == element_byte_size) {
+						Write<true>(data->write_data->stream, data->data_to_write.buffer, element_count * element_byte_size);
 					}
 					else {
+						// Can't use a single write
 						for (size_t index = 0; index < element_count; index++) {
-							void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
-							// Use the serialize function now
-							Serialize(data->write_data->reflection_manager, data->reflection_type, element, *data->write_data->stream, &options);
+							void* element = OffsetPointer(data->data_to_write.buffer, index * element_stride);
+							Write<true>(data->write_data->stream, element, element_byte_size);
 						}
 					}
 				}
 				else {
 					for (size_t index = 0; index < element_count; index++) {
-						void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
-						Serialize(data->write_data->reflection_manager, data->reflection_type, element, *data->write_data->stream, &options);
+						void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * element_stride);
+						Write<true>(data->write_data->stream, element, element_byte_size);
 					}
 				}
 			}
 			else {
-				// Use a fast path for blittable types
-				bool is_blittable = IsBlittable(data->reflection_type);
-				if (is_blittable) {
-					serialize_size += element_count * data->element_byte_size;
-				}
-				else {
-					// Hoist the indices check outside the for
-					if (data->indices.buffer == nullptr) {
-						for (size_t index = 0; index < element_count; index++) {
-							void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
-							serialize_size += SerializeSize(data->write_data->reflection_manager, data->reflection_type, element, &options);
-						}
-					}
-					else {
-						for (size_t index = 0; index < element_count; index++) {
-							void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
-							serialize_size += SerializeSize(data->write_data->reflection_manager, data->reflection_type, element, &options);
-						}
-					}
-				}
-			}
-		}
-		// It has a custom serializer functor - use it
-		else if (data->custom_serializer_index != -1) {
-			// Use a fast path for blittable types
-			ReflectionCustomTypeIsBlittableData is_blittable_data;
-			is_blittable_data.definition = data->write_data->definition;
-			is_blittable_data.reflection_manager = data->write_data->reflection_manager;
-			bool is_blittable = ECS_REFLECTION_CUSTOM_TYPES[data->custom_serializer_index]->IsBlittable(&is_blittable_data);
-			// Hoist the indices check outside the for
-			if (data->indices.buffer == nullptr) {
-				if (!data->write_data->write_data && is_blittable) {
-					serialize_size += data->element_byte_size * element_count;
-				}
-				else {
-					if (is_blittable) {
-						if (data->write_data->write_data) {
-							// Memcpy directly
-							serialize_size += Write<true>(data->write_data->stream, data->data_to_write.buffer, element_count * data->element_byte_size);
-						}
-						else {
-							serialize_size += element_count * data->element_byte_size;
-						}
-					}
-					else {
-						for (size_t index = 0; index < element_count; index++) {
-							void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
-							data->write_data->data = element;
-							serialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].write(data->write_data);
-						}
-					}
-				}
-			}
-			else {
-				if (!data->write_data->write_data && is_blittable) {
-					serialize_size += data->element_byte_size * element_count;
-				}
-				else {
-					for (size_t index = 0; index < element_count; index++) {
-						void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
-						data->write_data->data = element;
-						serialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].write(data->write_data);
-					}
-				}
+				serialize_size += element_count * element_byte_size;
 			}
 		}
 		else {
-			if (data->stream_type != ReflectionStreamFieldType::Basic) {
-				// Serialize using known types - basic and stream based ones of primitive types
-				// PERFORMANCE TODO: Can we replace the loops with memcpys?
-				// If these are basic types, with no user defined ones and no nested streams,
-				// We can memcpy directly
+			// In this else, we know that the type is not blittable, so we must always call the appropriate serialize function
 
-				ReflectionFieldInfo field_info;
-				field_info.basic_type = data->basic_type;
-				field_info.stream_type = data->stream_type;
+			if (data->definition_info.type != nullptr) {
+				// It is a reflected type
+				SerializeOptions options;
+				options.write_type_table = false;
+				options.verify_dependent_types = false;
+				options.write_type_table_tags = false;
 
-				field_info.stream_byte_size = data->element_byte_size;
-				size_t stream_offset = data->stream_type == ReflectionStreamFieldType::ResizableStream ? sizeof(ResizableStream<void>) : sizeof(Stream<void>);
+				if (data->write_data->options != nullptr) {
+					options.error_message = data->write_data->options->error_message;
+					options.omit_fields = data->write_data->options->omit_fields;
+					options.write_type_table_tags = data->write_data->options->write_type_table_tags;
+				}
 
 				if (data->write_data->write_data) {
-					// Hoist the indices check outside the for
-					if (data->indices.buffer == nullptr) {
-						for (size_t index = 0; index < element_count; index++) {
-							void* element = OffsetPointer(
-								data->data_to_write.buffer,
-								index * stream_offset
-							);
-							WriteFundamentalType<true>(field_info, element, *data->write_data->stream);
-						}
-					}
-					else {
-						for (size_t index = 0; index < element_count; index++) {
-							void* element = OffsetPointer(
-								data->data_to_write.buffer,
-								data->indices[index] * stream_offset
-							);
-							WriteFundamentalType<true>(field_info, element, *data->write_data->stream);
-						}
-					}
+					iterate_elements([data, &options](void* element) {
+						Serialize(data->write_data->reflection_manager, data->definition_info.type, element, *data->write_data->stream, &options);
+					});
 				}
 				else {
-					// Hoist the indices check outside the for
-					if (data->indices.buffer == nullptr) {
-						for (size_t index = 0; index < element_count; index++) {
-							void* element = OffsetPointer(
-								data->data_to_write.buffer,
-								index * stream_offset
-							);
-							serialize_size += WriteFundamentalType<false>(field_info, element, *data->write_data->stream);
-						}
-					}
-					else {
-						for (size_t index = 0; index < element_count; index++) {
-							void* element = OffsetPointer(
-								data->data_to_write.buffer,
-								data->indices[index] * stream_offset
-							);
-							serialize_size += WriteFundamentalType<false>(field_info, element, *data->write_data->stream);
-						}
-					}
+					iterate_elements([&serialize_size, data, &options](void* element) {
+						serialize_size += SerializeSize(data->write_data->reflection_manager, data->definition_info.type, element, &options);
+					});
 				}
 			}
+			// If it has a custom serializer functor - use it
+			else if (data->definition_info.custom_type_index != -1) {
+				// We must change the definition used
+				Stream<char> previous_definition = data->write_data->definition;
+				data->write_data->definition = data->definition;
+
+				iterate_elements([&serialize_size, data](void* element) {
+					data->write_data->data = element;
+					serialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->definition_info.custom_type_index].write(data->write_data);
+				});
+
+				data->write_data->definition = previous_definition;
+			}
 			else {
-				if (data->write_data->write_data) {
-					if (data->indices.buffer == nullptr) {
-						Write<true>(data->write_data->stream, data->data_to_write.buffer, element_count * data->element_byte_size);
+				if (data->definition_info.field_stream_type != ReflectionStreamFieldType::Basic) {
+					// Serialize using known types - basic and stream based ones of primitive types
+					// PERFORMANCE TODO: Can we replace the loops with memcpys?
+					// If these are basic types, with no user defined ones and no nested streams,
+					// We can memcpy directly
+
+					ReflectionFieldInfo field_info;
+					field_info.basic_type = data->definition_info.field_basic_type;
+					field_info.stream_type = data->definition_info.field_stream_type;
+
+					field_info.stream_byte_size = data->definition_info.field_stream_byte_size;
+					size_t stream_offset = data->definition_info.field_stream_type == ReflectionStreamFieldType::ResizableStream ? sizeof(ResizableStream<void>) : sizeof(Stream<void>);
+
+					if (data->write_data->write_data) {
+						iterate_elements([&field_info, data](void* element) {
+							WriteFundamentalType<true>(field_info, element, *data->write_data->stream);
+						});
 					}
 					else {
-						for (size_t index = 0; index < element_count; index++) {
-							void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
-							Write<true>(data->write_data->stream, element, data->element_byte_size);
-						}
+						iterate_elements([&field_info, data, &serialize_size](void* element) {
+							serialize_size += WriteFundamentalType<false>(field_info, element, *data->write_data->stream);
+						});
 					}
 				}
 				else {
-					serialize_size += element_count * data->element_byte_size;
+					ECS_ASSERT(false, "Critical error in serialization helper write: unknown case (non blittable basic field)");
 				}
 			}
 		}
 
 		return serialize_size;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	SerializeCustomWriteHelperData FillSerializeCustomWriteHelper(const SerializeCustomTypeDeduceTypeHelperResult* result)
-	{
-		SerializeCustomWriteHelperData value;
-
-		value.basic_type = result->basic_type;
-		value.custom_serializer_index = result->custom_serializer_index;
-		value.element_byte_size = result->byte_size;
-		value.reflection_type = &result->type;
-		value.stream_type = result->stream_type;
-		
-		return value;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	size_t SerializeCustomWriteHelperEx(SerializeCustomWriteHelperExData* data)
-	{
-		SerializeCustomTypeDeduceTypeHelperData helper_data;
-		helper_data.reflection_manager = data->write_data->reflection_manager;
-		helper_data.template_type = &data->template_type;
-
-		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&helper_data);
-
-		SerializeCustomWriteHelperData write_data = FillSerializeCustomWriteHelper(&result);
-		write_data.data_to_write = data->data_to_write;
-		write_data.element_byte_size = data->element_byte_size == -1 ? result.byte_size : data->element_byte_size;
-		write_data.write_data = data->write_data;
-
-		Stream<char> previous_definition = data->write_data->definition;
-		data->write_data->definition = data->template_type;
-		size_t return_result = SerializeCustomWriteHelper(&write_data);
-		data->write_data->definition = previous_definition;
-		return return_result;
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -380,8 +209,9 @@ namespace ECSEngine {
 		};
 
 		bool single_instance = data->elements_to_allocate == 0 && data->element_count == 1;
+		size_t element_byte_size = data->definition_info.byte_size;
 
-		if (data->reflection_type->name.size > 0) {
+		if (data->definition_info.type != nullptr) {
 			bool has_options = data->read_data->options != nullptr;
 
 			DeserializeOptions options;
@@ -406,10 +236,10 @@ namespace ECSEngine {
 					bool previous_was_allocated = data->read_data->was_allocated;
 					data->read_data->was_allocated = true;
 
-					void* buffer = data->elements_to_allocate > 0 ? 
-						AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size, data->element_alignment) : nullptr;
+					void* buffer = data->elements_to_allocate > 0 ?
+						AllocateEx(backup_allocator, data->elements_to_allocate * element_byte_size, data->definition_info.alignment) : nullptr;
 					*data->allocated_buffer = buffer;
-					deserialize_size += data->elements_to_allocate * data->element_byte_size;
+					deserialize_size += data->elements_to_allocate * element_byte_size;
 
 					auto loop = [&](auto use_indices) {
 						// We need this separate case for the following reason
@@ -425,7 +255,7 @@ namespace ECSEngine {
 						// We are to use the deserialize, it will be skipping
 						// Only 6 bytes per entry, instead of the full 8. So
 						// We need to account for this fact
-						unsigned int field_table_index = data->read_data->options->field_table->TypeIndex(data->reflection_type->name);
+						unsigned int field_table_index = data->read_data->options->field_table->TypeIndex(data->definition_info.type->name);
 						ECS_ASSERT(field_table_index != -1, "Corrupt deserialization file");
 						bool is_file_blittable = data->read_data->options->field_table->IsBlittable(field_table_index);
 						if (is_file_blittable) {
@@ -435,13 +265,13 @@ namespace ECSEngine {
 							bool is_unchanged = data->read_data->options->field_table->IsUnchanged(
 								field_table_index,
 								data->read_data->reflection_manager,
-								data->reflection_type
+								data->definition_info.type
 							);
 
 							if constexpr (!use_indices) {
 								if (is_unchanged) {
 									// Can memcpy directly
-									Read<true>(data->read_data->stream, buffer, data->element_count * data->element_byte_size);
+									Read<true>(data->read_data->stream, buffer, data->element_count * element_byte_size);
 								}
 								else {
 									// Need to deserialize every element
@@ -449,12 +279,12 @@ namespace ECSEngine {
 									// For the ptr stream offset
 									for (size_t index = 0; index < data->element_count; index++) {
 										uintptr_t initial_ptr = *data->read_data->stream;
-										void* element = OffsetPointer(buffer, data->element_byte_size * index);
+										void* element = OffsetPointer(buffer, element_byte_size * index);
 										ECS_DESERIALIZE_CODE code = Deserialize(
-											data->read_data->reflection_manager, 
-											data->reflection_type, 
-											element, 
-											*data->read_data->stream, 
+											data->read_data->reflection_manager,
+											data->definition_info.type,
+											element,
+											*data->read_data->stream,
 											&options
 										);
 										if (code != ECS_DESERIALIZE_OK) {
@@ -469,7 +299,7 @@ namespace ECSEngine {
 								if (is_unchanged) {
 									// Can memcpy into each index, but cannot as a whole
 									for (size_t index = 0; index < data->element_count; index++) {
-										void* element = OffsetPointer(buffer, data->element_byte_size * data->indices[index]);
+										void* element = OffsetPointer(buffer, element_byte_size * data->indices[index]);
 										Read<true>(data->read_data->stream, element, file_blittable_size);
 									}
 								}
@@ -477,10 +307,10 @@ namespace ECSEngine {
 									// Cannot memcpy directly
 									for (size_t index = 0; index < data->element_count; index++) {
 										uintptr_t initial_ptr = *data->read_data->stream;
-										void* element = OffsetPointer(buffer, data->element_byte_size * data->indices[index]);
+										void* element = OffsetPointer(buffer, element_byte_size * data->indices[index]);
 										ECS_DESERIALIZE_CODE code = Deserialize(
 											data->read_data->reflection_manager,
-											data->reflection_type,
+											data->definition_info.type,
 											element,
 											*data->read_data->stream,
 											&options
@@ -500,8 +330,8 @@ namespace ECSEngine {
 								if constexpr (use_indices) {
 									offset = data->indices[index];
 								}
-								void* element = OffsetPointer(buffer, data->element_byte_size * offset);
-								ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->reflection_type, element, *data->read_data->stream, &options);
+								void* element = OffsetPointer(buffer, element_byte_size * offset);
+								ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->definition_info.type, element, *data->read_data->stream, &options);
 								if (code != ECS_DESERIALIZE_OK) {
 									deallocate_buffer();
 									return -1;
@@ -526,7 +356,7 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->reflection_type, data->deserialize_target, *data->read_data->stream, &options);
+					ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->definition_info.type, data->deserialize_target, *data->read_data->stream, &options);
 					if (code != ECS_DESERIALIZE_OK) {
 						return -1;
 					}
@@ -537,7 +367,7 @@ namespace ECSEngine {
 				size_t iterate_count = single_instance ? 1 : data->element_count;
 				data->read_data->was_allocated = true;
 				for (size_t index = 0; index < iterate_count; index++) {
-					size_t byte_size = DeserializeSize(data->read_data->reflection_manager, data->reflection_type, *data->read_data->stream, &options);
+					size_t byte_size = DeserializeSize(data->read_data->reflection_manager, data->definition_info.type, *data->read_data->stream, &options);
 					if (byte_size == -1) {
 						return -1;
 					}
@@ -546,13 +376,17 @@ namespace ECSEngine {
 				data->read_data->was_allocated = previous_was_allocated;
 			}
 		}
-		else if (data->custom_serializer_index != -1) {
+		else if (data->definition_info.custom_type_index != -1) {
+			// We must change the definition of the read data
+			Stream<char> previous_definition = data->read_data->definition;
+			data->read_data->definition = data->definition;
+
 			if (!single_instance) {
 				bool previous_was_allocated = data->read_data->was_allocated;
 				data->read_data->was_allocated = true;
 				if (data->read_data->read_data) {
-					size_t allocate_size = data->elements_to_allocate * data->element_byte_size;
-					void* buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size, data->element_alignment) : nullptr;
+					size_t allocate_size = data->elements_to_allocate * element_byte_size;
+					void* buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size, data->definition_info.alignment) : nullptr;
 					*data->allocated_buffer = buffer;
 					deserialize_size += allocate_size;
 				}
@@ -564,9 +398,9 @@ namespace ECSEngine {
 							offset = data->indices[index];
 						}
 
-						void* element = OffsetPointer(*data->allocated_buffer, data->element_byte_size * offset);
+						void* element = OffsetPointer(*data->allocated_buffer, element_byte_size * offset);
 						data->read_data->data = element;
-						size_t byte_size_or_success = ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].read(data->read_data);
+						size_t byte_size_or_success = ECS_SERIALIZE_CUSTOM_TYPES[data->definition_info.custom_type_index].read(data->read_data);
 						if (byte_size_or_success == -1) {
 							if (data->read_data->read_data) {
 								deallocate_buffer();
@@ -589,21 +423,25 @@ namespace ECSEngine {
 
 				data->read_data->was_allocated = previous_was_allocated;
 				if (return_val == -1) {
+					// Don't forget to restore the previous definition
+					data->read_data->definition = previous_definition;
 					return -1;
 				}
 			}
 			else {
 				data->read_data->data = data->deserialize_target;
-				deserialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].read(data->read_data);
+				deserialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->definition_info.custom_type_index].read(data->read_data);
 			}
+
+			data->read_data->definition = previous_definition;
 		}
 		else {
-			if (data->stream_type != ReflectionStreamFieldType::Basic) {
+			if (data->definition_info.field_stream_type != ReflectionStreamFieldType::Basic) {
 				ReflectionFieldInfo field_info;
-				field_info.basic_type = data->basic_type;
-				field_info.stream_type = data->stream_type;
-				field_info.stream_byte_size = data->element_byte_size;
-				field_info.stream_alignment = data->element_alignment;
+				field_info.basic_type = data->definition_info.field_basic_type;
+				field_info.stream_type = data->definition_info.field_stream_type;
+				field_info.stream_byte_size = data->definition_info.field_stream_byte_size;
+				field_info.stream_alignment = data->definition_info.field_stream_alignment;
 
 				AllocatorPolymorphic allocator = { nullptr };
 				bool has_options = data->read_data->options != nullptr;
@@ -611,12 +449,12 @@ namespace ECSEngine {
 					allocator = data->read_data->options->field_allocator;
 				}
 
-				size_t stream_size = data->stream_type == ReflectionStreamFieldType::ResizableStream ? sizeof(ResizableStream<void>) : sizeof(Stream<void>);
+				size_t stream_size = data->definition_info.field_stream_type == ReflectionStreamFieldType::ResizableStream ? sizeof(ResizableStream<void>) : sizeof(Stream<void>);
 
 				if (data->read_data->read_data) {
 					if (!single_instance) {
 						// We don't need to modify the was_allocated field since we are reading fundamental types
-						*data->allocated_buffer = data->elements_to_allocate > 0 ? 
+						*data->allocated_buffer = data->elements_to_allocate > 0 ?
 							AllocateEx(backup_allocator, data->elements_to_allocate * stream_size, field_info.stream_alignment) : nullptr;
 						deserialize_size += data->elements_to_allocate * stream_size;
 
@@ -628,7 +466,7 @@ namespace ECSEngine {
 								}
 
 								void* element = OffsetPointer(*data->allocated_buffer, index * stream_size);
-								if (data->stream_type == ReflectionStreamFieldType::ResizableStream) {
+								if (data->definition_info.field_stream_type == ReflectionStreamFieldType::ResizableStream) {
 									if (has_options && data->read_data->options->use_resizable_stream_allocator) {
 										allocator = ((ResizableStream<void>*)element)->allocator;
 									}
@@ -661,72 +499,30 @@ namespace ECSEngine {
 				if (data->read_data->read_data) {
 					if (!single_instance) {
 						// No need to change the was_allocated field since we are reading blittable types
-						size_t allocate_size = data->elements_to_allocate * data->element_byte_size;
-						*data->allocated_buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size, data->element_alignment) : nullptr;
+						size_t allocate_size = data->elements_to_allocate * element_byte_size;
+						*data->allocated_buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size, data->definition_info.alignment) : nullptr;
 
 						if (data->indices.buffer == nullptr) {
 							Read<true>(data->read_data->stream, *data->allocated_buffer, allocate_size);
 						}
 						else {
 							for (size_t index = 0; index < data->element_count; index++) {
-								Read<true>(data->read_data->stream, OffsetPointer(*data->allocated_buffer, data->indices[index] * data->element_byte_size), data->element_byte_size);
+								Read<true>(data->read_data->stream, OffsetPointer(*data->allocated_buffer, data->indices[index] * element_byte_size), element_byte_size);
 							}
 						}
 					}
 					else {
-						Read<true>(data->read_data->stream, data->deserialize_target, data->element_byte_size);
+						Read<true>(data->read_data->stream, data->deserialize_target, element_byte_size);
 					}
 				}
 				else {
 					size_t count = single_instance ? 1 : data->elements_to_allocate;
-					deserialize_size += count * data->element_byte_size;
+					deserialize_size += count * element_byte_size;
 				}
 			}
 		}
 
 		return deserialize_size;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	DeserializeCustomReadHelperData FillDeserializeCustomReadHelper(const SerializeCustomTypeDeduceTypeHelperResult* result)
-	{
-		DeserializeCustomReadHelperData value;
-
-		value.basic_type = result->basic_type;
-		value.custom_serializer_index = result->custom_serializer_index;
-		value.element_byte_size = result->byte_size;
-		value.element_alignment = result->alignment;
-		value.reflection_type = &result->type;
-		value.stream_type = result->stream_type;
-
-		return value;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	size_t DeserializeCustomReadHelperEx(DeserializeCustomReadHelperExData* data)
-	{
-		SerializeCustomTypeDeduceTypeHelperData helper_data;
-		helper_data.reflection_manager = data->data->reflection_manager;
-		helper_data.template_type = &data->definition;
-
-		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&helper_data);
-		
-		Stream<char> previous_definition = data->data->definition;
-		data->data->definition = data->definition;
-
-		// Copy the results into this structure
-		DeserializeCustomReadHelperData deserialize_data = FillDeserializeCustomReadHelper(&result);
-		deserialize_data.elements_to_allocate = data->elements_to_allocate;
-		deserialize_data.element_count = data->element_count;
-		deserialize_data.read_data = data->data;
-		deserialize_data.allocated_buffer = data->allocated_buffer;
-
-		size_t return_result = DeserializeCustomReadHelper(&deserialize_data);
-		// Restore the previous definition
-		data->data->definition = previous_definition;
-		return return_result;
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -794,11 +590,10 @@ namespace ECSEngine {
 		reflection_type.name = { nullptr, 0 };
 		unsigned int custom_serializer_index = 0;
 
-		SerializeCustomWriteHelperExData helper_data;
+		SerializeCustomWriteHelperData helper_data;
+		helper_data.Set(data, template_type);
 		helper_data.data_to_write = { buffer, buffer_count };
-		helper_data.template_type = template_type;
-		helper_data.write_data = data;
-		return total_serialize_size + SerializeCustomWriteHelperEx(&helper_data);
+		return total_serialize_size + SerializeCustomWriteHelper(&helper_data);
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -837,13 +632,12 @@ namespace ECSEngine {
 
 		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 
-		DeserializeCustomReadHelperExData helper_data;
+		DeserializeCustomReadHelperData helper_data;
+		helper_data.Set(data, template_type);
 		helper_data.allocated_buffer = (void**)data->data;
-		helper_data.data = data;
-		helper_data.definition = template_type;
 		helper_data.element_count = buffer_count;
 		helper_data.elements_to_allocate = buffer_count;
-		return DeserializeCustomReadHelperEx(&helper_data);
+		return DeserializeCustomReadHelper(&helper_data);
 	}
 
 #pragma endregion
@@ -892,12 +686,11 @@ namespace ECSEngine {
 			total_serialize_size += Write<false>(data->stream, &first_free, sizeof(first_free));
 		}
 
-		SerializeCustomWriteHelperExData helper_data;
+		SerializeCustomWriteHelperData helper_data;
+		helper_data.Set(data, template_type);
 		helper_data.data_to_write = { buffer, buffer_count };
-		helper_data.write_data = data;
-		helper_data.template_type = template_type;
 
-		total_serialize_size += SerializeCustomWriteHelperEx(&helper_data);
+		total_serialize_size += SerializeCustomWriteHelper(&helper_data);
 
 		//size_t template_type_byte_size = SerializeCustomTypeDeduceTypeHelper(template_type, data->reflection_manager, &reflection_type, custom_serializer_index, basic_type, stream_type);
 		//data->definition = template_type;
@@ -951,21 +744,15 @@ namespace ECSEngine {
 
 		void* allocated_buffer = nullptr;
 
-		SerializeCustomTypeDeduceTypeHelperData deduce_data;
-		deduce_data.reflection_manager = data->reflection_manager;
-		deduce_data.template_type = &template_type;
-
-		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&deduce_data);
-		data->definition = template_type;
+		DeserializeCustomReadHelperData read_data;
+		read_data.Set(data, template_type);
 
 		// We can allocate the buffer only once by using the elements_to_allocate variable
-		size_t allocation_size = result.byte_size * buffer_capacity + sizeof(uint2) * buffer_capacity;
+		size_t allocation_size = read_data.definition_info.byte_size * buffer_capacity + sizeof(uint2) * buffer_capacity;
 		// If there is a remainder, allocate one more to compensate
-		size_t elements_to_allocate = allocation_size / result.byte_size + ((allocation_size % result.byte_size) != 0);
+		size_t elements_to_allocate = SlotsFor(allocation_size, read_data.definition_info.byte_size);
 
-		DeserializeCustomReadHelperData read_data = FillDeserializeCustomReadHelper(&result);
 		read_data.allocated_buffer = &allocated_buffer;
-		read_data.read_data = data;
 		read_data.element_count = buffer_count;
 		read_data.elements_to_allocate = elements_to_allocate;
 
@@ -977,7 +764,7 @@ namespace ECSEngine {
 		total_deserialize_size += user_defined_size;
 
 		if (data->read_data) {
-			SparseSetInitializeUntyped(set, buffer_capacity, result.byte_size, allocated_buffer);
+			SparseSetInitializeUntyped(set, buffer_capacity, read_data.definition_info.byte_size, allocated_buffer);
 		}
 
 		if (user_data != nullptr && *user_data) {
@@ -1067,31 +854,31 @@ namespace ECSEngine {
 	static size_t SerializeCreateBaseAllocatorInfo(SerializeCustomTypeWriteFunctionData* data, const CreateBaseAllocatorInfo& info) {
 		size_t write_size = 0;
 
-		write_size += WriteDeduce(data->stream, &info.allocator_type, data->write_data);
+		write_size += data->Write(&info.allocator_type);
 		switch (info.allocator_type) {
 		case ECS_ALLOCATOR_LINEAR:
 		{
-			write_size += WriteDeduce(data->stream, &info.linear_capacity, data->write_data);
+			write_size += data->Write(&info.linear_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_STACK:
 		{
-			write_size += WriteDeduce(data->stream, &info.stack_capacity, data->write_data);
+			write_size += data->Write(&info.stack_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_MULTIPOOL:
 		{
-			write_size += WriteDeduce(data->stream, &info.multipool_block_count, data->write_data);
-			write_size += WriteDeduce(data->stream, &info.multipool_capacity, data->write_data);
+			write_size += data->Write(&info.multipool_block_count);
+			write_size += data->Write(&info.multipool_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_ARENA:
 		{
-			write_size += WriteDeduce(data->stream, &info.arena_allocator_count, data->write_data);
-			write_size += WriteDeduce(data->stream, &info.arena_capacity, data->write_data);
-			write_size += WriteDeduce(data->stream, &info.arena_nested_type, data->write_data);
+			write_size += data->Write(&info.arena_allocator_count);
+			write_size += data->Write(&info.arena_capacity);
+			write_size += data->Write(&info.arena_nested_type);
 			if (info.arena_nested_type == ECS_ALLOCATOR_MULTIPOOL) {
-				write_size += WriteDeduce(data->stream, &info.arena_multipool_block_count, data->write_data);
+				write_size += data->Write(&info.arena_multipool_block_count);
 			}
 		}
 		break;
@@ -1106,31 +893,31 @@ namespace ECSEngine {
 	static size_t DeserializeCreateBaseAllocatorInfo(SerializeCustomTypeReadFunctionData* data, CreateBaseAllocatorInfo& info) {
 		size_t read_size = 0;
 
-		read_size += ReadDeduce(data->stream, &info.allocator_type, data->read_data);
+		read_size += data->Read(&info.allocator_type);
 		switch (info.allocator_type) {
 		case ECS_ALLOCATOR_LINEAR:
 		{
-			read_size += ReadDeduce(data->stream, &info.linear_capacity, data->read_data);
+			read_size += data->Read(&info.linear_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_STACK:
 		{
-			read_size += ReadDeduce(data->stream, &info.stack_capacity, data->read_data);
+			read_size += data->Read(&info.stack_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_MULTIPOOL:
 		{
-			read_size += ReadDeduce(data->stream, &info.multipool_block_count, data->read_data);
-			read_size += ReadDeduce(data->stream, &info.multipool_capacity, data->read_data);
+			read_size += data->Read(&info.multipool_block_count);
+			read_size += data->Read(&info.multipool_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_ARENA:
 		{
-			read_size += ReadDeduce(data->stream, &info.arena_allocator_count, data->read_data);
-			read_size += ReadDeduce(data->stream, &info.arena_capacity, data->read_data);
-			read_size += ReadDeduce(data->stream, &info.arena_nested_type, data->read_data);
+			read_size += data->Read(&info.arena_allocator_count);
+			read_size += data->Read(&info.arena_capacity);
+			read_size += data->Read(&info.arena_nested_type);
 			if (info.arena_nested_type == ECS_ALLOCATOR_MULTIPOOL) {
-				read_size += ReadDeduce(data->stream, &info.arena_multipool_block_count, data->read_data);
+				read_size += data->Read(&info.arena_multipool_block_count);
 			}
 		}
 		break;
@@ -1163,13 +950,13 @@ namespace ECSEngine {
 			case ECS_ALLOCATOR_LINEAR:
 			{
 				LinearAllocator* allocator = (LinearAllocator*)data->data;
-				write_size += WriteDeduce(data->stream, &allocator->m_capacity, data->write_data);
+				write_size += data->Write(&allocator->m_capacity);
 			}
 			break;
 			case ECS_ALLOCATOR_STACK:
 			{
 				StackAllocator* allocator = (StackAllocator*)data->data;
-				write_size += WriteDeduce(data->stream, &allocator->m_capacity, data->write_data);
+				write_size += data->Write(&allocator->m_capacity);
 			}
 			break;
 			case ECS_ALLOCATOR_MULTIPOOL:
@@ -1177,8 +964,8 @@ namespace ECSEngine {
 				MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
 				size_t allocator_size = allocator->GetSize();
 				unsigned int block_count = allocator->GetBlockCount();
-				write_size += WriteDeduce(data->stream, &allocator_size, data->write_data);
-				write_size += WriteDeduce(data->stream, &block_count, data->write_data);
+				write_size += data->Write(&allocator_size);
+				write_size += data->Write(&block_count);
 			}
 			break;
 			case ECS_ALLOCATOR_ARENA:
@@ -1186,7 +973,7 @@ namespace ECSEngine {
 				MemoryArena* allocator = (MemoryArena*)data->data;
 				CreateBaseAllocatorInfo base_allocator_info = allocator->GetInitialBaseAllocatorInfo();
 				unsigned char allocator_count = allocator->m_allocator_count;
-				write_size += WriteDeduce(data->stream, &allocator_count, data->write_data);
+				write_size += data->Write(&allocator_count);
 				write_size += SerializeCreateBaseAllocatorInfo(data, base_allocator_info);
 			}
 			break;
@@ -1200,15 +987,15 @@ namespace ECSEngine {
 			case ECS_ALLOCATOR_RESIZABLE_LINEAR:
 			{
 				ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)data->data;
-				write_size += WriteDeduce(data->stream, &allocator->m_initial_capacity, data->write_data);
-				write_size += WriteDeduce(data->stream, &allocator->m_backup_size, data->write_data);
+				write_size += data->Write(&allocator->m_initial_capacity);
+				write_size += data->Write(&allocator->m_backup_size);
 			}
 			break;
 			case ECS_ALLOCATOR_MEMORY_PROTECTED:
 			{
 				MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)data->data;
-				write_size += WriteDeduce(data->stream, &allocator->chunk_size, data->write_data);
-				write_size += WriteDeduce(data->stream, &allocator->linear_allocators, data->write_data);
+				write_size += data->Write(&allocator->chunk_size);
+				write_size += data->Write(&allocator->linear_allocators);
 			}
 			break;
 			default:
@@ -1226,7 +1013,7 @@ namespace ECSEngine {
 			// Serialize the nested type once more. If the target allocator is nullptr, make the type as COUNT
 			// Once more to signal that it is malloc
 			ECS_ALLOCATOR_TYPE polymorphic_type = allocator->allocator == nullptr ? ECS_ALLOCATOR_TYPE_COUNT : allocator->allocator_type;
-			write_size += WriteDeduce(data->stream, &polymorphic_type, data->write_data);
+			write_size += data->Write(&polymorphic_type);
 			if (polymorphic_type != ECS_ALLOCATOR_TYPE_COUNT) {
 				serialize(polymorphic_type);
 			}
@@ -1263,7 +1050,7 @@ namespace ECSEngine {
 			case ECS_ALLOCATOR_LINEAR:
 			{
 				size_t capacity = 0;
-				read_size += ReadDeduce(data->stream, &capacity, data->read_data);
+				read_size += data->Read(&capacity);
 				if (data->read_data && is_allocator_matched) {
 					LinearAllocator* allocator = (LinearAllocator*)data->data;
 					*allocator = LinearAllocator(AllocateEx(field_allocator, capacity), capacity);
@@ -1273,7 +1060,7 @@ namespace ECSEngine {
 			case ECS_ALLOCATOR_STACK:
 			{
 				size_t capacity = 0;
-				read_size += ReadDeduce(data->stream, &capacity, data->read_data);
+				read_size += data->Read(&capacity);
 				if (data->read_data && is_allocator_matched) {
 					StackAllocator* allocator = (StackAllocator*)data->data;
 					*allocator = StackAllocator(AllocateEx(field_allocator, capacity), capacity);
@@ -1284,8 +1071,8 @@ namespace ECSEngine {
 			{
 				size_t capacity = 0;
 				unsigned int block_count = 0;
-				read_size += ReadDeduce(data->stream, &capacity, data->read_data);
-				read_size += ReadDeduce(data->stream, &block_count, data->read_data);
+				read_size += data->Read(&capacity);
+				read_size += data->Read(&block_count);
 				if (data->read_data && is_allocator_matched) {
 					MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
 					*allocator = MultipoolAllocator(AllocateEx(field_allocator, MultipoolAllocator::MemoryOf(block_count, capacity)), capacity, block_count);
@@ -1296,7 +1083,7 @@ namespace ECSEngine {
 			{
 				CreateBaseAllocatorInfo base_allocator_info;
 				unsigned char allocator_count = 0;
-				read_size += ReadDeduce(data->stream, &allocator_count, data->read_data);
+				read_size += data->Read(&allocator_count);
 				read_size += DeserializeCreateBaseAllocatorInfo(data, base_allocator_info);
 				if (data->read_data && is_allocator_matched) {
 					MemoryArena* allocator = (MemoryArena*)data->data;
@@ -1320,8 +1107,8 @@ namespace ECSEngine {
 			{
 				size_t initial_capacity = 0;
 				size_t backup_capacity = 0;
-				read_size += ReadDeduce(data->stream, &initial_capacity, data->read_data);
-				read_size += ReadDeduce(data->stream, &backup_capacity, data->read_data);
+				read_size += data->Read(&initial_capacity);
+				read_size += data->Read(&backup_capacity);
 				if (data->read_data && is_allocator_matched) {
 					ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)data->data;
 					*allocator = ResizableLinearAllocator(initial_capacity, backup_capacity, field_allocator);
@@ -1386,124 +1173,90 @@ namespace ECSEngine {
 	size_t SerializeCustomTypeWrite_HashTable(SerializeCustomTypeWriteFunctionData* data) {
 		size_t write_size = 0;
 
-		// We must write as a first byte the type of allocator, such that if it changes, we can choose to abort or not the deserialization
-		ECS_ALLOCATOR_TYPE allocator_type = AllocatorTypeFromString(data->definition);
-		write_size += Write(data->stream, &allocator_type, sizeof(allocator_type), data->write_data);
+		HashTableTemplateArguments template_arguments = HashTableExtractTemplateArguments(data->definition);
+		ReflectionDefinitionInfo value_definition_info = HashTableGetValueDefinitionInfo(data->reflection_manager, template_arguments);
+		ReflectionDefinitionInfo identifier_definition_info = HashTableGetIdentifierDefinitionInfo(data->reflection_manager, template_arguments);
 
-		// TODO: Determine if we need more information written, in order to restore fully the allocator
-		// For the current usage, this is intended to write only the capacity of the allocator and if required,
-		// Extra information like the base allocator types and sizes for a manager type allocator. It is not intended
-		// To write an extensive allocator representation, including the allocations that were made, since that is not
-		// Needed for the intended purpose. The intented purpose is for this to know how much to allocate when reconstructing
-		// It, and then the fields will make allocations from it as needed.
+		const HashTableDefault<char>* hash_table = (const HashTableDefault<char>*)data->data;
+		// Write the count and capacity upfront
+		write_size += data->Write(&hash_table->m_count);
+		write_size += data->Write(&hash_table->m_capacity);
 
-		// The memory manager can use 2 create infos
-		bool uses_base_allocator_info = false;
-		bool uses_secondary_allocator_info = false;
-		size_t allocator_size = 0;
-		CreateBaseAllocatorInfo base_allocator_info;
-		CreateBaseAllocatorInfo secondary_base_allocator_info;
+		// Write the metadata buffer as is directly to the stream
+		write_size += data->Write(hash_table->m_metadata, hash_table->GetExtendedCapacity() * sizeof(hash_table->m_metadata[0]));
 
-		switch (allocator_type) {
-		case ECS_ALLOCATOR_LINEAR:
-		{
-			LinearAllocator* allocator = (LinearAllocator*)data->data;
-			allocator_size = allocator->m_capacity;
+		// We need to branch based on the SoA now
+		if (template_arguments.is_soa) {
+			// Handle the case when the value is empty, then we don't have to write anything
+			if (value_definition_info.byte_size > 0) {
+				hash_table->ForEachIndexConst([&](unsigned int index) {
+					if (value_definition_info.is_blittable) {
+						write_size += data->Write(OffsetPointer(hash_table->m_buffer, value_definition_info.byte_size * (size_t)index), value_definition_info.byte_size);
+					}
+					else {
+						// Need to perform a full serialization
+					}
+				});
+			}
 		}
-		break;
-		case ECS_ALLOCATOR_STACK:
-		{
-			StackAllocator* allocator = (StackAllocator*)data->data;
-			allocator_size = allocator->m_capacity;
-		}
-		break;
-		case ECS_ALLOCATOR_MULTIPOOL:
-		{
-			MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
-			allocator_size = allocator->GetSize();
-		}
-		break;
-		case ECS_ALLOCATOR_ARENA:
-		{
-			MemoryArena* allocator = (MemoryArena*)data->data;
-			uses_base_allocator_info = true;
-			base_allocator_info = allocator->GetInitialBaseAllocatorInfo();
-		}
-		break;
-		case ECS_ALLOCATOR_MANAGER:
-		{
-			MemoryManager* allocator = (MemoryManager*)data->data;
-			uses_base_allocator_info = true;
-			uses_secondary_allocator_info = true;
-			base_allocator_info = allocator->GetInitialAllocatorInfo();
-			secondary_base_allocator_info = allocator->m_backup_info;
-		}
-		break;
-		case ECS_ALLOCATOR_RESIZABLE_LINEAR:
-		{
+		else {
 
 		}
-		break;
-		case ECS_ALLOCATOR_MEMORY_PROTECTED:
-		{
 
-		}
-		break;
-		}
-
-		return 0;
+		return write_size;
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	size_t SerializeCustomTypeRead_HashTable(SerializeCustomTypeReadFunctionData* data) {
-		if (data->version != SERIALIZE_CUSTOM_STREAM_VERSION) {
-			return -1;
-		}
+		//if (data->version != SERIALIZE_CUSTOM_STREAM_VERSION) {
+		//	return -1;
+		//}
 
-		unsigned int string_offset = 0;
+		//unsigned int string_offset = 0;
 
-		size_t buffer_count = 0;
+		//size_t buffer_count = 0;
 
-		Read<true>(data->stream, &buffer_count, sizeof(buffer_count));
+		//Read<true>(data->stream, &buffer_count, sizeof(buffer_count));
 
-		if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
-			string_offset = sizeof("Stream<") - 1;
-			if (data->read_data) {
-				size_t* stream_size = (size_t*)OffsetPointer(data->data, sizeof(void*));
-				*stream_size = buffer_count;
-			}
-		}
-		else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
-			string_offset = sizeof("CapacityStream<") - 1;
-			if (data->read_data) {
-				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
-				*stream_size = buffer_count; // This is the size field
-				stream_size[1] = buffer_count; // This is the capacity field
-			}
-		}
-		else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
-			string_offset = sizeof("ResizableStream<") - 1;
-			if (data->read_data) {
-				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
-				*stream_size = buffer_count; // This is the size field
-				stream_size[1] = buffer_count; // This is the capacity field
-			}
-		}
-		else {
-			ECS_ASSERT(false);
-		}
+		//if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
+		//	string_offset = sizeof("Stream<") - 1;
+		//	if (data->read_data) {
+		//		size_t* stream_size = (size_t*)OffsetPointer(data->data, sizeof(void*));
+		//		*stream_size = buffer_count;
+		//	}
+		//}
+		//else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
+		//	string_offset = sizeof("CapacityStream<") - 1;
+		//	if (data->read_data) {
+		//		unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
+		//		*stream_size = buffer_count; // This is the size field
+		//		stream_size[1] = buffer_count; // This is the capacity field
+		//	}
+		//}
+		//else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
+		//	string_offset = sizeof("ResizableStream<") - 1;
+		//	if (data->read_data) {
+		//		unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
+		//		*stream_size = buffer_count; // This is the size field
+		//		stream_size[1] = buffer_count; // This is the capacity field
+		//	}
+		//}
+		//else {
+		//	ECS_ASSERT(false);
+		//}
 
-		// Determine if it is a trivial type - including streams
-		Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
+		//// Determine if it is a trivial type - including streams
+		//Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
 
-		DeserializeCustomReadHelperExData helper_data;
-		helper_data.allocated_buffer = (void**)data->data;
-		helper_data.data = data;
-		helper_data.definition = template_type;
-		helper_data.element_count = buffer_count;
-		helper_data.elements_to_allocate = buffer_count;
-		return DeserializeCustomReadHelperEx(&helper_data);
+		//DeserializeCustomReadHelperData helper_data;
+		//helper_data.allocated_buffer = (void**)data->data;
+		//helper_data.data = data;
+		//helper_data.definition = template_type;
+		//helper_data.element_count = buffer_count;
+		//helper_data.elements_to_allocate = buffer_count;
+		//return DeserializeCustomReadHelperEx(&helper_data);
+		return 0;
 	}
 
 #pragma endregion
@@ -1581,5 +1334,21 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
+
+	void SerializeCustomWriteHelperData::Set(SerializeCustomTypeWriteFunctionData* _write_data, Stream<char> _definition)
+	{
+		write_data = _write_data;
+		definition = _definition;
+		definition_info = SearchReflectionDefinitionInfo(write_data->reflection_manager, definition);
+	}
+
+	void DeserializeCustomReadHelperData::Set(SerializeCustomTypeReadFunctionData* _read_data, Stream<char> _definition)
+	{
+		read_data = _read_data;
+		definition = _definition;
+		definition_info = SearchReflectionDefinitionInfo(read_data->reflection_manager, definition);
+	}
+
+	// -----------------------------------------------------------------------------------------
 
 }
