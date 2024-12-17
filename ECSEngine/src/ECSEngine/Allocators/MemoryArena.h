@@ -38,7 +38,7 @@ namespace ECSEngine {
 		MemoryArena(const MemoryArena& other) = default;
 		MemoryArena& operator = (const MemoryArena& other) = default;
 
-		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		bool Belongs(const void* buffer) const;
 
@@ -58,6 +58,9 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic GetAllocator(size_t index) const;
 
+		// Returns the base allocator info with which this instance was initialized with
+		CreateBaseAllocatorInfo GetInitialBaseAllocatorInfo() const;
+
 		size_t GetCurrentUsage() const;
 
 		// The return value is only useful when using assert_if_not_found set to false
@@ -65,7 +68,7 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		void* Reallocate(const void* block, size_t new_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Reallocate(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Region start and region size are parallel arrays. Returns the count of regions
 		// Pointer capacity must represent the count of valid entries for the given pointers
@@ -73,14 +76,14 @@ namespace ECSEngine {
 
 		// ----------------------------------------  Thread safe --------------------------------------------------------
 
-		void* Allocate_ts(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate_ts(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 		
 		// The return value is only useful when using assert_if_not_found set to false
 		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		static size_t MemoryOf(size_t allocator_count, CreateBaseAllocatorInfo info);
 
@@ -91,10 +94,21 @@ namespace ECSEngine {
 		// memory that the allocators start allocating from. Used by Belongs and Deallocate functions
 		void* m_data_buffer;
 		size_t m_size_per_allocator;
-		unsigned char m_allocator_count;
-		ECS_ALLOCATOR_TYPE m_base_allocator_type;
 		unsigned char m_current_index;
+		unsigned char m_allocator_count;
+		// This is the type the type that is actually being used as base allocator
+		ECS_ALLOCATOR_TYPE m_base_allocator_type;
+		// This is the type that was passed in during the init/constructor call.
+		// Used for serialization/deserialization purposes
+		ECS_ALLOCATOR_TYPE m_base_allocator_creation_type;
 		unsigned short m_base_allocator_byte_size;
+		
+		// These fields are added for serialization/deserialization purposes. They don't have any functional role,
+		// Paying 8 extra bytes for this information is reasonable
+		struct {
+			// Used by both the arena base with nested multipool, or a simple multipool
+			unsigned int m_base_allocator_creation_multipool_block_count;
+		};
 	};
 
 }

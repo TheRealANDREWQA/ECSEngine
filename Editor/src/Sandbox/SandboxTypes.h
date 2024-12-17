@@ -80,8 +80,8 @@ struct ECS_REFLECT EditorSandboxModule {
 	ECSEngine::ResizableStream<ECSEngine::Stream<char>> enabled_debug_tasks;
 
 	ECSEngine::Stream<EditorModuleReflectedSetting> reflected_settings; ECS_SKIP_REFLECTION()
-	ECSEngine::MemoryManager settings_allocator; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::MemoryManager) == 80))
-	ECSEngine::MemoryManager enabled_debug_tasks_allocator; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::MemoryManager) == 80))
+	ECSEngine::MemoryManager settings_allocator; ECS_SKIP_REFLECTION()
+	ECSEngine::MemoryManager enabled_debug_tasks_allocator; ECS_SKIP_REFLECTION()
 	// The time stamp is used to determine when a change has happened in order to refresh the data
 	size_t time_stamp; ECS_SKIP_REFLECTION()
 

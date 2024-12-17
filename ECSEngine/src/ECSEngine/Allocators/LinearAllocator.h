@@ -15,7 +15,7 @@ namespace ECSEngine {
 		ECS_INLINE LinearAllocator(void* buffer, size_t capacity) : AllocatorBase(ECS_ALLOCATOR_LINEAR), m_buffer(buffer), m_capacity(capacity), m_top(0), 
 			m_marker(0) {}
 
-		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
@@ -49,7 +49,7 @@ namespace ECSEngine {
 
 		// ---------------------- Thread safe variants -----------------------------
 		
-		void* Allocate_ts(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate_ts(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);

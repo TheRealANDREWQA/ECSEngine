@@ -18,9 +18,12 @@ namespace ECSEngine {
 			arena->MemoryOf(allocator_count, base_info.arena_capacity, base_info.arena_nested_type) : 
 			arena->MemoryOf(allocator_count, base_info);
 		arena->m_data_buffer = OffsetPointer(buffer, allocator_size);
+		arena->m_base_allocator_creation_multipool_block_count = 0;
 
 		CreateBaseAllocatorInfo nested_info;
 		if (base_info.allocator_type == ECS_ALLOCATOR_ARENA) {
+			ECS_ASSERT(allocator_count == base_info.arena_allocator_count, "Trying to create a memory arena with base info arena, but the allocator counts are different");
+
 			nested_info.allocator_type = base_info.arena_nested_type;
 			switch (nested_info.allocator_type) {
 			case ECS_ALLOCATOR_LINEAR:
@@ -30,6 +33,7 @@ namespace ECSEngine {
 				nested_info.stack_capacity = base_info.arena_capacity / base_info.arena_allocator_count;
 				break;
 			case ECS_ALLOCATOR_MULTIPOOL:
+				arena->m_base_allocator_creation_multipool_block_count = base_info.arena_multipool_block_count;
 				nested_info.multipool_block_count = base_info.arena_multipool_block_count;
 				nested_info.multipool_capacity = MultipoolAllocator::CapacityFromFixedSize(
 					base_info.arena_capacity / base_info.arena_allocator_count, 
@@ -42,6 +46,9 @@ namespace ECSEngine {
 		}
 		else {
 			nested_info = base_info;
+			if (base_info.allocator_type == ECS_ALLOCATOR_MULTIPOOL) {
+				arena->m_base_allocator_creation_multipool_block_count = base_info.multipool_block_count;
+			}
 		}
 
 		CreateBaseAllocators(arena->m_data_buffer, nested_info, buffer, allocator_count);
@@ -242,6 +249,39 @@ namespace ECSEngine {
 	AllocatorPolymorphic MemoryArena::GetAllocator(size_t index) const
 	{
 		return { OffsetPointer(m_allocators, index * m_base_allocator_byte_size), m_base_allocator_type, ECS_ALLOCATION_SINGLE };
+	}
+
+	CreateBaseAllocatorInfo MemoryArena::GetInitialBaseAllocatorInfo() const
+	{
+		CreateBaseAllocatorInfo info;
+		info.allocator_type = m_base_allocator_creation_type;
+		switch (info.allocator_type) {
+		case ECS_ALLOCATOR_LINEAR:
+		{
+			info.linear_capacity = m_size_per_allocator;
+		}
+		break;
+		case ECS_ALLOCATOR_STACK:
+		{
+			info.stack_capacity = m_size_per_allocator;
+		}
+		break;
+		case ECS_ALLOCATOR_MULTIPOOL:
+		{
+			info.multipool_block_count = m_base_allocator_creation_multipool_block_count;
+			info.multipool_capacity = m_size_per_allocator;
+		}
+		break;
+		case ECS_ALLOCATOR_ARENA:
+		{
+			info.arena_allocator_count = m_allocator_count;
+			info.arena_capacity = InitialArenaCapacity();
+			info.arena_multipool_block_count = m_base_allocator_creation_multipool_block_count;
+			info.arena_nested_type = m_base_allocator_type;
+		}
+		break;
+		}
+		return info;
 	}
 
 	size_t MemoryArena::GetCurrentUsage() const

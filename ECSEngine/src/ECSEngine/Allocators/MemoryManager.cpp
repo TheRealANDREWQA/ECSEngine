@@ -243,7 +243,39 @@ namespace ECSEngine {
 		manager->m_backup_info = backup_info;
 		manager->m_base_allocator_byte_size = base_allocator_size;
 		manager->CreateAllocator(initial_info);
+
 		manager->m_initial_allocator_size = BaseAllocatorBufferSize(initial_info);
+		manager->m_initial_allocator_arena_count = initial_info.arena_allocator_count;
+		manager->m_initial_allocator_type = initial_info.allocator_type;
+		manager->m_initial_allocator_multipool_block_count = 0;
+		manager->m_initial_allocator_nested_type = ECS_ALLOCATOR_TYPE_COUNT;
+		manager->m_initial_allocator_arena_count = 0;
+		switch (initial_info.allocator_type) {
+		case ECS_ALLOCATOR_LINEAR:
+		{
+			manager->m_initial_allocator_capacity = initial_info.linear_capacity;
+		}
+		break;
+		case ECS_ALLOCATOR_STACK:
+		{
+			manager->m_initial_allocator_capacity = initial_info.stack_capacity;
+		}
+		break;
+		case ECS_ALLOCATOR_MULTIPOOL:
+		{
+			manager->m_initial_allocator_capacity = initial_info.multipool_capacity;
+			manager->m_initial_allocator_multipool_block_count = initial_info.multipool_block_count;
+		}
+		break;
+		case ECS_ALLOCATOR_ARENA:
+		{
+			manager->m_initial_allocator_capacity = initial_info.arena_capacity;
+			manager->m_initial_allocator_multipool_block_count = initial_info.arena_multipool_block_count;
+			manager->m_initial_allocator_nested_type = initial_info.arena_nested_type;
+			manager->m_initial_allocator_arena_count = initial_info.arena_allocator_count;
+		}
+		break;
+		}
 	}
 
 	MemoryManager::MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, AllocatorPolymorphic backup) 
@@ -413,6 +445,38 @@ namespace ECSEngine {
 			}
 		}
 		return m_allocator_count;
+	}
+
+	CreateBaseAllocatorInfo MemoryManager::GetInitialAllocatorInfo() const {
+		CreateBaseAllocatorInfo allocator_info;
+		allocator_info.allocator_type = m_initial_allocator_type;
+		switch (allocator_info.allocator_type) {
+		case ECS_ALLOCATOR_LINEAR:
+		{
+			allocator_info.linear_capacity = m_initial_allocator_capacity;
+		}
+		break;
+		case ECS_ALLOCATOR_STACK:
+		{
+			allocator_info.stack_capacity = m_initial_allocator_capacity;
+		}
+		break;
+		case ECS_ALLOCATOR_MULTIPOOL:
+		{
+			allocator_info.multipool_capacity = m_initial_allocator_capacity;
+			allocator_info.multipool_block_count = m_initial_allocator_multipool_block_count;
+		}
+		break;
+		case ECS_ALLOCATOR_ARENA:
+		{
+			allocator_info.arena_nested_type = m_initial_allocator_nested_type;
+			allocator_info.arena_capacity = m_initial_allocator_capacity;
+			allocator_info.arena_multipool_block_count = m_initial_allocator_multipool_block_count;
+			allocator_info.arena_allocator_count = m_initial_allocator_arena_count;
+		}
+		break;
+		}
+		return allocator_info;
 	}
 
 	// ---------------------- Thread safe variants -----------------------------
