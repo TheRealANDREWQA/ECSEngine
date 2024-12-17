@@ -241,6 +241,11 @@ namespace ECSEngine {
 		return write_data ? Write<true>(stream, data, data_size) : Write<false>(stream, data, data_size);
 	}
 
+	template<typename T>
+	ECS_INLINE size_t WriteDeduce(uintptr_t* stream, const T* data, bool write_data) {
+		return write_data ? Write<true>(stream, data) : Write<false>(stream, data);
+	}
+
 	// -----------------------------------------------------------------------------------------
 
 	template<bool write_data>
@@ -323,6 +328,11 @@ namespace ECSEngine {
 
 	ECS_INLINE size_t Read(uintptr_t* stream, void* data, size_t data_size, bool read_data) {
 		return read_data ? Read<true>(stream, data, data_size) : Read<false>(stream, data, data_size);
+	}
+
+	template<typename T>
+	ECS_INLINE size_t ReadDeduce(uintptr_t* stream, T* data, bool read_data) {
+		return read_data ? Read<true>(stream, data) : Read<false>(stream, data);
 	}
 
 	// -----------------------------------------------------------------------------------------

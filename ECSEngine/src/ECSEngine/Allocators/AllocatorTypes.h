@@ -134,16 +134,20 @@ namespace ECSEngine {
 		ECS_ALLOCATOR_TYPE allocator_type;
 
 		union {
+			// Linear allocator options
 			struct {
 				size_t linear_capacity;
 			};
+			// Stack allocator options
 			struct {
 				size_t stack_capacity;
 			};
+			// Multipool allocator options
 			struct {
 				size_t multipool_block_count;
 				size_t multipool_capacity;
 			};
+			// Arena allocator options
 			struct {
 				ECS_ALLOCATOR_TYPE arena_nested_type;
 				size_t arena_allocator_count;

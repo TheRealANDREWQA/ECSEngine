@@ -32,7 +32,7 @@ namespace ECSEngine {
 		unsigned char tag = 0;
 	};
 
-	struct ECSENGINE_API CPUFrameProfilerThread {
+	struct ECSENGINE_API alignas(ECS_CACHE_LINE_SIZE) CPUFrameProfilerThread {
 		AllocatorPolymorphic Allocator();
 
 		void Clear();
@@ -71,9 +71,6 @@ namespace ECSEngine {
 		// That we use to subtract then from another call to determine
 		// For how long has this thread been executing during this frame
 		size_t start_frame_cycle_count;
-	private:
-		// Add these bytes to eliminate the possibility of false sharing
-		char padding[24];
 	};
 
 	// Returns an estimate of how much memory this would use

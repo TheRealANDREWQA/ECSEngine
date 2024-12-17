@@ -9,6 +9,12 @@
 #include "../../Resources/AssetMetadataSerialize.h"
 #include "../../Containers/SparseSet.h"
 
+#include "../../Allocators/StackAllocator.h"
+#include "../../Allocators/MemoryArena.h"
+#include "../../Allocators/MemoryManager.h"
+#include "../../Allocators/MemoryProtectedAllocator.h"
+#include "../../Allocators/ResizableLinearAllocator.h"
+
 namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
@@ -729,6 +735,26 @@ namespace ECSEngine {
 	{
 		memcpy(data->destination, data->source, byte_size);
 	}
+
+	// -----------------------------------------------------------------------------------------
+
+	// Returns the field allocator, if the options are specified, else nullptr. You can optionally assert that the options are always specified
+	ECS_INLINE static AllocatorPolymorphic GetDeserializeFieldAllocator(const SerializeCustomTypeReadFunctionData* data, bool assert_it_exists) {
+		if (data->options != nullptr) {
+			return data->options->field_allocator;
+		}
+		ECS_ASSERT(!assert_it_exists, "Deserialize custom type missing field allocator");
+		return { nullptr };
+	}
+
+	// Returns the backup allocator, if the options are specified, else nullptr. You can optionally assert that the options are always specified
+	ECS_INLINE static AllocatorPolymorphic GetDeserializeBackupAllocator(const SerializeCustomTypeReadFunctionData* data, bool assert_it_exists) {
+		if (data->options != nullptr) {
+			return data->options->backup_allocator;
+		}
+		ECS_ASSERT(!assert_it_exists, "Deserialize custom type missing field allocator");
+		return { nullptr };
+	}
 	
 	// -----------------------------------------------------------------------------------------
 
@@ -739,21 +765,16 @@ namespace ECSEngine {
 #define SERIALIZE_CUSTOM_STREAM_VERSION (0)
 
 	size_t SerializeCustomTypeWrite_Stream(SerializeCustomTypeWriteFunctionData* data) {
-		unsigned int string_offset = 0;
-
 		void* buffer = *(void**)data->data;
 		size_t buffer_count = 0;
 
-		if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
-			string_offset = sizeof("Stream<") - 1;
+		if (data->definition.StartsWith(STRING(Stream))) {
 			buffer_count = *(size_t*)OffsetPointer(data->data, sizeof(void*));
 		}
-		else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
-			string_offset = sizeof("CapacityStream<") - 1;
+		else if (data->definition.StartsWith(STRING(CapacityStream))) {
 			buffer_count = *(unsigned int*)OffsetPointer(data->data, sizeof(void*));
 		}
-		else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
-			string_offset = sizeof("ResizableStream<") - 1;
+		else if (data->definition.StartsWith(STRING(ResizableStream))) {
 			buffer_count = *(unsigned int*)OffsetPointer(data->data, sizeof(void*));
 		}
 		else {
@@ -768,13 +789,11 @@ namespace ECSEngine {
 			total_serialize_size += Write<false>(data->stream, &buffer_count, sizeof(buffer_count));
 		}
 
-		// Determine if it is a trivial type - including streams
-		Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
+		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 		ReflectionType reflection_type;
 		reflection_type.name = { nullptr, 0 };
 		unsigned int custom_serializer_index = 0;
 
-		// Leave the byte size to -1 in order to use the return from the deduce helper
 		SerializeCustomWriteHelperExData helper_data;
 		helper_data.data_to_write = { buffer, buffer_count };
 		helper_data.template_type = template_type;
@@ -789,29 +808,23 @@ namespace ECSEngine {
 			return -1;
 		}
 
-		unsigned int string_offset = 0;
-
 		size_t buffer_count = 0;
-
 		Read<true>(data->stream, &buffer_count, sizeof(buffer_count));
 
-		if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
-			string_offset = sizeof("Stream<") - 1;
+		if (data->definition.StartsWith(STRING(Stream))) {
 			if (data->read_data) {
 				size_t* stream_size = (size_t*)OffsetPointer(data->data, sizeof(void*));
 				*stream_size = buffer_count;
 			}
 		}
-		else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
-			string_offset = sizeof("CapacityStream<") - 1;
+		else if (data->definition.StartsWith(STRING(CapacityStream))) {
 			if (data->read_data) {
 				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
 				*stream_size = buffer_count; // This is the size field
 				stream_size[1] = buffer_count; // This is the capacity field
 			}
 		}
-		else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
-			string_offset = sizeof("ResizableStream<") - 1;
+		else if (data->definition.StartsWith(STRING(ResizableStream))) {
 			if (data->read_data) {
 				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
 				*stream_size = buffer_count; // This is the size field
@@ -822,8 +835,7 @@ namespace ECSEngine {
 			ECS_ASSERT(false);
 		}
 
-		// Determine if it is a trivial type - including streams
-		Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
+		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 
 		DeserializeCustomReadHelperExData helper_data;
 		helper_data.allocated_buffer = (void**)data->data;
@@ -843,28 +855,15 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 	
 	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(SparseSet) {
-		unsigned int string_offset = 0;
-
-		if (memcmp(data->definition.buffer, "SparseSet<", sizeof("SparseSet<") - 1) == 0) {
-			string_offset = sizeof("SparseSet<") - 1;
-		}
-		else if (memcmp(data->definition.buffer, "ResizableSparseSet<", sizeof("ResizableSparseSet<") - 1) == 0) {
-			string_offset = sizeof("ResizableSparseSet<") - 1;
-		}
-		else {
-			ECS_ASSERT(false);
-		}
-
-		// Determine if it is a trivial type - including streams
-		Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
+		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 
 		bool* user_data = (bool*)ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET].user_data;
 		if (user_data != nullptr && *user_data) {
 			// Serialize as a stream instead
 			ECS_STACK_CAPACITY_STREAM(char, stream_name, 256);
 			stream_name.CopyOther("Stream<");
-			stream_name.AddStream(template_type);
-			stream_name.Add('>');
+			stream_name.AddStreamAssert(template_type);
+			stream_name.AddAssert('>');
 
 			// It doesn't matter the type, it will always give the buffer and the size
 			SparseSet<char>* set = (SparseSet<char>*)data->data;
@@ -1060,6 +1059,455 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Allocator
+
+#define SERIALIZE_CUSTOM_ALLOCATOR_VERSION (0)
+
+	// Returns the total amount of bytes written
+	static size_t SerializeCreateBaseAllocatorInfo(SerializeCustomTypeWriteFunctionData* data, const CreateBaseAllocatorInfo& info) {
+		size_t write_size = 0;
+
+		write_size += WriteDeduce(data->stream, &info.allocator_type, data->write_data);
+		switch (info.allocator_type) {
+		case ECS_ALLOCATOR_LINEAR:
+		{
+			write_size += WriteDeduce(data->stream, &info.linear_capacity, data->write_data);
+		}
+		break;
+		case ECS_ALLOCATOR_STACK:
+		{
+			write_size += WriteDeduce(data->stream, &info.stack_capacity, data->write_data);
+		}
+		break;
+		case ECS_ALLOCATOR_MULTIPOOL:
+		{
+			write_size += WriteDeduce(data->stream, &info.multipool_block_count, data->write_data);
+			write_size += WriteDeduce(data->stream, &info.multipool_capacity, data->write_data);
+		}
+		break;
+		case ECS_ALLOCATOR_ARENA:
+		{
+			write_size += WriteDeduce(data->stream, &info.arena_allocator_count, data->write_data);
+			write_size += WriteDeduce(data->stream, &info.arena_capacity, data->write_data);
+			write_size += WriteDeduce(data->stream, &info.arena_nested_type, data->write_data);
+			if (info.arena_nested_type == ECS_ALLOCATOR_MULTIPOOL) {
+				write_size += WriteDeduce(data->stream, &info.arena_multipool_block_count, data->write_data);
+			}
+		}
+		break;
+		default:
+			ECS_ASSERT(false);
+		}
+
+		return write_size;
+	}
+
+	// Returns the total amount of bytes read
+	static size_t DeserializeCreateBaseAllocatorInfo(SerializeCustomTypeReadFunctionData* data, CreateBaseAllocatorInfo& info) {
+		size_t read_size = 0;
+
+		read_size += ReadDeduce(data->stream, &info.allocator_type, data->read_data);
+		switch (info.allocator_type) {
+		case ECS_ALLOCATOR_LINEAR:
+		{
+			read_size += ReadDeduce(data->stream, &info.linear_capacity, data->read_data);
+		}
+		break;
+		case ECS_ALLOCATOR_STACK:
+		{
+			read_size += ReadDeduce(data->stream, &info.stack_capacity, data->read_data);
+		}
+		break;
+		case ECS_ALLOCATOR_MULTIPOOL:
+		{
+			read_size += ReadDeduce(data->stream, &info.multipool_block_count, data->read_data);
+			read_size += ReadDeduce(data->stream, &info.multipool_capacity, data->read_data);
+		}
+		break;
+		case ECS_ALLOCATOR_ARENA:
+		{
+			read_size += ReadDeduce(data->stream, &info.arena_allocator_count, data->read_data);
+			read_size += ReadDeduce(data->stream, &info.arena_capacity, data->read_data);
+			read_size += ReadDeduce(data->stream, &info.arena_nested_type, data->read_data);
+			if (info.arena_nested_type == ECS_ALLOCATOR_MULTIPOOL) {
+				read_size += ReadDeduce(data->stream, &info.arena_multipool_block_count, data->read_data);
+			}
+		}
+		break;
+		default:
+			ECS_ASSERT(false);
+		}
+
+		return read_size;
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+	size_t SerializeCustomTypeWrite_Allocator(SerializeCustomTypeWriteFunctionData* data) {
+		size_t write_size = 0;
+
+		// We must write as a first byte the type of allocator, such that if it changes, we can choose to abort or not the deserialization
+		ECS_ALLOCATOR_TYPE allocator_type = AllocatorTypeFromString(data->definition);
+		write_size += WriteDeduce(data->stream, &allocator_type, data->write_data);
+
+		// TODO: Determine if we need more information written, in order to restore fully the allocator
+		// For the current usage, this is intended to write only the capacity of the allocator and if required,
+		// Extra information like the base allocator types and sizes for a manager type allocator. It is not intended
+		// To write an extensive allocator representation, including the allocations that were made, since that is not
+		// Needed for the intended purpose. The intented purpose is for this to know how much to allocate when reconstructing
+		// It, and then the fields will make allocations from it as needed.
+
+		// This lambda will perform the appropriate serialization, based on the given type
+		auto serialize = [data, &write_size](ECS_ALLOCATOR_TYPE allocator_type) {
+			switch (allocator_type) {
+			case ECS_ALLOCATOR_LINEAR:
+			{
+				LinearAllocator* allocator = (LinearAllocator*)data->data;
+				write_size += WriteDeduce(data->stream, &allocator->m_capacity, data->write_data);
+			}
+			break;
+			case ECS_ALLOCATOR_STACK:
+			{
+				StackAllocator* allocator = (StackAllocator*)data->data;
+				write_size += WriteDeduce(data->stream, &allocator->m_capacity, data->write_data);
+			}
+			break;
+			case ECS_ALLOCATOR_MULTIPOOL:
+			{
+				MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
+				size_t allocator_size = allocator->GetSize();
+				unsigned int block_count = allocator->GetBlockCount();
+				write_size += WriteDeduce(data->stream, &allocator_size, data->write_data);
+				write_size += WriteDeduce(data->stream, &block_count, data->write_data);
+			}
+			break;
+			case ECS_ALLOCATOR_ARENA:
+			{
+				MemoryArena* allocator = (MemoryArena*)data->data;
+				CreateBaseAllocatorInfo base_allocator_info = allocator->GetInitialBaseAllocatorInfo();
+				unsigned char allocator_count = allocator->m_allocator_count;
+				write_size += WriteDeduce(data->stream, &allocator_count, data->write_data);
+				write_size += SerializeCreateBaseAllocatorInfo(data, base_allocator_info);
+			}
+			break;
+			case ECS_ALLOCATOR_MANAGER:
+			{
+				MemoryManager* allocator = (MemoryManager*)data->data;
+				write_size += SerializeCreateBaseAllocatorInfo(data, allocator->GetInitialAllocatorInfo());
+				write_size += SerializeCreateBaseAllocatorInfo(data, allocator->m_backup_info);
+			}
+			break;
+			case ECS_ALLOCATOR_RESIZABLE_LINEAR:
+			{
+				ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)data->data;
+				write_size += WriteDeduce(data->stream, &allocator->m_initial_capacity, data->write_data);
+				write_size += WriteDeduce(data->stream, &allocator->m_backup_size, data->write_data);
+			}
+			break;
+			case ECS_ALLOCATOR_MEMORY_PROTECTED:
+			{
+				MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)data->data;
+				write_size += WriteDeduce(data->stream, &allocator->chunk_size, data->write_data);
+				write_size += WriteDeduce(data->stream, &allocator->linear_allocators, data->write_data);
+			}
+			break;
+			default:
+				ECS_ASSERT(false);
+			}
+		};
+
+		if (allocator_type != ECS_ALLOCATOR_TYPE_COUNT) {
+			serialize(allocator_type);
+		}
+		else {
+			// It must be the polymorphic allocator
+			AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)data->data;
+			
+			// Serialize the nested type once more. If the target allocator is nullptr, make the type as COUNT
+			// Once more to signal that it is malloc
+			ECS_ALLOCATOR_TYPE polymorphic_type = allocator->allocator == nullptr ? ECS_ALLOCATOR_TYPE_COUNT : allocator->allocator_type;
+			write_size += WriteDeduce(data->stream, &polymorphic_type, data->write_data);
+			if (polymorphic_type != ECS_ALLOCATOR_TYPE_COUNT) {
+				serialize(polymorphic_type);
+			}
+		}
+
+		return write_size;
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+	size_t SerializeCustomTypeRead_Allocator(SerializeCustomTypeReadFunctionData* data) {
+		if (data->version != SERIALIZE_CUSTOM_ALLOCATOR_VERSION) {
+			return -1;
+		}
+
+		size_t read_size = 0;
+
+		// Read the first byte. If the type has changed, then abort this
+		ECS_ALLOCATOR_TYPE allocator_type;
+		Read<true>(data->stream, &allocator_type);
+		if (!data->read_data) {
+			read_size += sizeof(allocator_type);
+		}
+
+		bool is_allocator_matched = allocator_type == AllocatorTypeFromString(data->definition);
+		// When we have a mismatch, we must still advance through with the data pointer
+		// When retrieving the field allocator, don't assert if we are interested in skipping only the section
+		AllocatorPolymorphic field_allocator = GetDeserializeFieldAllocator(data, data->read_data);
+
+		// This lambda will perform the appropriate deserialization, based on the given type.
+		// Returns false if there is an error.
+		auto deserialize = [data, &read_size, is_allocator_matched, field_allocator](ECS_ALLOCATOR_TYPE allocator_type) {
+			switch (allocator_type) {
+			case ECS_ALLOCATOR_LINEAR:
+			{
+				size_t capacity = 0;
+				read_size += ReadDeduce(data->stream, &capacity, data->read_data);
+				if (data->read_data && is_allocator_matched) {
+					LinearAllocator* allocator = (LinearAllocator*)data->data;
+					*allocator = LinearAllocator(AllocateEx(field_allocator, capacity), capacity);
+				}
+			}
+			break;
+			case ECS_ALLOCATOR_STACK:
+			{
+				size_t capacity = 0;
+				read_size += ReadDeduce(data->stream, &capacity, data->read_data);
+				if (data->read_data && is_allocator_matched) {
+					StackAllocator* allocator = (StackAllocator*)data->data;
+					*allocator = StackAllocator(AllocateEx(field_allocator, capacity), capacity);
+				}
+			}
+			break;
+			case ECS_ALLOCATOR_MULTIPOOL:
+			{
+				size_t capacity = 0;
+				unsigned int block_count = 0;
+				read_size += ReadDeduce(data->stream, &capacity, data->read_data);
+				read_size += ReadDeduce(data->stream, &block_count, data->read_data);
+				if (data->read_data && is_allocator_matched) {
+					MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
+					*allocator = MultipoolAllocator(AllocateEx(field_allocator, MultipoolAllocator::MemoryOf(block_count, capacity)), capacity, block_count);
+				}
+			}
+			break;
+			case ECS_ALLOCATOR_ARENA:
+			{
+				CreateBaseAllocatorInfo base_allocator_info;
+				unsigned char allocator_count = 0;
+				read_size += ReadDeduce(data->stream, &allocator_count, data->read_data);
+				read_size += DeserializeCreateBaseAllocatorInfo(data, base_allocator_info);
+				if (data->read_data && is_allocator_matched) {
+					MemoryArena* allocator = (MemoryArena*)data->data;
+					*allocator = MemoryArena(field_allocator, allocator_count, base_allocator_info);
+				}
+			}
+			break;
+			case ECS_ALLOCATOR_MANAGER:
+			{
+				CreateBaseAllocatorInfo initial_allocator_info;
+				CreateBaseAllocatorInfo backup_allocator_info;
+				read_size += DeserializeCreateBaseAllocatorInfo(data, initial_allocator_info);
+				read_size += DeserializeCreateBaseAllocatorInfo(data, backup_allocator_info);
+				if (data->read_data && is_allocator_matched) {
+					MemoryManager* allocator = (MemoryManager*)data->data;
+					*allocator = MemoryManager(initial_allocator_info, backup_allocator_info, field_allocator);
+				}
+			}
+			break;
+			case ECS_ALLOCATOR_RESIZABLE_LINEAR:
+			{
+				size_t initial_capacity = 0;
+				size_t backup_capacity = 0;
+				read_size += ReadDeduce(data->stream, &initial_capacity, data->read_data);
+				read_size += ReadDeduce(data->stream, &backup_capacity, data->read_data);
+				if (data->read_data && is_allocator_matched) {
+					ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)data->data;
+					*allocator = ResizableLinearAllocator(initial_capacity, backup_capacity, field_allocator);
+				}
+			}
+			break;
+			case ECS_ALLOCATOR_MEMORY_PROTECTED:
+			{
+				size_t chunk_size = 0;
+				bool linear_allocators = false;
+				read_size += ReadDeduce(data->stream, &chunk_size, data->read_data);
+				read_size += ReadDeduce(data->stream, &linear_allocators, data->read_data);
+				if (data->read_data && is_allocator_matched) {
+					MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)data->data;
+					*allocator = MemoryProtectedAllocator(chunk_size, linear_allocators);
+				}
+			}
+			break;
+			default:
+				return false;
+			}
+
+			return true;
+		};
+
+		if (allocator_type != ECS_ALLOCATOR_TYPE_COUNT) {
+			if (!deserialize(allocator_type)) {
+				return -1;
+			}
+		}
+		else {
+			// It must be the polymorphic allocator
+			AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)data->data;
+
+			// Serialize the nested type once more. If the target allocator is nullptr, make the type as COUNT
+			// Once more to signal that it is malloc
+			ECS_ALLOCATOR_TYPE polymorphic_type = ECS_ALLOCATOR_TYPE_COUNT;
+			Read<true>(data->stream, &polymorphic_type);
+			if (!data->read_data) {
+				read_size += sizeof(polymorphic_type);
+			}
+			if (polymorphic_type != ECS_ALLOCATOR_TYPE_COUNT) {
+				if (!deserialize(polymorphic_type)) {
+					return -1;
+				}
+			}
+		}
+
+		return read_size;
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region HashTable
+
+#define SERIALIZE_CUSTOM_HASH_TABLE_VERSION (0)
+
+	// -----------------------------------------------------------------------------------------
+
+	size_t SerializeCustomTypeWrite_HashTable(SerializeCustomTypeWriteFunctionData* data) {
+		size_t write_size = 0;
+
+		// We must write as a first byte the type of allocator, such that if it changes, we can choose to abort or not the deserialization
+		ECS_ALLOCATOR_TYPE allocator_type = AllocatorTypeFromString(data->definition);
+		write_size += Write(data->stream, &allocator_type, sizeof(allocator_type), data->write_data);
+
+		// TODO: Determine if we need more information written, in order to restore fully the allocator
+		// For the current usage, this is intended to write only the capacity of the allocator and if required,
+		// Extra information like the base allocator types and sizes for a manager type allocator. It is not intended
+		// To write an extensive allocator representation, including the allocations that were made, since that is not
+		// Needed for the intended purpose. The intented purpose is for this to know how much to allocate when reconstructing
+		// It, and then the fields will make allocations from it as needed.
+
+		// The memory manager can use 2 create infos
+		bool uses_base_allocator_info = false;
+		bool uses_secondary_allocator_info = false;
+		size_t allocator_size = 0;
+		CreateBaseAllocatorInfo base_allocator_info;
+		CreateBaseAllocatorInfo secondary_base_allocator_info;
+
+		switch (allocator_type) {
+		case ECS_ALLOCATOR_LINEAR:
+		{
+			LinearAllocator* allocator = (LinearAllocator*)data->data;
+			allocator_size = allocator->m_capacity;
+		}
+		break;
+		case ECS_ALLOCATOR_STACK:
+		{
+			StackAllocator* allocator = (StackAllocator*)data->data;
+			allocator_size = allocator->m_capacity;
+		}
+		break;
+		case ECS_ALLOCATOR_MULTIPOOL:
+		{
+			MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
+			allocator_size = allocator->GetSize();
+		}
+		break;
+		case ECS_ALLOCATOR_ARENA:
+		{
+			MemoryArena* allocator = (MemoryArena*)data->data;
+			uses_base_allocator_info = true;
+			base_allocator_info = allocator->GetInitialBaseAllocatorInfo();
+		}
+		break;
+		case ECS_ALLOCATOR_MANAGER:
+		{
+			MemoryManager* allocator = (MemoryManager*)data->data;
+			uses_base_allocator_info = true;
+			uses_secondary_allocator_info = true;
+			base_allocator_info = allocator->GetInitialAllocatorInfo();
+			secondary_base_allocator_info = allocator->m_backup_info;
+		}
+		break;
+		case ECS_ALLOCATOR_RESIZABLE_LINEAR:
+		{
+
+		}
+		break;
+		case ECS_ALLOCATOR_MEMORY_PROTECTED:
+		{
+
+		}
+		break;
+		}
+
+		return 0;
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+	size_t SerializeCustomTypeRead_HashTable(SerializeCustomTypeReadFunctionData* data) {
+		if (data->version != SERIALIZE_CUSTOM_STREAM_VERSION) {
+			return -1;
+		}
+
+		unsigned int string_offset = 0;
+
+		size_t buffer_count = 0;
+
+		Read<true>(data->stream, &buffer_count, sizeof(buffer_count));
+
+		if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
+			string_offset = sizeof("Stream<") - 1;
+			if (data->read_data) {
+				size_t* stream_size = (size_t*)OffsetPointer(data->data, sizeof(void*));
+				*stream_size = buffer_count;
+			}
+		}
+		else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
+			string_offset = sizeof("CapacityStream<") - 1;
+			if (data->read_data) {
+				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
+				*stream_size = buffer_count; // This is the size field
+				stream_size[1] = buffer_count; // This is the capacity field
+			}
+		}
+		else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
+			string_offset = sizeof("ResizableStream<") - 1;
+			if (data->read_data) {
+				unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
+				*stream_size = buffer_count; // This is the size field
+				stream_size[1] = buffer_count; // This is the capacity field
+			}
+		}
+		else {
+			ECS_ASSERT(false);
+		}
+
+		// Determine if it is a trivial type - including streams
+		Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
+
+		DeserializeCustomReadHelperExData helper_data;
+		helper_data.allocated_buffer = (void**)data->data;
+		helper_data.data = data;
+		helper_data.definition = template_type;
+		helper_data.element_count = buffer_count;
+		helper_data.elements_to_allocate = buffer_count;
+		return DeserializeCustomReadHelperEx(&helper_data);
+	}
+
+#pragma endregion
+
 	// -----------------------------------------------------------------------------------------
 
 	// Must be kept in sync with ECS_REFLECTION_CUSTOM_TYPES
@@ -1068,8 +1516,12 @@ namespace ECSEngine {
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(ReferenceCounted, ECS_SERIALIZE_CUSTOM_TYPE_REFERENCE_COUNTED_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(SparseSet, SERIALIZE_SPARSE_SET_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(MaterialAsset, ECS_SERIALIZE_CUSTOM_TYPE_MATERIAL_ASSET_VERSION),
-		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(DataPointer, SERIALIZE_CUSTOM_DATA_POINTER_VERSION)
+		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(DataPointer, SERIALIZE_CUSTOM_DATA_POINTER_VERSION),
+		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(Allocator, SERIALIZE_CUSTOM_ALLOCATOR_VERSION),
+		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(HashTable, SERIALIZE_CUSTOM_HASH_TABLE_VERSION)
 	};
+
+	static_assert(ECS_COUNTOF(ECS_SERIALIZE_CUSTOM_TYPES) == ECS_REFLECTION_CUSTOM_TYPE_COUNT, "Serialize custom types must be maintained in sync with reflection custom types!");
 
 #pragma endregion
 

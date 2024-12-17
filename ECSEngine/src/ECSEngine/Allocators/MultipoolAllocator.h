@@ -20,14 +20,14 @@ namespace ECSEngine {
 		
 		MultipoolAllocator& operator = (const MultipoolAllocator& other) = default;
 		
-		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// The return value is only useful when using assert_if_not_found set to false
 		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		void* Reallocate(const void* block, size_t new_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Reallocate(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		void Clear(DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -62,14 +62,14 @@ namespace ECSEngine {
 
 		// --------------------------------------------------- Thread safe variants ------------------------------------------
 
-		void* Allocate_ts(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate_ts(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// The return value is only useful when using assert_if_not_found set to false
 		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		static size_t MemoryOf(size_t pool_count);
 		static size_t MemoryOf(size_t pool_count, size_t size);

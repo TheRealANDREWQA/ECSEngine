@@ -28,7 +28,7 @@ namespace ECSEngine {
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ResizableLinearAllocator);
 
-		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
@@ -72,7 +72,7 @@ namespace ECSEngine {
 
 		// ---------------------- Thread safe variants -----------------------------
 
-		void* Allocate_ts(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate_ts(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);

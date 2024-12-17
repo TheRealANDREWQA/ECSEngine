@@ -16,7 +16,7 @@ namespace ECSEngine {
 		
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(MemoryManager);
 		
-		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		void CreateAllocator(CreateBaseAllocatorInfo info);
 
@@ -28,7 +28,7 @@ namespace ECSEngine {
 		// Returns true if it did deallocate it
 		bool DeallocateIfBelongs(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		void* Reallocate(const void* block, size_t new_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Reallocate(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Deallocates all the extra buffers, keeps only the first one and resets the allocations such that there are none
 		void Clear(DebugInfo debug_info = ECS_DEBUG_INFO);
@@ -61,28 +61,44 @@ namespace ECSEngine {
 		// Pointer capacity must represent the count of valid entries for the given pointers
 		size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const;
 
+		// Returns the base allocator info with which this instance was initialized with
+		CreateBaseAllocatorInfo GetInitialAllocatorInfo() const;
+
 		// ---------------------------------------------------- Thread safe --------------------------------------------------
 
-		void* Allocate_ts(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Allocate_ts(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// The return value is only useful when using assert_if_not_found set to false
 		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		bool DeallocateIfBelongs_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 	
+		// This field is not needed for this to function, it is used only for serialization/deserialization purposes
+		// It is placed here to reduce the waste coming from padding bytes
+		ECS_ALLOCATOR_TYPE m_initial_allocator_type;
 		unsigned char m_allocator_count;
 		// Cache this value such that we don't have to query it every single time
 		unsigned short m_base_allocator_byte_size;
+		// This field is not needed for this to function, it is used only for serialization/deserialization purposes
+		// It is placed here to reduce the waste coming from padding bytes
+		unsigned int m_initial_allocator_multipool_count;
 		void* m_allocators;
 		CreateBaseAllocatorInfo m_backup_info;
 		AllocatorPolymorphic m_backup;
 		// This is needed for the GetAllocatorBaseAllocationSize() to report correctly
 		// For the first allocator
 		size_t m_initial_allocator_size;
+		
+		// The following fields are not needed for this to function, they are used only for serialization/deserialization purposes
+		ECS_ALLOCATOR_TYPE m_initial_allocator_nested_type;
+		unsigned char m_initial_allocator_arena_count;
+		unsigned int m_initial_allocator_multipool_block_count;
+		// This is not exactly the same as m_initial_allocator_size
+		size_t m_initial_allocator_capacity;
 	};
 
 	typedef MemoryManager GlobalMemoryManager;

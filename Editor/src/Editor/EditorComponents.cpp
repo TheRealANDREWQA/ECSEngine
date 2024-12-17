@@ -2262,8 +2262,6 @@ void EditorComponents::UpdateComponent(const ReflectionManager* reflection_manag
 void EditorComponents::Initialize(void* buffer)
 {
 	MemoryArena* arena = (MemoryArena*)buffer;
-	CreateBaseAllocatorInfo info;
-	info.allocator_type = ECS_ALLOCATOR_ARENA;
 	*arena = MemoryArena(OffsetPointer(arena, sizeof(*arena)), ARENA_COUNT, ARENA_CAPACITY, ARENA_BLOCK_COUNT);
 	InitializeAllocator(arena);
 }

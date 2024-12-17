@@ -257,7 +257,7 @@ namespace ECSEngine {
 		size_t thread_arena_backup_capacity
 	)
 	{
-		entry_capacity = _entry_capacity;;
+		entry_capacity = _entry_capacity;
 
 		static_assert((sizeof(CPUFrameProfilerThread) % ECS_CACHE_LINE_SIZE) == 0);
 
