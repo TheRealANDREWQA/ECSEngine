@@ -166,6 +166,10 @@ namespace ECSEngine {
 		// In order to correctly address the identifier inside the pair
 		ulong2 HashTableComputePairByteSizeAndAlignmentOffset(const ReflectionDefinitionInfo& value_definition_info, const ReflectionDefinitionInfo& identifier_definition_info);
 
+		// For an untyped hash table, it will allocate an allocation and set the table buffers accordingly
+		// Returns the number of bytes needed for the allocation
+		size_t HashTableCustomTypeAllocateAndSetBuffers(void* hash_table, size_t capacity, AllocatorPolymorphic allocator, bool is_soa, const ReflectionDefinitionInfo& value_definition_info, const ReflectionDefinitionInfo& identifier_definition_info);
+
 		// ---------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
