@@ -367,11 +367,11 @@ namespace ECSEngine {
 				size_t iterate_count = single_instance ? 1 : data->element_count;
 				data->read_data->was_allocated = true;
 				for (size_t index = 0; index < iterate_count; index++) {
-					size_t byte_size = DeserializeSize(data->read_data->reflection_manager, data->definition_info.type, *data->read_data->stream, &options);
-					if (byte_size == -1) {
+					size_t entry_deserialize_size = DeserializeSize(data->read_data->reflection_manager, data->definition_info.type, *data->read_data->stream, &options);
+					if (entry_deserialize_size == -1) {
 						return -1;
 					}
-					deserialize_size += byte_size;
+					deserialize_size += entry_deserialize_size;
 				}
 				data->read_data->was_allocated = previous_was_allocated;
 			}
@@ -400,15 +400,15 @@ namespace ECSEngine {
 
 						void* element = OffsetPointer(*data->allocated_buffer, element_byte_size * offset);
 						data->read_data->data = element;
-						size_t byte_size_or_success = ECS_SERIALIZE_CUSTOM_TYPES[data->definition_info.custom_type_index].read(data->read_data);
-						if (byte_size_or_success == -1) {
+						size_t entry_deserialized_size = ECS_SERIALIZE_CUSTOM_TYPES[data->definition_info.custom_type_index].read(data->read_data);
+						if (entry_deserialized_size == -1) {
 							if (data->read_data->read_data) {
 								deallocate_buffer();
 								return -1;
 							}
 						}
 
-						deserialize_size += byte_size_or_success;
+						deserialize_size += entry_deserialized_size;
 					}
 					return 0;
 				};
@@ -430,7 +430,12 @@ namespace ECSEngine {
 			}
 			else {
 				data->read_data->data = data->deserialize_target;
-				deserialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->definition_info.custom_type_index].read(data->read_data);
+				size_t entry_deserialize_size = ECS_SERIALIZE_CUSTOM_TYPES[data->definition_info.custom_type_index].read(data->read_data);
+				if (entry_deserialize_size == -1) {
+					deallocate_buffer();
+					return -1;
+				}
+				deserialize_size += entry_deserialize_size;
 			}
 
 			data->read_data->definition = previous_definition;
@@ -889,43 +894,39 @@ namespace ECSEngine {
 		return write_size;
 	}
 
-	// Returns the total amount of bytes read
-	static size_t DeserializeCreateBaseAllocatorInfo(SerializeCustomTypeReadFunctionData* data, CreateBaseAllocatorInfo& info) {
-		size_t read_size = 0;
-
-		read_size += data->Read(&info.allocator_type);
+	// It will always read the bytes, it won't simply skip over them
+	static void DeserializeCreateBaseAllocatorInfo(SerializeCustomTypeReadFunctionData* data, CreateBaseAllocatorInfo& info) {
+		data->ReadAlways(&info.allocator_type);
 		switch (info.allocator_type) {
 		case ECS_ALLOCATOR_LINEAR:
 		{
-			read_size += data->Read(&info.linear_capacity);
+			data->ReadAlways(&info.linear_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_STACK:
 		{
-			read_size += data->Read(&info.stack_capacity);
+			data->ReadAlways(&info.stack_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_MULTIPOOL:
 		{
-			read_size += data->Read(&info.multipool_block_count);
-			read_size += data->Read(&info.multipool_capacity);
+			data->ReadAlways(&info.multipool_block_count);
+			data->ReadAlways(&info.multipool_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_ARENA:
 		{
-			read_size += data->Read(&info.arena_allocator_count);
-			read_size += data->Read(&info.arena_capacity);
-			read_size += data->Read(&info.arena_nested_type);
+			data->ReadAlways(&info.arena_allocator_count);
+			data->ReadAlways(&info.arena_capacity);
+			data->ReadAlways(&info.arena_nested_type);
 			if (info.arena_nested_type == ECS_ALLOCATOR_MULTIPOOL) {
-				read_size += data->Read(&info.arena_multipool_block_count);
+				data->ReadAlways(&info.arena_multipool_block_count);
 			}
 		}
 		break;
 		default:
 			ECS_ASSERT(false);
 		}
-
-		return read_size;
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -1029,14 +1030,11 @@ namespace ECSEngine {
 			return -1;
 		}
 
-		size_t read_size = 0;
+		size_t deserialize_size = 0;
 
 		// Read the first byte. If the type has changed, then abort this
 		ECS_ALLOCATOR_TYPE allocator_type;
 		Read<true>(data->stream, &allocator_type);
-		if (!data->read_data) {
-			read_size += sizeof(allocator_type);
-		}
 
 		bool is_allocator_matched = allocator_type == AllocatorTypeFromString(data->definition);
 		// When we have a mismatch, we must still advance through with the data pointer
@@ -1045,25 +1043,35 @@ namespace ECSEngine {
 
 		// This lambda will perform the appropriate deserialization, based on the given type.
 		// Returns false if there is an error.
-		auto deserialize = [data, &read_size, is_allocator_matched, field_allocator](ECS_ALLOCATOR_TYPE allocator_type) {
+		auto deserialize = [data, &deserialize_size, is_allocator_matched, field_allocator](ECS_ALLOCATOR_TYPE allocator_type) {
 			switch (allocator_type) {
 			case ECS_ALLOCATOR_LINEAR:
 			{
 				size_t capacity = 0;
-				read_size += data->Read(&capacity);
-				if (data->read_data && is_allocator_matched) {
-					LinearAllocator* allocator = (LinearAllocator*)data->data;
-					*allocator = LinearAllocator(AllocateEx(field_allocator, capacity), capacity);
+				data->ReadAlways(&capacity);
+				if (is_allocator_matched) {
+					if (data->read_data) {
+							LinearAllocator* allocator = (LinearAllocator*)data->data;
+							*allocator = LinearAllocator(AllocateEx(field_allocator, capacity), capacity);
+					}
+					else {
+						deserialize_size += capacity;
+					}
 				}
 			}
 			break;
 			case ECS_ALLOCATOR_STACK:
 			{
 				size_t capacity = 0;
-				read_size += data->Read(&capacity);
-				if (data->read_data && is_allocator_matched) {
-					StackAllocator* allocator = (StackAllocator*)data->data;
-					*allocator = StackAllocator(AllocateEx(field_allocator, capacity), capacity);
+				data->ReadAlways(&capacity);
+				if (is_allocator_matched) {
+					if (data->read_data) {
+							StackAllocator* allocator = (StackAllocator*)data->data;
+							*allocator = StackAllocator(AllocateEx(field_allocator, capacity), capacity);
+					}
+					else {
+						deserialize_size += capacity;
+					}
 				}
 			}
 			break;
@@ -1071,11 +1079,18 @@ namespace ECSEngine {
 			{
 				size_t capacity = 0;
 				unsigned int block_count = 0;
-				read_size += data->Read(&capacity);
-				read_size += data->Read(&block_count);
-				if (data->read_data && is_allocator_matched) {
-					MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
-					*allocator = MultipoolAllocator(AllocateEx(field_allocator, MultipoolAllocator::MemoryOf(block_count, capacity)), capacity, block_count);
+				data->ReadAlways(&capacity);
+				data->ReadAlways(&block_count);
+
+				size_t allocate_size = MultipoolAllocator::MemoryOf(block_count, capacity);
+				if (is_allocator_matched) {
+					if (data->read_data) {
+							MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
+							*allocator = MultipoolAllocator(AllocateEx(field_allocator, allocate_size), capacity, block_count);
+					}
+					else {
+						deserialize_size += allocate_size;
+					}
 				}
 			}
 			break;
@@ -1083,11 +1098,16 @@ namespace ECSEngine {
 			{
 				CreateBaseAllocatorInfo base_allocator_info;
 				unsigned char allocator_count = 0;
-				read_size += data->Read(&allocator_count);
-				read_size += DeserializeCreateBaseAllocatorInfo(data, base_allocator_info);
-				if (data->read_data && is_allocator_matched) {
-					MemoryArena* allocator = (MemoryArena*)data->data;
-					*allocator = MemoryArena(field_allocator, allocator_count, base_allocator_info);
+				data->ReadAlways(&allocator_count);
+				DeserializeCreateBaseAllocatorInfo(data, base_allocator_info);
+				if (is_allocator_matched) {
+					if (data->read_data) {
+						MemoryArena* allocator = (MemoryArena*)data->data;
+						*allocator = MemoryArena(field_allocator, allocator_count, base_allocator_info);
+					}
+					else {
+						deserialize_size += MemoryArena::MemoryOf(allocator_count, base_allocator_info);
+					}
 				}
 			}
 			break;
@@ -1095,11 +1115,17 @@ namespace ECSEngine {
 			{
 				CreateBaseAllocatorInfo initial_allocator_info;
 				CreateBaseAllocatorInfo backup_allocator_info;
-				read_size += DeserializeCreateBaseAllocatorInfo(data, initial_allocator_info);
-				read_size += DeserializeCreateBaseAllocatorInfo(data, backup_allocator_info);
-				if (data->read_data && is_allocator_matched) {
-					MemoryManager* allocator = (MemoryManager*)data->data;
-					*allocator = MemoryManager(initial_allocator_info, backup_allocator_info, field_allocator);
+				DeserializeCreateBaseAllocatorInfo(data, initial_allocator_info);
+				DeserializeCreateBaseAllocatorInfo(data, backup_allocator_info);
+				if (is_allocator_matched) {
+					if (data->read_data) {
+						MemoryManager* allocator = (MemoryManager*)data->data;
+						*allocator = MemoryManager(initial_allocator_info, backup_allocator_info, field_allocator);
+					}
+					else {
+						// TODO: Determine how to approach this
+						ECS_ASSERT(false, "Unimplemented");
+					}
 				}
 			}
 			break;
@@ -1107,11 +1133,17 @@ namespace ECSEngine {
 			{
 				size_t initial_capacity = 0;
 				size_t backup_capacity = 0;
-				read_size += data->Read(&initial_capacity);
-				read_size += data->Read(&backup_capacity);
-				if (data->read_data && is_allocator_matched) {
-					ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)data->data;
-					*allocator = ResizableLinearAllocator(initial_capacity, backup_capacity, field_allocator);
+				data->ReadAlways(&initial_capacity);
+				data->ReadAlways(&backup_capacity);
+				if (is_allocator_matched) {
+					if (data->read_data) {
+						ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)data->data;
+						*allocator = ResizableLinearAllocator(initial_capacity, backup_capacity, field_allocator);
+					}
+					else {
+						// Count only the initial capacity
+						deserialize_size += initial_capacity;
+					}
 				}
 			}
 			break;
@@ -1119,11 +1151,17 @@ namespace ECSEngine {
 			{
 				size_t chunk_size = 0;
 				bool linear_allocators = false;
-				read_size += ReadDeduce(data->stream, &chunk_size, data->read_data);
-				read_size += ReadDeduce(data->stream, &linear_allocators, data->read_data);
-				if (data->read_data && is_allocator_matched) {
-					MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)data->data;
-					*allocator = MemoryProtectedAllocator(chunk_size, linear_allocators);
+				data->ReadAlways(&chunk_size);
+				data->ReadAlways(&linear_allocators);
+				if (is_allocator_matched) {
+					if (data->read_data) {
+						MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)data->data;
+						*allocator = MemoryProtectedAllocator(chunk_size, linear_allocators);
+					}
+					else {
+						// This allocator doesn't allocate from the field allocator, but instead from Malloc directly.
+						// Don't count its memory allocations
+					}
 				}
 			}
 			break;
@@ -1147,9 +1185,6 @@ namespace ECSEngine {
 			// Once more to signal that it is malloc
 			ECS_ALLOCATOR_TYPE polymorphic_type = ECS_ALLOCATOR_TYPE_COUNT;
 			Read<true>(data->stream, &polymorphic_type);
-			if (!data->read_data) {
-				read_size += sizeof(polymorphic_type);
-			}
 			if (polymorphic_type != ECS_ALLOCATOR_TYPE_COUNT) {
 				if (!deserialize(polymorphic_type)) {
 					return -1;
@@ -1157,7 +1192,7 @@ namespace ECSEngine {
 			}
 		}
 
-		return read_size;
+		return deserialize_size;
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -1189,18 +1224,72 @@ namespace ECSEngine {
 		if (template_arguments.is_soa) {
 			// Handle the case when the value is empty, then we don't have to write anything
 			if (value_definition_info.byte_size > 0) {
+				SerializeCustomWriteHelperData helper_data;
+				helper_data.definition = template_arguments.value_type;
+				helper_data.definition_info = value_definition_info;
+				helper_data.write_data = data;
+
 				hash_table->ForEachIndexConst([&](unsigned int index) {
+					const void* element = OffsetPointer(hash_table->m_buffer, value_definition_info.byte_size * (size_t)index);
 					if (value_definition_info.is_blittable) {
-						write_size += data->Write(OffsetPointer(hash_table->m_buffer, value_definition_info.byte_size * (size_t)index), value_definition_info.byte_size);
+						write_size += data->Write(element, value_definition_info.byte_size);
 					}
 					else {
 						// Need to perform a full serialization
+						helper_data.data_to_write = { element, 1 };
+						write_size += SerializeCustomWriteHelper(&helper_data);
 					}
 				});
 			}
+
+			SerializeCustomWriteHelperData helper_data;
+			helper_data.definition = template_arguments.identifier_type;
+			helper_data.definition_info = identifier_definition_info;
+			helper_data.write_data = data;
+			// Handle the identifiers
+			hash_table->ForEachIndexConst([&](unsigned int index) {
+				const void* identifier = OffsetPointer(hash_table->m_identifiers, identifier_definition_info.byte_size * (size_t)index);
+				if (identifier_definition_info.is_blittable) {
+					write_size += data->Write(identifier, identifier_definition_info.byte_size);
+				}
+				else {
+					helper_data.data_to_write = { identifier, 1 };
+					write_size += SerializeCustomWriteHelper(&helper_data);
+				}
+			});
 		}
 		else {
+			ulong2 pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
+			
+			SerializeCustomWriteHelperData value_helper_data;
+			value_helper_data.definition = template_arguments.value_type;
+			value_helper_data.definition_info = value_definition_info;
+			value_helper_data.write_data = data;
 
+			SerializeCustomWriteHelperData identifier_helper_data;
+			identifier_helper_data.definition = template_arguments.identifier_type;
+			identifier_helper_data.definition_info = identifier_definition_info;
+			identifier_helper_data.write_data = data;
+
+			hash_table->ForEachIndexConst([&](unsigned int index) {
+				const void* pair = OffsetPointer(hash_table->m_buffer, pair_size.x * (size_t)index);
+				if (value_definition_info.is_blittable) {
+					write_size += data->Write(pair, value_definition_info.byte_size);
+				}
+				else {
+					value_helper_data.data_to_write = { pair, 1 };
+					write_size += SerializeCustomWriteHelper(&value_helper_data);
+				}
+
+				const void* identifier = OffsetPointer(pair, value_definition_info.byte_size + pair_size.y);
+				if (identifier_definition_info.is_blittable) {
+					write_size += data->Write(identifier, identifier_definition_info.byte_size);
+				}
+				else {
+					identifier_helper_data.data_to_write = { identifier, 1 };
+					write_size += SerializeCustomWriteHelper(&identifier_helper_data);
+				}
+			});
 		}
 
 		return write_size;
@@ -1209,54 +1298,126 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	size_t SerializeCustomTypeRead_HashTable(SerializeCustomTypeReadFunctionData* data) {
-		//if (data->version != SERIALIZE_CUSTOM_STREAM_VERSION) {
-		//	return -1;
-		//}
+		if (data->version != SERIALIZE_CUSTOM_HASH_TABLE_VERSION) {
+			return -1;
+		}
 
-		//unsigned int string_offset = 0;
+		size_t deserialize_size = 0;
 
-		//size_t buffer_count = 0;
+		HashTableDefault<char>* hash_table = (HashTableDefault<char>*)data->data;
+		unsigned int count = 0;
+		unsigned int capacity = 0;
+		// Write the count and capacity upfront
+		data->ReadAlways(&count);
+		data->ReadAlways(&capacity);
 
-		//Read<true>(data->stream, &buffer_count, sizeof(buffer_count));
+		if (data->read_data) {
+			hash_table->m_count = count;
+			hash_table->m_capacity = capacity;
+		}
 
-		//if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
-		//	string_offset = sizeof("Stream<") - 1;
-		//	if (data->read_data) {
-		//		size_t* stream_size = (size_t*)OffsetPointer(data->data, sizeof(void*));
-		//		*stream_size = buffer_count;
-		//	}
-		//}
-		//else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
-		//	string_offset = sizeof("CapacityStream<") - 1;
-		//	if (data->read_data) {
-		//		unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
-		//		*stream_size = buffer_count; // This is the size field
-		//		stream_size[1] = buffer_count; // This is the capacity field
-		//	}
-		//}
-		//else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
-		//	string_offset = sizeof("ResizableStream<") - 1;
-		//	if (data->read_data) {
-		//		unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
-		//		*stream_size = buffer_count; // This is the size field
-		//		stream_size[1] = buffer_count; // This is the capacity field
-		//	}
-		//}
-		//else {
-		//	ECS_ASSERT(false);
-		//}
+		// If the capacity is 0, we can early exit
+		if (capacity == 0) {
+			if (data->read_data) {
+				hash_table->InitializeFromBuffer(nullptr, 0);
+			}
+			return deserialize_size;
+		}
 
-		//// Determine if it is a trivial type - including streams
-		//Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
+		HashTableTemplateArguments template_arguments = HashTableExtractTemplateArguments(data->definition);
+		ReflectionDefinitionInfo value_definition_info = HashTableGetValueDefinitionInfo(data->reflection_manager, template_arguments);
+		ReflectionDefinitionInfo identifier_definition_info = HashTableGetIdentifierDefinitionInfo(data->reflection_manager, template_arguments);
 
-		//DeserializeCustomReadHelperData helper_data;
-		//helper_data.allocated_buffer = (void**)data->data;
-		//helper_data.data = data;
-		//helper_data.definition = template_type;
-		//helper_data.element_count = buffer_count;
-		//helper_data.elements_to_allocate = buffer_count;
-		//return DeserializeCustomReadHelperEx(&helper_data);
-		return 0;
+		if (data->read_data) {
+			ECS_ASSERT(data->options != nullptr);
+			// Determine the buffer that must be allocated. Use the backup allocator for the moment
+			deserialize_size += HashTableCustomTypeAllocateAndSetBuffers(hash_table, hash_table->m_capacity, data->options->backup_allocator, template_arguments.is_soa, value_definition_info, identifier_definition_info);
+		}
+
+		// Read the metadata buffer directly from the stream
+		data->Read(hash_table->m_metadata, hash_table->GetExtendedCapacity() * sizeof(hash_table->m_metadata[0]));
+
+		// Branch based on the SoA
+		if (template_arguments.is_soa) {
+			// Handle the case when the value is empty, then we don't have to write anything
+			if (value_definition_info.byte_size > 0) {
+				DeserializeCustomReadHelperData helper_data;
+				helper_data.definition = template_arguments.value_type;
+				helper_data.definition_info = value_definition_info;
+				helper_data.read_data = data;
+				helper_data.elements_to_allocate = 0;
+				helper_data.element_count = 1;
+
+				hash_table->ForEachIndexConst([&](unsigned int index) {
+					void* element = OffsetPointer(hash_table->m_buffer, value_definition_info.byte_size * (size_t)index);
+					if (value_definition_info.is_blittable) {
+						data->Read(element, value_definition_info.byte_size);
+					}
+					else {
+						// Need to perform a full serialization
+						helper_data.deserialize_target = element;
+						deserialize_size += DeserializeCustomReadHelper(&helper_data);
+					}
+				});
+			}
+
+			DeserializeCustomReadHelperData helper_data;
+			helper_data.definition = template_arguments.identifier_type;
+			helper_data.definition_info = identifier_definition_info;
+			helper_data.read_data = data;
+			helper_data.elements_to_allocate = 0;
+			helper_data.element_count = 1;
+			// Handle the identifiers
+			hash_table->ForEachIndexConst([&](unsigned int index) {
+				void* identifier = OffsetPointer(hash_table->m_identifiers, identifier_definition_info.byte_size * (size_t)index);
+				if (identifier_definition_info.is_blittable) {
+					data->Read(identifier, identifier_definition_info.byte_size);
+				}
+				else {
+					helper_data.deserialize_target = identifier;
+					deserialize_size += DeserializeCustomReadHelper(&helper_data);
+				}
+			});
+		}
+		else {
+			ulong2 pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
+
+			DeserializeCustomReadHelperData value_helper_data;
+			value_helper_data.definition = template_arguments.value_type;
+			value_helper_data.definition_info = value_definition_info;
+			value_helper_data.read_data = data;
+			value_helper_data.elements_to_allocate = 0;
+			value_helper_data.element_count = 1;
+
+			DeserializeCustomReadHelperData identifier_helper_data;
+			identifier_helper_data.definition = template_arguments.identifier_type;
+			identifier_helper_data.definition_info = identifier_definition_info;
+			identifier_helper_data.read_data = data;
+			identifier_helper_data.elements_to_allocate = 0;
+			identifier_helper_data.element_count = 1;
+
+			hash_table->ForEachIndexConst([&](unsigned int index) {
+				void* pair = OffsetPointer(hash_table->m_buffer, pair_size.x * (size_t)index);
+				if (value_definition_info.is_blittable) {
+					data->Read(pair, value_definition_info.byte_size);
+				}
+				else {
+					value_helper_data.deserialize_target = pair;
+					deserialize_size += DeserializeCustomReadHelper(&value_helper_data);
+				}
+
+				void* identifier = OffsetPointer(pair, value_definition_info.byte_size + pair_size.y);
+				if (identifier_definition_info.is_blittable) {
+					data->Read(identifier, identifier_definition_info.byte_size);
+				}
+				else {
+					identifier_helper_data.deserialize_target = identifier;
+					deserialize_size += DeserializeCustomReadHelper(&identifier_helper_data);
+				}
+			});
+		}
+
+		return deserialize_size;
 	}
 
 #pragma endregion

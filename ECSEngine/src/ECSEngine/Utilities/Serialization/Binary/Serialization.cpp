@@ -872,7 +872,7 @@ namespace ECSEngine {
 
 		Stream<SerializeOmitField> omit_fields = has_options ? options->omit_fields : Stream<SerializeOmitField>(nullptr, 0);
 
-		Stream<char> type_name = type->name;;
+		Stream<char> type_name = type->name;
 
 		bool has_backup_allocator = has_options && options->backup_allocator.allocator != nullptr;
 		if (!has_options || (has_options && options->verify_dependent_types)) {

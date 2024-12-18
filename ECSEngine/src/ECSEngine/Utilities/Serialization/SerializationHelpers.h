@@ -340,9 +340,18 @@ namespace ECSEngine {
 			return ECSEngine::Read(stream, data, data_size, read_data);
 		}
 
+		ECS_INLINE void ReadAlways(void* data, size_t data_size) const {
+			ECSEngine::Read<true>(stream, data, data_size);
+		}
+
 		template<typename T>
 		ECS_INLINE size_t Read(T* data) const {
 			return ReadDeduce(stream, data, read_data);
+		}
+
+		template<typename T>
+		ECS_INLINE void ReadAlways(T* data) const {
+			ECSEngine::Read<true>(stream, data);
 		}
 
 		unsigned int version;
@@ -359,7 +368,7 @@ namespace ECSEngine {
 		DeserializeOptions* options;
 	};
 
-	// If read_data is false, just determine how many buffer bytes are needed
+	// If read_data is false, it determines how many buffer bytes are needed
 	typedef size_t (*SerializeCustomTypeReadFunction)(SerializeCustomTypeReadFunctionData* data);
 
 #define ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name) size_t SerializeCustomTypeRead_##name(SerializeCustomTypeReadFunctionData* data)

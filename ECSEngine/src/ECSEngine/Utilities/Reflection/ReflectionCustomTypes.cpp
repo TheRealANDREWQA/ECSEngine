@@ -775,6 +775,38 @@ namespace ECSEngine {
 			return { pair_size, identifier_pair_offset };
 		}
 
+		size_t HashTableCustomTypeAllocateAndSetBuffers(void* hash_table, size_t capacity, AllocatorPolymorphic allocator, bool is_soa, const ReflectionDefinitionInfo& value_definition_info, const ReflectionDefinitionInfo& identifier_definition_info) {
+			HashTableDefault<char>* typed_table = (HashTableDefault<char>*)hash_table;
+			// Set the typed table capacity to the one given such that we can ask for the extended capacity. Restore the previous capacity
+			unsigned int previous_table_capacity = typed_table->GetCapacity();
+			typed_table->m_capacity = capacity;
+			size_t extended_capacity = typed_table->GetExtendedCapacity();
+			typed_table->m_capacity = previous_table_capacity;
+
+			if (is_soa) {
+				// Compute the total byte size for the destination. We must use the extended capacity
+				size_t total_allocation_size = (value_definition_info.byte_size + identifier_definition_info.byte_size + sizeof(unsigned char)) * extended_capacity;
+				void* allocation = AllocateEx(allocator, total_allocation_size);
+
+				// The metadata buffer is set last
+				typed_table->m_buffer = allocation;
+				typed_table->m_identifiers = (ResourceIdentifier*)OffsetPointer(typed_table->m_buffer, value_definition_info.byte_size * extended_capacity);
+				typed_table->m_metadata = (unsigned char*)OffsetPointer(typed_table->m_identifiers, identifier_definition_info.byte_size * extended_capacity);
+				return total_allocation_size;
+			}
+			else {
+				ulong2 pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
+				size_t total_allocation_size = (pair_size.x + sizeof(unsigned char)) * extended_capacity;
+				void* allocation = AllocateEx(allocator, total_allocation_size);
+
+				// The metadata buffer is set last
+				typed_table->m_buffer = allocation;
+				typed_table->m_identifiers = nullptr;
+				typed_table->m_metadata = (unsigned char*)OffsetPointer(typed_table->m_buffer, pair_size.x * extended_capacity);
+				return total_allocation_size;
+			}
+		}
+
 		static void HashTableDeallocateWithElements(
 			const ReflectionManager* reflection_manager,
 			void* hash_table,
@@ -914,31 +946,7 @@ namespace ECSEngine {
 
 			// We need to have separate branches for SoA
 			size_t source_extended_capacity = source->GetExtendedCapacity();
-			// Set if template_parameters.is_soa is false
-			ulong2 non_soa_pair_size;
-
-			if (template_parameters.is_soa) {
-				// Compute the total byte size for the destination. We must use the extended capacity
-				size_t total_allocation_size = (value_definition_info.byte_size + identifier_definition_info.byte_size + sizeof(unsigned char)) * source_extended_capacity;
-				void* allocation = AllocateEx(data->allocator, total_allocation_size);
-				
-				// The metadata buffer is set last
-				ECS_ASSERT(source->m_metadata > (void*)source->m_identifiers && source->m_identifiers > source->m_buffer, "Hash table reflection copy must be changed!");
-				destination->m_buffer = allocation;
-				destination->m_identifiers = (ResourceIdentifier*)OffsetPointer(destination->m_buffer, value_definition_info.byte_size * source_extended_capacity);
-				destination->m_metadata = (unsigned char*)OffsetPointer(destination->m_identifiers, identifier_definition_info.byte_size * source_extended_capacity);
-			}
-			else {
-				non_soa_pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
-				size_t total_allocation_size = (non_soa_pair_size.x + sizeof(unsigned char)) * source_extended_capacity;
-				void* allocation = AllocateEx(data->allocator, total_allocation_size);
-
-				// The metadata buffer is set last
-				ECS_ASSERT(source->m_metadata > source->m_buffer, "Hash table reflection copy must be changed!");
-				destination->m_buffer = allocation;
-				destination->m_identifiers = nullptr;
-				destination->m_metadata = (unsigned char*)OffsetPointer(destination->m_buffer, non_soa_pair_size.x * source_extended_capacity);
-			}
+			HashTableCustomTypeAllocateAndSetBuffers(destination, source->GetCapacity(), data->allocator, template_parameters.is_soa, value_definition_info, identifier_definition_info);
 
 			destination->m_capacity = source->m_capacity;
 			destination->m_count = source->m_count;
@@ -990,22 +998,23 @@ namespace ECSEngine {
 				}
 			}
 			else {
+				ulong2 pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
 				if (value_definition_info.is_blittable && identifier_definition_info.is_blittable) {
 					// Can memcpy directly
-					memcpy(destination->m_buffer, source->m_buffer, non_soa_pair_size.x * source_extended_capacity);
+					memcpy(destination->m_buffer, source->m_buffer, pair_size.x * source_extended_capacity);
 				}
 				else {
 					// Go through each entry and call the copy individually
 					// The copy function has a fast path for the is blittable, so no need to add a pre-check
 					source->ForEachIndexConst([&](unsigned int index) {
-						const void* source_element = OffsetPointer(source->m_buffer, (size_t)index * non_soa_pair_size.x);
-						void* destination_element = OffsetPointer(destination->m_buffer, (size_t)index * non_soa_pair_size.x);
+						const void* source_element = OffsetPointer(source->m_buffer, (size_t)index * pair_size.x);
+						void* destination_element = OffsetPointer(destination->m_buffer, (size_t)index * pair_size.x);
 						CopyReflectionTypeInstance(data->reflection_manager, template_parameters.value_type, source_element, destination_element, &copy_options);
 						CopyReflectionTypeInstance(
 							data->reflection_manager,
 							template_parameters.identifier_type,
-							OffsetPointer(source_element, value_definition_info.byte_size + non_soa_pair_size.y),
-							OffsetPointer(destination_element, value_definition_info.byte_size + non_soa_pair_size.y),
+							OffsetPointer(source_element, value_definition_info.byte_size + pair_size.y),
+							OffsetPointer(destination_element, value_definition_info.byte_size + pair_size.y),
 							&copy_options
 						);
 					});
