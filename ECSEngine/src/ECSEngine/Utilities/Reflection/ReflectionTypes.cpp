@@ -614,11 +614,15 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ECS_INLINE ReflectionTypeMiscInfo ReflectionTypeMiscInfo::Copy(AllocatorPolymorphic allocator) const {
+		ReflectionTypeMiscInfo ReflectionTypeMiscInfo::Copy(AllocatorPolymorphic allocator) const {
 			switch (type) {
 			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
 			{
-				return { type, soa.Copy(allocator) };
+				return soa.Copy(allocator);
+			}
+			case ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR:
+			{
+				return allocator_info.Copy(allocator);
 			}
 			default:
 				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
@@ -626,35 +630,45 @@ namespace ECSEngine {
 			return {};
 		}
 
-		ECS_INLINE ReflectionTypeMiscInfo ReflectionTypeMiscInfo::CopyTo(uintptr_t& ptr) const {
+		ReflectionTypeMiscInfo ReflectionTypeMiscInfo::CopyTo(uintptr_t& ptr) const {
 			switch (type) {
 			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
 			{
-				return { type, soa.CopyTo(ptr) };
+				return soa.CopyTo(ptr);
 			}
+			case ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR:
+				return allocator_info.CopyTo(ptr);
 			default:
 				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
 			}
 			return {};
 		}
 
-		ECS_INLINE size_t ReflectionTypeMiscInfo::CopySize() const {
+		size_t ReflectionTypeMiscInfo::CopySize() const {
 			switch (type) {
 			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
 			{
 				return soa.CopySize();
 			}
+			case ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR:
+			{
+				return allocator_info.CopySize();
+			}
 			default:
 				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
 			}
 			return {};
 		}
 
-		ECS_INLINE void ReflectionTypeMiscInfo::Deallocate(AllocatorPolymorphic allocator) const {
+		void ReflectionTypeMiscInfo::Deallocate(AllocatorPolymorphic allocator) const {
 			switch (type) {
 			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
 			{
-				return soa.Deallocate(allocator);
+				soa.Deallocate(allocator);
+			}
+			case ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR:
+			{
+				allocator_info.Deallocate(allocator);
 			}
 			default:
 				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");

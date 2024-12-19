@@ -214,6 +214,7 @@ namespace ECSEngine {
 
 		enum ECS_REFLECTION_TYPE_MISC_INFO_TYPE : unsigned char {
 			ECS_REFLECTION_TYPE_MISC_INFO_SOA,
+			ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR,
 			ECS_REFLECTION_TYPE_MISC_INFO_COUNT
 		};
 
@@ -249,7 +250,45 @@ namespace ECSEngine {
 			unsigned char parallel_streams[13];
 		};
 
+		enum ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER : unsigned char {
+			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_NONE,
+			// When set, it indicates that it should act as an override for the allocator to be used, lower
+			// In priority than per field allocator
+			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN,
+			// When specified, it indicates that this field should not perform a full initialization, 
+			// But only reference the allocator that is given
+			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE
+		};
+
+		// This structure specifies a type's allocator, from which allocations can be made from
+		// If the user specified that per type allocators or per field allocators are to be enabled (only the main has that property).
+		struct ReflectionTypeMiscAllocator {
+			ECS_INLINE ReflectionTypeMiscAllocator Copy(AllocatorPolymorphic allocator) const {
+				return *this;
+			}
+
+			ECS_INLINE ReflectionTypeMiscAllocator CopyTo(uintptr_t& ptr) const {
+				return *this;
+			}
+
+			ECS_INLINE size_t CopySize() const {
+				// No buffer to copy
+				return 0;
+			}
+
+			ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+				// Nothing to deallocate
+			}
+
+			unsigned int field_index;
+			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER modifier;
+		};
+
 		struct ECSENGINE_API ReflectionTypeMiscInfo {
+			ECS_INLINE ReflectionTypeMiscInfo() : type(ECS_REFLECTION_TYPE_MISC_INFO_COUNT) {}
+			ECS_INLINE ReflectionTypeMiscInfo(const ReflectionTypeMiscSoa& soa) : type(ECS_REFLECTION_TYPE_MISC_INFO_SOA), soa(soa) {}
+			ECS_INLINE ReflectionTypeMiscInfo(const ReflectionTypeMiscAllocator& allocator) : type(ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR), allocator_info(allocator) {}
+
 			ReflectionTypeMiscInfo Copy(AllocatorPolymorphic allocator) const;
 
 			ReflectionTypeMiscInfo CopyTo(uintptr_t& ptr) const;
@@ -261,6 +300,7 @@ namespace ECSEngine {
 			ECS_REFLECTION_TYPE_MISC_INFO_TYPE type;
 			union {
 				ReflectionTypeMiscSoa soa;
+				ReflectionTypeMiscAllocator allocator_info;
 			};
 		};
 

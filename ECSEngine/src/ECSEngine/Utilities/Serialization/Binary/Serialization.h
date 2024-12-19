@@ -173,6 +173,11 @@ namespace ECSEngine {
 		bool verify_dependent_types = true;
 		bool use_resizable_stream_allocator = false;
 		bool default_initialize_missing_fields = false;
+		// If a type has an overall allocator, it will initialize it and provide that allocator as a fallback
+		// For all the other allocations that are made to that instance
+		bool initialize_type_allocators = false;
+		// If a type field has an allocator assigned, it will use that to make allocations instead
+		bool use_type_field_allocators = false;
 
 		DeserializeValidateHeader validate_header = nullptr;
 		void* validate_header_data = nullptr;
