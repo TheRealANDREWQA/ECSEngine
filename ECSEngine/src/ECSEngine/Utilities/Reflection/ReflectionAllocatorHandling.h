@@ -11,6 +11,10 @@ namespace ECSEngine {
 		// Returns true if the given field is an allocator, else false
 		ECSENGINE_API bool IsReflectionTypeFieldAllocator(const ReflectionType* type, size_t field_index);
 
+		// Returns true if the given field index is an allocator, else false. It deduces this information
+		// By checking the misc entries, not by checking for the actual definition
+		ECSENGINE_API bool IsReflectionTypeFieldAllocatorFromMisc(const ReflectionType* type, size_t field_index);
+
 		// Returns true if the given field should be used as an allocator reference, instead of a fully allocated instance
 		ECSENGINE_API bool IsReflectionTypeFieldAllocatorAsReference(const ReflectionType* type, size_t field_index);
 

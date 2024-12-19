@@ -41,8 +41,8 @@ namespace ECSEngine {
 		unsigned short stream_byte_size;
 		unsigned short byte_size;
 		unsigned short basic_type_count;
-		unsigned int custom_serializer_index;
 		unsigned short pointer_offset;
+		unsigned int custom_serializer_index;
 	};
 
 	struct ECSENGINE_API DeserializeFieldTable {

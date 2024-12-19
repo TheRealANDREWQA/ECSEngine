@@ -16,6 +16,17 @@ namespace ECSEngine {
 			return ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR]->Match(&match_data);
 		}
 
+		bool IsReflectionTypeFieldAllocatorFromMisc(const ReflectionType* type, size_t field_index) {
+			for (size_t index = 0; index < type->misc_info.size; index++) {
+				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
+					if (type->misc_info[index].allocator_info.field_index == field_index) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
 		bool IsReflectionTypeFieldAllocatorAsReference(const ReflectionType* type, size_t field_index) {
 			return type->fields[field_index].Has(STRING(ECS_TYPE_REFERENCE_ALLOCATOR));
 		}

@@ -3,6 +3,7 @@
 #include "../../Reflection/Reflection.h"
 #include "../../Reflection/ReflectionStringFunctions.h"
 #include "../../Reflection/ReflectionCustomTypes.h"
+#include "../../Reflection/ReflectionAllocatorHandling.h"
 #include "../SerializationHelpers.h"
 #include "../../../Containers/Stacks.h"
 #include "../../../Allocators/ResizableLinearAllocator.h"
@@ -538,10 +539,35 @@ namespace ECSEngine {
 			nested_options->omit_fields = omit_fields;
 		}
 
+		// Before writing the normal type fields, proceed by writing all the standalone type allocators
+		// Such that they can be reconstructed before all the other fields
+		for (size_t index = 0; index < type->misc_info.size; index++) {
+			if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
+				// If it is a reference allocator, don't write its contents
+				const ReflectionTypeMiscAllocator& allocator_field = type->misc_info[index].allocator_info;
+				if (allocator_field.modifier != ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE) {
+					const ReflectionField& field = type->fields[allocator_field.field_index];
+					
+					SerializeCustomTypeWriteFunctionData allocator_write_data;
+					allocator_write_data.data = type->GetField(data, allocator_field.field_index);
+					allocator_write_data.tags = field.tag;
+					allocator_write_data.definition = field.definition;
+					allocator_write_data.options = nested_options;
+					allocator_write_data.reflection_manager = reflection_manager;
+					allocator_write_data.stream = &stream;
+					allocator_write_data.write_data = write_data;
+					
+					*total_size += ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].write(&allocator_write_data);
+				}
+			}
+		}
+
 		for (size_t index = 0; index < type->fields.size; index++) {
 			const ReflectionField* field = &type->fields[index];
 
 			bool skip_serializable = field->Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
+			// Consider the field skipped if it an allocator as well
+			skip_serializable |= IsReflectionTypeFieldAllocatorFromMisc(type, index);
 
 			if (!skip_serializable && omit_fields.size > 0) {
 				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
