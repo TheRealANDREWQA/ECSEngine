@@ -40,13 +40,19 @@
 //// The names of the fields here
 //#define ECS_SOA_REFLECT_AGGREGATE(...)
 
-// Should be placed after a field - it describes from which field the allocations should be made from
-// If the deserializer/copier specified per field allocator usage. It will validate that field corresponds
-// To an actual allocator
+// When placed for a field - it describes from which field the allocations should be made from
+// If the deserialize/copy function specified per field allocator usage. It will validate that the field name
+// Exists and corresponds to an actual allocator
 #define ECS_FIELD_ALLOCATOR(allocator_field_name)
-// Should be placed after an allocator field - it indicates that fields should allocate from this allocator
-// When deserializing/copying (if the user specified per type allocator usage)
-#define ECS_TYPE_ALLOCATOR
+
+// Should be placed for an allocator field - when specified, it indicates that all further allocations for an instance
+// Should be made from this allocator, unless that field has an allocator override, and the user specified that type
+// Allocators are enabled
+#define ECS_TYPE_MAIN_ALLOCATOR
+
+// When specified, it indicates that this allocator should not be initialized as a standalone entry, but rather
+// It should reference the allocator that is passed in.
+#define ECS_TYPE_REFERENCE_ALLOCATOR
 
 #define ECS_REFLECT_SETTINGS
 #define ECS_REFLECT_COMPONENT

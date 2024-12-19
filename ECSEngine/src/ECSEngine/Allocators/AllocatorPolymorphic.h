@@ -461,6 +461,13 @@ namespace ECSEngine {
 
 	ECSENGINE_API void CreateBaseAllocators(void* buffer, CreateBaseAllocatorInfo info, void* pointers_to_be_constructed, size_t count);
 
+	// Returns the appropriate allocator polymorphic for the given pointer and type. ECS_ALLOCATOR_TYPE_COUNT is not a valid value
+	ECSENGINE_API AllocatorPolymorphic ConvertPointerToAllocatorPolymorphic(const void* pointer, ECS_ALLOCATOR_TYPE type);
+
+	// This function is different from the basic one in the sense that it allows ECS_ALLOCATOR_TYPE_COUNT, in which case
+	// It considers that the pointer is a pointer to an existing allocator polymorphic
+	ECSENGINE_API AllocatorPolymorphic ConvertPointerToAllocatorPolymorphicEx(const void* pointer, ECS_ALLOCATOR_TYPE type);
+
 	struct LinearAllocator;
 	struct StackAllocator;
 	struct MultipoolAllocator;

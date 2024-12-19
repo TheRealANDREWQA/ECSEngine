@@ -11,6 +11,7 @@
 #include "../StreamUtilities.h"
 #include "../EvaluateExpression.h"
 #include "ReflectionCustomTypes.h"
+#include "ReflectionAllocatorHandling.h"
 #include "../Tokenize.h"
 
 namespace ECSEngine {
@@ -1025,11 +1026,11 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < type_named_soa.size; index++) {
 				auto output_error = [&](Stream<char> field_type, Stream<char> field_name) {
 					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: {#} {#} doesn't exist. ", type.name, field_type, field_name);
-					WriteErrorMessage(data, message.buffer);
+					WriteErrorMessage(data, message);
 				};
 				auto output_type_error = [&](Stream<char> field_name) {
 					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: field {#} invalid type {#} for size/capacity. ", type.name, field_name);
-					WriteErrorMessage(data, message.buffer);
+					WriteErrorMessage(data, message);
 				};
 
 				const ReflectionTypeMiscNamedSoa* named_soa = &type_named_soa[index];
@@ -1075,7 +1076,7 @@ namespace ECSEngine {
 					// Verify that this is a pointer field
 					if (type.fields[current_field_index].info.stream_type != ReflectionStreamFieldType::Pointer) {
 						ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: field {#} is not a pointer. ", type.name, type.fields[current_field_index].name);
-						WriteErrorMessage(data, message.buffer);
+						WriteErrorMessage(data, message);
 						return;
 					}
 					// Change the pointer type to PointerSoA
@@ -1086,6 +1087,75 @@ namespace ECSEngine {
 
 				// We need to add to the total memory the misc copy size
 				data->total_memory += misc_soa->CopySize();
+			}
+
+			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscInfo, type_allocators, 64);
+
+			// Check for type allocator tags. There must be at max one primary allocator, and if there is, create a misc entry for it
+			size_t type_overall_primary_allocator_index = -1;
+			for (size_t index = 0; index < type.fields.size; index++) {
+				if (IsReflectionTypeOverallAllocatorByTag(&type, index)) {
+					// If it is not an allocator field, error
+					if (!IsReflectionTypeFieldAllocator(&type, index)) {
+						ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} specified as type allocator, but it is not a valid allocator type. ", type.name, type.fields[index].name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+
+					if (type_overall_primary_allocator_index != -1) {
+						// Fail, there are multiple valid entries
+						ECS_FORMAT_TEMP_STRING(message, "Type {#} has multiple type allocators specified, but only one should be. ", type.name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+
+					// If it is marked as a reference, fail as well
+					if (IsReflectionTypeFieldAllocatorAsReference(&type, index)) {
+						ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} specified as type allocator, but it is marked as a reference allocator as well, which is illegal. ", type.name, type.fields[index].name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+				}
+			}
+
+			if (type_overall_primary_allocator_index != -1) {
+				// Create a misc entry for it
+				ReflectionTypeMiscAllocator misc_allocator;
+				misc_allocator.field_index = type_overall_primary_allocator_index;
+				misc_allocator.modifier = ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN;
+				type_allocators.AddAssert(misc_allocator);
+			}
+
+			for (size_t index = 0; index < type.fields.size; index++) {
+				// Skip the main type allocator, it already has an entry, if it exists
+				if (index != type_overall_primary_allocator_index && IsReflectionTypeFieldAllocator(&type, index)) {
+					ReflectionTypeMiscAllocator misc_allocator;
+					misc_allocator.field_index = index;
+					misc_allocator.modifier = IsReflectionTypeFieldAllocatorAsReference(&type, index) ? ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE : ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_NONE;
+					type_allocators.AddAssert(misc_allocator);
+				}
+			}
+
+			// After all allocators are detected, add them to the type's misc entries
+			type.misc_info.AddResize(type_allocators, &data->allocator, false);
+
+			// If everything succeeded, check allocator field macros to see if they are satisfied. Create a misc entry for each
+			for (size_t index = 0; index < type.fields.size; index++) {
+				Stream<char> field_allocator_name = GetReflectionTypeFieldAllocatorFromTag(&type, index);
+				if (field_allocator_name.size > 0) {
+					unsigned int field_index = type.FindField(field_allocator_name);
+					if (field_index == -1) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid field allocator for field {#} specified for type {#}. There is no field named {#}. ", type.fields[index].name, type.name, field_allocator_name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+					
+					if (!IsReflectionTypeFieldAllocator(&type, index)) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid field allocator for field {#} specified for type {#}. The field {#} is not an allocator. ", type.fields[index].name, type.name, field_allocator_name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+				}
 			}
 		}
 

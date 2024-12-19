@@ -326,6 +326,10 @@ namespace ECSEngine {
 		bool write_data;
 
 		SerializeOptions* options;
+
+		// This is an optional field. Tags can be used to alter the behavior of the serializer. These can be user defined tags
+		// Or the reflection type based tags.
+		Stream<char> tags = {};
 	};
 
 	// If write data is false, just determine how many buffer bytes are needed
@@ -366,6 +370,10 @@ namespace ECSEngine {
 		Stream<char> definition;
 
 		DeserializeOptions* options;
+
+		// This is an optional field. Tags can be used to alter the behavior of the deserializer. These can be user defined tags
+		// Or the reflection type based tags.
+		Stream<char> tags = {};
 	};
 
 	// If read_data is false, it determines how many buffer bytes are needed

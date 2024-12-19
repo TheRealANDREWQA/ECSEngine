@@ -504,13 +504,44 @@ namespace ECSEngine {
 		}
 	}
 
+	AllocatorPolymorphic ConvertPointerToAllocatorPolymorphic(const void* pointer, ECS_ALLOCATOR_TYPE type) {
+		switch (type) {
+		case ECS_ALLOCATOR_LINEAR:
+			return (LinearAllocator*)pointer;
+		case ECS_ALLOCATOR_STACK:
+			return (StackAllocator*)pointer;
+		case ECS_ALLOCATOR_MULTIPOOL:
+			return (MultipoolAllocator*)pointer;
+		case ECS_ALLOCATOR_ARENA:
+			return (MemoryArena*)pointer;
+		case ECS_ALLOCATOR_MANAGER:
+			return (MemoryManager*)pointer;
+		case ECS_ALLOCATOR_RESIZABLE_LINEAR:
+			return (ResizableLinearAllocator*)pointer;
+		case ECS_ALLOCATOR_MEMORY_PROTECTED:
+			return (MemoryProtectedAllocator*)pointer;
+		default:
+			ECS_ASSERT(false, "Invalid allocator type for pointer conversion to polymorphic allocator");
+		}
+
+		return {};
+	}
+
+	AllocatorPolymorphic ConvertPointerToAllocatorPolymorphicEx(const void* pointer, ECS_ALLOCATOR_TYPE type) {
+		if (type == ECS_ALLOCATOR_TYPE_COUNT) {
+			return *(AllocatorPolymorphic*)pointer;
+		}
+
+		return ConvertPointerToAllocatorPolymorphic(pointer, type);
+	}
+
 	template<typename Allocator>
-	void* DirectXTexAllocator(void* _allocator, size_t size, size_t alignment) {
+	static void* DirectXTexAllocator(void* _allocator, size_t size, size_t alignment) {
 		Allocator* allocator = (Allocator*)_allocator;
 		return allocator->Allocate(size, alignment);
 	}
 
-	DirectX::Tex_AllocateFunction DIRECTX_ALLOCATE_FUNCTIONS[] = {
+	static DirectX::Tex_AllocateFunction DIRECTX_ALLOCATE_FUNCTIONS[] = {
 		ECS_JUMP_TABLE(DirectXTexAllocator)
 	};
 
