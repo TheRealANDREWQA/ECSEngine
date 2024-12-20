@@ -47,6 +47,9 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API DeserializeFieldTable {
 		struct Type {
+			// Returns the index of the field that corresponds to the given name, else -1
+			size_t FindField(Stream<char> name) const;
+
 			Stream<DeserializeFieldInfo> fields;
 			Stream<char> name;
 			Stream<char> tag;
@@ -163,7 +166,7 @@ namespace ECSEngine {
 
 		Stream<void> header = { nullptr, 0 };
 
-		DeserializeFieldTable* field_table = nullptr;
+		const DeserializeFieldTable* field_table = nullptr;
 		// It is used for skipping fields. It can be specified such that it won't need to be recreated multiple times
 		Reflection::ReflectionManager* deserialized_field_manager = nullptr;
 
@@ -204,6 +207,9 @@ namespace ECSEngine {
 		ECS_DESERIALIZE_MISSING_DEPENDENT_TYPES,
 		ECS_DESERIALIZE_INVALID_HEADER,
 		ECS_DESERIALIZE_FIELD_TYPE_MISMATCH,
+		// This value signals that a new allocator entry was added, and we don't know how to initialize it
+		// For the moment, this is not possible
+		ECS_DESERIALIZE_NEW_ALLOCATOR_ENTRY,
 		ECS_DESERIALIZE_CORRUPTED_FILE
 	};
 

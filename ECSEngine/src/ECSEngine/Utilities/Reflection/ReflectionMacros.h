@@ -48,11 +48,11 @@
 // Should be placed for an allocator field - when specified, it indicates that all further allocations for an instance
 // Should be made from this allocator, unless that field has an allocator override, and the user specified that type
 // Allocators are enabled
-#define ECS_TYPE_MAIN_ALLOCATOR
+#define ECS_MAIN_ALLOCATOR
 
 // When specified, it indicates that this allocator should not be initialized as a standalone entry, but rather
 // It should reference the allocator that is passed in.
-#define ECS_TYPE_REFERENCE_ALLOCATOR
+#define ECS_REFERENCE_ALLOCATOR
 
 #define ECS_REFLECT_SETTINGS
 #define ECS_REFLECT_COMPONENT
