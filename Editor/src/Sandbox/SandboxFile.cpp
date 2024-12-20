@@ -86,7 +86,6 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 		DeserializeOptions options;
 		options.field_table = &field_table;
 		options.field_allocator = allocator;
-		options.backup_allocator = allocator;
 		options.read_type_table = false;
 
 		const Reflection::ReflectionType* type = reflection_manager->GetType(STRING(EditorSandbox));

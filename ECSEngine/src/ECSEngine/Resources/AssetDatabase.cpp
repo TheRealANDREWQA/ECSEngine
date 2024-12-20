@@ -1500,7 +1500,6 @@ namespace ECSEngine {
 			}
 			DeserializeOptions deserialize_options;
 			deserialize_options.field_allocator = allocator;
-			deserialize_options.backup_allocator = allocator;
 
 			SetSerializeCustomMaterialAssetDatabase(database);
 
@@ -2707,7 +2706,6 @@ namespace ECSEngine {
 	ECS_DESERIALIZE_CODE DeserializeAssetDatabaseImpl(AssetDatabase* database, DeserializeAssetDatabaseOptions database_options, Functor&& functor) {
 		DeserializeOptions options;
 		options.file_allocator = database->Allocator();
-		options.backup_allocator = database->Allocator();
 		options.field_allocator = database->Allocator();
 
 		SetSerializeCustomMaterialAssetDatabase(database);

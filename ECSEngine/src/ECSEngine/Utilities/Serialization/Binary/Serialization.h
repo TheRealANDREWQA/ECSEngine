@@ -189,7 +189,6 @@ namespace ECSEngine {
 		
 		AllocatorPolymorphic file_allocator = { nullptr };
 		AllocatorPolymorphic field_allocator = { nullptr };
-		AllocatorPolymorphic backup_allocator = { nullptr };
 
 		CapacityStream<char>* error_message = nullptr;
 	};

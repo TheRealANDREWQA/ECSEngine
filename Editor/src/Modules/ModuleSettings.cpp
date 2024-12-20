@@ -272,7 +272,6 @@ bool LoadModuleSettings(
 		}
 
 		DeserializeOptions deserialize_options;
-		deserialize_options.backup_allocator = allocator;
 		deserialize_options.field_allocator = allocator;
 		
 		const Reflection::ReflectionManager* reflection = editor_state->module_reflection->reflection;

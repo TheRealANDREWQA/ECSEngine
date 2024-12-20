@@ -902,7 +902,6 @@ namespace ECSEngine {
 
 		Stream<char> type_name = type->name;
 
-		bool has_backup_allocator = has_options && options->backup_allocator.allocator != nullptr;
 		if (!has_options || (has_options && options->verify_dependent_types)) {
 			// Verify that it has its dependencies met
 			bool has_dependencies = SerializeHasDependentTypes(reflection_manager, type, omit_fields);
@@ -997,7 +996,6 @@ namespace ECSEngine {
 			nested_options->error_message = options->error_message;
 			nested_options->fail_if_field_mismatch = options->fail_if_field_mismatch;
 			nested_options->field_allocator = options->field_allocator;
-			nested_options->backup_allocator = options->backup_allocator;
 			nested_options->use_resizable_stream_allocator = options->use_resizable_stream_allocator;
 			nested_options->read_type_table = false;
 			nested_options->verify_dependent_types = false;
@@ -1047,7 +1045,7 @@ namespace ECSEngine {
 			// Don't know how large this allocator should be, or how to handle it
 			for (size_t index = 0; index < type->misc_info.size; index++) {
 				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
-					if (deserialized_type.FindField(type->fields[type->misc_info[index].allocator_info.field_index]) == -1) {
+					if (deserialized_type.FindField(type->fields[type->misc_info[index].allocator_info.field_index].name) == -1) {
 						// It doesn't exist, fail
 						ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
 							" Allocator field {#} was added, but the serialization does not have that field. ",
@@ -1076,24 +1074,24 @@ namespace ECSEngine {
 			// Iterate over the fields from the serialized type, and use the tags and definitions to find 
 			// Which fields are the allocators.
 			for (size_t index = 0; index < deserialized_type.fields.size; index++) {
-				if (IsReflectionTypeFieldAllocator(deserialized_type.fields[index].definition)) {
+				if (deserialized_type.fields[index].custom_serializer_index == ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR) {
 					// Check to see if the field still exists
 					size_t current_type_field_index = 0;
 					for (; current_type_field_index < type->fields.size; current_type_field_index++) {
 						if (type->fields[current_type_field_index].name == deserialized_type.fields[index].name) {
 							// TODO: If the definition changed, abort? Currently, the custom serialize type does not do anything for this case
-							SerializeCustomTypeReadFunctionData read_data;
-							read_data.data = type->GetField(address, current_type_field_index);
-							read_data.definition = type->fields[current_type_field_index].definition;
-							read_data.options = nested_options;
-							read_data.read_data = read_data;
-							read_data.reflection_manager = reflection_manager;
-							read_data.stream = &stream;
-							read_data.tags = type->fields[current_type_field_index].tag;
-							read_data.version = deserialize_table.custom_serializers[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR];
-							read_data.was_allocated = false;
+							SerializeCustomTypeReadFunctionData custom_read_data;
+							custom_read_data.data = type->GetField(address, current_type_field_index);
+							custom_read_data.definition = type->fields[current_type_field_index].definition;
+							custom_read_data.options = nested_options;
+							custom_read_data.read_data = read_data;
+							custom_read_data.reflection_manager = reflection_manager;
+							custom_read_data.stream = &stream;
+							custom_read_data.tags = type->fields[current_type_field_index].tag;
+							custom_read_data.version = deserialize_table.custom_serializers[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR];
+							custom_read_data.was_allocated = false;
 
-							size_t read_size = ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].read(&read_data);
+							size_t read_size = ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].read(&custom_read_data);
 							if (read_size == -1) {
 								if (has_options) {
 									ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
@@ -1130,28 +1128,30 @@ namespace ECSEngine {
 
 			// Iterate over the type stored inside the file
 			// and for each field that is still valid read it
-			for (size_t index = 0; index < field_count; index++) {
+			for (size_t index = 0; index < deserialize_type_fields_to_iterate.size; index++) {
+				size_t deserialize_field_index = deserialize_type_fields_to_iterate[index];
+
 				// Search the field inside the type
 				size_t subindex = 0;
 				for (; subindex < type->fields.size; subindex++) {
-					if (type->fields[subindex].name == deserialized_type.fields[index].name) {
+					if (type->fields[subindex].name == deserialized_type.fields[deserialize_field_index].name) {
 						break;
 					}
 				}
 
-				const DeserializeFieldInfo& file_field_info = deserialized_type.fields[index];
+				const DeserializeFieldInfo& file_field_info = deserialized_type.fields[deserialize_field_index];
 
 				// The field doesn't exist in the current type
 				if (subindex == type->fields.size) {
 					// Just go to the next field
 					// But first the data inside the stream must be skipped
-					IgnoreTypeField(stream, deserialize_table, type_index, index, deserialized_manager);
+					IgnoreTypeField(stream, deserialize_table, type_index, deserialize_field_index, deserialized_manager);
 					continue;
 				}
 
 				// Check to see if it is omitted
 				if (SerializeShouldOmitField(type->name, type->fields[subindex].name, omit_fields)) {
-					IgnoreTypeField(stream, deserialize_table, type_index, index, deserialized_manager);
+					IgnoreTypeField(stream, deserialize_table, type_index, deserialize_field_index, deserialized_manager);
 					continue;
 				}
 
@@ -1203,8 +1203,7 @@ namespace ECSEngine {
 							}
 
 							size_t allocation_size = per_element_size * element_count;
-							AllocatorPolymorphic allocator_to_use = field_allocator.allocator != nullptr ? field_allocator : options->backup_allocator;
-							allocation = allocation_size == 0 ? nullptr : Allocate(allocator_to_use, allocation_size, type->fields[soa->parallel_streams[0]].info.stream_alignment);
+							allocation = allocation_size == 0 ? nullptr : Allocate(field_allocator, allocation_size, type->fields[soa->parallel_streams[0]].info.stream_alignment);
 
 							// Now write the corresponding pointers in the address
 							for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
@@ -1245,7 +1244,7 @@ namespace ECSEngine {
 							}
 
 							// Ignore the data
-							IgnoreTypeField(stream, deserialize_table, type_index, index, deserialized_manager);
+							IgnoreTypeField(stream, deserialize_table, type_index, deserialize_field_index, deserialized_manager);
 							continue;
 						}
 						// Good to go, read the data using the nested type, or custom serializer
@@ -1376,8 +1375,7 @@ namespace ECSEngine {
 										resizable_stream->size = element_count;
 									}
 									else {
-										AllocatorPolymorphic allocator_to_use = field_allocator.allocator != nullptr ? field_allocator : options->backup_allocator;
-										allocation = Allocate(allocator_to_use, allocation_size, type_field_info.stream_alignment);
+										allocation = Allocate(field_allocator, allocation_size, type_field_info.stream_alignment);
 
 										if (type_field_info.stream_type == ReflectionStreamFieldType::Stream) {
 											Stream<void>* normal_stream = (Stream<void>*)field_data;
@@ -1435,7 +1433,7 @@ namespace ECSEngine {
 							}
 
 							// Ignore the data
-							IgnoreTypeField(stream, deserialize_table, type_index, index, deserialized_manager);
+							IgnoreTypeField(stream, deserialize_table, type_index, deserialize_field_index, deserialized_manager);
 							continue;
 						}
 
@@ -1454,8 +1452,8 @@ namespace ECSEngine {
 						custom_data.stream = &stream;
 						custom_data.version = deserialize_table.custom_serializers[current_custom_serializer_index];
 
-						size_t buffer_size = ECS_SERIALIZE_CUSTOM_TYPES[current_custom_serializer_index].read(&custom_data);
-						if (buffer_size == -1) {
+						size_t custom_buffer_size = ECS_SERIALIZE_CUSTOM_TYPES[current_custom_serializer_index].read(&custom_data);
+						if (custom_buffer_size == -1) {
 							if (has_options) {
 								ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
 									" Reading custom serialization field {#} with definition {#} failed.",
@@ -1466,7 +1464,7 @@ namespace ECSEngine {
 							}
 							return ECS_DESERIALIZE_CORRUPTED_FILE;
 						}
-						*total_size += buffer_size;
+						*buffer_size += custom_buffer_size;
 					}
 					// Good to go, read the data - no user defined type here
 					else {
@@ -1564,12 +1562,14 @@ namespace ECSEngine {
 														ResizableStream<void>* field_stream = (ResizableStream<void>*)field_data;
 														allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
-													else if (options->field_allocator.allocator != nullptr) {
+													else {
+														ECS_ASSERT(options->field_allocator.allocator != nullptr, "A deserialize field allocator must be specified when incompatible types are detected!");
 														allocation = Allocate(options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
 												}
 												else {
-													allocation = Allocate(options->backup_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+													ECS_ASSERT(false, "A deserialize field allocator must be specified when incompatible types are detected!");
+													//allocation = Allocate(options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 												}
 
 												for (size_t element_index = 0; element_index < element_count; element_index++) {

@@ -1973,7 +1973,6 @@ namespace ECSEngine {
 			options.field_table = &functor_data->field_table;
 			options.verify_dependent_types = false;
 			options.field_allocator = data->component_allocator;
-			options.backup_allocator = data->component_allocator;
 			options.default_initialize_missing_fields = true;
 
 			uintptr_t ptr = (uintptr_t)data->file_data;
