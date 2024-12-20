@@ -252,7 +252,6 @@ namespace ECSEngine {
 			ECS_ASSERT(load_data->scene_modules_allocator.allocator != nullptr, "Loading a scene with module retrieval but no allocator is specified.");
 
 			DeserializeOptions options;
-			options.backup_allocator = load_data->scene_modules_allocator;
 			options.field_allocator = load_data->scene_modules_allocator;
 			options.default_initialize_missing_fields = true;
 

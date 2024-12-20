@@ -393,7 +393,6 @@ namespace ECSEngine {
 							options.deserialized_field_manager = reflection_manager;
 							options.read_type_table = false;
 							options.field_allocator = allocator;
-							options.backup_allocator = allocator;
 							options.field_table = &field_table;
 							ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, type_to_be_deserialized, allocation, *data->stream, &options);
 							if (code != ECS_DESERIALIZE_OK) {

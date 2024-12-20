@@ -193,16 +193,16 @@ namespace ECSEngine {
 	size_t DeserializeCustomReadHelper(DeserializeCustomReadHelperData* data) {
 		size_t deserialize_size = 0;
 
-		AllocatorPolymorphic backup_allocator = { nullptr };
+		AllocatorPolymorphic field_allocator = { nullptr };
 
 		if (data->override_allocator.allocator != nullptr) {
-			backup_allocator = data->override_allocator;
+			field_allocator = data->override_allocator;
 		}
-		else if (data->read_data->options != nullptr) {
-			backup_allocator = data->read_data->options->backup_allocator;
+		else if (data->read_data->options != nullptr && data->read_data->options->field_allocator.allocator != nullptr) {
+			field_allocator = data->read_data->options->field_allocator;
 		}
 
-		AllocatorPolymorphic deallocate_allocator = backup_allocator;
+		AllocatorPolymorphic deallocate_allocator = field_allocator;
 		auto deallocate_buffer = [&]() {
 			DeallocateEx(deallocate_allocator, *data->allocated_buffer);
 			*data->allocated_buffer = nullptr;
@@ -219,7 +219,6 @@ namespace ECSEngine {
 			options.verify_dependent_types = false;
 
 			if (has_options) {
-				options.backup_allocator = data->read_data->options->backup_allocator;
 				options.error_message = data->read_data->options->error_message;
 				options.field_allocator = data->read_data->options->field_allocator;
 				options.use_resizable_stream_allocator = data->read_data->options->use_resizable_stream_allocator;
@@ -237,7 +236,7 @@ namespace ECSEngine {
 					data->read_data->was_allocated = true;
 
 					void* buffer = data->elements_to_allocate > 0 ?
-						AllocateEx(backup_allocator, data->elements_to_allocate * element_byte_size, data->definition_info.alignment) : nullptr;
+						AllocateEx(field_allocator, data->elements_to_allocate * element_byte_size, data->definition_info.alignment) : nullptr;
 					*data->allocated_buffer = buffer;
 					deserialize_size += data->elements_to_allocate * element_byte_size;
 
@@ -386,7 +385,7 @@ namespace ECSEngine {
 				data->read_data->was_allocated = true;
 				if (data->read_data->read_data) {
 					size_t allocate_size = data->elements_to_allocate * element_byte_size;
-					void* buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size, data->definition_info.alignment) : nullptr;
+					void* buffer = allocate_size > 0 ? AllocateEx(field_allocator, allocate_size, data->definition_info.alignment) : nullptr;
 					*data->allocated_buffer = buffer;
 					deserialize_size += allocate_size;
 				}
@@ -460,7 +459,7 @@ namespace ECSEngine {
 					if (!single_instance) {
 						// We don't need to modify the was_allocated field since we are reading fundamental types
 						*data->allocated_buffer = data->elements_to_allocate > 0 ?
-							AllocateEx(backup_allocator, data->elements_to_allocate * stream_size, field_info.stream_alignment) : nullptr;
+							AllocateEx(field_allocator, data->elements_to_allocate * stream_size, field_info.stream_alignment) : nullptr;
 						deserialize_size += data->elements_to_allocate * stream_size;
 
 						auto loop = [&](auto use_indices) {
@@ -505,7 +504,7 @@ namespace ECSEngine {
 					if (!single_instance) {
 						// No need to change the was_allocated field since we are reading blittable types
 						size_t allocate_size = data->elements_to_allocate * element_byte_size;
-						*data->allocated_buffer = allocate_size > 0 ? AllocateEx(backup_allocator, allocate_size, data->definition_info.alignment) : nullptr;
+						*data->allocated_buffer = allocate_size > 0 ? AllocateEx(field_allocator, allocate_size, data->definition_info.alignment) : nullptr;
 
 						if (data->indices.buffer == nullptr) {
 							Read<true>(data->read_data->stream, *data->allocated_buffer, allocate_size);
@@ -543,15 +542,6 @@ namespace ECSEngine {
 	ECS_INLINE static AllocatorPolymorphic GetDeserializeFieldAllocator(const SerializeCustomTypeReadFunctionData* data, bool assert_it_exists) {
 		if (data->options != nullptr) {
 			return data->options->field_allocator;
-		}
-		ECS_ASSERT(!assert_it_exists, "Deserialize custom type missing field allocator");
-		return { nullptr };
-	}
-
-	// Returns the backup allocator, if the options are specified, else nullptr. You can optionally assert that the options are always specified
-	ECS_INLINE static AllocatorPolymorphic GetDeserializeBackupAllocator(const SerializeCustomTypeReadFunctionData* data, bool assert_it_exists) {
-		if (data->options != nullptr) {
-			return data->options->backup_allocator;
 		}
 		ECS_ASSERT(!assert_it_exists, "Deserialize custom type missing field allocator");
 		return { nullptr };
@@ -1331,7 +1321,7 @@ namespace ECSEngine {
 		if (data->read_data) {
 			ECS_ASSERT(data->options != nullptr);
 			// Determine the buffer that must be allocated. Use the backup allocator for the moment
-			deserialize_size += HashTableCustomTypeAllocateAndSetBuffers(hash_table, hash_table->m_capacity, data->options->backup_allocator, template_arguments.is_soa, value_definition_info, identifier_definition_info);
+			deserialize_size += HashTableCustomTypeAllocateAndSetBuffers(hash_table, hash_table->m_capacity, data->options->field_allocator, template_arguments.is_soa, value_definition_info, identifier_definition_info);
 		}
 
 		// Read the metadata buffer directly from the stream
