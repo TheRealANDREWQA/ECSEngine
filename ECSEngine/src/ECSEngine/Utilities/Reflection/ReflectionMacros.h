@@ -42,7 +42,8 @@
 
 // When placed for a field - it describes from which field the allocations should be made from
 // If the deserialize/copy function specified per field allocator usage. It will validate that the field name
-// Exists and corresponds to an actual allocator
+// Exists and corresponds to an actual allocator. It can be used inside an ECS_SOA_REFLECT as the last parameter, like this
+// ECS_SOA_REFLECT(name, size_field, capacity_field, field0, field1, ECS_FIELD_ALLOCATOR(allocator_name))
 #define ECS_FIELD_ALLOCATOR(allocator_field_name)
 
 // Should be placed for an allocator field - when specified, it indicates that all further allocations for an instance
@@ -51,7 +52,7 @@
 #define ECS_MAIN_ALLOCATOR
 
 // When specified, it indicates that this allocator should not be initialized as a standalone entry, but rather
-// It should reference the allocator that is passed in.
+// It should reference the allocator that is passed in
 #define ECS_REFERENCE_ALLOCATOR
 
 #define ECS_REFLECT_SETTINGS

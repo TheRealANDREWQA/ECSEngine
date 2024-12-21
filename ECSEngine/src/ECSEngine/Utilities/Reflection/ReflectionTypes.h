@@ -246,8 +246,10 @@ namespace ECSEngine {
 			Stream<char> name;
 			unsigned char size_field;
 			unsigned char capacity_field;
+			// This is an optional field, which describes an allocator to be used, if there is a preference
+			unsigned char field_allocator_index;
 			unsigned char parallel_stream_count;
-			unsigned char parallel_streams[13];
+			unsigned char parallel_streams[12];
 		};
 
 		enum ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER : unsigned char {

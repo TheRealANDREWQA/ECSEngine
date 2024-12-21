@@ -41,7 +41,8 @@ namespace ECSEngine {
 			Stream<char> name;
 			Stream<char> size_field;
 			Stream<char> capacity_field;
-			Stream<char> parallel_streams[_countof(ReflectionTypeMiscSoa::parallel_streams)];
+			Stream<char> allocator_field_name;
+			Stream<char> parallel_streams[ECS_COUNTOF(ReflectionTypeMiscSoa::parallel_streams)];
 			unsigned char parallel_stream_count;
 		};
 
@@ -1066,6 +1067,23 @@ namespace ECSEngine {
 					}
 				}
 				misc_soa->soa.capacity_field = capacity_field_index;
+
+				unsigned int allocator_field_index = -1;
+				if (named_soa->allocator_field_name.size > 0) {
+					allocator_field_index = type.FindField(named_soa->allocator_field_name);
+					if (allocator_field_index == -1) {
+						output_error("allocator field", named_soa->allocator_field_name);
+						return;
+					}
+					ECS_ASSERT(allocator_field_index <= UCHAR_MAX);
+					if (!IsReflectionTypeFieldAllocator(&type, allocator_field_index)) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: allocator field {#} is not an allocator. ", type.name, named_soa->allocator_field_name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+				}
+				misc_soa->soa.field_allocator_index = allocator_field_index;
+
 				for (unsigned char subindex = 0; subindex < named_soa->parallel_stream_count; subindex++) {
 					unsigned int current_field_index = type.FindField(named_soa->parallel_streams[subindex]);
 					if (current_field_index == -1) {
@@ -1304,10 +1322,10 @@ namespace ECSEngine {
 					TokenizeSplitBySeparator(data->string, ",", parse_subrange.GetSubrange(2, parse_subrange.count - 3), &soa_parameters);
 
 					if (soa_parameters.size <= ECS_COUNTOF(ReflectionTypeMiscNamedSoa::parallel_streams)) {
-						// If the splits contain more than 1 token each, error.
-						for (unsigned int index = 0; index < soa_parameters.size; index++) {
+						// If the splits contain more than 1 token each, except the last one, error.
+						for (unsigned int index = 0; index < soa_parameters.size - 1; index++) {
 							if (soa_parameters[index].count != 1) {
-								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFELCT for type {#}. A parameter contain multiple tokens", type_name);
+								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFELCT for type {#}. A parameter contains multiple tokens, when it shouldn't", type_name);
 								WriteErrorMessage(parse_data, error_message);
 								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 							}
@@ -1320,8 +1338,35 @@ namespace ECSEngine {
 						named_soa.name = data->string[soa_parameters[0][0]];
 						named_soa.size_field = data->string[soa_parameters[1][0]];
 						named_soa.capacity_field = data->string[soa_parameters[2][0]];
-						named_soa.parallel_stream_count = soa_parameters.size - 3;
-						for (unsigned int index = 3; index < soa_parameters.size; index++) {
+
+						// Determine if the last entry is a field allocator or not
+						TokenizedString::Subrange last_parameter = soa_parameters[soa_parameters.size - 1];
+						bool contains_allocator_field = false;
+						if (last_parameter.count != 1) {
+							// There should be 4 tokens here for the ECS_FIELD_ALLOCATOR
+							if (last_parameter.count != 4) {
+								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. The last parameter contains {#} tokens, but expected 4 for ECS_FIELD_ALLOCATOR", type_name, last_parameter.count);
+								WriteErrorMessage(parse_data, error_message);
+								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+							}
+
+							// Ensure that it is the field allocator specification
+							if (data->string[last_parameter[0]] != STRING(ECS_FIELD_ALLOCATOR) || data->string[last_parameter[1]] != "(" || data->string[last_parameter[last_parameter.count - 1]] != ")") {
+								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. The last parameter contains multiple tokens, but it is not a ECS_FIELD_ALLOCATOR as expected", type_name);
+								WriteErrorMessage(parse_data, error_message);
+								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+							}
+
+							// Extract directly the 3rd token
+							named_soa.allocator_field_name = data->string[last_parameter[2]];
+							contains_allocator_field = true;
+						}
+						else {
+							named_soa.allocator_field_name = {};
+						}
+
+						named_soa.parallel_stream_count = soa_parameters.size - 3 - contains_allocator_field;
+						for (unsigned int index = 3; index < soa_parameters.size - contains_allocator_field; index++) {
 							named_soa.parallel_streams[index - 3] = data->string[soa_parameters[index][0]];
 						}
 						call_data->last_type_named_soa.AddAssert(&named_soa);
