@@ -1107,6 +1107,48 @@ namespace ECSEngine {
 				data->total_memory += misc_soa->CopySize();
 			}
 
+			// Verify that the tags that are specified per field have their constraints met,
+			// like tags specific to pointers are applied to pointers
+			for (size_t index = 0; index < type.fields.size; index++) {
+				Stream<char> per_element_options = type.fields[index].GetTag(STRING(ECS_CUSTOM_TYPE_ELEMENT_OPTIONS));
+				if (per_element_options.size > 0) {
+					// Ensure that at least 2 parameters are specified
+					Stream<char> option_parameter = GetStringParameter(per_element_options);
+					if (option_parameter.size == 0) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_CUSTOM_TYPE_ELEMENT_OPTIONS for type {#}: field {#} has this tag but no parenthesis. ", type.name, type.fields[index].name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, parameter_split, 32);
+					SplitString(option_parameter, ',', &parameter_split);
+					if (option_parameter.size < 2) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_CUSTOM_TYPE_ELEMENT_OPTIONS for type {#}: field {#} has this tag but not enough parameters. ", type.name, type.fields[index].name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+				}
+				else {
+					// We must check this tag after the element options, since element options can contain this inside
+					if (type.fields[index].Has(STRING(ECS_POINTER_AS_REFERENCE))) {
+						// Ensure it is a pointer field
+						if (type.fields[index].info.stream_type != ReflectionStreamFieldType::Pointer) {
+							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has this tag but it is not a pointer. ", type.name, type.fields[index].name);
+							WriteErrorMessage(data, message);
+							return;
+						}
+
+						// Ensure that a no parameters are specified or just a single one
+						Stream<char> parameters = GetStringParameter(type.fields[index].tag);
+						if (FindFirstCharacter(parameters, ',').size > 0) {
+							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has more than one parameter. ", type.name, type.fields[index].name);
+							WriteErrorMessage(data, message);
+							return;
+						}
+					}
+				}
+			}
+
 			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscInfo, type_allocators, 64);
 
 			// Check for type allocator tags. There must be at max one primary allocator, and if there is, create a misc entry for it
@@ -5713,7 +5755,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					copy_data.destination = destination;
 					copy_data.source = source;
 					copy_data.reflection_manager = reflection_manager;
-
+					copy_data.options = options->custom_options;
 					definition_info.custom_type->Copy(&copy_data);
 				}
 			}
@@ -6296,11 +6338,28 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						SetReflectionFieldResizableStreamVoid(field->info, destination, previous_data, false);
 					}
 					else {
-						memcpy(
-							destination,
-							source,
-							field->info.byte_size
-						);
+						// If it is a pointer, and no reference tag is specified, allocate the entry and call copy on it
+						if (field->info.stream_type == ReflectionStreamFieldType::Pointer) {
+							ECS_ASSERT(GetReflectionFieldPointerIndirection(field->info) == 1, "Pointers of indirection greater than 1 are not allowed");
+							void** field_data = (void**)destination;
+							const void* source_pointer = *(void**)source;
+							if (source_pointer == nullptr) {
+								// Handle the nullptr case
+								*field_data = nullptr;
+							}
+							else {
+								*field_data = Allocate(field_allocator, field->info.stream_byte_size, field->info.stream_alignment);
+								memcpy(*field_data, source_pointer, field->info.stream_byte_size);
+							}
+						}
+						else {
+							// Probably a stream field type of basic
+							memcpy(
+								destination,
+								source,
+								field->info.byte_size
+							);
+						}
 					}
 				}
 				else {
@@ -6338,18 +6397,34 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							);
 						}
 						else {
-							ResizableStream<void> source_data = GetReflectionFieldResizableStreamVoidEx(field->info, source, false);
-							// Check to see if we need to allocate
-							if (options->always_allocate_for_buffers) {
-								size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * source_data.size;
-								void* allocation = allocation_size == 0 ? nullptr : Allocate(field_allocator, allocation_size, field->info.stream_alignment);
-								memcpy(allocation, source_data.buffer, allocation_size);
-								source_data.buffer = allocation;
-								source_data.capacity = source_data.size;
+							if (field->info.stream_type == ReflectionStreamFieldType::Pointer) {
+								ECS_ASSERT(GetReflectionFieldPointerIndirection(field->info) == 1, "Pointers of indirection greater than 1 are not allowed");
+								void** field_data = (void**)destination;
+								const void* source_pointer = *(void**)source;
+								if (source_pointer == nullptr) {
+									// Handle the nullptr case
+									*field_data = nullptr;
+								}
+								else {
+									*field_data = Allocate(field_allocator, field->info.stream_byte_size, field->info.stream_alignment);
+									// Copy the definition using the general copy function
+									CopyReflectionTypeInstance(reflection_manager, field->definition, source_pointer, *field_data, options);
+								}
 							}
+							else {
+								ResizableStream<void> source_data = GetReflectionFieldResizableStreamVoidEx(field->info, source, false);
+								// Check to see if we need to allocate
+								if (options->always_allocate_for_buffers) {
+									size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * source_data.size;
+									void* allocation = allocation_size == 0 ? nullptr : Allocate(field_allocator, allocation_size, field->info.stream_alignment);
+									memcpy(allocation, source_data.buffer, allocation_size);
+									source_data.buffer = allocation;
+									source_data.capacity = source_data.size;
+								}
 
-							// Can set the data directly
-							SetReflectionFieldResizableStreamVoidEx(field->info, destination, source_data, false);
+								// Can set the data directly
+								SetReflectionFieldResizableStreamVoidEx(field->info, destination, source_data, false);
+							}
 						}
 					}
 					else {

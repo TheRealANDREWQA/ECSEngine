@@ -57,6 +57,21 @@
 // ECS_FIELD_ALLOCATOR to designate that field
 #define ECS_REFERENCE_ALLOCATOR
 
+// This tag can be added to pointers only. It indicates that during a reflection Copy call, this entry should not
+// Be separately allocated, but instead it should reference the existing pointer, from the source. In case this
+// Field should reference another field from the destination during the copy, you can specify in the parentheses
+// A named key which will be used to resolve the reference using the data from a destination field
+#define ECS_POINTER_AS_REFERENCE(...)
+
+// Used in conjunction with ECS_POINTER_AS_REFERENCE, it indicates that this field contains the pointers which
+// Should be referenced by the field which asked for references
+#define ECS_POINTER_KEY_REFERENCE_TARGET(key_name)
+
+// It should be applied to custom type fields only, which can have multiple types of elements in them, like a hash table
+// It is used to specify tag options that should be applied to that element type only, not to the entire custom type
+// To check the element name values that are valid for each custom type, check ReflectionCustomTypes.h
+#define ECS_CUSTOM_TYPE_ELEMENT_OPTIONS(element_name, ...)
+
 #define ECS_REFLECT_SETTINGS
 #define ECS_REFLECT_COMPONENT
 #define ECS_REFLECT_GLOBAL_COMPONENT

@@ -614,6 +614,9 @@ namespace ECSEngine {
 
 		ECSENGINE_API ECS_INT_TYPE BasicTypeToIntType(ReflectionBasicFieldType type);
 
+		// Fills in the options specified for the given element type for a custom type tag, if such a tag was specified
+		ECSENGINE_API void GetReflectionCustomTypeElementOptions(Stream<char> tag, Stream<char> element_name, CapacityStream<Stream<char>>& options);
+
 		ECS_INLINE size_t GetReflectionTypeSoaAllocationAlignment(const ReflectionType* type, const ReflectionTypeMiscSoa* soa) {
 			return type->fields[soa->parallel_streams[0]].info.stream_alignment;
 		}

@@ -614,6 +614,43 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void GetReflectionCustomTypeElementOptions(Stream<char> tag, Stream<char> element_name, CapacityStream<Stream<char>>& options) {
+			Stream<char> search_string = STRING(ECS_CUSTOM_TYPE_ELEMENT_OPTIONS);
+
+			Stream<char> token = FindFirstToken(tag, search_string);
+			while (token.size > 0) {
+				Stream<char> parenthesis = FindFirstCharacter(token, '(');
+				if (parenthesis.size > 0) {
+					Stream<char> name_start = parenthesis.AdvanceReturn();
+					name_start = SkipWhitespace(name_start);
+					Stream<char> comma_delimiter = FindFirstCharacter(name_start, ',');
+					if (comma_delimiter.size > 0) {
+						Stream<char> token_name = SkipWhitespace(name_start.StartDifference(comma_delimiter), -1);
+						if (token_name == element_name) {
+							Stream<char> parenthesis_end = FindMatchingParenthesis(comma_delimiter, '(', ')');
+							if (parenthesis_end.size > 0) {
+								Stream<char> options_string = comma_delimiter.AdvanceReturn().StartDifference(parenthesis_end);
+								unsigned int initial_options_size = options.size;
+								SplitString(options_string, ',', &options);
+								// After splitting the string, eliminate whitespaces
+								for (unsigned int index = initial_options_size; index < options.size; index++) {
+									options[index] = SkipWhitespace(options[index]);
+									options[index] = SkipWhitespace(options[index], -1);
+								}
+								// Can exit the while now
+								break;
+							}
+						}
+					}
+				}
+
+				token.Advance(search_string.size);
+				token = FindFirstToken(token, search_string);
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionTypeMiscInfo ReflectionTypeMiscInfo::Copy(AllocatorPolymorphic allocator) const {
 			switch (type) {
 			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
