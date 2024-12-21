@@ -577,10 +577,10 @@ namespace ECSEngine {
 			AllocatorPolymorphic allocator = { nullptr };
 			bool always_allocate_for_buffers = false;
 			bool set_padding_bytes_to_zero = false;
-			bool deallocate_existing_buffers = false;
 			// For fields copies, if this is set to true, it will offset
 			// Using the field pointer offset
 			bool offset_pointer_data_from_field = false;
+			ReflectionCustomTypeCopyOptions custom_options = {};
 		};
 
 		// Copies the data from the old_type into the new type and checks for remappings
@@ -591,7 +591,8 @@ namespace ECSEngine {
 		// for buffers it will always allocate even when the type is the same
 		// The old and the new reflection manager can be made nullptr if you are sure there are no nested types
 		// Or custom types. By default, it will copy matching padding bytes between versions, but you can specify
-		// The last boolean in order to ignore that and set the padding bytes to zero for the new type
+		// The last boolean in order to ignore that and set the padding bytes to zero for the new type.
+		// The following custom options are not accepted: initialize_type_allocators, use_field_allocators and overwrite_resizable_allocators
 		ECSENGINE_API void CopyReflectionTypeToNewVersion(
 			const ReflectionManager* old_reflection_manager,
 			const ReflectionManager* new_reflection_manager,
@@ -669,6 +670,7 @@ namespace ECSEngine {
 		// for buffers it will always allocate even when the type is the same
 		// The old and the new reflection manager can be made nullptr if you are sure there are no nested types
 		// Or custom types
+		// The following custom options are not accepted: initialize_type_allocators, use_field_allocators and overwrite_resizable_allocators
 		ECSENGINE_API void ConvertReflectionFieldToOtherField(
 			const ReflectionManager* first_reflection_manager,
 			const ReflectionManager* second_reflection_manager,

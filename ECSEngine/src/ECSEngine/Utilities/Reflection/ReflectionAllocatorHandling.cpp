@@ -47,7 +47,9 @@ namespace ECSEngine {
 		size_t GetReflectionTypeAllocatorMiscIndex(const ReflectionType* type) {
 			for (size_t index = 0; index < type->misc_info.size; index++) {
 				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
-					return index;
+					if (type->misc_info[index].allocator_info.modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN) {
+						return index;
+					}
 				}
 			}
 			return -1;
@@ -88,6 +90,47 @@ namespace ECSEngine {
 			ECS_ASSERT(type->fields[allocator_info->field_index].definition == STRING(AllocatorPolymorphic), "Reference allocator must of type AllocatorPolymorphic!");
 			AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)type->GetField(instance, allocator_info->field_index);
 			*allocator = reference_allocator;
+		}
+
+		// The index extractor is a functor that receives as arguments (size_t soa_index) and it should return a size_t which indicates
+		// What index it should use
+		template<typename IndexExtractor>
+		static void GetReflectionTypeAllocatorInitializeOrderImpl(const ReflectionType* type, CapacityStream<unsigned int>& allocator_indices, IndexExtractor&& extractor) {
+			for (size_t index = 0; index < type->misc_info.size; index++) {
+				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
+					size_t allocator_field_index = type->misc_info[index].allocator_info.field_index;
+					size_t reference_index = GetReflectionTypeFieldAllocatorFromTagAsIndex(type, allocator_field_index);
+
+					size_t allocator_index_to_use = extractor(index);
+					if (reference_index == -1) {
+						// We can insert it right at the beginning
+						allocator_indices.Insert(0, (unsigned int)allocator_index_to_use);
+					}
+					else {
+						// Find its dependency, if its already in the allocator_field_indices, and insert it right after it,
+						// Else (if the dependency was not added yet) add it the end of the array
+						unsigned int inside_array_index = allocator_indices.Find((unsigned)reference_index);
+						if (inside_array_index == -1) {
+							allocator_indices.AddAssert((unsigned int)allocator_index_to_use);
+						}
+						else {
+							allocator_indices.Insert(inside_array_index + 1, (unsigned int)allocator_index_to_use);
+						}
+					}
+				}
+			}
+		}
+
+		void GetReflectionTypeAllocatorInitializeOrder(const ReflectionType* type, CapacityStream<unsigned int>& allocator_field_indices) {
+			GetReflectionTypeAllocatorInitializeOrderImpl(type, allocator_field_indices, [type](size_t soa_index) {
+				return type->misc_info[soa_index].allocator_info.field_index;
+			});
+		}
+
+		void GetReflectionTypeAllocatorInitializeOrderSoaIndices(const ReflectionType* type, CapacityStream<unsigned int>& allocator_soa_indices) {
+			GetReflectionTypeAllocatorInitializeOrderImpl(type, allocator_soa_indices, [type](size_t soa_index) {
+				return soa_index;
+			});
 		}
 
 	}

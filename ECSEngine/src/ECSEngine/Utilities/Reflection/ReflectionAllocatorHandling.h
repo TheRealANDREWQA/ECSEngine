@@ -64,6 +64,14 @@ namespace ECSEngine {
 		// Sets the target field with a reference allocator to the passed argument
 		ECSENGINE_API void SetReflectionTypeFieldAllocatorReference(const ReflectionType* type, const ReflectionTypeMiscAllocator* allocator_info, void* instance, AllocatorPolymorphic reference_allocator);
 
+		// For a given type, it will fill in the field indices of the allocator fields in an order in which dependencies
+		// Are initialized before they are needed
+		ECSENGINE_API void GetReflectionTypeAllocatorInitializeOrder(const ReflectionType* type, CapacityStream<unsigned int>& allocator_field_indices);
+
+		// For a given type, it will fill in the soa indices of the allocator entries in an order in which dependencies
+		// Are initialized before they are needed
+		ECSENGINE_API void GetReflectionTypeAllocatorInitializeOrderSoaIndices(const ReflectionType* type, CapacityStream<unsigned int>& allocator_soa_indices);
+
 	}
 
 }

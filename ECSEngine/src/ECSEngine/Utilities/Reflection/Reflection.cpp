@@ -5484,7 +5484,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const CopyReflectionDataOptions* options
 		)
 		{
-			if (options->always_allocate_for_buffers || options->deallocate_existing_buffers) {
+			ECS_ASSERT(!options->custom_options.initialize_type_allocators && !options->custom_options.use_field_allocators && !options->custom_options.overwrite_resizable_allocators, 
+				"Invalid copy options passed into CopyReflectionTypeToNewVersion");
+
+			if (options->always_allocate_for_buffers || options->custom_options.deallocate_existing_data) {
+				// The main allocator must be specified
 				ECS_ASSERT(options->allocator.allocator != nullptr);
 			}
 
@@ -5579,23 +5583,57 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const CopyReflectionDataOptions* options
 		)
 		{
-			if (options->always_allocate_for_buffers || options->deallocate_existing_buffers) {
-				ECS_ASSERT(options->allocator.allocator != nullptr);
+			if (options->always_allocate_for_buffers || options->custom_options.deallocate_existing_data || options->custom_options.initialize_type_allocators) {
+				// Either the option allocator must be specified, or the field allocators must be in use
+				ECS_ASSERT(options->allocator.allocator != nullptr || options->custom_options.use_field_allocators);
 			}
 
-			CopyReflectionDataOptions copy_with_offset_options = *options;
-			copy_with_offset_options.offset_pointer_data_from_field = true;
+			CopyReflectionDataOptions adjusted_options = *options;
+			adjusted_options.offset_pointer_data_from_field = true;
+
+			// If the initialize allocators option is enabled, initialize the allocators before the main body
+			if (options->custom_options.initialize_type_allocators) {
+				ECS_STACK_CAPACITY_STREAM(unsigned int, allocator_initialize_order, 64);
+				GetReflectionTypeAllocatorInitializeOrderSoaIndices(type, allocator_initialize_order);
+				for (size_t index = 0; index < allocator_initialize_order.size; index++) {
+					// If it is a reference, initialize it
+					const ReflectionTypeMiscAllocator* allocator_info = &type->misc_info[allocator_initialize_order[index]].allocator_info;
+					if (allocator_info->modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE) {
+						AllocatorPolymorphic referenced_allocator = GetReflectionTypeFieldAllocator(type, allocator_info->field_index, destination_data, options->allocator, options->custom_options.use_field_allocators);
+						SetReflectionTypeFieldAllocatorReference(type, allocator_info, destination_data, referenced_allocator);
+					}
+					else {
+						// Initialize this allocator using the custom reflection type
+						ReflectionCustomTypeCopyData copy_data;
+						copy_data.allocator = options->allocator;
+						copy_data.definition = type->fields[allocator_info->field_index].definition;
+						copy_data.destination = type->GetField(destination_data, allocator_info->field_index);
+						copy_data.options = options->custom_options;
+						copy_data.reflection_manager = reflection_manager;
+						copy_data.source = type->GetField(source_data, allocator_info->field_index);
+						ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR]->Copy(&copy_data);
+					}
+				}
+			}
+
+			// Override the options allocator with the type allocator, if the field allocators are to be used
+			if (options->custom_options.use_field_allocators) {
+				adjusted_options.allocator = GetReflectionTypeOverallAllocator(type, destination_data, options->allocator);
+			}
 
 			// Go through the new type and try to get the data
 			for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
-				CopyReflectionFieldInstance(
-					reflection_manager,
-					type,
-					field_index,
-					source_data,
-					destination_data,
-					&copy_with_offset_options
-				);
+				// If this field is an allocator, skip it
+				if (!IsReflectionTypeFieldAllocatorFromMisc(type, field_index)) {
+					CopyReflectionFieldInstance(
+						reflection_manager,
+						type,
+						field_index,
+						source_data,
+						destination_data,
+						&adjusted_options
+					);
+				}
 
 				// If there are padding bytes between this field and the next one, and they match in length, make sure to copy
 				// That as well otherwise comparison checks will fail because of them
@@ -5767,9 +5805,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		// The signature of the function was changed to take types and field indices instead
-		// Of ReflectionField directly in order to accomodate the PointerSoA which has some special
-		// Treatment
-
+		// Of ReflectionField directly in order to accomodate the PointerSoA which has some special treatment
 		void ConvertReflectionFieldToOtherField(
 			const ReflectionManager* first_reflection_manager,
 			const ReflectionManager* second_reflection_manager,
@@ -5785,7 +5821,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const ReflectionField* source_field = &source_type->fields[source_field_index];
 			const ReflectionField* destination_field = &destination_type->fields[destination_field_index];
 
-			if (options->always_allocate_for_buffers || options->deallocate_existing_buffers) {
+			if (options->always_allocate_for_buffers || options->custom_options.deallocate_existing_data) {
+				// The main allocator must be specified
 				ECS_ASSERT(options->allocator.allocator != nullptr);
 			}
 
@@ -5795,7 +5832,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			ResizableStream<void> initial_destination_stream_data;
-			if (options->deallocate_existing_buffers && IsStreamWithSoA(destination_field->info.stream_type)) {
+			if (options->custom_options.deallocate_existing_data && IsStreamWithSoA(destination_field->info.stream_type)) {
 				initial_destination_stream_data = GetReflectionFieldResizableStreamVoid(destination_field->info, destination_data, false);
 			}
 
@@ -6185,7 +6222,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 			}
 
-			if (options->deallocate_existing_buffers && IsStreamWithSoA(destination_field->info.stream_type)) {
+			if (options->custom_options.deallocate_existing_data && IsStreamWithSoA(destination_field->info.stream_type)) {
 				if (initial_destination_stream_data.allocator.allocator == nullptr) {
 					initial_destination_stream_data.allocator = options->allocator;
 				}
@@ -6216,8 +6253,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		{
 			const ReflectionField* field = &type->fields[field_index];
 
-			if (options->always_allocate_for_buffers || options->deallocate_existing_buffers) {
-				ECS_ASSERT(options->allocator.allocator != nullptr);
+			if (options->always_allocate_for_buffers || options->custom_options.deallocate_existing_data) {
+				// The main allocator or the field allocators must be specified
+				ECS_ASSERT(options->allocator.allocator != nullptr || options->custom_options.use_field_allocators);
 			}
 
 			if (options->offset_pointer_data_from_field) {
@@ -6225,10 +6263,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				destination = OffsetPointer(destination, field->info.pointer_offset);
 			}
 
-			if (options->deallocate_existing_buffers && IsStreamWithSoA(field->info.stream_type)) {
+			AllocatorPolymorphic field_allocator = GetReflectionTypeFieldAllocator(type, field_index, destination, options->allocator, options->custom_options.use_field_allocators);
+			if (options->custom_options.deallocate_existing_data && IsStreamWithSoA(field->info.stream_type)) {
 				ResizableStream<void> destination_stream_data = GetReflectionFieldResizableStreamVoid(field->info, destination, false);
 				if (destination_stream_data.allocator.allocator == nullptr) {
-					destination_stream_data.allocator = options->allocator;
+					destination_stream_data.allocator = field_allocator;
 				}
 				// Here, we have the special pointer SoA case where we need to deallocate only the first pointer
 				if (field->info.stream_type == ReflectionStreamFieldType::PointerSoA) {
@@ -6249,7 +6288,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						// Merging of the SoA pointers
 						ResizableStream<void> previous_data = GetReflectionFieldResizableStreamVoid(field->info, source, false);
 						size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * previous_data.size;
-						void* allocation = allocation_size == 0 ? nullptr : Allocate(options->allocator, allocation_size, field->info.stream_alignment);
+						void* allocation = allocation_size == 0 ? nullptr : Allocate(field_allocator, allocation_size, field->info.stream_alignment);
 						memcpy(allocation, previous_data.buffer, allocation_size);
 
 						previous_data.buffer = allocation;
@@ -6303,7 +6342,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							// Check to see if we need to allocate
 							if (options->always_allocate_for_buffers) {
 								size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * source_data.size;
-								void* allocation = allocation_size == 0 ? nullptr : Allocate(options->allocator, allocation_size, field->info.stream_alignment);
+								void* allocation = allocation_size == 0 ? nullptr : Allocate(field_allocator, allocation_size, field->info.stream_alignment);
 								memcpy(allocation, source_data.buffer, allocation_size);
 								source_data.buffer = allocation;
 								source_data.capacity = source_data.size;
@@ -6335,12 +6374,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								}
 								else {
 									ReflectionCustomTypeCopyData copy_data;
-									copy_data.allocator = options->allocator;
+									copy_data.allocator = field_allocator;
 									copy_data.definition = field->definition;
 									copy_data.destination = destination;
 									copy_data.source = source;
 									copy_data.reflection_manager = reflection_manager;
-									copy_data.deallocate_existing_data = options->deallocate_existing_buffers;
+									copy_data.options = options->custom_options;
 
 									custom_type->Copy(&copy_data);
 								}
@@ -7232,7 +7271,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				if (allocator.allocator != nullptr) {
 					copy_options.allocator = allocator;
 					copy_options.always_allocate_for_buffers = true;
-					copy_options.deallocate_existing_buffers = true;
+					copy_options.custom_options.deallocate_existing_data = true;
 				}
 				for (size_t destination_index = 0; destination_index < destinations.size; destination_index++) {
 					void* current_destination_data = OffsetPointer(destinations[destination_index], current_data_offset);
