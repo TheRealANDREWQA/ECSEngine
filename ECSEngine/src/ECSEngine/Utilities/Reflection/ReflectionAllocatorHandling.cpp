@@ -39,6 +39,11 @@ namespace ECSEngine {
 			return {};
 		}
 
+		size_t GetReflectionTypeFieldAllocatorFromTagAsIndex(const ReflectionType* type, size_t field_index) {
+			Stream<char> field_tag = GetReflectionTypeFieldAllocatorFromTag(type, field_index);
+			return field_tag.size == 0 ? -1 : type->FindField(field_tag);
+		}
+
 		size_t GetReflectionTypeAllocatorMiscIndex(const ReflectionType* type) {
 			for (size_t index = 0; index < type->misc_info.size; index++) {
 				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
@@ -67,6 +72,13 @@ namespace ECSEngine {
 			if (field_allocator_name.size > 0) {
 				unsigned int allocator_field_index = type->FindField(field_allocator_name);
 				return ConvertReflectionTypeFieldToAllocator(type, allocator_field_index, instance);
+			}
+			return fallback_allocator;
+		}
+
+		AllocatorPolymorphic GetReflectionTypeFieldAllocatorForSoa(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, const void* instance, AllocatorPolymorphic fallback_allocator) {
+			if (soa->field_allocator_index != UCHAR_MAX) {
+				return ConvertReflectionTypeFieldToAllocator(type, soa->field_allocator_index, instance);
 			}
 			return fallback_allocator;
 		}

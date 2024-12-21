@@ -937,6 +937,8 @@ namespace ECSEngine {
 		bool fail_if_mismatch = has_options && options->fail_if_field_mismatch;
 		bool use_resizable_stream_allocator = has_options && options->use_resizable_stream_allocator;
 		bool default_initialize_missing_fields = has_options && options->default_initialize_missing_fields;
+		bool initialize_type_allocators = has_options && options->initialize_type_allocators;
+		bool use_field_allocators = has_options && options->use_type_field_allocators;
 
 		//bool use_deserialize_table = !has_options || (options->field_table != nullptr);
 		// At the moment allow only table deserialization
@@ -961,7 +963,7 @@ namespace ECSEngine {
 			return ECS_DESERIALIZE_OK;
 		};
  
-		AllocatorPolymorphic field_allocator = { nullptr };
+		AllocatorPolymorphic initial_field_allocator = { nullptr };
 
 		if (has_options) {		
 			if (options->field_table != nullptr) {
@@ -977,7 +979,7 @@ namespace ECSEngine {
 				}
 			}
 
-			field_allocator = options->field_allocator;
+			initial_field_allocator = options->field_allocator;
 		}
 		else {
 			ECS_DESERIALIZE_CODE code = read_type_table_from_file();
@@ -1017,7 +1019,7 @@ namespace ECSEngine {
 			unsigned int pointer_increment = type_info.byte_size / type_basic_component_count;
 			unsigned int per_component_byte_size = file_info.byte_size / file_basic_component_count;
 			for (unsigned int index = 0; index < iteration_count; index++) {
-				void* type_data = OffsetPointer(field_data, pointer_increment * index);
+				void* type_data = OffsetPointer(field_data, (size_t)pointer_increment * (size_t)index);
 				Read<true>(&data, &file_data, per_component_byte_size);
 
 				ConvertReflectionBasicField(file_info.basic_type, type_info.basic_type, file_data, type_data);
@@ -1071,50 +1073,108 @@ namespace ECSEngine {
 			ECS_ASSERT(deserialized_type.fields.size < deserialize_type_fields_to_iterate.capacity, "Deserialized type has too many fields for deserialization!");
 
 			// Before continuing with the normal field read, we must read the allocators firsthand and create them.
-			// Iterate over the fields from the serialized type, and use the tags and definitions to find 
-			// Which fields are the allocators.
+			// Iterate over the fields from the serialized type, since that is the order they were written in.
+			// But there is a catch. If an allocator has another allocator as a field allocator, we must initialize
+			// The referenced field allocator before the main entry. In order to do this, gather the indices of the
+			// Current type allocators, and initialize them in the increasing order of their indices.
+			
+			struct DeserializedAllocatorEntry {
+				unsigned int current_type_field_index;
+				unsigned int deserialized_type_field_index;
+				unsigned int deserialized_type_allocator_count;
+			};
+
+			// Reuse this memory in order to not create more stack entries
+			ECS_STACK_CAPACITY_STREAM(DeserializedAllocatorEntry, allocators_to_initialize_entries, 8);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, deserialized_type_allocator_indices, 8);
+
+			unsigned int deserialized_type_allocator_count = 0;
 			for (size_t index = 0; index < deserialized_type.fields.size; index++) {
 				if (deserialized_type.fields[index].custom_serializer_index == ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR) {
-					// Check to see if the field still exists
-					size_t current_type_field_index = 0;
-					for (; current_type_field_index < type->fields.size; current_type_field_index++) {
-						if (type->fields[current_type_field_index].name == deserialized_type.fields[index].name) {
-							// TODO: If the definition changed, abort? Currently, the custom serialize type does not do anything for this case
-							SerializeCustomTypeReadFunctionData custom_read_data;
-							custom_read_data.data = type->GetField(address, current_type_field_index);
-							custom_read_data.definition = type->fields[current_type_field_index].definition;
-							custom_read_data.options = nested_options;
-							custom_read_data.read_data = read_data;
-							custom_read_data.reflection_manager = reflection_manager;
-							custom_read_data.stream = &stream;
-							custom_read_data.tags = type->fields[current_type_field_index].tag;
-							custom_read_data.version = deserialize_table.custom_serializers[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR];
-							custom_read_data.was_allocated = false;
-
-							size_t read_size = ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].read(&custom_read_data);
-							if (read_size == -1) {
-								if (has_options) {
-									ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
-										" Reading the allocator field {#} failed.",
-										type->name,
-										type->fields[current_type_field_index].name
-									);
+					if constexpr (read_data) {
+						if (initialize_type_allocators) {
+							// Check to see if the field still exists
+							for (size_t current_type_field_index = 0; current_type_field_index < type->fields.size; current_type_field_index++) {
+								if (type->fields[current_type_field_index].name == deserialized_type.fields[index].name) {
+									size_t field_allocator_index = GetReflectionTypeFieldAllocatorFromTagAsIndex(type, current_type_field_index);
+									// If it doesn't have a reference, insert it at the front.
+									if (field_allocator_index == -1) {
+										allocators_to_initialize_entries.Insert(0, { (unsigned int)current_type_field_index, (unsigned int)index, deserialized_type_allocator_count });
+									}
+									else {
+										// If it has a dependency, insert it after it, or if it wasn't added yet, at the end
+										unsigned int existing_type_allocator_entry_index = allocators_to_initialize_entries.Find((unsigned int)field_allocator_index, [](const DeserializedAllocatorEntry& entry) {
+											return entry.current_type_field_index;
+											});
+										if (existing_type_allocator_entry_index == -1) {
+											allocators_to_initialize_entries.AddAssert({ (unsigned int)current_type_field_index, (unsigned int)index, deserialized_type_allocator_count });
+										}
+										else {
+											allocators_to_initialize_entries.Insert(existing_type_allocator_entry_index + 1, { (unsigned int)current_type_field_index, (unsigned int)index, deserialized_type_allocator_count });
+										}
+									}
+									break;
 								}
-								return ECS_DESERIALIZE_CORRUPTED_FILE;
 							}
-							break;
+							deserialized_type_allocator_count++;
 						}
 					}
-
-					if (current_type_field_index == type->fields.size) {
-						// Skip this entry
-						IgnoreTypeField(stream, deserialize_table, type_index, index, reflection_manager);
-					}
+					deserialized_type_allocator_indices.AddAssert((unsigned int)index);
 				}
 				else {
 					// Add the field to be iterated later on
 					deserialize_type_fields_to_iterate.Add((unsigned short)index);
 				}
+			}
+
+			if constexpr (read_data) {
+				if (initialize_type_allocators) {
+					// Create the allocators now
+					for (size_t index = 0; index < allocators_to_initialize_entries.size; index++) {
+						// Use a temporary to seek to that location
+						uintptr_t allocator_stream = stream;
+						for (unsigned int subindex = 0; subindex < allocators_to_initialize_entries[index].deserialized_type_allocator_count; subindex++) {
+							IgnoreTypeField(allocator_stream, deserialize_table, type_index, deserialized_type_allocator_indices[subindex], deserialized_manager);
+						}
+
+						// Once we reached the location, we can read the actual allocator entry
+						// TODO: If the definition changed, abort? Currently, the custom serialize type does not do anything for this case
+
+						unsigned int current_type_field_index = allocators_to_initialize_entries[index].current_type_field_index;
+						AllocatorPolymorphic previous_field_allocator = nested_options->field_allocator;
+						nested_options->field_allocator = GetReflectionTypeFieldAllocator(type, current_type_field_index, address, previous_field_allocator, use_field_allocators);
+
+						SerializeCustomTypeReadFunctionData custom_read_data;
+						custom_read_data.data = type->GetField(address, current_type_field_index);
+						custom_read_data.definition = type->fields[current_type_field_index].definition;
+						custom_read_data.options = nested_options;
+						custom_read_data.read_data = read_data;
+						custom_read_data.reflection_manager = reflection_manager;
+						custom_read_data.stream = &stream;
+						custom_read_data.tags = type->fields[current_type_field_index].tag;
+						custom_read_data.version = deserialize_table.custom_serializers[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR];
+						custom_read_data.was_allocated = false;
+
+						size_t read_size = ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].read(&custom_read_data);
+						if (read_size == -1) {
+							if (has_options) {
+								ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
+									" Reading the allocator field {#} failed.",
+									type->name,
+									type->fields[current_type_field_index].name
+								);
+							}
+							return ECS_DESERIALIZE_CORRUPTED_FILE;
+						}
+
+						nested_options->field_allocator = previous_field_allocator;
+					}
+				}
+			}
+
+			// Skip the allocator entries now, for the actual stream
+			for (size_t index = 0; index < deserialized_type_allocator_indices.size; index++) {
+				IgnoreTypeField(stream, deserialize_table, type_index, deserialized_type_allocator_indices[index], deserialized_manager);
 			}
 
 			// We need to keep track of the SoA streams that have been allocated such that when going
@@ -1157,6 +1217,9 @@ namespace ECSEngine {
 
 				Stream<char> field_definition = type->fields[subindex].definition;
 				void* field_data = OffsetPointer(address, type->fields[subindex].info.pointer_offset);
+
+				// Modify the field allocator to the one specified by the tag, if enabled
+				nested_options->field_allocator = GetReflectionTypeFieldAllocator(type, subindex, address, initial_field_allocator, use_field_allocators);
 
 				if (file_field_info.flags.user_defined_as_blittable) {
 					// See if the field has given size and it matches the byte size
@@ -1203,7 +1266,8 @@ namespace ECSEngine {
 							}
 
 							size_t allocation_size = per_element_size * element_count;
-							allocation = allocation_size == 0 ? nullptr : Allocate(field_allocator, allocation_size, type->fields[soa->parallel_streams[0]].info.stream_alignment);
+							// Don't forget to use the SoA specified allocator
+							allocation = allocation_size == 0 ? nullptr : Allocate(GetReflectionTypeFieldAllocatorForSoa(type, soa, address, initial_field_allocator, use_field_allocators), allocation_size, type->fields[soa->parallel_streams[0]].info.stream_alignment);
 
 							// Now write the corresponding pointers in the address
 							for (unsigned int soa_stream_index = 0; soa_stream_index < soa->parallel_stream_count; soa_stream_index++) {
@@ -1375,7 +1439,7 @@ namespace ECSEngine {
 										resizable_stream->size = element_count;
 									}
 									else {
-										allocation = Allocate(field_allocator, allocation_size, type_field_info.stream_alignment);
+										allocation = Allocate(nested_options->field_allocator, allocation_size, type_field_info.stream_alignment);
 
 										if (type_field_info.stream_type == ReflectionStreamFieldType::Stream) {
 											Stream<void>* normal_stream = (Stream<void>*)field_data;
@@ -1472,6 +1536,7 @@ namespace ECSEngine {
 						if (has_options) {
 							field_allocator = options->GetFieldAllocator(type_field_info.stream_type, field_data);
 						}
+						field_allocator = GetReflectionTypeFieldAllocator(type, subindex, address, field_allocator, use_field_allocators);
 
 						if (type_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 							size_t byte_size;
@@ -1563,13 +1628,13 @@ namespace ECSEngine {
 														allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
 													else {
-														ECS_ASSERT(options->field_allocator.allocator != nullptr, "A deserialize field allocator must be specified when incompatible types are detected!");
-														allocation = Allocate(options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+														ECS_ASSERT(nested_options->field_allocator.allocator != nullptr, "A deserialize field allocator must be specified when incompatible types are detected!");
+														allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
 												}
 												else {
-													ECS_ASSERT(false, "A deserialize field allocator must be specified when incompatible types are detected!");
-													//allocation = Allocate(options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+													ECS_ASSERT(nested_options->field_allocator.allocator != nullptr, "A deserialize field allocator must be specified when incompatible types are detected! (no options were specified)");
+													allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 												}
 
 												for (size_t element_index = 0; element_index < element_count; element_index++) {
@@ -1586,8 +1651,9 @@ namespace ECSEngine {
 														ResizableStream<void>* field_stream = (ResizableStream<void>*)field_data;
 														allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
-													else if (options->field_allocator.allocator != nullptr) {
-														allocation = Allocate(options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+													// Check the field allocator
+													else if (nested_options->field_allocator.allocator != nullptr) {
+														allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
 													else {
 														// Just reference the data
