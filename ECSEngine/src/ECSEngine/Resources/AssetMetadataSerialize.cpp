@@ -31,7 +31,7 @@ namespace ECSEngine {
 	{
 		const MaterialAsset* source = (const MaterialAsset*)data->source;
 		MaterialAsset* destination = (MaterialAsset*)data->destination;
-		if (data->deallocate_existing_data) {
+		if (data->options.deallocate_existing_data) {
 			destination->DeallocateMemory(data->allocator);
 		}
 		*destination = source->Copy(data->allocator);

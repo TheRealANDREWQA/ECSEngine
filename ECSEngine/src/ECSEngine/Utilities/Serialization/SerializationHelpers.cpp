@@ -937,23 +937,23 @@ namespace ECSEngine {
 		// It, and then the fields will make allocations from it as needed.
 
 		// This lambda will perform the appropriate serialization, based on the given type
-		auto serialize = [data, &write_size](ECS_ALLOCATOR_TYPE allocator_type) {
+		auto serialize = [data, &write_size](ECS_ALLOCATOR_TYPE allocator_type, const void* source) {
 			switch (allocator_type) {
 			case ECS_ALLOCATOR_LINEAR:
 			{
-				LinearAllocator* allocator = (LinearAllocator*)data->data;
+				LinearAllocator* allocator = (LinearAllocator*)source;
 				write_size += data->Write(&allocator->m_capacity);
 			}
 			break;
 			case ECS_ALLOCATOR_STACK:
 			{
-				StackAllocator* allocator = (StackAllocator*)data->data;
+				StackAllocator* allocator = (StackAllocator*)source;
 				write_size += data->Write(&allocator->m_capacity);
 			}
 			break;
 			case ECS_ALLOCATOR_MULTIPOOL:
 			{
-				MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
+				MultipoolAllocator* allocator = (MultipoolAllocator*)source;
 				size_t allocator_size = allocator->GetSize();
 				unsigned int block_count = allocator->GetBlockCount();
 				write_size += data->Write(&allocator_size);
@@ -962,7 +962,7 @@ namespace ECSEngine {
 			break;
 			case ECS_ALLOCATOR_ARENA:
 			{
-				MemoryArena* allocator = (MemoryArena*)data->data;
+				MemoryArena* allocator = (MemoryArena*)source;
 				CreateBaseAllocatorInfo base_allocator_info = allocator->GetInitialBaseAllocatorInfo();
 				unsigned char allocator_count = allocator->m_allocator_count;
 				write_size += data->Write(&allocator_count);
@@ -971,21 +971,21 @@ namespace ECSEngine {
 			break;
 			case ECS_ALLOCATOR_MANAGER:
 			{
-				MemoryManager* allocator = (MemoryManager*)data->data;
+				MemoryManager* allocator = (MemoryManager*)source;
 				write_size += SerializeCreateBaseAllocatorInfo(data, allocator->GetInitialAllocatorInfo());
 				write_size += SerializeCreateBaseAllocatorInfo(data, allocator->m_backup_info);
 			}
 			break;
 			case ECS_ALLOCATOR_RESIZABLE_LINEAR:
 			{
-				ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)data->data;
+				ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)source;
 				write_size += data->Write(&allocator->m_initial_capacity);
 				write_size += data->Write(&allocator->m_backup_size);
 			}
 			break;
 			case ECS_ALLOCATOR_MEMORY_PROTECTED:
 			{
-				MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)data->data;
+				MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)source;
 				write_size += data->Write(&allocator->chunk_size);
 				write_size += data->Write(&allocator->linear_allocators);
 			}
@@ -996,7 +996,7 @@ namespace ECSEngine {
 		};
 
 		if (allocator_type != ECS_ALLOCATOR_TYPE_COUNT) {
-			serialize(allocator_type);
+			serialize(allocator_type, data->data);
 		}
 		else {
 			// It must be the polymorphic allocator
@@ -1007,7 +1007,7 @@ namespace ECSEngine {
 			ECS_ALLOCATOR_TYPE polymorphic_type = allocator->allocator == nullptr ? ECS_ALLOCATOR_TYPE_COUNT : allocator->allocator_type;
 			write_size += data->Write(&polymorphic_type);
 			if (polymorphic_type != ECS_ALLOCATOR_TYPE_COUNT) {
-				serialize(polymorphic_type);
+				serialize(polymorphic_type, allocator->allocator);
 			}
 		}
 
@@ -1027,8 +1027,10 @@ namespace ECSEngine {
 		if (FindFirstToken(data->tags, STRING(ECS_REFERENCE_ALLOCATOR)).size > 0) {
 			// As a safeguard, ensure that it is an allocator polymorphic
 			ECS_ASSERT(data->definition == STRING(AllocatorPolymorphic), "Reference allocator is not an AllocatorPolymorphic!");
-			AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)data->data;
-			*allocator = field_allocator;
+			if (data->read_data) {
+				AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)data->data;
+				*allocator = field_allocator;
+			}
 			return deserialize_size;
 		}
 
@@ -1042,7 +1044,7 @@ namespace ECSEngine {
 
 		// This lambda will perform the appropriate deserialization, based on the given type.
 		// Returns false if there is an error.
-		auto deserialize = [data, &deserialize_size, is_allocator_matched, field_allocator](ECS_ALLOCATOR_TYPE allocator_type) {
+		auto deserialize = [data, &deserialize_size, is_allocator_matched, field_allocator](ECS_ALLOCATOR_TYPE allocator_type, void* allocator_pointer) {
 			switch (allocator_type) {
 			case ECS_ALLOCATOR_LINEAR:
 			{
@@ -1050,7 +1052,7 @@ namespace ECSEngine {
 				data->ReadAlways(&capacity);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-						LinearAllocator* allocator = (LinearAllocator*)data->data;
+						LinearAllocator* allocator = (LinearAllocator*)allocator_pointer;
 						*allocator = LinearAllocator(AllocateEx(field_allocator, capacity), capacity);
 					}
 					else {
@@ -1065,7 +1067,7 @@ namespace ECSEngine {
 				data->ReadAlways(&capacity);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-						StackAllocator* allocator = (StackAllocator*)data->data;
+						StackAllocator* allocator = (StackAllocator*)allocator_pointer;
 						*allocator = StackAllocator(AllocateEx(field_allocator, capacity), capacity);
 					}
 					else {
@@ -1084,7 +1086,7 @@ namespace ECSEngine {
 				size_t allocate_size = MultipoolAllocator::MemoryOf(block_count, capacity);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-						MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
+						MultipoolAllocator* allocator = (MultipoolAllocator*)allocator_pointer;
 						*allocator = MultipoolAllocator(AllocateEx(field_allocator, allocate_size), capacity, block_count);
 					}
 					else {
@@ -1101,7 +1103,7 @@ namespace ECSEngine {
 				DeserializeCreateBaseAllocatorInfo(data, base_allocator_info);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-						MemoryArena* allocator = (MemoryArena*)data->data;
+						MemoryArena* allocator = (MemoryArena*)allocator_pointer;
 						*allocator = MemoryArena(field_allocator, allocator_count, base_allocator_info);
 					}
 					else {
@@ -1118,7 +1120,7 @@ namespace ECSEngine {
 				DeserializeCreateBaseAllocatorInfo(data, backup_allocator_info);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-						MemoryManager* allocator = (MemoryManager*)data->data;
+						MemoryManager* allocator = (MemoryManager*)allocator_pointer;
 						*allocator = MemoryManager(initial_allocator_info, backup_allocator_info, field_allocator);
 					}
 					else {
@@ -1136,7 +1138,7 @@ namespace ECSEngine {
 				data->ReadAlways(&backup_capacity);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-						ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)data->data;
+						ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)allocator_pointer;
 						*allocator = ResizableLinearAllocator(initial_capacity, backup_capacity, field_allocator);
 					}
 					else {
@@ -1154,7 +1156,7 @@ namespace ECSEngine {
 				data->ReadAlways(&linear_allocators);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-						MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)data->data;
+						MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)allocator_pointer;
 						*allocator = MemoryProtectedAllocator(chunk_size, linear_allocators);
 					}
 					else {
@@ -1172,7 +1174,7 @@ namespace ECSEngine {
 		};
 
 		if (allocator_type != ECS_ALLOCATOR_TYPE_COUNT) {
-			if (!deserialize(allocator_type)) {
+			if (!deserialize(allocator_type, data->data)) {
 				return -1;
 			}
 		}
@@ -1185,8 +1187,12 @@ namespace ECSEngine {
 			ECS_ALLOCATOR_TYPE polymorphic_type = ECS_ALLOCATOR_TYPE_COUNT;
 			Read<true>(data->stream, &polymorphic_type);
 			if (polymorphic_type != ECS_ALLOCATOR_TYPE_COUNT) {
-				if (!deserialize(polymorphic_type)) {
+				// Make this nullptr in order to not trigger a read when we are not supposed to
+				if (!deserialize(polymorphic_type, data->read_data ? allocator->allocator : nullptr)) {
 					return -1;
+				}
+				if (data->read_data) {
+					allocator->allocator_type = polymorphic_type;
 				}
 			}
 		}

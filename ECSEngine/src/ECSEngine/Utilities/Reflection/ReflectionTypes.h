@@ -423,13 +423,25 @@ namespace ECSEngine {
 			const ReflectionManager* reflection_manager;
 		};
 
+		struct ReflectionCustomTypeCopyOptions {
+			bool deallocate_existing_data = false;
+			// When enabled, it will create the type (overall and field) allocators, instead of doing nothing
+			bool initialize_type_allocators = false;
+			// When enabled, it will use the overall type allocator and field allocators
+			// To make allocations from, overriding the allocator specified in this structure
+			bool use_field_allocators = false;
+			// When enabled, custom structures that are resizable (like ResizableStream or ResizableSparseSet)
+			// Will have their allocator replaced with the one at the call site
+			bool overwrite_resizable_allocators = false;
+		};
+
 		struct ReflectionCustomTypeCopyData {
 			const ReflectionManager* reflection_manager;
 			Stream<char> definition;
 			const void* source;
 			void* destination;
 			AllocatorPolymorphic allocator;
-			bool deallocate_existing_data = false;
+			ReflectionCustomTypeCopyOptions options;
 		};
 
 		struct ReflectionCustomTypeCompareData {

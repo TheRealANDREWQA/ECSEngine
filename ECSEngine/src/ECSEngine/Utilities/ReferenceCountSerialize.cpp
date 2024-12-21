@@ -46,7 +46,7 @@ namespace ECSEngine {
 		CopyReflectionDataOptions copy_options;
 		copy_options.allocator = data->allocator;
 		copy_options.always_allocate_for_buffers = true;
-		copy_options.deallocate_existing_buffers = data->deallocate_existing_data;
+		copy_options.custom_options = data->options;
 
 		CopyReflectionTypeInstance(data->reflection_manager, template_type, data->source, data->destination, &copy_options);
 

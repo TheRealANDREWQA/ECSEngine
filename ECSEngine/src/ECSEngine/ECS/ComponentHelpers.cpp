@@ -110,7 +110,7 @@ namespace ECSEngine {
 		//memcpy(copy_data->destination, copy_data->source, data->component_byte_size);
 		CopyReflectionDataOptions options;
 		options.allocator = copy_data->allocator;
-		options.deallocate_existing_buffers = copy_data->deallocate_previous;
+		options.custom_options.deallocate_existing_data = copy_data->deallocate_previous;
 		options.always_allocate_for_buffers = true;
 		CopyReflectionTypeInstance(&data->reflection_manager, &data->type, copy_data->source, copy_data->destination, &options);
 	}
@@ -169,6 +169,7 @@ namespace ECSEngine {
 		for (size_t blittable_index = 0; blittable_index < blittable_count; blittable_index++) {
 			blittable_types.AddAssert({ ECS_ASSET_TARGET_FIELD_NAMES[blittable_index].name, Reflection::ReflectionStreamFieldType::Pointer });
 		}
+		blittable_types.AddAssert({ STRING(MiscAssetData), Reflection::ReflectionStreamFieldType::Basic });
 		CompareReflectionTypeInstancesOptions options;
 		options.blittable_types = blittable_types;
 		return CompareReflectionTypeInstances(&function_data->reflection_manager, &function_data->type, data->first, data->second, &options);

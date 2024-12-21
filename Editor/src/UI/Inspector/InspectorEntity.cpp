@@ -634,7 +634,7 @@ struct InspectorDrawEntityData {
 			Reflection::CopyReflectionDataOptions copy_options;
 			copy_options.allocator = Allocator();
 			copy_options.always_allocate_for_buffers = true;
-			copy_options.deallocate_existing_buffers = true;
+			copy_options.custom_options.deallocate_existing_data = true;
 			Reflection::CopyReflectionTypeInstance(
 				editor_state->editor_components.internal_manager,
 				link_type,
@@ -709,7 +709,7 @@ struct InspectorDrawEntityData {
 						Reflection::CopyReflectionDataOptions copy_options;
 						copy_options.allocator = Allocator();
 						copy_options.always_allocate_for_buffers = true;
-						copy_options.deallocate_existing_buffers = true;
+						copy_options.custom_options.deallocate_existing_data = true;
 						Reflection::CopyReflectionTypeInstance(
 							editor_state->editor_components.internal_manager,
 							link_type,
@@ -1401,7 +1401,7 @@ static void DrawComponents(
 						Reflection::CopyReflectionDataOptions copy_options;
 						copy_options.allocator = editor_state->EditorAllocator();
 						copy_options.always_allocate_for_buffers = true;
-						copy_options.deallocate_existing_buffers = true;
+						copy_options.custom_options.deallocate_existing_data = true;
 						Reflection::CopyReflectionTypeInstance(
 							editor_state->editor_components.internal_manager,
 							link_type,

@@ -230,6 +230,14 @@ namespace ECSEngine {
 				ECS_ASSERT(false);
 			}
 
+			// If the option to overwrite resizable allocators is enabled, do that now
+			if (data->options.overwrite_resizable_allocators) {
+				if (data->definition.StartsWith("ResizableStream")) {
+					ResizableStream<void>* stream = (ResizableStream<void>*)data->destination;
+					stream->allocator = data->allocator;
+				}
+			}
+
 			const void* source = *(const void**)data->source;
 			void** destination = (void**)data->destination;
 			size_t source_size = GetIntValueUnsigned(OffsetPointer(data->source, sizeof(void*)), size_type);
@@ -241,7 +249,7 @@ namespace ECSEngine {
 				memcpy(allocation, source, allocation_size);
 			}
 
-			if (data->deallocate_existing_data) {
+			if (data->options.deallocate_existing_data) {
 				size_t destination_size = GetIntValueUnsigned(OffsetPointer(data->destination, sizeof(void*)), size_type);
 				if (*destination != nullptr) {
 					for (size_t index = 0; index < destination_size; index++) {
@@ -262,12 +270,13 @@ namespace ECSEngine {
 				CopyReflectionDataOptions copy_options;
 				copy_options.allocator = data->allocator;
 				copy_options.always_allocate_for_buffers = true;
-				copy_options.deallocate_existing_buffers = false;
+				copy_options.custom_options = data->options;
+				copy_options.custom_options.deallocate_existing_data = false;
 
 				for (size_t index = 0; index < source_size; index++) {
-					const void* source = OffsetPointer(source, index * element_info.byte_size);
-					void* destination = OffsetPointer(allocation, element_info.byte_size * index);
-					CopyReflectionTypeInstance(data->reflection_manager, template_type, element_info, source, destination, &copy_options);
+					const void* current_source = OffsetPointer(source, index * element_info.byte_size);
+					void* current_destination = OffsetPointer(allocation, element_info.byte_size * index);
+					CopyReflectionTypeInstance(data->reflection_manager, template_type, element_info, current_source, current_destination, &copy_options);
 				}
 			}
 		}
@@ -392,14 +401,17 @@ namespace ECSEngine {
 			Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(data->reflection_manager, template_type);
 
-			// TODO: Determine if we should add a field to indicate to use per field allocators for resizables
 			AllocatorPolymorphic set_allocator = data->allocator;
 			if (data->definition.StartsWith("Resizable")) {
 				ResizableSparseSet<char>* sparse_set = (ResizableSparseSet<char>*)data->destination;
+				// Check for the override option
+				if (data->options.overwrite_resizable_allocators) {
+					sparse_set->allocator = data->allocator;
+				}
 				set_allocator = sparse_set->allocator;
 			}
 
-			if (data->deallocate_existing_data) {
+			if (data->options.deallocate_existing_data) {
 				SparseSetDeallocateElements(
 					data->reflection_manager,
 					data->destination,
@@ -413,7 +425,7 @@ namespace ECSEngine {
 
 			if (definition_info.is_blittable) {
 				// Can blit the data type
-				SparseSetCopyTypeErased(data->source, data->destination, definition_info.byte_size, data->allocator);
+				SparseSetCopyTypeErased(data->source, data->destination, definition_info.byte_size, set_allocator);
 			}
 			else {
 				data->definition = template_type;
@@ -432,7 +444,7 @@ namespace ECSEngine {
 
 				CopyReflectionDataOptions copy_type_options;
 				copy_type_options.allocator = data->allocator;
-				copy_type_options.deallocate_existing_buffers = data->deallocate_existing_data;
+				copy_type_options.custom_options = data->options;
 				copy_type_options.always_allocate_for_buffers = true;
 				
 				CopyData copy_data;
@@ -536,7 +548,7 @@ namespace ECSEngine {
 			const DataPointer* source = (const DataPointer*)data->source;
 			DataPointer* destination = (DataPointer*)data->destination;
 
-			if (data->deallocate_existing_data) {
+			if (data->options.deallocate_existing_data) {
 				destination->Deallocate(data->allocator);
 			}
 
@@ -585,6 +597,9 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		// PERFORMANCE TODO: All allocators inherit from AllocatorBase, and that structure contains already a ECS_ALLOCATOR_TYPE
+		// Inside it. Should we use it to make the determination of the allocator type faster (although that doesn't help with AllocatorPolymorphic)?
+
 		// Returns the allocator type, taking into account allocator polymorphic. It can return ECS_ALLOCATOR_TYPE_COUNT
 		// If it is a polymorphic allocator that targets Malloc/Free, or the allocator type is not identified
 		static ECS_ALLOCATOR_TYPE AllocatorTypeFromStringWithPolymorphic(const void* allocator, Stream<char> definition) {
@@ -627,13 +642,82 @@ namespace ECSEngine {
 		}
 
 		void AllocatorCustomTypeInterface::Copy(ReflectionCustomTypeCopyData* data) {
-			// TODO: Determine if we should resize this field according to the source or not
-			// For copies, don't do anything, since copying for this field doesn't work as normally
+			// If the initialize type allocators option is enabled, resize this allocator according to the source
+			auto initialize_implementation = [data](ECS_ALLOCATOR_TYPE allocator_type, void* destination_untyped, const void* source_untyped) {
+				switch (allocator_type) {
+				case ECS_ALLOCATOR_LINEAR:
+				{
+					LinearAllocator* destination = (LinearAllocator*)destination_untyped;
+					const LinearAllocator* source = (const LinearAllocator*)source_untyped;
+					*destination = LinearAllocator(AllocateEx(data->allocator, source->m_capacity), source->m_capacity);
+				}
+				break;
+				case ECS_ALLOCATOR_STACK:
+				{
+					StackAllocator* destination = (StackAllocator*)destination_untyped;
+					const StackAllocator* source = (const StackAllocator*)source_untyped;
+					*destination = StackAllocator(AllocateEx(data->allocator, source->m_capacity), source->m_capacity);
+				}
+				break;
+				case ECS_ALLOCATOR_MULTIPOOL:
+				{
+					MultipoolAllocator* destination = (MultipoolAllocator*)destination_untyped;
+					const MultipoolAllocator* source = (const MultipoolAllocator*)source_untyped;
+					*destination = MultipoolAllocator(AllocateEx(data->allocator, MultipoolAllocator::MemoryOf(source->GetBlockCount(), source->GetSize())), source->GetSize(), source->GetBlockCount());
+				}
+				break;
+				case ECS_ALLOCATOR_ARENA:
+				{
+					MemoryArena* destination = (MemoryArena*)destination_untyped;
+					const MemoryArena* source = (const MemoryArena*)source_untyped;
+					*destination = MemoryArena(data->allocator, source->m_allocator_count, source->GetInitialBaseAllocatorInfo());
+				}
+				break;
+				case ECS_ALLOCATOR_MANAGER:
+				{
+					MemoryManager* destination = (MemoryManager*)destination_untyped;
+					const MemoryManager* source = (const MemoryManager*)source_untyped;
+					*destination = MemoryManager(source->GetInitialAllocatorInfo(), source->m_backup_info, data->allocator);
+				}
+				break;
+				case ECS_ALLOCATOR_RESIZABLE_LINEAR:
+				{
+					ResizableLinearAllocator* destination = (ResizableLinearAllocator*)destination_untyped;
+					const ResizableLinearAllocator* source = (const ResizableLinearAllocator*)source_untyped;
+					*destination = ResizableLinearAllocator(source->m_initial_capacity, source->m_backup_size, data->allocator);
+				}
+				break;
+				case ECS_ALLOCATOR_MEMORY_PROTECTED:
+				{
+					MemoryProtectedAllocator* destination = (MemoryProtectedAllocator*)destination_untyped;
+					const MemoryProtectedAllocator* source = (const MemoryProtectedAllocator*)source_untyped;
+					*destination = MemoryProtectedAllocator(source->chunk_size, source->linear_allocators);
+				}
+				break;
+				}
+			};
+
+			if (data->options.initialize_type_allocators) {
+				ECS_ALLOCATOR_TYPE allocator_type = AllocatorTypeFromString(data->definition);
+				if (allocator_type == ECS_ALLOCATOR_TYPE_COUNT) {
+					ECS_ASSERT(data->definition == STRING(AllocatorPolymorphic));
+					// Allocate an instance for the pointer
+					AllocatorPolymorphic* destination = (AllocatorPolymorphic*)data->destination;
+					const AllocatorPolymorphic* source = (const AllocatorPolymorphic*)data->source;
+					*destination = *source;
+					destination->allocator = AllocateEx(data->allocator, BaseAllocatorByteSize(source->allocator_type));
+					initialize_implementation(source->allocator_type, destination->allocator, source->allocator);
+				}
+				else {
+					initialize_implementation(allocator_type, data->destination, data->source);
+				}
+			}
 		}
 
 		bool AllocatorCustomTypeInterface::Compare(ReflectionCustomTypeCompareData* data) {
-			// Comparing allocators doesn't make sense, always return false
-			return false;
+			// Comparing allocators doesn't make sense, always return true such that the
+			// Comparison is not disturbed by this entry.
+			return true;
 		}
 
 		void AllocatorCustomTypeInterface::Deallocate(ReflectionCustomTypeDeallocateData* data) {
@@ -940,7 +1024,7 @@ namespace ECSEngine {
 			ReflectionDefinitionInfo value_definition_info = HashTableGetValueDefinitionInfo(data->reflection_manager, template_parameters);
 			ReflectionDefinitionInfo identifier_definition_info = HashTableGetIdentifierDefinitionInfo(data->reflection_manager, template_parameters);
 
-			if (data->deallocate_existing_data) {
+			if (data->options.deallocate_existing_data) {
 				HashTableDeallocateWithElements(data->reflection_manager, destination, data->allocator, template_parameters, value_definition_info, identifier_definition_info, false);
 			}
 
@@ -960,7 +1044,7 @@ namespace ECSEngine {
 			CopyReflectionDataOptions copy_options;
 			copy_options.allocator = data->allocator;
 			copy_options.always_allocate_for_buffers = true;
-			copy_options.deallocate_existing_buffers = data->deallocate_existing_data;
+			copy_options.custom_options = data->options;
 
 			// Need to branch out again by SoA
 			if (template_parameters.is_soa) {
