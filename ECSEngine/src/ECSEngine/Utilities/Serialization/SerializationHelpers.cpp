@@ -215,19 +215,15 @@ namespace ECSEngine {
 			bool has_options = data->read_data->options != nullptr;
 
 			DeserializeOptions options;
+			if (has_options) {
+				options = *data->read_data->options;
+			}
+
 			options.read_type_table = false;
 			options.verify_dependent_types = false;
-
-			if (has_options) {
-				options.error_message = data->read_data->options->error_message;
-				options.field_allocator = data->read_data->options->field_allocator;
-				options.use_resizable_stream_allocator = data->read_data->options->use_resizable_stream_allocator;
-				options.fail_if_field_mismatch = data->read_data->options->fail_if_field_mismatch;
-				options.field_table = data->read_data->options->field_table;
-				options.omit_fields = data->read_data->options->omit_fields;
-				options.deserialized_field_manager = data->read_data->options->deserialized_field_manager;
-				options.version = data->read_data->options->version;
-			}
+			options.header = {};
+			options.validate_header = false;
+			options.validate_header_data = nullptr;
 
 			if (data->read_data->read_data) {
 				// Allocate the data before
@@ -924,6 +920,11 @@ namespace ECSEngine {
 	size_t SerializeCustomTypeWrite_Allocator(SerializeCustomTypeWriteFunctionData* data) {
 		size_t write_size = 0;
 
+		// If this is a reference, don't write its contents
+		if (FindFirstToken(data->tags, STRING(ECS_REFERENCE_ALLOCATOR)).size > 0) {
+			return write_size;
+		}
+
 		// We must write as a first byte the type of allocator, such that if it changes, we can choose to abort or not the deserialization
 		ECS_ALLOCATOR_TYPE allocator_type = AllocatorTypeFromString(data->definition);
 		write_size += WriteDeduce(data->stream, &allocator_type, data->write_data);
@@ -1022,6 +1023,15 @@ namespace ECSEngine {
 
 		size_t deserialize_size = 0;
 
+		AllocatorPolymorphic field_allocator = GetDeserializeFieldAllocator(data, data->read_data);
+		if (FindFirstToken(data->tags, STRING(ECS_REFERENCE_ALLOCATOR)).size > 0) {
+			// As a safeguard, ensure that it is an allocator polymorphic
+			ECS_ASSERT(data->definition == STRING(AllocatorPolymorphic), "Reference allocator is not an AllocatorPolymorphic!");
+			AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)data->data;
+			*allocator = field_allocator;
+			return deserialize_size;
+		}
+
 		// Read the first byte. If the type has changed, then abort this
 		ECS_ALLOCATOR_TYPE allocator_type;
 		Read<true>(data->stream, &allocator_type);
@@ -1029,7 +1039,6 @@ namespace ECSEngine {
 		bool is_allocator_matched = allocator_type == AllocatorTypeFromString(data->definition);
 		// When we have a mismatch, we must still advance through with the data pointer
 		// When retrieving the field allocator, don't assert if we are interested in skipping only the section
-		AllocatorPolymorphic field_allocator = GetDeserializeFieldAllocator(data, data->read_data);
 
 		// This lambda will perform the appropriate deserialization, based on the given type.
 		// Returns false if there is an error.
@@ -1041,8 +1050,8 @@ namespace ECSEngine {
 				data->ReadAlways(&capacity);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-							LinearAllocator* allocator = (LinearAllocator*)data->data;
-							*allocator = LinearAllocator(AllocateEx(field_allocator, capacity), capacity);
+						LinearAllocator* allocator = (LinearAllocator*)data->data;
+						*allocator = LinearAllocator(AllocateEx(field_allocator, capacity), capacity);
 					}
 					else {
 						deserialize_size += capacity;
@@ -1056,8 +1065,8 @@ namespace ECSEngine {
 				data->ReadAlways(&capacity);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-							StackAllocator* allocator = (StackAllocator*)data->data;
-							*allocator = StackAllocator(AllocateEx(field_allocator, capacity), capacity);
+						StackAllocator* allocator = (StackAllocator*)data->data;
+						*allocator = StackAllocator(AllocateEx(field_allocator, capacity), capacity);
 					}
 					else {
 						deserialize_size += capacity;
@@ -1075,8 +1084,8 @@ namespace ECSEngine {
 				size_t allocate_size = MultipoolAllocator::MemoryOf(block_count, capacity);
 				if (is_allocator_matched) {
 					if (data->read_data) {
-							MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
-							*allocator = MultipoolAllocator(AllocateEx(field_allocator, allocate_size), capacity, block_count);
+						MultipoolAllocator* allocator = (MultipoolAllocator*)data->data;
+						*allocator = MultipoolAllocator(AllocateEx(field_allocator, allocate_size), capacity, block_count);
 					}
 					else {
 						deserialize_size += allocate_size;

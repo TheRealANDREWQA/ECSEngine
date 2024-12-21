@@ -154,12 +154,13 @@ namespace ECSEngine {
 	// or streams whose data type has changed
 	// Error_Message: a stream where an error message will be written if one occurs
 	struct DeserializeOptions {
-		// It returns the field allocator according to the given options
-		ECS_INLINE AllocatorPolymorphic GetFieldAllocator(Reflection::ReflectionStreamFieldType field_type, const void* data) const {
+		// It returns the resizable stream allocator, if the field type is of resizable stream and this allocator was enabled, 
+		// Else returns the fallback allocator
+		ECS_INLINE AllocatorPolymorphic GetFieldAllocator(Reflection::ReflectionStreamFieldType field_type, const void* data, AllocatorPolymorphic fallback_allocator) const {
 			if (field_type == Reflection::ReflectionStreamFieldType::ResizableStream && use_resizable_stream_allocator) {
 				return ((ResizableStream<void>*)data)->allocator;
 			}
-			return field_allocator;
+			return fallback_allocator;
 		}
 
 		unsigned int version = -1;

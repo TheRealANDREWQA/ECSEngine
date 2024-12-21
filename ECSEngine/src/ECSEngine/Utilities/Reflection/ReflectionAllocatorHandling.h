@@ -61,6 +61,9 @@ namespace ECSEngine {
 			return fallback_allocator;
 		}
 
+		// Sets the target field with a reference allocator to the passed argument
+		ECSENGINE_API void SetReflectionTypeFieldAllocatorReference(const ReflectionType* type, const ReflectionTypeMiscAllocator* allocator_info, void* instance, AllocatorPolymorphic reference_allocator);
+
 	}
 
 }
