@@ -1148,8 +1148,17 @@ namespace ECSEngine {
 				// Skip the main type allocator, it already has an entry, if it exists
 				if (index != type_overall_primary_allocator_index && IsReflectionTypeFieldAllocator(&type, index)) {
 					ReflectionTypeMiscAllocator misc_allocator;
-					misc_allocator.field_index = index;
 					misc_allocator.modifier = IsReflectionTypeFieldAllocatorAsReference(&type, index) ? ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE : ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_NONE;
+					// Ensure that if this is a reference, that the definition is AllocatorPolymorphic
+					if (misc_allocator.modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE) {
+						if (type.fields[index].definition != STRING(AllocatorPolymorphic)) {
+							ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} marked as a reference allocator, but it is not an AllocatorPolymorphoc. ", type.name, type.fields[index].name);
+							WriteErrorMessage(data, message);
+							return;
+						}
+					}
+
+					misc_allocator.field_index = index;
 					type_allocators.AddAssert(misc_allocator);
 				}
 			}

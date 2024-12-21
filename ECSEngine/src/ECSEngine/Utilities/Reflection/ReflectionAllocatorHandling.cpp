@@ -28,7 +28,7 @@ namespace ECSEngine {
 		}
 
 		bool IsReflectionTypeFieldAllocatorAsReference(const ReflectionType* type, size_t field_index) {
-			return type->fields[field_index].Has(STRING(ECS_TYPE_REFERENCE_ALLOCATOR));
+			return type->fields[field_index].Has(STRING(ECS_REFERENCE_ALLOCATOR));
 		}
 
 		Stream<char> GetReflectionTypeFieldAllocatorFromTag(const ReflectionType* type, size_t field_index) {
@@ -81,6 +81,13 @@ namespace ECSEngine {
 				return ConvertReflectionTypeFieldToAllocator(type, soa->field_allocator_index, instance);
 			}
 			return fallback_allocator;
+		}
+
+		void SetReflectionTypeFieldAllocatorReference(const ReflectionType* type, const ReflectionTypeMiscAllocator* allocator_info, void* instance, AllocatorPolymorphic reference_allocator) {
+			// Ensure that the field is a AllocatorPolymorphic
+			ECS_ASSERT(type->fields[allocator_info->field_index].definition == STRING(AllocatorPolymorphic), "Reference allocator must of type AllocatorPolymorphic!");
+			AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)type->GetField(instance, allocator_info->field_index);
+			*allocator = reference_allocator;
 		}
 
 	}

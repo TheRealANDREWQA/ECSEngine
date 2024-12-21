@@ -52,7 +52,9 @@
 #define ECS_MAIN_ALLOCATOR
 
 // When specified, it indicates that this allocator should not be initialized as a standalone entry, but rather
-// It should reference the allocator that is passed in
+// It should reference the allocator that is passed in. At the moment, it works only on AllocatorPolymorphic entries,
+// Not on MemoryManager or MemoryManager* entries. If you want it to reference a specific field from the type, use
+// ECS_FIELD_ALLOCATOR to designate that field
 #define ECS_REFERENCE_ALLOCATOR
 
 #define ECS_REFLECT_SETTINGS

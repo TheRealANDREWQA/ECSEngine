@@ -989,23 +989,22 @@ namespace ECSEngine {
 		}
 
 		DeserializeOptions _nested_options;
+		if (has_options) {
+			_nested_options = *options;
+		}
+
 		DeserializeOptions* nested_options = &_nested_options;
 		nested_options->field_table = &deserialize_table;
 		nested_options->version = -1;
+		nested_options->read_type_table = false;
+		nested_options->verify_dependent_types = false;
+		nested_options->validate_header = false;
+		nested_options->header = {};
+		nested_options->validate_header_data = nullptr;
 
-		if (has_options) {
-			nested_options = &_nested_options;
-			nested_options->error_message = options->error_message;
-			nested_options->fail_if_field_mismatch = options->fail_if_field_mismatch;
-			nested_options->field_allocator = options->field_allocator;
-			nested_options->use_resizable_stream_allocator = options->use_resizable_stream_allocator;
-			nested_options->read_type_table = false;
-			nested_options->verify_dependent_types = false;
-			nested_options->omit_fields = omit_fields;
-			nested_options->version = options->version;
-			nested_options->default_initialize_missing_fields = default_initialize_missing_fields;
-			nested_options->initialize_type_allocators = options->initialize_type_allocators;
-			nested_options->use_type_field_allocators = options->use_type_field_allocators;
+		// If the field allocators are enabled, check the main type allocator and override the initial field allocator
+		if (use_field_allocators) {
+			initial_field_allocator = GetReflectionTypeOverallAllocator(type, address, initial_field_allocator);
 		}
 
 		auto deserialize_incompatible_basic = [](uintptr_t& data, void* field_data, const DeserializeFieldInfo& file_info, const ReflectionFieldInfo& type_info) {
@@ -1096,21 +1095,23 @@ namespace ECSEngine {
 							// Check to see if the field still exists
 							for (size_t current_type_field_index = 0; current_type_field_index < type->fields.size; current_type_field_index++) {
 								if (type->fields[current_type_field_index].name == deserialized_type.fields[index].name) {
-									size_t field_allocator_index = GetReflectionTypeFieldAllocatorFromTagAsIndex(type, current_type_field_index);
-									// If it doesn't have a reference, insert it at the front.
-									if (field_allocator_index == -1) {
-										allocators_to_initialize_entries.Insert(0, { (unsigned int)current_type_field_index, (unsigned int)index, deserialized_type_allocator_count });
-									}
-									else {
-										// If it has a dependency, insert it after it, or if it wasn't added yet, at the end
-										unsigned int existing_type_allocator_entry_index = allocators_to_initialize_entries.Find((unsigned int)field_allocator_index, [](const DeserializedAllocatorEntry& entry) {
-											return entry.current_type_field_index;
-											});
-										if (existing_type_allocator_entry_index == -1) {
-											allocators_to_initialize_entries.AddAssert({ (unsigned int)current_type_field_index, (unsigned int)index, deserialized_type_allocator_count });
+									if (IsReflectionTypeFieldAllocator(type, current_type_field_index)) {
+										size_t field_allocator_index = GetReflectionTypeFieldAllocatorFromTagAsIndex(type, current_type_field_index);
+										// If it doesn't have a reference, insert it at the front.
+										if (field_allocator_index == -1) {
+											allocators_to_initialize_entries.Insert(0, { (unsigned int)current_type_field_index, (unsigned int)index, deserialized_type_allocator_count });
 										}
 										else {
-											allocators_to_initialize_entries.Insert(existing_type_allocator_entry_index + 1, { (unsigned int)current_type_field_index, (unsigned int)index, deserialized_type_allocator_count });
+											// If it has a dependency, insert it after it, or if it wasn't added yet, at the end
+											unsigned int existing_type_allocator_entry_index = allocators_to_initialize_entries.Find((unsigned int)field_allocator_index, [](const DeserializedAllocatorEntry& entry) {
+												return entry.current_type_field_index;
+												});
+											if (existing_type_allocator_entry_index == -1) {
+												allocators_to_initialize_entries.AddAssert({ (unsigned int)current_type_field_index, (unsigned int)index, deserialized_type_allocator_count });
+											}
+											else {
+												allocators_to_initialize_entries.Insert(existing_type_allocator_entry_index + 1, { (unsigned int)current_type_field_index, (unsigned int)index, deserialized_type_allocator_count });
+											}
 										}
 									}
 									break;
@@ -1168,6 +1169,16 @@ namespace ECSEngine {
 						}
 
 						nested_options->field_allocator = previous_field_allocator;
+					}
+
+					// For all type allocators that are references, initialize them now, if the initialize type allocators is specified
+					for (size_t index = 0; index < type->misc_info.size; index++) {
+						if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
+							if (type->misc_info[index].allocator_info.modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE) {
+								AllocatorPolymorphic reference_allocator = GetReflectionTypeFieldAllocator(type, type->misc_info[index].allocator_info.field_index, address, initial_field_allocator);
+								SetReflectionTypeFieldAllocatorReference(type, &type->misc_info[index].allocator_info, address, reference_allocator);
+							}
+						}
 					}
 				}
 			}
@@ -1532,12 +1543,11 @@ namespace ECSEngine {
 					}
 					// Good to go, read the data - no user defined type here
 					else {
-						AllocatorPolymorphic field_allocator = { nullptr };
+						AllocatorPolymorphic field_allocator = nested_options->field_allocator;
 						if (has_options) {
-							field_allocator = options->GetFieldAllocator(type_field_info.stream_type, field_data);
+							field_allocator = options->GetFieldAllocator(type_field_info.stream_type, field_data, initial_field_allocator);
 						}
-						field_allocator = GetReflectionTypeFieldAllocator(type, subindex, address, field_allocator, use_field_allocators);
-
+						
 						if (type_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 							size_t byte_size;
 							Read<true>(&stream, &byte_size, sizeof(byte_size));
