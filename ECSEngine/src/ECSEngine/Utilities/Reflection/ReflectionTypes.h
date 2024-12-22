@@ -460,6 +460,49 @@ namespace ECSEngine {
 			bool reset_buffers = true;
 		};
 
+		struct ReflectionCustomTypeGetElementCountData {
+			const ReflectionManager* reflection_manager;
+			Stream<char> definition;
+			Stream<char> element_name_type;
+			const void* source;
+		};
+
+#define ECS_REFLECTION_CUSTOM_TYPE_GET_ELEMENT_CACHE_SIZE 64
+
+		struct ReflectionCustomTypeGetElementDataBase {
+			const ReflectionManager* reflection_manager;
+			Stream<char> definition;
+			Stream<char> element_name_type;
+			void* source;
+
+			// This value must be specified always. When enabled, the returned value represents
+			// A token, which is not necessarily the same as the iteration index, but it is much
+			// Quicker to find out and to lookup
+			bool is_token;
+
+			// This value is used as an acceleration to speed up successive queries
+			// You don't need to modify this, it will be done automatically
+			bool has_cache = false;
+			struct {
+				size_t element_name_index;
+				size_t element_byte_size;
+				// Store some extra bytes that each custom type can use to speed up the queries
+				char element_cache_data[ECS_REFLECTION_CUSTOM_TYPE_GET_ELEMENT_CACHE_SIZE];
+			};
+		};
+
+		// This data is used for retrieving a specific. It has a fast path for iterating linearly over elements
+		struct ReflectionCustomTypeGetElementData : ReflectionCustomTypeGetElementDataBase {
+			// Check ReflectionCustomTypeGetElementDataBase as well
+			size_t index;
+		};
+
+		// This data is used for searching a specific element
+		struct ReflectionCustomTypeFindElementData : ReflectionCustomTypeGetElementDataBase {
+			// Check ReflectionCustomTypeGetElementDataBase as well
+			const void* element;
+		};
+
 		struct ReflectionCustomTypeInterface {
 			virtual bool Match(ReflectionCustomTypeMatchData* data) = 0;
 
@@ -476,6 +519,18 @@ namespace ECSEngine {
 			virtual bool Compare(ReflectionCustomTypeCompareData* data) = 0;
 
 			virtual void Deallocate(ReflectionCustomTypeDeallocateData* data) = 0;
+
+			// These functions are primarly intended for container custom types. Other custom type are not obligated to implement these
+
+			// Returns the number of elements this custom type has
+			virtual size_t GetElementCount(ReflectionCustomTypeGetElementCountData* data) { ECS_ASSERT(false); return 0; }
+
+			// Returns a pointer to an element for a given element name type and a given index
+			virtual void* GetElement(ReflectionCustomTypeGetElementData* data) { ECS_ASSERT(false); return nullptr; }
+
+			// Returns the index that corresponds to the given element for a given element name type
+			// Or -1 if the element doesn't exist. It uses a simple memcmp as comparison, not a full reflection comparison
+			virtual size_t FindElement(ReflectionCustomTypeFindElementData* data) { ECS_ASSERT(false); return 0; }
 		};
 
 		struct ReflectionDefinitionInfo {

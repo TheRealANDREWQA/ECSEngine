@@ -1081,7 +1081,7 @@ namespace ECSEngine {
 				while (!table.IsItemAt(index)) {
 					index++;
 				}
-				pair.value = tabl.GetValuePtrFromIndex(index);
+				pair.value = table.GetValuePtrFromIndex(index);
 				pair.identifier = table.GetIdentifierPtrFromIndex(index);
 				index++;
 				return &pair;

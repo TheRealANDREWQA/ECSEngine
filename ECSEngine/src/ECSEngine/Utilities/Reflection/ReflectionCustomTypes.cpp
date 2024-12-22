@@ -341,6 +341,41 @@ namespace ECSEngine {
 			//}
 		}
 
+		size_t StreamCustomTypeInterface::GetElementCount(ReflectionCustomTypeGetElementCountData* data) {
+			// We don't care about the element type name, we have a single type
+			if (data->definition.StartsWith(STRING(Stream))) {
+				const Stream<void>* stream = (const Stream<void>*)data->source;
+				return stream->size;
+			}
+			else {
+				// Can type pun the capacity and resizable streams
+				const CapacityStream<void>* stream = (const CapacityStream<void>*)data->source;
+				return stream->size;
+			}
+		}
+
+		// For the stream type it doesn't matter if it is a token or not
+
+		void* StreamCustomTypeInterface::GetElement(ReflectionCustomTypeGetElementData* data) {
+			if (!data->has_cache) {
+				data->has_cache = true;
+				data->element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, ReflectionCustomTypeGetTemplateArgument(data->definition));
+			}
+
+			void* buffer = *(void**)data->source;
+			return OffsetPointer(buffer, data->element_byte_size * data->index);
+		}
+
+		size_t StreamCustomTypeInterface::FindElement(ReflectionCustomTypeFindElementData* data) {
+			if (!data->has_cache) {
+				data->has_cache = true;
+				data->element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, ReflectionCustomTypeGetTemplateArgument(data->definition));
+			}
+
+			void* buffer = *(void**)data->source;
+			return PointerDifference(data->element, buffer) / data->element_byte_size;
+		}
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
@@ -521,6 +556,35 @@ namespace ECSEngine {
 			}
 		}
 
+		size_t SparseSetCustomTypeInterface::GetElementCount(ReflectionCustomTypeGetElementCountData* data) {
+			// We don't care about the element type name, we have a single type
+			// We can type pun both the normal sparse set and the resizable one
+			const SparseSet<char>* set = (const SparseSet<char>*)data->source;
+			return set->size;
+		}
+
+		// For the sparse set, it doesn't matter if it is a token or not
+
+		void* SparseSetCustomTypeInterface::GetElement(ReflectionCustomTypeGetElementData* data) {
+			if (!data->has_cache) {
+				data->has_cache = true;
+				data->element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, ReflectionCustomTypeGetTemplateArgument(data->definition));
+			}
+
+			void* buffer = *(void**)data->source;
+			return OffsetPointer(buffer, data->element_byte_size * data->index);
+		}
+
+		size_t SparseSetCustomTypeInterface::FindElement(ReflectionCustomTypeFindElementData* data) {
+			if (!data->has_cache) {
+				data->has_cache = true;
+				data->element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, ReflectionCustomTypeGetTemplateArgument(data->definition));
+			}
+
+			void* buffer = *(void**)data->source;
+			return PointerDifference(data->element, buffer) / data->element_byte_size;
+		}
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
@@ -588,6 +652,8 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		// The data pointer doesn't have to implement the Element family of functions
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
@@ -726,6 +792,8 @@ namespace ECSEngine {
 			ECS_ASSERT(allocator_type != ECS_ALLOCATOR_TYPE_COUNT, "Unknown reflection custom allocator!");
 			FreeAllocatorFrom({ data->source, allocator_type, ECS_ALLOCATION_SINGLE }, data->allocator);
 		}
+
+		// The allocator doesn't need to implement the Element family of functions
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
@@ -1254,6 +1322,179 @@ namespace ECSEngine {
 			ReflectionDefinitionInfo value_info = HashTableGetValueDefinitionInfo(data->reflection_manager, template_arguments);
 			ReflectionDefinitionInfo identifier_info = HashTableGetIdentifierDefinitionInfo(data->reflection_manager, template_arguments);
 			HashTableDeallocateWithElements(data->reflection_manager, data->source, data->allocator, template_arguments, value_info, identifier_info, data->reset_buffers);
+		}
+
+		size_t HashTableCustomTypeInterface::GetElementCount(ReflectionCustomTypeGetElementCountData* data) {
+			// Can type pun to any type
+			const HashTableDefault<char>* table = (const HashTableDefault<char>*)data->source;
+			return table->GetCount();
+		}
+
+		struct HashTableGetElementCacheInfo {
+			bool is_soa;
+			size_t pair_byte_size;
+			size_t pair_identifier_offset;
+
+			// These 2 fields are used to speed up the get index search, especially if linearly iterating
+			size_t last_user_index;
+			size_t last_table_index;
+		};
+
+		static_assert(sizeof(ECS_REFLECTION_CUSTOM_TYPE_GET_ELEMENT_CACHE_SIZE) <= ECS_REFLECTION_CUSTOM_TYPE_GET_ELEMENT_CACHE_SIZE);
+
+		static void HashTableInitializeGetElementCacheInfo(ReflectionCustomTypeGetElementDataBase* data) {
+			if (!data->has_cache) {
+				data->has_cache = true;
+				HashTableTemplateArguments template_arguments = HashTableExtractTemplateArguments(data->definition);
+				HashTableGetElementCacheInfo* cache_info = (HashTableGetElementCacheInfo*)data->element_cache_data;
+				cache_info->is_soa = template_arguments.is_soa;
+				cache_info->last_table_index = 0;
+				cache_info->last_user_index = 0;
+
+				if (data->element_name_type == STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE)) {
+					data->element_name_index = ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE;
+				}
+				else {
+					data->element_name_index = ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER;
+				}
+
+				if (cache_info->is_soa) {
+					cache_info->pair_identifier_offset = 0;
+					cache_info->pair_byte_size = 0;
+
+					if (data->element_name_index == ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) {
+						ReflectionDefinitionInfo value_definition = HashTableGetValueDefinitionInfo(data->reflection_manager, template_arguments);
+						data->element_byte_size = value_definition.byte_size;
+					}
+					else {
+						ReflectionDefinitionInfo identifier_definition = HashTableGetIdentifierDefinitionInfo(data->reflection_manager, template_arguments);
+						data->element_byte_size = identifier_definition.byte_size;
+					}
+				}
+				else {
+					ReflectionDefinitionInfo value_definition = HashTableGetValueDefinitionInfo(data->reflection_manager, template_arguments);
+					ReflectionDefinitionInfo identifier_definition = HashTableGetIdentifierDefinitionInfo(data->reflection_manager, template_arguments);
+					ulong2 pair_info = HashTableComputePairByteSizeAndAlignmentOffset(value_definition, identifier_definition);
+					cache_info->pair_identifier_offset = value_definition.byte_size + pair_info.y;
+					cache_info->pair_byte_size = pair_info.x;
+					if (data->element_name_index == ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) {
+						data->element_byte_size = value_definition.byte_size;
+					}
+					else {
+						data->element_byte_size = identifier_definition.byte_size;
+					}
+				}
+
+				
+			}
+		}
+
+		void* HashTableCustomTypeInterface::GetElement(ReflectionCustomTypeGetElementData* data) {
+			HashTableInitializeGetElementCacheInfo(data);
+
+			HashTableGetElementCacheInfo* cache_info = (HashTableGetElementCacheInfo*)data->element_cache_data;
+			HashTableDefault<char>* table = (HashTableDefault<char>*)data->source;
+
+			// Find the table index that corresponds to the user index
+			size_t table_index = 0;
+			size_t extended_capacity = table->GetExtendedCapacity();
+			if (data->is_token) {
+				table_index = data->index;
+			}
+			else {
+				table_index = cache_info->last_user_index > data->index ? 0 : cache_info->last_table_index;
+				size_t remaining_elements = cache_info->last_user_index > data->index ? data->index : data->index - cache_info->last_user_index;
+				// We exit the while from a break
+				while (table_index < extended_capacity) {
+					if (table->IsItemAt(table_index)) {
+						remaining_elements--;
+						if (remaining_elements == 0) {
+							break;
+						}
+					}
+					table_index++;
+				}
+			}
+
+			if (table_index == extended_capacity) {
+				// The element is out of bounds
+				return nullptr;
+			}
+
+			cache_info->last_table_index = table_index;
+			cache_info->last_user_index = data->index;
+
+			if (cache_info->is_soa) {
+				if (data->element_name_index == ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) {
+					return OffsetPointer(table->m_buffer, data->element_byte_size * table_index);
+				}
+				else {
+					return OffsetPointer(table->m_identifiers, data->element_byte_size * table_index);
+				}
+			}
+			else {
+				void* pair_start = OffsetPointer(table->m_buffer, table_index * cache_info->pair_byte_size);
+				if (data->element_name_index == ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) {
+					return pair_start;
+				}
+				else {
+					return OffsetPointer(pair_start, cache_info->pair_identifier_offset);
+				}
+			}
+		}
+
+		size_t HashTableCustomTypeInterface::FindElement(ReflectionCustomTypeFindElementData* data) {
+			HashTableInitializeGetElementCacheInfo(data);
+
+			HashTableGetElementCacheInfo* cache_info = (HashTableGetElementCacheInfo*)data->element_cache_data;
+			HashTableDefault<char>* table = (HashTableDefault<char>*)data->source;
+
+			size_t table_index = -1;
+			if (cache_info->is_soa) {
+				if (data->element_name_index == ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) {
+					table_index = SearchBytesEx(table->m_buffer, table->GetExtendedCapacity(), data->source, data->element_byte_size);
+				}
+				else {
+					table_index = SearchBytesEx(table->m_identifiers, table->GetExtendedCapacity(), data->source, data->element_byte_size);
+				}
+			}
+			else {
+				// Can't use the clasical search bytes
+				for (size_t index = 0; index < (size_t)table->GetExtendedCapacity(); index++) {
+					if (table->IsItemAt(index)) {
+						const void* pair = OffsetPointer(table->m_buffer, cache_info->pair_byte_size * index);
+						const void* pointer = pair;
+						if (data->element_name_index == ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER) {
+							pointer = OffsetPointer(pair, cache_info->pair_identifier_offset);
+						}
+
+						if (memcmp(data->source, pointer, data->element_byte_size) == 0) {
+							table_index = index;
+							break;
+						}
+					}
+				}
+			}
+
+			if (table_index == -1) {
+				return -1;
+			}
+
+			if (data->is_token) {
+				// Can return the value as is
+				return table_index;
+			}
+			else {
+				// Determine how many other entries are before it. We can accelerate this in the future with SIMD, but we need to have a use case for it
+				size_t previous_entry_count = 0;
+				for (size_t index = 0; index < table_index; index++) {
+					if (table->IsItemAt(index)) {
+						previous_entry_count++;
+					}
+				}
+
+				return previous_entry_count;
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

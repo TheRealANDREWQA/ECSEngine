@@ -69,7 +69,10 @@
 
 // It should be applied to custom type fields only, which can have multiple types of elements in them, like a hash table
 // It is used to specify tag options that should be applied to that element type only, not to the entire custom type
-// To check the element name values that are valid for each custom type, check ReflectionCustomTypes.h
+// To check the element name values that are valid for each custom type, check ReflectionCustomTypes.h. The macros
+// Are defined there, but they don't have any definition assigned, you should use them as STRING(macro_name) like
+// STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) when in C++ code, and when in reflection tags, it should be just
+// The macro itself
 #define ECS_CUSTOM_TYPE_ELEMENT_OPTIONS(element_name, ...)
 
 #define ECS_REFLECT_SETTINGS
