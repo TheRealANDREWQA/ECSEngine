@@ -261,6 +261,96 @@ namespace ECSEngine {
 			ResizableStream<BlittableType> blittable_types;
 		};
 
+		// This structure contains information that upper level types
+// Or fields can send to fields or nested types to change their behavior
+		struct ECSENGINE_API ReflectionPassdownInfo {
+			struct PointerReferenceTarget {
+				Stream<char> key;
+				// When a simply pointer is the target, this needs to be handled differently
+				bool is_pointer;
+				// The definition will be looked at, only if the is_pointer field
+				// Is set to false
+				Stream<char> definition;
+				// If this is a custom type, at first, it will be -1, and the first
+				// Function to need this entry will set it to the actual custom index
+				// Such that next calls don't have to perform the finding again
+				unsigned int custom_type_index;
+				// There are 2 pointers, in order to make the copying situation easier
+				// When no source and destination are needed at the same time, they can
+				// Be made the same
+				const void* source_data;
+				const void* destination_data;
+				// For compound custom types, this differentiates between the element types
+				Stream<char> element_type_name;
+
+				// Maintain these caches automatically, such that we can speed up subsequent queries
+				// Without having to burden the user of having to pass in these structures
+				ReflectionCustomTypeFindElementData cached_find_data;
+				ReflectionCustomTypeGetElementData cached_get_data;
+			};
+
+			// Adding this constructor in order to make the user not forget to initialize the fields
+			// Inside it
+			ECS_INLINE ReflectionPassdownInfo(AllocatorPolymorphic allocator) {
+				pointer_reference_targets.Initialize(allocator, 0);
+			}
+
+			// The definition can be left as empty if the info type is a pointer
+			// If you have just a single data pointer, use it as both binding spots,
+			// As source and as destination at the same time
+			void AddPointerReference(
+				Stream<char> key, 
+				bool is_pointer, 
+				Stream<char> definition, 
+				Stream<char> element_type_name,
+				const void* source_data,
+				const void* destination_data
+			);
+
+			// Adds all the pointer references for the given field. It correctly handles the custom types
+			// And pointer types
+			void AddPointerReferencesFromField(const ReflectionField* field, const void* source_data, const void* destination_data);
+
+			// Returns nullptr if it doesn't find the target
+			ECS_INLINE PointerReferenceTarget* FindPointerTarget(Stream<char> key) {
+				unsigned int index = pointer_reference_targets.Find(key, [](const PointerReferenceTarget& target) {
+					return target.key;
+					});
+				return index == -1 ? nullptr : &pointer_reference_targets[index];
+			}
+
+			// This variant uses the slower index value lookup, which corresponds to an iteration
+			// Order, but if you only need an identifier to restore this, use the token variant.
+			// Returns -1 if it couldn't be found (either the key or the pointer value).
+			// With the boolean is_source_data you can control whether the source or the destination data
+			// Is being used
+			size_t GetPointerTargetIndex(Stream<char> key, const void* pointer_value, bool is_source_data);
+
+			// This variant uses the faster token value lookup. It is a unique value that
+			// Can be used later on to identify the entry
+			// Returns -1 if it couldn't be found (either the key or the pointer value)
+			size_t GetPointerTargetToken(Stream<char> key, const void* pointer_value, bool is_source_data);
+
+			// From a previous index value for a certain state, it returns the pointer
+			// Value that corresponds to that token for that key. The behavior is undefined
+			// If the index value is not valid - it may be nullptr or a garbage value
+			void* RetrievePointerTargetValueFromIndex(Stream<char> key, size_t index_value, bool is_source_data);
+
+			// From a previous token value for a certain state, it returns the pointer
+			// Value that corresponds for the token for that key. The behavior is undefined
+			// If the token value is not valid - it may be nullptr or a garbage value
+			void* RetrievePointerTargetValueFromToken(Stream<char> key, size_t token_value, bool is_source_data);
+
+			ResizableStream<PointerReferenceTarget> pointer_reference_targets;
+		};
+
+		// Create a resizable stack allocator and initializes a structure of type
+		// Passdown info with the given name with that allocator
+#define ECS_REFLECTION_STACK_PASSDOWN_INFO(name) \
+		/* The allocator size can be small, since we are not expecting many entries in it */ \
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_allocator##name, ECS_KB * 4, ECS_MB * 32); \
+		ReflectionPassdownInfo name(&_allocator##name);
+
 		// If there are no user defined types, this version will work
 		ECSENGINE_API void SetInstanceFieldDefaultData(const ReflectionField* field, void* data, bool offset_data = true);
 
@@ -388,6 +478,17 @@ namespace ECSEngine {
 
 		// Copies non user defined fields
 		ECSENGINE_API void CopyReflectionFieldBasic(const ReflectionFieldInfo* info, const void* source, void* destination, AllocatorPolymorphic allocator);
+
+		// Copies non user defined fields, and takes into consideration for certain types
+		// The tags and the passdown information
+		ECSENGINE_API void CopyReflectionFieldBasicWithTag(
+			const ReflectionFieldInfo* info,
+			const void* source,
+			void* destination,
+			AllocatorPolymorphic allocator,
+			Stream<char> tag,
+			ReflectionPassdownInfo* passdown_info
+		);
 
 		// Deallocates non user defined fields. By default, it will reset buffers, but you can disable this option
 		ECSENGINE_API void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator, bool reset_buffers = true);
@@ -581,6 +682,9 @@ namespace ECSEngine {
 			// Using the field pointer offset
 			bool offset_pointer_data_from_field = false;
 			ReflectionCustomTypeCopyOptions custom_options = {};
+			// This pointer should be created by the top level function and keep
+			// Being used for the rest of the calls, such that the data is properly transimitted
+			ReflectionPassdownInfo* passdown_info = nullptr;
 		};
 
 		// Copies the data from the old_type into the new type and checks for remappings
@@ -593,6 +697,7 @@ namespace ECSEngine {
 		// Or custom types. By default, it will copy matching padding bytes between versions, but you can specify
 		// The last boolean in order to ignore that and set the padding bytes to zero for the new type.
 		// The following custom options are not accepted: initialize_type_allocators, use_field_allocators and overwrite_resizable_allocators
+		// And passdown info.
 		ECSENGINE_API void CopyReflectionTypeToNewVersion(
 			const ReflectionManager* old_reflection_manager,
 			const ReflectionManager* new_reflection_manager,
@@ -626,7 +731,8 @@ namespace ECSEngine {
 			Stream<char> definition,
 			const void* source,
 			void* destination,
-			const CopyReflectionDataOptions* options
+			const CopyReflectionDataOptions* options,
+			Stream<char> tags = {}
 		);
 
 		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
@@ -634,13 +740,15 @@ namespace ECSEngine {
 		// The reflection manager can be made nullptr if you are sure there are no nested types or custom types. 
 		// By default, it will copy matching padding bytes between instances, but you can specify
 		// The last boolean in order to ignore that and set the padding bytes to zero for the new type
+		// You can optionally specify tags for this definition to be used
 		ECSENGINE_API void CopyReflectionTypeInstance(
 			const ReflectionManager* reflection_manager,
 			Stream<char> definition,
 			const ReflectionDefinitionInfo& definition_info,
 			const void* source,
 			void* destination,
-			const CopyReflectionDataOptions* options
+			const CopyReflectionDataOptions* options,
+			Stream<char> tags = {}
 		);
 
 		// It does a memcpy into the corresponding field of the instance
@@ -671,6 +779,7 @@ namespace ECSEngine {
 		// The old and the new reflection manager can be made nullptr if you are sure there are no nested types
 		// Or custom types
 		// The following custom options are not accepted: initialize_type_allocators, use_field_allocators and overwrite_resizable_allocators
+		// And passdown info
 		ECSENGINE_API void ConvertReflectionFieldToOtherField(
 			const ReflectionManager* first_reflection_manager,
 			const ReflectionManager* second_reflection_manager,

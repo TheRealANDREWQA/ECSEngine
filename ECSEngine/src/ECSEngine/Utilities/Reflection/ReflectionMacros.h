@@ -60,20 +60,26 @@
 // This tag can be added to pointers only. It indicates that during a reflection Copy call, this entry should not
 // Be separately allocated, but instead it should reference the existing pointer, from the source. In case this
 // Field should reference another field from the destination during the copy, you can specify in the parentheses
-// A named key which will be used to resolve the reference using the data from a destination field
+// A named key which will be used to resolve the reference using the data from a destination field. This tag
+// Must appear after the ECS_POINTER_KEY_REFERENCE_TARGET, otherwise the connection will not be seen.
+// Supports as second argument ECS_CUSTOM_TYPE_ELEMENT when a key is specified
 #define ECS_POINTER_AS_REFERENCE(...)
 
 // Used in conjunction with ECS_POINTER_AS_REFERENCE, it indicates that this field contains the pointers which
-// Should be referenced by the field which asked for references
-#define ECS_POINTER_KEY_REFERENCE_TARGET(key_name)
+// Should be referenced by the field which asked for references. It must appear before the ECS_POINTER_AS_REFERENCE
+// Tag when starting from the top type, first field, since this information is gathered in a DFS manner. Supports
+// A second optional argument ECS_CUSTOM_TYPE_ELEMENT
+#define ECS_POINTER_KEY_REFERENCE_TARGET(key_name, ...)
 
 // It should be applied to custom type fields only, which can have multiple types of elements in them, like a hash table
 // It is used to specify tag options that should be applied to that element type only, not to the entire custom type
 // To check the element name values that are valid for each custom type, check ReflectionCustomTypes.h. The macros
 // Are defined there, but they don't have any definition assigned, you should use them as STRING(macro_name) like
 // STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) when in C++ code, and when in reflection tags, it should be just
-// The macro itself
-#define ECS_CUSTOM_TYPE_ELEMENT_OPTIONS(element_name, ...)
+// The macro itself. This field should be embedded into the tags that supports this feature. These are:
+//	- ECS_POINTER_AS_REFERENCE
+//	- ECS_POINTER_KEY_REFERENCE_TARGET
+#define ECS_CUSTOM_TYPE_ELEMENT(element_name)
 
 #define ECS_REFLECT_SETTINGS
 #define ECS_REFLECT_COMPONENT

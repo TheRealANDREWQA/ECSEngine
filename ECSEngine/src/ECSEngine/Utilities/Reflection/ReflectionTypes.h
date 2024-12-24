@@ -13,6 +13,7 @@ namespace ECSEngine {
 #define ECS_REFLECTION_TYPE_TAG_DELIMITER_STRING "~"
 
 		struct ReflectionManager;
+		struct ReflectionPassdownInfo;
 
 		// IMPORTANT TODO: Should we create separate flags for Custom Reflection Type,
 		// Blittable Exception? This would speed up some functions but it would require
@@ -159,6 +160,11 @@ namespace ECSEngine {
 			};
 		};
 
+		// Returns the tag option separated from the other tags from a reflection field tag
+		ECS_INLINE Stream<char> GetReflectionFieldSeparatedTag(Stream<char> tag, Stream<char> option) {
+			return IsolateString(tag, option, ECS_REFLECTION_TYPE_TAG_DELIMITER_STRING);
+		}
+
 		struct ECSENGINE_API ReflectionField {
 			// It returns true if the string appears in the tag, else returns false in both cases
 			ECS_INLINE bool Has(Stream<char> string) const {
@@ -174,7 +180,12 @@ namespace ECSEngine {
 
 			// Returns the tag isolated from others
 			ECS_INLINE Stream<char> GetTag(Stream<char> string) const {
-				return IsolateString(tag, string, ECS_REFLECTION_TYPE_TAG_DELIMITER_STRING);
+				return GetReflectionFieldSeparatedTag(tag, string);
+			}
+
+			// If there are multiple same tags, you can look up the next one using this function
+			ECS_INLINE Stream<char> GetNextTag(Stream<char> existing_tag, Stream<char> string) const {
+				return GetReflectionFieldSeparatedTag(tag.SliceAt(existing_tag.buffer - tag.buffer + existing_tag.size), string);
 			}
 
 			// Each buffer will be allocated separately. To deallocate call DeallocateSeparate
@@ -438,10 +449,14 @@ namespace ECSEngine {
 		struct ReflectionCustomTypeCopyData {
 			const ReflectionManager* reflection_manager;
 			Stream<char> definition;
+			Stream<char> tags;
 			const void* source;
 			void* destination;
 			AllocatorPolymorphic allocator;
 			ReflectionCustomTypeCopyOptions options;
+			// This will collect any necessary information that should be
+			// Passed to other later fields
+			ReflectionPassdownInfo* passdown_info;
 		};
 
 		struct ReflectionCustomTypeCompareData {
@@ -473,7 +488,7 @@ namespace ECSEngine {
 			const ReflectionManager* reflection_manager;
 			Stream<char> definition;
 			Stream<char> element_name_type;
-			void* source;
+			const void* source;
 
 			// This value must be specified always. When enabled, the returned value represents
 			// A token, which is not necessarily the same as the iteration index, but it is much
@@ -494,7 +509,7 @@ namespace ECSEngine {
 		// This data is used for retrieving a specific. It has a fast path for iterating linearly over elements
 		struct ReflectionCustomTypeGetElementData : ReflectionCustomTypeGetElementDataBase {
 			// Check ReflectionCustomTypeGetElementDataBase as well
-			size_t index;
+			size_t index_or_token;
 		};
 
 		// This data is used for searching a specific element
@@ -557,7 +572,6 @@ namespace ECSEngine {
 
 			struct {
 				// We cannot obtain SoA pointers from definitions, so no need to handle that case
-
 				ReflectionBasicFieldType field_basic_type = ReflectionBasicFieldType::UserDefined;
 				ReflectionStreamFieldType field_stream_type = ReflectionStreamFieldType::Basic;
 				unsigned char field_stream_alignment = 0;
@@ -668,9 +682,6 @@ namespace ECSEngine {
 		ECSENGINE_API ReflectionBasicFieldType ReduceMultiComponentReflectionType(ReflectionBasicFieldType type);
 
 		ECSENGINE_API ECS_INT_TYPE BasicTypeToIntType(ReflectionBasicFieldType type);
-
-		// Fills in the options specified for the given element type for a custom type tag, if such a tag was specified
-		ECSENGINE_API void GetReflectionCustomTypeElementOptions(Stream<char> tag, Stream<char> element_name, CapacityStream<Stream<char>>& options);
 
 		ECS_INLINE size_t GetReflectionTypeSoaAllocationAlignment(const ReflectionType* type, const ReflectionTypeMiscSoa* soa) {
 			return type->fields[soa->parallel_streams[0]].info.stream_alignment;
