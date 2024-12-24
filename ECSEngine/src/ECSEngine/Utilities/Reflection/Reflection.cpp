@@ -1110,40 +1110,64 @@ namespace ECSEngine {
 			// Verify that the tags that are specified per field have their constraints met,
 			// like tags specific to pointers are applied to pointers
 			for (size_t index = 0; index < type.fields.size; index++) {
-				Stream<char> per_element_options = type.fields[index].GetTag(STRING(ECS_CUSTOM_TYPE_ELEMENT_OPTIONS));
-				if (per_element_options.size > 0) {
-					// Ensure that at least 2 parameters are specified
-					Stream<char> option_parameter = GetStringParameter(per_element_options);
-					if (option_parameter.size == 0) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_CUSTOM_TYPE_ELEMENT_OPTIONS for type {#}: field {#} has this tag but no parenthesis. ", type.name, type.fields[index].name);
+				Stream<char> pointer_as_reference = type.fields[index].GetTag(STRING(ECS_POINTER_AS_REFERENCE));
+				// We must check this tag after the element options, since element options can contain this inside
+				if (pointer_as_reference.size > 0) {
+					// Ensure it is a pointer field or a user defined type (which should be a custom type,
+					// But we are not checking that here)
+					if (type.fields[index].info.stream_type != ReflectionStreamFieldType::Pointer || type.fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has this tag but it is not a pointer or a custom type. ", type.name, type.fields[index].name);
 						WriteErrorMessage(data, message);
 						return;
 					}
 
-					ECS_STACK_CAPACITY_STREAM(Stream<char>, parameter_split, 32);
-					SplitString(option_parameter, ',', &parameter_split);
-					if (option_parameter.size < 2) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_CUSTOM_TYPE_ELEMENT_OPTIONS for type {#}: field {#} has this tag but not enough parameters. ", type.name, type.fields[index].name);
+					// Ensure that no parameters are specified, a single one, or 2 with the second one being ECS_CUSTOM_TYPE_ELEMENT
+					Stream<char> parameters = GetStringParameter(pointer_as_reference);
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, parameter_splits, 8);
+					SplitString(parameters, ",", &parameter_splits);
+					if (parameter_splits.size > 2) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has more than two parameter. ", type.name, type.fields[index].name);
 						WriteErrorMessage(data, message);
 						return;
 					}
-				}
-				else {
-					// We must check this tag after the element options, since element options can contain this inside
-					if (type.fields[index].Has(STRING(ECS_POINTER_AS_REFERENCE))) {
-						// Ensure it is a pointer field
-						if (type.fields[index].info.stream_type != ReflectionStreamFieldType::Pointer) {
-							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has this tag but it is not a pointer. ", type.name, type.fields[index].name);
+
+					if (parameter_splits.size == 2) {
+						if (!parameter_splits[1].StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
+							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has 2 parameters, but the second one has to be ECS_CUSTOM_TYPE_ELEMENT",
+								type.name, type.fields[index].name);
 							WriteErrorMessage(data, message);
 							return;
 						}
-
-						// Ensure that a no parameters are specified or just a single one
-						Stream<char> parameters = GetStringParameter(type.fields[index].tag);
-						if (FindFirstCharacter(parameters, ',').size > 0) {
-							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has more than one parameter. ", type.name, type.fields[index].name);
+					}
+				}
+				else {
+					Stream<char> pointer_reference_target = type.fields[index].GetTag(STRING(ECS_POINTER_KEY_REFERENCE_TARGET));
+					if (pointer_reference_target.size > 0) {
+						// Ensure that it has 1 or 2 parameters
+						Stream<char> parameters = GetStringParameter(pointer_reference_target);
+						ECS_STACK_CAPACITY_STREAM(Stream<char>, parameter_splits, 8);
+						SplitString(parameters, ",", &parameter_splits);
+						if (parameter_splits.size == 0) {
+							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has 0 parameters, but one is mandatory. ", 
+								type.name, type.fields[index].name);
 							WriteErrorMessage(data, message);
 							return;
+						}
+						else if (parameter_splits.size > 2) {
+							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has mora than 2 parameters, which is the maximum. ",
+								type.name, type.fields[index].name);
+							WriteErrorMessage(data, message);
+							return;
+						}
+						else if (parameter_splits.size == 2) {
+							// Check that the second parameter is the custom macro
+							if (!parameter_splits[1].StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
+								ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has 2 parameters," 
+									" but the second one should be ECS_CUSTOM_TYPE_ELEMENT. ",
+									type.name, type.fields[index].name);
+								WriteErrorMessage(data, message);
+								return;
+							}
 						}
 					}
 				}
@@ -4832,6 +4856,55 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 		}
 
+		void CopyReflectionFieldBasicWithTag(
+			const ReflectionFieldInfo* info,
+			const void* source,
+			void* destination,
+			AllocatorPolymorphic allocator,
+			Stream<char> tag,
+			ReflectionPassdownInfo* passdown_info
+		) {
+			// If it is a pointer with the reference as tag, we need to handle it,
+			// Else we can forward to the normal copy function
+			if (info->stream_type == ReflectionStreamFieldType::Pointer) {
+				// If it has the pointer key tag, add it to the passdown information
+				Stream<char> reference_key_target_macro = GetReflectionFieldSeparatedTag(tag, STRING(ECS_POINTER_KEY_REFERENCE_TARGET));
+				if (reference_key_target_macro.size > 0) {
+					Stream<char> reference_key_value = GetStringParameter(reference_key_target_macro);
+					ECS_ASSERT(reference_key_value.size > 0);
+					passdown_info->AddPointerReference(reference_key_value, info, {}, {}, source, destination);
+				}
+
+				Stream<char> reference_as_tag = GetReflectionFieldSeparatedTag(tag, STRING(ECS_POINTER_AS_REFERENCE));
+				if (reference_as_tag.size > 0) {
+					// We need to handle it, if the string parameter is specified
+					Stream<char> target_string = GetStringParameter(reference_as_tag);
+					if (target_string.size > 0) {
+						// Use the token route, it is faster
+						const void* source_pointer = *(void**)source;
+						size_t source_token = passdown_info->GetPointerTargetToken(target_string, source_pointer, true);
+						ECS_ASSERT(source_token != -1, "Reflection pointer reference token unmatched");
+						// Retrieve the value from the destination
+						void* destination_pointer = passdown_info->RetrievePointerTargetValueFromToken(target_string, source_token, false);
+						ECS_ASSERT(destination_pointer != nullptr, "Reflection destination pointer reference is unmatched");
+						// Write the current pointer now
+						*(void**)destination = destination_pointer;
+					}
+					else {
+						// Normal copy
+						CopyReflectionFieldBasic(info, source, destination, allocator);
+					}
+				}
+				else {
+					// The normal function can take care of it
+					CopyReflectionFieldBasic(info, source, destination, allocator);
+				}
+			}
+			else {
+				CopyReflectionFieldBasic(info, source, destination, allocator);
+			}
+		}
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator, bool reset_buffers) {
@@ -5653,6 +5726,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						copy_data.options = options->custom_options;
 						copy_data.reflection_manager = reflection_manager;
 						copy_data.source = type->GetField(source_data, allocator_info->field_index);
+						// The allocator doesn't need the passdown info
+						copy_data.passdown_info = nullptr;
 						ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR]->Copy(&copy_data);
 					}
 				}
@@ -5716,10 +5791,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			Stream<char> definition,
 			const void* source,
 			void* destination,
-			const CopyReflectionDataOptions* options
+			const CopyReflectionDataOptions* options,
+			Stream<char> tags
 		) {
 			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(reflection_manager, definition);
-			return CopyReflectionTypeInstance(reflection_manager, definition, definition_info, source, destination, options);
+			return CopyReflectionTypeInstance(reflection_manager, definition, definition_info, source, destination, options, tags);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -5730,7 +5806,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const ReflectionDefinitionInfo& definition_info,
 			const void* source,
 			void* destination,
-			const CopyReflectionDataOptions* options
+			const CopyReflectionDataOptions* options,
+			Stream<char> tags
 		) {
 			if (definition_info.is_blittable) {
 				// Can memcpy directly
@@ -5741,7 +5818,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				if (definition_info.is_basic_field) {
 					// Create a mock reflection field
 					ReflectionField field = definition_info.GetBasicField();
-					CopyReflectionFieldBasic(&field.info, source, destination, options->allocator);
+					CopyReflectionFieldBasicWithTag(&field.info, source, destination, options->allocator, tags, options->passdown_info);
 				}
 				else if (definition_info.type != nullptr) {
 					// Forward the call
@@ -5756,6 +5833,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					copy_data.source = source;
 					copy_data.reflection_manager = reflection_manager;
 					copy_data.options = options->custom_options;
+					copy_data.passdown_info = options->passdown_info;
+					copy_data.tags = tags;
 					definition_info.custom_type->Copy(&copy_data);
 				}
 			}
@@ -6293,6 +6372,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const CopyReflectionDataOptions* options
 		)
 		{
+			// If the passdown info is missing, then we need to create one
+			ECS_REFLECTION_STACK_PASSDOWN_INFO(passdown_info);
+			CopyReflectionDataOptions adjusted_options;
+			if (options->passdown_info == nullptr) {
+				adjusted_options = *options;
+				adjusted_options.passdown_info = &passdown_info;
+				options = &adjusted_options;
+			}
+			
 			const ReflectionField* field = &type->fields[field_index];
 
 			if (options->always_allocate_for_buffers || options->custom_options.deallocate_existing_data) {
@@ -6322,6 +6410,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 			}
 
+			options->passdown_info->AddPointerReferencesFromField(&type->fields[field_index], source, destination);
+
 			// If not a user defined type, can copy it
 			if (field->info.basic_type != ReflectionBasicFieldType::UserDefined) {
 				if (field->info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
@@ -6341,15 +6431,22 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						// If it is a pointer, and no reference tag is specified, allocate the entry and call copy on it
 						if (field->info.stream_type == ReflectionStreamFieldType::Pointer) {
 							ECS_ASSERT(GetReflectionFieldPointerIndirection(field->info) == 1, "Pointers of indirection greater than 1 are not allowed");
-							void** field_data = (void**)destination;
-							const void* source_pointer = *(void**)source;
-							if (source_pointer == nullptr) {
-								// Handle the nullptr case
-								*field_data = nullptr;
+							// Check the reference pointer
+							if (field->Has(STRING(ECS_POINTER_AS_REFERENCE))) {
+								// The basic field with tag will properly take care of this case
+								CopyReflectionFieldBasicWithTag(&field->info, source, destination, field_allocator, field->tag, options->passdown_info);
 							}
 							else {
-								*field_data = Allocate(field_allocator, field->info.stream_byte_size, field->info.stream_alignment);
-								memcpy(*field_data, source_pointer, field->info.stream_byte_size);
+								void** field_data = (void**)destination;
+								const void* source_pointer = *(void**)source;
+								if (source_pointer == nullptr) {
+									// Handle the nullptr case
+									*field_data = nullptr;
+								}
+								else {
+									*field_data = Allocate(field_allocator, field->info.stream_byte_size, field->info.stream_alignment);
+									memcpy(*field_data, source_pointer, field->info.stream_byte_size);
+								}
 							}
 						}
 						else {
@@ -6399,16 +6496,23 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						else {
 							if (field->info.stream_type == ReflectionStreamFieldType::Pointer) {
 								ECS_ASSERT(GetReflectionFieldPointerIndirection(field->info) == 1, "Pointers of indirection greater than 1 are not allowed");
-								void** field_data = (void**)destination;
-								const void* source_pointer = *(void**)source;
-								if (source_pointer == nullptr) {
-									// Handle the nullptr case
-									*field_data = nullptr;
+								// Check the reference pointer
+								if (field->Has(STRING(ECS_POINTER_AS_REFERENCE))) {
+									// The basic field with tag will properly take care of this case
+									CopyReflectionFieldBasicWithTag(&field->info, source, destination, field_allocator, field->tag, options->passdown_info);
 								}
 								else {
-									*field_data = Allocate(field_allocator, field->info.stream_byte_size, field->info.stream_alignment);
-									// Copy the definition using the general copy function
-									CopyReflectionTypeInstance(reflection_manager, field->definition, source_pointer, *field_data, options);
+									void** field_data = (void**)destination;
+									const void* source_pointer = *(void**)source;
+									if (source_pointer == nullptr) {
+										// Handle the nullptr case
+										*field_data = nullptr;
+									}
+									else {
+										*field_data = Allocate(field_allocator, field->info.stream_byte_size, field->info.stream_alignment);
+										// Copy the definition using the general copy function
+										CopyReflectionTypeInstance(reflection_manager, field->definition, source_pointer, *field_data, options);
+									}
 								}
 							}
 							else {
@@ -6451,11 +6555,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									ReflectionCustomTypeCopyData copy_data;
 									copy_data.allocator = field_allocator;
 									copy_data.definition = field->definition;
+									copy_data.tags = field->tag;
 									copy_data.destination = destination;
 									copy_data.source = source;
 									copy_data.reflection_manager = reflection_manager;
 									copy_data.options = options->custom_options;
-
+									copy_data.passdown_info = options->passdown_info;
 									custom_type->Copy(&copy_data);
 								}
 							}
@@ -7360,6 +7465,137 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					);
 				}
 			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionPassdownInfo::AddPointerReference(
+			Stream<char> key, 
+			bool is_pointer, 
+			Stream<char> definition, 
+			Stream<char> element_type_name,
+			const void* source_data,
+			const void* destination_data
+		) {
+			PointerReferenceTarget target;
+			target.custom_type_index = -1;
+			target.definition = definition;
+			target.element_type_name = element_type_name;
+			target.source_data = source_data;
+			target.destination_data = destination_data;
+			target.is_pointer = is_pointer;
+			target.key = key;
+
+			// Initialize the find and get elements here
+			target.cached_find_data.definition = definition;
+			target.cached_find_data.element_name_type = element_type_name;
+
+			target.cached_get_data.definition = definition;
+			target.cached_get_data.element_name_type = element_type_name;
+			pointer_reference_targets.Add(&target);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionPassdownInfo::AddPointerReferencesFromField(const ReflectionField* field, const void* source_data, const void* destination_data)
+		{
+			bool is_pointer = false;
+			if (field->info.stream_type == ReflectionStreamFieldType::Pointer) {
+				// Treat this as a pointer
+				is_pointer = true;
+			}
+			else {
+				// If the basic type is different from user defined, then don't add these
+				if (field->info.basic_type != ReflectionBasicFieldType::UserDefined) {
+					return;
+				}
+			}
+
+			Stream<char> search_string = STRING(ECS_POINTER_KEY_REFERENCE_TARGET);
+			Stream<char> target_tag = field->GetTag(search_string);
+			while (target_tag.size > 0) {
+				Stream<char> parameters = GetStringParameter(target_tag);
+				ECS_STACK_CAPACITY_STREAM(Stream<char>, parameters_split, 2);
+				SplitString(parameters, ',', &parameters_split);
+				Stream<char> element_custom_type = {};
+				if (parameters_split.size == 2) {
+					element_custom_type = parameters_split[1];
+				}
+				AddPointerReference(parameters_split[0], is_pointer, field->definition, element_custom_type, source_data, destination_data);
+
+				target_tag = field->GetNextTag(target_tag, search_string);
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static size_t ReflectionPassdownInfoGetPointerTargetImpl(ReflectionPassdownInfo* info, Stream<char> key, const void* pointer_value, bool is_source_data, bool is_token) {
+			ReflectionPassdownInfo::PointerReferenceTarget* target = info->FindPointerTarget(key);
+			if (target == nullptr) {
+				return -1;
+			}
+
+			const void* field_data = is_source_data ? target->source_data : target->destination_data;
+			if (target->is_pointer) {
+				return *(void**)field_data == pointer_value ? 0 : -1;
+			}
+			else {
+				// It has to be a custom type
+				if (target->custom_type_index == -1) {
+					target->custom_type_index = FindReflectionCustomType(target->definition);
+					ECS_ASSERT(target->custom_type_index != -1);
+				}
+
+				target->cached_find_data.is_token = is_token;
+				target->cached_find_data.element = &pointer_value;
+				target->cached_find_data.source = field_data;
+				return ECS_REFLECTION_CUSTOM_TYPES[target->custom_type_index]->FindElement(&target->cached_find_data);
+			}
+		}
+
+		size_t ReflectionPassdownInfo::GetPointerTargetIndex(Stream<char> key, const void* pointer_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, pointer_value, is_source_data, false);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t ReflectionPassdownInfo::GetPointerTargetToken(Stream<char> key, const void* pointer_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, pointer_value, is_source_data, true);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static void* ReflectionPassdownInfoGetPointerTargetImpl(ReflectionPassdownInfo* info, Stream<char> key, size_t value, bool is_source_data, bool is_token) {
+			ReflectionPassdownInfo::PointerReferenceTarget* target = info->FindPointerTarget(key);
+			if (target == nullptr) {
+				return nullptr;
+			}
+
+			const void* field_data = is_source_data ? target->source_data : target->destination_data;
+			if (target->is_pointer) {
+				// If it is 0, then dereference the pointer, else return nullptr
+				return value == 0 ? *(void**)field_data : nullptr;
+			}
+			else {
+				// It has to be a custom type
+				if (target->custom_type_index == -1) {
+					target->custom_type_index = FindReflectionCustomType(target->definition);
+					ECS_ASSERT(target->custom_type_index != -1);
+				}
+
+				target->cached_get_data.is_token = is_token;
+				target->cached_get_data.index_or_token = value;
+				target->cached_get_data.source = field_data;
+				return ECS_REFLECTION_CUSTOM_TYPES[target->custom_type_index]->GetElement(&target->cached_get_data);
+			}
+		}
+
+		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromIndex(Stream<char> key, size_t index_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, index_value, is_source_data, false);
+		}
+
+		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromToken(Stream<char> key, size_t token_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, token_value, is_source_data, true);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

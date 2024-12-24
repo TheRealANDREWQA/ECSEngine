@@ -363,7 +363,7 @@ namespace ECSEngine {
 			}
 
 			void* buffer = *(void**)data->source;
-			return OffsetPointer(buffer, data->element_byte_size * data->index);
+			return OffsetPointer(buffer, data->element_byte_size * data->index_or_token);
 		}
 
 		size_t StreamCustomTypeInterface::FindElement(ReflectionCustomTypeFindElementData* data) {
@@ -372,8 +372,16 @@ namespace ECSEngine {
 				data->element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, ReflectionCustomTypeGetTemplateArgument(data->definition));
 			}
 
-			void* buffer = *(void**)data->source;
-			return PointerDifference(data->element, buffer) / data->element_byte_size;
+			Stream<void> stream;
+			if (data->definition.StartsWith(STRING(Stream))) {
+				stream = *(Stream<void>*)data->source;
+			}
+			else {
+				// Capacity or resizable, can alias them
+				stream = *(CapacityStream<void>*)data->source;
+			}
+
+			return SearchBytesEx(stream.buffer, stream.size, data->element, data->element_byte_size);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -572,7 +580,7 @@ namespace ECSEngine {
 			}
 
 			void* buffer = *(void**)data->source;
-			return OffsetPointer(buffer, data->element_byte_size * data->index);
+			return OffsetPointer(buffer, data->element_byte_size * data->index_or_token);
 		}
 
 		size_t SparseSetCustomTypeInterface::FindElement(ReflectionCustomTypeFindElementData* data) {
@@ -581,8 +589,9 @@ namespace ECSEngine {
 				data->element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, ReflectionCustomTypeGetTemplateArgument(data->definition));
 			}
 
-			void* buffer = *(void**)data->source;
-			return PointerDifference(data->element, buffer) / data->element_byte_size;
+			// Can type pun both resizable and non resizable streams
+			const SparseSet<char>* sparse_set = (const SparseSet<char>*)data->source;
+			return SearchBytesEx(sparse_set->buffer, sparse_set->size, data->element, data->element_byte_size);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1061,7 +1070,8 @@ namespace ECSEngine {
 			};
 
 			// Assert that the hash function is known, otherwise we don't know how much space it takes
-			ECS_ASSERT(FindString(template_arguments.hash_function_type, { known_hash_functions, ECS_COUNTOF(known_hash_functions) }) != -1, "The hash table reflection can't cope with custom hash functions.");
+			ECS_ASSERT(FindString(template_arguments.hash_function_type, { known_hash_functions, ECS_COUNTOF(known_hash_functions) }) != -1, 
+				"The hash table reflection can't cope with custom hash functions.");
 			return { sizeof(HashTableDefault<char>), alignof(HashTableDefault<char>) };
 		}
 
@@ -1399,11 +1409,11 @@ namespace ECSEngine {
 			size_t table_index = 0;
 			size_t extended_capacity = table->GetExtendedCapacity();
 			if (data->is_token) {
-				table_index = data->index;
+				table_index = data->index_or_token;
 			}
 			else {
-				table_index = cache_info->last_user_index > data->index ? 0 : cache_info->last_table_index;
-				size_t remaining_elements = cache_info->last_user_index > data->index ? data->index : data->index - cache_info->last_user_index;
+				table_index = cache_info->last_user_index > data->index_or_token ? 0 : cache_info->last_table_index;
+				size_t remaining_elements = cache_info->last_user_index > data->index_or_token ? data->index_or_token : data->index_or_token - cache_info->last_user_index;
 				// We exit the while from a break
 				while (table_index < extended_capacity) {
 					if (table->IsItemAt(table_index)) {
@@ -1422,7 +1432,7 @@ namespace ECSEngine {
 			}
 
 			cache_info->last_table_index = table_index;
-			cache_info->last_user_index = data->index;
+			cache_info->last_user_index = data->index_or_token;
 
 			if (cache_info->is_soa) {
 				if (data->element_name_index == ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) {
