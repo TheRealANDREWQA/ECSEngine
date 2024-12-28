@@ -458,11 +458,7 @@ namespace ECSEngine {
 			TokenizedString::Subrange field_type_tokens,
 			ReflectionField& field
 		) {
-			// The definition of the field is all tokens except the final one which is the name. But also remove tokens that are * or &, 
-			// Since those are special
-			TokenizedString::Subrange definition_tokens = RemoveFieldTypeQualifiers(string, field_type_tokens);
-
-			Stream<char> definition = string.GetStreamForSubrange(definition_tokens);
+			Stream<char> definition = string.GetStreamForSubrange(field_type_tokens);
 			// Copy the definition in order to not modify the actual string
 			definition = definition.Copy(&data->allocator);
 			definition = RemoveECSEngineNamespace(definition);
@@ -494,25 +490,25 @@ namespace ECSEngine {
 			const TokenizedString& string,
 			TokenizedString::Subrange field_tokens
 		) {
-			unsigned int first_star_index = TokenizeFindToken(string, "*", field_tokens);
-
-			if (first_star_index != -1) {
+			// Pointers must have the last tokens, besides the name as *
+			unsigned int star_index = field_tokens.count - 2;
+			if (string[field_tokens[star_index]] == "*") {
 				ReflectionField field;
 				// The field name is the second to last token
 				field.name = GetStructFieldName(string, field_tokens);
 
-				unsigned int final_star_index = first_star_index + 1;
-				while (final_star_index < field_tokens.count && string[field_tokens[final_star_index]] == "*") {
-					final_star_index++;
+				unsigned int final_star_index = star_index;
+				while (final_star_index > 0 && string[field_tokens[final_star_index]] == "*") {
+					final_star_index--;
 				}
-				size_t pointer_level = final_star_index - first_star_index;
 
+				size_t pointer_level = star_index - final_star_index;
 				unsigned short before_pointer_offset = pointer_offset;
 				DeduceFieldTypeExtended(
 					data,
 					pointer_offset,
 					string,
-					field_tokens.GetSubrange(0, first_star_index),
+					field_tokens.GetSubrange(0, final_star_index + 1),
 					field
 				);
 
@@ -542,8 +538,6 @@ namespace ECSEngine {
 			const TokenizedString& string,
 			TokenizedString::Subrange field_tokens
 		) {
-			// Test each keyword
-
 			auto parse_stream_type = [&](ReflectionStreamFieldType stream_type, size_t byte_size, const char* stream_name) {
 				ReflectionField field;
 				field.name = string[field_tokens[field_tokens.count - 1]];
@@ -787,6 +781,13 @@ namespace ECSEngine {
 							}
 							else {
 								replaced_field_definition.AddStreamAssert(tokenized_field_definition[index]);
+								// Add a special case for unsigned. If we have unsigned char or unsigned short
+								// In the definition, we must add a space to separate the words
+								if (tokenized_field_definition[index] == STRING(unsigned)) {
+									if (index < field_tokens.size - 1 && field_tokens[index + 1].type == ECS_TOKEN_TYPE_GENERAL) {
+										replaced_field_definition.AddAssert(' ');
+									}
+								}
 							}
 						}
 						else {
@@ -1110,12 +1111,13 @@ namespace ECSEngine {
 			// Verify that the tags that are specified per field have their constraints met,
 			// like tags specific to pointers are applied to pointers
 			for (size_t index = 0; index < type.fields.size; index++) {
+				// TODO: Test that the pointer as reference and pointer key target are not applied at the same time?
 				Stream<char> pointer_as_reference = type.fields[index].GetTag(STRING(ECS_POINTER_AS_REFERENCE));
 				// We must check this tag after the element options, since element options can contain this inside
-				if (pointer_as_reference.size > 0) {
+				while (pointer_as_reference.size > 0) {
 					// Ensure it is a pointer field or a user defined type (which should be a custom type,
 					// But we are not checking that here)
-					if (type.fields[index].info.stream_type != ReflectionStreamFieldType::Pointer || type.fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					if (type.fields[index].info.stream_type != ReflectionStreamFieldType::Pointer && type.fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
 						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has this tag but it is not a pointer or a custom type. ", type.name, type.fields[index].name);
 						WriteErrorMessage(data, message);
 						return;
@@ -1139,37 +1141,40 @@ namespace ECSEngine {
 							return;
 						}
 					}
+
+					pointer_as_reference = type.fields[index].GetNextTag(pointer_as_reference, STRING(ECS_POINTER_AS_REFERENCE));
 				}
-				else {
-					Stream<char> pointer_reference_target = type.fields[index].GetTag(STRING(ECS_POINTER_KEY_REFERENCE_TARGET));
-					if (pointer_reference_target.size > 0) {
-						// Ensure that it has 1 or 2 parameters
-						Stream<char> parameters = GetStringParameter(pointer_reference_target);
-						ECS_STACK_CAPACITY_STREAM(Stream<char>, parameter_splits, 8);
-						SplitString(parameters, ",", &parameter_splits);
-						if (parameter_splits.size == 0) {
-							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has 0 parameters, but one is mandatory. ", 
+
+				Stream<char> pointer_reference_target = type.fields[index].GetTag(STRING(ECS_POINTER_KEY_REFERENCE_TARGET));
+				while (pointer_reference_target.size > 0) {
+					// Ensure that it has 1 or 2 parameters
+					Stream<char> parameters = GetStringParameter(pointer_reference_target);
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, parameter_splits, 8);
+					SplitString(parameters, ",", &parameter_splits);
+					if (parameter_splits.size == 0) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has 0 parameters, but one is mandatory. ", 
+							type.name, type.fields[index].name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+					else if (parameter_splits.size > 2) {
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has mora than 2 parameters, which is the maximum. ",
+							type.name, type.fields[index].name);
+						WriteErrorMessage(data, message);
+						return;
+					}
+					else if (parameter_splits.size == 2) {
+						// Check that the second parameter is the custom macro
+						if (!parameter_splits[1].StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
+							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has 2 parameters," 
+								" but the second one should be ECS_CUSTOM_TYPE_ELEMENT. ",
 								type.name, type.fields[index].name);
 							WriteErrorMessage(data, message);
 							return;
-						}
-						else if (parameter_splits.size > 2) {
-							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has mora than 2 parameters, which is the maximum. ",
-								type.name, type.fields[index].name);
-							WriteErrorMessage(data, message);
-							return;
-						}
-						else if (parameter_splits.size == 2) {
-							// Check that the second parameter is the custom macro
-							if (!parameter_splits[1].StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
-								ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has 2 parameters," 
-									" but the second one should be ECS_CUSTOM_TYPE_ELEMENT. ",
-									type.name, type.fields[index].name);
-								WriteErrorMessage(data, message);
-								return;
-							}
 						}
 					}
+
+					pointer_reference_target = type.fields[index].GetNextTag(pointer_reference_target, STRING(ECS_POINTER_KEY_REFERENCE_TARGET));
 				}
 			}
 
@@ -4438,30 +4443,31 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						return false;
 					}
 				}
-
-				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					// Check it
-					ReflectionType nested_type;
-					if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-						if (!SearchIsBlittable(reflection_manager, &nested_type)) {
-							return false;
-						}
-					}
-					else {
-						// Check custom type
-						ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[index].definition);
-						if (custom_type != nullptr) {
-							ReflectionCustomTypeIsBlittableData data;
-							data.reflection_manager = reflection_manager;
-							data.definition = type->fields[index].definition;
-							if (!custom_type->IsBlittable(&data)) {
+				else {
+					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+						// Check it
+						ReflectionType nested_type;
+						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
+							if (!SearchIsBlittable(reflection_manager, &nested_type)) {
 								return false;
 							}
 						}
 						else {
-							// Check for ECS_GIVE_SIZE_REFLECTION tag. If it present, assume it is trivially copyable
-							// because we don't know its fields
-							ECS_ASSERT(type->fields[index].Has(STRING(ECS_GIVE_SIZE_REFLECTION)));
+							// Check custom type
+							ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[index].definition);
+							if (custom_type != nullptr) {
+								ReflectionCustomTypeIsBlittableData data;
+								data.reflection_manager = reflection_manager;
+								data.definition = type->fields[index].definition;
+								if (!custom_type->IsBlittable(&data)) {
+									return false;
+								}
+							}
+							else {
+								// Check for ECS_GIVE_SIZE_REFLECTION tag. If it present, assume it is trivially copyable
+								// because we don't know its fields
+								ECS_ASSERT(type->fields[index].Has(STRING(ECS_GIVE_SIZE_REFLECTION)));
+							}
 						}
 					}
 				}
@@ -4560,13 +4566,24 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ReflectionDefinitionInfo definition_info;
 
 			// Check pointers
-			if (FindFirstCharacter(definition, '*').size > 0) {
+			if (definition.Last() == '*') {
+				size_t indirection = 0;
+				while (definition.Last() == '*') {
+					indirection++;
+					definition.size--;
+				}
+				ECS_ASSERT(indirection <= UCHAR_MAX, "Pointer indirection exceeded maximum limit!");
+				
+				// Try to retrieve the basic type using this definition
+				definition_info.field_basic_type = GetReflectionFieldInfo(reflection_manager, definition).info.basic_type;
+
 				definition_info.byte_size = sizeof(void*);
 				definition_info.alignment = alignof(void*);
 				definition_info.is_blittable = false;
 				definition_info.is_basic_field = true;
 				// Set the field basic type as UserDefined, since we are currently not detecting the target pointer type
 				definition_info.field_stream_type = ReflectionStreamFieldType::Pointer;
+				definition_info.field_pointer_indirection = (unsigned char)indirection;
 				return definition_info;
 			}
 

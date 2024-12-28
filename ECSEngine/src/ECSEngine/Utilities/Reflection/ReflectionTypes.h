@@ -566,8 +566,14 @@ namespace ECSEngine {
 				field.info.byte_size = byte_size;
 				field.info.basic_type = field_basic_type;
 				field.info.stream_type = field_stream_type;
-				field.info.stream_alignment = field_stream_alignment;
-				field.info.stream_byte_size = field_stream_byte_size;
+				if (field_stream_type == ReflectionStreamFieldType::Pointer) {
+					// This is the field that is used as pointer indirection level
+					field.info.basic_type_count = field_pointer_indirection;
+				}
+				else if (field_stream_type != ReflectionStreamFieldType::Basic) {
+					field.info.stream_alignment = field_stream_alignment;
+					field.info.stream_byte_size = field_stream_byte_size;
+				}
 				return field;
 			}
 
@@ -585,7 +591,13 @@ namespace ECSEngine {
 				// We cannot obtain SoA pointers from definitions, so no need to handle that case
 				ReflectionBasicFieldType field_basic_type = ReflectionBasicFieldType::UserDefined;
 				ReflectionStreamFieldType field_stream_type = ReflectionStreamFieldType::Basic;
-				unsigned char field_stream_alignment = 0;
+				union {
+					// Valid when the stream type is an actual stream
+					unsigned char field_stream_alignment = 0;
+					// Valid when the stream type is the pointer
+					unsigned char field_pointer_indirection;
+				};
+				// Valid when the stream type is an actual stream
 				unsigned short field_stream_byte_size = 0;
 			};
 

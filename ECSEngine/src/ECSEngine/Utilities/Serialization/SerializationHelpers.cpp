@@ -156,28 +156,27 @@ namespace ECSEngine {
 			}
 			else {
 				if (data->definition_info.field_stream_type != ReflectionStreamFieldType::Basic) {
-					// Serialize using known types - basic and stream based ones of primitive types
-					// PERFORMANCE TODO: Can we replace the loops with memcpys?
-					// If these are basic types, with no user defined ones and no nested streams,
-					// We can memcpy directly
+					//if (data->definition_info.field_stream_type == ReflectionStreamFieldType::Pointer) {
 
-					ReflectionFieldInfo field_info;
-					field_info.basic_type = data->definition_info.field_basic_type;
-					field_info.stream_type = data->definition_info.field_stream_type;
+					//}
+					//else {
+						// Serialize using known types - basic and stream based ones of primitive types
+						// PERFORMANCE TODO: Can we replace the loops with memcpys?
+						// If these are basic types, with no user defined ones and no nested streams,
+						// We can memcpy directly
 
-					field_info.stream_byte_size = data->definition_info.field_stream_byte_size;
-					size_t stream_offset = data->definition_info.field_stream_type == ReflectionStreamFieldType::ResizableStream ? sizeof(ResizableStream<void>) : sizeof(Stream<void>);
-
-					if (data->write_data->write_data) {
-						iterate_elements([&field_info, data](void* element) {
-							WriteFundamentalType<true>(field_info, element, *data->write_data->stream);
-						});
-					}
-					else {
-						iterate_elements([&field_info, data, &serialize_size](void* element) {
-							serialize_size += WriteFundamentalType<false>(field_info, element, *data->write_data->stream);
-						});
-					}
+						ReflectionField field = data->definition_info.GetBasicField();
+						if (data->write_data->write_data) {
+							iterate_elements([&field, data](void* element) {
+								WriteFundamentalType<true>(field.info, element, *data->write_data->stream);
+								});
+						}
+						else {
+							iterate_elements([&field, data, &serialize_size](void* element) {
+								serialize_size += WriteFundamentalType<false>(field.info, element, *data->write_data->stream);
+								});
+						}
+					//}
 				}
 				else {
 					ECS_ASSERT(false, "Critical error in serialization helper write: unknown case (non blittable basic field)");
