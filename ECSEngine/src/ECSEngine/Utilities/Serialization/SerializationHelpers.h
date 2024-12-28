@@ -496,7 +496,10 @@ namespace ECSEngine {
 						return WriteWithSize<write_data>(&stream, characters, character_count * sizeof(wchar_t));
 					}
 					else {
-						ECS_ASSERT(false, "Failed to serialize basic pointer with indirection 1. It is not a char* or wchar_t*.");
+						ECS_ASSERT(info.basic_type != ReflectionBasicFieldType::UserDefined, "WriteFundamentalType does not accept user defined pointers!");
+						// Write the value that is there
+						size_t write_size = GetReflectionBasicFieldTypeByteSize(info.basic_type);
+						return Write<write_data>(&stream, data, write_size);
 					}
 				}
 				else {
@@ -603,7 +606,9 @@ namespace ECSEngine {
 						return byte_size;
 					}
 					else {
-						ECS_ASSERT(false, "Cannot deserialize pointer with indirection 1. Type is not char* or wchar_t*.");
+						size_t fundamental_byte_size = GetReflectionBasicFieldTypeByteSize(info.basic_type);
+						Read<read_data>(&stream, data, fundamental_byte_size);
+						return 0;
 					}
 				}
 				else {

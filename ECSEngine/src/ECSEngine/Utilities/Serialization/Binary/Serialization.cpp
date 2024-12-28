@@ -433,6 +433,21 @@ namespace ECSEngine {
 
 			return true;
 		}
+		// Handle the void case separately
+		else if (definition == STRING(void)) {
+			return true;
+		}
+		else {
+			// Pointers can fall into this category
+			Stream<char> no_pointer_definition = definition;
+			while (no_pointer_definition.Last() == '*') {
+				no_pointer_definition.size--;
+			}
+			if (no_pointer_definition.size != definition.size) {
+				// Return the dependent types of the target of the pointee
+				return SerializeHasDependentTypesCustomSerializerRecurse(reflection_manager, no_pointer_definition, custom_serializer_success, omit_fields);
+			}
+		}
 		return false;
 	}
 
@@ -443,7 +458,7 @@ namespace ECSEngine {
 		bool custom_serializer_success = true;
 
 		for (size_t index = 0; index < type->fields.size; index++) {
-			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD_REFLECT));
+			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 			if (!skip_serializable) {
 				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
 				if (!skip_serializable) {
@@ -634,19 +649,8 @@ namespace ECSEngine {
 									// No need to test the return code since it cannot fail if it gets to here
 									SerializeImplementation<write_data>(reflection_manager, &nested_type, *(void**)field_data, stream, nested_options, total_size);
 								}
-								else if (basic_type == ReflectionBasicFieldType::Int8) {
-									const char* characters = *(const char**)field_data;
-									size_t character_size = strlen(characters) + 1;
-									*total_size += WriteWithSize<write_data>(&stream, characters, character_size);
-								}
-								else if (basic_type == ReflectionBasicFieldType::Wchar_t) {
-									const wchar_t* characters = *(const wchar_t**)field_data;
-									size_t character_size = wcslen(characters) + 1;
-									*total_size += WriteWithSize<write_data>(&stream, characters, character_size * sizeof(wchar_t));
-								}
-								// Other type of pointers cannot be serialized - they must be turned into streams
 								else {
-									ECS_ASSERT(false, "Cannot serialize pointers of indirection 1 of types other than char or wchar_t.");
+									*total_size += WriteFundamentalType<write_data>(type->fields[index].info, field_data, stream);
 								}
 							}
 							// Other types of pointers cannot be serialized - multi level indirections are not allowed
