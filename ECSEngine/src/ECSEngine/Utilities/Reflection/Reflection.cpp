@@ -4867,25 +4867,18 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// If it is a pointer with the reference as tag, we need to handle it,
 			// Else we can forward to the normal copy function
 			if (info->stream_type == ReflectionStreamFieldType::Pointer) {
-				// If it has the pointer key tag, add it to the passdown information
-				Stream<char> reference_key_target_macro = GetReflectionFieldSeparatedTag(tag, STRING(ECS_POINTER_KEY_REFERENCE_TARGET));
-				if (reference_key_target_macro.size > 0) {
-					Stream<char> reference_key_value = GetStringParameter(reference_key_target_macro);
-					ECS_ASSERT(reference_key_value.size > 0);
-					passdown_info->AddPointerReference(reference_key_value, info, {}, {}, source, destination);
-				}
+				Stream<char> as_reference_key;
+				Stream<char> as_reference_custom_element_type;
 
-				Stream<char> reference_as_tag = GetReflectionFieldSeparatedTag(tag, STRING(ECS_POINTER_AS_REFERENCE));
-				if (reference_as_tag.size > 0) {
+				if (GetReflectionPointerAsReferenceParams(tag, as_reference_key, as_reference_custom_element_type)) {
 					// We need to handle it, if the string parameter is specified
-					Stream<char> target_string = GetStringParameter(reference_as_tag);
-					if (target_string.size > 0) {
+					if (as_reference_key.size > 0) {
 						// Use the token route, it is faster
 						const void* source_pointer = *(void**)source;
-						size_t source_token = passdown_info->GetPointerTargetToken(target_string, source_pointer, true);
+						size_t source_token = passdown_info->GetPointerTargetToken(as_reference_key, source_pointer, true);
 						ECS_ASSERT(source_token != -1, "Reflection pointer reference token unmatched");
 						// Retrieve the value from the destination
-						void* destination_pointer = passdown_info->RetrievePointerTargetValueFromToken(target_string, source_token, false);
+						void* destination_pointer = passdown_info->RetrievePointerTargetValueFromToken(as_reference_key, source_token, false);
 						ECS_ASSERT(destination_pointer != nullptr, "Reflection destination pointer reference is unmatched");
 						// Write the current pointer now
 						*(void**)destination = destination_pointer;
@@ -5427,10 +5420,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const void* first, 
 			const void* second, 
 			bool offset_into_data,
-			const CompareReflectionTypeInstancesOptions* options
+			const ReflectionCustomTypeCompareOptions* options
 		)
 		{
-			CompareReflectionTypeInstancesOptions default_options;
+			ReflectionCustomTypeCompareOptions default_options;
 			if (options == nullptr) {
 				options = &default_options;
 			}
@@ -5442,7 +5435,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// Check to see if this is a blittable field according to the options
 			if (options->blittable_types.size > 0) {
-				unsigned int index = FindString(field->definition, options->blittable_types, [](CompareReflectionTypeInstanceBlittableType blittable_type) {
+				unsigned int index = FindString(field->definition, options->blittable_types, [](ReflectionCustomTypeCompareOptionBlittableType blittable_type) {
 					return blittable_type.field_definition;
 				});
 				if (index != -1) {
@@ -5472,6 +5465,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 				else if (field->info.stream_type == ReflectionStreamFieldType::Pointer) {
 					unsigned char pointer_indirection = GetReflectionFieldPointerIndirection(field->info);
+					// We are not handling the pointer as reference case differently, since the pointed
+					// Data should be the same
 					while (pointer_indirection > 0) {
 						first = *(void**)first;
 						second = *(void**)second;
@@ -5514,7 +5509,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const ReflectionType* type, 
 			const void* first, 
 			const void* second,
-			const CompareReflectionTypeInstancesOptions* options
+			const ReflectionCustomTypeCompareOptions* options
 		)
 		{
 			bool is_blittable = IsBlittable(type);
@@ -5542,15 +5537,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const void* first, 
 			const void* second, 
 			size_t count,
-			const CompareReflectionTypeInstancesOptions* options
+			const ReflectionCustomTypeCompareOptions* options
 		)
 		{
 			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(reflection_manager, definition);
-			if (definition_info.is_blittable) {
-				// Use a fast path for this
-				return memcmp(first, second, count * definition_info.byte_size) == 0;
-			}
-			return CompareReflectionTypeInstances(reflection_manager, definition, definition_info, first, second, options);
+			return CompareReflectionTypeInstances(reflection_manager, definition, definition_info, first, second, options );
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -5561,11 +5552,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const ReflectionDefinitionInfo& definition_info,
 			const void* first,
 			const void* second,
-			const CompareReflectionTypeInstancesOptions* options
+			const ReflectionCustomTypeCompareOptions* options
 		) {
 			if (definition_info.is_blittable) {
 				// Can use memcmp directly
-				return memcmp(first, second, definition_info.byte_size);
+				return memcmp(first, second, definition_info.byte_size) == 0;
 			}
 			else {
 				if (definition_info.type != nullptr) {
@@ -5577,6 +5568,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					compare_data.second = second;
 					compare_data.first = first;
 					compare_data.reflection_manager = reflection_manager;
+					compare_data.options = *options;
 					return definition_info.custom_type->Compare(&compare_data);
 				}
 				else {
@@ -7511,19 +7503,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 			}
 
-			Stream<char> search_string = STRING(ECS_POINTER_KEY_REFERENCE_TARGET);
-			Stream<char> target_tag = field->GetTag(search_string);
-			while (target_tag.size > 0) {
-				Stream<char> parameters = GetStringParameter(target_tag);
-				ECS_STACK_CAPACITY_STREAM(Stream<char>, parameters_split, 2);
-				SplitString(parameters, ',', &parameters_split);
-				Stream<char> element_custom_type = {};
-				if (parameters_split.size == 2) {
-					element_custom_type = parameters_split[1];
-				}
-				AddPointerReference(parameters_split[0], is_pointer, field->definition, element_custom_type, source_data, destination_data);
+			Stream<char> key;
+			Stream<char> custom_element_name;
+			Stream<char> search_tag = field->tag;
+			while (GetReflectionPointerReferenceKeyParams(search_tag, key, custom_element_name)) {
+				AddPointerReference(key, is_pointer, field->definition, custom_element_name, source_data, destination_data);
 
-				target_tag = field->GetNextTag(target_tag, search_string);
+				// Reduce the search string to the tag that starts from the key
+				search_tag = search_tag.SliceAt(key.buffer - search_tag.buffer);
 			}
 		}
 

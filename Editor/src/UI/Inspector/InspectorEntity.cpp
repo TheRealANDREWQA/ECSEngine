@@ -670,13 +670,8 @@ struct InspectorDrawEntityData {
 				Stream<char> link_name = link_components[index].name;
 				Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_name);
 
-				ECS_STACK_CAPACITY_STREAM(Reflection::CompareReflectionTypeInstanceBlittableType, blittable_types, 32);
-				size_t blittable_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
-				// This will include the misc Stream<void> with a pointer but that is no problem, shouldn't really happen in code
-				for (size_t blittable_index = 0; blittable_index < blittable_count; blittable_index++) {
-					blittable_types.AddAssert({ ECS_ASSET_TARGET_FIELD_NAMES[blittable_index].name, Reflection::ReflectionStreamFieldType::Pointer });
-				}
-				Reflection::CompareReflectionTypeInstancesOptions compare_options;
+				ECS_STACK_COMPONENT_BLITTABLE_TYPES(blittable_types);
+				Reflection::ReflectionCustomTypeCompareOptions compare_options;
 				compare_options.blittable_types = blittable_types;
 				if (!Reflection::CompareReflectionTypeInstances(editor_state->editor_components.internal_manager, target_name, target_data, current_data, 1, &compare_options)) {
 					// We need to convert the target to the link and update the target data copy

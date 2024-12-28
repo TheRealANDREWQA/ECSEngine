@@ -9,6 +9,7 @@ namespace ECSEngine {
 		struct ReflectionManager;
 		struct ReflectionType;
 		struct ReflectionNestedFieldIndex;
+		struct ReflectionCustomTypeCompareOptionBlittableType;
 	}
 
 	ECSENGINE_API bool IsReflectionTypeComponent(const Reflection::ReflectionType* type);
@@ -23,6 +24,13 @@ namespace ECSEngine {
 	ECSENGINE_API bool IsReflectionTypeLinkComponent(const Reflection::ReflectionType* type);
 
 	ECSENGINE_API bool IsReflectionTypeComponentType(const Reflection::ReflectionType* type, ECS_COMPONENT_TYPE component_type);
+
+	// Fills in the types which are considered blittable for a component
+	ECSENGINE_API void FillReflectionComponentBlittableTypes(CapacityStream<Reflection::ReflectionCustomTypeCompareOptionBlittableType>& blittable_types);
+
+#define ECS_STACK_COMPONENT_BLITTABLE_TYPES(array_name) \
+	ECS_STACK_CAPACITY_STREAM(Reflection::ReflectionCustomTypeCompareOptionBlittableType, array_name, 64); \
+	FillReflectionComponentBlittableTypes(array_name);
 
 	// It needs the allocator to write some data for the functions to use
 	// It builds default functions to handle Streams and DataPointers

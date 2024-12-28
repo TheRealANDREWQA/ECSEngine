@@ -458,12 +458,23 @@ namespace ECSEngine {
 			// Passed to other later fields
 			ReflectionPassdownInfo* passdown_info;
 		};
+		
+		struct ReflectionCustomTypeCompareOptionBlittableType {
+			Stream<char> field_definition;
+			ReflectionStreamFieldType stream_type;
+		};
+
+		struct ReflectionCustomTypeCompareOptions {
+			// Optional list of field definitions to be considered blittable
+			Stream<ReflectionCustomTypeCompareOptionBlittableType> blittable_types = {};
+		};
 
 		struct ReflectionCustomTypeCompareData {
 			const ReflectionManager* reflection_manager;
 			Stream<char> definition;
 			const void* first;
 			const void* second;
+			ReflectionCustomTypeCompareOptions options;
 		};
 
 		struct ReflectionCustomTypeDeallocateData {
@@ -682,6 +693,24 @@ namespace ECSEngine {
 		ECSENGINE_API ReflectionBasicFieldType ReduceMultiComponentReflectionType(ReflectionBasicFieldType type);
 
 		ECSENGINE_API ECS_INT_TYPE BasicTypeToIntType(ReflectionBasicFieldType type);
+		
+		// The options will be written into the stack memory because they cannot reference
+		// The tag characters as is. Each individual tag is separated from the others with
+		// The normal delimiter character
+		ECSENGINE_API void GetReflectionCustomTypeElementOptions(
+			Stream<char> tag, 
+			Stream<char> element_name, 
+			CapacityStream<Stream<char>>& options,
+			CapacityStream<char>& stack_memory
+		);
+
+		// The tag must be the entire field string, not the separated tag.
+		// Returns true if the tag is present, else false
+		ECSENGINE_API bool GetReflectionPointerAsReferenceParams(Stream<char> field_tag, Stream<char>& key, Stream<char>& custom_element_type);
+
+		// The tag must be the entire field string, not the separated tag.
+		// Returns true if the tag is present, else false
+		ECSENGINE_API bool GetReflectionPointerReferenceKeyParams(Stream<char> field_tag, Stream<char>& key, Stream<char>& custom_element_type);
 
 		ECS_INLINE size_t GetReflectionTypeSoaAllocationAlignment(const ReflectionType* type, const ReflectionTypeMiscSoa* soa) {
 			return type->fields[soa->parallel_streams[0]].info.stream_alignment;

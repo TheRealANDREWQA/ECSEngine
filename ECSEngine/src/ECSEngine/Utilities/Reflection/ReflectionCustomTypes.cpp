@@ -276,7 +276,7 @@ namespace ECSEngine {
 				for (size_t index = 0; index < source_size; index++) {
 					const void* current_source = OffsetPointer(source, index * element_info.byte_size);
 					void* current_destination = OffsetPointer(allocation, element_info.byte_size * index);
-					CopyReflectionTypeInstance(data->reflection_manager, template_type, element_info, current_source, current_destination, &copy_options);
+					CopyReflectionTypeInstance(data->reflection_manager, template_type, element_info, current_source, current_destination, &copy_options, data->tags);
 				}
 			}
 		}
@@ -1123,6 +1123,7 @@ namespace ECSEngine {
 			copy_options.allocator = data->allocator;
 			copy_options.always_allocate_for_buffers = true;
 			copy_options.custom_options = data->options;
+			copy_options.passdown_info = data->passdown_info;
 
 			// Need to branch out again by SoA
 			if (template_parameters.is_soa) {
@@ -1131,14 +1132,20 @@ namespace ECSEngine {
 					memcpy(destination->m_buffer, source->m_buffer, value_definition_info.byte_size * source_extended_capacity);
 				}
 				else {
-					// Need to iterate and call the copy function
+					// Determine the custom element options for this value type
+					ECS_STACK_CAPACITY_STREAM(char, options_storage, 512);
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, split_options, 16);
+					GetReflectionCustomTypeElementOptions(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE), split_options, options_storage);
+
+					// Need to iterate and call the copy function. As tags, pass the element options
 					source->ForEachIndexConst([&](unsigned int index) {
 						CopyReflectionTypeInstance(
 							data->reflection_manager,
 							template_parameters.value_type,
 							OffsetPointer(source->m_buffer, (size_t)index * value_definition_info.byte_size),
 							OffsetPointer(destination->m_buffer, (size_t)index * value_definition_info.byte_size),
-							&copy_options
+							&copy_options,
+							options_storage
 						);
 					});
 				}
@@ -1148,13 +1155,19 @@ namespace ECSEngine {
 					memcpy(destination->m_identifiers, source->m_identifiers, identifier_definition_info.byte_size * source_extended_capacity);
 				}
 				else {
+					// Determine the custom element options for the identifier type
+					ECS_STACK_CAPACITY_STREAM(char, options_storage, 512);
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, split_options, 16);
+					GetReflectionCustomTypeElementOptions(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER), split_options, options_storage);
+
 					source->ForEachIndexConst([&](unsigned int index) {
 						CopyReflectionTypeInstance(
 							data->reflection_manager,
 							template_parameters.identifier_type,
 							OffsetPointer(source->m_identifiers, (size_t)index * identifier_definition_info.byte_size),
 							OffsetPointer(destination->m_identifiers, (size_t)index * identifier_definition_info.byte_size),
-							&copy_options
+							&copy_options,
+							options_storage
 						);
 					});
 				}
@@ -1166,19 +1179,46 @@ namespace ECSEngine {
 					memcpy(destination->m_buffer, source->m_buffer, pair_size.x * source_extended_capacity);
 				}
 				else {
+					// Retrieve the tag options for each individual entry
+					ECS_STACK_CAPACITY_STREAM(char, value_options_storage, 512);
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, value_split_options, 16);
+					if (!value_definition_info.is_blittable) {
+						GetReflectionCustomTypeElementOptions(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE), value_split_options, value_options_storage);
+					}
+
+					ECS_STACK_CAPACITY_STREAM(char, identifier_options_storage, 512);
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, identifier_split_options, 16);
+					if (!identifier_definition_info.is_blittable) {
+						GetReflectionCustomTypeElementOptions(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER), identifier_split_options, identifier_options_storage);
+					}
+
 					// Go through each entry and call the copy individually
 					// The copy function has a fast path for the is blittable, so no need to add a pre-check
 					source->ForEachIndexConst([&](unsigned int index) {
 						const void* source_element = OffsetPointer(source->m_buffer, (size_t)index * pair_size.x);
 						void* destination_element = OffsetPointer(destination->m_buffer, (size_t)index * pair_size.x);
-						CopyReflectionTypeInstance(data->reflection_manager, template_parameters.value_type, source_element, destination_element, &copy_options);
-						CopyReflectionTypeInstance(
-							data->reflection_manager,
-							template_parameters.identifier_type,
-							OffsetPointer(source_element, value_definition_info.byte_size + pair_size.y),
-							OffsetPointer(destination_element, value_definition_info.byte_size + pair_size.y),
-							&copy_options
-						);
+						if (value_definition_info.is_blittable) {
+							memcpy(destination_element, source_element, value_definition_info.byte_size);
+						}
+						else {
+							CopyReflectionTypeInstance(data->reflection_manager, template_parameters.value_type, source_element, destination_element, &copy_options, value_options_storage);
+						}
+
+						const void* source_identifier = OffsetPointer(source_element, value_definition_info.byte_size + pair_size.y);
+						void* destination_identifier = OffsetPointer(destination_element, value_definition_info.byte_size + pair_size.y);
+						if (identifier_definition_info.is_blittable) {
+							memcpy(destination_identifier, source_identifier, identifier_definition_info.byte_size);
+						}
+						else {
+							CopyReflectionTypeInstance(
+								data->reflection_manager,
+								template_parameters.identifier_type,
+								source_identifier,
+								destination_identifier,
+								&copy_options,
+								identifier_options_storage
+							);
+						}
 					});
 				}
 			}
