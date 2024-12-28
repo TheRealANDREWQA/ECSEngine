@@ -543,8 +543,13 @@ LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 			unsigned int new_width = LOWORD(lParam);
 			unsigned int new_height = HIWORD(lParam);
-			editor_state.ui_system->SetWindowOSSize({ new_width, new_height }, monitor_size);
-			editor_state.UIGraphics()->SetNewSize(hWnd, new_width, new_height);
+			// In some weird cases, the monitor handle that is returned is empty
+			// And the monitor size would be { 0, 0 }, which would case an incorrect
+			// Resizing to take place. Protect from this case			
+			if (monitor_size.x != 0 && monitor_size.y != 0) {
+				editor_state.ui_system->SetWindowOSSize({ new_width, new_height }, monitor_size);
+				editor_state.UIGraphics()->SetNewSize(hWnd, new_width, new_height);
+			}
 		}
 		break;
 	}

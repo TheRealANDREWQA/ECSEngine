@@ -614,6 +614,136 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void GetReflectionCustomTypeElementOptions(
+			Stream<char> tag, 
+			Stream<char> element_name, 
+			CapacityStream<Stream<char>>& options, 
+			CapacityStream<char>& stack_memory
+		) {
+			// These custom
+			struct CustomElementMacro {
+				Stream<char> macro;
+				size_t field_count;
+			};
+
+			static CustomElementMacro TAGS_WITH_CUSTOM_ELEMENTS[] = {
+				{ STRING(ECS_POINTER_AS_REFERENCE), 2 },
+				{ STRING(ECS_POINTER_KEY_REFERENCE_TARGET), 2 }
+			};
+
+			for (size_t index = 0; index < ECS_COUNTOF(TAGS_WITH_CUSTOM_ELEMENTS); index++) {
+				Stream<char> current_tag = GetReflectionFieldSeparatedTag(tag, TAGS_WITH_CUSTOM_ELEMENTS[index].macro);
+				while (current_tag.size > 0) {
+					Stream<char> current_tag_parameters = GetStringParameter(current_tag);
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, current_tag_splits, 8);
+					SplitString(current_tag_parameters, ',', &current_tag_splits);
+					size_t split_count = TAGS_WITH_CUSTOM_ELEMENTS[index].field_count;
+					if (current_tag_splits.size == split_count) {
+						if (current_tag_splits[split_count - 1].StartsWith(TAGS_WITH_CUSTOM_ELEMENTS[index].macro)) {
+							// This macro matched
+							unsigned int initial_stack_memory_size = stack_memory.size;
+							stack_memory.AddStreamAssert(TAGS_WITH_CUSTOM_ELEMENTS[index].macro);
+							stack_memory.AddAssert('(');
+							for (size_t split_index = 0; split_index < split_count - 1; split_index++) {
+								stack_memory.AddStreamAssert(current_tag_splits[split_index]);
+								stack_memory.AddAssert(',');
+							}
+							// Remove the last comma, by reducing the size
+							stack_memory.size--;
+							stack_memory.AddAssert(')');
+							options.AddAssert(stack_memory.SliceAt(initial_stack_memory_size));
+							// Add a tag separator as well
+							stack_memory.AddAssert(ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR);
+						}
+					}
+
+					// Advance to the next tag
+					current_tag = GetReflectionFieldSeparatedTag(tag.SliceAt(current_tag.buffer - tag.buffer + current_tag.size), TAGS_WITH_CUSTOM_ELEMENTS[index].macro);
+				}
+			}
+
+			// Remove the last delimiter character, if there is one
+			if (stack_memory.Last() == ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR) {
+				stack_memory.size--;
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool GetReflectionPointerAsReferenceParams(Stream<char> field_tag, Stream<char>& key, Stream<char>& custom_element_type) {
+			Stream<char> isolated_tag = GetReflectionFieldSeparatedTag(field_tag, STRING(ECS_POINTER_AS_REFERENCE));
+			if (isolated_tag.size > 0) {
+				Stream<char> parameters = GetStringParameter(isolated_tag);
+				if (parameters.size > 0) {
+					Stream<char> comma = FindFirstCharacter(parameters, ',');
+					if (comma.size > 0) {
+						key = SkipWhitespaceEx(parameters.StartDifference(comma));
+						key = SkipWhitespaceEx(key, -1);
+
+						custom_element_type = SkipWhitespaceEx(comma.AdvanceReturn());
+						if (custom_element_type.StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
+							// Eliminate the overall parenthesis
+							custom_element_type.size--;
+							custom_element_type = GetStringParameter(custom_element_type);
+						}
+						else {
+							custom_element_type = {};
+						}
+					}
+					else {
+						key = SkipWhitespaceEx(parameters);
+						key = SkipWhitespaceEx(parameters, -1);
+					}
+				}
+				else {
+					key = {};
+					custom_element_type = {};
+				}
+				
+				return true;
+			}
+			return false;
+		}
+
+		bool GetReflectionPointerReferenceKeyParams(Stream<char> field_tag, Stream<char>& key, Stream<char>& custom_element_type) {
+			// At the moment, this function is identical to that of the pointer as reference,
+			// Except for the macro string
+			Stream<char> isolated_tag = GetReflectionFieldSeparatedTag(field_tag, STRING(ECS_POINTER_KEY_REFERENCE_TARGET));
+			if (isolated_tag.size > 0) {
+				Stream<char> parameters = GetStringParameter(isolated_tag);
+				if (parameters.size > 0) {
+					Stream<char> comma = FindFirstCharacter(parameters, ',');
+					if (comma.size > 0) {
+						key = SkipWhitespaceEx(parameters.StartDifference(comma));
+						key = SkipWhitespaceEx(key, -1);
+
+						custom_element_type = SkipWhitespaceEx(comma.AdvanceReturn());
+						if (custom_element_type.StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
+							// Eliminate the overall parenthesis
+							custom_element_type.size--;
+							custom_element_type = GetStringParameter(custom_element_type);
+						}
+						else {
+							custom_element_type = {};
+						}
+					}
+					else {
+						key = SkipWhitespaceEx(parameters);
+						key = SkipWhitespaceEx(parameters, -1);
+					}
+				}
+				else {
+					key = {};
+					custom_element_type = {};
+				}
+
+				return true;
+			}
+			return false;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionTypeMiscInfo ReflectionTypeMiscInfo::Copy(AllocatorPolymorphic allocator) const {
 			switch (type) {
 			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:

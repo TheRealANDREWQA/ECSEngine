@@ -76,9 +76,10 @@
 // To check the element name values that are valid for each custom type, check ReflectionCustomTypes.h. The macros
 // Are defined there, but they don't have any definition assigned, you should use them as STRING(macro_name) like
 // STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) when in C++ code, and when in reflection tags, it should be just
-// The macro itself. This field should be embedded into the tags that supports this feature. These are:
+// The macro itself. This field should be embedded into the tags that supports this feature as an optional last field. These are:
 //	- ECS_POINTER_AS_REFERENCE
 //	- ECS_POINTER_KEY_REFERENCE_TARGET
+// (When a new entry is added, the function GetReflectionCustomTypeElementOptions should be modified)
 #define ECS_CUSTOM_TYPE_ELEMENT(element_name)
 
 #define ECS_REFLECT_SETTINGS

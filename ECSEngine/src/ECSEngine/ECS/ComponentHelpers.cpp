@@ -79,6 +79,17 @@ namespace ECSEngine {
 			return IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type) || IsReflectionTypeGlobalComponent(type);
 		}
 	}
+	
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	void FillReflectionComponentBlittableTypes(CapacityStream<Reflection::ReflectionCustomTypeCompareOptionBlittableType>& blittable_types) {
+		size_t blittable_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
+		// This will include the misc MiscAssetData with a pointer but that is no problem, shouldn't really happen in code
+		for (size_t blittable_index = 0; blittable_index < blittable_count; blittable_index++) {
+			blittable_types.AddAssert({ ECS_ASSET_TARGET_FIELD_NAMES[blittable_index].name, Reflection::ReflectionStreamFieldType::Pointer });
+		}
+		blittable_types.AddAssert({ STRING(MiscAssetData), Reflection::ReflectionStreamFieldType::Basic });
+	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 	
@@ -163,14 +174,8 @@ namespace ECSEngine {
 
 	static bool ReflectionTypeRuntimeCompare(SharedComponentCompareFunctionData* data) {
 		const RuntimeComponentCompareData* function_data = (const RuntimeComponentCompareData*)data->function_data;
-		ECS_STACK_CAPACITY_STREAM(Reflection::CompareReflectionTypeInstanceBlittableType, blittable_types, 32);
-		size_t blittable_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
-		// This will include the misc Stream<void> with a pointer but that is no problem, shouldn't really happen in code
-		for (size_t blittable_index = 0; blittable_index < blittable_count; blittable_index++) {
-			blittable_types.AddAssert({ ECS_ASSET_TARGET_FIELD_NAMES[blittable_index].name, Reflection::ReflectionStreamFieldType::Pointer });
-		}
-		blittable_types.AddAssert({ STRING(MiscAssetData), Reflection::ReflectionStreamFieldType::Basic });
-		CompareReflectionTypeInstancesOptions options;
+		ECS_STACK_COMPONENT_BLITTABLE_TYPES(blittable_types);
+		ReflectionCustomTypeCompareOptions options;
 		options.blittable_types = blittable_types;
 		return CompareReflectionTypeInstances(&function_data->reflection_manager, &function_data->type, data->first, data->second, &options);
 	}
