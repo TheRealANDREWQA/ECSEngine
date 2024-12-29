@@ -545,13 +545,21 @@ namespace ECSEngine {
 		}
 
 		SerializeOptions _nested_options;
-		SerializeOptions* nested_options = nullptr;
+		SerializeOptions* nested_options = &_nested_options;
 		if (has_options) {
 			nested_options = &_nested_options;
-			nested_options->error_message = options->error_message;
+			*nested_options = *options;
 			nested_options->verify_dependent_types = false;
 			nested_options->write_type_table = false;
+			nested_options->header = {};
 			nested_options->omit_fields = omit_fields;
+		}
+
+		// Use a small stack size in order to not blow the stack limit when nesting deep
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(passdown_allocator, ECS_KB * 4, ECS_MB * 16);
+		ReflectionPassdownInfo passdown_info(&passdown_allocator);
+		if (nested_options->passdown_info == nullptr) {
+			nested_options->passdown_info = &passdown_info;
 		}
 
 		// Before writing the normal type fields, proceed by writing all the standalone type allocators
@@ -593,6 +601,9 @@ namespace ECSEngine {
 				const void* field_data = OffsetPointer(data, field->info.pointer_offset);
 				ReflectionStreamFieldType stream_type = field->info.stream_type;
 				ReflectionBasicFieldType basic_type = field->info.basic_type;
+				
+				// If the field is a pointer reference key, add it now
+				nested_options->passdown_info->AddPointerReferencesFromField(&type->fields[index], field_data, field_data);
 
 				bool is_user_defined = basic_type == ReflectionBasicFieldType::UserDefined;
 				ReflectionType nested_type;
@@ -644,13 +655,29 @@ namespace ECSEngine {
 						// If pointer, only do it for 1 level of indirection and ASCII or wide char strings
 						else if (stream_type == ReflectionStreamFieldType::Pointer) {
 							if (GetReflectionFieldPointerIndirection(type->fields[index].info) == 1) {
-								// Treat user defined pointers as pointers to a single entity
-								if (is_user_defined) {
-									// No need to test the return code since it cannot fail if it gets to here
-									SerializeImplementation<write_data>(reflection_manager, &nested_type, *(void**)field_data, stream, nested_options, total_size);
+								// Determine if this is a reference pointer. If it is, handle it separately
+								Stream<char> pointer_reference;
+								Stream<char> pointer_reference_custom_element;
+								if (GetReflectionPointerAsReferenceParams(type->fields[index].tag, pointer_reference, pointer_reference_custom_element)) {
+									// If it is missing the pointer reference argument, skip it
+									if (pointer_reference.size > 0) {
+										size_t token = 0;
+										if constexpr (!write_data) {
+											token = nested_options->passdown_info->GetPointerTargetToken(pointer_reference, pointer_reference_custom_element, *(void**)field_data, true);
+											ECS_ASSERT(token != -1);
+										}
+										*total_size += Write<write_data>(&stream, &token);
+									}
 								}
 								else {
-									*total_size += WriteFundamentalType<write_data>(type->fields[index].info, field_data, stream);
+									// Treat user defined pointers as pointers to a single entity
+									if (is_user_defined) {
+										// No need to test the return code since it cannot fail if it gets to here
+										SerializeImplementation<write_data>(reflection_manager, &nested_type, *(void**)field_data, stream, nested_options, total_size);
+									}
+									else {
+										*total_size += WriteFundamentalType<write_data>(type->fields[index].info, field_data, stream);
+									}
 								}
 							}
 							// Other types of pointers cannot be serialized - multi level indirections are not allowed
@@ -800,11 +827,27 @@ namespace ECSEngine {
 				Ignore(&stream, info->byte_size);
 			}
 			else if (info->stream_type == ReflectionStreamFieldType::Pointer) {
-				if (info->basic_type == ReflectionBasicFieldType::Int8) {
-					IgnoreWithSize(&stream);
+				// Check to see if this pointer is a reference or not. If it is, treat it differently
+				Stream<char> pointer_reference_key;
+				Stream<char> pointer_reference_custom_element;
+				if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
+					// If the tag is empty, nothing was written
+					if (pointer_reference_key.size > 0) {
+						Ignore(&stream, sizeof(size_t));
+					}
 				}
-				else if (info->basic_type == ReflectionBasicFieldType::Wchar_t) {
-					IgnoreWithSize(&stream);
+				else {
+					if (info->basic_type == ReflectionBasicFieldType::Int8) {
+						IgnoreWithSize(&stream);
+					}
+					else if (info->basic_type == ReflectionBasicFieldType::Wchar_t) {
+						IgnoreWithSize(&stream);
+					}
+					else {
+						ECS_ASSERT(info->basic_type != ReflectionBasicFieldType::UserDefined, "Unhandled deserialize ignore case!");
+						size_t byte_size = GetReflectionBasicFieldTypeByteSize(info->basic_type);
+						Ignore(&stream, byte_size);
+					}
 				}
 			}
 			else {
@@ -854,7 +897,18 @@ namespace ECSEngine {
 					// Indirection 1
 					else if (info->stream_type == ReflectionStreamFieldType::Pointer) {
 						if (info->basic_type_count == 1) {
-							IgnoreType(stream, deserialize_table, nested_type, deserialized_manager);
+							// Check to see if this pointer is a reference or not. If it is, treat it differently
+							Stream<char> pointer_reference_key;
+							Stream<char> pointer_reference_custom_element;
+							if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
+								// If the tag is empty, nothing was written
+								if (pointer_reference_key.size > 0) {
+									Ignore(&stream, sizeof(size_t));
+								}
+							}
+							else {
+								IgnoreType(stream, deserialize_table, nested_type, deserialized_manager);
+							}
 						}
 						else {
 							ECS_ASSERT(false, "Pointer Indirection greater than 1!");
@@ -1005,6 +1059,15 @@ namespace ECSEngine {
 		nested_options->validate_header = false;
 		nested_options->header = {};
 		nested_options->validate_header_data = nullptr;
+
+		// If the deserialized passdown info was not created previously, we must create it.
+		// Use a small stack allocation in order to not blow through the stack limit
+		// If we recurse a lot
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(passdown_allocator, ECS_KB * 4, ECS_MB * 16);
+		ReflectionPassdownInfo passdown_info(&passdown_allocator);
+		if (nested_options->passdown_info == nullptr) {
+			nested_options->passdown_info = &passdown_info;
+		}
 
 		// If the field allocators are enabled, check the main type allocator and override the initial field allocator
 		if (use_field_allocators) {
@@ -2248,57 +2311,60 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> string, const void* data, Stream<wchar_t> file, SerializeOptions* options)
+	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, Stream<wchar_t> file, SerializeOptions* options, Stream<char> tags)
 	{
-		return SerializeFileImpl(SerializeSizeEx(reflection_manager, string, data, options), file, options, [&](uintptr_t& buffer) {
-			return SerializeEx(reflection_manager, string, data, buffer, options);
+		return SerializeFileImpl(SerializeSizeEx(reflection_manager, definition, data, options), file, options, [&](uintptr_t& buffer) {
+			return SerializeEx(reflection_manager, definition, data, buffer, options, tags);
 		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> string, const void* data, uintptr_t& ptr, SerializeOptions* options)
+	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, uintptr_t& ptr, SerializeOptions* options, Stream<char> tags)
 	{
 		ReflectionType reflection_type;
-		if (reflection_manager->TryGetType(string, reflection_type)) {
+		if (reflection_manager->TryGetType(definition, reflection_type)) {
 			return Serialize(reflection_manager, &reflection_type, data, ptr, options);
 		}
 		else {
 			// Try a custom type
-			unsigned int custom_index = FindSerializeCustomType(string);
+			unsigned int custom_index = FindSerializeCustomType(definition);
 			ECS_ASSERT(custom_index != -1);
 
+			// Don't create a temporary passdown - that should be created already by an upper level
 			SerializeCustomTypeWriteFunctionData write_data;
 			write_data.reflection_manager = reflection_manager;
 			write_data.data = data;
-			write_data.definition = string;
+			write_data.definition = definition;
 			write_data.options = options;
 			write_data.stream = &ptr;
 			write_data.write_data = true;
+			write_data.tags = tags;
 			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].write(&write_data) == -1 ? ECS_SERIALIZE_CUSTOM_TYPE_FAILED : ECS_SERIALIZE_OK;
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t SerializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> string, const void* data, SerializeOptions* options)
+	size_t SerializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, SerializeOptions* options, Stream<char> tags)
 	{
 		ReflectionType reflection_type;
-		if (reflection_manager->TryGetType(string, reflection_type)) {
+		if (reflection_manager->TryGetType(definition, reflection_type)) {
 			return SerializeSize(reflection_manager, &reflection_type, data, options);
 		}
 		else {
 			// Try a custom type
-			unsigned int custom_index = FindSerializeCustomType(string);
+			unsigned int custom_index = FindSerializeCustomType(definition);
 			ECS_ASSERT(custom_index != -1);
 
 			SerializeCustomTypeWriteFunctionData write_data;
 			write_data.reflection_manager = reflection_manager;
 			write_data.data = data;
-			write_data.definition = string;
+			write_data.definition = definition;
 			write_data.options = options;
 			write_data.stream = nullptr;
 			write_data.write_data = false;
+			write_data.tags = tags;
 			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].write(&write_data);
 		}
 	}
@@ -2307,45 +2373,48 @@ namespace ECSEngine {
 
 	ECS_DESERIALIZE_CODE DeserializeEx(
 		const ReflectionManager* reflection_manager, 
-		Stream<char> string, 
+		Stream<char> definition,
 		void* address, 
 		Stream<wchar_t> file, 
 		DeserializeOptions* options, 
-		void** file_data
+		void** file_data,
+		Stream<char> tags
 	)
 	{
 		return DeserializeFileImpl(file, options, file_data, [&](uintptr_t& buffer) {
-			return DeserializeEx(reflection_manager, string, address, buffer, options);
+			return DeserializeEx(reflection_manager, definition, address, buffer, options, tags);
 		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	ECS_DESERIALIZE_CODE DeserializeEx(const ReflectionManager* reflection_manager, Stream<char> string, void* address, uintptr_t& stream, DeserializeOptions* options)
+	ECS_DESERIALIZE_CODE DeserializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, void* address, uintptr_t& stream, DeserializeOptions* options, Stream<char> tags)
 	{
 		ReflectionType reflection_type;
-		if (reflection_manager->TryGetType(string, reflection_type)) {
+		if (reflection_manager->TryGetType(definition, reflection_type)) {
 			return Deserialize(reflection_manager, &reflection_type, address, stream, options);
 		}
 		else {
-			unsigned int custom_index = FindSerializeCustomType(string);
+			unsigned int custom_index = FindSerializeCustomType(definition);
 			ECS_ASSERT(custom_index != -1);
 
+			// Don't create an initial passdown information, that should be created before in the main deserialize function
 			SerializeCustomTypeReadFunctionData read_data;
 			read_data.data = address;
-			read_data.definition = string;
+			read_data.definition = definition;
 			read_data.reflection_manager = reflection_manager;
 			read_data.options = options;
 			read_data.stream = &stream;
 			read_data.read_data = true;
 			read_data.version = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].version;
+			read_data.tags = tags;
 			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) == -1 ? ECS_DESERIALIZE_CORRUPTED_FILE : ECS_DESERIALIZE_OK;
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> string, uintptr_t& stream, DeserializeOptions* options)
+	size_t DeserializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> string, uintptr_t& stream, DeserializeOptions* options, Stream<char> tags)
 	{
 		Stream<char> definition = string;
 
@@ -2366,6 +2435,7 @@ namespace ECSEngine {
 			read_data.read_data = false;
 			read_data.was_allocated = false;
 			read_data.version = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].version;
+			read_data.tags = tags;
 			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) == -1 ? ECS_DESERIALIZE_CORRUPTED_FILE : ECS_DESERIALIZE_OK;
 		}
 	}
