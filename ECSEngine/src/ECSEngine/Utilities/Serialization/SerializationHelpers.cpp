@@ -128,6 +128,7 @@ namespace ECSEngine {
 					options.error_message = data->write_data->options->error_message;
 					options.omit_fields = data->write_data->options->omit_fields;
 					options.write_type_table_tags = data->write_data->options->write_type_table_tags;
+					options.passdown_info = data->write_data->options->passdown_info;
 				}
 
 				if (data->write_data->write_data) {
@@ -156,10 +157,23 @@ namespace ECSEngine {
 			}
 			else {
 				if (data->definition_info.field_stream_type != ReflectionStreamFieldType::Basic) {
-					//if (data->definition_info.field_stream_type == ReflectionStreamFieldType::Pointer) {
+					if (data->definition_info.field_stream_type == ReflectionStreamFieldType::Pointer) {
+						// Determine if this is a reference pointer
+						Stream<char> pointer_reference_key;
+						Stream<char> pointer_reference_custom_element_name;
+						if (GetReflectionPointerAsReferenceParams(data->tags, pointer_reference_key, pointer_reference_custom_element_name)) {
 
-					//}
-					//else {
+						}
+						else {
+							if (data->definition_info.field_basic_type == ReflectionBasicFieldType::UserDefined) {
+
+							}
+							else {
+								// The Int8 and Wchar_t are special cases
+							}
+						}
+					}
+					else {
 						// Serialize using known types - basic and stream based ones of primitive types
 						// PERFORMANCE TODO: Can we replace the loops with memcpys?
 						// If these are basic types, with no user defined ones and no nested streams,
@@ -174,9 +188,9 @@ namespace ECSEngine {
 						else {
 							iterate_elements([&field, data, &serialize_size](void* element) {
 								serialize_size += WriteFundamentalType<false>(field.info, element, *data->write_data->stream);
-								});
+							});
 						}
-					//}
+					}
 				}
 				else {
 					ECS_ASSERT(false, "Critical error in serialization helper write: unknown case (non blittable basic field)");
@@ -578,10 +592,9 @@ namespace ECSEngine {
 		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 		ReflectionType reflection_type;
 		reflection_type.name = { nullptr, 0 };
-		unsigned int custom_serializer_index = 0;
-
+	
 		SerializeCustomWriteHelperData helper_data;
-		helper_data.Set(data, template_type);
+		helper_data.Set(data, template_type, data->tags);
 		helper_data.data_to_write = { buffer, buffer_count };
 		return total_serialize_size + SerializeCustomWriteHelper(&helper_data);
 	}
@@ -623,7 +636,7 @@ namespace ECSEngine {
 		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 
 		DeserializeCustomReadHelperData helper_data;
-		helper_data.Set(data, template_type);
+		helper_data.Set(data, template_type, data->tags);
 		helper_data.allocated_buffer = (void**)data->data;
 		helper_data.element_count = buffer_count;
 		helper_data.elements_to_allocate = buffer_count;
@@ -677,7 +690,7 @@ namespace ECSEngine {
 		}
 
 		SerializeCustomWriteHelperData helper_data;
-		helper_data.Set(data, template_type);
+		helper_data.Set(data, template_type, data->tags);
 		helper_data.data_to_write = { buffer, buffer_count };
 
 		total_serialize_size += SerializeCustomWriteHelper(&helper_data);
@@ -735,7 +748,7 @@ namespace ECSEngine {
 		void* allocated_buffer = nullptr;
 
 		DeserializeCustomReadHelperData read_data;
-		read_data.Set(data, template_type);
+		read_data.Set(data, template_type, data->tags);
 
 		// We can allocate the buffer only once by using the elements_to_allocate variable
 		size_t allocation_size = read_data.definition_info.byte_size * buffer_capacity + sizeof(uint2) * buffer_capacity;
@@ -1228,10 +1241,18 @@ namespace ECSEngine {
 		if (template_arguments.is_soa) {
 			// Handle the case when the value is empty, then we don't have to write anything
 			if (value_definition_info.byte_size > 0) {
+				ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+					!value_definition_info.is_blittable,
+					data->tags,
+					STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE),
+					value_options
+				);
+
 				SerializeCustomWriteHelperData helper_data;
-				helper_data.definition = template_arguments.value_type;
-				helper_data.definition_info = value_definition_info;
 				helper_data.write_data = data;
+				helper_data.definition = template_arguments.value_type;
+				helper_data.tags = value_options;
+				helper_data.definition_info = value_definition_info;
 
 				hash_table->ForEachIndexConst([&](unsigned int index) {
 					const void* element = OffsetPointer(hash_table->m_buffer, value_definition_info.byte_size * (size_t)index);
@@ -1246,10 +1267,18 @@ namespace ECSEngine {
 				});
 			}
 
+			ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+				!identifier_definition_info.is_blittable,
+				data->tags,
+				STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER),
+				identifier_options
+			);
 			SerializeCustomWriteHelperData helper_data;
 			helper_data.definition = template_arguments.identifier_type;
 			helper_data.definition_info = identifier_definition_info;
 			helper_data.write_data = data;
+			helper_data.tags = identifier_options;
+
 			// Handle the identifiers
 			hash_table->ForEachIndexConst([&](unsigned int index) {
 				const void* identifier = OffsetPointer(hash_table->m_identifiers, identifier_definition_info.byte_size * (size_t)index);
@@ -1265,15 +1294,31 @@ namespace ECSEngine {
 		else {
 			ulong2 pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
 			
+			ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+				!value_definition_info.is_blittable,
+				data->tags,
+				STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE),
+				value_options
+			);
+
 			SerializeCustomWriteHelperData value_helper_data;
 			value_helper_data.definition = template_arguments.value_type;
 			value_helper_data.definition_info = value_definition_info;
 			value_helper_data.write_data = data;
+			value_helper_data.tags = value_options;
+
+			ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+				!identifier_definition_info.is_blittable,
+				data->tags,
+				STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER),
+				identifier_options
+			);
 
 			SerializeCustomWriteHelperData identifier_helper_data;
 			identifier_helper_data.definition = template_arguments.identifier_type;
 			identifier_helper_data.definition_info = identifier_definition_info;
 			identifier_helper_data.write_data = data;
+			identifier_helper_data.tags = identifier_options;
 
 			hash_table->ForEachIndexConst([&](unsigned int index) {
 				const void* pair = OffsetPointer(hash_table->m_buffer, pair_size.x * (size_t)index);
@@ -1345,12 +1390,20 @@ namespace ECSEngine {
 		if (template_arguments.is_soa) {
 			// Handle the case when the value is empty, then we don't have to write anything
 			if (value_definition_info.byte_size > 0) {
+				ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+					!value_definition_info.is_blittable,
+					data->tags,
+					STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE),
+					value_options
+				);
+
 				DeserializeCustomReadHelperData helper_data;
 				helper_data.definition = template_arguments.value_type;
 				helper_data.definition_info = value_definition_info;
 				helper_data.read_data = data;
 				helper_data.elements_to_allocate = 0;
 				helper_data.element_count = 1;
+				helper_data.tags = value_options;
 
 				hash_table->ForEachIndexConst([&](unsigned int index) {
 					void* element = OffsetPointer(hash_table->m_buffer, value_definition_info.byte_size * (size_t)index);
@@ -1365,12 +1418,20 @@ namespace ECSEngine {
 				});
 			}
 
+			ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+				!identifier_definition_info.is_blittable,
+				data->tags,
+				STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER),
+				identifier_options
+			);
 			DeserializeCustomReadHelperData helper_data;
 			helper_data.definition = template_arguments.identifier_type;
 			helper_data.definition_info = identifier_definition_info;
 			helper_data.read_data = data;
 			helper_data.elements_to_allocate = 0;
 			helper_data.element_count = 1;
+			helper_data.tags = identifier_options;
+
 			// Handle the identifiers
 			hash_table->ForEachIndexConst([&](unsigned int index) {
 				void* identifier = OffsetPointer(hash_table->m_identifiers, identifier_definition_info.byte_size * (size_t)index);
@@ -1386,12 +1447,27 @@ namespace ECSEngine {
 		else {
 			ulong2 pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
 
+			ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+				!value_definition_info.is_blittable,
+				data->tags,
+				STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE),
+				value_options
+			);
+
 			DeserializeCustomReadHelperData value_helper_data;
 			value_helper_data.definition = template_arguments.value_type;
 			value_helper_data.definition_info = value_definition_info;
 			value_helper_data.read_data = data;
 			value_helper_data.elements_to_allocate = 0;
 			value_helper_data.element_count = 1;
+			value_helper_data.tags = value_options;
+
+			ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+				!identifier_definition_info.is_blittable,
+				data->tags,
+				STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER),
+				identifier_options
+			);
 
 			DeserializeCustomReadHelperData identifier_helper_data;
 			identifier_helper_data.definition = template_arguments.identifier_type;
@@ -1399,6 +1475,7 @@ namespace ECSEngine {
 			identifier_helper_data.read_data = data;
 			identifier_helper_data.elements_to_allocate = 0;
 			identifier_helper_data.element_count = 1;
+			identifier_helper_data.tags = identifier_options;
 
 			hash_table->ForEachIndexConst([&](unsigned int index) {
 				void* pair = OffsetPointer(hash_table->m_buffer, pair_size.x * (size_t)index);
@@ -1500,17 +1577,19 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 
-	void SerializeCustomWriteHelperData::Set(SerializeCustomTypeWriteFunctionData* _write_data, Stream<char> _definition)
+	void SerializeCustomWriteHelperData::Set(SerializeCustomTypeWriteFunctionData* _write_data, Stream<char> _definition, Stream<char> _tags)
 	{
 		write_data = _write_data;
 		definition = _definition;
+		tags = _tags;
 		definition_info = SearchReflectionDefinitionInfo(write_data->reflection_manager, definition);
 	}
 
-	void DeserializeCustomReadHelperData::Set(SerializeCustomTypeReadFunctionData* _read_data, Stream<char> _definition)
+	void DeserializeCustomReadHelperData::Set(SerializeCustomTypeReadFunctionData* _read_data, Stream<char> _definition, Stream<char> _tags)
 	{
 		read_data = _read_data;
 		definition = _definition;
+		tags = _tags;
 		definition_info = SearchReflectionDefinitionInfo(read_data->reflection_manager, definition);
 	}
 

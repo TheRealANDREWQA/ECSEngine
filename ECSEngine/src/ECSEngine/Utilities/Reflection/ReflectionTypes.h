@@ -724,6 +724,22 @@ namespace ECSEngine {
 		// Returns true if the tag is present, else false
 		ECSENGINE_API bool GetReflectionPointerReferenceKeyParams(Stream<char> field_tag, Stream<char>& key, Stream<char>& custom_element_type);
 
+		// Creates 2 stack streams to house the options, which you can specify the name of.
+		// Element name must be a string already, i.e. STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE)
+#define ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK(tag, element_name, option_storage_name) ECS_STACK_CAPACITY_STREAM(char, option_storage_name, 512); \
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, option_storage_name##_split, 16); \
+		GetReflectionCustomTypeElementOptions(tag, element_name, option_storage_name##_split, option_storage_name);
+
+		// Creates 2 stack streams to house the options, which you can specify the name of.
+		// Element name must be a string already, i.e. STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE)
+		// The difference compared to the normal function is that this one performs the retrieval
+		// Only if the condition is set
+#define ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(condition, tag, element_name, option_storage_name) ECS_STACK_CAPACITY_STREAM(char, option_storage_name, 512); \
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, option_storage_name##_split, 16); \
+		if (condition) { \
+			GetReflectionCustomTypeElementOptions(tag, element_name, option_storage_name##_split, option_storage_name); \
+		}
+
 		ECS_INLINE size_t GetReflectionTypeSoaAllocationAlignment(const ReflectionType* type, const ReflectionTypeMiscSoa* soa) {
 			return type->fields[soa->parallel_streams[0]].info.stream_alignment;
 		}

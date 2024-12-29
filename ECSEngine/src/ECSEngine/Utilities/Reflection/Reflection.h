@@ -309,14 +309,27 @@ namespace ECSEngine {
 
 			// Adds all the pointer references for the given field. It correctly handles the custom types
 			// And pointer types
+			void AddPointerReferencesFromField(
+				Stream<char> definition, 
+				Stream<char> tag, 
+				ReflectionBasicFieldType basic_type, 
+				ReflectionStreamFieldType stream_type, 
+				const void* source_data, 
+				const void* destination_data
+			);
+
+			// Adds all the pointer references for the given field. It correctly handles the custom types
+			// And pointer types
 			void AddPointerReferencesFromField(const ReflectionField* field, const void* source_data, const void* destination_data);
 
 			// Returns nullptr if it doesn't find the target
-			ECS_INLINE PointerReferenceTarget* FindPointerTarget(Stream<char> key) {
-				unsigned int index = pointer_reference_targets.Find(key, [](const PointerReferenceTarget& target) {
-					return target.key;
-					});
-				return index == -1 ? nullptr : &pointer_reference_targets[index];
+			ECS_INLINE PointerReferenceTarget* FindPointerTarget(Stream<char> key, Stream<char> custom_element_name) {
+				for (size_t index = 0; index < pointer_reference_targets.size; index++) {
+					if (pointer_reference_targets[index].key == key && pointer_reference_targets[index].element_type_name == custom_element_name) {
+						return pointer_reference_targets.buffer + index;
+					}
+				}
+				return nullptr;
 			}
 
 			// This variant uses the slower index value lookup, which corresponds to an iteration
@@ -324,22 +337,22 @@ namespace ECSEngine {
 			// Returns -1 if it couldn't be found (either the key or the pointer value).
 			// With the boolean is_source_data you can control whether the source or the destination data
 			// Is being used
-			size_t GetPointerTargetIndex(Stream<char> key, const void* pointer_value, bool is_source_data);
+			size_t GetPointerTargetIndex(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data);
 
 			// This variant uses the faster token value lookup. It is a unique value that
 			// Can be used later on to identify the entry
 			// Returns -1 if it couldn't be found (either the key or the pointer value)
-			size_t GetPointerTargetToken(Stream<char> key, const void* pointer_value, bool is_source_data);
+			size_t GetPointerTargetToken(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data);
 
 			// From a previous index value for a certain state, it returns the pointer
 			// Value that corresponds to that token for that key. The behavior is undefined
 			// If the index value is not valid - it may be nullptr or a garbage value
-			void* RetrievePointerTargetValueFromIndex(Stream<char> key, size_t index_value, bool is_source_data);
+			void* RetrievePointerTargetValueFromIndex(Stream<char> key, Stream<char> custom_element_name, size_t index_value, bool is_source_data);
 
 			// From a previous token value for a certain state, it returns the pointer
 			// Value that corresponds for the token for that key. The behavior is undefined
 			// If the token value is not valid - it may be nullptr or a garbage value
-			void* RetrievePointerTargetValueFromToken(Stream<char> key, size_t token_value, bool is_source_data);
+			void* RetrievePointerTargetValueFromToken(Stream<char> key, Stream<char> custom_element_name, size_t token_value, bool is_source_data);
 
 			ResizableStream<PointerReferenceTarget> pointer_reference_targets;
 		};

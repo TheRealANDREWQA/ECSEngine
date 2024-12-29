@@ -11,6 +11,7 @@ namespace ECSEngine {
 
 	namespace Reflection {
 		struct ReflectionManager;
+		struct ReflectionPassdownInfo;
 	}
 
 	struct DeserializeTypeNameRemapping;
@@ -123,6 +124,8 @@ namespace ECSEngine {
 	// SettingsAllocator: an allocator to be used for writing the whole data in memory for commiting then into a file
 	// OmitFields: optionally tell the serializer to omit fields of certain types
 	// Error_Message: a stream where the error message will be written if an error occurs
+	// Passdown_Info: a structure where information is accumulated about prior fields when iterating.
+	// Should be left nullptr for the top level function that calls the serialize function
 	struct SerializeOptions {
 		Stream<void> header = { nullptr, 0 };
 		bool write_type_table = true;
@@ -133,6 +136,7 @@ namespace ECSEngine {
 		Stream<SerializeOmitField> omit_fields = { nullptr, 0 };
 
 		CapacityStream<char>* error_message = nullptr;
+		Reflection::ReflectionPassdownInfo* passdown_info = nullptr;
 	};
 
 	// Version: If left at -1, it will deserialize based on the version in the file, else it will use the version given
@@ -150,9 +154,9 @@ namespace ECSEngine {
 	// OmitFields: optionally tell the deserializer to ignore certain fields
 	// File_Allocator: an allocator to be used to read the whole file into memory
 	// Field_Allocator: an allocator to be used to read off streams of data into the fields
-	// Backup SettingsAllocator: an allocator to be used if there are incompatible user defined types
-	// or streams whose data type has changed
 	// Error_Message: a stream where an error message will be written if one occurs
+	// Passdown_Info: A structure where information from previous fields is gathered to be used
+	// By next fields. Should be left nullptr for the top level function that calls the deserialize function
 	struct DeserializeOptions {
 		// It returns the resizable stream allocator, if the field type is of resizable stream and this allocator was enabled, 
 		// Else returns the fallback allocator
@@ -192,6 +196,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic field_allocator = { nullptr };
 
 		CapacityStream<char>* error_message = nullptr;
+		Reflection::ReflectionPassdownInfo* passdown_info = nullptr;
 	};
 
 	enum ECS_SERIALIZE_CODE : unsigned char {
@@ -360,54 +365,60 @@ namespace ECSEngine {
 	// Determines if it is a reflected type or a custom type and call the function appropriately
 	ECSENGINE_API ECS_SERIALIZE_CODE SerializeEx(
 		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> string,
+		Stream<char> definition,
 		const void* data,
 		Stream<wchar_t> file,
-		SerializeOptions* options = nullptr
+		SerializeOptions* options = nullptr,
+		Stream<char> tags = {}
 	);
 
 	// Determines if it is a reflected type or a custom type and call the function appropriately
 	ECSENGINE_API ECS_SERIALIZE_CODE SerializeEx(
 		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> string,
+		Stream<char> definition,
 		const void* data,
 		uintptr_t& ptr,
-		SerializeOptions* options = nullptr
+		SerializeOptions* options = nullptr,
+		Stream<char> tags = {}
 	);
 
 	// Determines if it is a reflected type or a custom type and call the function appropriately
 	ECSENGINE_API size_t SerializeSizeEx(
 		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> string,
+		Stream<char> definition,
 		const void* data,
-		SerializeOptions* options = nullptr
+		SerializeOptions* options = nullptr,
+		Stream<char> tags = {}
 	);
 
 	// Determines if it is a reflected type or a custom type and call the function appropriately
 	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
 		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> string,
+		Stream<char> definition,
 		void* address,
 		Stream<wchar_t> file,
 		DeserializeOptions* options = nullptr,
-		void** file_data = nullptr
+		void** file_data = nullptr,
+		Stream<char> tags = {}
 	);
 
 	// Determines if it is a reflected type or a custom type and call the function appropriately
 	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
 		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> string,
+		Stream<char> definition,
 		void* address,
 		uintptr_t& stream,
-		DeserializeOptions* options = nullptr
+		DeserializeOptions* options = nullptr,
+		Stream<char> tags = {}
 	);
 	
 	// Determines if it is a reflected type or a custom type and call the function appropriately
 	ECSENGINE_API size_t DeserializeSizeEx(
 		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> string,
+		Stream<char> definition,
 		uintptr_t& stream,
-		DeserializeOptions* options = nullptr
+		DeserializeOptions* options = nullptr,
+		Stream<char> tags = {}
 	);
 
 #pragma endregion

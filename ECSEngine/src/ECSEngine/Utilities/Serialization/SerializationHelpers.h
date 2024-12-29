@@ -406,12 +406,13 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API SerializeCustomWriteHelperData {
 		// Initializes the 2 fields alongside the definition info
-		void Set(SerializeCustomTypeWriteFunctionData* write_data, Stream<char> definition);
+		void Set(SerializeCustomTypeWriteFunctionData* write_data, Stream<char> definition, Stream<char> tags);
 		
 		Reflection::ReflectionDefinitionInfo definition_info;
 		SerializeCustomTypeWriteFunctionData* write_data;
 		Stream<void> data_to_write;
 		Stream<char> definition;
+		Stream<char> tags;
 		// This is an optional field, in case you want to address a subfield from a larger structure.
 		// If left at 0, it will use the definition info byte size
 		size_t element_stride = 0;
@@ -425,8 +426,9 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API DeserializeCustomReadHelperData {
 		// Initializes the 2 fields alongside the definition info
-		void Set(SerializeCustomTypeReadFunctionData* read_data, Stream<char> definition);
+		void Set(SerializeCustomTypeReadFunctionData* read_data, Stream<char> definition, Stream<char> tags);
 
+		Stream<char> tags;
 		Stream<char> definition;
 		Reflection::ReflectionDefinitionInfo definition_info;
 		SerializeCustomTypeReadFunctionData* read_data;

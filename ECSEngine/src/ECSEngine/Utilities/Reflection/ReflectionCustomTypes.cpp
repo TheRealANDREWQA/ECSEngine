@@ -936,7 +936,14 @@ namespace ECSEngine {
 			return { pair_size, identifier_pair_offset };
 		}
 
-		size_t HashTableCustomTypeAllocateAndSetBuffers(void* hash_table, size_t capacity, AllocatorPolymorphic allocator, bool is_soa, const ReflectionDefinitionInfo& value_definition_info, const ReflectionDefinitionInfo& identifier_definition_info) {
+		size_t HashTableCustomTypeAllocateAndSetBuffers(
+			void* hash_table, 
+			size_t capacity, 
+			AllocatorPolymorphic allocator, 
+			bool is_soa, 
+			const ReflectionDefinitionInfo& value_definition_info, 
+			const ReflectionDefinitionInfo& identifier_definition_info
+		) {
 			HashTableDefault<char>* typed_table = (HashTableDefault<char>*)hash_table;
 			// Set the typed table capacity to the one given such that we can ask for the extended capacity. Restore the previous capacity
 			unsigned int previous_table_capacity = typed_table->GetCapacity();
@@ -1133,9 +1140,7 @@ namespace ECSEngine {
 				}
 				else {
 					// Determine the custom element options for this value type
-					ECS_STACK_CAPACITY_STREAM(char, options_storage, 512);
-					ECS_STACK_CAPACITY_STREAM(Stream<char>, split_options, 16);
-					GetReflectionCustomTypeElementOptions(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE), split_options, options_storage);
+					ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE), options_storage);
 
 					// Need to iterate and call the copy function. As tags, pass the element options
 					source->ForEachIndexConst([&](unsigned int index) {
@@ -1155,10 +1160,8 @@ namespace ECSEngine {
 					memcpy(destination->m_identifiers, source->m_identifiers, identifier_definition_info.byte_size * source_extended_capacity);
 				}
 				else {
-					// Determine the custom element options for the identifier type
-					ECS_STACK_CAPACITY_STREAM(char, options_storage, 512);
-					ECS_STACK_CAPACITY_STREAM(Stream<char>, split_options, 16);
-					GetReflectionCustomTypeElementOptions(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER), split_options, options_storage);
+					// Determine the custom element options for the identifier type;
+					ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER), options_storage);
 
 					source->ForEachIndexConst([&](unsigned int index) {
 						CopyReflectionTypeInstance(
@@ -1180,17 +1183,19 @@ namespace ECSEngine {
 				}
 				else {
 					// Retrieve the tag options for each individual entry
-					ECS_STACK_CAPACITY_STREAM(char, value_options_storage, 512);
-					ECS_STACK_CAPACITY_STREAM(Stream<char>, value_split_options, 16);
-					if (!value_definition_info.is_blittable) {
-						GetReflectionCustomTypeElementOptions(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE), value_split_options, value_options_storage);
-					}
+					ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+						!value_definition_info.is_blittable, 
+						data->tags, 
+						STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE), 
+						value_options_storage
+					);
 
-					ECS_STACK_CAPACITY_STREAM(char, identifier_options_storage, 512);
-					ECS_STACK_CAPACITY_STREAM(Stream<char>, identifier_split_options, 16);
-					if (!identifier_definition_info.is_blittable) {
-						GetReflectionCustomTypeElementOptions(data->tags, STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER), identifier_split_options, identifier_options_storage);
-					}
+					ECS_GET_REFLECTION_CUSTOM_TYPE_ELEMENT_OPTIONS_STACK_CONDITIONAL(
+						!identifier_definition_info.is_blittable,
+						data->tags, 
+						STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER),
+						identifier_options_storage
+					);
 
 					// Go through each entry and call the copy individually
 					// The copy function has a fast path for the is blittable, so no need to add a pre-check

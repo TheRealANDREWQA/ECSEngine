@@ -4892,10 +4892,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					if (as_reference_key.size > 0) {
 						// Use the token route, it is faster
 						const void* source_pointer = *(void**)source;
-						size_t source_token = passdown_info->GetPointerTargetToken(as_reference_key, source_pointer, true);
+						size_t source_token = passdown_info->GetPointerTargetToken(as_reference_key, as_reference_custom_element_type, source_pointer, true);
 						ECS_ASSERT(source_token != -1, "Reflection pointer reference token unmatched");
 						// Retrieve the value from the destination
-						void* destination_pointer = passdown_info->RetrievePointerTargetValueFromToken(as_reference_key, source_token, false);
+						void* destination_pointer = passdown_info->RetrievePointerTargetValueFromToken(as_reference_key, as_reference_custom_element_type, source_token, false);
 						ECS_ASSERT(destination_pointer != nullptr, "Reflection destination pointer reference is unmatched");
 						// Write the current pointer now
 						*(void**)destination = destination_pointer;
@@ -7506,25 +7506,32 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionPassdownInfo::AddPointerReferencesFromField(const ReflectionField* field, const void* source_data, const void* destination_data)
+		void ReflectionPassdownInfo::AddPointerReferencesFromField(
+			Stream<char> definition, 
+			Stream<char> tag, 
+			ReflectionBasicFieldType basic_type, 
+			ReflectionStreamFieldType stream_type, 
+			const void* source_data, 
+			const void* destination_data
+		)
 		{
 			bool is_pointer = false;
-			if (field->info.stream_type == ReflectionStreamFieldType::Pointer) {
+			if (stream_type == ReflectionStreamFieldType::Pointer) {
 				// Treat this as a pointer
 				is_pointer = true;
 			}
 			else {
 				// If the basic type is different from user defined, then don't add these
-				if (field->info.basic_type != ReflectionBasicFieldType::UserDefined) {
+				if (basic_type != ReflectionBasicFieldType::UserDefined) {
 					return;
 				}
 			}
 
 			Stream<char> key;
 			Stream<char> custom_element_name;
-			Stream<char> search_tag = field->tag;
+			Stream<char> search_tag = tag;
 			while (GetReflectionPointerReferenceKeyParams(search_tag, key, custom_element_name)) {
-				AddPointerReference(key, is_pointer, field->definition, custom_element_name, source_data, destination_data);
+				AddPointerReference(key, is_pointer, definition, custom_element_name, source_data, destination_data);
 
 				// Reduce the search string to the tag that starts from the key
 				search_tag = search_tag.SliceAt(key.buffer - search_tag.buffer);
@@ -7533,8 +7540,22 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		static size_t ReflectionPassdownInfoGetPointerTargetImpl(ReflectionPassdownInfo* info, Stream<char> key, const void* pointer_value, bool is_source_data, bool is_token) {
-			ReflectionPassdownInfo::PointerReferenceTarget* target = info->FindPointerTarget(key);
+		void ReflectionPassdownInfo::AddPointerReferencesFromField(const ReflectionField* field, const void* source_data, const void* destination_data)
+		{
+			AddPointerReferencesFromField(field->definition, field->tag, field->info.basic_type, field->info.stream_type, source_data, destination_data);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		static size_t ReflectionPassdownInfoGetPointerTargetImpl(
+			ReflectionPassdownInfo* info, 
+			Stream<char> key, 
+			Stream<char> custom_element_name, 
+			const void* pointer_value, 
+			bool is_source_data, 
+			bool is_token
+		) {
+			ReflectionPassdownInfo::PointerReferenceTarget* target = info->FindPointerTarget(key, custom_element_name);
 			if (target == nullptr) {
 				return -1;
 			}
@@ -7557,20 +7578,27 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 		}
 
-		size_t ReflectionPassdownInfo::GetPointerTargetIndex(Stream<char> key, const void* pointer_value, bool is_source_data) {
-			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, pointer_value, is_source_data, false);
+		size_t ReflectionPassdownInfo::GetPointerTargetIndex(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, pointer_value, is_source_data, false);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t ReflectionPassdownInfo::GetPointerTargetToken(Stream<char> key, const void* pointer_value, bool is_source_data) {
-			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, pointer_value, is_source_data, true);
+		size_t ReflectionPassdownInfo::GetPointerTargetToken(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, pointer_value, is_source_data, true);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		static void* ReflectionPassdownInfoGetPointerTargetImpl(ReflectionPassdownInfo* info, Stream<char> key, size_t value, bool is_source_data, bool is_token) {
-			ReflectionPassdownInfo::PointerReferenceTarget* target = info->FindPointerTarget(key);
+		static void* ReflectionPassdownInfoGetPointerTargetImpl(
+			ReflectionPassdownInfo* info, 
+			Stream<char> key, 
+			Stream<char> custom_element_name,
+			size_t value, 
+			bool is_source_data, 
+			bool is_token
+		) {
+			ReflectionPassdownInfo::PointerReferenceTarget* target = info->FindPointerTarget(key, custom_element_name);
 			if (target == nullptr) {
 				return nullptr;
 			}
@@ -7594,12 +7622,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 		}
 
-		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromIndex(Stream<char> key, size_t index_value, bool is_source_data) {
-			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, index_value, is_source_data, false);
+		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromIndex(Stream<char> key, Stream<char> custom_element_name, size_t index_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, index_value, is_source_data, false);
 		}
 
-		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromToken(Stream<char> key, size_t token_value, bool is_source_data) {
-			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, token_value, is_source_data, true);
+		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromToken(Stream<char> key, Stream<char> custom_element_name, size_t token_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, token_value, is_source_data, true);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
