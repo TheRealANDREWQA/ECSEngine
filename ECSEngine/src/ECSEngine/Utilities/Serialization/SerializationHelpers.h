@@ -501,7 +501,7 @@ namespace ECSEngine {
 						ECS_ASSERT(info.basic_type != ReflectionBasicFieldType::UserDefined, "WriteFundamentalType does not accept user defined pointers!");
 						// Write the value that is there
 						size_t write_size = GetReflectionBasicFieldTypeByteSize(info.basic_type);
-						return Write<write_data>(&stream, data, write_size);
+						return Write<write_data>(&stream, *(void**)data, write_size);
 					}
 				}
 				else {
@@ -609,8 +609,27 @@ namespace ECSEngine {
 					}
 					else {
 						size_t fundamental_byte_size = GetReflectionBasicFieldTypeByteSize(info.basic_type);
-						Read<read_data>(&stream, data, fundamental_byte_size);
-						return 0;
+						// Allocate the pointer
+						if constexpr (read_data) {
+							void** pointer = (void**)data;
+							if (allocator.allocator != nullptr) {
+								*pointer = Allocate(allocator, fundamental_byte_size, GetReflectionFieldTypeAlignment(info.basic_type));
+								Read<true>(&stream, *pointer, fundamental_byte_size);
+							}
+							else {
+								if constexpr (!force_allocation) {
+									ReferenceData<true>(&stream, pointer, fundamental_byte_size);
+								}
+								else {
+									*pointer = AllocateEx(allocator, fundamental_byte_size, GetReflectionFieldTypeAlignment(info.basic_type));
+									Read<true>(&stream, *pointer, fundamental_byte_size);
+								}
+							}
+						}
+						else {
+							Ignore(&stream, fundamental_byte_size);
+						}
+						return fundamental_byte_size;
 					}
 				}
 				else {

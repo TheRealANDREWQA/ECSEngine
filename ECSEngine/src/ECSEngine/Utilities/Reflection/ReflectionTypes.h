@@ -517,10 +517,12 @@ namespace ECSEngine {
 			};
 		};
 
+		typedef size_t ReflectionCustomTypeGetElementIndexOrToken;
+
 		// This data is used for retrieving a specific. It has a fast path for iterating linearly over elements
 		struct ReflectionCustomTypeGetElementData : ReflectionCustomTypeGetElementDataBase {
 			// Check ReflectionCustomTypeGetElementDataBase as well
-			size_t index_or_token;
+			ReflectionCustomTypeGetElementIndexOrToken index_or_token;
 		};
 
 		// This data is used for searching a specific element
@@ -556,7 +558,7 @@ namespace ECSEngine {
 
 			// Returns the index that corresponds to the given element for a given element name type
 			// Or -1 if the element doesn't exist. It uses a simple memcmp as comparison, not a full reflection comparison
-			virtual size_t FindElement(ReflectionCustomTypeFindElementData* data) { ECS_ASSERT(false); return 0; }
+			virtual ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) { ECS_ASSERT(false); return 0; }
 		};
 
 		struct ReflectionDefinitionInfo {

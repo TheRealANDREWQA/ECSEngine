@@ -47,6 +47,7 @@ namespace ECSEngine {
 		copy_options.allocator = data->allocator;
 		copy_options.always_allocate_for_buffers = true;
 		copy_options.custom_options = data->options;
+		copy_options.passdown_info = data->passdown_info;
 
 		CopyReflectionTypeInstance(data->reflection_manager, template_type, data->source, data->destination, &copy_options);
 
@@ -85,7 +86,7 @@ namespace ECSEngine {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 
 		SerializeCustomWriteHelperData ex_data;
-		ex_data.Set(data, template_type);
+		ex_data.Set(data, template_type, data->tags);
 		ex_data.data_to_write = { data->data, 1 };
 		size_t written_size = SerializeCustomWriteHelper(&ex_data);
 
@@ -106,7 +107,7 @@ namespace ECSEngine {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 
 		DeserializeCustomReadHelperData ex_data;
-		ex_data.Set(data, template_type);
+		ex_data.Set(data, template_type, data->tags);
 		ex_data.deserialize_target = data->data;
 		ex_data.elements_to_allocate = 0;
 		ex_data.element_count = 1;

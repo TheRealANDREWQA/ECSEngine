@@ -505,7 +505,7 @@ namespace ECSEngine {
 	}
 
 	AllocatorPolymorphic ConvertPointerToAllocatorPolymorphic(const void* pointer, ECS_ALLOCATOR_TYPE type) {
-		switch (type) {
+		/*switch (type) {
 		case ECS_ALLOCATOR_LINEAR:
 			return (LinearAllocator*)pointer;
 		case ECS_ALLOCATOR_STACK:
@@ -522,9 +522,10 @@ namespace ECSEngine {
 			return (MemoryProtectedAllocator*)pointer;
 		default:
 			ECS_ASSERT(false, "Invalid allocator type for pointer conversion to polymorphic allocator");
-		}
+		}*/
 
-		return {};
+		// No need to type cast the pointers
+		return AllocatorPolymorphic((void*)pointer, type);
 	}
 
 	AllocatorPolymorphic ConvertPointerToAllocatorPolymorphicEx(const void* pointer, ECS_ALLOCATOR_TYPE type) {

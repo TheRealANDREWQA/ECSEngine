@@ -833,7 +833,7 @@ namespace ECSEngine {
 				if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
 					// If the tag is empty, nothing was written
 					if (pointer_reference_key.size > 0) {
-						Ignore(&stream, sizeof(size_t));
+						Ignore(&stream, sizeof(ReflectionCustomTypeGetElementIndexOrToken));
 					}
 				}
 				else {
@@ -903,7 +903,7 @@ namespace ECSEngine {
 							if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
 								// If the tag is empty, nothing was written
 								if (pointer_reference_key.size > 0) {
-									Ignore(&stream, sizeof(size_t));
+									Ignore(&stream, sizeof(ReflectionCustomTypeGetElementIndexOrToken));
 								}
 							}
 							else {
@@ -1218,7 +1218,7 @@ namespace ECSEngine {
 						custom_read_data.options = nested_options;
 						custom_read_data.read_data = read_data;
 						custom_read_data.reflection_manager = reflection_manager;
-						custom_read_data.stream = &stream;
+						custom_read_data.stream = &allocator_stream;
 						custom_read_data.tags = type->fields[current_type_field_index].tag;
 						custom_read_data.version = deserialize_table.custom_serializers[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR];
 						custom_read_data.was_allocated = false;
@@ -1319,6 +1319,9 @@ namespace ECSEngine {
 					}
 					continue;
 				}
+
+				// If this field has pointer references, register them
+				nested_options->passdown_info->AddPointerReferencesFromField(&type->fields[subindex], field_data, field_data);
 
 				// Verify the basic and the stream type
 				const ReflectionFieldInfo& type_field_info = type->fields[subindex].info;
@@ -1592,6 +1595,7 @@ namespace ECSEngine {
 						custom_data.was_allocated = false;
 						custom_data.reflection_manager = reflection_manager;
 						custom_data.stream = &stream;
+						custom_data.tags = type->fields[subindex].tag;
 						custom_data.version = deserialize_table.custom_serializers[current_custom_serializer_index];
 
 						size_t custom_buffer_size = ECS_SERIALIZE_CUSTOM_TYPES[current_custom_serializer_index].read(&custom_data);

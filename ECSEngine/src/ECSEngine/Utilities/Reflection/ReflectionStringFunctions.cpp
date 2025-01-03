@@ -591,37 +591,37 @@ namespace ECSEngine {
 			Stream<char> opened_bracket = FindFirstCharacter(string, '<');
 			Stream<char> closed_bracket = FindFirstCharacter(string, '>');
 
-			if (opened_bracket.buffer != nullptr) {
-				opened_bracket.buffer = (char*)SkipWhitespace(opened_bracket.buffer + 1);
-				closed_bracket.buffer = (char*)SkipWhitespace(closed_bracket.buffer - 1, -1);
+			if (opened_bracket.size > 0) {
+				opened_bracket = SkipWhitespace(opened_bracket);
+				closed_bracket = SkipWhitespace(closed_bracket, -1);
 
 				basic_type = ConvertStringToBasicFieldType({ opened_bracket.buffer, PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
 
 				Stream<char> asterisk = FindFirstCharacter(opened_bracket, '*');
 				if (asterisk.buffer == nullptr) {
-					if (memcmp(string.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
+					if (string.StartsWith("Stream")) {
 						stream_type = ReflectionStreamFieldType::Stream;
 					}
-					else if (memcmp(string.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
+					else if (string.StartsWith("CapacityStream<")) {
 						stream_type = ReflectionStreamFieldType::CapacityStream;
 					}
-					else if (memcmp(string.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
+					else if (string.StartsWith("ResizableStream<")) {
 						stream_type = ReflectionStreamFieldType::ResizableStream;
 					}
 				}
 				else {
-					basic_type = ReflectionBasicFieldType::Unknown;
+					basic_type = ReflectionBasicFieldType::UserDefined;
 				}
 			}
 			else {
-				Stream<char> asterisk = FindFirstCharacter(string.buffer, '*');
-				if (asterisk.buffer == nullptr) {
+				Stream<char> asterisk = FindFirstCharacter(string, '*');
+				if (asterisk.size == 0) {
 					basic_type = ConvertStringToBasicFieldType(string);
 				}
 				else {
 					stream_type = ReflectionStreamFieldType::Pointer;
 
-					asterisk.buffer = (char*)SkipWhitespace(asterisk.buffer - 1, -1);
+					asterisk = SkipWhitespace(asterisk, -1);
 					basic_type = ConvertStringToBasicFieldType({ string.buffer, PointerDifference(asterisk.buffer, string.buffer) });
 				}
 			}
