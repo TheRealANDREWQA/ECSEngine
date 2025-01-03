@@ -39,8 +39,16 @@ namespace ECSEngine {
 			ConvertStringToPrimitiveType(definition, basic_field_type, stream_field_type);
 			if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type == ReflectionBasicFieldType::UserDefined
 				|| stream_field_type == ReflectionStreamFieldType::Unknown) {
+				if (stream_field_type == ReflectionStreamFieldType::Pointer) {
+					// If this is a Pointer, then try again for the target
+					Stream<char> pointee_target = definition;
+					while (pointee_target.size > 0 && pointee_target.Last() == '*') {
+						pointee_target.size--;
+					}
+					ReflectionCustomTypeAddDependentType(data, pointee_target);
+				}
 				// One more exception here, void, treat it as a special case
-				if (definition != "void") {
+				else if (definition != "void") {
 					data->dependent_types.AddAssert(definition);
 				}
 			}
@@ -272,6 +280,7 @@ namespace ECSEngine {
 				copy_options.always_allocate_for_buffers = true;
 				copy_options.custom_options = data->options;
 				copy_options.custom_options.deallocate_existing_data = false;
+				copy_options.passdown_info = data->passdown_info;
 
 				for (size_t index = 0; index < source_size; index++) {
 					const void* current_source = OffsetPointer(source, index * element_info.byte_size);
@@ -489,6 +498,7 @@ namespace ECSEngine {
 				copy_type_options.allocator = data->allocator;
 				copy_type_options.custom_options = data->options;
 				copy_type_options.always_allocate_for_buffers = true;
+				copy_type_options.passdown_info = data->passdown_info;
 				
 				CopyData copy_data;
 				copy_data.custom_data = data;

@@ -7,7 +7,7 @@ namespace ECSEngine {
 	namespace Reflection {
 
 		bool IsReflectionTypeOverallAllocatorByTag(const ReflectionType* type, size_t field_index) {
-			return type->fields[field_index].Has(STRING(ECS_TYPE_MAIN_ALLOCATOR));
+			return type->fields[field_index].Has(STRING(ECS_MAIN_ALLOCATOR));
 		}
 
 		bool IsReflectionTypeFieldAllocator(const ReflectionType* type, size_t field_index) {

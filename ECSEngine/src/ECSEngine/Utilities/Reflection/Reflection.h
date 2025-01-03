@@ -337,22 +337,22 @@ namespace ECSEngine {
 			// Returns -1 if it couldn't be found (either the key or the pointer value).
 			// With the boolean is_source_data you can control whether the source or the destination data
 			// Is being used
-			size_t GetPointerTargetIndex(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data);
+			ReflectionCustomTypeGetElementIndexOrToken GetPointerTargetIndex(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data);
 
 			// This variant uses the faster token value lookup. It is a unique value that
 			// Can be used later on to identify the entry
 			// Returns -1 if it couldn't be found (either the key or the pointer value)
-			size_t GetPointerTargetToken(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data);
+			ReflectionCustomTypeGetElementIndexOrToken GetPointerTargetToken(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data);
 
 			// From a previous index value for a certain state, it returns the pointer
 			// Value that corresponds to that token for that key. The behavior is undefined
 			// If the index value is not valid - it may be nullptr or a garbage value
-			void* RetrievePointerTargetValueFromIndex(Stream<char> key, Stream<char> custom_element_name, size_t index_value, bool is_source_data);
+			void* RetrievePointerTargetValueFromIndex(Stream<char> key, Stream<char> custom_element_name, ReflectionCustomTypeGetElementIndexOrToken index_value, bool is_source_data);
 
 			// From a previous token value for a certain state, it returns the pointer
 			// Value that corresponds for the token for that key. The behavior is undefined
 			// If the token value is not valid - it may be nullptr or a garbage value
-			void* RetrievePointerTargetValueFromToken(Stream<char> key, Stream<char> custom_element_name, size_t token_value, bool is_source_data);
+			void* RetrievePointerTargetValueFromToken(Stream<char> key, Stream<char> custom_element_name, ReflectionCustomTypeGetElementIndexOrToken token_value, bool is_source_data);
 
 			ResizableStream<PointerReferenceTarget> pointer_reference_targets;
 		};

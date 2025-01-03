@@ -62,7 +62,7 @@ namespace ECSEngine {
 
 			void* GetElement(ReflectionCustomTypeGetElementData* data) override;
 
-			size_t FindElement(ReflectionCustomTypeFindElementData* data) override;
+			ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) override;
 		};
 
 		struct SparseSetCustomTypeInterface : public ReflectionCustomTypeInterface {
@@ -84,7 +84,7 @@ namespace ECSEngine {
 
 			void* GetElement(ReflectionCustomTypeGetElementData* data) override;
 
-			size_t FindElement(ReflectionCustomTypeFindElementData* data) override;
+			ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) override;
 		};
 
 		struct DataPointerCustomTypeInterface : public ReflectionCustomTypeInterface {
@@ -139,7 +139,7 @@ namespace ECSEngine {
 
 			void* GetElement(ReflectionCustomTypeGetElementData* data) override;
 
-			size_t FindElement(ReflectionCustomTypeFindElementData* data) override;
+			ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) override;
 		};
 
 		// ---------------------------------------------------------------------------------------------------------------------

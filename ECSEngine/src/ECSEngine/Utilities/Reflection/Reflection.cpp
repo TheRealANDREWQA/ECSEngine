@@ -1184,6 +1184,11 @@ namespace ECSEngine {
 			size_t type_overall_primary_allocator_index = -1;
 			for (size_t index = 0; index < type.fields.size; index++) {
 				if (IsReflectionTypeOverallAllocatorByTag(&type, index)) {
+					// If the field is marked as skipped, then don't consider it
+					if (IsReflectionFieldSkipped(&type.fields[index])) {
+						continue;
+					}
+
 					// If it is not an allocator field, error
 					if (!IsReflectionTypeFieldAllocator(&type, index)) {
 						ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} specified as type allocator, but it is not a valid allocator type. ", type.name, type.fields[index].name);
@@ -1204,6 +1209,9 @@ namespace ECSEngine {
 						WriteErrorMessage(data, message);
 						return;
 					}
+
+					// Update the overall index
+					type_overall_primary_allocator_index = index;
 				}
 			}
 
@@ -1218,6 +1226,11 @@ namespace ECSEngine {
 			for (size_t index = 0; index < type.fields.size; index++) {
 				// Skip the main type allocator, it already has an entry, if it exists
 				if (index != type_overall_primary_allocator_index && IsReflectionTypeFieldAllocator(&type, index)) {
+					// If the field is marked as skipped, then don't consider it
+					if (IsReflectionFieldSkipped(&type.fields[index])) {
+						continue;
+					}
+
 					ReflectionTypeMiscAllocator misc_allocator;
 					misc_allocator.modifier = IsReflectionTypeFieldAllocatorAsReference(&type, index) ? ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE : ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_NONE;
 					// Ensure that if this is a reference, that the definition is AllocatorPolymorphic
@@ -5619,6 +5632,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			CopyReflectionDataOptions copy_with_offset_options = *options;
 			copy_with_offset_options.offset_pointer_data_from_field = true;
 
+			// If the field allocators are specified, then consider that allocate buffers is as well
+			copy_with_offset_options.always_allocate_for_buffers = options->always_allocate_for_buffers || options->custom_options.use_field_allocators;
+
 			// Go through the new type and try to get the data
 			for (size_t new_index = 0; new_index < new_type->fields.size; new_index++) {
 				// Check the remapping tag
@@ -5690,7 +5706,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 			}
 
-			if (options->always_allocate_for_buffers) {
+			if (copy_with_offset_options.always_allocate_for_buffers) {
 				// We need to merge the SoA buffers
 				// At the moment, all SoA streams do not have an allocator for themselves
 				MergeReflectionPointerSoAAllocationsForType(new_type, new_data, options->allocator);
@@ -5714,6 +5730,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			CopyReflectionDataOptions adjusted_options = *options;
 			adjusted_options.offset_pointer_data_from_field = true;
+
+			// If the field allocators are specified, then consider that allocate buffers is as well
+			adjusted_options.always_allocate_for_buffers = options->always_allocate_for_buffers || options->custom_options.use_field_allocators;
 
 			// If the initialize allocators option is enabled, initialize the allocators before the main body
 			if (options->custom_options.initialize_type_allocators) {
@@ -5745,6 +5764,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Override the options allocator with the type allocator, if the field allocators are to be used
 			if (options->custom_options.use_field_allocators) {
 				adjusted_options.allocator = GetReflectionTypeOverallAllocator(type, destination_data, options->allocator);
+			}
+
+			// If the passdown info is missing, then we need to create one
+			ECS_REFLECTION_STACK_PASSDOWN_INFO(passdown_info);
+			if (adjusted_options.passdown_info == nullptr) {
+				adjusted_options.passdown_info = &passdown_info;
 			}
 
 			// Go through the new type and try to get the data
@@ -5788,7 +5813,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			// At the end, if the buffer allocation is enabled, we need to coalesce any SoA buffers
-			if (options->always_allocate_for_buffers) {
+			if (adjusted_options.always_allocate_for_buffers) {
 				MergeReflectionPointerSoAAllocationsForType(type, destination_data, options->allocator);
 			}
 		}
@@ -6380,16 +6405,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			void* destination,
 			const CopyReflectionDataOptions* options
 		)
-		{
-			// If the passdown info is missing, then we need to create one
-			ECS_REFLECTION_STACK_PASSDOWN_INFO(passdown_info);
-			CopyReflectionDataOptions adjusted_options;
-			if (options->passdown_info == nullptr) {
-				adjusted_options = *options;
-				adjusted_options.passdown_info = &passdown_info;
-				options = &adjusted_options;
-			}
-			
+		{		
 			const ReflectionField* field = &type->fields[field_index];
 
 			if (options->always_allocate_for_buffers || options->custom_options.deallocate_existing_data) {
@@ -7547,7 +7563,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		static size_t ReflectionPassdownInfoGetPointerTargetImpl(
+		static ReflectionCustomTypeGetElementIndexOrToken ReflectionPassdownInfoGetPointerTargetImpl(
 			ReflectionPassdownInfo* info, 
 			Stream<char> key, 
 			Stream<char> custom_element_name, 
@@ -7578,13 +7594,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 		}
 
-		size_t ReflectionPassdownInfo::GetPointerTargetIndex(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
+		ReflectionCustomTypeGetElementIndexOrToken ReflectionPassdownInfo::GetPointerTargetIndex(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
 			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, pointer_value, is_source_data, false);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t ReflectionPassdownInfo::GetPointerTargetToken(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
+		ReflectionCustomTypeGetElementIndexOrToken ReflectionPassdownInfo::GetPointerTargetToken(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
 			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, pointer_value, is_source_data, true);
 		}
 
@@ -7594,7 +7610,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ReflectionPassdownInfo* info, 
 			Stream<char> key, 
 			Stream<char> custom_element_name,
-			size_t value, 
+			ReflectionCustomTypeGetElementIndexOrToken value,
 			bool is_source_data, 
 			bool is_token
 		) {
@@ -7622,11 +7638,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 		}
 
-		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromIndex(Stream<char> key, Stream<char> custom_element_name, size_t index_value, bool is_source_data) {
+		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromIndex(Stream<char> key, Stream<char> custom_element_name, ReflectionCustomTypeGetElementIndexOrToken index_value, bool is_source_data) {
 			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, index_value, is_source_data, false);
 		}
 
-		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromToken(Stream<char> key, Stream<char> custom_element_name, size_t token_value, bool is_source_data) {
+		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromToken(Stream<char> key, Stream<char> custom_element_name, ReflectionCustomTypeGetElementIndexOrToken token_value, bool is_source_data) {
 			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, token_value, is_source_data, true);
 		}
 

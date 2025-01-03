@@ -90,7 +90,7 @@ namespace ECSEngine {
 
 		// Returns the old buffer
 		void* AddResize(Stream<T> elements, AllocatorPolymorphic allocator, bool deallocate_old = false) {
-			size_t old_size = elements.size;
+			size_t old_size = size;
 			void* old_buffer = Expand(allocator, elements.size, deallocate_old);
 			CopySlice(old_size, elements);
 			return old_buffer;
