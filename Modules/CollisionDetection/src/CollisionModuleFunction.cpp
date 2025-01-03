@@ -115,7 +115,9 @@ static void BuildConvexColliderTaskBase(ModuleComponentBuildFunctionData* data) 
 		world_allocator.allocation_type = ECS_ALLOCATION_MULTI;
 
 		// Retrieve the mesh vertices from the GPU memory to the CPU side
+		data->gpu_lock.Lock();
 		Stream<float3> vertex_positions = GetMeshPositionsCPU(data->world_graphics, render_mesh->mesh->mesh, world_allocator);
+		data->gpu_lock.Unlock();
 		ConvexCollider* collider = (ConvexCollider*)data->component;
 		DeallocateConvexCollider(collider, data->component_allocator);
 		//collider->hull = CreateConvexHullFromMesh(vertex_positions, data->component_allocator);
@@ -133,9 +135,7 @@ static void BuildConvexColliderTaskBase(ModuleComponentBuildFunctionData* data) 
 
 static ECS_THREAD_TASK(BuildConvexColliderTask) {
 	ModuleComponentBuildFunctionData* data = (ModuleComponentBuildFunctionData*)_data;
-	data->gpu_lock.Lock();
 	BuildConvexColliderTaskBase(data);
-	data->gpu_lock.Unlock();
 }
 
 static ThreadTask ModuleBuildConvexCollider(ModuleComponentBuildFunctionData* data) {

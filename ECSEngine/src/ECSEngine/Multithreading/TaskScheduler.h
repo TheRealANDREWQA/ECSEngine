@@ -17,6 +17,12 @@ namespace ECSEngine {
 	};
 
 	struct TaskSchedulerInfo {
+		ECS_INLINE TaskSchedulerInfo Copy(AllocatorPolymorphic allocator) const {
+			TaskSchedulerInfo copy;
+			memcpy(&copy, this, sizeof(*this));
+			return copy;
+		}
+
 		ECS_TASK_SCHEDULER_BARRIER_TYPE barrier;
 		ECS_TASK_SCHEDULER_WRAPPER_TYPE wrapper_type;
 		ECS_THREAD_TASK_READ_VISIBILITY_TYPE read_type;
@@ -77,6 +83,9 @@ namespace ECSEngine {
 		);
 
 		void Copy(Stream<TaskSchedulerElement> stream, bool copy_data = false);
+
+		// Copies the contents from another entry
+		void CopyOther(const TaskScheduler* other);
 
 		void ClearFrame();
 

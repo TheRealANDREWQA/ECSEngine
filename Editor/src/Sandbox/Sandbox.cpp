@@ -782,6 +782,24 @@ static void CopySandboxGeneralFields(EditorState* editor_state, unsigned int des
 	RestoreAndSaveEditorSandboxFile(editor_state, disable_sandbox_file);
 }
 
+static void CopySandboxRecordingAndReplayOptions(EditorState* editor_state, unsigned int destination_index, unsigned int source_index) {
+	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
+		EDITOR_SANDBOX_RECORDING_TYPE recording_type = (EDITOR_SANDBOX_RECORDING_TYPE)index;
+
+		const EditorSandbox::Recorder* source_sandbox_recorder = GetSandboxRecordingInfo(editor_state, source_index, recording_type).recorder;
+		EditorSandbox::Recorder* destination_sandbox_recorder = GetSandboxRecordingInfo(editor_state, destination_index, recording_type).recorder;
+		destination_sandbox_recorder->file.CopyOther(source_sandbox_recorder->file);
+		destination_sandbox_recorder->file_automatic_index = source_sandbox_recorder->file_automatic_index;
+		destination_sandbox_recorder->is_file_valid = source_sandbox_recorder->is_file_valid;
+
+		const EditorSandbox::ReplayPlayer* source_sandbox_replay = GetSandboxReplayInfo(editor_state, source_index, recording_type).replay;
+		EditorSandbox::ReplayPlayer* destination_sandbox_replay = GetSandboxReplayInfo(editor_state, destination_index, recording_type).replay;
+		destination_sandbox_replay->file.CopyOther(source_sandbox_replay->file);
+		destination_sandbox_replay->is_file_valid = source_sandbox_replay->is_file_valid;
+		destination_sandbox_replay->is_driving_delta_time = source_sandbox_replay->is_driving_delta_time;
+	}
+}
+
 void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsigned int source_index)
 {
 	// First, the modules must be changed, while also copying their assigned settings
@@ -821,6 +839,7 @@ void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsi
 	}
 
 	// Copy the recorders and replayers
+	CopySandboxRecordingAndReplayOptions(editor_state, destination_index, source_index);
 
 	CopySandboxGeneralFields(editor_state, destination_index, source_index);
 	// Render the sandbox now again

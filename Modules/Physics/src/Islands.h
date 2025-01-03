@@ -1,3 +1,4 @@
+// ECS_REFLECT
 #pragma once
 #include "ECSEngineEntities.h"
 #include "ECSEngineContainers.h"
@@ -6,22 +7,23 @@ using namespace ECSEngine;
 
 struct ContactConstraint;
 
-struct IslandHandle {
+struct ECS_REFLECT IslandHandle {
 	unsigned int handle;
 	unsigned int reference_count;
 };
 
-struct Island {
+struct ECS_REFLECT Island {
 	void AddContact(ContactConstraint* constraint);
 
 	void AddContacts(Stream<ContactConstraint*> constraints);
 
 	void RemoveContact(ContactConstraint* constraint);
-
+	
+	[[ECS_POINTER_AS_REFERENCE(ContactConstraint)]]
 	ResizableStream<ContactConstraint*> contacts;
 };
 
-struct IslandManager {
+struct ECS_REFLECT IslandManager {
 	void AddContact(ContactConstraint* constraint);
 
 	// Returns the handle for the island that contains the given entity. If there is no island
@@ -56,10 +58,11 @@ struct IslandManager {
 	// From the hash table
 	typedef HashTable<IslandHandle, Entity, HashFunctionPowerOfTwo> EntityTable;
 
+	[[ECS_MAIN_ALLOCATOR]]
+	MemoryManager allocator;
 	// We are using a sparse set because we want to iterate through this when simulating
 	// The islands, but also to have a stable index for the EntityTable such that we don't
 	// Need to repair references
 	ResizableSparseSet<Island> islands;
 	EntityTable entity_table;
-	MemoryManager allocator;
 };

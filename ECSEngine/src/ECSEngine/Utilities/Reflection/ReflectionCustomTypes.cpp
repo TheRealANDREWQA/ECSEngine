@@ -120,26 +120,31 @@ namespace ECSEngine {
 			const char* parse_character = opened_bracket.buffer + 1;
 			
 			// Retrieves a single template parameter, starting from the location of parse character
-			auto parse_template_type = [closed_bracket, parse_character]() {
+			auto parse_template_type = [closed_bracket, &parse_character]() {
 				// Go through the characters in between the brackets and keep track of how many templates we encountered.
 				// Stop when we get to a comma and the template counter is 0, or we got to the closed bracket
+				if (*parse_character == ',') {
+					// Skip this comma and the whitespace that follows it
+					parse_character++;
+					parse_character = SkipWhitespace(parse_character);
+				}
+
 				size_t template_count = 0;
 				Stream<char> type = { parse_character, PointerElementDifference(parse_character, closed_bracket.buffer) };
 
-				const char* iterate_character = parse_character;
-				while (iterate_character < closed_bracket.buffer) {
-					if (*iterate_character == '<') {
+				while (parse_character < closed_bracket.buffer) {
+					if (*parse_character == '<') {
 						template_count++;
 					}
-					else if (*iterate_character == '>') {
+					else if (*parse_character == '>') {
 						template_count--;
 					}
-					else if (*iterate_character == ',' && template_count == 0) {
-						type.size = iterate_character - type.buffer;
+					else if (*parse_character == ',' && template_count == 0) {
+						type.size = parse_character - type.buffer;
 						break;
 					}
 
-					iterate_character++;
+					parse_character++;
 				}
 
 				type = SkipWhitespace(type);

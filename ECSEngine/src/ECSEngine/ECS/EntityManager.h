@@ -1695,8 +1695,8 @@ namespace ECSEngine {
 				T::ID(),
 				sizeof(T),
 				data,
-				ComponentAllocatorSize<T>(),
-				name
+				name,
+				ComponentAllocatorSize<T>()
 			);
 		}
 

@@ -1129,6 +1129,13 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
 	data->sandbox_index = sandbox_index;
 
+	// If the targetted sandbox is outside the sandbox count, (i.e. it has been deleted)
+	// Then change the inspector
+	if (sandbox_index >= GetSandboxCount(editor_state, true)) {
+		ChangeInspectorToNothing(editor_state, inspector_index);
+		return;
+	}
+
 	auto get_name = [](unsigned int index, CapacityStream<char>& name) {
 		name.CopyOther("Sandbox ");
 		ConvertIntToChars(name, index);

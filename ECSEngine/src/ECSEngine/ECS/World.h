@@ -156,7 +156,7 @@ namespace ECSEngine {
 
 	// Clears the destination world and then copies all the data from the source world. It assumes
 	// That the destination world was initialized at least once.
-	ECSENGINE_API void CopyWorld(World* destination_world, const World* source_world, bool copy_resource_manager_entries = true);
+	ECSENGINE_API void CopyWorld(World* destination_world, const World* source_world);
 
 	// These are functions that can be used from C++ to tell the editor to stop
 	// The simulation

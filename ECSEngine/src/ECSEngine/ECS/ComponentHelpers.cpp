@@ -2,6 +2,7 @@
 #include "ComponentHelpers.h"
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
+#include "../Utilities/Reflection/ReflectionAllocatorHandling.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Resources/AssetMetadata.h"
 
@@ -296,7 +297,12 @@ namespace ECSEngine {
 			bool has_buffers = HasReflectionTypeComponentBuffers(type);
 			size_t allocator_size = GetReflectionComponentAllocatorSize(type);
 			if (allocator_size == 0 && has_buffers) {
-				validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION;
+				// For this case, if a main allocator is specified, then don't signal this
+				// As an error, consider this entry as a system component which handles
+				// Its own allocator
+				if (GetReflectionTypeAllocatorMiscIndex(type) == -1) {
+					validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION;
+				}
 			}
 
 			if (allocator_size != 0 && !has_buffers) {

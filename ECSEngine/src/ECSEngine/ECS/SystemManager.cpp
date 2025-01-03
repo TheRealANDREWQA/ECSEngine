@@ -271,6 +271,19 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
+	void SystemManager::CopyOther(const SystemManager* other)
+	{
+		// The bound data is of most interest. Don't copy the temporary data
+		ECS_ASSERT(system_settings.GetCount() == 0, "Copying a SystemManager with system settings is not supported");
+		
+		Clear();
+		other->data_table.ForEachConst([&](DataPointer value, ResourceIdentifier identifier) {
+			BindData(identifier.AsASCII(), value.GetPointer(), value.GetData());
+		});
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------------
+
 	void SystemManager::FreeMemory()
 	{
 		// This is also allocated

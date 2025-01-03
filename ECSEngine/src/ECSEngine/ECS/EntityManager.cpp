@@ -4499,10 +4499,8 @@ namespace ECSEngine {
 
 	const void* EntityManager::GetGlobalComponent(Component component) const
 	{
-		ECS_CRASH_CONDITION_RETURN(ExistsGlobalComponent(component), nullptr, "The global component {#} doesn't exist when trying to retrieve the value.",
-			GetGlobalComponentName(component));
 		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
-		ECS_CRASH_CONDITION_RETURN(index != -1, nullptr, "Missing global component {#} in SoA stream", GetGlobalComponentName(component));
+		ECS_CRASH_CONDITION_RETURN(index != -1, nullptr, "Global component {#} was not registered!", GetGlobalComponentName(component));
 		return m_global_components_data[index];
 	}
 

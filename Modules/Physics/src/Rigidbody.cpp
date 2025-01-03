@@ -230,7 +230,7 @@ static ThreadTask RigidbodyBuildFunction(ModuleComponentBuildFunctionData* data)
         else {
             float mass = 0.0f;
             float3 center_of_mass = float3::Splat(0.0f);
-            Matrix3x3 inertia_tensor = ComputeInertiaTensor(&hull, rigidbody->mass_inverse, &mass, &center_of_mass);
+            Matrix3x3 inertia_tensor = ComputeInertiaTensor(&hull, 1.0f, &mass, &center_of_mass);
             rigidbody->inertia_tensor_inverse = Matrix3x3Inverse(inertia_tensor);
             rigidbody->mass_inverse = 1.0f / mass;
             // The center of mass should coincide with the center of the hull

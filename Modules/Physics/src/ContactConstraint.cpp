@@ -6,7 +6,6 @@
 #include "ECSEngineWorld.h"
 #include "CollisionDetection/src/CollisionDetectionComponents.h"
 #include "CollisionDetection/src/GJK.h"
-#include "Settings.h"
 #include "SolverData.h"
 
 #define MAX_BAUMGARTE_BIAS 1000.0f
@@ -500,20 +499,14 @@ static void DeallocateContactConstraint(SolverData* solver_data, ContactConstrai
 }
 
 ECS_THREAD_TASK(SolveContactConstraints) {
-	SolverData* data = (SolverData*)_data;
+	//SolverData* data = (SolverData*)_data;
+	SolverData* data = world->entity_manager->GetGlobalComponent<SolverData>();
 	
 	//if (data->constraints.size > 0) {
 	//	StopSimulation(world);
 	//}
 
 	if (data->contact_table.GetCount() > 0) {
-		if (world->entity_manager->ExistsGlobalComponent(PhysicsSettings::ID())) {
-			PhysicsSettings* settings = world->entity_manager->GetGlobalComponent<PhysicsSettings>();
-			data->iterations = settings->iterations;
-			data->baumgarte_factor = settings->baumgarte_factor;
-			data->use_warm_starting = settings->use_warm_starting;
-		}
-
 		CapacityStream<unsigned int> iteration_indices;
 		iteration_indices.Initialize(&data->allocator, 0, data->contact_table.GetCount());
 
@@ -560,10 +553,11 @@ ECS_THREAD_TASK(SolveContactConstraints) {
 }
 
 static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInitializeInfo* info) {
-	SolverData* data = info->Allocate<SolverData>();
-	data->Initialize(world->memory);
-	// Bind this so we can access the data from outside the main function
-	world->system_manager->BindData(SOLVER_DATA_STRING, data);
+	//SolverData* data = info->Allocate<SolverData>();
+	//data->Initialize(world->memory);
+	SolverData data;
+	data.Initialize(world->memory);
+	world->entity_manager->RegisterGlobalComponentCommit(&data, STRING(SolverData));
 }
 
 void AddSolverTasks(ModuleTaskFunctionData* data) {
@@ -582,7 +576,7 @@ void AddContactConstraint(
 	const Rigidbody* second_rigidbody
 ) {
 	// At the moment, allocate the contact directly now
-	SolverData* data = (SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
+	SolverData* data = world->entity_manager->GetGlobalComponent<SolverData>();
 
 	// Try to retrieve the existing pair
 	unsigned int pair_index = GetContactConstraintIndex(data, contact->entity_A, contact->entity_B);
