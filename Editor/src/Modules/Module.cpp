@@ -1532,11 +1532,17 @@ ModuleComponentBuildEntry* GetModuleComponentBuildEntry(
 	unsigned int index, 
 	EDITOR_MODULE_CONFIGURATION configuration, 
 	Stream<char> component_name,
-	EDITOR_MODULE_CONFIGURATION* matched_configuration
+	EDITOR_MODULE_CONFIGURATION* matched_configuration,
+	bool allow_out_of_date_modules
 )
 {
 	if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
-		configuration = GetModuleLoadedConfiguration(editor_state, index);
+		if (allow_out_of_date_modules) {
+			configuration = GetModuleLoadedConfigurationWithOutOfDate(editor_state, index);
+		}
+		else {
+			configuration = GetModuleLoadedConfiguration(editor_state, index);
+		}
 		if (matched_configuration != nullptr) {
 			*matched_configuration = configuration;
 		}
@@ -1553,12 +1559,20 @@ ModuleComponentBuildEntry* GetModuleComponentBuildEntry(
 
 EditorModuleComponentBuildEntry GetModuleComponentBuildEntry(
 	const EditorState* editor_state,
-	Stream<char> component_name
+	Stream<char> component_name,
+	bool allow_out_of_date_modules
 ) {
 	unsigned int module_count = editor_state->project_modules->size;
 	for (unsigned int index = 0; index < module_count; index++) {
 		EDITOR_MODULE_CONFIGURATION matched_configuration;
-		ModuleComponentBuildEntry* entry = GetModuleComponentBuildEntry(editor_state, index, EDITOR_MODULE_CONFIGURATION_COUNT, component_name, &matched_configuration);
+		ModuleComponentBuildEntry* entry = GetModuleComponentBuildEntry(
+			editor_state, 
+			index, 
+			EDITOR_MODULE_CONFIGURATION_COUNT, 
+			component_name, 
+			&matched_configuration, 
+			allow_out_of_date_modules
+		);
 		if (entry != nullptr && entry->function != nullptr) {
 			return { entry, index, matched_configuration };
 		}
@@ -1986,6 +2000,27 @@ EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* edit
 	const EditorModule* module = editor_state->project_modules->buffer + module_index;
 	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
 		if (module->infos[EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index].load_status == EDITOR_MODULE_LOAD_GOOD) {
+			return (EDITOR_MODULE_CONFIGURATION)(EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index);
+		}
+	}
+
+	return EDITOR_MODULE_CONFIGURATION_COUNT;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfigurationWithOutOfDate(const EditorState* editor_state, unsigned int module_index)
+{
+	const EditorModule* module = editor_state->project_modules->buffer + module_index;
+	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
+		if (module->infos[EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index].load_status == EDITOR_MODULE_LOAD_GOOD) {
+			return (EDITOR_MODULE_CONFIGURATION)(EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index);
+		}
+	}
+
+	// No good module was found, try with out of date
+	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
+		if (module->infos[EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index].load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
 			return (EDITOR_MODULE_CONFIGURATION)(EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index);
 		}
 	}

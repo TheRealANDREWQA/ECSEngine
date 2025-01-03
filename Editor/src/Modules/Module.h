@@ -219,14 +219,16 @@ EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, u
 
 // If the configuration is COUNT, it will use the most suitable loaded module
 // If you want to know the actual configuration that was matched, you can fill in
-// The last parameter
+// The last parameter. With the last parameter you can choose whether or not out
+// Of date modules should be considered
 // Returns nullptr if there is no such function
 ModuleComponentBuildEntry* GetModuleComponentBuildEntry(
 	const EditorState* editor_state, 
 	unsigned int index, 
 	EDITOR_MODULE_CONFIGURATION configuration, 
 	Stream<char> component_name,
-	EDITOR_MODULE_CONFIGURATION* matched_configuration = nullptr
+	EDITOR_MODULE_CONFIGURATION* matched_configuration = nullptr,
+	bool allow_out_of_date_modules = false
 );
 
 struct EditorModuleComponentBuildEntry {
@@ -236,10 +238,12 @@ struct EditorModuleComponentBuildEntry {
 };
 
 // Convenience function - it will search through all modules and return the first found.
-// Returns nullptr if there is no such function
+// Returns nullptr if there is no such function. With the last parameter you can choose
+// Whether out of date modules should be considered or not
 EditorModuleComponentBuildEntry GetModuleComponentBuildEntry(
 	const EditorState* editor_state,
-	Stream<char> component_name
+	Stream<char> component_name,
+	bool allow_out_of_date_modules = false
 );
 
 void GetModuleStem(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);
@@ -283,8 +287,13 @@ bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int 
 unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, unsigned int module_index);
 
 // Returns the most suitable configuration. The rules are like this. Find the first GOOD configuration (from distribution to debug).
-// If found return it. If all are not loaded or out of date, then return EDITOR_MODULE_CONFIGURATION_COUNT
+// If found returns it. If all are not loaded or out of date, then returns EDITOR_MODULE_CONFIGURATION_COUNT
 EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* editor_state, unsigned int module_index);
+
+// Returns the most suitable configuration. The rules are like this. Find the first GOOD configuration (from distribution to debug),
+// Or the first one that is out of date, when there is no GOOD configuration. If found returns it. 
+// If all are not loaded, then return EDITOR_MODULE_CONFIGURATION_COUNT
+EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfigurationWithOutOfDate(const EditorState* editor_state, unsigned int module_index);
 
 // Returns a structures with both functions nullptr in case there is no such component. (Fine for components
 // that only expose handles to assets). If there is no dll loaded, then it will simply return nullptrs

@@ -182,15 +182,15 @@ namespace ECSEngine {
 	template<typename T>
 	struct has_AllocatorSize_t<T, std::void_t<decltype(std::declval<T>().AllocatorSize())>> : std::true_type {};
 
-	template<typename T, typename std::enable_if_t<has_AllocatorSize_t<T>::value, bool>::type = false>
-	constexpr ECS_INLINE size_t ComponentAllocatorSize() {
-		return 0;
-	}
-
-	template<typename T, typename std::enable_if<has_AllocatorSize_t<T>::value, bool>::type = true>
+	template<typename T>
 	constexpr ECS_INLINE size_t ComponentAllocatorSize()
 	{
-		return T::AllocatorSize();
+		if constexpr (has_AllocatorSize_t<T>::value) {
+			return T::AllocatorSize();
+		}
+		else {
+			return 0;
+		}
 	};
 
 	enum ECS_COMPONENT_TYPE : unsigned char {

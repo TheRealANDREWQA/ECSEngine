@@ -363,6 +363,16 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+	ECS_INLINE static Stream<void> GetResourceEntrySuffix(const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+		return { OffsetPointer(identifier.ptr, identifier.size - entry.suffix_size), entry.suffix_size };
+	}
+
+	ECS_INLINE static ResourceIdentifier GetResourceEntryIdentifierWithoutSuffix(const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+		return { identifier.ptr, identifier.size - entry.suffix_size };
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	static void AddResourceEx(ResourceManager* resource_manager, ResourceType type, void* data, bool multithreaded_allocation, const ResourceManagerLoadDesc& load_descriptor, const ResourceManagerExDesc* ex_desc) {
 		if (ex_desc != nullptr && ex_desc->HasFilename()) {
 			ex_desc->Lock(resource_manager);
@@ -831,21 +841,42 @@ namespace ECSEngine {
 				if (other->m_graphics == m_graphics) {
 					// Can just reference the resource
 					table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
-						AddResource(identifier, (ResourceType)index, entry.data, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+						AddResource(
+							GetResourceEntryIdentifierWithoutSuffix(entry, identifier), 
+							(ResourceType)index, 
+							entry.data, 
+							false, 
+							entry.time_stamp, 
+							GetResourceEntrySuffix(entry, identifier), 
+							entry.reference_count
+						);
 					});
 				}
 				else {
+					auto add_entry = [this](void* data, size_t resource_index, const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+						AddResource(
+							GetResourceEntryIdentifierWithoutSuffix(entry, identifier),
+							(ResourceType)resource_index,
+							data,
+							false,
+							entry.time_stamp,
+							GetResourceEntrySuffix(entry, identifier),
+							entry.reference_count
+						);
+					};
+
 					switch ((ResourceType)index) {
 					case ResourceType::TextFile:
 					case ResourceType::PBRMaterial:
 						// These types don't need to be transferred on the other graphics object
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
-							AddResource(identifier, (ResourceType)index, entry.data, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							add_entry(entry.data, index, entry, identifier);
 						});
 						break;
 					case ResourceType::Shader:
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
-							// TODO: Need to transfer the shader
+							// TODO: Transfer the shader
+							add_entry(entry.data, index, entry, identifier);
 						});
 						break;
 					case ResourceType::CoalescedMesh:
@@ -853,7 +884,7 @@ namespace ECSEngine {
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 							CoalescedMesh* mesh = (CoalescedMesh*)entry.data;
 							CoalescedMesh new_mesh = m_graphics->TransferCoalescedMesh(mesh);
-							AddResource(identifier, (ResourceType)index, &new_mesh, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							add_entry(&new_mesh, index, entry, identifier);
 						});
 						break;
 					case ResourceType::Mesh:
@@ -861,21 +892,21 @@ namespace ECSEngine {
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 							Mesh* mesh = (Mesh*)entry.data;
 							Mesh new_mesh = m_graphics->TransferMesh(mesh);
-							AddResource(identifier, (ResourceType)index, &new_mesh, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							add_entry(&new_mesh, index, entry, identifier);
 						});
 						break;
 					case ResourceType::PBRMesh:
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 							PBRMesh* pbr_mesh = (PBRMesh*)entry.data;
 							PBRMesh new_mesh = m_graphics->TransferPBRMesh(pbr_mesh);
-							AddResource(identifier, (ResourceType)index, &new_mesh, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							add_entry(&new_mesh, index, entry, identifier);
 						});
 						break;
 					case ResourceType::Texture:
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 							ResourceView view = (ID3D11ShaderResourceView*)entry.data;
 							ResourceView new_view = TransferGPUView(view, m_graphics->GetDevice());
-							AddResource(identifier, (ResourceType)index, new_view.view, false, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
+							add_entry(new_view.view, index, entry, identifier);
 						});
 						break;
 					}

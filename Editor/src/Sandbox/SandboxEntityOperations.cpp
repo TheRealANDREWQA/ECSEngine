@@ -79,6 +79,13 @@ void AddSandboxEntitySharedComponent(
 					);
 				}
 				else {
+					// Emit a warning if the module is out of date and it contains a build function for this component
+					EditorModuleComponentBuildEntry out_of_date_build_entry = GetModuleComponentBuildEntry(editor_state, component_name, true);
+					if (out_of_date_build_entry.entry != nullptr) {
+						ECS_FORMAT_TEMP_STRING(warning, "Module {#} contains a build function for component {#}, but it is out of date.", 
+							editor_state->project_modules->buffer[out_of_date_build_entry.module_index].library_name, component_name);
+						EditorSetConsoleWarn(warning);
+					}
 					entity_manager->AddSharedComponentCommit(entity, component, instance);
 				}
 			}
@@ -174,10 +181,14 @@ static void EditorModuleComponentBuildGPULockLock(void* data) {
 	// Set the background task gpu lock thread id such that
 	// We know, if we crash, to release the lock
 	BACKGROUND_TASK_GPU_LOCK_THREAD_ID = OS::GetCurrentThreadID();
+	// We need to acquire the editor state frame gpu lock as well, such that
+	// We synchronize with the main thread
+	editor_state->frame_gpu_lock.Lock();
 }
 
 static void EditorModuleComponentBuildGPULockUnlock(void* data) {
 	EditorState* editor_state = (EditorState*)data;
+	editor_state->frame_gpu_lock.Unlock();
 	EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
 	// Set this to -1 to indicate that it is unlocked
 	BACKGROUND_TASK_GPU_LOCK_THREAD_ID = -1;
@@ -190,7 +201,12 @@ static bool EditorModuleComponentBuildGPULockIsLocked(void* data) {
 
 static bool EditorModuleComponentBuildGPULockTryLock(void* data) {
 	EditorState* editor_state = (EditorState*)data;
-	return EditorStateTrySetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, 0, 1);
+	bool acquired_lock = EditorStateTrySetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, 0, 1);
+	if (acquired_lock) {
+		// Get the editor state frame gpu lock as well
+		editor_state->frame_gpu_lock.Lock();
+	}
+	return acquired_lock;
 }
 
 static void EditorModuleComponentBuildPrintFunction(void* data, Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE message_type) {

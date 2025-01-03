@@ -346,6 +346,8 @@ namespace ECSEngine {
 		};
 
 		struct UIReflectionDrawerCreateTypeOptions {
+			// By default, it will assert that the type doesn't exist
+			bool assert_that_it_doesnt_exist = true;
 			Stream<char> identifier_name = { nullptr, 0 };
 			Stream<unsigned int> ignore_fields = { nullptr, 0 };
 		};

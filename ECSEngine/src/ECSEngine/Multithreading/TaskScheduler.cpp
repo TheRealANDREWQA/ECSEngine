@@ -73,6 +73,15 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void TaskScheduler::CopyOther(const TaskScheduler* other) {
+		elements = StreamDeepCopy(other->elements, Allocator());
+		query_index = other->query_index;
+		query_infos = StreamDeepCopy(other->query_infos, Allocator());
+		task_barriers.InitializeAndCopy(Allocator(), other->task_barriers);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void TaskScheduler::ClearFrame()
 	{
 		query_index = 0;

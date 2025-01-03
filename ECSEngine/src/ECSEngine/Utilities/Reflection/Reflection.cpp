@@ -349,6 +349,8 @@ namespace ECSEngine {
 			if (equals_index != -1) {
 				type_and_name_tokens = subrange.GetSubrange(0, equals_index);
 				default_value_tokens = subrange.GetSubrangeAfterUntilEnd(equals_index);
+				// This will include the semicolon, exclude it
+				default_value_tokens.count--;
 			}
 
 			uint2 embedded_array_indices = TokenizeFindMatchingPair(string, "[", "]", type_and_name_tokens);
@@ -2788,6 +2790,16 @@ namespace ECSEngine {
 				}
 			}
 			constants.Trim();
+
+			// The typedefs need to be cleared as well
+			typedefs.ForEachIndex([&](unsigned int index) {
+				const ReflectionTypedef* typedef_ = typedefs.GetValuePtrFromIndex(index);
+				if (typedef_->folder_hierarchy_index == folder_index) {
+					typedefs.EraseFromIndex(index);
+					return true;
+				}
+				return false;
+			});
 
 			if (folders[folder_index].allocated_buffer != nullptr) {
 				Deallocate(folders.allocator, folders[folder_index].allocated_buffer);
@@ -6672,6 +6684,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							size_t current_element_byte_size = 0;
 							if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Basic) {
 								user_defined_stream = { OffsetPointer(current_source, type->fields[field_index].info.pointer_offset), 1 };
+							}
+							else if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Pointer) {
+								user_defined_stream = { *(void**)OffsetPointer(current_source, type->fields[field_index].info.pointer_offset), 1 };
 							}
 							else {
 								current_element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[field_index].info);

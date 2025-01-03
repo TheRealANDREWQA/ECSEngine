@@ -5,7 +5,7 @@
 #include "ECSEngineWorld.h"
 #include "ECSEngineComponents.h"
 #include "Logging.h"
-#include "Settings.h"
+#include "SolverData.h"
 
 static ECS_THREAD_TASK(CameraController) {
 	EntityManager* entity_manager = world->entity_manager;

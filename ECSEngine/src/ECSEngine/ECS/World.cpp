@@ -360,7 +360,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	void CopyWorld(World* destination_world, const World* source_world, bool copy_resource_manager_entries) {
+	void CopyWorld(World* destination_world, const World* source_world) {
 		// We don't want to clear the physical pages, they might be used again in this call
 		ClearWorld(destination_world, false);
 
@@ -369,7 +369,11 @@ namespace ECSEngine {
 		// Then the resources don't need to be copied.
 
 		destination_world->entity_manager->CopyOther(source_world->entity_manager);
-		//destination_world->system_manager->
+		destination_world->system_manager->CopyOther(source_world->system_manager);
+		destination_world->task_scheduler->CopyOther(source_world->task_scheduler);
+		if (destination_world->resource_manager != source_world->resource_manager) {
+			destination_world->resource_manager->InheritResources(source_world->resource_manager);
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

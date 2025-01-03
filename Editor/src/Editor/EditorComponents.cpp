@@ -182,7 +182,7 @@ bool EditorComponents::IsComponent(Stream<char> name) const
 {
 	ReflectionType type;
 	if (internal_manager->TryGetType(name, type)) {
-		if (IsReflectionTypeComponent(&type) || IsReflectionTypeSharedComponent(&type)) {
+		if (IsReflectionTypeComponent(&type) || IsReflectionTypeSharedComponent(&type) || IsReflectionTypeGlobalComponent(&type)) {
 			return true;
 		}
 	}
@@ -1109,7 +1109,7 @@ void EditorComponents::AddType(const ReflectionType* type, unsigned int module_i
 void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stream<char> component_name, SpinLock* lock)
 {
 	const ReflectionType* internal_type = internal_manager->GetType(component_name);
-	bool is_component = IsReflectionTypeComponent(internal_type);
+	ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(internal_type);
 	
 	Component component = { (short)internal_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 	ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
@@ -1120,16 +1120,21 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 		lock->Lock();
 	}
 	// Check to see if it already exists. If it does, don't commit it
-	if (is_component) {
+	if (component_type == ECS_COMPONENT_UNIQUE) {
 		if (!entity_manager->ExistsComponent(component)) {
 			entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), component_name, &component_functions);
 		}
 	}
-	else {
+	else if (component_type == ECS_COMPONENT_SHARED) {
 		if (!entity_manager->ExistsSharedComponent(component)) {
 			entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), component_name, &component_functions);
 		}
 	}
+	else if (component_type == ECS_COMPONENT_GLOBAL) { /* Nothing to be done here - the global components are handled separately */ }
+	else {
+		ECS_ASSERT(false);
+	}
+
 	if (lock != nullptr) {
 		lock->Unlock();
 	}
@@ -1945,6 +1950,13 @@ void EditorComponents::ResetComponent(EditorState* editor_state, unsigned int sa
 		}
 	}
 	else {
+		EditorModuleComponentBuildEntry out_of_date_build_entry = GetModuleComponentBuildEntry(editor_state, component_name, true);
+		if (out_of_date_build_entry.entry != nullptr) {
+			ECS_FORMAT_TEMP_STRING(warning, "Module {#} contains a build function for component {#}, but it is out of date.",
+				editor_state->project_modules->buffer[out_of_date_build_entry.module_index].library_name, component_name);
+			EditorSetConsoleWarn(warning);
+		}
+
 		entity_manager->TryCallEntityComponentDeallocateCommit(entity, component);
 		internal_manager->SetInstanceDefaultData(component_name, entity_data);
 	}
@@ -3108,7 +3120,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
 				if (IsReflectionTypeLinkComponent(&type)) {
 					Stream<char> target = GetReflectionTypeLinkComponentTarget(&type);
-					if (target.size > 0 && editor_state->editor_components.IsComponent(target)) {
+					if (target.size > 0) {
 						// Add an invalid target event if the target is invalid
 						if (!editor_state->editor_components.IsComponent(target)) {
 							// We need to allocate the name

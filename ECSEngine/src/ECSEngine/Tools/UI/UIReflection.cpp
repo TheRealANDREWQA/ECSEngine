@@ -3,6 +3,7 @@
 #include "../../Input/Mouse.h"
 #include "../../Input/Keyboard.h"
 #include "../../Utilities/Reflection/ReflectionStringFunctions.h"
+#include "../../Utilities/Reflection/ReflectionCustomTypes.h"
 #include "../../Utilities/ParsingUtilities.h"
 #include "../../Math/MathTypeSizes.h"
 
@@ -3913,7 +3914,9 @@ namespace ECSEngine {
 				}
 			};
 
-			ECS_ASSERT(type_definition.Find(reflected_type->name) == -1);
+			if (options == nullptr || options->assert_that_it_doesnt_exist) {
+				ECS_ASSERT(type_definition.Find(reflected_type->name) == -1);
+			}
 
 			UIReflectionType type;
 			type.name = reflected_type->name;
@@ -3974,8 +3977,9 @@ namespace ECSEngine {
 					}
 				}
 				else if (field_info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					// Only if it doesn't have the ECS_GIVE_SIZE_REFLECTION macro
-					if (!field->Has(STRING(ECS_GIVE_SIZE_REFLECTION))) {
+					// Only if it doesn't have the ECS_GIVE_SIZE_REFLECTION macro and it is
+					// Not a custom type
+					if (!field->Has(STRING(ECS_GIVE_SIZE_REFLECTION)) && FindReflectionCustomType(field->definition) == -1) {
 						user_defined_convert(*field, type.fields[type.fields.size]);
 						value_written = true;
 					}
@@ -4062,6 +4066,11 @@ namespace ECSEngine {
 			auto is_field_omitted = [&](unsigned int index) {
 				bool is_omitted = SearchBytes(ignore_fields, index) != -1;
 				if (is_omitted) {
+					return true;
+				}
+				
+				// Check the omitted tag as well
+				if (reflected_type->fields[index].Has(STRING(ECS_UI_OMIT_FIELD_REFLECT))) {
 					return true;
 				}
 				
@@ -4404,10 +4413,15 @@ namespace ECSEngine {
 		unsigned int UIReflectionDrawer::CreateTypesForHierarchy(unsigned int hierarchy_index, const UIReflectionDrawerSearchOptions& options)
 		{
 			unsigned int count = 0;
+			// Since the user might specify this in a random order, dependencies might get created before
+			// The main type does, so don't assert that it doesn't exist
+			UIReflectionDrawerCreateTypeOptions create_options;
+			create_options.assert_that_it_doesnt_exist = false;
+
 			reflection->type_definitions.ForEach([&](const ReflectionType& type, ResourceIdentifier identifier) {
 				if (type.folder_hierarchy_index == hierarchy_index) {
 					if (CreateForHierarchyVerifyIncludeExclude(&type, options)) {
-						UIReflectionType* ui_type = CreateType(&type);
+						UIReflectionType* ui_type = CreateType(&type, &create_options);
 						unsigned int type_index = type_definition.ValuePtrIndex(ui_type);
 						CreateForHierarchyAddIndex(type_index, options);
 						count++;

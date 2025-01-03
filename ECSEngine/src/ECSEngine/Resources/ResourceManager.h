@@ -339,9 +339,8 @@ namespace ECSEngine {
 		void IncrementReferenceCounts(ResourceType type, unsigned short amount);
 
 		// It will insert the resources already loaded from the other resource manager into the instance's
-		// tables. The timestamps will be 0, and will have no reference count. If the graphics object
-		// differs between the 2 resource managers, then it will create another shared instance for the
-		// GPU resources which require this
+		// tables. The timestamps will be 0. If the graphics object differs between the 2 resource managers, 
+		// Then it will create another shared instance for the GPU resources which require this
 		void InheritResources(const ResourceManager* other);
 
 		// The file is allocated from the current allocator of the resource manager

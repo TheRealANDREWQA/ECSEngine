@@ -84,6 +84,12 @@ void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void CopySandboxRuntimeWorldFromOther(EditorState* editor_state, unsigned int sandbox_index)
+{
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool FocusUIOnSandbox(EditorState* editor_state, unsigned int sandbox_index) {
 	unsigned int game_ui_index = GetGameUIWindowIndex(editor_state, sandbox_index);
 	if (game_ui_index != -1) {
