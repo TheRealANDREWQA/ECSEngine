@@ -6,6 +6,12 @@ struct EditorState;
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Copies the scene path and updates the scene entities for a destination sandbox from the information
+// Of a source sandbox
+void CopySandboxScenePath(EditorState* editor_state, unsigned int source_sandbox_index, unsigned int destination_sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // The new scene needs to be the relative path from the assets folder. A special case is new_scene { nullptr, 0 } which means reset
 // Returns true if the scene could be loaded with success. It will deserialize into a temporary entity manager and asset database
 // If that succeeds, then it will copy into the sandbox allocator.
@@ -22,8 +28,7 @@ void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int
 
 // -------------------------------------------------------------------------------------------------------------
 
-// TODO: Implement this
-void CopySandboxRuntimeWorldFromOther(EditorState* editor_state, unsigned int sandbox_index);
+void CopySandboxRuntimeWorldFromOther(EditorState* editor_state, unsigned int source_sandbox_index, unsigned int destination_sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

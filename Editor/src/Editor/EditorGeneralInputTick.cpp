@@ -7,6 +7,7 @@
 #include "../Sandbox/SandboxScene.h"
 #include "../Sandbox/Sandbox.h"
 #include "../UI/Inspector.h"
+#include "../UI/SandboxUI.h"
 
 void TickEditorGeneralInput(EditorState* editor_state) {
 	const InputMapping& input_mapping = editor_state->input_mapping;
@@ -115,7 +116,9 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 	if (input_mapping.IsTriggered(EDITOR_INPUT_DUPLICATE_SANDBOX)) {
 		unsigned int active_sandbox = GetActiveSandboxIncludeScene(editor_state);
 		if (active_sandbox != -1) {
-			//CopySandbox()
+			// This function will create only the backend sandbox, without any support UI
+			unsigned int duplicated_sandbox = DuplicateSandbox(editor_state, active_sandbox);
+			DuplicateSandboxUIForDifferentSandbox(editor_state, active_sandbox, duplicated_sandbox);
 		}
 	}
 }

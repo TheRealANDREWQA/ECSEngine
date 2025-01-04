@@ -364,13 +364,14 @@ namespace ECSEngine {
 		// We don't want to clear the physical pages, they might be used again in this call
 		ClearWorld(destination_world, false);
 
-		// The structure that need to be copied are the entity manager, the system manager, the task scheduler
-		// And the resource manager, if the user specified so, if the pointers are different. If it is the same resource manager instance,
-		// Then the resources don't need to be copied.
+		// The structure that need to be copied are the entity manager, the system manager, the task scheduler,
+		// The task manager (static tasks) and the resource manager, if the user specified so, if the pointers are different. 
+		// If it is the same resource manager instance, then the resources don't need to be copied.
 
 		destination_world->entity_manager->CopyOther(source_world->entity_manager);
 		destination_world->system_manager->CopyOther(source_world->system_manager);
 		destination_world->task_scheduler->CopyOther(source_world->task_scheduler);
+		destination_world->task_manager->AddTasksFromOther(source_world->task_manager);
 		if (destination_world->resource_manager != source_world->resource_manager) {
 			destination_world->resource_manager->InheritResources(source_world->resource_manager);
 		}

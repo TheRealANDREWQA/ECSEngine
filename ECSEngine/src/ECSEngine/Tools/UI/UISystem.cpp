@@ -760,6 +760,18 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::AddWindowToDockspaceRegion(
+			unsigned int window_to_add_index,
+			unsigned int target_window_region_index
+		) {
+			unsigned int region_border_index;
+			DockspaceType region_dockspace_type;
+			UIDockspace* dockspace = GetDockspaceFromWindow(target_window_region_index, region_border_index, region_dockspace_type);
+			AddWindowToDockspaceRegion(window_to_add_index, dockspace, region_border_index);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddWindowSnapshotRunnable(UIDockspace* dockspace, unsigned int border_index, UIDockspaceBorderDrawSnapshotRunnable runnable)
 		{
 			runnable.data = CopyNonZero(TemporaryAllocator(ECS_UI_DRAW_NORMAL), runnable.data, runnable.data_size);
@@ -9887,6 +9899,46 @@ namespace ECSEngine {
 			m_mouse->SetPosition(new_position.x, new_position.y);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::SplitDockspaceRegion(UIDockspaceRegion region, ECS_UI_BORDER_TYPE border_type, unsigned int window_index) {
+			// Create a temporary dockspace that contains the given window and then use the addition function
+			UIElementTransform dockspace_transform;
+			dockspace_transform.position = GetWindowPosition(window_index);
+			dockspace_transform.scale = GetWindowScale(window_index);
+			unsigned int temporary_dockspace_index = CreateDockspace(dockspace_transform, DockspaceType::FloatingHorizontal, window_index, false);
+
+			unsigned int addition_mode = 0;
+			switch (border_type) {
+			case ECS_UI_BORDER_LEFT:
+				addition_mode = 0;
+				break;
+			case ECS_UI_BORDER_TOP:
+				addition_mode = 1;
+				break;
+			case ECS_UI_BORDER_RIGHT:
+				addition_mode = 2;
+				break;
+			case ECS_UI_BORDER_BOTTOM:
+				addition_mode = 3;
+				break;
+			}
+			HandleDockingGizmoAdditionOfDockspace(
+				region.dockspace, 
+				region.border_index, 
+				region.type, 
+				addition_mode, 
+				m_floating_horizontal_dockspaces.buffer + temporary_dockspace_index, 
+				DockspaceType::FloatingHorizontal
+			);
+		}
+
+		void UISystem::SplitDockspaceRegion(unsigned int target_window_region_index, ECS_UI_BORDER_TYPE border_type, unsigned int window_to_add_index) {
+			UIDockspaceRegion region;
+			region.dockspace = GetDockspaceFromWindow(target_window_region_index, region.border_index, region.type);
+			SplitDockspaceRegion(region, border_type, window_to_add_index);
+		}
+		
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void* UISystem::StartDragDrop(UIActionHandler handler, Stream<char> name, bool trigger_on_hover, bool trigger_on_region_exit)

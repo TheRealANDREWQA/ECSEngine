@@ -250,6 +250,12 @@ namespace ECSEngine {
 				unsigned int border_index
 			);
 
+			// Adds the given window_to_add to the dockspace region which contains the target window
+			void AddWindowToDockspaceRegion(
+				unsigned int window_to_add_index,
+				unsigned int target_window_region_index
+			);
+
 			void AddWindowSnapshotRunnable(
 				UIDockspace* dockspace,
 				unsigned int border_index,
@@ -1723,6 +1729,14 @@ namespace ECSEngine {
 
 			// The position is relative to the window position
 			void SetCursorPosition(uint2 position);
+
+			// Splits a dockspace region by adding a new window specified at a given location. The window
+			// To be added shouldn't exist in any dockspace
+			void SplitDockspaceRegion(UIDockspaceRegion region, ECS_UI_BORDER_TYPE border_type, unsigned int window_index);
+
+			// Splits a dockspace region of a target window by adding a new window specified at a given dockspace region.
+			// The window to be added shouldn't exist in any dockspace
+			void SplitDockspaceRegion(unsigned int target_window_region_index, ECS_UI_BORDER_TYPE border_type, unsigned int window_to_add_index);
 
 			// Used for inter window communication
 			// The interested elements need to use AcquireDragDrop() to be notified if they received something

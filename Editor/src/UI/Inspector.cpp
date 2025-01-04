@@ -323,6 +323,8 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 // ----------------------------------------------------------------------------------------------------------------------------
 
 unsigned int CreateInspectorWindow(EditorState* editor_state, unsigned int inspector_index) {
+	ECS_ASSERT(inspector_index < MAX_INSPECTOR_WINDOWS, "The maximum number of UI inspectors has been exceeded!");
+
 	UIWindowDescriptor descriptor;
 	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.x);
 	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.y);
@@ -340,8 +342,6 @@ unsigned int CreateInspectorWindow(EditorState* editor_state, unsigned int inspe
 // ----------------------------------------------------------------------------------------------------------------------------
 
 unsigned int CreateInspectorDockspace(EditorState* editor_state, unsigned int inspector_index) {
-	ECS_ASSERT(inspector_index < MAX_INSPECTOR_WINDOWS);
-
 	unsigned int window_index = CreateInspectorWindow(editor_state, inspector_index);
 
 	float2 window_position = editor_state->ui_system->GetWindowPosition(window_index);

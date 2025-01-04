@@ -84,8 +84,9 @@ void ClearSandboxDebugDrawComponents(EditorState* editor_state, unsigned int san
 // -------------------------------------------------------------------------------------------------------------
 
 // It will copy all the state of the source sandbox to the destination
-// It will re-render the viewport as well
-void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsigned int source_index);
+// It will re-render the viewport as well. The last flag controls whether
+// The runtime world should be copied if the source sandbox is in a run or paused state
+void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsigned int source_index, bool copy_runtime_world = true);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -119,8 +120,8 @@ bool ConstructSandboxSchedulingOrder(
 
 // -------------------------------------------------------------------------------------------------------------
 
-// It will duplicate the given sandbox - the associated windows will be placed in the same dockspace region as the given sandbox
-void DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_index);
+// It will duplicate the given sandbox, without any UI being created for it. Returns the newly created sandbox' index
+unsigned int DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

@@ -85,6 +85,7 @@ void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
 {
 	unsigned int index = *(unsigned int*)stack_memory->buffer;
+	ECS_ASSERT(index <= MAX_GAME_WINDOWS, "The maximum allowed count of game windows has been exceeded!");
 
 	GameData* game_data = (GameData*)stack_memory->Reserve<GameData>();
 	

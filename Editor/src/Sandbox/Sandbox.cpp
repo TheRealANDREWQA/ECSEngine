@@ -296,17 +296,6 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	EditorSandboxAssetHandlesSnapshot& snapshot = sandbox->runtime_asset_handle_snapshot;
 
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
-	AllocatorPolymorphic stack_allocator = &_stack_allocator;
-
-	const AssetDatabase* database = editor_state->asset_database;
-	SandboxReferenceCountsFromEntities asset_reference_counts = GetSandboxAssetReferenceCountsFromEntities(
-		editor_state, 
-		sandbox_index, 
-		EDITOR_SANDBOX_VIEWPORT_RUNTIME, 
-		stack_allocator
-	);
-
 	if (initialize) {
 		snapshot.allocator.Clear();
 		// Clear and reset everything
@@ -317,6 +306,17 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 		// Since the next iteration will pick up on this
 	}
 	else {
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
+		AllocatorPolymorphic stack_allocator = &_stack_allocator;
+
+		const AssetDatabase* database = editor_state->asset_database;
+		SandboxReferenceCountsFromEntities asset_reference_counts = GetSandboxAssetReferenceCountsFromEntities(
+			editor_state,
+			sandbox_index,
+			EDITOR_SANDBOX_VIEWPORT_RUNTIME,
+			stack_allocator
+		);
+
 		// Determine the difference between the 2 snapshots
 		// Allocate for each handle in the stored snapshot a boolean such that we mark those that were already found
 		size_t was_found_size = snapshot.handle_count;
@@ -800,7 +800,7 @@ static void CopySandboxRecordingAndReplayOptions(EditorState* editor_state, unsi
 	}
 }
 
-void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsigned int source_index)
+void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsigned int source_index, bool copy_runtime_world)
 {
 	// First, the modules must be changed, while also copying their assigned settings
 	// Then the scene must be set, alongside the runtime settings
@@ -826,22 +826,32 @@ void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsi
 		ChangeSandboxModuleSettings(editor_state, destination_index, sandbox_module.module_index, sandbox_module.settings_name);
 	}
 
-	bool scene_success = ChangeSandboxScenePath(editor_state, destination_index, source_sandbox->scene_path);
-	if (!scene_success) {
-		ECS_FORMAT_TEMP_STRING(message, "Could not load scene {#} during sandbox copy", source_sandbox->scene_path);
-		EditorSetConsoleError(message);
-	}
-
+	// The runtime settings must be loaded before the sandbox scene path is changed,
+	// Otherwise the loaded data will be lost
 	bool runtime_settings_success = ChangeSandboxRuntimeSettings(editor_state, destination_index, source_sandbox->runtime_settings);
 	if (!runtime_settings_success) {
 		ECS_FORMAT_TEMP_STRING(message, "Could not load runtime settings {#} during sandbox copy", source_sandbox->runtime_settings);
 		EditorSetConsoleError(message);
 	}
 
+	// This version works as well, but it is slower since it needs to read the file and perform a full deserialization
+	/*bool scene_success = ChangeSandboxScenePath(editor_state, destination_index, source_sandbox->scene_path);
+	if (!scene_success) {
+		ECS_FORMAT_TEMP_STRING(message, "Could not load scene {#} during sandbox copy", source_sandbox->scene_path);
+		EditorSetConsoleError(message);
+	}*/
+	CopySandboxScenePath(editor_state, source_index, destination_index);
+
 	// Copy the recorders and replayers
 	CopySandboxRecordingAndReplayOptions(editor_state, destination_index, source_index);
 
 	CopySandboxGeneralFields(editor_state, destination_index, source_index);
+
+	// If the sandbox is currently in a runtime mode, copy the runtime world as well
+	if (copy_runtime_world && GetSandboxState(editor_state, destination_index) != EDITOR_SANDBOX_SCENE) {
+		CopySandboxRuntimeWorldFromOther(editor_state, source_index, destination_index);
+	}
+
 	// Render the sandbox now again
 	RenderSandboxViewports(editor_state, destination_index);
 
@@ -1002,7 +1012,7 @@ bool ConstructSandboxSchedulingOrder(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+unsigned int DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_index) {
 	// Create a new sandbox - detect if it is a temporary sandbox and create another temporary accordingly
 	unsigned int duplicated_sandbox_index = -1;
 	if (IsSandboxTemporary(editor_state, sandbox_index)) {
@@ -1012,8 +1022,26 @@ void DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_index) {
 		duplicated_sandbox_index = CreateSandbox(editor_state);
 	}
 
-	// Copy the sandbox
-	CopySandbox(editor_state, duplicated_sandbox_index, sandbox_index);
+	// Copy the sandbox - without the runtime state. That will be copied separately
+	CopySandbox(editor_state, duplicated_sandbox_index, sandbox_index, false);
+
+	// If the sandbox is in the run state, we need to start this sandbox as well - before
+	// Copying the actual component data, in order to warm up all the necessary structures
+	EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+	if (sandbox_state == EDITOR_SANDBOX_RUNNING) {
+		StartSandboxWorld(editor_state, duplicated_sandbox_index);
+	}
+	else if (sandbox_state == EDITOR_SANDBOX_PAUSED) {
+		StartSandboxWorld(editor_state, duplicated_sandbox_index);
+		PauseSandboxWorld(editor_state, duplicated_sandbox_index, false);
+	}
+
+	// Finally, copy the runtime data
+	if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
+		CopySandboxRuntimeWorldFromOther(editor_state, sandbox_index, duplicated_sandbox_index);
+	}
+
+	return duplicated_sandbox_index;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1064,8 +1092,9 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	// Free the global sandbox allocator
 	sandbox->GlobalMemoryManager()->Free();
 
-	// Release the runtime settings path as well - it was allocated from the editor allocator
+	// Release the runtime settings path and the scene as well - it was allocated from the editor allocator
 	editor_state->editor_allocator->Deallocate(sandbox->runtime_settings.buffer);
+	sandbox->scene_path.Deallocate(editor_state->EditorAllocator());
 
 	// Check to see if it belongs to the temporary sandboxes
 	if (GetSandboxCount(editor_state, true) <= sandbox_index) {
@@ -1525,13 +1554,16 @@ void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_i
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	Graphics* runtime_graphics = editor_state->RuntimeGraphics();
 
+	// Use bypass protection calls to free the resources, because the main loop that runs
+	// The sandboxes will protect them before calling the run function, which might trigger
+	// A resize, which can get to this function while the resources are protected
 	if (sandbox->viewport_render_destination[viewport].render_view.Interface() != nullptr) {
-		runtime_graphics->FreeRenderDestination(sandbox->viewport_render_destination[viewport]);
+		runtime_graphics->FreeRenderDestinationBypassProtection(sandbox->viewport_render_destination[viewport]);
 
 		ECS_STACK_CAPACITY_STREAM(char, visualize_texture_name, 512);	
 		if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
-			runtime_graphics->FreeView(sandbox->scene_viewport_instance_framebuffer);
-			runtime_graphics->FreeView(sandbox->scene_viewport_depth_stencil_framebuffer);
+			runtime_graphics->FreeViewBypassProtection(sandbox->scene_viewport_instance_framebuffer);
+			runtime_graphics->FreeViewBypassProtection(sandbox->scene_viewport_depth_stencil_framebuffer);
 
 			GetVisualizeInstancedTextureName(sandbox_index, true, visualize_texture_name);
 			RemoveVisualizeTexture(editor_state, visualize_texture_name);
