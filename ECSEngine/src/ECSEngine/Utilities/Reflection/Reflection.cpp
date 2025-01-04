@@ -1023,6 +1023,10 @@ namespace ECSEngine {
 
 			data->total_memory += type.fields.CopySize();
 
+			// Update these fields - since they are not taken by reference
+			type_named_soa = struct_matcher_data.last_type_named_soa;
+			type_typedefs = struct_matcher_data.last_type_typedefs;
+
 			// We can validate the SoA fields here, such that we don't continue in case there
 			// Is a mismatch between the fields
 			type.misc_info.Initialize(&data->allocator, type_named_soa.size);
