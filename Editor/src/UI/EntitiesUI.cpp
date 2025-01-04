@@ -1000,19 +1000,12 @@ unsigned int CreateEntitiesUI(EditorState* editor_state)
 
 	unsigned int last_entities_index = GetEntitiesUILastWindowIndex(editor_state);
 	// This works even for the case when last entities is -1
-	ECS_ASSERT(last_entities_index + 1 < MAX_ENTITIES_UI_WINDOWS);
 	// This is fine even for -1, when it gets incremented then it will be 0.
 	unsigned int window_index = CreateEntitiesUIWindow(editor_state, last_entities_index + 1);
 
 	UIElementTransform window_transform = { ui_system->GetWindowPosition(window_index), ui_system->GetWindowScale(window_index) };
 	ui_system->CreateDockspace(window_transform, DockspaceType::FloatingHorizontal, window_index, false);
 
-	// Also trigger a re-update of the selected entities such that this newly created entities UI
-	// will update itself
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	if (sandbox_count > 0) {
-		SignalSandboxSelectedEntitiesCounter(editor_state, 0);
-	}
 	return window_index;
 }
 
@@ -1028,6 +1021,7 @@ void CreateEntitiesUIAction(ActionData* action_data)
 unsigned int CreateEntitiesUIWindow(EditorState* editor_state, unsigned int window_index)
 {
 	UIWindowDescriptor descriptor;
+	ECS_ASSERT(window_index < MAX_ENTITIES_UI_WINDOWS, "The maximum number of EntitiesUI windows has been exceeded!");
 
 	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 2);
 	unsigned int* stack_index = stack_memory.Reserve<unsigned int>();
@@ -1039,6 +1033,13 @@ unsigned int CreateEntitiesUIWindow(EditorState* editor_state, unsigned int wind
 
 	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, descriptor.initial_size_x);
 	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, descriptor.initial_size_y);
+
+	// Also trigger a re-update of the selected entities such that this newly created entities UI
+	// will update itself
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	if (sandbox_count > 0) {
+		SignalSandboxSelectedEntitiesCounter(editor_state, 0);
+	}
 
 	return editor_state->ui_system->Create_Window(descriptor);
 }

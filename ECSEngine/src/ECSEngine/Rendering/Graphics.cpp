@@ -2053,8 +2053,8 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	template<bool assert>
-	void RemoveResourceFromTrackingImplementation(Graphics* graphics, void* resource) {
+	template<bool assert, bool bypass_protection>
+	static void RemoveResourceFromTrackingImplementation(Graphics* graphics, void* resource) {
 		// Spin lock while the resizing is finished
 		graphics->m_internal_resources_lock.WaitLocked();
 		graphics->m_internal_resources_reader_count.fetch_add(1, ECS_RELAXED);
@@ -2067,12 +2067,18 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < resource_count && resource != nullptr; index++) {
 			if (graphics->m_internal_resources[index].interface_pointer == resource) {
 				bool expected = false;
-				if (graphics->m_internal_resources[index].is_deleted.compare_exchange_weak(expected, true)) {
+				if (graphics->m_internal_resources[index].is_deleted.compare_exchange_weak(expected, true, ECS_RELAXED)) {
 					// Check to see if the resource is protected. If it is protected, then set
 					// The is_deleted_flag to false again, and continue onwards
-					if (graphics->m_internal_resources[index].is_protected) {
-						graphics->m_internal_resources[index].is_deleted.store(false, ECS_RELAXED);
-						encountered_protected = true;
+					if constexpr (!bypass_protection) {
+						if (graphics->m_internal_resources[index].is_protected) {
+							graphics->m_internal_resources[index].is_deleted.store(false, ECS_RELAXED);
+							encountered_protected = true;
+						}
+						else {
+							// Exit by changing the interface to nullptr
+							resource = nullptr;
+						}
 					}
 					else {
 						// Exit by changing the interface to nullptr
@@ -2102,20 +2108,42 @@ namespace ECSEngine {
 		FreeView(destination.render_view);
 		FreeView(destination.depth_view);
 		FreeResource(destination.output_view);
+		if (destination.render_ua_view.Interface() != nullptr) {
+			FreeResource(destination.render_ua_view);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::FreeRenderDestinationBypassProtection(RenderDestination destination)
+	{
+		FreeViewBypassProtection(destination.render_view);
+		FreeViewBypassProtection(destination.depth_view);
+		FreeResourceBypassProtection(destination.output_view);
+		if (destination.render_ua_view.Interface() != nullptr) {
+			FreeResourceBypassProtection(destination.render_ua_view);
+		}
 	}
 	
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::RemoveResourceFromTracking(void* resource)
 	{
-		RemoveResourceFromTrackingImplementation<true>(this, resource);
+		RemoveResourceFromTrackingImplementation<true, false>(this, resource);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::RemoveResourceFromTrackingBypassProtection(void* resource)
+	{
+		RemoveResourceFromTrackingImplementation<true, true>(this, resource);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::RemovePossibleResourceFromTracking(void* resource)
 	{
-		RemoveResourceFromTrackingImplementation<false>(this, resource);
+		RemoveResourceFromTrackingImplementation<false, false>(this, resource);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

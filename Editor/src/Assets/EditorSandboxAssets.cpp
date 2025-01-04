@@ -14,7 +14,7 @@ using namespace ECSEngine;
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void FromDeallocateAssetDependencyToUpdateAssetToComponentElement(
+static void FromDeallocateAssetDependencyToUpdateAssetToComponentElement(
 	CapacityStream<UpdateAssetToComponentElement>* update_assets, 
 	Stream<DeallocateAssetDependency> deallocate_dependencies
 ) {
@@ -32,7 +32,7 @@ struct DeallocateAssetWithRemappingEventData {
 	bool force_execution;
 };
 
-EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
+static EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 	DeallocateAssetWithRemappingEventData* data = (DeallocateAssetWithRemappingEventData*)_data;
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) || data->force_execution) {
 		size_t total_size = 0;
@@ -93,7 +93,7 @@ public:
 	char old_metadata[AssetMetadataMaxByteSize()];
 };
 
-EDITOR_EVENT(DeallocateAssetWithRemappingWithOldMetadataEvent) {
+static EDITOR_EVENT(DeallocateAssetWithRemappingWithOldMetadataEvent) {
 	DeallocateAssetWithRemappingWithOldMetadataEventData* data = (DeallocateAssetWithRemappingWithOldMetadataEventData*)_data;
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) || data->force_execution) {
 		ECS_STACK_CAPACITY_STREAM(UpdateAssetToComponentElement, update_assets, 256);
@@ -133,7 +133,7 @@ struct DeallocateAssetWithRemappingMetadataChangeEventData {
 	bool force_execution;
 };
 
-EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
+static EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 	DeallocateAssetWithRemappingMetadataChangeEventData* data = (DeallocateAssetWithRemappingMetadataChangeEventData*)_data;
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) || data->force_execution) {
 		size_t total_size = 0;
@@ -233,6 +233,17 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 	}
 	else {
 		return true;
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void CopySandboxAssetReferences(EditorState* editor_state, unsigned int source_sandbox_index, unsigned int destination_sandbox_index) {
+	const EditorSandbox* source_sandbox = GetSandbox(editor_state, source_sandbox_index);
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		source_sandbox->database.ForEachAssetDuplicates((ECS_ASSET_TYPE)index, [&](unsigned int handle) {
+			IncrementAssetReferenceInSandbox(editor_state, handle, (ECS_ASSET_TYPE)index, destination_sandbox_index);
+		});
 	}
 }
 
@@ -1296,7 +1307,7 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, bool clear_database_reference)
+void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index)
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 

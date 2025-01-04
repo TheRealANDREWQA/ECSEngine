@@ -1114,6 +1114,24 @@ namespace ECSEngine {
 			}
 		}
 
+		// Only for basic resources. USE IN SPECIFIC SCENARIOS ONLY
+		template<typename Resource>
+		void FreeResourceBypassProtection(Resource resource) {
+			void* interface_pointer = GetGraphicsResourceInterface(resource);
+			RemoveResourceFromTrackingBypassProtection(interface_pointer);
+
+			unsigned int count = -1;
+			if constexpr (std::is_same_v<Resource, GraphicsContext*>) {
+				count = resource->Release();
+			}
+			else if constexpr (std::is_same_v<Resource, ID3D11Resource*>) {
+				count = resource->Release();
+			}
+			else {
+				count = resource.Release();
+			}
+		}
+
 		template<typename View>
 		void FreeView(View view) {
 			ID3D11Resource* resource = view.GetResource();
@@ -1122,10 +1140,26 @@ namespace ECSEngine {
 			FreeResource(Texture2D(resource));
 		}
 
+		// USE ONLY IN SPECIFIC SCENARIOS
+		template<typename View>
+		void FreeViewBypassProtection(View view) {
+			ID3D11Resource* resource = view.GetResource();
+			FreeResourceBypassProtection(view);
+			// It doesn't matter what the type is - only the interface
+			FreeResourceBypassProtection(Texture2D(resource));
+		}
+
 		void FreeRenderDestination(RenderDestination destination);
+
+		// USE IN SPECIFIC SCENARIOS ONLY
+		void FreeRenderDestinationBypassProtection(RenderDestination destination);
 
 		// It will assert FALSE if it doesn't exist
 		void RemoveResourceFromTracking(void* resource);
+
+		// It will assert FALSE if it doesn't exist. This call will ignore the protection status,
+		// So if a resource is protected, this will still remove it. ONLY USE IN SPECIAL SCENARIOS
+		void RemoveResourceFromTrackingBypassProtection(void* resource);
 
 		// If it doesn't find the resource, it does nothing
 		void RemovePossibleResourceFromTracking(void* resource);

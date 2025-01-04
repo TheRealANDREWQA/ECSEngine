@@ -112,6 +112,9 @@ namespace ECSEngine {
 
 		void AddTasks(Stream<StaticThreadTask> tasks);
 
+		// Adds the static tasks from another task manager into this one
+		void AddTasksFromOther(const TaskManager* other);
+
 		// it will add that task to the next thread after the last one used and returns the index of the 
 		// thread that is executing the task
 		unsigned int AddDynamicTask(ThreadTask task, bool can_be_stolen = true);

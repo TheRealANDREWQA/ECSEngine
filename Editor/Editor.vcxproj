@@ -264,6 +264,7 @@
     <ClInclude Include="src\UI\PrefabSceneDrag.h" />
     <ClInclude Include="src\UI\ProjectSettingsWindow.h" />
     <ClInclude Include="src\UI\RenderingCommon.h" />
+    <ClInclude Include="src\UI\SandboxUI.h" />
     <ClInclude Include="src\UI\SandboxExplorer.h" />
     <ClInclude Include="src\UI\CreateScene.h" />
     <ClInclude Include="src\UI\Scene.h" />
@@ -354,6 +355,7 @@
     <ClCompile Include="src\UI\PrefabSceneDrag.cpp" />
     <ClCompile Include="src\UI\ProjectSettingsWindow.cpp" />
     <ClCompile Include="src\UI\RenderingCommon.cpp" />
+    <ClCompile Include="src\UI\SandboxUI.cpp" />
     <ClCompile Include="src\UI\SandboxExplorer.cpp" />
     <ClCompile Include="src\UI\CreateScene.cpp" />
     <ClCompile Include="src\UI\Scene.cpp" />

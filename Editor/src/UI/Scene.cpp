@@ -744,6 +744,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 
 void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory) {
 	unsigned int index = *(unsigned int*)stack_memory->buffer;
+	ECS_ASSERT(index <= MAX_SCENE_WINDOWS, "The maximum allowed count of scene windows has been exceeded!");
 
 	SceneDrawData* data = (SceneDrawData*)stack_memory->Reserve<SceneDrawData>();
 

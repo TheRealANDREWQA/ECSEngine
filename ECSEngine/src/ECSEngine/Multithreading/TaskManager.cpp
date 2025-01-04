@@ -222,6 +222,17 @@ namespace ECSEngine {
 			AddTask(tasks[index]);
 		}
 	}
+	
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::AddTasksFromOther(const TaskManager* other) {
+		m_tasks.Reserve(other->m_tasks.size);
+		for (size_t index = 0; index < other->m_tasks.size; index++) {
+			// A static task is a barrier task if the barrier count is larger than 1 (if the thread count
+			// Is also different from 1, but that should be the case)
+			AddTask({ other->m_tasks[index].task, other->m_tasks[index].barrier.count > 1 });
+		}
+	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 

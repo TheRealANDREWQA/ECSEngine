@@ -17,6 +17,10 @@ struct LinkComponentWithAssetFields {
 
 // -------------------------------------------------------------------------------------------------------------
 
+void CopySandboxAssetReferences(EditorState* editor_state, unsigned int source_sandbox_index, unsigned int destination_sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // It will just deallocate the runtime asset and modify the sandbox scenes link components
 // If the commit flag is set to true then it will execute it immediately, otherwise it will postpone until
 // the resource loading editor state flag is cleared
@@ -279,11 +283,9 @@ void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sand
 
 // -------------------------------------------------------------------------------------------------------------
 
-// Unloads all assets in use by the given sandbox. It will copy the current handles before forwarding to the event
-// If the clear database reference is set to true, then it will clear the database after the assets have been unloaded
-// It will report any failures that have happened. (The clear database reference is helpful when destroying a sandbox
-// and the database reference no longer exists and the flag set to false will prevent an access to it)
-void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, bool clear_database_reference = false);
+// Unloads all assets in use by the given sandbox. It will copy the current handles before forwarding to an event.
+// It will report any failures that have happened
+void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

@@ -14,11 +14,39 @@ using namespace ECSEngine;
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void CopySandboxScenePath(EditorState* editor_state, unsigned int source_sandbox_index, unsigned int destination_sandbox_index) {
+	EditorSandbox* destination_sandbox = GetSandbox(editor_state, destination_sandbox_index);
+	const EditorSandbox* source_sandbox = GetSandbox(editor_state, source_sandbox_index);
+
+	ClearSandboxScene(editor_state, destination_sandbox_index);
+	destination_sandbox->scene_path.size = 0;
+
+	Stream<wchar_t> source_sandbox_path = source_sandbox->scene_path;
+	if (source_sandbox_path.size == 0) {
+		// Setting the components needs to be done right before exiting
+		editor_state->editor_components.SetManagerComponents(editor_state, destination_sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		return;
+	}
+
+	// Copy the scene path now
+	destination_sandbox->scene_path.CopyOther(source_sandbox_path);
+	destination_sandbox->is_scene_dirty = false;
+
+	// Copy the entities now
+	destination_sandbox->scene_entities.CopyOther(&source_sandbox->scene_entities);
+	// Update the sandbox asset references
+	CopySandboxAssetReferences(editor_state, source_sandbox_index, destination_sandbox_index);
+
+	editor_state->editor_components.SetManagerComponents(editor_state, destination_sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 struct ChangeSceneRenderViewportsEventData {
 	unsigned int sandbox_index;
 };
 
-EDITOR_EVENT(ChangeSceneRenderViewportsEvent) {
+static EDITOR_EVENT(ChangeSceneRenderViewportsEvent) {
 	ChangeSceneRenderViewportsEventData* data = (ChangeSceneRenderViewportsEventData*)_data;
 
 	// Trigger a rerender of the viewport
@@ -84,8 +112,22 @@ void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void CopySandboxRuntimeWorldFromOther(EditorState* editor_state, unsigned int sandbox_index)
+void CopySandboxRuntimeWorldFromOther(EditorState* editor_state, unsigned int source_sandbox_index, unsigned int destination_sandbox_index)
 {
+	const EditorSandbox* source_sandbox = GetSandbox(editor_state, source_sandbox_index);
+	EditorSandbox* destination_sandbox = GetSandbox(editor_state, destination_sandbox_index);
+
+	// Copy the world
+	CopyWorld(&destination_sandbox->sandbox_world, &source_sandbox->sandbox_world);
+	
+	// We shouldn't change the sandbox asset references. The asset snapshot will take care of that.
+	// Just clear the asset snapshot
+	destination_sandbox->runtime_asset_handle_snapshot.allocator.Clear();
+	destination_sandbox->runtime_asset_handle_snapshot.handle_count = 0;
+	destination_sandbox->runtime_asset_handle_snapshot.handle_capacity = 0;
+
+	// Re-render the sandbox viewports for the destination sandbox
+	RenderSandboxViewports(editor_state, destination_sandbox_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
