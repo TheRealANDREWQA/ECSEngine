@@ -7888,6 +7888,8 @@ namespace ECSEngine {
 					dockspace_receiver->borders[border_index_receiver].draw_region_header = element_to_add->borders[element_border].draw_region_header;
 					dockspace_receiver->borders[border_index_receiver].draw_elements = element_to_add->borders[element_border].draw_elements;
 					dockspace_receiver->borders[border_index_receiver].draw_close_x = element_to_add->borders[element_border].draw_close_x;
+					// Preserve the active window as well
+					dockspace_receiver->borders[border_index_receiver].active_window = element_to_add->borders[element_border].active_window;
 			};
 
 			auto handle_fixed_dockspace_empty = [](
@@ -7953,6 +7955,20 @@ namespace ECSEngine {
 						DockspaceType::Vertical
 					};
 
+					// If we are in the bottom or right cases, the addition won't work as expected, in terms
+					// Of the final border positions. To counteract this, we must manually compute the correct values
+					float previous_border_position = 0.0f;
+					float current_border_position = 0.0f;
+
+					// Right or bottom
+					if (addition_type == 2 || addition_type == 3) {
+						// Border index receiver must always be greater or equal to 1
+						ECS_ASSERT(border_index_receiver >= 1);
+
+						previous_border_position = dockspace_receiver->borders[border_index_receiver - 1].position;
+						current_border_position = dockspace_receiver->borders[border_index_receiver].position;
+					}
+
 					if (system->IsEmptyFixedDockspace(dockspace_receiver)) {
 						handle_fixed_dockspace_empty(this, dockspace_receiver, type_receiver, element_to_add, element_type);
 					}
@@ -7962,6 +7978,7 @@ namespace ECSEngine {
 							element_to_add,
 							replacement_type[(unsigned int)element_type]
 						);
+
 						system->AddElementToDockspace(
 							new_dockspace_index,
 							true,
@@ -7983,6 +8000,12 @@ namespace ECSEngine {
 						copy_multiple_windows(dockspace_receiver, border_index_receiver, element_to_add, 0);
 						system->SetNewFocusedDockspace(dockspace_receiver, type_receiver);
 						system->SearchAndSetNewFocusedDockspaceRegion(dockspace_receiver, border_index_receiver, type_receiver);
+
+					}
+
+					if (addition_type == 2 || addition_type == 3) {
+						dockspace_receiver->borders[border_index_receiver].position = (previous_border_position + current_border_position) * 0.5f;
+						dockspace_receiver->borders[border_index_receiver + 1].position = current_border_position;
 					}
 			};
 
@@ -8020,6 +8043,11 @@ namespace ECSEngine {
 							element_to_add,
 							replacement_type[(unsigned int)element_type]
 						);
+
+						// Record the positions of the borders where the dockspace is added - such that we don't modify their location
+						float current_border_position = dockspace_receiver->borders[border_index_receiver].position;
+						float next_border_position = dockspace_receiver->borders[border_index_receiver + 1].position;
+
 						system->AddElementToDockspace(
 							new_dockspace_index,
 							true,
@@ -8030,6 +8058,9 @@ namespace ECSEngine {
 
 						system->SetNewFocusedDockspace(dockspace_receiver, type_receiver);
 						system->SearchAndSetNewFocusedDockspaceRegion(dockspace_receiver, border_index_receiver, type_receiver);
+
+						dockspace_receiver->borders[border_index_receiver].position = current_border_position;
+						dockspace_receiver->borders[border_index_receiver + 1].position = next_border_position;
 					}
 			};
 
@@ -8047,6 +8078,17 @@ namespace ECSEngine {
 						handle_fixed_dockspace_empty(this, dockspace_receiver, type_receiver, element_to_add, element_type);
 					}
 					else {
+						// The right and bottom cases are not handled correctly. We must record the border positions
+						// Where the insertion happens, and calculate the correct border positions manually
+						float previous_border_position = 0.0f;
+						float current_border_position = 0.0f;
+						if (addition_type == 2 || addition_type == 3) {
+							ECS_ASSERT(border_index_receiver >= 1);
+
+							previous_border_position = dockspace_receiver->borders[border_index_receiver - 1].position;
+							current_border_position = dockspace_receiver->borders[border_index_receiver].position;
+						}
+
 						for (size_t index = 0; index < element_to_add->borders.size - 1; index++) {
 							unsigned int receiver_index = border_index_receiver + index;
 							system->AddElementToDockspace(
@@ -8061,6 +8103,17 @@ namespace ECSEngine {
 
 						system->SetNewFocusedDockspace(dockspace_receiver, type_receiver);
 						system->SearchAndSetNewFocusedDockspaceRegion(dockspace_receiver, 0, type_receiver);
+
+						if (addition_type == 2 || addition_type == 3) {
+							float last_border_position = (previous_border_position + current_border_position) * 0.5f;
+							float addition_elements_border_increment = (last_border_position - previous_border_position) / (float)(element_to_add->borders.size - 1);
+							for (size_t index = 0; index < element_to_add->borders.size - 1; index++) {
+								dockspace_receiver->borders[border_index_receiver + index].position = last_border_position;
+								last_border_position += addition_elements_border_increment;
+							}
+							// The next border must be updated as well
+							dockspace_receiver->borders[border_index_receiver + element_to_add->borders.size - 1].position = current_border_position;
+						}
 					}
 			};
 
@@ -8099,6 +8152,11 @@ namespace ECSEngine {
 							element_to_add,
 							replacement_type[(unsigned int)element_type]
 						);
+
+						// Record the positions of the borders where the dockspace is added - such that we don't modify their location
+						float current_border_position = dockspace_receiver->borders[border_index_receiver].position;
+						float next_border_position = dockspace_receiver->borders[border_index_receiver + 1].position;
+
 						system->AddElementToDockspace(
 							new_dockspace_index,
 							true,
@@ -8110,6 +8168,9 @@ namespace ECSEngine {
 						system->SearchAndSetNewFocusedDockspaceRegion(dockspace_receiver, border_index_receiver, type_receiver);
 
 						system->RemoveDockspaceBorder<false>(dockspace_receiver, border_index_receiver + 1, type_receiver);
+
+						dockspace_receiver->borders[border_index_receiver].position = current_border_position;
+						dockspace_receiver->borders[border_index_receiver + 1].position = next_border_position;
 					}
 			};
 
@@ -8319,6 +8380,10 @@ namespace ECSEngine {
 							);
 							copy_multiple_windows(new_dockspace, position_to_add_window, dockspace_receiver, border_index_receiver);
 
+							// Record the positions of the borders where the dockspace is added - such that we don't modify their location
+							float current_border_position = dockspace_receiver->borders[border_index_receiver].position;
+							float next_border_position = dockspace_receiver->borders[border_index_receiver + 1].position;
+
 							system->AddElementToDockspace(
 								new_dockspace_index,
 								true,
@@ -8331,6 +8396,9 @@ namespace ECSEngine {
 							system->SearchAndSetNewFocusedDockspaceRegion(new_dockspace, 0, new_create_type[(unsigned int)element_type]);
 
 							system->RemoveDockspaceBorder<false>(dockspace_receiver, border_index_receiver + 1, type_receiver);
+
+							dockspace_receiver->borders[border_index_receiver].position = current_border_position;
+							dockspace_receiver->borders[border_index_receiver + 1].position = next_border_position;
 						}
 					}
 			};
@@ -12689,14 +12757,16 @@ namespace ECSEngine {
 
 								//data->clickable_handler.phase = ECS_UI_DRAW_SYSTEM;
 
-								// Change the clickable
-								system->m_focused_window_data.ChangeClickable(
-									data->clickable_position, 
-									data->clickable_scale, 
-									&data->clickable_handler, 
-									nullptr, 
-									data->button_type
-								);
+								// Change the clickable - only if it is not in a system phase
+								//if (data->clickable_handler.phase != ECS_UI_DRAW_SYSTEM) {
+									system->m_focused_window_data.ChangeClickable(
+										data->clickable_position,
+										data->clickable_scale,
+										&data->clickable_handler,
+										nullptr,
+										data->button_type
+									);
+								//}
 
 								// Change the general
 								system->m_focused_window_data.ChangeGeneralHandler(position, scale, &data->general_handler, nullptr);
@@ -12716,6 +12786,8 @@ namespace ECSEngine {
 								sizeof(GeneralWrapperData),
 								system->m_focused_window_data.clickable_handler[data->button_type].phase
 							};
+
+							UIActionHandler previous_general_handler = system->m_focused_window_data.general_handler;
 							GeneralWrapperData* wrapper_data = (GeneralWrapperData*)system->m_focused_window_data.ChangeGeneralHandler(
 								system->m_focused_window_data.general_transform.position,
 								system->m_focused_window_data.general_transform.scale,
@@ -12724,7 +12796,7 @@ namespace ECSEngine {
 							);
 
 							wrapper_data->clickable_handler = recall_handler;
-							wrapper_data->general_handler = system->m_focused_window_data.general_handler;
+							wrapper_data->general_handler = previous_general_handler;
 							wrapper_data->clickable_position = system->m_focused_window_data.mouse_click_transform[data->button_type].position;
 							wrapper_data->clickable_scale = system->m_focused_window_data.mouse_click_transform[data->button_type].scale;
 							wrapper_data->button_type = data->button_type;

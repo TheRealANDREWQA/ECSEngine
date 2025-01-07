@@ -893,57 +893,69 @@ void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sa
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void RegisterInspectorSandboxChange(EditorState* editor_state) {
+void RegisterInspectorSandboxCreation(EditorState* editor_state) {
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	if (sandbox_count > editor_state->inspector_manager.round_robin_index.size) {
-		// An addition was done - just copy to a new buffer
-		Stream<unsigned int> old_stream = editor_state->inspector_manager.round_robin_index;
-		editor_state->inspector_manager.round_robin_index.Initialize(editor_state->editor_allocator, sandbox_count + 1);
-		old_stream.CopyTo(editor_state->inspector_manager.round_robin_index.buffer);
 
-		// Move the count, for actions independent of sandbox, positioned at old_stream.size to sandbox_count + 1
-		editor_state->inspector_manager.round_robin_index[sandbox_count] = old_stream[old_stream.size];
-		editor_state->editor_allocator->Deallocate(old_stream.buffer);
-	}
-	else if (sandbox_count < editor_state->inspector_manager.round_robin_index.size) {
-		// A removal was done - allocate a new buffer and reroute inspectors on the sandboxes removed
-		Stream<unsigned int> old_stream = editor_state->inspector_manager.round_robin_index;
-		editor_state->inspector_manager.round_robin_index.Initialize(editor_state->editor_allocator, sandbox_count + 1);
-		// The count for actions independent of sandbox must be moved separately
-		memcpy(editor_state->inspector_manager.round_robin_index.buffer, old_stream.buffer, sizeof(unsigned int) * sandbox_count);
+	// An addition was done - just copy to a new buffer
+	Stream<unsigned int> old_stream = editor_state->inspector_manager.round_robin_index;
+	editor_state->inspector_manager.round_robin_index.Initialize(editor_state->editor_allocator, sandbox_count + 1);
+	old_stream.CopyTo(editor_state->inspector_manager.round_robin_index.buffer);
 
-		editor_state->inspector_manager.round_robin_index[sandbox_count] = old_stream[old_stream.size];
-		editor_state->editor_allocator->Deallocate(old_stream.buffer);
+	// Move the count, for actions independent of sandbox, positioned at old_stream.size to sandbox_count + 1
+	editor_state->inspector_manager.round_robin_index[sandbox_count] = old_stream[old_stream.size];
+	editor_state->editor_allocator->Deallocate(old_stream.buffer);
+}
+
+void RegisterInspectorSandboxDestroy(EditorState* editor_state, unsigned int sandbox_index) {
+	unsigned int sandbox_count = GetSandboxCount(editor_state) - 1;
+
+	FixInspectorSandboxReference(editor_state, sandbox_count, sandbox_index);
+
+	// A removal was done - allocate a new buffer and reroute inspectors on the sandboxes removed
+	Stream<unsigned int> old_stream = editor_state->inspector_manager.round_robin_index;
+	editor_state->inspector_manager.round_robin_index.Initialize(editor_state->editor_allocator, sandbox_count + 1);
+	// The count for actions independent of sandbox must be moved separately
+	memcpy(editor_state->inspector_manager.round_robin_index.buffer, old_stream.buffer, sizeof(unsigned int) * sandbox_count);
+
+	editor_state->inspector_manager.round_robin_index[sandbox_count] = old_stream[old_stream.size];
+	editor_state->editor_allocator->Deallocate(old_stream.buffer);
 		
-		// Fix any invalid round robin index
-		for (unsigned int index = 0; index < sandbox_count; index++) {
-			unsigned int target_inspectors_for_module = 0;
-			for (unsigned int subindex = 0; subindex < editor_state->inspector_manager.data.size; subindex++) {
-				target_inspectors_for_module += GetInspectorMatchingSandbox(editor_state, subindex) == index;
-			}
-
-			if (target_inspectors_for_module > 0) {
-				editor_state->inspector_manager.round_robin_index[index] = editor_state->inspector_manager.round_robin_index[index] % target_inspectors_for_module;
-			}
-			else {
-				editor_state->inspector_manager.round_robin_index[index] = 0;
-			}
+	// Fix any invalid round robin index
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		unsigned int target_inspectors_for_module = 0;
+		for (unsigned int subindex = 0; subindex < editor_state->inspector_manager.data.size; subindex++) {
+			target_inspectors_for_module += GetInspectorMatchingSandbox(editor_state, subindex) == index;
 		}
 
-		if (sandbox_count > 0) {
-			editor_state->inspector_manager.round_robin_index[sandbox_count] = editor_state->inspector_manager.round_robin_index[sandbox_count] % sandbox_count;
+		if (target_inspectors_for_module > 0) {
+			editor_state->inspector_manager.round_robin_index[index] = editor_state->inspector_manager.round_robin_index[index] % target_inspectors_for_module;
 		}
 		else {
-			editor_state->inspector_manager.round_robin_index[sandbox_count] = 0;
+			editor_state->inspector_manager.round_robin_index[index] = 0;
+		}
+	}
+
+	if (sandbox_count > 0) {
+		editor_state->inspector_manager.round_robin_index[sandbox_count] = editor_state->inspector_manager.round_robin_index[sandbox_count] % sandbox_count;
+	}
+	else {
+		editor_state->inspector_manager.round_robin_index[sandbox_count] = 0;
+	}
+
+	// Any inspectors that are matching invalid sandboxes, re-target them to the 0th sandbox
+	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
+		unsigned int matching_sandbox = GetInspectorMatchingSandbox(editor_state, index);
+		if (matching_sandbox >= sandbox_count && matching_sandbox != -1) {
+			ChangeInspectorMatchingSandbox(editor_state, index, 0);
+			ChangeInspectorToNothing(editor_state, index);
 		}
 
-		// Any inspectors that are matching invalid sandboxes, retarget them to the 0th sandbox
-		for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-			unsigned int matching_sandbox = GetInspectorMatchingSandbox(editor_state, index);
-			if (matching_sandbox >= sandbox_count && matching_sandbox != -1) {
-				ChangeInspectorMatchingSandbox(editor_state, index, 0);
-				ChangeInspectorToNothing(editor_state, index);
-			}
+		// We must check the target sandbox separately - it can happen that the matching
+		// Sandbox is -1 but the target sandbox is invalid
+		unsigned int target_sandbox = GetInspectorTargetSandbox(editor_state, index);
+		if (target_sandbox >= sandbox_count && target_sandbox != -1) {
+			editor_state->inspector_manager.data[index].target_sandbox = 0;
+			ChangeInspectorToNothing(editor_state, index);
 		}
 	}
 }

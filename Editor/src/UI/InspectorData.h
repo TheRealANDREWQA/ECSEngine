@@ -98,10 +98,11 @@ const void* GetInspectorDrawFunctionData(const EditorState* editor_state, unsign
 
 void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
 
-// It will resize the round robin index - can be used both when removing or adding
-// And reroute any inspector pointing to an invalid sandbox (when removing)
-// to the 0 sandbox
-void RegisterInspectorSandboxChange(EditorState* editor_state);
+// It will perform any necessary actions that should be performed for the inspector UI when a sandbox is created
+void RegisterInspectorSandboxCreation(EditorState* editor_state);
+
+// It will perform any necessary actions that should be performed for the inspector UI when a sandbox is destroy
+void RegisterInspectorSandboxDestroy(EditorState* editor_state, unsigned int sandbox_index);
 
 // All inspectors that point to old_sandbox_index will be rerouted to new_sandbox_index
 // It will also change the name of the sandbox window if there is one with that index

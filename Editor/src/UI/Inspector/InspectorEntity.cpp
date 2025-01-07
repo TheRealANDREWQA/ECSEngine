@@ -20,11 +20,12 @@ ECS_TOOLS;
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-static void InspectorComponentUIIInstanceName(Stream<char> component_name, Stream<char> base_entity_name, unsigned int sandbox_index, CapacityStream<char>& instance_name) {
+static void InspectorComponentUIIInstanceName(Stream<char> component_name, Stream<char> base_entity_name, unsigned int sandbox_index, unsigned int inspector_index, CapacityStream<char>& instance_name) {
 	instance_name.CopyOther(component_name);
 	instance_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 	instance_name.AddStream(base_entity_name);
 	ConvertIntToChars(instance_name, sandbox_index);
+	ConvertIntToChars(instance_name, inspector_index);
 }
 
 static Stream<char> InspectorComponentNameFromUIInstanceName(Stream<char> instance_name) {
@@ -366,11 +367,11 @@ struct InspectorDrawEntityData {
 		return FindString(name, created_instances, [](CreatedInstance instance) { return instance.name; });
 	}
 
-	unsigned int FindCreatedInstanceByComponentName(unsigned int sandbox_index, Stream<char> component_name) {
+	unsigned int FindCreatedInstanceByComponentName(unsigned int sandbox_index, unsigned int inspector_index, Stream<char> component_name) {
 		ECS_STACK_CAPACITY_STREAM(char, full_name, 1024);
 		ECS_STACK_CAPACITY_STREAM(char, entity_name, 512);
 		entity.ToString(entity_name, true);
-		InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, full_name);
+		InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, inspector_index, full_name);
 		return FindCreatedInstance(full_name);
 	}
 
@@ -525,7 +526,7 @@ struct InspectorDrawEntityData {
 
 	// This removes components which no longer are attached to the entity
 	// Only works for the entity case
-	void UpdateStoredComponents(EditorState* editor_state, unsigned int sandbox_index) {
+	void UpdateStoredComponents(EditorState* editor_state, unsigned int sandbox_index, unsigned int inspector_index) {
 		const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 		ComponentSignature unique_signature = active_entity_manager->GetEntitySignatureStable(entity);
 		SharedComponentSignature shared_signature = active_entity_manager->GetEntitySharedSignatureStable(entity);
@@ -546,7 +547,7 @@ struct InspectorDrawEntityData {
 				component_name = link_name;
 			}
 			full_component_name_storage.size = 0;
-			InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, full_component_name_storage);
+			InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, inspector_index, full_component_name_storage);
 			unsigned int created_instance_index = FindCreatedInstance(full_component_name_storage);
 			if (created_instance_index != -1) {
 				valid_created_instances[created_instance_index] = true;
@@ -976,6 +977,7 @@ void ResetComponentCallback(ActionData* action_data) {
 struct InspectorComponentCallbackData {
 	EditorState* editor_state;
 	unsigned int sandbox_index;
+	unsigned int inspector_index;
 	bool apply_modifier;
 
 	Stream<char> component_name;
@@ -1013,7 +1015,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 	if (is_shared) {
 		// We need to change the shared instance
 		if (data->draw_data->IsSharedComponentAndNoLink(editor_state, component_name)) {
-			unsigned int created_index = data->draw_data->FindCreatedInstanceByComponentName(sandbox_index, component_name);
+			unsigned int created_index = data->draw_data->FindCreatedInstanceByComponentName(sandbox_index, data->inspector_index, component_name);
 			ECS_ASSERT(created_index != -1);
 			SharedInstance new_instance = FindOrCreateSandboxSharedComponentInstance(editor_state, sandbox_index, component, data->draw_data->created_instances[created_index].pointer_bound);
 			SetSandboxEntitySharedInstance(editor_state, sandbox_index, entity, component, new_instance);
@@ -1164,6 +1166,7 @@ static void InspectorEntityHeaderConstructButtons(
 struct DrawComponentsBaseInfo {
 	EditorState* editor_state;
 	unsigned int sandbox_index;
+	unsigned int inspector_index;
 	InspectorDrawEntityData* data;
 	UIDrawer* drawer;
 	EntityManager* entity_manager;
@@ -1201,6 +1204,7 @@ static void DrawComponents(
 	InspectorComponentCallbackData change_component_data;
 	change_component_data.editor_state = editor_state;
 	change_component_data.sandbox_index = sandbox_index;
+	change_component_data.inspector_index = base_info->inspector_index;
 	change_component_data.draw_data = data;
 	change_component_data.apply_modifier = false;
 	UIActionHandler modify_value_handler = { InspectorComponentCallback, &change_component_data, sizeof(change_component_data) };
@@ -1244,7 +1248,7 @@ static void DrawComponents(
 		if (!IsUIReflectionTypeOmitted(component_reflection_type)) {
 			change_component_data.component_name = current_component_name;
 			Stream<char> base_instance_name = data->is_global_component ? current_component_name : base_entity_name;
-			InspectorComponentUIIInstanceName(current_component_name, base_instance_name, sandbox_index, instance_name);
+			InspectorComponentUIIInstanceName(current_component_name, base_instance_name, sandbox_index, base_info->inspector_index, instance_name);
 
 			// Check to see whether or not the component is from the engine side or from the module side
 			UIReflectionDrawer* ui_drawer = editor_state->module_reflection;
@@ -1757,7 +1761,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	if (!data->is_global_component) {
 		// Before drawing, we need to remove all components which have been removed from the entity but are still being stored here
 		// This needs to be done only for the entity case
-		data->UpdateStoredComponents(editor_state, sandbox_index);
+		data->UpdateStoredComponents(editor_state, sandbox_index, inspector_index);
 	}
 
 	// We should update the component allocators before actually drawing
@@ -1958,6 +1962,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	DrawComponentsBaseInfo draw_base_info;
 	draw_base_info.editor_state = editor_state;
 	draw_base_info.sandbox_index = sandbox_index;
+	draw_base_info.inspector_index = inspector_index;
 	draw_base_info.data = data;
 	draw_base_info.drawer = drawer;
 	draw_base_info.entity_manager = entity_manager;
