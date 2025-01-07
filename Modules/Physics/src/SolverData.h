@@ -22,9 +22,9 @@ struct PHYSICS_API ECS_REFLECT_GLOBAL_COMPONENT_PRIVATE SolverData {
 
 	void Initialize(MemoryManager* backup_allocator);
 
-	unsigned int iterations = 4;
-	float baumgarte_factor = 0.05f;
-	float linear_slop = 0.01f;
+	unsigned int iterations;
+	float baumgarte_factor;
+	float linear_slop;
 	// Expressed in seconds, it tells the simulation
 	// At which rate to update itself
 	[[ECS_UI_OMIT_FIELD_REFLECT]]

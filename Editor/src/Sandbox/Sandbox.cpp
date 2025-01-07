@@ -2126,13 +2126,14 @@ bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sand
 		set_options.call_initialize_functions = true;
 		set_options.preserve_data_flag = tasks_were_initialized;
 		set_options.transfer_data = sandbox->sandbox_world_transfer_data;
-		PrepareWorldConcurrency(&sandbox->sandbox_world, &set_options);
 		if (!tasks_were_initialized) {
 			// In this case, we also need to copy the entities from the scene to the
 			// Runtime entities since that did not happen
 			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
 			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
 		}
+		// We must call this after the scene entities were copied into the runtime version
+		PrepareWorldConcurrency(&sandbox->sandbox_world, &set_options);
 		
 		// We can now clear the transfer data
 		ClearSandboxRuntimeTransferData(editor_state, sandbox_index);
