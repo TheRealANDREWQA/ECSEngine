@@ -140,8 +140,6 @@ public:
 		MSG message;
 		BOOL result = 0;
 
-		MatchTokenizeRuleTest();
-
 		while (true) {
 			auto run_application = [&](EDITOR_APPLICATION_QUIT_RESPONSE application_quit_value) {
 				ECS_UI_FRAME_PACING frame_pacing = ECS_UI_FRAME_PACING_NONE;

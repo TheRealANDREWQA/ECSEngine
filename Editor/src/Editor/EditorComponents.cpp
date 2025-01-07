@@ -234,6 +234,20 @@ bool EditorComponents::IsGlobalComponent(ECSEngine::Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
+bool EditorComponents::IsGlobalComponentPrivate(Stream<char> name) const
+{
+	ReflectionType type;
+	if (internal_manager->TryGetType(name, type)) {
+		if (IsReflectionTypeGlobalComponentPrivate(&type)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// ----------------------------------------------------------------------------------------------
+
 bool EditorComponents::IsLinkComponent(Stream<char> name) const
 {
 	ReflectionType type;

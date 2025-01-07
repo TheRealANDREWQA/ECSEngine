@@ -277,6 +277,11 @@ namespace ECSEngine {
 		ECSENGINE_API void RightClickMenu(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------
+		// 
+		// If the last general action is that of a menu, it will destroy it
+		ECSENGINE_API void RightClickMenuDestroyLastMenu(UISystem* system);
+
+		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void FilterMenuDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 

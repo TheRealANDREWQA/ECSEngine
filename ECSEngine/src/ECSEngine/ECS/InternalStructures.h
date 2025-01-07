@@ -172,6 +172,10 @@ namespace ECSEngine {
 			ConvertIntToChars(string, value);
 		}
 
+		ECS_INLINE static Component Invalid() {
+			return -1;
+		}
+
 		short value;
 	};
 

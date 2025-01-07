@@ -172,7 +172,8 @@ namespace ECSEngine {
 
 		ReflectionTypeTagHandler ECS_REFLECTION_TYPE_TAG_HANDLER[] = {
 			{ ECS_COMPONENT_TAG, TypeTagComponent, TypeTagComponent },
-			{ ECS_GLOBAL_COMPONENT_TAG, TypeTagComponent, TypeTagComponent }
+			{ ECS_GLOBAL_COMPONENT_TAG, TypeTagComponent, TypeTagComponent },
+			{ ECS_GLOBAL_COMPONENT_PRIVATE_TAG, TypeTagComponent, TypeTagComponent },
 		};
 
 		// These are not exposed to the outside interface. They are needed locally only

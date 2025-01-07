@@ -53,7 +53,14 @@ namespace ECSEngine {
 
 	bool IsReflectionTypeGlobalComponent(const Reflection::ReflectionType* type)
 	{
-		return type->IsTag(ECS_GLOBAL_COMPONENT_TAG);
+		return type->IsTag(ECS_GLOBAL_COMPONENT_TAG) || type->IsTag(ECS_GLOBAL_COMPONENT_PRIVATE_TAG);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	bool IsReflectionTypeGlobalComponentPrivate(const Reflection::ReflectionType* type)
+	{
+		return type->IsTag(ECS_GLOBAL_COMPONENT_PRIVATE_TAG);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
@@ -220,7 +227,8 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(unsigned, all_indices, ECS_KB * 16);
 		Stream<char> tags[] = {
 			ECS_COMPONENT_TAG,
-			ECS_GLOBAL_COMPONENT_TAG
+			ECS_GLOBAL_COMPONENT_TAG,
+			ECS_GLOBAL_COMPONENT_PRIVATE_TAG
 		};
 
 		ReflectionManagerGetQuery query_options;

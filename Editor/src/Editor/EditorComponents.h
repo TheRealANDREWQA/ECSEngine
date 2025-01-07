@@ -271,6 +271,9 @@ struct EditorComponents {
 	// Returns true if the global component exists or not
 	bool IsGlobalComponent(Stream<char> name) const;
 
+	// Returns true if the given type name is a global private component
+	bool IsGlobalComponentPrivate(Stream<char> name) const;
+
 	// Returns true if it is a link component
 	bool IsLinkComponent(Stream<char> name) const;
 

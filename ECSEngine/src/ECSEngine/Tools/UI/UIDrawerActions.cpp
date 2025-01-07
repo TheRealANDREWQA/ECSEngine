@@ -3104,16 +3104,12 @@ namespace ECSEngine {
 						data->action(action_data);
 					}
 
-					if (system->GetWindowFromName(data->state.left_characters) != -1) {
-						// mouse position -2.0f -2.0f ensures that it will not fall into an existing 
-						// window and avoid destroying the windows
-						system->HandleFocusedWindowCleanupGeneral({ -2.0f, -2.0f }, 0);
-						system->m_focused_window_data.ResetGeneralHandler();
-						// The window destruction handler and the release handlers are somewhere here
-						system->HandleFrameHandlers();
+					unsigned int window_index = data->window_index;
+					// If a menu with the same left characters or name already exists, destroy it
+					if (system->GetWindowFromName(data->state.left_characters) != -1 || system->ExistsWindowResource(window_index, data->name)) {
+						RightClickMenuDestroyLastMenu(system);
 					}
 
-					unsigned int window_index = data->window_index;
 					UIDrawerDescriptor descriptor = system->GetDrawerDescriptor(window_index);
 					descriptor.do_not_initialize_viewport_sliders = true;
 					UIDrawer drawer = UIDrawer(
@@ -3162,6 +3158,19 @@ namespace ECSEngine {
 				// Use deallocate if belongs in case this is called from other actions
 				// Without having being copied in the pressed call
 				data->DeallocateIfBelongs(system->Allocator());
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void RightClickMenuDestroyLastMenu(UISystem* system) {
+			if (system->m_focused_window_data.general_handler.action == MenuGeneral) {
+				// mouse position -2.0f -2.0f ensures that it will not fall into an existing 
+				// window and avoid destroying the windows
+				system->HandleFocusedWindowCleanupGeneral({ -2.0f, -2.0f }, 0);
+				system->m_focused_window_data.ResetGeneralHandler();
+				// The window destruction handler and the release handlers are somewhere here
+				system->HandleFrameHandlers();
 			}
 		}
 
