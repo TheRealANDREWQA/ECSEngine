@@ -15,11 +15,11 @@ ECSEngine::EntityManager* ActiveEntityManager(EditorState* editor_state, unsigne
 
 // Returns the index of the sandbox that is active, i.e. the Game window is the focused dockspace region
 // Returns -1 if there is no sandbox currently in focus
-unsigned int GetActiveSandbox(const EditorState* editor_state);
+unsigned int GetActiveSandbox(const EditorState* editor_state, bool include_temporary_sandboxes = false);
 
 // Returns the index of the sandbox that is active, i.e. the Game/Scene window is the focused dockspace region
 // Returns -1 if there is no sandbox currently in focus
-unsigned int GetActiveSandboxIncludeScene(const EditorState* editor_state);
+unsigned int GetActiveSandboxIncludeScene(const EditorState* editor_state, bool include_temporary_sandboxes = false);
 
 // -------------------------------------------------------------------------------------------------------------
 

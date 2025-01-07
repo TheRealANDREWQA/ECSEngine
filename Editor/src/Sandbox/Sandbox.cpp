@@ -25,7 +25,7 @@
 #include "../UI/Game.h"
 #include "../UI/Scene.h"
 #include "../UI/EntitiesUI.h"
-#include "../UI/Common.h"
+#include "../UI/SandboxUI.h"
 
 using namespace ECSEngine;
 

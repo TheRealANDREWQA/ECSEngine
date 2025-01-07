@@ -40,9 +40,8 @@ static void InspectorDestroyCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_additional_data;
-	unsigned int* inspector_index = (unsigned int*)_data;
-
-	DestroyInspectorInstance(editor_state, *inspector_index);
+	unsigned int inspector_index = GetInspectorIndex(system->GetWindowName(window_index));
+	DestroyInspectorInstance(editor_state, inspector_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -51,16 +50,16 @@ static void InspectorPrivateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_additional_data;
-	unsigned int* inspector_index = (unsigned int*)_data;
+	unsigned int inspector_index = GetInspectorIndex(system->GetWindowName(window_index));
 
 	if (window_index == system->GetActiveWindow()) {
 		if (!editor_state->Keyboard()->IsCaptureCharacters()) {
 			// Check for these actions only if we are the focused window
 			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INSPECTOR_PREVIOUS_TARGET)) {
-				PopInspectorTarget(editor_state, *inspector_index);
+				PopInspectorTarget(editor_state, inspector_index);
 			}
 			else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INSPECTOR_NEXT_TARGET)) {
-				RestoreInspectorTarget(editor_state, *inspector_index);
+				RestoreInspectorTarget(editor_state, inspector_index);
 			}
 		}
 	}
@@ -76,12 +75,7 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 	descriptor.window_data_size = 0;
 
 	descriptor.destroy_action = InspectorDestroyCallback;
-	descriptor.destroy_action_data = stack_memory->buffer;
-	descriptor.destroy_action_data_size = sizeof(inspector_index);
-
 	descriptor.private_action = InspectorPrivateAction;
-	descriptor.private_action_data = stack_memory->buffer;
-	descriptor.private_action_data_size = sizeof(inspector_index);
 
 	const size_t MAX_WINDOW_NAME = 128;
 	CapacityStream<char> inspector_name(stack_memory->Reserve(MAX_WINDOW_NAME), 0, MAX_WINDOW_NAME);
@@ -540,6 +534,13 @@ void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_
 	else if (editor_state->inspector_manager.data.size > 0) {
 		editor_state->inspector_manager.data.size--;
 	}
+}
+
+void DestroyInspectorInstanceWithUI(EditorState* editor_state, unsigned int inspector_index) {
+	// The window clean function will deallocate the backend instance
+	unsigned int ui_window_index = GetInspectorUIWindowIndex(editor_state, inspector_index);
+	ECS_ASSERT(ui_window_index != -1);
+	editor_state->ui_system->DestroyWindowEx(ui_window_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

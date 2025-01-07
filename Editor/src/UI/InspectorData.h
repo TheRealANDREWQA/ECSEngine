@@ -77,6 +77,9 @@ bool DoesInspectorMatchSandbox(const EditorState* editor_state, unsigned int ins
 // This function does not destroy the UI window, just the backend for the inspector manager data
 void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_index);
 
+// The same as the normal function, with the addition that it destroys the UI window as well
+void DestroyInspectorInstanceWithUI(EditorState* editor_state, unsigned int inspector_index);
+
 void InitializeInspectorManager(EditorState* editor_state);
 
 // Determines the index of the inspector from its name

@@ -80,5 +80,9 @@ void InitializeInputMapping(EditorState* editor_state) {
 	mappings[EDITOR_INPUT_DUPLICATE_SANDBOX].SetSecondKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_HELD);
 	mappings[EDITOR_INPUT_DUPLICATE_SANDBOX].SetThirdKey(ECS_KEY_D, ECS_BUTTON_PRESSED);
 
+	mappings[EDITOR_INPUT_CLOSE_SANDBOX].SetFirstKey(ECS_KEY_LEFT_CTRL, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_CLOSE_SANDBOX].SetSecondKey(ECS_KEY_LEFT_ALT, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_CLOSE_SANDBOX].SetThirdKey(ECS_KEY_D, ECS_BUTTON_PRESSED);
+
 	editor_state->input_mapping.ChangeMapping(mappings);
 }

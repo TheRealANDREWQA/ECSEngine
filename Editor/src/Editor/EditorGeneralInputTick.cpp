@@ -53,7 +53,7 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 	}
 
 	if (input_mapping.IsTriggered(EDITOR_INPUT_PLAY_CURRENT_SANDBOX)) {
-		unsigned int active_sandbox = GetActiveSandbox(editor_state);
+		unsigned int active_sandbox = GetActiveSandbox(editor_state, true);
 		if (active_sandbox != -1) {
 			if (GetSandboxState(editor_state, active_sandbox) == EDITOR_SANDBOX_SCENE) {
 				StartSandboxWorld(editor_state, active_sandbox);
@@ -65,7 +65,7 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 	}
 
 	if (input_mapping.IsTriggered(EDITOR_INPUT_PAUSE_CURRENT_SANDBOX)) {
-		unsigned int active_sandbox = GetActiveSandbox(editor_state);
+		unsigned int active_sandbox = GetActiveSandbox(editor_state, true);
 		if (active_sandbox != -1) {
 			if (GetSandboxState(editor_state, active_sandbox) == EDITOR_SANDBOX_RUNNING) {
 				PauseSandboxWorld(editor_state, active_sandbox);
@@ -77,7 +77,7 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 	}
 
 	if (input_mapping.IsTriggered(EDITOR_INPUT_STEP_CURRENT_SANDBOX)) {
-		unsigned int active_sandbox = GetActiveSandbox(editor_state);
+		unsigned int active_sandbox = GetActiveSandbox(editor_state, true);
 		if (active_sandbox != -1) {
 			if (GetSandboxState(editor_state, active_sandbox) == EDITOR_SANDBOX_PAUSED) {
 				RunSandboxWorld(editor_state, active_sandbox, true, true);
@@ -119,6 +119,16 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 			// This function will create only the backend sandbox, without any support UI
 			unsigned int duplicated_sandbox = DuplicateSandbox(editor_state, active_sandbox);
 			DuplicateSandboxUIForDifferentSandbox(editor_state, active_sandbox, duplicated_sandbox);
+		}
+	}
+
+	// Check the sandbox close shortcut
+	if (input_mapping.IsTriggered(EDITOR_INPUT_CLOSE_SANDBOX)) {
+		unsigned int active_sandbox = GetActiveSandboxIncludeScene(editor_state);
+		if (active_sandbox != -1) {
+			// Destroy the auxiliary windows before destroying the sandbox itself
+			DestroySandboxAuxiliaryWindows(editor_state, active_sandbox);
+			DestroySandbox(editor_state, active_sandbox);
 		}
 	}
 }

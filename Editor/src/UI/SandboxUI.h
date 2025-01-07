@@ -10,3 +10,9 @@ void DuplicateSandboxUIForDifferentSandbox(
 	unsigned int destination_sandbox_index, 
 	bool split_region = true
 );
+
+// Destroys all windows that are directly associated with the sandbox (i.e. the Scene and Game windows)
+void DestroySandboxWindows(EditorState* editor_state, unsigned int sandbox_index);
+
+// Destroys all windows that are indirectly associated with the given sandbox (i.e. the entities and inspector windows)
+void DestroySandboxAuxiliaryWindows(EditorState* editor_state, unsigned int sandbox_index);
