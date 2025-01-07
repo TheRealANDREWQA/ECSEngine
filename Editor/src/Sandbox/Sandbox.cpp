@@ -923,7 +923,7 @@ unsigned int CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 		sandbox->runtime_descriptor.resource_manager = nullptr;
 	}
 
-	RegisterInspectorSandboxChange(editor_state);
+	RegisterInspectorSandboxCreation(editor_state);
 	return sandbox_index;
 }
 
@@ -1066,6 +1066,10 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 // -----------------------------------------------------------------------------------------------------------------------------
 
 static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_index) {
+	// This must be performed before the scene is destroyed, otherwise buffers would try
+	// To be deallocated, but the world is already destroyed
+	RegisterInspectorSandboxDestroy(editor_state, sandbox_index);
+
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// Unload the sandbox assets
 	UnloadSandboxAssets(editor_state, sandbox_index);
@@ -1103,18 +1107,15 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	editor_state->sandboxes.RemoveSwapBack(sandbox_index);
 	unsigned int swapped_index = editor_state->sandboxes.size;
 
-	// Notify the UI and the inspector
+	// Notify the UI
 	if (editor_state->sandboxes.size > 0) {
 		// Destroy the associated windows first
 		DestroySandboxWindows(editor_state, sandbox_index);
-		FixInspectorSandboxReference(editor_state, swapped_index, sandbox_index);
 		UpdateGameUIWindowIndex(editor_state, swapped_index, sandbox_index);
 		UpdateSceneUIWindowIndex(editor_state, swapped_index, sandbox_index);
 		UpdateEntitiesUITargetSandbox(editor_state, swapped_index, sandbox_index);
 		UpdateVisualizeTextureSandboxReferences(editor_state, swapped_index, sandbox_index);
 	}
-
-	RegisterInspectorSandboxChange(editor_state);
 }
 
 // In order to have the correct sandbox be destroyed even when multiple of these
