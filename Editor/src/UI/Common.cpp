@@ -20,10 +20,3 @@ void DestroyIndexedWindows(EditorState* editor_state, Stream<char> window_root, 
 		}
 	}
 }
-
-void DestroySandboxWindows(EditorState* editor_state, unsigned int sandbox_index)
-{
-	// Destroy only the windows for that sandbox index
-	DestroyIndexedWindows(editor_state, GAME_WINDOW_NAME, sandbox_index, sandbox_index + 1);
-	DestroyIndexedWindows(editor_state, SCENE_WINDOW_NAME, sandbox_index, sandbox_index + 1);
-}

@@ -34,14 +34,25 @@ EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandb
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetActiveSandbox(const EditorState* editor_state) {
-	return GameUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
+unsigned int GetActiveSandbox(const EditorState* editor_state, bool include_temporary_sandboxes) {
+	unsigned int sandbox_index = GameUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
+	if (sandbox_index != -1) {
+		if (include_temporary_sandboxes && IsSandboxTemporary(editor_state, sandbox_index)) {
+			sandbox_index = -1;
+		}
+	}
+	return sandbox_index;
 }
 
-unsigned int GetActiveSandboxIncludeScene(const EditorState* editor_state) {
-	unsigned int active_sandbox = GetActiveSandbox(editor_state);
+unsigned int GetActiveSandboxIncludeScene(const EditorState* editor_state, bool include_temporary_sandboxes) {
+	unsigned int active_sandbox = GetActiveSandbox(editor_state, include_temporary_sandboxes);
 	if (active_sandbox == -1) {
 		active_sandbox = SceneUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
+		if (active_sandbox != -1) {
+			if (include_temporary_sandboxes && IsSandboxTemporary(editor_state, active_sandbox)) {
+				active_sandbox = -1;
+			}
+		}
 	}
 	return active_sandbox;
 }
