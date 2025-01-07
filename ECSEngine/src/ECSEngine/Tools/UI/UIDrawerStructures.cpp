@@ -768,16 +768,23 @@ namespace ECSEngine {
 
 		void UIDrawerLabelHierarchyData::TriggerSelectable(ActionData* action_data) {
 			if (selectable_action != nullptr) {
+				void* previous_set_data = action_data->data;
+
 				UIDrawerLabelHierarchySelectableData current_data;
 				current_data.data = selectable_data;
 				current_data.labels = selected_labels;
 				action_data->data = &current_data;
 				selectable_action(action_data);
+
+				// Restore the action data, to be safe
+				action_data->data = previous_set_data;
 			}
 		}
 
 		void UIDrawerLabelHierarchyData::TriggerCopy(ActionData* action_data) {
 			if (copy_action != nullptr) {
+				void* previous_set_data = action_data->data;
+
 				UIDrawerLabelHierarchyCopyData action_copy_data;
 				action_copy_data.data = copy_data;
 				action_copy_data.destination_label = selected_labels.size == 0 ? nullptr : selected_labels.buffer;
@@ -801,11 +808,16 @@ namespace ECSEngine {
 
 				action_data->data = &action_copy_data;
 				copy_action(action_data);
+			
+				// Restore the action data, to be safe
+				action_data->data = previous_set_data;
 			}
 		}
 
 		void UIDrawerLabelHierarchyData::TriggerCut(ActionData* action_data) {
 			if (cut_action != nullptr) {
+				void* previous_set_data = action_data->data;
+
 				UIDrawerLabelHierarchyCutData action_cut_data;
 				action_cut_data.data = cut_data;
 				action_cut_data.destination_label = selected_labels.size == 0 ? nullptr : selected_labels.buffer;
@@ -831,11 +843,16 @@ namespace ECSEngine {
 				cut_action(action_data);
 				// Clear the cut labels
 				ResetCopiedLabels(action_data);
+
+				// Restore the action data, to be safe
+				action_data->data = previous_set_data;
 			}
 		}
 
 		void UIDrawerLabelHierarchyData::TriggerDelete(ActionData* action_data) {
 			if (delete_action != nullptr) {
+				void* previous_set_data = action_data->data;
+
 				UIDrawerLabelHierarchyDeleteData action_delete_data;
 				action_delete_data.data = delete_data;
 				action_delete_data.source_labels = selected_labels;
@@ -843,24 +860,34 @@ namespace ECSEngine {
 
 				delete_action(action_data);
 				ClearSelection(action_data);
+
+				// Restore the action data, to be safe
+				action_data->data = previous_set_data;
 			}
 		}
 
 		void UIDrawerLabelHierarchyData::TriggerDoubleClick(ActionData* action_data)
 		{
 			if (double_click_action != nullptr) {
+				void* previous_set_data = action_data->data;
+
 				// Call the double click action - if any
 				UIDrawerLabelHierarchyDoubleClickData action_double_click_data;
 				action_double_click_data.data = double_click_data;
 				action_double_click_data.label = selected_labels.buffer;
 				action_data->data = &action_double_click_data;
 				double_click_action(action_data);
+
+				// Restore the action data, to be safe
+				action_data->data = previous_set_data;
 			}
 		}
 
 		void UIDrawerLabelHierarchyData::TriggerDrag(ActionData* action_data, bool is_released)
 		{
 			if (drag_action != nullptr) {
+				void* previous_set_data = action_data->data;
+
 				Stream<char> hovered_char_label = hovered_label.AsIs<char>();
 				void* untyped_label = &hovered_char_label;
 				if (label_size != 0) {
@@ -892,6 +919,10 @@ namespace ECSEngine {
 						AddOpenedLabel(action_data->system, untyped_label);
 					}
 				}
+
+
+				// Restore the action data, to be safe
+				action_data->data = previous_set_data;
 			}
 		}
 

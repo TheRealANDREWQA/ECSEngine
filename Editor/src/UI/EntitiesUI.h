@@ -24,9 +24,6 @@ void CreateEntitiesUIAction(ECSEngine::Tools::ActionData* action_data);
 // It only creates the window, it will not be assigned to any dockspace and returns the window index
 unsigned int CreateEntitiesUIWindow(EditorState* editor_state, unsigned int entities_window_index_index);
 
-// Creates a new UI entities window, without a dockspace being assigned to it
-unsigned int CreateEntitiesUIWindowNewNoDockspace(EditorState* editor_state);
-
 void GetEntitiesUIWindowName(unsigned int entities_window_index, ECSEngine::CapacityStream<char>& name);
 
 // It returns the index of the sandbox UI window or -1 if it doesn't exist

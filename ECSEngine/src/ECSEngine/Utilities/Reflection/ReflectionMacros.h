@@ -85,7 +85,10 @@
 #define ECS_REFLECT_SETTINGS
 #define ECS_REFLECT_COMPONENT
 #define ECS_REFLECT_GLOBAL_COMPONENT
-#define ECS_REFLECT_LINK_COMPONENT(a)
+// This tag indicates that a component is global, but handled privately,
+// And won't appear in the entities window
+#define ECS_REFLECT_GLOBAL_COMPONENT_PRIVATE
+#define ECS_REFLECT_LINK_COMPONENT(link_target)
 
 // TODO: The link modifier specifiers are no longer in use
 // Have a thought if these should stick around or they should be removed
@@ -102,6 +105,8 @@
 #define ECS_COMPONENT_TAG "COMPONENT"
 // Used with the IsTag function of the ReflectionType
 #define ECS_GLOBAL_COMPONENT_TAG "GLOBAL_COMPONENT"
+// Used with the IsTag function of the ReflectionType
+#define ECS_GLOBAL_COMPONENT_PRIVATE_TAG "GLOBAL_COMPONENT_PRIVATE"
 // Used with the HasTag function of the ReflectionType
 #define ECS_LINK_COMPONENT_TAG "LINK_COMPONENT"
 

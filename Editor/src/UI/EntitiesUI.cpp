@@ -28,6 +28,12 @@ struct EntitiesUIData {
 		);
 	}
 
+	// If the given entity is a virtual global component, it will return the component value associated with it
+	ECS_INLINE Component IsVirtualGlobalComponent(Entity entity) const {
+		size_t slot_index = FindVirtualEntity(entity);
+		return slot_index == -1 ? Component::Invalid() : virtual_global_component[slot_index];
+	}
+
 	EditorState* editor_state;
 	// These are chars because of the combo box
 	unsigned char sandbox_index;
@@ -614,35 +620,70 @@ static void RightClickCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchyRightClickData* right_click_data = (UIDrawerLabelHierarchyRightClickData*)_data;
 	EntitiesUIData* ui_data = (EntitiesUIData*)right_click_data->data;
 
-	enum HANDLER_INDEX {
-		COPY,
-		CUT,
-		DELETE_,
-		HANDLER_COUNT
-	};
+	Entity selected_entity;
+	right_click_data->GetLabel(&selected_entity);
 
-	UIActionHandler handlers[HANDLER_COUNT];
+	Component global_component = ui_data->IsVirtualGlobalComponent(selected_entity);
+	
+	UIDrawerMenuState menu_state;
+	menu_state.row_count = 0;
 
 	RightClickHandlerData handler_data;
 	handler_data.editor_state = ui_data->editor_state;
 	handler_data.label_hierarchy = right_click_data->hierarchy;
 	handler_data.sandbox_index = ui_data->sandbox_index;
-	handlers[COPY] = { RightClickCopy, &handler_data, sizeof(handler_data) };
-	handlers[CUT] = { RightClickCut, &handler_data, sizeof(handler_data) };
-	handlers[DELETE_] = { RightClickDelete, &handler_data, sizeof(handler_data) };
 
-	UIDrawerMenuState menu_state;
-	menu_state.left_characters = "Copy\nCut\nDelete";
-	menu_state.row_count = HANDLER_COUNT;
-	menu_state.click_handlers = handlers;
+	// We need to have separate branches for normal entities and global components
+	if (global_component.Valid()) {
+		// It might be a private global component - check that
+		bool is_global_component_private = ui_data->editor_state->editor_components.IsGlobalComponentPrivate(ui_data->editor_state->editor_components.ComponentFromID(global_component, ECS_COMPONENT_GLOBAL));
+		// For private global components, no menu needs to be created
+		if (!is_global_component_private) {
+			enum HANDLER_INDEX {
+				DELETE_,
+				HANDLER_COUNT
+			};
 
-	UIDrawerMenuRightClickData menu_data;
-	menu_data.name = "Hierarchy Menu";
-	menu_data.window_index = window_index;
-	menu_data.state = menu_state;
+			UIActionHandler handlers[HANDLER_COUNT];
+			handlers[DELETE_] = { RightClickDelete, &handler_data, sizeof(handler_data) };
 
-	action_data->data = &menu_data;
-	RightClickMenu(action_data);
+			menu_state.left_characters = "Delete";
+			menu_state.row_count = HANDLER_COUNT;
+			menu_state.click_handlers = handlers;
+		}
+	}
+	else {
+		enum HANDLER_INDEX {
+			COPY,
+			CUT,
+			DELETE_,
+			HANDLER_COUNT
+		};
+
+		UIActionHandler handlers[HANDLER_COUNT];
+
+		handlers[COPY] = { RightClickCopy, &handler_data, sizeof(handler_data) };
+		handlers[CUT] = { RightClickCut, &handler_data, sizeof(handler_data) };
+		handlers[DELETE_] = { RightClickDelete, &handler_data, sizeof(handler_data) };
+
+		menu_state.left_characters = "Copy\nCut\nDelete";
+		menu_state.row_count = HANDLER_COUNT;
+		menu_state.click_handlers = handlers;
+	}
+
+	if (menu_state.row_count > 0) {
+		UIDrawerMenuRightClickData menu_data;
+		menu_data.name = "Hierarchy Menu";
+		menu_data.window_index = window_index;
+		menu_data.state = menu_state;
+
+		action_data->data = &menu_data;
+		RightClickMenu(action_data);
+	}
+	else {
+		// Call this to destroy any last menu that there is still pending
+		RightClickMenuDestroyLastMenu(system);
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -724,9 +765,10 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		// Update the shortcut focus ID
 		data->basic_operations_shortcut_id = editor_state->shortcut_focus.IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_index, EDITOR_SHORTCUT_FOCUS_PRIORITY1, data->basic_operations_shortcut_id);
 
-		// Get the count of global components and update the virtual mapping of the global components if the count is different
-		unsigned int global_component_count = entity_manager->GetGlobalComponentCount();
+		// Update the virtual mapping of the global components if the public global component count is different
 		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
+		unsigned int global_component_count = entity_manager->GetGlobalComponentCount();
+
 		if (data->last_sandbox_index != data->sandbox_index || global_component_count != data->virtual_global_components_entities.size
 			|| ShouldSandboxRecomputeVirtualEntitySlots(editor_state, sandbox_index)) {
 			// Reset the virtual entities first
@@ -750,8 +792,8 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			data->virtual_global_components_entities.Resize(editor_state->EditorAllocator(), global_component_count, false, true);
 			if (global_component_count > 0) {
 				unsigned int slot_start_index = GetSandboxVirtualEntitySlots(editor_state, sandbox_index, data->virtual_global_components_entities);
-				data->virtual_global_component = (Component*)editor_state->editor_allocator->Allocate(sizeof(Component) * global_component_count);
-				memcpy(data->virtual_global_component, GetSandboxEntityManager(editor_state, sandbox_index)->m_global_components, sizeof(Component)* global_component_count);
+				data->virtual_global_component = (Component*)editor_state->editor_allocator->Allocate(sizeof(Component) * global_component_count);				
+				memcpy(data->virtual_global_component, GetSandboxEntityManager(editor_state, sandbox_index)->m_global_components, sizeof(Component) * global_component_count);
 
 				for (size_t index = 0; index < data->virtual_global_components_entities.size; index++) {
 					EditorSandboxEntitySlot slot;
@@ -832,7 +874,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		ECS_STACK_CAPACITY_STREAM(char, sandbox_labels, 512);
 		unsigned int sandbox_count = GetSandboxCount(editor_state);
 
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, combo_sandbox_labels, sandbox_count);
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, combo_sandbox_labels, EDITOR_MAX_SANDBOX_COUNT);
 
 		Stream<char> none_label = "None";
 		Stream<Stream<char>> combo_labels;

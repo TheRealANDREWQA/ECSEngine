@@ -19,7 +19,11 @@ namespace ECSEngine {
 	// Returns true if the type has the component tag but no IsShared function to distinguish between unique and shared
 	ECSENGINE_API bool IsReflectionTypeMaybeComponent(const Reflection::ReflectionType* type);
 
+	// Returns true for both normal global components and private ones
 	ECSENGINE_API bool IsReflectionTypeGlobalComponent(const Reflection::ReflectionType* type);
+
+	// Returns true if the type is a private global component
+	ECSENGINE_API bool IsReflectionTypeGlobalComponentPrivate(const Reflection::ReflectionType* type);
 
 	ECSENGINE_API bool IsReflectionTypeLinkComponent(const Reflection::ReflectionType* type);
 

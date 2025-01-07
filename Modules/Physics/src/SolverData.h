@@ -6,13 +6,11 @@
 #include "ContactConstraint.h"
 #include "Islands.h"
 
-#define SOLVER_DATA_STRING "PhysicsSolverData"
-
 // Store pointers, since this will reduce the table size, which helps with resizings,
 // But also to have referential stability, which can be used to accelerate other structures
 ECS_REFLECT typedef HashTable<ContactConstraint*, EntityPair, HashFunctionPowerOfTwo> ContactTable;
 
-struct PHYSICS_API ECS_REFLECT_GLOBAL_COMPONENT SolverData {
+struct PHYSICS_API ECS_REFLECT_GLOBAL_COMPONENT_PRIVATE SolverData {
 	ECS_INLINE constexpr static short ID() {
 		return PHYSICS_GLOBAL_COMPONENT_BASE + 1;
 	}
