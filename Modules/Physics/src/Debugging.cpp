@@ -24,7 +24,7 @@ static ECS_THREAD_TASK(DebugDrawPhysicsIslands) {
 	}
 
 	if (data->should_draw) {
-		const SolverData* solver_data = (const SolverData*)world->system_manager->GetData(SOLVER_DATA_STRING);
+		const SolverData* solver_data = world->entity_manager->GetGlobalComponent<SolverData>();
 		// Do a prepass to determine the entity counts, allocate them from the debug allocator
 		// And then fill the buffers
 

@@ -7,6 +7,7 @@
 #include "CollisionDetection/src/CollisionDetectionComponents.h"
 #include "CollisionDetection/src/GJK.h"
 #include "SolverData.h"
+#include "Settings.h"
 
 #define MAX_BAUMGARTE_BIAS 1000.0f
 
@@ -507,6 +508,13 @@ ECS_THREAD_TASK(SolveContactConstraints) {
 	//}
 
 	if (data->contact_table.GetCount() > 0) {
+		if (world->entity_manager->ExistsGlobalComponent(PhysicsSettings::ID())) {
+			PhysicsSettings* settings = world->entity_manager->GetGlobalComponent<PhysicsSettings>();
+			data->iterations = settings->iterations;
+			data->baumgarte_factor = settings->baumgarte_factor;
+			data->use_warm_starting = settings->use_warm_starting;
+		}
+
 		CapacityStream<unsigned int> iteration_indices;
 		iteration_indices.Initialize(&data->allocator, 0, data->contact_table.GetCount());
 

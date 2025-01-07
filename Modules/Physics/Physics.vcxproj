@@ -204,6 +204,7 @@
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\Rigidbody.h" />
     <ClInclude Include="src\Scripting.h" />
+    <ClInclude Include="src\Settings.h" />
     <ClInclude Include="src\SolverCommon.h" />
     <ClInclude Include="src\SolverData.h" />
   </ItemGroup>

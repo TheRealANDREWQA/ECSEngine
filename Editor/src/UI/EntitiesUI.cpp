@@ -273,6 +273,8 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 
 	const size_t PREFABS_SUBMENU_INDEX = 1;
 
+	EditorState* editor_state = entities_data->editor_state;
+
 	ECS_STACK_CAPACITY_STREAM(char, menu_left_characters, 512);
 	menu_left_characters.CopyOther("Create Empty");
 
@@ -285,7 +287,7 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 256, ECS_MB);
 	ResizableStream<Stream<wchar_t>> project_prefabs(&stack_allocator, 8);
-	GetProjectPrefabs(entities_data->editor_state, &project_prefabs, &stack_allocator);
+	GetProjectPrefabs(editor_state, &project_prefabs, &stack_allocator);
 	
 	if (project_prefabs.size > 0) {
 		// We need to convert these paths into an ASCII string
@@ -314,12 +316,20 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 	}
 
 	ECS_STACK_CAPACITY_STREAM(Component, all_global_components, ECS_KB * 4);
-	entities_data->editor_state->editor_components.FillAllComponents(&all_global_components, ECS_COMPONENT_GLOBAL);
+	editor_state->editor_components.FillAllComponents(&all_global_components, ECS_COMPONENT_GLOBAL);
 
-	const EntityManager* entity_manager = ActiveEntityManager(entities_data->editor_state, entities_data->sandbox_index);
+	const EntityManager* entity_manager = ActiveEntityManager(editor_state, entities_data->sandbox_index);
 	// Determine which global components have not been created yet
 	for (unsigned int index = 0; index < all_global_components.size; index++) {
 		if (entity_manager->ExistsGlobalComponent(all_global_components[index])) {
+			all_global_components.RemoveSwapBack(index);
+			index--;
+		}
+	}
+
+	// Remove the global components which are private - those should not be created by the user
+	for (unsigned int index = 0; index < all_global_components.size; index++) {
+		if (editor_state->editor_components.IsGlobalComponentPrivate(editor_state->editor_components.ComponentFromID(all_global_components[index], ECS_COMPONENT_GLOBAL))) {
 			all_global_components.RemoveSwapBack(index);
 			index--;
 		}
@@ -337,7 +347,7 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 
 			global_component_handlers[index] = { EntitiesCreateGlobalComponent, global_handler_data, sizeof(*global_handler_data) };
 
-			global_components_string.AddStream(entities_data->editor_state->editor_components.ComponentFromID(all_global_components[index], ECS_COMPONENT_GLOBAL));
+			global_components_string.AddStream(editor_state->editor_components.ComponentFromID(all_global_components[index], ECS_COMPONENT_GLOBAL));
 			global_components_string.Add('\n');
 		}
 		// Remove the last '\n'
