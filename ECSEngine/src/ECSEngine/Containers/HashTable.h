@@ -740,61 +740,57 @@ namespace ECSEngine {
 			}
 		}
 
+		// Returns nullptr if it doesn't find it
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		bool TryGetValuePtr(IdentifierParameter identifier, T*& pointer) {
+		T* TryGetValuePtr(IdentifierParameter identifier) {
 			if (GetCount() == 0) {
-				return false;
+				return nullptr;
 			}
 
 			unsigned int index = Find(identifier);
 			if (index != -1) {
-				pointer = GetValuePtrFromIndex(index);
-				return true;
+				return GetValuePtrFromIndex(index);
 			}
-			else {
-				return false;
-			}
+			return nullptr;
 		}
 
 		// This is provided for some edge cases when you use templates and you know
 		// That the target type is fine and just wanna retrieve the pointer
+		//template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
+		//bool TryGetValuePtrUntyped(IdentifierParameter identifier, void*& pointer) {
+		//	T* ptr = nullptr;
+		//	if (TryGetValuePtr(identifier, ptr)) {
+		//		pointer = (void*)ptr;
+		//		return true;
+		//	}
+		//	return false;
+		//}
+		
+		// Returns nullptr if it doesn't find it
 		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		bool TryGetValuePtrUntyped(IdentifierParameter identifier, void*& pointer) {
-			T* ptr = nullptr;
-			if (TryGetValuePtr(identifier, ptr)) {
-				pointer = (void*)ptr;
-				return true;
-			}
-			return false;
-		}
-
-		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		bool TryGetValuePtr(IdentifierParameter identifier, const T*& pointer) const {
+		const T* TryGetValuePtr(IdentifierParameter identifier) const {
 			if (GetCount() == 0) {
-				return false;
+				return nullptr;
 			}
 
 			unsigned int index = Find(identifier);
 			if (index != -1) {
-				pointer = GetValuePtrFromIndex(index);
-				return true;
+				return GetValuePtrFromIndex(index);
 			}
-			else {
-				return false;
-			}
+			return nullptr;
 		}
 
 		// This is provided for some edge cases when you use templates and you know
 		// That the target type is fine and just wanna retrieve the pointer
-		template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
-		bool TryGetValuePtrUntyped(IdentifierParameter identifier, const void*& pointer) const {
-			const T* ptr = nullptr;
-			if (TryGetValuePtr(identifier, ptr)) {
-				pointer = (const void*)ptr;
-				return true;
-			}
-			return false;
-		}
+		//template<typename = std::enable_if_t<!std::is_same_v<T, HashTableEmptyValue>>>
+		//bool TryGetValuePtrUntyped(IdentifierParameter identifier, const void*& pointer) const {
+		//	const T* ptr = nullptr;
+		//	if (TryGetValuePtr(identifier, ptr)) {
+		//		pointer = (const void*)ptr;
+		//		return true;
+		//	}
+		//	return false;
+		//}
 
 		ECS_INLINE static size_t MemoryOf(unsigned int number) {
 			if (number == 0) {

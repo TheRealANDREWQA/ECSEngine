@@ -134,8 +134,8 @@ bool EditorShortcutFocus::IsIDActive(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsi
 
 unsigned int EditorShortcutFocus::RegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned char priority) {
 	IDType id_type = { sandbox_index, focus_type };
-	IDEntries* entries;
-	if (!id_table.TryGetValuePtr(id_type, entries)) {
+	IDEntries* entries = id_table.TryGetValuePtr(id_type);
+	if (entries == nullptr) {
 		IDEntries default_entries;
 		default_entries.current_id = 0;
 		default_entries.has_overflowed = false;

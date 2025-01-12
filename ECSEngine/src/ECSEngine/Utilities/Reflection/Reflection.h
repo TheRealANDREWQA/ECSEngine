@@ -16,6 +16,7 @@ namespace ECSEngine {
 		typedef HashTableDefault<ReflectionType> ReflectionTypeTable;
 		typedef HashTableDefault<ReflectionEnum> ReflectionEnumTable;
 		typedef HashTableDefault<ReflectionTypedef> ReflectionTypedefTable;
+		typedef HashTableDefault<ReflectionTypeTemplate> ReflectionTypeTemplateTable;
 
 #define ECS_REFLECTION_MAX_TYPE_COUNT (128)
 #define ECS_REFLECTION_MAX_ENUM_COUNT (32)
@@ -139,17 +140,24 @@ namespace ECSEngine {
 
 			void FreeFolderHierarchy(unsigned int folder_index);
 
+			// It asserts that it exists
 			ReflectionType* GetType(Stream<char> name);
 			ReflectionType* GetType(unsigned int index);
 
+			// It asserts that it exists
 			const ReflectionType* GetType(Stream<char> name) const;
 			const ReflectionType* GetType(unsigned int index) const;
 
+			// It asserts that it exists
 			ReflectionEnum* GetEnum(Stream<char> name);
 			ReflectionEnum* GetEnum(unsigned int index);
 
+			// It asserts that it exists
 			const ReflectionEnum* GetEnum(Stream<char> name) const;
 			const ReflectionEnum* GetEnum(unsigned int index) const;
+
+			// Returns nullptr if no template matches the given definition
+			const ReflectionTypeTemplate* GetTypeTemplate(Stream<char> definition) const;
 
 			// Returns DBL_MAX if it doesn't exist
 			double GetConstant(Stream<char> name) const;
@@ -180,10 +188,8 @@ namespace ECSEngine {
 			// For serialization, use the other function
 			bool HasValidDependencies(const ReflectionType* type) const;
 
-			bool TryGetType(Stream<char> name, ReflectionType& type) const;
-			// This version allows you to reference the pointer directly, in case you need it to reference it above in the stack scopes
-			bool TryGetTypePtr(Stream<char> name, const ReflectionType*& type) const;
-			bool TryGetEnum(Stream<char> name, ReflectionEnum& enum_) const;
+			const ReflectionType* TryGetType(Stream<char> name) const;
+			const ReflectionEnum* TryGetEnum(Stream<char> name) const;
 
 			// Copies the constants reflected from another manager into this one
 			void InheritConstants(const ReflectionManager* other);
@@ -256,13 +262,14 @@ namespace ECSEngine {
 			ReflectionEnumTable enum_definitions;
 			ReflectionFieldTable field_table;
 			ReflectionTypedefTable typedefs;
+			ReflectionTypeTemplateTable type_templates;
 			ResizableStream<FolderHierarchy> folders;
 			ResizableStream<ReflectionConstant> constants;
 			ResizableStream<BlittableType> blittable_types;
 		};
 
 		// This structure contains information that upper level types
-// Or fields can send to fields or nested types to change their behavior
+		// Or fields can send to fields or nested types to change their behavior
 		struct ECSENGINE_API ReflectionPassdownInfo {
 			struct PointerReferenceTarget {
 				Stream<char> key;

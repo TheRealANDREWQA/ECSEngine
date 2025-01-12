@@ -79,9 +79,9 @@ namespace ECSEngine {
 		CapacityStream<void*> data
 	) {
 		for (size_t index = 0; index < gizmos.size; index++) {
-			Reflection::ReflectionType reflection_type;
-			if (reflection_manager->TryGetType(gizmos[index].component, reflection_type)) {
-				data[index] = entity_manager->TryGetGlobalComponent(GetReflectionTypeComponent(&reflection_type));
+			const Reflection::ReflectionType* reflection_type = reflection_manager->TryGetType(gizmos[index].component);
+			if (reflection_type != nullptr) {
+				data[index] = entity_manager->TryGetGlobalComponent(GetReflectionTypeComponent(reflection_type));
 			}
 			else {
 				data[index] = nullptr;

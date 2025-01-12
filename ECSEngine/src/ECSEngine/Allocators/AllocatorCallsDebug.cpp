@@ -137,8 +137,8 @@ namespace ECSEngine {
 	) {
 		AllocatorManager.hash_table_lock.EnterRead();
 
-		TrackedAllocator* tracked_allocator;
-		if (AllocatorManager.allocators.TryGetValuePtr(allocator, tracked_allocator)) {
+		TrackedAllocator* tracked_allocator = AllocatorManager.allocators.TryGetValuePtr(allocator);
+		if (tracked_allocator != nullptr) {
 			if (resizable) {
 				//ECS_HARD_ASSERT(!tracked_allocator->is_resizable);
 				if (!tracked_allocator->is_resizable) {
@@ -281,8 +281,8 @@ namespace ECSEngine {
 		// We can insert into it's stream without disrupting other entries
 		AllocatorManager.hash_table_lock.EnterRead();
 
-		TrackedAllocator* tracked_allocator_ptr = nullptr;
-		if (AllocatorManager.allocators.TryGetValuePtr(allocator, tracked_allocator_ptr)) {
+		TrackedAllocator* tracked_allocator_ptr = AllocatorManager.allocators.TryGetValuePtr(allocator);
+		if (tracked_allocator_ptr != nullptr) {
 			bool exit_read = true;
 
 			if (tracked_allocator_ptr->is_resizable) {

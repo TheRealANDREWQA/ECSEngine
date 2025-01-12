@@ -554,6 +554,23 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 	// These splits will only reference the content inside the string
 	ECSENGINE_API void SplitString(Stream<wchar_t> string, Stream<wchar_t> delimiter, AdditionStream<Stream<wchar_t>> splits);
 
+	// Performs a special type of splitting. It splits the string given by the delimiter, but it takes into account
+	// Parameter list, lists that can contain the delimiter but should not produce a new split. For example:
+	// Type<HashTable<void*, ResourceIdentifier, HashTableFunctionPowerOfTwo>, void, AnotherType<param1, Param2<Param3, Param4>>>
+	// It will produce the following splits: 
+	//   - HashTable<void*, ResourceIdentifier, HashTableFunctionPowerOfTwo>
+	//   - void
+	//   - AnotherType<param1, Param2<Param3, Param4>>
+	ECSENGINE_API void SplitStringWithParameterList(Stream<char> string, char delimiter, char parameter_list_start, char parameter_list_end, AdditionStream<Stream<char>> splits);
+
+	// Replaces the given token with the replacement while respecting the token order. Each individual character from the delimiters
+	// Parameter is treated as a separator. This works by tokenizing the string, and the replacing the general tokens that match the token
+	ECSENGINE_API Stream<char> ReplaceTokenWithDelimiters(Stream<char> string, Stream<char> token, Stream<char> replacement, Stream<char> delimiters, AllocatorPolymorphic allocator);
+
+	// Replaces the given token with the replacement while respecting the token order. Each individual character from the delimiters
+	// Parameter is treated as a separator. This works by tokenizing the string, and the replacing the general tokens that match the token
+	ECSENGINE_API Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, Stream<ReplaceOccurrence<char>> replacements, Stream<char> delimiters, AllocatorPolymorphic allocator);
+
 	// Returns the string isolated from other strings delimited using the given delimiter
 	ECSENGINE_API Stream<char> IsolateString(Stream<char> string, Stream<char> token, Stream<char> delimiter);
 

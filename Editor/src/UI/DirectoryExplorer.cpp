@@ -439,10 +439,8 @@ void TickDirectoryExplorer(EditorState* editor_state)
 			data->drawer_hierarchy->active_label.CopyOther(ascii_stream);
 
 			ASCIIPath parent_path = PathParent(ascii_stream);
-			ResourceIdentifier identifier(parent_path.buffer, parent_path.size);
-
-			UIDrawerFilesystemHierarchyLabelData* label_data;
-			if (data->drawer_hierarchy->label_states.TryGetValuePtr(identifier, label_data)) {
+			UIDrawerFilesystemHierarchyLabelData* label_data = data->drawer_hierarchy->label_states.TryGetValuePtr(parent_path);
+			if (label_data != nullptr) {
 				label_data->state = true;
 			}
 		}

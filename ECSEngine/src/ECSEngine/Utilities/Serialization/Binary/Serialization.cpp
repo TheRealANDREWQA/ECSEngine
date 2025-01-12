@@ -36,16 +36,16 @@ namespace ECSEngine {
 	bool AssetSerializeOmitFieldsExist(const ReflectionManager* reflection_manager, Stream<SerializeOmitField> omit_fields)
 	{
 		for (size_t index = 0; index < omit_fields.size; index++) {
-			ReflectionType type;
-			if (reflection_manager->TryGetType(omit_fields[index].type, type)) {
+			const ReflectionType* type = reflection_manager->TryGetType(omit_fields[index].type);
+			if (type != nullptr) {
 				size_t subindex = 0;
-				for (; subindex < type.fields.size; subindex++) {
-					if (type.fields[subindex].name == omit_fields[index].name) {
+				for (; subindex < type->fields.size; subindex++) {
+					if (type->fields[subindex].name == omit_fields[index].name) {
 						break;
 					}
 				}
 
-				if (subindex == type.fields.size) {
+				if (subindex == type->fields.size) {
 					return false;
 				}
 			}
@@ -229,9 +229,8 @@ namespace ECSEngine {
 						// Check that the type has not been already written
 						bool is_missing = FindString(field->definition, deserialized_type_names) == -1;
 						if (is_missing) {
-							ReflectionType nested_type;
 							// Can be a custom serializer type
-							if (reflection_manager->TryGetType(field->definition, nested_type)) {
+							if (reflection_manager->TryGetType(field->definition) != nullptr) {
 								custom_dependent_types.Push(field->definition);
 							}
 							else {
@@ -257,11 +256,11 @@ namespace ECSEngine {
 
 		Stream<char> current_dependent_type;
 		while (custom_dependent_types.Pop(current_dependent_type)) {
-			ReflectionType nested_type;
-			if (reflection_manager->TryGetType(current_dependent_type, nested_type)) {
+			const ReflectionType* nested_type = reflection_manager->TryGetType(current_dependent_type);
+			if (nested_type != nullptr) {
 				bool is_missing = FindString(current_dependent_type, deserialized_type_names) == -1;
 				if (is_missing) {
-					write_total += WriteTypeTable<write_data>(reflection_manager, &nested_type, stream, deserialized_type_names, omit_fields, write_tags);
+					write_total += WriteTypeTable<write_data>(reflection_manager, nested_type, stream, deserialized_type_names, omit_fields, write_tags);
 				}
 			}
 			else {
@@ -412,10 +411,10 @@ namespace ECSEngine {
 				ConvertStringToPrimitiveType(dependent_data.dependent_types[subindex], basic_field_type, stream_field_type);
 				// It is not a basic type - should look for it as a dependency
 				if (basic_field_type == ReflectionBasicFieldType::Unknown) {
-					ReflectionType nested_type;
+					const ReflectionType* nested_type = reflection_manager->TryGetType(dependent_data.dependent_types[subindex].buffer);
 					// It is a reflected type - make sure its dependencies are met
-					if (reflection_manager->TryGetType(dependent_data.dependent_types[subindex].buffer, nested_type)) {
-						if (!SerializeHasDependentTypes(reflection_manager, &nested_type, omit_fields)) {
+					if (nested_type != nullptr) {
+						if (!SerializeHasDependentTypes(reflection_manager, nested_type, omit_fields)) {
 							custom_serializer_success = false;
 							return true;
 						}
@@ -470,9 +469,9 @@ namespace ECSEngine {
 				// Check to see if it has a custom serializer
 				if (!SerializeHasDependentTypesCustomSerializerRecurse(reflection_manager, type->fields[index].definition, custom_serializer_success, omit_fields)) {
 					// Check to see if it is a reflected type
-					ReflectionType nested_type;
-					if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-						if (!SerializeHasDependentTypes(reflection_manager, &nested_type, omit_fields)) {
+					const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[index].definition);
+					if (nested_type != nullptr) {
+						if (!SerializeHasDependentTypes(reflection_manager, nested_type, omit_fields)) {
 							return false;
 						}
 					}
@@ -606,7 +605,7 @@ namespace ECSEngine {
 				nested_options->passdown_info->AddPointerReferencesFromField(&type->fields[index], field_data, field_data);
 
 				bool is_user_defined = basic_type == ReflectionBasicFieldType::UserDefined;
-				ReflectionType nested_type;
+				const ReflectionType* nested_type = nullptr;
 				unsigned int custom_serializer_index = -1;
 
 				Stream<char> definition_stream = field->definition;
@@ -624,7 +623,8 @@ namespace ECSEngine {
 						continue;
 					}
 
-					if (!reflection_manager->TryGetType(field->definition, nested_type)) {
+					nested_type = reflection_manager->TryGetType(field->definition);
+					if (nested_type == nullptr) {
 						custom_serializer_index = FindSerializeCustomType(definition_stream);
 					}
 				}
@@ -649,7 +649,7 @@ namespace ECSEngine {
 						// User defined, call the serialization for it
 						if (stream_type == ReflectionStreamFieldType::Basic && is_user_defined) {
 							// No need to test the return code since it cannot fail if it gets to here
-							SerializeImplementation<write_data>(reflection_manager, &nested_type, field_data, stream, nested_options, total_size);
+							SerializeImplementation<write_data>(reflection_manager, nested_type, field_data, stream, nested_options, total_size);
 						}
 						// Determine if it is a pointer, basic array or stream
 						// If pointer, only do it for 1 level of indirection and ASCII or wide char strings
@@ -673,7 +673,7 @@ namespace ECSEngine {
 									// Treat user defined pointers as pointers to a single entity
 									if (is_user_defined) {
 										// No need to test the return code since it cannot fail if it gets to here
-										SerializeImplementation<write_data>(reflection_manager, &nested_type, *(void**)field_data, stream, nested_options, total_size);
+										SerializeImplementation<write_data>(reflection_manager, nested_type, *(void**)field_data, stream, nested_options, total_size);
 									}
 									else {
 										*total_size += WriteFundamentalType<write_data>(type->fields[index].info, field_data, stream);
@@ -693,7 +693,7 @@ namespace ECSEngine {
 
 								for (size_t subindex = 0; subindex < basic_count; subindex++) {
 									// No need to test the return code since if it gets to here it cannot fail
-									SerializeImplementation<write_data>(reflection_manager, &nested_type, OffsetPointer(field_data, subindex * element_byte_size), stream, nested_options, total_size);
+									SerializeImplementation<write_data>(reflection_manager, nested_type, OffsetPointer(field_data, subindex * element_byte_size), stream, nested_options, total_size);
 								}
 							}
 							else {
@@ -707,14 +707,14 @@ namespace ECSEngine {
 							// Since we are interested in writing only the data along side the byte size
 							Stream<void> field_stream = GetReflectionFieldStreamVoid(field->info, data);
 							if (is_user_defined) {
-								size_t type_byte_size = GetReflectionTypeByteSize(&nested_type);
+								size_t type_byte_size = GetReflectionTypeByteSize(nested_type);
 
 								// Write the size first and then the user defined
 								*total_size += Write<write_data>(&stream, &field_stream.size, sizeof(field_stream.size));
 								for (size_t subindex = 0; subindex < field_stream.size; subindex++) {
 									SerializeImplementation<write_data>(
 										reflection_manager, 
-										&nested_type, 
+										nested_type, 
 										OffsetPointer(field_data, subindex * type_byte_size),
 										stream, 
 										nested_options, 
@@ -1859,11 +1859,11 @@ namespace ECSEngine {
 				size_t element_byte_size = GetReflectionFieldStreamElementByteSize(field->info);
 				// At the moment, only user defined types have a special default procedure.
 				// All others are memset'ed. So test for that
-				ReflectionType nested_reflection_type;
-				if (reflection_manager->TryGetType(GetReflectionFieldPointerTarget(*field), nested_reflection_type)) {
+				const ReflectionType* nested_reflection_type = reflection_manager->TryGetType(GetReflectionFieldPointerTarget(*field));
+				if (nested_reflection_type != nullptr) {
 					void* current_pointer = *pointer;
 					for (size_t subindex = 0; subindex < pointer_size; subindex++) {
-						reflection_manager->SetInstanceDefaultData(&nested_reflection_type, current_pointer);
+						reflection_manager->SetInstanceDefaultData(nested_reflection_type, current_pointer);
 						current_pointer = OffsetPointer(current_pointer, element_byte_size);
 					}
 				}
@@ -2326,9 +2326,9 @@ namespace ECSEngine {
 
 	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, uintptr_t& ptr, SerializeOptions* options, Stream<char> tags)
 	{
-		ReflectionType reflection_type;
-		if (reflection_manager->TryGetType(definition, reflection_type)) {
-			return Serialize(reflection_manager, &reflection_type, data, ptr, options);
+		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
+		if (reflection_type != nullptr) {
+			return Serialize(reflection_manager, reflection_type, data, ptr, options);
 		}
 		else {
 			// Try a custom type
@@ -2352,9 +2352,9 @@ namespace ECSEngine {
 
 	size_t SerializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, SerializeOptions* options, Stream<char> tags)
 	{
-		ReflectionType reflection_type;
-		if (reflection_manager->TryGetType(definition, reflection_type)) {
-			return SerializeSize(reflection_manager, &reflection_type, data, options);
+		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
+		if (reflection_type != nullptr) {
+			return SerializeSize(reflection_manager, reflection_type, data, options);
 		}
 		else {
 			// Try a custom type
@@ -2394,9 +2394,9 @@ namespace ECSEngine {
 
 	ECS_DESERIALIZE_CODE DeserializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, void* address, uintptr_t& stream, DeserializeOptions* options, Stream<char> tags)
 	{
-		ReflectionType reflection_type;
-		if (reflection_manager->TryGetType(definition, reflection_type)) {
-			return Deserialize(reflection_manager, &reflection_type, address, stream, options);
+		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
+		if (reflection_type != nullptr) {
+			return Deserialize(reflection_manager, reflection_type, address, stream, options);
 		}
 		else {
 			unsigned int custom_index = FindSerializeCustomType(definition);
@@ -2422,9 +2422,9 @@ namespace ECSEngine {
 	{
 		Stream<char> definition = string;
 
-		ReflectionType reflection_type;
-		if (reflection_manager->TryGetType(definition, reflection_type)) {
-			return DeserializeSize(reflection_manager, &reflection_type, stream, options);
+		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
+		if (reflection_type != nullptr) {
+			return DeserializeSize(reflection_manager, reflection_type, stream, options);
 		}
 		else {
 			unsigned int custom_index = FindSerializeCustomType(definition);

@@ -364,9 +364,9 @@ namespace ECSEngine {
 				link_name.CopyOther(targets[index]);
 				link_name.AddStream(suffixed_name);
 
-				Reflection::ReflectionType link_type;
-				if (reflection_manager->TryGetType(link_name, link_type)) {
-					link_names[index] = link_type.name;
+				const Reflection::ReflectionType* link_type = reflection_manager->TryGetType(link_name);
+				if (link_type != nullptr) {
+					link_names[index] = link_type->name;
 				}
 				else {
 					link_names[index] = { nullptr, 0 };
@@ -1034,9 +1034,9 @@ namespace ECSEngine {
 			const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_type_indices[index]);
 			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_type);
 
-			Reflection::ReflectionType target_type;
-			if (reflection_manager->TryGetType(target, target_type)) {
-				functor(link_type, &target_type);
+			const Reflection::ReflectionType* target_type = reflection_manager->TryGetType(target);
+			if (target_type != nullptr) {
+				functor(link_type, target_type);
 			}
 		}
 	}
