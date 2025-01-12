@@ -274,8 +274,8 @@ namespace ECSEngine {
     // -----------------------------------------------------------------------------------------------------------------------------
 
     Stream<Entity> EntityHierarchy::GetChildren(Entity parent, Entity* static_storage) const {
-        const Children* children;
-        if (children_table.TryGetValuePtr(parent, children)) {
+        const Children* children = children_table.TryGetValuePtr(parent);
+        if (children != nullptr) {
             if (children->IsPointer()) {
                 return { children->entities, children->count };
             }

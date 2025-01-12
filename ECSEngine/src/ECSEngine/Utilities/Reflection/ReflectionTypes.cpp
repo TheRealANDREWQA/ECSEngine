@@ -1,5 +1,8 @@
 #include "ecspch.h"
 #include "ReflectionTypes.h"
+#include "Reflection.h"
+#include "../StringUtilities.h"
+#include "../Tokenize.h"
 
 namespace ECSEngine {
 
@@ -744,16 +747,30 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		int AdjustReflectionFieldBasicTypeArrayCount(Stream<ReflectionField> fields, unsigned int field_index, unsigned int new_count) {
+			int new_byte_size = (int)(new_count * (unsigned int)fields[field_index].info.byte_size);
+			int difference = new_byte_size - (int)fields[field_index].info.byte_size;
+
+			fields[field_index].info.basic_type_count = new_count;
+			fields[field_index].info.byte_size = new_byte_size;
+			fields[field_index].info.stream_type = ReflectionStreamFieldType::BasicTypeArray;
+
+			// Update the fields located after the current field
+			for (size_t next_field_index = field_index + 1; next_field_index < fields.size; next_field_index++) {
+				// Use this assignment to handle the int to unsigned short conversion properly
+				fields[next_field_index].info.pointer_offset = (unsigned short)((int)fields[next_field_index].info.pointer_offset + difference);
+			}
+			return difference;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionTypeMiscInfo ReflectionTypeMiscInfo::Copy(AllocatorPolymorphic allocator) const {
 			switch (type) {
 			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
-			{
 				return soa.Copy(allocator);
-			}
 			case ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR:
-			{
 				return allocator_info.Copy(allocator);
-			}
 			default:
 				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
 			}
@@ -763,9 +780,7 @@ namespace ECSEngine {
 		ReflectionTypeMiscInfo ReflectionTypeMiscInfo::CopyTo(uintptr_t& ptr) const {
 			switch (type) {
 			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
-			{
 				return soa.CopyTo(ptr);
-			}
 			case ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR:
 				return allocator_info.CopyTo(ptr);
 			default:
@@ -777,13 +792,9 @@ namespace ECSEngine {
 		size_t ReflectionTypeMiscInfo::CopySize() const {
 			switch (type) {
 			case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
-			{
 				return soa.CopySize();
-			}
 			case ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR:
-			{
 				return allocator_info.CopySize();
-			}
 			default:
 				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
 			}
@@ -796,10 +807,12 @@ namespace ECSEngine {
 			{
 				soa.Deallocate(allocator);
 			}
+			break;
 			case ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR:
 			{
 				allocator_info.Deallocate(allocator);
 			}
+			break;
 			default:
 				ECS_ASSERT(false, "Unhandled/invalid reflection type misc info type");
 			}
@@ -1056,6 +1069,270 @@ namespace ECSEngine {
 
 		size_t ReflectionTypedef::CopySize() const {
 			return definition.CopySize();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionTypeTemplate::Argument ReflectionTypeTemplate::Argument::CopyTo(uintptr_t& ptr) const
+		{
+			Argument copy;
+			copy.template_parameter_index = template_parameter_index;
+			copy.has_default_value = has_default_value;
+			copy.type = type;
+			if (copy.type == ArgumentType::Integer) {
+				copy.default_integer_value = default_integer_value;
+			}
+			else {
+				copy.type_name.InitializeAndCopy(ptr, type_name);
+				if (has_default_value) {
+					copy.default_type_name.InitializeAndCopy(ptr, copy.default_type_name);
+				}
+			}
+			return copy;
+		}
+
+		size_t ReflectionTypeTemplate::Argument::CopySize() const
+		{
+			size_t copy_size = 0;
+			if (type == ArgumentType::Type) {
+				copy_size += type_name.CopySize();
+				if (has_default_value) {
+					copy_size += default_type_name.CopySize();
+				}
+			}
+			return copy_size;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionTypeTemplate ReflectionTypeTemplate::CopyTo(uintptr_t& ptr) const {
+			ReflectionTypeTemplate copy = *this;
+			copy.arguments = StreamCoalescedDeepCopy(arguments, ptr);
+			copy.base_type = base_type.CopyTo(ptr);
+			copy.embedded_array_sizes = embedded_array_sizes.CopyTo(ptr);
+			return copy;
+		}
+
+		size_t ReflectionTypeTemplate::CopySize() const {
+			return StreamCoalescedDeepCopySize(arguments) + base_type.CopySize() + embedded_array_sizes.CopySize();
+		}
+
+		unsigned int ReflectionTypeTemplate::GetMandatoryParameterCount() const {
+			return mandatory_parameter_count;
+		}
+
+		ReflectionTypeTemplate::MatchStatus ReflectionTypeTemplate::DoesMatch(Stream<char> template_parameters, CapacityStream<Stream<char>>* matched_arguments) const {
+			if (template_parameters.size < 2) {
+				return MatchStatus::Failure;
+			}
+			
+			if (template_parameters[0] == '<') {
+				template_parameters.AdvanceReturn();
+			}
+
+			if (template_parameters.Last() == '>') {
+				template_parameters.size--;
+			}
+
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, stack_matched_arguments, 32);
+			SplitStringWithParameterList(template_parameters, ',', '<', '>', &stack_matched_arguments);
+
+			unsigned int mandatory_argument_count = GetMandatoryParameterCount();
+			if (stack_matched_arguments.size < mandatory_argument_count) {
+				return MatchStatus::Failure;
+			}
+
+			// Skip the whitespaces for the arguments
+			for (unsigned int index = 0; index < stack_matched_arguments.size; index++) {
+				stack_matched_arguments[index] = SkipWhitespace(stack_matched_arguments[index]);
+				stack_matched_arguments[index] = SkipWhitespace(stack_matched_arguments[index], -1);
+			}
+
+			for (unsigned int index = 0; index < arguments.size; index++) {
+				// If the argument is specified
+				if (arguments[index].template_parameter_index < stack_matched_arguments.size) {
+					if (arguments[index].type == ArgumentType::Integer) {
+						// If the template parameter is not an integer, fail
+						if (!IsIntegerNumber(stack_matched_arguments[index])) {
+							return MatchStatus::IncorrectParameter;
+						}
+					}
+					else if (arguments[index].type == ArgumentType::Type) {
+						// If it is a number, fail
+						if (IsIntegerNumber(stack_matched_arguments[index])) {
+							return MatchStatus::IncorrectParameter;
+						}
+					}
+					else {
+						ECS_ASSERT(false);
+					}
+
+					// The argument is valid, continue
+					if (matched_arguments != nullptr) {
+						matched_arguments->AddAssert(stack_matched_arguments[index]);
+					}
+				}
+				else {
+					if (matched_arguments != nullptr) {
+						// Add the default value
+						if (arguments[index].type == ArgumentType::Integer) {
+							matched_arguments->AddAssert({ arguments[index].default_integer_string_characters, (size_t)arguments[index].default_integer_string_length });
+						}
+						else if (arguments[index].type == ArgumentType::Type) {
+							matched_arguments->AddAssert(arguments[index].default_type_name);
+						}
+						else {
+							ECS_ASSERT(false);
+						}
+					}
+				}
+			}
+		}
+
+		void ReflectionTypeTemplate::Finalize(AllocatorPolymorphic allocator, Stream<ReflectionEmbeddedArraySize>& template_embedded_array_sizes) {
+			// There are 3 things that must be performed - compute the mandatory argument count,
+			// Convert the default integers into strings and match the embedded array sizes with
+			// Their template arguments
+
+			// Mandatory parameter count loop
+			for (size_t index = 0; index < arguments.size; index++) {
+				if (arguments[index].has_default_value) {
+					mandatory_parameter_count = index;
+					break;
+				}
+			}
+
+			// Integer default strings
+			for (size_t index = 0; index < arguments.size; index++) {
+				if (arguments[index].has_default_value && arguments[index].type == ArgumentType::Integer) {
+					CapacityStream<char> default_string = { arguments[index].default_integer_string_characters, 0, ECS_COUNTOF(arguments[index].default_integer_string_characters) };
+					ConvertIntToChars(default_string, arguments[index].default_integer_value);
+					arguments[index].default_integer_string_length = default_string.size;
+				}
+			}
+
+			auto embedded_array_size_projection = [](const Argument& argument) {
+				// We don't want to match non integer fields
+				return argument.type == ArgumentType::Integer ? argument.type_name : Stream<char>();
+			};
+
+			// Embedded array sizes matching
+			size_t total_matched_embedded_array_size = 0;
+			for (size_t index = 0; index < template_embedded_array_sizes.size; index++) {
+				unsigned int matched_argument_index = arguments.Find(template_embedded_array_sizes[index].body, embedded_array_size_projection);
+				if (matched_argument_index != -1) {
+					total_matched_embedded_array_size++;
+				}
+			}
+
+			if (total_matched_embedded_array_size > 0) {
+				embedded_array_sizes.Initialize(allocator, total_matched_embedded_array_size);
+				embedded_array_sizes.size = 0;
+				for (size_t index = 0; index < template_embedded_array_sizes.size; index++) {
+					unsigned int matched_argument_index = arguments.Find(template_embedded_array_sizes[index].body, embedded_array_size_projection);
+					if (matched_argument_index != -1) {
+						embedded_array_sizes.Add({ matched_argument_index, base_type.FindField(template_embedded_array_sizes[index].field_name) });
+						template_embedded_array_sizes.RemoveSwapBack(index);
+						index--;
+					}
+				}
+			}
+		}
+
+		ReflectionType ReflectionTypeTemplate::Instantiate(const ReflectionManager* reflection_manager, AllocatorPolymorphic allocator, Stream<Stream<char>> template_arguments) const {
+			ReflectionType instance;
+
+			// We can perform a copy right away
+			instance = base_type.Copy(allocator);
+			
+			// Start matching the template arguments and replace them as needed
+			// Accumulate all template type replacements such that we can perform the
+			// Replacement all at once
+			ECS_STACK_CAPACITY_STREAM(ReplaceOccurrence<char>, type_template_replacements, 64);
+
+			for (size_t index = 0; index < arguments.size; index++) {
+				if (arguments[index].type == ArgumentType::Integer) {
+					int64_t integer_value = 0;
+					if (arguments[index].template_parameter_index < template_arguments.size) {
+						integer_value = ConvertCharactersToInt(template_arguments[arguments[index].template_parameter_index]);
+					}
+					else {
+						// Use the default - it must be defaulted
+						ECS_ASSERT(arguments[index].has_default_value, "Trying to instantiate a reflection template without full arguments");
+						integer_value = arguments[index].default_integer_value;
+					}
+
+					// At the moment, the only thing to do with the integer template parameters is to replace them in basic type arrays
+					for (size_t subindex = 0; subindex < embedded_array_sizes.size; subindex++) {
+						if ((size_t)embedded_array_sizes[subindex].x == index) {
+							instance.byte_size += AdjustReflectionFieldBasicTypeArrayCount(instance.fields, embedded_array_sizes[subindex].y, integer_value);
+						}
+					}
+				}
+				else if (arguments[index].type == ArgumentType::Type) {
+					Stream<char> type_name_replacement;
+					if (arguments[index].template_parameter_index < template_arguments.size) {
+						type_name_replacement = template_arguments[arguments[index].template_parameter_index];
+					}
+					else {
+						// Use the default - it must be defaulted
+						ECS_ASSERT(arguments[index].has_default_value, "Trying to instantiate a reflection template without full arguments");
+						type_name_replacement = arguments[index].default_type_name;
+					}
+					type_template_replacements.AddAssert({ arguments[index].type_name, type_name_replacement });
+				}
+				else {
+					ECS_ASSERT(false);
+				}
+			}
+
+			// Perform the final replacement
+			for (size_t index = 0; index < instance.fields.size; index++) {
+				// Do the replacement only if the base type is UserDefined
+				if (instance.fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					Stream<char> previous_definition = instance.fields[index].definition;
+					instance.fields[index].definition = ReplaceTokensWithDelimiters(previous_definition, type_template_replacements, GetCppTypeTokenSeparators(), allocator);
+					// Deallocate the previous definition
+					previous_definition.Deallocate(allocator);
+
+					// Now determine if the type is a basic type - and update the field info accordingly
+					// Be careful to pointers, eliminate the asterisks
+					Stream<char> definition_without_special_characters = instance.fields[index].definition;
+					while (definition_without_special_characters.Last() == '*') {
+						definition_without_special_characters.size--;
+					}
+
+					ReflectionField basic_field = GetReflectionFieldInfo(reflection_manager, definition_without_special_characters);
+					if (basic_field.info.basic_type != ReflectionBasicFieldType::UserDefined) {
+						unsigned int byte_size_difference = basic_field.info.byte_size - instance.fields[index].info.byte_size;
+						// Update the byte size and basic type of the field
+						instance.fields[index].info.byte_size = basic_field.info.byte_size;
+						instance.fields[index].info.basic_type = basic_field.info.basic_type;
+
+						// Update the pointer offsets of all next fields
+						for (size_t subindex = index + 1; subindex < instance.fields.size; subindex++) {
+							instance.fields[subindex].info.pointer_offset += byte_size_difference;
+						}
+					}
+				}
+			}
+
+			ECS_STACK_CAPACITY_STREAM(char, instance_name, 512);
+			instance_name.CopyOther(base_type.name);
+			instance_name.AddAssert('<');
+			for (size_t index = 0; index < template_arguments.size; index++) {
+				instance_name.AddStreamAssert(template_arguments[index]);
+				instance_name.AddAssert(',');
+				instance_name.AddAssert(' ');
+			}
+			// Remove the last ', '
+			instance_name.size -= 2;
+			instance_name.AddAssert('>');
+			// Deallocate the type name, and replace it
+			instance.name.Deallocate(allocator);
+			instance.name = instance_name.Copy(allocator);
+
+			return instance;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

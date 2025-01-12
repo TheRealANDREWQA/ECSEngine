@@ -3969,10 +3969,9 @@ namespace ECSEngine {
 					value_written = true;
 				}
 				else if (IsEnum(field_info.basic_type)) {
-					ReflectionEnum reflected_enum;
-					bool success = reflection->TryGetEnum(field->definition, reflected_enum);
-					if (success) {
-						enum_convert(reflected_enum, type.fields[type.fields.size]);
+					const ReflectionEnum* reflected_enum = reflection->TryGetEnum(field->definition);
+					if (reflected_enum != nullptr) {
+						enum_convert(*reflected_enum, type.fields[type.fields.size]);
 						value_written = true;
 					}
 				}
@@ -4050,10 +4049,9 @@ namespace ECSEngine {
 					value_written = true;
 				}
 				else if (IsEnum(field_info.basic_type)) {
-					ReflectionEnum reflected_enum;
-					bool success = reflection->TryGetEnum(field->definition, reflected_enum);
-					if (success) {
-						enum_stream_convert(reflected_enum, type.fields[type.fields.size]);
+					const ReflectionEnum* reflected_enum = reflection->TryGetEnum(field->definition);
+					if (reflected_enum != nullptr) {
+						enum_stream_convert(*reflected_enum, type.fields[type.fields.size]);
 						value_written = true;
 					}
 				}

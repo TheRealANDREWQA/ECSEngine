@@ -4,6 +4,7 @@
 #include "PointerUtilities.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Math/VCLExtensions.h"
+#include "Tokenize.h"
 
 namespace ECSEngine {
 
@@ -1551,6 +1552,143 @@ namespace ECSEngine {
 	void SplitString(Stream<wchar_t> string, Stream<wchar_t> delimiter, AdditionStream<Stream<wchar_t>> splits)
 	{
 		SplitStringImpl<wchar_t>(string, delimiter, splits);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	template<typename CharacterType>
+	static void SplitStringWithParameterListImpl(Stream<CharacterType> string, CharacterType delimiter, CharacterType parameter_list_start, CharacterType parameter_list_end, AdditionStream<Stream<CharacterType>> splits) {
+		Stream<CharacterType> string_to_search = string;
+		Stream<CharacterType> matched_parameter_list = FindMatchingParenthesis(string, parameter_list_start, parameter_list_end, 0);
+		CharacterType* previous_delimiter = string.buffer - 1;
+
+		// We break from the while
+		while (true) {
+			Stream<CharacterType> found_delimiter = FindFirstCharacter(string_to_search, delimiter);
+			if (found_delimiter.size == 0) {
+				break;
+			}
+			else {
+				if (matched_parameter_list.size > 0) {
+					// Determine who appears first, the delimiter, or the matched parameter list
+					if (matched_parameter_list.buffer < found_delimiter.buffer) {
+						// The matched parameter list appears first, find the first delimiter after it
+						Stream<CharacterType> string_after_parameter_list;
+						string_after_parameter_list.buffer = matched_parameter_list.buffer + matched_parameter_list.size;
+						string_after_parameter_list.size = PointerElementDifference(string_after_parameter_list.buffer, string_to_search.buffer + string_to_search.size);
+
+						Stream<CharacterType> next_delimiter = FindFirstCharacter(string_after_parameter_list, delimiter);
+						if (next_delimiter.size == 0) {
+							// No next delimiter, exit
+							break;
+						}
+
+						Stream<CharacterType> split;
+						split.buffer = previous_delimiter + 1;
+						split.size = PointerElementDifference(split.buffer, string_after_parameter_list.buffer);
+
+						if (split.size > 0) {
+							splits.Add(split);
+						}
+
+						string_to_search = next_delimiter.AdvanceReturn();
+						previous_delimiter = next_delimiter.buffer;
+						// Search for a new matched parameter list
+						matched_parameter_list = FindMatchingParenthesis(string_to_search, parameter_list_start, parameter_list_end, 0);
+					}
+					else {
+						Stream<CharacterType> split;
+						split.buffer = previous_delimiter + 1;
+						split.size = PointerElementDifference(split.buffer, found_delimiter.buffer);
+						if (split.size > 0) {
+							splits.Add(split);
+						}
+
+						string_to_search = found_delimiter.AdvanceReturn();
+						previous_delimiter = found_delimiter.buffer;
+					}
+				}
+				else {
+					Stream<CharacterType> split;
+					split.buffer = previous_delimiter + 1;
+					split.size = PointerElementDifference(split.buffer, found_delimiter.buffer);
+					if (split.size > 0) {
+						splits.Add(split);
+					}
+
+					string_to_search = found_delimiter.AdvanceReturn();
+					previous_delimiter = found_delimiter.buffer;
+				}
+			}
+		}
+
+		// If we exited the while, check to see if still have a valid matched parameter list. If we do have one,
+		// We need to add it
+		if (matched_parameter_list.size > 0) {
+			Stream<CharacterType> split;
+			split.buffer = previous_delimiter + 1;
+			split.size = PointerElementDifference(split.buffer, matched_parameter_list.buffer + matched_parameter_list.size);
+
+			splits.Add(split);
+		}
+	}
+
+	void SplitStringWithParameterList(Stream<char> string, char delimiter, char parameter_list_start, char parameter_list_end, AdditionStream<Stream<char>> splits) {
+		SplitStringWithParameterListImpl(string, delimiter, parameter_list_start, parameter_list_end, splits);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	Stream<char> ReplaceTokenWithDelimiters(Stream<char> string, Stream<char> token, Stream<char> replacement, Stream<char> delimiters, AllocatorPolymorphic allocator) {
+		ReplaceOccurrence<char> occurence;
+		occurence.string = token;
+		occurence.replacement = replacement;
+		return ReplaceTokensWithDelimiters(string, { &occurence, 1 }, delimiters, allocator);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, Stream<ReplaceOccurrence<char>> replacements, Stream<char> delimiters, AllocatorPolymorphic allocator) {
+		if (replacements.size == 0) {
+			return string.Copy(allocator);
+		}
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+
+		ResizableStream<char> replaced_string(&stack_allocator, string.size);
+
+		// Use the whitespace ' ' and '\t' as delimiters as well, in order to preserve these as well
+		Stream<char> expanded_delimiters;
+		expanded_delimiters.Initialize(&stack_allocator, delimiters.size + 2);
+		expanded_delimiters.CopyOther(delimiters);
+		expanded_delimiters.Add(' ');
+		expanded_delimiters.Add('\t');
+
+		TokenizedString tokenized_string;
+		tokenized_string.string = string;
+		tokenized_string.InitializeResizable(&stack_allocator);
+
+		TokenizeString(tokenized_string, expanded_delimiters, false, "");
+
+		Stream<Token> field_tokens = tokenized_string.tokens.ToStream();
+		for (size_t index = 0; index < field_tokens.size; index++) {
+			if (field_tokens[index].type == ECS_TOKEN_TYPE_GENERAL) {
+				unsigned int replacement_index = FindString(tokenized_string[index], replacements, [](const ReplaceOccurrence<char>& occurence) {
+					return occurence.string;
+					});
+				if (replacement_index != -1) {
+					replaced_string.AddStream(replacements[replacement_index].replacement);
+				}
+				else {
+					replaced_string.AddStream(tokenized_string[index]);
+				}
+			}
+			else {
+				replaced_string.AddStream(tokenized_string[index]);
+			}
+		}
+
+		return replaced_string.Copy(allocator);
 	}
 
 	// --------------------------------------------------------------------------------------------------

@@ -438,6 +438,10 @@ namespace ECSEngine {
 		return "+-*%^/|&.,:;=()<>{}[]";
 	}
 
+	ECS_INLINE Stream<char> GetCppTypeTokenSeparators() {
+		return "<>,&*:";
+	}
+
 	// Must be kept in sync with the function GetCppEnumTokenSeparators
 	enum ECS_CPP_ENUM_TOKEN_SEPARATOR_TYPE : unsigned char {
 		ECS_CPP_ENUM_TOKEN_SEPARATOR_COMMA,

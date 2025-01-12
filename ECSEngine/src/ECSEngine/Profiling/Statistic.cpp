@@ -37,9 +37,9 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				ReflectionType nested_type;
-				if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-					field_count += StatisticCountForReflectionType(reflection_manager, &nested_type);
+				const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[index].definition);
+				if (nested_type != nullptr) {
+					field_count += StatisticCountForReflectionType(reflection_manager, nested_type);
 				}
 				else {
 					ECS_ASSERT(false, "Cannot get statistic count for reflected types with enums, reflection container types or blittable types");
@@ -85,8 +85,8 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				ReflectionType nested_type;
-				if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
+				const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[index].definition);
+				if (nested_type != nullptr) {
 					statistics = FillStatisticsForReflectionType(reflection_manager, type, type->GetField(instance, index), statistics);
 				}
 				else {

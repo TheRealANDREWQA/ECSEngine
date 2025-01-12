@@ -104,9 +104,7 @@ Stream<char> EditorComponents::GetComponentFromLink(Stream<char> name) const
 
 const ReflectionType* EditorComponents::GetType(Stream<char> name) const
 {
-	ReflectionType* type = nullptr;
-	internal_manager->type_definitions.TryGetValuePtr(name, type);
-	return type;
+	return internal_manager->type_definitions.TryGetValuePtr(name);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -180,9 +178,9 @@ void EditorComponents::GetUserEvents(CapacityStream<EditorComponentEvent>& user_
 
 bool EditorComponents::IsComponent(Stream<char> name) const
 {
-	ReflectionType type;
-	if (internal_manager->TryGetType(name, type)) {
-		if (IsReflectionTypeComponent(&type) || IsReflectionTypeSharedComponent(&type) || IsReflectionTypeGlobalComponent(&type)) {
+	const ReflectionType* type = internal_manager->TryGetType(name);
+	if (type != nullptr) {
+		if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type) || IsReflectionTypeGlobalComponent(type)) {
 			return true;
 		}
 	}
@@ -194,9 +192,9 @@ bool EditorComponents::IsComponent(Stream<char> name) const
 
 bool EditorComponents::IsUniqueComponent(Stream<char> name) const
 {
-	ReflectionType type;
-	if (internal_manager->TryGetType(name, type)) {
-		if (IsReflectionTypeComponent(&type)) {
+	const ReflectionType* type = internal_manager->TryGetType(name);
+	if (type != nullptr) {
+		if (IsReflectionTypeComponent(type)) {
 			return true;
 		}
 	}
@@ -208,9 +206,9 @@ bool EditorComponents::IsUniqueComponent(Stream<char> name) const
 
 bool EditorComponents::IsSharedComponent(Stream<char> name) const
 {
-	ReflectionType type;
-	if (internal_manager->TryGetType(name, type)) {
-		if (IsReflectionTypeSharedComponent(&type)) {
+	const ReflectionType* type = internal_manager->TryGetType(name);
+	if (type != nullptr) {
+		if (IsReflectionTypeSharedComponent(type)) {
 			return true;
 		}
 	}
@@ -222,9 +220,9 @@ bool EditorComponents::IsSharedComponent(Stream<char> name) const
 
 bool EditorComponents::IsGlobalComponent(ECSEngine::Stream<char> name) const
 {
-	ReflectionType type;
-	if (internal_manager->TryGetType(name, type)) {
-		if (IsReflectionTypeGlobalComponent(&type)) {
+	const ReflectionType* type = internal_manager->TryGetType(name);
+	if (type != nullptr) {
+		if (IsReflectionTypeGlobalComponent(type)) {
 			return true;
 		}
 	}
@@ -236,9 +234,9 @@ bool EditorComponents::IsGlobalComponent(ECSEngine::Stream<char> name) const
 
 bool EditorComponents::IsGlobalComponentPrivate(Stream<char> name) const
 {
-	ReflectionType type;
-	if (internal_manager->TryGetType(name, type)) {
-		if (IsReflectionTypeGlobalComponentPrivate(&type)) {
+	const ReflectionType* type = internal_manager->TryGetType(name);
+	if (type != nullptr) {
+		if (IsReflectionTypeGlobalComponentPrivate(type)) {
 			return true;
 		}
 	}
@@ -250,9 +248,9 @@ bool EditorComponents::IsGlobalComponentPrivate(Stream<char> name) const
 
 bool EditorComponents::IsLinkComponent(Stream<char> name) const
 {
-	ReflectionType type;
-	if (internal_manager->TryGetType(name, type)) {
-		if (IsReflectionTypeLinkComponent(&type)) {
+	const ReflectionType* type = internal_manager->TryGetType(name);
+	if (type != nullptr) {
+		if (IsReflectionTypeLinkComponent(type)) {
 			return true;
 		}
 	}
@@ -1575,9 +1573,9 @@ Stream<char> EditorComponents::GetLinkComponentForTarget(Stream<char> name) cons
 
 bool EditorComponents::GetLinkComponentDLLStatus(Stream<char> name) const
 {
-	ReflectionType type;
-	if (internal_manager->TryGetType(name, type)) {
-		return GetReflectionTypeLinkComponentNeedsDLL(&type);
+	const ReflectionType* type = internal_manager->TryGetType(name);
+	if (type != nullptr) {
+		return GetReflectionTypeLinkComponentNeedsDLL(type);
 	}
 	return false;
 }
@@ -1586,9 +1584,9 @@ bool EditorComponents::GetLinkComponentDLLStatus(Stream<char> name) const
 
 ECS_COMPONENT_TYPE EditorComponents::GetComponentType(Stream<char> name) const
 {
-	ReflectionType type;
-	if (internal_manager->TryGetType(name, type)) {
-		return GetReflectionTypeComponentType(&type);
+	const ReflectionType* type = internal_manager->TryGetType(name);
+	if (type != nullptr) {
+		return GetReflectionTypeComponentType(type);
 	}
 	return ECS_COMPONENT_TYPE_COUNT;
 }
@@ -2639,11 +2637,11 @@ void EditorComponents::UpdateComponents(
 
 	// Verify the link components for links with undetermined targets
 	for (unsigned int index = 0; index < link_components.size; index++) {
-		ReflectionType type;
-		if (internal_manager->TryGetType(link_components[index].target, type)) {
-			bool is_component = GetReflectionTypeComponentType(&type) != ECS_COMPONENT_TYPE_COUNT;
+		const ReflectionType* type = internal_manager->TryGetType(link_components[index].target);
+		if (type != nullptr) {
+			bool is_component = GetReflectionTypeComponentType(type) != ECS_COMPONENT_TYPE_COUNT;
 			if (!is_component) {
-				invalid_link(&type, index);
+				invalid_link(type, index);
 			}
 		}
 		else {
@@ -3038,28 +3036,26 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 				remove_event_step(index);
 			};
 
-			ReflectionType first_type;
-			first_type.name.size = 0;
-			ReflectionType second_type;
-			second_type.name.size = 0;
+			const ReflectionType* first_type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			const ReflectionType* second_type = editor_state->module_reflection->reflection->TryGetType(component_event.conflicting_name);
 
 			// If one of the types has been removed, then remove the event
 			// Else if their component ids have changed
-			if (!editor_state->module_reflection->reflection->TryGetType(component_event.name, first_type)) {
-				editor_state->ui_reflection->reflection->TryGetType(component_event.name, first_type);
+			if (first_type == nullptr) {
+				first_type = editor_state->ui_reflection->reflection->TryGetType(component_event.name);
 			}
 
-			if (!editor_state->module_reflection->reflection->TryGetType(component_event.conflicting_name, second_type)) {
-				editor_state->ui_reflection->reflection->TryGetType(component_event.conflicting_name, second_type);
+			if (second_type == nullptr) {
+				second_type = editor_state->ui_reflection->reflection->TryGetType(component_event.conflicting_name);
 			}
 
-			if (first_type.name.size == 0 || second_type.name.size == 0) {
+			if (first_type == nullptr || second_type == nullptr) {
 				remove_same_id(index);
 				continue;
 			}
 
-			Component first_component = GetReflectionTypeComponent(&first_type);
-			Component second_component = GetReflectionTypeComponent(&second_type);
+			Component first_component = GetReflectionTypeComponent(first_type);
+			Component second_component = GetReflectionTypeComponent(second_type);
 
 			if (first_component.value == -1 || second_component.value == -1) {
 				// If any of the these is not found, remove the event
@@ -3074,18 +3070,18 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION) {
-			ReflectionType type;
-			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
+			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			if (type != nullptr) {
 				if (component_event.missing_function_name == ECS_COMPONENT_ID_FUNCTION) {
-					Component component_id = GetReflectionTypeComponent(&type);
+					Component component_id = GetReflectionTypeComponent(type);
 					if (component_id.value != -1) {
 						remove_event_step(index);
 						continue;
 					}
 				}
 				else if (component_event.missing_function_name == ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION) {
-					size_t allocator_size = GetReflectionComponentAllocatorSize(&type);
-					bool has_buffers = HasReflectionTypeComponentBuffers(&type);
+					size_t allocator_size = GetReflectionComponentAllocatorSize(type);
+					bool has_buffers = HasReflectionTypeComponentBuffers(type);
 					if (has_buffers && allocator_size != 0) {
 						remove_event_step(index);
 						continue;
@@ -3096,7 +3092,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 					}
 				}
 				else if (component_event.missing_function_name == ECS_COMPONENT_IS_SHARED_FUNCTION) {
-					ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(&type);
+					ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(type);
 					if (component_type != ECS_COMPONENT_TYPE_COUNT) {
 						remove_event_step(index);
 						continue;
@@ -3110,10 +3106,10 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS) {
-			ReflectionType type;
-			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
-				bool has_buffers = HasReflectionTypeComponentBuffers(&type);
-				size_t allocator_size = GetReflectionComponentAllocatorSize(&type);
+			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			if (type != nullptr) {
+				bool has_buffers = HasReflectionTypeComponentBuffers(type);
+				size_t allocator_size = GetReflectionComponentAllocatorSize(type);
 				if (allocator_size != 0 && has_buffers) {
 					remove_event_step(index);
 					continue;
@@ -3130,10 +3126,10 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_MISSING_TARGET) {
-			ReflectionType type;
-			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
-				if (IsReflectionTypeLinkComponent(&type)) {
-					Stream<char> target = GetReflectionTypeLinkComponentTarget(&type);
+			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			if (type != nullptr) {
+				if (IsReflectionTypeLinkComponent(type)) {
+					Stream<char> target = GetReflectionTypeLinkComponentTarget(type);
 					if (target.size > 0) {
 						// Add an invalid target event if the target is invalid
 						if (!editor_state->editor_components.IsComponent(target)) {
@@ -3145,7 +3141,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 							});
 						}
 						// If the validation fails, add a mismatch event
-						else if (!ValidateLinkComponent(&type, editor_state->editor_components.GetType(target))) {
+						else if (!ValidateLinkComponent(type, editor_state->editor_components.GetType(target))) {
 							user_events.Add({ EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT, component_event.name.Copy(editor_state->editor_components.allocator) });
 						}
 						remove_event_step(index);
@@ -3165,14 +3161,14 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET) {
-			ReflectionType type;
-			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
-				if (IsReflectionTypeLinkComponent(&type)) {
-					Stream<char> target = GetReflectionTypeLinkComponentTarget(&type);
+			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			if (type != nullptr) {
+				if (IsReflectionTypeLinkComponent(type)) {
+					Stream<char> target = GetReflectionTypeLinkComponentTarget(type);
 					if (target.size > 0 && editor_state->editor_components.IsComponent(target)) {
 						// Now it has a target and a valid one
 						// If the validation fails, add a mismatch event
-						if (!ValidateLinkComponent(&type, editor_state->editor_components.GetType(target))) {
+						if (!ValidateLinkComponent(type, editor_state->editor_components.GetType(target))) {
 							user_events.Add({ EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT, component_event.name.Copy(editor_state->editor_components.allocator) });
 						}
 						remove_event_step(index);
@@ -3192,14 +3188,14 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT) {
-			ReflectionType type;
-			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
-				if (IsReflectionTypeLinkComponent(&type)) {
-					Stream<char> target = GetReflectionTypeLinkComponentTarget(&type);
+			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			if (type != nullptr) {
+				if (IsReflectionTypeLinkComponent(type)) {
+					Stream<char> target = GetReflectionTypeLinkComponentTarget(type);
 					if (target.size > 0 && editor_state->editor_components.IsComponent(target)) {
 						// Now it has a target and a valid one
 						// Verify that the type can be converted to
-						if (ValidateLinkComponent(&type, editor_state->editor_components.GetType(target))) {
+						if (ValidateLinkComponent(type, editor_state->editor_components.GetType(target))) {
 							remove_event_step(index);
 							continue;
 						}

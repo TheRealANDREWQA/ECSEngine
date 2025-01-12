@@ -2465,12 +2465,12 @@ namespace ECSEngine {
 	void ResourceManager::RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, bool multithreaded_allocation, Stream<void> suffix)
 	{
 		unsigned int int_type = (unsigned int)resource_type;
-		ResourceManagerEntry* entry;
-
+		
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
 		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
-		bool success = m_resource_types[int_type].TryGetValuePtr(identifier, entry);
-		ECS_ASSERT_FORMAT(success, "Could not rebind resource of type {#}", ResourceTypeString(resource_type));
+		ResourceManagerEntry* entry = m_resource_types[int_type].TryGetValuePtr(identifier);
+
+		ECS_ASSERT_FORMAT(entry != nullptr, "Could not rebind resource of type {#}", ResourceTypeString(resource_type));
 
 		UNLOAD_FUNCTIONS[int_type](entry->data, this, entry->multithreaded_allocation);
 
@@ -2485,13 +2485,13 @@ namespace ECSEngine {
 	void ResourceManager::RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, bool multithreaded_allocation, Stream<void> suffix)
 	{
 		unsigned int int_type = (unsigned int)resource_type;
-		ResourceManagerEntry* entry;
+		
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
 		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
-		bool success = m_resource_types[int_type].TryGetValuePtr(identifier, entry);
+		ResourceManagerEntry* entry = m_resource_types[int_type].TryGetValuePtr(identifier);
 
-		ECS_ASSERT_FORMAT(success, "Could not rebind resource of type {#}", ResourceTypeString(resource_type));
+		ECS_ASSERT_FORMAT(entry != nullptr, "Could not rebind resource of type {#}", ResourceTypeString(resource_type));
 		//if (success) {
 		entry->data = new_resource;
 		entry->multithreaded_allocation = multithreaded_allocation;
@@ -2503,13 +2503,12 @@ namespace ECSEngine {
 	void ResourceManager::RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix)
 	{
 		unsigned int type_index = (unsigned int)resource_type;
-		ResourceManagerEntry* entry;
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
 		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
-		bool success = m_resource_types[type_index].TryGetValuePtr(identifier, entry);
+		ResourceManagerEntry* entry = m_resource_types[type_index].TryGetValuePtr(identifier);
 
-		ECS_ASSERT_FORMAT(success, "Could not remove reference count for resource of type {#}", ResourceTypeString(resource_type));
+		ECS_ASSERT_FORMAT(entry != nullptr, "Could not remove reference count for resource of type {#}", ResourceTypeString(resource_type));
 		entry->reference_count = USHORT_MAX;
 	}
 

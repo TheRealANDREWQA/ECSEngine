@@ -497,8 +497,8 @@ static void RecreateReflectionManagerForShaders(InspectorDrawMaterialFileData* d
 	for (size_t order = PIXEL_ORDER; order < ORDER_COUNT; order++) {
 		for (size_t index = 0; index < data->cbuffers[order].size; index++) {
 			const Reflection::ReflectionType* reflection_type = &data->cbuffers[order][index];
-			const Reflection::ReflectionType* other_type;
-			if (data->reflection_manager.type_definitions.TryGetValuePtr(reflection_type->name, other_type)) {
+			const Reflection::ReflectionType* other_type = data->reflection_manager.type_definitions.TryGetValuePtr(reflection_type->name);
+			if (other_type != nullptr) {
 				if (!Reflection::CompareReflectionTypes(
 					&data->reflection_manager,
 					&data->reflection_manager,

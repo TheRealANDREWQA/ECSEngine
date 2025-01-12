@@ -27,12 +27,6 @@ namespace ECSEngine {
 			Stream<char> name;
 			Stream<char> body;
 		};
-
-		struct ReflectionEmbeddedArraySize {
-			Stream<char> reflection_type;
-			Stream<char> field_name;
-			Stream<char> body;
-		};
 		
 		// This structure differs in the sense that it
 		// Contains the names of the fields, not the indices
@@ -61,6 +55,7 @@ namespace ECSEngine {
 			ResizableStream<ReflectionConstant> constants;
 			ResizableStream<ReflectionEmbeddedArraySize> embedded_array_size;
 			ResizableStream<ReflectionParsedTypedef> typedefs;
+			ResizableStream<ReflectionTypeTemplate> type_templates;
 			HashTableDefault<Stream<ReflectionExpression>> expressions;
 			const ReflectionFieldTable* field_table;
 			CapacityStream<char>* error_message;
@@ -763,41 +758,8 @@ namespace ECSEngine {
 
 				if (field.info.basic_type == ReflectionBasicFieldType::UserDefined) {
 					// Check to see if we have a local typedef that appears in the definition. If it does, replace it
-					ECS_STACK_CAPACITY_STREAM(char, replaced_field_definition, 512);
-					// We have to tokenize the definition, and replace only general tokens, otherwise we risk
-					// Replacing intra-type
-					ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 8, ECS_MB);
-					TokenizedString tokenized_field_definition;
-					tokenized_field_definition.string = field.definition;
-					tokenized_field_definition.InitializeResizable(&stack_allocator);
-					TokenizeString(tokenized_field_definition, GetCppFileTokenSeparators(), false);
-
-					Stream<Token> field_tokens = tokenized_field_definition.tokens.ToStream();
-					for (size_t index = 0; index < field_tokens.size; index++) {
-						if (field_tokens[index].type == ECS_TOKEN_TYPE_GENERAL) {
-							// Check the aliases
-							unsigned int alias_index = FindString(tokenized_field_definition[index], call_data->last_type_typedefs.ToStream(), [](const ReplaceOccurrence<char>& alias) {
-								return alias.string;
-							});
-							if (alias_index != -1) {
-								replaced_field_definition.AddStreamAssert(call_data->last_type_typedefs[alias_index].replacement);
-							}
-							else {
-								replaced_field_definition.AddStreamAssert(tokenized_field_definition[index]);
-								// Add a special case for unsigned. If we have unsigned char or unsigned short
-								// In the definition, we must add a space to separate the words
-								if (tokenized_field_definition[index] == STRING(unsigned)) {
-									if (index < field_tokens.size - 1 && field_tokens[index + 1].type == ECS_TOKEN_TYPE_GENERAL) {
-										replaced_field_definition.AddAssert(' ');
-									}
-								}
-							}
-						}
-						else {
-							replaced_field_definition.AddStreamAssert(tokenized_field_definition[index]);
-						}
-					}
-					field.definition = replaced_field_definition.Copy(&data->allocator);
+					// Use as delimiters only the ones that can appear in type definitions, to make the tokenization faster
+					field.definition = ReplaceTokensWithDelimiters(field.definition, call_data->last_type_typedefs, GetCppTypeTokenSeparators(), &data->allocator);
 				}
 
 				ReflectionFieldInfo& info = field.info;
@@ -1936,6 +1898,56 @@ namespace ECSEngine {
 				}
 			}
 
+			// Bind the type templates now
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t template_index = 0; template_index < data[data_index].type_templates.size; template_index++) {
+					ReflectionTypeTemplate template_copy = data[data_index].type_templates[template_index].CopyTo(ptr);
+					template_copy.folder_hierarchy_index = folder_index;
+					type_templates.InsertDynamic(folders.allocator, template_copy, data[data_index].type_templates[template_index].base_type.name);
+				}
+			}
+
+			// After binding the type templates, iterate through all fields of normal types and when a field
+			// Is encountered that matches a template, instantiate that type template
+
+			// This buffer will hold the types that were instantiated this iteration, such that we can integrate them
+			// In the resolve pipeline
+			ResizableStream<Stream<char>> instantiated_type_templates(&stack_allocator, 16);
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
+					const ReflectionType& type = data[data_index].types[type_index];
+					for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
+						Stream<char> template_pair = FindMatchingParenthesis(type.fields[field_index].definition, '<', '>', 0);
+						if (template_pair.size > 0) {
+							Stream<char> template_type_definition = type.fields[field_index].definition.StartDifference(template_pair);
+							const ReflectionTypeTemplate* template_type = GetTypeTemplate(template_type_definition);
+							if (template_type != nullptr) {
+								ECS_STACK_CAPACITY_STREAM(Stream<char>, matched_template_parameters, 32);
+								ReflectionTypeTemplate::MatchStatus match_status = template_type->DoesMatch(template_pair, &matched_template_parameters);
+								if (match_status == ReflectionTypeTemplate::MatchStatus::IncorrectParameter) {
+									ECS_FORMAT_TEMP_STRING(message, "Type {#} contains the field {#} with definition {#} that matches the template type {#}, but its arguments are invalid.", 
+										type.name, type.fields[field_index].name, type.fields[field_index].definition, template_type_definition);
+									WriteErrorMessage(data, message);
+									FreeFolderHierarchy(folder_index);
+									return false;
+								}
+								else if (match_status == ReflectionTypeTemplate::MatchStatus::Success) {
+									// It matched the template, we need to instantiate it, if it doesn't already exist
+									if (TryGetType(template_type_definition) == nullptr) {
+										ReflectionType instantiated_type = template_type->Instantiate(this, Allocator(), matched_template_parameters);
+										instantiated_type.folder_hierarchy_index = -1;
+										type_definitions.InsertDynamic(Allocator(), instantiated_type, instantiated_type.name);
+
+										ECS_ASSERT(template_type_definition == instantiated_type.name, "Mismatch between reflection template instantiated name and the requested name");
+										instantiated_type_templates.Add(instantiated_type.name);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
 			// Bind all the new constants and add all enums before evaluating basic array sizes for reflection types
 			// since they might refer them
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
@@ -2024,22 +2036,7 @@ namespace ECSEngine {
 
 					Stream<ReflectionField> fields = data[data_index].types[type_index].fields;
 					size_t field_index = data[data_index].types[type_index].FindField(embedded_size.field_name);
-					ReflectionField& current_field = fields[field_index];
-
-					unsigned short new_byte_size = int_constant * current_field.info.byte_size;
-					unsigned short difference = new_byte_size - current_field.info.byte_size;
-
-					ReflectionType& reflection_type = data[data_index].types[type_index];
-					reflection_type.byte_size += difference;
-
-					current_field.info.basic_type_count = int_constant;
-					current_field.info.byte_size = new_byte_size;
-					current_field.info.stream_type = ReflectionStreamFieldType::BasicTypeArray;
-
-					// Update the fields located after the current field
-					for (size_t next_field_index = field_index + 1; next_field_index < fields.size; next_field_index++) {
-						fields[next_field_index].info.pointer_offset += difference;
-					}
+					data[data_index].types[type_index].byte_size += AdjustReflectionFieldBasicTypeArrayCount(fields, field_index, int_constant);
 				}
 			}
 
@@ -2058,6 +2055,8 @@ namespace ECSEngine {
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				total_type_count += data[data_index].types.size;
 			}
+			// Include the type templates
+			total_type_count += instantiated_type_templates.size;
 
 			SkippedFieldsTable skipped_fields_table;
 			skipped_fields_table.Initialize(&stack_allocator, PowerOfTwoGreater(total_type_count));
@@ -2066,66 +2065,100 @@ namespace ECSEngine {
 
 			// Because types can reference each other, keep a mask of the types that still need to be processed and
 			// try iteratively to update types. If at a step not a single type can be updated then there is an error
-			// X component is the data index, y component the type index inside that data
+			// X component is the data index, y component the type index inside that data. If x is -1, then it means
+			// That this type is a template instantiation, and the y is the index inside the buffer instantiated_type_templates
 			Stream<ulong2> types_to_be_processed;
 			types_to_be_processed.Initialize(&stack_allocator, total_type_count);
 			types_to_be_processed.size = 0;
+
+			// Returns the type inside type_definition that corresponds to the given type to be processed
+			auto get_type_to_be_processed = [&](size_t index) -> ReflectionType* {
+				ulong2 indices = types_to_be_processed[index];
+				Stream<char> type_name;
+				if (indices.x == -1) {
+					type_name = instantiated_type_templates[indices.y];
+				}
+				else {
+					type_name = data[indices.x].types[indices.y].name;
+				}
+				return GetType(type_name);
+			};
+
+			// Returns true if it succeeded, else false if there was an error, and it will print an error message
+			// And free the folder hierarchy in that case
+			auto initialize_skipped_fields_for_type = [&](ReflectionType* type) -> bool {
+				for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
+					if (IsReflectionFieldSkipped(&type->fields[field_index])) {
+						ulong2 byte_size_alignment = GetReflectionFieldSkipMacroByteSize(&type->fields[field_index]);
+
+						if (byte_size_alignment.x == -1) {
+							// Try to deduce the type
+							byte_size_alignment = SearchReflectionUserDefinedTypeByteSizeAlignment(this, type->fields[field_index].definition);
+							if (byte_size_alignment.x == -1) {
+								// Fail if couldn't determine
+								ECS_FORMAT_TEMP_STRING(message, "Failed to determine byte size and alignment for | {#} {#}; |, type {#}",
+									type->fields[field_index].definition, type->fields[field_index].name, type->name);
+								WriteErrorMessage(data, message);
+								FreeFolderHierarchy(folder_index);
+								return false;
+							}
+						}
+						else {
+							if (byte_size_alignment.y == -1) {
+								// Assume that the alignment is that of the highest platform type
+								byte_size_alignment.y = alignof(void*);
+							}
+						}
+
+						// Convert the 0 values to -1 to indicate that the skipped field is not yet ready
+						byte_size_alignment.x = byte_size_alignment.x == 0 ? -1 : byte_size_alignment.x;
+						byte_size_alignment.y = byte_size_alignment.y == 0 ? -1 : byte_size_alignment.y;
+
+						if (field_index == -1) {
+							current_skipped_fields.AddAssert({ (unsigned int)-1, (unsigned int)byte_size_alignment.y, byte_size_alignment.x, type->fields[field_index].definition });
+						}
+						else {
+							current_skipped_fields.AddAssert({ (unsigned int)field_index - 1, (unsigned int)byte_size_alignment.y, byte_size_alignment.x, type->fields[field_index].definition });
+						}
+
+						// Remove the field
+						type->fields.Remove(field_index);
+						field_index--;
+					}
+					else if (type->fields[field_index].definition.size == 0) {
+						// Remove those unneeded fields
+						type->fields.Remove(field_index);
+						field_index--;
+					}
+				}
+
+				Stream<SkippedField> allocated_skipped_fields = { nullptr, 0 };
+				if (current_skipped_fields.size > 0) {
+					allocated_skipped_fields.InitializeAndCopy(&stack_allocator, current_skipped_fields);
+				}
+				skipped_fields_table.Insert(allocated_skipped_fields, type->name);
+				return true;
+			};
+
+			// Register the types to be processed and the skipped fields
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				for (size_t index = 0; index < data[data_index].types.size; index++) {
 					types_to_be_processed.Add({ data_index, index });
 					current_skipped_fields.size = 0;
 
 					ReflectionType* data_type = &data[data_index].types[index];
-					for (size_t field_index = 0; field_index < data_type->fields.size; field_index++) {
-						if (IsReflectionFieldSkipped(&data_type->fields[field_index])) {
-							ulong2 byte_size_alignment = GetReflectionFieldSkipMacroByteSize(&data_type->fields[field_index]);
-
-							if (byte_size_alignment.x == -1) {
-								// Try to deduce the type
-								byte_size_alignment = SearchReflectionUserDefinedTypeByteSizeAlignment(this, data_type->fields[field_index].definition);
-								if (byte_size_alignment.x == -1) {
-									// Fail if couldn't determine
-									ECS_FORMAT_TEMP_STRING(message, "Failed to determine byte size and alignment for | {#} {#}; |, type {#}",
-										data_type->fields[field_index].definition, data_type->fields[field_index].name, data_type->name);
-									WriteErrorMessage(data, message);
-									FreeFolderHierarchy(folder_index);
-									return false;
-								}
-							}
-							else {
-								if (byte_size_alignment.y == -1) {
-									// Assume that the alignment is that of the highest platform type
-									byte_size_alignment.y = alignof(void*);
-								}
-							}
-
-							// Convert the 0 values to -1 to indicate that the skipped field is not yet ready
-							byte_size_alignment.x = byte_size_alignment.x == 0 ? -1 : byte_size_alignment.x;
-							byte_size_alignment.y = byte_size_alignment.y == 0 ? -1 : byte_size_alignment.y;
-
-							if (field_index == -1) {
-								current_skipped_fields.AddAssert({ (unsigned int)-1, (unsigned int)byte_size_alignment.y, byte_size_alignment.x, data_type->fields[field_index].definition });
-							}
-							else {
-								current_skipped_fields.AddAssert({ (unsigned int)field_index - 1, (unsigned int)byte_size_alignment.y, byte_size_alignment.x, data_type->fields[field_index].definition });
-							}
-
-							// Remove the field
-							data_type->fields.Remove(field_index);
-							field_index--;
-						}
-						else if (data_type->fields[field_index].definition.size == 0) {
-							// Remove those unneeded fields
-							data_type->fields.Remove(field_index);
-							field_index--;
-						}
+					if (!initialize_skipped_fields_for_type(data_type)) {
+						return false;
 					}
+				}
+			}
 
-					Stream<SkippedField> allocated_skipped_fields = { nullptr, 0 };
-					if (current_skipped_fields.size > 0) {
-						allocated_skipped_fields.InitializeAndCopy(&stack_allocator, current_skipped_fields);
-					}
-					skipped_fields_table.Insert(allocated_skipped_fields, data_type->name);
+			// Register the template type instantiations into the types to be processed and their respective skipped fields
+			for (size_t instantiation_index = 0; instantiation_index < instantiated_type_templates.size; instantiation_index++) {
+				types_to_be_processed.Add({ (size_t)-1, instantiation_index });
+				current_skipped_fields.size = 0;
+				if (!initialize_skipped_fields_for_type(GetType(instantiated_type_templates[instantiation_index]))) {
+					return false;
 				}
 			}
 
@@ -2150,8 +2183,7 @@ namespace ECSEngine {
 						ReflectionField* field = &type.fields[field_index];
 						if (field->info.basic_type == ReflectionBasicFieldType::UserDefined &&
 							(field->info.stream_type == ReflectionStreamFieldType::Basic || field->info.stream_type == ReflectionStreamFieldType::BasicTypeArray)) {
-							ReflectionEnum enum_;
-							if (TryGetEnum(field->definition, enum_)) {
+							if (TryGetEnum(field->definition) != nullptr) {
 								field->info.basic_type = ReflectionBasicFieldType::Enum;
 								unsigned short new_byte_size = field->info.basic_type_count * sizeof(unsigned char);
 								field->info.byte_size = new_byte_size;
@@ -2170,7 +2202,7 @@ namespace ECSEngine {
 
 			auto is_type_still_to_be_determined_recursion = [&](Stream<char> type, auto is_still_to_be_determined) {
 				for (size_t index = 0; index < types_to_be_processed.size; index++) {
-					if (data[types_to_be_processed[index].x].types[types_to_be_processed[index].y].name == type) {
+					if (get_type_to_be_processed(index)->name == type) {
 						return true;
 					}
 				}
@@ -2224,6 +2256,8 @@ namespace ECSEngine {
 
 						// Align the field
 						size_t current_field_alignment = GetFieldTypeAlignmentEx(this, type->fields[field_index]);
+						// There is no need to adjust the pointer offsets for the next fields because they calculate themselves
+						// Based on the previous field's pointer offset + byte size
 						type->fields[field_index].info.pointer_offset = AlignPointer(field_offset, current_field_alignment);
 					}
 				}
@@ -2273,7 +2307,7 @@ namespace ECSEngine {
 				iteration_determined_types = 0;
 
 				for (size_t index = 0; index < types_to_be_processed.size; index++) {
-					ReflectionType* type = GetType(data[types_to_be_processed[index].x].types[types_to_be_processed[index].y].name);
+					ReflectionType* type = get_type_to_be_processed(index);
 
 					Stream<SkippedField> skipped_fields = skipped_fields_table.GetValue(type->name);
 					bool has_determined_skipped_fields = determine_skipped_fields(skipped_fields);
@@ -2383,9 +2417,9 @@ namespace ECSEngine {
 												}
 												else {
 													// Try to get the user defined type
-													ReflectionType nested_type;
-													if (TryGetType(field_definition, nested_type)) {
-														byte_size_alignment = { GetReflectionTypeByteSize(&nested_type), GetReflectionTypeAlignment(&nested_type) };
+													const ReflectionType* nested_type = TryGetType(field_definition);
+													if (nested_type != nullptr) {
+														byte_size_alignment = { GetReflectionTypeByteSize(nested_type), GetReflectionTypeAlignment(nested_type) };
 													}
 												}
 											}
@@ -2649,14 +2683,14 @@ namespace ECSEngine {
 				// Check that we have the byte size of that type
 				Stream<char> name = parse_sizeof_alignof_type(offset);
 				
-				ReflectionType type;
-				if (TryGetType(name.buffer, type)) {
+				const ReflectionType* type = TryGetType(name);
+				if (type != nullptr) {
 					size_t byte_size_or_alignment = 0;
 					if (sizeof_) {
-						byte_size_or_alignment = GetReflectionTypeByteSize(&type);
+						byte_size_or_alignment = GetReflectionTypeByteSize(type);
 					}
 					else {
-						byte_size_or_alignment = GetReflectionTypeAlignment(&type);
+						byte_size_or_alignment = GetReflectionTypeAlignment(type);
 					}
 
 					replace_sizeof_alignof_with_value(offset, byte_size_or_alignment);
@@ -2666,8 +2700,8 @@ namespace ECSEngine {
 					ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(name);
 					if (custom_type == nullptr) {
 						// Try to see if it is an enum, if it is not then error
-						ReflectionEnum enum_;
-						if (TryGetEnum(name.buffer, enum_)) {
+						const ReflectionEnum* enum_ = TryGetEnum(name);
+						if (enum_ != nullptr) {
 							// Same alignment and size
 							replace_sizeof_alignof_with_value(offset, sizeof(unsigned char));
 						}
@@ -2806,6 +2840,54 @@ namespace ECSEngine {
 				return false;
 			});
 
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+			// This table will map a template to all of its instantiations, such that we don't have to traverse
+			// The type definition table every time for each template type.
+			HashTableDefault<ResizableStream<Stream<char>>> template_to_instantiations_table;
+			template_to_instantiations_table.Initialize(&stack_allocator, 128);
+
+			type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
+				// We can catch custom types in this method as well, but it is not all that relevant, they will simply
+				// Be ignored
+				Stream<char> template_arguments = FindMatchingParenthesis(type.name, '<', '>');
+				if (template_arguments.size > 0) {
+					Stream<char> definition = type.name.StartDifference(template_arguments);
+					ResizableStream<Stream<char>>* instantiations = template_to_instantiations_table.TryGetValuePtr(definition);
+					if (instantiations == nullptr) {
+						// Insert the entry
+						ResizableStream<Stream<char>> instantiations_entry;
+						instantiations_entry.Initialize(&stack_allocator, 4);
+
+						template_to_instantiations_table.InsertDynamic(&stack_allocator, instantiations_entry, definition);
+						instantiations = template_to_instantiations_table.GetValuePtr(definition);
+					}
+					instantiations->Add(type.name);
+				}
+			});
+
+			// The templates that are associated
+			type_templates.ForEachIndex([&](unsigned int index) {
+				const ReflectionTypeTemplate* template_ = type_templates.GetValuePtrFromIndex(index);
+				if (template_->folder_hierarchy_index == folder_index) {
+					// Besides deallocating the template itself, we must deallocate all of its instances
+					// And those do not belong to any folder hierarchy. Use the previously detected mapping
+					const ResizableStream<Stream<char>>* instantiations = template_to_instantiations_table.TryGetValuePtr(template_->base_type.name);
+					if (instantiations != nullptr) {
+						for (unsigned int subindex = 0; subindex < instantiations->size; subindex++) {
+							unsigned int instance_index = type_definitions.Find(instantiations->buffer[subindex]);
+							ReflectionType* instance = type_definitions.GetValuePtrFromIndex(instance_index);
+							// We must deallocate it by hand, since its allocation does not belong to the folder hierarchy coalesced allocation
+							instance->Deallocate(Allocator());
+							type_definitions.EraseFromIndex(instance_index);
+						}
+					}
+
+					type_templates.EraseFromIndex(index);
+					return true;
+				}
+				return false;
+			});
+
 			if (folders[folder_index].allocated_buffer != nullptr) {
 				Deallocate(folders.allocator, folders[folder_index].allocated_buffer);
 				folders[folder_index].allocated_buffer = nullptr;
@@ -2870,6 +2952,12 @@ namespace ECSEngine {
 		const ReflectionEnum* ReflectionManager::GetEnum(unsigned int index) const
 		{
 			return enum_definitions.GetValuePtrFromIndex(index);
+		}
+		
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		const ReflectionTypeTemplate* ReflectionManager::GetTypeTemplate(Stream<char> definition) const {
+			return type_templates.TryGetValuePtr(definition);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -3047,12 +3135,11 @@ namespace ECSEngine {
 		{
 			for (size_t index = 0; index < type->fields.size; index++) {
 				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					ReflectionType child_type;
-					bool is_child_type = TryGetType(type->fields[index].definition, child_type);
-					if (!is_child_type) {
+					const ReflectionType* child_type = TryGetType(type->fields[index].definition);
+					if (child_type == nullptr) {
 						return false;
 					}
-					if (!HasValidDependencies(&child_type)) {
+					if (!HasValidDependencies(child_type)) {
 						return false;
 					}
 				}
@@ -3063,24 +3150,17 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ReflectionManager::TryGetType(Stream<char> name, ReflectionType& type) const
+		const ReflectionType* ReflectionManager::TryGetType(Stream<char> name) const
 		{
 			ResourceIdentifier identifier(name);
-			return type_definitions.TryGetValue(identifier, type);
+			return type_definitions.TryGetValuePtr(identifier);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ReflectionManager::TryGetTypePtr(Stream<char> name, const ReflectionType*& type) const {
+		const ReflectionEnum* ReflectionManager::TryGetEnum(Stream<char> name) const {
 			ResourceIdentifier identifier(name);
-			return type_definitions.TryGetValuePtr(name, type);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool ReflectionManager::TryGetEnum(Stream<char> name, ReflectionEnum& enum_) const {
-			ResourceIdentifier identifier(name);
-			return enum_definitions.TryGetValue(identifier, enum_);
+			return enum_definitions.TryGetValuePtr(identifier);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -3221,6 +3301,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.expressions.Initialize(&data.allocator, 32);
 			data.embedded_array_size.Initialize(&data.allocator, 128);
 			data.typedefs.Initialize(&data.allocator, 16);
+			data.type_templates.Initialize(&data.allocator, 16);
 
 			data.field_table = &field_table;
 			data.success = true;
@@ -3576,8 +3657,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					unsigned int blittable_index = BlittableExceptionIndex(field->definition);
 					if (blittable_index == -1) {
 						// Check to see if it exists
-						ReflectionType nested_type;
-						if (TryGetType(field->definition, nested_type)) {
+						const ReflectionType* nested_type = TryGetType(field->definition);
+						if (nested_type != nullptr) {
 							// Set the field to its default values
 							SetInstanceDefaultData(field->definition, current_field);
 						}
@@ -4225,9 +4306,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					// Check blittable exceptions
 					size_t blittable_exception = reflection_manager->FindBlittableException(type->fields[index].definition).y;
 					if (blittable_exception == -1) {
-						ReflectionType nested_type;
-						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-							alignment = max(alignment, CalculateReflectionTypeAlignment(reflection_manager, &nested_type));
+						const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[index].definition);
+						if (nested_type != nullptr) {
+							alignment = max(alignment, CalculateReflectionTypeAlignment(reflection_manager, nested_type));
 						}
 						else {
 							Stream<char> definition = type->fields[index].definition;
@@ -4417,7 +4498,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void SearchReflectionUserDefinedType(const ReflectionManager* reflection_manager, Stream<char> definition, const ReflectionType*& type, unsigned int& container_index, ReflectionEnum& enum_)
 		{
-			if (reflection_manager->TryGetTypePtr(definition, type)) {
+			type = reflection_manager->TryGetType(definition);
+			if (type != nullptr) {
 				container_index = -1;
 				enum_.name = { nullptr, 0 };
 				return;
@@ -4430,7 +4512,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					return;
 				}
 				else {
-					if (reflection_manager->TryGetEnum(definition, enum_)) {
+					const ReflectionEnum* enum_pointer = reflection_manager->TryGetEnum(definition);
+					if (enum_pointer != nullptr) {
+						enum_ = *enum_pointer;
 						type = nullptr;
 						// Container index is already -1
 						return;
@@ -4476,9 +4560,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				else {
 					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 						// Check it
-						ReflectionType nested_type;
-						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-							if (!SearchIsBlittable(reflection_manager, &nested_type)) {
+						const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[index].definition);
+						if (nested_type != nullptr) {
+							if (!SearchIsBlittable(reflection_manager, nested_type)) {
 								return false;
 							}
 						}
@@ -4522,10 +4606,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			Stream<char> definition,
 			bool pointers_are_copyable
 		) {
-			ReflectionType type;
-			if (reflection_manager->TryGetType(definition, type)) {
+			const ReflectionType* type = reflection_manager->TryGetType(definition);
+			if (type != nullptr) {
 				// If we have the type, return its trivial status
-				return SearchIsBlittable(reflection_manager, &type);
+				return SearchIsBlittable(reflection_manager, type);
 			}
 			else {
 				// Might be another container type
@@ -4538,8 +4622,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 				else {
 					// Try enum
-					Reflection::ReflectionEnum enum_;
-					if (reflection_manager->TryGetEnum(definition, enum_)) {
+					const ReflectionEnum* enum_ = reflection_manager->TryGetEnum(definition);
+					if (enum_ != nullptr) {
 						return true;
 					}
 				}
@@ -4808,14 +4892,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					return alignof(void*);
 				}
 				else {
-					ReflectionType nested_type;
-					if (reflection_manager->TryGetType(field.definition, nested_type)) {
-						return GetReflectionTypeAlignment(&nested_type);
+					const ReflectionType* nested_type = reflection_manager->TryGetType(field.definition);
+					if (nested_type != nullptr) {
+						return GetReflectionTypeAlignment(nested_type);
 					}
 					else {
 						// Check for enums
-						ReflectionEnum enum_;
-						if (reflection_manager->TryGetEnum(field.definition, enum_)) {
+						const ReflectionEnum* enum_ = reflection_manager->TryGetEnum(field.definition);
+						if (enum_ != nullptr) {
 							return alignof(unsigned char);
 						}
 
@@ -5353,13 +5437,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				if (first_info->basic_type == ReflectionBasicFieldType::UserDefined) {
 					// Make sure it is not a blittable type
 					if (first_reflection_manager->FindBlittableException(first->fields[index].definition).x == -1) {
-						ReflectionType first_nested;
-						ReflectionType second_nested;
-
-						if (first_reflection_manager->TryGetType(first->fields[index].definition, first_nested)) {
-							if (second_reflection_manager->TryGetType(first->fields[index].definition, second_nested)) {
+						const ReflectionType* first_nested = first_reflection_manager->TryGetType(first->fields[index].definition);
+						if (first_nested != nullptr) {
+							const ReflectionType* second_nested = second_reflection_manager->TryGetType(first->fields[index].definition);
+							if (second_nested != nullptr) {
 								// Verify these as well
-								if (!CompareReflectionTypes(first_reflection_manager, second_reflection_manager, &first_nested, &second_nested)) {
+								if (!CompareReflectionTypes(first_reflection_manager, second_reflection_manager, first_nested, second_nested)) {
 									return false;
 								}
 							}
@@ -5371,7 +5454,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 						else {
 							// Assume that it is a container type. Only check that the second one doesn't have it either
-							if (second_reflection_manager->TryGetType(first->fields[index].definition, second_nested)) {
+							if (second_reflection_manager->TryGetType(first->fields[index].definition) != nullptr) {
 								// The second one has it but the first one doesn't have it.
 								// An error must be somewhere
 								return false;
@@ -6066,10 +6149,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					}
 					else {
 						// Call the functor again
-						ReflectionType new_nested_type;
-						ReflectionType old_nested_type;
-						if (first_reflection_manager->TryGetType(source_field->definition, old_nested_type)) {
-							if (second_reflection_manager->TryGetType(destination_field->definition, new_nested_type)) {
+						const ReflectionType* new_nested_type = first_reflection_manager->TryGetType(source_field->definition);
+						if (new_nested_type != nullptr) {
+							const ReflectionType* old_nested_type = second_reflection_manager->TryGetType(destination_field->definition);
+							if (old_nested_type != nullptr) {
 								if (source_field->info.stream_type == ReflectionStreamFieldType::Basic || source_field->info.stream_type == ReflectionStreamFieldType::Pointer) {
 									if (source_field->info.stream_type == ReflectionStreamFieldType::Pointer) {
 										source_data = *(void**)source_data;
@@ -6078,8 +6161,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									CopyReflectionTypeToNewVersion(
 										first_reflection_manager,
 										second_reflection_manager,
-										&old_nested_type,
-										&new_nested_type,
+										old_nested_type,
+										new_nested_type,
 										source_data,
 										destination_data,
 										options
@@ -6093,8 +6176,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									if (CompareReflectionTypes(
 										first_reflection_manager,
 										second_reflection_manager,
-										&old_nested_type,
-										&new_nested_type
+										old_nested_type,
+										new_nested_type
 									)) {
 										// Check to see if we need to allocate
 										if (options->always_allocate_for_buffers) {
@@ -6115,8 +6198,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 											second_reflection_manager->SetInstanceFieldDefaultData(destination_field, destination_data);
 										}
 										else {
-											size_t old_type_byte_size = GetReflectionTypeByteSize(&old_nested_type);
-											size_t new_type_byte_size = GetReflectionTypeByteSize(&new_nested_type);
+											size_t old_type_byte_size = GetReflectionTypeByteSize(old_nested_type);
+											size_t new_type_byte_size = GetReflectionTypeByteSize(new_nested_type);
 
 											if (destination_field->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 												unsigned int copy_count = min(old_data.size, (unsigned int)destination_field->info.basic_type_count);
@@ -6125,8 +6208,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 													CopyReflectionTypeToNewVersion(
 														first_reflection_manager,
 														second_reflection_manager,
-														&old_nested_type,
-														&new_nested_type,
+														old_nested_type,
+														new_nested_type,
 														OffsetPointer(old_data.buffer, old_type_byte_size * index),
 														OffsetPointer(current_data, new_type_byte_size * index),
 														options
@@ -6141,8 +6224,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 													CopyReflectionTypeToNewVersion(
 														first_reflection_manager,
 														second_reflection_manager,
-														&old_nested_type,
-														&new_nested_type,
+														old_nested_type,
+														new_nested_type,
 														OffsetPointer(old_data.buffer, old_type_byte_size * index),
 														OffsetPointer(allocation, new_type_byte_size * index),
 														options
@@ -6175,15 +6258,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 								unsigned int index = 0;
 								for (; index < dependent_data.dependent_types.size; index++) {
-									ReflectionType first_type;
-									ReflectionType second_type;
-									if (first_reflection_manager->TryGetType(dependent_data.dependent_types[index], first_type)) {
-										if (second_reflection_manager->TryGetType(dependent_data.dependent_types[index], second_type)) {
+									const ReflectionType* first_type = first_reflection_manager->TryGetType(dependent_data.dependent_types[index]);
+									if (first_type != nullptr) {
+										const ReflectionType* second_type = second_reflection_manager->TryGetType(dependent_data.dependent_types[index]);
+										if (second_type != nullptr) {
 											if (!CompareReflectionTypes(
 												first_reflection_manager,
 												second_reflection_manager,
-												&first_type,
-												&second_type
+												first_type,
+												second_type
 											)) {
 												// Revert to default data
 												break;
@@ -6524,12 +6607,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 				else {
 					// Call the functor again
-					ReflectionType nested_type;
-					if (reflection_manager->TryGetType(field->definition, nested_type)) {
+					const ReflectionType* nested_type = reflection_manager->TryGetType(field->definition);
+					if (nested_type != nullptr) {
 						if (field->info.stream_type == ReflectionStreamFieldType::Basic) {
 							CopyReflectionTypeInstance(
 								reflection_manager,
-								&nested_type,
+								nested_type,
 								source,
 								destination,
 								options
@@ -6703,12 +6786,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 					};
 
-					ReflectionType nested_type;
-					if (reflection_manager->TryGetType(type->fields[field_index].definition, nested_type)) {
+					const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[field_index].definition);
+					if (nested_type != nullptr) {
 						deallocate_buffers([&](Stream<void> user_defined_stream, size_t current_element_byte_size) {
 							DeallocateReflectionTypeInstanceBuffers(
 								reflection_manager,
-								&nested_type,
+								nested_type,
 								user_defined_stream.buffer,
 								allocator,
 								user_defined_stream.size,
@@ -7103,9 +7186,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							Stream<char> give_size_tag = field->GetTag(STRING(ECS_GIVE_SIZE_REFLECTION));
 							if (give_size_tag.size == 0) {
 								// Check to see if it is a nested type or a custom serializer
-								ReflectionType nested_type;
-								if (reflection_manager->TryGetType(field->definition, nested_type)) {
-									if (DependsUpon(reflection_manager, &nested_type, subtype)) {
+								const ReflectionType* nested_type = reflection_manager->TryGetType(field->definition);
+								if (nested_type != nullptr) {
+									if (DependsUpon(reflection_manager, nested_type, subtype)) {
 										return true;
 									}
 								}
@@ -7267,11 +7350,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						if (blittable_index.x == -1) {
 							// Not a blittable type
 							// Try nested type, then custom type
-							ReflectionType nested_type;
-							if (manager->TryGetType(type->fields[index].definition, nested_type)) {
-								dependent_types.AddAssert(nested_type.name);
+							const ReflectionType* nested_type = manager->TryGetType(type->fields[index].definition);
+							if (nested_type != nullptr) {
+								dependent_types.AddAssert(nested_type->name);
 								// Retrieve its dependent types as well
-								GetReflectionTypeDependentTypes(manager, &nested_type, dependent_types);
+								GetReflectionTypeDependentTypes(manager, nested_type, dependent_types);
 							}
 							else {
 								// Try custom type
@@ -7352,16 +7435,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						if (previous_type->fields[previous_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 							// Check to see if we have a nested type or not
 							// Must be able to get it from both reflection managers
-							ReflectionType previous_nested_type;
-							if (previous_reflection_manager->TryGetType(previous_type->fields[previous_index].definition, previous_nested_type)) {
-								ReflectionType new_nested_type;
-								if (new_reflection_manager->TryGetType(new_type->fields[index].definition, new_nested_type)) {
+							const ReflectionType* previous_nested_type = previous_reflection_manager->TryGetType(previous_type->fields[previous_index].definition);
+							if (previous_nested_type != nullptr) {
+								const ReflectionType* new_nested_type = new_reflection_manager->TryGetType(new_type->fields[index].definition);
+								if (new_nested_type != nullptr) {
 									TypeChangeAddIndex(current_level, index);
 									DetermineReflectionTypeChangeSet(
 										previous_reflection_manager,
 										new_reflection_manager,
-										&previous_nested_type,
-										&new_nested_type,
+										previous_nested_type,
+										new_nested_type,
 										changes
 									);
 									current_level->indices_count--;
@@ -7408,10 +7491,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 						// If it is a user defined type and we can retrieve the nested type,
 						// We need to determine the update for each of its fields
-						ReflectionType nested_type;
-						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
+						const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[index].definition);
+						if (nested_type != nullptr) {
 							TypeChangeAddIndex(current_level, index);
-							DetermineReflectionTypeInstanceUpdatesImpl(reflection_manager, &nested_type, first_data, second_data, updates, current_level);
+							DetermineReflectionTypeInstanceUpdatesImpl(reflection_manager, nested_type, first_data, second_data, updates, current_level);
 							current_level->indices_count--;
 						}
 						else {

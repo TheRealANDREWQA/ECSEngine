@@ -246,8 +246,8 @@ namespace ECSEngine {
 		unsigned short source_code_commit_hash_size = 0;
 		ReferenceDataWithSizeShort<true>(&ptr, &source_code_commit_hash, source_code_commit_hash_size);
 
-		Reflection::ReflectionType scene_modules_type;
-		ECS_ASSERT(load_data->reflection_manager->TryGetType(STRING(SceneModule), scene_modules_type), "Loading scene requires the ReflectionManager to have the type SceneModules reflected!");
+		const Reflection::ReflectionType* scene_modules_type = load_data->reflection_manager->TryGetType(STRING(SceneModule));
+		ECS_ASSERT(scene_modules_type != nullptr, "Loading scene requires the ReflectionManager to have the type SceneModules reflected!");
 		if (load_data->scene_modules.IsInitialized()) {
 			ECS_ASSERT(load_data->scene_modules_allocator.allocator != nullptr, "Loading a scene with module retrieval but no allocator is specified.");
 
@@ -256,7 +256,7 @@ namespace ECSEngine {
 			options.default_initialize_missing_fields = true;
 
 			SceneModules scene_modules;
-			ECS_DESERIALIZE_CODE deserialize_status = Deserialize(load_data->reflection_manager, &scene_modules_type, &scene_modules, ptr, &options);
+			ECS_DESERIALIZE_CODE deserialize_status = Deserialize(load_data->reflection_manager, scene_modules_type, &scene_modules, ptr, &options);
 			if (deserialize_status != ECS_DESERIALIZE_OK) {
 				if (load_data->detailed_error_string) {
 					load_data->detailed_error_string->AddStreamAssert("The scene file is corrupted - could not deserialize the modules (module chunk)");
@@ -451,9 +451,9 @@ namespace ECSEngine {
 
 		// Retrieve the module serialize size firstly such that we can make a stack allocation for it and write it to the file then
 		// Use the reflection manager to write the scene modules
-		Reflection::ReflectionType scene_modules_type;
-		ECS_ASSERT(save_data->reflection_manager->TryGetType(STRING(SceneModules), scene_modules_type), "Saving scene requires the SceneModules type to be reflected!");
-		size_t serialize_modules_size = SerializeSize(save_data->reflection_manager, &scene_modules_type, &save_data->modules);
+		const Reflection::ReflectionType* scene_modules_type = save_data->reflection_manager->TryGetType(STRING(SceneModules));
+		ECS_ASSERT(scene_modules_type, "Saving scene requires the SceneModules type to be reflected!");
+		size_t serialize_modules_size = SerializeSize(save_data->reflection_manager, scene_modules_type, &save_data->modules);
 		if (serialize_modules_size == 0) {
 			// An error has occured
 			return false;
@@ -468,7 +468,7 @@ namespace ECSEngine {
 		WriteWithSizeShort<true>(&modules_allocation_ptr, save_data->source_code_branch_name);
 		WriteWithSizeShort<true>(&modules_allocation_ptr, save_data->source_code_commit_hash);
 
-		ECS_SERIALIZE_CODE serialize_modules_status = Serialize(save_data->reflection_manager, &scene_modules_type, &save_data->modules, modules_allocation_ptr);
+		ECS_SERIALIZE_CODE serialize_modules_status = Serialize(save_data->reflection_manager, scene_modules_type, &save_data->modules, modules_allocation_ptr);
 		if (serialize_modules_status != ECS_SERIALIZE_OK) {
 			// An error has occured
 			return false;

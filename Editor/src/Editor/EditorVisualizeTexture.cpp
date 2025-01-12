@@ -21,8 +21,8 @@ void RemoveVisualizeTexture(EditorState* editor_state, ECSEngine::Stream<char> n
 
 void SetVisualizeTexture(EditorState* editor_state, ECSEngine::Tools::VisualizeTextureSelectElement select_element) {
 	// Check to see if the element exists or not
-	VisualizeTextureSelectElement* table_select_element;
-	if (editor_state->visualize_texture.mapping.TryGetValuePtr(select_element.name, table_select_element)) {
+	VisualizeTextureSelectElement* table_select_element = editor_state->visualize_texture.mapping.TryGetValuePtr(select_element.name);
+	if (table_select_element != nullptr) {
 		Stream<char> previous_name = table_select_element->name;
 		*table_select_element = select_element;
 		table_select_element->name = previous_name;

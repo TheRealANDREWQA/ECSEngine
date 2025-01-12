@@ -412,8 +412,93 @@ namespace ECSEngine {
 			unsigned int folder_hierarchy_index;
 		};
 
-		struct ReflectionManager;
-		
+		struct ReflectionEmbeddedArraySize {
+			Stream<char> reflection_type;
+			Stream<char> field_name;
+			Stream<char> body;
+		};
+
+		struct ECSENGINE_API ReflectionTypeTemplate {
+			ECS_INLINE ReflectionTypeTemplate() {
+				memset(this, 0, sizeof(*this));
+			}
+
+			enum class ArgumentType {
+				Type,
+				Integer
+			};
+
+			struct Argument {
+				Argument() {}
+
+				Argument CopyTo(uintptr_t& ptr) const;
+
+				size_t CopySize() const;
+
+				bool has_default_value;
+				ArgumentType type;
+				unsigned int template_parameter_index;
+				
+				// Only valid when the type is ArgumentType::Type
+				Stream<char> type_name;
+
+				// In case the argument is defaulted, record its value here
+				union {
+					// For the integer case
+					struct {
+						int64_t default_integer_value;
+						// Needed for the DoesMatch function to provide a string when matching a template
+						char default_integer_string_characters[7];
+						char default_integer_string_length;
+					};
+					// For the type case
+					struct {
+						Stream<char> default_type_name;
+					};
+				};
+			};
+
+			enum class MatchStatus {
+				Failure,
+				Success,
+				// It returns this value if the overall structure is good, but there is a mismatch between
+				// The type of the argument
+				IncorrectParameter
+			};
+
+			// Returns how many parameters are mandatory for this template type
+			unsigned int GetMandatoryParameterCount() const;
+
+			// Determines if the given template parameters are valid for this template type. If it matches and the matched_arguments
+			// Parameter is provided, it fills in the strings of the template arguments
+			MatchStatus DoesMatch(Stream<char> template_parameters, CapacityStream<Stream<char>>* matched_arguments = nullptr) const;
+
+			ReflectionTypeTemplate CopyTo(uintptr_t& ptr) const;
+
+			size_t CopySize() const;
+
+			// Should be called once after all arguments were determined. The parameter that is passed in should contain
+			// The strings of the embedded array sizes that the template contains. It will modify the array such that
+			// Entries that are matched by template arguments are removed, and only those that are not matched are kept.
+			// The allocator is needed for the resizing of embedded array sizes
+			void Finalize(AllocatorPolymorphic allocator, Stream<ReflectionEmbeddedArraySize>& template_embedded_array_sizes);
+
+			// Creates a new type instance for the given template parameters and returns it. Allocates the type
+			// As non-coalesced allocation. The type will still be raw, it cannot be used right away. For example,
+			// The byte sizes of user defined types are not determined, fields may not be properly aligned. You must
+			// Deal with these yourself after this call.
+			ReflectionType Instantiate(const ReflectionManager* reflection_manager, AllocatorPolymorphic allocator, Stream<Stream<char>> template_arguments) const;
+
+			// This is what the template actually contains - which will be used to instantiate particular types
+			ReflectionType base_type;
+			Stream<Argument> arguments;
+			// The x component is the index inside arguments of the entry that matched, while the y is the field index
+			// Inside base type
+			Stream<uint2> embedded_array_sizes;
+			unsigned int mandatory_parameter_count;
+			unsigned int folder_hierarchy_index;
+		};
+
 		struct ReflectionCustomTypeMatchData {
 			Stream<char> definition;
 		};
@@ -725,6 +810,12 @@ namespace ECSEngine {
 		// The tag must be the entire field string, not the separated tag.
 		// Returns true if the tag is present, else false
 		ECSENGINE_API bool GetReflectionPointerReferenceKeyParams(Stream<char> field_tag, Stream<char>& key, Stream<char>& custom_element_type);
+
+		// For a basic type array field, it will adjust all the following next fields such that they are at the appropriate offsets.
+		// It assumes that the byte size of an element is stored in the info.byte_size field. The pointer offsets for the fields
+		// That follow might be out of alignment, you must manually align them afterwards.
+		// It returns the difference in byte size due to the count change.
+		ECSENGINE_API int AdjustReflectionFieldBasicTypeArrayCount(Stream<ReflectionField> fields, unsigned int field_index, unsigned int new_count);
 
 		// Creates 2 stack streams to house the options, which you can specify the name of.
 		// Element name must be a string already, i.e. STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE)

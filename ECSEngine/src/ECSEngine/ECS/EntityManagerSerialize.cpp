@@ -907,8 +907,8 @@ namespace ECSEngine {
 				if (pairs[component_pair_index].name_size > 0) {
 					Stream<char> current_component_name = get_name_functor(component_pair_index);
 
-					const void* untyped_component_info;
-					if (component_table->TryGetValuePtrUntyped(component, untyped_component_info)) {
+					const void* untyped_component_info = component_table->TryGetValuePtr(component);
+					if (untyped_component_info != nullptr) {
 						component_info = (decltype(component_info))untyped_component_info;
 						if (component_info->name.size == 0) {
 							// Iterate through the table
@@ -3031,14 +3031,14 @@ namespace ECSEngine {
 		for (size_t index = 0; index < deserialize_field_table->types.size; index++) {
 			// If the type table doesn't exist then proceed with the proxy
 			Stream<char> current_name = deserialize_field_table->types[index].name;
-			Reflection::ReflectionType current_type;
-			if (current_reflection_manager->TryGetType(current_name, current_type)) {
+			const Reflection::ReflectionType* current_type = current_reflection_manager->TryGetType(current_name);
+			if (current_type != nullptr) {
 				// Check to see if the file type was a link type and now it's not
 				Stream<char> target_type_name = GetReflectionTypeLinkNameBase(current_name);
 				if (target_type_name.size < current_name.size) {
 					// It was a link type - check to see if the target exists
-					Reflection::ReflectionType target_type;
-					if (current_reflection_manager->TryGetType(target_type_name, target_type)) {
+					const Reflection::ReflectionType* target_type = current_reflection_manager->TryGetType(target_type_name);
+					if (target_type != nullptr) {
 						// Convert the name of the file type to this name
 						// No need for an allocation since it fits into the already allocated name
 						deserialize_field_table->types[index].name = target_type_name;
@@ -3051,13 +3051,13 @@ namespace ECSEngine {
 					// Check to see if now it has a link and previously it didn't
 					ECS_STACK_CAPACITY_STREAM(char, link_type_name_storage, 512);
 					Stream<char> link_type_name = GetReflectionTypeLinkComponentName(current_name, link_type_name_storage);
-					Reflection::ReflectionType link_type;
-					if (current_reflection_manager->TryGetType(link_type_name, link_type)) {
+					const Reflection::ReflectionType* link_type = current_reflection_manager->TryGetType(link_type_name);
+					if (link_type != nullptr) {
 						// Get the target of this link type - if it is the same proceed
-						target_type_name = GetReflectionTypeLinkComponentTarget(&link_type);
+						target_type_name = GetReflectionTypeLinkComponentTarget(link_type);
 						if (target_type_name == current_name) {
 							// Reference the link type name
-							deserialize_field_table->types[index].name = link_type.name;
+							deserialize_field_table->types[index].name = link_type->name;
 						}
 					}
 					else {
