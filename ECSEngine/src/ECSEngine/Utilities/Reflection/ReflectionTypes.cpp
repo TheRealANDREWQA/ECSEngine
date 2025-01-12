@@ -680,8 +680,7 @@ namespace ECSEngine {
 				if (parameters.size > 0) {
 					Stream<char> comma = FindFirstCharacter(parameters, ',');
 					if (comma.size > 0) {
-						key = SkipWhitespaceEx(parameters.StartDifference(comma));
-						key = SkipWhitespaceEx(key, -1);
+						key = TrimWhitespaceEx(parameters.StartDifference(comma));
 
 						custom_element_type = SkipWhitespaceEx(comma.AdvanceReturn());
 						if (custom_element_type.StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
@@ -694,8 +693,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						key = SkipWhitespaceEx(parameters);
-						key = SkipWhitespaceEx(parameters, -1);
+						key = TrimWhitespaceEx(parameters);
 					}
 				}
 				else {
@@ -717,8 +715,7 @@ namespace ECSEngine {
 				if (parameters.size > 0) {
 					Stream<char> comma = FindFirstCharacter(parameters, ',');
 					if (comma.size > 0) {
-						key = SkipWhitespaceEx(parameters.StartDifference(comma));
-						key = SkipWhitespaceEx(key, -1);
+						key = TrimWhitespaceEx(parameters.StartDifference(comma));
 
 						custom_element_type = SkipWhitespaceEx(comma.AdvanceReturn());
 						if (custom_element_type.StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
@@ -731,8 +728,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						key = SkipWhitespaceEx(parameters);
-						key = SkipWhitespaceEx(parameters, -1);
+						key = TrimWhitespaceEx(parameters);
 					}
 				}
 				else {
@@ -1085,7 +1081,7 @@ namespace ECSEngine {
 			else {
 				copy.type_name.InitializeAndCopy(ptr, type_name);
 				if (has_default_value) {
-					copy.default_type_name.InitializeAndCopy(ptr, copy.default_type_name);
+					copy.default_type_name.InitializeAndCopy(ptr, default_type_name);
 				}
 			}
 			return copy;
@@ -1144,8 +1140,7 @@ namespace ECSEngine {
 
 			// Skip the whitespaces for the arguments
 			for (unsigned int index = 0; index < stack_matched_arguments.size; index++) {
-				stack_matched_arguments[index] = SkipWhitespace(stack_matched_arguments[index]);
-				stack_matched_arguments[index] = SkipWhitespace(stack_matched_arguments[index], -1);
+				stack_matched_arguments[index] = TrimWhitespace(stack_matched_arguments[index]);
 			}
 
 			for (unsigned int index = 0; index < arguments.size; index++) {

@@ -541,7 +541,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename CharacterType>
-	const CharacterType* FindMatchingParanthesisImpl(
+	static const CharacterType* FindMatchingParanthesisImpl(
 		const CharacterType* start_character,
 		const CharacterType* end_character,
 		CharacterType opened_char,
@@ -558,7 +558,7 @@ namespace ECSEngine {
 				return;
 			}
 
-			while (current_opened < end_character) {
+			while (current_opened < current_closed) {
 				current_opened = FindFirstCharacter(
 					Stream<CharacterType>(current_opened + 1, PointerDifference(current_closed, current_opened + 1) / sizeof(CharacterType)),
 					opened_char
@@ -616,6 +616,55 @@ namespace ECSEngine {
 		}
 
 		return { opened_paren, PointerDifference(range.buffer + range.size, opened_paren) };
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	// The range is [start_character, end_character), the end character is not included
+	template<typename CharacterType>
+	static const CharacterType* FindMatchingParanthesisReverseImpl(
+		const CharacterType* start_character,
+		const CharacterType* end_character,
+		CharacterType opened_char,
+		CharacterType closed_char,
+		unsigned int closed_count
+	) {
+		// It is harder to use find character reverse for this, for this reason, use character by character processing
+		end_character--;
+		while (end_character > start_character) {
+			if (*end_character == closed_char) {
+				closed_count++;
+			}
+			else if (*end_character == opened_char) {
+				closed_count--;
+				if (closed_count == 0) {
+					// We can exit, the pair is matched
+					return end_character;
+				}
+			}
+			end_character--;
+		}
+
+		// No matching pair
+		return nullptr;
+	}
+
+	Stream<char> FindMatchingParenthesisReverse(Stream<char> range, char opened_char, char closed_char, unsigned int closed_count) {
+		const char* matched_opened = FindMatchingParanthesisReverseImpl(range.buffer, range.buffer + range.size, opened_char, closed_char, closed_count);
+		if (matched_opened == nullptr) {
+			return {};
+		}
+
+		return { matched_opened, PointerElementDifference(matched_opened, range.buffer + range.size) };
+	}
+
+	Stream<wchar_t> FindMatchingParenthesisReverse(Stream<wchar_t> range, wchar_t opened_char, wchar_t closed_char, unsigned int closed_count) {
+		const wchar_t* matched_opened = FindMatchingParanthesisReverseImpl(range.buffer, range.buffer + range.size, opened_char, closed_char, closed_count);
+		if (matched_opened == nullptr) {
+			return {};
+		}
+
+		return { matched_opened, PointerElementDifference(matched_opened, range.buffer + range.size) };
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -1559,7 +1608,7 @@ namespace ECSEngine {
 	template<typename CharacterType>
 	static void SplitStringWithParameterListImpl(Stream<CharacterType> string, CharacterType delimiter, CharacterType parameter_list_start, CharacterType parameter_list_end, AdditionStream<Stream<CharacterType>> splits) {
 		Stream<CharacterType> string_to_search = string;
-		Stream<CharacterType> matched_parameter_list = FindMatchingParenthesis(string, parameter_list_start, parameter_list_end, 0);
+		Stream<CharacterType> matched_parameter_list_end = FindMatchingParenthesis(string, parameter_list_start, parameter_list_end, 0);
 		CharacterType* previous_delimiter = string.buffer - 1;
 
 		// We break from the while
@@ -1569,12 +1618,12 @@ namespace ECSEngine {
 				break;
 			}
 			else {
-				if (matched_parameter_list.size > 0) {
+				if (matched_parameter_list_end.size > 0) {
 					// Determine who appears first, the delimiter, or the matched parameter list
-					if (matched_parameter_list.buffer < found_delimiter.buffer) {
+					if (matched_parameter_list_end.buffer < found_delimiter.buffer) {
 						// The matched parameter list appears first, find the first delimiter after it
 						Stream<CharacterType> string_after_parameter_list;
-						string_after_parameter_list.buffer = matched_parameter_list.buffer + matched_parameter_list.size;
+						string_after_parameter_list.buffer = matched_parameter_list_end.buffer + 1;
 						string_after_parameter_list.size = PointerElementDifference(string_after_parameter_list.buffer, string_to_search.buffer + string_to_search.size);
 
 						Stream<CharacterType> next_delimiter = FindFirstCharacter(string_after_parameter_list, delimiter);
@@ -1594,7 +1643,7 @@ namespace ECSEngine {
 						string_to_search = next_delimiter.AdvanceReturn();
 						previous_delimiter = next_delimiter.buffer;
 						// Search for a new matched parameter list
-						matched_parameter_list = FindMatchingParenthesis(string_to_search, parameter_list_start, parameter_list_end, 0);
+						matched_parameter_list_end = FindMatchingParenthesis(string_to_search, parameter_list_start, parameter_list_end, 0);
 					}
 					else {
 						Stream<CharacterType> split;
@@ -1624,10 +1673,10 @@ namespace ECSEngine {
 
 		// If we exited the while, check to see if still have a valid matched parameter list. If we do have one,
 		// We need to add it
-		if (matched_parameter_list.size > 0) {
+		if (previous_delimiter < string.buffer + string.size) {
 			Stream<CharacterType> split;
 			split.buffer = previous_delimiter + 1;
-			split.size = PointerElementDifference(split.buffer, matched_parameter_list.buffer + matched_parameter_list.size);
+			split.size = PointerElementDifference(split.buffer, string.buffer + string.size);
 
 			splits.Add(split);
 		}

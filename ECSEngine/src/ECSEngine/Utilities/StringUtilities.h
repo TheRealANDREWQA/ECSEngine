@@ -413,6 +413,24 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 		unsigned int opened_count = 1
 	);
 
+	// Works it the same fashion as find matching parenthesis, the difference is that it goes backwards,
+	// From the end of the range until the beginning. Returns an empty range if there is no matching pair
+	ECSENGINE_API Stream<char> FindMatchingParenthesisReverse(
+		Stream<char> range,
+		char opened_char,
+		char closed_char,
+		unsigned int closed_count = 1
+	);
+
+	// Works it the same fashion as find matching parenthesis, the difference is that it goes backwards,
+	// From the end of the range until the beginning. Returns an empty range if there is no matching pair
+	ECSENGINE_API Stream<wchar_t> FindMatchingParenthesisReverse(
+		Stream<wchar_t> range,
+		wchar_t opened_char,
+		wchar_t closed_char,
+		unsigned int closed_count = 1
+	);
+
 	ECSENGINE_API Stream<char> FindDelimitedString(Stream<char> range, char opened_delimiter, char closed_delimiter, bool skip_whitespace = false);
 
 	ECSENGINE_API unsigned int FindString(const char* string, Stream<const char*> other);
@@ -503,6 +521,16 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 
 	// Returns the string that is delimited by the character in reverse order
 	ECSENGINE_API Stream<char> SkipUntilCharacterReverse(const char* string, const char* bound, char character);
+
+	// Removes the leading and final whitespace characters
+	ECS_INLINE Stream<char> TrimWhitespace(Stream<char> characters) {
+		return SkipWhitespace(SkipWhitespace(characters), -1);
+	}
+
+	// Removes the leading and final whitespace characters
+	ECS_INLINE Stream<char> TrimWhitespaceEx(Stream<char> characters) {
+		return SkipWhitespaceEx(SkipWhitespaceEx(characters), -1);
+	}
 
 	ECSENGINE_API unsigned int GetAlphabetIndex(char character);
 

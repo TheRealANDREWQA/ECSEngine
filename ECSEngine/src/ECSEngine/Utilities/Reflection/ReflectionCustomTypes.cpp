@@ -147,8 +147,7 @@ namespace ECSEngine {
 					parse_character++;
 				}
 
-				type = SkipWhitespace(type);
-				type = SkipWhitespace(type, -1);
+				type = TrimWhitespace(type);
 				return type;
 			};
 
@@ -851,8 +850,7 @@ namespace ECSEngine {
 				iterate_character++;
 			}
 
-			value_type = SkipWhitespace(value_type);
-			value_type = SkipWhitespace(value_type, -1);
+			value_type = TrimWhitespace(value_type);
 			return value_type;
 		}
 
