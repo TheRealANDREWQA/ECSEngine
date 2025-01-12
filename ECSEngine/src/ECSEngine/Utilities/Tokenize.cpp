@@ -952,12 +952,10 @@ namespace ECSEngine {
 			}
 
 			Stream<char> left_part = lines[index].StartDifference(first_equals);
-			left_part = SkipWhitespace(left_part);
-			left_part = SkipWhitespace(left_part, -1);
+			left_part = TrimWhitespace(left_part);
 
 			Stream<char> right_part = first_equals.AdvanceReturn(1);
-			right_part = SkipWhitespace(right_part);
-			right_part = SkipWhitespace(right_part, -1);
+			right_part = TrimWhitespace(right_part);
 
 			ParsedDefinition definition;
 			definition.name = left_part;

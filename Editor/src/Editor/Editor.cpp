@@ -28,6 +28,18 @@ int ExceptionFilter(EXCEPTION_POINTERS* pointers) {
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
+template<typename T>
+struct ECS_REFLECT TestStruct {
+	T a;
+	T b;
+};
+
+template<typename T = TestStruct<void>, int value = 2>
+struct ECS_REFLECT TestStruct2 {
+	T a[value];
+	Stream<T> b;
+};
+
 class Editor : public ECSEngine::Application {
 public:
 	Editor(const wchar_t* name);

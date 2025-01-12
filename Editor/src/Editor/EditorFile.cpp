@@ -132,8 +132,8 @@ bool LoadEditorFile(EditorState* editor_state) {
 
 		// Use ASCII paths, even tho we internally store them as wide
 		Stream<char> compiler_path_ascii = lines[0].AdvanceReturn(strlen(COMPILER_PATH_STRING));
-		compiler_path_ascii = SkipWhitespace(compiler_path_ascii);
-		compiler_path_ascii = SkipWhitespace(compiler_path_ascii, -1);
+		compiler_path_ascii = TrimWhitespace(compiler_path_ascii);
+
 		// Add a null terminator such that the final path contains it at the end
 		compiler_path_ascii.Add('\0');
 		ECS_STACK_CAPACITY_STREAM(wchar_t, compiler_path, 512);
@@ -145,8 +145,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 		hub_data->projects.size = 0;
 		if (lines[1].StartsWith(PROJECTS_STRING)) {
 			for (size_t index = 2; index < lines.size; index++) {
-				Stream<char> line = SkipWhitespace(lines[index]);
-				line = SkipWhitespace(line, -1);
+				Stream<char> line = TrimWhitespace(lines[index]);
 
 				ECS_STACK_CAPACITY_STREAM(wchar_t, wide_path, 512);
 				ConvertASCIIToWide(wide_path, line);

@@ -4036,6 +4036,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										}
 									}
 
+									// For template types, we can parse the type normally, and then move it to the template types afterwards
+									// What we need to do tho is to record the embedded array size count, since we will eliminate these if
+									// The type proves to be a template
+									size_t previous_embedded_array_size_count = data->embedded_array_size.size;
+
 									AddTypeDefinition(data, tokenized_body, type_name, index);
 									if (data->success == false) {
 										return;
@@ -4067,6 +4072,141 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									}
 									else {
 										data->types.Last().tag = { nullptr, 0 };
+									}
+								
+									// Determine if this is a type template
+								
+									const char* struct_definition_start = struct_ptr != nullptr ? struct_ptr : class_ptr;
+									struct_definition_start--;
+									// Skip to the first non whitespace character. If it is a '>', then we have a template
+									while (struct_definition_start >= file_stream.buffer && IsWhitespaceEx(*struct_definition_start)) {
+										struct_definition_start--;
+									}
+
+									if (*struct_definition_start == '>') {
+										// It is a template, try to find its matching pair
+										Stream<char> template_range = FindMatchingParenthesisReverse({ file_stream.buffer, PointerElementDifference(file_stream.buffer, struct_definition_start) + 1 }, '<', '>', 0);
+										if (template_range.size == 0) {
+											// Fail, supossed template is not matched
+											ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type {#}. Found a > before the type, which is indicative of a template, but no template range was found.", data->types.Last().name);
+											WriteErrorMessage(data, error_message);
+											return;
+										}
+
+										// Ensure that the template keyword appears before the template range
+										Stream<char> template_keyword_range = SkipWhitespaceEx({ file_stream.buffer, PointerElementDifference(file_stream.buffer, template_range.buffer) }, -1);
+										Stream<char> template_keyword = "template";
+										Stream<char> template_keyword_range_last_characters = template_keyword_range.SliceAt(template_keyword_range.size - template_keyword.size);
+										if (template_keyword_range_last_characters != template_keyword) {
+											// Fail, supossed template does not have the template keyword
+											ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type {#}. Found a template <> pair before the type, which is indicative of a template, but the template keyword is missing.", data->types.Last().name);
+											WriteErrorMessage(data, error_message);
+											return;
+										}
+
+										// Remove the leading '<' and the trailing '>'
+										template_range.size--;
+										template_range.Advance();
+
+										// Everything is good, upgrade the last parsed type to a type template
+										ECS_STACK_CAPACITY_STREAM(Stream<char>, template_parameters, 32);
+										SplitStringWithParameterList(template_range, ',', '<', '>', &template_parameters);
+
+										ReflectionTypeTemplate type_template;
+										type_template.base_type = data->types.Last();
+										// There might at max template_parameters.size, but there can be less than that value
+										// If there are template parameter types that we are not interested in
+										type_template.arguments.Initialize(&data->allocator, template_parameters.size);
+										type_template.arguments.size = 0;
+										
+										for (size_t index = 0; index < template_parameters.size; index++) {
+											// There must be 2 strings per template parameter, one which determines the type of the parameter
+											// And the second one the name of the parameter
+											Stream<char> current_parameter = TrimWhitespace(template_parameters[index]);
+
+											// There can be up to 3 splits, the first one for the type, the second one for the name,
+											// And the third one for the default value
+											Stream<char> parameter_type_string;
+											Stream<char> parameter_name_string;
+											Stream<char> parameter_default_value_string;
+											bool has_default_value = false;
+
+											Stream<char> name_whitespace = FindFirstCharacter(current_parameter, ' ');
+											if (name_whitespace.size == 0) {
+												// Fail, invalid template specification
+												ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type {#}. It is a template, but a parameter is invalid (there is no separating space between the type and the parameter name).", data->types.Last().name);
+												WriteErrorMessage(data, error_message);
+												return;
+											}
+
+											parameter_type_string = current_parameter.StartDifference(name_whitespace);
+											parameter_name_string = name_whitespace.AdvanceReturn();
+
+											// Check to see if the second split contains a =, if it does, it means that it has a default value
+											Stream<char> default_value_equals = FindFirstCharacter(parameter_name_string, '=');
+											if (default_value_equals.size > 0) {
+												parameter_name_string = parameter_name_string.StartDifference(default_value_equals);
+												parameter_name_string = TrimWhitespace(parameter_name_string);
+
+												parameter_default_value_string = default_value_equals.AdvanceReturn();
+												parameter_default_value_string = TrimWhitespace(parameter_default_value_string);
+												has_default_value = true;
+											}
+
+											if (parameter_type_string == "typename" || parameter_type_string == "class") {
+												// It is a type parameter
+												ReflectionTypeTemplate::Argument& argument = type_template.arguments[type_template.arguments.size];
+												type_template.arguments.size++;
+												argument.template_parameter_index = index;
+												argument.type = ReflectionTypeTemplate::ArgumentType::Type;
+												argument.type_name = parameter_name_string;
+												argument.has_default_value = has_default_value;
+												if (has_default_value) {
+													argument.default_type_name = parameter_default_value_string;
+												}
+											}
+											else {
+												// If it is not an integer parameter, ignore it
+												ReflectionField field = GetReflectionFieldInfo(data->field_table, parameter_type_string);
+												if (IsIntegralSingleComponent(field.info.basic_type)) {
+													// It is a type parameter
+													ReflectionTypeTemplate::Argument& argument = type_template.arguments[type_template.arguments.size];
+													type_template.arguments.size++;
+													argument.template_parameter_index = index;
+													argument.type = ReflectionTypeTemplate::ArgumentType::Integer;
+													argument.type_name = parameter_name_string;
+													argument.has_default_value = has_default_value;
+													if (has_default_value) {
+														// Ensure the default value actually is an integer
+														bool default_value_success = false;
+														argument.default_integer_value = ConvertCharactersToIntStrict(parameter_default_value_string, default_value_success);
+														if (!default_value_success) {
+															// Fail
+															ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type {#}. It is a template, but integer parameter {#} contains an invalid default value", data->types.Last().name, parameter_name_string);
+															WriteErrorMessage(data, error_message);
+															return;
+														}
+													}
+												}
+											}
+										}
+
+										// Finalize the template type
+										Stream<ReflectionEmbeddedArraySize> type_embedded_entries = data->embedded_array_size.SliceAt(previous_embedded_array_size_count);
+										type_template.Finalize(&data->allocator, type_embedded_entries);
+
+										// Add the memory used by the entire template, minus the base type copy size, since that was already accounted
+										// For when parsing the type normally
+										data->total_memory += type_template.CopySize() - type_template.base_type.CopySize();
+
+										// Remove the parsed type from the normal type list
+										data->types.size--;
+										// Remove the embedded array size entries that are consumed by template parameters.
+										// They will be in their appropriate location after the finalize call
+										data->embedded_array_size.size = previous_embedded_array_size_count + type_embedded_entries.size;
+
+										// At last, register this type as a template
+										data->type_templates.Add(&type_template);
 									}
 								}
 							}

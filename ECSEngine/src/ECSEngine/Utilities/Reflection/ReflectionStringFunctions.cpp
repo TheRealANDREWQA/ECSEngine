@@ -622,7 +622,7 @@ namespace ECSEngine {
 					stream_type = ReflectionStreamFieldType::Pointer;
 
 					asterisk = SkipWhitespace(asterisk, -1);
-					basic_type = ConvertStringToBasicFieldType({ string.buffer, PointerDifference(asterisk.buffer, string.buffer) });
+					basic_type = ConvertStringToBasicFieldType({ string.buffer, PointerDifference(asterisk.buffer, string.buffer) / sizeof(char) });
 				}
 			}
 		}
