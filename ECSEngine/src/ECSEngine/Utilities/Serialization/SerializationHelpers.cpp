@@ -1591,6 +1591,31 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Deck
+
+#define SERIALIZE_CUSTOM_DECK_VERSION (0)
+
+	// -----------------------------------------------------------------------------------------
+
+	size_t SerializeCustomTypeWrite_Deck(SerializeCustomTypeWriteFunctionData* data) {
+		size_t write_size = 0;
+		ECS_ASSERT(false);
+		return write_size;
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+	size_t SerializeCustomTypeRead_Deck(SerializeCustomTypeReadFunctionData* data) {
+		if (data->version != SERIALIZE_CUSTOM_DECK_VERSION) {
+			return -1;
+		}
+
+		ECS_ASSERT(false);
+		return 0;
+	}
+
+#pragma endregion
+
 	// -----------------------------------------------------------------------------------------
 
 	// Must be kept in sync with ECS_REFLECTION_CUSTOM_TYPES
@@ -1601,7 +1626,8 @@ namespace ECSEngine {
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(MaterialAsset, ECS_SERIALIZE_CUSTOM_TYPE_MATERIAL_ASSET_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(DataPointer, SERIALIZE_CUSTOM_DATA_POINTER_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(Allocator, SERIALIZE_CUSTOM_ALLOCATOR_VERSION),
-		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(HashTable, SERIALIZE_CUSTOM_HASH_TABLE_VERSION)
+		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(HashTable, SERIALIZE_CUSTOM_HASH_TABLE_VERSION),
+		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(Deck, SERIALIZE_CUSTOM_DECK_VERSION)
 	};
 
 	static_assert(ECS_COUNTOF(ECS_SERIALIZE_CUSTOM_TYPES) == ECS_REFLECTION_CUSTOM_TYPE_COUNT, "Serialize custom types must be maintained in sync with reflection custom types!");

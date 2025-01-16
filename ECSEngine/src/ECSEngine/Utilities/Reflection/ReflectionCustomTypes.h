@@ -20,6 +20,7 @@ namespace ECSEngine {
 			// This type will deal with all types of allocators
 			ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR,
 			ECS_REFLECTION_CUSTOM_TYPE_HASH_TABLE,
+			ECS_REFLECTION_CUSTOM_TYPE_DECK,
 			ECS_REFLECTION_CUSTOM_TYPE_COUNT
 		};
 
@@ -121,6 +122,28 @@ namespace ECSEngine {
 		};
 
 		struct HashTableCustomTypeInterface : ReflectionCustomTypeInterface {
+			bool Match(ReflectionCustomTypeMatchData* data) override;
+
+			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
+
+			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
+
+			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
+
+			void Copy(ReflectionCustomTypeCopyData* data) override;
+
+			bool Compare(ReflectionCustomTypeCompareData* data) override;
+
+			void Deallocate(ReflectionCustomTypeDeallocateData* data) override;
+
+			size_t GetElementCount(ReflectionCustomTypeGetElementCountData* data) override;
+
+			void* GetElement(ReflectionCustomTypeGetElementData* data) override;
+
+			ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) override;
+		};
+
+		struct DeckCustomTypeInterface : ReflectionCustomTypeInterface {
 			bool Match(ReflectionCustomTypeMatchData* data) override;
 
 			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;

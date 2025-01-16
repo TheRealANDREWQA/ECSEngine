@@ -76,6 +76,8 @@ namespace ECSEngine {
 	}
 
 	void ReferenceCountedCustomTypeInterface::Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) {
+		// TODO: This is wrong, it doesn't respect element counts greater than 1
+		ECS_ASSERT(data->element_count == 1);
 		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 		DeallocateReflectionInstanceBuffers(data->reflection_manager, template_type, data->source, data->allocator, data->element_count, data->reset_buffers);
 	}

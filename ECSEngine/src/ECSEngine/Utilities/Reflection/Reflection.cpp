@@ -857,6 +857,8 @@ namespace ECSEngine {
 			// Add the type directly
 			data->types.ReserveRange();
 			ReflectionType& type = data->types.Last();
+			ZeroOut(&type);
+
 			type.name = name;
 			type.byte_size = 0;
 			data->total_memory += sizeof(ReflectionType);
@@ -5811,7 +5813,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		)
 		{
 			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(reflection_manager, definition);
-			return CompareReflectionTypeInstances(reflection_manager, definition, definition_info, first, second, options );
+			return CompareReflectionTypeInstances(reflection_manager, definition, definition_info, first, second, count, options);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -5847,6 +5849,59 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					return CompareReflectionFieldInfoInstances(&field.info, first, second, false);
 				}
 			}
+		}
+
+		bool CompareReflectionTypeInstances(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
+			const void* first,
+			const void* second,
+			size_t count,
+			const ReflectionCustomTypeCompareOptions* options
+		) {
+			if (definition_info.is_blittable) {
+				// Can use memcmp directly
+				return memcmp(first, second, definition_info.byte_size * count) == 0;
+			}
+			else {
+				if (definition_info.type != nullptr) {
+					for (size_t index = 0; index < count; index++) {
+						const void* first_element = OffsetPointer(first, definition_info.byte_size * index);
+						const void* second_element = OffsetPointer(second, definition_info.byte_size * index);
+						if (!CompareReflectionTypeInstances(reflection_manager, definition_info.type, first_element, second_element, options)) {
+							return false;
+						}
+					}
+				}
+				else if (definition_info.custom_type != nullptr) {
+					ReflectionCustomTypeCompareData compare_data;
+					compare_data.definition = definition;
+					compare_data.reflection_manager = reflection_manager;
+					compare_data.options = *options;
+
+					for (size_t index = 0; index < count; index++) {
+						compare_data.first = OffsetPointer(first, definition_info.byte_size * index);
+						compare_data.second = OffsetPointer(second, definition_info.byte_size * index);
+						if (!definition_info.custom_type->Compare(&compare_data)) {
+							return false;
+						}
+					}
+				}
+				else {
+					// Use the basic field
+					ReflectionField field = definition_info.GetBasicField();
+					for (size_t index = 0; index < count; index++) {
+						const void* first_element = OffsetPointer(first, definition_info.byte_size * index);
+						const void* second_element = OffsetPointer(second, definition_info.byte_size * index);
+						if (!CompareReflectionFieldInfoInstances(&field.info, first_element, second_element, false)) {
+							return false;
+						}
+					}
+				}
+			}
+
+			return true;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -6083,33 +6138,57 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const CopyReflectionDataOptions* options,
 			Stream<char> tags
 		) {
+			CopyReflectionTypeInstance(reflection_manager, definition, definition_info, source, destination, 1, options, tags);
+		}
+
+		void CopyReflectionTypeInstance(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
+			const void* source,
+			void* destination,
+			size_t element_count,
+			const CopyReflectionDataOptions* options,
+			Stream<char> tags
+		) {
 			if (definition_info.is_blittable) {
 				// Can memcpy directly
-				memcpy(destination, source, definition_info.byte_size);
+				memcpy(destination, source, definition_info.byte_size * element_count);
 			}
 			else {
 				// Check fundamental type
 				if (definition_info.is_basic_field) {
 					// Create a mock reflection field
 					ReflectionField field = definition_info.GetBasicField();
-					CopyReflectionFieldBasicWithTag(&field.info, source, destination, options->allocator, tags, options->passdown_info);
+					for (size_t index = 0; index < element_count; index++) {
+						const void* source_element = OffsetPointer(source, definition_info.byte_size * index);
+						void* destination_element = OffsetPointer(destination, definition_info.byte_size * index);
+						CopyReflectionFieldBasicWithTag(&field.info, source_element, destination_element, options->allocator, tags, options->passdown_info);
+					}
 				}
 				else if (definition_info.type != nullptr) {
 					// Forward the call
-					CopyReflectionTypeInstance(reflection_manager, definition_info.type, source, destination, options);
+					for (size_t index = 0; index < element_count; index++) {
+						const void* source_element = OffsetPointer(source, definition_info.byte_size * index);
+						void* destination_element = OffsetPointer(destination, definition_info.byte_size * index);
+						CopyReflectionTypeInstance(reflection_manager, definition_info.type, source_element, destination_element, options);
+					}
 				}
 				else {
 					// It has to be the custom type
 					ReflectionCustomTypeCopyData copy_data;
 					copy_data.allocator = options->allocator;
 					copy_data.definition = definition;
-					copy_data.destination = destination;
-					copy_data.source = source;
 					copy_data.reflection_manager = reflection_manager;
 					copy_data.options = options->custom_options;
 					copy_data.passdown_info = options->passdown_info;
 					copy_data.tags = tags;
-					definition_info.custom_type->Copy(&copy_data);
+
+					for (size_t index = 0; index < element_count; index++) {
+						copy_data.source = OffsetPointer(source, definition_info.byte_size * index);
+						copy_data.destination = OffsetPointer(destination, definition_info.byte_size * index);
+						definition_info.custom_type->Copy(&copy_data);
+					}
 				}
 			}
 		}
@@ -6899,6 +6978,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Iterate over the fields in order to reduce the branching required
 			for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
 				if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					// TODO: Refactor this to use the other overload?
+
 					// Pre-cache the reflection type of the nested type or the custom reflection index
 					// If neither of these is set, then we can simply skip the step
 					
@@ -6996,15 +7077,19 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const ReflectionDefinitionInfo& definition_info,
 			void* source,
 			AllocatorPolymorphic allocator,
+			size_t element_count,
 			bool reset_buffers
 		) {
 			if (!definition_info.is_blittable) {
 				if (definition_info.is_basic_field) {
 					ReflectionField field = definition_info.GetBasicField();
-					DeallocateReflectionFieldBasic(&field.info, source, allocator, reset_buffers);
+					for (size_t index = 0; index < element_count; index++) {
+						void* element = OffsetPointer(source, definition_info.byte_size);
+						DeallocateReflectionFieldBasic(&field.info, element, allocator, reset_buffers);
+					}
 				}
 				else if (definition_info.type != nullptr) {
-					DeallocateReflectionTypeInstanceBuffers(reflection_manager, definition_info.type, source, allocator, 1, 0, reset_buffers);
+					DeallocateReflectionTypeInstanceBuffers(reflection_manager, definition_info.type, source, allocator, element_count, 0, reset_buffers);
 				}
 				else {
 					ReflectionCustomTypeDeallocateData deallocate_data;
@@ -7013,7 +7098,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					deallocate_data.reflection_manager = reflection_manager;
 					deallocate_data.reset_buffers = reset_buffers;
 					deallocate_data.source = source;
-					deallocate_data.element_count = 1;
+					deallocate_data.element_count = element_count;
 					definition_info.custom_type->Deallocate(&deallocate_data);
 				}
 			}

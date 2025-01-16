@@ -5,6 +5,7 @@
 #include "../../Resources/AssetMetadataSerialize.h"
 #include "../ReferenceCountSerialize.h"
 #include "../../Containers/SparseSet.h"
+#include "../../Containers/Deck.h"
 
 #include "../../Allocators/ResizableLinearAllocator.h"
 #include "../../Allocators/StackAllocator.h"
@@ -25,7 +26,8 @@ namespace ECSEngine {
 			new MaterialAssetCustomTypeInterface(),
 			new DataPointerCustomTypeInterface(),
 			new AllocatorCustomTypeInterface(),
-			new HashTableCustomTypeInterface()
+			new HashTableCustomTypeInterface(),
+			new DeckCustomTypeInterface()
 		};
 
 		static_assert(ECS_COUNTOF(ECS_REFLECTION_CUSTOM_TYPES) == ECS_REFLECTION_CUSTOM_TYPE_COUNT, "ECS_REFLECTION_CUSTOM_TYPES is not in sync");
@@ -116,43 +118,14 @@ namespace ECSEngine {
 			Stream<char> opened_bracket = FindFirstCharacter(definition, '<');
 			Stream<char> closed_bracket = FindCharacterReverse(definition, '>');
 			ECS_ASSERT(opened_bracket.buffer != nullptr && closed_bracket.buffer != nullptr);
-
-			const char* parse_character = opened_bracket.buffer + 1;
 			
-			// Retrieves a single template parameter, starting from the location of parse character
-			auto parse_template_type = [closed_bracket, &parse_character]() {
-				// Go through the characters in between the brackets and keep track of how many templates we encountered.
-				// Stop when we get to a comma and the template counter is 0, or we got to the closed bracket
-				if (*parse_character == ',') {
-					// Skip this comma and the whitespace that follows it
-					parse_character++;
-					parse_character = SkipWhitespace(parse_character);
-				}
+			Stream<char> template_range = opened_bracket.AdvanceReturn().StartDifference(closed_bracket);
+			unsigned int initial_argument_size = arguments.size;
+			SplitStringWithParameterList(template_range, ',', '<', '>', &arguments);
 
-				size_t template_count = 0;
-				Stream<char> type = { parse_character, PointerElementDifference(parse_character, closed_bracket.buffer) };
-
-				while (parse_character < closed_bracket.buffer) {
-					if (*parse_character == '<') {
-						template_count++;
-					}
-					else if (*parse_character == '>') {
-						template_count--;
-					}
-					else if (*parse_character == ',' && template_count == 0) {
-						type.size = parse_character - type.buffer;
-						break;
-					}
-
-					parse_character++;
-				}
-
-				type = TrimWhitespace(type);
-				return type;
-			};
-
-			while (parse_character < closed_bracket.buffer) {
-				arguments.AddAssert(parse_template_type());
+			// Trim whitespaces from the arguments
+			for (unsigned int index = initial_argument_size; index < arguments.size; index++) {
+				arguments[index] = TrimWhitespace(arguments[index]);
 			}
 		}
 
@@ -258,7 +231,6 @@ namespace ECSEngine {
 			void* allocation = nullptr;
 			if (allocation_size > 0) {
 				allocation = Allocate(data->allocator, allocation_size);
-				memcpy(allocation, source, allocation_size);
 			}
 
 			if (data->options.deallocate_existing_data) {
@@ -278,20 +250,8 @@ namespace ECSEngine {
 				SetIntValueUnsigned(OffsetPointer(data->destination, sizeof(void*) + GetIntTypeByteSize(size_type)), size_type, source_size);
 			}
 
-			if (!element_info.is_blittable) {
-				CopyReflectionDataOptions copy_options;
-				copy_options.allocator = data->allocator;
-				copy_options.always_allocate_for_buffers = true;
-				copy_options.custom_options = data->options;
-				copy_options.custom_options.deallocate_existing_data = false;
-				copy_options.passdown_info = data->passdown_info;
-
-				for (size_t index = 0; index < source_size; index++) {
-					const void* current_source = OffsetPointer(source, index * element_info.byte_size);
-					void* current_destination = OffsetPointer(allocation, element_info.byte_size * index);
-					CopyReflectionTypeInstance(data->reflection_manager, template_type, element_info, current_source, current_destination, &copy_options, data->tags);
-				}
-			}
+			CopyReflectionDataOptions copy_options = data;
+			CopyReflectionTypeInstance(data->reflection_manager, template_type, element_info, source, allocation, source_size, &copy_options, data->tags);
 		}
 
 		bool StreamCustomTypeInterface::Compare(ReflectionCustomTypeCompareData* data) {
@@ -433,7 +393,7 @@ namespace ECSEngine {
 		}
 
 		bool SparseSetCustomTypeInterface::Match(ReflectionCustomTypeMatchData* data) {
-			return ReflectionCustomTypeMatchTemplate(data, "SparseSet") || ReflectionCustomTypeMatchTemplate(data, "ResizableSparseSet");
+			return ReflectionCustomTypeMatchTemplate(data, "SparseSet<") || ReflectionCustomTypeMatchTemplate(data, "ResizableSparseSet<");
 		}
 
 		ulong2 SparseSetCustomTypeInterface::GetByteSize(ReflectionCustomTypeByteSizeData* data) {
@@ -498,11 +458,7 @@ namespace ECSEngine {
 					CopyReflectionTypeInstance(data->custom_data->reflection_manager, data->template_type, *data->definition_info, source, destination, data->copy_type_options);
 				};
 
-				CopyReflectionDataOptions copy_type_options;
-				copy_type_options.allocator = data->allocator;
-				copy_type_options.custom_options = data->options;
-				copy_type_options.always_allocate_for_buffers = true;
-				copy_type_options.passdown_info = data->passdown_info;
+				CopyReflectionDataOptions copy_type_options = data;
 				
 				CopyData copy_data;
 				copy_data.custom_data = data;
@@ -642,7 +598,7 @@ namespace ECSEngine {
 			unsigned short source_size = source->GetData();
 			void* allocation = nullptr;
 			if (source_size > 0) {
-				allocation = Allocate(data->allocator, source_size);
+				allocation = AllocateEx(data->allocator, source_size);
 				memcpy(allocation, source->GetPointer(), source_size);
 			}
 
@@ -1069,7 +1025,7 @@ namespace ECSEngine {
 				return false;
 			}
 
-			if (data->definition.StartsWith("HashTable<") || data->definition.StartsWith("HashTableDefault<") || data->definition.StartsWith("HashTableEmpty")) {
+			if (data->definition.StartsWith("HashTable<") || data->definition.StartsWith("HashTableDefault<") || data->definition.StartsWith("HashTableEmpty<")) {
 				return true;
 			}
 
@@ -1080,18 +1036,6 @@ namespace ECSEngine {
 			// All hash tables have the same byte size and alignment. Technically, the size can depend on the hasher
 			// Being used, but the ones we provide are at max 8 bytes long, which is the limit of the alignment
 			HashTableTemplateArguments template_arguments = HashTableExtractTemplateArguments(data->definition);
-			
-			static Stream<char> known_hash_functions[] = {
-				STRING(HashFunctionPowerOfTwo),
-				STRING(HashFunctionPrimeNumber), 
-				STRING(HashFunctionFibonacci),
-				STRING(HashFunctionFolding),
-				STRING(HashFunctionXORFibonacci)
-			};
-
-			// Assert that the hash function is known, otherwise we don't know how much space it takes
-			ECS_ASSERT(FindString(template_arguments.hash_function_type, { known_hash_functions, ECS_COUNTOF(known_hash_functions) }) != -1, 
-				"The hash table reflection can't cope with custom hash functions.");
 			return { sizeof(HashTableDefault<char>), alignof(HashTableDefault<char>) };
 		}
 
@@ -1139,11 +1083,7 @@ namespace ECSEngine {
 			memcpy(destination->m_metadata, source->m_metadata, sizeof(source->m_metadata[0]) * source_extended_capacity);
 
 			// If we need to call the copy function, these are the options
-			CopyReflectionDataOptions copy_options;
-			copy_options.allocator = data->allocator;
-			copy_options.always_allocate_for_buffers = true;
-			copy_options.custom_options = data->options;
-			copy_options.passdown_info = data->passdown_info;
+			CopyReflectionDataOptions copy_options = data;
 
 			// Need to branch out again by SoA
 			if (template_parameters.is_soa) {
@@ -1160,6 +1100,7 @@ namespace ECSEngine {
 						CopyReflectionTypeInstance(
 							data->reflection_manager,
 							template_parameters.value_type,
+							value_definition_info,
 							OffsetPointer(source->m_buffer, (size_t)index * value_definition_info.byte_size),
 							OffsetPointer(destination->m_buffer, (size_t)index * value_definition_info.byte_size),
 							&copy_options,
@@ -1180,6 +1121,7 @@ namespace ECSEngine {
 						CopyReflectionTypeInstance(
 							data->reflection_manager,
 							template_parameters.identifier_type,
+							identifier_definition_info,
 							OffsetPointer(source->m_identifiers, (size_t)index * identifier_definition_info.byte_size),
 							OffsetPointer(destination->m_identifiers, (size_t)index * identifier_definition_info.byte_size),
 							&copy_options,
@@ -1215,28 +1157,19 @@ namespace ECSEngine {
 					source->ForEachIndexConst([&](unsigned int index) {
 						const void* source_element = OffsetPointer(source->m_buffer, (size_t)index * pair_size.x);
 						void* destination_element = OffsetPointer(destination->m_buffer, (size_t)index * pair_size.x);
-						if (value_definition_info.is_blittable) {
-							memcpy(destination_element, source_element, value_definition_info.byte_size);
-						}
-						else {
-							CopyReflectionTypeInstance(data->reflection_manager, template_parameters.value_type, source_element, destination_element, &copy_options, value_options_storage);
-						}
+						CopyReflectionTypeInstance(data->reflection_manager, template_parameters.value_type, value_definition_info, source_element, destination_element, &copy_options, value_options_storage);
 
 						const void* source_identifier = OffsetPointer(source_element, value_definition_info.byte_size + pair_size.y);
 						void* destination_identifier = OffsetPointer(destination_element, value_definition_info.byte_size + pair_size.y);
-						if (identifier_definition_info.is_blittable) {
-							memcpy(destination_identifier, source_identifier, identifier_definition_info.byte_size);
-						}
-						else {
-							CopyReflectionTypeInstance(
-								data->reflection_manager,
-								template_parameters.identifier_type,
-								source_identifier,
-								destination_identifier,
-								&copy_options,
-								identifier_options_storage
-							);
-						}
+						CopyReflectionTypeInstance(
+							data->reflection_manager,
+							template_parameters.identifier_type,
+							identifier_definition_info,
+							source_identifier,
+							destination_identifier,
+							&copy_options,
+							identifier_options_storage
+						);
 					});
 				}
 			}
@@ -1389,7 +1322,13 @@ namespace ECSEngine {
 			HashTableTemplateArguments template_arguments = HashTableExtractTemplateArguments(data->definition);
 			ReflectionDefinitionInfo value_info = HashTableGetValueDefinitionInfo(data->reflection_manager, template_arguments);
 			ReflectionDefinitionInfo identifier_info = HashTableGetIdentifierDefinitionInfo(data->reflection_manager, template_arguments);
-			HashTableDeallocateWithElements(data->reflection_manager, data->source, data->allocator, template_arguments, value_info, identifier_info, data->reset_buffers);
+
+			// All hash tables should have the same byte size - if the hash function has at max 8 bytes
+			size_t hash_table_byte_size = sizeof(HashTableDefault<char>);
+			for (size_t index = 0; index < data->element_count; index++) {
+				void* current_source = OffsetPointer(data->source, index * hash_table_byte_size);
+				HashTableDeallocateWithElements(data->reflection_manager, current_source, data->allocator, template_arguments, value_info, identifier_info, data->reset_buffers);
+			}
 		}
 
 		size_t HashTableCustomTypeInterface::GetElementCount(ReflectionCustomTypeGetElementCountData* data) {
@@ -1511,7 +1450,7 @@ namespace ECSEngine {
 			}
 		}
 
-		size_t HashTableCustomTypeInterface::FindElement(ReflectionCustomTypeFindElementData* data) {
+		ReflectionCustomTypeGetElementIndexOrToken HashTableCustomTypeInterface::FindElement(ReflectionCustomTypeFindElementData* data) {
 			HashTableInitializeGetElementCacheInfo(data);
 
 			HashTableGetElementCacheInfo* cache_info = (HashTableGetElementCacheInfo*)data->element_cache_data;
@@ -1563,6 +1502,171 @@ namespace ECSEngine {
 
 				return previous_entry_count;
 			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Deck
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool DeckCustomTypeInterface::Match(ReflectionCustomTypeMatchData* data) {
+			return data->definition.StartsWith("Deck<") || data->definition.StartsWith("DeckPowerOfTwo<") || data->definition.StartsWith("DeckModulo<");
+		}
+
+		ulong2 DeckCustomTypeInterface::GetByteSize(ReflectionCustomTypeByteSizeData* data) {
+			// All decks have the same byte size and alignment, regardless of the argument
+			return { sizeof(DeckPowerOfTwo<char>), alignof(DeckPowerOfTwo<char>) };
+		}
+
+		void DeckCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {
+			// This will work for the generalization, but as well as the specialization
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
+			ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
+			ReflectionCustomTypeAddDependentType(data, template_arguments[0]);
+		}
+
+		bool DeckCustomTypeInterface::IsBlittable(ReflectionCustomTypeIsBlittableData* data) {
+			return false;
+		}
+
+		void DeckCustomTypeInterface::Copy(ReflectionCustomTypeCopyData* data) {
+			// Type cast to a specific type to have access to the fields of the structures
+			const DeckPowerOfTwo<char>* source = (const DeckPowerOfTwo<char>*)data->source;
+			DeckPowerOfTwo<char>* destination = (DeckPowerOfTwo<char>*)data->destination;
+
+			// We don't care about the accesor template argument, just about the first one
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
+			ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
+
+			// If the overwrite resizable allocator is specified, do it before the deallocate
+			if (data->options.overwrite_resizable_allocators) {
+				destination->buffers.allocator = data->allocator;
+			}
+
+			if (data->options.deallocate_existing_data) {
+				destination->Deallocate();
+			}
+
+			ReflectionDefinitionInfo element_info = SearchReflectionDefinitionInfo(data->reflection_manager, template_arguments[0]);
+
+			// Copy the entire fields, and then overwrite the buffers
+			memcpy(destination, source, sizeof(*source));
+			destination->buffers.Initialize(data->allocator, source->buffers.size);
+			destination->buffers.size = source->buffers.size;
+			
+			for (size_t index = 0; index < source->buffers.size; index++) {
+				destination->buffers[index].buffer = (char*)AllocateEx(data->allocator, element_info.byte_size * source->buffers[index].capacity, element_info.alignment);
+
+				CopyReflectionDataOptions copy_options = data;
+				CopyReflectionTypeInstance(data->reflection_manager, template_arguments[0], element_info, source->buffers[index].buffer, destination->buffers[index].buffer, source->buffers[index].size, &copy_options, data->tags);
+
+				destination->buffers[index].size = source->buffers[index].size;
+				destination->buffers[index].capacity = source->buffers[index].capacity;
+			}
+		}
+
+		bool DeckCustomTypeInterface::Compare(ReflectionCustomTypeCompareData* data) {
+			// Type cast to known types to access the fields easier
+			const DeckPowerOfTwo<char>* first = (const DeckPowerOfTwo<char>*)data->first;
+			const DeckPowerOfTwo<char>* second = (const DeckPowerOfTwo<char>*)data->second;
+
+			// Early exit if the obvious parameters are different
+			if (first->chunk_size != second->chunk_size || first->miscellaneous != second->miscellaneous || first->size != second->size
+				|| first->buffers.size != second->buffers.size) {
+				return false;
+			}
+
+			// Do a prepass and if the individual counts of the substreams is different, fail
+			for (size_t index = 0; index < first->buffers.size; index++) {
+				if (first->buffers[index].size != second->buffers[index].size) {
+					return false;
+				}
+			}
+
+			// We don't care about the accesor template argument, just about the first one
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
+			ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
+
+			ReflectionDefinitionInfo element_info = SearchReflectionDefinitionInfo(data->reflection_manager, template_arguments[0]);
+			for (size_t index = 0; index < first->buffers[index].size; index++) {
+				if (!CompareReflectionTypeInstances(data->reflection_manager, template_arguments[0], element_info, first->buffers[index].buffer, second->buffers[index].buffer, first->buffers[index].size)) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		void DeckCustomTypeInterface::Deallocate(ReflectionCustomTypeDeallocateData* data) {
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
+			ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
+			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(data->reflection_manager, template_arguments[0]);
+
+			DeckPowerOfTwo<char>* decks = (DeckPowerOfTwo<char>*)data->source;
+			for (size_t index = 0; index < data->element_count; index++) {
+				DeckPowerOfTwo<char> initial_deck = decks[index];
+
+				// Iterate over the chunks only if the elements themselves are not blittable
+				if (!definition_info.is_blittable) {
+					for (size_t subindex = 0; subindex < decks[index].buffers.size; subindex++) {
+						DeallocateReflectionInstanceBuffers(data->reflection_manager, template_arguments[0], definition_info, decks[index].buffers[subindex].buffer, data->allocator, decks[index].buffers[subindex].size, data->reset_buffers);
+					}
+				}
+
+				// TODO: Should we override the allocator or leave it like it is?
+				decks[index].buffers.allocator = data->allocator;
+				decks[index].Deallocate();
+
+				// Restore the previous allocator afterwards
+				decks[index].buffers.allocator = initial_deck.buffers.allocator;
+
+				if (!data->reset_buffers) {
+					// Copy back the initial values
+					memcpy(&decks[index], &initial_deck, sizeof(initial_deck));
+				}
+			}
+		}
+
+		size_t DeckCustomTypeInterface::GetElementCount(ReflectionCustomTypeGetElementCountData* data) {
+			const DeckPowerOfTwo<char>* deck = (const DeckPowerOfTwo<char>*)data->source;
+			return deck->size;
+		}
+
+		static void DeckUpdateCache(ReflectionCustomTypeGetElementDataBase* data) {
+			if (!data->has_cache) {
+				ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
+				ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
+
+				data->has_cache = true;
+				data->element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_arguments[0]);
+			}
+		}
+
+		void* DeckCustomTypeInterface::GetElement(ReflectionCustomTypeGetElementData* data) {
+			const DeckPowerOfTwo<char>* deck = (const DeckPowerOfTwo<char>*)data->source;
+			DeckUpdateCache(data);
+
+			// We can index the element directly, using modulo. Indices or tokens are the same
+			size_t chunk_index = data->index_or_token / deck->chunk_size;
+			size_t in_chunk_index = data->index_or_token % deck->chunk_size;
+			return OffsetPointer(deck->buffers[chunk_index].buffer, in_chunk_index * data->element_byte_size);
+		}
+
+		ReflectionCustomTypeGetElementIndexOrToken DeckCustomTypeInterface::FindElement(ReflectionCustomTypeFindElementData* data) {
+			const DeckPowerOfTwo<char>* deck = (const DeckPowerOfTwo<char>*)data->source;
+			DeckUpdateCache(data);
+
+			for (size_t index = 0; index < deck->buffers.size; index++) {
+				size_t current_deck_index = SearchBytesEx(deck->buffers[index].buffer, deck->buffers[index].size, data->element, data->element_byte_size);
+				if (current_deck_index != -1) {
+					return current_deck_index + deck->chunk_size * index;
+				}
+			}
+
+			return -1;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

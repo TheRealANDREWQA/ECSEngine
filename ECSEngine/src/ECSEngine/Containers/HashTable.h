@@ -38,6 +38,7 @@ namespace ECSEngine {
 	>
 	struct HashTable {
 		static_assert(!std::is_same_v<T, HashTableEmptyValue> || SoA, "Look up table without any value must be SoA!");
+		static_assert(sizeof(TableHashFunction) < alignof(void*), "Hash table hash function can have at max the native max alignment as byte size!");
 
 		typedef T Value;
 		typedef Identifier Identifier;
