@@ -684,11 +684,32 @@ namespace ECSEngine {
 			const ReflectionCustomTypeCompareOptions* options = nullptr
 		);
 
+		// Compares two instances of a certain type to see if they contain the same data.
+		// Returns true in case they contain the same data
+		ECSENGINE_API bool CompareReflectionTypeInstances(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
+			const void* first,
+			const void* second,
+			size_t count,
+			const ReflectionCustomTypeCompareOptions* options = nullptr
+		);
+
 		struct CopyReflectionDataOptions {
+			ECS_INLINE CopyReflectionDataOptions() {}
+			// Copies the relevant information from the given custom data
+			ECS_INLINE CopyReflectionDataOptions(const ReflectionCustomTypeCopyData* custom_data) {
+				allocator = custom_data->allocator;
+				always_allocate_for_buffers = true;
+				custom_options = custom_data->options;
+				passdown_info = custom_data->passdown_info;
+			}
+
 			AllocatorPolymorphic allocator = { nullptr };
 			bool always_allocate_for_buffers = false;
 			bool set_padding_bytes_to_zero = false;
-			// For fields copies, if this is set to true, it will offset
+			// For field copies, if this is set to true, it will offset
 			// Using the field pointer offset
 			bool offset_pointer_data_from_field = false;
 			ReflectionCustomTypeCopyOptions custom_options = {};
@@ -757,6 +778,24 @@ namespace ECSEngine {
 			const ReflectionDefinitionInfo& definition_info,
 			const void* source,
 			void* destination,
+			const CopyReflectionDataOptions* options,
+			Stream<char> tags = {}
+		);
+
+		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
+		// for buffers it will always allocate even when the type is the same
+		// The reflection manager can be made nullptr if you are sure there are no nested types or custom types. 
+		// By default, it will copy matching padding bytes between instances, but you can specify
+		// The last boolean in order to ignore that and set the padding bytes to zero for the new type
+		// You can optionally specify tags for this definition to be used
+		// Element_count describes how many consecutive elements to copy
+		ECSENGINE_API void CopyReflectionTypeInstance(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const ReflectionDefinitionInfo& definition_info,
+			const void* source,
+			void* destination,
+			size_t element_count,
 			const CopyReflectionDataOptions* options,
 			Stream<char> tags = {}
 		);
@@ -831,14 +870,17 @@ namespace ECSEngine {
 		// If the last boolean parameter is set to true, it will
 		// Reset the buffers (as it is by default). By default, it will deallocate
 		// A single element. But you can specify a contiguous array as well
-		// In order to increase the performance for buffers
+		// In order to increase the performance for buffers. If the element stride
+		// Is left as 0, it will use the type's byte size as stride, else it will
+		// Use the parameter value. Useful if you want to deallocate a subfield of
+		// A larger type
 		ECSENGINE_API void DeallocateReflectionTypeInstanceBuffers(
 			const ReflectionManager* reflection_manager,
 			const ReflectionType* type,
 			void* source,
 			AllocatorPolymorphic allocator,
 			size_t element_count = 1,
-			size_t element_byte_size = 0,
+			size_t element_stride = 0,
 			bool reset_buffers = true
 		);
 
@@ -852,6 +894,7 @@ namespace ECSEngine {
 			const ReflectionDefinitionInfo& definition_info,
 			void* source,
 			AllocatorPolymorphic allocator,
+			size_t count = 1,
 			bool reset_buffers = true
 		);
 
