@@ -8,6 +8,7 @@
 #include "../ReferenceCountSerialize.h"
 #include "../../Resources/AssetMetadataSerialize.h"
 #include "../../Containers/SparseSet.h"
+#include "../../Containers/Deck.h"
 
 #include "../../Allocators/StackAllocator.h"
 #include "../../Allocators/MemoryArena.h"
@@ -1599,7 +1600,34 @@ namespace ECSEngine {
 
 	size_t SerializeCustomTypeWrite_Deck(SerializeCustomTypeWriteFunctionData* data) {
 		size_t write_size = 0;
-		ECS_ASSERT(false);
+		
+		const DeckPowerOfTwo<char>* deck = (const DeckPowerOfTwo<char>*)data->data;
+
+		// Write the element count first. If the count is 0, we can stop
+		write_size += data->Write(&deck->size);
+		if (deck->size == 0) {
+			return write_size;
+		}
+
+		// Write the other mandatory data
+		write_size += data->Write(&deck->chunk_size);
+		write_size += data->Write(&deck->miscellaneous);
+		
+		// The rest of the draw we can forward to the custom stream serializer
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
+		ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
+
+		ECS_FORMAT_TEMP_STRING(buffers_definition, "ResizableStream<CapacityStream<T>>", template_arguments[0]);
+		
+		Stream<char> original_definition = data->definition;
+		data->definition = buffers_definition;
+		data->data = &deck->buffers;
+
+		write_size += SerializeCustomTypeWrite_Stream(data);
+
+		data->definition = original_definition;
+		data->data = deck;
+
 		return write_size;
 	}
 
@@ -1610,8 +1638,42 @@ namespace ECSEngine {
 			return -1;
 		}
 
-		ECS_ASSERT(false);
-		return 0;
+		DeckPowerOfTwo<char>* deck = (DeckPowerOfTwo<char>*)data->data;
+
+		decltype(deck->size) deck_size;
+		data->ReadAlways(&deck_size);
+		if (deck_size == 0) {
+			return 0;
+		}
+
+		decltype(deck->chunk_size) chunk_size;
+		decltype(deck->miscellaneous) miscellaneous;
+		data->ReadAlways(&chunk_size);
+		data->ReadAlways(&miscellaneous);
+
+		if (data->read_data) {
+			deck->size = deck_size;
+			deck->chunk_size = chunk_size;
+			deck->miscellaneous = miscellaneous;
+			deck->buffers.allocator = GetDeserializeFieldAllocator(data, false);
+		}
+
+		// The rest of the draw we can forward to the custom stream deserializer
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
+		ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
+
+		ECS_FORMAT_TEMP_STRING(buffers_definition, "ResizableStream<CapacityStream<T>>", template_arguments[0]);
+
+		Stream<char> original_definition = data->definition;
+		data->definition = buffers_definition;
+		data->data = data->read_data ? &deck->buffers : data->data;
+
+		size_t read_size = SerializeCustomTypeRead_Stream(data);
+
+		data->definition = original_definition;
+		data->data = data->read_data ? deck : data->data;;
+		
+		return read_size;
 	}
 
 #pragma endregion

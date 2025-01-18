@@ -959,7 +959,7 @@ namespace ECSEngine {
 					ECS_TOKENIZE_MATCHER_RESULT match_result = StructRuleMatcher.MatchRulesWithFind(body_tokens, match_subrange, &struct_matcher_data);
 					if (match_result != ECS_TOKENIZE_MATCHER_SUCCESS) {
 						if (match_result == ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL) {
-							ECS_FORMAT_TEMP_STRING(error_message, "Failed to match the type {#} tokens", type.name);
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's {#} tokens", type.name);
 							WriteErrorMessage(data, error_message);
 						}
 						return;
@@ -973,7 +973,7 @@ namespace ECSEngine {
 				ECS_TOKENIZE_MATCHER_RESULT match_result = StructRuleMatcher.MatchRulesWithFind(body_tokens, body_tokens.AsSubrange(), &struct_matcher_data);
 				if (match_result != ECS_TOKENIZE_MATCHER_SUCCESS) {
 					if (match_result == ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Failed to match the type {#} tokens", type.name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's {#} tokens", type.name);
 						WriteErrorMessage(data, error_message);
 					}
 					return;

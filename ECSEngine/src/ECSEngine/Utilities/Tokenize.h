@@ -202,6 +202,8 @@ namespace ECSEngine {
 			return sets.size == 0;
 		}
 
+		// This field exists for debugging purposes, it does need to exist for functional purposes
+		Stream<char> name;
 		Stream<EntrySet> sets;
 		// This is a cached value that helps in quickly retrieving the minimum amount of tokens for this rule
 		unsigned int minimum_token_count;
