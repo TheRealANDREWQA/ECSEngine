@@ -2427,6 +2427,7 @@ namespace ECSEngine {
 
 	TokenizeRule TokenizeRule::Copy(AllocatorPolymorphic allocator) const {
 		TokenizeRule rule;
+		rule.name = name.Copy(allocator);
 		rule.sets = StreamDeepCopy(sets, allocator);
 		rule.minimum_token_count = minimum_token_count;
 		return rule;
@@ -2435,6 +2436,7 @@ namespace ECSEngine {
 	void TokenizeRule::Deallocate(AllocatorPolymorphic allocator) {
 		StreamDeallocateElements(sets, allocator);
 		sets.Deallocate(allocator);
+		name.Deallocate(allocator);
 	}
 
 	void TokenizeRule::ComputeCachedValues() {

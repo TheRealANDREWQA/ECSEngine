@@ -1,13 +1,15 @@
+// ECS_REFLECT
 #pragma once
 #include "../Core.h"
 #include "../Utilities/BasicTypes.h"
 #include "../Containers/HashTable.h"
 #include "../Containers/Deck.h"
+#include "../Utilities/Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {
 
 	template<typename ChunkData>
-	struct SpatialGridChunk {
+	struct ECS_REFLECT SpatialGridChunk {
 		ChunkData data;
 		unsigned char count;
 		unsigned int next_chunk;
@@ -22,7 +24,7 @@ namespace ECSEngine {
 	// The ChunkData struct must have a function void Set(ChunkDataEntry entry, unsigned int index) to add a new entry
 	// The ChunkData is memsetted to 0 when a new entry is created
 	template<typename ChunkData, typename ChunkDataEntry, size_t chunk_entries, typename CellIndicesHash = SpatialGridDefaultCellIndicesHash, bool use_smaller_cell_size = false>
-	struct SpatialGrid {
+	struct ECS_REFLECT SpatialGrid {
 		static_assert(chunk_entries < UCHAR_MAX, "SpatialGrid supports up to 255 per chunk entries");
 
 		typedef unsigned int Cell;
@@ -575,6 +577,7 @@ namespace ECSEngine {
 		// The cell hash value must be computed by the user
 		HashTable<Cell, uint3, HashFunctionPowerOfTwo, CellIndicesHash> cells;
 		DeckPowerOfTwo<Chunk> chunks;
+		[[ECS_MAIN_ALLOCATOR]]
 		AllocatorPolymorphic allocator;
 		// This is the array with all the inserted cells
 		ResizableStream<uint3> inserted_cells;
