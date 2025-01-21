@@ -376,7 +376,8 @@ namespace ECSEngine {
 	// If the rule is not valid, like the paired characters could not be determined, it will return an empty rule
 	// And it will optionally fill in an error message. The boolean allocator_is_temporary can be used to tell the
 	// Function that even temporary allocations can be made from it. It will result in a faster call since it will
-	// Avoid having to work on temporaries that are committed in the parameter allocator at the end.
+	// Avoid having to work on temporaries that are committed in the parameter allocator at the end
+	// The resulting rule doesn't have a name assigned to it
 	ECSENGINE_API TokenizeRule CreateTokenizeRule(Stream<char> string_rule, AllocatorPolymorphic allocator, bool allocator_is_temporary, CapacityStream<char>* error_message = nullptr);
 
 	// Returns true if the given rule matches the string, else false. If it matches the string, it can optionally report how many

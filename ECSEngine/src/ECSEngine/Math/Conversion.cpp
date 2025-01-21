@@ -1,6 +1,8 @@
 #include "ecspch.h"
 #include "Conversion.h"
 
+ECS_OPTIMIZE_END;
+
 namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------
@@ -179,22 +181,76 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------
 
 	QuaternionScalar ECS_VECTORCALL MatrixToQuaternion(Matrix matrix) {
-		// Since a matrix can contain scale, the vectors cannot be taken as they are
-		// So they must be deducted in order to be orthogonal
-		alignas(ECS_SIMD_BYTE_SIZE) float4 scalar_matrix[4];
-		matrix.StoreAligned(scalar_matrix);
+		return Matrix3x3ToQuaternion(MatrixTo3x3(matrix));
+	}
 
-		float3 up = scalar_matrix[1].xyz();
-		float3 forward = scalar_matrix[2].xyz();
-		float3 right = Cross(up, forward);
-		float3 orthogonal_up = Cross(forward, right);
-		return QuaternionLookRotation(forward, orthogonal_up);
+	QuaternionScalar Matrix3x3ToQuaternion(const Matrix3x3& matrix) {
+		// Solution based on the article https://d3cw3dd2w32x2b.cloudfront.net/wp-content/uploads/2015/01/matrix-to-quat.pdf
+		QuaternionScalar result;
+		float trace = 0.0f;
+
+		float m00 = matrix[0][0];
+		float m01 = matrix[0][1];
+		float m02 = matrix[0][2];
+		float m10 = matrix[1][0];
+		float m11 = matrix[1][1];
+		float m12 = matrix[1][2];
+		float m20 = matrix[2][0];
+		float m21 = matrix[2][1];
+		float m22 = matrix[2][2];
+
+		if (m22 < 0.0f) {
+			if (m00 > m11) {
+				trace = 1.0f + m00 - m11 - m22;
+				result = QuaternionScalar(trace, m01 + m10, m20 + m02, m12 - m21);
+			}
+			else {
+				trace = 1.0f - m00 + m11 - m22;
+				result = QuaternionScalar(m01 + m10, trace, m12 + m21, m20 - m02);
+			}
+		}
+		else {
+			if (m00 < -m11) {
+				trace = 1.0f - m00 - m11 + m22;
+				result = QuaternionScalar(m20 + m02, m12 + m21, trace, m01 - m10);
+			}
+			else {
+				trace = 1.0f + m00 + m11 + m22;
+				result = QuaternionScalar(m12 - m21, m20 - m02, m01 - m10, trace);
+			}
+		}
+		
+		// PERFORMANCE TODO: Can we use approx_rsqrt?
+		result *= 0.5f / sqrt(trace);
+		return result;
 	}
 
 	void ECS_VECTORCALL MatrixToQuaternion(Matrix matrix, Quaternion* quaternion, size_t index) {
 		// We can use the scalar version and then write into the SIMD quaternion at the end
 		// If this is really necessary, we can convert to an all SIMD conversion - if need be
 		QuaternionScalar scalar_quaternion = MatrixToQuaternion(matrix);
+		quaternion->Set(scalar_quaternion, index);
+	}
+
+
+	QuaternionScalar ECS_VECTORCALL MatrixWithScalingToQuaternion(Matrix matrix) {
+		return Matrix3x3WithScalingToQuaternion(MatrixTo3x3(matrix));
+	}
+
+	QuaternionScalar Matrix3x3WithScalingToQuaternion(const Matrix3x3& matrix) {
+		// Since a matrix can contain scale, the vectors cannot be taken as they are
+		// So they must be deducted in order to be orthogonal
+		float3 up = matrix[1];
+		float3 forward = matrix[2];
+		float3 right = Cross(up, forward);
+		float3 orthogonal_up = Cross(forward, right);
+		return QuaternionLookRotation(forward, orthogonal_up);
+	}
+
+	void ECS_VECTORCALL MatrixWithScalingToQuaternion(Matrix matrix, Quaternion* quaternion, size_t index) {
+		// We can use the scalar version and then write into the SIMD quaternion at the end
+		// If this is really necessary, we can convert to an all SIMD conversion - if need be
+		QuaternionScalar scalar_quaternion = MatrixWithScalingToQuaternion(matrix);
 		quaternion->Set(scalar_quaternion, index);
 	}
 

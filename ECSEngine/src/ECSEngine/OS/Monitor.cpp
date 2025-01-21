@@ -46,7 +46,7 @@ namespace ECSEngine {
 		static bool EnumerateMonitorFromCursor(const MonitorInfo* monitor_info, void* monitor_handle, void* user_data) {
 			EnumerateMonitorFromCursorData* data = (EnumerateMonitorFromCursorData*)user_data;
 			// Can use unsigned coordinates since they won't affect the rectangle test
-			uint2 cursor_pos = data->cursor_position;
+			int2 cursor_pos = data->cursor_position;
 			if (cursor_pos.x >= monitor_info->origin.x && cursor_pos.x <= monitor_info->origin.x + monitor_info->size.x) {
 				if (cursor_pos.y >= monitor_info->origin.y && cursor_pos.y <= monitor_info->origin.y + monitor_info->size.y) {
 					data->monitor_handle = monitor_handle;
