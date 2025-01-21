@@ -22,12 +22,28 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------
 
-	// The resulting quaternion is normalized
+	// The resulting quaternion is normalized. If the matrix has scaling, if might not produce an accurate result
 	ECSENGINE_API QuaternionScalar ECS_VECTORCALL MatrixToQuaternion(Matrix matrix);
 
+	// The resulting quaternion is normalized. If the matrix has scaling, if might not produce an accurate result
+	ECSENGINE_API QuaternionScalar Matrix3x3ToQuaternion(const Matrix3x3& matrix);
+
 	// Converts the matrix to a quaternion at the given index
-	// The resulting quaternion is normalized
+	// The resulting quaternion is normalized. If the matrix has scaling, if might not produce an accurate result
 	ECSENGINE_API void ECS_VECTORCALL MatrixToQuaternion(Matrix matrix, Quaternion* quaternion, size_t index);
+
+	// The resulting quaternion is normalized. This function handles better the case when the matrix has scaling
+	// Applied to it, as opposed to the normal function
+	ECSENGINE_API QuaternionScalar ECS_VECTORCALL MatrixWithScalingToQuaternion(Matrix matrix);
+
+	// The resulting quaternion is normalized. This function handles better the case when the matrix has scaling
+	// Applied to it, as opposed to the normal function
+	ECSENGINE_API QuaternionScalar Matrix3x3WithScalingToQuaternion(const Matrix3x3& matrix);
+
+	// Converts the matrix to a quaternion at the given index
+	// The resulting quaternion is normalized. This function handles better the case when the matrix has scaling
+	// Applied to it, as opposed to the normal function
+	ECSENGINE_API void ECS_VECTORCALL MatrixWithScalingToQuaternion(Matrix matrix, Quaternion* quaternion, size_t index);
 
 	// -------------------------------------------------------------------------------------------------
 

@@ -83,6 +83,16 @@ namespace ECSEngine {
 			values[2][2] = a22;
 		}
 
+		// Returns a Matrix3x3 from the floating point individual element representation of a 4x4 matrix
+		ECS_INLINE static Matrix3x3 From4x4(const float* values) {
+			return { values[0], values[1], values[2], values[4], values[5], values[6], values[8], values[9], values[10] };
+		}
+		
+		// Returns one of the rows
+		ECS_INLINE float3 operator[] (size_t index) const {
+			return { values[index][0], values[index][1], values[index][2] };
+		}
+
 		float values[3][3];
 	};
 

@@ -1,6 +1,8 @@
 #include "ecspch.h"
 #include "Quaternion.h"
 
+ECS_OPTIMIZE_END;
+
 namespace ECSEngine {
 
 	namespace VectorGlobals {
@@ -563,8 +565,8 @@ namespace ECSEngine {
 
 		// From world forward to object forward
 		Vector default_up = UpVector<Vector>();
-		Vector default_right = RightVector<Vector>();
-		Quaternion world_to_object = QuaternionFromVectorsNormalized(default_right, direction_normalized, vector_count);
+		Vector default_forward = ForwardVector<Vector>();
+		Quaternion world_to_object = QuaternionFromVectorsNormalized(default_forward, direction_normalized, vector_count);
 
 		// This is the new up that the object wants to have
 		Vector desired_up = QuaternionVectorMultiply(world_to_object, default_up);

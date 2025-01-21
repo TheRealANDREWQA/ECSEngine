@@ -1554,6 +1554,7 @@ namespace ECSEngine {
 
 			TokenizeRule enum_rule = CreateTokenizeRule(enum_rule_string, temporary_allocator, true);
 			ECS_ASSERT(!enum_rule.IsEmpty());
+			enum_rule.name = "Enum";
 
 			TokenizeRuleAction action;
 			action.callback = EnumMatcherCallback;
@@ -1579,7 +1580,8 @@ namespace ECSEngine {
 
 			TokenizeRule field_rule = CreateTokenizeRule(field_rule_string, temporary_allocator, true);
 			ECS_ASSERT(!field_rule.IsEmpty());
-		
+			field_rule.name = "Struct field";
+
 			TokenizeRuleAction action;
 			action.callback = StructMatcherFieldCallback;
 			action.callback_data = {};
@@ -1591,6 +1593,7 @@ namespace ECSEngine {
 			const char* typedef_rule_string = "typedef. $G. $G. ;. | typedef. $G. \\< $T+ /> $G. ;.";
 			TokenizeRule typedef_rule = CreateTokenizeRule(typedef_rule_string, temporary_allocator, true);
 			ECS_ASSERT(!typedef_rule.IsEmpty());
+			typedef_rule.name = "Struct typedef";
 
 			TokenizeRuleAction action;
 			action.callback = StructTypedefCallback;
@@ -1601,6 +1604,8 @@ namespace ECSEngine {
 
 		static void CreateTokenizeFunctionAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
 			TokenizeRule function_rule = GetTokenizeRuleForFunctions(temporary_allocator, true);
+			function_rule.name = "Struct function";
+
 			TokenizeRuleAction action;
 			action.callback = StructFunctionCallback;
 			action.callback_data = {};
@@ -1612,6 +1617,7 @@ namespace ECSEngine {
 			const char* macro_rule_string = "$G. \\( $T* /) ;?";
 			TokenizeRule macro_rule = CreateTokenizeRule(macro_rule_string, temporary_allocator, true);
 			ECS_ASSERT(!macro_rule.IsEmpty());
+			macro_rule.name = "Struct macro or misc";
 
 			TokenizeRuleAction action;
 			action.callback = StructGeneralMacrosCallback;
@@ -1623,9 +1629,11 @@ namespace ECSEngine {
 		static void CreateTokenizeStructExcludeRules(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
 			// This will also cover some off chance macros that might appear
 			TokenizeRule constructor_rule = GetTokenizeRuleForStructConstructors(temporary_allocator, true);
+			constructor_rule.name = "Struct constructor";
 			struct_matcher->AddExcludeRule(constructor_rule, false);
 
 			TokenizeRule operator_rule = GetTokenizeRuleForStructOperators(temporary_allocator, true);
+			operator_rule.name = "Struct operator";
 			struct_matcher->AddExcludeRule(operator_rule, false);
 		}
 

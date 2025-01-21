@@ -184,27 +184,29 @@ namespace ECSEngine {
 	TransformScalar ECS_VECTORCALL MatrixToTransform(Matrix matrix)
 	{
 		// The position is simply the last row
-		// In order to extract the rotation and scale, we need to
-		// get the rotation quaternion from the matrix, then create
-		// a matrix from its inverse and then multiply the existing matrix
-		// (but with the position zeroed out) with that matrix
-		// The values on the diagonal are the scale, and the rotation
-		// Is simply the initial quaternion
+		// For the scale, extract the basis vectors (the first 3 components of the first 3 rows)
+		// The length of each vector is the scaling factor for that axis. The rotation
+		// Is the 3x3 matrix divided by the lengths of the basis vectors. This works
+		// For affine transformation matrices without shearing.
 
 		alignas(ECS_SIMD_BYTE_SIZE) float4 matrix_elements[sizeof(Matrix) / sizeof(float4)];
 		matrix.StoreAligned(matrix_elements);
-
 		float3 position = matrix_elements[3].xyz();
-		QuaternionScalar rotation = MatrixToQuaternion(matrix);
-		Matrix inverse_rotation_matrix = QuaternionToMatrix(QuaternionInverseNormalized(rotation));
-		matrix_elements[3] = { 0.0f, 0.0f, 0.0f, 1.0f };
-		Matrix no_position_matrix = Matrix().LoadAligned(matrix_elements);
-		// The order is the current rotation multiplied with the inverse matrix
-		Matrix scale_skew_matrix = no_position_matrix * inverse_rotation_matrix;
-		scale_skew_matrix.StoreAligned(matrix_elements);
-		
-		float3 scale = { matrix_elements[0][0], matrix_elements[1][1], matrix_elements[2][2] };
-		return { position, rotation, scale };
+		float3 scale = { Length(matrix_elements[0].xyz()), Length(matrix_elements[1].xyz()), Length(matrix_elements[2].xyz()) };
+
+		// If the rotation matrix has a negative determinant, it means that there is an odd count of negative
+		// Scaling factors, which results in a matrix that does not respect all conditions (its determinant must be 1)
+		// In that case, negate all the scale factors.
+		Matrix3x3 rotation_matrix = Matrix3x3::From4x4((float*)matrix_elements);
+		if (Matrix3x3Determinant(rotation_matrix) < 0.0f) {
+			scale = -scale;
+		}
+
+		matrix_elements[0] /= scale.x;
+		matrix_elements[1] /= scale.y;
+		matrix_elements[2] /= scale.z;
+
+		return { position, Matrix3x3ToQuaternion(Matrix3x3::From4x4((float*)matrix_elements)), scale };
 	}
 
 	void ECS_VECTORCALL MatrixToTransform(Matrix matrix, Transform* transform, size_t index) {

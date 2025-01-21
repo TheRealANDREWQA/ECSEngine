@@ -460,7 +460,7 @@ Editor::Editor(const wchar_t* name)
 		abort();
 	}
 
-	uint2 cursor_position = OS::GetCursorPosition(hWnd);
+	int2 cursor_position = OS::GetCursorPosition(hWnd);
 	// Temporarly set the hWnd to this one
 	mouse.m_window_handle = hWnd;
 	mouse.SetPosition(cursor_position.x, cursor_position.y);
