@@ -364,6 +364,9 @@ namespace ECSEngine {
 		// It changes the registration of the component as well
 		void ChangeSharedComponentIndex(Component old_component, Component new_component);
 
+		// Mostly for editor purposes, like when a component ID is changed
+		void ChangeGlobalComponentIndex(Component old_component, Component new_component);
+
 		// ---------------------------------------------------------------------------------------------------
 
 		// Deferred call

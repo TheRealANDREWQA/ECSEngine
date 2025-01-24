@@ -1,8 +1,6 @@
 #include "ecspch.h"
 #include "Conversion.h"
 
-ECS_OPTIMIZE_END;
-
 namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------

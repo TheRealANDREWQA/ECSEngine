@@ -576,7 +576,7 @@ namespace ECSEngine {
 		if (opened_count == 0) {
 			iteration();
 		}
-		while (current_closed < end_character && opened_count > 0) {
+		while (current_closed != nullptr && current_closed < end_character && opened_count > 0) {
 			iteration();
 		}
 		return opened_count == 0 ? current_closed : nullptr;

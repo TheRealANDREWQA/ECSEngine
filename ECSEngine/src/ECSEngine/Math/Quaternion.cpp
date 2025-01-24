@@ -1,8 +1,6 @@
 #include "ecspch.h"
 #include "Quaternion.h"
 
-ECS_OPTIMIZE_END;
-
 namespace ECSEngine {
 
 	namespace VectorGlobals {

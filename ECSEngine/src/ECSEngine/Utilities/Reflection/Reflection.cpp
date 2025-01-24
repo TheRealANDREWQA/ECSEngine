@@ -1590,7 +1590,9 @@ namespace ECSEngine {
 		}
 
 		static void CreateTokenizeStructTypedefAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
-			const char* typedef_rule_string = "typedef. $G. $G. ;. | typedef. $G. \\< $T+ /> $G. ;.";
+			ECS_STACK_CAPACITY_STREAM(char, typedef_rule_string, 1024);
+			AddTokenizeRuleIdentifierDefinitions(typedef_rule_string);
+			typedef_rule_string.AddStreamAssert("typedef. identifier. $G. ;.");
 			TokenizeRule typedef_rule = CreateTokenizeRule(typedef_rule_string, temporary_allocator, true);
 			ECS_ASSERT(!typedef_rule.IsEmpty());
 			typedef_rule.name = "Struct typedef";
