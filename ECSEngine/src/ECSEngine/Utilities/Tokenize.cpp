@@ -2393,7 +2393,6 @@ namespace ECSEngine {
 			}
 
 			if (index < 0) {
-				Stream<char> subrange_string = string.GetStreamForSubrange(subrange.GetSubrange(0, 30));
 				// No entry matched, exit
 				return ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL;
 			}
