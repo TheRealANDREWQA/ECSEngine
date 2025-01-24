@@ -3,8 +3,6 @@
 
 #define INTERSECT_INTERPOLATION_THRESHOLD 1000000.0f
 
-ECS_OPTIMIZE_END;
-
 namespace ECSEngine {
 
 	// Can be used for line tests, ray tests (semi-lines) or segment tests

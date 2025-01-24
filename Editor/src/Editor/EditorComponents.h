@@ -52,15 +52,85 @@ enum EDITOR_COMPONENT_EVENT : unsigned char {
 bool IsEditorComponentHandledInternally(EDITOR_COMPONENT_EVENT event_type);
 
 struct EditorComponentEvent {
+	ECS_INLINE EditorComponentEvent() {}
+
+	ECS_INLINE static EditorComponentEvent CreateBase(EDITOR_COMPONENT_EVENT event_type, Stream<char> component_name) {
+		EditorComponentEvent event_;
+		event_.type = event_type;
+		event_.name = component_name;
+		return event_;
+	}
+
+	ECS_INLINE static EditorComponentEvent CreateSameID(Stream<char> component_name, Stream<char> conflicting_name) {
+		EditorComponentEvent event_;
+		event_.type = EDITOR_COMPONENT_EVENT_SAME_ID;
+		event_.name = component_name;
+		event_.conflicting_name = conflicting_name;
+		return event_;
+	}
+
+	ECS_INLINE static EditorComponentEvent CreateIsMissingFunction(Stream<char> component_name, Stream<char> function_name) {
+		EditorComponentEvent event_;
+		event_.type = EDITOR_COMPONENT_EVENT_SAME_ID;
+		event_.name = component_name;
+		event_.missing_function_name = function_name;
+		return event_;
+	}
+
+	ECS_INLINE static EditorComponentEvent CreateSameComponentChangedID(Stream<char> component_name, Component new_id) {
+		EditorComponentEvent event_;
+		event_.type = EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID;
+		event_.name = component_name;
+		event_.new_id = new_id;
+		return event_;
+	}
+
+	ECS_INLINE static EditorComponentEvent CreateDifferentComponentChangedID(Stream<char> component_name, Component new_id) {
+		EditorComponentEvent event_ = CreateSameComponentChangedID(component_name, new_id);
+		event_.type = EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID;
+		return event_;
+	}
+
+	ECS_INLINE static EditorComponentEvent CreateIsRemoved(Stream<char> component_name, Component component_id, ECS_COMPONENT_TYPE type) {
+		EditorComponentEvent event_;
+		event_.type = EDITOR_COMPONENT_EVENT_IS_REMOVED;
+		event_.name = component_name;
+		event_.component_id = component_id;
+		event_.component_type = type;
+		return event_;
+	}
+
+	ECS_INLINE static EditorComponentEvent CreateComponentDemoted(Stream<char> component_name, Component component_id, ECS_COMPONENT_TYPE type) {
+		EditorComponentEvent event_ = CreateIsRemoved(component_name, component_id, type);
+		event_.type = EDITOR_COMPONENT_EVENT_COMPONENT_DEMOTED;
+		return event_;
+	}
+
 	EDITOR_COMPONENT_EVENT type;
 	Stream<char> name;
 
-	Stream<char> conflicting_name; // used by the SAME_ID event
-	Stream<char> missing_function_name; // used by the IS_MISSING_FUNCTION
+	union {
+		// Used by the SAME_ID event.
+		struct {
+			Stream<char> conflicting_name;
+		};
 
-	short new_id; // used by the changed ID events or IS_REMOVED
-	ECS_COMPONENT_TYPE component_type; // used only by IS_REMOVED
-	bool is_link_component; // used by IS_REMOVED
+		// Used by the IS_MISSING_FUNCTION event
+		struct {
+			Stream<char> missing_function_name;
+		};
+
+		// Used by the changed ID (with or without actual component change) events
+		struct {
+			short new_id;
+		};
+
+		// Used by the IS_REMOVED event
+		struct {
+			short component_id;
+			ECS_COMPONENT_TYPE component_type;
+		};
+	};
 };
 
 // Keeps the reflection_type as well such that when a component is changed the data can still be appropriately preserved

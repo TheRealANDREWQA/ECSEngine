@@ -1432,7 +1432,7 @@ namespace ECSEngine {
 				shared_signature.instances = base_archetypes_instances + base_archetype_instances_offset;
 				// We need to shuffle the instances according to the order the components were shuffled
 				unsigned char current_shared_count = original_shared_count;
-				for (unsigned char shared_index = 0; shared_index < original_shared_count; shared_index++) {
+				for (unsigned char shared_index = 0; shared_index < current_shared_count; shared_index++) {
 					if (missing_shared_components[shared_index]) {
 						current_shared_count--;
 						shared_signature.instances[shared_index] = shared_signature.instances[current_shared_count];

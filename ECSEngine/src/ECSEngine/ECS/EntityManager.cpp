@@ -2797,6 +2797,17 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::ChangeGlobalComponentIndex(Component old_component, Component new_component)
+	{
+		ECS_ASSERT(ExistsGlobalComponent(old_component) && !ExistsGlobalComponent(new_component));
+
+		// This is a special case, since the component does not index directly into the array
+		size_t index = SearchBytes(Stream<Component>{ m_global_components, m_global_component_count }, old_component);
+		m_global_components[index] = new_component;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void EntityManager::ChangeEntitySharedInstance(
 		Stream<ChangeSharedComponentElement> elements,
 		bool possibly_the_same_instance,
