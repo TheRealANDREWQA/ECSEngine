@@ -57,8 +57,8 @@ typedef HashTable<VertexConnections, unsigned int, HashFunctionPowerOfTwo> Verte
 
 // Allocates an entry if there is no such entry, else it returns the existing one
 static VertexConnections* GetVertexConnection(VertexConnectionTable* table, unsigned int vertex, AllocatorPolymorphic allocator) {
-	VertexConnections* vertex_connection;
-	if (!table->TryGetValuePtr(vertex, vertex_connection)) {
+	VertexConnections* vertex_connection = table->TryGetValuePtr(vertex);
+	if (vertex_connection != nullptr) {
 		VertexConnections stack_connection;
 		stack_connection.entry_count = 0;
 		stack_connection.next_connections = nullptr;
@@ -304,8 +304,8 @@ static unsigned int FindPointThatEnclosesEdge(
 // The x index is always going to be the vertex
 template<bool early_exit = false, typename Functor>
 static bool ForEachTriangleForPoint(const VertexConnectionTable* table, unsigned int vertex, Functor&& functor) {
-	const VertexConnections* connection;
-	if (table->TryGetValuePtr(vertex, connection)) {
+	const VertexConnections* connection = table->TryGetValuePtr(vertex);
+	if (connection != nullptr) {
 		if (connection->entry_count > 0) {
 			// Flatten the connections in a single array
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 8, ECS_MB);
@@ -324,9 +324,9 @@ static bool ForEachTriangleForPoint(const VertexConnectionTable* table, unsigned
 
 			// For each entry in the connections, verify if it has a paired connection
 			for (unsigned int index = 0; index < vertex_connection_count; index++) {
-				const VertexConnections* current_neighbour;
 				unsigned int neighbour = vertex_connections[index];
-				if (table->TryGetValuePtr(neighbour, current_neighbour)) {
+				const VertexConnections* current_neighbour = table->TryGetValuePtr(neighbour);
+				if (current_neighbour != nullptr) {
 					if (current_neighbour->entry_count > 0) {
 						bool should_early_exit = ForEachVertexConnection<early_exit>(current_neighbour, [&](const VertexConnections* neighbour_connections) {
 							for (unsigned int neighbour_index = 0; neighbour_index < neighbour_connections->entry_count; neighbour_index++) {

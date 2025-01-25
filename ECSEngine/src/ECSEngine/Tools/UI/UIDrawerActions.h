@@ -201,10 +201,6 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void SetWindowVerticalSliderPosition(UISystem* system, unsigned int window_index, float value);
-
-		// --------------------------------------------------------------------------------------------------------------
-
 		ECSENGINE_API void PinWindowVerticalSliderPosition(UISystem* system, unsigned int window_index);
 
 		// --------------------------------------------------------------------------------------------------------------

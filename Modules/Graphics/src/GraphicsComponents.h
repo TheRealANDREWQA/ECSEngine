@@ -30,7 +30,7 @@ struct ECS_REFLECT_COMPONENT RenderMesh {
 
 struct ECS_REFLECT_COMPONENT RenderEverything {
 	constexpr ECS_INLINE static short ID() {
-		return GRAPHICS_SHARED_COMPONENT_BASE + 0;
+		return GRAPHICS_SHARED_COMPONENT_BASE + 1;
 	}
 
 	constexpr ECS_INLINE static bool IsShared() {
