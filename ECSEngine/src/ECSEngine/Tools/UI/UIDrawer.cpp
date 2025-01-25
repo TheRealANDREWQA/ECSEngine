@@ -12,9 +12,6 @@
 #define ECS_TOOLS_UI_DRAWER_IDENTITY_SCALE [](float2 scale, const UIDrawer& drawer) {return scale;}
 #define ECS_TOOLS_UI_DRAWER_LABEL_SCALE [](float2 scale, const UIDrawer& drawer){return float2(scale.x + 2.0f * drawer.element_descriptor.label_padd.x, scale.y + 2.0f * drawer.element_descriptor.label_padd.y);}
 
-#define HORIZONTAL_SCROLL_SLIDER_NAME "##HorizontalSlider"
-#define VERTICAL_SCROLL_SLIDER_NAME "##VerticalSlider"
-
 namespace ECSEngine {
 
 	namespace Tools {
@@ -9361,8 +9358,8 @@ namespace ECSEngine {
 				}
 
 				ViewportRegionSliders(
-					HORIZONTAL_SCROLL_SLIDER_NAME,
-					VERTICAL_SCROLL_SLIDER_NAME,
+					ECS_UI_WINDOW_HORIZONTAL_SCROLL_SLIDER_NAME,
+					ECS_UI_WINDOW_VERTICAL_SCROLL_SLIDER_NAME,
 					render_span,
 					render_zone,
 					&system->m_windows[window_index].render_region_offset
@@ -12408,10 +12405,10 @@ namespace ECSEngine {
 		{
 			UIDrawerSlider* slider = nullptr;
 			if (vertical) {
-				slider = (UIDrawerSlider*)GetResource(VERTICAL_SCROLL_SLIDER_NAME);
+				slider = (UIDrawerSlider*)GetResource(ECS_UI_WINDOW_VERTICAL_SCROLL_SLIDER_NAME);
 			}
 			else {
-				slider = (UIDrawerSlider*)GetResource(HORIZONTAL_SCROLL_SLIDER_NAME);
+				slider = (UIDrawerSlider*)GetResource(ECS_UI_WINDOW_HORIZONTAL_SCROLL_SLIDER_NAME);
 			}
 			return slider->slider_position;
 		}

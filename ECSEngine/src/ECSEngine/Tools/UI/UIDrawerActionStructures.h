@@ -5,6 +5,9 @@
 #include "UIDrawerStructures.h"
 #include "UIDrawConfig.h"
 
+#define ECS_UI_WINDOW_HORIZONTAL_SCROLL_SLIDER_NAME "##HorizontalSlider"
+#define ECS_UI_WINDOW_VERTICAL_SCROLL_SLIDER_NAME "##VerticalSlider"
+
 namespace ECSEngine {
 
 	namespace Tools {

@@ -13,6 +13,7 @@
 #include "../../Utilities/Algorithms.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
 #include "../../OS/Cursor.h"
+#include "UIDrawerActionStructures.h"
 
 namespace ECSEngine {
 
@@ -7714,6 +7715,8 @@ namespace ECSEngine {
 
 		UIDefaultWindowHandler* UISystem::GetDefaultWindowHandlerData(unsigned int window_index) const
 		{
+			// TODO: The default handler being modifiable or overridenable should no longer
+			// Be a thing, it should always be the default. Remove it as a field
 			return (UIDefaultWindowHandler*)m_windows[window_index].default_handler.data;
 		}
 
@@ -8561,6 +8564,9 @@ namespace ECSEngine {
 				unsigned int window_count = dockspace_receiver->borders[border_index_receiver].window_indices.size;
 				copy_multiple_windows(dockspace_receiver, border_index_receiver, element_to_add, 0);
 				dockspace_receiver->borders[border_index_receiver].window_indices.size = window_count;
+
+				// Deallocate the border snapshot, if there is one
+				DeallocateDockspaceBorderSnapshot(dockspace_receiver, border_index_receiver, false);
 			}
 
 			DestroyDockspace(element_to_add->borders.buffer, element_type);
@@ -9938,6 +9944,24 @@ namespace ECSEngine {
 			m_windows[window_index].drawer_draw_difference = span;
 		}
 
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void SetSliderScrollPosition(UIDrawerSlider* slider, float value) {
+			slider->slider_position = value;
+			slider->interpolate_value = true;
+			slider->changed_value = true;
+		}
+
+		void UISystem::SetWindowVerticalScroll(unsigned int window_index, float scroll_value) const {
+			UIDefaultWindowHandler* handler = GetDefaultWindowHandlerData(window_index);
+			SetSliderScrollPosition(handler->vertical_slider, scroll_value);
+		}
+
+		void UISystem::SetWindowHorizontalScroll(unsigned int window_index, float scroll_value) const {
+			UIDefaultWindowHandler* handler = GetDefaultWindowHandlerData(window_index);
+			SetSliderScrollPosition(handler->horizontal_slider, scroll_value);
+		}
+
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowOSSize(uint2 new_size, uint2 monitor_size)
@@ -10025,6 +10049,18 @@ namespace ECSEngine {
 
 			void* allocated_data = AddGlobalResource({ stack_handler, write_size }, name);
 			return OffsetPointer(allocated_data, sizeof(*stack_handler));
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ScrollWindowVertically(unsigned int window_index) const {
+			SetWindowVerticalScroll(window_index, 1.0f);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ScrollWindowHorizontally(unsigned int window_index) const {
+			SetWindowHorizontalScroll(window_index, 1.0f);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

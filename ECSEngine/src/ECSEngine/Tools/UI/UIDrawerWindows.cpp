@@ -1071,7 +1071,7 @@ namespace ECSEngine {
 							total_scroll = data->scroll_factor * ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_FACTOR * scroll_amount * dimming_value;
 						}
 
-						UIDrawerSlider* vertical_slider = (UIDrawerSlider*)data->vertical_slider;
+						UIDrawerSlider* vertical_slider = data->vertical_slider;
 						float previous_slider_position = vertical_slider->slider_position;
 						vertical_slider->interpolate_value = true;
 						vertical_slider->slider_position -= total_scroll;
@@ -2372,6 +2372,14 @@ namespace ECSEngine {
 			data.last_frame_message_count = 0;
 			data.filtered_message_indices.InitializeFromBuffer(nullptr, 0, 0);
 			data.filter_string.InitializeFromBuffer(nullptr, 0, 0);
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void ScrollConsoleWindowToBottom(UISystem* system) {
+			unsigned int window_index = system->GetWindowFromName(CONSOLE_WINDOW_NAME);
+			ECS_ASSERT(window_index != -1);
+			system->ScrollWindowVertically(window_index);
 		}
 
 		// -------------------------------------------------------------------------------------------------------

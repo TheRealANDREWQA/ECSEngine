@@ -433,6 +433,9 @@ namespace ECSEngine {
 
 		ECSENGINE_API void CreateConsoleWindowData(ConsoleWindowData& data);
 
+		// Scrolls the Console window to the last message
+		ECSENGINE_API void ScrollConsoleWindowToBottom(UISystem* system);
+
 		// --------------------------------------------------------------------------------------------------------------
 
 		struct InjectWindowElement {

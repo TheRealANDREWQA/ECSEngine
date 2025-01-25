@@ -1724,6 +1724,12 @@ namespace ECSEngine {
 
 			void SetWindowDrawerDifferenceSpan(unsigned int window_index, float2 span);
 
+			// Scroll value must be in range [0, 1], where 1.0f means the end of the scrollable range
+			void SetWindowVerticalScroll(unsigned int window_index, float scroll_value) const;
+			
+			// Scroll value must be in range [0, 1], where 1.0f means the end of the scrollable range
+			void SetWindowHorizontalScroll(unsigned int window_index, float scroll_value) const;
+
 			// The monitor size must be supplied as well. This is the size of the OS window size, not that of an individual UI window
 			void SetWindowOSSize(uint2 new_size, uint2 monitor_size);
 
@@ -1748,6 +1754,12 @@ namespace ECSEngine {
 			// To true. In that case, the region_name in tha additional data will be empty
 			// Returns the allocated data (in case the data size is different from 0)
 			void* StartDragDrop(UIActionHandler handler, Stream<char> name, bool trigger_on_hover = false, bool trigger_on_region_exit = false);
+
+			// Scrolls the window to the bottom of the vertical scroll range
+			void ScrollWindowVertically(unsigned int window_index) const;
+
+			// Scrolls the window to the bottom of the horizontal scroll range
+			void ScrollWindowHorizontally(unsigned int window_index) const;
 
 			void TranslateDockspace(UIDockspace* dockspace, float2 translation);
 

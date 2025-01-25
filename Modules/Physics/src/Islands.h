@@ -39,12 +39,9 @@ struct ECS_REFLECT IslandManager {
 	}
 
 	// Returns the island handle for that entity, else nullptr if it doesn't exist
+	// The value is not stable across handle insertions and removals.
 	ECS_INLINE IslandHandle* GetHandle(Entity entity) {
-		IslandHandle* handle;
-		if (entity_table.TryGetValuePtr(entity, handle)) {
-			return handle;
-		}
-		return nullptr;
+		return entity_table.TryGetValuePtr(entity);
 	}
 
 	void Initialize(MemoryManager* allocator_source);

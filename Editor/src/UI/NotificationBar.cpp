@@ -38,13 +38,16 @@ void NotificationBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* e
 	descriptor.window_data_size = sizeof(*data);
 }
 
-void FocusConsole(ActionData* action_data) {
+static void FocusConsole(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
 	// Create console handles the case when the window already exists
 	// If it doesn't, create it
 	CreateConsole(system);
+
+	// Scroll the console, such that the last message can be seen
+	ScrollConsoleWindowToBottom(system);
 }
 
 void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
@@ -131,7 +134,7 @@ void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_TEXT_ALIGNMENT, config, draw_message);
 
 		float2 action_scale = { drawer.current_x - action_position.x, TEXT_LABEL_Y_SIZE };
-		drawer.AddClickable(0, action_position, action_scale, { FocusConsole, data->editor_state, 0 });
+		drawer.AddDefaultClickable(0, action_position, action_scale, { SkipAction, nullptr }, { FocusConsole, data->editor_state, 0 });
 
 		float2 notification_size = drawer.GetLabelScale(message->message.buffer);
 		if (notification_size.x > NOTIFICATION_MESSAGE_SIZE) {			

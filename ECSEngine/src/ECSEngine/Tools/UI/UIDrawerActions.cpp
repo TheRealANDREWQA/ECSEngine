@@ -50,9 +50,8 @@ namespace ECSEngine {
 				window_data->is_this_parameter_window = false;
 			}
 
-			const char* string_identifier = "##VerticalSlider";
-			size_t string_size = strlen(string_identifier);
-			window_data->vertical_slider = system->FindWindowResource(window_index, string_identifier, string_size);
+			window_data->vertical_slider = (UIDrawerSlider*)system->FindWindowResource(window_index, ECS_UI_WINDOW_VERTICAL_SCROLL_SLIDER_NAME);
+			window_data->horizontal_slider = (UIDrawerSlider*)system->FindWindowResource(window_index, ECS_UI_WINDOW_HORIZONTAL_SCROLL_SLIDER_NAME);
 		}
 		
 		// --------------------------------------------------------------------------------------------------------------
@@ -1486,17 +1485,6 @@ namespace ECSEngine {
 				action_data->data = &selectable_data;
 				FilesystemHierarchySelectable(action_data);
 			}
-		}
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		void SetWindowVerticalSliderPosition(UISystem* system, unsigned int window_index, float value)
-		{
-			UIDefaultWindowHandler* handler_data = (UIDefaultWindowHandler*)system->m_windows[window_index].default_handler.data;
-			UIDrawerSlider* slider = (UIDrawerSlider*)handler_data->vertical_slider;
-			slider->slider_position = value;
-			slider->interpolate_value = true;
-			slider->changed_value = true;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

@@ -24,6 +24,7 @@ namespace ECSEngine {
 
 		struct UISystem;
 		struct UIDockspace;
+		struct UIDrawerSlider;
 
 		template<typename T>
 		using UIDynamicStream = ResizableStream<T>;
@@ -1171,7 +1172,8 @@ namespace ECSEngine {
 
 			void ChangeCursor(ECS_CURSOR_TYPE cursor);
 
-			void* vertical_slider;
+			UIDrawerSlider* vertical_slider;
+			UIDrawerSlider* horizontal_slider;
 			int scroll;
 			float scroll_factor;
 			bool is_parameter_window_opened;
