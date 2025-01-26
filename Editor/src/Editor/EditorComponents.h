@@ -31,6 +31,8 @@ enum EDITOR_COMPONENT_EVENT : unsigned char {
 	// Handled by the user
 	EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION,
 	// Handled by the user
+	EDITOR_COMPONENT_EVENT_GLOBAL_COMPONENT_MISSING_TYPE_ALLOCATOR,
+	// Handled by the user
 	EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS,
 	// Handled internally
 	EDITOR_COMPONENT_EVENT_ALLOCATOR_SIZE_CHANGED,
@@ -71,7 +73,7 @@ struct EditorComponentEvent {
 
 	ECS_INLINE static EditorComponentEvent CreateIsMissingFunction(Stream<char> component_name, Stream<char> function_name) {
 		EditorComponentEvent event_;
-		event_.type = EDITOR_COMPONENT_EVENT_SAME_ID;
+		event_.type = EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION;
 		event_.name = component_name;
 		event_.missing_function_name = function_name;
 		return event_;

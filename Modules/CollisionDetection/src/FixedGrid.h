@@ -1,19 +1,21 @@
+// ECS_REFLECT
 #pragma once
 #include "ECSEngineMath.h"
 #include "ECSEngineContainers.h"
 #include "Export.h"
+#include "ECSEngineReflectionMacros.h"
 
 using namespace ECSEngine;
 
-#define GRID_CHUNK_COUNT (8)
+#define GRID_CHUNK_COUNT ECS_CONSTANT_REFLECT(8)
 
-struct GridChunkDataEntry {
+struct ECS_REFLECT GridChunkDataEntry {
 	AABBScalar aabb;
 	unsigned int identifier;
 	unsigned char layer;
 };
 
-struct GridChunkData {
+struct ECS_REFLECT GridChunkData {
 	void Set(GridChunkDataEntry entry, unsigned int count) {
 		colliders[count] = entry.aabb;
 		identifiers[count] = entry.identifier;
@@ -32,7 +34,7 @@ struct CollisionInfo {
 	unsigned char layer;
 };
 
-struct CollisionLayer {
+struct ECS_REFLECT CollisionLayer {
 	// This is a boolean bit mask that tells whether or not
 	unsigned char entries[32];
 };
@@ -50,7 +52,7 @@ struct FixedGridHandlerData {
 
 // When a collision is detected, a collision handler will be called to perform the necessary action
 // The handler must take as parameter a FixedGridHandlerData* pointer and then it can cast its own data
-struct COLLISIONDETECTION_API FixedGrid {
+struct COLLISIONDETECTION_API ECS_REFLECT FixedGrid {
 	ECS_INLINE AllocatorPolymorphic Allocator() const {
 		return spatial_grid.allocator;
 	}
@@ -145,8 +147,11 @@ struct COLLISIONDETECTION_API FixedGrid {
 	unsigned int last_frame_cell_capacity;
 
 	Stream<CollisionLayer> layers;
+
 	// This is the function that will be called to handle the collisions
+	[[ECS_SKIP_REFLECTION(8)]]
 	ThreadFunction handler_function;
+	[[ECS_SKIP_REFLECTION]]
 	void* handler_data;
 };
 

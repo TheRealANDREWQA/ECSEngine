@@ -69,11 +69,11 @@ constexpr size_t ECS_TB_10 = 1'000'000'000'000;
 
 namespace ECSEngine {
 
-	static inline float DegToRad(float angle) {
+	ECS_INLINE static float DegToRad(float angle) {
 		return angle * DEG_TO_RAD_FACTOR;
 	}
 
-	static inline float RadToDeg(float angle) {
+	ECS_INLINE static float RadToDeg(float angle) {
 		return angle * RAD_TO_DEG_FACTOR;
 	}
 

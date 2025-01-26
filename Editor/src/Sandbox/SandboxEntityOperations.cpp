@@ -888,7 +888,7 @@ bool CreateSandboxGlobalComponent(
 
 	ECS_STACK_CAPACITY_STREAM(size_t, component_storage, ECS_KB);
 	Stream<char> component_name = editor_state->editor_components.ComponentFromID(component, ECS_COMPONENT_GLOBAL);
-	unsigned short component_size = editor_state->editor_components.GetComponentByteSize(component_name);
+	size_t component_size = editor_state->editor_components.GetComponentByteSize(component_name);
 	const Reflection::ReflectionType* component_type = editor_state->editor_components.GetType(component_name);
 	if (data == nullptr) {
 		ECS_ASSERT(component_size < component_storage.capacity * sizeof(component_storage[0]));
@@ -896,8 +896,19 @@ bool CreateSandboxGlobalComponent(
 		data = component_storage.buffer;
 	}
 
-	size_t allocator_size = GetReflectionComponentAllocatorSize(component_type);
-	entity_manager->RegisterGlobalComponentCommit(component, component_size, data, component_name, allocator_size);
+	// Retrieve the component functions
+	const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(editor_state, sandbox_index, component_name);
+	ComponentFunctions component_functions;
+
+	ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
+	if (module_component_functions != nullptr && module_component_functions->copy_function != nullptr && module_component_functions->deallocate_function != nullptr) {
+		module_component_functions->SetComponentFunctionsTo(&component_functions, 0);
+	}
+	else {
+		component_functions = GetReflectionTypeRuntimeComponentFunctions(editor_state->GlobalReflectionManager(), component_type, &stack_allocator);
+	}
+	
+	entity_manager->RegisterGlobalComponentCommit(component, component_size, data, component_name, &component_functions);
 	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	return true;
 }
@@ -1606,11 +1617,8 @@ MemoryArena* GetSandboxComponentAllocatorEx(
 	case ECS_COMPONENT_SHARED:
 		return GetSandboxSharedComponentAllocator(editor_state, sandbox_index, component, viewport);
 	case ECS_COMPONENT_GLOBAL:
-	{
-		EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-		return entity_manager->GetGlobalComponentAllocator(component);
-	}
-	break;
+		// This case should not be valid
+		return nullptr;
 	}
 
 	return nullptr;

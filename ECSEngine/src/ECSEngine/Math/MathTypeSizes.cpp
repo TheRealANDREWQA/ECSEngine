@@ -12,11 +12,16 @@ namespace ECSEngine {
 
 	MathStructureInfo ECS_MATH_STRUCTURE_TYPE_INFOS[] = {
 		ENTRY(Vector3),
+		ENTRY(Vector4),
 		ENTRY(Matrix),
 		ENTRY(Quaternion),
+		ENTRY(QuaternionScalar),
 		ENTRY(Plane),
+		ENTRY(PlaneScalar),
 		ENTRY(Transform),
+		ENTRY(TransformScalar),
 		ENTRY(AABB),
+		ENTRY(AABBScalar),
 		ENTRY(Matrix3x3)
 	};
 

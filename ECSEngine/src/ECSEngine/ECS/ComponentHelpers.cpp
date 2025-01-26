@@ -304,12 +304,19 @@ namespace ECSEngine {
 			// Now check the buffers
 			bool has_buffers = HasReflectionTypeComponentBuffers(type);
 			size_t allocator_size = GetReflectionComponentAllocatorSize(type);
-			if (allocator_size == 0 && has_buffers) {
-				// For this case, if a main allocator is specified, then don't signal this
-				// As an error, consider this entry as a system component which handles
-				// Its own allocator
-				if (GetReflectionTypeAllocatorMiscIndex(type) == -1) {
-					validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION;
+			if (has_buffers) {
+				if (allocator_size == 0) {
+					// For this case, if a main allocator is specified, then don't signal this
+					// As an error, consider this entry as a system/global component which handles
+					// Its own allocator
+					if (GetReflectionTypeAllocatorMiscIndex(type) == -1) {
+						if (component_type == ECS_COMPONENT_GLOBAL) {
+							validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_TYPE_ALLOCATOR;
+						}
+						else {
+							validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION;
+						}
+					}
 				}
 			}
 

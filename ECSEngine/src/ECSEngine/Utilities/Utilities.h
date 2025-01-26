@@ -6,6 +6,8 @@
 
 namespace ECSEngine {
 
+#define ECS_FLOAT_COMPARE_DEFAULT_EPSILON 0.000001
+
 	template<typename U, typename T>
 	ECS_INLINE U BitCast(T value) {
 		// To please the C++ "Standard Comittee", use memcpy to avoid "Undefined behaviour" of using *(U*)
@@ -215,8 +217,24 @@ namespace ECSEngine {
 		return false;
 	}
 
-	ECS_INLINE bool FloatCompare(float a, float b, float epsilon = 0.00001f) {
+	ECS_INLINE bool FloatCompare(float a, float b, float epsilon = (float)ECS_FLOAT_COMPARE_DEFAULT_EPSILON) {
 		return fabsf(a - b) < epsilon;
+	}
+
+	ECS_INLINE bool DoubleCompare(double a, double b, double epsilon = ECS_FLOAT_COMPARE_DEFAULT_EPSILON) {
+		return fabs(a - b) < epsilon;
+	}
+
+	// Returns true if the floating point value is almost integral, else false
+	ECS_INLINE bool IsAlmostIntegral(float value, float epsilon = (float)ECS_FLOAT_COMPARE_DEFAULT_EPSILON) {
+		float rounded_value = roundf(value);
+		return FloatCompare(value - rounded_value, 0.0f, epsilon);
+	}
+
+	// Returns true if the floating point value is almost integral, else false
+	ECS_INLINE bool IsAlmostIntegral(double value, double epsilon = ECS_FLOAT_COMPARE_DEFAULT_EPSILON) {
+		double rounded_value = round(value);
+		return DoubleCompare(value - rounded_value, 0.0, epsilon);
 	}
 
 	// Returns the index of the first most significant bit set, -1 if no bit is set

@@ -70,6 +70,9 @@ namespace ECSEngine {
 
 			void AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment, const void* default_data = nullptr);
 
+			// Copies the constants reflected from another manager into this one
+			void AddConstantsFrom(const ReflectionManager* other);
+
 			// Adds an enum which is not bound to any folder hierarchy. If the allocator is nullptr
 			// then it will only reference the type streams, not actually copy
 			void AddEnum(const ReflectionEnum* enum_, AllocatorPolymorphic allocator = { nullptr });
@@ -83,6 +86,18 @@ namespace ECSEngine {
 
 			// Adds all the types from the other reflection manager without binding the types to a particular hierarchy
 			void AddTypesFrom(const ReflectionManager* other);
+
+			// Adds all parsed typedefs from the other instance to this instance without binding them to a 
+			// Particular folder hierarchy
+			void AddTypedefsFrom(const ReflectionManager* other);
+
+			// Adds all parsed type templates from the other instance to this instance without binding them to
+			// A particular folder hierarchy
+			void AddTypeTemplatesFrom(const ReflectionManager* other);
+
+			// Copies all parsed resources from an other reflection manager to this instance without binding the resources
+			// To a particular folder hierarchy
+			void AddAllFrom(const ReflectionManager* other);
 
 			// Adds a type to a certain hierarchy. It will add it as is, it will be deallocated when the hierarchy is freed using the allocator given
 			void AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coalesced);
@@ -190,9 +205,6 @@ namespace ECSEngine {
 
 			const ReflectionType* TryGetType(Stream<char> name) const;
 			const ReflectionEnum* TryGetEnum(Stream<char> name) const;
-
-			// Copies the constants reflected from another manager into this one
-			void InheritConstants(const ReflectionManager* other);
 
 			void InitializeFieldTable();
 			void InitializeTypeTable(size_t count);

@@ -446,6 +446,7 @@ MemoryArena* GetSandboxSharedComponentAllocator(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// The global components don't have such an allocator
 MemoryArena* GetSandboxComponentAllocatorEx(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
