@@ -71,7 +71,7 @@ namespace ECSEngine {
 		memcpy(m_entities, other->m_entities, sizeof(Entity) * other_size);
 		// Copy the components now
 		for (size_t index = 0; index < m_components.count; index++) {
-			unsigned short component_byte_size = m_infos[m_components.indices[index].value].size;
+			size_t component_byte_size = m_infos[m_components.indices[index].value].size;
 			if (deep_copy) {
 				// If the component has buffers, we need to make a deep copy of them
 				bool has_copy_function = m_infos[m_components.indices[index]].copy_function != nullptr;
@@ -80,17 +80,17 @@ namespace ECSEngine {
 					void* current_buffer = m_buffers[index];
 					const void* other_current_buffer = other->m_buffers[index];
 					for (unsigned int entity_index = 0; entity_index < m_size; entity_index++) {
-						void* current_component = OffsetPointer(current_buffer, component_byte_size * entity_index);
-						const void* other_current_component = OffsetPointer(other_current_buffer, component_byte_size * entity_index);
+						void* current_component = OffsetPointer(current_buffer, component_byte_size * (size_t)entity_index);
+						const void* other_current_component = OffsetPointer(other_current_buffer, component_byte_size * (size_t)entity_index);
 						m_infos[m_components.indices[index]].CallCopyFunction(current_component, other_current_component, false);
 					}
 				}
 				else {
-					memcpy(m_buffers[index], other->m_buffers[index], component_byte_size * other_size);
+					memcpy(m_buffers[index], other->m_buffers[index], component_byte_size * (size_t)other_size);
 				}
 			}
 			else {
-				memcpy(m_buffers[index], other->m_buffers[index], component_byte_size * other_size);
+				memcpy(m_buffers[index], other->m_buffers[index], component_byte_size * (size_t)other_size);
 			}
 		}
 	}

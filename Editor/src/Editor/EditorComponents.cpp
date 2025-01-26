@@ -958,26 +958,17 @@ void EditorComponents::RecoverData(
 		const void* data = entity_manager->GetGlobalComponent(component);
 		ptr = (uintptr_t)temporary_allocation;
 		Serialize(internal_manager, old_type, data, ptr, &serialize_options);
-		entity_manager->UnregisterGlobalComponentCommit(component);
 
-		ECS_STACK_VOID_STREAM(global_data_stack_allocation, 4096);
-		// We are going to deserialize directly into the component data later on
-		ECS_ASSERT(new_size < global_data_stack_allocation.capacity);
+		void* new_data = entity_manager->ResizeGlobalComponent(component, new_size);
 
-		// Register the component first, such that we have a valid allocator
-		entity_manager->RegisterGlobalComponentCommit(component, new_size, global_data_stack_allocation.buffer, current_type->name, new_allocator_size);
-
-		if (new_allocator_size != -1) {
-			MemoryArena* arena = entity_manager->GetGlobalComponentAllocator(component);	
-			AllocatorPolymorphic alloc = arena;
-			// We need to use multithreaded allocations
-			alloc.allocation_type = ECS_ALLOCATION_MULTI;
-			deserialize_options.field_allocator = alloc;
-		}
+		deserialize_options.initialize_type_allocators = true;
+		deserialize_options.use_type_field_allocators = true;
+		// Global components should initialize their allocator from the main entity manager allocator,
+		// Since they might need a lot of memory
+		deserialize_options.field_allocator = entity_manager->MainAllocator();
 
 		ptr = (uintptr_t)temporary_allocation;
-		void* current_component_data = entity_manager->GetGlobalComponent(component);
-		ECS_DESERIALIZE_CODE code = Deserialize(internal_manager, current_type, current_component_data, ptr, &deserialize_options);
+		ECS_DESERIALIZE_CODE code = Deserialize(internal_manager, current_type, new_data, ptr, &deserialize_options);
 		ECS_ASSERT(code == ECS_DESERIALIZE_OK, "Failed to recover global component data after change");
 	}
 
@@ -2247,14 +2238,7 @@ void EditorComponents::SetManagerComponentAllocators(EditorState* editor_state, 
 	shared_data.entity_manager = entity_manager;
 	ForEachSharedComponent(shared_functor, &shared_data);
 
-	entity_manager->ForAllGlobalComponents([&](void* data, Component component) {
-		Stream<char> component_name = ComponentFromID(component, ECS_COMPONENT_GLOBAL);
-		const ReflectionType* reflection_type = GetType(component_name);
-		size_t allocator_size = GetReflectionComponentAllocatorSize(reflection_type);
-		if (allocator_size != -1) {
-			entity_manager->ResizeGlobalComponentAllocator(component, allocator_size);
-		}
-	});
+	// Global components don't have an out of the box allocator
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -2474,6 +2458,13 @@ void EditorComponents::UpdateComponents(
 					// Existing entities
 				}
 
+				if (HasFlag(validate_result, ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_TYPE_ALLOCATOR)) {
+					// This case is the same as MISSING_ALLOCATOR_SIZE_FUNCTION, with the difference that a better
+					// Message is relayed to the user
+					Stream<char> name_copy = type->name.Copy(allocator);
+					events.Add(EditorComponentEvent::CreateBase(EDITOR_COMPONENT_EVENT_GLOBAL_COMPONENT_MISSING_TYPE_ALLOCATOR, name_copy));
+				}
+
 				if (HasFlag(validate_result, ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_IS_SHARED_FUNCTION)) {
 					Stream<char> name_copy = type->name.Copy(allocator);
 					events.Add(EditorComponentEvent::CreateIsMissingFunction(name_copy, ECS_COMPONENT_IS_SHARED_FUNCTION));
@@ -2533,6 +2524,11 @@ void EditorComponents::UpdateComponents(
 					// Make an exception for this one, do not continue the loop
 					// Since the component is still valid after all, it just needs a function to be specified
 					//continue;
+				}
+				else if (HasFlag(validate_result, ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_TYPE_ALLOCATOR)) {
+					// This case is the same as MISSING_ALLOCATOR_SIZE_FUNCTION, with the difference that a better
+					// Message is relayed to the user
+					events.Add(EditorComponentEvent::CreateBase(EDITOR_COMPONENT_EVENT_GLOBAL_COMPONENT_MISSING_TYPE_ALLOCATOR, type->name.Copy(allocator)));
 				}
 			}
 		}
@@ -2924,7 +2920,10 @@ void UserEventsWindow(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 		"HAS_ALLOCATOR_BUT_NO_BUFFERS: Remove the allocator function",
 		"LINK_COMPONENT_MISSING_TARGET: Give the component its target",
 		"LINK_COMPONENT_INVALID_TARGET: The target of the link is not a component",
-		"LINK_MISMATCH_FOR_DEFAULT: The link component has default conversion but the target cannot be converted to"
+		"LINK_MISMATCH_FOR_DEFAULT: The link component has default conversion but the target cannot be converted to",
+		"GLOBAL_COMPONENT_MISSING_TYPE_ALLOCATOR: Global components (be it public or private) need to have a type allocator"
+		" specified if they have buffers. This allocator should be initialized from the entity manager's main allocator, if"
+		" the component is private and you initialize yourself in code"
 	};
 	drawer.LabelList(UI_CONFIG_LABEL_LIST_NO_NAME, config, "List", { label_lists, std::size(label_lists) });
 	drawer.NextRow();
@@ -2947,6 +2946,9 @@ void UserEventsWindow(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 		else if (component_event == EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION) {
 			FormatString(temporary_string, " IS_MISSING the function {#}", data->user_events[index].missing_function_name);
 			type_string = temporary_string;
+		}
+		else if (component_event == EDITOR_COMPONENT_EVENT_GLOBAL_COMPONENT_MISSING_TYPE_ALLOCATOR) {
+			type_string = " GLOBAL_COMPONENT_MISSING_TYPE_ALLOCATOR";
 		}
 		else if (component_event == EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS) {
 			type_string = " HAS_ALLOCATOR_NO_BUFFERS";
@@ -3308,6 +3310,33 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 				remove_event_step(index);
 				continue;
 			}
+		}
+		else if (component_event.type == EDITOR_COMPONENT_EVENT_GLOBAL_COMPONENT_MISSING_TYPE_ALLOCATOR) {
+			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			if (type != nullptr) {
+				bool has_buffers = HasReflectionTypeComponentBuffers(type);
+				if (has_buffers) {
+					bool has_main_allocator = HasReflectionTypeOverallAllocator(type);
+					if (has_main_allocator) {
+						// Remove the event if the main allocator was added
+						remove_event_step(index);
+						continue;
+					}
+				}
+				else {
+					// If it no longer has buffers, remove this event
+					remove_event_step(index);
+					continue;
+				}
+			}
+			else {
+				// Remove the event if the type has been removed
+				remove_event_step(index);
+				continue;
+			}
+		}
+		else {
+			ECS_ASSERT(false);
 		}
 	}
 }

@@ -47,12 +47,12 @@ ECS_THREAD_TASK(CollisionBroadphase) {
 ECS_THREAD_TASK(EmptyGridHandler) {}
 
 void InitializeCollisionBroadphase(World* world, StaticThreadTaskInitializeInfo* info) {
-	if (info->previous_data.size > 0) {
-		FixedGrid* previous_grid = (FixedGrid*)info->previous_data.buffer;
-		previous_grid->Clear();
-	}
+	//if (info->previous_data.size > 0) {
+	//	FixedGrid* previous_grid = (FixedGrid*)info->previous_data.buffer;
+	//	previous_grid->Clear();
+	//}
 
-	FixedGrid* fixed_grid = (FixedGrid*)info->Allocate(sizeof(FixedGrid));
+	FixedGrid* fixed_grid = world->entity_manager->RegisterGlobalComponentCommit<FixedGrid>(nullptr);
 	fixed_grid->Initialize(world->memory, { 128, 128, 128 }, { 2, 2, 2 }, 10, NarrowphaseGridHandler, nullptr, 0);
 	fixed_grid->EnableLayerCollisions(0, 0);
 }

@@ -598,24 +598,48 @@ namespace ECSEngine {
 
 	Stream<char> FindMatchingParenthesis(Stream<char> range, char opened_char, char closed_char, unsigned int opened_count)
 	{
-		const char* opened_paren = FindMatchingParenthesis(range.buffer, range.buffer + range.size, opened_char, closed_char, opened_count);
-		if (opened_paren == nullptr) {
+		const char* closed_paren = FindMatchingParenthesis(range.buffer, range.buffer + range.size, opened_char, closed_char, opened_count);
+		if (closed_paren == nullptr) {
 			return { nullptr, 0 };
 		}
 
-		return { opened_paren, PointerDifference(range.buffer + range.size, opened_paren) };
+		return { closed_paren, PointerDifference(range.buffer + range.size, closed_paren) };
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	Stream<char> FindMatchingParenthesesRange(Stream<char> range, char opened_char, char closed_char) {
+		Stream<char> closed_paren = FindMatchingParenthesis(range, opened_char, closed_char, 0);
+		if (closed_paren.size == 0) {
+			return {};
+		}
+
+		Stream<char> open_paren = FindFirstCharacter(range, opened_char);
+		return open_paren.StartDifference(closed_paren.AdvanceReturn());
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
 	Stream<wchar_t> FindMatchingParenthesis(Stream<wchar_t> range, wchar_t opened_char, wchar_t closed_char, unsigned int opened_count)
 	{
-		const wchar_t* opened_paren = FindMatchingParenthesis(range.buffer, range.buffer + range.size, opened_char, closed_char, opened_count);
-		if (opened_paren == nullptr) {
+		const wchar_t* closed_paren = FindMatchingParenthesis(range.buffer, range.buffer + range.size, opened_char, closed_char, opened_count);
+		if (closed_paren == nullptr) {
 			return { nullptr, 0 };
 		}
 
-		return { opened_paren, PointerDifference(range.buffer + range.size, opened_paren) };
+		return { closed_paren, PointerDifference(range.buffer + range.size, closed_paren) };
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	Stream<wchar_t> FindMatchingParenthesesRange(Stream<wchar_t> range, wchar_t opened_char, wchar_t closed_char) {
+		Stream<wchar_t> closed_paren = FindMatchingParenthesis(range, opened_char, closed_char, 0);
+		if (closed_paren.size == 0) {
+			return {};
+		}
+
+		Stream<wchar_t> open_paren = FindFirstCharacter(range, opened_char);
+		return open_paren.StartDifference(closed_paren.AdvanceReturn());
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -1692,16 +1716,15 @@ namespace ECSEngine {
 		ReplaceOccurrence<char> occurence;
 		occurence.string = token;
 		occurence.replacement = replacement;
-		return ReplaceTokensWithDelimiters(string, { &occurence, 1 }, delimiters, allocator);
+		return ReplaceTokensWithDelimiters(string, Stream<ReplaceOccurrence<char>>{ &occurence, 1 }, delimiters, allocator);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, Stream<ReplaceOccurrence<char>> replacements, Stream<char> delimiters, AllocatorPolymorphic allocator) {
-		if (replacements.size == 0) {
-			return string.Copy(allocator);
-		}
-
+	// The find functor receives as parameter (Stream<char> token) and should return a Stream<char> with the
+	// Replacement, if there is one, else {}
+	template<typename FindFunctor>
+	static Stream<char> ReplaceTokensWithDelimitersImpl(Stream<char> string, Stream<char> delimiters, AllocatorPolymorphic allocator, FindFunctor&& find_functor) {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 
 		ResizableStream<char> replaced_string(&stack_allocator, string.size);
@@ -1722,11 +1745,9 @@ namespace ECSEngine {
 		Stream<Token> field_tokens = tokenized_string.tokens.ToStream();
 		for (size_t index = 0; index < field_tokens.size; index++) {
 			if (field_tokens[index].type == ECS_TOKEN_TYPE_GENERAL) {
-				unsigned int replacement_index = FindString(tokenized_string[index], replacements, [](const ReplaceOccurrence<char>& occurence) {
-					return occurence.string;
-					});
-				if (replacement_index != -1) {
-					replaced_string.AddStream(replacements[replacement_index].replacement);
+				Stream<char> replacement = find_functor(tokenized_string[index]);
+				if (replacement.size > 0) {
+					replaced_string.AddStream(replacement);
 				}
 				else {
 					replaced_string.AddStream(tokenized_string[index]);
@@ -1738,6 +1759,34 @@ namespace ECSEngine {
 		}
 
 		return replaced_string.Copy(allocator);
+	}
+
+	Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, Stream<ReplaceOccurrence<char>> replacements, Stream<char> delimiters, AllocatorPolymorphic allocator) {
+		if (replacements.size == 0) {
+			return string.Copy(allocator);
+		}
+
+		return ReplaceTokensWithDelimitersImpl(string, delimiters, allocator, [&](Stream<char> token) -> Stream<char> {
+			unsigned int replacement_index = FindString(token, replacements, [](const ReplaceOccurrence<char>& occurence) {
+				return occurence.string;
+				});
+			return replacement_index != -1 ? replacements[replacement_index].replacement : Stream<char>();
+		});
+
+		
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, const HashTableDefault<Stream<char>>& replacements, Stream<char> delimiters, AllocatorPolymorphic allocator) {
+		if (replacements.GetCount() == 0) {
+			return string.Copy(allocator);
+		}
+
+		return ReplaceTokensWithDelimitersImpl(string, delimiters, allocator, [&](Stream<char> token) -> Stream<char> {
+			const Stream<char>* replacement = replacements.TryGetValuePtr(token);
+			return replacement != nullptr ? *replacement : Stream<char>();
+		});
 	}
 
 	// --------------------------------------------------------------------------------------------------

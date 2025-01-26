@@ -478,7 +478,7 @@ namespace ECSEngine {
 
 	static void DeallocateGlobalComponent(EntityManager* entity_manager, unsigned int index) {
 		// If it has an allocator deallocate it
-		DeallocateAllocatorForComponent(entity_manager, entity_manager->m_global_components_info[index].allocator);
+		entity_manager->m_global_components_info[index].TryCallDeallocateFunction(entity_manager->m_global_components_data[index]);
 		entity_manager->m_global_components_info[index].allocator = nullptr;
 
 		entity_manager->m_small_memory_manager.Deallocate(entity_manager->m_global_components_data[index]);
@@ -2556,15 +2556,18 @@ namespace ECSEngine {
 		other->ForAllGlobalComponents([&](void* data, Component component) {
 			if (!ExistsGlobalComponent(component)) {
 				const ComponentInfo* component_info = other->m_global_components_info + component;
-				size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
-				ECS_ASSERT(allocator_size == 0, "Adding global components from other entity managers with buffers is not possible since those cannot be copied manually");
-				RegisterGlobalComponentCommit(
+				ComponentFunctions component_functions = component_info->GetComponentFunctions();
+
+				void* global_component = RegisterGlobalComponentCommit(
 					component,
 					component_info->size,
 					data,
 					component_info->name,
-					allocator_size
+					component_functions.copy_function != nullptr ? &component_functions : nullptr
 				);
+
+				// Call the copy function if it is specified
+				component_info->TryCallCopyFunction(global_component, data, false);
 			}
 		});
 
@@ -3274,20 +3277,18 @@ namespace ECSEngine {
 		ResizeGlobalComponents(this, entity_manager->m_global_component_capacity, false);
 		// We need to register the components one by one because we need to copy the buffers
 		for (unsigned int index = 0; index < entity_manager->m_global_component_count; index++) {
-			ComponentInfo component_info = entity_manager->m_global_components_info[index];
-			ECS_ASSERT(component_info.allocator == nullptr, "Copying global components with allocators is not yet implemented");
-
-			size_t allocator_size = 0;
-			if (component_info.allocator != nullptr) {
-				allocator_size = component_info.allocator->InitialArenaCapacity();
-			}
-			RegisterGlobalComponentCommit(
+			const ComponentInfo& component_info = entity_manager->m_global_components_info[index];
+			ComponentFunctions component_functions = component_info.GetComponentFunctions();
+			void* new_global_component = RegisterGlobalComponentCommit(
 				entity_manager->m_global_components[index],
 				component_info.size,
 				entity_manager->m_global_components_data[index],
 				component_info.name,
-				allocator_size
+				component_functions.copy_function != nullptr ? &component_functions : nullptr
 			);
+
+			// If it has a copy function, call it
+			component_info.TryCallCopyFunction(new_global_component, entity_manager->m_global_components_data[index], false);
 		}
 
 		// Copy the actual archetypes now
@@ -4533,15 +4534,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	MemoryArena* EntityManager::GetGlobalComponentAllocator(Component component)
-	{
-		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
-		ECS_CRASH_CONDITION_RETURN(index != -1, nullptr, "The global component {#} doesn't exist when retrieving its allocator.", component.value);
-		return m_global_components_info[index].allocator;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
 	MemoryArena* EntityManager::GetComponentAllocatorFromType(Component component, ECS_COMPONENT_TYPE type) {
 		switch (type) {
 		case ECS_COMPONENT_UNIQUE:
@@ -4549,7 +4541,7 @@ namespace ECSEngine {
 		case ECS_COMPONENT_SHARED:
 			return GetSharedComponentAllocator(component);
 		case ECS_COMPONENT_GLOBAL:
-			return GetGlobalComponentAllocator(component);
+			ECS_CRASH_CONDITION_RETURN(false, nullptr, "EntityManager: Global components do not have component allocators");
 		}
 
 		ECS_CRASH_CONDITION_RETURN(false, nullptr, "EntityManager: invalid component type when trying to retrieve component memory allocator.");
@@ -5430,8 +5422,13 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void* EntityManager::RegisterGlobalComponentCommit(Component component, unsigned int size, const void* data, Stream<char> name, size_t allocator_size)
-	{
+	void* EntityManager::RegisterGlobalComponentCommit(
+		Component component, 
+		unsigned int size, 
+		const void* data, 
+		Stream<char> name, 
+		const ComponentFunctions* component_functions
+	) {
 		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 64);
 		Stream<char> component_name = name;
 		if (name.size == 0) {
@@ -5450,16 +5447,21 @@ namespace ECSEngine {
 
 		ComponentInfo* component_info = m_global_components_info + m_global_component_count;
 		component_info->size = size;
-		component_info->copy_function = nullptr;
-		component_info->deallocate_function = nullptr;
 		component_info->data = {};
 		component_info->name = StringCopy(SmallAllocator(), component_name);
-
-		CreateAllocatorForComponent(this, *component_info, allocator_size);
+		component_info->allocator = nullptr;
+		if (component_functions != nullptr) {
+			component_info->SetComponentFunctions(component_functions, ComponentAllocator());
+		}
+		else {
+			component_info->ResetComponentFunctions();
+		}
 
 		void* component_allocation = m_small_memory_manager.Allocate(size);
 		m_global_components_data[m_global_component_count] = component_allocation;
-		memcpy(component_allocation, data, size);
+		if (data != nullptr) {
+			memcpy(component_allocation, data, size);
+		}
 		m_global_components[m_global_component_count] = component;
 
 		m_global_component_count++;
@@ -5614,6 +5616,14 @@ namespace ECSEngine {
 		});
 	}
 
+	void* EntityManager::ResizeGlobalComponent(Component component, unsigned int new_size) {
+		ECS_CRASH_CONDITION(ExistsGlobalComponent(component), "EntityManager: There is no global component {#} when trying to resize it.", component.value);
+
+		size_t global_component_index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		m_global_components_data[global_component_index] = m_small_memory_manager.Reallocate(m_global_components_data[global_component_index], new_size);
+		return m_global_components_data[global_component_index];
+	}
+
 	// --------------------------------------------------------------------------------------------------------------------
 
 	template<ECS_COMPONENT_TYPE component_type>
@@ -5668,12 +5678,6 @@ namespace ECSEngine {
 	MemoryArena* EntityManager::ResizeSharedComponentAllocator(Component component, size_t new_allocation_size)
 	{
 		return ResizeComponentAllocatorImpl<ECS_COMPONENT_SHARED>(this, component, new_allocation_size);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	MemoryArena* EntityManager::ResizeGlobalComponentAllocator(Component component, size_t new_allocation_size) {
-		return ResizeComponentAllocatorImpl<ECS_COMPONENT_GLOBAL>(this, component, new_allocation_size);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

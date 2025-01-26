@@ -1759,6 +1759,16 @@ namespace ECSEngine {
 				MathStructureInfo structure_info = ECS_MATH_STRUCTURE_TYPE_INFOS[index];
 				blittable_types->AddAssert({ structure_info.name, structure_info.byte_size, structure_info.alignment, nullptr });
 			}
+
+			// Besides the math types, add the most common SIMD types as well
+#define ADD_ENTRY(type) blittable_types->AddAssert({ STRING(type), sizeof(type), alignof(type), nullptr })
+
+			ADD_ENTRY(Vec8f);
+			ADD_ENTRY(Vec8ui);
+			ADD_ENTRY(Vec8i);
+			ADD_ENTRY(Vec4d);
+
+#undef ADD_ENTRY
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1786,6 +1796,20 @@ namespace ECSEngine {
 				memset(allocated_data, 0, byte_size);
 			}
 			blittable_types.Add({ definition, byte_size, alignment, allocated_data });
+		}		
+		
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::AddConstantsFrom(const ReflectionManager* other)
+		{
+			unsigned int write_index = constants.ReserveRange(other->constants.size);
+			Stream<ReflectionConstant> new_constants = StreamCoalescedDeepCopy(other->constants.ToStream(), folders.allocator);
+			// Set the folder hierarchy index for these constants to -1 such that they don't get bound to any
+			// folder index
+			for (size_t index = 0; index < new_constants.size; index++) {
+				new_constants[index].folder_hierarchy = -1;
+				constants[write_index + index] = new_constants[index];
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1828,6 +1852,42 @@ namespace ECSEngine {
 			other->type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
 				AddType(&type, Allocator());
 			});
+		}
+		
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::AddTypedefsFrom(const ReflectionManager* other)
+		{
+			other->typedefs.ForEachConst([&](const ReflectionTypedef& typedef_, ResourceIdentifier identifier) {
+				void* allocation = Allocate(Allocator(), typedef_.CopySize());
+				uintptr_t allocation_ptr = (uintptr_t)allocation;
+				ReflectionTypedef copied_typedef = typedef_.CopyTo(allocation_ptr);
+				copied_typedef.folder_hierarchy_index = -1;
+				typedefs.InsertDynamic(Allocator(), copied_typedef, identifier.Copy(Allocator()));
+			});
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::AddTypeTemplatesFrom(const ReflectionManager* other) {
+			other->type_templates.ForEachConst([&](const ReflectionTypeTemplate& template_, ResourceIdentifier identifier) {
+				void* allocation = Allocate(Allocator(), template_.CopySize());
+				uintptr_t allocation_ptr = (uintptr_t)allocation;
+				ReflectionTypeTemplate copied_template = template_.CopyTo(allocation_ptr);
+				copied_template.folder_hierarchy_index = -1;
+				type_templates.InsertDynamic(Allocator(), copied_template, copied_template.base_type.name);
+			});
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::AddAllFrom(const ReflectionManager* other)
+		{
+			AddConstantsFrom(other);
+			AddEnumsFrom(other);
+			AddTypesFrom(other);
+			AddTypedefsFrom(other);
+			AddTypeTemplatesFrom(other);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1915,48 +1975,7 @@ namespace ECSEngine {
 				for (size_t template_index = 0; template_index < data[data_index].type_templates.size; template_index++) {
 					ReflectionTypeTemplate template_copy = data[data_index].type_templates[template_index].CopyTo(ptr);
 					template_copy.folder_hierarchy_index = folder_index;
-					type_templates.InsertDynamic(folders.allocator, template_copy, data[data_index].type_templates[template_index].base_type.name);
-				}
-			}
-
-			// After binding the type templates, iterate through all fields of normal types and when a field
-			// Is encountered that matches a template, instantiate that type template
-
-			// This buffer will hold the types that were instantiated this iteration, such that we can integrate them
-			// In the resolve pipeline
-			ResizableStream<Stream<char>> instantiated_type_templates(&stack_allocator, 16);
-			for (size_t data_index = 0; data_index < data_count; data_index++) {
-				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
-					const ReflectionType& type = data[data_index].types[type_index];
-					for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
-						Stream<char> template_pair = FindMatchingParenthesis(type.fields[field_index].definition, '<', '>', 0);
-						if (template_pair.size > 0) {
-							Stream<char> template_type_definition = type.fields[field_index].definition.StartDifference(template_pair);
-							const ReflectionTypeTemplate* template_type = GetTypeTemplate(template_type_definition);
-							if (template_type != nullptr) {
-								ECS_STACK_CAPACITY_STREAM(Stream<char>, matched_template_parameters, 32);
-								ReflectionTypeTemplate::MatchStatus match_status = template_type->DoesMatch(template_pair, &matched_template_parameters);
-								if (match_status == ReflectionTypeTemplate::MatchStatus::IncorrectParameter) {
-									ECS_FORMAT_TEMP_STRING(message, "Type {#} contains the field {#} with definition {#} that matches the template type {#}, but its arguments are invalid.", 
-										type.name, type.fields[field_index].name, type.fields[field_index].definition, template_type_definition);
-									WriteErrorMessage(data, message);
-									FreeFolderHierarchy(folder_index);
-									return false;
-								}
-								else if (match_status == ReflectionTypeTemplate::MatchStatus::Success) {
-									// It matched the template, we need to instantiate it, if it doesn't already exist
-									if (TryGetType(template_type_definition) == nullptr) {
-										ReflectionType instantiated_type = template_type->Instantiate(this, Allocator(), matched_template_parameters);
-										instantiated_type.folder_hierarchy_index = -1;
-										type_definitions.InsertDynamic(Allocator(), instantiated_type, instantiated_type.name);
-
-										ECS_ASSERT(template_type_definition == instantiated_type.name, "Mismatch between reflection template instantiated name and the requested name");
-										instantiated_type_templates.Add(instantiated_type.name);
-									}
-								}
-							}
-						}
-					}
+					type_templates.InsertDynamic(folders.allocator, template_copy, template_copy.base_type.name);
 				}
 			}
 
@@ -1992,6 +2011,98 @@ namespace ECSEngine {
 						return false;
 					}
 					enum_definitions.InsertDynamic(folders.allocator, enum_, identifier);
+				}
+			}
+
+			// Build a hash table with the remapping values, such that we can perfrom this operation quickly
+			// Use a default size, and then use dynamic insertion in case we need a higher capacity
+			HashTableDefault<Stream<char>> replace_constants_or_enum_strings;
+			replace_constants_or_enum_strings.Initialize(&stack_allocator, PowerOfTwoGreater(constants.size + enum_definitions.GetCount() * 4));
+			for (size_t index = 0; index < constants.size; index++) {
+				// Consider constants that have integral value at the moment.
+				// TODO: In the future, floating point integral arguments might be necessary
+				if (IsAlmostIntegral(constants[index].value)) {
+					ECS_STACK_CAPACITY_STREAM(char, converted_constant_value, 64);
+					int64_t integer_value = (int64_t)constants[index].value;
+					ConvertIntToChars(converted_constant_value, integer_value);
+					replace_constants_or_enum_strings.InsertDynamic(&stack_allocator, converted_constant_value.Copy(&stack_allocator), constants[index].name);
+				}
+			}
+			enum_definitions.ForEachConst([&](const ReflectionEnum& enum_, ResourceIdentifier identifier) {
+				// Use the original field names, not the stylized names
+				for (size_t field_index = 0; field_index < enum_.original_fields.size; field_index++) {
+					ECS_STACK_CAPACITY_STREAM(char, converted_enum_value, 64);
+					ConvertIntToChars(converted_enum_value, field_index);
+					replace_constants_or_enum_strings.InsertDynamic(&stack_allocator, converted_enum_value.Copy(&stack_allocator), enum_.original_fields[field_index]);
+				}
+			});
+
+			stack_allocator.SetMarker();
+			// After the constants and enums have been bound, iterate through the fields of current types
+			// And replace template parameters that reference these values with their hardcoded value
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
+					ReflectionType& type = data[data_index].types[type_index];
+					for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
+						Stream<char> template_pair = FindMatchingParenthesesRange(type.fields[field_index].definition, '<', '>');
+						if (template_pair.size > 0) {
+							Stream<char> new_definition = ReplaceTokensWithDelimiters(template_pair, replace_constants_or_enum_strings, "<>,:", &stack_allocator);
+							if (template_pair != new_definition) {
+								// If the definition has changed, ensure it still fits inside the storage for the definition
+								ECS_ASSERT(new_definition.size <= type.fields[field_index].definition.size, "Replacing template parameters with constants or " 
+									"enum values failed: the space exceeded the initial size!");
+								// Overwrite the current definition, such that we can maintain the coalesced allocation
+								new_definition.CopyTo(template_pair.buffer);
+								type.fields[field_index].definition.size -= template_pair.size - new_definition.size;
+							}
+							stack_allocator.ReturnToMarker();
+						}
+					}
+				}
+			}
+
+			// After the constant replacement was done, we can release the stack allocator current usage, since that memory 
+			// Is no longer needed.
+			stack_allocator.Clear();
+
+			// After binding the type templates, iterate through all fields of normal types and when a field
+			// Is encountered that matches a template, instantiate that type template
+
+			// This buffer will hold the types that were instantiated this iteration, such that we can integrate them
+			// In the resolve pipeline
+			ResizableStream<Stream<char>> instantiated_type_templates(&stack_allocator, 16);
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
+					const ReflectionType& type = data[data_index].types[type_index];
+					for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
+						Stream<char> template_pair = FindMatchingParenthesesRange(type.fields[field_index].definition, '<', '>');
+						if (template_pair.size > 0) {
+							Stream<char> template_type_definition = type.fields[field_index].definition.StartDifference(template_pair);
+							const ReflectionTypeTemplate* template_type = GetTypeTemplate(template_type_definition);
+							if (template_type != nullptr) {
+								ECS_STACK_CAPACITY_STREAM(Stream<char>, matched_template_parameters, 32);
+								ReflectionTypeTemplate::MatchStatus match_status = template_type->DoesMatch(template_pair, &matched_template_parameters);
+								if (match_status == ReflectionTypeTemplate::MatchStatus::IncorrectParameter) {
+									ECS_FORMAT_TEMP_STRING(message, "Type {#} contains the field {#} with definition {#} that matches the template type {#}, but its arguments are invalid.", 
+										type.name, type.fields[field_index].name, type.fields[field_index].definition, template_type_definition);
+									WriteErrorMessage(data, message);
+									FreeFolderHierarchy(folder_index);
+									return false;
+								}
+								else if (match_status == ReflectionTypeTemplate::MatchStatus::Success) {
+									// It matched the template, we need to instantiate it, if it doesn't already exist
+									if (TryGetType(template_type_definition) == nullptr) {
+										ReflectionType instantiated_type = template_type->Instantiate(this, Allocator(), matched_template_parameters);
+										instantiated_type.folder_hierarchy_index = -1;
+										type_definitions.InsertDynamic(Allocator(), instantiated_type, instantiated_type.name);
+
+										ECS_ASSERT(template_type_definition == instantiated_type.name, "Mismatch between reflection template instantiated name and the requested name");
+										instantiated_type_templates.Add(instantiated_type.name);
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 
@@ -2104,8 +2215,14 @@ namespace ECSEngine {
 						ulong2 byte_size_alignment = GetReflectionFieldSkipMacroByteSize(&type->fields[field_index]);
 
 						if (byte_size_alignment.x == -1) {
-							// Try to deduce the type
-							byte_size_alignment = SearchReflectionUserDefinedTypeByteSizeAlignment(this, type->fields[field_index].definition);
+							// Try to deduce the type - handle pointers separately, since the definition has the * removed
+							if (IsPointerWithSoA(type->fields[field_index].info.stream_type)) {
+								byte_size_alignment = { sizeof(void*), alignof(void*) };
+							}
+							else {
+								byte_size_alignment = SearchReflectionUserDefinedTypeByteSizeAlignment(this, type->fields[field_index].definition);
+							}
+
 							if (byte_size_alignment.x == -1) {
 								// Fail if couldn't determine
 								ECS_FORMAT_TEMP_STRING(message, "Failed to determine byte size and alignment for | {#} {#}; |, type {#}",
@@ -3173,20 +3290,6 @@ namespace ECSEngine {
 		const ReflectionEnum* ReflectionManager::TryGetEnum(Stream<char> name) const {
 			ResourceIdentifier identifier(name);
 			return enum_definitions.TryGetValuePtr(identifier);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void ReflectionManager::InheritConstants(const ReflectionManager* other)
-		{
-			unsigned int write_index = constants.ReserveRange(other->constants.size);
-			Stream<ReflectionConstant> new_constants = StreamCoalescedDeepCopy(other->constants.ToStream(), folders.allocator);
-			// Set the folder hierarchy index for these constants to -1 such that they don't get bound to any
-			// folder index
-			for (size_t index = 0; index < new_constants.size; index++) {
-				new_constants[index].folder_hierarchy = -1;
-				constants[write_index + index] = new_constants[index];
-			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -7492,26 +7595,35 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		ulong2 GetReflectionFieldSkipMacroByteSize(const ReflectionField* field)
 		{
 			Stream<char> tag = field->GetTag(STRING(ECS_SKIP_REFLECTION));
-			Stream<char> opened_paranthese = FindFirstCharacter(tag, '(');
-			Stream<char> closed_paranthese = FindMatchingParenthesis(opened_paranthese.buffer + 1, tag.buffer + tag.size, '(', ')');
-
-			opened_paranthese.Advance();
-			Stream<char> removed_whitespace = SkipWhitespace(opened_paranthese);
-			if (removed_whitespace.buffer == closed_paranthese.buffer) {
+			Stream<char> opened_parenthesis = FindFirstCharacter(tag, '(');
+			if (opened_parenthesis.size == 0) {
+				// If the parenthesis is missing, consider that the byte size must be deduced
 				return { (size_t)-1, (size_t)-1 };
 			}
 
-			Stream<char> comma = FindFirstCharacter(opened_paranthese, ',');
+			Stream<char> closed_parenthesis = FindMatchingParenthesis(opened_parenthesis.buffer + 1, tag.buffer + tag.size, '(', ')');
+			if (closed_parenthesis.size == 0) {
+				// If the parenthesis is missing, consider that the byte size must be deduced
+				return { (size_t)-1, (size_t)-1 };
+			}
+
+			opened_parenthesis.Advance();
+			Stream<char> removed_whitespace = SkipWhitespace(opened_parenthesis);
+			if (removed_whitespace.buffer == closed_parenthesis.buffer) {
+				return { (size_t)-1, (size_t)-1 };
+			}
+
+			Stream<char> comma = FindFirstCharacter(opened_parenthesis, ',');
 			size_t byte_size = -1;
 			size_t alignment = -1;
 
 			if (comma.size == 0) {
 				// No alignment specified
-				byte_size = ConvertCharactersToInt(opened_paranthese);
+				byte_size = ConvertCharactersToInt(opened_parenthesis);
 			}
 			else {
 				// Has alignment specified
-				byte_size = ConvertCharactersToInt(Stream<char>(opened_paranthese.buffer, comma.buffer - opened_paranthese.buffer));
+				byte_size = ConvertCharactersToInt(Stream<char>(opened_parenthesis.buffer, comma.buffer - opened_parenthesis.buffer));
 				alignment = ConvertCharactersToInt(comma);
 			}
 			return { byte_size, alignment };

@@ -21,6 +21,12 @@ namespace ECSEngine {
 	struct EntityManager;
 	struct ArchetypeQueryCache;
 
+	/* 
+		Note: Global components should have a type allocator, from which all descending allocations
+		are made from. This type allocator should be created from the entity manager main allocator,
+		since some functions rely on this behavior.
+	*/
+
 	/*typedef void (*EntityManagerEventCallback)(EntityManager*, void*, ECS_ENTITY_MANAGER_EVENT_TYPE);
 
 	struct EntityManagerEvent {
@@ -1392,8 +1398,6 @@ namespace ECSEngine {
 
 		MemoryArena* GetSharedComponentAllocator(Component component);
 
-		MemoryArena* GetGlobalComponentAllocator(Component component);
-
 		MemoryArena* GetComponentAllocatorFromType(Component component, ECS_COMPONENT_TYPE type);
 
 		// Returns how many entities exist
@@ -1665,41 +1669,38 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// The component needs to be a shared component - with the appropriate reflection set
-		// The allocator size can be provided to have an allocator just for this component
-		// It makes it useful if the component needs buffers and they are allocated from here
-		// Since when destroying the world, no buffers will be leaked. The component buffers don't
-		// Need to be provided here - since the whole allocator will be deallocated when being removed
 		// The name is optional - for debugging purposes only
 		// It returns the newly allocated data back to you - if there are any buffers you must
-		// Copy them manually
+		// Copy them manually. You can set the data parameter to nullptr if you don't want to copy
+		// Anything initially, you just want the storage to be allocated. The copy function is needed
+		// Only if you plan on using the function CopyOther, which needs it to properly copy it. The
+		// Deallocate is needed no matter what
 		void* RegisterGlobalComponentCommit(
 			Component component,
 			unsigned int size,
 			const void* data,
 			Stream<char> name = { nullptr, 0 },
-			size_t allocator_size = 0
+			const ComponentFunctions* functions = nullptr
 		);
 
-		// The component needs to be a shared component - with the appropriate reflection set
-		// The allocator size can be provided to have an allocator just for this component
-		// It makes it useful if the component needs buffers and they are allocated from here
-		// Since when destroying the world, no buffers will be leaked. The component buffers don't
-		// Need to be provided here - since the whole allocator will be deallocated when being removed
 		// The name is optional - for debugging purposes only
 		// It returns the newly allocated data back to you - if there are any buffers you must
-		// Copy them manually
+		// Copy them manually. You can set the data parameter to nullptr if you don't want to copy
+		// Anything initially, you just want the storage to be allocated. The copy function is needed
+		// Only if you plan on using the function CopyOther, which needs it to properly copy it. The
+		// Deallocate is needed no matter what
 		template<typename T>
-		void* RegisterGlobalComponentCommit(
+		T* RegisterGlobalComponentCommit(
 			const T* data,
-			Stream<char> name = { nullptr, 0 }
+			Stream<char> name = { nullptr, 0 },
+			const ComponentFunctions* functions = nullptr
 		) {
-			return RegisterGlobalComponentCommit(
+			return (T*)RegisterGlobalComponentCommit(
 				T::ID(),
 				sizeof(T),
 				data,
-				name,
-				ComponentAllocatorSize<T>()
+				GetTemplateName<T>(),
+				functions
 			);
 		}
 
@@ -1773,6 +1774,10 @@ namespace ECSEngine {
 		// the data but it will not copy any old data.
 		void ResizeSharedComponent(Component component, unsigned int new_size);
 
+		// Immediate call. It will deallocate the previous data and reallocate a new block, without
+		// Copying the existing data. Returns the newly allocated pointer
+		void* ResizeGlobalComponent(Component component, unsigned int new_size);
+
 		// ---------------------------------------------------------------------------------------------------
 
 		// It does not copy any data stored previously. If the new allocation size is 0,
@@ -1784,11 +1789,6 @@ namespace ECSEngine {
 		// then it will deallocate it and return nullptr. Else deallocates and reallocates a new
 		// one and returns it
 		MemoryArena* ResizeSharedComponentAllocator(Component component, size_t new_allocation_size);
-
-		// It does not copy any data stored previously. If the new allocation size is 0,
-		// then it will deallocate it and return nullptr. Else deallocates and reallocates a new
-		// one and returns it
-		MemoryArena* ResizeGlobalComponentAllocator(Component component, size_t new_allocation_size);
 
 		// ---------------------------------------------------------------------------------------------------
 		
@@ -1900,7 +1900,6 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// Frees the component allocator - if it has one and deallocates the space for it
 		void UnregisterGlobalComponentCommit(Component component);
 
 		// ---------------------------------------------------------------------------------------------------

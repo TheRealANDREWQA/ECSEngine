@@ -1180,16 +1180,14 @@ namespace ECSEngine {
 					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
 				}
 
-				// Copy some dummy data - it doesn't matter exactly what gets copied here as long as it doesn't crash
-				// Since we will overwrite that later. We can register the component directly with the new ID - such
-				// that we don't need to perform any remapping
+				// We can register the component directly with the new ID - such that we don't need to perform any remapping
 				ECS_STACK_CAPACITY_STREAM(size_t, dummy_data, 256);
 				entity_manager->RegisterGlobalComponentCommit(
 					cached_global_infos[index].found_at,
 					component_fixup->component_byte_size,
-					dummy_data.buffer,
+					nullptr,
 					cached_global_infos[index].info->name,
-					component_fixup->component_functions.allocator_size
+					&component_fixup->component_functions
 				);
 			}
 		}
@@ -1309,14 +1307,15 @@ namespace ECSEngine {
 
 				// Allocate the data from the entity manager allocator
 				void* global_data = entity_manager->GetGlobalComponent(cached_global_infos[index].found_at);
-				AllocatorPolymorphic component_allocator = entity_manager->GetGlobalComponentAllocator(cached_global_infos[index].found_at);
 
 				DeserializeEntityManagerComponentData function_data;
 				function_data.components = global_data;
 				function_data.file_data = component_data;
 				function_data.extra_data = component_info->extra_data;
 				function_data.version = global_component_pairs[index].serialize_version;
-				function_data.component_allocator = component_allocator;
+				// Global components have their allocator as the main entity manager allocator, since they
+				// Might need a lot of memory
+				function_data.component_allocator = entity_manager->MainAllocator();
 				function_data.count = 1;
 
 				// Now call the extract function
@@ -1953,6 +1952,9 @@ namespace ECSEngine {
 		// We need this flag because we need a bit of special handling
 		// For the blittable case
 		bool is_file_blittable;
+		// This boolean is set to true by global components, which can have a type
+		// Allocator embedded in them, and we want to initialize it, else it's false
+		bool initialize_type_allocator;
 		// This is used only by the is_file_blittable case
 		size_t file_byte_size;
 	};
@@ -1974,6 +1976,10 @@ namespace ECSEngine {
 			options.verify_dependent_types = false;
 			options.field_allocator = data->component_allocator;
 			options.default_initialize_missing_fields = true;
+			if (functor_data->initialize_type_allocator) {
+				options.initialize_type_allocators = true;
+				options.use_type_field_allocators = true;
+			}
 
 			uintptr_t ptr = (uintptr_t)data->file_data;
 			void* current_component = data->components;
@@ -2061,6 +2067,8 @@ namespace ECSEngine {
 		}
 		functor_data->is_file_blittable = functor_data->field_table.IsBlittable(type_index);
 		functor_data->file_byte_size = functor_data->field_table.TypeByteSize(type_index);
+		// This is a special case for the global component, where we need to initialize the type allocator
+		functor_data->initialize_type_allocator = GetReflectionTypeComponentType(functor_data->type) == ECS_COMPONENT_GLOBAL;
 
 		return true;
 	}

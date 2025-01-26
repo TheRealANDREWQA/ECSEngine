@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 // The last value is meant to be no sleep, so set an enormous fps target
-constexpr size_t FRAME_PACING_FPS[] = { 35, 60, 120, 200, 100'000 };
+constexpr size_t FRAME_PACING_FPS[] = { 40, 60, 120, 200, 100'000 };
 constexpr size_t GLOBAL_MEMORY_COUNT = 100 * ECS_MB;
 constexpr size_t GLOBAL_MEMORY_RESERVE_COUNT = 75 * ECS_MB;
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "../Containers/Stream.h"
+#include "../Containers/HashTable.h"
 #include "BasicTypes.h"
 #include "Assert.h"
 
@@ -32,6 +33,54 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 }
 
 #define ECS_FORMAT_SPECIFIER "{#}"
+
+	// This code was adapted from https://blog.molecular-matters.com/2015/12/11/getting-the-type-of-a-template-argument-as-string-without-rtti/
+	// Smart approach indeed.
+	namespace internal_template
+	{
+		static const unsigned int FRONT_SIZE = sizeof("ECSEngine::internal_template::GetTemplateNameHelper<") - 1u;
+		static const unsigned int BACK_SIZE = sizeof(">::GetTypeName") - 1u;
+
+		template <typename T>
+		struct GetTemplateNameHelper
+		{
+			ECS_INLINE static const char* GetTypeName()
+			{
+				static const size_t size = sizeof(__FUNCTION__) - FRONT_SIZE - BACK_SIZE;
+				static char template_name[size] = {};
+				static bool was_initialized = false;
+
+				if (!was_initialized) {
+					const char* copy_location = __FUNCTION__ + FRONT_SIZE;
+					// If it starts with struct or class, remove this keyword
+					const char* struct_keyword = "struct ";
+					const char* class_keyword = "class ";
+					size_t copy_size = size - 1;
+
+					if (memcmp(copy_location, struct_keyword, strlen(struct_keyword)) == 0) {
+						copy_location += strlen(struct_keyword);
+						copy_size -= strlen(struct_keyword);
+					}
+					else if (memcmp(copy_location, class_keyword, strlen(class_keyword)) == 0) {
+						copy_location += strlen(class_keyword);
+						copy_size -= strlen(class_keyword);
+					}
+
+					memcpy(template_name, copy_location, copy_size);
+					was_initialized = true;
+				}
+
+				return template_name;
+			}
+		};
+	}
+
+	// A helper function that returns the string name of a template parameter
+	template <typename T>
+	ECS_INLINE const char* GetTemplateName()
+	{
+		return internal_template::GetTemplateNameHelper<T>::GetTypeName();
+	}
 
 	ECS_INLINE void Capitalize(char* character) {
 		if (*character >= 'a' && *character <= 'z') {
@@ -381,7 +430,8 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 	}
 
 
-	// Returns nullptr if it doesn't find a match or there is an invalid number of parenthesis
+	// Returns nullptr if it doesn't find a match or there is an invalid number of parentheses
+	// Returns the closed character that matches the opened count
 	ECSENGINE_API const char* FindMatchingParenthesis(
 		const char* start_character,
 		const char* end_character,
@@ -390,6 +440,8 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 		unsigned int opened_count = 1
 	);
 
+	// Returns an empty range if it doesn't find a match or there is an invalid number of parentheses
+	// Returns the range starting from the closed character that matched until the end of the range
 	ECSENGINE_API Stream<char> FindMatchingParenthesis(
 		Stream<char> range,
 		char opened_char,
@@ -397,7 +449,16 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 		unsigned int opened_count = 1
 	);
 
-	// Returns nullptr if it doesn't find a match or there is an invalid number of parenthesis
+	// Returns the range starting from the opened parenthesis character to the closed character, if there
+	// Is such a matching range, else {}
+	ECSENGINE_API Stream<char> FindMatchingParenthesesRange(
+		Stream<char> range,
+		char opened_char,
+		char closed_char
+	);
+
+	// Returns nullptr if it doesn't find a match or there is an invalid number of parentheses
+	// Returns the closed character that matches the opened count
 	ECSENGINE_API const wchar_t* FindMatchingParenthesis(
 		const wchar_t* start_character,
 		const wchar_t* end_character,
@@ -406,11 +467,21 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 		unsigned int opened_count = 1
 	);
 
+	// Returns an empty range if it doesn't find a match or there is an invalid number of parentheses
+	// Returns the range starting from the closed character that matched until the end of the range
 	ECSENGINE_API Stream<wchar_t> FindMatchingParenthesis(
 		Stream<wchar_t> range,
 		wchar_t opened_char,
 		wchar_t closed_char,
 		unsigned int opened_count = 1
+	);
+
+	// Returns the range starting from the opened parenthesis character to the closed character, if there
+	// Is such a matching range, else {}
+	ECSENGINE_API Stream<wchar_t> FindMatchingParenthesesRange(
+		Stream<wchar_t> range,
+		wchar_t opened_char,
+		wchar_t closed_char
 	);
 
 	// Works it the same fashion as find matching parenthesis, the difference is that it goes backwards,
@@ -598,6 +669,11 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 	// Replaces the given token with the replacement while respecting the token order. Each individual character from the delimiters
 	// Parameter is treated as a separator. This works by tokenizing the string, and the replacing the general tokens that match the token
 	ECSENGINE_API Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, Stream<ReplaceOccurrence<char>> replacements, Stream<char> delimiters, AllocatorPolymorphic allocator);
+
+	// Replaces the given token with the replacement while respecting the token order. Each individual character from the delimiters
+	// Parameter is treated as a separator. This works by tokenizing the string, and the replacing the general tokens that match the token.
+	// This overload is identical in functionality to the stream one, but it uses a faster lookup for replacements, when there are many of them
+	ECSENGINE_API Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, const HashTableDefault<Stream<char>>& replacements, Stream<char> delimiters, AllocatorPolymorphic allocator);
 
 	// Returns the string isolated from other strings delimited using the given delimiter
 	ECSENGINE_API Stream<char> IsolateString(Stream<char> string, Stream<char> token, Stream<char> delimiter);

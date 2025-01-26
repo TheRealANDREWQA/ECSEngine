@@ -50,15 +50,7 @@
 //	ECS_INLINE constexpr static short ID() {
 //		return Physics_GLOBAL_COMPONENT_BASE + 0;
 //	}
-//	ECS_INLINE constexpr static size_t AllocatorSize() {
-//		return ECS_KB_R * 256;
-//	}
 // 
-//};
-
-// Settings
-// struct ECS_REFLECT_SETTINGS SettingsName {
-//
 //};
 
 // ------------------------ Copy Paste Helpers ------------------------------

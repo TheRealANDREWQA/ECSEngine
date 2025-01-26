@@ -1027,15 +1027,15 @@ void InspectorComponentCallback(ActionData* action_data) {
 		// Check to see if it has buffers and copy them if they have changed
 		unsigned int ui_input_count = data->draw_data->matching_inputs[matching_index].capacity_inputs.size;
 		if (ui_input_count > 0) {
-			MemoryArena* arena = nullptr;
+			AllocatorPolymorphic allocator = { nullptr };
 			void* component_data = nullptr;
 			if (data->draw_data->is_global_component) {
-				arena = active_manager->GetGlobalComponentAllocator(component);
 				component_data = active_manager->GetGlobalComponent(component);
+				allocator = Reflection::GetReflectionTypeOverallAllocator(type, component_data, allocator);
 			}
 			else {
 				if (is_shared) {
-					arena = active_manager->GetSharedComponentAllocator(component);
+					allocator = active_manager->GetSharedComponentAllocator(component);
 					SharedInstance shared_instance = SandboxEntitySharedInstance(editor_state, sandbox_index, entity, component);
 					component_data = GetSandboxSharedInstance(
 						editor_state,
@@ -1045,7 +1045,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 					);
 				}
 				else {
-					arena = active_manager->GetComponentAllocator(component);
+					allocator = active_manager->GetComponentAllocator(component);
 					component_data = GetSandboxEntityComponent(editor_state, sandbox_index, entity, component);
 				}
 			}
@@ -1055,7 +1055,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 			// Must use the target type, if this is a link component
 			const Reflection::ReflectionType* component_type = reflection_manager->GetType(target.size > 0 ? target : component_name);
 			Reflection::SetReflectionTypeInstanceBufferOptions set_buffer_options;
-			set_buffer_options.allocator = arena;
+			set_buffer_options.allocator = allocator;
 			set_buffer_options.checked_copy = true;
 			set_buffer_options.deallocate_existing = true;
 
