@@ -1117,13 +1117,13 @@ namespace ECSEngine {
 			return mandatory_parameter_count;
 		}
 
-		ReflectionTypeTemplate::MatchStatus ReflectionTypeTemplate::DoesMatch(Stream<char> template_parameters, CapacityStream<Stream<char>>* matched_arguments) const {
+		ReflectionTypeTemplate::MatchStatus ReflectionTypeTemplate::DoesMatch(Stream<char> template_parameters, CapacityStream<Stream<char>>* matched_arguments, bool matched_arguments_include_default_parameters) const {
 			if (template_parameters.size < 2) {
 				return MatchStatus::Failure;
 			}
 			
 			if (template_parameters[0] == '<') {
-				template_parameters.AdvanceReturn();
+				template_parameters.Advance();
 			}
 
 			if (template_parameters.Last() == '>') {
@@ -1167,7 +1167,7 @@ namespace ECSEngine {
 						matched_arguments->AddAssert(stack_matched_arguments[index]);
 					}
 				}
-				else {
+				else if (matched_arguments_include_default_parameters) {
 					if (matched_arguments != nullptr) {
 						// Add the default value
 						if (arguments[index].type == ArgumentType::Integer) {
@@ -1182,6 +1182,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			return MatchStatus::Success;
 		}
 
 		void ReflectionTypeTemplate::Finalize(AllocatorPolymorphic allocator, Stream<ReflectionEmbeddedArraySize>& template_embedded_array_sizes) {

@@ -2096,7 +2096,7 @@ namespace ECSEngine {
 										instantiated_type.folder_hierarchy_index = -1;
 										type_definitions.InsertDynamic(Allocator(), instantiated_type, instantiated_type.name);
 
-										ECS_ASSERT(template_type_definition == instantiated_type.name, "Mismatch between reflection template instantiated name and the requested name");
+										ECS_ASSERT(type.fields[field_index].definition == instantiated_type.name, "Mismatch between reflection template instantiated name and the requested name");
 										instantiated_type_templates.Add(instantiated_type.name);
 									}
 								}

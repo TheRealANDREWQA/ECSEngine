@@ -470,8 +470,9 @@ namespace ECSEngine {
 			unsigned int GetMandatoryParameterCount() const;
 
 			// Determines if the given template parameters are valid for this template type. If it matches and the matched_arguments
-			// Parameter is provided, it fills in the strings of the template arguments
-			MatchStatus DoesMatch(Stream<char> template_parameters, CapacityStream<Stream<char>>* matched_arguments = nullptr) const;
+			// Parameter is provided, it fills in the strings of the template arguments. The last argument indicates whether or not
+			// You want to receive in matched_arguments entries for the default arguments when these do not exist.
+			MatchStatus DoesMatch(Stream<char> template_parameters, CapacityStream<Stream<char>>* matched_arguments = nullptr, bool matched_arguments_include_default_parameters = false) const;
 
 			ReflectionTypeTemplate CopyTo(uintptr_t& ptr) const;
 
