@@ -3551,7 +3551,7 @@ namespace ECSEngine {
 
 		static void ConvertGroupForType(
 			UIReflectionDrawer* reflection, 
-			ReflectionField reflection_field,
+			const ReflectionField& reflection_field,
 			UIReflectionTypeField& field,
 			unsigned int type_byte_size,
 			UIReflectionElement element_index,
@@ -3573,6 +3573,7 @@ namespace ECSEngine {
 			// Embed in front of each buffer a boolean telling whether or not the buffer can be used or not
 			data->value_to_modify = nullptr;
 			data->int_flags = int_flags;
+			data->pointer_indirection_count = reflection_field.info.stream_type == ReflectionStreamFieldType::Pointer ? 1 : 0;
 			CreateTypeInputGroupSetBuffers(data, ptr);
 
 			field.stream_type = UIReflectionStreamType::None;
@@ -3597,6 +3598,7 @@ namespace ECSEngine {
 			data->stream.element_byte_size = reflection_field.info.stream_byte_size;
 			data->stream.element_alignment = reflection_field.info.stream_alignment;
 			data->stream.is_resizable = false;
+			data->stream.pointer_indirection_count = 0;
 
 			if (int_flags > 0) {
 				UIReflectionStreamIntInputData* int_data = (UIReflectionStreamIntInputData*)data;
@@ -3609,7 +3611,7 @@ namespace ECSEngine {
 
 		static void ConvertStreamGroupForType(
 			UIReflectionDrawer* reflection,
-			ReflectionField reflection_field,
+			const ReflectionField& reflection_field,
 			UIReflectionTypeField& field,
 			UIReflectionElement element_index,
 			unsigned int int_flags = 0
@@ -3624,6 +3626,7 @@ namespace ECSEngine {
 			data->basic_type_count = Reflection::BasicTypeComponentCount(reflection_field.info.basic_type);
 			data->base_data.stream.element_byte_size = reflection_field.info.stream_byte_size;
 			data->base_data.stream.element_alignment = reflection_field.info.stream_alignment;
+			data->base_data.stream.pointer_indirection_count = 0;
 
 			data->int_flags = int_flags;
 
@@ -3674,6 +3677,7 @@ namespace ECSEngine {
 
 				data->value_to_modify = nullptr;
 				data->int_flags = GetIntFlags(reflection_field.info.basic_type);
+				data->pointer_indirection_count = reflection_field.info.stream_type == ReflectionStreamFieldType::Pointer ? 1 : 0;
 
 				field.stream_type = UIReflectionStreamType::None;
 				field.configuration = 0;
@@ -3701,6 +3705,7 @@ namespace ECSEngine {
 				data->lower_bound = -FLT_MAX;
 				data->upper_bound = FLT_MAX;
 				data->value_to_modify = nullptr;
+				data->pointer_indirection_count = reflection_field.info.stream_type == ReflectionStreamFieldType::Pointer ? 1 : 0;
 
 				field.stream_type = UIReflectionStreamType::None;
 				field.configuration = 0;
@@ -3721,6 +3726,7 @@ namespace ECSEngine {
 				data->default_value = 0;
 				data->lower_bound = -DBL_MAX;
 				data->upper_bound = DBL_MAX;
+				data->pointer_indirection_count = reflection_field.info.stream_type == ReflectionStreamFieldType::Pointer ? 1 : 0;
 
 				field.stream_type = UIReflectionStreamType::None;
 				field.configuration = 0;
@@ -3735,8 +3741,11 @@ namespace ECSEngine {
 				field.data = data;
 				field.element_index = UIReflectionElement::ComboBox;
 				field.byte_size = sizeof(*data);
+
+				data->value_to_modify = nullptr;
 				data->labels = reflection_enum.fields;
 				data->label_display_count = reflection_enum.fields.size;
+				data->pointer_indirection_count = 0;
 
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::None;
@@ -3759,6 +3768,7 @@ namespace ECSEngine {
 				field.byte_size = sizeof(*data);
 
 				data->value_to_modify = nullptr;
+				data->pointer_indirection_count = reflection_field.info.stream_type == ReflectionStreamFieldType::Pointer ? 1 : 0;
 
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::None;
@@ -3772,6 +3782,7 @@ namespace ECSEngine {
 
 				data->value_to_modify = nullptr;
 				data->default_color = Color(0, 0, 0);
+				data->pointer_indirection_count = reflection_field.info.stream_type == ReflectionStreamFieldType::Pointer ? 1 : 0;
 
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::None;
@@ -3785,6 +3796,7 @@ namespace ECSEngine {
 
 				data->value_to_modify = nullptr;
 				data->default_color = ColorFloat(0.0f, 0.0f, 0.0f, 1.0f);
+				data->pointer_indirection_count = reflection_field.info.stream_type == ReflectionStreamFieldType::Pointer ? 1 : 0;
 
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::None;
@@ -3815,11 +3827,21 @@ namespace ECSEngine {
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::None;
 
+				// If it contains pointer asterisks, don't use them to search by definition
+				unsigned char pointer_indirection_level = 0;
+				Stream<char> field_definition = reflection_field.definition;
+				while (field_definition.Last() == '*') {
+					pointer_indirection_level++;
+					field_definition.size--;
+				}
+
 				// If the type doesn't exist in the UI reflection, then create it
-				if (GetType(reflection_field.definition) == nullptr) {
-					const ReflectionType* user_defined_type = reflection->GetType(reflection_field.definition);
+				if (GetType(field_definition) == nullptr) {
+					const ReflectionType* user_defined_type = reflection->GetType(field_definition);
 					CreateType(user_defined_type);
 				}
+
+				data->pointer_indirection_count = pointer_indirection_level;
 			};
 
 			// Returns true if it found an override, else false.
@@ -3893,6 +3915,7 @@ namespace ECSEngine {
 
 				data->label_names = nullptr;
 				data->base_data.stream.element_byte_size = sizeof(char);
+				data->base_data.stream.pointer_indirection_count = 0;
 
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::Capacity;
@@ -3931,14 +3954,26 @@ namespace ECSEngine {
 				data->base_data.stream.element_alignment = reflection_field.info.stream_alignment;
 
 				Stream<char> user_defined_type = GetUserDefinedTypeFromStreamUserDefined(reflection_field.definition, reflection_field.info.stream_type);
+				// If it has pointer indirections, eliminate them and record the indirection count
+				unsigned char pointer_indirection_level = 0;
+				while (user_defined_type.Last() == '*') {
+					pointer_indirection_level++;
+					user_defined_type.size--;
+				}
+
+				// Skip over const
+				if (user_defined_type.StartsWith("const ")) {
+					user_defined_type.Advance(strlen("const "));
+				}
+
 				Stream<char> allocated_type = StringCopy(allocator, user_defined_type);
 				data->type_name = allocated_type.buffer;
+				data->base_data.stream.pointer_indirection_count = pointer_indirection_level;
 
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::Capacity;
 
 				// If the user defined type doesn't exist in the UI, then create it
-				// TODO: Handle pointers and const There is a special case to consider here:
 				if (GetType(data->type_name) == nullptr) {
 					CreateType(reflection->GetType(data->type_name));
 				}
