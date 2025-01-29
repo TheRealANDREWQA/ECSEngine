@@ -35,6 +35,11 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionCustomTypeAddDependentType(ReflectionCustomTypeDependentTypesData* data, Stream<char> definition) {
+			// If the definition starts with a const, discard it
+			if (definition.StartsWith("const ")) {
+				definition.Advance(strlen("const "));
+			}
+
 			// Check to see if it is a trivial type or not - do not report trivial types as dependent types
 			ReflectionBasicFieldType basic_field_type;
 			ReflectionStreamFieldType stream_field_type;

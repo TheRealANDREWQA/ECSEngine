@@ -927,7 +927,12 @@ namespace ECSEngine {
 
 		ECSENGINE_API size_t GetReflectionDataPointerElementByteSize(const ReflectionManager* manager, Stream<char> tag);
 
+		// It asserts that all user defined types have a match, i.e. they are matched by a type or custom type interface or it is assigned as blittable
 		ECSENGINE_API void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types);
+
+		// Returns true if a user defined field of the given type cannot be matched by a normal reflection type or by a custom type interface
+		// And that it is not declared as blittable. You can optionally retrieve the missing dependency as an out parameter
+		ECSENGINE_API bool HasReflectionTypeMissingDependencies(const ReflectionManager* manager, const ReflectionType* type, Stream<char>* missing_dependency = nullptr);
 
 		// Returns true if the field was tagged with ECS_REFLECTION_SKIP
 		ECSENGINE_API bool IsReflectionFieldSkipped(const ReflectionField* field);

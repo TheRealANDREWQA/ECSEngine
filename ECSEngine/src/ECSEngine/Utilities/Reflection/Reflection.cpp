@@ -2329,6 +2329,22 @@ namespace ECSEngine {
 				}
 			}
 
+			// After all types have been added to the type definition, ensure that all of the type dependencies are satisfied.
+			// For example, Stream<ContactConstraint*> has as dependency ConstactConstraint. Technically, the reflection field
+			// Infos can be safely resolved without knowing ContactConstraint itself, but it is better to signal to the user
+			// To reflect it instead of having other systems protect against this or fail because of this
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t index = 0; index < data[data_index].types.size; index++) {
+					Stream<char> missing_dependency;
+					if (HasReflectionTypeMissingDependencies(this, GetType(data[data_index].types[index].name), &missing_dependency)) {
+						ECS_FORMAT_TEMP_STRING(message, "The reflection type {#} has missing dependency {#}", data[data_index].types[index].name, missing_dependency);
+						WriteErrorMessage(data, message);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+				}
+			}
+
 			auto is_type_still_to_be_determined_recursion = [&](Stream<char> type, auto is_still_to_be_determined) {
 				for (size_t index = 0; index < types_to_be_processed.size; index++) {
 					if (get_type_to_be_processed(index)->name == type) {
@@ -7707,6 +7723,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// Try custom type
 								ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[index].definition);
 								if (custom_type != nullptr) {
+									// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
+									// If it needs them as well.
 									ReflectionCustomTypeDependentTypesData dependent_data;
 									dependent_data.definition = type->fields[index].definition;
 									dependent_data.dependent_types = dependent_types;
@@ -7722,6 +7740,105 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					}
 				}
 			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool HasReflectionTypeMissingDependencies(const ReflectionManager* manager, const ReflectionType* type, Stream<char>* missing_dependency) {
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, dependencies, 512);
+			
+			// Keep track of the dependencies that were already processed, such that we don't process
+			// A type once more if it appears multiple times. Use an array instead of a hash table since
+			// There should be few entries, and a hash table at small sizes is not that benefical.
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 4, ECS_MB);
+			ResizableStream<Stream<char>> processed_dependencies(&stack_allocator, 256);
+			
+			// This function is almost identical to GetReflectionTypeDependentTypes, with the difference being that
+			// It doesn't assert if a match could not be found. Returns true if the dependencies were successfully retrieved,
+			// Else false (when a match could not be established)
+			auto get_dependencies = [&](const ReflectionType* type) -> bool {
+				for (size_t index = 0; index < type->fields.size; index++) {
+					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+						// Check to see if it has the size given
+						if (GetReflectionTypeGivenFieldTag(&type->fields[index]).x == -1) {
+							// Check blittable exception
+							ulong2 blittable_index = manager->FindBlittableException(type->fields[index].definition);
+							if (blittable_index.x == -1) {
+								// Not a blittable type
+								// Try nested type, then custom type
+								const ReflectionType* nested_type = manager->TryGetType(type->fields[index].definition);
+								if (nested_type != nullptr) {
+									dependencies.AddAssert(nested_type->name);
+								}
+								else {
+									// Try custom type
+									ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[index].definition);
+									if (custom_type != nullptr) {
+										// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
+										// If it needs them as well.
+										ReflectionCustomTypeDependentTypesData dependent_data;
+										dependent_data.definition = type->fields[index].definition;
+										dependent_data.dependent_types = dependencies;
+										custom_type->GetDependentTypes(&dependent_data);
+										dependencies.size = dependent_data.dependent_types.size;
+									}
+									else {
+										// No match was found, bail out
+										if (missing_dependency != nullptr) {
+											*missing_dependency = type->fields[index].definition;
+										}
+										return false;
+									}
+								}
+							}
+						}
+					}
+				}
+				return true;
+			};
+
+			// Retrieve the top level dependencies
+			if (!get_dependencies(type)) {
+				return true;
+			}
+
+			processed_dependencies.Add(type->name);
+
+			while (dependencies.size > 0) {
+				Stream<char> current_dependency = dependencies.Last();
+				dependencies.size--;
+				if (FindString(current_dependency, processed_dependencies) == -1) {
+					processed_dependencies.Add(current_dependency);
+					const ReflectionType* type = manager->TryGetType(current_dependency);
+					if (type != nullptr) {
+						if (!get_dependencies(type)) {
+							return true;
+						}
+					}
+					else {
+						// Might be a custom reflection type, or an unmatched type
+						ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(current_dependency);
+						if (custom_type != nullptr) {
+							// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
+							// If it needs them as well.
+							ReflectionCustomTypeDependentTypesData dependent_data;
+							dependent_data.definition = current_dependency;
+							dependent_data.dependent_types = dependencies;
+							custom_type->GetDependentTypes(&dependent_data);
+							dependencies.size = dependent_data.dependent_types.size;
+						}
+						else {
+							// No match was found, bail out
+							if (missing_dependency != nullptr) {
+								*missing_dependency = current_dependency;
+							}
+							return true;
+						}
+					}
+				}
+			}
+
+			return false;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
