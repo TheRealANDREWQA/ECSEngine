@@ -958,14 +958,14 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 						ConvertIntToHex(end_characters, (int64_t)parameter);
 					}
 				}
-				else if constexpr (std::is_same_v<Parameter, CapacityStream<wchar_t>> || std::is_same_v<Parameter, Stream<wchar_t>>) {
+				else if constexpr (IsStreamType<wchar_t, Parameter>()) {
 					end_characters.AssertCapacity(parameter.size);
 					ConvertWideCharsToASCII(parameter, end_characters);
 				}
-				else if constexpr (std::is_same_v<Parameter, CapacityStream<char>> || std::is_same_v<Parameter, Stream<char>>) {
+				else if constexpr (IsStreamType<char, Parameter>()) {
 					end_characters.AddStreamAssert(parameter);
 				}
-				else if constexpr (std::is_same_v<Parameter, CapacityStream<void>> || std::is_same_v<Parameter, Stream<void>>) {
+				else if constexpr (IsStreamType<void, Parameter>()) {
 					end_characters.AddStreamAssert(parameter.As<char>());
 				}
 				else {

@@ -955,21 +955,24 @@ void EditorComponents::RecoverData(
 	}
 	// Global component
 	else {
-		const void* data = entity_manager->GetGlobalComponent(component);
-		ptr = (uintptr_t)temporary_allocation;
-		Serialize(internal_manager, old_type, data, ptr, &serialize_options);
+		// Perform this operation if the global component exists only
+		if (entity_manager->ExistsGlobalComponent(component)) {
+			const void* data = entity_manager->GetGlobalComponent(component);
+			ptr = (uintptr_t)temporary_allocation;
+			Serialize(internal_manager, old_type, data, ptr, &serialize_options);
 
-		void* new_data = entity_manager->ResizeGlobalComponent(component, new_size);
+			void* new_data = entity_manager->ResizeGlobalComponent(component, new_size);
 
-		deserialize_options.initialize_type_allocators = true;
-		deserialize_options.use_type_field_allocators = true;
-		// Global components should initialize their allocator from the main entity manager allocator,
-		// Since they might need a lot of memory
-		deserialize_options.field_allocator = entity_manager->MainAllocator();
+			deserialize_options.initialize_type_allocators = true;
+			deserialize_options.use_type_field_allocators = true;
+			// Global components should initialize their allocator from the main entity manager allocator,
+			// Since they might need a lot of memory
+			deserialize_options.field_allocator = entity_manager->MainAllocator();
 
-		ptr = (uintptr_t)temporary_allocation;
-		ECS_DESERIALIZE_CODE code = Deserialize(internal_manager, current_type, new_data, ptr, &deserialize_options);
-		ECS_ASSERT(code == ECS_DESERIALIZE_OK, "Failed to recover global component data after change");
+			ptr = (uintptr_t)temporary_allocation;
+			ECS_DESERIALIZE_CODE code = Deserialize(internal_manager, current_type, new_data, ptr, &deserialize_options);
+			ECS_ASSERT(code == ECS_DESERIALIZE_OK, "Failed to recover global component data after change");
+		}
 	}
 
 	Free(temporary_allocation);

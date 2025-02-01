@@ -4,6 +4,7 @@
 #include "ECSEngineContainers.h"
 #include "Export.h"
 #include "ECSEngineReflectionMacros.h"
+#include "CollisionDetectionComponents.h"
 
 using namespace ECSEngine;
 
@@ -52,7 +53,11 @@ struct FixedGridHandlerData {
 
 // When a collision is detected, a collision handler will be called to perform the necessary action
 // The handler must take as parameter a FixedGridHandlerData* pointer and then it can cast its own data
-struct COLLISIONDETECTION_API ECS_REFLECT FixedGrid {
+struct COLLISIONDETECTION_API ECS_REFLECT_GLOBAL_COMPONENT_PRIVATE FixedGrid {
+	ECS_INLINE constexpr static short ID() {
+		return COLLISION_DETECTION_GLOBAL_COMPONENT_BASE + 0;
+	}
+
 	ECS_INLINE AllocatorPolymorphic Allocator() const {
 		return spatial_grid.allocator;
 	}
@@ -64,7 +69,7 @@ struct COLLISIONDETECTION_API ECS_REFLECT FixedGrid {
 	// Adds a new entry to the given chunk, or if it is full, it will chain a new chunk
 	// And add to that one instead. Returns the "current" chunk - the chained one if it
 	// is the case, else the original chunk
-	GridChunk* AddToChunk(unsigned int identifier, unsigned char layer, AABBScalar aabb, GridChunk* chunk);
+	GridChunk* AddToChunk(unsigned int identifier, unsigned char layer, const AABBScalar& aabb, GridChunk* chunk);
 
 	// Returns the cell x, y and z indices that can be used to retrieve a grid cell
 	ECS_INLINE uint3 CalculateCell(float3 position) const {
@@ -86,7 +91,7 @@ struct COLLISIONDETECTION_API ECS_REFLECT FixedGrid {
 		uint3 cell_index, 
 		unsigned int identifier,
 		unsigned char layer, 
-		AABBScalar aabb, 
+		const AABBScalar& aabb, 
 		CapacityStream<CollisionInfo>* collisions
 	);
 
@@ -99,7 +104,7 @@ struct COLLISIONDETECTION_API ECS_REFLECT FixedGrid {
 		GridChunk* chunk,
 		unsigned int identifier,
 		unsigned char layer,
-		AABBScalar aabb,
+		const AABBScalar& aabb,
 		CapacityStream<CollisionInfo>* collisions
 	);
 
@@ -127,18 +132,19 @@ struct COLLISIONDETECTION_API ECS_REFLECT FixedGrid {
 	);
 
 	// The AABB needs to be transformed already. The collision handler will be called for each collision
-	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBScalar aabb);
+	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, const AABBScalar& aabb);
 
 	// The AABB needs to be transformed already. It will fill in the collisions
 	// That it finds inside the given buffer and calls the functor for each collision pair that it finds
-	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBScalar aabb, CapacityStream<CollisionInfo>* collisions);
+	void InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, const AABBScalar& aabb, CapacityStream<CollisionInfo>* collisions);
 
-	void InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, AABBScalar aabb);
+	void InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, const AABBScalar& aabb);
 
 	void StartFrame();
 
 	void SetLayerMask(unsigned char layer_index, const CollisionLayer* layer_mask);
 
+	[[ECS_MAIN_ALLOCATOR]]
 	SpatialGrid<GridChunkData, GridChunkDataEntry, GRID_CHUNK_COUNT> spatial_grid;
 
 	// Record these values such that we can have a good approximation for the initial
@@ -149,10 +155,8 @@ struct COLLISIONDETECTION_API ECS_REFLECT FixedGrid {
 	Stream<CollisionLayer> layers;
 
 	// This is the function that will be called to handle the collisions
-	[[ECS_SKIP_REFLECTION(8)]]
-	ThreadFunction handler_function;
-	[[ECS_SKIP_REFLECTION]]
-	void* handler_data;
+	ThreadFunction handler_function; ECS_SKIP_REFLECTION(static_assert(sizeof(ThreadFunction) == 8))
+	void* handler_data; ECS_SKIP_REFLECTION()
 };
 
 // Data should be the fixed grid

@@ -571,9 +571,12 @@ namespace ECSEngine {
 					const ReflectionField& field = type->fields[allocator_field.field_index];
 					
 					SerializeCustomTypeWriteFunctionData allocator_write_data;
-					allocator_write_data.data = type->GetField(data, allocator_field.field_index);
+					// The function GetReflectionTypeAllocatorPointerAndDefinition requires a void* out parameter, use a stack variable for this
+					void* write_data_pointer = nullptr;
+					GetReflectionTypeAllocatorPointerAndDefinition(type, allocator_field.field_index, data, write_data_pointer, allocator_write_data.definition);
+					
+					allocator_write_data.data = write_data_pointer;
 					allocator_write_data.tags = field.tag;
-					allocator_write_data.definition = field.definition;
 					allocator_write_data.options = nested_options;
 					allocator_write_data.reflection_manager = reflection_manager;
 					allocator_write_data.stream = &stream;
@@ -1213,8 +1216,7 @@ namespace ECSEngine {
 						nested_options->field_allocator = GetReflectionTypeFieldAllocator(type, current_type_field_index, address, previous_field_allocator, use_field_allocators);
 
 						SerializeCustomTypeReadFunctionData custom_read_data;
-						custom_read_data.data = type->GetField(address, current_type_field_index);
-						custom_read_data.definition = type->fields[current_type_field_index].definition;
+						GetReflectionTypeAllocatorPointerAndDefinition(type, current_type_field_index, address, custom_read_data.data, custom_read_data.definition);
 						custom_read_data.options = nested_options;
 						custom_read_data.read_data = read_data;
 						custom_read_data.reflection_manager = reflection_manager;

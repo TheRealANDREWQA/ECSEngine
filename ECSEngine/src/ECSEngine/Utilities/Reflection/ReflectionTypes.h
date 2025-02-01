@@ -276,6 +276,8 @@ namespace ECSEngine {
 		// This structure specifies a type's allocator, from which allocations can be made from
 		// If the user specified that per type allocators or per field allocators are to be enabled (only the main has that property).
 		struct ReflectionTypeMiscAllocator {
+			ECS_INLINE ReflectionTypeMiscAllocator() {}
+
 			ECS_INLINE ReflectionTypeMiscAllocator Copy(AllocatorPolymorphic allocator) const {
 				return *this;
 			}
@@ -285,7 +287,7 @@ namespace ECSEngine {
 			}
 
 			ECS_INLINE size_t CopySize() const {
-				// No buffer to copy
+				// No buffer to copy - the main_allocator_definition will simply reference that of the final field
 				return 0;
 			}
 
@@ -293,8 +295,34 @@ namespace ECSEngine {
 				// Nothing to deallocate
 			}
 
+			// Call this function only if this misc allocator is a modifier of main allocator.
+			// It returns the allocator polymorphic that corresponds to the main allocator for the given
+			// Instance, which takes into account nested allocators
+			ECS_INLINE AllocatorPolymorphic GetMainAllocatorForInstance(const void* instance_pointer) const {
+				const void* allocator_pointer = OffsetPointer(instance_pointer, main_allocator_offset);
+				ECS_ALLOCATOR_TYPE allocator_type = AllocatorTypeFromString(main_allocator_definition);
+				return ConvertPointerToAllocatorPolymorphicEx(allocator_pointer, allocator_type);
+			}
+
 			unsigned int field_index;
 			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER modifier;
+			// This caches the offset starting from the beginning of the referenced type up to the actual allocator byte offset
+			// Which handles the case where this is not a direct allocator
+			unsigned short main_allocator_offset;
+			// The definition of the actual nested/normal field, as a cached value to ease the API for certain functions
+			Stream<char> main_allocator_definition;
+
+			union {
+				// Set only when the allocator is main
+				struct {
+					// When set to true, it indicates that the top level field, so the direct field of the type,
+					// Is the actual main allocator. If it is false, it means that the referenced field contains
+					// Itself a main allocator that the upward parent type uses as a main allocator.
+					// IMPORTANT: If this is not a direct allocator, it must be the first field of its type, otherwise
+					// Some functions will fail!
+					bool is_direct_allocator;
+				};
+			};
 		};
 
 		struct ECSENGINE_API ReflectionTypeMiscInfo {

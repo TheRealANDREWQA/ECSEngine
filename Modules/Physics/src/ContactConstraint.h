@@ -64,10 +64,8 @@ struct ECS_REFLECT ContactConstraint {
 	float3 center_of_mass_A;
 	float3 center_of_mass_B;
 	// These are cached during a precompute step
-	[[ECS_SKIP_REFLECTION]]
-	Rigidbody* rigidbody_A;
-	[[ECS_SKIP_REFLECTION]]
-	Rigidbody* rigidbody_B;
+	Rigidbody* rigidbody_A; ECS_SKIP_REFLECTION()
+	Rigidbody* rigidbody_B; ECS_SKIP_REFLECTION()
 
 	// This is used to determine when to remove the contact
 	// If this reaches 0, it means that the contact needs to be removed
