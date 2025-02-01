@@ -500,6 +500,11 @@ namespace ECSEngine {
 			unsigned int folder_hierarchy_index;
 		};
 
+		struct ReflectionValidDependency {
+			// The actual definition is stored in the identifier of the hash table
+			unsigned int folder_index;
+		};
+
 		struct ReflectionCustomTypeMatchData {
 			Stream<char> definition;
 		};

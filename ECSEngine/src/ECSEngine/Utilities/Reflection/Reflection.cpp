@@ -44,6 +44,10 @@ namespace ECSEngine {
 			Stream<char> name;
 			ReflectionTypedef entry;
 		};
+		
+		struct ReflectionParsedValidDependency {
+			Stream<char> name;
+		};
 
 		struct ReflectionManagerParseStructuresThreadTaskData {
 			// This is the allocator from which the resizable streams are allocated from.
@@ -56,6 +60,7 @@ namespace ECSEngine {
 			ResizableStream<ReflectionEmbeddedArraySize> embedded_array_size;
 			ResizableStream<ReflectionParsedTypedef> typedefs;
 			ResizableStream<ReflectionTypeTemplate> type_templates;
+			ResizableStream<ReflectionParsedValidDependency> valid_dependencies;
 			HashTableDefault<Stream<ReflectionExpression>> expressions;
 			const ReflectionFieldTable* field_table;
 			CapacityStream<char>* error_message;
@@ -1734,6 +1739,8 @@ namespace ECSEngine {
 			constants.Initialize(allocator, 0);
 			blittable_types.Initialize(allocator, 0);
 			typedefs.Initialize(allocator, 0);
+			type_templates.Initialize(allocator, 0);
+			valid_dependencies.Initialize(allocator, 0);
 
 			AddKnownBlittableExceptions();
 		}
@@ -1881,6 +1888,16 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void ReflectionManager::AddValidDependenciesFrom(const ReflectionManager* other) {
+			other->valid_dependencies.ForEachConst([&](const ReflectionValidDependency& dependency, ResourceIdentifier identifier) {
+				ReflectionValidDependency dependency_copy = dependency;
+				dependency_copy.folder_index = -1;
+				valid_dependencies.InsertDynamic(Allocator(), dependency_copy, identifier.Copy(Allocator()));
+			});
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::AddAllFrom(const ReflectionManager* other)
 		{
 			AddConstantsFrom(other);
@@ -1888,6 +1905,7 @@ namespace ECSEngine {
 			AddTypesFrom(other);
 			AddTypedefsFrom(other);
 			AddTypeTemplatesFrom(other);
+			AddValidDependenciesFrom(other);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1953,6 +1971,39 @@ namespace ECSEngine {
 					typedef_name = typedef_name.CopyTo(ptr);
 					typedef_value.folder_hierarchy_index = folder_index;
 					typedefs.InsertDynamic(folders.allocator, typedef_value, typedef_name);
+				}
+			}
+
+			// Bind the valid dependencies upfront
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t dependency_index = 0; dependency_index < data[data_index].valid_dependencies.size; dependency_index++) {
+					Stream<char> dependency_name = data[data_index].valid_dependencies[dependency_index].name;
+					
+					if (typedefs.Find(dependency_name) != -1) {
+						ECS_FORMAT_TEMP_STRING(message, "Valid dependency with name {#} conflicts with another typedef!", dependency_name);
+						WriteErrorMessage(data, message);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+
+					if (type_definitions.Find(dependency_name) != -1) {
+						ECS_FORMAT_TEMP_STRING(message, "Valid dependency with name {#} conflicts with another type struct!", dependency_name);
+						WriteErrorMessage(data, message);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+
+					if (enum_definitions.Find(dependency_name) != -1) {
+						ECS_FORMAT_TEMP_STRING(message, "Valid dependency with name {#} conflicts with another enum!", dependency_name);
+						WriteErrorMessage(data, message);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+
+					ReflectionValidDependency dependency;
+					dependency.folder_index = folder_index;
+					// Only the name needs to be allocated here
+					valid_dependencies.InsertDynamic(folders.allocator, dependency, dependency_name.CopyTo(ptr));
 				}
 			}
 
@@ -2069,40 +2120,88 @@ namespace ECSEngine {
 			// Is encountered that matches a template, instantiate that type template
 
 			// This buffer will hold the types that were instantiated this iteration, such that we can integrate them
-			// In the resolve pipeline
+			// In the resolve pipeline. Also, it provides another functionality that we need.
+			// Take this example
+			// template<typename T>
+			// struct A {
+			// T value;
+			// };
+			// 
+			// template<typename T1, typename T2>
+			// struct B {
+			// A<T1> floating;
+			// A<T2> integer;
+			// };
+			// 
+			// struct C {
+			//		B<float, int> b;
+			// };
+			//
+			// Only C will appear as a type that we parsed, and when we iterate over its fields,
+			// We will find B<float, int> as a template that we need to instantiate, but that type
+			// Itself requires the templates A<float> and A<int> to be instantiated as well. For this
+			// Reason, when we instantiate a template type, we must go recursively and instantiate its
+			// Subtypes as well. The types that are instantiated here are guaranteed to be unique, insertion
+			// Happen when the type is missing from this reflection manager instance
 			ResizableStream<Stream<char>> instantiated_type_templates(&stack_allocator, 16);
-			for (size_t data_index = 0; data_index < data_count; data_index++) {
-				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
-					const ReflectionType& type = data[data_index].types[type_index];
-					for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
-						Stream<char> template_pair = FindMatchingParenthesesRange(type.fields[field_index].definition, '<', '>');
-						if (template_pair.size > 0) {
-							Stream<char> template_type_definition = type.fields[field_index].definition.StartDifference(template_pair);
-							const ReflectionTypeTemplate* template_type = GetTypeTemplate(template_type_definition);
-							if (template_type != nullptr) {
-								ECS_STACK_CAPACITY_STREAM(Stream<char>, matched_template_parameters, 32);
-								ReflectionTypeTemplate::MatchStatus match_status = template_type->DoesMatch(template_pair, &matched_template_parameters);
-								if (match_status == ReflectionTypeTemplate::MatchStatus::IncorrectParameter) {
-									ECS_FORMAT_TEMP_STRING(message, "Type {#} contains the field {#} with definition {#} that matches the template type {#}, but its arguments are invalid.", 
-										type.name, type.fields[field_index].name, type.fields[field_index].definition, template_type_definition);
-									WriteErrorMessage(data, message);
-									FreeFolderHierarchy(folder_index);
-									return false;
-								}
-								else if (match_status == ReflectionTypeTemplate::MatchStatus::Success) {
-									// It matched the template, we need to instantiate it, if it doesn't already exist
-									if (TryGetType(template_type_definition) == nullptr) {
-										ReflectionType instantiated_type = template_type->Instantiate(this, Allocator(), matched_template_parameters);
-										instantiated_type.folder_hierarchy_index = -1;
-										type_definitions.InsertDynamic(Allocator(), instantiated_type, instantiated_type.name);
 
-										ECS_ASSERT(type.fields[field_index].definition == instantiated_type.name, "Mismatch between reflection template instantiated name and the requested name");
-										instantiated_type_templates.Add(instantiated_type.name);
-									}
+			// Instantiates the necessary templates for this type and return true if there were no errors,
+			// else false and writes an error message.
+			auto instantiate_type_templates = [&](const ReflectionType& type) -> bool {
+				// Retrieve all the missing dependencies this type has. Go through all of these dependencies
+				// And try to match them with existing parsed templates
+				ECS_STACK_CAPACITY_STREAM(Stream<char>, missing_dependencies, 512);
+				GetReflectionTypeMissingDependencies(this, &type, missing_dependencies);
+
+				for (unsigned int index = 0; index < missing_dependencies.size; index++) {
+					Stream<char> template_pair = FindMatchingParenthesesRange(missing_dependencies[index], '<', '>');
+					if (template_pair.size > 0) {
+						Stream<char> template_type_definition = missing_dependencies[index].StartDifference(template_pair);
+						const ReflectionTypeTemplate* template_type = GetTypeTemplate(template_type_definition);
+						if (template_type != nullptr) {
+							ECS_STACK_CAPACITY_STREAM(Stream<char>, matched_template_parameters, 32);
+							ReflectionTypeTemplate::MatchStatus match_status = template_type->DoesMatch(template_pair, &matched_template_parameters);
+							if (match_status == ReflectionTypeTemplate::MatchStatus::IncorrectParameter) {
+								ECS_FORMAT_TEMP_STRING(message, "Type {#} has dependency on {#} that matches the template type {#}, but its arguments are invalid.",
+									type.name, missing_dependencies[index], template_type_definition);
+								WriteErrorMessage(data, message);
+								return false;
+							}
+							else if (match_status == ReflectionTypeTemplate::MatchStatus::Success) {
+								// It matched the template, we need to instantiate it, if it doesn't already exist
+								if (TryGetType(template_type_definition) == nullptr) {
+									ReflectionType instantiated_type = template_type->Instantiate(this, Allocator(), matched_template_parameters);
+									instantiated_type.folder_hierarchy_index = -1;
+									type_definitions.InsertDynamic(Allocator(), instantiated_type, instantiated_type.name);
+
+									ECS_ASSERT(missing_dependencies[index] == instantiated_type.name, "Mismatch between reflection template instantiated name and the requested name");
+									instantiated_type_templates.Add(instantiated_type.name);
 								}
 							}
 						}
 					}
+				}
+
+				return true;
+			};
+
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
+					const ReflectionType& type = data[data_index].types[type_index];
+					if (!instantiate_type_templates(type)) {
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+				}
+			}
+
+			// This index is increasing monotonically through the instantiated_type_templates array
+			// And with it we instantiate the nested templates that these instantiations have.
+			for (unsigned int instantiated_template_index = 0; instantiated_template_index < instantiated_type_templates.size; instantiated_template_index++) {
+				const ReflectionType* type = GetType(instantiated_type_templates[instantiated_template_index]);
+				if (!instantiate_type_templates(*type)) {
+					FreeFolderHierarchy(folder_index);
+					return false;
 				}
 			}
 
@@ -3033,6 +3132,16 @@ namespace ECSEngine {
 				return false;
 			});
 
+			// Valid dependencies
+			valid_dependencies.ForEachIndex([&](unsigned int index) {
+				const ReflectionValidDependency* dependency = valid_dependencies.GetValuePtrFromIndex(index);
+				if (dependency->folder_index == folder_index) {
+					valid_dependencies.EraseFromIndex(index);
+					return true;
+				}
+				return false;
+			});
+
 			if (folders[folder_index].allocated_buffer != nullptr) {
 				Deallocate(folders.allocator, folders[folder_index].allocated_buffer);
 				folders[folder_index].allocated_buffer = nullptr;
@@ -3271,30 +3380,6 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ReflectionManager::HasValidDependencies(Stream<char> type_name) const
-		{
-			return HasValidDependencies(GetType(type_name));
-		}
-
-		bool ReflectionManager::HasValidDependencies(const ReflectionType* type) const
-		{
-			for (size_t index = 0; index < type->fields.size; index++) {
-				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					const ReflectionType* child_type = TryGetType(type->fields[index].definition);
-					if (child_type == nullptr) {
-						return false;
-					}
-					if (!HasValidDependencies(child_type)) {
-						return false;
-					}
-				}
-			}
-
-			return true;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		const ReflectionType* ReflectionManager::TryGetType(Stream<char> name) const
 		{
 			ResourceIdentifier identifier(name);
@@ -3433,6 +3518,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.embedded_array_size.Initialize(&data.allocator, 128);
 			data.typedefs.Initialize(&data.allocator, 16);
 			data.type_templates.Initialize(&data.allocator, 16);
+			data.valid_dependencies.Initialize(&data.allocator, 8);
 
 			data.field_table = &field_table;
 			data.success = true;
@@ -4067,19 +4153,33 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							if (space != ecs_reflect_end_position) {
 								tag_name = ecs_reflect_end_position[0] == '_' ? ecs_reflect_end_position + 1 : ecs_reflect_end_position;
 							}
-							space = SkipWhitespace(space);
+							const char* reflection_structure_name_start = SkipWhitespace(space);
 
-							const char* second_space = SkipCodeIdentifier(space);
-							// If the second space was not found, fail
-							if (second_space == nullptr || space == second_space) {
+							const char* reflection_structure_name_end = SkipCodeIdentifier(reflection_structure_name_start);
+							// If the second whitespace was not found, fail
+							if (reflection_structure_name_end == nullptr || reflection_structure_name_start == reflection_structure_name_end) {
 								WriteErrorMessage(data, "Finding type final space failed. Faulty path: ");
 								return;
 							}
 
+							// Check for valid dependency macro flavour. These structures shouldn't be processed, only registered as valid dependencies
+							Stream<char> valid_dependency_macro = STRING(ECS_REFLECT_VALID_DEPENDENCY);
+							Stream<char> current_macro_definition;
+							current_macro_definition.buffer = (char*)(ecs_reflect_end_position - ecs_reflect_size);
+							current_macro_definition.size = PointerElementDifference(current_macro_definition.buffer, space);
+							if (current_macro_definition == valid_dependency_macro) {
+								// It matched this macro
+								ReflectionParsedValidDependency parsed_dependency;
+								parsed_dependency.name = { reflection_structure_name_start, PointerElementDifference(reflection_structure_name_start, reflection_structure_name_end) };
+								data->valid_dependencies.Add(parsed_dependency);
+								data->total_memory += parsed_dependency.name.CopySize();
+								continue;
+							}
+
 							// Determine whether this is a typedef or type/enum declaration
-							Stream<char> structure_name = { space, PointerDifference(second_space, space) / sizeof(char) };
+							Stream<char> structure_name = { reflection_structure_name_start, PointerDifference(reflection_structure_name_end, reflection_structure_name_start) / sizeof(char) };
 							if (structure_name == STRING(typedef)) {
-								const char* typedef_colon = strchr(second_space, ';');
+								const char* typedef_colon = strchr(reflection_structure_name_end, ';');
 								if (typedef_colon == nullptr) {
 									WriteErrorMessage(data, "Finding typedef alias colon failed. Faulty path: ");
 									return;
@@ -4088,9 +4188,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							}
 							else {
 								// null terminate 
-								char* second_space_mutable = (char*)(second_space);
+								char* second_space_mutable = (char*)(reflection_structure_name_end);
 								*second_space_mutable = '\0';
-								data->total_memory += PointerDifference(second_space_mutable, space) / sizeof(char) + 1;
+								data->total_memory += PointerDifference(second_space_mutable, reflection_structure_name_start) / sizeof(char) + 1;
 
 								file_contents[word_offset] = '\0';
 								// find the last new line character in order to speed up processing
@@ -4099,7 +4199,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// if it failed, set it to the start of the processing block
 								last_new_line = last_new_line == nullptr ? file_contents + last_position : last_new_line;
 
-								const char* opening_parenthese = strchr(second_space + 1, '{');
+								const char* opening_parenthese = strchr(reflection_structure_name_end + 1, '{');
 								// if no opening curly brace was found, fail
 								if (opening_parenthese == nullptr) {
 									WriteErrorMessage(data, "Finding opening curly brace failed. Faulty path: ");
@@ -4118,7 +4218,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// enum declaration
 								const char* enum_ptr = strstr(last_new_line + 1, "enum");
 								if (enum_ptr != nullptr) {
-									AddEnumDefinition(data, opening_parenthese, closing_parenthese, space, index);
+									AddEnumDefinition(data, opening_parenthese, closing_parenthese, reflection_structure_name_start, index);
 									if (data->success == false) {
 										return;
 									}
@@ -4146,7 +4246,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									// Check to see if it is a tagged type with a preparsing handler
 									const char* type_opening_parenthese = opening_parenthese;
 									const char* type_closing_parenthese = closing_parenthese;
-									const char* type_name = space;
+									const char* type_name = reflection_structure_name_start;
 
 									stack_allocator.Clear();
 
@@ -7744,19 +7844,18 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool HasReflectionTypeMissingDependencies(const ReflectionManager* manager, const ReflectionType* type, Stream<char>* missing_dependency) {
+		void GetReflectionTypeMissingDependencies(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& missing_dependencies) {
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, dependencies, 512);
 			
 			// Keep track of the dependencies that were already processed, such that we don't process
 			// A type once more if it appears multiple times. Use an array instead of a hash table since
-			// There should be few entries, and a hash table at small sizes is not that benefical.
+			// There should be few entries, and a hash table at small sizes is not that beneficial.
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 4, ECS_MB);
 			ResizableStream<Stream<char>> processed_dependencies(&stack_allocator, 256);
 			
 			// This function is almost identical to GetReflectionTypeDependentTypes, with the difference being that
-			// It doesn't assert if a match could not be found. Returns true if the dependencies were successfully retrieved,
-			// Else false (when a match could not be established)
-			auto get_dependencies = [&](const ReflectionType* type) -> bool {
+			// It doesn't assert if a match could not be found, instead it adds it to the missing dependencies
+			auto get_dependencies = [&](const ReflectionType* type) -> void {
 				for (size_t index = 0; index < type->fields.size; index++) {
 					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 						// Check to see if it has the size given
@@ -7782,25 +7881,20 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										custom_type->GetDependentTypes(&dependent_data);
 										dependencies.size = dependent_data.dependent_types.size;
 									}
-									else {
-										// No match was found, bail out
-										if (missing_dependency != nullptr) {
-											*missing_dependency = type->fields[index].definition;
-										}
-										return false;
+									// If it is a known valid dependency, skip it.
+									else if (!manager->IsKnownValidDependency(type->fields[index].definition)) {
+										// No match was found
+										missing_dependencies.AddAssert(type->fields[index].definition);
 									}
 								}
 							}
 						}
 					}
 				}
-				return true;
 			};
 
 			// Retrieve the top level dependencies
-			if (!get_dependencies(type)) {
-				return true;
-			}
+			get_dependencies(type);
 
 			processed_dependencies.Add(type->name);
 
@@ -7811,9 +7905,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					processed_dependencies.Add(current_dependency);
 					const ReflectionType* type = manager->TryGetType(current_dependency);
 					if (type != nullptr) {
-						if (!get_dependencies(type)) {
-							return true;
-						}
+						get_dependencies(type);
 					}
 					else {
 						// Might be a custom reflection type, or an unmatched type
@@ -7827,18 +7919,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							custom_type->GetDependentTypes(&dependent_data);
 							dependencies.size = dependent_data.dependent_types.size;
 						}
-						else {
-							// No match was found, bail out
-							if (missing_dependency != nullptr) {
-								*missing_dependency = current_dependency;
-							}
-							return true;
+						// If it is a known valid dependency, skip it.
+						else if (!manager->IsKnownValidDependency(current_dependency)) {
+							// No match was found
+							missing_dependencies.AddAssert(current_dependency);
 						}
 					}
 				}
 			}
-
-			return false;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

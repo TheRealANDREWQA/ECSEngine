@@ -17,6 +17,7 @@ namespace ECSEngine {
 		typedef HashTableDefault<ReflectionEnum> ReflectionEnumTable;
 		typedef HashTableDefault<ReflectionTypedef> ReflectionTypedefTable;
 		typedef HashTableDefault<ReflectionTypeTemplate> ReflectionTypeTemplateTable;
+		typedef HashTableDefault<ReflectionValidDependency> ReflectionValidDependenciesTable;
 
 #define ECS_REFLECTION_MAX_TYPE_COUNT (128)
 #define ECS_REFLECTION_MAX_ENUM_COUNT (32)
@@ -94,6 +95,10 @@ namespace ECSEngine {
 			// Adds all parsed type templates from the other instance to this instance without binding them to
 			// A particular folder hierarchy
 			void AddTypeTemplatesFrom(const ReflectionManager* other);
+
+			// Adds all parsed valid dependencies from the other instance to this instance without binding them to
+			// A particular folder hierarchy
+			void AddValidDependenciesFrom(const ReflectionManager* other);
 
 			// Copies all parsed resources from an other reflection manager to this instance without binding the resources
 			// To a particular folder hierarchy
@@ -196,13 +201,6 @@ namespace ECSEngine {
 			bool HasTypeTag(unsigned int type_index, Stream<char> tag) const;
 			bool HasTypeTag(Stream<char> name, Stream<char> tag) const;
 
-			// Verifies if the type has all of its user defined types reflected aswell
-			// For serialization, use the other function
-			bool HasValidDependencies(Stream<char> type_name) const;
-			// Verifies if the type has all of its user defined types reflected aswell
-			// For serialization, use the other function
-			bool HasValidDependencies(const ReflectionType* type) const;
-
 			const ReflectionType* TryGetType(Stream<char> name) const;
 			const ReflectionEnum* TryGetEnum(Stream<char> name) const;
 
@@ -212,6 +210,10 @@ namespace ECSEngine {
 
 			// It will not set the paths that need to be searched; thread memory will be allocated from the heap, must be freed manually
 			void InitializeParseThreadTaskData(size_t thread_memory, size_t path_count, ReflectionManagerParseStructuresThreadTaskData& data, CapacityStream<char>* error_message = nullptr);
+
+			ECS_INLINE bool IsKnownValidDependency(Stream<char> definition) const {
+				return valid_dependencies.Find(definition) != -1;
+			}
 
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
@@ -275,6 +277,10 @@ namespace ECSEngine {
 			ReflectionFieldTable field_table;
 			ReflectionTypedefTable typedefs;
 			ReflectionTypeTemplateTable type_templates;
+			// Structure names or typedefs or any other string that might appear
+			// Inside other structures and that it is considered valid without having
+			// It properly reflected. I.e. template functors that provide an indexer
+			ReflectionValidDependenciesTable valid_dependencies;
 			ResizableStream<FolderHierarchy> folders;
 			ResizableStream<ReflectionConstant> constants;
 			ResizableStream<BlittableType> blittable_types;
@@ -930,9 +936,19 @@ namespace ECSEngine {
 		// It asserts that all user defined types have a match, i.e. they are matched by a type or custom type interface or it is assigned as blittable
 		ECSENGINE_API void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types);
 
-		// Returns true if a user defined field of the given type cannot be matched by a normal reflection type or by a custom type interface
-		// And that it is not declared as blittable. You can optionally retrieve the missing dependency as an out parameter
-		ECSENGINE_API bool HasReflectionTypeMissingDependencies(const ReflectionManager* manager, const ReflectionType* type, Stream<char>* missing_dependency = nullptr);
+		// Fills in the missing dependencies of a given type, including nested dependencies, if there are any
+		ECSENGINE_API void GetReflectionTypeMissingDependencies(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& missing_dependencies);
+
+		// Returns true if a user defined field of the given type cannot be matched by a normal reflection type, by a custom type interface
+		// Or by a known valid dependency and that it is not declared as blittable. You can optionally retrieve the first missing dependency as an out parameter
+		ECS_INLINE bool HasReflectionTypeMissingDependencies(const ReflectionManager* manager, const ReflectionType* type, Stream<char>* missing_dependency = nullptr) {
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, missing_dependencies, 512);
+			GetReflectionTypeMissingDependencies(manager, type, missing_dependencies);
+			if (missing_dependencies.size > 0 && missing_dependency != nullptr) {
+				*missing_dependency = missing_dependencies[0];
+			}
+			return missing_dependencies.size > 0;
+ 		}
 
 		// Returns true if the field was tagged with ECS_REFLECTION_SKIP
 		ECSENGINE_API bool IsReflectionFieldSkipped(const ReflectionField* field);

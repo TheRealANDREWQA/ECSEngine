@@ -1,7 +1,7 @@
 #pragma once
 #include "ContactManifolds.h"
 
-struct ContactConstraintPoint {
+struct ECS_REFLECT ContactConstraintPoint {
 	// Local anchor relative to the center of mass
 	float3 local_anchor_A;
 	float3 local_anchor_B;
@@ -26,7 +26,7 @@ struct ContactConstraintPoint {
 	float3 friction_local_anchor_B;
 };
 
-struct EntityContact {
+struct ECS_REFLECT EntityContact {
 	Entity entity_A;
 	Entity entity_B;
 	ContactManifoldFeatures manifold;
@@ -37,7 +37,7 @@ struct EntityContact {
 // The contact contains all the information about the contact
 // Of two entities that is indepndent of data from those entities
 // And that needs to be persisted across frames
-struct Contact {
+struct ECS_REFLECT Contact {
 	EntityContact base;
 	float3 tangent_1;
 	float3 tangent_2;
@@ -46,7 +46,7 @@ struct Contact {
 
 struct Rigidbody;
 
-struct ContactConstraint {
+struct ECS_REFLECT ContactConstraint {
 	ECS_INLINE size_t PointCount() const {
 		return contact.base.manifold.point_count;
 	}
@@ -64,7 +64,9 @@ struct ContactConstraint {
 	float3 center_of_mass_A;
 	float3 center_of_mass_B;
 	// These are cached during a precompute step
+	[[ECS_SKIP_REFLECTION]]
 	Rigidbody* rigidbody_A;
+	[[ECS_SKIP_REFLECTION]]
 	Rigidbody* rigidbody_B;
 
 	// This is used to determine when to remove the contact
