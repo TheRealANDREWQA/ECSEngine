@@ -136,7 +136,8 @@ namespace ECSEngine {
 
 	static void ReflectionTypeRuntimeComponentDeallocate(ComponentDeallocateFunctionData* deallocate_data) {
 		RuntimeComponentCopyDeallocateData* data = (RuntimeComponentCopyDeallocateData*)deallocate_data->function_data;
-		DeallocateReflectionTypeInstanceBuffers(&data->reflection_manager, &data->type, deallocate_data->data, deallocate_data->allocator);
+		// Do not reset buffers, the component is destroyed anyways
+		DeallocateReflectionTypeInstanceBuffers(&data->reflection_manager, &data->type, deallocate_data->data, deallocate_data->allocator, 1, 0, false);
 	}
 
 	// TODO: Is it worth having each component store a reflection manager?
@@ -309,7 +310,7 @@ namespace ECSEngine {
 					// For this case, if a main allocator is specified, then don't signal this
 					// As an error, consider this entry as a system/global component which handles
 					// Its own allocator
-					if (GetReflectionTypeAllocatorMiscIndex(type) == -1) {
+					if (GetReflectionTypeOverallAllocatorMiscIndex(type) == -1) {
 						if (component_type == ECS_COMPONENT_GLOBAL) {
 							validate_value |= ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_TYPE_ALLOCATOR;
 						}

@@ -1158,6 +1158,7 @@ namespace ECSEngine {
 
 			// Check for type allocator tags. There must be at max one primary allocator, and if there is, create a misc entry for it
 			size_t type_overall_primary_allocator_index = -1;
+			bool is_type_overall_primary_allocator_direct = true;
 			for (size_t index = 0; index < type.fields.size; index++) {
 				if (IsReflectionTypeOverallAllocatorByTag(&type, index)) {
 					// If the field is marked as skipped, then don't consider it
@@ -1165,11 +1166,28 @@ namespace ECSEngine {
 						continue;
 					}
 
-					// If it is not an allocator field, error
+					// Here, there are 2 situations: normal overall type, for a field that is an actual field allocator
+					// And the case where it references the overall allocator of a nested user defined type. For this reason,
+					// If it is not an allocator, register it in the deferred solver which will see if it can deduce this allocator
+					
 					if (!IsReflectionTypeFieldAllocator(&type, index)) {
-						ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} specified as type allocator, but it is not a valid allocator type. ", type.name, type.fields[index].name);
-						WriteErrorMessage(data, message);
-						return;
+						// If it is not an allocator, it must be the first field of its type. Fail if it isn't.
+						if (index != 0) {
+							ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} specified as type allocator, which is a nested main allocator, but this construct is allowed only if the referenced field is the first field inside its type. ", 
+								type.name, type.fields[index].name);
+							WriteErrorMessage(data, message);
+							return;
+						}
+
+						// If the field is not user defined, we can quit now, since it is invalid by default
+						if (type.fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
+							ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} with definition {#} specified as type allocator, which is a nested main allocator, but the referenced field is not valid - not a user defined type. ",
+								type.name, type.fields[index].name, type.fields[index].definition);
+							WriteErrorMessage(data, message);
+							return;
+						}
+
+						is_type_overall_primary_allocator_direct = false;
 					}
 
 					if (type_overall_primary_allocator_index != -1) {
@@ -1196,6 +1214,11 @@ namespace ECSEngine {
 				ReflectionTypeMiscAllocator misc_allocator;
 				misc_allocator.field_index = type_overall_primary_allocator_index;
 				misc_allocator.modifier = ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN;
+				misc_allocator.is_direct_allocator = type_overall_primary_allocator_index;
+				misc_allocator.main_allocator_offset = 0;
+				misc_allocator.main_allocator_definition = {};
+				// No need to set the offset and the definition, these are resolved in the BindApprovedData call
+				// Since if it is a nested type we don't have the overall information to resolve this
 				type_allocators.AddAssert(misc_allocator);
 			}
 
@@ -2719,9 +2742,119 @@ namespace ECSEngine {
 				}
 			}
 
+			// After all types have been finally resolved, there is one more step for the misc info. For all MiscAllocator infos,
+			// We must write the cached values and for nested main allocator entries we must validate that the field that they reference
+			// Is indeed valid. In case a type has a nested main allocator in which the referenced type itself has another referenced main allocator,
+			// Put the first type on a retry queue, until the deepest type has been resolved
+			// NOTE: We cannot clear the stack allocator since it contains the instantiated_type_templates buffer, which we need to reference now
+			ResizableQueue<Stream<char>> main_allocator_retry_types(&stack_allocator, 8);
+
+			// Returns true if it succeeded, else false if there was an error, in which case it will also print an error message
+			// And free the folder hierarchy that is being processed
+			auto process_type_main_allocator = [&](Stream<char> type_name) -> bool {
+				ReflectionType* type = GetType(type_name);
+				size_t main_allocator_soa_index = GetReflectionTypeOverallAllocatorMiscIndex(type);
+				if (main_allocator_soa_index != -1) {
+					ReflectionTypeMiscAllocator* main_allocator = &type->misc_info[main_allocator_soa_index].allocator_info;
+					if (main_allocator->is_direct_allocator) {
+						// Write the cached values
+						main_allocator->main_allocator_offset = type->fields[main_allocator->field_index].info.pointer_offset;
+						main_allocator->main_allocator_definition = type->fields[main_allocator->field_index].definition;
+					}
+					else {
+						Stream<char> referenced_type_name = type->fields[main_allocator->field_index].definition;
+						const ReflectionType* referenced_type = TryGetType(referenced_type_name);
+						if (referenced_type == nullptr) {
+							// Fail, we need to get a user defined type for this to work
+							ECS_FORMAT_TEMP_STRING(message, "Type {#} has a main allocator that is nested, but the nested type {#} is not valid user defined type", type->name, referenced_type_name);
+							WriteErrorMessage(data, message);
+							FreeFolderHierarchy(folder_index);
+							return false;
+						}
+
+						size_t referenced_type_main_allocator_soa_index = GetReflectionTypeOverallAllocatorMiscIndex(referenced_type);
+						if (referenced_type_main_allocator_soa_index == -1) {
+							// Fail, it must have a main allocator specified
+							ECS_FORMAT_TEMP_STRING(message, "Type {#} has a main allocator that is nested, but the nested type {#} does not have a main allocator assigned", type->name, referenced_type_name);
+							WriteErrorMessage(data, message);
+							FreeFolderHierarchy(folder_index);
+							return false;
+						}
+
+						// A main allocator is considered initialized if the definition is not empty - then we know it has been finalized
+						const ReflectionTypeMiscAllocator* referenced_main_allocator = &referenced_type->misc_info[referenced_type_main_allocator_soa_index].allocator_info;
+						if (referenced_main_allocator->main_allocator_definition.size > 0) {
+							// We can inherit the values now
+							// Technically, we can assign the offset directly, without adding the initial type pointer offset, since there is
+							// A constraint that says that nested main allocators must reference the first field only, but leave it like this
+							// Since it is more future proof in case that constraint is dropped in the future
+							main_allocator->main_allocator_offset = type->fields[main_allocator->field_index].info.pointer_offset + referenced_main_allocator->main_allocator_offset;
+							main_allocator->main_allocator_definition = referenced_main_allocator->main_allocator_definition;
+						}
+						else {
+							// Put the current type on hold
+							main_allocator_retry_types.Push(type_name);
+						}
+					}
+				}
+
+				return true;
+			};
+
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
+					if (!process_type_main_allocator(data[data_index].types[type_index].name)) {
+						return false;
+					}
+				}
+			}
+
+			// Process the instantiated templates as well
+			for (unsigned int index = 0; index < instantiated_type_templates.size; index++) {
+				if (!process_type_main_allocator(instantiated_type_templates[index])) {
+					return false;
+				}
+			}
+
+			if (main_allocator_retry_types.GetSize() > 0) {
+				// The size of main_allocator_retry_types must reduce with each iteration, if it doesn't, it means that there is some sort of error 
+				// (a circular reference)
+				while (main_allocator_retry_types.GetSize() > 0) {
+					unsigned int iteration_process_size = main_allocator_retry_types.GetSize();
+
+					for (unsigned int index = 0; index < iteration_process_size; index++) {
+						Stream<char> type_name;
+						main_allocator_retry_types.Pop(type_name);
+						// Technically, the first time a time is added it means that it passed the validation tests, but just to be
+						// On the safe side, still check for this
+						if (!process_type_main_allocator(type_name)) {
+							return false;
+						}
+					}
+
+					if (main_allocator_retry_types.GetSize() == iteration_process_size) {
+						// Fail, some sort of error
+						ResizableStream<char> all_type_names(&stack_allocator, ECS_KB);
+						for (unsigned int index = 0; index < iteration_process_size; index++) {
+							Stream<char> type_name;
+							main_allocator_retry_types.Pop(type_name);
+							all_type_names.AddStream(type_name);
+							all_type_names.Add(',');
+							all_type_names.Add(' ');
+						}
+						// Eliminate the last ', '
+						all_type_names.size -= 2;
+						ECS_FORMAT_TEMP_STRING(message, "Resolving nested main type allocators failed, there is a circular reference between at least 2 of these types: {#}", all_type_names);
+						WriteErrorMessage(data, message);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+				}
+			}
+
 			bool evaluate_success = true;
 			// And evaluate the expressions. This must be done in the end such that all types are reflected when we come to evaluate
-			for (unsigned int data_index = 0; data_index < data_count; data_index++) {
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				if (data[data_index].expressions.ForEachConst<true>([&](Stream<ReflectionExpression> expressions, ResourceIdentifier identifier) {
 					// Set the stream first
 					ReflectionType* type_ptr = type_definitions.GetValuePtr(identifier);
@@ -6269,18 +6402,25 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						AllocatorPolymorphic referenced_allocator = GetReflectionTypeFieldAllocator(type, allocator_info->field_index, destination_data, options->allocator, options->custom_options.use_field_allocators);
 						SetReflectionTypeFieldAllocatorReference(type, allocator_info, destination_data, referenced_allocator);
 					}
+					else if (allocator_info->modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN) {
+						// Initialize this allocator using the custom reflection type, perform this operation only
+						// If the main allocator is a direct allocator, not a nested one, otherwise we will initialize this
+						// Allocator multiple times
+						if (allocator_info->is_direct_allocator) {
+							ReflectionCustomTypeCopyData copy_data;
+							copy_data.allocator = options->allocator;
+							copy_data.definition = allocator_info->main_allocator_definition;
+							copy_data.destination = OffsetPointer(destination_data, allocator_info->main_allocator_offset);
+							copy_data.options = options->custom_options;
+							copy_data.reflection_manager = reflection_manager;
+							copy_data.source = OffsetPointer(source_data, allocator_info->main_allocator_offset);
+							// The allocator doesn't need the passdown info
+							copy_data.passdown_info = nullptr;
+							ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR]->Copy(&copy_data);
+						}
+					}
 					else {
-						// Initialize this allocator using the custom reflection type
-						ReflectionCustomTypeCopyData copy_data;
-						copy_data.allocator = options->allocator;
-						copy_data.definition = type->fields[allocator_info->field_index].definition;
-						copy_data.destination = type->GetField(destination_data, allocator_info->field_index);
-						copy_data.options = options->custom_options;
-						copy_data.reflection_manager = reflection_manager;
-						copy_data.source = type->GetField(source_data, allocator_info->field_index);
-						// The allocator doesn't need the passdown info
-						copy_data.passdown_info = nullptr;
-						ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR]->Copy(&copy_data);
+						ECS_ASSERT(false, "Unhandled code path!");
 					}
 				}
 			}
@@ -7084,17 +7224,30 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									else {
 										*field_data = Allocate(field_allocator, field->info.stream_byte_size, field->info.stream_alignment);
 										// Copy the definition using the general copy function
-										CopyReflectionTypeInstance(reflection_manager, field->definition, source_pointer, *field_data, options);
+										CopyReflectionTypeInstance(reflection_manager, nested_type, source_pointer, *field_data, options);
 									}
 								}
 							}
 							else {
 								ResizableStream<void> source_data = GetReflectionFieldResizableStreamVoidEx(field->info, source, false);
+
 								// Check to see if we need to allocate
 								if (options->always_allocate_for_buffers) {
 									size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * source_data.size;
 									void* allocation = allocation_size == 0 ? nullptr : Allocate(field_allocator, allocation_size, field->info.stream_alignment);
-									memcpy(allocation, source_data.buffer, allocation_size);
+
+									// Copy each individual entry
+									size_t nested_type_byte_size = GetReflectionTypeByteSize(nested_type);
+									for (size_t index = 0; index < source_data.size; index++) {
+										CopyReflectionTypeInstance(
+											reflection_manager,
+											nested_type,
+											OffsetPointer(source_data.buffer, nested_type_byte_size * index),
+											OffsetPointer(allocation, nested_type_byte_size * index),
+											options
+										);
+									}
+
 									source_data.buffer = allocation;
 									source_data.capacity = source_data.size;
 								}
@@ -7204,6 +7357,30 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return;
 			}
 
+			// If the type has a main allocator, then we simply need to deallocate it and forget about all the other fields
+			// The only nuissance is the fact if the reset_buffers is set to true, we still need to reset those buffers.
+			size_t type_main_allocator_soa_index = GetReflectionTypeOverallAllocatorMiscIndex(type);
+			if (type_main_allocator_soa_index != -1) {
+				const ReflectionTypeMiscAllocator* main_allocator = &type->misc_info[type_main_allocator_soa_index].allocator_info;
+				// If the reset buffers is set to false, we can deallocate the main allocator and simply exit. For the other case,
+				// It is not so simple
+				if (!reset_buffers) {
+					for (size_t index = 0; index < element_count; index++) {
+						void* current_source = OffsetPointer(source, index * element_byte_size);
+						AllocatorPolymorphic main_allocator_polymorphic = main_allocator->GetMainAllocatorForInstance(current_source);
+						FreeAllocatorFrom(main_allocator_polymorphic, allocator);
+					}
+					// Early return
+					return;
+				}
+				else {
+					// At the moment, do not support this case, since it is more complicated, we still have to clear the buffers only, without the normal
+					// Fields being changed. One option is to memset to 0 the entire type, and then copy the blittable fields, but we have to think about
+					// The padding bytes and if it works in all cases. For the time being, don't allow this.
+					ECS_ASSERT(false, "Code path not implemented!");
+				}
+			}
+
 			// Iterate over the fields in order to reduce the branching required
 			for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
 				if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
@@ -7254,7 +7431,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					if (custom_type != nullptr) {
 						deallocate_buffers([&](Stream<void> user_defined_stream, size_t current_element_byte_size) {
 							// We are not interested in the element byte size here
-
 							ReflectionCustomTypeDeallocateData deallocate_data;
 							deallocate_data.allocator = allocator;
 							deallocate_data.definition = type->fields[field_index].definition;
@@ -7313,7 +7489,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				if (definition_info.is_basic_field) {
 					ReflectionField field = definition_info.GetBasicField();
 					for (size_t index = 0; index < element_count; index++) {
-						void* element = OffsetPointer(source, definition_info.byte_size);
+						void* element = OffsetPointer(source, index * definition_info.byte_size);
 						DeallocateReflectionFieldBasic(&field.info, element, allocator, reset_buffers);
 					}
 				}

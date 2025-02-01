@@ -17,7 +17,7 @@ GridChunk* FixedGrid::AddCell(uint3 indices)
 	return spatial_grid.AddCell(indices);
 }
 
-GridChunk* FixedGrid::AddToChunk(unsigned int identifier, unsigned char layer, AABBScalar aabb, GridChunk* chunk)
+GridChunk* FixedGrid::AddToChunk(unsigned int identifier, unsigned char layer, const AABBScalar& aabb, GridChunk* chunk)
 {
 	GridChunk* insert_chunk = spatial_grid.ReserveEntriesInChunk(chunk, 1);
 	insert_chunk->data.Set({ aabb, identifier, layer }, insert_chunk->count);
@@ -39,7 +39,7 @@ GridChunk* FixedGrid::CheckCollisions(
 	uint3 cell_index,
 	unsigned int identifier,
 	unsigned char layer, 
-	AABBScalar aabb, 
+	const AABBScalar& aabb, 
 	CapacityStream<CollisionInfo>* collisions
 )
 {
@@ -56,7 +56,7 @@ GridChunk* FixedGrid::CheckCollisions(
 	GridChunk* chunk, 
 	unsigned int identifier, 
 	unsigned char layer, 
-	AABBScalar aabb, 
+	const AABBScalar& aabb, 
 	CapacityStream<CollisionInfo>* collisions
 )
 {
@@ -146,21 +146,21 @@ void FixedGrid::Initialize(
 	handler_data = CopyNonZero(Allocator(), _handler_data, _handler_data_size);
 }
 
-void FixedGrid::InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBScalar aabb)
+void FixedGrid::InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, const AABBScalar& aabb)
 {
 	// Just ignore the collisions
 	ECS_STACK_CAPACITY_STREAM(CollisionInfo, collisions, ECS_KB);
 	InsertEntry(thread_id, world, identifier, layer, aabb, &collisions);
 }
 
-void FixedGrid::InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, AABBScalar aabb, CapacityStream<CollisionInfo>* collisions)
+void FixedGrid::InsertEntry(unsigned int thread_id, World* world, unsigned int identifier, unsigned char layer, const AABBScalar& aabb, CapacityStream<CollisionInfo>* collisions)
 {
 	spatial_grid.InsertAABB(aabb.min, aabb.max, { aabb, identifier, layer }, [&](uint3 cell_indices, GridChunk* initial_chunk) {
 		CheckCollisions(thread_id, world, initial_chunk, identifier, layer, aabb, collisions);
 	});
 }
 
-void FixedGrid::InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, AABBScalar aabb)
+void FixedGrid::InsertIntoCell(uint3 cell_indices, unsigned int identifier, unsigned char layer, const AABBScalar& aabb)
 {
 	spatial_grid.InsertEntry(cell_indices, { aabb, identifier, layer });
 }

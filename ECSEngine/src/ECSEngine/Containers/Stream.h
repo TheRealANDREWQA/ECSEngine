@@ -2516,7 +2516,7 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE ECS_ALLOCATOR_TYPE AllocatorTypeFromString(Stream<char> string) {
-		// Conveniece function
+		// Convenience function
 		return AllocatorTypeFromString(string.buffer, string.size);
 	}
 

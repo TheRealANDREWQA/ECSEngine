@@ -44,7 +44,7 @@ namespace ECSEngine {
 			return field_tag.size == 0 ? -1 : type->FindField(field_tag);
 		}
 
-		size_t GetReflectionTypeAllocatorMiscIndex(const ReflectionType* type) {
+		size_t GetReflectionTypeOverallAllocatorMiscIndex(const ReflectionType* type) {
 			for (size_t index = 0; index < type->misc_info.size; index++) {
 				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
 					if (type->misc_info[index].allocator_info.modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN) {
@@ -61,10 +61,27 @@ namespace ECSEngine {
 			return ConvertPointerToAllocatorPolymorphicEx(field, allocator_type);
 		}
 
+		AllocatorPolymorphic ConvertReflectionTypeFieldToAllocatorWithMainHandling(const ReflectionType* type, size_t field_index, const void* instance) {
+			// Firstly, determine if this is a main allocator field index with a nested allocator
+			size_t main_allocator_soa_index = GetReflectionTypeOverallAllocatorMiscIndex(type);
+			if (main_allocator_soa_index != -1) {
+				const ReflectionTypeMiscAllocator* main_allocator = &type->misc_info[main_allocator_soa_index].allocator_info;
+				if (main_allocator->field_index == field_index) {
+					// Handle this case manually
+					return main_allocator->GetMainAllocatorForInstance(instance);
+				}
+			}
+
+			return ConvertReflectionTypeFieldToAllocator(type, field_index, instance);
+		}
+
 		AllocatorPolymorphic GetReflectionTypeOverallAllocator(const ReflectionType* type, const void* instance, AllocatorPolymorphic fallback_allocator) {
-			size_t misc_allocator_index = GetReflectionTypeAllocatorMiscIndex(type);
+			size_t misc_allocator_index = GetReflectionTypeOverallAllocatorMiscIndex(type);
 			if (misc_allocator_index != -1) {
-				return ConvertReflectionTypeFieldToAllocator(type, type->misc_info[misc_allocator_index].allocator_info.field_index, instance);
+				// This is a more special case to handle. We must make use of the extra information from the misc info, cannot use
+				// The normal ConvertReflectionTypeFieldToAllocator to get the allocator
+				const ReflectionTypeMiscAllocator* misc_allocator = &type->misc_info[misc_allocator_index].allocator_info;
+				return misc_allocator->GetMainAllocatorForInstance(instance);
 			}
 			return fallback_allocator;
 		}
@@ -73,14 +90,14 @@ namespace ECSEngine {
 			Stream<char> field_allocator_name = GetReflectionTypeFieldAllocatorFromTag(type, field_index);
 			if (field_allocator_name.size > 0) {
 				unsigned int allocator_field_index = type->FindField(field_allocator_name);
-				return ConvertReflectionTypeFieldToAllocator(type, allocator_field_index, instance);
+				return ConvertReflectionTypeFieldToAllocatorWithMainHandling(type, allocator_field_index, instance);
 			}
 			return fallback_allocator;
 		}
 
 		AllocatorPolymorphic GetReflectionTypeFieldAllocatorForSoa(const ReflectionType* type, const ReflectionTypeMiscSoa* soa, const void* instance, AllocatorPolymorphic fallback_allocator) {
 			if (soa->field_allocator_index != UCHAR_MAX) {
-				return ConvertReflectionTypeFieldToAllocator(type, soa->field_allocator_index, instance);
+				return ConvertReflectionTypeFieldToAllocatorWithMainHandling(type, soa->field_allocator_index, instance);
 			}
 			return fallback_allocator;
 		}
@@ -121,16 +138,25 @@ namespace ECSEngine {
 			}
 		}
 
-		void GetReflectionTypeAllocatorInitializeOrder(const ReflectionType* type, CapacityStream<unsigned int>& allocator_field_indices) {
-			GetReflectionTypeAllocatorInitializeOrderImpl(type, allocator_field_indices, [type](size_t soa_index) {
-				return type->misc_info[soa_index].allocator_info.field_index;
-			});
-		}
-
 		void GetReflectionTypeAllocatorInitializeOrderSoaIndices(const ReflectionType* type, CapacityStream<unsigned int>& allocator_soa_indices) {
 			GetReflectionTypeAllocatorInitializeOrderImpl(type, allocator_soa_indices, [type](size_t soa_index) {
 				return soa_index;
 			});
+		}
+
+		void GetReflectionTypeAllocatorPointerAndDefinition(const ReflectionType* type, size_t field_index, const void* instance, void*& allocator_pointer, Stream<char>& definition) {
+			size_t main_allocator_soa_index = GetReflectionTypeOverallAllocatorMiscIndex(type);
+			// Set the default value here, and overwrite it only for the unusual case
+			allocator_pointer = type->GetField(instance, field_index);
+			definition = type->fields[field_index].definition;
+			
+			if (main_allocator_soa_index != -1) {
+				const ReflectionTypeMiscAllocator* main_allocator = &type->misc_info[main_allocator_soa_index].allocator_info;
+				if (main_allocator->field_index == field_index) {
+					allocator_pointer = OffsetPointer(instance, main_allocator->main_allocator_offset);
+					definition = main_allocator->main_allocator_definition;
+				}
+			}
 		}
 
 	}
