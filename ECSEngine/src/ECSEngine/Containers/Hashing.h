@@ -1,8 +1,10 @@
+// ECS_REFLECT
 #pragma once
 #include "../Core.h"
 #include "Stream.h"
 #include "../Math/VCLExtensions.h"
 #include "../Utilities/PointerUtilities.h"
+#include "../Utilities/Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {
 
@@ -65,7 +67,7 @@ namespace ECSEngine {
 		unsigned int size;
 	};
 
-	struct ECSENGINE_API HashFunctionPowerOfTwo {
+	struct ECSENGINE_API ECS_REFLECT_VALID_DEPENDENCY HashFunctionPowerOfTwo {
 	public:
 		HashFunctionPowerOfTwo() {}
 		HashFunctionPowerOfTwo(size_t additional_info) {}
@@ -86,7 +88,7 @@ namespace ECSEngine {
 		}
 	};
 
-	struct ECSENGINE_API HashFunctionPrimeNumber {
+	struct ECSENGINE_API ECS_REFLECT_VALID_DEPENDENCY HashFunctionPrimeNumber {
 	public:
 		HashFunctionPrimeNumber() {}
 		HashFunctionPrimeNumber(size_t additional_info) {}
@@ -435,7 +437,7 @@ namespace ECSEngine {
 		}
 	};
 
-	struct ECSENGINE_API HashFunctionFibonacci {
+	struct ECSENGINE_API ECS_REFLECT_VALID_DEPENDENCY HashFunctionFibonacci {
 	public:
 		HashFunctionFibonacci() : m_shift_amount(64) {}
 		HashFunctionFibonacci(size_t additional_info) : m_shift_amount(64 - additional_info) {}
@@ -450,7 +452,7 @@ namespace ECSEngine {
 		size_t m_shift_amount;
 	};
 
-	struct ECSENGINE_API HashFunctionXORFibonacci {
+	struct ECSENGINE_API ECS_REFLECT_VALID_DEPENDENCY HashFunctionXORFibonacci {
 	public:
 		HashFunctionXORFibonacci() : m_shift_amount(64) {}
 		HashFunctionXORFibonacci(size_t additional_info) : m_shift_amount(64 - additional_info) {}
@@ -466,7 +468,7 @@ namespace ECSEngine {
 		size_t m_shift_amount;
 	};
 
-	struct ECSENGINE_API HashFunctionFolding {
+	struct ECSENGINE_API ECS_REFLECT_VALID_DEPENDENCY HashFunctionFolding {
 	public:
 		HashFunctionFolding() {}
 		HashFunctionFolding(size_t additional_info) {}
@@ -488,7 +490,7 @@ namespace ECSEngine {
 		}
 	};
 
-	struct ObjectHashFallthrough {
+	struct ECS_REFLECT_VALID_DEPENDENCY ObjectHashFallthrough {
 		template<typename T>
 		ECS_INLINE static unsigned int Hash(T identifier) {
 			if constexpr (std::is_arithmetic_v<T> || std::is_pointer_v<T>) {
@@ -500,7 +502,7 @@ namespace ECSEngine {
 		}
 	};
 
-	struct PointerHashing {
+	struct ECS_REFLECT_VALID_DEPENDENCY PointerHashing {
 		template<typename T>
 		ECS_INLINE static unsigned int Hash(const T* pointer) {
 			return PointerHash(pointer);

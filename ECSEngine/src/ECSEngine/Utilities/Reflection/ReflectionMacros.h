@@ -3,6 +3,10 @@
 #pragma warning(disable: 4003)
 
 #define ECS_REFLECT
+// When attached to a struct, it indicates that this structure might appear in other structures
+// And it should be considered as a valid dependency, without having its proper definition registered
+// It only looks at the token to the right of it and it adds to the valid dependencies array
+#define ECS_REFLECT_VALID_DEPENDENCY
 
 #define ECS_FIELDS_START_REFLECT
 #define ECS_FIELDS_END_REFLECT

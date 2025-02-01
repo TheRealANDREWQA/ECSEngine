@@ -15,7 +15,7 @@ namespace ECSEngine {
 		unsigned int next_chunk;
 	};
 
-	struct SpatialGridDefaultCellIndicesHash {
+	struct ECS_REFLECT_VALID_DEPENDENCY SpatialGridDefaultCellIndicesHash {
 		ECS_INLINE static unsigned int Hash(uint3 indices) {
 			return Cantor(indices.x, indices.y, indices.z);
 		}
