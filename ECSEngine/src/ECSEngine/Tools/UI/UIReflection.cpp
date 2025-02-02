@@ -3802,7 +3802,27 @@ namespace ECSEngine {
 				field.stream_type = UIReflectionStreamType::None;
 			};
 
-			auto user_defined_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
+			// Returns true if the given type can be reflected, else false
+			auto user_defined_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) -> bool {
+				// If it contains pointer asterisks, don't use them to search by definition
+				unsigned char pointer_indirection_level = 0;
+				Stream<char> field_definition = reflection_field.definition;
+				while (field_definition.Last() == '*') {
+					pointer_indirection_level++;
+					field_definition.size--;
+				}
+
+				// If the type doesn't exist in the UI reflection, then create it
+				if (GetType(field_definition) == nullptr) {
+					const ReflectionType* user_defined_type = reflection->TryGetType(field_definition);
+					if (user_defined_type == nullptr) {
+						// Exit, we can't handle this type
+						return false;
+					}
+
+					CreateType(user_defined_type);
+				}
+				
 				UIReflectionUserDefinedData* data = (UIReflectionUserDefinedData*)allocator->Allocate(sizeof(UIReflectionUserDefinedData));
 				field.data = data;
 				field.element_index = UIReflectionElement::UserDefined;
@@ -3827,21 +3847,8 @@ namespace ECSEngine {
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::None;
 
-				// If it contains pointer asterisks, don't use them to search by definition
-				unsigned char pointer_indirection_level = 0;
-				Stream<char> field_definition = reflection_field.definition;
-				while (field_definition.Last() == '*') {
-					pointer_indirection_level++;
-					field_definition.size--;
-				}
-
-				// If the type doesn't exist in the UI reflection, then create it
-				if (GetType(field_definition) == nullptr) {
-					const ReflectionType* user_defined_type = reflection->GetType(field_definition);
-					CreateType(user_defined_type);
-				}
-
 				data->pointer_indirection_count = pointer_indirection_level;
+				return true;
 			};
 
 			// Returns true if it found an override, else false.
@@ -3941,18 +3948,8 @@ namespace ECSEngine {
 				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::ColorFloat);
 			};
 
-			auto user_defined_stream_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				UIReflectionStreamUserDefinedData* data = (UIReflectionStreamUserDefinedData*)allocator->Allocate(sizeof(UIReflectionStreamUserDefinedData));
-				memset(data, 0, sizeof(*data));
-
-				field.data = data;
-				field.element_index = UIReflectionElement::UserDefined;
-				field.byte_size = sizeof(*data);
-
-				data->ui_drawer = this;
-				data->base_data.stream.element_byte_size = reflection_field.info.stream_byte_size;
-				data->base_data.stream.element_alignment = reflection_field.info.stream_alignment;
-
+			// Returns true if the type could be reflected, else false
+			auto user_defined_stream_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) -> bool {
 				Stream<char> user_defined_type = GetUserDefinedTypeFromStreamUserDefined(reflection_field.definition, reflection_field.info.stream_type);
 				// If it has pointer indirections, eliminate them and record the indirection count
 				unsigned char pointer_indirection_level = 0;
@@ -3966,17 +3963,34 @@ namespace ECSEngine {
 					user_defined_type.Advance(strlen("const "));
 				}
 
+				// If the user defined type doesn't exist in the UI, then create it, if it exists, else false
+				if (GetType(user_defined_type) == nullptr) {
+					const ReflectionType* reflection_type = reflection->GetType(user_defined_type);
+					if (reflection_type == nullptr) {
+						return false;
+					}
+
+					CreateType(reflection_type);
+				}
+
+				UIReflectionStreamUserDefinedData* data = (UIReflectionStreamUserDefinedData*)allocator->Allocate(sizeof(UIReflectionStreamUserDefinedData));
+				memset(data, 0, sizeof(*data));
+
+				field.data = data;
+				field.element_index = UIReflectionElement::UserDefined;
+				field.byte_size = sizeof(*data);
+
+				data->ui_drawer = this;
+				data->base_data.stream.element_byte_size = reflection_field.info.stream_byte_size;
+				data->base_data.stream.element_alignment = reflection_field.info.stream_alignment;
+
 				Stream<char> allocated_type = StringCopy(allocator, user_defined_type);
-				data->type_name = allocated_type.buffer;
+				data->type_name = allocated_type;
 				data->base_data.stream.pointer_indirection_count = pointer_indirection_level;
 
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::Capacity;
-
-				// If the user defined type doesn't exist in the UI, then create it
-				if (GetType(data->type_name) == nullptr) {
-					CreateType(reflection->GetType(data->type_name));
-				}
+				return true;
 			};
 
 			if (options == nullptr || options->assert_that_it_doesnt_exist) {
@@ -4046,8 +4060,7 @@ namespace ECSEngine {
 					// Only if it doesn't have the ECS_GIVE_SIZE_REFLECTION macro and it is
 					// Not a custom type
 					if (!field->Has(STRING(ECS_GIVE_SIZE_REFLECTION)) && FindReflectionCustomType(field->definition) == -1) {
-						user_defined_convert(*field, type.fields[type.fields.size]);
-						value_written = true;
+						value_written = user_defined_convert(*field, type.fields[type.fields.size]);
 					}
 				}
 			};
@@ -4123,8 +4136,7 @@ namespace ECSEngine {
 					}
 				}
 				else if (field_info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					user_defined_stream_convert(*field, type.fields[type.fields.size]);
-					value_written = true;
+					value_written = user_defined_stream_convert(*field, type.fields[type.fields.size]);
 				}
 			};
 

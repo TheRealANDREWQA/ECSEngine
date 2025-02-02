@@ -1278,14 +1278,32 @@ namespace ECSEngine {
 			return component.value < m_unique_components.size && m_unique_components[component.value].size != -1;
 		}
 
+		// Verifies if a component already exists at that slot
+		template<typename T>
+		ECS_INLINE bool ExistsComponent() const {
+			return ExistsComponent(T::ID());
+		}
+
 		// Verifies if a shared component was already allocated at that slot
 		ECS_INLINE bool ExistsSharedComponent(Component component) const {
 			return component.value < m_shared_components.size && m_shared_components[component.value].info.size != -1;
 		}
 
+		// Verifies if a shared component was already allocated at that slot
+		template<typename T>
+		ECS_INLINE bool ExistsSharedComponent() const {
+			return ExistsSharedComponent(T::ID());
+		}
+
 		// Verifies if a global component was already allocated at that slot
 		ECS_INLINE bool ExistsGlobalComponent(Component component) const {
 			return SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component)) != -1;
+		}
+
+		// Verifies if a global component was already allocated at that slot
+		template<typename T>
+		ECS_INLINE bool ExistsGlobalComponent() const {
+			return ExistsGlobalComponent(T::ID());
 		}
 
 		// Verifies if a shared instance is a valid instance - checks to see if the component also exists
