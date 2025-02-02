@@ -1,7 +1,9 @@
+// ECS_REFLECT
 #pragma once
 #include "ECSEngineMath.h"
 #include "Export.h"
 #include "CollisionDetection/src/SAT.h"
+#include "ECSEngineReflectionMacros.h"
 
 namespace ECSEngine {
 	struct World;
@@ -9,12 +11,14 @@ namespace ECSEngine {
 
 struct ConvexHull;
 
+#define CONTACT_MANIFOLD_MAX_POINTS ECS_CONSTANT_REFLECT(4)
+
 struct ContactManifold {
 	// This axis needs to be normalized
 	float3 separation_axis;
 	float separation_distance;
 	unsigned int point_count = 0;
-	float3 points[4];
+	float3 points[CONTACT_MANIFOLD_MAX_POINTS];
 
 	// These describe the features that produced this contact manifold
 	unsigned int feature_index_A;
@@ -24,17 +28,17 @@ struct ContactManifold {
 
 // This is a contact manifold that also has the features 
 // that generated each point
-struct PHYSICS_API ContactManifoldFeatures : ContactManifold {
+struct PHYSICS_API ECS_REFLECT ContactManifoldFeatures : ContactManifold {
 	void RemoveSwapBack(unsigned int index);
 
-	unsigned int point_indices[ECS_COUNTOF(ContactManifold::points)];
-	uint2 point_edge_indices[ECS_COUNTOF(ContactManifold::points)];
+	unsigned int point_indices[CONTACT_MANIFOLD_MAX_POINTS];
+	uint2 point_edge_indices[CONTACT_MANIFOLD_MAX_POINTS];
 };
 
 
 // Returns the index of the added point
 ECS_INLINE unsigned int ContactManifoldAddPoint(ContactManifold& manifold, float3 point) {
-	ECS_ASSERT(manifold.point_count < ECS_COUNTOF(ContactManifold::points), "ContactManifold too many contact points!");
+	ECS_ASSERT(manifold.point_count < CONTACT_MANIFOLD_MAX_POINTS, "ContactManifold too many contact points!");
 	manifold.points[manifold.point_count++] = point;
 	return manifold.point_count - 1;
 }
@@ -48,7 +52,7 @@ ECS_INLINE unsigned int ContactManifoldFeaturesAddPoint(ContactManifoldFeatures&
 
 // Returns the index of the first added point
 ECS_INLINE unsigned int ContactManifoldWritePoints(ContactManifold& manifold, Stream<float3> write_points) {
-	ECS_ASSERT(manifold.point_count + write_points.size <= ECS_COUNTOF(ContactManifold::points), "ContactManifold too many contact points!");
+	ECS_ASSERT(manifold.point_count + write_points.size <= CONTACT_MANIFOLD_MAX_POINTS, "ContactManifold too many contact points!");
 	write_points.CopyTo(manifold.points + manifold.point_count);
 	manifold.point_count += write_points.size;
 	return manifold.point_count - write_points.size;
@@ -56,7 +60,7 @@ ECS_INLINE unsigned int ContactManifoldWritePoints(ContactManifold& manifold, St
 
 // Returns the index of the first added point
 ECS_INLINE unsigned int ContactManifoldWritePoints(ContactManifold& manifold, Stream<ConvexHullClippedPoint> write_points) {
-	ECS_ASSERT(manifold.point_count + write_points.size <= ECS_COUNTOF(ContactManifold::points), "ContactManifold too many contact points!");
+	ECS_ASSERT(manifold.point_count + write_points.size <= CONTACT_MANIFOLD_MAX_POINTS, "ContactManifold too many contact points!");
 	for (size_t index = 0; index < write_points.size; index++) {
 		manifold.points[manifold.point_count + index] = write_points[index].position;
 	}

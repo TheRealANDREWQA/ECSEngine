@@ -22,7 +22,7 @@ ECS_THREAD_TASK(GridHandler) {
 }
 
 static ECS_THREAD_TASK(ChangeHandler) {
-	FixedGrid* fixed_grid = (FixedGrid*)_data;
+	FixedGrid* fixed_grid = world->entity_manager->GetGlobalComponent<FixedGrid>();
 	fixed_grid->ChangeHandler(GridHandler, nullptr, 0);
 }
 

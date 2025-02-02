@@ -35,13 +35,14 @@ static void UpdateBroadphaseGrid(
 
 template<bool get_query>
 ECS_THREAD_TASK(CollisionBroadphase) {
+	FixedGrid* fixed_grid = nullptr;
 	if constexpr (!get_query) {
-		FixedGrid* fixed_grid = (FixedGrid*)_data;
+		fixed_grid = world->entity_manager->GetGlobalComponent<FixedGrid>();
 		fixed_grid->EndFrame();
 		fixed_grid->StartFrame();
 	}
 	ForEachEntityCommit<get_query, QueryRead<Translation>, QueryRead<RenderMesh>, QueryOptional<QueryRead<Rotation>>, QueryOptional<QueryRead<Scale>>>(thread_id, world)
-		.Function(UpdateBroadphaseGrid, _data);
+		.Function(UpdateBroadphaseGrid, fixed_grid);
 }
 
 ECS_THREAD_TASK(EmptyGridHandler) {}
@@ -52,9 +53,11 @@ void InitializeCollisionBroadphase(World* world, StaticThreadTaskInitializeInfo*
 	//	previous_grid->Clear();
 	//}
 
-	FixedGrid* fixed_grid = world->entity_manager->RegisterGlobalComponentCommit<FixedGrid>(nullptr);
-	fixed_grid->Initialize(world->memory, { 128, 128, 128 }, { 2, 2, 2 }, 10, NarrowphaseGridHandler, nullptr, 0);
-	fixed_grid->EnableLayerCollisions(0, 0);
+	if (!world->entity_manager->ExistsGlobalComponent<FixedGrid>()) {
+		FixedGrid* fixed_grid = world->entity_manager->RegisterGlobalComponentCommit<FixedGrid>(nullptr);
+		fixed_grid->Initialize(world->memory, { 128, 128, 128 }, { 2, 2, 2 }, 10, NarrowphaseGridHandler, nullptr, 0);
+		fixed_grid->EnableLayerCollisions(0, 0);
+	}
 }
 
 ECS_THREAD_TASK(CollisionBroadphaseEndFrame) {

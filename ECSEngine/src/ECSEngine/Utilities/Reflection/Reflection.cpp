@@ -49,11 +49,17 @@ namespace ECSEngine {
 			Stream<char> name;
 		};
 
+		//struct ReflectionParsedType : ReflectionType {
+		//	// If the type inherits from another one, this is the name of the type it inherits from
+		//	Stream<char> inherit_type;
+		//};
+
 		struct ReflectionManagerParseStructuresThreadTaskData {
 			// This is the allocator from which the resizable streams are allocated from.
 			// The allocator is local to this thread, it is not shared
 			ResizableLinearAllocator allocator;
 			Stream<Stream<wchar_t>> paths;
+			//ResizableStream<ReflectionParsedType> types;
 			ResizableStream<ReflectionType> types;
 			ResizableStream<ReflectionEnum> enums;
 			ResizableStream<ReflectionConstant> constants;
@@ -856,11 +862,16 @@ namespace ECSEngine {
 		static void AddTypeDefinition(
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			const TokenizedString& body_tokens,
-			const char* name,
+			Stream<char> inherit_type,
+			Stream<char> name,
 			unsigned int file_index
 		) {
 			// Add the type directly
 			data->types.ReserveRange();
+			
+			// We can reference the type directly, no need to copy it
+			//data->types.Last().inherit_type = inherit_type;
+
 			ReflectionType& type = data->types.Last();
 			ZeroOut(&type);
 
@@ -1214,7 +1225,7 @@ namespace ECSEngine {
 				ReflectionTypeMiscAllocator misc_allocator;
 				misc_allocator.field_index = type_overall_primary_allocator_index;
 				misc_allocator.modifier = ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN;
-				misc_allocator.is_direct_allocator = type_overall_primary_allocator_index;
+				misc_allocator.is_direct_allocator = is_type_overall_primary_allocator_direct;
 				misc_allocator.main_allocator_offset = 0;
 				misc_allocator.main_allocator_definition = {};
 				// No need to set the offset and the definition, these are resolved in the BindApprovedData call
@@ -1783,6 +1794,16 @@ namespace ECSEngine {
 			}
 			blittable_types->AddAssert({ STRING(ColorFloat), sizeof(float) * 4, alignof(float), float_color_default });
 
+			// The same as with color, don't add the include for Entity and EntityPair. Set the default as -1
+			unsigned int* default_entity = (unsigned int*)Allocate(allocator, sizeof(unsigned int));
+			*default_entity = -1;
+			blittable_types->AddAssert({ STRING(Entity), sizeof(unsigned int), alignof(unsigned int), default_entity });
+
+			unsigned int* default_entity_pair = (unsigned int*)Allocate(allocator, sizeof(unsigned int) * 2);
+			default_entity_pair[0] = -1;
+			default_entity_pair[1] = -1;
+			blittable_types->AddAssert({ STRING(EntityPair), sizeof(unsigned int) * 2, alignof(unsigned int), default_entity_pair });
+
 			// Add the math types now
 			// Don't include the headers just for the byte sizes - use the MathTypeSizes.h
 			for (size_t index = 0; index < ECS_MATH_STRUCTURE_TYPE_COUNT; index++) {
@@ -2049,7 +2070,7 @@ namespace ECSEngine {
 				for (size_t template_index = 0; template_index < data[data_index].type_templates.size; template_index++) {
 					ReflectionTypeTemplate template_copy = data[data_index].type_templates[template_index].CopyTo(ptr);
 					template_copy.folder_hierarchy_index = folder_index;
-					type_templates.InsertDynamic(folders.allocator, template_copy, template_copy.base_type.name);
+					type_templates.InsertDynamic(Allocator(), template_copy, template_copy.base_type.name);
 				}
 			}
 
@@ -4320,10 +4341,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								AddTypedefAlias(data, structure_name.buffer, typedef_colon, index);
 							}
 							else {
-								// null terminate 
-								char* second_space_mutable = (char*)(reflection_structure_name_end);
-								*second_space_mutable = '\0';
-								data->total_memory += PointerDifference(second_space_mutable, reflection_structure_name_start) / sizeof(char) + 1;
+								data->total_memory += PointerDifference(reflection_structure_name_end, reflection_structure_name_start) / sizeof(char) + 1;
 
 								file_contents[word_offset] = '\0';
 								// find the last new line character in order to speed up processing
@@ -4376,11 +4394,45 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										return;
 									}
 
-									// Check to see if it is a tagged type with a preparsing handler
-									const char* type_opening_parenthese = opening_parenthese;
-									const char* type_closing_parenthese = closing_parenthese;
-									const char* type_name = reflection_structure_name_start;
+									// Check to see if it inherits from another type. Allow single inheritance
+									Stream<char> inherit_type_name;
+									const char* inherit_colon = strchr(reflection_structure_name_end, ':');
+									if (inherit_colon != nullptr && inherit_colon < opening_parenthese) {
+										// It has an inherit colon, check to see how many types there are
+										Stream<char> inherit_parse_range = { inherit_colon + 1, PointerElementDifference(inherit_colon + 1, opening_parenthese) };
+										
+										// If a comma appears, then consider that there is multiple inheritance, fail
+										if (FindFirstCharacter(inherit_parse_range, ',').size > 0) {
+											WriteErrorMessage(data, "Type {#} inherits from multiple types, which is not allowed");
+											return;
+										}
 
+										inherit_parse_range = TrimWhitespace(inherit_parse_range);
+										// If it starts with public, private or protected, remove that leading keyword
+										if (inherit_parse_range.StartsWith("public ")) {
+											inherit_parse_range = inherit_parse_range.SliceAt(strlen("public "));
+										}
+										else if (inherit_parse_range.StartsWith("protected ")) {
+											inherit_parse_range = inherit_parse_range.SliceAt(strlen("protected "));
+										}
+										else if (inherit_parse_range.StartsWith("private ")) {
+											inherit_parse_range = inherit_parse_range.SliceAt(strlen("private "));
+										}
+
+										// If the parse range contains :: namespace separators, then find the latest name.
+										// Use reverse searching for this
+										Stream<char> namespace_separators = FindTokenReverse(inherit_parse_range, "::");
+										if (namespace_separators.size > 0) {
+											// Skip over the namespace separators and over whitespace
+											namespace_separators.Advance(2);
+											inherit_parse_range = SkipWhitespace(namespace_separators);
+										}
+
+										// Assign this type as an inherit
+										inherit_type_name = inherit_parse_range;
+									}
+
+									// Check to see if it is a tagged type with a preparsing handler
 									stack_allocator.Clear();
 
 									TokenizedString tokenized_body;
@@ -4405,7 +4457,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									// The type proves to be a template
 									size_t previous_embedded_array_size_count = data->embedded_array_size.size;
 
-									AddTypeDefinition(data, tokenized_body, type_name, index);
+									size_t current_total_memory_usage = data->total_memory;
+									AddTypeDefinition(data, tokenized_body, inherit_type_name, structure_name, index);
 									if (data->success == false) {
 										return;
 									}
@@ -4561,6 +4614,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 										// Add the memory used by the entire template, minus the base type copy size, since that was already accounted
 										// For when parsing the type normally
+										size_t base_memory_size = type_template.base_type.CopySize();
 										data->total_memory += type_template.CopySize() - type_template.base_type.CopySize();
 
 										// Remove the parsed type from the normal type list
@@ -8029,6 +8083,38 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 4, ECS_MB);
 			ResizableStream<Stream<char>> processed_dependencies(&stack_allocator, 256);
 			
+			// Processes a single Stream<char> definition
+			auto process_definition = [&](Stream<char> definition) -> void {
+				// Check blittable exception
+				ulong2 blittable_index = manager->FindBlittableException(definition);
+				if (blittable_index.x == -1) {
+					// Not a blittable type
+					// Try nested type, then custom type
+					const ReflectionType* nested_type = manager->TryGetType(definition);
+					if (nested_type != nullptr) {
+						dependencies.AddAssert(nested_type->name);
+					}
+					else {
+						// Try custom type
+						ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(definition);
+						if (custom_type != nullptr) {
+							// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
+							// If it needs them as well.
+							ReflectionCustomTypeDependentTypesData dependent_data;
+							dependent_data.definition = definition;
+							dependent_data.dependent_types = dependencies;
+							custom_type->GetDependentTypes(&dependent_data);
+							dependencies.size = dependent_data.dependent_types.size;
+						}
+						// If it is a known valid dependency or an enum, skip it.
+						else if (!manager->IsKnownValidDependency(definition) && manager->TryGetEnum(definition) == nullptr) {
+							// No match was found
+							missing_dependencies.AddAssert(definition);
+						}
+					}
+				}
+			};
+
 			// This function is almost identical to GetReflectionTypeDependentTypes, with the difference being that
 			// It doesn't assert if a match could not be found, instead it adds it to the missing dependencies
 			auto get_dependencies = [&](const ReflectionType* type) -> void {
@@ -8036,34 +8122,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 						// Check to see if it has the size given
 						if (GetReflectionTypeGivenFieldTag(&type->fields[index]).x == -1) {
-							// Check blittable exception
-							ulong2 blittable_index = manager->FindBlittableException(type->fields[index].definition);
-							if (blittable_index.x == -1) {
-								// Not a blittable type
-								// Try nested type, then custom type
-								const ReflectionType* nested_type = manager->TryGetType(type->fields[index].definition);
-								if (nested_type != nullptr) {
-									dependencies.AddAssert(nested_type->name);
-								}
-								else {
-									// Try custom type
-									ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[index].definition);
-									if (custom_type != nullptr) {
-										// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
-										// If it needs them as well.
-										ReflectionCustomTypeDependentTypesData dependent_data;
-										dependent_data.definition = type->fields[index].definition;
-										dependent_data.dependent_types = dependencies;
-										custom_type->GetDependentTypes(&dependent_data);
-										dependencies.size = dependent_data.dependent_types.size;
-									}
-									// If it is a known valid dependency, skip it.
-									else if (!manager->IsKnownValidDependency(type->fields[index].definition)) {
-										// No match was found
-										missing_dependencies.AddAssert(type->fields[index].definition);
-									}
-								}
-							}
+							process_definition(type->fields[index].definition);
 						}
 					}
 				}
@@ -8084,22 +8143,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						get_dependencies(type);
 					}
 					else {
-						// Might be a custom reflection type, or an unmatched type
-						ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(current_dependency);
-						if (custom_type != nullptr) {
-							// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
-							// If it needs them as well.
-							ReflectionCustomTypeDependentTypesData dependent_data;
-							dependent_data.definition = current_dependency;
-							dependent_data.dependent_types = dependencies;
-							custom_type->GetDependentTypes(&dependent_data);
-							dependencies.size = dependent_data.dependent_types.size;
-						}
-						// If it is a known valid dependency, skip it.
-						else if (!manager->IsKnownValidDependency(current_dependency)) {
-							// No match was found
-							missing_dependencies.AddAssert(current_dependency);
-						}
+						process_definition(current_dependency);
 					}
 				}
 			}
