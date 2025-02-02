@@ -1214,7 +1214,7 @@ namespace ECSEngine {
 				ReflectionTypeMiscAllocator misc_allocator;
 				misc_allocator.field_index = type_overall_primary_allocator_index;
 				misc_allocator.modifier = ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN;
-				misc_allocator.is_direct_allocator = type_overall_primary_allocator_index;
+				misc_allocator.is_direct_allocator = is_type_overall_primary_allocator_direct;
 				misc_allocator.main_allocator_offset = 0;
 				misc_allocator.main_allocator_definition = {};
 				// No need to set the offset and the definition, these are resolved in the BindApprovedData call
@@ -1782,6 +1782,16 @@ namespace ECSEngine {
 				float_color_default[index] = 1.0f;
 			}
 			blittable_types->AddAssert({ STRING(ColorFloat), sizeof(float) * 4, alignof(float), float_color_default });
+
+			// The same as with color, don't add the include for Entity and EntityPair. Set the default as -1
+			unsigned int* default_entity = (unsigned int*)Allocate(allocator, sizeof(unsigned int));
+			*default_entity = -1;
+			blittable_types->AddAssert({ STRING(Entity), sizeof(unsigned int), alignof(unsigned int), default_entity });
+
+			unsigned int* default_entity_pair = (unsigned int*)Allocate(allocator, sizeof(unsigned int) * 2);
+			default_entity_pair[0] = -1;
+			default_entity_pair[1] = -1;
+			blittable_types->AddAssert({ STRING(EntityPair), sizeof(unsigned int) * 2, alignof(unsigned int), default_entity_pair });
 
 			// Add the math types now
 			// Don't include the headers just for the byte sizes - use the MathTypeSizes.h
@@ -8029,6 +8039,38 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 4, ECS_MB);
 			ResizableStream<Stream<char>> processed_dependencies(&stack_allocator, 256);
 			
+			// Processes a single Stream<char> definition
+			auto process_definition = [&](Stream<char> definition) -> void {
+				// Check blittable exception
+				ulong2 blittable_index = manager->FindBlittableException(definition);
+				if (blittable_index.x == -1) {
+					// Not a blittable type
+					// Try nested type, then custom type
+					const ReflectionType* nested_type = manager->TryGetType(definition);
+					if (nested_type != nullptr) {
+						dependencies.AddAssert(nested_type->name);
+					}
+					else {
+						// Try custom type
+						ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(definition);
+						if (custom_type != nullptr) {
+							// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
+							// If it needs them as well.
+							ReflectionCustomTypeDependentTypesData dependent_data;
+							dependent_data.definition = definition;
+							dependent_data.dependent_types = dependencies;
+							custom_type->GetDependentTypes(&dependent_data);
+							dependencies.size = dependent_data.dependent_types.size;
+						}
+						// If it is a known valid dependency, skip it.
+						else if (!manager->IsKnownValidDependency(definition)) {
+							// No match was found
+							missing_dependencies.AddAssert(definition);
+						}
+					}
+				}
+			};
+
 			// This function is almost identical to GetReflectionTypeDependentTypes, with the difference being that
 			// It doesn't assert if a match could not be found, instead it adds it to the missing dependencies
 			auto get_dependencies = [&](const ReflectionType* type) -> void {
@@ -8036,34 +8078,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 						// Check to see if it has the size given
 						if (GetReflectionTypeGivenFieldTag(&type->fields[index]).x == -1) {
-							// Check blittable exception
-							ulong2 blittable_index = manager->FindBlittableException(type->fields[index].definition);
-							if (blittable_index.x == -1) {
-								// Not a blittable type
-								// Try nested type, then custom type
-								const ReflectionType* nested_type = manager->TryGetType(type->fields[index].definition);
-								if (nested_type != nullptr) {
-									dependencies.AddAssert(nested_type->name);
-								}
-								else {
-									// Try custom type
-									ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[index].definition);
-									if (custom_type != nullptr) {
-										// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
-										// If it needs them as well.
-										ReflectionCustomTypeDependentTypesData dependent_data;
-										dependent_data.definition = type->fields[index].definition;
-										dependent_data.dependent_types = dependencies;
-										custom_type->GetDependentTypes(&dependent_data);
-										dependencies.size = dependent_data.dependent_types.size;
-									}
-									// If it is a known valid dependency, skip it.
-									else if (!manager->IsKnownValidDependency(type->fields[index].definition)) {
-										// No match was found
-										missing_dependencies.AddAssert(type->fields[index].definition);
-									}
-								}
-							}
+							process_definition(type->fields[index].definition);
 						}
 					}
 				}
@@ -8084,22 +8099,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						get_dependencies(type);
 					}
 					else {
-						// Might be a custom reflection type, or an unmatched type
-						ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(current_dependency);
-						if (custom_type != nullptr) {
-							// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
-							// If it needs them as well.
-							ReflectionCustomTypeDependentTypesData dependent_data;
-							dependent_data.definition = current_dependency;
-							dependent_data.dependent_types = dependencies;
-							custom_type->GetDependentTypes(&dependent_data);
-							dependencies.size = dependent_data.dependent_types.size;
-						}
-						// If it is a known valid dependency, skip it.
-						else if (!manager->IsKnownValidDependency(current_dependency)) {
-							// No match was found
-							missing_dependencies.AddAssert(current_dependency);
-						}
+						process_definition(current_dependency);
 					}
 				}
 			}
