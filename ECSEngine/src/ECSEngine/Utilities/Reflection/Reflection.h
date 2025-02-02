@@ -950,9 +950,12 @@ namespace ECSEngine {
 			return missing_dependencies.size > 0;
  		}
 
+		// Returns true if the given definition is a user defined type that can be matched, else false
+		ECSENGINE_API bool IsReflectionDefinitionAValidDefinition(const ReflectionManager* manager, Stream<char> definition);
+
 		// Returns true if the field was tagged with ECS_REFLECTION_SKIP
 		ECSENGINE_API bool IsReflectionFieldSkipped(const ReflectionField* field);
-
+		
 		// One of the surplus fields needs to be specified. It will write the indices of the fields
 		// that the respective type has and the other does not
 		ECSENGINE_API void GetReflectionTypesDifferentFields(

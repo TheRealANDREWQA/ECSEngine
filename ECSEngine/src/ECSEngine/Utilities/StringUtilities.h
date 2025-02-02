@@ -662,18 +662,27 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 	//   - AnotherType<param1, Param2<Param3, Param4>>
 	ECSENGINE_API void SplitStringWithParameterList(Stream<char> string, char delimiter, char parameter_list_start, char parameter_list_end, AdditionStream<Stream<char>> splits);
 
-	// Replaces the given token with the replacement while respecting the token order. Each individual character from the delimiters
-	// Parameter is treated as a separator. This works by tokenizing the string, and the replacing the general tokens that match the token
-	ECSENGINE_API Stream<char> ReplaceTokenWithDelimiters(Stream<char> string, Stream<char> token, Stream<char> replacement, Stream<char> delimiters, AllocatorPolymorphic allocator);
+	enum ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS : unsigned char {
+		ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS_NONE = 0,
+		// If no replacement was performed, then it returns the same initial string, without making an allocation
+		ECS_REPLACE_TOKEN_WITH_DELIMITER_DONT_ALLOCATE_IF_SAME = 1 << 0
+	};
 
 	// Replaces the given token with the replacement while respecting the token order. Each individual character from the delimiters
 	// Parameter is treated as a separator. This works by tokenizing the string, and the replacing the general tokens that match the token
-	ECSENGINE_API Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, Stream<ReplaceOccurrence<char>> replacements, Stream<char> delimiters, AllocatorPolymorphic allocator);
+	ECSENGINE_API Stream<char> ReplaceTokenWithDelimiters(Stream<char> string, Stream<char> token, Stream<char> replacement, Stream<char> delimiters, AllocatorPolymorphic allocator, 
+		ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS options = ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS_NONE);
+
+	// Replaces the given token with the replacement while respecting the token order. Each individual character from the delimiters
+	// Parameter is treated as a separator. This works by tokenizing the string, and the replacing the general tokens that match the token
+	ECSENGINE_API Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, Stream<ReplaceOccurrence<char>> replacements, Stream<char> delimiters, AllocatorPolymorphic allocator, 
+		ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS options = ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS_NONE);
 
 	// Replaces the given token with the replacement while respecting the token order. Each individual character from the delimiters
 	// Parameter is treated as a separator. This works by tokenizing the string, and the replacing the general tokens that match the token.
 	// This overload is identical in functionality to the stream one, but it uses a faster lookup for replacements, when there are many of them
-	ECSENGINE_API Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, const HashTableDefault<Stream<char>>& replacements, Stream<char> delimiters, AllocatorPolymorphic allocator);
+	ECSENGINE_API Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, const HashTableDefault<Stream<char>>& replacements, Stream<char> delimiters, AllocatorPolymorphic allocator,
+		ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS options = ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS_NONE);
 
 	// Returns the string isolated from other strings delimited using the given delimiter
 	ECSENGINE_API Stream<char> IsolateString(Stream<char> string, Stream<char> token, Stream<char> delimiter);

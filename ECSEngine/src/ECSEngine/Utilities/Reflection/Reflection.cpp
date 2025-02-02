@@ -49,18 +49,17 @@ namespace ECSEngine {
 			Stream<char> name;
 		};
 
-		//struct ReflectionParsedType : ReflectionType {
-		//	// If the type inherits from another one, this is the name of the type it inherits from
-		//	Stream<char> inherit_type;
-		//};
+		struct ReflectionParsedType : ReflectionType {
+			// If the type inherits from another one, this is the name of the type it inherits from
+			Stream<char> inherit_type;
+		};
 
 		struct ReflectionManagerParseStructuresThreadTaskData {
 			// This is the allocator from which the resizable streams are allocated from.
 			// The allocator is local to this thread, it is not shared
 			ResizableLinearAllocator allocator;
 			Stream<Stream<wchar_t>> paths;
-			//ResizableStream<ReflectionParsedType> types;
-			ResizableStream<ReflectionType> types;
+			ResizableStream<ReflectionParsedType> types;
 			ResizableStream<ReflectionEnum> enums;
 			ResizableStream<ReflectionConstant> constants;
 			ResizableStream<ReflectionEmbeddedArraySize> embedded_array_size;
@@ -222,7 +221,7 @@ namespace ECSEngine {
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			const char* opening_parenthese,
 			const char* closing_parenthese,
-			const char* name,
+			Stream<char> name,
 			unsigned int file_index
 		) {
 			ReflectionEnum enum_definition;
@@ -870,7 +869,7 @@ namespace ECSEngine {
 			data->types.ReserveRange();
 			
 			// We can reference the type directly, no need to copy it
-			//data->types.Last().inherit_type = inherit_type;
+			data->types.Last().inherit_type = inherit_type;
 
 			ReflectionType& type = data->types.Last();
 			ZeroOut(&type);
@@ -1968,20 +1967,39 @@ namespace ECSEngine {
 			unsigned int folder_index
 		)
 		{
+			const size_t TYPEDEF_REPLACEMENT_RESERVE_SIZE = 20;
+
 			size_t total_memory = 0;
+			size_t total_typedef_replacement_memory = 0;
+			size_t types_with_inheritance_count = 0;
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				total_memory += data[data_index].total_memory;
+				// Add some memory for typedef definition replacement. Use an average of extra bytes
+				// Per each type, which should be enough for practical use cases
+				total_typedef_replacement_memory += (data[data_index].types.size + data[data_index].type_templates.size) * TYPEDEF_REPLACEMENT_RESERVE_SIZE;
+				
+				// Calculate the total count of inherit types, these will need to be allocated separately, cannot use the coalesced
+				// Allocation because they will have their fields, evaluations, and misc info augmented, but the augmentation case use
+				// A lot of bytes that we cannot reserve upfront
+				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
+					if (data[data_index].types[type_index].inherit_type.size > 0) {
+						types_with_inheritance_count++;
+					}
+				}
 			}
 			// We will use this entry when writing error messages, and setting the value of -1 indicates
 			// That we are no longer in a per thread context, but in an overall context
 			data[0].current_file_index = -1;
 
-			void* allocation = Allocate(folders.allocator, total_memory);
+			void* allocation = Allocate(folders.allocator, total_memory + total_typedef_replacement_memory);
 			folders[folder_index].allocated_buffer = allocation;
 
 			uintptr_t ptr = (uintptr_t)allocation;
 
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 48, ECS_MB);
+			// Use a separate stack allocator for typedef replacement because the allocations need to be alive
+			// Until the function exists
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(typedef_stack_allocator, ECS_KB * 16, ECS_MB);
 
 			// Bind the typedefs firstly
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
@@ -2047,25 +2065,65 @@ namespace ECSEngine {
 					ReflectionValidDependency dependency;
 					dependency.folder_index = folder_index;
 					// Only the name needs to be allocated here
-					valid_dependencies.InsertDynamic(folders.allocator, dependency, dependency_name.CopyTo(ptr));
+					valid_dependencies.InsertDynamic(Allocator(), dependency, dependency_name.CopyTo(ptr));
 				}
 			}
 
-			// After the typedefs are added, change the fields of all user types that reference typedefs - we can reference the memory of the
-			// Typedef directly, no need to adjust the allocation size.
-			for (size_t data_index = 0; data_index < data_count; data_index++) {
-				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
-					ReflectionType& type = data[data_index].types[type_index];
-					for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
-						unsigned int typedef_index = typedefs.Find(type.fields[field_index].definition);
-						if (typedef_index != -1) {
-							type.fields[field_index].definition = typedefs.GetValueFromIndex(typedef_index).definition;
+			// After the typedefs are added, change the fields of all user types that reference typedefs. We need to tokenize the definitions
+			// And perform the replacement for individual tokens. Keep track of how many bytes we use such that to assert that we don't go overboard
+			int64_t typedef_replacement_byte_usage = 0;
+
+			// Build a hash table out of the typedefs to accelerate this
+			HashTableDefault<Stream<char>> typedefs_hash_table;
+			typedefs_hash_table.Initialize(&stack_allocator, HashTablePowerOfTwoCapacityForElements(typedefs.GetCount()));
+			typedefs.ForEachConst([&](const ReflectionTypedef& typedef_, ResourceIdentifier identifier) {
+				typedefs_hash_table.Insert(typedef_.definition, identifier);
+			});
+
+			auto replace_type_definitions_with_typedefs = [&](ReflectionType& type) {
+				for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
+					Stream<char> previous_definition = type.fields[field_index].definition;
+					type.fields[field_index].definition = ReplaceTokensWithDelimiters(previous_definition, typedefs_hash_table, GetCppTypeTokenSeparators(), &typedef_stack_allocator);
+					if (type.fields[field_index].definition.size != previous_definition.size) {
+						typedef_replacement_byte_usage += type.fields[field_index].definition.size - previous_definition.size;
+						if (typedef_replacement_byte_usage > 0 && typedef_replacement_byte_usage > total_typedef_replacement_memory) {
+							// Assert false
+							ECS_ASSERT(false, "Exceeded the maximum amount of reflection typedef extra byte usage");
 						}
 					}
 				}
+			};
+
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
+					ReflectionType& type = data[data_index].types[type_index];
+					replace_type_definitions_with_typedefs(type);
+
+					// For these normal types, we must replace the type that is being inherited from, if it is typedef
+					if (data[data_index].types[type_index].inherit_type.size > 0) {
+						Stream<char> previous_definition = data[data_index].types[type_index].inherit_type;
+						data[data_index].types[type_index].inherit_type = ReplaceTokensWithDelimiters(previous_definition, typedefs_hash_table, GetCppTypeTokenSeparators(), &typedef_stack_allocator);
+						if (data[data_index].types[type_index].inherit_type.size != previous_definition.size) {
+							typedef_replacement_byte_usage += data[data_index].types[type_index].inherit_type.size - previous_definition.size;
+							if (typedef_replacement_byte_usage > 0 && typedef_replacement_byte_usage > total_typedef_replacement_memory) {
+								// Assert false
+								ECS_ASSERT(false, "Exceeded the maximum amount of reflection typedef extra byte usage");
+							}
+						}
+					}
+				}
+
+				// Besides replacing the typedefs inside normal types, do this for template types as well
+				for (size_t template_index = 0; template_index < data[data_index].type_templates.size; template_index++) {
+					ReflectionType& type_template = data[data_index].type_templates[template_index].base_type;
+					replace_type_definitions_with_typedefs(type_template);
+				}
 			}
 
-			// Bind the type templates now
+			// Can clear the stack allocator
+			stack_allocator.Clear();
+
+			// Bind the type templates now - after the typedef replacement
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				for (size_t template_index = 0; template_index < data[data_index].type_templates.size; template_index++) {
 					ReflectionTypeTemplate template_copy = data[data_index].type_templates[template_index].CopyTo(ptr);
@@ -2105,7 +2163,7 @@ namespace ECSEngine {
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
-					enum_definitions.InsertDynamic(folders.allocator, enum_, identifier);
+					enum_definitions.InsertDynamic(Allocator(), enum_, identifier);
 				}
 			}
 
@@ -2141,7 +2199,7 @@ namespace ECSEngine {
 					for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
 						Stream<char> template_pair = FindMatchingParenthesesRange(type.fields[field_index].definition, '<', '>');
 						if (template_pair.size > 0) {
-							Stream<char> new_definition = ReplaceTokensWithDelimiters(template_pair, replace_constants_or_enum_strings, "<>,:", &stack_allocator);
+							Stream<char> new_definition = ReplaceTokensWithDelimiters(template_pair, replace_constants_or_enum_strings, GetCppTypeTokenSeparators(), &stack_allocator);
 							if (template_pair != new_definition) {
 								// If the definition has changed, ensure it still fits inside the storage for the definition
 								ECS_ASSERT(new_definition.size <= type.fields[field_index].definition.size, "Replacing template parameters with constants or " 
@@ -2189,8 +2247,45 @@ namespace ECSEngine {
 			// Happen when the type is missing from this reflection manager instance
 			ResizableStream<Stream<char>> instantiated_type_templates(&stack_allocator, 16);
 
+			// The parent type should be the name of the type that contains this definition, used for error printing.
+			// Returns true if it succeeded, else false if there is an error, in which case it prints a message and
+			// Frees the folder hierarchy
+			auto instantiated_type_templates_for_definition = [&](Stream<char> definition, Stream<char> parent_type) -> bool {
+				// We need to tokenize the definition, and when we encounter a template pair with a general
+				// Token before it that matches a template, then we have to instantiate it
+				Stream<char> template_pair = FindMatchingParenthesesRange(definition, '<', '>');
+				if (template_pair.size > 0) {
+					Stream<char> template_type_definition = definition.StartDifference(template_pair);
+					const ReflectionTypeTemplate* template_type = GetTypeTemplate(template_type_definition);
+					if (template_type != nullptr) {
+						ECS_STACK_CAPACITY_STREAM(Stream<char>, matched_template_parameters, 32);
+						ReflectionTypeTemplate::MatchStatus match_status = template_type->DoesMatch(template_pair, &matched_template_parameters);
+						if (match_status == ReflectionTypeTemplate::MatchStatus::IncorrectParameter) {
+							ECS_FORMAT_TEMP_STRING(message, "Type {#} has dependency on {#} that matches the template type {#}, but its arguments are invalid.",
+								parent_type, definition, template_type_definition);
+							WriteErrorMessage(data, message);
+							FreeFolderHierarchy(folder_index);
+							return false;
+						}
+						else if (match_status == ReflectionTypeTemplate::MatchStatus::Success) {
+							// It matched the template, we need to instantiate it, if it doesn't already exist
+							if (TryGetType(definition) == nullptr) {
+								ReflectionType instantiated_type = template_type->Instantiate(this, Allocator(), matched_template_parameters);
+								instantiated_type.folder_hierarchy_index = -1;
+								type_definitions.InsertDynamic(Allocator(), instantiated_type, instantiated_type.name);
+
+								ECS_ASSERT(definition == instantiated_type.name, "Mismatch between reflection template instantiated name and the requested name");
+								instantiated_type_templates.Add(instantiated_type.name);
+							}
+						}
+					}
+				}
+
+				return true;
+			};
+
 			// Instantiates the necessary templates for this type and return true if there were no errors,
-			// else false and writes an error message.
+			// else false, writes an error message and frees the folder hierarchy
 			auto instantiate_type_templates = [&](const ReflectionType& type) -> bool {
 				// Retrieve all the missing dependencies this type has. Go through all of these dependencies
 				// And try to match them with existing parsed templates
@@ -2198,31 +2293,8 @@ namespace ECSEngine {
 				GetReflectionTypeMissingDependencies(this, &type, missing_dependencies);
 
 				for (unsigned int index = 0; index < missing_dependencies.size; index++) {
-					Stream<char> template_pair = FindMatchingParenthesesRange(missing_dependencies[index], '<', '>');
-					if (template_pair.size > 0) {
-						Stream<char> template_type_definition = missing_dependencies[index].StartDifference(template_pair);
-						const ReflectionTypeTemplate* template_type = GetTypeTemplate(template_type_definition);
-						if (template_type != nullptr) {
-							ECS_STACK_CAPACITY_STREAM(Stream<char>, matched_template_parameters, 32);
-							ReflectionTypeTemplate::MatchStatus match_status = template_type->DoesMatch(template_pair, &matched_template_parameters);
-							if (match_status == ReflectionTypeTemplate::MatchStatus::IncorrectParameter) {
-								ECS_FORMAT_TEMP_STRING(message, "Type {#} has dependency on {#} that matches the template type {#}, but its arguments are invalid.",
-									type.name, missing_dependencies[index], template_type_definition);
-								WriteErrorMessage(data, message);
-								return false;
-							}
-							else if (match_status == ReflectionTypeTemplate::MatchStatus::Success) {
-								// It matched the template, we need to instantiate it, if it doesn't already exist
-								if (TryGetType(template_type_definition) == nullptr) {
-									ReflectionType instantiated_type = template_type->Instantiate(this, Allocator(), matched_template_parameters);
-									instantiated_type.folder_hierarchy_index = -1;
-									type_definitions.InsertDynamic(Allocator(), instantiated_type, instantiated_type.name);
-
-									ECS_ASSERT(missing_dependencies[index] == instantiated_type.name, "Mismatch between reflection template instantiated name and the requested name");
-									instantiated_type_templates.Add(instantiated_type.name);
-								}
-							}
-						}
+					if (!instantiated_type_templates_for_definition(missing_dependencies[index], type.name)) {
+						return false;
 					}
 				}
 
@@ -2233,8 +2305,14 @@ namespace ECSEngine {
 				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
 					const ReflectionType& type = data[data_index].types[type_index];
 					if (!instantiate_type_templates(type)) {
-						FreeFolderHierarchy(folder_index);
 						return false;
+					}
+
+					// If the type inherits from another one, instantiate the templates for the base type as well
+					if (data[data_index].types[type_index].inherit_type.size > 0) {
+						if (!instantiated_type_templates_for_definition(data[data_index].types[type_index].inherit_type, type.name)) {
+							return false;
+						}
 					}
 				}
 			}
@@ -2244,7 +2322,6 @@ namespace ECSEngine {
 			for (unsigned int instantiated_template_index = 0; instantiated_template_index < instantiated_type_templates.size; instantiated_template_index++) {
 				const ReflectionType* type = GetType(instantiated_type_templates[instantiated_template_index]);
 				if (!instantiate_type_templates(*type)) {
-					FreeFolderHierarchy(folder_index);
 					return false;
 				}
 			}
@@ -2325,7 +2402,7 @@ namespace ECSEngine {
 			total_type_count += instantiated_type_templates.size;
 
 			SkippedFieldsTable skipped_fields_table;
-			skipped_fields_table.Initialize(&stack_allocator, PowerOfTwoGreater(total_type_count));
+			skipped_fields_table.Initialize(&stack_allocator, HashTablePowerOfTwoCapacityForElements(total_type_count));
 
 			ECS_STACK_CAPACITY_STREAM(SkippedField, current_skipped_fields, 32);
 
@@ -2436,10 +2513,14 @@ namespace ECSEngine {
 
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				for (size_t index = 0; index < data[data_index].types.size; index++) {
-					const ReflectionType* data_type = &data[data_index].types[index];
+					ReflectionType& type = data[data_index].types[index];
 
-					ReflectionType type = data_type->CopyTo(ptr);
+					// Important NOTE: We are inserting the type into type definitions without being copied to the allocation ptr
+					// The reason for this is because types that inherit from others will have their fields changed, and if we
+					// Write the type now, the entire type will have to be written to a new location
 					type.folder_hierarchy_index = folder_index;
+
+					// Remember to update the identifier name in the hash table after the type has been written!
 					ResourceIdentifier identifier(type.name);
 					// If the type already exists, fail
 					if (type_definitions.Find(identifier) != -1) {
@@ -2468,7 +2549,7 @@ namespace ECSEngine {
 						}
 					}
 
-					type_definitions.InsertDynamic(folders.allocator, type, identifier);
+					type_definitions.InsertDynamic(Allocator(), type, identifier);
 				}
 			}
 
@@ -2476,6 +2557,11 @@ namespace ECSEngine {
 			// For example, Stream<ContactConstraint*> has as dependency ConstactConstraint. Technically, the reflection field
 			// Infos can be safely resolved without knowing ContactConstraint itself, but it is better to signal to the user
 			// To reflect it instead of having other systems protect against this or fail because of this
+
+			// Also, construct a mapping of the type names with a hash table of the types that inherit from others and need
+			// To be adjusted. The target string is the name of the type it inherits from
+			HashTableDefault<Stream<char>> types_with_inheritance;
+			types_with_inheritance.Initialize(&stack_allocator, HashTablePowerOfTwoCapacityForElements(types_with_inheritance_count));
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				for (size_t index = 0; index < data[data_index].types.size; index++) {
 					Stream<char> missing_dependency;
@@ -2484,6 +2570,18 @@ namespace ECSEngine {
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
+					}
+
+					// Check the inheriting type as well, if there is one, since we need to make it is valid as well
+					if (data[data_index].types[index].inherit_type.size > 0) {
+						if (!IsReflectionDefinitionAValidDefinition(this, data[data_index].types[index].inherit_type)) {
+							ECS_FORMAT_TEMP_STRING(message, "The reflection type {#} has missing dependency {#}, the type that is being inherited", data[data_index].types[index].name, data[data_index].types[index].inherit_type);
+							WriteErrorMessage(data, message);
+							FreeFolderHierarchy(folder_index);
+							return false;
+						}
+
+						types_with_inheritance.Insert(data[data_index].types[index].inherit_type, data[data_index].types[index].name);
 					}
 				}
 			}
@@ -2503,6 +2601,15 @@ namespace ECSEngine {
 						return true;
 					}
 				}
+
+				// If this is a type that is inheriting from another, check to see if that one is still processing
+				const Stream<char>* inherit_type = types_with_inheritance.TryGetValuePtr(type);
+				if (inherit_type != nullptr) {
+					if (is_still_to_be_determined(*inherit_type, is_still_to_be_determined)) {
+						return true;
+					}
+				}
+
 				return false;
 			};
 
@@ -2578,13 +2685,165 @@ namespace ECSEngine {
 				}
 			};
 
+			// Inherits the necessary structures from the base to derived, if it has one. The buffers will be allocated from the stack allocator
+			// The new buffers can reference the fields from base, so this is intended as a temporary transformation, after which a stable copy is made from the derived.
+			// The fields might not be properly aligned, you need to account for this manually. 
+			// It returns true if it succeeded without conflicts, else false if there are conflicts, in which case it can output an error message with the conflict description
+	
+			// This integer is used to ensure that we don't exceed the reservation for the inherit type bytes
+			size_t inherit_type_extra_bytes_usage = 0;
+			auto inherit_type = [&](ReflectionType* derived, const ReflectionType* base) -> bool {
+				// We need to inherit everything - fields, misc infos and evaluations. Ensure that there is no conflict between the entries
+
+				// Ensure no conflict between fields
+				for (size_t index = 0; index < base->fields.size; index++) {
+					if (derived->FindField(base->fields[index].name) != -1) {
+						ECS_FORMAT_TEMP_STRING(error_message, "Type {#} inherits from {#}, but field {#} is conflicted, appears in both derived and base", derived->name, base->name, base->fields[index].name);
+						WriteErrorMessage(data, error_message);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+				}
+
+				// Ensure no conflict between evaluations
+				for (size_t index = 0; index < base->evaluations.size; index++) {
+					if (derived->GetEvaluation(base->evaluations[index].name) != DBL_MAX) {
+						ECS_FORMAT_TEMP_STRING(error_message, "Type {#} inherits from {#}, but evaluation {#} is conflicted, appears in both derived and base", derived->name, base->name, base->evaluations[index].name);
+						WriteErrorMessage(data, error_message);
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+				}
+
+				// Ensure no conflict between misc infos. At the moment, the only conflicts can appear between main allocator types, either none,
+				// Either only one of the types has it defined
+				size_t derived_main_allocator_index = GetReflectionTypeOverallAllocatorMiscIndex(derived);
+				size_t base_main_allocator_index = GetReflectionTypeOverallAllocatorMiscIndex(base);
+				if (derived_main_allocator_index != -1 && base_main_allocator_index != -1) {
+					ECS_FORMAT_TEMP_STRING(error_message, "Type {#} inherits from {#}, but both base and derived have a main allocator, which is not allowed", derived->name, base->name);
+					WriteErrorMessage(data, error_message);
+					FreeFolderHierarchy(folder_index);
+					return false;
+				}
+
+				// Everything is validated, good to go
+				Stream<ReflectionField> new_fields;
+				if (base->fields.size > 0) {
+					if (derived->fields.size > 0) {
+						new_fields.Initialize(&stack_allocator, base->fields.size + derived->fields.size);
+						new_fields.size = 0;
+						new_fields.AddStream(base->fields);
+						new_fields.AddStream(derived->fields);
+					}
+					else {
+						new_fields = base->fields;
+					}
+				}
+				else {
+					new_fields = derived->fields;
+				}
+				// Don't update the offsets, they will be recalculated anyways
+				derived->fields = new_fields;
+
+				Stream<ReflectionEvaluation> new_evaluations;
+				if (base->evaluations.size > 0) {
+					if (derived->evaluations.size > 0) {
+						new_evaluations.Initialize(&stack_allocator, base->evaluations.size + derived->evaluations.size);
+						new_evaluations.size = 0;
+						new_evaluations.AddStream(base->evaluations);
+						new_evaluations.AddStream(derived->evaluations);
+					}
+					else {
+						new_evaluations = base->evaluations;
+					}
+				}
+				else {
+					new_evaluations = derived->evaluations;
+				}
+				derived->evaluations = new_evaluations;
+
+				// Updates the misc information such that it respects the new ordering of the fields
+				auto update_misc_infos_for_derived = [&](Stream<ReflectionTypeMiscInfo> misc_info) {
+					if (base->fields.size > 0) {
+						for (size_t index = 0; index < misc_info.size; index++) {
+							switch (misc_info[index].type) {
+							case ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR:
+							{
+								// Update the field index
+								misc_info[index].allocator_info.field_index += base->fields.size;
+							}
+							break;
+							case ECS_REFLECTION_TYPE_MISC_INFO_SOA:
+							{
+								// Update all stream references
+								if (misc_info[index].soa.field_allocator_index != UCHAR_MAX) {
+									misc_info[index].soa.field_allocator_index += base->fields.size;
+								}
+								if (misc_info[index].soa.capacity_field != UCHAR_MAX) {
+									misc_info[index].soa.capacity_field += base->fields.size;
+								}
+								// This field is mandatory
+								misc_info[index].soa.size_field += base->fields.size;
+								for (size_t subindex = 0; subindex < misc_info[index].soa.parallel_stream_count; subindex++) {
+									misc_info[index].soa.parallel_streams[subindex] += base->fields.size;
+								}
+							}
+							break;
+							default:
+								ECS_ASSERT(false, "Incorrect reflection misc info type");
+							}
+						}
+					}
+				};
+
+				Stream<ReflectionTypeMiscInfo> new_misc;
+				if (base->misc_info.size > 0) {
+					if (derived->misc_info.size > 0) {
+						new_misc.Initialize(&stack_allocator, base->misc_info.size + derived->misc_info.size);
+						new_misc.size = 0;
+						new_misc.AddStream(base->misc_info);
+						new_misc.AddStream(derived->misc_info);
+						update_misc_infos_for_derived(new_misc.SliceAt(base->misc_info.size));
+					}
+					else {
+						new_misc = base->misc_info;
+					}
+				}
+				else {
+					new_misc = derived->misc_info;
+					update_misc_infos_for_derived(new_misc);
+				}
+				derived->misc_info = new_misc;
+
+				return true;
+			};
+
+			// This array will contain the final types that used inheritance. We will use this to know which types to allocate separately
+			ResizableStream<Stream<char>> types_with_inheritance_array(&stack_allocator, 8);
+
+			// Writes the type to the allocation ptr and changes the identifier stored in the hash table
+			auto finalize_type_allocation_pointer_copy = [&](ReflectionType* type) -> void {
+				// Copy this type to the final allocation ptr, since it was finalized
+				if (FindString(type->name, types_with_inheritance_array) != -1) {
+					*type = type->CopyCoalesced(Allocator());
+				}
+				else {
+					*type = type->CopyTo(ptr);
+				}
+
+				// Update the identifier associated with this type, to the stable name
+				unsigned int type_table_index = type_definitions.Find(type->name);
+				*type_definitions.GetIdentifierPtrFromIndex(type_table_index) = type->name;
+			};
+
 			// Aligns the type, calculates the cached parameters ignoring the skipped fields and then takes into consideration these
-			auto calculate_cached_parameters = [&](ReflectionType* type, Stream<SkippedField> skipped_fields) {
+			auto finalize_type = [&](ReflectionType* type, Stream<SkippedField> skipped_fields) {
 				align_type(type, skipped_fields);
 				CalculateReflectionTypeCachedParameters(this, type);
 				// Determine the stream byte size as well
 				SetReflectionTypeFieldsStreamByteSizeAlignment(this, type);
 				finalize_type_byte_size(type, skipped_fields);
+				finalize_type_allocation_pointer_copy(type);
 			};
 
 			// Calculate the byte sizes of the types that can be calculated
@@ -2601,6 +2860,25 @@ namespace ECSEngine {
 					bool has_determined_skipped_fields = determine_skipped_fields(skipped_fields);
 
 					if (has_determined_skipped_fields) {
+						// Inherit the base, if there is any, only if it has been processed
+						const Stream<char>* inherit_type_name = types_with_inheritance.TryGetValuePtr(type->name);
+						if (inherit_type_name != nullptr) {
+							// If the type is still to be determined, wait for it
+							if (is_type_still_to_be_determined(*inherit_type_name)) {
+								continue;
+							}
+
+							if (!inherit_type(type, GetType(*inherit_type_name))) {
+								return false;
+							}
+
+							// Remove the type from the types with inheritance table, such that a recall on this type
+							// Won't trigger a new inheriting. This type might not get resolved now, so on a new iteration
+							// If we leave the entry, a re-inheriting will occur.
+							types_with_inheritance.Erase(type->name);
+							types_with_inheritance_array.Add(type->name);
+						}
+
 						// If it doesn't have any user defined fields, can calculate it
 						if (type->fields.size == 0) {
 							// An omitted type
@@ -2618,7 +2896,10 @@ namespace ECSEngine {
 							// Assume the type is blittable since we don't know its composition
 							type->is_blittable = true;
 							type->is_blittable_with_pointer = true;
-							
+
+							// Copy this type to the final allocation ptr, since it was resolved
+							finalize_type_allocation_pointer_copy(type);
+
 							iteration_determined_types++;
 							types_to_be_processed.RemoveSwapBack(index);
 							index--;
@@ -2635,7 +2916,7 @@ namespace ECSEngine {
 							if (!has_user_defined_fields) {
 								// No user defined type as basic stream type or basic type array
 								// Can calculate the cached parameters
-								calculate_cached_parameters(type, skipped_fields);
+								finalize_type(type, skipped_fields);
 
 								iteration_determined_types++;
 								types_to_be_processed.RemoveSwapBack(index);
@@ -2751,7 +3032,7 @@ namespace ECSEngine {
 									}
 
 									// Now align the type and calculate the cached parameters
-									calculate_cached_parameters(type, skipped_fields);
+									finalize_type(type, skipped_fields);
 
 									iteration_determined_types++;
 									types_to_be_processed.RemoveSwapBack(index);
@@ -2904,7 +3185,18 @@ namespace ECSEngine {
 			}
 
 			size_t difference = PointerDifference((void*)ptr, allocation);
-			ECS_ASSERT(difference <= total_memory);
+			ECS_ASSERT(difference <= total_memory + total_typedef_replacement_memory);
+
+			// At the end, if everything succeeded, register the types with inheritance as added types to this folder hierarchy, even tho
+			// They were added by the user separately
+			for (size_t index = 0; index < types_with_inheritance_array.size; index++) {
+				AddedType added_inheritance_type;
+				added_inheritance_type.allocator = Allocator();
+				added_inheritance_type.coalesced_allocation = true;
+				// The name is stable, it's the actual allocated name
+				added_inheritance_type.type_name = types_with_inheritance_array[index];
+				folders[folder_index].added_types.Add(&added_inheritance_type);
+			}
 
 			return evaluate_success;
 		}
@@ -4369,7 +4661,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// enum declaration
 								const char* enum_ptr = strstr(last_new_line + 1, "enum");
 								if (enum_ptr != nullptr) {
-									AddEnumDefinition(data, opening_parenthese, closing_parenthese, reflection_structure_name_start, index);
+									AddEnumDefinition(data, opening_parenthese, closing_parenthese, structure_name, index);
 									if (data->success == false) {
 										return;
 									}
@@ -4457,7 +4749,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									// The type proves to be a template
 									size_t previous_embedded_array_size_count = data->embedded_array_size.size;
 
-									size_t current_total_memory_usage = data->total_memory;
 									AddTypeDefinition(data, tokenized_body, inherit_type_name, structure_name, index);
 									if (data->success == false) {
 										return;
@@ -4517,6 +4808,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										if (template_keyword_range_last_characters != template_keyword) {
 											// Fail, supossed template does not have the template keyword
 											ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type {#}. Found a template <> pair before the type, which is indicative of a template, but the template keyword is missing.", data->types.Last().name);
+											WriteErrorMessage(data, error_message);
+											return;
+										}
+
+										// TODO: If it inherits from a type, fail, at the moment this is not implemented
+										if (inherit_type_name.size > 0) {
+											ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type {#}. It is a template type, but it inherits from {#}, which is not yet supported.", data->types.Last().name, inherit_type_name);
 											WriteErrorMessage(data, error_message);
 											return;
 										}
@@ -4614,7 +4912,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 										// Add the memory used by the entire template, minus the base type copy size, since that was already accounted
 										// For when parsing the type normally
-										size_t base_memory_size = type_template.base_type.CopySize();
 										data->total_memory += type_template.CopySize() - type_template.base_type.CopySize();
 
 										// Remove the parsed type from the normal type list
@@ -8147,6 +8444,37 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					}
 				}
 			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool IsReflectionDefinitionAValidDefinition(const ReflectionManager* manager, Stream<char> definition) {
+			// Check blittable exception
+			ulong2 blittable_index = manager->FindBlittableException(definition);
+			if (blittable_index.x == -1) {
+				// Not a blittable type
+				// Try nested type, then custom type
+				const ReflectionType* nested_type = manager->TryGetType(definition);
+				if (nested_type != nullptr) {
+					return true;
+				}
+				else {
+					// Try custom type
+					ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(definition);
+					if (custom_type != nullptr) {
+						return true;
+					}
+					// Check enums and known dependencies at last
+					else if (manager->TryGetEnum(definition) != nullptr) {
+						return true;
+					}
+					else if (manager->IsKnownValidDependency(definition)) {
+						return true;
+					}
+				}
+			}
+
+			return false;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

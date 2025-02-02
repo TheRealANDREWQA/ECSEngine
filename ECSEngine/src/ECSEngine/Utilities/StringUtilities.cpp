@@ -1712,11 +1712,18 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	Stream<char> ReplaceTokenWithDelimiters(Stream<char> string, Stream<char> token, Stream<char> replacement, Stream<char> delimiters, AllocatorPolymorphic allocator) {
+	Stream<char> ReplaceTokenWithDelimiters(
+		Stream<char> string, 
+		Stream<char> token, 
+		Stream<char> replacement, 
+		Stream<char> delimiters, 
+		AllocatorPolymorphic allocator,
+		ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS options
+	) {
 		ReplaceOccurrence<char> occurence;
 		occurence.string = token;
 		occurence.replacement = replacement;
-		return ReplaceTokensWithDelimiters(string, Stream<ReplaceOccurrence<char>>{ &occurence, 1 }, delimiters, allocator);
+		return ReplaceTokensWithDelimiters(string, Stream<ReplaceOccurrence<char>>{ &occurence, 1 }, delimiters, allocator, options);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -1724,7 +1731,7 @@ namespace ECSEngine {
 	// The find functor receives as parameter (Stream<char> token) and should return a Stream<char> with the
 	// Replacement, if there is one, else {}
 	template<typename FindFunctor>
-	static Stream<char> ReplaceTokensWithDelimitersImpl(Stream<char> string, Stream<char> delimiters, AllocatorPolymorphic allocator, FindFunctor&& find_functor) {
+	static Stream<char> ReplaceTokensWithDelimitersImpl(Stream<char> string, Stream<char> delimiters, AllocatorPolymorphic allocator, ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS options, FindFunctor&& find_functor) {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 
 		ResizableStream<char> replaced_string(&stack_allocator, string.size);
@@ -1758,32 +1765,35 @@ namespace ECSEngine {
 			}
 		}
 
+		if (HasFlag(options, ECS_REPLACE_TOKEN_WITH_DELIMITER_DONT_ALLOCATE_IF_SAME)) {
+			if (replaced_string == string) {
+				return string;
+			}
+		}
 		return replaced_string.Copy(allocator);
 	}
 
-	Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, Stream<ReplaceOccurrence<char>> replacements, Stream<char> delimiters, AllocatorPolymorphic allocator) {
+	Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, Stream<ReplaceOccurrence<char>> replacements, Stream<char> delimiters, AllocatorPolymorphic allocator, ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS options) {
 		if (replacements.size == 0) {
-			return string.Copy(allocator);
+			return HasFlag(options, ECS_REPLACE_TOKEN_WITH_DELIMITER_DONT_ALLOCATE_IF_SAME) ? string : string.Copy(allocator);
 		}
 
-		return ReplaceTokensWithDelimitersImpl(string, delimiters, allocator, [&](Stream<char> token) -> Stream<char> {
+		return ReplaceTokensWithDelimitersImpl(string, delimiters, allocator, options, [&](Stream<char> token) -> Stream<char> {
 			unsigned int replacement_index = FindString(token, replacements, [](const ReplaceOccurrence<char>& occurence) {
 				return occurence.string;
 				});
 			return replacement_index != -1 ? replacements[replacement_index].replacement : Stream<char>();
 		});
-
-		
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, const HashTableDefault<Stream<char>>& replacements, Stream<char> delimiters, AllocatorPolymorphic allocator) {
+	Stream<char> ReplaceTokensWithDelimiters(Stream<char> string, const HashTableDefault<Stream<char>>& replacements, Stream<char> delimiters, AllocatorPolymorphic allocator, ECS_REPLACE_TOKEN_WITH_DELIMITER_OPTIONS options) {
 		if (replacements.GetCount() == 0) {
-			return string.Copy(allocator);
+			return HasFlag(options, ECS_REPLACE_TOKEN_WITH_DELIMITER_DONT_ALLOCATE_IF_SAME) ? string : string.Copy(allocator);
 		}
 
-		return ReplaceTokensWithDelimitersImpl(string, delimiters, allocator, [&](Stream<char> token) -> Stream<char> {
+		return ReplaceTokensWithDelimitersImpl(string, delimiters, allocator, options, [&](Stream<char> token) -> Stream<char> {
 			const Stream<char>* replacement = replacements.TryGetValuePtr(token);
 			return replacement != nullptr ? *replacement : Stream<char>();
 		});

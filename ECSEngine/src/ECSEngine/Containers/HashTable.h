@@ -1141,6 +1141,10 @@ namespace ECSEngine {
 		return count * 100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1;
 	}
 
+	ECS_INLINE size_t HashTablePowerOfTwoCapacityForElements(size_t count) {
+		return PowerOfTwoGreater(HashTableCapacityForElements(count));
+	}
+
 	template<typename T>
 	using HashTableDefault = HashTable<T, ResourceIdentifier, HashFunctionPowerOfTwo>;
 
