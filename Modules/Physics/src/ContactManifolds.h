@@ -13,7 +13,7 @@ struct ConvexHull;
 
 #define CONTACT_MANIFOLD_MAX_POINTS ECS_CONSTANT_REFLECT(4)
 
-struct ContactManifold {
+struct ECS_REFLECT ContactManifold {
 	// This axis needs to be normalized
 	float3 separation_axis;
 	float separation_distance;

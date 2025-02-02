@@ -168,7 +168,7 @@ namespace ECSEngine {
 		size_t total_size = StreamsTotalSize(first_stream, streams...);
 		void* allocation = AllocateEx(allocator, total_size);
 
-		CoalesceStreamsEmptyImplementation(allocastion, first_stream, streams...);
+		CoalesceStreamsEmptyImplementation(allocation, first_stream, streams...);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------
