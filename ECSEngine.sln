@@ -7,6 +7,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{5200A2F8-5215-421E-BCE6-E8DCDAB7779D}"
 	ProjectSection(SolutionItems) = preProject
 		Dependencies\DirectXTex\.editorconfig = Dependencies\DirectXTex\.editorconfig
+		ECSEngine\ECSEngine.natvis = ECSEngine\ECSEngine.natvis
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Editor", "Editor\Editor.vcxproj", "{CBAA625A-B15A-4686-BB8C-C7241CAE234B}"

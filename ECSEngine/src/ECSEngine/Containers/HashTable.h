@@ -848,7 +848,7 @@ namespace ECSEngine {
 			unsigned int extended_capacity = capacity + ECS_HASH_TABLE_PADDING_ELEMENT_COUNT;
 
 			uintptr_t ptr = (uintptr_t)buffer;
-			m_buffer = buffer;
+			m_buffer = (decltype(m_buffer))buffer;
 			if constexpr (SoA) {
 				ptr += GetValueSize() * extended_capacity;
 				m_identifiers = (Identifier*)ptr;
@@ -958,7 +958,7 @@ namespace ECSEngine {
 				}
 				void* allocation = Allocate(allocator, total_size);
 
-				m_buffer = allocation;
+				m_buffer = (decltype(m_buffer))allocation;
 				if (SoA) {
 					m_identifiers = (Identifier*)OffsetPointer(allocation, sizeof(T) * extended_capacity);
 				}
@@ -1127,7 +1127,8 @@ namespace ECSEngine {
 		}
 
 		unsigned char* m_metadata;
-		void* m_buffer;
+		// This is used in order for the .natvis visualization to work
+		std::conditional_t<SoA, Value*, Pair*> m_buffer;
 		Identifier* m_identifiers;
 		unsigned int m_capacity;
 		unsigned int m_count;

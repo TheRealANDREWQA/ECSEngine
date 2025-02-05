@@ -931,7 +931,7 @@ namespace ECSEngine {
 				void* allocation = AllocateEx(allocator, total_allocation_size);
 
 				// The metadata buffer is set last
-				typed_table->m_buffer = allocation;
+				typed_table->m_buffer = (decltype(typed_table->m_buffer))allocation;
 				typed_table->m_identifiers = (ResourceIdentifier*)OffsetPointer(typed_table->m_buffer, value_definition_info.byte_size * extended_capacity);
 				typed_table->m_metadata = (unsigned char*)OffsetPointer(typed_table->m_identifiers, identifier_definition_info.byte_size * extended_capacity);
 				return total_allocation_size;
@@ -942,7 +942,7 @@ namespace ECSEngine {
 				void* allocation = AllocateEx(allocator, total_allocation_size);
 
 				// The metadata buffer is set last
-				typed_table->m_buffer = allocation;
+				typed_table->m_buffer = (decltype(typed_table->m_buffer))allocation;
 				typed_table->m_identifiers = nullptr;
 				typed_table->m_metadata = (unsigned char*)OffsetPointer(typed_table->m_buffer, pair_size.x * extended_capacity);
 				return total_allocation_size;
