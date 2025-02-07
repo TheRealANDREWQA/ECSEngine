@@ -432,22 +432,28 @@ TransformScalar GetSandboxEntityTransform(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
- MemoryArena* GetSandboxComponentAllocator(
+AllocatorPolymorphic GetSandboxComponentAllocator(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-MemoryArena* GetSandboxSharedComponentAllocator(
+AllocatorPolymorphic GetSandboxSharedComponentAllocator(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-// The global components don't have such an allocator
-MemoryArena* GetSandboxComponentAllocatorEx(
+AllocatorPolymorphic GetSandboxGlobalComponentAllocator(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+AllocatorPolymorphic GetSandboxComponentAllocatorEx(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	Component component,

@@ -1953,6 +1953,12 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void ReflectionManager::AddFrom(const ReflectionManager* other, const AddFromOptions& options)
+		{
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coalesced)
 		{
 			type_definitions.InsertDynamic(Allocator(), *type, ResourceIdentifier(type->name));

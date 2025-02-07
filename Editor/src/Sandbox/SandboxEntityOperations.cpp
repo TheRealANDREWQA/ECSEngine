@@ -1580,7 +1580,7 @@ TransformScalar GetSandboxEntityTransform(const EditorState* editor_state, unsig
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-MemoryArena* GetSandboxComponentAllocator(
+AllocatorPolymorphic GetSandboxComponentAllocator(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Component component,
@@ -1592,7 +1592,7 @@ MemoryArena* GetSandboxComponentAllocator(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-MemoryArena* GetSandboxSharedComponentAllocator(
+AllocatorPolymorphic GetSandboxSharedComponentAllocator(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	Component component,
@@ -1604,7 +1604,19 @@ MemoryArena* GetSandboxSharedComponentAllocator(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-MemoryArena* GetSandboxComponentAllocatorEx(
+AllocatorPolymorphic GetSandboxGlobalComponentAllocator(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	return GetSandboxEntityManager(editor_state, sandbox_index)->GetGlobalComponentAllocator(component);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+AllocatorPolymorphic GetSandboxComponentAllocatorEx(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	Component component,
@@ -1617,8 +1629,7 @@ MemoryArena* GetSandboxComponentAllocatorEx(
 	case ECS_COMPONENT_SHARED:
 		return GetSandboxSharedComponentAllocator(editor_state, sandbox_index, component, viewport);
 	case ECS_COMPONENT_GLOBAL:
-		// This case should not be valid
-		return nullptr;
+		return GetSandboxGlobalComponentAllocator(editor_state, sandbox_index, component, viewport);
 	}
 
 	return nullptr;

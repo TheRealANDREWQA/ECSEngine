@@ -1412,11 +1412,15 @@ namespace ECSEngine {
 			return (const T*)GetGlobalComponent(T::ID());
 		}
 
-		MemoryArena* GetComponentAllocator(Component component);
+		AllocatorPolymorphic GetComponentAllocator(Component component) const;
 
-		MemoryArena* GetSharedComponentAllocator(Component component);
+		AllocatorPolymorphic GetSharedComponentAllocator(Component component) const;
 
-		MemoryArena* GetComponentAllocatorFromType(Component component, ECS_COMPONENT_TYPE type);
+		// If the global component doesn't have an allocator (because it doesn't have buffers for example),
+		// It returns nullptr
+		AllocatorPolymorphic GetGlobalComponentAllocator(Component component) const;
+
+		AllocatorPolymorphic GetComponentAllocatorFromType(Component component, ECS_COMPONENT_TYPE type) const;
 
 		// Returns how many entities exist
 		ECS_INLINE unsigned int GetEntityCount() const {
@@ -1801,12 +1805,12 @@ namespace ECSEngine {
 		// It does not copy any data stored previously. If the new allocation size is 0,
 		// then it will deallocate it and return nullptr. Else deallocates and reallocates a new
 		// one and returns it
-		MemoryArena* ResizeComponentAllocator(Component component, size_t new_allocation_size);
+		AllocatorPolymorphic ResizeComponentAllocator(Component component, size_t new_allocation_size);
 
 		// It does not copy any data stored previously. If the new allocation size is 0,
 		// then it will deallocate it and return nullptr. Else deallocates and reallocates a new
 		// one and returns it
-		MemoryArena* ResizeSharedComponentAllocator(Component component, size_t new_allocation_size);
+		AllocatorPolymorphic ResizeSharedComponentAllocator(Component component, size_t new_allocation_size);
 
 		// ---------------------------------------------------------------------------------------------------
 		

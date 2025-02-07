@@ -40,12 +40,18 @@ namespace ECSEngine {
 	struct ComponentFunctions {
 		ECS_INLINE ComponentFunctions() {
 			memset(this, 0, sizeof(*this));
+			type_allocator_pointer_offset = -1;
 		}
 
 		size_t allocator_size;
 		ComponentCopyFunction copy_function;
 		ComponentDeallocateFunction deallocate_function;
 		Copyable* data;
+
+		// Used only for global components to indicate the position of the allocator
+		// To make possible retrieving the component allocator from the entity manager
+		short type_allocator_pointer_offset;
+		ECS_ALLOCATOR_TYPE type_allocator_type;
 	};
 
 	struct SharedComponentCompareEntry {

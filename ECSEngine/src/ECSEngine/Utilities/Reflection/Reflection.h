@@ -58,6 +58,19 @@ namespace ECSEngine {
 				size_t alignment;
 				void* default_data;
 			};
+			
+			struct AddFromOptions {
+				bool types = true;
+				bool enums = true;
+				bool typedefs = true;
+				bool templates = true;
+				bool constants = true;
+				bool valid_dependencies = true;
+				// If this is false, it will add only those that match the folder hierarchy. -1 can be a valid entry
+				// In that case, for types that are not bound to any hierarchy from the other instance.
+				bool all_hierarchies = false;
+				unsigned int folder_hierarchy = -1;
+			};
 
 			ReflectionManager() {}
 			ReflectionManager(AllocatorPolymorphic allocator, size_t type_count = ECS_REFLECTION_MAX_TYPE_COUNT, size_t enum_count = ECS_REFLECTION_MAX_ENUM_COUNT);
@@ -103,6 +116,11 @@ namespace ECSEngine {
 			// Copies all parsed resources from an other reflection manager to this instance without binding the resources
 			// To a particular folder hierarchy
 			void AddAllFrom(const ReflectionManager* other);
+
+			// Adds selective elements from the other reflection manager into this instance. Each entry will be added as an individual
+			// Entry, be aware that calling the normal FreeFolderHierarchy() for entries that are added with options will not be picked up.
+			// You need to use the function FreeEntries() to deallocate the entries.
+			void AddFrom(const ReflectionManager* other, const AddFromOptions& options);
 
 			// Adds a type to a certain hierarchy. It will add it as is, it will be deallocated when the hierarchy is freed using the allocator given
 			void AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coalesced);
@@ -159,6 +177,9 @@ namespace ECSEngine {
 			ulong2 FindBlittableException(Stream<char> name) const;
 
 			void FreeFolderHierarchy(unsigned int folder_index);
+
+			// Frees the entries that were added with the call AddFrom(). The same options that were used to add the entries should be used here as well
+			void FreeEntries(const AddFromOptions& options);
 
 			// It asserts that it exists
 			ReflectionType* GetType(Stream<char> name);
