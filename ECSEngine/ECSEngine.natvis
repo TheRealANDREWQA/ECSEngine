@@ -31,6 +31,76 @@
     </Expand>
   </Type>
 
+  <Type Name="ECSEngine::CapacityStream&lt;char&gt;">
+    <DisplayString>{buffer,[size] sb}</DisplayString>
+    <DisplayString>capacity={capacity}</DisplayString>
+    <StringView>buffer,[size] sb</StringView>
+
+    <Expand>
+      <Item Name="buffer">buffer</Item>
+      <Item Name="size">size</Item>
+      <Item Name="capacity">capacity</Item>
+
+      <ArrayItems>
+        <Size>size</Size>
+        <ValuePointer>buffer</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="ECSEngine::CapacityStream&lt;wchar_t&gt;">
+    <DisplayString>{buffer,[size] su}</DisplayString>
+    <DisplayString>capacity={capacity}</DisplayString>
+    <StringView>buffer,[size] sub</StringView>
+
+    <Expand>
+      <Item Name="buffer">buffer</Item>
+      <Item Name="size">size</Item>
+      <Item Name="capacity">capacity</Item>
+
+      <ArrayItems>
+        <Size>size</Size>
+        <ValuePointer>buffer</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="ECSEngine::ResizableStream&lt;char&gt;">
+    <DisplayString>{buffer,[size] sb}</DisplayString>
+    <DisplayString>capacity={capacity}</DisplayString>
+    <StringView>buffer,[size] sb</StringView>
+
+    <Expand>
+      <Item Name="buffer">buffer</Item>
+      <Item Name="size">size</Item>
+      <Item Name="capacity">capacity</Item>
+      <Item Name="allocator">allocator</Item>
+
+      <ArrayItems>
+        <Size>size</Size>
+        <ValuePointer>buffer</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="ECSEngine::ResizableStream&lt;wchar_t&gt;">
+    <DisplayString>{buffer,[size] su}</DisplayString>
+    <DisplayString>capacity={capacity}</DisplayString>
+    <StringView>buffer,[size] sub</StringView>
+
+    <Expand>
+      <Item Name="buffer">buffer</Item>
+      <Item Name="size">size</Item>
+      <Item Name="capacity">capacity</Item>
+      <Item Name="allocator">allocator</Item>
+      
+      <ArrayItems>
+        <Size>size</Size>
+        <ValuePointer>buffer</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
   <Type Name="ECSEngine::Stream&lt;*&gt;">
     <DisplayString>buffer={buffer}</DisplayString>
     <DisplayString>size={size}</DisplayString>

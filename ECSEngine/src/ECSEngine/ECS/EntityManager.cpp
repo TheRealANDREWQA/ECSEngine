@@ -4518,30 +4518,44 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	MemoryArena* EntityManager::GetComponentAllocator(Component component)
+	AllocatorPolymorphic EntityManager::GetComponentAllocator(Component component) const
 	{
-		ECS_CRASH_CONDITION_RETURN(ExistsComponent(component), nullptr, "The component {#} doesn't exist when retrieving its allocator.", GetComponentName(component));
+		ECS_CRASH_CONDITION_RETURN(ExistsComponent(component), nullptr, "The component {#} doesn't exist when retrieving its allocator.", component);
 		return m_unique_components[component.value].allocator;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	MemoryArena* EntityManager::GetSharedComponentAllocator(Component component)
+	AllocatorPolymorphic EntityManager::GetSharedComponentAllocator(Component component) const
 	{
-		ECS_CRASH_CONDITION_RETURN(ExistsSharedComponent(component), nullptr, "The shared component {#} doesn't exist when retrieving its allocator.", GetSharedComponentName(component));
+		ECS_CRASH_CONDITION_RETURN(ExistsSharedComponent(component), nullptr, "The shared component {#} doesn't exist when retrieving its allocator.", component);
 		return m_shared_components[component.value].info.allocator;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	MemoryArena* EntityManager::GetComponentAllocatorFromType(Component component, ECS_COMPONENT_TYPE type) {
+	AllocatorPolymorphic EntityManager::GetGlobalComponentAllocator(Component component) const {
+		size_t component_index = SearchBytes(Stream<Component>(m_global_components, m_global_component_count), component);
+		ECS_CRASH_CONDITION_RETURN(component_index != -1, { nullptr }, "The global component {#} doesn't exist when retrieving its allocator.", component);
+		if (m_global_components_info[component_index].type_allocator_pointer_offset == -1) {
+			// No allocator can be deduced
+			return { nullptr };
+		}
+
+		const void* allocator_pointer = OffsetPointer(m_global_components_data[component_index], m_global_components_info[component_index].type_allocator_pointer_offset);
+		return ConvertPointerToAllocatorPolymorphicEx(allocator_pointer, m_global_components_info[component_index].type_allocator_type);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	AllocatorPolymorphic EntityManager::GetComponentAllocatorFromType(Component component, ECS_COMPONENT_TYPE type) const {
 		switch (type) {
 		case ECS_COMPONENT_UNIQUE:
 			return GetComponentAllocator(component);
 		case ECS_COMPONENT_SHARED:
 			return GetSharedComponentAllocator(component);
 		case ECS_COMPONENT_GLOBAL:
-			ECS_CRASH_CONDITION_RETURN(false, nullptr, "EntityManager: Global components do not have component allocators");
+			return GetGlobalComponentAllocator(component);
 		}
 
 		ECS_CRASH_CONDITION_RETURN(false, nullptr, "EntityManager: invalid component type when trying to retrieve component memory allocator.");
@@ -5627,7 +5641,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	template<ECS_COMPONENT_TYPE component_type>
-	static MemoryArena* ResizeComponentAllocatorImpl(EntityManager* entity_manager, Component component, size_t new_allocation_size) {
+	static AllocatorPolymorphic ResizeComponentAllocatorImpl(EntityManager* entity_manager, Component component, size_t new_allocation_size) {
 		bool exists;
 		const char* crash_string = nullptr;
 		if constexpr (component_type == ECS_COMPONENT_UNIQUE) {
@@ -5645,37 +5659,39 @@ namespace ECSEngine {
 
 		ECS_CRASH_CONDITION_RETURN(exists, nullptr, crash_string, component.value);
 
-		MemoryArena* previous_arena;
+		AllocatorPolymorphic previous_allocator;
 		ComponentInfo* info = nullptr;
 		if constexpr (component_type == ECS_COMPONENT_UNIQUE) {
-			previous_arena = entity_manager->GetComponentAllocator(component);
+			previous_allocator = entity_manager->GetComponentAllocator(component);
 			info = &entity_manager->m_unique_components[component.value];
 		}
 		else if constexpr (component_type == ECS_COMPONENT_SHARED) {
-			previous_arena = entity_manager->GetSharedComponentAllocator(component);
+			previous_allocator = entity_manager->GetSharedComponentAllocator(component);
 			info = &entity_manager->m_shared_components[component.value].info;
 		}
 		else {
-			previous_arena = entity_manager->GetGlobalComponentAllocator(component);
+			previous_allocator = entity_manager->GetGlobalComponentAllocator(component);
 			info = entity_manager->m_global_components_info + component.value;
 		}
 
-		if (previous_arena != nullptr) {
-			entity_manager->m_memory_manager->Deallocate(previous_arena);
+		if (previous_allocator.allocator != nullptr) {
+			if constexpr (component_type != ECS_COMPONENT_GLOBAL) {
+				entity_manager->m_memory_manager->Deallocate(previous_allocator.allocator);
+			}
 		}
 
 		CreateAllocatorForComponent(entity_manager, *info, new_allocation_size);
-		return info->allocator;
+		return entity_manager->GetComponentAllocatorFromType(component, component_type);
 	}
 
-	MemoryArena* EntityManager::ResizeComponentAllocator(Component component, size_t new_allocation_size)
+	AllocatorPolymorphic EntityManager::ResizeComponentAllocator(Component component, size_t new_allocation_size)
 	{
 		return ResizeComponentAllocatorImpl<ECS_COMPONENT_UNIQUE>(this, component, new_allocation_size);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	MemoryArena* EntityManager::ResizeSharedComponentAllocator(Component component, size_t new_allocation_size)
+	AllocatorPolymorphic EntityManager::ResizeSharedComponentAllocator(Component component, size_t new_allocation_size)
 	{
 		return ResizeComponentAllocatorImpl<ECS_COMPONENT_SHARED>(this, component, new_allocation_size);
 	}

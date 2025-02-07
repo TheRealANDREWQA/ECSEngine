@@ -544,9 +544,9 @@ void EditorComponents::RecoverData(
 				entity_manager_lock->Lock();
 			}
 
-			MemoryArena* arena = entity_manager->GetComponentAllocator(component);
+			AllocatorPolymorphic arena = entity_manager->GetComponentAllocator(component);
 			if (new_allocator_size == old_allocator_size) {
-				arena->Clear();
+				ClearAllocator(arena);
 			}
 			else {
 				// Resize the arena
@@ -557,11 +557,10 @@ void EditorComponents::RecoverData(
 				entity_manager_lock->Unlock();
 			}
 
-			if (arena != nullptr) {
-				AllocatorPolymorphic component_allocator = arena;
+			if (arena.allocator != nullptr) {
 				// We need to use multithreaded allocations
-				component_allocator.allocation_type = ECS_ALLOCATION_MULTI;
-				deserialize_options.field_allocator = component_allocator;
+				arena.allocation_type = ECS_ALLOCATION_MULTI;
+				deserialize_options.field_allocator = arena;
 			}
 		};
 
@@ -606,7 +605,7 @@ void EditorComponents::RecoverData(
 				}
 			}
 			else {
-				MemoryArena* arena = nullptr;
+				AllocatorPolymorphic arena = { nullptr };
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
 						entity_manager_lock->Lock();
@@ -623,11 +622,10 @@ void EditorComponents::RecoverData(
 					arena = entity_manager->GetComponentAllocator(component);
 				}
 				
-				if (arena != nullptr) {
-					AllocatorPolymorphic alloc = arena;
+				if (arena.allocator != nullptr) {
 					// We need to use multithreaded allocations
-					alloc.allocation_type = ECS_ALLOCATION_MULTI;
-					deserialize_options.field_allocator = alloc;
+					arena.allocation_type = ECS_ALLOCATION_MULTI;
+					deserialize_options.field_allocator = arena;
 				}
 
 				for (unsigned int index = 0; index < matching_archetypes.size; index++) {
@@ -783,7 +781,7 @@ void EditorComponents::RecoverData(
 				resize_archetype(no_copy, deserialize_handler);
 			}
 			else {
-				MemoryArena* arena = nullptr;
+				AllocatorPolymorphic arena = { nullptr };
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
 						entity_manager_lock->Lock();
@@ -800,11 +798,10 @@ void EditorComponents::RecoverData(
 					arena = entity_manager->GetComponentAllocator(component);
 				}
 
-				if (arena != nullptr) {
-					AllocatorPolymorphic alloc = arena;
+				if (arena.allocator != nullptr) {
 					// We need to use multithreaded allocations
-					alloc.allocation_type = ECS_ALLOCATION_MULTI;
-					deserialize_options.field_allocator = alloc;
+					arena.allocation_type = ECS_ALLOCATION_MULTI;
+					deserialize_options.field_allocator = arena;
 				}
 
 				auto initial_copy_same_component = [](void* destination, const void* source, size_t copy_size) {
@@ -857,7 +854,7 @@ void EditorComponents::RecoverData(
 				});
 
 				// Deallocate the arena or resize it
-				MemoryArena* arena = nullptr;
+				AllocatorPolymorphic arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
 						entity_manager_lock->Lock();
@@ -869,16 +866,15 @@ void EditorComponents::RecoverData(
 				}
 				else {
 					arena = entity_manager->GetSharedComponentAllocator(component);
-					if (arena != nullptr) {
-						arena->Clear();
+					if (arena.allocator != nullptr) {
+						ClearAllocator(arena);
 					}
 				}
 
-				if (arena != nullptr) {
-					AllocatorPolymorphic alloc = arena;
+				if (arena.allocator != nullptr) {
 					// We need to use multithreaded allocations
-					alloc.allocation_type = ECS_ALLOCATION_MULTI;
-					deserialize_options.field_allocator = alloc;
+					arena.allocation_type = ECS_ALLOCATION_MULTI;
+					deserialize_options.field_allocator = arena;
 				}
 
 				ptr = (uintptr_t)temporary_allocation;
@@ -888,7 +884,7 @@ void EditorComponents::RecoverData(
 				});
 			}
 			else {
-				MemoryArena* arena = nullptr;
+				AllocatorPolymorphic arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
 						entity_manager_lock->Lock();
@@ -902,11 +898,10 @@ void EditorComponents::RecoverData(
 					arena = entity_manager->GetSharedComponentAllocator(component);
 				}
 
-				if (arena != nullptr) {
-					AllocatorPolymorphic alloc = arena;
+				if (arena.allocator != nullptr) {
 					// We need to use multithreaded allocations
-					alloc.allocation_type = ECS_ALLOCATION_MULTI;
-					deserialize_options.field_allocator = alloc;
+					arena.allocation_type = ECS_ALLOCATION_MULTI;
+					deserialize_options.field_allocator = arena;
 				}
 
 				entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
@@ -929,7 +924,7 @@ void EditorComponents::RecoverData(
 				ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY, "Editor components reallocating shared component failed: temporary memory size exceeded (different size branch)!");
 			});
 
-			MemoryArena* arena = nullptr;
+			AllocatorPolymorphic arena = nullptr;
 			if (has_locks) {
 				entity_manager_lock->Lock();
 			}
@@ -939,11 +934,10 @@ void EditorComponents::RecoverData(
 				entity_manager_lock->Unlock();
 			}
 
-			if (arena != nullptr) {
-				AllocatorPolymorphic alloc = arena;
+			if (arena.allocator != nullptr) {
 				// We need to use multithreaded allocations
-				alloc.allocation_type = ECS_ALLOCATION_MULTI;
-				deserialize_options.field_allocator = alloc;
+				arena.allocation_type = ECS_ALLOCATION_MULTI;
+				deserialize_options.field_allocator = arena;
 			}
 
 			ptr = (uintptr_t)temporary_allocation;
@@ -2317,7 +2311,10 @@ void EditorComponents::UpdateComponents(
 	ReflectionManagerGetQuery query;
 	query.indices = &hierarchy_types;
 	reflection_manager->GetHierarchyTypes(query, hierarchy_index);
-	hierarchy_types.AssertCapacity();
+
+	// TODO: Insert the templates/constants/enums from the hierarchy into the internal manager.
+	// Also, instantiated templates won't be picked up because their hierarchy index is -1,
+	// So we need to add those as well.
 
 	// Walk through the list of the types and separate the components (unique, shared and link) from the rest of the types
 	for (int32_t index = 0; index < (int32_t)hierarchy_types.size; index++) {

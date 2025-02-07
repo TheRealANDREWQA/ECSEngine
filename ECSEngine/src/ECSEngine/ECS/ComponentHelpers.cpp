@@ -148,9 +148,23 @@ namespace ECSEngine {
 	{
 		ComponentFunctions component_functions;
 		if (!IsBlittableWithPointer(type)) {
-			// If the allocator size is missing, then don't set this entry as having buffers
-			component_functions.allocator_size = GetReflectionComponentAllocatorSize(type);
-			if (component_functions.allocator_size > 0) {
+			bool is_global_with_buffers = false;
+			if (IsReflectionTypeGlobalComponent(type)) {
+				// For global components, we have to check the buffers and allocator individually
+				size_t overall_misc_index = GetReflectionTypeOverallAllocatorMiscIndex(type);
+				if (overall_misc_index != -1) {
+					is_global_with_buffers = true;
+					component_functions.type_allocator_pointer_offset = type->misc_info[overall_misc_index].allocator_info.main_allocator_offset;
+					component_functions.type_allocator_type = AllocatorTypeFromString(type->misc_info[overall_misc_index].allocator_info.main_allocator_definition);
+				}
+			}
+			else {
+				// If the allocator size is missing, then don't set this entry as having buffers
+				component_functions.allocator_size = GetReflectionComponentAllocatorSize(type);
+			}
+
+			// If this is a global component
+			if (component_functions.allocator_size > 0 || is_global_with_buffers) {
 				component_functions.copy_function = ReflectionTypeRuntimeComponentCopy;
 				component_functions.deallocate_function = ReflectionTypeRuntimeComponentDeallocate;
 

@@ -257,10 +257,11 @@ namespace ECSEngine {
 	typedef MemoryArena ComponentBufferAllocator;
 
 	struct ECSENGINE_API ComponentInfo {
-		ECS_INLINE ComponentInfo() : size(0) {}
+		ECS_INLINE ComponentInfo() : size(0), type_allocator_pointer_offset(-1) {}
 		ECS_INLINE ComponentInfo(unsigned int _size) {
 			memset(this, 0, sizeof(*this));
 			size = _size;
+			type_allocator_pointer_offset = -1;
 		}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentInfo);
@@ -291,20 +292,31 @@ namespace ECSEngine {
 			copy_function = component_functions->copy_function;
 			deallocate_function = component_functions->deallocate_function;
 			data = CopyableCopy(component_functions->data, _allocator);
+
+			type_allocator_pointer_offset = component_functions->type_allocator_pointer_offset;
+			type_allocator_type = component_functions->type_allocator_type;
 		}
 
 		ECS_INLINE void ResetComponentFunctions() {
 			copy_function = nullptr;
 			deallocate_function = nullptr;
 			data = nullptr;
+
+			type_allocator_pointer_offset = -1;
 		}
 
 		MemoryArena* allocator;
-		unsigned int size;
 		ComponentCopyFunction copy_function;
 		ComponentDeallocateFunction deallocate_function;
 		Copyable* data;
 		Stream<char> name;
+		unsigned int size;
+
+		// These 2 fields are used only for global components for now.
+		// They indicate the allocator that the global component has embedded in the data itself
+		short type_allocator_pointer_offset;
+		// If this field is left as ECS_ALLOCATOR_TYPE_COUNT, then it considers the allocator is polymorphic
+		ECS_ALLOCATOR_TYPE type_allocator_type;
 	};
 
 	struct SharedComponentInfo {
