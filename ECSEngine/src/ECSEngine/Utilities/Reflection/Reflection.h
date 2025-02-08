@@ -39,6 +39,11 @@ namespace ECSEngine {
 			bool use_stream_indices = false;
 		};
 
+		struct ReflectionTypeDependency {
+			ReflectionUserDefinedType type;
+			Stream<char> string;
+		};
+
 		struct ECSENGINE_API ReflectionManager {
 			struct AddedType {
 				Stream<char> type_name;
@@ -946,16 +951,22 @@ namespace ECSEngine {
 		// Returns -1 if the field is the field does not have the byte size specified else the specified byte size
 		ECSENGINE_API ulong2 GetReflectionFieldSkipMacroByteSize(const ReflectionField* field);
 
-		// Fills in the user defined types that this field has (only custom types can have dependencies with any stream type 
-		// or if a field is a user defined type)
-		ECSENGINE_API void GetReflectionFieldDependentTypes(const ReflectionField* field, CapacityStream<Stream<char>>& dependencies);
-
-		ECSENGINE_API void GetReflectionFieldDependentTypes(Stream<char> definition, CapacityStream<Stream<char>>& dependencies);
-
 		ECSENGINE_API size_t GetReflectionDataPointerElementByteSize(const ReflectionManager* manager, Stream<char> tag);
 
-		// It asserts that all user defined types have a match, i.e. they are matched by a type or custom type interface or it is assigned as blittable
-		ECSENGINE_API void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types);
+		// Retrieves all dependencies that are found for the given definition. The dependencies are not all necessarily ReflectionTypes
+		ECSENGINE_API void GetReflectionTypeDependencies(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependencies, bool recurse = true);
+
+		// It asserts that all user defined types have a match, i.e. they are matched by a type or custom type interface, it is assigned as blittable
+		// Or it is matched by a valid known dependency. The dependencies that will be written into the output buffer will be only ReflectionTypes
+		// That the given reflection type depends upon. By default it will recurse to find all type dependencies, but you can disable that
+		ECSENGINE_API void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependencies, bool recurse = true);
+
+		// Retrieves all dependencies that are found for the given definition. The dependencies are not all necessarily ReflectionTypes
+		ECSENGINE_API void GetReflectionDependenciesFor(const ReflectionManager* manager, Stream<char> definition, CapacityStream<Stream<char>>& dependencies, bool recurse = true);
+
+		// Retrieves all the dependencies this custom type interface has, with the default retrieving nested dependencies as well. It does not assert that all types be matched.
+		// The dependencies are not all ReflectionTypes, they can be enums, other custom interfaces, or blittable exceptions/valid dependencies
+		ECSENGINE_API void GetReflectionCustomTypeInterfaceDependencies(const ReflectionManager* manager, Stream<char> definition, ReflectionCustomTypeInterface* custom_interface, CapacityStream<Stream<char>>& dependencies, bool recurse = true);
 
 		// Fills in the missing dependencies of a given type, including nested dependencies, if there are any
 		ECSENGINE_API void GetReflectionTypeMissingDependencies(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& missing_dependencies);
@@ -1052,16 +1063,6 @@ namespace ECSEngine {
 			const ReflectionManager* reflection_manager,
 			const ReflectionType* reflection_type,
 			Stream<char> field
-		);
-
-		// Determines the dependency graph for these reflection types. The first types are those ones
-		// that have no dependencies, the second group depends only on the first and so on.
-		// Returns true if the dependencies are valid, else false. It will fill in the two buffers given,
-		// one with the names of the types and the other one with the subgroups
-		ECSENGINE_API bool ConstructReflectionTypeDependencyGraph(
-			Stream<ReflectionType> types, 
-			CapacityStream<Stream<char>>& ordered_types, 
-			CapacityStream<uint2>& subgroups
 		);
 		
 		enum ECS_REFLECTION_TYPE_CHANGE_TYPE : unsigned char {

@@ -29,7 +29,7 @@ namespace ECSEngine {
 		return { byte_size_alignment.x + byte_size_alignment.y, byte_size_alignment.y };
 	}
 
-	void ReferenceCountedCustomTypeInterface::GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data)
+	void ReferenceCountedCustomTypeInterface::GetDependencies(Reflection::ReflectionCustomTypeDependenciesData* data)
 	{
 		ReflectionCustomTypeDependentTypes_SingleTemplate(data);
 	}

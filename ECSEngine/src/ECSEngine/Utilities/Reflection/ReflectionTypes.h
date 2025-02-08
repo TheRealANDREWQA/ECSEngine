@@ -84,6 +84,16 @@ namespace ECSEngine {
 			COUNT
 		};
 
+		// For a string definition that is user defined (doesn't match the fundamental types),
+		// This enum indicates what structure type matches this user defined string
+		enum class ReflectionUserDefinedType : unsigned char {
+			ReflectionType,
+			Enum,
+			BlittableException,
+			CustomInterface,
+			ValidDependency
+		};
+
 		struct ECSENGINE_API ReflectionFieldInfo {
 			ReflectionFieldInfo() {}
 			ReflectionFieldInfo(ReflectionBasicFieldType _basic_type, ReflectionStreamFieldType _extended_type, unsigned short _byte_size, unsigned short _basic_type_count)
@@ -425,6 +435,17 @@ namespace ECSEngine {
 
 			size_t CopySize() const;
 
+			ECS_INLINE ReflectionConstant Copy(AllocatorPolymorphic allocator) const {
+				void* allocation = Allocate(allocator, CopySize());
+				uintptr_t ptr = (uintptr_t)allocation;
+				return CopyTo(ptr);
+			}
+
+			// Deallocates an instance create using Copy(AllocatorPolymorphic allocator)
+			ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+				ECSEngine::Deallocate(allocator, name.buffer);
+			}
+
 			Stream<char> name;
 			double value;
 			unsigned int folder_hierarchy;
@@ -435,6 +456,17 @@ namespace ECSEngine {
 			ReflectionTypedef CopyTo(uintptr_t& ptr) const;
 
 			size_t CopySize() const;
+
+			ECS_INLINE ReflectionTypedef Copy(AllocatorPolymorphic allocator) const {
+				void* allocation = Allocate(allocator, CopySize());
+				uintptr_t ptr = (uintptr_t)allocation;
+				return CopyTo(ptr);
+			}
+
+			// Deallocates an instance create using Copy(AllocatorPolymorphic allocator)
+			ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+				ECSEngine::Deallocate(allocator, definition.buffer);
+			}
 
 			Stream<char> definition;
 			unsigned int folder_hierarchy_index;
@@ -506,6 +538,17 @@ namespace ECSEngine {
 
 			size_t CopySize() const;
 
+			ECS_INLINE ReflectionTypeTemplate Copy(AllocatorPolymorphic allocator) const {
+				void* allocation = Allocate(allocator, CopySize());
+				uintptr_t ptr = (uintptr_t)allocation;
+				return CopyTo(ptr);
+			}
+
+			// Deallocates an instance create using Copy(AllocatorPolymorphic allocator)
+			ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+				ECSEngine::Deallocate(allocator, arguments.buffer);
+			}
+
 			// Should be called once after all arguments were determined. The parameter that is passed in should contain
 			// The strings of the embedded array sizes that the template contains. It will modify the array such that
 			// Entries that are matched by template arguments are removed, and only those that are not matched are kept.
@@ -543,9 +586,9 @@ namespace ECSEngine {
 		};
 
 		// No need to allocate the strings, they can be referenced inside the definition since it is stable
-		struct ReflectionCustomTypeDependentTypesData {
+		struct ReflectionCustomTypeDependenciesData {
 			Stream<char> definition;
-			CapacityStream<Stream<char>> dependent_types;
+			CapacityStream<Stream<char>> dependencies;
 		};
 
 		struct ReflectionCustomTypeIsBlittableData {
@@ -657,7 +700,7 @@ namespace ECSEngine {
 			// The x component is the byte size, the y component is the alignment
 			virtual ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) = 0;
 
-			virtual void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) = 0;
+			virtual void GetDependencies(ReflectionCustomTypeDependenciesData* data) = 0;
 
 			virtual bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) = 0;
 

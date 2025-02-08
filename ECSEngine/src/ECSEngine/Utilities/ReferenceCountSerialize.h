@@ -11,7 +11,7 @@ namespace ECSEngine {
 
 		ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) override;
 
-		void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) override;
+		void GetDependencies(Reflection::ReflectionCustomTypeDependenciesData* data) override;
 
 		bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) override;
 

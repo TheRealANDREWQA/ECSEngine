@@ -34,7 +34,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionCustomTypeAddDependentType(ReflectionCustomTypeDependentTypesData* data, Stream<char> definition) {
+		void ReflectionCustomTypeAddDependentType(ReflectionCustomTypeDependenciesData* data, Stream<char> definition) {
 			// If the definition starts with a const, discard it
 			if (definition.StartsWith("const ")) {
 				definition.Advance(strlen("const "));
@@ -56,14 +56,14 @@ namespace ECSEngine {
 				}
 				// One more exception here, void, treat it as a special case
 				else if (definition != "void") {
-					data->dependent_types.AddAssert(definition);
+					data->dependencies.AddAssert(definition);
 				}
 			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependentTypesData* data)
+		void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependenciesData* data)
 		{
 			Stream<char> opened_bracket = FindFirstCharacter(data->definition, '<');
 			ECS_ASSERT(opened_bracket.buffer != nullptr);
@@ -77,7 +77,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionCustomTypeDependentTypes_MultiTemplate(ReflectionCustomTypeDependentTypesData* data) {
+		void ReflectionCustomTypeDependentTypes_MultiTemplate(ReflectionCustomTypeDependenciesData* data) {
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 16);
 			ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
 			for (unsigned int index = 0; index < template_arguments.size; index++) {
@@ -197,7 +197,7 @@ namespace ECSEngine {
 			return 0;
 		}
 
-		void StreamCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {
+		void StreamCustomTypeInterface::GetDependencies(ReflectionCustomTypeDependenciesData* data) {
 			ReflectionCustomTypeDependentTypes_SingleTemplate(data);
 		}
 
@@ -410,7 +410,7 @@ namespace ECSEngine {
 			}
 		}
 
-		void SparseSetCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {
+		void SparseSetCustomTypeInterface::GetDependencies(ReflectionCustomTypeDependenciesData* data) {
 			ReflectionCustomTypeDependentTypes_SingleTemplate(data);
 		}
 
@@ -586,7 +586,7 @@ namespace ECSEngine {
 			return { sizeof(DataPointer), alignof(DataPointer) };
 		}
 
-		void DataPointerCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {}
+		void DataPointerCustomTypeInterface::GetDependencies(ReflectionCustomTypeDependenciesData* data) {}
 
 		bool DataPointerCustomTypeInterface::IsBlittable(ReflectionCustomTypeIsBlittableData* data) {
 			return false;
@@ -684,7 +684,7 @@ namespace ECSEngine {
 		}
 
 		// No dependent types
-		void AllocatorCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {}
+		void AllocatorCustomTypeInterface::GetDependencies(ReflectionCustomTypeDependenciesData* data) {}
 
 		bool AllocatorCustomTypeInterface::IsBlittable(ReflectionCustomTypeIsBlittableData* data) {
 			// These types are not blittable, only a few fields are needed from them
@@ -1044,7 +1044,7 @@ namespace ECSEngine {
 			return { sizeof(HashTableDefault<char>), alignof(HashTableDefault<char>) };
 		}
 
-		void HashTableCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {
+		void HashTableCustomTypeInterface::GetDependencies(ReflectionCustomTypeDependenciesData* data) {
 			// Can't use ReflectionCustomTypeDependentTypes_MultiTemplate because we need to handle the special
 			// Case of ResourceIdentifier being used
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 16);
@@ -1526,7 +1526,7 @@ namespace ECSEngine {
 			return { sizeof(DeckPowerOfTwo<char>), alignof(DeckPowerOfTwo<char>) };
 		}
 
-		void DeckCustomTypeInterface::GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) {
+		void DeckCustomTypeInterface::GetDependencies(ReflectionCustomTypeDependenciesData* data) {
 			// This will work for the generalization, but as well as the specialization
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
 			ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);

@@ -124,6 +124,10 @@ namespace ECSEngine {
 		// It will be called with a single argument - the index of the element
 		// For the early exit it must return true when to exit, else false.
 		// For non early exit it must return true if the current element is being deleted (you must do this!), else false.
+		// The reason for this design decision is because in many use cases you have a RemoveEntry() function that looks up the
+		// entry and erases it from the table, but other functions might iterate the table and remove entries that satisfy a criterion.
+		// In that case, you can call the remove function on that index, while returning true, without having a double erase if we were
+		// To have an erase here as well.
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
 		bool ForEachIndex(Functor&& functor) {

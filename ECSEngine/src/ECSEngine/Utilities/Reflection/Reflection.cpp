@@ -1953,8 +1953,61 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddFrom(const ReflectionManager* other, const AddFromOptions& options)
-		{
+		void ReflectionManager::AddFrom(const ReflectionManager* other, const AddFromOptions& options) {
+			if (options.types) {
+				other->type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
+					if (options.all_hierarchies || options.folder_hierarchy == type.folder_hierarchy_index) {
+						AddType(&type, Allocator());
+						// Set the same folder hierarchy index
+						GetType(type.name)->folder_hierarchy_index = type.folder_hierarchy_index;
+					}
+				});
+			}
+
+			if (options.constants) {
+				for (size_t index = 0; index < other->constants.size; index++) {
+					const ReflectionConstant& constant = other->constants[index];
+					if (options.all_hierarchies || options.folder_hierarchy == constant.folder_hierarchy) {
+						constants.Add(constant.Copy(Allocator()));
+					}
+				}
+			}
+
+			if (options.enums) {
+				other->enum_definitions.ForEachConst([&](const ReflectionEnum& enum_, ResourceIdentifier identifier) {
+					if (options.all_hierarchies || options.folder_hierarchy == enum_.folder_hierarchy_index) {
+						AddEnum(&enum_, Allocator());
+						// Set the same folder hierarchy index
+						GetEnum(enum_.name)->folder_hierarchy_index = enum_.folder_hierarchy_index;
+					}
+				});
+			}
+
+			if (options.templates) {
+				other->type_templates.ForEachConst([&](const ReflectionTypeTemplate& template_, ResourceIdentifier identifier) {
+					if (options.all_hierarchies || options.folder_hierarchy == template_.folder_hierarchy_index) {
+						ReflectionTypeTemplate copy = template_.Copy(Allocator());
+						type_templates.InsertDynamic(Allocator(), copy, copy.base_type.name);
+					}
+				});
+			}
+
+			if (options.typedefs) {
+				other->typedefs.ForEachConst([&](const ReflectionTypedef& typedef_, ResourceIdentifier identifier) {
+					if (options.all_hierarchies || options.folder_hierarchy == typedef_.folder_hierarchy_index) {
+						ReflectionTypedef copy = typedef_.Copy(Allocator());
+						typedefs.InsertDynamic(Allocator(), copy, copy.definition);
+					}
+				});
+			}
+
+			if (options.valid_dependencies) {
+				other->valid_dependencies.ForEachConst([&](const ReflectionValidDependency& dependency, ResourceIdentifier identifier) {
+					if (options.all_hierarchies || options.folder_hierarchy == dependency.folder_index) {
+						valid_dependencies.InsertDynamic(Allocator(), dependency, identifier.Copy(Allocator()));
+					}
+				});
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -2600,7 +2653,8 @@ namespace ECSEngine {
 				}
 
 				ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 128);
-				GetReflectionFieldDependentTypes(type, dependent_types);
+				// This can be a reflection type or a custom type interface. 
+				GetReflectionDependenciesFor(this, type, dependent_types);
 				// Check to see if it is a custom type that has dependencies on these types
 				for (unsigned int dependent_index = 0; dependent_index < dependent_types.size; dependent_index++) {
 					if (is_still_to_be_determined(dependent_types[dependent_index], is_still_to_be_determined)) {
@@ -3600,6 +3654,86 @@ namespace ECSEngine {
 			}
 
 			folders[folder_index].added_types.FreeBuffer();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::FreeEntries(const AddFromOptions& options)
+		{
+			if (options.types) {
+				type_definitions.ForEachIndex([&](unsigned int index) {
+					const ReflectionType* type = type_definitions.GetValuePtrFromIndex(index);
+					if (options.all_hierarchies || options.folder_hierarchy == type->folder_hierarchy_index) {
+						type->DeallocateCoalesced(Allocator());
+						type_definitions.EraseFromIndex(index);
+						return true;
+					}
+
+					return false;
+				});
+			}
+
+			if (options.constants) {
+				for (size_t index = 0; index < constants.size; index++) {
+					if (options.all_hierarchies || options.folder_hierarchy == constants[index].folder_hierarchy) {
+						constants[index].Deallocate(Allocator());
+						constants.RemoveSwapBack(index);
+						index--;
+					}
+				}
+			}
+
+			if (options.enums) {
+				enum_definitions.ForEachIndex([&](unsigned int index) {
+					const ReflectionEnum* enum_ = enum_definitions.GetValuePtrFromIndex(index);
+					if (options.all_hierarchies || options.folder_hierarchy == enum_->folder_hierarchy_index) {
+						enum_->Deallocate(Allocator());
+						enum_definitions.EraseFromIndex(index);
+						return true;
+					}
+
+					return false;
+				});
+			}
+
+			if (options.templates) {
+				type_templates.ForEachIndex([&](unsigned int index) {
+					const ReflectionTypeTemplate* template_ = type_templates.GetValuePtrFromIndex(index);
+					if (options.all_hierarchies || options.folder_hierarchy == template_->folder_hierarchy_index) {
+						template_->Deallocate(Allocator());
+						type_templates.EraseFromIndex(index);
+						return true;
+					}
+
+					return false;
+				});
+			}
+
+			if (options.typedefs) {
+				typedefs.ForEachIndex([&](unsigned int index) {
+					const ReflectionTypedef* typedef_ = typedefs.GetValuePtrFromIndex(index);
+					if (options.all_hierarchies || options.folder_hierarchy == typedef_->folder_hierarchy_index) {
+						typedef_->Deallocate(Allocator());
+						typedefs.EraseFromIndex(index);
+						return true;
+					}
+
+					return false;
+				});
+			}
+
+			if (options.valid_dependencies) {
+				valid_dependencies.ForEachIndex([&](unsigned int index) {
+					const ReflectionValidDependency* dependency = valid_dependencies.GetValuePtrFromIndex(index);
+					if (options.all_hierarchies || options.folder_hierarchy == dependency->folder_index) {
+						valid_dependencies.GetIdentifierFromIndex(index).Deallocate(Allocator());
+						valid_dependencies.EraseFromIndex(index);
+						return true;
+					}
+
+					return false;
+				});
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -7196,16 +7330,41 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							if (custom_type != nullptr) {
 								// Get the dependent types. If any of these has changed, then revert to default instance field
 								ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 128);
-								ReflectionCustomTypeDependentTypesData dependent_data;
-								dependent_data.dependent_types = dependent_types;
+								ReflectionCustomTypeDependenciesData dependent_data;
+								dependent_data.dependencies = dependent_types;
 								dependent_data.definition = destination_field->definition;
-								custom_type->GetDependentTypes(&dependent_data);
+								custom_type->GetDependencies(&dependent_data);
 
 								unsigned int index = 0;
-								for (; index < dependent_data.dependent_types.size; index++) {
-									const ReflectionType* first_type = first_reflection_manager->TryGetType(dependent_data.dependent_types[index]);
+								for (; index < dependent_data.dependencies.size; index++) {
+									// If this is a known dependency in both managers, a blittable exception in both managers
+									// (with the same byte size and alignment) or a custom type interface, then we can go to the next
+									// Iteration, since we can assume that it did not invalidate anything
+									Stream<char> current_dependency = dependent_data.dependencies[index];
+									ulong2 first_blittable_exception = first_reflection_manager->FindBlittableException(current_dependency);
+									if (first_blittable_exception.x != -1 && first_blittable_exception.y != -1) {
+										if (second_reflection_manager->FindBlittableException(current_dependency) != first_blittable_exception) {
+											break;
+										}
+										else {
+											continue;
+										}
+									}
+									else if (first_reflection_manager->IsKnownValidDependency(current_dependency)) {
+										if (!second_reflection_manager->IsKnownValidDependency(current_dependency)) {
+											break;
+										}
+										else {
+											continue;
+										}
+									}
+									else if (FindReflectionCustomType(current_dependency) != -1) {
+										continue;
+									}
+
+									const ReflectionType* first_type = first_reflection_manager->TryGetType(current_dependency);
 									if (first_type != nullptr) {
-										const ReflectionType* second_type = second_reflection_manager->TryGetType(dependent_data.dependent_types[index]);
+										const ReflectionType* second_type = second_reflection_manager->TryGetType(current_dependency);
 										if (second_type != nullptr) {
 											if (!CompareReflectionTypes(
 												first_reflection_manager,
@@ -7228,7 +7387,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									}
 								}
 
-								if (index < dependent_data.dependent_types.size) {
+								if (index < dependent_data.dependencies.size) {
 									second_reflection_manager->SetInstanceFieldDefaultData(destination_field, destination_data, false);
 								}
 								else {
@@ -8107,50 +8266,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ConstructReflectionTypeDependencyGraph(Stream<ReflectionType> types, CapacityStream<Stream<char>>& ordered_types, CapacityStream<uint2>& subgroups)
-		{
-			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, valid_mask, types.size);
-			valid_mask.size = types.size;
-			MakeSequence(valid_mask);
-
-			ECS_STACK_CAPACITY_STREAM(Stream<char>, current_dependencies, 32);
-
-			unsigned int added_types = -1;
-			// This will exit even when valid_mask has size 0
-			while (added_types != 0) {
-				added_types = 0;
-				
-				uint2 current_subgroup = { ordered_types.size, 0 };
-				for (unsigned int index = 0; index < valid_mask.size; index++) {
-					for (size_t field_index = 0; field_index < types.size; field_index++) {
-						current_dependencies.size = 0;
-						GetReflectionFieldDependentTypes(&types[index].fields[field_index], current_dependencies);
-
-						unsigned int dependency_index = 0;
-						for (; dependency_index < current_dependencies.size; dependency_index++) {
-							// Check to see if this dependency is already met
-							if (FindString(current_dependencies[dependency_index], ordered_types.ToStream()) == -1) {
-								break;
-							}
-						}
-
-						if (dependency_index == current_dependencies.size) {
-							// All dependencies are met - can add it
-							ordered_types.AddAssert(types[index].name);
-							valid_mask.RemoveSwapBack(index);
-							index--;
-							added_types++;
-							current_subgroup.y++;
-						}
-					}
-				}
-			}
-
-			return added_types != 0;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		bool DependsUpon(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<char> subtype)
 		{
 			for (size_t index = 0; index < type->fields.size; index++) {
@@ -8185,13 +8300,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									ECS_ASSERT(custom_type != nullptr);
 
 									ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 64);
-									ReflectionCustomTypeDependentTypesData dependent_data;
+									ReflectionCustomTypeDependenciesData dependent_data;
 									dependent_data.definition = field->definition;
-									dependent_data.dependent_types = dependent_types;
-									custom_type->GetDependentTypes(&dependent_data);
+									dependent_data.dependencies = dependent_types;
+									custom_type->GetDependencies(&dependent_data);
 
-									for (unsigned int subindex = 0; subindex < dependent_data.dependent_types.size; subindex++) {
-										if (subtype == dependent_data.dependent_types[subindex]) {
+									for (unsigned int subindex = 0; subindex < dependent_data.dependencies.size; subindex++) {
+										if (subtype == dependent_data.dependencies[subindex]) {
 											return true;
 										}
 									}
@@ -8280,40 +8395,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void GetReflectionFieldDependentTypes(const ReflectionField* field, CapacityStream<Stream<char>>& dependencies)
-		{
-			// Only user defined or custom types can have dependencies
-			if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
-				ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(field->definition);
-				if (custom_type != nullptr) {
-					ReflectionCustomTypeDependentTypesData dependent_types;
-					dependent_types.definition = field->definition;
-					dependent_types.dependent_types = dependencies;
-					custom_type->GetDependentTypes(&dependent_types);
-					dependencies.size += dependent_types.dependent_types.size;
-				}
-				else {
-					dependencies.AddAssert(field->definition);
-				}
-			}
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void GetReflectionFieldDependentTypes(Stream<char> definition, CapacityStream<Stream<char>>& dependencies)
-		{
-			ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(definition);
-			if (custom_type != nullptr) {
-				ReflectionCustomTypeDependentTypesData dependent_types;
-				dependent_types.definition = definition;
-				dependent_types.dependent_types = dependencies;
-				custom_type->GetDependentTypes(&dependent_types);
-				dependencies.size += dependent_types.dependent_types.size;
-			}
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		size_t GetReflectionDataPointerElementByteSize(const ReflectionManager* manager, Stream<char> tag)
 		{
 			tag = FindFirstCharacter(tag, '(');
@@ -8332,11 +8413,17 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Explicit number given
 			return ConvertCharactersToInt(tag);
 		}
-
+		
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types)
-		{
+		void GetReflectionTypeDependencies(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependencies, bool recurse) {
+			unsigned int initial_dependency_size = dependencies.size;
+
+			// Returns true if the given entry name was already added to the dependencies
+			auto is_entry_already_added = [&](Stream<char> name) -> bool {
+				return FindString(name, dependencies.SliceAt(initial_dependency_size)) != -1;
+			};
+
 			for (size_t index = 0; index < type->fields.size; index++) {
 				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 					// Check to see if it has the size given
@@ -8348,27 +8435,125 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							// Try nested type, then custom type
 							const ReflectionType* nested_type = manager->TryGetType(type->fields[index].definition);
 							if (nested_type != nullptr) {
-								dependent_types.AddAssert(nested_type->name);
-								// Retrieve its dependent types as well
-								GetReflectionTypeDependentTypes(manager, nested_type, dependent_types);
+								if (!is_entry_already_added(nested_type->name)) {
+									dependencies.AddAssert(nested_type->name);
+								}
 							}
 							else {
 								// Try custom type
 								ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[index].definition);
 								if (custom_type != nullptr) {
-									// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
-									// If it needs them as well.
-									ReflectionCustomTypeDependentTypesData dependent_data;
+									ReflectionCustomTypeDependenciesData dependent_data;
 									dependent_data.definition = type->fields[index].definition;
-									dependent_data.dependent_types = dependent_types;
-									custom_type->GetDependentTypes(&dependent_data);
-									dependent_types.size = dependent_data.dependent_types.size;
+									dependent_data.dependencies = dependencies;
+									custom_type->GetDependencies(&dependent_data);
+
+									// Iterate over the additions and eliminate those that were already added
+									for (unsigned int subindex = dependencies.size; subindex < dependent_data.definition.size; subindex++) {
+										// The dependencies that are reported by custom types are not necessarly
+										Stream<char> dependency = dependent_data.dependencies[subindex];
+										if (manager->TryGetType(dependency) != nullptr) {
+											if (!is_entry_already_added(dependency)) {
+												dependencies.Add(dependency);
+											}
+										}
+									}
 								}
-								else {
+								// Verify valid dependencies
+								else if (!manager->IsKnownValidDependency(type->fields[index].definition) && manager->TryGetEnum(type->fields[index].definition) == nullptr) {
 									// Possibly an error, could not identify what type this is
 									ECS_ASSERT(false);
 								}
 							}
+						}
+					}
+				}
+			}
+
+			if (recurse) {
+				for (unsigned int index = initial_dependency_size; index < dependencies.size; index++) {
+					unsigned int iteration_dependent_types_count = dependencies.size;
+					GetReflectionDependenciesFor(manager, dependencies[index], dependencies, true);
+					// Remove the duplicates, if there are any. Set the size to the previous one,
+					// Such that we can use the is_type_already_added function.
+					unsigned int total_dependent_types_count = dependencies.size;
+					dependencies.size = iteration_dependent_types_count;
+					for (unsigned int subindex = dependencies.size; subindex < total_dependent_types_count; subindex++) {
+						if (!is_entry_already_added(dependencies[subindex])) {
+							dependencies.Add(dependencies[subindex]);
+						}
+					}
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types, bool recurse)
+		{
+			// Retrieve all the dependencies and filter out those that are not types
+			unsigned int initial_dependent_types_size = dependent_types.size;
+			GetReflectionTypeDependencies(manager, type, dependent_types, recurse);
+			unsigned int final_dependencies_size = dependent_types.size;
+			dependent_types.size = initial_dependent_types_size;
+			for (unsigned int index = initial_dependent_types_size; index < final_dependencies_size; index++) {
+				if (manager->TryGetType(dependent_types[index]) != nullptr) {
+					dependent_types.Add(dependent_types[index]);
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void GetReflectionDependenciesFor(const ReflectionManager* manager, Stream<char> definition, CapacityStream<Stream<char>>& dependencies, bool recurse) {
+			// Try nested type, then custom type
+			const ReflectionType* type = manager->TryGetType(definition);
+			if (type != nullptr) {
+				GetReflectionTypeDependencies(manager, type, dependencies, recurse);
+			}
+			else {
+				// Try custom type
+				ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(definition);
+				if (custom_type != nullptr) {
+					GetReflectionCustomTypeInterfaceDependencies(manager, definition, custom_type, dependencies, recurse);
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void GetReflectionCustomTypeInterfaceDependencies(const ReflectionManager* manager, Stream<char> definition, ReflectionCustomTypeInterface* custom_interface, CapacityStream<Stream<char>>& dependencies, bool recurse) {			
+			unsigned int initial_dependent_types_size = dependencies.size;
+
+			// Returns true if the given type name was already added to the dependent_types
+			auto is_entry_already_added = [&](Stream<char> name) -> bool {
+				return FindString(name, dependencies.SliceAt(initial_dependent_types_size)) != -1;
+			};
+
+			ReflectionCustomTypeDependenciesData dependent_data;
+			dependent_data.definition = definition;
+			dependent_data.dependencies = dependencies;
+			custom_interface->GetDependencies(&dependent_data);
+
+			// Iterate over the additions and eliminate those that were already added
+			for (unsigned int subindex = dependencies.size; subindex < dependent_data.definition.size; subindex++) {
+				// The dependencies that are reported by custom types are not necessarly
+				Stream<char> dependency = dependent_data.dependencies[subindex];
+				if (!is_entry_already_added(dependency)) {
+					dependencies.Add(dependency);
+				}
+			}
+
+			if (recurse) {
+				// Add the dependencies on the definitions themselves as well, while removing duplicates
+				for (unsigned int index = initial_dependent_types_size; index < dependencies.size; index++) {
+					unsigned int initial_dependent_types_size = dependencies.size;
+					GetReflectionDependenciesFor(manager, dependencies[index], dependencies, true);
+					unsigned int final_dependencies_size = dependencies.size;
+					dependencies.size = initial_dependent_types_size;
+					for (unsigned int index = initial_dependent_types_size; index < final_dependencies_size; index++) {
+						if (!is_entry_already_added(dependencies[index])) {
+							dependencies.Add(dependencies[index]);
 						}
 					}
 				}
@@ -8403,11 +8588,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						if (custom_type != nullptr) {
 							// This will retrieve only the direct dependencies, the user needs to retrieve the subdependencies
 							// If it needs them as well.
-							ReflectionCustomTypeDependentTypesData dependent_data;
+							ReflectionCustomTypeDependenciesData dependent_data;
 							dependent_data.definition = definition;
-							dependent_data.dependent_types = dependencies;
-							custom_type->GetDependentTypes(&dependent_data);
-							dependencies.size = dependent_data.dependent_types.size;
+							dependent_data.dependencies = dependencies;
+							custom_type->GetDependencies(&dependent_data);
+							dependencies.size = dependent_data.dependencies.size;
 						}
 						// If it is a known valid dependency or an enum, skip it.
 						else if (!manager->IsKnownValidDependency(definition) && manager->TryGetEnum(definition) == nullptr) {

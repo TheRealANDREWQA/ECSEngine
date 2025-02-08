@@ -430,7 +430,7 @@ struct EditorComponents {
 
 	// Removes all internal types that were associated with the given module. Also, it will update the entity managers
 	// in order to remove all the components and systems that were associated with that module
-	void RemoveModule(EditorState* editor_state, unsigned int loaded_module_index);
+	void RemoveModule(EditorState* editor_state, unsigned int loaded_module_index, unsigned int reflection_hierarchy_index);
 
 	// Removes all the components that came from the given module
 	void RemoveModuleFromManager(
