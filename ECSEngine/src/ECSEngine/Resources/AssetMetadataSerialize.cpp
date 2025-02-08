@@ -20,7 +20,7 @@ namespace ECSEngine {
 		return { sizeof(MaterialAsset), alignof(MaterialAsset) };
 	}
 
-	void MaterialAssetCustomTypeInterface::GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) {}
+	void MaterialAssetCustomTypeInterface::GetDependencies(Reflection::ReflectionCustomTypeDependenciesData* data) {}
 
 	bool MaterialAssetCustomTypeInterface::IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data)
 	{

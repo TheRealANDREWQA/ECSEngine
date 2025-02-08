@@ -1972,8 +1972,13 @@ void EditorComponents::ResetComponent(EditorState* editor_state, unsigned int sa
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::RemoveModule(EditorState* editor_state, unsigned int loaded_module_index)
+void EditorComponents::RemoveModule(EditorState* editor_state, unsigned int loaded_module_index, unsigned int reflection_hierarchy_index)
 {
+	// The reason for which we request the reflection module index, even tho we have ReflectionModuleIndex() to convert to a reflection
+	// Module index, is because that function requires the editor state module to be alive in project modules, which means that this
+	// Function would need to be called before that one, which adds a hidden dependency. For this reason, force the caller to pass in
+	// That index, such that we don't need this hidden dependency
+
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	// Remove the module from the entity managers firstly and then actually deallocate it
 	for (unsigned int sandbox_index = 0; sandbox_index < sandbox_count; sandbox_index++) {
@@ -2021,6 +2026,28 @@ void EditorComponents::RemoveModule(EditorState* editor_state, unsigned int load
 
 	// Now remove the main stream
 	loaded_modules.RemoveSwapBack(loaded_module_index);
+
+	// Before leaving, remove all the other data associated with this module in the internal reflection manager
+	// For the types that have the folder hierarchy index -1, which are most likely
+	// Template instantiations, this will remove all of them, even if they are needed for another hierarchy,
+	// But this is not an issue since we will reinsert all of them back.
+	ReflectionManager::AddFromOptions add_from_options;
+	add_from_options.types = false;
+	add_from_options.folder_hierarchy = reflection_hierarchy_index;
+	internal_manager->FreeEntries(add_from_options);
+
+	ReflectionManager::AddFromOptions add_types_minus_one_options;
+	add_from_options.constants = false;
+	add_from_options.enums = false;
+	add_from_options.templates = false;
+	add_from_options.typedefs = false;
+	add_from_options.valid_dependencies = false;
+	add_from_options.folder_hierarchy = -1;
+	internal_manager->FreeEntries(add_types_minus_one_options);
+
+	// Add again the types with folder hierarchy -1, this should properly take care of removing those that
+	// Belonged only to this hierarchy
+	internal_manager->AddFrom(editor_state->ModuleReflectionManager(), add_types_minus_one_options);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -2303,6 +2330,32 @@ void EditorComponents::UpdateComponents(
 	ECS_STACK_CAPACITY_STREAM(Stream<char>, added_types, 512);
 	ECS_STACK_CAPACITY_STREAM(Stream<char>, temporary_module_types, 512);
 
+	// Insert the templates/constants/enums from the hierarchy into the internal manager.
+	// Also, instantiated templates won't be picked up because their hierarchy index is -1,
+	// So we need to add those as well.
+
+	// Firstly, remove all the entries that are mapped to this hierarchy, except the types.
+	// Then remove all the types that have the folder hierarchy index -1, which are most likely
+	// Template instantiations, this will remove all of them, even if they are needed for another hierarchy,
+	// But this is not an issue since we will reinsert all of them back.
+	ReflectionManager::AddFromOptions add_from_options;
+	add_from_options.types = false;
+	add_from_options.folder_hierarchy = hierarchy_index;
+	internal_manager->FreeEntries(add_from_options);
+
+	ReflectionManager::AddFromOptions add_types_minus_one_options;
+	add_from_options.constants = false;
+	add_from_options.enums = false;
+	add_from_options.templates = false;
+	add_from_options.typedefs = false;
+	add_from_options.valid_dependencies = false;
+	add_from_options.folder_hierarchy = -1;
+	internal_manager->FreeEntries(add_types_minus_one_options);
+
+	// Now add the types into the internal manager
+	internal_manager->AddFrom(reflection_manager, add_from_options);
+	internal_manager->AddFrom(reflection_manager, add_types_minus_one_options);
+
 	unsigned int module_index = FindModule(module_name);
 
 	ECS_STACK_CAPACITY_STREAM(unsigned int, component_indices, 512);
@@ -2311,10 +2364,6 @@ void EditorComponents::UpdateComponents(
 	ReflectionManagerGetQuery query;
 	query.indices = &hierarchy_types;
 	reflection_manager->GetHierarchyTypes(query, hierarchy_index);
-
-	// TODO: Insert the templates/constants/enums from the hierarchy into the internal manager.
-	// Also, instantiated templates won't be picked up because their hierarchy index is -1,
-	// So we need to add those as well.
 
 	// Walk through the list of the types and separate the components (unique, shared and link) from the rest of the types
 	for (int32_t index = 0; index < (int32_t)hierarchy_types.size; index++) {

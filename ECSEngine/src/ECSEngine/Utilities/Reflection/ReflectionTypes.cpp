@@ -924,18 +924,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < fields.size; index++) {
 				copy.fields[index].info = fields[index].info;
 				copy.fields[index].name.InitializeAndCopy(ptr, fields[index].name);
-
-				ReflectionStreamFieldType stream_type = fields[index].info.stream_type;
-				ReflectionBasicFieldType basic_type = fields[index].info.basic_type;
-				if (basic_type == ReflectionBasicFieldType::UserDefined || stream_type == ReflectionStreamFieldType::Stream ||
-					stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream ||
-					basic_type == ReflectionBasicFieldType::Enum) 
-				{
-					copy.fields[index].definition.InitializeAndCopy(ptr, fields[index].definition);
-				}
-				else {
-					copy.fields[index].definition = fields[index].definition;
-				}
+				copy.fields[index].definition.InitializeAndCopy(ptr, fields[index].definition);
 
 				// Verify field tag
 				Stream<char> field_tag = fields[index].tag;

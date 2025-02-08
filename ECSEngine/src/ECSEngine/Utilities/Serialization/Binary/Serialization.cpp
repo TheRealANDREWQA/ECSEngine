@@ -238,13 +238,13 @@ namespace ECSEngine {
 								if (custom_serializer_index != -1) {
 									ECS_STACK_CAPACITY_STREAM(Stream<char>, current_custom_dependent_types, DESERIALIZE_FIELD_TABLE_MAX_TYPES / 2);
 
-									ReflectionCustomTypeDependentTypesData dependent_data;
+									ReflectionCustomTypeDependenciesData dependent_data;
 									dependent_data.definition = field->definition;
-									dependent_data.dependent_types = current_custom_dependent_types;
+									dependent_data.dependencies = current_custom_dependent_types;
 
-									ECS_REFLECTION_CUSTOM_TYPES[custom_serializer_index]->GetDependentTypes(&dependent_data);
-									for (size_t subindex = 0; subindex < dependent_data.dependent_types.size; subindex++) {
-										custom_dependent_types.Push(dependent_data.dependent_types[subindex]);
+									ECS_REFLECTION_CUSTOM_TYPES[custom_serializer_index]->GetDependencies(&dependent_data);
+									for (size_t subindex = 0; subindex < dependent_data.dependencies.size; subindex++) {
+										custom_dependent_types.Push(dependent_data.dependencies[subindex]);
 									}
 								}
 							}
@@ -269,13 +269,13 @@ namespace ECSEngine {
 				if (nested_custom_serializer != -1) {
 					ECS_STACK_CAPACITY_STREAM(Stream<char>, current_custom_dependent_types, DESERIALIZE_FIELD_TABLE_MAX_TYPES / 2);
 
-					ReflectionCustomTypeDependentTypesData dependent_data;
+					ReflectionCustomTypeDependenciesData dependent_data;
 					dependent_data.definition = current_dependent_type;
-					dependent_data.dependent_types = current_custom_dependent_types;
+					dependent_data.dependencies = current_custom_dependent_types;
 
-					ECS_REFLECTION_CUSTOM_TYPES[nested_custom_serializer]->GetDependentTypes(&dependent_data);
-					for (size_t index = 0; index < dependent_data.dependent_types.size; index++) {
-						custom_dependent_types.Push(dependent_data.dependent_types[index]);
+					ECS_REFLECTION_CUSTOM_TYPES[nested_custom_serializer]->GetDependencies(&dependent_data);
+					for (size_t index = 0; index < dependent_data.dependencies.size; index++) {
+						custom_dependent_types.Push(dependent_data.dependencies[index]);
 					}
 				}
 			}
@@ -399,19 +399,19 @@ namespace ECSEngine {
 		unsigned int custom_serializer = FindSerializeCustomType(definition);
 
 		if (custom_serializer != -1) {
-			ReflectionCustomTypeDependentTypesData dependent_data;
+			ReflectionCustomTypeDependenciesData dependent_data;
 			dependent_data.definition = definition;
-			dependent_data.dependent_types = dependent_types;
-			ECS_REFLECTION_CUSTOM_TYPES[custom_serializer]->GetDependentTypes(&dependent_data);
+			dependent_data.dependencies = dependent_types;
+			ECS_REFLECTION_CUSTOM_TYPES[custom_serializer]->GetDependencies(&dependent_data);
 
-			for (size_t subindex = 0; subindex < dependent_data.dependent_types.size; subindex++) {
+			for (size_t subindex = 0; subindex < dependent_data.dependencies.size; subindex++) {
 				ReflectionBasicFieldType basic_field_type;
 				ReflectionStreamFieldType stream_field_type;
 
-				ConvertStringToPrimitiveType(dependent_data.dependent_types[subindex], basic_field_type, stream_field_type);
+				ConvertStringToPrimitiveType(dependent_data.dependencies[subindex], basic_field_type, stream_field_type);
 				// It is not a basic type - should look for it as a dependency
 				if (basic_field_type == ReflectionBasicFieldType::Unknown) {
-					const ReflectionType* nested_type = reflection_manager->TryGetType(dependent_data.dependent_types[subindex].buffer);
+					const ReflectionType* nested_type = reflection_manager->TryGetType(dependent_data.dependencies[subindex].buffer);
 					// It is a reflected type - make sure its dependencies are met
 					if (nested_type != nullptr) {
 						if (!SerializeHasDependentTypes(reflection_manager, nested_type, omit_fields)) {
@@ -421,7 +421,7 @@ namespace ECSEngine {
 					}
 					else {
 						// Might be a custom serializer type again
-						SerializeHasDependentTypesCustomSerializerRecurse(reflection_manager, dependent_data.dependent_types[subindex], custom_serializer_success, omit_fields);
+						SerializeHasDependentTypesCustomSerializerRecurse(reflection_manager, dependent_data.dependencies[subindex], custom_serializer_success, omit_fields);
 						if (!custom_serializer_success) {
 							return true;
 						}
@@ -2188,24 +2188,25 @@ namespace ECSEngine {
 
 						custom_serializer_index = FindSerializeCustomType(current_definition);
 
-						ReflectionCustomTypeDependentTypesData dependent_data;
+						ReflectionCustomTypeDependenciesData dependent_data;
 						dependent_data.definition = current_definition;
-						dependent_data.dependent_types = nested_dependent_types;
-						ECS_REFLECTION_CUSTOM_TYPES[custom_serializer_index]->GetDependentTypes(&dependent_data);
+						dependent_data.dependencies = nested_dependent_types;
+						ECS_REFLECTION_CUSTOM_TYPES[custom_serializer_index]->GetDependencies(&dependent_data);
 
 						ReflectionBasicFieldType basic_type;
 						ReflectionStreamFieldType stream_type;
-						for (size_t subindex = 0; subindex < dependent_data.dependent_types.size; subindex++) {
-							ConvertStringToPrimitiveType(dependent_data.dependent_types[subindex], basic_type, stream_type);
+						for (size_t subindex = 0; subindex < dependent_data.dependencies.size; subindex++) {
+							Stream<char> dependency = dependent_data.dependencies[subindex];
+							ConvertStringToPrimitiveType(dependency, basic_type, stream_type);
 							if (basic_type == ReflectionBasicFieldType::Unknown) {
 								// Can be a user defined type or custom serializer again
-								unsigned int nested_custom_serializer = FindSerializeCustomType(dependent_data.dependent_types[subindex]);
+								unsigned int nested_custom_serializer = FindSerializeCustomType(dependency);
 								if (nested_custom_serializer == -1) {
 									// It is a user defined type
-									to_be_read_user_defined_types.Push(dependent_data.dependent_types[subindex]);
+									to_be_read_user_defined_types.Push(dependency);
 								}
 								else {
-									dependent_types.Push(dependent_data.dependent_types[subindex]);
+									dependent_types.Push(dependency);
 								}
 							}
 						}

@@ -28,12 +28,12 @@ namespace ECSEngine {
 		extern ReflectionCustomTypeInterface* ECS_REFLECTION_CUSTOM_TYPES[];
 
 		// This function will add the definition as a dependency unless the given definition is not a known basic type
-		ECSENGINE_API void ReflectionCustomTypeAddDependentType(ReflectionCustomTypeDependentTypesData* data, Stream<char> definition);
+		ECSENGINE_API void ReflectionCustomTypeAddDependentType(ReflectionCustomTypeDependenciesData* data, Stream<char> definition);
 
-		ECSENGINE_API void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependentTypesData* data);
+		ECSENGINE_API void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependenciesData* data);
 
 		// When the type has multiple template parameters, call this function, since it will handle all of them correctly
-		ECSENGINE_API void ReflectionCustomTypeDependentTypes_MultiTemplate(ReflectionCustomTypeDependentTypesData* data);
+		ECSENGINE_API void ReflectionCustomTypeDependentTypes_MultiTemplate(ReflectionCustomTypeDependenciesData* data);
 
 		// E.g. for Template<Type> string should be Template
 		ECSENGINE_API bool ReflectionCustomTypeMatchTemplate(ReflectionCustomTypeMatchData* data, const char* string);
@@ -49,7 +49,7 @@ namespace ECSEngine {
 
 			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
 
-			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
+			void GetDependencies(ReflectionCustomTypeDependenciesData* data) override;
 
 			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
 
@@ -71,7 +71,7 @@ namespace ECSEngine {
 
 			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
 
-			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
+			void GetDependencies(ReflectionCustomTypeDependenciesData* data) override;
 
 			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
 
@@ -93,7 +93,7 @@ namespace ECSEngine {
 
 			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
 
-			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
+			void GetDependencies(ReflectionCustomTypeDependenciesData* data) override;
 
 			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
 
@@ -110,7 +110,7 @@ namespace ECSEngine {
 
 			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
 
-			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
+			void GetDependencies(ReflectionCustomTypeDependenciesData* data) override;
 
 			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
 
@@ -126,7 +126,7 @@ namespace ECSEngine {
 
 			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
 
-			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
+			void GetDependencies(ReflectionCustomTypeDependenciesData* data) override;
 
 			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
 
@@ -148,7 +148,7 @@ namespace ECSEngine {
 
 			ulong2 GetByteSize(ReflectionCustomTypeByteSizeData* data) override;
 
-			void GetDependentTypes(ReflectionCustomTypeDependentTypesData* data) override;
+			void GetDependencies(ReflectionCustomTypeDependenciesData* data) override;
 
 			bool IsBlittable(ReflectionCustomTypeIsBlittableData* data) override;
 

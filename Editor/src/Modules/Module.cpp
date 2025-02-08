@@ -1952,7 +1952,7 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			// Remove the module from the editor components - if it was already loaded
 			unsigned int editor_component_module_index = editor_state->editor_components.FindModule(ascii_name);
 			if (editor_component_module_index != -1) {
-				editor_state->editor_components.RemoveModule(editor_state, editor_component_module_index);
+				editor_state->editor_components.RemoveModule(editor_state, editor_component_module_index, index);
 			}
 		}
 		else {
@@ -2420,7 +2420,9 @@ void RemoveModule(EditorState* editor_state, unsigned int index) {
 
 	// Remove the module from the editor components as well
 	unsigned int editor_component_index = editor_state->editor_components.ModuleIndexFromReflection(editor_state, index);
-	editor_state->editor_components.RemoveModule(editor_state, editor_component_index);
+	// We need to call this function after ReleaseModule, because it needs the types to be deallocated from 
+	// The other (module) reflection manager
+	editor_state->editor_components.RemoveModule(editor_state, editor_component_index, index);
 
 	modules->Remove(index);
 }
@@ -2434,7 +2436,7 @@ void RemoveModule(EditorState* editor_state, Stream<wchar_t> solution_path)
 		RemoveModule(editor_state, module_index);
 		return;
 	}
-	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 	FormatString(error_message, "Removing project module {#} failed. No such module exists.", solution_path);
 	EditorSetConsoleError(error_message);
 }
@@ -2448,7 +2450,7 @@ void RemoveModuleAssociatedFiles(EditorState* editor_state, unsigned int module_
 	// Delete the associated files
 	Stream<Stream<wchar_t>> associated_file_extensions(MODULE_ASSOCIATED_FILES, MODULE_ASSOCIATED_FILES_SIZE());
 
-	ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, path, 512);
 	GetProjectModulesFolder(editor_state, path);
 	GetModuleStem(modules->buffer[module_index].library_name, configuration, path);
 	size_t path_size = path.size;
