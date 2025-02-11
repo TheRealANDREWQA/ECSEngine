@@ -130,6 +130,12 @@ size_t EditorComponents::GetComponentAllocatorSize(Component component, ECS_COMP
 
 // ----------------------------------------------------------------------------------------------
 
+size_t EditorComponents::GetComponentAllocatorSize(Stream<char> name) const {
+	return GetReflectionComponentAllocatorSize(GetType(name));
+}
+
+// ----------------------------------------------------------------------------------------------
+
 void EditorComponents::GetUniqueLinkComponents(CapacityStream<const ReflectionType*>& link_types) const
 {
 	ECSEngine::GetUniqueLinkComponents(internal_manager, link_types);
@@ -2158,24 +2164,15 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 		EditorState* editor_state;
 		unsigned int sandbox_index;
 		EntityManager* entity_manager;
-		const ReflectionManager* reflection_manager;
 	};
 
-	FunctorData functor_data = { editor_state, sandbox_index, entity_manager, internal_manager };
+	FunctorData functor_data = { editor_state, sandbox_index, entity_manager };
 	auto functor = [](const ReflectionType* type, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsComponent(component_id)) {
-			const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(data->editor_state, data->sandbox_index, type->name);
-			ComponentFunctions component_functions;
-
 			ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
-			if (module_component_functions != nullptr && module_component_functions->copy_function != nullptr && module_component_functions->deallocate_function != nullptr) {
-				module_component_functions->SetComponentFunctionsTo(&component_functions, GetReflectionComponentAllocatorSize(type));
-			}
-			else {
-				component_functions = GetReflectionTypeRuntimeComponentFunctions(data->reflection_manager, type, &stack_allocator);
-			}
+			ComponentFunctions component_functions = GetSandboxComponentFunctions(data->editor_state, data->sandbox_index, type->name, &stack_allocator);
 			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name, &component_functions);
 		}
 	};
@@ -2184,37 +2181,17 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 		EditorState* editor_state;
 		unsigned int sandbox_index;
 		EntityManager* entity_manager;
-		const ReflectionManager* reflection_manager;
 	};
 
-	SharedFunctorData shared_functor_data = { editor_state, sandbox_index, entity_manager, internal_manager };
+	SharedFunctorData shared_functor_data = { editor_state, sandbox_index, entity_manager };
 	auto shared_functor = [](const ReflectionType* type, void* _data) {
 		SharedFunctorData* data = (SharedFunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsSharedComponent(component_id)) {
-			const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(data->editor_state, data->sandbox_index, type->name);
-			if (module_component_functions == nullptr) {
-				// Try again with the best fit module, if the sandbox
-				// Does not have the module assigned to it
-				module_component_functions = GetModuleComponentFunctionsBestFit(data->editor_state, type->name);
-			}
-			ComponentFunctions component_functions;
-			SharedComponentCompareEntry compare_entry;
-			
 			ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
-			if (module_component_functions != nullptr && module_component_functions->copy_function != nullptr && module_component_functions->deallocate_function != nullptr) {
-				module_component_functions->SetComponentFunctionsTo(&component_functions, GetReflectionComponentAllocatorSize(type));
-			}
-			else {
-				component_functions = GetReflectionTypeRuntimeComponentFunctions(data->reflection_manager, type, &stack_allocator);
-			}
-
-			if (module_component_functions != nullptr && module_component_functions->compare_function != nullptr) {
-				module_component_functions->SetCompareEntryTo(&compare_entry);
-			}
-			else {
-				compare_entry = GetReflectionTypeRuntimeCompareEntry(data->reflection_manager, type, &stack_allocator);
-			}
+			const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(data->editor_state, data->sandbox_index, type->name);
+			SharedComponentCompareEntry compare_entry;
+			ComponentFunctions component_functions = GetSandboxComponentFunctions(data->editor_state, data->sandbox_index, type->name, &stack_allocator, &compare_entry);
 			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name, &component_functions, compare_entry);
 		}
 	};

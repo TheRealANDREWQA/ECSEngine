@@ -166,6 +166,7 @@ namespace ECSEngine {
 									ECS_ASSERT(data->write_data->options != nullptr, "Serializing a reference pointer failed");
 									iterate_elements([data, pointer_reference_key, pointer_reference_custom_element_name](void* element) {
 										ReflectionCustomTypeGetElementIndexOrToken token = data->write_data->options->passdown_info->GetPointerTargetToken(
+											data->write_data->reflection_manager,
 											pointer_reference_key,
 											pointer_reference_custom_element_name,
 											*(void**)element,
@@ -527,6 +528,7 @@ namespace ECSEngine {
 									ReflectionCustomTypeGetElementIndexOrToken token;
 									Read<true>(data->read_data->stream, &token);
 									void* referenced_value = data->read_data->options->passdown_info->RetrievePointerTargetValueFromToken(
+										data->read_data->reflection_manager,
 										pointer_reference_key, 
 										pointer_reference_custom_element_name,
 										token,
