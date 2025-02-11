@@ -897,17 +897,8 @@ bool CreateSandboxGlobalComponent(
 	}
 
 	// Retrieve the component functions
-	const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(editor_state, sandbox_index, component_name);
-	ComponentFunctions component_functions;
-
 	ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
-	if (module_component_functions != nullptr && module_component_functions->copy_function != nullptr && module_component_functions->deallocate_function != nullptr) {
-		module_component_functions->SetComponentFunctionsTo(&component_functions, 0);
-	}
-	else {
-		component_functions = GetReflectionTypeRuntimeComponentFunctions(editor_state->GlobalReflectionManager(), component_type, &stack_allocator);
-	}
-	
+	ComponentFunctions component_functions = GetSandboxComponentFunctions(editor_state, sandbox_index, component_name, &stack_allocator);
 	entity_manager->RegisterGlobalComponentCommit(component, component_size, data, component_name, &component_functions);
 	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	return true;

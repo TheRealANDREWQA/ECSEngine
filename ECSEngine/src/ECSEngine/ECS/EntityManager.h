@@ -1714,7 +1714,6 @@ namespace ECSEngine {
 		template<typename T>
 		T* RegisterGlobalComponentCommit(
 			const T* data,
-			Stream<char> name = { nullptr, 0 },
 			const ComponentFunctions* functions = nullptr
 		) {
 			return (T*)RegisterGlobalComponentCommit(

@@ -897,14 +897,11 @@ namespace ECSEngine {
 		ulong2 HashTableComputePairByteSizeAndAlignmentOffset(const ReflectionDefinitionInfo& value_definition_info, const ReflectionDefinitionInfo& identifier_definition_info) {
 			size_t pair_size = value_definition_info.byte_size + identifier_definition_info.byte_size;
 			size_t identifier_pair_offset = 0;
-			if (value_definition_info.alignment < identifier_definition_info.alignment) {
-				// Add the difference between these 2. Also, we must use this offset when addressing the identifier
-				identifier_pair_offset = identifier_definition_info.alignment - value_definition_info.alignment;
+			// Align the end of the normal identifier, i.e. at the end of the value, and see if we need to adjust the offset
+			size_t alignment_identifier_start = AlignPointer(value_definition_info.byte_size, identifier_definition_info.alignment);
+			if (alignment_identifier_start != value_definition_info.byte_size) {
+				identifier_pair_offset = alignment_identifier_start - value_definition_info.byte_size;
 				pair_size += identifier_pair_offset;
-			}
-			else if (value_definition_info.alignment > identifier_definition_info.alignment) {
-				// Add the difference between these 2
-				pair_size += value_definition_info.alignment - identifier_definition_info.alignment;
 			}
 
 			return { pair_size, identifier_pair_offset };

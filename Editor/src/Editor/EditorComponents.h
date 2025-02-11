@@ -256,6 +256,9 @@ struct EditorComponents {
 	// Returns 0 if the component doesn't have an allocator size function
 	size_t GetComponentAllocatorSize(Component component, ECS_COMPONENT_TYPE type) const;
 
+	// Returns 0 if the component doesn't have an allocator size function
+	size_t GetComponentAllocatorSize(Stream<char> name) const;
+
 	void GetUniqueLinkComponents(CapacityStream<const Reflection::ReflectionType*>& link_types) const;
 
 	void GetSharedLinkComponents(CapacityStream<const Reflection::ReflectionType*>& link_types) const;

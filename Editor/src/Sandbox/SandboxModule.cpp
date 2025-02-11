@@ -5,6 +5,7 @@
 #include "../Modules/ModuleSettings.h"
 #include "Sandbox.h"
 #include "SandboxFile.h"
+#include "ECSEngineComponentsAll.h"
 
 #define MODULE_FILE_SETTING_EXTENSION L".config"
 //#define MODULE_FILE_MANUAL_SETTING_EXTENSION L".mconfig"
@@ -668,6 +669,37 @@ const ModuleComponentFunctions* GetModuleComponentFunctionsBestFit(const EditorS
 		}
 	}
 	return nullptr;
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+ComponentFunctions GetSandboxComponentFunctions(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name, AllocatorPolymorphic stack_allocator, SharedComponentCompareEntry* compare_entry) {
+	ComponentFunctions component_functions;
+	const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(editor_state, sandbox_index, component_name);
+	if (module_component_functions == nullptr) {
+		// Try again with the best fit module, if the sandbox
+		// Does not have the module assigned to it
+		module_component_functions = GetModuleComponentFunctionsBestFit(editor_state, component_name);
+	}
+
+	const Reflection::ReflectionType* component_type = editor_state->editor_components.GetType(component_name);
+	if (module_component_functions != nullptr && module_component_functions->copy_function != nullptr && module_component_functions->deallocate_function != nullptr) {
+		module_component_functions->SetComponentFunctionsTo(&component_functions, editor_state->editor_components.GetComponentAllocatorSize(component_name));
+	}
+	else {
+		component_functions = GetReflectionTypeRuntimeComponentFunctions(editor_state->GlobalReflectionManager(), component_type, stack_allocator);
+	}
+
+	if (compare_entry != nullptr) {
+		if (module_component_functions != nullptr && module_component_functions->compare_function != nullptr) {
+			module_component_functions->SetCompareEntryTo(compare_entry);
+		}
+		else {
+			*compare_entry = GetReflectionTypeRuntimeCompareEntry(editor_state->GlobalReflectionManager(), component_type, stack_allocator);
+		}
+	}
+
+	return component_functions;
 }
 
 // -------------------------------------------------------------------------------------------------------------

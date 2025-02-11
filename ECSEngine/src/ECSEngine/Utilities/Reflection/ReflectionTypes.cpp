@@ -666,7 +666,7 @@ namespace ECSEngine {
 			}
 
 			// Remove the last delimiter character, if there is one
-			if (stack_memory.Last() == ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR) {
+			if (stack_memory.size > 0 && stack_memory.Last() == ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR) {
 				stack_memory.size--;
 			}
 		}

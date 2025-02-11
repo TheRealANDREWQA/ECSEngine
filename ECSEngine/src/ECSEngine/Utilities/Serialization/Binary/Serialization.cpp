@@ -666,7 +666,7 @@ namespace ECSEngine {
 									if (pointer_reference.size > 0) {
 										size_t token = 0;
 										if constexpr (!write_data) {
-											token = nested_options->passdown_info->GetPointerTargetToken(pointer_reference, pointer_reference_custom_element, *(void**)field_data, true);
+											token = nested_options->passdown_info->GetPointerTargetToken(reflection_manager, pointer_reference, pointer_reference_custom_element, *(void**)field_data, true);
 											ECS_ASSERT(token != -1);
 										}
 										*total_size += Write<write_data>(&stream, &token);

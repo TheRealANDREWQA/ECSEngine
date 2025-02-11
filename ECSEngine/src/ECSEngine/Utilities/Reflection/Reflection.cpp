@@ -5983,6 +5983,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		}
 
 		void CopyReflectionFieldBasicWithTag(
+			const ReflectionManager* reflection_manager,
 			const ReflectionFieldInfo* info,
 			const void* source,
 			void* destination,
@@ -6001,10 +6002,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					if (as_reference_key.size > 0) {
 						// Use the token route, it is faster
 						const void* source_pointer = *(void**)source;
-						size_t source_token = passdown_info->GetPointerTargetToken(as_reference_key, as_reference_custom_element_type, source_pointer, true);
+						size_t source_token = passdown_info->GetPointerTargetToken(reflection_manager, as_reference_key, as_reference_custom_element_type, source_pointer, true);
 						ECS_ASSERT(source_token != -1, "Reflection pointer reference token unmatched");
 						// Retrieve the value from the destination
-						void* destination_pointer = passdown_info->RetrievePointerTargetValueFromToken(as_reference_key, as_reference_custom_element_type, source_token, false);
+						void* destination_pointer = passdown_info->RetrievePointerTargetValueFromToken(reflection_manager, as_reference_key, as_reference_custom_element_type, source_token, false);
 						ECS_ASSERT(destination_pointer != nullptr, "Reflection destination pointer reference is unmatched");
 						// Write the current pointer now
 						*(void**)destination = destination_pointer;
@@ -7023,7 +7024,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					for (size_t index = 0; index < element_count; index++) {
 						const void* source_element = OffsetPointer(source, definition_info.byte_size * index);
 						void* destination_element = OffsetPointer(destination, definition_info.byte_size * index);
-						CopyReflectionFieldBasicWithTag(&field.info, source_element, destination_element, options->allocator, tags, options->passdown_info);
+						CopyReflectionFieldBasicWithTag(reflection_manager, &field.info, source_element, destination_element, options->allocator, tags, options->passdown_info);
 					}
 				}
 				else if (definition_info.type != nullptr) {
@@ -7663,7 +7664,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							// Check the reference pointer
 							if (field->Has(STRING(ECS_POINTER_AS_REFERENCE))) {
 								// The basic field with tag will properly take care of this case
-								CopyReflectionFieldBasicWithTag(&field->info, source, destination, field_allocator, field->tag, options->passdown_info);
+								CopyReflectionFieldBasicWithTag(reflection_manager, &field->info, source, destination, field_allocator, field->tag, options->passdown_info);
 							}
 							else {
 								void** field_data = (void**)destination;
@@ -7728,7 +7729,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// Check the reference pointer
 								if (field->Has(STRING(ECS_POINTER_AS_REFERENCE))) {
 									// The basic field with tag will properly take care of this case
-									CopyReflectionFieldBasicWithTag(&field->info, source, destination, field_allocator, field->tag, options->passdown_info);
+									CopyReflectionFieldBasicWithTag(reflection_manager, &field->info, source, destination, field_allocator, field->tag, options->passdown_info);
 								}
 								else {
 									void** field_data = (void**)destination;
@@ -8958,6 +8959,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		static ReflectionCustomTypeGetElementIndexOrToken ReflectionPassdownInfoGetPointerTargetImpl(
+			const ReflectionManager* reflection_manager,
 			ReflectionPassdownInfo* info, 
 			Stream<char> key, 
 			Stream<char> custom_element_name, 
@@ -8981,6 +8983,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					ECS_ASSERT(target->custom_type_index != -1);
 				}
 
+				target->cached_find_data.reflection_manager = reflection_manager;
 				target->cached_find_data.is_token = is_token;
 				target->cached_find_data.element = &pointer_value;
 				target->cached_find_data.source = field_data;
@@ -8988,19 +8991,20 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 		}
 
-		ReflectionCustomTypeGetElementIndexOrToken ReflectionPassdownInfo::GetPointerTargetIndex(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
-			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, pointer_value, is_source_data, false);
+		ReflectionCustomTypeGetElementIndexOrToken ReflectionPassdownInfo::GetPointerTargetIndex(const ReflectionManager* reflection_manager, Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(reflection_manager, this, key, custom_element_name, pointer_value, is_source_data, false);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionCustomTypeGetElementIndexOrToken ReflectionPassdownInfo::GetPointerTargetToken(Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
-			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, pointer_value, is_source_data, true);
+		ReflectionCustomTypeGetElementIndexOrToken ReflectionPassdownInfo::GetPointerTargetToken(const ReflectionManager* reflection_manager, Stream<char> key, Stream<char> custom_element_name, const void* pointer_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(reflection_manager, this, key, custom_element_name, pointer_value, is_source_data, true);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		static void* ReflectionPassdownInfoGetPointerTargetImpl(
+			const ReflectionManager* reflection_manager,
 			ReflectionPassdownInfo* info, 
 			Stream<char> key, 
 			Stream<char> custom_element_name,
@@ -9025,6 +9029,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					ECS_ASSERT(target->custom_type_index != -1);
 				}
 
+				target->cached_get_data.reflection_manager = reflection_manager;
 				target->cached_get_data.is_token = is_token;
 				target->cached_get_data.index_or_token = value;
 				target->cached_get_data.source = field_data;
@@ -9032,12 +9037,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 		}
 
-		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromIndex(Stream<char> key, Stream<char> custom_element_name, ReflectionCustomTypeGetElementIndexOrToken index_value, bool is_source_data) {
-			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, index_value, is_source_data, false);
+		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromIndex(const ReflectionManager* reflection_manager, Stream<char> key, Stream<char> custom_element_name, ReflectionCustomTypeGetElementIndexOrToken index_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(reflection_manager, this, key, custom_element_name, index_value, is_source_data, false);
 		}
 
-		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromToken(Stream<char> key, Stream<char> custom_element_name, ReflectionCustomTypeGetElementIndexOrToken token_value, bool is_source_data) {
-			return ReflectionPassdownInfoGetPointerTargetImpl(this, key, custom_element_name, token_value, is_source_data, true);
+		void* ReflectionPassdownInfo::RetrievePointerTargetValueFromToken(const ReflectionManager* reflection_manager, Stream<char> key, Stream<char> custom_element_name, ReflectionCustomTypeGetElementIndexOrToken token_value, bool is_source_data) {
+			return ReflectionPassdownInfoGetPointerTargetImpl(reflection_manager, this, key, custom_element_name, token_value, is_source_data, true);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

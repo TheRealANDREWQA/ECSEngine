@@ -209,6 +209,13 @@ const ModuleComponentFunctions* GetModuleComponentFunctionsBestFit(const EditorS
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Finds the appropriate module that offers an implementation for the given component, else it will auto generate the needed functions
+// Using the reflection information of that component. If this component is a shared component and the compare entry is needed, it can
+// Output that information as well, if the last output parameter is set. The allocator that is being passed should be a temporary stack allocator
+ComponentFunctions GetSandboxComponentFunctions(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name, AllocatorPolymorphic stack_allocator, SharedComponentCompareEntry* compare_entry = nullptr);
+
+// -------------------------------------------------------------------------------------------------------------
+
 bool HasSandboxModuleSettings(const EditorSandboxModule* sandbox_module);
 
 // -------------------------------------------------------------------------------------------------------------
