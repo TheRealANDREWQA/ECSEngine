@@ -592,7 +592,7 @@ namespace ECSEngine {
 
 			bool skip_serializable = field->Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 			// Consider the field skipped if it an allocator as well
-			skip_serializable |= IsReflectionTypeFieldAllocatorFromMisc(type, index);
+			skip_serializable |= IsReflectionTypeFieldAllocatorFromMiscDirectOnly(type, index);
 
 			if (!skip_serializable && omit_fields.size > 0) {
 				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);

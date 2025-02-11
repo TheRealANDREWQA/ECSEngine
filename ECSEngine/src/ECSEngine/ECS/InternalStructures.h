@@ -269,14 +269,46 @@ namespace ECSEngine {
 		// It will call the copy function. It assumes that there is one
 		void CallCopyFunction(void* destination, const void* source, bool deallocate_previous) const;
 
+		// It will call the copy function. It assumes that there is one. 
+		// It will not use the allocator that is stored in here, but the provided override
+		void CallCopyFunction(void* destination, const void* source, bool deallocate_previous, AllocatorPolymorphic override_allocator) const;
+
 		// It will call the deallocate function. It assumes that there is one
 		void CallDeallocateFunction(void* data) const;
 
-		// It will call this function only if it is set
-		void TryCallCopyFunction(void* destination, const void* source, bool deallocate_previous) const;
+		// It will call the deallocate function. It assumes that there is one.
+		// It will not use the allocator that is stored in here, but the provided override
+		void CallDeallocateFunction(void* data, AllocatorPolymorphic override_allocator) const;
 
 		// It will call this function only if it is set
-		void TryCallDeallocateFunction(void* data) const;
+		ECS_INLINE void TryCallCopyFunction(void* destination, const void* source, bool deallocate_previous) const {
+			if (copy_function != nullptr) {
+				CallCopyFunction(destination, source, deallocate_previous);
+			}
+		}
+
+		// It will call this function only if it is set
+		// It will not use the allocator that is stored in here, but the provided override
+		ECS_INLINE void TryCallCopyFunction(void* destination, const void* source, bool deallocate_previous, AllocatorPolymorphic override_allocator) const {
+			if (copy_function != nullptr) {
+				CallCopyFunction(destination, source, deallocate_previous, override_allocator);
+			}
+		}
+
+		// It will call this function only if it is set
+		ECS_INLINE void TryCallDeallocateFunction(void* data) const {
+			if (deallocate_function != nullptr) {
+				CallDeallocateFunction(data);
+			}
+		}
+
+		// It will call this function only if it is set
+		// It will not use the allocator that is stored in here, but the provided override
+		ECS_INLINE void TryCallDeallocateFunction(void* data, AllocatorPolymorphic override_allocator) const {
+			if (deallocate_function != nullptr) {
+				CallDeallocateFunction(data, override_allocator);
+			}
+		}
 
 		ECS_INLINE ComponentFunctions GetComponentFunctions() const {
 			ComponentFunctions functions;

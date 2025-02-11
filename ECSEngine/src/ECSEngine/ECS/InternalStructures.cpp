@@ -823,10 +823,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void ComponentInfo::CallCopyFunction(void* destination, const void* source, bool deallocate_previous) const 
-	{
+	void ComponentInfo::CallCopyFunction(void* destination, const void* source, bool deallocate_previous) const {
+		CallCopyFunction(destination, source, deallocate_previous, allocator);
+	}
+
+	void ComponentInfo::CallCopyFunction(void* destination, const void* source, bool deallocate_previous, AllocatorPolymorphic override_allocator) const {
 		ComponentCopyFunctionData copy_data;
-		copy_data.allocator = allocator;
+		copy_data.allocator = override_allocator;
 		copy_data.destination = destination;
 		copy_data.source = source;
 		copy_data.function_data = data;
@@ -834,27 +837,17 @@ namespace ECSEngine {
 		copy_function(&copy_data);
 	}
 
-	void ComponentInfo::CallDeallocateFunction(void* _data) const
+	void ComponentInfo::CallDeallocateFunction(void* _data) const {
+		CallDeallocateFunction(_data, allocator);
+	}
+
+	void ComponentInfo::CallDeallocateFunction(void* _data, AllocatorPolymorphic override_allocator) const
 	{
 		ComponentDeallocateFunctionData deallocate_data;
-		deallocate_data.allocator = allocator;
+		deallocate_data.allocator = override_allocator;
 		deallocate_data.data = _data;
 		deallocate_data.function_data = data;
 		deallocate_function(&deallocate_data);
-	}
-
-	void ComponentInfo::TryCallCopyFunction(void* destination, const void* source, bool deallocate_previous) const
-	{
-		if (copy_function != nullptr) {
-			CallCopyFunction(destination, source, deallocate_previous);
-		}
-	}
-
-	void ComponentInfo::TryCallDeallocateFunction(void* _data) const
-	{
-		if (deallocate_function != nullptr) {
-			CallDeallocateFunction(_data);
-		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

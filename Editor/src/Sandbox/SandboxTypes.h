@@ -356,6 +356,9 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::ResizableLinearAllocator sandbox_world_transfer_data_allocator;
 	ECSEngine::Stream<ECSEngine::TaskSchedulerTransferStaticData> sandbox_world_transfer_data;
 
+	// Record this here, such that we can reference it directly in the entity managers
+	void* entity_manager_auto_generated_data;
+
 	// A structure that contains all the common fields that are used for a recorder
 	struct Recorder {
 		ECSEngine::DeltaStateWriter delta_writer;

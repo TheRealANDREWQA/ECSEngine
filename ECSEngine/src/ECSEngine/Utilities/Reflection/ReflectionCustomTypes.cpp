@@ -755,7 +755,7 @@ namespace ECSEngine {
 					AllocatorPolymorphic* destination = (AllocatorPolymorphic*)data->destination;
 					const AllocatorPolymorphic* source = (const AllocatorPolymorphic*)data->source;
 					*destination = *source;
-					destination->allocator = AllocateEx(data->allocator, BaseAllocatorByteSize(source->allocator_type));
+					destination->allocator = AllocateEx(data->allocator, AllocatorStructureByteSize(source->allocator_type));
 					initialize_implementation(source->allocator_type, destination->allocator, source->allocator);
 				}
 				else {

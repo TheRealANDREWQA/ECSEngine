@@ -897,9 +897,7 @@ bool CreateSandboxGlobalComponent(
 	}
 
 	// Retrieve the component functions
-	ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
-	ComponentFunctions component_functions = GetSandboxComponentFunctions(editor_state, sandbox_index, component_name, &stack_allocator);
-	entity_manager->RegisterGlobalComponentCommit(component, component_size, data, component_name, &component_functions);
+	entity_manager->RegisterGlobalComponentCommit(component, component_size, data, component_name);
 	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	return true;
 }

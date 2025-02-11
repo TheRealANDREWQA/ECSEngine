@@ -27,6 +27,18 @@ namespace ECSEngine {
 			return false;
 		}
 
+		bool IsReflectionTypeFieldAllocatorFromMiscDirectOnly(const ReflectionType* type, size_t field_index) {
+			for (size_t index = 0; index < type->misc_info.size; index++) {
+				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
+					if (type->misc_info[index].allocator_info.field_index == field_index && (type->misc_info[index].allocator_info.modifier != ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN
+						|| type->misc_info[index].allocator_info.is_direct_allocator)) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
 		bool IsReflectionTypeFieldAllocatorAsReference(const ReflectionType* type, size_t field_index) {
 			return type->fields[field_index].Has(STRING(ECS_REFERENCE_ALLOCATOR));
 		}

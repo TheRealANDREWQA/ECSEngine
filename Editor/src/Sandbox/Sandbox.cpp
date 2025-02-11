@@ -86,6 +86,18 @@ static void RestoreMouseState(EditorState* editor_state) {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+struct ComponentFunctionsAutoGeneratorData {
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+};
+
+static ComponentFunctions ComponentFunctionsAutoGenerator(EntityManagerAutoGenerateComponentFunctionsFunctorData* functor_data) {
+	ComponentFunctionsAutoGeneratorData* data = (ComponentFunctionsAutoGeneratorData*)functor_data->user_data;
+	return GetSandboxComponentFunctions(data->editor_state, data->sandbox_index, functor_data->component_name, functor_data->temporary_allocator, functor_data->compare_entry);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 // Stores all the current state of the modules being used such that changes to them can be detected dynamically
 static void RegisterSandboxModuleSnapshots(EditorState* editor_state, unsigned int sandbox_index) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -1115,6 +1127,12 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 		UpdateSceneUIWindowIndex(editor_state, swapped_index, sandbox_index);
 		UpdateEntitiesUITargetSandbox(editor_state, swapped_index, sandbox_index);
 		UpdateVisualizeTextureSandboxReferences(editor_state, swapped_index, sandbox_index);
+
+		if (sandbox_index < editor_state->sandboxes.size) {
+			// The entity manager auto generator data must be updated, only if the index is still valid
+			ComponentFunctionsAutoGeneratorData* auto_generator_data = (ComponentFunctionsAutoGeneratorData*)editor_state->sandboxes[sandbox_index].entity_manager_auto_generated_data;
+			auto_generator_data->sandbox_index = sandbox_index;
+		}
 	}
 }
 
@@ -1899,6 +1917,7 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 		// Recreate the world
 		sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 		sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
+		sandbox->sandbox_world.entity_manager->SetAutoGenerateComponentFunctionsFunctor(ComponentFunctionsAutoGenerator, sandbox->entity_manager_auto_generated_data, 0);
 		editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 }
@@ -2178,6 +2197,12 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->modules_in_use.Initialize(sandbox_allocator, 0);
 	sandbox->database = AssetDatabaseReference(editor_state->asset_database, sandbox_allocator);
 
+	// Create the entity manager auto generator
+	ComponentFunctionsAutoGeneratorData* component_functions_auto_generator_data = (ComponentFunctionsAutoGeneratorData*)allocator->Allocate(sizeof(ComponentFunctionsAutoGeneratorData));
+	component_functions_auto_generator_data->editor_state = editor_state;
+	component_functions_auto_generator_data->sandbox_index = sandbox_index;
+	sandbox->entity_manager_auto_generated_data = component_functions_auto_generator_data;
+
 	// Create a graphics object
 	sandbox->runtime_descriptor.graphics = editor_state->RuntimeGraphics();
 	sandbox->runtime_descriptor.resource_manager = editor_state->RuntimeResourceManager();
@@ -2191,6 +2216,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 		sandbox->runtime_descriptor.entity_pool_power_of_two,
 		allocator
 	);
+	sandbox->scene_entities.SetAutoGenerateComponentFunctionsFunctor(ComponentFunctionsAutoGenerator, sandbox->entity_manager_auto_generated_data, 0);
 	editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
 	// Create the task manager that is going to be reused across runtime plays
@@ -2231,6 +2257,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 	sandbox->sandbox_world.speed_up_factor = sandbox->simulation_speed_up_factor;
 	sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
+	sandbox->sandbox_world.entity_manager->SetAutoGenerateComponentFunctionsFunctor(ComponentFunctionsAutoGenerator, sandbox->entity_manager_auto_generated_data, 0);
 	editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
 	// Initialize the selected entities

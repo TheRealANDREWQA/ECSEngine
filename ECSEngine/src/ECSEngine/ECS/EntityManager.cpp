@@ -477,8 +477,8 @@ namespace ECSEngine {
 	}
 
 	static void DeallocateGlobalComponent(EntityManager* entity_manager, unsigned int index) {
-		// If it has an allocator deallocate it
-		entity_manager->m_global_components_info[index].TryCallDeallocateFunction(entity_manager->m_global_components_data[index]);
+		// If it has an allocator deallocate it. We must use the main allocator, not the one from component info
+		entity_manager->m_global_components_info[index].TryCallDeallocateFunction(entity_manager->m_global_components_data[index], entity_manager->MainAllocator());
 		entity_manager->m_global_components_info[index].allocator = nullptr;
 
 		entity_manager->m_small_memory_manager.Deallocate(entity_manager->m_global_components_data[index]);
@@ -1929,7 +1929,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	EntityManager::EntityManager(const EntityManagerDescriptor& descriptor) : m_entity_pool(descriptor.entity_pool), m_memory_manager(descriptor.memory_manager),
-		m_archetypes(descriptor.memory_manager, ENTITY_MANAGER_DEFAULT_ARCHETYPE_COUNT)
+		m_archetypes(descriptor.memory_manager, ENTITY_MANAGER_DEFAULT_ARCHETYPE_COUNT), m_auto_generate_component_functions_functor(nullptr)
 	{
 		// Create a small memory manager in order to not fragment the memory of the main allocator
 		m_small_memory_manager = MemoryManager(
@@ -3159,6 +3159,10 @@ namespace ECSEngine {
 		// Copy the entities first using the entity pool
 		m_entity_pool->CopyEntities(entity_manager->m_entity_pool);
 
+		// Copy the auto generate component functions, before registering any components
+		m_auto_generate_component_functions_functor = entity_manager->m_auto_generate_component_functions_functor;
+		m_auto_generate_component_functions_data = CopyNonZero(&m_small_memory_manager, entity_manager->m_auto_generate_component_functions_data);
+
 		// Copy the unique components
 		if (m_unique_components.buffer != nullptr) {
 			// Deallocate it
@@ -3287,8 +3291,8 @@ namespace ECSEngine {
 				component_functions.copy_function != nullptr ? &component_functions : nullptr
 			);
 
-			// If it has a copy function, call it
-			component_info.TryCallCopyFunction(new_global_component, entity_manager->m_global_components_data[index], false);
+			// If it has a copy function, call it. We must use the MainAllocator() as the allocator to use.
+			component_info.TryCallCopyFunction(new_global_component, entity_manager->m_global_components_data[index], false, MainAllocator());
 		}
 
 		// Copy the actual archetypes now
@@ -5344,6 +5348,20 @@ namespace ECSEngine {
 		m_unique_components[component.value].size = size;
 		m_unique_components[component.value].name = StringCopy(SmallAllocator(), component_name);
 
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB);
+		ComponentFunctions auto_generated_functions;
+		if (m_auto_generate_component_functions_functor != nullptr && functions == nullptr) {
+			EntityManagerAutoGenerateComponentFunctionsFunctorData functor_data;
+			functor_data.component = component;
+			functor_data.component_name = component_name;
+			functor_data.component_type = ECS_COMPONENT_UNIQUE;
+			functor_data.temporary_allocator = &stack_allocator;
+			functor_data.compare_entry = nullptr;
+			functor_data.user_data = m_auto_generate_component_functions_data.buffer;
+			auto_generated_functions = m_auto_generate_component_functions_functor(&functor_data);
+			functions = &auto_generated_functions;
+		}
+
 		if (functions != nullptr) {
 			bool is_something_set = functions->allocator_size != 0 || functions->copy_function != nullptr
 				|| functions->deallocate_function != nullptr;
@@ -5402,6 +5420,25 @@ namespace ECSEngine {
 		m_shared_components[component.value].instances.Initialize(SmallAllocator(), 0);
 		m_shared_components[component.value].named_instances.Initialize(SmallAllocator(), 0);
 		m_shared_components[component.value].info.name = StringCopy(SmallAllocator(), component_name);
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB);
+		ComponentFunctions auto_generated_functions;
+		SharedComponentCompareEntry auto_generated_compare_entry;
+		if (m_auto_generate_component_functions_functor != nullptr && component_functions == nullptr) {
+			EntityManagerAutoGenerateComponentFunctionsFunctorData functor_data;
+			functor_data.component = component;
+			functor_data.component_name = component_name;
+			functor_data.component_type = ECS_COMPONENT_SHARED;
+			functor_data.temporary_allocator = &stack_allocator;
+			functor_data.compare_entry = &auto_generated_compare_entry;
+			functor_data.user_data = m_auto_generate_component_functions_data.buffer;
+			auto_generated_functions = m_auto_generate_component_functions_functor(&functor_data);
+			component_functions = &auto_generated_functions;
+
+			if (compare_entry.function == nullptr) {
+				compare_entry = auto_generated_compare_entry;
+			}
+		}
 
 		if (component_functions != nullptr) {
 			bool is_something_set = component_functions->allocator_size != 0 || component_functions->copy_function != nullptr
@@ -5464,6 +5501,21 @@ namespace ECSEngine {
 		component_info->data = {};
 		component_info->name = StringCopy(SmallAllocator(), component_name);
 		component_info->allocator = nullptr;
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB);
+		ComponentFunctions auto_generated_functions;
+		if (m_auto_generate_component_functions_functor != nullptr && component_functions == nullptr) {
+			EntityManagerAutoGenerateComponentFunctionsFunctorData functor_data;
+			functor_data.component = component;
+			functor_data.component_name = component_name;
+			functor_data.component_type = ECS_COMPONENT_GLOBAL;
+			functor_data.temporary_allocator = &stack_allocator;
+			functor_data.compare_entry = nullptr;
+			functor_data.user_data = m_auto_generate_component_functions_data.buffer;
+			auto_generated_functions = m_auto_generate_component_functions_functor(&functor_data);
+			component_functions = &auto_generated_functions;
+		}
+
 		if (component_functions != nullptr) {
 			component_info->SetComponentFunctions(component_functions, ComponentAllocator());
 		}
@@ -5706,11 +5758,24 @@ namespace ECSEngine {
 		m_memory_manager->Clear();
 		m_entity_pool->Reset();
 
+		// We need to maintain the auto generate function
+		ECS_STACK_VOID_STREAM(auto_generate_data_storage, ECS_KB * 8);
+		Stream<void> auto_generator_data = m_auto_generate_component_functions_data;
+		EntityManagerAutoGenerateComponentFunctionsFunctor auto_generator_functor = m_auto_generate_component_functions_functor;
+		if (m_auto_generate_component_functions_data.size > 0) {
+			auto_generate_data_storage.CopyOther(auto_generator_data, 1);
+			auto_generator_data = auto_generate_data_storage;
+		}
+
 		EntityManagerDescriptor descriptor;
 		descriptor.memory_manager = m_memory_manager;
 		descriptor.entity_pool = m_entity_pool;
 		descriptor.deferred_action_capacity = m_deferred_actions.capacity;
 		*this = EntityManager(descriptor);
+
+		// The auto generator functor data is allocated from the entity manager, so we need to reallocate it after the assignment
+		m_auto_generate_component_functions_functor = auto_generator_functor;
+		m_auto_generate_component_functions_data = CopyNonZero(&m_small_memory_manager, auto_generator_data);
 
 		// Change the allocator of the hierarchy allocator, is going to point to the temporary memory. The roots allocator needs to be changed too
 		// The same goes for the query cache with the entity manager reference
@@ -5810,6 +5875,16 @@ namespace ECSEngine {
 				m_unique_components[component_signature[index]].TryCallCopyFunction(component, data[index], deallocate_previous_buffers);
 			}
 		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::SetAutoGenerateComponentFunctionsFunctor(EntityManagerAutoGenerateComponentFunctionsFunctor functor, void* data, size_t data_size) {
+		if (m_auto_generate_component_functions_data.size > 0) {
+			m_small_memory_manager.Deallocate(m_auto_generate_component_functions_data.buffer);
+		}
+		m_auto_generate_component_functions_functor = functor;
+		m_auto_generate_component_functions_data = CopyNonZero(&m_small_memory_manager, Stream<void>(data, data_size));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

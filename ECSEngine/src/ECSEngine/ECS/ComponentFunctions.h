@@ -9,7 +9,7 @@ namespace ECSEngine {
 		void* function_data;
 		void* destination;
 		const void* source;
-		MemoryArena* allocator;
+		AllocatorPolymorphic allocator;
 		// If this is set, you must also deallocate the existing buffers
 		// (Or you can reallocate)
 		bool deallocate_previous;
@@ -22,7 +22,7 @@ namespace ECSEngine {
 		// This function data is passed in at registration time
 		void* function_data;
 		void* data;
-		MemoryArena* allocator;
+		AllocatorPolymorphic allocator;
 	};
 
 	// The function should deallocate all fields and optionally invalidate the fields

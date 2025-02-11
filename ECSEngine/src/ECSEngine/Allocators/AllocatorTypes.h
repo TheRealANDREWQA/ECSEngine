@@ -83,9 +83,9 @@ namespace ECSEngine {
 	struct ECSENGINE_API Copyable {
 		ECS_INLINE Copyable(size_t _byte_size) : byte_size(_byte_size) {}
 
-		virtual void CopyBuffers(const void* other, AllocatorPolymorphic allocator) = 0;
+		virtual void CopyImpl(const void* other, AllocatorPolymorphic allocator) = 0;
 
-		virtual void DeallocateBuffers(AllocatorPolymorphic allocator) = 0;
+		virtual void DeallocateImpl(AllocatorPolymorphic allocator) = 0;
 
 		ECS_INLINE void* GetChildData() const {
 			return (void*)((uintptr_t)this + sizeof(Copyable));

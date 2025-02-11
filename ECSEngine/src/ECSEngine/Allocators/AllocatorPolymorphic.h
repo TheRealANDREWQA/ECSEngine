@@ -436,6 +436,9 @@ namespace ECSEngine {
 		return ECS_ALLOCATOR_GET_REGIONS_FUNCTIONS[allocator.allocator_type](allocator.allocator, region_pointers, region_size, pointer_capacity);
 	}
 
+	// Returns the byte size of the allocator itself, (i.e. sizeof(LinearAllocator))
+	ECSENGINE_API size_t AllocatorStructureByteSize(ECS_ALLOCATOR_TYPE type);
+
 	// Only linear/stack/multipool/arena are considered base allocator types
 	ECSENGINE_API size_t BaseAllocatorByteSize(ECS_ALLOCATOR_TYPE type);
 

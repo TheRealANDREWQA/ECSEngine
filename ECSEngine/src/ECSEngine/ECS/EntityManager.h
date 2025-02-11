@@ -88,6 +88,24 @@ namespace ECSEngine {
 		SharedInstance instance;
 	};
 
+	struct EntityManagerAutoGenerateComponentFunctionsFunctorData {
+		AllocatorPolymorphic temporary_allocator;
+		Component component;
+		Stream<char> component_name;
+		ECS_COMPONENT_TYPE component_type;
+		void* user_data;
+
+		// This should be set when the component type is SHARED
+		SharedComponentCompareEntry* compare_entry;
+	};
+
+	// A functor that is called by the entity manager to generate component functions when a component that has missing
+	// Component functions is registered. This improves the QoL for developing inside the Editor for Global components,
+	// Since the user inside the module cannot specify auto generated component functions. For this reason, this functor
+	// Is added such that the editor sets this functor and the component functions will be auto generated even when the
+	// User hasn't specified the component functions
+	typedef ComponentFunctions (*EntityManagerAutoGenerateComponentFunctionsFunctor)(EntityManagerAutoGenerateComponentFunctionsFunctorData* data);
+
 	struct ECSENGINE_API EntityManager
 	{
 	public:
@@ -1845,6 +1863,12 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Sets the auto generator for the component functions. The data will be copied if data_size is different
+		// From 0, else it will reference it directly.
+		void SetAutoGenerateComponentFunctionsFunctor(EntityManagerAutoGenerateComponentFunctionsFunctor functor, void* data, size_t data_size);
+
+		// ---------------------------------------------------------------------------------------------------
+
 		// If the entity doesn't have the component, it will return nullptr
 		void* TryGetComponent(Entity entity, Component component);
 
@@ -2054,6 +2078,11 @@ namespace ECSEngine {
 		MemoryManager* m_memory_manager;
 		EntityPool* m_entity_pool;
 		ResizableLinearAllocator m_temporary_allocator;
+		
+		// See the comment for the functor for the reasoning behind these fields. The data for the functor
+		// Must be blittable, if the data size is different from 0
+		Stream<void> m_auto_generate_component_functions_data;
+		EntityManagerAutoGenerateComponentFunctionsFunctor m_auto_generate_component_functions_functor;
 	};
 
 	// Uses the internal indexing of the entity manager
