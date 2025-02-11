@@ -34,9 +34,9 @@ struct EditorShortcutFocus {
 		struct Wrapper : Copyable {
 			ECS_INLINE Wrapper(Lambda&& _lambda) : Copyable(sizeof(Lambda)), lambda(_lambda) {}
 
-			void CopyBuffers(const void* other, AllocatorPolymorphic allocator) override {}
+			void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {}
 
-			void DeallocateBuffers(AllocatorPolymorphic allocator) override {}
+			void DeallocateImpl(AllocatorPolymorphic allocator) override {}
 
 			Lambda lambda;
 		};

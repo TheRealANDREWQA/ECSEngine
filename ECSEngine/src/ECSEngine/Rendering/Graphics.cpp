@@ -3509,6 +3509,7 @@ namespace ECSEngine {
 				if (m_internal_resources.size.load(ECS_RELAXED) >= m_internal_resources.capacity) {
 					unsigned int new_capacity = initial_capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR;
 					void* allocation = m_allocator->Allocate(sizeof(GraphicsInternalResource) * new_capacity);
+					ECS_ASSERT(allocation != nullptr);
 					memcpy(allocation, m_internal_resources.buffer, sizeof(GraphicsInternalResource) * initial_capacity);
 					m_allocator->Deallocate(m_internal_resources.buffer);
 					m_internal_resources.InitializeFromBuffer(allocation, m_internal_resources.capacity, new_capacity);

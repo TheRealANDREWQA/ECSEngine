@@ -80,6 +80,12 @@ namespace ECSEngine {
 			inverse_delta_time = 1.0f / delta_time;
 		}
 
+		// Returns an allocator from which all global components which have buffers
+		// And require a type allocator use.
+		ECS_INLINE AllocatorPolymorphic GetGlobalComponentAllocator() const {
+			return entity_manager->MainAllocator();
+		}
+
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(World);
 
 		GlobalMemoryManager* memory;

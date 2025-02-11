@@ -1118,9 +1118,6 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 	ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(internal_type);
 	
 	Component component = { (short)internal_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-	ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
-	ComponentFunctions component_functions = GetReflectionTypeRuntimeComponentFunctions(internal_manager, internal_type, &stack_allocator);
-
 	// Lock the small memory manager in order to commit the type
 	if (lock != nullptr) {
 		lock->Lock();
@@ -1128,12 +1125,12 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 	// Check to see if it already exists. If it does, don't commit it
 	if (component_type == ECS_COMPONENT_UNIQUE) {
 		if (!entity_manager->ExistsComponent(component)) {
-			entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), component_name, &component_functions);
+			entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), component_name);
 		}
 	}
 	else if (component_type == ECS_COMPONENT_SHARED) {
 		if (!entity_manager->ExistsSharedComponent(component)) {
-			entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), component_name, &component_functions);
+			entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), component_name);
 		}
 	}
 	else if (component_type == ECS_COMPONENT_GLOBAL) { /* Nothing to be done here - the global components are handled separately */ }
@@ -2171,9 +2168,7 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 		FunctorData* data = (FunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsComponent(component_id)) {
-			ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
-			ComponentFunctions component_functions = GetSandboxComponentFunctions(data->editor_state, data->sandbox_index, type->name, &stack_allocator);
-			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name, &component_functions);
+			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name);
 		}
 	};
 
@@ -2188,11 +2183,7 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 		SharedFunctorData* data = (SharedFunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsSharedComponent(component_id)) {
-			ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32);
-			const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(data->editor_state, data->sandbox_index, type->name);
-			SharedComponentCompareEntry compare_entry;
-			ComponentFunctions component_functions = GetSandboxComponentFunctions(data->editor_state, data->sandbox_index, type->name, &stack_allocator, &compare_entry);
-			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name, &component_functions, compare_entry);
+			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), type->name);
 		}
 	};
 

@@ -316,6 +316,28 @@ namespace ECSEngine {
 		ECS_JUMP_TABLE(GetAllocatorRegionsAllocator)
 	};
 
+	size_t AllocatorStructureByteSize(ECS_ALLOCATOR_TYPE type) {
+		switch (type) {
+		case ECS_ALLOCATOR_LINEAR:
+			return sizeof(LinearAllocator);
+		case ECS_ALLOCATOR_STACK:
+			return sizeof(StackAllocator);
+		case ECS_ALLOCATOR_MULTIPOOL:
+			return sizeof(MultipoolAllocator);
+		case ECS_ALLOCATOR_MANAGER:
+			return sizeof(MemoryManager);
+		case ECS_ALLOCATOR_ARENA:
+			return sizeof(MemoryArena);
+		case ECS_ALLOCATOR_RESIZABLE_LINEAR:
+			return sizeof(ResizableLinearAllocator);
+		case ECS_ALLOCATOR_MEMORY_PROTECTED:
+			return sizeof(MemoryProtectedAllocator);
+		}
+
+		ECS_ASSERT(false, "Invalid allocator type when getting structure byte size");
+		return -1;
+	}
+
 	size_t BaseAllocatorByteSize(ECS_ALLOCATOR_TYPE type)
 	{
 		switch (type) {
@@ -597,7 +619,7 @@ namespace ECSEngine {
 		Copyable* allocation = (Copyable*)AllocateEx(allocator, CopySize());
 		// This will correctly copy the virtual table pointer
 		memcpy(allocation, this, sizeof(Copyable));
-		allocation->CopyBuffers(this, allocator);
+		allocation->CopyImpl(this, allocator);
 		return allocation;
 	}
 
@@ -614,7 +636,7 @@ namespace ECSEngine {
 
 	void CopyableDeallocate(Copyable* copyable, AllocatorPolymorphic allocator) {
 		if (copyable != nullptr) {
-			copyable->DeallocateBuffers(allocator);
+			copyable->DeallocateImpl(allocator);
 			DeallocateEx(allocator, copyable);
 		}
 	}

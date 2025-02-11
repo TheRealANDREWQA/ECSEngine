@@ -37,9 +37,8 @@ namespace ECSEngine {
 	FillReflectionComponentBlittableTypes(array_name);
 
 	// It needs the allocator to write some data for the functions to use
-	// It builds default functions to handle Streams and DataPointers
-	// If the reflection_manager is specified, it will search deeply into the user defined types
-	// That are referenced by this type
+	// The reflection manager must be stable, it will be referenced across the duration
+	// Of the component functions that is returned! (if a function is provided)
 	ECSENGINE_API ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(
 		const Reflection::ReflectionManager* reflection_manager, 
 		const Reflection::ReflectionType* type, 
@@ -47,8 +46,8 @@ namespace ECSEngine {
 	);
 
 	// The data needs to be inherited from the copy deallocate function!!
-	// It builds default functions to handle reflectable types - in case it is
-	// Blittable, it won't return a function, it will let the runtime use the default memcmp
+	// The reflection manager must be stable, it will be referenced across the duration
+	// Of the component functions that is returned! (if a function is provided)
 	ECSENGINE_API SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,

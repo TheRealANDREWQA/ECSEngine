@@ -18,3 +18,4 @@ enc_temp_folder
 
 branch.txt
 hash.txt
+.vscode/settings.json

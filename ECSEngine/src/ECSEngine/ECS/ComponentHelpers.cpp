@@ -105,19 +105,21 @@ namespace ECSEngine {
 	struct RuntimeComponentCopyDeallocateData : public Copyable {
 		ECS_INLINE RuntimeComponentCopyDeallocateData() : Copyable(sizeof(*this)) {}
 
-		void CopyBuffers(const void* other, AllocatorPolymorphic allocator) override {
+		void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
 			const RuntimeComponentCopyDeallocateData* other_data = (const RuntimeComponentCopyDeallocateData*)other;
 			type = other_data->type.CopyCoalesced(allocator);
-			reflection_manager.CreateStaticFrom(&other_data->reflection_manager, allocator);
+			reflection_manager = other_data->reflection_manager;
+			is_global_component = other_data->is_global_component;
 		}
 
-		void DeallocateBuffers(AllocatorPolymorphic allocator) override {
+		void DeallocateImpl(AllocatorPolymorphic allocator) override {
 			type.DeallocateCoalesced(allocator);
-			reflection_manager.DeallocateStatic(allocator);
 		}
 
+		// Cache this variable such that we don't spend time parsing the tag
+		bool is_global_component;
 		ReflectionType type;
-		ReflectionManager reflection_manager;
+		const ReflectionManager* reflection_manager;
 	};
 
 	// PERFORMANCE TODO: If the copy is too slow, we can determine
@@ -131,13 +133,18 @@ namespace ECSEngine {
 		options.allocator = copy_data->allocator;
 		options.custom_options.deallocate_existing_data = copy_data->deallocate_previous;
 		options.always_allocate_for_buffers = true;
-		CopyReflectionTypeInstance(&data->reflection_manager, &data->type, copy_data->source, copy_data->destination, &options);
+		if (data->is_global_component) {
+			// These 2 options are needed for global components
+			options.custom_options.initialize_type_allocators = true;
+			options.custom_options.use_field_allocators = true;
+		}
+		CopyReflectionTypeInstance(data->reflection_manager, &data->type, copy_data->source, copy_data->destination, &options);
 	}
 
 	static void ReflectionTypeRuntimeComponentDeallocate(ComponentDeallocateFunctionData* deallocate_data) {
 		RuntimeComponentCopyDeallocateData* data = (RuntimeComponentCopyDeallocateData*)deallocate_data->function_data;
-		// Do not reset buffers, the component is destroyed anyways
-		DeallocateReflectionTypeInstanceBuffers(&data->reflection_manager, &data->type, deallocate_data->data, deallocate_data->allocator, 1, 0, false);
+		// Do not reset the buffers, the component is destroyed anyways
+		DeallocateReflectionTypeInstanceBuffers(data->reflection_manager, &data->type, deallocate_data->data, deallocate_data->allocator, 1, 0, false);
 	}
 
 	// TODO: Is it worth having each component store a reflection manager?
@@ -171,19 +178,8 @@ namespace ECSEngine {
 				RuntimeComponentCopyDeallocateData* copyable = AllocateAndConstruct<RuntimeComponentCopyDeallocateData>(allocator);
 
 				copyable->type = type->CopyCoalesced(allocator);
-				memset(&copyable->reflection_manager, 0, sizeof(copyable->reflection_manager));
-
-				ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 512);
-				GetReflectionTypeDependentTypes(reflection_manager, type, dependent_types);
-				if (dependent_types.size != 0) {
-					// Allocate the reflection manager hash table
-					copyable->reflection_manager.type_definitions.InitializeSmallFixed(allocator, dependent_types.size);
-					for (unsigned int index = 0; index < dependent_types.size; index++) {
-						const ReflectionType* current_type = reflection_manager->GetType(dependent_types[index]);
-						copyable->reflection_manager.AddType(current_type, allocator);
-					}
-				}
-
+				copyable->is_global_component = is_global_with_buffers;
+				copyable->reflection_manager = reflection_manager;
 				component_functions.data = copyable;
 			}
 		}
@@ -200,7 +196,7 @@ namespace ECSEngine {
 		ECS_STACK_COMPONENT_BLITTABLE_TYPES(blittable_types);
 		ReflectionCustomTypeCompareOptions options;
 		options.blittable_types = blittable_types;
-		return CompareReflectionTypeInstances(&function_data->reflection_manager, &function_data->type, data->first, data->second, &options);
+		return CompareReflectionTypeInstances(function_data->reflection_manager, &function_data->type, data->first, data->second, &options);
 	}
 
 	SharedComponentCompareEntry GetReflectionTypeRuntimeCompareEntry(

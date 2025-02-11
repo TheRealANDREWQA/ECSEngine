@@ -6884,6 +6884,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			adjusted_options.always_allocate_for_buffers = options->always_allocate_for_buffers || options->custom_options.use_field_allocators;
 
 			// If the initialize allocators option is enabled, initialize the allocators before the main body
+			bool has_main_indirect_allocator = false;
 			if (options->custom_options.initialize_type_allocators) {
 				ECS_STACK_CAPACITY_STREAM(unsigned int, allocator_initialize_order, 64);
 				GetReflectionTypeAllocatorInitializeOrderSoaIndices(type, allocator_initialize_order);
@@ -6910,6 +6911,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							copy_data.passdown_info = nullptr;
 							ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR]->Copy(&copy_data);
 						}
+						else {
+							has_main_indirect_allocator = true;
+						}
 					}
 					else {
 						ECS_ASSERT(false, "Unhandled code path!");
@@ -6918,7 +6922,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			// Override the options allocator with the type allocator, if the field allocators are to be used
-			if (options->custom_options.use_field_allocators) {
+			// Do that only if the main allocator is a direct one, otherwise we need to wait to initialize
+			// It inside the loop, since if it is an AllocatorPolymorphic, it can allocate a new pointer
+			if (options->custom_options.use_field_allocators && !has_main_indirect_allocator) {
 				adjusted_options.allocator = GetReflectionTypeOverallAllocator(type, destination_data, options->allocator);
 			}
 
@@ -6931,7 +6937,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Go through the new type and try to get the data
 			for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
 				// If this field is an allocator, skip it
-				if (!IsReflectionTypeFieldAllocatorFromMisc(type, field_index)) {
+				if (!IsReflectionTypeFieldAllocatorFromMiscDirectOnly(type, field_index)) {
 					CopyReflectionFieldInstance(
 						reflection_manager,
 						type,
@@ -6940,6 +6946,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						destination_data,
 						&adjusted_options
 					);
+				}
+
+				if (field_index == 0 && options->custom_options.use_field_allocators && has_main_indirect_allocator) {
+					// Now override the allocator
+					adjusted_options.allocator = GetReflectionTypeOverallAllocator(type, destination_data, options->allocator);
 				}
 
 				// If there are padding bytes between this field and the next one, and they match in length, make sure to copy

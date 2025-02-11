@@ -55,7 +55,7 @@ void InitializeCollisionBroadphase(World* world, StaticThreadTaskInitializeInfo*
 
 	if (!world->entity_manager->ExistsGlobalComponent<FixedGrid>()) {
 		FixedGrid* fixed_grid = world->entity_manager->RegisterGlobalComponentCommit<FixedGrid>(nullptr);
-		fixed_grid->Initialize(world->memory, { 128, 128, 128 }, { 2, 2, 2 }, 10, NarrowphaseGridHandler, nullptr, 0);
+		fixed_grid->Initialize(world->GetGlobalComponentAllocator(), { 128, 128, 128 }, { 2, 2, 2 }, 10, NarrowphaseGridHandler, nullptr, 0);
 		fixed_grid->EnableLayerCollisions(0, 0);
 	}
 }
