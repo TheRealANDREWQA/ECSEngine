@@ -299,8 +299,7 @@ namespace ECSEngine {
 					template_type,
 					stream_data.buffer,
 					data->allocator,
-					stream_data.size,
-					data->reset_buffers
+					stream_data.size
 				);
 			}
 
@@ -375,8 +374,7 @@ namespace ECSEngine {
 			AllocatorPolymorphic set_allocator, 
 			AllocatorPolymorphic element_allocator,
 			Stream<char> template_type, 
-			const ReflectionDefinitionInfo& element_definition_info, 
-			bool reset_buffers
+			const ReflectionDefinitionInfo& element_definition_info
 		) {
 			if (!element_definition_info.is_blittable) {
 				struct DeallocateData {
@@ -384,13 +382,12 @@ namespace ECSEngine {
 					AllocatorPolymorphic allocator;
 					const ReflectionDefinitionInfo* definition_info;
 					Stream<char> template_type;
-					bool reset_buffers;
 				};
 
-				DeallocateData deallocate_data = { reflection_manager, element_allocator, &element_definition_info, template_type, reset_buffers };
+				DeallocateData deallocate_data = { reflection_manager, element_allocator, &element_definition_info, template_type };
 				SparseSetDeallocateUntypedElements(sparse_set, element_definition_info.byte_size, [](void* element, void* extra_data) {
 					DeallocateData* data = (DeallocateData*)extra_data;
-					DeallocateReflectionInstanceBuffers(data->reflection_manager, data->template_type, *data->definition_info, element, data->allocator, data->reset_buffers);
+					DeallocateReflectionInstanceBuffers(data->reflection_manager, data->template_type, *data->definition_info, element, data->allocator);
 				}, &deallocate_data);
 			}
 
@@ -439,8 +436,7 @@ namespace ECSEngine {
 					set_allocator,
 					data->allocator,
 					template_type,
-					definition_info,
-					false
+					definition_info
 				);
 			}
 
@@ -503,35 +499,22 @@ namespace ECSEngine {
 			Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 			ReflectionDefinitionInfo element_definition_info = SearchReflectionDefinitionInfo(data->reflection_manager, template_type);
 
+
+			// It is fine to type pun to any type, since the basic layout is the same
 			if (data->definition.StartsWith("SparseSet<")) {
-				alignas(void*) char set_memory[sizeof(SparseSet<char>)];
 				for (size_t index = 0; index < data->element_count; index++) {
 					void* current_source = OffsetPointer(data->source, index * sizeof(SparseSet<char>));
-					if (!data->reset_buffers) {
-						memcpy(set_memory, current_source, sizeof(set_memory));
-					}
-					SparseSetDeallocateElements(data->reflection_manager, current_source, data->allocator, data->allocator, template_type, element_definition_info, true);
-					if (!data->reset_buffers) {
-						memcpy(current_source, set_memory, sizeof(set_memory));
-					}
+					SparseSetDeallocateElements(data->reflection_manager, current_source, data->allocator, data->allocator, template_type, element_definition_info);
 				}
 			}
 			else if (data->definition.StartsWith("ResizableSparseSet<")) {
-				// It is fine to type pun to any type
-				alignas(void*) char set_memory[sizeof(ResizableSparseSet<char>)];
 				for (size_t index = 0; index < data->element_count; index++) {
 					void* current_source = OffsetPointer(data->source, index * sizeof(ResizableSparseSet<char>));
 					ResizableSparseSet<char>* set = (ResizableSparseSet<char>*)current_source;
-					if (!data->reset_buffers) {
-						memcpy(set_memory, current_source, sizeof(set_memory));
-					}
 					// We can use the same deallocate elements function, since the first field of the resizable is a normal set,
 					// That is the actual field that needs to change, the allocator doesn't. Use the resizable allocator to deallocate the elements
 					// TODO: At the moment, we are always using the sparse set allocator to allocate
-					SparseSetDeallocateElements(data->reflection_manager, current_source, set->allocator, data->allocator, template_type, element_definition_info, true);
-					if (!data->reset_buffers) {
-						memcpy(current_source, set_memory, sizeof(set_memory));
-					}
+					SparseSetDeallocateElements(data->reflection_manager, current_source, set->allocator, data->allocator, template_type, element_definition_info);
 				}
 			}
 			else {
@@ -631,9 +614,9 @@ namespace ECSEngine {
 				if (pointer != nullptr) {
 					DeallocateEx(data->allocator, pointer);
 				}
-				if (data->reset_buffers) {
-					data_pointer = nullptr;
-				}
+
+				// Make this pointer empty
+				data_pointer = nullptr;
 			}
 		}
 
@@ -952,8 +935,7 @@ namespace ECSEngine {
 			AllocatorPolymorphic allocator,
 			const HashTableTemplateArguments& template_arguments,
 			const ReflectionDefinitionInfo& value_definition_info,
-			const ReflectionDefinitionInfo& identifier_definition_info,
-			bool reset_buffers
+			const ReflectionDefinitionInfo& identifier_definition_info
 		) {
 			HashTableDefault<char>* destination = (HashTableDefault<char>*)hash_table;
 
@@ -971,8 +953,7 @@ namespace ECSEngine {
 								template_arguments.value_type, 
 								value_definition_info, 
 								OffsetPointer(value_type, table_index * value_definition_info.byte_size), 
-								allocator, 
-								reset_buffers
+								allocator
 							);
 						}
 						if (!identifier_definition_info.is_blittable) {
@@ -981,8 +962,7 @@ namespace ECSEngine {
 								template_arguments.identifier_type, 
 								identifier_definition_info, 
 								OffsetPointer(identifier_type, table_index * identifier_definition_info.byte_size), 
-								allocator, 
-								reset_buffers
+								allocator
 							);
 						}
 						return false;
@@ -997,7 +977,7 @@ namespace ECSEngine {
 						void* current_pair = OffsetPointer(pair_buffer, pair_info.x * (size_t)table_index);
 						if (!value_definition_info.is_blittable) {
 							// The value starts directly at the current pair
-							DeallocateReflectionInstanceBuffers(reflection_manager, template_arguments.value_type, value_definition_info, current_pair, allocator, reset_buffers);
+							DeallocateReflectionInstanceBuffers(reflection_manager, template_arguments.value_type, value_definition_info, current_pair, allocator);
 						}
 						if (!identifier_definition_info.is_blittable) {
 							DeallocateReflectionInstanceBuffers(
@@ -1005,8 +985,7 @@ namespace ECSEngine {
 								template_arguments.identifier_type, 
 								identifier_definition_info, 
 								OffsetPointer(current_pair, value_definition_info.byte_size + pair_info.y),
-								allocator, 
-								reset_buffers
+								allocator
 							);
 						}
 						return false;
@@ -1014,7 +993,7 @@ namespace ECSEngine {
 				}
 			}
 
-			// We can call deallocate no matter what the hash table type is
+			// We can call deallocate no matter what the hash table type is. The deallocate will reset the buffers as we
 			destination->Deallocate(allocator);
 		}
 
@@ -1069,7 +1048,7 @@ namespace ECSEngine {
 			ReflectionDefinitionInfo identifier_definition_info = HashTableGetIdentifierDefinitionInfo(data->reflection_manager, template_parameters);
 
 			if (data->options.deallocate_existing_data) {
-				HashTableDeallocateWithElements(data->reflection_manager, destination, data->allocator, template_parameters, value_definition_info, identifier_definition_info, false);
+				HashTableDeallocateWithElements(data->reflection_manager, destination, data->allocator, template_parameters, value_definition_info, identifier_definition_info);
 			}
 
 			// We need to have separate branches for SoA
@@ -1329,7 +1308,7 @@ namespace ECSEngine {
 			size_t hash_table_byte_size = sizeof(HashTableDefault<char>);
 			for (size_t index = 0; index < data->element_count; index++) {
 				void* current_source = OffsetPointer(data->source, index * hash_table_byte_size);
-				HashTableDeallocateWithElements(data->reflection_manager, current_source, data->allocator, template_arguments, value_info, identifier_info, data->reset_buffers);
+				HashTableDeallocateWithElements(data->reflection_manager, current_source, data->allocator, template_arguments, value_info, identifier_info);
 			}
 		}
 
@@ -1360,11 +1339,14 @@ namespace ECSEngine {
 				cache_info->last_table_index = 0;
 				cache_info->last_user_index = 0;
 
-				if (data->element_name_type == STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE)) {
-					data->element_name_index = ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE;
+				// If the element name type is not specified, error, since it's better for the user to be explicit about this
+				//ECS_ASSERT(data->element_name_type.size > 0, "Hash table reflection custom type unspecified element name type for GetElement call!");
+
+				if (data->element_name_type == STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER)) {
+					data->element_name_index = ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER;
 				}
 				else {
-					data->element_name_index = ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER;
+					data->element_name_index = ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE;
 				}
 
 				if (cache_info->is_soa) {
@@ -1461,10 +1443,10 @@ namespace ECSEngine {
 			size_t table_index = -1;
 			if (cache_info->is_soa) {
 				if (data->element_name_index == ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) {
-					table_index = SearchBytesEx(table->m_buffer, table->GetExtendedCapacity(), data->source, data->element_byte_size);
+					table_index = SearchBytesEx(table->m_buffer, table->GetExtendedCapacity(), data->element, data->element_byte_size);
 				}
 				else {
-					table_index = SearchBytesEx(table->m_identifiers, table->GetExtendedCapacity(), data->source, data->element_byte_size);
+					table_index = SearchBytesEx(table->m_identifiers, table->GetExtendedCapacity(), data->element, data->element_byte_size);
 				}
 			}
 			else {
@@ -1477,7 +1459,7 @@ namespace ECSEngine {
 							pointer = OffsetPointer(pair, cache_info->pair_identifier_offset);
 						}
 
-						if (memcmp(data->source, pointer, data->element_byte_size) == 0) {
+						if (memcmp(data->element, pointer, data->element_byte_size) == 0) {
 							table_index = index;
 							break;
 						}
@@ -1609,12 +1591,12 @@ namespace ECSEngine {
 
 			DeckPowerOfTwo<char>* decks = (DeckPowerOfTwo<char>*)data->source;
 			for (size_t index = 0; index < data->element_count; index++) {
-				DeckPowerOfTwo<char> initial_deck = decks[index];
+				AllocatorPolymorphic initial_deck_allocator = decks[index].buffers.allocator;
 
 				// Iterate over the chunks only if the elements themselves are not blittable
 				if (!definition_info.is_blittable) {
 					for (size_t subindex = 0; subindex < decks[index].buffers.size; subindex++) {
-						DeallocateReflectionInstanceBuffers(data->reflection_manager, template_arguments[0], definition_info, decks[index].buffers[subindex].buffer, data->allocator, decks[index].buffers[subindex].size, data->reset_buffers);
+						DeallocateReflectionInstanceBuffers(data->reflection_manager, template_arguments[0], definition_info, decks[index].buffers[subindex].buffer, data->allocator, decks[index].buffers[subindex].size);
 					}
 				}
 
@@ -1623,12 +1605,7 @@ namespace ECSEngine {
 				decks[index].Deallocate();
 
 				// Restore the previous allocator afterwards
-				decks[index].buffers.allocator = initial_deck.buffers.allocator;
-
-				if (!data->reset_buffers) {
-					// Copy back the initial values
-					memcpy(&decks[index], &initial_deck, sizeof(initial_deck));
-				}
+				decks[index].buffers.allocator = initial_deck_allocator;
 			}
 		}
 

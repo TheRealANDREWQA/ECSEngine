@@ -52,6 +52,13 @@ namespace ECSEngine {
 		}
 
 		CreateBaseAllocators(arena->m_data_buffer, nested_info, buffer, allocator_count);
+		// Set the sub allocators to be non crashing on failure
+		size_t base_allocator_byte_size = AllocatorStructureByteSize(nested_info.allocator_type);
+		for (size_t index = 0; index < allocator_count; index++) {
+			AllocatorBase* base_allocator = (AllocatorBase*)OffsetPointer(buffer, base_allocator_byte_size * index);
+			base_allocator->ExitCrashOnAllocationFailure();
+		}
+
 		arena->m_allocator_count = allocator_count;
 		arena->m_lock.Clear();
 		arena->m_allocators = buffer;
@@ -111,7 +118,12 @@ namespace ECSEngine {
 			return allocation;
 		}
 
-		return loop(0, current_index);
+		allocation = loop(0, current_index);
+		if (allocation == nullptr) {
+			ECS_ASSERT(arena->m_crash_on_allocation_failure, "MemoryArena allocation cannot be fulfilled");
+		}
+
+		return allocation;
 	}
 
 	template<bool thread_safe, bool trigger_error_if_not_found>
@@ -170,6 +182,10 @@ namespace ECSEngine {
 		}
 
 		ECS_ASSERT(index < arena->m_allocator_count, "Invalid reallocation for memory arena");
+
+		if (reallocation == nullptr) {
+			ECS_ASSERT(arena->m_crash_on_allocation_failure, "MemoryArena reallocation could not be fulfilled");
+		}
 
 		if (arena->m_debug_mode) {
 			TrackedAllocation tracked;

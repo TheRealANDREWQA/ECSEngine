@@ -17,12 +17,16 @@ namespace ECSEngine {
 		if (allocator->linear_allocators) {
 			LinearAllocator* initial_allocator = (LinearAllocator*)Malloc(sizeof(LinearAllocator));
 			*initial_allocator = LinearAllocator(virtual_allocation, allocator->chunk_size);
+			// Set this allocator to not crash on failure
+			initial_allocator->ExitCrashOnAllocationFailure();
 			return initial_allocator;
 		}
 		else {
 			MultipoolAllocator* initial_allocator = (MultipoolAllocator*)Malloc(sizeof(MultipoolAllocator));
 			void* block_range_buffer = Malloc(MultipoolAllocator::MemoryOf(MULTIPOOL_BLOCK_COUNT));
 			*initial_allocator = MultipoolAllocator(virtual_allocation, block_range_buffer, allocator->chunk_size, MULTIPOOL_BLOCK_COUNT);
+			// Set this allocator to not crash on failure
+			initial_allocator->ExitCrashOnAllocationFailure();
 			return initial_allocator;
 		}
 	}
@@ -125,6 +129,7 @@ namespace ECSEngine {
 
 		if (chunk_size > 0) {
 			if (size > chunk_size) {
+				ECS_ASSERT(m_crash_on_allocation_failure, "MemoryProtectedAllocator allocation size exceeds the chunk size");
 				return nullptr;
 			}
 
@@ -152,6 +157,11 @@ namespace ECSEngine {
 			count++;
 
 			allocation = virtual_allocation;
+		}
+
+		if (allocation == nullptr) {
+			ECS_ASSERT(m_crash_on_allocation_failure, "MemoryProtectedAllocation allocation could not be fulfilled");
+			return nullptr;
 		}
 
 		if (m_debug_mode) {
@@ -276,6 +286,9 @@ namespace ECSEngine {
 
 			m_debug_mode = previous_debug_mode;
 		}
+
+		// Crashing on allocation failure is handled through the allocate function, although the failure string
+		// Might be a bit incorrect (it will says allocation instead of reallocation, but the gist is the same)
 
 		if (m_debug_mode) {
 			TrackedAllocation tracked;

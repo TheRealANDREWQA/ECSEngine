@@ -259,7 +259,7 @@ namespace ECSEngine {
 
 			// Skip the type definition
 			if (typedef_whitespace.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find whitespace after typedef.", typedef_range);
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef \"{#}\" alias. Could not find whitespace after typedef.", typedef_range);
 				WriteErrorMessage(data, message);
 				return;
 			}
@@ -268,7 +268,7 @@ namespace ECSEngine {
 			// With whitespaces eliminated. This will take into account template types as well.
 			Stream<char> definition_start = SkipWhitespaceEx(typedef_whitespace);
 			if (definition_start.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find definition start.", typedef_range);
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef \"{#}\" alias. Could not find definition start.", typedef_range);
 				WriteErrorMessage(data, message);
 				return;
 			}
@@ -277,28 +277,28 @@ namespace ECSEngine {
 			Stream<char> typedef_name_end = SkipWhitespaceEx(typedef_range, -1);
 			Stream<char> typedef_name_start = SkipCodeIdentifier(typedef_name_end, -1);
 			if (typedef_name_start.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could not find name start.", typedef_range);
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef \"{#}\" alias. Could not find name start.", typedef_range);
 				WriteErrorMessage(data, message);
 				return;
 			}
 
 			Stream<char> typedef_name = { typedef_name_start.buffer + typedef_name_start.size, typedef_name_end.size - typedef_name_start.size };
 			if (typedef_name.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. The name is empty.", typedef_range);
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef \"{#}\" alias. The name is empty.", typedef_range);
 				WriteErrorMessage(data, message);
 				return;
 			}
 
 			Stream<char> definition_end = SkipWhitespaceEx(typedef_name_start, -1);
 			if (definition_end.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. Could find definition end.", typedef_range);
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef \"{#}\" alias. Could find definition end.", typedef_range);
 				WriteErrorMessage(data, message);
 				return;
 			}
 
 			Stream<char> definition = { definition_start.buffer, PointerDifference(definition_end.buffer + definition_end.size, definition_start.buffer) / sizeof(char) };
 			if (definition.size == 0) {
-				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef {#} alias. The definition is empty.", typedef_range);
+				ECS_FORMAT_TEMP_STRING(message, "Invalid typedef \"{#}\" alias. The definition is empty.", typedef_range);
 				WriteErrorMessage(data, message);
 				return;
 			}
@@ -553,7 +553,7 @@ namespace ECSEngine {
 				unsigned short before_pointer_offset = pointer_offset;
 				uint2 bracket_indices = TokenizeFindMatchingPair(string, "<", ">", field_tokens);
 				if (bracket_indices.x == -1 || bracket_indices.y == -1) {
-					ECS_FORMAT_TEMP_STRING(temp_message, "Incorrect {#} field, missing > or unmatched template brackets.", stream_name);
+					ECS_FORMAT_TEMP_STRING(temp_message, "Incorrect \"{#}\" field, missing > or unmatched template brackets.", stream_name);
 					WriteErrorMessage(data, temp_message);
 					return;
 				}
@@ -697,7 +697,7 @@ namespace ECSEngine {
 			}
 
 			if (type.fields.size > MAX_PARSING_TYPE_ENTRIES) {
-				ECS_FORMAT_TEMP_STRING(error_message, "Type {#} exceeded the maximum amount of reflection fields.", type.name);
+				ECS_FORMAT_TEMP_STRING(error_message, "Type \"{#}\" exceeded the maximum amount of reflection fields.", type.name);
 				WriteErrorMessage(data, error_message);
 				return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 			}
@@ -722,12 +722,12 @@ namespace ECSEngine {
 							uint2 parenthese_pair_indices = TokenizeFindMatchingPair(string, "(", ")", tag_tokens.GetSubrangeUntilEnd(current_token));
 							if (parenthese_pair_indices.y == -1) {
 								// Error
-								ECS_FORMAT_TEMP_STRING(error_message, "Unmatched parenthese for tag a for type {#}", type.name);
+								ECS_FORMAT_TEMP_STRING(error_message, "Unmatched parenthese for tag a for type \"{#}\"", type.name);
 								WriteErrorMessage(data, error_message);
 								return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 							}
-							// Advance to that token
-							current_token += parenthese_pair_indices.y + 1;
+							// Advance to the ')' token, such that we remain in bounds if this is the last entry
+							current_token += parenthese_pair_indices.y;
 						}
 
 						// Tags are separated by comma, when a tag separation comma is detected, change the characters
@@ -739,6 +739,8 @@ namespace ECSEngine {
 							}
 						}
 
+						// Advance to the next token
+						current_token++;
 					}
 					field.tag = string.GetStreamForSubrange(tag_tokens);
 					data->total_memory += field.tag.size;
@@ -784,7 +786,7 @@ namespace ECSEngine {
 						info.stream_alignment = GetReflectionFieldTypeAlignment(info.basic_type);
 						int64_t basic_type_count = ConvertCharactersToInt(embedded_array_string);
 						if (basic_type_count > USHORT_MAX) {
-							ECS_FORMAT_TEMP_STRING(error_message, "Type {#} has field {#} with an embedded array size that is too large.", type.name, field.name);
+							ECS_FORMAT_TEMP_STRING(error_message, "Type \"{#}\" has field \"{#}\" with an embedded array size that is too large.", type.name, field.name);
 							WriteErrorMessage(data, error_message);
 							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 						}
@@ -804,7 +806,7 @@ namespace ECSEngine {
 						embedded_size.body = embedded_array_string;
 
 						data->embedded_array_size.Add(embedded_size);
-						//ECS_FORMAT_TEMP_STRING(error_message, "Type {#} has field {#} with a possible embedded array but the size is not a number.", type.name, field.name);
+						//ECS_FORMAT_TEMP_STRING(error_message, "Type \"{#}\" has field \"{#}\" with a possible embedded array but the size is not a number.", type.name, field.name);
 						//WriteErrorMessage(data, error_message);
 						//return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 					}
@@ -962,7 +964,7 @@ namespace ECSEngine {
 						fields_reflect_subrange
 					);
 					if (fields_end_macro_index == -1) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Unmatched ECS_FIELDS_START_REFLECT for type {#}", type.name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Unmatched ECS_FIELDS_START_REFLECT for type \"{#}\"", type.name);
 						WriteErrorMessage(data, error_message);
 						return;
 					}
@@ -974,7 +976,7 @@ namespace ECSEngine {
 					ECS_TOKENIZE_MATCHER_RESULT match_result = StructRuleMatcher.MatchRulesWithFind(body_tokens, match_subrange, &struct_matcher_data);
 					if (match_result != ECS_TOKENIZE_MATCHER_SUCCESS) {
 						if (match_result == ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL) {
-							ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's {#} tokens", type.name);
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's \"{#}\" tokens", type.name);
 							WriteErrorMessage(data, error_message);
 						}
 						return;
@@ -988,7 +990,7 @@ namespace ECSEngine {
 				ECS_TOKENIZE_MATCHER_RESULT match_result = StructRuleMatcher.MatchRulesWithFind(body_tokens, body_tokens.AsSubrange(), &struct_matcher_data);
 				if (match_result != ECS_TOKENIZE_MATCHER_SUCCESS) {
 					if (match_result == ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's {#} tokens", type.name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's \"{#}\" tokens", type.name);
 						WriteErrorMessage(data, error_message);
 					}
 					return;
@@ -1013,11 +1015,11 @@ namespace ECSEngine {
 			data->total_memory += type_named_soa.MemoryOf(type_named_soa.size);
 			for (unsigned int index = 0; index < type_named_soa.size; index++) {
 				auto output_error = [&](Stream<char> field_type, Stream<char> field_name) {
-					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: {#} {#} doesn't exist. ", type.name, field_type, field_name);
+					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type \"{#}\": field \"{#} {#}\" doesn't exist. ", type.name, field_type, field_name);
 					WriteErrorMessage(data, message);
 				};
 				auto output_type_error = [&](Stream<char> field_name) {
-					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: field {#} invalid type {#} for size/capacity. ", type.name, field_name);
+					ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type \"{#}\": field \"{#}\" invalid type \"{#}\" for size/capacity. ", type.name, field_name);
 					WriteErrorMessage(data, message);
 				};
 
@@ -1064,7 +1066,7 @@ namespace ECSEngine {
 					}
 					ECS_ASSERT(allocator_field_index <= UCHAR_MAX);
 					if (!IsReflectionTypeFieldAllocator(&type, allocator_field_index)) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: allocator field {#} is not an allocator. ", type.name, named_soa->allocator_field_name);
+						ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type \"{#}\": allocator field \"{#}\" is not an allocator. ", type.name, named_soa->allocator_field_name);
 						WriteErrorMessage(data, message);
 						return;
 					}
@@ -1080,7 +1082,7 @@ namespace ECSEngine {
 					ECS_ASSERT(current_field_index <= UCHAR_MAX);
 					// Verify that this is a pointer field
 					if (type.fields[current_field_index].info.stream_type != ReflectionStreamFieldType::Pointer) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type {#}: field {#} is not a pointer. ", type.name, type.fields[current_field_index].name);
+						ECS_FORMAT_TEMP_STRING(message, "Invalid SoA specification for type \"{#}\": field \"{#}\" is not a pointer. ", type.name, type.fields[current_field_index].name);
 						WriteErrorMessage(data, message);
 						return;
 					}
@@ -1104,7 +1106,7 @@ namespace ECSEngine {
 					// Ensure it is a pointer field or a user defined type (which should be a custom type,
 					// But we are not checking that here)
 					if (type.fields[index].info.stream_type != ReflectionStreamFieldType::Pointer && type.fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has this tag but it is not a pointer or a custom type. ", type.name, type.fields[index].name);
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type \"{#}\": field \"{#}\" has this tag but it is not a pointer or a custom type. ", type.name, type.fields[index].name);
 						WriteErrorMessage(data, message);
 						return;
 					}
@@ -1114,14 +1116,14 @@ namespace ECSEngine {
 					ECS_STACK_CAPACITY_STREAM(Stream<char>, parameter_splits, 8);
 					SplitString(parameters, ",", &parameter_splits);
 					if (parameter_splits.size > 2) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has more than two parameter. ", type.name, type.fields[index].name);
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type \"{#}\": field \"{#}\" has more than two parameter. ", type.name, type.fields[index].name);
 						WriteErrorMessage(data, message);
 						return;
 					}
 
 					if (parameter_splits.size == 2) {
 						if (!parameter_splits[1].StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
-							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type {#}: field {#} has 2 parameters, but the second one has to be ECS_CUSTOM_TYPE_ELEMENT",
+							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type \"{#}\": field \"{#}\" has 2 parameters, but the second one has to be ECS_CUSTOM_TYPE_ELEMENT. ",
 								type.name, type.fields[index].name);
 							WriteErrorMessage(data, message);
 							return;
@@ -1138,13 +1140,13 @@ namespace ECSEngine {
 					ECS_STACK_CAPACITY_STREAM(Stream<char>, parameter_splits, 8);
 					SplitString(parameters, ",", &parameter_splits);
 					if (parameter_splits.size == 0) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has 0 parameters, but one is mandatory. ", 
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type \"{#}\": field \"{#}\" has 0 parameters, but one is mandatory. ", 
 							type.name, type.fields[index].name);
 						WriteErrorMessage(data, message);
 						return;
 					}
 					else if (parameter_splits.size > 2) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has mora than 2 parameters, which is the maximum. ",
+						ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type \"{#}\": field \"{#}\" has mora than 2 parameters, which is the maximum. ",
 							type.name, type.fields[index].name);
 						WriteErrorMessage(data, message);
 						return;
@@ -1152,7 +1154,7 @@ namespace ECSEngine {
 					else if (parameter_splits.size == 2) {
 						// Check that the second parameter is the custom macro
 						if (!parameter_splits[1].StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
-							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type {#}: field {#} has 2 parameters," 
+							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type \"{#}\": field \"{#}\" has 2 parameters," 
 								" but the second one should be ECS_CUSTOM_TYPE_ELEMENT. ",
 								type.name, type.fields[index].name);
 							WriteErrorMessage(data, message);
@@ -1169,6 +1171,7 @@ namespace ECSEngine {
 			// Check for type allocator tags. There must be at max one primary allocator, and if there is, create a misc entry for it
 			size_t type_overall_primary_allocator_index = -1;
 			bool is_type_overall_primary_allocator_direct = true;
+			bool is_type_overall_primary_allocator_reference = false;
 			for (size_t index = 0; index < type.fields.size; index++) {
 				if (IsReflectionTypeOverallAllocatorByTag(&type, index)) {
 					// If the field is marked as skipped, then don't consider it
@@ -1183,7 +1186,7 @@ namespace ECSEngine {
 					if (!IsReflectionTypeFieldAllocator(&type, index)) {
 						// If it is not an allocator, it must be the first field of its type. Fail if it isn't.
 						if (index != 0) {
-							ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} specified as type allocator, which is a nested main allocator, but this construct is allowed only if the referenced field is the first field inside its type. ", 
+							ECS_FORMAT_TEMP_STRING(message, "Type \"{#}\" has field \"{#}\" specified as type allocator, which is a nested main allocator, but this construct is allowed only if the referenced field is the first field inside its type. ", 
 								type.name, type.fields[index].name);
 							WriteErrorMessage(data, message);
 							return;
@@ -1191,7 +1194,7 @@ namespace ECSEngine {
 
 						// If the field is not user defined, we can quit now, since it is invalid by default
 						if (type.fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
-							ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} with definition {#} specified as type allocator, which is a nested main allocator, but the referenced field is not valid - not a user defined type. ",
+							ECS_FORMAT_TEMP_STRING(message, "Type \"{#}\" has field \"{#}\" with definition \"{#}\" specified as type allocator, which is a nested main allocator, but the referenced field is not valid - not a user defined type. ",
 								type.name, type.fields[index].name, type.fields[index].definition);
 							WriteErrorMessage(data, message);
 							return;
@@ -1202,16 +1205,20 @@ namespace ECSEngine {
 
 					if (type_overall_primary_allocator_index != -1) {
 						// Fail, there are multiple valid entries
-						ECS_FORMAT_TEMP_STRING(message, "Type {#} has multiple type allocators specified, but only one should be. ", type.name);
+						ECS_FORMAT_TEMP_STRING(message, "Type \"{#}\" has multiple type allocators specified, but only one should be. ", type.name);
 						WriteErrorMessage(data, message);
 						return;
 					}
 
-					// If it is marked as a reference, fail as well
+					// It can be a reference allocator at the same time, now it is allowed
 					if (IsReflectionTypeFieldAllocatorAsReference(&type, index)) {
-						ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} specified as type allocator, but it is marked as a reference allocator as well, which is illegal. ", type.name, type.fields[index].name);
-						WriteErrorMessage(data, message);
-						return;
+						if (type.fields[index].definition != STRING(AllocatorPolymorphic)) {
+							ECS_FORMAT_TEMP_STRING(message, "Type \"{#}\" has field \"{#}\" marked as a reference allocator (main allocator as well), but it is not an AllocatorPolymorphic. ", type.name, type.fields[index].name);
+							WriteErrorMessage(data, message);
+							return;
+						}
+
+						is_type_overall_primary_allocator_reference = true;
 					}
 
 					// Update the overall index
@@ -1224,6 +1231,7 @@ namespace ECSEngine {
 				ReflectionTypeMiscAllocator misc_allocator;
 				misc_allocator.field_index = type_overall_primary_allocator_index;
 				misc_allocator.modifier = ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN;
+				misc_allocator.modifier |= is_type_overall_primary_allocator_reference ? ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE : ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_NONE;
 				misc_allocator.is_direct_allocator = is_type_overall_primary_allocator_direct;
 				misc_allocator.main_allocator_offset = 0;
 				misc_allocator.main_allocator_definition = {};
@@ -1243,9 +1251,9 @@ namespace ECSEngine {
 					ReflectionTypeMiscAllocator misc_allocator;
 					misc_allocator.modifier = IsReflectionTypeFieldAllocatorAsReference(&type, index) ? ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE : ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_NONE;
 					// Ensure that if this is a reference, that the definition is AllocatorPolymorphic
-					if (misc_allocator.modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE) {
+					if (HasFlag(misc_allocator.modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE)) {
 						if (type.fields[index].definition != STRING(AllocatorPolymorphic)) {
-							ECS_FORMAT_TEMP_STRING(message, "Type {#} has field {#} marked as a reference allocator, but it is not an AllocatorPolymorphoc. ", type.name, type.fields[index].name);
+							ECS_FORMAT_TEMP_STRING(message, "Type \"{#}\" has field \"{#}\" marked as a reference allocator, but it is not an AllocatorPolymorphic. ", type.name, type.fields[index].name);
 							WriteErrorMessage(data, message);
 							return;
 						}
@@ -1265,13 +1273,13 @@ namespace ECSEngine {
 				if (field_allocator_name.size > 0) {
 					unsigned int field_index = type.FindField(field_allocator_name);
 					if (field_index == -1) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid field allocator for field {#} specified for type {#}. There is no field named {#}. ", type.fields[index].name, type.name, field_allocator_name);
+						ECS_FORMAT_TEMP_STRING(message, "Invalid field allocator for field \"{#}\" specified for type \"{#}\". There is no field named \"{#}\". ", type.fields[index].name, type.name, field_allocator_name);
 						WriteErrorMessage(data, message);
 						return;
 					}
 					
 					if (!IsReflectionTypeFieldAllocator(&type, index)) {
-						ECS_FORMAT_TEMP_STRING(message, "Invalid field allocator for field {#} specified for type {#}. The field {#} is not an allocator. ", type.fields[index].name, type.name, field_allocator_name);
+						ECS_FORMAT_TEMP_STRING(message, "Invalid field allocator for field \"{#}\" specified for type \"{#}\". The field \"{#}\" is not an allocator. ", type.fields[index].name, type.name, field_allocator_name);
 						WriteErrorMessage(data, message);
 						return;
 					}
@@ -1290,7 +1298,7 @@ namespace ECSEngine {
 			// Always the first entry will be the name of the entry
 			if (enum_.original_fields.size == MAX_PARSING_ENUM_ENTRIES) {
 				// Exit the parsing, we have an error
-				ECS_FORMAT_TEMP_STRING(error_message, "Enum {#} reached the maximum number of entries allowed of {#}.", enum_.name, MAX_PARSING_ENUM_ENTRIES);
+				ECS_FORMAT_TEMP_STRING(error_message, "Enum \"{#}\" reached the maximum number of entries allowed of \"{#}\".", enum_.name, MAX_PARSING_ENUM_ENTRIES);
 				WriteErrorMessage(parse_data, error_message);
 				return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 			}
@@ -1401,7 +1409,7 @@ namespace ECSEngine {
 					// Parallel streams. Early exit if it doesn't have the appropriate token count
 					unsigned int minimum_token_count = 1 /* ECS_SOA_REFLECT */ + 2 /* () */ + 5 /*arguments*/ + 4 /*separating commas*/;
 					if (data->subrange.count < minimum_token_count) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. The minimum amount of parameters is not satisfied", type_name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type \"{#}\". The minimum amount of parameters is not satisfied", type_name);
 						WriteErrorMessage(parse_data, error_message);
 						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 					}
@@ -1414,7 +1422,7 @@ namespace ECSEngine {
 
 					// If the parenthesis are not at their appropriate locations, fail
 					if (data->string[parse_subrange[1]] != "(" || data->string[parse_subrange[parse_subrange.count - 1]] != ")") {
-						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. The parenthesis are missing", type_name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type \"{#}\". The parenthesis are missing", type_name);
 						WriteErrorMessage(parse_data, error_message);
 						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 					}
@@ -1427,7 +1435,7 @@ namespace ECSEngine {
 						// If the splits contain more than 1 token each, except the last one, error.
 						for (unsigned int index = 0; index < soa_parameters.size - 1; index++) {
 							if (soa_parameters[index].count != 1) {
-								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFELCT for type {#}. A parameter contains multiple tokens, when it shouldn't", type_name);
+								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFELCT for type \"{#}\". A parameter contains multiple tokens, when it shouldn't", type_name);
 								WriteErrorMessage(parse_data, error_message);
 								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 							}
@@ -1447,14 +1455,14 @@ namespace ECSEngine {
 						if (last_parameter.count != 1) {
 							// There should be 4 tokens here for the ECS_FIELD_ALLOCATOR
 							if (last_parameter.count != 4) {
-								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. The last parameter contains {#} tokens, but expected 4 for ECS_FIELD_ALLOCATOR", type_name, last_parameter.count);
+								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type \"{#}\". The last parameter contains {#} tokens, but expected 4 for ECS_FIELD_ALLOCATOR", type_name, last_parameter.count);
 								WriteErrorMessage(parse_data, error_message);
 								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 							}
 
 							// Ensure that it is the field allocator specification
 							if (data->string[last_parameter[0]] != STRING(ECS_FIELD_ALLOCATOR) || data->string[last_parameter[1]] != "(" || data->string[last_parameter[last_parameter.count - 1]] != ")") {
-								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. The last parameter contains multiple tokens, but it is not a ECS_FIELD_ALLOCATOR as expected", type_name);
+								ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type \"{#}\". The last parameter contains multiple tokens, but it is not a ECS_FIELD_ALLOCATOR as expected", type_name);
 								WriteErrorMessage(parse_data, error_message);
 								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 							}
@@ -1474,7 +1482,7 @@ namespace ECSEngine {
 						call_data->last_type_named_soa.AddAssert(&named_soa);
 					}
 					else {
-						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type {#}. It exceeded the maximum amount of parallel streams allowed", type_name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_SOA_REFLECT for type \"{#}\". It exceeded the maximum amount of parallel streams allowed", type_name);
 						WriteErrorMessage(parse_data, error_message);
 						return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 					}
@@ -2068,21 +2076,21 @@ namespace ECSEngine {
 					const ReflectionParsedTypedef& typedef_entry = data[data_index].typedefs[typedef_index];
 					Stream<char> typedef_name = typedef_entry.name;
 					if (typedefs.Find(typedef_name) != -1) {
-						ECS_FORMAT_TEMP_STRING(message, "Typedef with name {#} conflicts with another typedef!", typedef_name);
+						ECS_FORMAT_TEMP_STRING(message, "Typedef with name \"{#}\" conflicts with another typedef!", typedef_name);
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
 
 					if (type_definitions.Find(typedef_name) != -1) {
-						ECS_FORMAT_TEMP_STRING(message, "Typedef with name {#} conflicts with another type struct!", typedef_name);
+						ECS_FORMAT_TEMP_STRING(message, "Typedef with name \"{#}\" conflicts with another type struct!", typedef_name);
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
 
 					if (enum_definitions.Find(typedef_name) != -1) {
-						ECS_FORMAT_TEMP_STRING(message, "Typedef with name {#} conflicts with another enum!", typedef_name);
+						ECS_FORMAT_TEMP_STRING(message, "Typedef with name \"{#}\" conflicts with another enum!", typedef_name);
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
@@ -2101,21 +2109,21 @@ namespace ECSEngine {
 					Stream<char> dependency_name = data[data_index].valid_dependencies[dependency_index].name;
 					
 					if (typedefs.Find(dependency_name) != -1) {
-						ECS_FORMAT_TEMP_STRING(message, "Valid dependency with name {#} conflicts with another typedef!", dependency_name);
+						ECS_FORMAT_TEMP_STRING(message, "Valid dependency with name \"{#}\" conflicts with another typedef!", dependency_name);
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
 
 					if (type_definitions.Find(dependency_name) != -1) {
-						ECS_FORMAT_TEMP_STRING(message, "Valid dependency with name {#} conflicts with another type struct!", dependency_name);
+						ECS_FORMAT_TEMP_STRING(message, "Valid dependency with name \"{#}\" conflicts with another type struct!", dependency_name);
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
 					}
 
 					if (enum_definitions.Find(dependency_name) != -1) {
-						ECS_FORMAT_TEMP_STRING(message, "Valid dependency with name {#} conflicts with another enum!", dependency_name);
+						ECS_FORMAT_TEMP_STRING(message, "Valid dependency with name \"{#}\" conflicts with another enum!", dependency_name);
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
@@ -2217,7 +2225,7 @@ namespace ECSEngine {
 					ResourceIdentifier identifier(enum_.name);
 					if (enum_definitions.Find(identifier) != -1) {
 						// If the enum already exists, fail
-						ECS_FORMAT_TEMP_STRING(message, "Enum {#} was already reflect - conflict detected", enum_.name);
+						ECS_FORMAT_TEMP_STRING(message, "Enum \"{#}\" was already reflect - conflict detected", enum_.name);
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
@@ -2320,7 +2328,7 @@ namespace ECSEngine {
 						ECS_STACK_CAPACITY_STREAM(Stream<char>, matched_template_parameters, 32);
 						ReflectionTypeTemplate::MatchStatus match_status = template_type->DoesMatch(template_pair, &matched_template_parameters);
 						if (match_status == ReflectionTypeTemplate::MatchStatus::IncorrectParameter) {
-							ECS_FORMAT_TEMP_STRING(message, "Type {#} has dependency on {#} that matches the template type {#}, but its arguments are invalid.",
+							ECS_FORMAT_TEMP_STRING(message, "Type \"{#}\" has dependency on \"{#}\" that matches the template type \"{#}\", but its arguments are invalid.",
 								parent_type, definition, template_type_definition);
 							WriteErrorMessage(data, message);
 							FreeFolderHierarchy(folder_index);
@@ -2407,7 +2415,7 @@ namespace ECSEngine {
 							FreeFolderHierarchy(folder_index);
 							ECS_FORMAT_TEMP_STRING(
 								error_message,
-								"Failed to determine constant {#} for type {#}, field {#} when trying to determine embedded size.",
+								"Failed to determine constant \"{#}\" for type \"{#}\", field \"{#}\" when trying to determine embedded size.",
 								embedded_size.body,
 								embedded_size.reflection_type,
 								embedded_size.field_name
@@ -2428,7 +2436,7 @@ namespace ECSEngine {
 						FreeFolderHierarchy(folder_index);
 						ECS_FORMAT_TEMP_STRING(
 							error_message,
-							"Embedded array size for field {#}, type {#} is missing its user determined/custom type.",
+							"Embedded array size for field \"{#}\", type \"{#}\" is missing its user determined/custom type.",
 							embedded_size.field_name,
 							embedded_size.reflection_type
 						);
@@ -2504,7 +2512,7 @@ namespace ECSEngine {
 
 							if (byte_size_alignment.x == -1) {
 								// Fail if couldn't determine
-								ECS_FORMAT_TEMP_STRING(message, "Failed to determine byte size and alignment for | {#} {#}; |, type {#}",
+								ECS_FORMAT_TEMP_STRING(message, "Failed to determine byte size and alignment for field \"{#} {#};\", type \"{#}\"",
 									type->fields[field_index].definition, type->fields[field_index].name, type->name);
 								WriteErrorMessage(data, message);
 								FreeFolderHierarchy(folder_index);
@@ -2583,7 +2591,7 @@ namespace ECSEngine {
 					ResourceIdentifier identifier(type.name);
 					// If the type already exists, fail
 					if (type_definitions.Find(identifier) != -1) {
-						ECS_FORMAT_TEMP_STRING(message, "The reflection type {#} was already reflected - a conflict was detected", type.name);
+						ECS_FORMAT_TEMP_STRING(message, "The reflection type \"{#}\" was already reflected - a conflict was detected", type.name);
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
@@ -2625,7 +2633,7 @@ namespace ECSEngine {
 				for (size_t index = 0; index < data[data_index].types.size; index++) {
 					Stream<char> missing_dependency;
 					if (HasReflectionTypeMissingDependencies(this, GetType(data[data_index].types[index].name), &missing_dependency)) {
-						ECS_FORMAT_TEMP_STRING(message, "The reflection type {#} has missing dependency {#}", data[data_index].types[index].name, missing_dependency);
+						ECS_FORMAT_TEMP_STRING(message, "The reflection type \"{#}\" has missing dependency \"{#}\"", data[data_index].types[index].name, missing_dependency);
 						WriteErrorMessage(data, message);
 						FreeFolderHierarchy(folder_index);
 						return false;
@@ -2634,7 +2642,7 @@ namespace ECSEngine {
 					// Check the inheriting type as well, if there is one, since we need to make it is valid as well
 					if (data[data_index].types[index].inherit_type.size > 0) {
 						if (!IsReflectionDefinitionAValidDefinition(this, data[data_index].types[index].inherit_type)) {
-							ECS_FORMAT_TEMP_STRING(message, "The reflection type {#} has missing dependency {#}, the type that is being inherited", data[data_index].types[index].name, data[data_index].types[index].inherit_type);
+							ECS_FORMAT_TEMP_STRING(message, "The reflection type \"{#}\" has missing dependency \"{#}\", the type that is being inherited", data[data_index].types[index].name, data[data_index].types[index].inherit_type);
 							WriteErrorMessage(data, message);
 							FreeFolderHierarchy(folder_index);
 							return false;
@@ -2758,7 +2766,7 @@ namespace ECSEngine {
 				// Ensure no conflict between fields
 				for (size_t index = 0; index < base->fields.size; index++) {
 					if (derived->FindField(base->fields[index].name) != -1) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Type {#} inherits from {#}, but field {#} is conflicted, appears in both derived and base", derived->name, base->name, base->fields[index].name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Type \"{#}\" inherits from \"{#}\", but field \"{#}\" is conflicted, appears in both derived and base", derived->name, base->name, base->fields[index].name);
 						WriteErrorMessage(data, error_message);
 						FreeFolderHierarchy(folder_index);
 						return false;
@@ -2768,7 +2776,7 @@ namespace ECSEngine {
 				// Ensure no conflict between evaluations
 				for (size_t index = 0; index < base->evaluations.size; index++) {
 					if (derived->GetEvaluation(base->evaluations[index].name) != DBL_MAX) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Type {#} inherits from {#}, but evaluation {#} is conflicted, appears in both derived and base", derived->name, base->name, base->evaluations[index].name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Type \"{#}\" inherits from \"{#}\", but evaluation \"{#}\" is conflicted, appears in both derived and base", derived->name, base->name, base->evaluations[index].name);
 						WriteErrorMessage(data, error_message);
 						FreeFolderHierarchy(folder_index);
 						return false;
@@ -2780,7 +2788,7 @@ namespace ECSEngine {
 				size_t derived_main_allocator_index = GetReflectionTypeOverallAllocatorMiscIndex(derived);
 				size_t base_main_allocator_index = GetReflectionTypeOverallAllocatorMiscIndex(base);
 				if (derived_main_allocator_index != -1 && base_main_allocator_index != -1) {
-					ECS_FORMAT_TEMP_STRING(error_message, "Type {#} inherits from {#}, but both base and derived have a main allocator, which is not allowed", derived->name, base->name);
+					ECS_FORMAT_TEMP_STRING(error_message, "Type \"{#}\" inherits from \"{#}\", but both base and derived have a main allocator, which is not allowed", derived->name, base->name);
 					WriteErrorMessage(data, error_message);
 					FreeFolderHierarchy(folder_index);
 					return false;
@@ -3063,7 +3071,7 @@ namespace ECSEngine {
 												else {
 													// Some error has happened
 													// Fail
-													ECS_FORMAT_TEMP_STRING(message, "Cannot determine user defined type for field | {#} {#}; | for type {#}", field->definition, field->name, type->name);
+													ECS_FORMAT_TEMP_STRING(message, "Cannot determine user defined type for field \"{#} {#};\" for type \"{#}\"", field->definition, field->name, type->name);
 													WriteErrorMessage(data, message);
 													FreeFolderHierarchy(folder_index);
 													return false;
@@ -3128,7 +3136,7 @@ namespace ECSEngine {
 						const ReflectionType* referenced_type = TryGetType(referenced_type_name);
 						if (referenced_type == nullptr) {
 							// Fail, we need to get a user defined type for this to work
-							ECS_FORMAT_TEMP_STRING(message, "Type {#} has a main allocator that is nested, but the nested type {#} is not valid user defined type", type->name, referenced_type_name);
+							ECS_FORMAT_TEMP_STRING(message, "Type \"{#}\" has a main allocator that is nested, but the nested type \"{#}\" is not valid user defined type", type->name, referenced_type_name);
 							WriteErrorMessage(data, message);
 							FreeFolderHierarchy(folder_index);
 							return false;
@@ -3137,7 +3145,17 @@ namespace ECSEngine {
 						size_t referenced_type_main_allocator_soa_index = GetReflectionTypeOverallAllocatorMiscIndex(referenced_type);
 						if (referenced_type_main_allocator_soa_index == -1) {
 							// Fail, it must have a main allocator specified
-							ECS_FORMAT_TEMP_STRING(message, "Type {#} has a main allocator that is nested, but the nested type {#} does not have a main allocator assigned", type->name, referenced_type_name);
+							ECS_FORMAT_TEMP_STRING(message, "Type \"{#}\" has a main allocator that is nested, but the nested type \"{#}\" does not have a main allocator assigned", type->name, referenced_type_name);
+							WriteErrorMessage(data, message);
+							FreeFolderHierarchy(folder_index);
+							return false;
+						}
+
+						// If the referenced allocator has the tag ECS_REFERENCE_ALLOCATOR, then fail, since we need that allocator
+						// To be a standalone allocator, not a reference one.
+						if (HasFlag(referenced_type->misc_info[referenced_type_main_allocator_soa_index].allocator_info.modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE)) {
+							ECS_FORMAT_TEMP_STRING(message, "Type \"{#}\" has a main allocator that is nested, but the nested type \"{#}\" has a main allocator that is a reference allocator, "
+								"which is not allowed, it needs to be a standalone allocator.", type->name, referenced_type_name);
 							WriteErrorMessage(data, message);
 							FreeFolderHierarchy(folder_index);
 							return false;
@@ -3228,7 +3246,7 @@ namespace ECSEngine {
 							// Fail
 							FreeFolderHierarchy(folder_index);
 							evaluate_success = false;
-							ECS_FORMAT_TEMP_STRING(error_message, "Failed to parse function {#} for type {#}.", expressions[expression_index].name, type_ptr->name);
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to parse function \"{#}\" for type \"{#}\".", expressions[expression_index].name, type_ptr->name);
 							WriteErrorMessage(data, error_message);
 
 							// Return true to exit the loop
@@ -3288,7 +3306,6 @@ namespace ECSEngine {
 					});
 				}
 				type_definitions.Deallocate(allocator);
-				type_definitions.InitializeFromBuffer(nullptr, 0);
 
 				enum_definitions.ForEachConst([allocator](const ReflectionEnum& enum_, ResourceIdentifier identifier) {
 					if (enum_.name.buffer != identifier.ptr) {
@@ -3297,7 +3314,6 @@ namespace ECSEngine {
 					enum_.Deallocate(allocator);
 				});
 				enum_definitions.Deallocate(allocator);
-				enum_definitions.InitializeFromBuffer(nullptr, 0);
 
 				for (unsigned int index = 0; index < constants.size; index++) {
 					DeallocateIfBelongs(allocator, constants[index].name.buffer);
@@ -3375,7 +3391,6 @@ namespace ECSEngine {
 				type.DeallocateCoalesced(allocator);
 			});
 			type_definitions.Deallocate(allocator);
-			type_definitions.Reset();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -4989,7 +5004,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 											Stream<char> name_whitespace = FindFirstCharacter(current_parameter, ' ');
 											if (name_whitespace.size == 0) {
 												// Fail, invalid template specification
-												ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type {#}. It is a template, but a parameter is invalid (there is no separating space between the type and the parameter name).", data->types.Last().name);
+												ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type \"{#}\". It is a template, but a parameter is invalid (there is no separating space between the type and the parameter name).", data->types.Last().name);
 												WriteErrorMessage(data, error_message);
 												return;
 											}
@@ -5037,7 +5052,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 														argument.default_integer_value = ConvertCharactersToIntStrict(parameter_default_value_string, default_value_success);
 														if (!default_value_success) {
 															// Fail
-															ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type {#}. It is a template, but integer parameter {#} contains an invalid default value", data->types.Last().name, parameter_name_string);
+															ECS_FORMAT_TEMP_STRING(error_message, "Invalid ECS_REFLECT, for type \"{#}\". It is a template, but integer parameter \"{#}\" contains an invalid default value", data->types.Last().name, parameter_name_string);
 															WriteErrorMessage(data, error_message);
 															return;
 														}
@@ -6027,24 +6042,18 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator, bool reset_buffers) {
+		void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator) {
 			ReflectionStreamFieldType stream_type = info->stream_type;
 			if (stream_type != ReflectionStreamFieldType::Basic && stream_type != ReflectionStreamFieldType::BasicTypeArray) {
 				// Here the source needs to be passed in, it will offset it manually
 				if (stream_type == ReflectionStreamFieldType::Stream) {
 					Stream<void>* destination_stream = (Stream<void>*)destination;
 					destination_stream->Deallocate(allocator);
-					if (reset_buffers) {
-						destination_stream->InitializeFromBuffer(nullptr, 0);
-					}
 				}
 				else if (stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream) {
 					// TODO: Determine if we should use the resizable stream allocator or not
 					CapacityStream<void>* destination_stream = (CapacityStream<void>*)destination;
 					destination_stream->Deallocate(allocator);
-					if (reset_buffers) {
-						*destination_stream = { nullptr, 0, 0 };
-					}
 				}
 				else if (stream_type == ReflectionStreamFieldType::Pointer) {
 					// For pointers, don't do anything, since we can't know exactly if it is allocated or not
@@ -6052,10 +6061,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				else if (stream_type == ReflectionStreamFieldType::PointerSoA) {
 					void** destination_ptr = (void**)destination;
 					DeallocateEx(allocator, *destination_ptr);
-					if (reset_buffers) {
-						// Set the size to 0
-						SetReflectionFieldPointerSoASize(*info, OffsetPointer(destination, -(int64_t)info->pointer_offset), 0);
-					}
+
+					// Set the size to 0
+					SetReflectionFieldPointerSoASize(*info, OffsetPointer(destination, -(int64_t)info->pointer_offset), 0);
 				}
 				else {
 					ECS_ASSERT(false, "Unknown stream type");
@@ -6891,11 +6899,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				for (size_t index = 0; index < allocator_initialize_order.size; index++) {
 					// If it is a reference, initialize it
 					const ReflectionTypeMiscAllocator* allocator_info = &type->misc_info[allocator_initialize_order[index]].allocator_info;
-					if (allocator_info->modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE) {
+					// Check for the reference flag first. There can be overall allocators that are reference at the same time, and this should
+					// Take precedence
+					if (HasFlag(allocator_info->modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE)) {
 						AllocatorPolymorphic referenced_allocator = GetReflectionTypeFieldAllocator(type, allocator_info->field_index, destination_data, options->allocator, options->custom_options.use_field_allocators);
 						SetReflectionTypeFieldAllocatorReference(type, allocator_info, destination_data, referenced_allocator);
 					}
-					else if (allocator_info->modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN) {
+					else if (HasFlag(allocator_info->modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN)) {
 						// Initialize this allocator using the custom reflection type, perform this operation only
 						// If the main allocator is a direct allocator, not a nested one, otherwise we will initialize this
 						// Allocator multiple times
@@ -7661,7 +7671,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						// Merging of the SoA pointers
 						ResizableStream<void> previous_data = GetReflectionFieldResizableStreamVoid(field->info, source, false);
 						size_t allocation_size = GetReflectionFieldStreamElementByteSize(field->info) * previous_data.size;
-						void* allocation = allocation_size == 0 ? nullptr : Allocate(field_allocator, allocation_size, field->info.stream_alignment);
+						
+						// There is one thing that we need to handle. If the current type is a resizable stream,
+						// And the overwrite allocator option is not specified, use that stream's allocator instead
+						AllocatorPolymorphic allocator_to_use = field_allocator;
+						if (field->info.stream_type == ReflectionStreamFieldType::ResizableStream && !options->custom_options.overwrite_resizable_allocators) {
+							allocator_to_use = previous_data.allocator;
+						}
+
+						void* allocation = allocation_size == 0 ? nullptr : Allocate(allocator_to_use, allocation_size, field->info.stream_alignment);
 						memcpy(allocation, previous_data.buffer, allocation_size);
 
 						previous_data.buffer = allocation;
@@ -7698,6 +7716,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								field->info.byte_size
 							);
 						}
+					}
+
+					// Update the stream allocator, if the option is specified and the field is resizable
+					if (options->custom_options.overwrite_resizable_allocators && field->info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+						ResizableStream<void>* resizable_stream = (ResizableStream<void>*)destination;
+						resizable_stream->allocator = field_allocator;
 					}
 				}
 				else {
@@ -7855,18 +7879,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			Stream<char> definition,
 			void* source,
 			AllocatorPolymorphic allocator,
-			size_t element_count,
-			bool reset_buffers
+			size_t element_count
 		) {
-			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(reflection_manager, definition);
-			if (definition_info.is_blittable) {
-				// Early exit if the type is blittable
-				return;
-			}
-			
-			for (size_t index = 0; index < element_count; index++) {
-				DeallocateReflectionInstanceBuffers(reflection_manager, definition, definition_info, OffsetPointer(source, index * definition_info.byte_size), allocator, reset_buffers);
-			}
+			ReflectionDefinitionInfo definition_info = SearchReflectionDefinitionInfo(reflection_manager, definition);			
+			DeallocateReflectionInstanceBuffers(reflection_manager, definition, definition_info, source, allocator, element_count);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -7876,37 +7892,31 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const ReflectionType* type,
 			void* source,
 			AllocatorPolymorphic allocator,
-			size_t element_count,
-			size_t element_byte_size,
-			bool reset_buffers
+			size_t element_count
 		) {
 			// We can early exit in case this is a blittable type
 			if (IsBlittable(type)) {
 				return;
 			}
+			
+			size_t type_byte_size = GetReflectionTypeByteSize(type);
 
 			// If the type has a main allocator, then we simply need to deallocate it and forget about all the other fields
 			// The only nuissance is the fact if the reset_buffers is set to true, we still need to reset those buffers.
 			size_t type_main_allocator_soa_index = GetReflectionTypeOverallAllocatorMiscIndex(type);
 			if (type_main_allocator_soa_index != -1) {
 				const ReflectionTypeMiscAllocator* main_allocator = &type->misc_info[type_main_allocator_soa_index].allocator_info;
-				// If the reset buffers is set to false, we can deallocate the main allocator and simply exit. For the other case,
-				// It is not so simple
-				if (!reset_buffers) {
-					for (size_t index = 0; index < element_count; index++) {
-						void* current_source = OffsetPointer(source, index * element_byte_size);
-						AllocatorPolymorphic main_allocator_polymorphic = main_allocator->GetMainAllocatorForInstance(current_source);
-						FreeAllocatorFrom(main_allocator_polymorphic, allocator);
-					}
-					// Early return
-					return;
+				// If the reset buffers is set to false, we can deallocate the main allocator and simply exit. The user must manually call
+				// ZeroOut if he wants these types to be zeroed out
+
+				for (size_t index = 0; index < element_count; index++) {
+					void* current_source = OffsetPointer(source, index * type_byte_size);
+					AllocatorPolymorphic main_allocator_polymorphic = main_allocator->GetMainAllocatorForInstance(current_source);
+					FreeAllocatorFrom(main_allocator_polymorphic, allocator);
 				}
-				else {
-					// At the moment, do not support this case, since it is more complicated, we still have to clear the buffers only, without the normal
-					// Fields being changed. One option is to memset to 0 the entire type, and then copy the blittable fields, but we have to think about
-					// The padding bytes and if it works in all cases. For the time being, don't allow this.
-					ECS_ASSERT(false, "Code path not implemented!");
-				}
+
+				// Early return
+				return;
 			}
 
 			// Iterate over the fields in order to reduce the branching required
@@ -7917,14 +7927,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					// Pre-cache the reflection type of the nested type or the custom reflection index
 					// If neither of these is set, then we can simply skip the step
 					
-					// The functor will be called with (Stream<void> user_defined_stream, size_t current_element_byte_size)
-					// As arguments
+					// The functor will be called with (Stream<void> user_defined_stream) as argument
 					auto deallocate_buffers = [&](auto functor) {
 						for (size_t index = 0; index < element_count; index++) {
-							void* current_source = OffsetPointer(source, index * element_byte_size);
+							void* current_source = OffsetPointer(source, index * type_byte_size);
 
 							Stream<void> user_defined_stream;
-							size_t current_element_byte_size = 0;
 							if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Basic) {
 								user_defined_stream = { OffsetPointer(current_source, type->fields[field_index].info.pointer_offset), 1 };
 							}
@@ -7932,39 +7940,34 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								user_defined_stream = { *(void**)OffsetPointer(current_source, type->fields[field_index].info.pointer_offset), 1 };
 							}
 							else {
-								current_element_byte_size = GetReflectionFieldStreamElementByteSize(type->fields[field_index].info);
 								user_defined_stream = GetReflectionFieldStreamVoidEx(type->fields[field_index].info, current_source);
 							}
 
 							// The size of the stream is the element count
-							functor(user_defined_stream, current_element_byte_size);
+							functor(user_defined_stream);
 						}
 					};
 
 					const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[field_index].definition);
 					if (nested_type != nullptr) {
-						deallocate_buffers([&](Stream<void> user_defined_stream, size_t current_element_byte_size) {
+						deallocate_buffers([&](Stream<void> user_defined_stream) {
 							DeallocateReflectionTypeInstanceBuffers(
 								reflection_manager,
 								nested_type,
 								user_defined_stream.buffer,
 								allocator,
-								user_defined_stream.size,
-								current_element_byte_size,
-								reset_buffers
+								user_defined_stream.size
 							);
 						});
 					}
 					ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[field_index].definition);
 					if (custom_type != nullptr) {
-						deallocate_buffers([&](Stream<void> user_defined_stream, size_t current_element_byte_size) {
-							// We are not interested in the element byte size here
+						deallocate_buffers([&](Stream<void> user_defined_stream) {
 							ReflectionCustomTypeDeallocateData deallocate_data;
 							deallocate_data.allocator = allocator;
 							deallocate_data.definition = type->fields[field_index].definition;
 							deallocate_data.element_count = user_defined_stream.size;
 							deallocate_data.reflection_manager = reflection_manager;
-							deallocate_data.reset_buffers = reset_buffers;
 							deallocate_data.source = user_defined_stream.buffer;
 							custom_type->Deallocate(&deallocate_data);
 						});
@@ -7974,15 +7977,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// The SoA needs to be handled separately
 				if (IsStream(type->fields[field_index].info.stream_type)) {
 					for (size_t index = 0; index < element_count; index++) {
-						void* current_source = OffsetPointer(source, index * element_byte_size);
+						void* current_source = OffsetPointer(source, index * type_byte_size);
 						ResizableStream<void> buffer_data = GetReflectionFieldResizableStreamVoid(type->fields[field_index].info, current_source);
 						if (type->fields[field_index].info.stream_type != ReflectionStreamFieldType::ResizableStream) {
 							buffer_data.allocator = allocator;
 						}
 						buffer_data.FreeBuffer();
-						if (reset_buffers) {
-							SetReflectionFieldResizableStreamVoid(type->fields[field_index].info, current_source, buffer_data);
-						}
+
+						// Set this data back such that we zero out the field
+						SetReflectionFieldResizableStreamVoid(type->fields[field_index].info, current_source, buffer_data);
 					}
 				}
 			}
@@ -7990,13 +7993,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			for (size_t misc_index = 0; misc_index < type->misc_info.size; misc_index++) {
 				if (type->misc_info[misc_index].type == ECS_REFLECTION_TYPE_MISC_INFO_SOA) {
 					for (size_t index = 0; index < element_count; index++) {
-						void* current_source = OffsetPointer(source, index * element_byte_size);
+						void* current_source = OffsetPointer(source, index * type_byte_size);
 						Stream<void> buffer_data = GetReflectionTypeSoaStream(type, current_source, misc_index);
 						buffer_data.Deallocate(allocator);
-						if (reset_buffers) {
-							ResizableStream<void> empty_data;
-							SetReflectionFieldSoaStream(type, &type->misc_info[misc_index].soa, current_source, empty_data);
-						}
+						
+						// Set this data back such that we zero out the field
+						ResizableStream<void> empty_data;
+						SetReflectionFieldSoaStream(type, &type->misc_info[misc_index].soa, current_source, empty_data);
 					}
 				}
 			}
@@ -8010,26 +8013,25 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const ReflectionDefinitionInfo& definition_info,
 			void* source,
 			AllocatorPolymorphic allocator,
-			size_t element_count,
-			bool reset_buffers
+			size_t element_count
 		) {
 			if (!definition_info.is_blittable) {
 				if (definition_info.is_basic_field) {
 					ReflectionField field = definition_info.GetBasicField();
 					for (size_t index = 0; index < element_count; index++) {
 						void* element = OffsetPointer(source, index * definition_info.byte_size);
-						DeallocateReflectionFieldBasic(&field.info, element, allocator, reset_buffers);
+						DeallocateReflectionFieldBasic(&field.info, element, allocator);
 					}
 				}
 				else if (definition_info.type != nullptr) {
-					DeallocateReflectionTypeInstanceBuffers(reflection_manager, definition_info.type, source, allocator, element_count, 0, reset_buffers);
+					DeallocateReflectionTypeInstanceBuffers(reflection_manager, definition_info.type, source, allocator, element_count);
 				}
 				else {
+					// Use the deallocate bulk function
 					ReflectionCustomTypeDeallocateData deallocate_data;
 					deallocate_data.definition = definition;
 					deallocate_data.allocator = allocator;
 					deallocate_data.reflection_manager = reflection_manager;
-					deallocate_data.reset_buffers = reset_buffers;
 					deallocate_data.source = source;
 					deallocate_data.element_count = element_count;
 					definition_info.custom_type->Deallocate(&deallocate_data);

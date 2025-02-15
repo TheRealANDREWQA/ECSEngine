@@ -215,13 +215,13 @@ template ECSENGINE_API return_type function_name<template_4>(__VA_ARGS__);
 
 #define ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(type) type(const type& other) = default; type& operator = (const type& other) = default;
 
-#define ECS_ENUM_BITWISE_OPERATIONS(T) ECS_INLINE T operator~ (T a) { return (T)~(int)a; } \
-ECS_INLINE T operator| (T a, T b) { return (T)((int)a | (int)b); } \
-ECS_INLINE T operator& (T a, T b) { return (T)((int)a & (int)b); } \
-ECS_INLINE T operator^ (T a, T b) { return (T)((int)a ^ (int)b); } \
-ECS_INLINE T& operator|= (T& a, T b) { return (T&)((int&)a |= (int)b); } \
-ECS_INLINE T& operator&= (T& a, T b) { return (T&)((int&)a &= (int)b); } \
-ECS_INLINE T& operator^= (T& a, T b) { return (T&)((int&)a ^= (int)b); }
+#define ECS_ENUM_BITWISE_OPERATIONS(T) ECS_INLINE T operator~ (T a) { return (T)~(size_t)a; } \
+ECS_INLINE T operator| (T a, T b) { return (T)((size_t)a | (size_t)b); } \
+ECS_INLINE T operator& (T a, T b) { return (T)((size_t)a & (size_t)b); } \
+ECS_INLINE T operator^ (T a, T b) { return (T)((size_t)a ^ (size_t)b); } \
+ECS_INLINE T& operator|= (T& a, T b) { a = (T)((size_t)a | (size_t)b); return a; } \
+ECS_INLINE T& operator&= (T& a, T b) { a = (T)((size_t)a & (size_t)b); return a; } \
+ECS_INLINE T& operator^= (T& a, T b) { a = (T)((size_t)a ^ (size_t)b); return a; }
 
 // Count and pivot must be constant integer values
 #define LOOP_UNROLL_4(count, function, pivot)	if constexpr ((count) >= (pivot) + 1) { function(pivot); } \

@@ -3165,7 +3165,6 @@ namespace ECSEngine {
 				return true;
 				});
 			m_windows[window_index].dynamic_resources.Deallocate(Allocator());
-			m_windows[window_index].dynamic_resources.InitializeFromBuffer(nullptr, 0);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

@@ -30,7 +30,7 @@ namespace ECSEngine {
 		bool IsReflectionTypeFieldAllocatorFromMiscDirectOnly(const ReflectionType* type, size_t field_index) {
 			for (size_t index = 0; index < type->misc_info.size; index++) {
 				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
-					if (type->misc_info[index].allocator_info.field_index == field_index && (type->misc_info[index].allocator_info.modifier != ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN
+					if (type->misc_info[index].allocator_info.field_index == field_index && (!HasFlag(type->misc_info[index].allocator_info.modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN)
 						|| type->misc_info[index].allocator_info.is_direct_allocator)) {
 						return true;
 					}
@@ -59,7 +59,7 @@ namespace ECSEngine {
 		size_t GetReflectionTypeOverallAllocatorMiscIndex(const ReflectionType* type) {
 			for (size_t index = 0; index < type->misc_info.size; index++) {
 				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
-					if (type->misc_info[index].allocator_info.modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN) {
+					if (HasFlag(type->misc_info[index].allocator_info.modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN)) {
 						return index;
 					}
 				}
@@ -115,9 +115,22 @@ namespace ECSEngine {
 		}
 
 		void SetReflectionTypeFieldAllocatorReference(const ReflectionType* type, const ReflectionTypeMiscAllocator* allocator_info, void* instance, AllocatorPolymorphic reference_allocator) {
+			// If this is a main allocator, we must do a separate handling
+			Stream<char> allocator_definition;
+			void* allocator_pointer;
+
+			if (HasFlag(allocator_info->modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN)) {
+				allocator_definition = allocator_info->main_allocator_definition;
+				allocator_pointer = OffsetPointer(instance, allocator_info->main_allocator_offset);
+			}
+			else {
+				allocator_definition = type->fields[allocator_info->field_index].definition;
+				allocator_pointer = type->GetField(instance, allocator_info->field_index);
+			}
+
 			// Ensure that the field is a AllocatorPolymorphic
-			ECS_ASSERT(type->fields[allocator_info->field_index].definition == STRING(AllocatorPolymorphic), "Reference allocator must of type AllocatorPolymorphic!");
-			AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)type->GetField(instance, allocator_info->field_index);
+			ECS_ASSERT(allocator_definition == STRING(AllocatorPolymorphic), "Reference allocator must of type AllocatorPolymorphic!");
+			AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)allocator_pointer;
 			*allocator = reference_allocator;
 		}
 

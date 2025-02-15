@@ -177,16 +177,16 @@ namespace ECSEngine {
 	}
 
 	// This variant works in such a fashion that it addresses the smallest integral type that covers the bit index
-	ECSENGINE_API void SetFlag(void* value, unsigned char bit_index);
+	ECSENGINE_API void SetBitFlag(void* value, unsigned char bit_index);
 
 	// This variant works in such a fashion that it addresses the smallest integral type that covers the bit index
-	ECSENGINE_API void ClearFlag(void* value, unsigned char bit_index);
+	ECSENGINE_API void ClearBitFlag(void* value, unsigned char bit_index);
 
 	// This variant works in such a fashion that it addresses the smallest integral type that covers the bit index
-	ECSENGINE_API bool HasFlag(const void* value, unsigned char bit_index);
+	ECSENGINE_API bool HasBitFlag(const void* value, unsigned char bit_index);
 
 	// This variant works in such a fashion that it addresses the smallest integral type that covers the bit index
-	ECSENGINE_API void FlipFlag(void* value, unsigned char bit_index);
+	ECSENGINE_API void FlipBitFlag(void* value, unsigned char bit_index);
 
 	template<bool strict_compare = false, typename T>
 	ECS_INLINE bool IsInRange(T value, T low_bound, T high_bound) {

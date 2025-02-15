@@ -17,7 +17,10 @@ namespace ECSEngine {
 		// transforming to relative offset
 		offset -= (uintptr_t)m_buffer;
 
-		ECS_ASSERT(offset + size <= m_capacity);
+		if (offset + size > m_capacity) {
+			ECS_ASSERT(m_crash_on_allocation_failure, "StackAllocator capacity was exceeded!");
+			return nullptr;
+		}
 
 		void* pointer = &m_buffer[offset];
 		m_buffer[offset - 1] = offset - 1;

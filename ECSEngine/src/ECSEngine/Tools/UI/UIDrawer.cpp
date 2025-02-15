@@ -4025,7 +4025,7 @@ namespace ECSEngine {
 
 		struct CheckBoxValue {
 			ECS_INLINE bool IsSet() const {
-				return is_boolean ? *boolean_to_modify : HasFlag(value_to_modify, bit_index);
+				return is_boolean ? *boolean_to_modify : HasBitFlag(value_to_modify, bit_index);
 			}
 
 			ECS_INLINE void Flip() {
@@ -4033,7 +4033,7 @@ namespace ECSEngine {
 					*boolean_to_modify = !*boolean_to_modify;
 				}
 				else {
-					FlipFlag(value_to_modify, bit_index);
+					FlipBitFlag(value_to_modify, bit_index);
 				}
 			}
 

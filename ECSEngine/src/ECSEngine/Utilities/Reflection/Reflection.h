@@ -556,8 +556,8 @@ namespace ECSEngine {
 			ReflectionPassdownInfo* passdown_info
 		);
 
-		// Deallocates non user defined fields. By default, it will reset buffers, but you can disable this option
-		ECSENGINE_API void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator, bool reset_buffers = true);
+		// Deallocates non user defined fields. It will reset the stream/pointer structures to nullptr/0 size
+		ECSENGINE_API void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator);
 
 		ECSENGINE_API size_t GetBasicTypeArrayElementSize(const ReflectionFieldInfo& info);
 
@@ -900,48 +900,37 @@ namespace ECSEngine {
 			const CopyReflectionDataOptions* options
 		);
 
-		// If the last boolean parameter is set to true, it will
-		// Reset the buffers (as it is by default). By default, it will deallocate
-		// A single element. But you can specify a contiguous array as well
-		// In order to increase the performance for buffers, in which case you must specify the element byte size
+		// The containers that have buffer allocations will be emptied out after this call (equivalent to ZeroOut). 
+		// By default, it will deallocate a single element, but you can specify a contiguous array as well
+		// In order to increase the performance for buffers
 		ECSENGINE_API void DeallocateReflectionInstanceBuffers(
 			const ReflectionManager* reflection_manager,
 			Stream<char> definition,
 			void* source,
 			AllocatorPolymorphic allocator,
-			size_t element_count = 1,
-			bool reset_buffers = true
+			size_t element_count = 1
 		);
 
-		// If the last boolean parameter is set to true, it will
-		// Reset the buffers (as it is by default). By default, it will deallocate
-		// A single element. But you can specify a contiguous array as well
-		// In order to increase the performance for buffers. If the element stride
-		// Is left as 0, it will use the type's byte size as stride, else it will
-		// Use the parameter value. Useful if you want to deallocate a subfield of
-		// A larger type
+		// The containers that have buffer allocations will be emptied out after this call (equivalent to ZeroOut). 
+		// By default, it will deallocate a single element, but you can specify a contiguous array as well
+		// In order to increase the performance for buffers
 		ECSENGINE_API void DeallocateReflectionTypeInstanceBuffers(
 			const ReflectionManager* reflection_manager,
 			const ReflectionType* type,
 			void* source,
 			AllocatorPolymorphic allocator,
-			size_t element_count = 1,
-			size_t element_stride = 0,
-			bool reset_buffers = true
+			size_t element_count = 1
 		);
 
-		// This function deallocates only a single entry. It functions similarly
-		// To the other 2 overloads, the difference is that it extracts its information
-		// From the definition info. If the last boolean parameter is set to true, it will
-		// Reset the buffers (as it is by default)
+		// It functions similarly to the other 2 overloads, the difference is that it extracts its information
+		// From the definition info parameter instead of having to search for it.
 		ECSENGINE_API void DeallocateReflectionInstanceBuffers(
 			const ReflectionManager* reflection_manager,
 			Stream<char> definition,
 			const ReflectionDefinitionInfo& definition_info,
 			void* source,
 			AllocatorPolymorphic allocator,
-			size_t count = 1,
-			bool reset_buffers = true
+			size_t count = 1
 		);
 
 		// Returns true if the type references in any of its fields the subtype

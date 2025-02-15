@@ -136,6 +136,7 @@ void FixedGrid::Initialize(
 {
 	ECS_CRASH_CONDITION(_handler_function != nullptr, "Fixed grid handler function must be specified");
 	
+	allocator = _allocator;
 	spatial_grid.Initialize(_allocator, _dimensions, _cell_size_power_of_two, deck_power_of_two);
 
 	// Initialize the layers as well

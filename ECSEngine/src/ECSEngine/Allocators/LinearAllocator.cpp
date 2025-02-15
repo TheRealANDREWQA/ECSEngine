@@ -15,8 +15,11 @@ namespace ECSEngine {
 		// transforming to relative aligned offset
 		offset -= (uintptr_t)m_buffer;
 
-		ECS_ASSERT(offset + size <= m_capacity);
-
+		if (offset + size > m_capacity) {
+			ECS_ASSERT(m_crash_on_allocation_failure, "LinearAllocator capacity exceeded!");
+			return nullptr;
+		}
+		
 		void* pointer = (void*)((uintptr_t)m_buffer + offset);
 		m_top = offset + size;
 

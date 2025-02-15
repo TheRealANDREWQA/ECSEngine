@@ -97,6 +97,7 @@ namespace ECSEngine {
 		}
 		
 		if (size > BaseAllocatorMaxAllocationSize(memory_manager->m_backup_info)) {
+			ECS_ASSERT(memory_manager->m_crash_on_allocation_failure, "MemoryManager allocation size exceeds the backup size after the initial capacity was exhausted");
 			return nullptr;
 		}
 
@@ -122,6 +123,11 @@ namespace ECSEngine {
 		}
 		else {
 			allocation = ECSEngine::Allocate(last_allocator, size, alignment);
+		}
+
+		if (allocation == nullptr) {
+			ECS_ASSERT(memory_manager->m_crash_on_allocation_failure, "MemoryManager allocation cannot be fulfilled");
+			return nullptr;
 		}
 
 		if constexpr (!disable_debug_info) {
@@ -161,6 +167,7 @@ namespace ECSEngine {
 						ECSEngine::Deallocate(current_allocator, block);
 						if (reallocation == nullptr) {
 							// Special case, we tried general allocation but it failed, return the failure back
+							ECS_ASSERT(memory_manager->m_crash_on_allocation_failure, "MemoryManager reallocation cannot be fulfilled");
 							return nullptr;
 						}
 					}
@@ -331,6 +338,9 @@ namespace ECSEngine {
 		ECS_ASSERT(m_allocator_count < ECS_MEMORY_MANAGER_SIZE);
 		AllocatorPolymorphic allocator_to_be_constructed = GetAllocator(m_allocator_count);
 		CreateBaseAllocator(m_backup, info, allocator_to_be_constructed.allocator);
+		AllocatorBase* base_allocator = (AllocatorBase*)allocator_to_be_constructed.allocator;
+		// Set this allocator to be non crashing on failure
+		base_allocator->ExitCrashOnAllocationFailure();
 		m_allocator_count++;
 	}
 

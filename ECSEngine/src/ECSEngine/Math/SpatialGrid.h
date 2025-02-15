@@ -577,7 +577,7 @@ namespace ECSEngine {
 		// The cell hash value must be computed by the user
 		HashTable<Cell, uint3, HashFunctionPowerOfTwo, CellIndicesHash> cells;
 		DeckPowerOfTwo<Chunk> chunks;
-		[[ECS_MAIN_ALLOCATOR]]
+		[[ECS_MAIN_ALLOCATOR, ECS_REFERENCE_ALLOCATOR]]
 		AllocatorPolymorphic allocator;
 		// This is the array with all the inserted cells
 		ResizableStream<uint3> inserted_cells;
