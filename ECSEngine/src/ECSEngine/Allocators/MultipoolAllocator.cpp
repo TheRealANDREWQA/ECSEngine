@@ -31,6 +31,7 @@ namespace ECSEngine {
 		ECS_ASSERT(alignment <= ECS_CACHE_LINE_SIZE);
 		if (size > m_size) {
 			// Early exit if it is too large
+			ECS_ASSERT(m_crash_on_allocation_failure, "MultipoolAllocator: single allocation exceeds the entire allocator's capacity");
 			return nullptr;
 		}
 
@@ -44,7 +45,10 @@ namespace ECSEngine {
 		unsigned int index = m_range.Request(total_request_size);
 
 		if (index == 0xFFFFFFFF)
+		{
+			ECS_ASSERT(m_crash_on_allocation_failure, "MultipoolAllocator capacity was exceeded");
 			return nullptr;
+		}
 
 		size_t actual_offset = (size_t)index << m_power_of_two_factor;
 		uintptr_t allocation = AlignPointerStack((uintptr_t)m_buffer + actual_offset, alignment);
@@ -102,6 +106,12 @@ namespace ECSEngine {
 
 	void* MultipoolAllocator::Reallocate(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
+		if (new_size > m_size) {
+			// Early exit if it is too large
+			ECS_ASSERT(m_crash_on_allocation_failure, "MultipoolAllocator: single allocation exceeds the entire allocator's capacity");
+			return nullptr;
+		}
+
 		uintptr_t byte_offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
 		ECS_ASSERT(m_buffer[byte_offset_position] < ECS_CACHE_LINE_SIZE);
 		size_t block_start = (byte_offset_position - (size_t)m_buffer[byte_offset_position]) >> m_power_of_two_factor;
@@ -135,6 +145,7 @@ namespace ECSEngine {
 		}
 
 		// The request cannot be fulfilled
+		ECS_ASSERT(m_crash_on_allocation_failure, "MultipoolAllocator reallocate request cannot be fulfilled");
 		return nullptr;
 	}
 

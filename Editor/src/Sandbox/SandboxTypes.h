@@ -393,7 +393,7 @@ struct ECS_REFLECT EditorSandbox {
 	// The state replay structure - should be used only when the flag EDITOR_SANDBOX_FLAG_REPLAY_STATE is set
 	ReplayPlayer state_replay;
 
-	// Miscellaneous flags
+	// Miscellaneous flags, see EDITOR_SANDBOX_FLAG for values
 	size_t flags;
 };
 

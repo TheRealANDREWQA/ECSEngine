@@ -52,13 +52,14 @@
 
 // Should be placed for an allocator field - when specified, it indicates that all further allocations for an instance
 // Should be made from this allocator, unless that field has an allocator override, and the user specified that type
-// Allocators are enabled
+// Allocators are enabled. This type of allocator can be a reference as well, but this means that it must be of type
+// AllocatorPolymorphic, as strongly typed allocators cannot reference any arbitrary allocator input.
 #define ECS_MAIN_ALLOCATOR
 
 // When specified, it indicates that this allocator should not be initialized as a standalone entry, but rather
 // It should reference the allocator that is passed in. At the moment, it works only on AllocatorPolymorphic entries,
 // Not on MemoryManager or MemoryManager* entries. If you want it to reference a specific field from the type, use
-// ECS_FIELD_ALLOCATOR to designate that field
+// ECS_FIELD_ALLOCATOR to designate that field. Can be combined with ECS_MAIN_ALLOCATOR
 #define ECS_REFERENCE_ALLOCATOR
 
 // This tag can be added to pointers only. It indicates that during a reflection Copy call, this entry should not

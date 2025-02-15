@@ -68,6 +68,7 @@
   <Type Name="ECSEngine::ResizableStream&lt;char&gt;">
     <DisplayString>{buffer,[size] sb}</DisplayString>
     <DisplayString>capacity={capacity}</DisplayString>
+    <DisplayString>allocator={allocator}</DisplayString>
     <StringView>buffer,[size] sb</StringView>
 
     <Expand>
@@ -86,6 +87,7 @@
   <Type Name="ECSEngine::ResizableStream&lt;wchar_t&gt;">
     <DisplayString>{buffer,[size] su}</DisplayString>
     <DisplayString>capacity={capacity}</DisplayString>
+    <DisplayString>allocator={allocator}</DisplayString>
     <StringView>buffer,[size] sub</StringView>
 
     <Expand>
@@ -143,6 +145,7 @@
       <Item Name="buffer">buffer</Item>
       <Item Name="size">size</Item>
       <Item Name="capacity">capacity</Item>
+      <Item Name="allocator">allocator</Item>
 
       <ArrayItems>
         <Size>size</Size>

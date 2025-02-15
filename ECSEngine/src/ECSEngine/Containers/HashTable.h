@@ -840,9 +840,10 @@ namespace ECSEngine {
 
 		// Deallocates the pointer if it is not nullptr and the capacity is
 		// bigger than 0
-		void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
+		void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (GetAllocatedBuffer() != nullptr && GetCapacity() > 0) {
 				ECSEngine::Deallocate(allocator, GetAllocatedBuffer(), debug_info);
+				Reset();
 			}
 		}
 

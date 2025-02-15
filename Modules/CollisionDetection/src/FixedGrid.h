@@ -59,7 +59,7 @@ struct COLLISIONDETECTION_API ECS_REFLECT_GLOBAL_COMPONENT_PRIVATE FixedGrid {
 	}
 
 	ECS_INLINE AllocatorPolymorphic Allocator() const {
-		return spatial_grid.allocator;
+		return allocator;
 	}
 
 	// Adds a new cell. Make sure it doesn't exist previosuly!
@@ -144,7 +144,9 @@ struct COLLISIONDETECTION_API ECS_REFLECT_GLOBAL_COMPONENT_PRIVATE FixedGrid {
 
 	void SetLayerMask(unsigned char layer_index, const CollisionLayer* layer_mask);
 
-	[[ECS_MAIN_ALLOCATOR]]
+	// This is the overall allocator for the entire type, to respect the global component requirements and for better locality
+	[[ECS_MAIN_ALLOCATOR, ECS_REFERENCE_ALLOCATOR]]
+	AllocatorPolymorphic allocator;
 	SpatialGrid<GridChunkData, GridChunkDataEntry, GRID_CHUNK_COUNT> spatial_grid;
 
 	// Record these values such that we can have a good approximation for the initial

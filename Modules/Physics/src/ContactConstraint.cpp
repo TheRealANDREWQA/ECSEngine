@@ -565,7 +565,7 @@ static void SolveContactConstraintsInitialize(World* world, StaticThreadTaskInit
 	//data->Initialize(world->memory);
 	SolverData data;
 	data.Initialize(world->memory);
-	world->entity_manager->RegisterGlobalComponentCommit(&data, STRING(SolverData));
+	world->entity_manager->RegisterGlobalComponentCommit(&data);
 }
 
 void AddSolverTasks(ModuleTaskFunctionData* data) {

@@ -274,14 +274,17 @@ namespace ECSEngine {
 		};
 
 		enum ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER : unsigned char {
-			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_NONE,
+			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_NONE = 0,
 			// When set, it indicates that it should act as an override for the allocator to be used, lower
-			// In priority than per field allocator
-			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN,
+			// In priority than per field allocators. Can be combined with ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE.
+			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_MAIN = 1 << 0,
 			// When specified, it indicates that this field should not perform a full initialization, 
-			// But only reference the allocator that is given
-			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE
+			// But only reference the allocator that is given. Can be used only with AllocatorPolymorphic, not with strongly
+			// Typed allocators
+			ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE = 1 << 1
 		};
+
+		ECS_ENUM_BITWISE_OPERATIONS(ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER);
 
 		// This structure specifies a type's allocator, from which allocations can be made from
 		// If the user specified that per type allocators or per field allocators are to be enabled (only the main has that property).
@@ -645,7 +648,6 @@ namespace ECSEngine {
 			void* source;
 			AllocatorPolymorphic allocator;
 			size_t element_count = 1;
-			bool reset_buffers = true;
 		};
 
 		struct ReflectionCustomTypeGetElementCountData {

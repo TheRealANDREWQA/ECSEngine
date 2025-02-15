@@ -137,19 +137,20 @@ namespace ECSEngine {
 			// These 2 options are needed for global components
 			options.custom_options.initialize_type_allocators = true;
 			options.custom_options.use_field_allocators = true;
+			// We need this option because this is the first initialization done for this instance
+			options.custom_options.overwrite_resizable_allocators = true;
 		}
 		CopyReflectionTypeInstance(data->reflection_manager, &data->type, copy_data->source, copy_data->destination, &options);
 	}
 
 	static void ReflectionTypeRuntimeComponentDeallocate(ComponentDeallocateFunctionData* deallocate_data) {
+		// TODO: Is it worth adding a Bulk processing parameter? Currently, that would be useful if an entire
+		// Archetype base would be destroyed, which is not that often
+
 		RuntimeComponentCopyDeallocateData* data = (RuntimeComponentCopyDeallocateData*)deallocate_data->function_data;
 		// Do not reset the buffers, the component is destroyed anyways
-		DeallocateReflectionTypeInstanceBuffers(data->reflection_manager, &data->type, deallocate_data->data, deallocate_data->allocator, 1, 0, false);
+		DeallocateReflectionTypeInstanceBuffers(data->reflection_manager, &data->type, deallocate_data->data, deallocate_data->allocator);
 	}
-
-	// TODO: Is it worth having each component store a reflection manager?
-	// At the moment, the reflection manager cannot be shared. We can take
-	// Advantage of small hash table optimization
 
 	ComponentFunctions GetReflectionTypeRuntimeComponentFunctions(const ReflectionManager* reflection_manager, const ReflectionType* type, AllocatorPolymorphic allocator)
 	{

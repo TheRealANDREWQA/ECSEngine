@@ -567,7 +567,7 @@ namespace ECSEngine {
 			if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
 				// If it is a reference allocator, don't write its contents
 				const ReflectionTypeMiscAllocator& allocator_field = type->misc_info[index].allocator_info;
-				if (allocator_field.modifier != ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE) {
+				if (!HasFlag(allocator_field.modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE)) {
 					const ReflectionField& field = type->fields[allocator_field.field_index];
 					
 					SerializeCustomTypeWriteFunctionData allocator_write_data;
@@ -1243,7 +1243,7 @@ namespace ECSEngine {
 					// For all type allocators that are references, initialize them now, if the initialize type allocators is specified
 					for (size_t index = 0; index < type->misc_info.size; index++) {
 						if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
-							if (type->misc_info[index].allocator_info.modifier == ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE) {
+							if (HasFlag(type->misc_info[index].allocator_info.modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE)) {
 								AllocatorPolymorphic reference_allocator = GetReflectionTypeFieldAllocator(type, type->misc_info[index].allocator_info.field_index, address, initial_field_allocator);
 								SetReflectionTypeFieldAllocatorReference(type, &type->misc_info[index].allocator_info, address, reference_allocator);
 							}

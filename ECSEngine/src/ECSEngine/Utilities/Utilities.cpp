@@ -6,7 +6,7 @@
 namespace ECSEngine {
 
 	template<typename Functor>
-	void AddressFlagBit(void* value, unsigned char bit_index, Functor&& functor) {
+	static void AddressFlagBit(void* value, unsigned char bit_index, Functor&& functor) {
 		if (bit_index < sizeof(unsigned char) * 8) {
 			functor((unsigned char*)value);
 		}
@@ -24,21 +24,21 @@ namespace ECSEngine {
 		}
 	}
 
-	void SetFlag(void* value, unsigned char bit_index) {
+	void SetBitFlag(void* value, unsigned char bit_index) {
 		AddressFlagBit(value, bit_index, [bit_index](auto* integral_value) {
 			using IntegralType = std::remove_reference_t<decltype(*integral_value)>;
 			*integral_value = *integral_value | ((IntegralType)1 << (IntegralType)bit_index);
 		});
 	}
 
-	void ClearFlag(void* value, unsigned char bit_index) {
+	void ClearBitFlag(void* value, unsigned char bit_index) {
 		AddressFlagBit(value, bit_index, [bit_index](auto* integral_value) {
 			using IntegralType = std::remove_reference_t<decltype(*integral_value)>;
 			*integral_value = *integral_value & ~((IntegralType)1 << (IntegralType)bit_index);
 		});
 	}
 
-	bool HasFlag(const void* value, unsigned char bit_index) {
+	bool HasBitFlag(const void* value, unsigned char bit_index) {
 		bool has = false;
 		AddressFlagBit((void*)value, bit_index, [bit_index, &has](auto* integral_value) {
 			using IntegralType = std::remove_reference_t<decltype(*integral_value)>;
@@ -47,7 +47,7 @@ namespace ECSEngine {
 		return has;
 	}
 
-	void FlipFlag(void* value, unsigned char bit_index) {
+	void FlipBitFlag(void* value, unsigned char bit_index) {
 		AddressFlagBit(value, bit_index, [bit_index](auto* integral_value) {
 			using IntegralType = std::remove_reference_t<decltype(*integral_value)>;
 			*integral_value = *integral_value ^ ((IntegralType)1 << (IntegralType)bit_index);

@@ -6,7 +6,6 @@
 
 namespace ECSEngine {
 
-#define RESIZE_FACTOR (1.5f)
 #define MAX_BACKUPS 16
 
 	// ---------------------------------------------------------------------------------
@@ -43,7 +42,10 @@ namespace ECSEngine {
 				return (void*)ptr;
 			}
 
-			ECS_ASSERT(size + alignment < m_backup_size, "Trying to allocate a size bigger than the backup for a ResizableLinearAllocator.");
+			if (size + alignment > m_backup_size) {
+				ECS_ASSERT(m_crash_on_allocation_failure, "Trying to allocate a size bigger than the backup for a ResizableLinearAllocator.");
+				return nullptr;
+			}
 
 			void* allocation = AllocateEx(m_backup, m_backup_size);
 			m_allocated_buffers[0] = allocation;
@@ -71,7 +73,10 @@ namespace ECSEngine {
 			size_t remaining_capacity = m_backup_size - current_buffer_allocated_size;
 			if (remaining_capacity < size + alignment) {
 				// Allocate another one
-				ECS_ASSERT(m_allocated_buffer_size < m_allocated_buffer_capacity);
+				if (m_allocated_buffer_size == m_allocated_buffer_capacity) {
+					ECS_ASSERT(m_crash_on_allocation_failure, "ResizableLinearAllocator maximum backup allocations have been exceeded");
+					return nullptr;
+				}
 
 				void* allocation = AllocateEx(m_backup, m_backup_size);
 				m_allocated_buffers[m_allocated_buffer_size++] = allocation;
