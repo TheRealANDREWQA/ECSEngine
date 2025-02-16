@@ -120,7 +120,7 @@ namespace ECSEngine {
 
 		allocation = loop(0, current_index);
 		if (allocation == nullptr) {
-			ECS_ASSERT(arena->m_crash_on_allocation_failure, "MemoryArena allocation cannot be fulfilled");
+			ECS_ASSERT(!arena->m_crash_on_allocation_failure, "MemoryArena allocation cannot be fulfilled");
 		}
 
 		return allocation;
@@ -184,7 +184,7 @@ namespace ECSEngine {
 		ECS_ASSERT(index < arena->m_allocator_count, "Invalid reallocation for memory arena");
 
 		if (reallocation == nullptr) {
-			ECS_ASSERT(arena->m_crash_on_allocation_failure, "MemoryArena reallocation could not be fulfilled");
+			ECS_ASSERT(!arena->m_crash_on_allocation_failure, "MemoryArena reallocation could not be fulfilled");
 		}
 
 		if (arena->m_debug_mode) {

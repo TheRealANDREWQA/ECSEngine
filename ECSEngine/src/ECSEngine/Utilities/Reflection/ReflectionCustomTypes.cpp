@@ -1407,7 +1407,7 @@ namespace ECSEngine {
 				}
 			}
 
-			if (table_index == extended_capacity) {
+			if (table_index >= extended_capacity) {
 				// The element is out of bounds
 				return nullptr;
 			}

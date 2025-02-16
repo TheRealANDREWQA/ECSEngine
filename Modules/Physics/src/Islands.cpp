@@ -10,7 +10,7 @@
 #define ISLAND_MANAGER_ENTITY_TABLE_INITIAL_SIZE 8
 
 #define ALLOCATOR_SIZE ECS_MB
-#define ALLOCATOR_COUNT 4
+#define ALLOCATOR_POOL_BLOCK_COUNT ECS_KB * 4
 #define ALLOCATOR_BACKUP_SIZE ECS_MB
 
 // Moves all entries from the second island to the first island and removes the second island
@@ -151,7 +151,7 @@ void IslandManager::AddContact(ContactConstraint* constraint) {
 }
 
 void IslandManager::Initialize(MemoryManager* allocator_source) {
-	allocator = MemoryManager(ALLOCATOR_SIZE, ALLOCATOR_COUNT, ALLOCATOR_BACKUP_SIZE, allocator_source);
+	allocator = MemoryManager(ALLOCATOR_SIZE, ALLOCATOR_POOL_BLOCK_COUNT, ALLOCATOR_BACKUP_SIZE, allocator_source);
 	islands.Initialize(&allocator, ISLAND_MANAGER_INITIAL_ISLAND_CAPACITY);
 	entity_table.Initialize(&allocator, ISLAND_MANAGER_ENTITY_TABLE_INITIAL_SIZE);
 }

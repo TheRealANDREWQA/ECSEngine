@@ -43,7 +43,7 @@ namespace ECSEngine {
 			}
 
 			if (size + alignment > m_backup_size) {
-				ECS_ASSERT(m_crash_on_allocation_failure, "Trying to allocate a size bigger than the backup for a ResizableLinearAllocator.");
+				ECS_ASSERT(!m_crash_on_allocation_failure, "Trying to allocate a size bigger than the backup for a ResizableLinearAllocator.");
 				return nullptr;
 			}
 
@@ -74,7 +74,7 @@ namespace ECSEngine {
 			if (remaining_capacity < size + alignment) {
 				// Allocate another one
 				if (m_allocated_buffer_size == m_allocated_buffer_capacity) {
-					ECS_ASSERT(m_crash_on_allocation_failure, "ResizableLinearAllocator maximum backup allocations have been exceeded");
+					ECS_ASSERT(!m_crash_on_allocation_failure, "ResizableLinearAllocator maximum backup allocations have been exceeded");
 					return nullptr;
 				}
 

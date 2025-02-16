@@ -18,7 +18,7 @@ namespace ECSEngine {
 		offset -= (uintptr_t)m_buffer;
 
 		if (offset + size > m_capacity) {
-			ECS_ASSERT(m_crash_on_allocation_failure, "StackAllocator capacity was exceeded!");
+			ECS_ASSERT(!m_crash_on_allocation_failure, "StackAllocator capacity was exceeded!");
 			return nullptr;
 		}
 

@@ -31,7 +31,7 @@ namespace ECSEngine {
 		ECS_ASSERT(alignment <= ECS_CACHE_LINE_SIZE);
 		if (size > m_size) {
 			// Early exit if it is too large
-			ECS_ASSERT(m_crash_on_allocation_failure, "MultipoolAllocator: single allocation exceeds the entire allocator's capacity");
+			ECS_ASSERT(!m_crash_on_allocation_failure, "MultipoolAllocator: single allocation exceeds the entire allocator's capacity");
 			return nullptr;
 		}
 
@@ -46,7 +46,7 @@ namespace ECSEngine {
 
 		if (index == 0xFFFFFFFF)
 		{
-			ECS_ASSERT(m_crash_on_allocation_failure, "MultipoolAllocator capacity was exceeded");
+			ECS_ASSERT(!m_crash_on_allocation_failure, "MultipoolAllocator capacity was exceeded");
 			return nullptr;
 		}
 
@@ -108,7 +108,7 @@ namespace ECSEngine {
 	{
 		if (new_size > m_size) {
 			// Early exit if it is too large
-			ECS_ASSERT(m_crash_on_allocation_failure, "MultipoolAllocator: single allocation exceeds the entire allocator's capacity");
+			ECS_ASSERT(!m_crash_on_allocation_failure, "MultipoolAllocator: single allocation exceeds the entire allocator's capacity");
 			return nullptr;
 		}
 
@@ -145,7 +145,7 @@ namespace ECSEngine {
 		}
 
 		// The request cannot be fulfilled
-		ECS_ASSERT(m_crash_on_allocation_failure, "MultipoolAllocator reallocate request cannot be fulfilled");
+		ECS_ASSERT(!m_crash_on_allocation_failure, "MultipoolAllocator reallocate request cannot be fulfilled");
 		return nullptr;
 	}
 

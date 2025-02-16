@@ -724,8 +724,10 @@ namespace ECSEngine {
 			// Or -1 if the element doesn't exist. It uses a simple memcmp as comparison, not a full reflection comparison
 			virtual ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) { ECS_ASSERT(false); return 0; }
 		};
-
-		struct ReflectionDefinitionInfo {
+		
+		// This structure is separate from ReflectionDefinitionInfo because we want that struct to inherit from this
+		// Structure but contain a field of this structure as well
+		struct ReflectionDefinitionInfoBase {
 			// Should be called only when is_basic_field is set to true
 			ReflectionField GetBasicField() const {
 				ReflectionField field;
@@ -750,7 +752,6 @@ namespace ECSEngine {
 			// When this is set, the basic field properties are filled in
 			bool is_basic_field = false;
 			// This gives the same information as custom type. The custom type field is provided for convenience,
-			// While this can be used to address external structures that mirror the one from the reflection custom types
 			unsigned int custom_type_index = -1;
 
 			struct {
@@ -770,6 +771,29 @@ namespace ECSEngine {
 			// These will be filled in case the definition is a reflection type or a custom type
 			const ReflectionType* type = nullptr;
 			ReflectionCustomTypeInterface* custom_type = nullptr;
+		};
+
+		struct ReflectionDefinitionInfo : public ReflectionDefinitionInfoBase {
+			// If this info is a pointer, this function will return the definition info that corresponds to the target
+			ECS_INLINE ReflectionDefinitionInfo GetPointerTargetInfo() const {
+				ReflectionDefinitionInfo info;
+
+				// Assign the base directly, and make the other fields unspecified.
+				*((ReflectionDefinitionInfoBase*)&info) = pointer_target;
+				info.pointer_target_definition = {};
+				ZeroOut(&info.pointer_target);
+
+				return info;
+			}
+
+			ECS_INLINE bool IsUserDefinedPointer() const {
+				return field_basic_type == ReflectionBasicFieldType::UserDefined && field_stream_type == ReflectionStreamFieldType::Pointer;
+			}
+
+			// This is information that is filled in if this definition is a pointer. The user can then
+			// Use this information to perform operations that require both the pointer info and the target info
+			ReflectionDefinitionInfoBase pointer_target;
+			Stream<char> pointer_target_definition;
 		};
 
 		// This structure can be used to reference fields from a type, including nested fields

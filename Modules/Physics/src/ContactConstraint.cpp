@@ -456,8 +456,14 @@ static void MatchContactConstraint(const EntityContact* contact, float3 center_o
 	constraint.contact.base.friction = contact->friction;
 	constraint.contact.base.restitution = contact->restitution;
 	// We also need to update the entities
-	constraint.contact.base.entity_A = contact->entity_A;
-	constraint.contact.base.entity_B = contact->entity_B;
+	if (constraint.contact.base.entity_A != contact->entity_A) {
+		// The order has changed. We need to change the rigidbody pointers,
+		// Since if an immediate removal of this contact is to happen, then
+		// The rigidbody will be reversed, causing issues.
+		constraint.contact.base.entity_A = contact->entity_A;
+		constraint.contact.base.entity_B = contact->entity_B;
+		swap(constraint.rigidbody_A, constraint.rigidbody_B);
+	}
 
 	// Increment the reference count such that it won't get discarded
 	constraint.reference_count++;

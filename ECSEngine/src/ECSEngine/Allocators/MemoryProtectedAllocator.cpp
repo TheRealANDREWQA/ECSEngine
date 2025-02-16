@@ -129,7 +129,7 @@ namespace ECSEngine {
 
 		if (chunk_size > 0) {
 			if (size > chunk_size) {
-				ECS_ASSERT(m_crash_on_allocation_failure, "MemoryProtectedAllocator allocation size exceeds the chunk size");
+				ECS_ASSERT(!m_crash_on_allocation_failure, "MemoryProtectedAllocator allocation size exceeds the chunk size");
 				return nullptr;
 			}
 
@@ -160,7 +160,7 @@ namespace ECSEngine {
 		}
 
 		if (allocation == nullptr) {
-			ECS_ASSERT(m_crash_on_allocation_failure, "MemoryProtectedAllocation allocation could not be fulfilled");
+			ECS_ASSERT(!m_crash_on_allocation_failure, "MemoryProtectedAllocation allocation could not be fulfilled");
 			return nullptr;
 		}
 

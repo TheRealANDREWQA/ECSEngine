@@ -515,12 +515,17 @@ namespace ECSEngine {
 			Stream<char> definition
 		);
 
-		// This call combines a separate call to SearchReflectionUserDefinedTypeByteSizeAlignment and SearchIsBlittable
-		// Into a single search, making it faster than calling separately those 2 functions. If an error is encountered,
-		// The byte size and the alignment returned are -1.
+		// Function that determines what type of definition this is, and fills in many relevant information about it.
+		// The definition string must be valid for the entire duration of this definition info structure.
 		ECSENGINE_API ReflectionDefinitionInfo SearchReflectionDefinitionInfo(
 			const ReflectionManager* reflection_manager,
 			Stream<char> definition
+		);
+
+		// Returns a definition info if the given field is a pointer field
+		ECSENGINE_API ReflectionDefinitionInfo GetReflectionDefinitionInfoForPointerField(
+			const ReflectionManager* reflection_manager, 
+			const ReflectionField* field
 		);
 
 		// For all fields which are streams it will determine the element byte size and fill it in inside the field
@@ -558,6 +563,14 @@ namespace ECSEngine {
 
 		// Deallocates non user defined fields. It will reset the stream/pointer structures to nullptr/0 size
 		ECSENGINE_API void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator);
+
+		ECSENGINE_API void DeallocateReflectionPointerFieldWithTag(
+			const ReflectionManager* reflection_manager,
+			const ReflectionDefinitionInfo& definition_info,
+			void* destination,
+			AllocatorPolymorphic allocator,
+			Stream<char> tag
+		);
 
 		ECSENGINE_API size_t GetBasicTypeArrayElementSize(const ReflectionFieldInfo& info);
 
@@ -763,6 +776,19 @@ namespace ECSEngine {
 			// Being used for the rest of the calls, such that the data is properly transmitted
 			ReflectionPassdownInfo* passdown_info = nullptr;
 		};
+
+		// If a reflection definition info containing a pointer is encountered, this function will ensure that a proper
+		// Copy is made for that pointer. It handles pointer references, but also owning pointers, even to user defined types
+		// The options pointer must be always specified
+		ECSENGINE_API void CopyReflectionFieldPointerWithTag(
+			const ReflectionManager* reflection_manager,
+			const ReflectionDefinitionInfo& definition_info,
+			const void* source,
+			void* destination,
+			AllocatorPolymorphic allocator,
+			Stream<char> tag,
+			const CopyReflectionDataOptions* options
+		);
 
 		// Copies the data from the old_type into the new type and checks for remappings
 		// The allocator is needed only when a stream type has changed its underlying type

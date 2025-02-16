@@ -5686,7 +5686,35 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// -----------------------------------------------------------------------------------------
 
-		ReflectionDefinitionInfo SearchReflectionDefinitionInfo(const ReflectionManager* reflection_manager, Stream<char> definition) {
+		// Forward declare this to use it inside SetReflectionDefinitionInfoPointerInfo
+		ReflectionDefinitionInfo SearchReflectionDefinitionInfoImpl(const ReflectionManager* reflection_manager, Stream<char> definition, bool is_pointer_target);
+
+		// For the given pointer target definition, fills in the definition info such that it contains the proper information
+		// For a pointer definition info
+		static void SetReflectionDefinitionInfoPointerInfo(
+			const ReflectionManager* reflection_manager, 
+			ReflectionDefinitionInfo& definition_info, 
+			Stream<char> pointer_target_definition, 
+			unsigned char pointer_indirection
+		) {
+			// Try to retrieve the basic type using this definition
+			definition_info.field_basic_type = GetReflectionFieldInfo(reflection_manager, pointer_target_definition).info.basic_type;
+
+			definition_info.byte_size = sizeof(void*);
+			definition_info.alignment = alignof(void*);
+			definition_info.is_blittable = false;
+			definition_info.is_basic_field = true;
+			// Set the field basic type as UserDefined, since we are currently not detecting the target pointer type
+			definition_info.field_stream_type = ReflectionStreamFieldType::Pointer;
+			definition_info.field_pointer_indirection = pointer_indirection;
+
+			// Here, we want the slicing to be done, since the target cannot be a recursive pointer
+			definition_info.pointer_target = (ReflectionDefinitionInfoBase)SearchReflectionDefinitionInfoImpl(reflection_manager, pointer_target_definition, true);
+			definition_info.pointer_target_definition = pointer_target_definition;
+		}
+
+		// In case this is a pointer target, allow it to not assert if it fails to find any match
+		static ReflectionDefinitionInfo SearchReflectionDefinitionInfoImpl(const ReflectionManager* reflection_manager, Stream<char> definition, bool is_pointer_target) {
 			ReflectionDefinitionInfo definition_info;
 
 			// Check pointers
@@ -5697,17 +5725,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					definition.size--;
 				}
 				ECS_ASSERT(indirection <= UCHAR_MAX, "Pointer indirection exceeded maximum limit!");
-				
-				// Try to retrieve the basic type using this definition
-				definition_info.field_basic_type = GetReflectionFieldInfo(reflection_manager, definition).info.basic_type;
+				ECS_ASSERT(indirection == 1, "Pointer indirection of level greater than 1 is not allowed for ReflectionDefinitionInfo");
 
-				definition_info.byte_size = sizeof(void*);
-				definition_info.alignment = alignof(void*);
-				definition_info.is_blittable = false;
-				definition_info.is_basic_field = true;
-				// Set the field basic type as UserDefined, since we are currently not detecting the target pointer type
-				definition_info.field_stream_type = ReflectionStreamFieldType::Pointer;
-				definition_info.field_pointer_indirection = (unsigned char)indirection;
+				SetReflectionDefinitionInfoPointerInfo(reflection_manager, definition_info, definition, indirection);
+
 				return definition_info;
 			}
 
@@ -5801,12 +5822,28 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return definition_info;
 			}
 
-			ECS_ASSERT(false, "Invalid reflection definition search!");
+			ECS_ASSERT(is_pointer_target, "Invalid reflection definition search!");
 			// Signal an error
 			definition_info.byte_size = -1;
 			definition_info.alignment = -1;
 			definition_info.is_blittable = false;
 			return definition_info;
+		}
+
+		ReflectionDefinitionInfo SearchReflectionDefinitionInfo(const ReflectionManager* reflection_manager, Stream<char> definition) {
+			return SearchReflectionDefinitionInfoImpl(reflection_manager, definition, false);
+		}
+
+		// -----------------------------------------------------------------------------------------
+
+		ReflectionDefinitionInfo GetReflectionDefinitionInfoForPointerField(
+			const ReflectionManager* reflection_manager,
+			const ReflectionField* field
+		) {
+			ECS_ASSERT(GetReflectionFieldPointerIndirection(field->info) == 1, "GetReflectionDefinitionInfoForPointerField does not allow pointers of indirection greater than 1");
+			ReflectionDefinitionInfo result;
+			SetReflectionDefinitionInfoPointerInfo(reflection_manager, result, field->definition, GetReflectionFieldPointerIndirection(field->info));
+			return result;
 		}
 
 		// -----------------------------------------------------------------------------------------
@@ -5968,10 +6005,17 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					destination_stream->capacity = source_stream->capacity;
 				}
 				else if (stream_type == ReflectionStreamFieldType::Pointer) {
-					// Just copy the pointer
+					// CHANGED: Previously, this would simply reference the pointer, but now the default is to allocate all the time - 
+					// The function CopyReflectionFieldBasicWithTag handles pointer references
 					const void** source_ptr = (const void**)source;
-					const void** destination_ptr = (const void**)destination;
-					*destination_ptr = *source_ptr;
+					void** destination_ptr = (void**)destination;
+					if (*source_ptr == nullptr) {
+						*destination_ptr = nullptr;
+					}
+					else {
+						*destination_ptr = Allocate(allocator, info->byte_size);
+						memcpy(*destination_ptr, *source_ptr, info->byte_size);
+					}
 				}
 				else if (stream_type == ReflectionStreamFieldType::PointerSoA) {
 					const void** source_ptr = (const void**)source;
@@ -6042,6 +6086,53 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void CopyReflectionFieldPointerWithTag(
+			const ReflectionManager* reflection_manager,
+			const ReflectionDefinitionInfo& definition_info,
+			const void* source,
+			void* destination,
+			AllocatorPolymorphic allocator,
+			Stream<char> tag,
+			const CopyReflectionDataOptions* options
+		) {
+			// Handle the pointer reference case, which is the same for user defined and basic types
+			Stream<char> as_reference_key;
+			Stream<char> as_reference_custom_element_type;
+
+			if (GetReflectionPointerAsReferenceParams(tag, as_reference_key, as_reference_custom_element_type)) {
+				// We need to handle it, if the string parameter is specified
+				if (as_reference_key.size > 0) {
+					// Use the token route, it is faster
+					const void* source_pointer = *(void**)source;
+					size_t source_token = options->passdown_info->GetPointerTargetToken(reflection_manager, as_reference_key, as_reference_custom_element_type, source_pointer, true);
+					ECS_ASSERT(source_token != -1, "Reflection pointer reference token unmatched");
+					// Retrieve the value from the destination
+					void* destination_pointer = options->passdown_info->RetrievePointerTargetValueFromToken(reflection_manager, as_reference_key, as_reference_custom_element_type, source_token, false);
+					ECS_ASSERT(destination_pointer != nullptr, "Reflection destination pointer reference is unmatched");
+					// Write the current pointer now
+					*(void**)destination = destination_pointer;
+
+					// We can exit from the function now
+					return;
+				}
+			}
+
+			ECS_ASSERT(definition_info.field_pointer_indirection == 1, "Pointers of indirection greater than 1 are not allowed for CopyReflectionFieldPointerWithTag");
+			void** field_data = (void**)destination;
+			const void* source_pointer = *(void**)source;
+			if (source_pointer == nullptr) {
+				// Handle the nullptr case
+				*field_data = nullptr;
+			}
+			else {
+				// Allocate the pointer, and then forward the call
+				*field_data = Allocate(allocator, definition_info.pointer_target.byte_size, definition_info.pointer_target.alignment);
+				CopyReflectionTypeInstance(reflection_manager, definition_info.pointer_target_definition, definition_info.GetPointerTargetInfo(), source_pointer, *field_data, 1, options, tag);
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void DeallocateReflectionFieldBasic(const ReflectionFieldInfo* info, void* destination, AllocatorPolymorphic allocator) {
 			ReflectionStreamFieldType stream_type = info->stream_type;
 			if (stream_type != ReflectionStreamFieldType::Basic && stream_type != ReflectionStreamFieldType::BasicTypeArray) {
@@ -6056,7 +6147,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					destination_stream->Deallocate(allocator);
 				}
 				else if (stream_type == ReflectionStreamFieldType::Pointer) {
-					// For pointers, don't do anything, since we can't know exactly if it is allocated or not
+					// For pointers, this function assumes that the pointer is always allocated, the other function
+					// Deals with pointers that can be references
+					ECS_ASSERT(GetReflectionFieldPointerIndirection(*info) == 1, "DeallocateReflectionFieldBasic does not accept pointers with indirection bigger than 1");
+					void* target_pointer = *(void**)destination;
+					if (target_pointer != nullptr) {
+						Deallocate(allocator, target_pointer);
+					}
+					*(void**)destination = nullptr;
 				}
 				else if (stream_type == ReflectionStreamFieldType::PointerSoA) {
 					void** destination_ptr = (void**)destination;
@@ -6068,6 +6166,38 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				else {
 					ECS_ASSERT(false, "Unknown stream type");
 				}
+			}
+		}
+
+		void DeallocateReflectionPointerFieldWithTag(
+			const ReflectionManager* reflection_manager,
+			const ReflectionDefinitionInfo& definition_info,
+			void* destination,
+			AllocatorPolymorphic allocator,
+			Stream<char> tag
+		) {
+			// Handle the pointer reference case, which is the same for user defined and basic types
+			Stream<char> as_reference_key;
+			Stream<char> as_reference_custom_element_type;
+			void** destination_address = (void**)destination;
+
+			if (GetReflectionPointerAsReferenceParams(tag, as_reference_key, as_reference_custom_element_type)) {
+				// We need to handle it, if the string parameter is specified
+				if (as_reference_key.size > 0) {
+					// Set the pointer to nullptr, that's all for the reference case
+					*destination_address = nullptr;
+
+					// We can exit from the function now
+					return;
+				}
+			}
+
+			ECS_ASSERT(definition_info.field_pointer_indirection == 1, "Pointers of indirection greater than 1 are not allowed for DeallocateReflectionPointerFieldWithTag");
+			// Handle the nullptr case
+			if (*destination_address != nullptr) {
+				// Allocate the pointer, and then forward the call
+				DeallocateReflectionInstanceBuffers(reflection_manager, definition_info.pointer_target_definition, definition_info.GetPointerTargetInfo(), *destination_address, allocator);
+				Deallocate(allocator, *destination_address);
 			}
 		}
 
@@ -7040,12 +7170,23 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			else {
 				// Check fundamental type
 				if (definition_info.is_basic_field) {
-					// Create a mock reflection field
-					ReflectionField field = definition_info.GetBasicField();
-					for (size_t index = 0; index < element_count; index++) {
-						const void* source_element = OffsetPointer(source, definition_info.byte_size * index);
-						void* destination_element = OffsetPointer(destination, definition_info.byte_size * index);
-						CopyReflectionFieldBasicWithTag(reflection_manager, &field.info, source_element, destination_element, options->allocator, tags, options->passdown_info);
+					// We have to branch for pointers. If we have a pointer, handle it with the special function,
+					// Else the normal function can deal with it
+					if (definition_info.field_stream_type == ReflectionStreamFieldType::Pointer) {
+						for (size_t index = 0; index < element_count; index++) {
+							const void* source_element = OffsetPointer(source, definition_info.byte_size * index);
+							void* destination_element = OffsetPointer(destination, definition_info.byte_size * index);
+							CopyReflectionFieldPointerWithTag(reflection_manager, definition_info, source_element, destination_element, options->allocator, tags, options);
+						}
+					}
+					else {
+						// Create a mock reflection field and use the basic copy function
+						ReflectionField field = definition_info.GetBasicField();
+						for (size_t index = 0; index < element_count; index++) {
+							const void* source_element = OffsetPointer(source, definition_info.byte_size * index);
+							void* destination_element = OffsetPointer(destination, definition_info.byte_size * index);
+							CopyReflectionFieldBasicWithTag(reflection_manager, &field.info, source_element, destination_element, options->allocator, tags, options->passdown_info);
+						}
 					}
 				}
 				else if (definition_info.type != nullptr) {
@@ -7807,6 +7948,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// Can set the data directly
 								SetReflectionFieldResizableStreamVoidEx(field->info, destination, source_data, false);
 							}
+
+							// Update the stream allocator, if the option is specified and the field is resizable
+							if (options->custom_options.overwrite_resizable_allocators && field->info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+								ResizableStream<void>* resizable_stream = (ResizableStream<void>*)destination;
+								resizable_stream->allocator = field_allocator;
+							}
 						}
 					}
 					else {
@@ -7851,8 +7998,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							}
 						}
 						else {
-							// Check the pointer case - pointer to user defined types
-							// Gets here
+							// Check the pointer case
+							// TODO: pointer to user defined types with give size reach here?
 							if (IsPointerWithSoA(field->info.stream_type)) {
 								// Can mempcy the pointer
 								memcpy(
@@ -7921,71 +8068,81 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// Iterate over the fields in order to reduce the branching required
 			for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
-				if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					// TODO: Refactor this to use the other overload?
-
-					// Pre-cache the reflection type of the nested type or the custom reflection index
-					// If neither of these is set, then we can simply skip the step
-					
-					// The functor will be called with (Stream<void> user_defined_stream) as argument
-					auto deallocate_buffers = [&](auto functor) {
-						for (size_t index = 0; index < element_count; index++) {
-							void* current_source = OffsetPointer(source, index * type_byte_size);
-
-							Stream<void> user_defined_stream;
-							if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Basic) {
-								user_defined_stream = { OffsetPointer(current_source, type->fields[field_index].info.pointer_offset), 1 };
-							}
-							else if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Pointer) {
-								user_defined_stream = { *(void**)OffsetPointer(current_source, type->fields[field_index].info.pointer_offset), 1 };
-							}
-							else {
-								user_defined_stream = GetReflectionFieldStreamVoidEx(type->fields[field_index].info, current_source);
-							}
-
-							// The size of the stream is the element count
-							functor(user_defined_stream);
-						}
-					};
-
-					const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[field_index].definition);
-					if (nested_type != nullptr) {
-						deallocate_buffers([&](Stream<void> user_defined_stream) {
-							DeallocateReflectionTypeInstanceBuffers(
-								reflection_manager,
-								nested_type,
-								user_defined_stream.buffer,
-								allocator,
-								user_defined_stream.size
-							);
-						});
-					}
-					ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[field_index].definition);
-					if (custom_type != nullptr) {
-						deallocate_buffers([&](Stream<void> user_defined_stream) {
-							ReflectionCustomTypeDeallocateData deallocate_data;
-							deallocate_data.allocator = allocator;
-							deallocate_data.definition = type->fields[field_index].definition;
-							deallocate_data.element_count = user_defined_stream.size;
-							deallocate_data.reflection_manager = reflection_manager;
-							deallocate_data.source = user_defined_stream.buffer;
-							custom_type->Deallocate(&deallocate_data);
-						});
-					}
-				}
-
-				// The SoA needs to be handled separately
-				if (IsStream(type->fields[field_index].info.stream_type)) {
+				// Handle the pointer case separately
+				if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Pointer) {
+					ReflectionDefinitionInfo field_definition_info = GetReflectionDefinitionInfoForPointerField(reflection_manager, &type->fields[field_index]);
 					for (size_t index = 0; index < element_count; index++) {
 						void* current_source = OffsetPointer(source, index * type_byte_size);
-						ResizableStream<void> buffer_data = GetReflectionFieldResizableStreamVoid(type->fields[field_index].info, current_source);
-						if (type->fields[field_index].info.stream_type != ReflectionStreamFieldType::ResizableStream) {
-							buffer_data.allocator = allocator;
-						}
-						buffer_data.FreeBuffer();
+						DeallocateReflectionPointerFieldWithTag(reflection_manager, field_definition_info, type->GetField(current_source, field_index), allocator, type->fields[field_index].tag);
+					}
+				}
+				else {
+					if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+						// TODO: Refactor this to use the other overload?
 
-						// Set this data back such that we zero out the field
-						SetReflectionFieldResizableStreamVoid(type->fields[field_index].info, current_source, buffer_data);
+						// Pre-cache the reflection type of the nested type or the custom reflection index
+						// If neither of these is set, then we can simply skip the step
+
+						// The functor will be called with (Stream<void> user_defined_stream) as argument
+						auto deallocate_buffers = [&](auto functor) {
+							for (size_t index = 0; index < element_count; index++) {
+								void* current_source = OffsetPointer(source, index * type_byte_size);
+
+								Stream<void> user_defined_stream;
+								if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Basic) {
+									user_defined_stream = { OffsetPointer(current_source, type->fields[field_index].info.pointer_offset), 1 };
+								}
+								else if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Pointer) {
+									user_defined_stream = { *(void**)OffsetPointer(current_source, type->fields[field_index].info.pointer_offset), 1 };
+								}
+								else {
+									user_defined_stream = GetReflectionFieldStreamVoidEx(type->fields[field_index].info, current_source);
+								}
+
+								// The size of the stream is the element count
+								functor(user_defined_stream);
+							}
+						};
+
+						const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[field_index].definition);
+						if (nested_type != nullptr) {
+							deallocate_buffers([&](Stream<void> user_defined_stream) {
+								DeallocateReflectionTypeInstanceBuffers(
+									reflection_manager,
+									nested_type,
+									user_defined_stream.buffer,
+									allocator,
+									user_defined_stream.size
+								);
+								});
+						}
+						ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[field_index].definition);
+						if (custom_type != nullptr) {
+							deallocate_buffers([&](Stream<void> user_defined_stream) {
+								ReflectionCustomTypeDeallocateData deallocate_data;
+								deallocate_data.allocator = allocator;
+								deallocate_data.definition = type->fields[field_index].definition;
+								deallocate_data.element_count = user_defined_stream.size;
+								deallocate_data.reflection_manager = reflection_manager;
+								deallocate_data.source = user_defined_stream.buffer;
+								custom_type->Deallocate(&deallocate_data);
+								});
+						}
+					}
+
+					// The SoA needs to be handled separately
+					if (IsStream(type->fields[field_index].info.stream_type)) {
+						for (size_t index = 0; index < element_count; index++) {
+							void* current_source = OffsetPointer(source, index * type_byte_size);
+							ResizableStream<void> buffer_data = GetReflectionFieldResizableStreamVoid(type->fields[field_index].info, current_source);
+							if (type->fields[field_index].info.stream_type != ReflectionStreamFieldType::ResizableStream) {
+								buffer_data.allocator = allocator;
+							}
+							buffer_data.FreeBuffer();
+
+							// Set this data back such that we zero out the field
+							SetReflectionFieldResizableStreamVoid(type->fields[field_index].info, current_source, buffer_data);
+						}
 					}
 				}
 			}
@@ -8017,10 +8174,19 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		) {
 			if (!definition_info.is_blittable) {
 				if (definition_info.is_basic_field) {
-					ReflectionField field = definition_info.GetBasicField();
-					for (size_t index = 0; index < element_count; index++) {
-						void* element = OffsetPointer(source, index * definition_info.byte_size);
-						DeallocateReflectionFieldBasic(&field.info, element, allocator);
+					// The pointer case needs to be handled differently
+					if (definition_info.field_stream_type == ReflectionStreamFieldType::Pointer) {
+						for (size_t index = 0; index < element_count; index++) {
+							void* element = OffsetPointer(source, index * definition_info.byte_size);
+							DeallocateReflectionPointerFieldWithTag(reflection_manager, definition_info, element, allocator, {});
+						}
+					}
+					else {
+						ReflectionField field = definition_info.GetBasicField();
+						for (size_t index = 0; index < element_count; index++) {
+							void* element = OffsetPointer(source, index * definition_info.byte_size);
+							DeallocateReflectionFieldBasic(&field.info, element, allocator);
+						}
 					}
 				}
 				else if (definition_info.type != nullptr) {
@@ -9046,7 +9212,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				target->cached_get_data.is_token = is_token;
 				target->cached_get_data.index_or_token = value;
 				target->cached_get_data.source = field_data;
-				return ECS_REFLECTION_CUSTOM_TYPES[target->custom_type_index]->GetElement(&target->cached_get_data);
+				// The resulting pointer will be pointing at the address of the pointer, it is not the pointer value itself
+				return *(void**)ECS_REFLECTION_CUSTOM_TYPES[target->custom_type_index]->GetElement(&target->cached_get_data);
 			}
 		}
 
