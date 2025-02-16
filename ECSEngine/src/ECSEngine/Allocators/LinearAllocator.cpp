@@ -16,7 +16,7 @@ namespace ECSEngine {
 		offset -= (uintptr_t)m_buffer;
 
 		if (offset + size > m_capacity) {
-			ECS_ASSERT(m_crash_on_allocation_failure, "LinearAllocator capacity exceeded!");
+			ECS_ASSERT(!m_crash_on_allocation_failure, "LinearAllocator capacity exceeded!");
 			return nullptr;
 		}
 		

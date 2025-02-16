@@ -1619,7 +1619,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
 		ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
 
-		ECS_FORMAT_TEMP_STRING(buffers_definition, "ResizableStream<CapacityStream<T>>", template_arguments[0]);
+		ECS_FORMAT_TEMP_STRING(buffers_definition, "ResizableStream<CapacityStream<{#}>>", template_arguments[0]);
 		
 		Stream<char> original_definition = data->definition;
 		data->definition = buffers_definition;

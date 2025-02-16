@@ -97,7 +97,7 @@ namespace ECSEngine {
 		}
 		
 		if (size > BaseAllocatorMaxAllocationSize(memory_manager->m_backup_info)) {
-			ECS_ASSERT(memory_manager->m_crash_on_allocation_failure, "MemoryManager allocation size exceeds the backup size after the initial capacity was exhausted");
+			ECS_ASSERT(!memory_manager->m_crash_on_allocation_failure, "MemoryManager allocation size exceeds the backup size after the initial capacity was exhausted");
 			return nullptr;
 		}
 
@@ -126,7 +126,7 @@ namespace ECSEngine {
 		}
 
 		if (allocation == nullptr) {
-			ECS_ASSERT(memory_manager->m_crash_on_allocation_failure, "MemoryManager allocation cannot be fulfilled");
+			ECS_ASSERT(!memory_manager->m_crash_on_allocation_failure, "MemoryManager allocation cannot be fulfilled");
 			return nullptr;
 		}
 
@@ -167,7 +167,7 @@ namespace ECSEngine {
 						ECSEngine::Deallocate(current_allocator, block);
 						if (reallocation == nullptr) {
 							// Special case, we tried general allocation but it failed, return the failure back
-							ECS_ASSERT(memory_manager->m_crash_on_allocation_failure, "MemoryManager reallocation cannot be fulfilled");
+							ECS_ASSERT(!memory_manager->m_crash_on_allocation_failure, "MemoryManager reallocation cannot be fulfilled");
 							return nullptr;
 						}
 					}
