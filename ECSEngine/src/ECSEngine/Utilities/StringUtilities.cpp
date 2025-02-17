@@ -824,7 +824,7 @@ namespace ECSEngine {
 	{
 		Stream<char> opened_paranthesis = FindFirstCharacter(string, '(');
 		if (opened_paranthesis.size > 0) {
-			Stream<char> closed_paranthesis = FindFirstCharacter(opened_paranthesis, ')');
+			Stream<char> closed_paranthesis = FindCharacterReverse(opened_paranthesis, ')');
 			if (closed_paranthesis.size > 0) {
 				opened_paranthesis = SkipWhitespace(opened_paranthesis);
 				closed_paranthesis = SkipWhitespace(closed_paranthesis, -1);

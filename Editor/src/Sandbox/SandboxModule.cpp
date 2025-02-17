@@ -687,7 +687,15 @@ ComponentFunctions GetSandboxComponentFunctions(const EditorState* editor_state,
 		module_component_functions->SetComponentFunctionsTo(&component_functions, editor_state->editor_components.GetComponentAllocatorSize(component_name));
 	}
 	else {
-		component_functions = GetReflectionTypeRuntimeComponentFunctions(editor_state->GlobalReflectionManager(), component_type, stack_allocator);
+		// If the type is not present, emit a warning
+		if (component_type == nullptr) {
+			ECS_FORMAT_TEMP_STRING(error_message, "Could not auto generate component functions for type \"{#}\" because the reflection type is missing. "
+				"This might have unwanted consequences (corrupted sandbox state)", component_name);
+			EditorSetConsoleWarn(error_message);
+		}
+		else {
+			component_functions = GetReflectionTypeRuntimeComponentFunctions(editor_state->GlobalReflectionManager(), component_type, stack_allocator);
+		}
 	}
 
 	if (compare_entry != nullptr) {
@@ -695,7 +703,10 @@ ComponentFunctions GetSandboxComponentFunctions(const EditorState* editor_state,
 			module_component_functions->SetCompareEntryTo(compare_entry);
 		}
 		else {
-			*compare_entry = GetReflectionTypeRuntimeCompareEntry(editor_state->GlobalReflectionManager(), component_type, stack_allocator);
+			// Perform this operation only if the type is present. An error message was printed in the above check
+			if (component_type != nullptr) {
+				*compare_entry = GetReflectionTypeRuntimeCompareEntry(editor_state->GlobalReflectionManager(), component_type, stack_allocator);
+			}
 		}
 	}
 

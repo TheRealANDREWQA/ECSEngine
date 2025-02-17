@@ -64,6 +64,11 @@ namespace ECSEngine {
 			void* GetElement(ReflectionCustomTypeGetElementData* data) override;
 
 			ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) override;
+
+			bool ValidateTags(ReflectionCustomTypeValidateTagData* data) override {
+				// Nothing to validate for this type
+				return true;
+			}
 		};
 
 		struct SparseSetCustomTypeInterface : public ReflectionCustomTypeInterface {
@@ -86,6 +91,11 @@ namespace ECSEngine {
 			void* GetElement(ReflectionCustomTypeGetElementData* data) override;
 
 			ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) override;
+
+			bool ValidateTags(ReflectionCustomTypeValidateTagData* data) override {
+				// Nothing to validate for this type
+				return true;
+			}
 		};
 
 		struct DataPointerCustomTypeInterface : public ReflectionCustomTypeInterface {
@@ -102,6 +112,11 @@ namespace ECSEngine {
 			bool Compare(ReflectionCustomTypeCompareData* data) override;
 
 			void Deallocate(ReflectionCustomTypeDeallocateData* data) override;
+
+			bool ValidateTags(ReflectionCustomTypeValidateTagData* data) override {
+				// Nothing to validate for this type
+				return true;
+			}
 		};
 
 		// This interface handles AllocatorPolymorphic as well
@@ -119,6 +134,11 @@ namespace ECSEngine {
 			bool Compare(ReflectionCustomTypeCompareData* data) override;
 
 			void Deallocate(ReflectionCustomTypeDeallocateData* data) override;
+
+			bool ValidateTags(ReflectionCustomTypeValidateTagData* data) override {
+				// Nothing to validate for this type
+				return true;
+			}
 		};
 
 		struct HashTableCustomTypeInterface : ReflectionCustomTypeInterface {
@@ -141,6 +161,8 @@ namespace ECSEngine {
 			void* GetElement(ReflectionCustomTypeGetElementData* data) override;
 
 			ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) override;
+
+			bool ValidateTags(ReflectionCustomTypeValidateTagData* data) override;
 		};
 
 		struct DeckCustomTypeInterface : ReflectionCustomTypeInterface {
@@ -163,6 +185,11 @@ namespace ECSEngine {
 			void* GetElement(ReflectionCustomTypeGetElementData* data) override;
 
 			ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) override;
+		
+			bool ValidateTags(ReflectionCustomTypeValidateTagData* data) override {
+				// Nothing to validate for this type
+				return true;
+			}
 		};
 
 		// ---------------------------------------------------------------------------------------------------------------------
@@ -210,11 +237,6 @@ namespace ECSEngine {
 		// For an untyped hash table, it will allocate an allocation and set the table buffers accordingly
 		// Returns the number of bytes needed for the allocation
 		size_t HashTableCustomTypeAllocateAndSetBuffers(void* hash_table, size_t capacity, AllocatorPolymorphic allocator, bool is_soa, const ReflectionDefinitionInfo& value_definition_info, const ReflectionDefinitionInfo& identifier_definition_info);
-
-		enum ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_INDEX : unsigned char {
-			ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE,
-			ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER
-		};
 
 		// ---------------------------------------------------------------------------------------------------------------------
 

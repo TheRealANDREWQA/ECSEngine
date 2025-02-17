@@ -1488,6 +1488,29 @@ namespace ECSEngine {
 			}
 		}
 
+		bool HashTableCustomTypeInterface::ValidateTags(ReflectionCustomTypeValidateTagData* data) {
+			// Validate that if the pointer reference tag is specified, then the custom element options for it are specified as well,
+			// Since we want the user to be explicit about which element type it should target. The target element should be correct as well
+			Stream<char> pointer_key;
+			Stream<char> custom_element_type;
+			if (GetReflectionPointerReferenceKeyParams(data->tag, pointer_key, custom_element_type)) {
+				if (pointer_key.size > 0) {
+					bool success = custom_element_type == STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE) || custom_element_type == STRING(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER);
+					if (!success) {
+						if (custom_element_type.size == 0) {
+							ECS_FORMAT_ERROR_MESSAGE(data->error_message, "Hash table pointer reference was specified, but the element for which it applies it was not");
+						}
+						else {
+							ECS_FORMAT_ERROR_MESSAGE(data->error_message, "Hash table pointer reference was specified, but the element for which it applies it is not correct");
+						}
+					}
+					return success;
+				}
+			}
+
+			return true;
+		}
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion

@@ -37,7 +37,7 @@ struct PHYSICS_API ECS_REFLECT_GLOBAL_COMPONENT_PRIVATE SolverData {
 
 	[[ECS_MAIN_ALLOCATOR]]
 	MemoryManager allocator;
-	[[ECS_POINTER_KEY_REFERENCE_TARGET(ContactConstraint)]]
+	[[ECS_POINTER_KEY_REFERENCE_TARGET(ContactConstraint, ECS_CUSTOM_TYPE_ELEMENT(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE))]]
 	ContactTable contact_table;
 
 	IslandManager island_manager;

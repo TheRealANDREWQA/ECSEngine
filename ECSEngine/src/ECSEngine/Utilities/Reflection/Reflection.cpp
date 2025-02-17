@@ -1153,7 +1153,8 @@ namespace ECSEngine {
 					}
 					else if (parameter_splits.size == 2) {
 						// Check that the second parameter is the custom macro
-						if (!parameter_splits[1].StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
+						Stream<char> second_parameter = TrimWhitespace(parameter_splits[1]);
+						if (!second_parameter.StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
 							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_KEY_REFERENCE_TARGET for type \"{#}\": field \"{#}\" has 2 parameters," 
 								" but the second one should be ECS_CUSTOM_TYPE_ELEMENT. ",
 								type.name, type.fields[index].name);
@@ -2190,6 +2191,41 @@ namespace ECSEngine {
 			// Can clear the stack allocator
 			stack_allocator.Clear();
 
+			// After the typedefs are replaced, validate the tags for custom type fields on the reflection types that were parsed
+			// And on the template types as well.
+
+			// Returns true if the validation succeeded for this type, else false, in which case it will print an error message
+			// And free the folder hierarchy
+			auto validate_reflection_type_custom_types = [&](const ReflectionType* type) -> bool {
+				for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
+					ReflectionCustomTypeInterface* custom_interface = GetReflectionCustomType(type->fields[field_index].definition);
+					if (custom_interface != nullptr) {
+						ECS_STACK_CAPACITY_STREAM(char, custom_type_error_message, 512);
+						ReflectionCustomTypeValidateTagData validate_data;
+						validate_data.definition = type->fields[field_index].definition;
+						validate_data.tag = type->fields[field_index].tag;
+						validate_data.error_message = &custom_type_error_message;
+						if (!custom_interface->ValidateTags(&validate_data)) {
+							ECS_FORMAT_TEMP_STRING(message, "Validation for field \"{#}\" of type \"{#}\" has failed. Reason: {#}", type->fields[field_index].name, type->name, custom_type_error_message);
+							WriteErrorMessage(data, message);
+							FreeFolderHierarchy(folder_index);
+							return false;
+						}
+					}
+				}
+
+				return true;
+			};
+
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t type_index = 0; type_index < data[data_index].types.size; type_index++) {
+					const ReflectionType* type = &data[data_index].types[type_index];
+					if (!validate_reflection_type_custom_types(type)) {
+						return false;
+					}
+				}
+			}
+
 			// Bind the type templates now - after the typedef replacement
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				for (size_t template_index = 0; template_index < data[data_index].type_templates.size; template_index++) {
@@ -2389,6 +2425,15 @@ namespace ECSEngine {
 			for (unsigned int instantiated_template_index = 0; instantiated_template_index < instantiated_type_templates.size; instantiated_template_index++) {
 				const ReflectionType* type = GetType(instantiated_type_templates[instantiated_template_index]);
 				if (!instantiate_type_templates(*type)) {
+					return false;
+				}
+			}
+
+			// After all templates instantiations have been determined, validate their custom type fields as well. We can't do that on
+			// Template registration because the definition of fields changes depending on the template parameters
+			for (unsigned int index = 0; index < instantiated_type_templates.size; index++) {
+				const ReflectionType* instantiated_type = GetType(instantiated_type_templates[index]);
+				if (!validate_reflection_type_custom_types(instantiated_type)) {
 					return false;
 				}
 			}
@@ -3271,8 +3316,9 @@ namespace ECSEngine {
 				AddedType added_inheritance_type;
 				added_inheritance_type.allocator = Allocator();
 				added_inheritance_type.coalesced_allocation = true;
-				// The name is stable, it's the actual allocated name
-				added_inheritance_type.type_name = types_with_inheritance_array[index];
+				// The name is not stable, we need to retrieve the ReflectionType with which it is associated, since that name
+				// Is actually stable
+				added_inheritance_type.type_name = GetType(types_with_inheritance_array[index])->name;
 				folders[folder_index].added_types.Add(&added_inheritance_type);
 			}
 
