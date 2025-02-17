@@ -695,6 +695,13 @@ namespace ECSEngine {
 			const void* element;
 		};
 
+		struct ReflectionCustomTypeValidateTagData {
+			Stream<char> definition;
+			Stream<char> tag;
+			// The custom type should use this field to communicate back to the user what the error is
+			CapacityStream<char>* error_message;
+		};
+
 		struct ReflectionCustomTypeInterface {
 			virtual bool Match(ReflectionCustomTypeMatchData* data) = 0;
 
@@ -723,6 +730,11 @@ namespace ECSEngine {
 			// Returns the index that corresponds to the given element for a given element name type
 			// Or -1 if the element doesn't exist. It uses a simple memcmp as comparison, not a full reflection comparison
 			virtual ReflectionCustomTypeGetElementIndexOrToken FindElement(ReflectionCustomTypeFindElementData* data) { ECS_ASSERT(false); return 0; }
+
+			// Should return true if the tags for the given definition are valid, else false. This function is called on the BindApprovedData
+			// Call of the reflection manager, such that incorrect tag definitions are rejected as early as possible and the user can remedy
+			// Them before it gets to an internal function
+			virtual bool ValidateTags(ReflectionCustomTypeValidateTagData* data) = 0;
 		};
 		
 		// This structure is separate from ReflectionDefinitionInfo because we want that struct to inherit from this

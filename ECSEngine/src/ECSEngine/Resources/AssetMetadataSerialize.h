@@ -27,6 +27,11 @@ namespace ECSEngine {
 		bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
 
 		void Deallocate(Reflection::ReflectionCustomTypeDeallocateData* data) override;
+
+		bool ValidateTags(Reflection::ReflectionCustomTypeValidateTagData* data) override {
+			// Nothing to validate for this type
+			return true;
+		}
 	};
 	
 	ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(MaterialAsset);

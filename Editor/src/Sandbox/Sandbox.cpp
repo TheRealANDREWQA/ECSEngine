@@ -3335,6 +3335,8 @@ void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigne
 
 bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool disable_error_messages)
 {
+	// TODO: Don't allow starting a sandbox runtime if the reflection hierarchy for a module could not be parsed
+
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE);
 

@@ -122,3 +122,14 @@
 // deserialize the data if the file contains a link type and the new type is not a link
 // or the other way around
 #define ECS_COMPONENT_STRICT_DESERIALIZE "StrictDeserialize"
+
+namespace ECSEngine {
+	
+	// Enums for custom types should go here, such that they can be readily used when ReflectionMacros.h is included
+	
+	enum ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_INDEX : unsigned char {
+		ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE,
+		ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_IDENTIFIER
+	};
+
+}
