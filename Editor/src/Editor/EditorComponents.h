@@ -363,6 +363,10 @@ struct EditorComponents {
 	// And not by a module
 	bool IsECSEngineComponent(Component component, ECS_COMPONENT_TYPE type) const;
 
+	// Returns true if the given component belongs to a module whose reflection is currently failed,
+	// Which means that its reflection type is not available, else false
+	bool IsComponentFromFailedReflectedModule(const EditorState* editor_state, Stream<char> component_name) const;
+
 	unsigned int ModuleComponentCount(Stream<char> name, ECS_COMPONENT_TYPE type) const;
 
 	unsigned int ModuleComponentCount(unsigned int index, ECS_COMPONENT_TYPE type) const;

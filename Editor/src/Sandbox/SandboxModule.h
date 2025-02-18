@@ -30,6 +30,12 @@ bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandb
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true if the all of the modules that this sandbox is referencing are successfully reflected, else false.
+// Can optionally add an error message parameter to be filled in if this function fails
+bool AreSandboxModulesReflected(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<char>* error_message = nullptr);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void AggregateSandboxModuleEnabledDebugDrawTasks(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 

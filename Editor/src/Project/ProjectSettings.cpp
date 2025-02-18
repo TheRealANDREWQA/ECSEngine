@@ -11,7 +11,7 @@ bool ReadProjectSettings(EditorState* editor_state)
 	ECS_STACK_CAPACITY_STREAM(wchar_t, file_path, 512);
 	GetProjectSettingsFilePath(editor_state, file_path);
 	if (ExistsFileOrFolder(file_path)) {
-		const ReflectionManager* reflection_manager = editor_state->EditorReflectionManager();
+		const ReflectionManager* reflection_manager = editor_state->ModuleReflectionManager();
 		return Deserialize(reflection_manager, reflection_manager->GetType(STRING(ProjectSettings)), &editor_state->project_settings, file_path) == ECS_DESERIALIZE_OK;
 	}
 	else {
@@ -25,7 +25,7 @@ bool WriteProjectSettings(const EditorState* editor_state)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, file_path, 512);
 	GetProjectSettingsFilePath(editor_state, file_path);
-	const ReflectionManager* reflection_manager = editor_state->EditorReflectionManager();
+	const ReflectionManager* reflection_manager = editor_state->ModuleReflectionManager();
 	return Serialize(reflection_manager, reflection_manager->GetType(STRING(ProjectSettings)), &editor_state->project_settings, file_path) == ECS_SERIALIZE_OK;
 }
 

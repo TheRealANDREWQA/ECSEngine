@@ -3799,6 +3799,37 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void ReflectionManager::Free() {
+			// Call the normal remove, and at the end release whatever tables there are still in use
+			unsigned int hierarchy_count = folders.size;
+			for (unsigned int index = 0; index < hierarchy_count; index++) {
+				RemoveFolderHierarchy(0);
+			}
+			
+			// In case there are some entries left, it means that some sort of overrides were added, at the moment
+			// Assert that they are not encountered, such that we don't have to deal with those
+			ECS_ASSERT(type_definitions.GetCount() == 0 && enum_definitions.GetCount() == 0 && typedefs.GetCount() == 0 &&
+				type_templates.GetCount() == 0 && valid_dependencies.GetCount() == 0 && constants.size == 0,
+				"ReflectionManager free call did not clear all entries!");
+
+			type_definitions.Deallocate(Allocator());
+			enum_definitions.Deallocate(Allocator());
+			// The field table entries themselves must not be deallocated, since they reference static strings
+			field_table.Deallocate(Allocator());
+			typedefs.Deallocate(Allocator());
+			type_templates.Deallocate(Allocator());
+			valid_dependencies.Deallocate(Allocator());
+			folders.FreeBuffer();
+			constants.FreeBuffer();
+			// The blittable default data must be deallocated
+			for (unsigned int index = 0; index < blittable_types.size; index++) {
+				Deallocate(Allocator(), blittable_types[index].default_data);
+			}
+			blittable_types.FreeBuffer();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionType* ReflectionManager::GetType(Stream<char> name)
 		{
 			ResourceIdentifier identifier = ResourceIdentifier(name);
@@ -4391,6 +4422,48 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		void ReflectionManager::RemoveFolderHierarchy(unsigned int folder_index)
 		{
 			FreeFolderHierarchy(folder_index);
+
+			unsigned int last_folder_index = folders.size - 1;
+			
+			if (last_folder_index != folder_index) {
+				// Update all the folder indices of the last folder hierarchy to this new folder location.
+				type_definitions.ForEach([&](ReflectionType& type, ResourceIdentifier identifier) {
+					if (type.folder_hierarchy_index == last_folder_index) {
+						type.folder_hierarchy_index = folder_index;
+					}
+				});
+
+				enum_definitions.ForEach([&](ReflectionEnum& enum_, ResourceIdentifier identifier) {
+					if (enum_.folder_hierarchy_index == last_folder_index) {
+						enum_.folder_hierarchy_index = folder_index;
+					}
+				});
+
+				for (size_t index = 0; index < constants.size; index++) {
+					if (constants[index].folder_hierarchy == last_folder_index) {
+						constants[index].folder_hierarchy = folder_index;
+					}
+				}
+
+				typedefs.ForEach([&](ReflectionTypedef& typedef_, ResourceIdentifier identifier) {
+					if (typedef_.folder_hierarchy_index == last_folder_index) {
+						typedef_.folder_hierarchy_index = folder_index;
+					}
+				});
+
+				type_templates.ForEach([&](ReflectionTypeTemplate& template_, ResourceIdentifier identifier) {
+					if (template_.folder_hierarchy_index == last_folder_index) {
+						template_.folder_hierarchy_index = folder_index;
+					}
+				});
+
+				valid_dependencies.ForEach([&](ReflectionValidDependency& dependency, ResourceIdentifier identifier) {
+					if (dependency.folder_index == last_folder_index) {
+						dependency.folder_index = folder_index;
+					}
+				});
+			}
+
 			folders.RemoveSwapBack(folder_index);
 		}
 

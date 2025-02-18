@@ -284,6 +284,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 	module->library_name[module->library_name.size] = L'\0';
 	module->solution_last_write_time = 0;
 	module->is_graphics_module = is_graphics_module;
+	module->is_reflection_successful = false;
 	module->dll_imports = { nullptr, 0 };
 
 	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
@@ -1812,7 +1813,7 @@ unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, reflection_path, 512);
 	bool success = GetModuleReflectSolutionPath(editor_state, module_index, reflection_path);
 	if (success) {
-		return editor_state->module_reflection->reflection->GetHierarchyIndex(reflection_path);
+		return editor_state->ModuleReflectionManager()->GetHierarchyIndex(reflection_path);
 	}
 	return -1;
 }
@@ -1949,11 +1950,14 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			);
 			EditorSetConsoleWarn(console_message);
 
-			// Remove the module from the editor components - if it was already loaded
-			unsigned int editor_component_module_index = editor_state->editor_components.FindModule(ascii_name);
+			// Don't remove the module from the editor components - if it was already loaded
+			// Because this will trigger the components to be lost inside the editor, and the user
+			// Would have to recreate the components, which is unacceptable
+			/*unsigned int editor_component_module_index = editor_state->editor_components.FindModule(ascii_name);
 			if (editor_component_module_index != -1) {
 				editor_state->editor_components.RemoveModule(editor_state, editor_component_module_index, index);
-			}
+			}*/
+			module->is_reflection_successful = false;
 		}
 		else {
 			// Create all the link types for the components inside the reflection manager
@@ -1966,17 +1970,17 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			};
 			ECS_STACK_CAPACITY_STREAM(unsigned int, type_indices, 512);
 			UIReflectionDrawerSearchOptions search_options;
-			//search_options.exclude_tags = { component_tags, std::size(component_tags) };
+			//search_options.exclude_tags = { component_tags, ECS_COUNTOF(component_tags) };
 			search_options.indices = &type_indices;
-			unsigned int types_created = editor_state->module_reflection->CreateTypesForHierarchy(folder_hierarchy, search_options);
+			unsigned int types_created = editor_state->ui_reflection->CreateTypesForHierarchy(folder_hierarchy, search_options);
 
 			// Convert all stream types to resizable
 			for (unsigned int type_index = 0; type_index < type_indices.size; type_index++) {
-				UIReflectionType* type = editor_state->module_reflection->GetType(type_indices[type_index]);
-				editor_state->module_reflection->ConvertTypeStreamsToResizable(type);
+				UIReflectionType* type = editor_state->ui_reflection->GetType(type_indices[type_index]);
+				editor_state->ui_reflection->ConvertTypeStreamsToResizable(type);
 				// If this is a component, disable its stream writes
 				if (editor_state->editor_components.GetComponentType(type->name) != ECS_COMPONENT_TYPE_COUNT) {
-					editor_state->module_reflection->DisableInputWrites(type);
+					editor_state->ui_reflection->DisableInputWrites(type);
 				}
 			}
 
@@ -1985,11 +1989,13 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 
 			// Update the engine components
 			editor_state->editor_components.UpdateComponents(editor_state, module_reflection, folder_hierarchy, ascii_name);
+			module->is_reflection_successful = true;
 		}
 	}
 	else {
 		ECS_FORMAT_TEMP_STRING(console_message, "Could not find source folder for module {#} at {#}.", module->library_name, module->solution_path);
 		EditorSetConsoleWarn(console_message);
+		module->is_reflection_successful = false;
 	}
 }
 
@@ -2401,10 +2407,10 @@ void ReleaseModuleReflection(EditorState* editor_state, unsigned int index)
 	bool success = GetModuleReflectSolutionPath(editor_state, index, source_path);
 	if (success) {
 		// Release the UI types
-		unsigned int hierarchy_index = editor_state->module_reflection->reflection->GetHierarchyIndex(source_path);
+		unsigned int hierarchy_index = editor_state->ui_reflection->reflection->GetHierarchyIndex(source_path);
 		ECS_ASSERT(hierarchy_index != -1);
-		editor_state->module_reflection->DestroyAllFromFolderHierarchy(hierarchy_index);
-		editor_state->module_reflection->reflection->FreeFolderHierarchy(hierarchy_index);
+		editor_state->ui_reflection->DestroyAllFromFolderHierarchy(hierarchy_index);
+		editor_state->ui_reflection->reflection->FreeFolderHierarchy(hierarchy_index);
 	}
 	else {
 		ECS_FORMAT_TEMP_STRING(console_message, "Could not find module's {#} source folder.", editor_state->project_modules->buffer[index].library_name);

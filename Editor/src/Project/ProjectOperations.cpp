@@ -487,8 +487,8 @@ bool OpenProjectFile(ProjectOperationData data, bool info_only) {
 	options.error_message = &error_message;
 
 	ECS_DESERIALIZE_CODE status = Deserialize(
-		data.editor_state->ui_reflection->reflection, 
-		data.editor_state->ui_reflection->reflection->GetType(STRING(ProjectFile)), 
+		data.editor_state->ModuleReflectionManager(), 
+		data.editor_state->ModuleReflectionManager()->GetType(STRING(ProjectFile)), 
 		file_data, 
 		project_path, 
 		&options

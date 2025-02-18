@@ -194,6 +194,23 @@ bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandb
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool AreSandboxModulesReflected(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<char>* error_message) {
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		if (!sandbox->modules_in_use[index].is_deactivated) {
+			const EditorModule* module = editor_state->project_modules->buffer + sandbox->modules_in_use[index].module_index;
+			if (!module->is_reflection_successful) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Module {#} is not reflected", module->library_name);
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void AggregateSandboxModuleEnabledDebugDrawTasks(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<Stream<char>>* task_names)
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);

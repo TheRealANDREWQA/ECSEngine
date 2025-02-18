@@ -67,6 +67,8 @@ struct EditorModule {
 	ECSEngine::Stream<ECSEngine::Stream<char>> dll_imports;
 	size_t solution_last_write_time;
 	bool is_graphics_module;
+	// In case the reflection failed for this module, this value will be set to false
+	bool is_reflection_successful;
 
 	EditorModuleInfo infos[EDITOR_MODULE_CONFIGURATION_COUNT];
 };

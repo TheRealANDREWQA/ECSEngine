@@ -3965,7 +3965,7 @@ namespace ECSEngine {
 
 				// If the user defined type doesn't exist in the UI, then create it, if it exists, else false
 				if (GetType(user_defined_type) == nullptr) {
-					const ReflectionType* reflection_type = reflection->GetType(user_defined_type);
+					const ReflectionType* reflection_type = reflection->TryGetType(user_defined_type);
 					if (reflection_type == nullptr) {
 						return false;
 					}

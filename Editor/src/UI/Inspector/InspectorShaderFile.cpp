@@ -465,7 +465,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 	drawer->NextRow();
 	config.flag_count -= 2;
 
-	const Reflection::ReflectionManager* reflection_manager = editor_state->EditorReflectionManager();
+	const Reflection::ReflectionManager* reflection_manager = editor_state->ModuleReflectionManager();
 	const Reflection::ReflectionEnum* shader_type_enum_ = reflection_manager->GetEnum(STRING(ECS_SHADER_TYPE));
 	const Reflection::ReflectionEnum* compile_flag_enum_ = reflection_manager->GetEnum(STRING(ECS_SHADER_COMPILE_FLAGS));
 

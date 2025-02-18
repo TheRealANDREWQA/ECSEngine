@@ -51,19 +51,19 @@ void AllocateModuleSettings(
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 
 	SEARCH_OPTIONS_NO_SETTINGS(options, type_indices);
-	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
+	editor_state->ui_reflection->GetHierarchyTypes(hierarchy_index, options);
 
 	if (type_indices.size > 0) {
 		settings.Initialize(allocator, 0, type_indices.size);
 
 		// For each instance, create a corresponding void* data buffer
-		ReflectionManager* reflection_manager = editor_state->module_reflection->reflection;
+		const ReflectionManager* reflection_manager = editor_state->ModuleReflectionManager();
 
 		// Allocate a buffer for the instance pointers
 		EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
 
 		for (size_t index = 0; index < type_indices.size; index++) {
-			UIReflectionType* ui_type = editor_state->module_reflection->GetType(type_indices[index]);
+			const UIReflectionType* ui_type = editor_state->ui_reflection->GetType(type_indices[index]);
 
 			Stream<char> type_name = ui_type->name;
 			const ReflectionType* type = reflection_manager->GetType(type_name);
@@ -98,12 +98,12 @@ void CreateModuleSettings(
 	SEARCH_OPTIONS(settings_id, options, instance_indices);
 
 	// The tagged types are excluded since they do not get a reflection type in the first place
-	instance_indices.size = editor_state->module_reflection->CreateInstanceForHierarchy(hierarchy_index, options);
+	instance_indices.size = editor_state->ui_reflection->CreateInstanceForHierarchy(hierarchy_index, options);
 	instance_indices.AssertCapacity();
 
 	if (instance_indices.size > 0) {
 		// For each instance, create a corresponding void* data buffer
-		ReflectionManager* reflection_manager = editor_state->module_reflection->reflection;
+		const ReflectionManager* reflection_manager = editor_state->ModuleReflectionManager();
 
 		// Allocate a buffer for the instance pointers
 		EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
@@ -111,7 +111,7 @@ void CreateModuleSettings(
 		settings.size = 0;
 
 		for (size_t index = 0; index < instance_indices.size; index++) {
-			UIReflectionInstance* instance = editor_state->module_reflection->GetInstance(instance_indices[index]);
+			UIReflectionInstance* instance = editor_state->ui_reflection->GetInstance(instance_indices[index]);
 
 			Stream<char> type_name = instance->type_name;
 			const ReflectionType* type = reflection_manager->GetType(type_name);
@@ -128,10 +128,10 @@ void CreateModuleSettings(
 			// This will alias the name of the UI reflection type and that's fine
 			settings.Add({ instance_memory, type_name });
 
-			editor_state->module_reflection->BindInstancePtrs(instance, instance_memory);
-			editor_state->module_reflection->reflection->SetInstanceDefaultData(type->name, instance_memory);
+			editor_state->ui_reflection->BindInstancePtrs(instance, instance_memory);
+			editor_state->ui_reflection->reflection->SetInstanceDefaultData(type->name, instance_memory);
 
-			editor_state->module_reflection->AssignInstanceResizableAllocator(instance, allocator);
+			editor_state->ui_reflection->AssignInstanceResizableAllocator(instance, allocator);
 		}
 	}
 }
@@ -177,7 +177,7 @@ void DestroyModuleSettings(
 	SEARCH_OPTIONS(settings_id, options, type_indices);
 
 	// Destroy all instances now
-	editor_state->module_reflection->DestroyAllInstancesFromFolderHierarchy(hierarchy_index, options);
+	editor_state->ui_reflection->DestroyAllInstancesFromFolderHierarchy(hierarchy_index, options);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -235,7 +235,7 @@ void GetModuleSettingsUITypesIndices(const EditorState* editor_state, unsigned i
 {
 	SEARCH_OPTIONS_NO_SETTINGS(options, dummy_indices);
 	options.indices = &indices;
-	editor_state->module_reflection->GetHierarchyTypes(GetModuleReflectionHierarchyIndex(editor_state, module_index), options);
+	editor_state->ui_reflection->GetHierarchyTypes(GetModuleReflectionHierarchyIndex(editor_state, module_index), options);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -244,7 +244,7 @@ void GetModuleSettingsUIInstancesIndices(const EditorState* editor_state, unsign
 {
 	SEARCH_OPTIONS(settings_id, options, dummy_indices);
 	options.indices = &indices;
-	editor_state->module_reflection->GetHierarchyInstances(GetModuleReflectionHierarchyIndex(editor_state, module_index), options);
+	editor_state->ui_reflection->GetHierarchyInstances(GetModuleReflectionHierarchyIndex(editor_state, module_index), options);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -261,7 +261,7 @@ bool LoadModuleSettings(
 	SEARCH_OPTIONS_NO_SETTINGS(options, indices);
 
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
+	editor_state->ui_reflection->GetHierarchyTypes(hierarchy_index, options);
 
 	if (indices.size > 0) {
 		AllocatorPolymorphic editor_allocator = editor_state->editor_allocator;
@@ -274,7 +274,7 @@ bool LoadModuleSettings(
 		DeserializeOptions deserialize_options;
 		deserialize_options.field_allocator = allocator;
 		
-		const Reflection::ReflectionManager* reflection = editor_state->module_reflection->reflection;
+		const Reflection::ReflectionManager* reflection = editor_state->GlobalReflectionManager();
 		uintptr_t file_ptr = (uintptr_t)file_data.buffer;
 
 		// Need the deserialize table in order to determine the setting index
@@ -293,11 +293,7 @@ bool LoadModuleSettings(
 				return false;
 			}
 
-			// Null terminate the name
-			char previous_char = field_table.types[0].name[field_table.types[0].name.size];
-			field_table.types[0].name[field_table.types[0].name.size] = '\0';
-			size_t settings_index = SearchSetting(settings, field_table.types[0].name.buffer);
-			field_table.types[0].name[field_table.types[0].name.size] = previous_char;
+			size_t settings_index = SearchSetting(settings, field_table.types[0].name);
 
 			if (settings_index == -1) {
 				// The type no longer exists, just skip it
@@ -345,14 +341,14 @@ bool SaveModuleSettings(const EditorState* editor_state, unsigned int module_ind
 	SEARCH_OPTIONS_NO_SETTINGS(options, indices);
 
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
+	editor_state->ui_reflection->GetHierarchyTypes(hierarchy_index, options);
 
 	if (indices.size > 0) {
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(const ReflectionType*, module_types, indices.size);
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, instance_memory, indices.size);
 
 		// Get the reflection types in order to serialize
-		ReflectionManager* reflection = editor_state->module_reflection->reflection;
+		ReflectionManager* reflection = editor_state->ui_reflection->reflection;
 		for (size_t index = 0; index < indices.size; index++) {
 			module_types[index] = reflection->GetType(editor_state->module_reflection->GetType(indices[index])->name);
 			size_t setting_index = SearchSetting(settings, module_types[index]->name);
@@ -402,16 +398,16 @@ void SetModuleDefaultSettings(
 	SEARCH_OPTIONS_NO_SETTINGS(options, indices);
 
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
+	editor_state->ui_reflection->GetHierarchyTypes(hierarchy_index, options);
 
 	if (indices.size > 0) {
 		for (size_t index = 0; index < indices.size; index++) {
-			UIReflectionType* ui_type = editor_state->module_reflection->GetType(indices[index]);
-			const ReflectionType* type = editor_state->module_reflection->reflection->GetType(ui_type->name);
+			UIReflectionType* ui_type = editor_state->ui_reflection->GetType(indices[index]);
+			const ReflectionType* type = editor_state->ModuleReflectionManager()->GetType(ui_type->name);
 			size_t setting_index = SearchSetting(settings, ui_type->name);
 			void* instance_memory = settings[setting_index].data;
 
-			editor_state->module_reflection->reflection->SetInstanceDefaultData(type->name, instance_memory);
+			editor_state->ModuleReflectionManager()->SetInstanceDefaultData(type->name, instance_memory);
 		}
 	}
 }

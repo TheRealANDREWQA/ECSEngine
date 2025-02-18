@@ -300,6 +300,32 @@ bool EditorComponents::IsECSEngineComponent(Component component, ECS_COMPONENT_T
 
 // ----------------------------------------------------------------------------------------------
 
+bool EditorComponents::IsComponentFromFailedReflectedModule(const EditorState* editor_state, Stream<char> component_name) const {
+	// A short way of figuring out that is by checking to see if the reflection type exists in the module reflection of the editor state,
+	// Because if it does not, then the module failed to be reflected, but the problem is that it might interfere in the future with other systems. 
+	// For the moment, use the longer route of figuring out from which module this type comes from and check the module's status
+	// Use the loaded module index, since this allows us to discern between the first module, which is ECSEngine, and that it doesn't have an equivalent
+	// In ProjectModules.
+	unsigned int loaded_module_index = FindComponentModule(component_name);
+	ECS_ASSERT(loaded_module_index != -1);
+
+	if (loaded_module_index == 0) {
+		// Belongs to ECSEngine, if it is the first index
+		return false;
+	}
+
+	unsigned int project_modules_index = ReflectionModuleIndex(editor_state, loaded_module_index);
+	if (project_modules_index == -1) {
+		// The module might have been removed, signal this as true, which means failure
+		return true;
+	}
+
+	const EditorModule* module = editor_state->project_modules->buffer + project_modules_index;
+	return !module->is_reflection_successful;
+}
+
+// ----------------------------------------------------------------------------------------------
+
 unsigned int EditorComponents::ModuleComponentCount(Stream<char> name, ECS_COMPONENT_TYPE component_type) const
 {
 	unsigned int module_index = FindModule(name);
@@ -1225,10 +1251,7 @@ EDITOR_EVENT(FinalizeEventSingleThreaded) {
 		// Update the UIDrawer
 		Stream<char> name = data->event_.name;
 
-		UIReflectionDrawer* ui_reflection = editor_state->module_reflection;
-		if (data->reflection_manager == editor_state->ui_reflection->reflection) {
-			ui_reflection = editor_state->ui_reflection;
-		}
+		UIReflectionDrawer* ui_reflection = editor_state->ui_reflection;
 
 		// If the UIReflectionType doesn't already exists, create it
 		UIReflectionType* ui_type = ui_reflection->GetType(name);
@@ -1244,10 +1267,7 @@ EDITOR_EVENT(FinalizeEventSingleThreaded) {
 	break;
 	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	{
-		UIReflectionDrawer* ui_reflection = editor_state->module_reflection;
-		if (data->reflection_manager == editor_state->ui_reflection->reflection) {
-			ui_reflection = editor_state->ui_reflection;
-		}
+		UIReflectionDrawer* ui_reflection = editor_state->ui_reflection;
 
 		// Update the UIDrawer, the destroy call will destroy all instances of that type
 		// If it still exists. If the module is released all at once, then this type might not exist
@@ -1746,9 +1766,6 @@ void EditorComponents::RemoveLinkType(EditorState* editor_state, Stream<char> na
 {
 	if (editor_state->ui_reflection->GetType(name) != nullptr) {
 		editor_state->ui_reflection->DestroyType(name);
-	}
-	if (editor_state->module_reflection->GetType(name) != nullptr) {
-		editor_state->module_reflection->DestroyType(name);
 	}
 
 	RemoveType(name);
@@ -2847,7 +2864,7 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 				data->editor_state,
 				sandbox_index,
 				EDITOR_SANDBOX_VIEWPORT_RUNTIME,
-				data->editor_state->module_reflection->reflection,
+				data->editor_state->ModuleReflectionManager(),
 				data->event_to_handle,
 				data->runtime_options.buffer + sandbox_index
 			);
@@ -2858,7 +2875,7 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 			data->editor_state,
 			sandbox_index,
 			EDITOR_SANDBOX_VIEWPORT_SCENE,
-			data->editor_state->module_reflection->reflection,
+			data->editor_state->ModuleReflectionManager(),
 			data->event_to_handle,
 			data->scene_options.buffer + sandbox_index
 		);
@@ -2871,7 +2888,7 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 		data->finalize_event_lock->Lock();
 		data->editor_state->editor_components.FinalizeEvent(
 			data->editor_state, 
-			data->editor_state->module_reflection->reflection, 
+			data->editor_state->ModuleReflectionManager(),
 			data->event_to_handle
 		);
 		data->handled_events->Add(data->event_to_handle);
@@ -2911,7 +2928,7 @@ void UserEventsWindowDestroy(ActionData* action_data) {
 		unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(data->editor_state, index);
 		data->editor_state->editor_components.UpdateComponents(
 			data->editor_state, 
-			data->editor_state->module_reflection->reflection, 
+			data->editor_state->ModuleReflectionManager(), 
 			hierarchy_index, 
 			library_name
 		);
@@ -3145,18 +3162,11 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 				remove_event_step(index);
 			};
 
-			const ReflectionType* first_type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
-			const ReflectionType* second_type = editor_state->module_reflection->reflection->TryGetType(component_event.conflicting_name);
+			const ReflectionType* first_type = editor_state->ModuleReflectionManager()->TryGetType(component_event.name);
+			const ReflectionType* second_type = editor_state->ModuleReflectionManager()->TryGetType(component_event.conflicting_name);
 
 			// If one of the types has been removed, then remove the event
 			// Else if their component ids have changed
-			if (first_type == nullptr) {
-				first_type = editor_state->ui_reflection->reflection->TryGetType(component_event.name);
-			}
-
-			if (second_type == nullptr) {
-				second_type = editor_state->ui_reflection->reflection->TryGetType(component_event.conflicting_name);
-			}
 
 			if (first_type == nullptr || second_type == nullptr) {
 				remove_same_id(index);
@@ -3179,7 +3189,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION) {
-			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			const ReflectionType* type = editor_state->ModuleReflectionManager()->TryGetType(component_event.name);
 			if (type != nullptr) {
 				if (component_event.missing_function_name == ECS_COMPONENT_ID_FUNCTION) {
 					Component component_id = GetReflectionTypeComponent(type);
@@ -3215,7 +3225,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS) {
-			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			const ReflectionType* type = editor_state->ModuleReflectionManager()->TryGetType(component_event.name);
 			if (type != nullptr) {
 				bool has_buffers = HasReflectionTypeComponentBuffers(type);
 				size_t allocator_size = GetReflectionComponentAllocatorSize(type);
@@ -3235,7 +3245,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_MISSING_TARGET) {
-			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			const ReflectionType* type = editor_state->ModuleReflectionManager()->TryGetType(component_event.name);
 			if (type != nullptr) {
 				if (IsReflectionTypeLinkComponent(type)) {
 					Stream<char> target = GetReflectionTypeLinkComponentTarget(type);
@@ -3273,7 +3283,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET) {
-			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			const ReflectionType* type = editor_state->ModuleReflectionManager()->TryGetType(component_event.name);
 			if (type != nullptr) {
 				if (IsReflectionTypeLinkComponent(type)) {
 					Stream<char> target = GetReflectionTypeLinkComponentTarget(type);
@@ -3303,7 +3313,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT) {
-			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			const ReflectionType* type = editor_state->ModuleReflectionManager()->TryGetType(component_event.name);
 			if (type != nullptr) {
 				if (IsReflectionTypeLinkComponent(type)) {
 					Stream<char> target = GetReflectionTypeLinkComponentTarget(type);
@@ -3329,7 +3339,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			}
 		}
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_GLOBAL_COMPONENT_MISSING_TYPE_ALLOCATOR) {
-			const ReflectionType* type = editor_state->module_reflection->reflection->TryGetType(component_event.name);
+			const ReflectionType* type = editor_state->ModuleReflectionManager()->TryGetType(component_event.name);
 			if (type != nullptr) {
 				bool has_buffers = HasReflectionTypeComponentBuffers(type);
 				if (has_buffers) {
