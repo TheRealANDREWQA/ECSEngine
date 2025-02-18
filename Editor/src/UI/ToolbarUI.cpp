@@ -458,11 +458,12 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 	const ProjectFile* project_file = (const ProjectFile*)data->editor_state->project_file;
 	ECS_STACK_CAPACITY_STREAM(char, project_name, 256);
 	ConvertWideCharsToASCII(project_file->project_name, project_name);
-	project_transform.scale = drawer.GetLabelScale(project_name);
+	project_transform.scale.x = drawer.GetLabelScale(project_name).x;
+	project_transform.scale.y = drawer.GetRegionScale().y;
 	project_transform.position.x = drawer.GetAlignedToRightOverLimit(project_transform.scale.x).x;
 	project_transform.position.y = drawer.current_y;
 	config.AddFlag(project_transform);
-	drawer.TextLabel(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_BORDER, config, project_name);
+	drawer.TextLabel(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_BORDER | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y, config, project_name);
 }
 
 // ------------------------------------------------------------------------------------------------

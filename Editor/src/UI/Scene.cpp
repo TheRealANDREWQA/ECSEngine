@@ -937,7 +937,16 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 				// Get an initial entity selected and see if a gizmo was selected
 				// Only a single selection
 				ECS_STACK_CAPACITY_STREAM(unsigned int, selected_entity_instance, 1);
-				GetInstancesFromFramebufferFilteredCPU(data->cpu_framebuffer, hovered_texel_offset, hovered_texel_offset + uint2(1, 1), &selected_entity_instance);
+				uint2 bottom_right_position = hovered_texel_offset;
+
+				// In case the values are already at their limit, do not go overboard
+				if (bottom_right_position.x < data->cpu_framebuffer.dimensions.x) {
+					bottom_right_position.x++;
+				}
+				if (bottom_right_position.y < data->cpu_framebuffer.dimensions.y) {
+					bottom_right_position.y++;
+				}
+				GetInstancesFromFramebufferFilteredCPU(data->cpu_framebuffer, hovered_texel_offset, bottom_right_position, &selected_entity_instance);
 				// Check for the case nothing is selected
 				Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
 				// Check to see if this a gizmo Entity
@@ -1013,8 +1022,14 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 					system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 					ECS_STACK_CAPACITY_STREAM(unsigned int, selected_entities, ECS_KB * 16);
 					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
-					uint2 top_left = BasicTypeMin(hovered_texel_offset, data->click_texel_position);
-					uint2 bottom_right = BasicTypeMax(hovered_texel_offset, data->click_texel_position);
+					uint2 top_left = hovered_texel_offset;
+					uint2 bottom_right = hovered_texel_offset;
+					// In case some sort of error happened because the mouse is out of the window bounds,
+					// Do not use the click positions
+					if (data->click_texel_position.x != -1 && data->click_texel_position.y != -1) {
+						top_left = BasicTypeMin(hovered_texel_offset, data->click_texel_position);
+						bottom_right = BasicTypeMax(hovered_texel_offset, data->click_texel_position);
+					}
 
 					if (top_left.x != bottom_right.x && top_left.y != bottom_right.y) {
 						GetInstancesFromFramebufferFilteredCPU(data->cpu_framebuffer, top_left, bottom_right, &selected_entities);
