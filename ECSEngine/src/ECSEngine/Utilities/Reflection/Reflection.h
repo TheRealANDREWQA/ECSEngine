@@ -186,6 +186,9 @@ namespace ECSEngine {
 			// Frees the entries that were added with the call AddFrom(). The same options that were used to add the entries should be used here as well
 			void FreeEntries(const AddFromOptions& options);
 
+			// Deletes all the memory used by this instance
+			void Free();
+
 			// It asserts that it exists
 			ReflectionType* GetType(Stream<char> name);
 			ReflectionType* GetType(unsigned int index);

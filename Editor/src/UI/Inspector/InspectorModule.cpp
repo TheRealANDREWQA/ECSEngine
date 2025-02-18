@@ -296,7 +296,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 		// Coalesce the string
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, type_names, 32);
 		for (size_t index = 0; index < reflected_type_indices.size; index++) {
-			const UIReflectionType* type = editor_state->module_reflection->GetType(reflected_type_indices[index]);
+			const UIReflectionType* type = editor_state->ui_reflection->GetType(reflected_type_indices[index]);
 			type_names[index] = type->name;
 		}
 		type_names.size = reflected_type_indices.size;
@@ -528,7 +528,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 			config.AddFlag(dependent_size);
 			for (size_t index = 0; index < instance_indices.size; index++) {
 				// Display them as collapsing headers
-				UIReflectionInstance* instance = editor_state->module_reflection->GetInstance(instance_indices[index]);
+				UIReflectionInstance* instance = editor_state->ui_reflection->GetInstance(instance_indices[index]);
 
 				Stream<char> separator = FindFirstCharacter(instance->name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR);
 				Stream<char> name = { instance->name.buffer, instance->name.size - separator.size };
@@ -541,7 +541,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 					options.config = &config;
 					options.global_configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE;
 					options.additional_configs = { ui_reflection_configs, used_count };
-					editor_state->module_reflection->DrawInstance(
+					editor_state->ui_reflection->DrawInstance(
 						instance,
 						&options
 					);

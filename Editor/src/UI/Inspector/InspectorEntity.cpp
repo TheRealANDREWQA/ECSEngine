@@ -224,16 +224,10 @@ struct InspectorDrawEntityData {
 	void Clear(EditorState* editor_state) {
 		if (created_instances.size > 0) {
 			for (size_t index = 0; index < created_instances.size; index++) {
-				if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
-					// It is from the module side
-					editor_state->module_reflection->DestroyInstance(created_instances[index].name);
-				}
-				else {
-					// It must be from the engine side - or it was removed entirely from source code
-					// In that case, we don't have to destroy the instance
-					if (editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr) {
-						editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
-					}
+				// If the instance is not found, the type was removed entirely from source code
+				// In that case, we don't have to destroy the instance
+				if (editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr) {
+					editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
 				}
 			}
 		}
@@ -391,15 +385,7 @@ struct InspectorDrawEntityData {
 	}
 
 	bool IsCreatedInstanceValid(EditorState* editor_state, unsigned int index) const {
-		if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
-			return true;
-		}
-
-		if (editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr) {
-			return true;
-		}
-
-		return false;
+		return editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr;
 	}
 
 	void InitializeLinkApplyModifierData(const EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) {
@@ -438,17 +424,12 @@ struct InspectorDrawEntityData {
 			allocator.Deallocate(created_instances[index].pointer_bound);
 		}
 
-		if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
-			// It is from the module side
-			editor_state->module_reflection->DestroyInstance(created_instances[index].name);
+		// If the instance is not found, the type was removed entirely from source code
+		// In that case, we don't have to destroy the instance
+		if (editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr) {
+			editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
 		}
-		else {
-			// It must be from the engine side - or it was removed entirely from source code
-			// In that case, we don't need to destroy any instance
-			if (editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr) {
-				editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
-			}
-		}
+
 		allocator.Deallocate(created_instances[index].name.buffer);
 		created_instances.RemoveSwapBack(index);
 	}
@@ -746,13 +727,9 @@ struct InspectorDrawEntityData {
 
 	void UpdateComponentAllocators(EditorState* editor_state, unsigned int sandbox_index) {
 		for (size_t index = 0; index < created_instances.size; index++) {
-			UIReflectionDrawer* ui_drawer = editor_state->module_reflection;
+			UIReflectionDrawer* ui_drawer = editor_state->ui_reflection;
 			UIReflectionInstance* instance = ui_drawer->GetInstance(created_instances[index].name);
-			if (instance == nullptr) {
-				ui_drawer = editor_state->ui_reflection;
-				instance = ui_drawer->GetInstance(created_instances[index].name);
-				ECS_ASSERT(instance != nullptr);
-			}
+			ECS_ASSERT(instance != nullptr);
 
 			Stream<char> component_name = CreatedInstanceComponentName(index);
 			if (editor_state->editor_components.IsLinkComponent(component_name)) {
@@ -1223,6 +1200,25 @@ static void DrawComponents(
 		instance_name.size = 0;
 		Stream<char> current_component_name = editor_state->editor_components.ComponentFromID(signature[index].value, component_type);
 		ECS_ASSERT(current_component_name.size > 0);
+
+		// In case a component comes from a module that has failed the reflection, we cannot display it since
+		// The type is gone from module_reflection, and we would crash if we try to access it
+		if (editor_state->editor_components.IsComponentFromFailedReflectedModule(editor_state, current_component_name)) {
+			// Display an empty header that is inaccessible to signal to the user that the component exists,
+			// But the reflection is not available
+			UIDrawConfig inactive_config;
+			UIConfigActiveState active_state;
+			active_state.state = false;
+			inactive_config.AddFlag(active_state);
+			
+			// This value is used only as a dummy, since the value will never be changed due to the always
+			// Inactive state.
+			static bool inactive_flag_dummy = false;
+
+			drawer->CollapsingHeader(UI_CONFIG_ACTIVE_STATE, inactive_config, current_component_name, &inactive_flag_dummy, []() {});
+			continue;
+		}
+
 		Stream<char> original_component_name = current_component_name;
 
 		// Check to see if the component has a link to it
@@ -1250,14 +1246,8 @@ static void DrawComponents(
 			Stream<char> base_instance_name = data->is_global_component ? current_component_name : base_entity_name;
 			InspectorComponentUIIInstanceName(current_component_name, base_instance_name, sandbox_index, base_info->inspector_index, instance_name);
 
-			// Check to see whether or not the component is from the engine side or from the module side
-			UIReflectionDrawer* ui_drawer = editor_state->module_reflection;
+			UIReflectionDrawer* ui_drawer = editor_state->ui_reflection;
 			UIReflectionType* type = editor_state->ui_reflection->GetType(current_component_name);
-			if (type != nullptr) {
-				// Engine side
-				ui_drawer = editor_state->ui_reflection;
-			}
-			// Else module side
 
 			UIReflectionInstance* instance = ui_drawer->GetInstance(instance_name);
 
@@ -1692,13 +1682,9 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		if (viewport_source == EDITOR_SANDBOX_VIEWPORT_SCENE && last_data_source == EDITOR_SANDBOX_VIEWPORT_RUNTIME) {
 			// Invalidate the buffers
 			for (size_t index = 0; index < data->created_instances.size; index++) {
-				UIReflectionDrawer* ui_drawer = editor_state->module_reflection;
+				UIReflectionDrawer* ui_drawer = editor_state->ui_reflection;
 				UIReflectionInstance* instance = ui_drawer->GetInstance(data->created_instances[index].name);
-				if (instance == nullptr) {
-					ui_drawer = editor_state->ui_reflection;
-					instance = ui_drawer->GetInstance(data->created_instances[index].name);
-					ECS_ASSERT(instance != nullptr);
-				}
+				ECS_ASSERT(instance != nullptr);
 
 				ui_drawer->InvalidateStandaloneInstanceInputs(instance);
 			}

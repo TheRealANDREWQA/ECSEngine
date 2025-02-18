@@ -32,7 +32,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 	ECS_STACK_CAPACITY_STREAM(wchar_t, sandbox_file_path, 512);
 	GetProjectSandboxFile(editor_state, sandbox_file_path);
 
-	const Reflection::ReflectionManager* reflection_manager = editor_state->EditorReflectionManager();
+	const Reflection::ReflectionManager* reflection_manager = editor_state->ModuleReflectionManager();
 
 	const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 128;
 	const size_t BACKUP_CAPACITY = ECS_MB;

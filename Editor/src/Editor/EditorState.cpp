@@ -546,26 +546,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	ui->BindWindowHandler(WindowHandler, WindowHandlerInitializer, sizeof(Tools::UIDefaultWindowHandler));
 	editor_state->ui_system = ui;
 
-	Reflection::ReflectionManager* editor_reflection_manager = (Reflection::ReflectionManager*)Malloc(sizeof(Reflection::ReflectionManager));
-	*editor_reflection_manager = Reflection::ReflectionManager(editor_allocator);
-	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
-	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
-	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-	bool success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)0, editor_task_manager, &error_message);
-	ECS_ASSERT(success);
-	// Create all the link types for the components inside the reflection manager
-	CreateLinkTypesForComponents(editor_reflection_manager, 0);
-
-	success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)1, editor_task_manager, &error_message);
-	ECS_ASSERT(success);
-
 	size_t editor_component_allocator_size = editor_state->editor_components.DefaultAllocatorSize();
 	void* editor_component_allocator_buffer = editor_allocator->Allocate(editor_component_allocator_size);
 	editor_state->editor_components.Initialize(editor_component_allocator_buffer);
-
-	UIReflectionDrawer* editor_ui_reflection = (UIReflectionDrawer*)Malloc(sizeof(UIReflectionDrawer));
-	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, editor_reflection_manager);
-	editor_state->ui_reflection = editor_ui_reflection;
 
 	editor_state->event_queue.Initialize(editor_state->EditorAllocator(), EDITOR_EVENT_QUEUE_CAPACITY);
 	editor_state->readd_events.Initialize(editor_state->EditorAllocator(), 8);
@@ -575,12 +558,27 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->ecs_extra_information = LoadModuleExtraInformation(RegisterECSModuleExtraInformation, editor_state->EditorAllocator());
 	editor_state->ecs_component_functions = LoadModuleComponentFunctions(RegisterECSComponentFunctions, editor_state->EditorAllocator());
 
+	// Create a temporary reflection manager that parses the ECSEngine and Editor locations, that the module reflection
+	// Will then inherit all types. In this way, these internal types are not associated with a folder hierarchy inside
+	// The module reflection and it allows us to convert module index to hierarchy index directly, without adjustments.
+	Reflection::ReflectionManager editor_reflection_manager(editor_allocator);
+	editor_reflection_manager.CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
+	editor_reflection_manager.CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
+	bool success = editor_reflection_manager.ProcessFolderHierarchy((unsigned int)0, editor_task_manager, &error_message);
+	ECS_ASSERT(success);
+	// Create all the link types for the components inside the reflection manager
+	CreateLinkTypesForComponents(&editor_reflection_manager, 0);
+
+	success = editor_reflection_manager.ProcessFolderHierarchy((unsigned int)1, editor_task_manager, &error_message);
+	ECS_ASSERT(success);
+
 	// Update the editor components - these must be always the first "module" for the editor components
 	// A function which checks to see if the component is from ECSEngine or not uses this presumption
-	editor_state->editor_components.UpdateComponents(editor_state, editor_reflection_manager, 0, "ECSEngine");
+	editor_state->editor_components.UpdateComponents(editor_state, &editor_reflection_manager, 0, "ECSEngine");
 	// Finalize every event
 	for (unsigned int index = 0; index < editor_state->editor_components.events.size; index++) {
-		editor_state->editor_components.FinalizeEvent(editor_state, editor_reflection_manager, editor_state->editor_components.events[index]);
+		editor_state->editor_components.FinalizeEvent(editor_state, &editor_reflection_manager, editor_state->editor_components.events[index]);
 	}
 	editor_state->editor_components.EmptyEventStream();
 
@@ -588,11 +586,14 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	*module_reflection_manager = Reflection::ReflectionManager(editor_allocator);
 
 	// Inherit everything from the ui_reflection
-	module_reflection_manager->AddAllFrom(editor_reflection_manager);
+	module_reflection_manager->AddAllFrom(&editor_reflection_manager);
+	editor_state->module_reflection = module_reflection_manager;
 
-	UIReflectionDrawer* module_ui_reflection = (UIReflectionDrawer*)Malloc(sizeof(UIReflectionDrawer));
-	*module_ui_reflection = UIReflectionDrawer(resizable_arena, module_reflection_manager);
-	editor_state->module_reflection = module_ui_reflection;
+	editor_reflection_manager.Free();
+
+	UIReflectionDrawer* editor_ui_reflection = (UIReflectionDrawer*)Malloc(sizeof(UIReflectionDrawer));
+	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, module_reflection_manager);
+	editor_state->ui_reflection = editor_ui_reflection;
 
 	ECS_STACK_LINEAR_ALLOCATOR(ui_asset_override_allocator, ECS_KB * 2);
 
@@ -601,7 +602,6 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	GetEntityComponentUIOverrides(editor_state, ui_asset_overrides.buffer, &ui_asset_override_allocator);
 	// Set the overrides on the module reflection and on the engine side since we have some link components there as well
 	for (size_t index = 0; index < ui_asset_overrides.capacity; index++) {
-		editor_state->module_reflection->SetFieldOverride(ui_asset_overrides.buffer + index);
 		editor_state->ui_reflection->SetFieldOverride(ui_asset_overrides.buffer + index);
 	}
 	

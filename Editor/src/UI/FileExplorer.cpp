@@ -2073,7 +2073,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			UIDrawConfig config;
 			config.AddFlag(window_dependent_size);
 
-			Stream<Stream<char>> shader_type_labels = editor_state->EditorReflectionManager()->GetEnum(STRING(ECS_SHADER_TYPE))->fields;
+			Stream<Stream<char>> shader_type_labels = editor_state->ModuleReflectionManager()->GetEnum(STRING(ECS_SHADER_TYPE))->fields;
 			drawer->ComboBox(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Shader Type", shader_type_labels, shader_type_labels.size, (unsigned char*)shader_type);
 		};
 

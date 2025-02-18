@@ -53,16 +53,12 @@ struct EditorState {
 		return editor_allocator->m_backup;
 	}
 
-	ECS_INLINE ECSEngine::Reflection::ReflectionManager* EditorReflectionManager() {
-		return ui_reflection->reflection;
-	}
-
-	ECS_INLINE const ECSEngine::Reflection::ReflectionManager* EditorReflectionManager() const {
-		return ui_reflection->reflection;
-	}
-
 	ECS_INLINE ECSEngine::Reflection::ReflectionManager* ModuleReflectionManager() {
-		return module_reflection->reflection;
+		return module_reflection;
+	}
+
+	ECS_INLINE const ECSEngine::Reflection::ReflectionManager* ModuleReflectionManager() const {
+		return module_reflection;
 	}
 
 	ECS_INLINE ECSEngine::Reflection::ReflectionManager* GlobalReflectionManager() {
@@ -104,8 +100,11 @@ struct EditorState {
 	ECSEngine::Tools::UISystem* ui_system;
 	ECSEngine::ResourceManager* ui_resource_manager;
 
+	// This is the reflection manager where the module folder hierarchies are firstly reflected. 
+	// The internal reflection of the editor components contains the "ground truth" structures, the
+	// Ones from which almost all operations are being done on
+	ECSEngine::Reflection::ReflectionManager* module_reflection;
 	ECSEngine::Tools::UIReflectionDrawer* ui_reflection;
-	ECSEngine::Tools::UIReflectionDrawer* module_reflection;
 	
 	ECSEngine::MemoryManager* editor_allocator;
 	ECSEngine::MemoryManager* multithreaded_editor_allocator;

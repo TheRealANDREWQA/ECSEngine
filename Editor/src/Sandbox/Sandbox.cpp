@@ -696,7 +696,7 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 		ECS_STACK_CAPACITY_STREAM(wchar_t, file_path, 512);
 		GetSandboxRuntimeSettingsPath(editor_state, settings_name, file_path);
 
-		const Reflection::ReflectionManager* reflection = editor_state->EditorReflectionManager();
+		const Reflection::ReflectionManager* reflection = editor_state->ModuleReflectionManager();
 		ECS_DESERIALIZE_CODE code = Deserialize(reflection, reflection->GetType(STRING(WorldDescriptor)), &file_descriptor, file_path);
 		if (code != ECS_DESERIALIZE_OK) {
 			return false;
@@ -3335,7 +3335,9 @@ void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigne
 
 bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool disable_error_messages)
 {
-	// TODO: Don't allow starting a sandbox runtime if the reflection hierarchy for a module could not be parsed
+	// Don't allow starting a sandbox runtime if the reflection hierarchy for a module that it is referencing 
+	// Could not be parsed. The reason is that automatic copy/deallocate/serialization/deserialization functions
+	// Can be missing and that can introduce subtle bugs.
 
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE);
@@ -3344,6 +3346,15 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 	if (sandbox->is_crashed) {
 		if (!disable_error_messages) {
 			ECS_FORMAT_TEMP_STRING(message, "Cannot start sandbox {#} because it is crashed", sandbox_index);
+			EditorSetConsoleError(message);
+		}
+		return false;
+	}
+
+	ECS_STACK_CAPACITY_STREAM(char, modules_reflected_error_message, 256);
+	if (!AreSandboxModulesReflected(editor_state, sandbox_index, &modules_reflected_error_message)) {
+		if (!disable_error_messages) {
+			ECS_FORMAT_TEMP_STRING(message, "Cannot start sandbox {#}. Reason: {#}", sandbox_index, modules_reflected_error_message);
 			EditorSetConsoleError(message);
 		}
 		return false;

@@ -895,7 +895,7 @@ static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, uns
 		cpu_callback.handler = { change_cpu_statistic_action, &editor_sandbox_action_data, sizeof(editor_sandbox_action_data) };
 		config.AddFlag(cpu_callback);
 
-		const Reflection::ReflectionEnum* cpu_statistic_enum = editor_state->EditorReflectionManager()->GetEnum(STRING(EDITOR_SANDBOX_CPU_STATISTICS_TYPE));
+		const Reflection::ReflectionEnum* cpu_statistic_enum = editor_state->ModuleReflectionManager()->GetEnum(STRING(EDITOR_SANDBOX_CPU_STATISTICS_TYPE));
 		Stream<Stream<char>> cpu_statistic_labels = cpu_statistic_enum->fields;
 		drawer->ComboBox(
 			CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK,
@@ -922,7 +922,7 @@ static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, uns
 		gpu_callback.handler = { change_cpu_statistic_action, &editor_sandbox_action_data, sizeof(editor_sandbox_action_data) };
 		config.AddFlag(gpu_callback);
 
-		const Reflection::ReflectionEnum* gpu_statistic_enum = editor_state->EditorReflectionManager()->GetEnum(STRING(EDITOR_SANDBOX_GPU_STATISTICS_TYPE));
+		const Reflection::ReflectionEnum* gpu_statistic_enum = editor_state->ModuleReflectionManager()->GetEnum(STRING(EDITOR_SANDBOX_GPU_STATISTICS_TYPE));
 		Stream<Stream<char>> gpu_statistic_labels = gpu_statistic_enum->fields;
 		drawer->ComboBox(
 			CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK,
