@@ -2840,7 +2840,14 @@ namespace ECSEngine {
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 			ResizableStream<TimelineHeaderIndicationInfo> header_infos(&stack_allocator, 16);
 			TimelineFillHeaderIndicationsInfo(drawer, data, position, scale, header_indication_chars, &header_infos);
-			ECS_ASSERT(header_infos.size >= 2);
+
+			if (header_infos.size < 2) {
+				// We should have at least 2 entries, but if we don't assume that this is not visible
+				// (this is currently the only way this fails)
+				drawer->FinalizeRectangle(configuration, position, scale);
+				drawer->NextRow();
+				return;
+			}
 
 			auto adjust_indication_position = [](float2 position, float2 scale) {
 				return float2{ position.x - scale.x * 0.5f, position.y };
@@ -9024,6 +9031,7 @@ namespace ECSEngine {
 
 		template<typename TextType>
 		void UIDrawerElementName(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, TextType text, float2& position, float2 scale) {
+			// TODO: Some elements have incorrect sizing when the window is really small.
 			size_t label_configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
 			UIDrawConfig label_config;
 			UIConfigTextAlignment alignment;
