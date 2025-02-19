@@ -5316,6 +5316,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			if (!success) {
 				field.info.stream_type = ReflectionStreamFieldType::Basic;
 				field.info.basic_type = ReflectionBasicFieldType::UserDefined;
+				field.info.stream_byte_size = 0;
+				field.info.stream_alignment = 0;
+				field.info.has_default_value = false;
+				field.info.basic_type_count = 1;
 			}
 			else {
 				// Set to global strings the definition in order to not occupy extra memory
