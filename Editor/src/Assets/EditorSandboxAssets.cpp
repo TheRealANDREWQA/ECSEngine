@@ -1408,9 +1408,7 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 			}
 		},
 		// The base archetype initialize - nothing to be done
-			[&](Archetype* archetype, ArchetypeBase* base_archetype) {
-
-		},
+			[&](Archetype* archetype, unsigned int base_index) {},
 			[&](Archetype* archetype, ArchetypeBase* base_archetype, Entity entity, void** unique_components) {
 			// Go through the components and update the value if it matches
 			for (unsigned char index = 0; index < components_to_check_count; index++) {

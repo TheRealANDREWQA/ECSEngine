@@ -8973,11 +8973,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		static void TypeChangeAddIndex(ReflectionTypeChange* entry, unsigned int index) {
-			ECS_ASSERT(entry->indices_count < ECS_COUNTOF(entry->indices));
-			entry->indices[entry->indices_count++] = index;
-		}
-
 		static void TypeChangeAddIndices(ReflectionTypeChange* entry, const ReflectionTypeChange* parent) {
 			entry->indices_count = parent->indices_count;
 			memcpy(entry->indices, parent->indices, sizeof(parent->indices[0]) * parent->indices_count);
@@ -8985,7 +8980,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		static void TypeChangeAddIndexWithParent(ReflectionTypeChange* entry, const ReflectionTypeChange* parent, unsigned int index) {
 			TypeChangeAddIndices(entry, parent);
-			TypeChangeAddIndex(entry, index);
+			entry->AddIndex(index);
 		}
 
 		// The current level is used to write all the previous indices in the current entry
@@ -9033,7 +9028,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							if (previous_nested_type != nullptr) {
 								const ReflectionType* new_nested_type = new_reflection_manager->TryGetType(new_type->fields[index].definition);
 								if (new_nested_type != nullptr) {
-									TypeChangeAddIndex(current_level, index);
+									current_level->AddIndex(index);
 									DetermineReflectionTypeChangeSet(
 										previous_reflection_manager,
 										new_reflection_manager,
@@ -9087,7 +9082,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						// We need to determine the update for each of its fields
 						const ReflectionType* nested_type = reflection_manager->TryGetType(type->fields[index].definition);
 						if (nested_type != nullptr) {
-							TypeChangeAddIndex(current_level, index);
+							current_level->AddIndex(index);
 							DetermineReflectionTypeInstanceUpdatesImpl(reflection_manager, nested_type, first_data, second_data, updates, current_level);
 							current_level->indices_count--;
 						}

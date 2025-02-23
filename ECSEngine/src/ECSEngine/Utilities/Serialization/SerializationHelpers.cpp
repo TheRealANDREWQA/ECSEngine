@@ -1613,7 +1613,7 @@ namespace ECSEngine {
 
 		// Write the other mandatory data
 		write_size += data->Write(&deck->chunk_size);
-		write_size += data->Write(&deck->miscellaneous);
+		write_size += data->Write(&deck->power_of_two_exponent);
 		
 		// The rest of the draw we can forward to the custom stream serializer
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
@@ -1649,14 +1649,14 @@ namespace ECSEngine {
 		}
 
 		decltype(deck->chunk_size) chunk_size;
-		decltype(deck->miscellaneous) miscellaneous;
+		decltype(deck->power_of_two_exponent) power_of_two_exponent;
 		data->ReadAlways(&chunk_size);
-		data->ReadAlways(&miscellaneous);
+		data->ReadAlways(&power_of_two_exponent);
 
 		if (data->read_data) {
 			deck->size = deck_size;
 			deck->chunk_size = chunk_size;
-			deck->miscellaneous = miscellaneous;
+			deck->power_of_two_exponent = power_of_two_exponent;
 			deck->buffers.allocator = GetDeserializeFieldAllocator(data, false);
 		}
 

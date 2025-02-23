@@ -1024,7 +1024,7 @@ namespace ECSEngine {
 
 		// Return true to exit early, if desired.
 		// The functor receives the main archetype as Archetype*, the base archetype as ArchetypeBase*, the entity as Entity, void** unique_components
-		// The ArchetypeInitializeFunctor receives an Archetype*, the ArchetypeBaseInitializeFunctor receives an Archetype* and an ArchetypeBase*
+		// The ArchetypeInitializeFunctor receives an Archetype*, the ArchetypeBaseInitializeFunctor receives an (Archetype* archetype, unsigned int base_index)
 		// This iterates over all entities in the entity manager.
 		template<bool early_exit = false, typename ArchetypeInitializeFunctor, typename ArchetypeBaseInitializeFunctor, typename Functor>
 		bool ForEachEntity(ArchetypeInitializeFunctor&& archetype_initialize, ArchetypeBaseInitializeFunctor&& base_initialize, Functor&& functor) {
@@ -1036,7 +1036,7 @@ namespace ECSEngine {
 				unsigned int base_count = archetype->GetBaseCount();
 				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
 					ArchetypeBase* base_archetype = archetype->GetBase(base_index);
-					base_initialize(archetype, base_archetype);
+					base_initialize(archetype, base_index);
 
 					unsigned int entity_count = base_archetype->EntityCount();
 
@@ -1073,7 +1073,7 @@ namespace ECSEngine {
 		// CONST VARIANT
 		// Return true to exit early, if desired.
 		// The functor receives the main archetype as const Archetype*, the base archetype as const ArchetypeBase*, the entity as Entity, void** unique_components
-		// The ArchetypeInitializeFunctor receives an const Archetype*, the ArchetypeBaseInitializeFunctor receives an const Archetype* and an const ArchetypeBase*
+		// The ArchetypeInitializeFunctor receives an const Archetype*, the ArchetypeBaseInitializeFunctor receives a (const Archetype* archetype, unsigned int base_index)
 		// This iterates over all entities in the entity manager.
 		template<bool early_exit = false, typename ArchetypeInitializeFunctor, typename ArchetypeBaseInitializeFunctor, typename Functor>
 		bool ForEachEntity(ArchetypeInitializeFunctor&& archetype_initialize, ArchetypeBaseInitializeFunctor&& base_initialize, Functor&& functor) const {
@@ -1085,7 +1085,7 @@ namespace ECSEngine {
 				unsigned int base_count = archetype->GetBaseCount();
 				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
 					const ArchetypeBase* base_archetype = archetype->GetBase(base_index);
-					base_initialize(archetype, base_archetype);
+					base_initialize(archetype, base_index);
 
 					unsigned int entity_count = base_archetype->EntityCount();
 
@@ -1124,7 +1124,7 @@ namespace ECSEngine {
 		// This iterates over all entities in the entity manager
 		template<bool early_exit = false, typename Functor>
 		bool ForEachEntity(Functor&& functor) {
-			return ForEachEntity<early_exit>([](Archetype* archetype) {}, [](Archetype* archetype, ArchetypeBase* base_archetype) {}, functor);
+			return ForEachEntity<early_exit>([](Archetype* archetype) {}, [](Archetype* archetype, unsigned int base_index) {}, functor);
 		}
 
 		// CONST VARIANT
@@ -1133,7 +1133,7 @@ namespace ECSEngine {
 		// This iterates over all entities in the entity manager
 		template<bool early_exit = false, typename Functor>
 		bool ForEachEntity(Functor&& functor) const {
-			return ForEachEntity<early_exit>([](const Archetype* archetype) {}, [](const Archetype* archetype, const ArchetypeBase* base_archetype) {}, functor);
+			return ForEachEntity<early_exit>([](const Archetype* archetype) {}, [](const Archetype* archetype, unsigned int base_index) {}, functor);
 		}
 
 		// Return true to exit early, if desired.
@@ -1385,9 +1385,25 @@ namespace ECSEngine {
 
 		const void* GetComponent(Entity entity, Component component) const;
 
-		void* GetComponentWithIndex(Entity entity, unsigned char component_index);
+		// This overload is faster than the entity overload, if the entity info is already known
+		void* GetComponent(EntityInfo info, Component component);
 
+		// This overload is faster than the entity overload, if the entity info is already known
+		const void* GetComponent(EntityInfo info, Component component) const;
+
+		// Component index should be the index of the component in the archetype signature
+		void* GetComponentWithIndex(Entity entity, unsigned char component_index);
+		
+		// Component index should be the index of the component in the archetype signature
 		const void* GetComponentWithIndex(Entity entity, unsigned char component_index) const;
+
+		// Component index should be the index of the component in the archetype signature
+		// This overload is faster than the entity overload, if the entity info is already known
+		void* GetComponentWithIndex(EntityInfo info, unsigned char component_index);
+
+		// Component index should be the index of the component in the archetype signature
+		// This overload is faster than the entity overload, if the entity info is already known
+		const void* GetComponentWithIndex(EntityInfo info, unsigned char component_index) const;
 
 		// Data must have components.count pointers
 		void GetComponent(Entity entity, ComponentSignature components, void** data) const;
@@ -1398,6 +1414,12 @@ namespace ECSEngine {
 		void* GetSharedComponent(Entity entity, Component component);
 
 		const void* GetSharedComponent(Entity entity, Component component) const;
+
+		// This overload is faster than the entity overload, if the entity info is already known
+		void* GetSharedComponent(EntityInfo info, Component component);
+
+		// This overload is faster than the entity overload, if the entity info is already known
+		const void* GetSharedComponent(EntityInfo info, Component component) const;
 
 		// Works for both unique and shared
 		template<typename T>
@@ -1453,6 +1475,12 @@ namespace ECSEngine {
 
 		// Returns the entity which is alive at the indicated stream index, or an invalid entity if it doesn't exist
 		Entity GetEntityFromIndex(unsigned int stream_index) const;
+
+		// Returns the entity which corresponds to the entity info (if the info is not valid to begin with, then
+		// The returned value will not be valid as well)
+		ECS_INLINE Entity GetEntityFromInfo(EntityInfo info) const {
+			return GetEntityFromIndex(info.stream_index);
+		}
 
 		ECS_INLINE EntityInfo GetEntityInfo(Entity entity) const {
 			return m_entity_pool->GetInfo(entity);
@@ -1539,6 +1567,9 @@ namespace ECSEngine {
 		SharedInstance GetSharedComponentInstance(Component component, const void* data) const;
 
 		SharedInstance GetSharedComponentInstance(Component component, Entity entity) const;
+
+		// This overload is faster than the entity variant, if this info is readily available
+		SharedInstance GetSharedComponentInstance(Component component, EntityInfo info) const;
 
 		SharedInstance GetNamedSharedComponentInstance(Component component, Stream<char> identifier) const;
 
@@ -1875,11 +1906,27 @@ namespace ECSEngine {
 		// If the entity doesn't have the component, it will return nullptr
 		const void* TryGetComponent(Entity entity, Component component) const;
 
+		// If the entity doesn't have the component, it will return nullptr. It is faster than the entity variant, 
+		// Since it can readily use the entity info data to locate the component fast.
+		void* TryGetComponent(EntityInfo info, Component component);
+
+		// If the entity doesn't have the component, it will return nullptr. It is faster than the entity variant, 
+		// Since it can readily use the entity info data to locate the component fast.
+		const void* TryGetComponent(EntityInfo info, Component component) const;
+
 		// If the entity doesn't have the shared component, it will return nullptr
 		void* TryGetSharedComponent(Entity entity, Component component);
 
 		// If the entity doesn't have the shared component, it will return nullptr
 		const void* TryGetSharedComponent(Entity entity, Component component) const;
+
+		// If the entity doesn't have the shared component, it will return nullptr. It is faster than the entity variant, 
+		// Since it can readily use the entity info data to locate the component fast.
+		void* TryGetSharedComponent(EntityInfo info, Component component);
+
+		// If the entity doesn't have the shared component, it will return nullptr. It is faster than the entity variant, 
+		// Since it can readily use the entity info data to locate the component fast.
+		const void* TryGetSharedComponent(EntityInfo info, Component component) const;
 
 		// If the component was not registered or not set, it returns nullptr
 		void* TryGetGlobalComponent(Component component);
@@ -1892,6 +1939,12 @@ namespace ECSEngine {
 			return (T*)((const EntityManager*)this)->TryGetComponent<T>(entity);
 		}
 		
+		// This overload is faster than the entity one if this information is readily available
+		template<typename T>
+		ECS_INLINE T* TryGetComponent(EntityInfo info) {
+			return (T*)((const EntityManager*)this)->TryGetComponent<T>(info);
+		}
+
 		template<typename T>
 		ECS_INLINE const T* TryGetComponent(Entity entity) const {
 			if constexpr (T::IsShared()) {
@@ -1899,6 +1952,17 @@ namespace ECSEngine {
 			}
 			else {
 				return (const T*)TryGetComponent(entity, T::ID());
+			}
+		}
+
+		// This overload is faster than the entity one if this information is readily available
+		template<typename T>
+		ECS_INLINE const T* TryGetComponent(EntityInfo info) const {
+			if constexpr (T::IsShared()) {
+				return (const T*)TryGetSharedComponent(info, T::ID());
+			}
+			else {
+				return (const T*)TryGetComponent(info, T::ID());
 			}
 		}
 
@@ -1915,6 +1979,16 @@ namespace ECSEngine {
 		// It tries to retrieve the shared instance that the entity has. If the entity does not have the shared component,
 		// It will return an invalid shared instance.
 		SharedInstance TryGetComponentSharedInstance(Component component, Entity entity) const;
+
+		// It tries to retrieve the shared instance that the entity has. If the entity does not have the shared component,
+		// It will return an invalid shared instance. This overload is faster if the entity info is known as opposed to the
+		// Entity overload
+		SharedInstance TryGetComponentSharedInstance(Component component, EntityInfo info) const;
+
+		// Returns the entity info that corresponds to the entity, if it is valid, else nullptr
+		ECS_INLINE const EntityInfo* TryGetEntityInfo(Entity entity) const {
+			return m_entity_pool->TryGetEntityInfo(entity);
+		}
 
 		// ---------------------------------------------------------------------------------------------------
 

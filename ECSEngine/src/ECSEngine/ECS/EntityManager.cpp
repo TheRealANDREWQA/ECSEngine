@@ -254,6 +254,10 @@ namespace ECSEngine {
 		return GetEntityNameExtendedTempStorage(entity_manager, entity, true);
 	}
 
+	ECS_INLINE static Stream<char> EntityName(const EntityManager* entity_manager, EntityInfo info) {
+		return EntityName(entity_manager, entity_manager->GetEntityFromInfo(info));
+	}
+
 	static void WriteCommandStream(EntityManager* manager, DeferredActionParameters parameters, DeferredAction action) {
 		if (parameters.command_stream == nullptr) {
 			unsigned int index = manager->m_deferred_actions.Add(action);
@@ -4444,7 +4448,7 @@ namespace ECSEngine {
 	void* EntityManager::GetComponent(Entity entity, Component component)
 	{
 		EntityInfo info = GetEntityInfo(entity);
-		return GetBase(info.main_archetype, info.base_archetype)->GetComponent(info, component);
+		return GetComponent(info, component);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4452,6 +4456,20 @@ namespace ECSEngine {
 	const void* EntityManager::GetComponent(Entity entity, Component component) const
 	{
 		EntityInfo info = GetEntityInfo(entity);
+		return GetComponent(info, component);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void* EntityManager::GetComponent(EntityInfo info, Component component)
+	{
+		return GetBase(info.main_archetype, info.base_archetype)->GetComponent(info, component);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	const void* EntityManager::GetComponent(EntityInfo info, Component component) const
+	{
 		return GetBase(info.main_archetype, info.base_archetype)->GetComponent(info, component);
 	}
 
@@ -4460,7 +4478,7 @@ namespace ECSEngine {
 	void* EntityManager::GetComponentWithIndex(Entity entity, unsigned char component_index)
 	{
 		EntityInfo info = GetEntityInfo(entity);
-		return GetBase(info.main_archetype, info.base_archetype)->GetComponentByIndex(info, component_index);
+		return GetComponentWithIndex(info, component_index);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4468,6 +4486,20 @@ namespace ECSEngine {
 	const void* EntityManager::GetComponentWithIndex(Entity entity, unsigned char component_index) const
 	{
 		EntityInfo info = GetEntityInfo(entity);
+		return GetComponentWithIndex(info, component_index);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void* EntityManager::GetComponentWithIndex(EntityInfo info, unsigned char component_index)
+	{
+		return GetBase(info.main_archetype, info.base_archetype)->GetComponentByIndex(info, component_index);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	const void* EntityManager::GetComponentWithIndex(EntityInfo info, unsigned char component_index) const
+	{
 		return GetBase(info.main_archetype, info.base_archetype)->GetComponentByIndex(info, component_index);
 	}
 
@@ -4501,6 +4533,17 @@ namespace ECSEngine {
 
 	const void* EntityManager::GetSharedComponent(Entity entity, Component component) const {
 		SharedInstance instance = GetSharedComponentInstance(component, entity);
+		return GetSharedData(component, instance);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void* EntityManager::GetSharedComponent(EntityInfo info, Component component) {
+		return (void*)((const EntityManager*)this)->GetSharedComponent(info, component);
+	}
+
+	const void* EntityManager::GetSharedComponent(EntityInfo info, Component component) const {
+		SharedInstance instance = GetSharedComponentInstance(component, info);
 		return GetSharedData(component, instance);
 	}
 
@@ -4599,7 +4642,7 @@ namespace ECSEngine {
 		Entity entity;
 		entity.index = stream_index;
 		EntityInfo info = m_entity_pool->GetInfoNoChecks(entity);
-		return { stream_index, info.generation_count };
+		return { stream_index, (unsigned int)info.generation_count };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4862,9 +4905,15 @@ namespace ECSEngine {
 	SharedInstance EntityManager::GetSharedComponentInstance(Component component, Entity entity) const
 	{
 		EntityInfo info = GetEntityInfo(entity);
+		return GetSharedComponentInstance(component, info);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	SharedInstance EntityManager::GetSharedComponentInstance(Component component, EntityInfo info) const {
 		const Archetype* archetype = GetArchetype(info.main_archetype);
 		SharedInstance instance = archetype->GetBaseInstance(component, info.base_archetype);
-		ECS_CRASH_CONDITION_RETURN(instance.IsValid(), SharedInstance::Invalid(), "EntityManager: The entity {#} doesn't have the shared component {#}.", EntityName(this, entity), GetSharedComponentName(component));
+		ECS_CRASH_CONDITION_RETURN(instance.IsValid(), SharedInstance::Invalid(), "EntityManager: The entity {#} doesn't have the shared component {#}.", EntityName(this, info), GetSharedComponentName(component));
 		return instance;
 	}
 
@@ -5889,14 +5938,22 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	// If the entity doesn't have the component, it will return nullptr
 	void* EntityManager::TryGetComponent(Entity entity, Component component) {
 		return (void*)((const EntityManager*)this)->TryGetComponent(entity, component);
 	}
 
-	// If the entity doesn't have the component, it will return nullptr
 	const void* EntityManager::TryGetComponent(Entity entity, Component component) const {
 		EntityInfo info = GetEntityInfo(entity);
+		return TryGetComponent(info, component);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void* EntityManager::TryGetComponent(EntityInfo info, Component component) {
+		return (void*)((const EntityManager*)this)->TryGetComponent(info, component);
+	}
+
+	const void* EntityManager::TryGetComponent(EntityInfo info, Component component) const {
 		const ArchetypeBase* base = GetBase(info.main_archetype, info.base_archetype);
 		unsigned char component_index = base->FindComponentIndex(component);
 		if (component_index == UCHAR_MAX) {
@@ -5907,18 +5964,28 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void* EntityManager::TryGetSharedComponent(Entity entity, Component component) {
-		return (void*)((const EntityManager*)this)->TryGetSharedComponent(entity, component);
+	void* EntityManager::TryGetSharedComponent(EntityInfo info, Component component) {
+		return (void*)((const EntityManager*)this)->TryGetSharedComponent(info, component);
 	}
 
-	const void* EntityManager::TryGetSharedComponent(Entity entity, Component component) const {
-		EntityInfo info = GetEntityInfo(entity);
+	const void* EntityManager::TryGetSharedComponent(EntityInfo info, Component component) const {
 		const Archetype* archetype = GetArchetype(info.main_archetype);
 		SharedInstance instance = archetype->GetBaseInstance(component, info.base_archetype);
 		if (instance.value == -1) {
 			return nullptr;
 		}
 		return GetSharedData(component, instance);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void* EntityManager::TryGetSharedComponent(Entity entity, Component component) {
+		return (void*)((const EntityManager*)this)->TryGetSharedComponent(entity, component);
+	}
+
+	const void* EntityManager::TryGetSharedComponent(Entity entity, Component component) const {
+		EntityInfo info = GetEntityInfo(entity);
+		return TryGetSharedComponent(info, component);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5941,6 +6008,12 @@ namespace ECSEngine {
 
 	SharedInstance EntityManager::TryGetComponentSharedInstance(Component component, Entity entity) const {
 		EntityInfo info = GetEntityInfo(entity);
+		return TryGetComponentSharedInstance(component, info);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	SharedInstance EntityManager::TryGetComponentSharedInstance(Component component, EntityInfo info) const {
 		const Archetype* archetype = GetArchetype(info.main_archetype);
 		return archetype->GetBaseInstance(component, info.base_archetype);
 	}

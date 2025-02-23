@@ -25,7 +25,6 @@
 #define STRING_CHARACTER_SPACING 0.05f
 
 #define DECK_POWER_OF_TWO 7
-#define DECK_CHUNK_SIZE (1 << DECK_POWER_OF_TWO)
 
 #define OOBB_CROSS_Y_SCALE 0.02f
 #define OOBB_CROSS_Z_SCALE 0.02f
@@ -3601,18 +3600,18 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic polymorphic_allocator = drawer->allocator;
 
-		drawer->lines.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->spheres.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->points.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->rectangles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->crosses.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->circles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->arrows.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->triangles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->aabbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->oobbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->strings.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		drawer->grids.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		drawer->lines.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->spheres.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->points.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->rectangles.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->crosses.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->circles.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->arrows.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->triangles.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->aabbs.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->oobbs.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->strings.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
+		drawer->grids.Initialize(polymorphic_allocator, 1, DECK_POWER_OF_TWO);
 
 		drawer->is_redirect = false;
 		drawer->redirect_drawer = nullptr;
@@ -4224,7 +4223,7 @@ namespace ECSEngine {
 		const size_t POWER_OF_TWO_EXPONENT = 7; // 128
 
 		if (residency_function != nullptr) {
-			valid_cells.Initialize(allocator, 1, 1 << POWER_OF_TWO_EXPONENT, POWER_OF_TWO_EXPONENT);
+			valid_cells.Initialize(allocator, 1, POWER_OF_TWO_EXPONENT);
 			float3 cell_offset = cell_size * float3::Splat(2.0f);
 
 			for (unsigned int x = 0; x < dimensions.x; x++) {

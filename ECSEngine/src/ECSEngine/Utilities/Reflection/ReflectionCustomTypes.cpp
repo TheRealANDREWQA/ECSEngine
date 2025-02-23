@@ -1581,7 +1581,7 @@ namespace ECSEngine {
 			const DeckPowerOfTwo<char>* second = (const DeckPowerOfTwo<char>*)data->second;
 
 			// Early exit if the obvious parameters are different
-			if (first->chunk_size != second->chunk_size || first->miscellaneous != second->miscellaneous || first->size != second->size
+			if (first->chunk_size != second->chunk_size || first->power_of_two_exponent != second->power_of_two_exponent|| first->size != second->size
 				|| first->buffers.size != second->buffers.size) {
 				return false;
 			}
