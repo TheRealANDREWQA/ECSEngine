@@ -1096,6 +1096,11 @@ namespace ECSEngine {
 		// The update index is the new type field index
 		// In case there is a nested type, there will be more than 1 index
 		struct ReflectionTypeChange {
+			ECS_INLINE void AddIndex(unsigned int index) {
+				ECS_ASSERT(indices_count < ECS_COUNTOF(indices));
+				indices[indices_count++] = index;
+			}
+
 			ECS_REFLECTION_TYPE_CHANGE_TYPE change_type;
 			unsigned char indices_count = 0;
 			unsigned int indices[ECS_REFLECTION_TYPE_CHANGE_SET_MAX_INDICES];

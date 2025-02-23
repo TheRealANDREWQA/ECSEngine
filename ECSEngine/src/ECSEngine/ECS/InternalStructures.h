@@ -126,15 +126,26 @@ namespace ECSEngine {
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(EntityInfo);
 
+		ECS_INLINE bool operator == (const EntityInfo& other) const {
+			// The compiler will hopefully optimize this to a simple register check
+			return memcmp(this, &other, sizeof(EntityInfo)) == 0;
+		}
+
+		ECS_INLINE bool operator != (const EntityInfo& other) const {
+			return !(*this == other);
+		}
+
 		// 32 bits for these 4 fields
-		unsigned int main_archetype : 10;
-		unsigned int base_archetype : 10;
-		unsigned int generation_count : 6;
-		unsigned int tags : 6;
+		size_t main_archetype : 10;
+		size_t base_archetype : 10;
+		size_t generation_count : 6;
+		size_t tags : 6;
 
 		// 32 bits for these 2 fields
-		unsigned int stream_index : 24;
-		unsigned int layer : 8;
+		size_t stream_index : 24;
+		size_t layer : 8;
+
+		// Can use a size_t base type in order to have the structure be copyable as a single register
 	};
 
 	struct Component {
@@ -480,7 +491,7 @@ namespace ECSEngine {
 		// Receives as parameter the entity and its entity info
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		bool ForEach(Functor&& functor) {
+		bool ForEach(Functor&& functor) const {
 			bool should_continue = true;
 			for (unsigned int index = 0; index < m_entity_infos.size && should_continue; index++) {
 				if (m_entity_infos[index].is_in_use) {
@@ -558,6 +569,9 @@ namespace ECSEngine {
 		void SetTag(Entity entity, unsigned char tag);
 
 		void SetLayer(Entity entity, unsigned int layer);
+
+		// Returns the entity info if the entity is valid, else nullptr
+		const EntityInfo* TryGetEntityInfo(Entity entity) const;
 
 		struct TaggedStableReferenceStream {
 			// Use a queue free list because having a stack free list can pound multiple times

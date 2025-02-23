@@ -1,7 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "../Utilities/Serialization/DeltaStateSerializationForward.h"
-#include "../Containers/Stream.h"
+#include "../Containers/Deck.h"
 #include "InternalStructures.h"
 #include "EntityChangeSet.h"
 
@@ -10,11 +10,17 @@ namespace ECSEngine {
 	struct EntityManager;
 	struct World;
 
-	struct EntityManagerChangeSet {
-		// This is related to a component change/addition/removal
-		struct ExistingEntity {
+	struct ECSENGINE_API EntityManagerChangeSet {
+		// This structure describes a component update/addition/removal
+		struct EntityComponentChange {
+			ECS_CHANGE_SET_TYPE change_type;
+			Component component;
+		};
+
+		// Store the changes per entity, which achieves a blend of fast entity change set runtime determination, and disk write efficiency
+		struct EntityChanges {
 			Entity entity;
-			EntityChange change;
+			Stream<EntityComponentChange> changes;
 		};
 
 		// This is created when the entity info of an entity is changed
@@ -34,23 +40,43 @@ namespace ECSEngine {
 			EntityInfo entity_info;
 		};
 
+		// This structure contains information about an instance of a shared component that was added/removed/changed
+		struct SharedComponentInstanceChange {
+			Component component;
+			SharedInstance instance;
+			ECS_CHANGE_SET_TYPE type;
+		};
+
 		struct GlobalComponentChange {
 			ECS_CHANGE_SET_TYPE type;
 			Component component;
 		};
 
+		void Initialize(AllocatorPolymorphic allocator);
+
+		void Deallocate();
+
+		// Use decks instead of ResizableStream since the variability of changes can be quite large, and if a temporary linear allocator is used
+		// Those reallocations can blow the allocator because of the fact that it can't deallocate. And since these fields won't ever be used to directly
+		// Index, only to iterate over, the penalty is small
+
 		// These are entities that existed previously, but component data was changed about them
-		ResizableStream<ExistingEntity> existing_entity_changes;
+		DeckPowerOfTwo<EntityChanges> entity_unique_component_changes;
 		// From the EntityInfo structures we can deduce the entity pool and the entity order inside the archetypes
-		ResizableStream<EntityInfoChange> entity_info_changes;
-		ResizableStream<EntityInfoDestroy> entity_info_destroys;
-		ResizableStream<EntityInfoAddition> entity_info_additions;
-		ResizableStream<GlobalComponentChange> global_component_changes;
+		DeckPowerOfTwo<EntityInfoChange> entity_info_changes;
+		DeckPowerOfTwo<EntityInfoDestroy> entity_info_destroys;
+		DeckPowerOfTwo<EntityInfoAddition> entity_info_additions;
+		// This structure contains the modifications that shared instances went through - we need to record these as well,
+		// Otherwise the entities might reference invalid data
+		DeckPowerOfTwo<SharedComponentInstanceChange> shared_instances_changes;
+		DeckPowerOfTwo<GlobalComponentChange> global_component_changes;
 	};
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-
+	// The allocator will be used to allocate the buffers needed. It computes the necessary changes that should be applied to the previous entity manager
+	// To obtain the new entity manager
+	ECSENGINE_API EntityManagerChangeSet DetermineEntityManagerChangeSet(const EntityManager* previous_entity_manager, const EntityManager* new_entity_manager, AllocatorPolymorphic change_set_allocator);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 

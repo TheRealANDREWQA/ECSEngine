@@ -6,18 +6,61 @@
 
 namespace ECSEngine {
 
+	// The GetNextCapacity() is used to initialize a temp reference to an existing Stream<T>
+	// It needs to return a ulong2 that represents { chunk_size, miscellaneous }
+
+	struct DeckRangeModulo {
+		ECS_INLINE static size_t Chunk(size_t index, size_t chunk_size, size_t miscellaneous) {
+			return index / chunk_size;
+		}
+
+		ECS_INLINE static size_t Buffer(size_t index, size_t chunk_size, size_t miscellaneous) {
+			return index % chunk_size;
+		}
+
+		ECS_INLINE static ulong2 GetNextCapacity(size_t capacity) {
+			return { capacity, 0 };
+		}
+	};
+
+	struct DeckRangePowerOfTwo {
+		ECS_INLINE static size_t Chunk(size_t index, size_t chunk_size, size_t miscellaneous) {
+			return index >> miscellaneous;
+		}
+
+		ECS_INLINE static size_t Buffer(size_t index, size_t chunk_size, size_t miscellaneous) {
+			return index & (chunk_size - 1);
+		}
+
+		ECS_INLINE static ulong2 GetNextCapacity(size_t capacity) {
+			return PowerOfTwoGreaterEx(capacity);
+		}
+	};
+
 	// Miscellaneous is used as the exponent for the power of two range selector
 	template<typename T, typename RangeSelector>
 	struct Deck {
 		typedef T T;
 
 		ECS_INLINE Deck() : buffers({ nullptr }, 0), chunk_size(0), miscellaneous(0) {}
+
+		// Disregard the template argument, it is used only to avoid a compilation error to distinguish between this overload
+		// And the overload for the power of two
+		template<typename Dummy = RangeSelector, std::enable_if_t<std::is_same_v<Dummy, DeckRangePowerOfTwo>, int> = 0>
 		ECS_INLINE Deck(
 			const void* _buffers, 
 			size_t _buffers_capacity,
-			size_t _chunk_size, 
-			size_t _miscellaneous = 0
-		) : buffers(_buffers, 0, _buffers_capacity), chunk_size(_chunk_size), miscellaneous(_miscellaneous) {}
+			size_t _chunk_exponent 
+		) : buffers(_buffers, 0, _buffers_capacity), chunk_size(1 << _chunk_exponent), power_of_two_exponent(_chunk_exponent) {}
+
+		// Disregard the template argument, it is used only to avoid a compilation error to distinguish between this overload
+		// And the overload for the power of two
+		template<typename Dummy = RangeSelector, std::enable_if_t<!std::is_same_v<Dummy, DeckRangePowerOfTwo>, int> = 0>
+		ECS_INLINE Deck(
+			const void* _buffers,
+			size_t _buffers_capacity,
+			size_t _chunk_size
+		) : buffers(_buffers, 0, _buffers_capacity), chunk_size(_chunk_size), miscellaneous(0) {}
 
 		Deck(const Deck& other) = default;
 		Deck& operator = (const Deck& other) = default;
@@ -106,7 +149,13 @@ namespace ECSEngine {
 
 		Deck<T, RangeSelector> Copy(AllocatorPolymorphic allocator) const {
 			Deck<T, RangeSelector> copy;
-			copy.Initialize(allocator, 0, chunk_size, miscellaneous);
+			if constexpr (std::is_same_v<RangeSelector, DeckRangePowerOfTwo>) {
+				copy.Initialize(allocator, 0, power_of_two_exponent);
+			}
+			else {
+				copy.Initialize(allocator, 0, chunk_size);
+			}
+			copy.miscellaneous = miscellaneous;
 			copy.AddDeck(*this);
 			return copy;
 		}
@@ -420,10 +469,26 @@ namespace ECSEngine {
 			return buffers[chunk_index][in_chunk_index];
 		}
 
-		// For power of two deck, miscellaneous is the power of two exponent
-		void Initialize(AllocatorPolymorphic _allocator, size_t _initial_chunk_count, size_t _chunk_size, size_t _miscellaneous = 0) {
+		// Disregard the template argument, it is used only to avoid a compilation error to distinguish between this overload
+		// And the overloads
+		template<typename Dummy = RangeSelector, std::enable_if_t<std::is_same_v<Dummy, DeckRangePowerOfTwo>, int> = 0>
+		void Initialize(AllocatorPolymorphic _allocator, size_t _initial_chunk_count, size_t _power_of_two_exponent) {
+			chunk_size = 1 << _power_of_two_exponent;
+			power_of_two_exponent = _power_of_two_exponent;
+			size = 0;
+			buffers.Initialize(_allocator, _initial_chunk_count);
+			buffers.size = _initial_chunk_count;
+			for (size_t index = 0; index < _initial_chunk_count; index++) {
+				buffers[index].Initialize(_allocator, 0, chunk_size);
+			}
+		}
+
+		// Disregard the template argument, it is used only to avoid a compilation error to distinguish between this overload
+		// And the overload for the power of two
+		template<typename Dummy = RangeSelector, std::enable_if_t<!std::is_same_v<Dummy, DeckRangePowerOfTwo>, int> = 0>
+		void Initialize(AllocatorPolymorphic _allocator, size_t _initial_chunk_count, size_t _chunk_size) {
 			chunk_size = _chunk_size;
-			miscellaneous = _miscellaneous;
+			power_of_two_exponent = 0;
 			size = 0;
 			buffers.Initialize(_allocator, _initial_chunk_count);
 			buffers.size = _initial_chunk_count;
@@ -492,38 +557,13 @@ namespace ECSEngine {
 		// This is the current element count
 		size_t size;
 		size_t chunk_size;
-		size_t miscellaneous;
-	};
-
-	// The GetNextCapacity() is used to initialize a temp reference to an existing Stream<T>
-	// It needs to return a ulong2 that represents { chunk_size, miscellaneous }
-
-	struct DeckRangeModulo {
-		ECS_INLINE static size_t Chunk(size_t index, size_t chunk_size, size_t miscellaneous) {
-			return index / chunk_size;
-		}
-
-		ECS_INLINE static size_t Buffer(size_t index, size_t chunk_size, size_t miscellaneous) {
-			return index % chunk_size;
-		}
-
-		ECS_INLINE static ulong2 GetNextCapacity(size_t capacity) {
-			return { capacity, 0 };
-		}
-	};
-
-	struct DeckRangePowerOfTwo {
-		ECS_INLINE static size_t Chunk(size_t index, size_t chunk_size, size_t miscellaneous) {
-			return index >> miscellaneous;
-		}
-
-		ECS_INLINE static size_t Buffer(size_t index, size_t chunk_size, size_t miscellaneous) {
-			return index & (chunk_size - 1);
-		}
-
-		ECS_INLINE static ulong2 GetNextCapacity(size_t capacity) {
-			return PowerOfTwoGreaterEx(capacity);
-		}
+		union {
+			// Used only for the power of two variant
+			size_t power_of_two_exponent;
+			// This name is here just to indicate that it can have a different meaning for other
+			// Range selectors
+			size_t miscellaneous;
+		};
 	};
 
 	template<typename T>

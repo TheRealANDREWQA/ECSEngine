@@ -802,7 +802,7 @@ bool SandboxForAllUniqueComponents(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-	return entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](Archetype* archetype, ArchetypeBase* base_archetype) {}, functor);
+	return entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](Archetype* archetype, unsigned int base_index) {}, functor);
 }
 
 // The functor receives as parameters const Archetype*, const ArchetypeBase*, Entity, void** unique_components
@@ -815,7 +815,7 @@ bool SandboxForAllUniqueComponents(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
 	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-	return entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](const Archetype* archetype, const ArchetypeBase* base_archetype) {}, functor);
+	return entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](const Archetype* archetype, unsigned int base_index) {}, functor);
 }
 
 // Return true to early exit, else false

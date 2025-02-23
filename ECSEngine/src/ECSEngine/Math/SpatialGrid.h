@@ -297,7 +297,7 @@ namespace ECSEngine {
 			cell_size_power_of_two = _cell_size_power_of_two;
 			half_cell_size = ulong3((size_t)1 << cell_size_power_of_two.x, (size_t)1 << cell_size_power_of_two.y, (size_t)1 << cell_size_power_of_two.z);
 			half_cell_size *= float3::Splat(0.5f);
-			chunks.Initialize(allocator, 0, (size_t)1 << _deck_power_of_two, _deck_power_of_two);
+			chunks.Initialize(allocator, 0, _deck_power_of_two);
 			inserted_cells.Initialize(allocator, 0);
 			smaller_cell_size_factor = float3::Splat(1.0f);
 		}

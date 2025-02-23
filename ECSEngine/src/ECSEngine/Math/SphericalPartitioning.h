@@ -160,7 +160,7 @@ namespace ECSEngine {
 			partitions.Initialize(allocator, partition_size);
 			// Make the initial partitions -1
 			memset(partitions.buffer, -1, partitions.MemoryOf(partition_size));
-			chunks.Initialize(allocator, initial_chunk_count, 1 << deck_power_exponent, deck_power_exponent);
+			chunks.Initialize(allocator, initial_chunk_count, deck_power_exponent);
 		}
 
 		DeckPowerOfTwo<Chunk> chunks;

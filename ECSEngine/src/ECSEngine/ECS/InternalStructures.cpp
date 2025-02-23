@@ -605,7 +605,7 @@ namespace ECSEngine {
 
 	void EntityPool::SetTag(Entity entity, unsigned char tag) {
 		EntityInfo* info = GetInfoCrashCheck(this, entity, ECS_LOCATION);
-		info->tags |= 1 << tag;
+		info->tags |= (size_t)1 << (size_t)tag;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -613,6 +613,16 @@ namespace ECSEngine {
 	void EntityPool::SetLayer(Entity entity, unsigned int layer) {
 		EntityInfo* info = GetInfoCrashCheck(this, entity, ECS_LOCATION);
 		info->layer = layer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	const EntityInfo* EntityPool::TryGetEntityInfo(Entity entity) const {
+		if (IsValid(entity)) {
+			uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
+			return m_entity_infos[entity_indices.x].stream.ElementPointer(entity_indices.y);
+		}
+		return nullptr;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

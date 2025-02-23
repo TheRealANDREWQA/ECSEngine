@@ -12,6 +12,8 @@ namespace ECSEngine {
 	
 	struct EntityManager;
 
+	// This structure describe the changes that were done for a particular component of an entity, changes
+	// That include alterations of the reflection type itself of the component
 	struct EntityChange {
 		Component component;
 		ECS_CHANGE_SET_TYPE type;
