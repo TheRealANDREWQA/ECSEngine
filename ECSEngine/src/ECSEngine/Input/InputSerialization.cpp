@@ -110,8 +110,8 @@ namespace ECSEngine {
 		return VERSION;
 	}
 
-	InputSerializationHeader GeInputSerializeHeader() {
-		InputSerializationHeader header;
+	DeltaStateGenericHeader GetInputSerializeHeader() {
+		DeltaStateGenericHeader header;
 		memset(&header, 0, sizeof(header));
 		header.version = VERSION;
 		return header;
@@ -699,6 +699,7 @@ namespace ECSEngine {
 
 	// This allows the writer to work in a self-contained manner
 	struct DeltaStateWriterWorldData : DeltaStateWriterData {
+		// Needed for the elapsed seconds
 		const World* world;
 	};
 
@@ -847,7 +848,7 @@ namespace ECSEngine {
 		info.user_data_allocator_initialize = InputDeltaWriterInitialize;
 		info.user_data_allocator_deallocate = InputDeltaWriterDeallocate;
 
-		InputSerializationHeader serialization_header = GeInputSerializeHeader();
+		InputSerializationHeader serialization_header = GetInputSerializeHeader();
 		info.header = stack_memory.Add(&serialization_header);
 
 		DeltaStateWriterData writer_data;
@@ -865,7 +866,7 @@ namespace ECSEngine {
 		info.user_data_allocator_initialize = InputDeltaWriterInitialize;
 		info.user_data_allocator_deallocate = InputDeltaWriterDeallocate;
 
-		InputSerializationHeader serialization_header = GeInputSerializeHeader();
+		InputSerializationHeader serialization_header = GetInputSerializeHeader();
 		info.header = stack_memory.Add(&serialization_header);
 
 		DeltaStateWriterWorldData writer_data;

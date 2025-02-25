@@ -1482,24 +1482,46 @@ namespace ECSEngine {
 			return GetEntityFromIndex(info.stream_index);
 		}
 
+		// Returns the entity info for an entity that is valid, it will ensure that the entity is indeed valid
 		ECS_INLINE EntityInfo GetEntityInfo(Entity entity) const {
 			return m_entity_pool->GetInfo(entity);
 		}
 
 		ComponentSignature GetEntitySignature(Entity entity, Component* components) const;
 
+		// This overload is faster than the entity overload, in case this information is readily available
+		ComponentSignature GetEntitySignature(EntityInfo info, Component* components) const;
+
 		// It will point to the archetype's signature - Do not modify!!
 		ComponentSignature GetEntitySignatureStable(Entity entity) const;
 
+		// This overload is faster than the entity overload, in case this information is readily available
+		// It will point to the archetype's signature - Do not modify!!
+		ComponentSignature GetEntitySignatureStable(EntityInfo info) const;
+
 		SharedComponentSignature GetEntitySharedSignature(Entity entity, Component* shared, SharedInstance* instances) const;
+		
+		// This overload is faster than the entity overload, in case this information is readily available
+		SharedComponentSignature GetEntitySharedSignature(EntityInfo info, Component* shared, SharedInstance* instances) const;
 
 		// It will point to the archetypes' signature (the base and the main) - Do not modify!!
 		SharedComponentSignature GetEntitySharedSignatureStable(Entity entity) const;
 
+		// This overload is faster than the entity overload, in case this information is readily available
+		// It will point to the archetypes' signature (the base and the main) - Do not modify!!
+		SharedComponentSignature GetEntitySharedSignatureStable(EntityInfo info) const;
+
 		void GetEntityCompleteSignature(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) const;
+
+		// This overload is faster than the entity overload, in case this information is readily available
+		void GetEntityCompleteSignature(EntityInfo info, ComponentSignature* unique, SharedComponentSignature* shared) const;
 
 		// It will point to the archetypes' signature (the base and the main) - Do not modify!!
 		void GetEntityCompleteSignatureStable(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) const;
+		
+		// This overload is faster than the entity overload, in case this information is readily available
+		// It will point to the archetypes' signature (the base and the main) - Do not modify!!
+		void GetEntityCompleteSignatureStable(EntityInfo info, ComponentSignature* unique, SharedComponentSignature* shared) const;
 
 		// Returns a stringified version of the component. If the name was not specified when inserting the component
 		// then it will just use the index as string
@@ -1559,6 +1581,9 @@ namespace ECSEngine {
 		ECS_INLINE const ComponentType* GetSharedData(SharedInstance instance) const {
 			return (ComponentType*)GetSharedData(ComponentType::ID(), instance);
 		}
+
+		// Returns the number of shared component named instances. It ensures that the component is valid
+		unsigned int GetNamedSharedInstanceCount(Component component) const;
 
 		void* GetNamedSharedData(Component component, Stream<char> identifier);
 

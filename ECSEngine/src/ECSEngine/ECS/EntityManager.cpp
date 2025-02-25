@@ -4648,23 +4648,36 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	ComponentSignature EntityManager::GetEntitySignature(Entity entity, Component* components) const {
-		ComponentSignature signature = GetEntitySignatureStable(entity);
+		EntityInfo info = GetEntityInfo(entity);
+		return GetEntitySignature(info, components);
+	}
+
+	ComponentSignature EntityManager::GetEntitySignature(EntityInfo info, Component* components) const {
+		ComponentSignature signature = GetEntitySignatureStable(info);
 		memcpy(components, signature.indices, sizeof(Component) * signature.count);
 		return { components, signature.count };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	// It will point to the archetype's signature - Do not modify!!
 	ComponentSignature EntityManager::GetEntitySignatureStable(Entity entity) const {
 		EntityInfo info = GetEntityInfo(entity);
+		return GetEntitySignatureStable(info);
+	}
+
+	ComponentSignature EntityManager::GetEntitySignatureStable(EntityInfo info) const {
 		return m_archetypes[info.main_archetype].GetUniqueSignature();
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	SharedComponentSignature EntityManager::GetEntitySharedSignature(Entity entity, Component* shared, SharedInstance* instances) const {
-		SharedComponentSignature signature = GetEntitySharedSignatureStable(entity);
+		EntityInfo info = GetEntityInfo(entity);
+		return GetEntitySharedSignature(info, shared, instances);
+	}
+
+	SharedComponentSignature EntityManager::GetEntitySharedSignature(EntityInfo info, Component* shared, SharedInstance* instances) const {
+		SharedComponentSignature signature = GetEntitySharedSignatureStable(info);
 		memcpy(shared, signature.indices, sizeof(Component) * signature.count);
 		memcpy(instances, signature.instances, sizeof(SharedInstance) * signature.count);
 		return { shared, instances, signature.count };
@@ -4674,6 +4687,10 @@ namespace ECSEngine {
 	
 	SharedComponentSignature EntityManager::GetEntitySharedSignatureStable(Entity entity) const {
 		EntityInfo info = GetEntityInfo(entity);
+		return GetEntitySharedSignatureStable(info);
+	}
+
+	SharedComponentSignature EntityManager::GetEntitySharedSignatureStable(EntityInfo info) const {
 		ComponentSignature shared_signature = m_archetypes[info.main_archetype].GetSharedSignature();
 		const SharedInstance* instances = m_archetypes[info.main_archetype].GetBaseInstances(info.base_archetype);
 		return { shared_signature.indices, (SharedInstance*)instances, shared_signature.count };
@@ -4682,8 +4699,13 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::GetEntityCompleteSignature(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) const {
-		ComponentSignature stable_unique = GetEntitySignatureStable(entity);
-		SharedComponentSignature stable_shared = GetEntitySharedSignatureStable(entity);
+		EntityInfo info = GetEntityInfo(entity);
+		GetEntityCompleteSignature(info, unique, shared);
+	}
+
+	void EntityManager::GetEntityCompleteSignature(EntityInfo info, ComponentSignature* unique, SharedComponentSignature* shared) const {
+		ComponentSignature stable_unique = GetEntitySignatureStable(info);
+		SharedComponentSignature stable_shared = GetEntitySharedSignatureStable(info);
 
 		memcpy(unique->indices, stable_unique.indices, sizeof(Component) * stable_unique.count);
 		unique->count = stable_unique.count;
@@ -4696,8 +4718,13 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::GetEntityCompleteSignatureStable(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) const {
-		*unique = GetEntitySignatureStable(entity);
-		*shared = GetEntitySharedSignatureStable(entity);
+		EntityInfo info = GetEntityInfo(entity);
+		GetEntityCompleteSignatureStable(info, unique, shared);
+	}
+
+	void EntityManager::GetEntityCompleteSignatureStable(EntityInfo info, ComponentSignature* unique, SharedComponentSignature* shared) const {
+		*unique = GetEntitySignatureStable(info);
+		*shared = GetEntitySharedSignatureStable(info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4838,6 +4865,13 @@ namespace ECSEngine {
 		ECS_CRASH_CONDITION_RETURN(ExistsSharedInstanceOnly(component, instance), nullptr, "EntityManager: Shared instance "
 			"{#} for component {#} is invalid.", instance.value, GetSharedComponentName(component));
 		return m_shared_components[component.value].instances[instance.value];
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	unsigned int EntityManager::GetNamedSharedInstanceCount(Component component) const {
+		ECS_CRASH_CONDITION_RETURN(ExistsSharedComponent(component), -1, "EntityManager: Shared component {#} is invalid when trying to retrieve named shared instance count.", GetSharedComponentName(component));
+		return m_shared_components[component.value].named_instances.GetCount();
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

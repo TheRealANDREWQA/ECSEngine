@@ -101,6 +101,11 @@ namespace ECSEngine {
 		float entire_state_write_seconds_tick = 0.0f;
 	};
 
+	// The last argument is optional, it allows you to write extra bytes in the header that you can interpret in the reader.
+	// It must have at max ECS_DELTA_STATE_GENERIC_HEADER_CAPACITY size, otherwise it will fail (because there is not enough space).
+	// The remaining reserved bytes will be set to 0
+	ECSENGINE_API void DeltaStateWriteGenericHeader(CapacityStream<void>& stack_memory, unsigned char version, Stream<void> extra_memory = {});
+
 	// A helper structure that helps in writing input serialization data in an efficient
 	struct ECSENGINE_API DeltaStateWriter {
 		// Deallocates all the memory used by this writer
