@@ -10,6 +10,10 @@ namespace ECSEngine {
 	struct EntityManager;
 	struct World;
 
+	namespace Reflection {
+		struct ReflectionManager;
+	}
+
 	struct ECSENGINE_API EntityManagerChangeSet {
 		// This structure describes a component update/addition/removal
 		struct EntityComponentChange {
@@ -42,15 +46,24 @@ namespace ECSEngine {
 
 		// This structure contains information about an instance of a shared component that was added/removed/changed
 		struct SharedComponentInstanceChange {
-			Component component;
 			SharedInstance instance;
 			ECS_CHANGE_SET_TYPE type;
+		};
+
+		struct SharedComponentChanges {
+			Component component;
+			Stream<SharedComponentInstanceChange> changes;
 		};
 
 		struct GlobalComponentChange {
 			ECS_CHANGE_SET_TYPE type;
 			Component component;
 		};
+
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			// Any deck can go in here, they all use the same allocator
+			return entity_unique_component_changes.Allocator();
+		}
 
 		void Initialize(AllocatorPolymorphic allocator);
 
@@ -68,31 +81,68 @@ namespace ECSEngine {
 		DeckPowerOfTwo<EntityInfoAddition> entity_info_additions;
 		// This structure contains the modifications that shared instances went through - we need to record these as well,
 		// Otherwise the entities might reference invalid data
-		DeckPowerOfTwo<SharedComponentInstanceChange> shared_instances_changes;
+		DeckPowerOfTwo<SharedComponentChanges> shared_component_changes;
 		DeckPowerOfTwo<GlobalComponentChange> global_component_changes;
 	};
+
+	typedef DeltaStateGenericHeader EntityManagerDeltaSerializationHeader;
+
+	// -----------------------------------------------------------------------------------------------------------------------------
+
+	// Returns the current input serialization version. It will be at max a byte.
+	ECSENGINE_API unsigned char SerializeEntityManagerDeltaVersion();
+
+	// Returns a header that should be written in the serialized range such
+	ECSENGINE_API EntityManagerDeltaSerializationHeader GetEntityManagerDeltaSerializeHeader();
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// The allocator will be used to allocate the buffers needed. It computes the necessary changes that should be applied to the previous entity manager
-	// To obtain the new entity manager
-	ECSENGINE_API EntityManagerChangeSet DetermineEntityManagerChangeSet(const EntityManager* previous_entity_manager, const EntityManager* new_entity_manager, AllocatorPolymorphic change_set_allocator);
+	// To obtain the new entity manager. The reflection manager should contain the component types
+	ECSENGINE_API EntityManagerChangeSet DetermineEntityManagerChangeSet(
+		const EntityManager* previous_entity_manager, 
+		const EntityManager* new_entity_manager, 
+		const Reflection::ReflectionManager* reflection_manager, 
+		AllocatorPolymorphic change_set_allocator
+	);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// Sets the necessary info for the writer to be initialized as an ECS state delta writer - outside the runtime context
-	// The entity manager must be stable for the entire duration of the writer
-	ECSENGINE_API void SetEntityManagerDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const EntityManager* entity_manager, CapacityStream<void>& stack_memory);
+	// The entity manager and the reflection manager must be stable for the entire duration of the writer
+	ECSENGINE_API void SetEntityManagerDeltaWriterInitializeInfo(
+		DeltaStateWriterInitializeFunctorInfo& info, 
+		const EntityManager* entity_manager, 
+		const Reflection::ReflectionManager* reflection_manager, 
+		CapacityStream<void>& stack_memory
+	);
 
 	// Sets the necessary info for the writer to be initialized as an ECS state delta writer - for a simulation world
-	ECSENGINE_API void SetEntityManagerDeltaWriterWorldInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const World* world, CapacityStream<void>& stack_memory);
+	// The reflection manager must be stable for the entire duration of the writer
+	ECSENGINE_API void SetEntityManagerDeltaWriterWorldInitializeInfo(
+		DeltaStateWriterInitializeFunctorInfo& info, 
+		const World* world, 
+		const Reflection::ReflectionManager* reflection_manager,
+		CapacityStream<void>& stack_memory
+	);
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
-	// The entity manager must be stable for the entire duration of the writer
-	ECSENGINE_API void SetEntityManagerDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, EntityManager* entity_manager, CapacityStream<void>& stack_memory);
+	// The entity manager and the reflection manager must be stable for the entire duration of the reader
+	ECSENGINE_API void SetEntityManagerDeltaReaderInitializeInfo(
+		DeltaStateReaderInitializeFunctorInfo& info, 
+		EntityManager* entity_manager, 
+		const Reflection::ReflectionManager* reflection_manager,
+		CapacityStream<void>& stack_memory
+	);
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
-	ECSENGINE_API void SetEntityManagerDeltaReaderWorldInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, World* world, CapacityStream<void>& stack_memory);
+	// The reflection manager must be stable for the entire duration of the reader
+	ECSENGINE_API void SetEntityManagerDeltaReaderWorldInitializeInfo(
+		DeltaStateReaderInitializeFunctorInfo& info, 
+		World* world,
+		const Reflection::ReflectionManager* reflection_manager,
+		CapacityStream<void>& stack_memory
+	);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 

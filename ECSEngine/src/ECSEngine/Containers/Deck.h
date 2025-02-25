@@ -88,6 +88,10 @@ namespace ECSEngine {
 			return AddImpl(element);
 		}
 
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			return buffers.allocator;
+		}
+
 		size_t AddStream(Stream<T> other) {
 			Reserve(other.size);
 			size_t initial_size = size;

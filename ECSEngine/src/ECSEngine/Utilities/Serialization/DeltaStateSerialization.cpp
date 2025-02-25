@@ -593,6 +593,19 @@ namespace ECSEngine {
 
 		return true;
 	}
+
+	// -----------------------------------------------------------------------------------------------------------------------------
+
+	void DeltaStateWriteGenericHeader(CapacityStream<void>& stack_memory, unsigned char version, Stream<void> extra_memory = {}) {
+		DeltaStateGenericHeader header;
+		ECS_ASSERT(extra_memory.size <= ECS_COUNTOF(header.reserved), "Delta State generic header reserved size exceeded");
+
+		header.version = version;
+		extra_memory.CopyTo(header.reserved);
+		// Set the remaining reserved bytes to 0
+		memset(header.reserved + extra_memory.size, 0, ECS_COUNTOF(header.reserved) - extra_memory.size);
+		stack_memory.Add(&header);
+	}
 	
 	// -----------------------------------------------------------------------------------------------------------------------------
 

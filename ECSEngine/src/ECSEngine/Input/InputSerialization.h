@@ -11,25 +11,21 @@ namespace ECSEngine {
 
 	struct World;
 
-	// A header to be written at the start of an input file or a file that records inputs.
-	struct InputSerializationHeader {
-		unsigned char version;
-		unsigned char reserved[7];
-	};
-
 	enum ECS_INPUT_SERIALIZE_TYPE : unsigned char {
 		ECS_INPUT_SERIALIZE_MOUSE,
 		ECS_INPUT_SERIALIZE_KEYBOARD,
 		ECS_INPUT_SERIALIZE_COUNT
 	};
 
+	typedef DeltaStateGenericHeader InputSerializationHeader;
+
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// Returns the current input serialization version. It will be at max a byte.
 	ECSENGINE_API unsigned char SerializeInputVersion();
 
-	// Returns a header that should be written in the serialized range such
-	ECSENGINE_API InputSerializationHeader GeInputSerializeHeader();
+	// Returns a header that should be written in the serialized range
+	ECSENGINE_API DeltaStateGenericHeader GetInputSerializeHeader();
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
