@@ -5,6 +5,7 @@
 #include "../InMemoryReaderWriter.h"
 #include "../BufferedFileReaderWriter.h"
 #include "SerializeIntVariableLength.h"
+#include "DeltaStateSerializationForward.h"
 
 #define VERSION 0
 #define LAST_ENTIRE_STATE_INITIALIZE -10000.0f
@@ -596,7 +597,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	void DeltaStateWriteGenericHeader(CapacityStream<void>& stack_memory, unsigned char version, Stream<void> extra_memory = {}) {
+	void DeltaStateWriteGenericHeader(CapacityStream<void>& stack_memory, unsigned char version, Stream<void> extra_memory) {
 		DeltaStateGenericHeader header;
 		ECS_ASSERT(extra_memory.size <= ECS_COUNTOF(header.reserved), "Delta State generic header reserved size exceeded");
 

@@ -407,13 +407,13 @@ namespace ECSEngine {
 
 			// We must update the size of the buffers
 			// For that individual buffer as well
-			size_t initial_chunk = RangeSelector::Chunk(initial_size, chunk_size, miscellaneous);
+			/*size_t initial_chunk = RangeSelector::Chunk(initial_size, chunk_size, miscellaneous);
 			for (size_t index = initial_chunk; index < buffers.size; index++) {
 				size_t add_count = chunk_size - buffers[index].size;
 				add_count = ClampMax(add_count, count);
 				buffers[index].size += add_count;
 				count -= add_count;
-			}
+			}*/
 
 			return initial_size;
 		}

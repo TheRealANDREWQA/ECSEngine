@@ -29,9 +29,11 @@ namespace ECSEngine {
 		// The unique and shared changes have their own buffers
 		entity_unique_component_changes.ForEach([&](const EntityChanges& changes) {
 			changes.changes.Deallocate(Allocator());
+			return false;
 		});
 		shared_component_changes.ForEach([&](const SharedComponentChanges& changes) {
 			changes.changes.Deallocate(Allocator());
+			return false;
 		});
 
 		entity_unique_component_changes.Deallocate();
@@ -106,7 +108,7 @@ namespace ECSEngine {
 				}
 			}, 
 			[](const Archetype* archetype, unsigned int base_index) {}, 
-			[&](const Archetype* archetype, const ArchetypeBase* archetype_base, Entity entity, const void** unique_components) {
+			[&](const Archetype* archetype, const ArchetypeBase* archetype_base, Entity entity, void** unique_components) {
 				ECS_STACK_CAPACITY_STREAM(EntityManagerChangeSet::EntityComponentChange, component_changes, ECS_ARCHETYPE_MAX_COMPONENTS);
 
 				size_t changes_deck_index = change_set.entity_unique_component_changes.ReserveAndUpdateSize();
@@ -314,7 +316,7 @@ namespace ECSEngine {
 	static bool WriterDeltaFunction(DeltaStateWriterDeltaFunctionData* function_data) {
 		WriterData* data = (WriterData*)function_data->user_data;
 
-		if (!SerializeMouseInputDelta(&data->previous_mouse, data->mouse, function_data->write_instrument)) {
+		/*if (!SerializeMouseInputDelta(&data->previous_mouse, data->mouse, function_data->write_instrument)) {
 			return false;
 		}
 		data->previous_mouse = *data->mouse;
@@ -322,7 +324,7 @@ namespace ECSEngine {
 		if (!SerializeKeyboardInputDelta(&data->previous_keyboard, data->keyboard, function_data->write_instrument)) {
 			return false;
 		}
-		data->previous_keyboard.CopyOther(data->keyboard);
+		data->previous_keyboard.CopyOther(data->keyboard);*/
 
 		return true;
 	}
@@ -330,7 +332,7 @@ namespace ECSEngine {
 	static bool WriterEntireFunction(DeltaStateWriterEntireFunctionData* function_data) {
 		WriterData* data = (WriterData*)function_data->user_data;
 
-		if (!SerializeMouseInput(data->mouse, function_data->write_instrument)) {
+		/*if (!SerializeMouseInput(data->mouse, function_data->write_instrument)) {
 			return false;
 		}
 		data->previous_mouse = *data->mouse;
@@ -338,7 +340,7 @@ namespace ECSEngine {
 		if (!SerializeKeyboardInput(data->keyboard, function_data->write_instrument)) {
 			return false;
 		}
-		data->previous_keyboard.CopyOther(data->keyboard);
+		data->previous_keyboard.CopyOther(data->keyboard);*/
 
 		return true;
 	}
@@ -348,57 +350,57 @@ namespace ECSEngine {
 	// The deserialize functor is called with a (const InputSerializationHeader& header, Stream<ECS_INPUT_SERIALIZE_TYPE> accepted_input_types) parameters
 	template<typename FunctorData, typename DeserializeFunctor>
 	static bool InputDeltaReaderFunctionImpl(FunctorData* function_data, DeserializeFunctor&& deserialize_functor) {
-		DeltaStateReaderData* data = (DeltaStateReaderData*)function_data->user_data;
+		//DeltaStateReaderData* data = (DeltaStateReaderData*)function_data->user_data;
 
-		// If the header does not have the same size, fail
-		if (function_data->header.size != sizeof(InputSerializationHeader)) {
-			return false;
-		}
+		//// If the header does not have the same size, fail
+		//if (function_data->header.size != sizeof(InputSerializationHeader)) {
+		//	return false;
+		//}
 
-		// If nothing was written, we can exit
-		if (function_data->write_size == 0) {
-			return true;
-		}
+		//// If nothing was written, we can exit
+		//if (function_data->write_size == 0) {
+		//	return true;
+		//}
 
-		InputSerializationHeader* header = (InputSerializationHeader*)function_data->header.buffer;
+		//InputSerializationHeader* header = (InputSerializationHeader*)function_data->header.buffer;
 
-		ECS_STACK_CAPACITY_STREAM(ECS_INPUT_SERIALIZE_TYPE, valid_types, ECS_INPUT_SERIALIZE_COUNT);
-		for (size_t index = 0; index < ECS_INPUT_SERIALIZE_COUNT; index++) {
-			valid_types[index] = (ECS_INPUT_SERIALIZE_TYPE)index;
-		}
-		valid_types.size = ECS_INPUT_SERIALIZE_COUNT;
+		//ECS_STACK_CAPACITY_STREAM(ECS_INPUT_SERIALIZE_TYPE, valid_types, ECS_INPUT_SERIALIZE_COUNT);
+		//for (size_t index = 0; index < ECS_INPUT_SERIALIZE_COUNT; index++) {
+		//	valid_types[index] = (ECS_INPUT_SERIALIZE_TYPE)index;
+		//}
+		//valid_types.size = ECS_INPUT_SERIALIZE_COUNT;
 
-		size_t initial_offset = function_data->read_instrument->GetOffset();
-		size_t read_size = 0;
-		while (read_size < function_data->write_size && valid_types.size > 0) {
-			ECS_INPUT_SERIALIZE_TYPE serialized_type = deserialize_functor(*header, valid_types);
-			if (serialized_type == ECS_INPUT_SERIALIZE_COUNT) {
-				return false;
-			}
-			else {
-				// Verify that an input of that type is still available
-				unsigned int valid_type_index = valid_types.Find(serialized_type);
-				if (valid_type_index == -1) {
-					// An input is repeated, which means that the data is corrupted.
-					return false;
-				}
-				valid_types.RemoveSwapBack(valid_type_index);
+		//size_t initial_offset = function_data->read_instrument->GetOffset();
+		//size_t read_size = 0;
+		//while (read_size < function_data->write_size && valid_types.size > 0) {
+		//	ECS_INPUT_SERIALIZE_TYPE serialized_type = deserialize_functor(*header, valid_types);
+		//	if (serialized_type == ECS_INPUT_SERIALIZE_COUNT) {
+		//		return false;
+		//	}
+		//	else {
+		//		// Verify that an input of that type is still available
+		//		unsigned int valid_type_index = valid_types.Find(serialized_type);
+		//		if (valid_type_index == -1) {
+		//			// An input is repeated, which means that the data is corrupted.
+		//			return false;
+		//		}
+		//		valid_types.RemoveSwapBack(valid_type_index);
 
-				if (serialized_type == ECS_INPUT_SERIALIZE_MOUSE) {
-					data->previous_mouse = *data->mouse;
-				}
-				else if (serialized_type == ECS_INPUT_SERIALIZE_KEYBOARD) {
-					data->previous_keyboard = *data->keyboard;
-				}
-				else {
-					ECS_ASSERT(false);
-				}
+		//		if (serialized_type == ECS_INPUT_SERIALIZE_MOUSE) {
+		//			data->previous_mouse = *data->mouse;
+		//		}
+		//		else if (serialized_type == ECS_INPUT_SERIALIZE_KEYBOARD) {
+		//			data->previous_keyboard = *data->keyboard;
+		//		}
+		//		else {
+		//			ECS_ASSERT(false);
+		//		}
 
-				size_t current_offset = function_data->read_instrument->GetOffset();
-				read_size += current_offset - initial_offset;
-				initial_offset = current_offset;
-			}
-		}
+		//		size_t current_offset = function_data->read_instrument->GetOffset();
+		//		read_size += current_offset - initial_offset;
+		//		initial_offset = current_offset;
+		//	}
+		//}
 
 		return true;
 	}
