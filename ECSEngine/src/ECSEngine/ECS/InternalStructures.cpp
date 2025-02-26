@@ -629,10 +629,15 @@ namespace ECSEngine {
 
 #define ENTITY_POOL_SERIALIZE_VERSION 0
 
+	// When EntityInfo was using unsigned int instead of size_t as base type, it results in this type using
+	// 12 bytes, because there is no padding, but when upgrading to size_t, there are additional bytes added,
+	// Which ruin the serialization byte size. For this reason, use this special pack for this type only.
+#pragma pack(1)
 	struct SerializeEntityInfo {
 		EntityInfo info;
 		Entity entity;
 	};
+#pragma pack()
 
 	struct SerializeEntityPoolHeader {
 		unsigned int version;

@@ -6501,7 +6501,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			size_t per_element_size = GetReflectionPointerSoAPerElementSize(type, soa_index);
 			size_t soa_size = GetReflectionPointerSoASize(type, soa_index, data);
 			size_t total_allocation_size = per_element_size * soa_size;
-			void* allocation = AllocateEx(allocator, total_allocation_size, GetReflectionTypeSoaAllocationAlignment(type, soa));
+			void* allocation = total_allocation_size == 0 ? nullptr : AllocateEx(allocator, total_allocation_size, GetReflectionTypeSoaAllocationAlignment(type, soa));
 			
 			for (unsigned int index = 0; index < soa->parallel_stream_count; index++) {
 				const ReflectionFieldInfo* current_field = &type->fields[soa->parallel_streams[index]].info;
@@ -6509,7 +6509,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// Copy the data from the current ptr to the allocation and deallocate the current ptr afterwards
 				size_t current_copy_size = soa_size * GetReflectionFieldStreamElementByteSize(*current_field);
 				memcpy(allocation, *current_ptr, current_copy_size);
-				DeallocateEx(allocator, *current_ptr);
+				if (*current_ptr != nullptr) {
+					DeallocateEx(allocator, *current_ptr);
+				}
 				*current_ptr = allocation;
 				allocation = OffsetPointer(allocation, current_copy_size);
 			}

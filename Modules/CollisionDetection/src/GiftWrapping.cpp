@@ -58,7 +58,7 @@ typedef HashTable<VertexConnections, unsigned int, HashFunctionPowerOfTwo> Verte
 // Allocates an entry if there is no such entry, else it returns the existing one
 static VertexConnections* GetVertexConnection(VertexConnectionTable* table, unsigned int vertex, AllocatorPolymorphic allocator) {
 	VertexConnections* vertex_connection = table->TryGetValuePtr(vertex);
-	if (vertex_connection != nullptr) {
+	if (vertex_connection == nullptr) {
 		VertexConnections stack_connection;
 		stack_connection.entry_count = 0;
 		stack_connection.next_connections = nullptr;
