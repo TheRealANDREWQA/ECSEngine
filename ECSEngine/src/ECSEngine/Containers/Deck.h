@@ -407,13 +407,14 @@ namespace ECSEngine {
 
 			// We must update the size of the buffers
 			// For that individual buffer as well
-			/*size_t initial_chunk = RangeSelector::Chunk(initial_size, chunk_size, miscellaneous);
+			size_t initial_chunk = RangeSelector::Chunk(initial_size, chunk_size, miscellaneous);
 			for (size_t index = initial_chunk; index < buffers.size; index++) {
 				size_t add_count = chunk_size - buffers[index].size;
-				add_count = ClampMax(add_count, count);
+				// Clamp the add count to the count
+				add_count = add_count < count ? add_count : count;
 				buffers[index].size += add_count;
 				count -= add_count;
-			}*/
+			}
 
 			return initial_size;
 		}
@@ -428,7 +429,8 @@ namespace ECSEngine {
 				}
 				size_t max_chunk_count = SlotsFor(new_element_count, chunk_size);
 				for (size_t index = 0; index < max_chunk_count; index++) {
-					buffers[index].size = ClampMax(new_element_count, chunk_size);
+					// Clamp the size to the chunk size
+					buffers[index].size = new_element_count < chunk_size ? new_element_count : chunk_size;
 					new_element_count -= buffers[index].size;
 				}
 				size = new_element_count;
@@ -442,7 +444,12 @@ namespace ECSEngine {
 		void ResizeNoCopy(size_t element_count) {
 			size_t initial_size = size;
 			Deallocate();
-			Initialize(buffers.allocator, SlotsFor(element_count, chunk_size), chunk_size, miscellaneous);
+			if constexpr (std::is_same_v<RangeSelector, DeckRangePowerOfTwo>) {
+				Initialize(Allocator(), SlotsFor(element_count, chunk_size), power_of_two_exponent);
+			}
+			else {
+				Initialize(Allocator(), SlotsFor(element_count, chunk_size), chunk_size);
+			}
 			size = element_count < initial_size ? element_count : initial_size;
 		}
 
@@ -455,7 +462,7 @@ namespace ECSEngine {
 			size_t required_chunks = SlotsFor(size + additional_elements, chunk_size);
 			if (required_chunks < buffers.size) {
 				for (size_t index = required_chunks; index < buffers.size; index++) {
-					buffers[index].Deallocate(buffers.allocator);
+					buffers[index].Deallocate(Allocator());
 				}
 				buffers.size = required_chunks;
 			}
