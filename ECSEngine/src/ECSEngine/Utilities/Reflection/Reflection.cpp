@@ -21,6 +21,7 @@ namespace ECSEngine {
 #define MAX_PARSING_ENUM_ENTRIES 32
 #define MAX_PARSING_TYPE_ENTRIES 64
 #define MAX_PARSING_TYPE_TAG_ADDITIONAL_CHARACTERS 500
+#define SERIALIZE_VERSION 0
 
 		// These are pending expressions to be evaluated
 		struct ReflectionExpression {

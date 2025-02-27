@@ -92,9 +92,6 @@ namespace ECSEngine {
 	// Returns the current input serialization version. It will be at max a byte.
 	ECSENGINE_API unsigned char SerializeEntityManagerDeltaVersion();
 
-	// Returns a header that should be written in the serialized range such
-	ECSENGINE_API EntityManagerDeltaSerializationHeader GetEntityManagerDeltaSerializeHeader();
-
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// The allocator will be used to allocate the buffers needed. It computes the necessary changes that should be applied to the previous entity manager

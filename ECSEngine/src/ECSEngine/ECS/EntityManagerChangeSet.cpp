@@ -3,6 +3,7 @@
 #include "EntityManager.h"
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Serialization/DeltaStateSerialization.h"
+#include "World.h"
 
 // 256
 #define DECK_POWER_OF_TWO_EXPONENT 8
@@ -258,7 +259,7 @@ namespace ECSEngine {
 	typedef WriterReaderBaseData <EntityManager> ReaderData;
 
 	// This allows the writer to work in a self-contained manner
-	struct StateWriterWorldData : WriterData {
+	struct WriterWorldData : WriterData {
 		// Needed for the elapsed seconds
 		const World* world;
 	};
@@ -309,6 +310,11 @@ namespace ECSEngine {
 	static void ReaderDeallocate(void* user_data, AllocatorPolymorphic allocator) {
 		// The function is identical to the writer, and the data layout is identical as well, so we can directly forward to it
 		WriterDeallocate(user_data, allocator);
+	}
+
+	static float WriterExtractFunction(void* user_data) {
+		WriterWorldData* data = (WriterWorldData*)user_data;
+		return data->world->elapsed_seconds;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -414,7 +420,7 @@ namespace ECSEngine {
 		return false;
 	}
 
-	static bool InputDeltaReaderEntireFunction(DeltaStateReaderEntireFunctionData* function_data) {
+	static bool ReaderEntireFunction(DeltaStateReaderEntireFunctionData* function_data) {
 		// This is a mirror of the delta function, but instead of the delta function, we use the entire function
 		ReaderData* data = (ReaderData*)function_data->user_data;
 		//return InputDeltaReaderFunctionImpl(function_data, [function_data, data](const InputSerializationHeader& header, Stream<ECS_INPUT_SERIALIZE_TYPE> accepted_input_types) {
@@ -465,7 +471,19 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager,
 		CapacityStream<void>& stack_memory
 	) {
+		info.delta_function = WriterDeltaFunction;
+		info.entire_function = WriterEntireFunction;
+		info.self_contained_extract = WriterExtractFunction;
+		info.user_data_allocator_initialize = WriterInitialize;
+		info.user_data_allocator_deallocate = WriterDeallocate;
 
+		EntityManagerDeltaSerializationHeader serialization_header = GetEntityManagerDeltaSerializeHeader();
+		info.header = stack_memory.Add(&serialization_header);
+
+		WriterWorldData writer_data;
+		writer_data.current_state = world->entity_manager;
+		writer_data.world = world;
+		info.user_data = stack_memory.Add(&writer_data);
 	}
 
 	void SetEntityManagerDeltaReaderInitializeInfo(
@@ -474,7 +492,15 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager,
 		CapacityStream<void>& stack_memory
 	) {
+		info.delta_function = ReaderDeltaFunction;
+		info.entire_function = ReaderEntireFunction;
+		info.user_data_allocator_initialize = ReaderInitialize;
+		info.user_data_allocator_deallocate = ReaderDeallocate;
 
+		ReaderData reader_data;
+		ZeroOut(&reader_data);
+		reader_data.current_state = entity_manager;
+		info.user_data = stack_memory.Add(&reader_data);
 	}
 
 	void SetEntityManagerDeltaReaderWorldInitializeInfo(
@@ -483,7 +509,8 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager,
 		CapacityStream<void>& stack_memory
 	) {
-
+		// Can forward to the normal initialize
+		SetEntityManagerDeltaReaderInitializeInfo(info, world->entity_manager, reflection_manager, stack_memory);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------

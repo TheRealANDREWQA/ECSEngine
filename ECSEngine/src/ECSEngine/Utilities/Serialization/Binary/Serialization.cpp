@@ -9,6 +9,7 @@
 #include "../../../Allocators/ResizableLinearAllocator.h"
 #include "../../../Math/MathHelpers.h"
 #include "SerializationMacro.h"
+#include "../../ReaderWriterInterface.h"
 
 #define DESERIALIZE_FIELD_TABLE_MAX_TYPES (32)
 
@@ -83,7 +84,7 @@ namespace ECSEngine {
 	// The custom fields should be filled in with the fields which have a custom serializer
 	// The reflection manager is needed for blittable exceptions
 	template<bool write_data>
-	size_t WriteTypeTable(
+	static size_t WriteTypeTable(
 		const ReflectionManager* reflection_manager, 
 		const ReflectionType* type, 
 		uintptr_t& stream, 
@@ -172,7 +173,7 @@ namespace ECSEngine {
 					total_size += Write<write_data>(&stream, &flags, sizeof(flags));
 					total_size += Write<write_data>(&stream, &field->info.pointer_offset, sizeof(field->info.pointer_offset));
 
-					// If user defined, write the definition aswell
+					// If user defined, write the definition as well
 					if (field->info.basic_type == ReflectionBasicFieldType::UserDefined || field->info.basic_type == ReflectionBasicFieldType::Enum) {
 						Stream<char> definition_stream = field->definition;
 						total_size += WriteWithSizeShort<write_data>(&stream, definition_stream.buffer, (unsigned short)definition_stream.size);
@@ -190,7 +191,7 @@ namespace ECSEngine {
 	}
 
 	template<bool write_data>
-	size_t WriteTypeTable(
+	static size_t WriteTypeTable(
 		const ReflectionManager* reflection_manager, 
 		const ReflectionType* type, 
 		uintptr_t& stream,
@@ -291,21 +292,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	// Writes the necessary information about custom type interfaces, such that the user can version them
 	template<bool write_data>
-	size_t WriteTypeTableWithSerializers(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		uintptr_t& stream,
-		Stream<SerializeOmitField> omit_fields,
-		bool write_tags
-	) {
+	static size_t WriteTypeTableCustomInterfacesInfo(uintptr_t& stream) {
 		size_t write_total = 0;
 
 		// Write the version first
 		unsigned int serialize_version = SERIALIZE_VERSION;
 		write_total += Write<write_data>(&stream, &serialize_version, sizeof(serialize_version));
-
-		ECS_STACK_CAPACITY_STREAM(Stream<char>, deserialized_type_names, DESERIALIZE_FIELD_TABLE_MAX_TYPES);
 
 		// Write the custom serializer versions
 		unsigned int serializers_count = SerializeCustomTypeCount();
@@ -316,6 +310,24 @@ namespace ECSEngine {
 			write_total += Write<write_data>(&stream, &ECS_SERIALIZE_CUSTOM_TYPES[index].version, sizeof(unsigned int));
 		}
 
+		return write_total;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	template<bool write_data>
+	static size_t WriteTypeTableWithSerializers(
+		const ReflectionManager* reflection_manager,
+		const ReflectionType* type,
+		uintptr_t& stream,
+		Stream<SerializeOmitField> omit_fields,
+		bool write_tags
+	) {
+		size_t write_total = 0;
+
+		write_total += WriteTypeTableCustomInterfacesInfo<write_data>(stream);
+
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, deserialized_type_names, DESERIALIZE_FIELD_TABLE_MAX_TYPES);
 		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, deserialized_type_names, omit_fields, write_tags);
 
 		return write_total;
@@ -325,7 +337,7 @@ namespace ECSEngine {
 
 	// The functor must take as parameter a uintptr_t& and write into it and return an ECS_SERIALIZE_CODE
 	template<typename Functor>
-	ECS_SERIALIZE_CODE SerializeFileImpl(size_t serialize_size, Stream<wchar_t> file, SerializeOptions* options, Functor&& functor) {
+	static ECS_SERIALIZE_CODE SerializeFileImpl(size_t serialize_size, Stream<wchar_t> file, SerializeOptions* options, Functor&& functor) {
 		AllocatorPolymorphic file_allocator = options == nullptr ? AllocatorPolymorphic{ nullptr } : options->allocator;
 
 		ECS_SERIALIZE_CODE code = ECS_SERIALIZE_OK;
@@ -2313,6 +2325,114 @@ namespace ECSEngine {
 		// The type to be ignored is the first one from the field table
 		IgnoreType(data, field_table, 0, deserialized_manager);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	struct SerializeReflectionManagerHeader {
+		unsigned char version;
+		unsigned char reserved[7];
+		// How many types are serialized
+		size_t type_count;
+	};
+
+	bool SerializeReflectionManager(
+		const ReflectionManager* reflection_manager,
+		WriteInstrument* write_instrument,
+		const SerializeReflectionManagerOptions* options
+	) {
+		SerializeReflectionManagerOptions default_options;
+		if (options == nullptr) {
+			options = &default_options;
+		}
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+		// Record all the types that need to be written, including their dependencies
+		ResizableStream<const ReflectionType*> types_to_write(&stack_allocator, 0);
+
+		auto add_type_to_write = [&](const ReflectionType* type) {
+			if (SearchBytes(types_to_write.ToStream(), type) == -1) {
+				// The type wasn't already added, add it
+				types_to_write.Add(type);
+
+				// Determine its dependencies
+				ECS_STACK_CAPACITY_STREAM(Stream<char>, type_dependencies, 512);
+				GetReflectionTypeDependentTypes(reflection_manager, type, type_dependencies);
+
+				// Add the dependencies that don't exist already
+				for (unsigned int index = 0; index < type_dependencies.size; index++) {
+					const ReflectionType* dependency = reflection_manager->GetType(type_dependencies[index]);
+					if (SearchBytes(types_to_write.ToStream(), dependency) == -1) {
+						types_to_write.Add(dependency);
+					}
+				}
+			}
+		};
+
+		if (options->hierarchy_indices.size > 0) {
+			reflection_manager->type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
+				if (SearchBytes(options->hierarchy_indices, type.folder_hierarchy_index) != -1) {
+					add_type_to_write(&type);
+				}
+			});
+		}
+		else if (options->type_names.size > 0) {
+			// We will need to assert that are all found
+			for (size_t index = 0; index < options->type_names.size; index++) {
+				add_type_to_write(reflection_manager->GetType(options->type_names[index]));
+			}
+		}
+		else {
+			// All types are to be written, simply add all pointers
+			types_to_write.Reserve(reflection_manager->type_definitions.GetCount());
+			reflection_manager->type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
+				types_to_write.Add(&type);
+			});
+		}
+
+		// Write the header firstly
+		SerializeReflectionManagerHeader header;
+		ZeroOut(&header);
+		header.version = SERIALIZE_VERSION;
+		header.type_count = types_to_write.size;
+
+		if (!write_instrument->Write(&header)) {
+			return false;
+		}
+
+		// Write the custom type interface serialization
+		stack_allocator.SetMarker();
+
+		uintptr_t custom_interfaces_info_allocation_ptr;
+		size_t custom_interfaces_info_allocation_size = WriteTypeTableCustomInterfacesInfo<false>(custom_interfaces_info_allocation_ptr);
+		void* custom_interfaces_info_allocation = stack_allocator.Allocate(custom_interfaces_info_allocation_size);
+		custom_interfaces_info_allocation_ptr = (uintptr_t)custom_interfaces_info_allocation_ptr;
+		WriteTypeTableCustomInterfacesInfo<true>(custom_interfaces_info_allocation_ptr);
+
+		// Commit this to the type instrument
+		if (!write_instrument->Write(custom_interfaces_info_allocation, custom_interfaces_info_allocation_size)) {
+			return false;
+		}
+
+		// Can return the stack allocator to the marker
+		stack_allocator.ReturnToMarker();
+
+		if (options->hierarchy_indices.size > 0) {
+
+		}
+
+		return false;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	bool DeserializeReflectionManager(
+		ReflectionManager* reflection_manager,
+		ReadInstrument* read_instrument
+	) {
+		return false;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
 
 #pragma region String versions
 
