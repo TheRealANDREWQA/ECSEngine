@@ -15,6 +15,8 @@ namespace ECSEngine {
 	}
 
 	struct DeserializeTypeNameRemapping;
+	struct WriteInstrument;
+	struct ReadInstrument;
 
 	// Return true if the header is valid and the deserialization can continue
 	typedef bool (*DeserializeValidateHeader)(Stream<void> header, void* data);
@@ -358,6 +360,30 @@ namespace ECSEngine {
 		const DeserializeFieldTableOptions* options = nullptr,
 		const Reflection::ReflectionManager* deserialized_manager = nullptr,
 		Stream<DeserializeTypeNameRemapping> name_remapping = { nullptr, 0 }
+	);
+
+	struct SerializeReflectionManagerOptions {
+		// The name of the types to be serialized. If left empty, then it will write all types
+		Stream<Stream<char>> type_names = {};
+		// If specified, only these hierarchies will be written. By default, all hierarchies are considered (even types that
+		// Are outside all hierarchies). If you want to include types that do not belong to any hierarchy, include -1.
+		Stream<unsigned int> hierarchy_indices = {};
+	};
+
+	// Writes the types this reflection manager contains to a specified write instrument. With the options
+	// Parameter, you can control how the serialization is done. By default, it will write all reflection types.
+	// Returns true if it succeeded, else false
+	ECSENGINE_API bool SerializeReflectionManager(
+		const Reflection::ReflectionManager* reflection_manager,
+		WriteInstrument* write_instrument,
+		const SerializeReflectionManagerOptions* options = nullptr
+	);
+
+	// Reads a previous serialization into the given reflection manager. The added types will not belong to any folder hierarchy.
+	// Returns true if it succeeded, else false
+	ECSENGINE_API bool DeserializeReflectionManager(
+		Reflection::ReflectionManager* reflection_manager,
+		ReadInstrument* read_instrument
 	);
 
 #pragma region String versions
