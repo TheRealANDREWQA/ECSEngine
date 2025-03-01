@@ -15,6 +15,7 @@
 #include "../../Allocators/MemoryManager.h"
 #include "../../Allocators/MemoryProtectedAllocator.h"
 #include "../../Allocators/ResizableLinearAllocator.h"
+#include "../ReaderWriterInterface.h"
 
 namespace ECSEngine {
 
@@ -1770,6 +1771,309 @@ namespace ECSEngine {
 		tags = _tags;
 		definition_info = SearchReflectionDefinitionInfo(read_data->reflection_manager, definition);
 	}
+
+	// -----------------------------------------------------------------------------------------
+
+	bool WriteFundamentalType(const ReflectionFieldInfo& info, const void* data, WriteInstrument* write_instrument) {
+		if (info.stream_type == ReflectionStreamFieldType::Basic) {
+			return write_instrument->Write(data, info.byte_size);
+		}
+		else {
+			if (info.stream_type == ReflectionStreamFieldType::Pointer) {
+				unsigned int pointer_indirection = GetReflectionFieldPointerIndirection(info);
+				if (pointer_indirection == 1) {
+					if (info.basic_type == ReflectionBasicFieldType::Int8) {
+						const char* characters = *(const char**)data;
+						size_t character_count = strlen(characters) + 1;
+						return write_instrument->WriteWithSize<size_t>(Stream<void>(characters, character_count * sizeof(char)));
+					}
+					else if (info.basic_type == ReflectionBasicFieldType::Wchar_t) {
+						const wchar_t* characters = *(const wchar_t**)data;
+						size_t character_count = wcslen(characters) + 1;
+						return write_instrument->WriteWithSize<size_t>(Stream<void>(characters, character_count * sizeof(wchar_t)));
+					}
+					else {
+						ECS_ASSERT(info.basic_type != ReflectionBasicFieldType::UserDefined, "WriteFundamentalType does not accept user defined pointers!");
+						// Write the value that is there
+						size_t write_size = GetReflectionBasicFieldTypeByteSize(info.basic_type);
+						return write_instrument->Write(*(void**)data, write_size);
+					}
+				}
+				else {
+					ECS_ASSERT(false, "Failed to serialize basic pointer. Indirection is greater than 1.");
+				}
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+				return write_instrument->Write(&info.basic_type_count) + write_instrument->Write(data, info.byte_size);
+			}
+			else if (IsStreamWithSoA(info.stream_type)) {
+				// The SoA case can be handled here as well
+				Stream<void> void_stream = GetReflectionFieldStreamVoid(info, data);
+				size_t element_byte_size = GetReflectionFieldStreamElementByteSize(info);
+				bool write_success = write_instrument->WriteWithSize<size_t>(Stream<void>(void_stream.buffer, void_stream.size * element_byte_size));
+
+				// For strings, add a '\0' such that if the data is later on changed to a const char* or const wchar_t* it can still reference it
+				if (info.basic_type == ReflectionBasicFieldType::Int8) {
+					write_success &= write_instrument->Write("\0", sizeof(char));
+				}
+				else if (info.basic_type == ReflectionBasicFieldType::Wchar_t) {
+					write_success &= write_instrument->Write(L"\0", sizeof(wchar_t));
+				}
+
+				return write_success;
+			}
+		}
+
+		ECS_ASSERT(false, "An error has occured when trying to serialize fundamental type.");
+		return false;
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+	template<bool force_allocation>
+	size_t ReadOrReferenceFundamentalType(
+		const ReflectionFieldInfo& info,
+		void* data,
+		ReadInstrument* read_instrument,
+		unsigned short basic_type_array_count,
+		AllocatorPolymorphic allocator,
+		bool allocate_soa_pointer
+	) {
+		if (info.stream_type == ReflectionStreamFieldType::Basic) {
+			return read_instrument->Read(data, info.byte_size);
+		}
+		else {
+			if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+				unsigned short elements_to_read = ClampMax(info.basic_type_count, basic_type_array_count);
+				if (!read_instrument->Read(&data, elements_to_read * GetBasicTypeArrayElementSize(info))) {
+					return false;
+				}
+
+				return read_instrument->Ignore((info.basic_type_count - elements_to_read) * GetBasicTypeArrayElementSize(info));
+			}
+
+			if (info.stream_type == ReflectionStreamFieldType::Pointer) {
+				bool success = true;
+				unsigned int pointer_indirection = GetReflectionFieldPointerIndirection(info);
+				if (pointer_indirection == 1) {
+					if (info.basic_type == ReflectionBasicFieldType::Int8 || info.basic_type == ReflectionBasicFieldType::Wchar_t) {
+						size_t byte_size = 0;
+						success &= read_instrument->ReadAlways(&byte_size);
+						if (!read_instrument->IsSizeDetermination()) {
+							size_t element_byte_size = info.basic_type == ReflectionBasicFieldType::Int8 ? sizeof(char) : sizeof(wchar_t);
+							size_t allocate_size = byte_size + element_byte_size;
+							if (allocator.allocator != nullptr) {
+								if (byte_size > 0) {
+									void* allocation = Allocate(allocator, allocate_size, info.stream_alignment);
+									success &= read_instrument->ReadAlways(allocation, byte_size);
+
+									void* null_terminator = OffsetPointer(allocation, byte_size);
+									memset(null_terminator, 0, element_byte_size);
+
+									void** pointer = (void**)data;
+									*pointer = allocation;
+								}
+							}
+							else {
+								if constexpr (!force_allocation) {
+									void* referenced_data = read_instrument->ReferenceData(byte_size);
+									success &= referenced_data != nullptr;
+									*(void**)data = referenced_data;
+								}
+								else {
+									if (byte_size > 0) {
+										void* allocation = AllocateEx(allocator, allocate_size, info.stream_alignment);
+										success &= read_instrument->ReadAlways(allocation, byte_size);
+
+										void* null_terminator = OffsetPointer(allocation, byte_size);
+										memset(null_terminator, 0, element_byte_size);
+
+										void** pointer = (void**)data;
+										*pointer = allocation;
+									}
+								}
+							}
+						}
+						else {
+							success &= read_instrument->Ignore(byte_size);
+						}
+						return success;
+					}
+					else {
+						size_t fundamental_byte_size = GetReflectionBasicFieldTypeByteSize(info.basic_type);
+						// Allocate the pointer
+						if (!read_instrument->IsSizeDetermination()) {
+							void** pointer = (void**)data;
+							if (allocator.allocator != nullptr) {
+								*pointer = Allocate(allocator, fundamental_byte_size, GetReflectionFieldTypeAlignment(info.basic_type));
+								success &= read_instrument->ReadAlways(*pointer, fundamental_byte_size);
+							}
+							else {
+								if constexpr (!force_allocation) {
+									*pointer = read_instrument->ReferenceData(fundamental_byte_size);
+									success &= pointer != nullptr;
+								}
+								else {
+									*pointer = AllocateEx(allocator, fundamental_byte_size, GetReflectionFieldTypeAlignment(info.basic_type));
+									success &= read_instrument->Read(*pointer, fundamental_byte_size);
+								}
+							}
+						}
+						else {
+							success &= read_instrument->Ignore(fundamental_byte_size);
+						}
+						return success;
+					}
+				}
+				else {
+					ECS_ASSERT(false, "Cannot deserialize pointer with indirection greater than 1.");
+				}
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+				size_t byte_size = 0;
+				bool success = true;
+
+				success &= read_instrument->ReadAlways(&byte_size, sizeof(byte_size));
+				if (!read_instrument->IsSizeDetermination()) {
+					if (allocate_soa_pointer) {
+						if (allocator.allocator != nullptr) {
+							void** pointer = (void**)data;
+							if (byte_size > 0) {
+								void* allocation = Allocate(allocator, byte_size, info.stream_alignment);
+								success &= read_instrument->ReadAlways(allocation, byte_size);
+
+								*pointer = allocation;
+							}
+						}
+						else {
+							if constexpr (!force_allocation) {
+								void* referenced_data = read_instrument->ReferenceData(byte_size);
+								success &= referenced_data != nullptr;
+								*(void**)data = referenced_data;
+							}
+							else {
+								void** pointer = (void**)data;
+								if (byte_size > 0) {
+									void* allocation = AllocateEx(allocator, byte_size, info.stream_alignment);
+									success &= read_instrument->ReadAlways(byte_size);
+
+									*pointer = allocation;
+								}
+							}
+						}
+					}
+					else {
+						// Read the data into the buffer
+						success &= read_instrument->Read(*(void**)data, byte_size);
+					}
+				}
+				else {
+					success &= read_instrument->Ignore(byte_size);
+				}
+
+				return success;
+			}
+			// We can put the PointerSoA in the same case as this
+			else if (IsStream(info.stream_type)) {
+				bool success = true;
+
+				size_t byte_size = 0;
+				success &= read_instrument->ReadAlways(&byte_size);
+
+				bool update_stream_capacity = false;
+				if (!read_instrument->IsSizeDetermination()) {
+					if (allocator.allocator != nullptr) {
+						void** pointer = (void**)data;
+						if (byte_size > 0) {
+							void* allocation = Allocate(allocator, byte_size, info.stream_alignment);
+							success &= read_instrument->ReadAlways(allocation, byte_size);
+
+							*pointer = allocation;
+						}
+						else {
+							// This improves the readability
+							*pointer = nullptr;
+						}
+						update_stream_capacity = true;
+					}
+					else {
+						if constexpr (!force_allocation) {
+							void* referenced_data = read_instrument->ReferenceData(byte_size);
+							success &= referenced_data != nullptr;
+							*(void**)data = referenced_data;
+						}
+						else {
+							void** pointer = (void**)data;
+							if (byte_size > 0) {
+								void* allocation = AllocateEx(allocator, byte_size, info.stream_alignment);
+								success &= read_instrument->ReadAlways(allocation, byte_size);
+
+								*pointer = allocation;
+							}
+							else {
+								// This improves the readability
+								*pointer = nullptr;
+							}
+							update_stream_capacity = true;
+						}
+					}
+				}
+				else {
+					success &= read_instrument->Ignore(byte_size);
+				}
+
+				if (!read_instrument->IsSizeDetermination()) {
+					// If it is a string and ends with '\0', then eliminate it
+					if (info.stream_type == ReflectionStreamFieldType::Stream) {
+						Stream<void>* field_stream = (Stream<void>*)data;
+						field_stream->size = byte_size / info.stream_byte_size;
+
+						if (info.basic_type == ReflectionBasicFieldType::Int8) {
+							char* characters = (char*)field_stream->buffer;
+							if (field_stream->size > 0) {
+								field_stream->size -= characters[field_stream->size - 1] == '\0';
+							}
+						}
+						else if (info.basic_type == ReflectionBasicFieldType::Wchar_t) {
+							wchar_t* characters = (wchar_t*)field_stream->buffer;
+							if (field_stream->size > 0) {
+								field_stream->size -= characters[field_stream->size - 1] == L'\0';
+							}
+						}
+					}
+					// They can be safely aliased
+					else if (info.stream_type == ReflectionStreamFieldType::CapacityStream || info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+						CapacityStream<void>* field_stream = (CapacityStream<void>*)data;
+						field_stream->size = (unsigned int)byte_size / info.stream_byte_size;
+
+						if (update_stream_capacity) {
+							field_stream->capacity = field_stream->size;
+						}
+
+						if (info.basic_type == ReflectionBasicFieldType::Int8) {
+							char* characters = (char*)field_stream->buffer;
+							if (field_stream->size > 0) {
+								field_stream->size -= characters[field_stream->size - 1] == '\0';
+							}
+						}
+						else if (info.basic_type == ReflectionBasicFieldType::Wchar_t) {
+							wchar_t* characters = (wchar_t*)field_stream->buffer;
+							if (field_stream->size > 0) {
+								field_stream->size -= characters[field_stream->size - 1] == L'\0';
+							}
+						}
+					}
+				}
+
+				return success;
+			}
+		}
+
+		ECS_ASSERT(false, "Invalid code path - shouldn't be reached");
+		return false;
+	}
+
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, ReadOrReferenceFundamentalType, const Reflection::ReflectionFieldInfo&, void*, ReadInstrument*, unsigned short, AllocatorPolymorphic, bool);
 
 	// -----------------------------------------------------------------------------------------
 

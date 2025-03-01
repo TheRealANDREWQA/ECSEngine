@@ -205,7 +205,8 @@ namespace ECSEngine {
 		ECS_SERIALIZE_OK,
 		ECS_SERIALIZE_COULD_NOT_OPEN_OR_WRITE_FILE,
 		ECS_SERIALIZE_MISSING_DEPENDENT_TYPES,
-		ECS_SERIALIZE_CUSTOM_TYPE_FAILED
+		ECS_SERIALIZE_CUSTOM_TYPE_FAILED,
+		ECS_SERIALIZE_INSTRUMENT_FAILURE
 	};
 
 	enum ECS_DESERIALIZE_CODE : unsigned char {
@@ -245,6 +246,15 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* type,
 		const void* data,
 		uintptr_t& stream,
+		SerializeOptions* options = nullptr
+	);
+
+	// NEW: This function supersedes the previous variants, since the write instrument is abstracted away
+	ECSENGINE_API ECS_SERIALIZE_CODE Serialize(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		const void* data,
+		WriteInstrument* write_instrument,
 		SerializeOptions* options = nullptr
 	);
 
