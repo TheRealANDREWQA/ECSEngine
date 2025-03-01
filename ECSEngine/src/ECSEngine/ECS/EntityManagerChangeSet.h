@@ -103,6 +103,17 @@ namespace ECSEngine {
 		AllocatorPolymorphic change_set_allocator
 	);
 
+	// Writes the delta between a previous entity manager and a new entity manager, after the change set has been computed.
+	// The previous entity manager is no longer needed, since the changes that require actual data to be written will use the
+	// New entity manager.
+	// Returns true if it succeeded, else false
+	ECSENGINE_API bool SerializeEntityManagerChangeSet(
+		const EntityManagerChangeSet* change_set,
+		const EntityManager* new_entity_manager,
+		const Reflection::ReflectionManager* reflection_manager,
+		WriteInstrument* write_instrument
+	);
+
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// Sets the necessary info for the writer to be initialized as an ECS state delta writer - outside the runtime context

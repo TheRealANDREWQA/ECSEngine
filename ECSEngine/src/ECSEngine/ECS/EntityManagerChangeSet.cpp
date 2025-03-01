@@ -3,6 +3,7 @@
 #include "EntityManager.h"
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Serialization/DeltaStateSerialization.h"
+#include "../Utilities/Serialization/Binary/Serialization.h"
 #include "World.h"
 
 // 256
@@ -245,18 +246,44 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
+	bool SerializeEntityManagerChangeSet(
+		const EntityManagerChangeSet* change_set,
+		const EntityManager* new_entity_manager,
+		const Reflection::ReflectionManager* reflection_manager,
+		WriteInstrument* write_instrument
+	) {
+		// Firstly, write the change set itself, the structure that describes what changes need to be performed,
+		// Then write the component data that was changed
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------------------
+
 	// EntityManagerType should be EntityManager or const EntityManager
 	template<typename EntityManagerType>
 	struct WriterReaderBaseData {
 		// Maintain a personal allocator for the previous state, such that we don't force the caller to do
 		// This, which can be quite a hassle
 		GlobalMemoryManager previous_state_allocator;
+		// Use a separate allocator for the change set, that is linear in nature since it is temporary,
+		// Such that we can wink it in order to deallocate the change set
+		ResizableLinearAllocator change_set_allocator;
 		EntityManager previous_state;
 		EntityManagerType* current_state;
 	};
 
-	typedef WriterReaderBaseData <const EntityManager> WriterData;
-	typedef WriterReaderBaseData <EntityManager> ReaderData;
+	struct WriterData : public WriterReaderBaseData<const EntityManager> {
+		// We need to record this reflection manager such that we can write the variable length header
+		const ReflectionManager* reflection_manager;
+	};
+
+	struct ReaderData : public WriterReaderBaseData<EntityManager> {
+		// This reflection manager will store the reflection types used for serialization
+		// In the file. It will be constructed upon initialization
+		ReflectionManager reflection_manager;
+		// In this field, the deserialized table will be recorded such that in can be forwarded to
+		// The deserialize calls directly
+		DeserializeFieldTable file_field_table;
+	};
 
 	// This allows the writer to work in a self-contained manner
 	struct WriterWorldData : WriterData {
@@ -305,6 +332,10 @@ namespace ECSEngine {
 	static void ReaderInitialize(void* user_data, AllocatorPolymorphic allocator) {
 		// The function is identical to the writer, and the data layout is identical as well, so we can directly forward to it
 		WriterInitialize(user_data, allocator);
+
+		// There is one more thing to do tho, and that is to initialize the reflection manager
+		ReaderData* data = (ReaderData*)user_data;
+		data->reflection_manager = ReflectionManager(&data->previous_state_allocator, 0, 0);
 	}
 
 	static void ReaderDeallocate(void* user_data, AllocatorPolymorphic allocator) {
@@ -317,20 +348,34 @@ namespace ECSEngine {
 		return data->world->elapsed_seconds;
 	}
 
+	static bool WriterHeaderWriteFunction(void* user_data, WriteInstrument* write_instrument) {
+		WriterData* data = (WriterData*)user_data;
+
+		// We need to write the reflection manager types, such that they are stored only once in the file
+		return SerializeReflectionManager(data->reflection_manager, write_instrument);
+	}
+
+	static bool ReaderHeaderReadFunction(DeltaStateReaderHeaderReadFunctionData* functor_data) {
+		// Do a quick pre-check, if the variable length header is missing, fail
+		if (functor_data->write_size == 0) {
+			return false;
+		}
+
+		ReaderData* data = (ReaderData*)functor_data->user_data;
+
+		// Read the reflection manager stored in the file
+		return DeserializeReflectionManager(&data->reflection_manager, functor_data->read_instrument, &data->previous_state_allocator, &data->file_field_table);
+	}
+
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	static bool WriterDeltaFunction(DeltaStateWriterDeltaFunctionData* function_data) {
 		WriterData* data = (WriterData*)function_data->user_data;
 
-		/*if (!SerializeMouseInputDelta(&data->previous_mouse, data->mouse, function_data->write_instrument)) {
-			return false;
-		}
-		data->previous_mouse = *data->mouse;
+		// Determine the change set
+		EntityManagerChangeSet change_set = DetermineEntityManagerChangeSet(&data->previous_state, data->current_state, data->reflection_manager, &data->change_set_allocator);
 
-		if (!SerializeKeyboardInputDelta(&data->previous_keyboard, data->keyboard, function_data->write_instrument)) {
-			return false;
-		}
-		data->previous_keyboard.CopyOther(data->keyboard);*/
+		
 
 		return true;
 	}
@@ -456,6 +501,7 @@ namespace ECSEngine {
 		info.self_contained_extract = nullptr;
 		info.user_data_allocator_initialize = WriterInitialize;
 		info.user_data_allocator_deallocate = WriterDeallocate;
+		info.header_write_function = WriterHeaderWriteFunction;
 
 		EntityManagerDeltaSerializationHeader serialization_header = GetEntityManagerDeltaSerializeHeader();
 		info.header = stack_memory.Add(&serialization_header);
@@ -471,14 +517,9 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager,
 		CapacityStream<void>& stack_memory
 	) {
-		info.delta_function = WriterDeltaFunction;
-		info.entire_function = WriterEntireFunction;
+		// Call the basic function and simply override the user data and the extract function, since that's what is different
+		SetEntityManagerDeltaWriterInitializeInfo(info, world->entity_manager, reflection_manager, stack_memory);
 		info.self_contained_extract = WriterExtractFunction;
-		info.user_data_allocator_initialize = WriterInitialize;
-		info.user_data_allocator_deallocate = WriterDeallocate;
-
-		EntityManagerDeltaSerializationHeader serialization_header = GetEntityManagerDeltaSerializeHeader();
-		info.header = stack_memory.Add(&serialization_header);
 
 		WriterWorldData writer_data;
 		writer_data.current_state = world->entity_manager;
@@ -496,6 +537,7 @@ namespace ECSEngine {
 		info.entire_function = ReaderEntireFunction;
 		info.user_data_allocator_initialize = ReaderInitialize;
 		info.user_data_allocator_deallocate = ReaderDeallocate;
+		info.header_read_function = ReaderHeaderReadFunction;
 
 		ReaderData reader_data;
 		ZeroOut(&reader_data);

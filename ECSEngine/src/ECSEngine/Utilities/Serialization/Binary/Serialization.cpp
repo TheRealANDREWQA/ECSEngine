@@ -13,7 +13,7 @@
 
 #define DESERIALIZE_FIELD_TABLE_MAX_TYPES (32)
 
-#define SERIALIZE_VERSION 0
+#define REFLECTION_MANAGER_SERIALIZE_VERSION 0
 
 namespace ECSEngine {
 
@@ -80,36 +80,74 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	struct UintptrWriteInstrument {
+		template<typename T>
+		ECS_INLINE bool Write(const T* data) const {
+			ECSEngine::Write<true>(ptr, data);
+			return true;
+		}
+
+		template<typename IntegerType>
+		ECS_INLINE bool WriteWithSize(Stream<void> data) const {
+			IntegerType size = data.size;
+			Write(&size);
+			ECSEngine::Write<true>(ptr, data.buffer, size);
+			return true;
+		}
+
+		uintptr_t* ptr;
+	};
+
+	struct UintptrSizeDeterminationWriteInstrument {
+		template<typename T>
+		ECS_INLINE bool Write(const T* data) const {
+			*size += sizeof(T);
+			return true;
+		}
+
+		template<typename IntegerType>
+		ECS_INLINE bool WriteWithSize(Stream<void> data) const {
+			*size += sizeof(IntegerType) + data.size;
+			return true;
+		}
+
+		size_t* size;
+	};
+
 	// It will write only the fields of this type, the user defined types are only specified by name
 	// The custom fields should be filled in with the fields which have a custom serializer
-	// The reflection manager is needed for blittable exceptions
-	template<bool write_data>
-	static size_t WriteTypeTable(
+	// The reflection manager is needed for blittable exceptions. The write instrument is a template parameter
+	// Such that we force the compiler to not use virtual calls for the common case of a uintptr_t instrument.
+	// Returns true if it succeeded, else false.
+	template<typename WriteInstrument>
+	static bool WriteTypeTable(
 		const ReflectionManager* reflection_manager, 
-		const ReflectionType* type, 
-		uintptr_t& stream, 
+		const ReflectionType* type,
+		WriteInstrument* write_instrument,
 		Stream<SerializeOmitField> omit_fields,
 		bool write_tags
 	) {
-		size_t total_size = 0;
-
 		// Write the name of the type first
-		unsigned short type_name_size = (unsigned short)type->name.size;
-		total_size += WriteWithSizeShort<write_data>(&stream, type->name.buffer, type_name_size);
+		if (!write_instrument->WriteWithSize<unsigned short>(type->name)) {
+			return false;
+		}
 
 		// Write the byte size, alignment, and is_blittable booleans here
 		ECS_ASSERT(type->byte_size < UINT_MAX);
 		ECS_ASSERT(type->alignment < UINT_MAX);
 		unsigned int byte_size = type->byte_size;
 		unsigned int alignment = type->alignment;
-		total_size += Write<write_data>(&stream, &byte_size, sizeof(byte_size));
-		total_size += Write<write_data>(&stream, &alignment, sizeof(alignment));
-		total_size += Write<write_data>(&stream, &type->is_blittable, sizeof(type->is_blittable));
-		total_size += Write<write_data>(&stream, &type->is_blittable_with_pointer, sizeof(type->is_blittable_with_pointer));
+		write_instrument->Write(&byte_size);
+		write_instrument->Write(&alignment);
+		write_instrument->Write(&type->is_blittable);
+		if (!write_instrument->Write(&type->is_blittable_with_pointer)) {
+			return false;
+		}
 
 		if (write_tags) {
-			unsigned short tag_size = (unsigned short)type->tag.size;
-			total_size += WriteWithSizeShort<write_data>(&stream, type->tag.buffer, tag_size);
+			if (!write_instrument->WriteWithSize<unsigned short>(type->tag)) {
+				return false;
+			}
 		}
 
 		// Get the count of fields that want to be serialized
@@ -124,11 +162,15 @@ namespace ECSEngine {
 		}
 		
 		// Then write all its fields - and the count
-		total_size += Write<write_data>(&stream, &serializable_field_count, sizeof(serializable_field_count));
+		if (!write_instrument->Write(&serializable_field_count)) {
+			return false;
+		}
 		for (size_t index = 0; index < type->fields.size; index++) {
 			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 
 			if (!skip_serializable) {
+				bool write_success = true;
+
 				if (omit_fields.size > 0) {
 					skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
 				}
@@ -137,12 +179,10 @@ namespace ECSEngine {
 					const ReflectionField* field = &type->fields[index];
 
 					// Write the field name
-					unsigned short field_name_size = (unsigned short)field->name.size;
-					total_size += WriteWithSizeShort<write_data>(&stream, field->name.buffer, field_name_size);
+					write_success &= write_instrument->WriteWithSize<unsigned short>(field->name);
 
 					if (write_tags) {
-						unsigned short field_tag_size = (unsigned short)field->tag.size;
-						total_size += WriteWithSizeShort<write_data>(&stream, field->tag.buffer, field_tag_size);
+						write_success &= write_instrument->WriteWithSize<unsigned short>(field->tag);
 					}
 
 					// Write the field type - the stream type, basic type, basic type count, stream byte size and the byte size all
@@ -163,30 +203,56 @@ namespace ECSEngine {
 
 					DeserializeFieldInfoFlags flags;
 					flags.user_defined_as_blittable = blittable_user_defined;
-					total_size += Write<write_data>(&stream, &field->info.stream_type, sizeof(field->info.stream_type));
-					total_size += Write<write_data>(&stream, &field->info.stream_byte_size, sizeof(field->info.stream_byte_size));
-					total_size += Write<write_data>(&stream, &field->info.stream_alignment, sizeof(field->info.stream_alignment));
-					total_size += Write<write_data>(&stream, &field->info.basic_type, sizeof(field->info.basic_type));
-					total_size += Write<write_data>(&stream, &field->info.basic_type_count, sizeof(field->info.basic_type_count));
-					total_size += Write<write_data>(&stream, &field->info.byte_size, sizeof(field->info.byte_size));
-					total_size += Write<write_data>(&stream, &custom_serializer_index, sizeof(custom_serializer_index));
-					total_size += Write<write_data>(&stream, &flags, sizeof(flags));
-					total_size += Write<write_data>(&stream, &field->info.pointer_offset, sizeof(field->info.pointer_offset));
+					write_success &= write_instrument->Write(&field->info.stream_type);
+					write_success &= write_instrument->Write(&field->info.stream_byte_size);
+					write_success &= write_instrument->Write(&field->info.stream_alignment);
+					write_success &= write_instrument->Write(&field->info.basic_type);
+					write_success &= write_instrument->Write(&field->info.basic_type_count);
+					write_success &= write_instrument->Write(&field->info.byte_size);
+					write_success &= write_instrument->Write(&custom_serializer_index);
+					write_success &= write_instrument->Write(&flags);
+					write_success &= write_instrument->Write(&field->info.pointer_offset);
 
 					// If user defined, write the definition as well
 					if (field->info.basic_type == ReflectionBasicFieldType::UserDefined || field->info.basic_type == ReflectionBasicFieldType::Enum) {
 						Stream<char> definition_stream = field->definition;
-						total_size += WriteWithSizeShort<write_data>(&stream, definition_stream.buffer, (unsigned short)definition_stream.size);
+						write_success &= write_instrument->WriteWithSize<unsigned short>(definition_stream);
+					}
+
+					if (!write_success) {
+						return false;
 					}
 				}
 			}
 		}
 
+		return true;
+	}
+
+	// A wrapper that maintains the previous behavior of the write type table, before the introduction of a generic WriteInstrument
+	// It will write only the fields of this type, the user defined types are only specified by name
+	// The custom fields should be filled in with the fields which have a custom serializer
+	// The reflection manager is needed for blittable exceptions.
+	template<bool write_data>
+	static size_t WriteTypeTable(
+		const ReflectionManager* reflection_manager,
+		const ReflectionType* type,
+		uintptr_t& stream,
+		Stream<SerializeOmitField> omit_fields,
+		bool write_tags
+	) {
 		if constexpr (write_data) {
+			UintptrWriteInstrument write_instrument;
+			write_instrument.ptr = &stream;
+			WriteTypeTable(reflection_manager, type, &write_instrument, omit_fields, write_tags);
 			return 0;
 		}
 		else {
-			return total_size;
+			size_t write_size = 0;
+			UintptrSizeDeterminationWriteInstrument write_instrument;
+			write_instrument.size = &write_size;
+			WriteTypeTable(reflection_manager, type, &write_instrument, omit_fields, write_tags);
+			return write_size;
 		}
 	}
 
@@ -1956,7 +2022,65 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	bool ValidateDeserializeFieldInfo(const DeserializeFieldInfo& field_info) {
+	struct UintptrReadInstrument {
+		template<typename T>
+		ECS_INLINE bool Read(T* data) const {
+			ECSEngine::Read(ptr, data);
+			return true;
+		}
+
+		template<typename IntegerType, typename ElementType>
+		ECS_INLINE bool ReadWithSize(CapacityStream<ElementType>& data) const {
+			IntegerType size;
+			Read(&size);
+			data.AssertCapacity(size);
+			ECSEngine::Read(ptr, data.buffer + data.size, size);
+			return true;
+		}
+
+		template<typename IntegerType, typename ElementType>
+		ECS_INLINE bool ReferenceDataWithSize(Stream<ElementType>& data) const {
+			IntegerType size;
+			Read(&size);
+			data.size = size / sizeof(ElementType);
+			ECSEngine::ReferenceData(ptr, (void**)&data.buffer, size);
+			return true;
+		}
+
+		uintptr_t* ptr;
+	};
+
+	struct UintptrSizeDeterminationReadInstrument {
+		template<typename T>
+		ECS_INLINE bool Read(T* data) const {
+			*size += sizeof(T);
+			*ptr += sizeof(T);
+			return true;
+		}
+
+		template<typename IntegerType, typename ElementType>
+		ECS_INLINE bool ReadWithSize(CapacityStream<ElementType>& data) const {
+			IntegerType read_size;
+			ECSEngine::Read<true>(ptr, &read_size);
+			*size += ECSEngine::Read<false>(ptr, data.buffer, read_size);
+			*size += sizeof(read_size);
+			return true;
+		}
+
+		template<typename IntegerType, typename ElementType>
+		ECS_INLINE bool ReferenceDataWithSize(Stream<ElementType>& data) const {
+			IntegerType read_size;
+			ECSEngine::Read<true>(ptr, &read_size);
+			*size += ECSEngine::Read<false>(ptr, data.buffer, read_size);
+			*size += sizeof(read_size);
+			return true;
+		}
+
+		uintptr_t* ptr;
+		size_t* size;
+	};
+
+	static bool ValidateDeserializeFieldInfo(const DeserializeFieldInfo& field_info) {
 		if ((unsigned char)field_info.stream_type >= (unsigned char)ReflectionStreamFieldType::COUNT) {
 			return false;
 		}
@@ -1981,11 +2105,10 @@ namespace ECSEngine {
 	}
 
 	// One type read, doesn't go recursive
-	// It returns -1 if the type has been corrupted (i.e. the stream type or basic type is out of bounds)
-	// else 0 if the read_data is specified as true. Else returns the total read size
-	template<bool read_data>
-	size_t DeserializeFieldTableFromDataImplementation(
-		uintptr_t& data,
+	// Returns true if it succeeded, else false
+	template<typename ReadInstrument>
+	static bool DeserializeFieldTableFromDataImplementation(
+		ReadInstrument* read_instrument,
 		DeserializeFieldTable::Type* type,
 		AllocatorPolymorphic allocator,
 		const DeserializeFieldTableOptions* options
@@ -1993,31 +2116,37 @@ namespace ECSEngine {
 		// We are always reading with true here such that we can validate that the fields that are deserialized
 		// Are valid, in case they are not we can return -1 to the caller even when read_data is false to let it know
 		// That there is some corruption
-
-		uintptr_t initial_data = data;
-
 		unsigned short main_type_name_size = 0;
 		void* main_type_name = nullptr;
 
 		// Read the type name
-		ReferenceDataWithSizeShort<true>(&data, &main_type_name, main_type_name_size);
-		type->name = { main_type_name, main_type_name_size / sizeof(char) };
+		if (!read_instrument->ReferenceDataWithSize<unsigned short>(type->name)) {
+			return false;
+		}
 
 		// Read the byte size, alignment and is_blittable flags
 		unsigned int byte_size;
 		unsigned int alignment;
-		Read<true>(&data, &byte_size, sizeof(byte_size));
-		Read<true>(&data, &alignment, sizeof(alignment));
+		if (!read_instrument->Read(&byte_size)) {
+			return false;
+		}
+		if (!read_instrument->Read(&alignment)) {
+			return false;
+		}
 		type->byte_size = byte_size;
 		type->alignment = alignment;
-		Read<true>(&data, &type->is_blittable, sizeof(type->is_blittable));
-		Read<true>(&data, &type->is_blittable_with_pointer, sizeof(type->is_blittable_with_pointer));
+		
+		if (!read_instrument->Read(&type->is_blittable)) {
+			return false;
+		}
+		if (!read_instrument->Read(&type->is_blittable_with_pointer)) {
+			return false;
+		}
 		
 		if (options->read_type_tags) {
-			unsigned short main_type_tag_size = 0;
-			void* main_type_tag = nullptr;
-			ReferenceDataWithSizeShort<true>(&data, &main_type_tag, main_type_tag_size);
-			type->tag = { main_type_tag, main_type_tag_size / sizeof(char) };
+			if (!read_instrument->ReferenceDataWithSize<unsigned short>(type->tag)) {
+				return false;
+			}
 		}
 		else {
 			type->tag = { nullptr, 0 };
@@ -2025,37 +2154,42 @@ namespace ECSEngine {
 
 		// The field count
 		size_t field_count = 0;
-		Read<true>(&data, &field_count, sizeof(field_count));
+		if (!read_instrument->Read(&field_count)) {
+			return false;
+		}
 
 		type->fields.size = field_count;
 		type->fields.buffer = (DeserializeFieldInfo*)Allocate(allocator, sizeof(DeserializeFieldInfo) * field_count);
 
 		// Read the fields now
 		for (size_t index = 0; index < field_count; index++) {
+			bool read_success = true;
+
 			// The name first
-			unsigned short field_name_size = 0;
-			ReferenceDataWithSizeShort<true>(&data, (void**)&type->fields[index].name.buffer, field_name_size);
-			type->fields[index].name.size = field_name_size / sizeof(char);
+			read_success &= read_instrument->ReferenceDataWithSize<unsigned short>(type->fields[index].name);
 
 			// The tag now
 			if (options->read_type_tags) {
 				unsigned short tag_name_size = 0;
-				ReferenceDataWithSizeShort<true>(&data, (void**)&type->fields[index].tag.buffer, tag_name_size);
-				type->fields[index].tag.size = tag_name_size / sizeof(char);
+				read_success &= read_instrument->ReferenceDataWithSize<unsigned short>(type->fields[index].tag);
 			}
 			else {
 				type->fields[index].tag = { nullptr, 0 };
 			}
 
-			Read<true>(&data, &type->fields[index].stream_type, sizeof(type->fields[index].stream_type));
-			Read<true>(&data, &type->fields[index].stream_byte_size, sizeof(type->fields[index].stream_byte_size));
-			Read<true>(&data, &type->fields[index].stream_alignment, sizeof(type->fields[index].stream_alignment));
-			Read<true>(&data, &type->fields[index].basic_type, sizeof(type->fields[index].basic_type));
-			Read<true>(&data, &type->fields[index].basic_type_count, sizeof(type->fields[index].basic_type_count));
-			Read<true>(&data, &type->fields[index].byte_size, sizeof(type->fields[index].byte_size));
-			Read<true>(&data, &type->fields[index].custom_serializer_index, sizeof(type->fields[index].custom_serializer_index));
-			Read<true>(&data, &type->fields[index].flags, sizeof(type->fields[index].flags));
-			Read<true>(&data, &type->fields[index].pointer_offset, sizeof(type->fields[index].pointer_offset));
+			read_success &= read_instrument->(&type->fields[index].stream_type);
+			read_success &= read_instrument->(&type->fields[index].stream_byte_size);
+			read_success &= read_instrument->(&type->fields[index].stream_alignment);
+			read_success &= read_instrument->(&type->fields[index].basic_type);
+			read_success &= read_instrument->(&type->fields[index].basic_type_count);
+			read_success &= read_instrument->(&type->fields[index].byte_size);
+			read_success &= read_instrument->(&type->fields[index].custom_serializer_index);
+			read_success &= read_instrument->(&type->fields[index].flags);
+			read_success &= read_instrument->(&type->fields[index].pointer_offset);
+
+			if (!read_success) {
+				return false;
+			}
 
 			bool is_valid = ValidateDeserializeFieldInfo(type->fields[index]);
 			if (!is_valid) {
@@ -2064,26 +2198,121 @@ namespace ECSEngine {
 
 			// The definition
 			if (type->fields[index].basic_type == ReflectionBasicFieldType::UserDefined || type->fields[index].basic_type == ReflectionBasicFieldType::Enum) {
-				unsigned short definition_size = 0;
-				ReferenceDataWithSizeShort<true>(&data, (void**)&type->fields[index].definition.buffer, definition_size);
-				type->fields[index].definition.size = definition_size;
+				if (!read_instrument->ReferenceDataWithSize<unsigned short>(type->fields[index].definition)) {
+					return false;
+				}
 			}
 			else {
 				type->fields[index].definition = GetBasicFieldDefinition(type->fields[index].basic_type);
 			}
 		}
 
+		return true;
+	}
+
+	// One type read, doesn't go recursive
+	// It returns -1 if the type has been corrupted (i.e. the stream type or basic type is out of bounds)
+	// else 0 if the read_data is specified as true. Else returns the total read size
+	// This is an adapter over the read instrument such that the previous behavior is maintained
+	template<bool read_data>
+	static size_t DeserializeFieldTableFromDataImplementation(
+		uintptr_t& stream,
+		DeserializeFieldTable::Type* type,
+		AllocatorPolymorphic allocator,
+		const DeserializeFieldTableOptions* options
+	) {
 		if constexpr (read_data) {
+			UintptrReadInstrument read_instrument;
+			read_instrument.ptr = &stream;
+			DeserializeFieldTableFromDataImplementation(&read_instrument, type, allocator, options);
 			return 0;
 		}
 		else {
-			return data - initial_data;
+			size_t write_size = 0;
+			UintptrSizeDeterminationReadInstrument read_instrument;
+			read_instrument.size = &write_size;
+			read_instrument.ptr = &stream;
+			DeserializeFieldTableFromDataImplementation(&read_instrument, type, allocator, options);
+			return write_size;
+		}
+	}
+
+	template<typename ReadInstrument>
+	static bool DeserializeFieldTableCustomInterfacesInfo(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, DeserializeFieldTable& field_table, const DeserializeFieldTableOptions* options) {
+		// Firstly the serialize version
+		if (!read_instrument->Read(&field_table.serialize_version)) {
+			return false;
+		}
+		field_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
+
+		unsigned int custom_serializer_count = 0;
+		if (!read_instrument->Read(&custom_serializer_count)) {
+			return false;
+
+		}
+		if (custom_serializer_count == 0) {
+			// This is indicative of an error
+			return false;
+		}
+
+		unsigned int serializer_count = SerializeCustomTypeCount();
+
+		// Allocate the versions of the custom serializers
+		field_table.custom_serializers.buffer = (unsigned int*)Allocate(temporary_allocator, sizeof(unsigned int) * serializer_count, alignof(unsigned int));
+		field_table.custom_serializers.size = serializer_count;
+
+		ECS_STACK_CAPACITY_STREAM(char, serializer_name, 512);
+		// We need to map the version now
+		for (unsigned int index = 0; index < custom_serializer_count; index++) {
+			// Firstly the name and then the version
+			if (!read_instrument->ReadWithSize<unsigned short>(serializer_name)) {
+				return false;
+			}
+
+			unsigned int version = 0;
+			if (!read_instrument->Read(&version)) {
+				return false;
+			}
+
+			unsigned int serializer_index = FindString(
+				serializer_name.ToStream(),
+				Stream<SerializeCustomType>(ECS_SERIALIZE_CUSTOM_TYPES, serializer_count),
+				[](const SerializeCustomType& custom_type) {
+					return custom_type.name;
+				});
+
+			if (serializer_index != -1) {
+				field_table.custom_serializers[serializer_index] = version;
+			}
+		}
+
+		return true;
+	}
+
+	// Wrapper around the instrument read function, to better work with the previous APIs
+	template<bool read_data>
+	static size_t DeserializeFieldTableCustomInterfacesInfo(uintptr_t& stream, AllocatorPolymorphic temporary_allocator, DeserializeFieldTable& field_table, const DeserializeFieldTableOptions* options) {
+		if constexpr (read_data) {
+			UintptrReadInstrument read_instrument;
+			read_instrument.ptr = &stream;
+			if (!DeserializeFieldTableCustomInterfacesInfo(&read_instrument, temporary_allocator, field_table, options)) {
+				return -1;
+			}
+			return 0;
+		}
+		else {
+			size_t write_size = 0;
+			UintptrSizeDeterminationReadInstrument read_instrument;
+			read_instrument.size = &write_size;
+			read_instrument.ptr = &stream;
+			DeserializeFieldTableCustomInterfacesInfo(&read_instrument, temporary_allocator, field_table, options);
+			return write_size;
 		}
 	}
 
 	// Goes recursive. The memory needs to be specified anyway, even if the read_data is false
 	template<bool read_data>
-	DeserializeFieldTable DeserializeFieldTableFromDataRecursive(
+	static DeserializeFieldTable DeserializeFieldTableFromDataRecursive(
 		uintptr_t& data, 
 		AllocatorPolymorphic allocator,
 		const DeserializeFieldTableOptions* options
@@ -2091,27 +2320,15 @@ namespace ECSEngine {
 	{
 		DeserializeFieldTable field_table;
 
-		size_t total_read_size = 0;
-
-		// Allocate DESERIALIZE_FIELD_TABLE_MAX_TYPES and fail if there are more
-		field_table.types.buffer = (DeserializeFieldTable::Type*)Allocate(allocator, sizeof(DeserializeFieldTable::Type) * DESERIALIZE_FIELD_TABLE_MAX_TYPES);
-
-		// Firstly the serialize version
-		Read<true>(&data, &field_table.serialize_version, sizeof(field_table.serialize_version));
-		field_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
-
-		unsigned int custom_serializer_count = 0;
-		Read<true>(&data, &custom_serializer_count, sizeof(custom_serializer_count));
-		if (custom_serializer_count == 0) {
-			// This is indicative of an error
+		size_t total_read_size = DeserializeFieldTableCustomInterfacesInfo<read_data>(data, allocator, field_table, options);
+		// Check for error
+		if (total_read_size == -1) {
+			field_table.types.size = 0;
 			return field_table;
 		}
 
-		unsigned int serializer_count = SerializeCustomTypeCount();
-
-		// Allocate the versions of the custom serializers
-		field_table.custom_serializers.buffer = (unsigned int*)Allocate(allocator, sizeof(unsigned int) * serializer_count, alignof(unsigned int));
-		field_table.custom_serializers.size = serializer_count;
+		// Allocate DESERIALIZE_FIELD_TABLE_MAX_TYPES and fail if there are more
+		field_table.types.buffer = (DeserializeFieldTable::Type*)Allocate(allocator, sizeof(DeserializeFieldTable::Type) * DESERIALIZE_FIELD_TABLE_MAX_TYPES);
 
 		struct ScopeDeallocator {
 			void operator() () {
@@ -2128,31 +2345,6 @@ namespace ECSEngine {
 		};
 
 		StackScope<ScopeDeallocator> scope_deallocator({ field_table.types.buffer, field_table.custom_serializers.buffer, allocator });
-		
-		ECS_STACK_CAPACITY_STREAM(char, serializer_name, 512);
-		// We need to map the version now
-		for (unsigned int index = 0; index < custom_serializer_count; index++) {
-			// Firstly the name and then the version
-			unsigned short serializer_name_size = 0;
-			ReadWithSizeShort<read_data>(&data, serializer_name.buffer, serializer_name_size);
-			serializer_name.size = serializer_name_size;
-
-			unsigned int version = 0;
-			Read<read_data>(&data, &version, sizeof(version));
-
-			if constexpr (read_data) {
-				unsigned int serializer_index = FindString(
-					serializer_name.ToStream(),
-					Stream<SerializeCustomType>(ECS_SERIALIZE_CUSTOM_TYPES, serializer_count),
-					[](const SerializeCustomType& custom_type) {
-						return custom_type.name;
-					});
-
-				if (serializer_index != -1) {
-					field_table.custom_serializers[serializer_index] = version;
-				}
-			}
-		}
 
 		DeserializeFieldTableOptions temp_options;
 		temp_options.version = field_table.serialize_version;
@@ -2272,9 +2464,55 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	DeserializeFieldTable DeserializeFieldTableFromData(uintptr_t& data, AllocatorPolymorphic allocator, const DeserializeFieldTableOptions* options)
+	DeserializeFieldTable DeserializeFieldTableFromData(uintptr_t& data, AllocatorPolymorphic temporary_allocator, const DeserializeFieldTableOptions* options)
 	{
-		return DeserializeFieldTableFromDataRecursive<true>(data, allocator, options);
+		return DeserializeFieldTableFromDataRecursive<true>(data, temporary_allocator, options);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	// This structure acts as a wrapper over a read instrument in order to add the ReferenceDataWithSize function
+	struct ReadInstrumentWrapper {
+		template<typename T>
+		ECS_INLINE bool Read(T* data) const {
+			return read_instrument->Read(data);
+		}
+
+		template<typename IntegerType, typename ElementType>
+		ECS_INLINE bool ReadWithSize(CapacityStream<ElementType>& data) const {
+			return read_instrument->ReadWithSize(data);
+		}
+
+		template<typename IntegerType, typename ElementType>
+		ECS_INLINE bool ReferenceDataWithSize(Stream<ElementType>& data) const {
+			IntegerType data_size;
+			if (!Read(&data_size)) {
+				return false;
+			}
+
+			// Allocate a buffer, since the read instrument is not guaranteed to return stable memory
+			data.Initialize(temporary_allocator, data_size / sizeof(ElementType));
+			return Read(data.buffer, data_size);
+		}
+
+		ReadInstrument* read_instrument;
+		AllocatorPolymorphic temporary_allocator;
+	};
+
+	DeserializeFieldTable DeserializeFieldTableFromData(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, const DeserializeFieldTableOptions* options) {
+		DeserializeFieldTable field_table;
+		if (!DeserializeFieldTableCustomInterfacesInfo(read_instrument, temporary_allocator, field_table, options)) {
+			return field_table;
+		}
+
+		// Allocate DESERIALIZE_FIELD_TABLE_MAX_TYPES and fail if there are more
+		field_table.types.buffer = (DeserializeFieldTable::Type*)Allocate(temporary_allocator, sizeof(DeserializeFieldTable::Type) * DESERIALIZE_FIELD_TABLE_MAX_TYPES);
+
+		ReadInstrumentWrapper wrapper = { read_instrument, temporary_allocator };
+		if (!DeserializeFieldTableFromDataImplementation(&wrapper, field_table.types.buffer, temporary_allocator, options)) {
+			field_table.types.size = 0;
+		}
+		return field_table;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -2354,15 +2592,17 @@ namespace ECSEngine {
 				// The type wasn't already added, add it
 				types_to_write.Add(type);
 
-				// Determine its dependencies
-				ECS_STACK_CAPACITY_STREAM(Stream<char>, type_dependencies, 512);
-				GetReflectionTypeDependentTypes(reflection_manager, type, type_dependencies);
+				if (!options->direct_types_only) {
+					// Determine its dependencies
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, type_dependencies, 512);
+					GetReflectionTypeDependentTypes(reflection_manager, type, type_dependencies);
 
-				// Add the dependencies that don't exist already
-				for (unsigned int index = 0; index < type_dependencies.size; index++) {
-					const ReflectionType* dependency = reflection_manager->GetType(type_dependencies[index]);
-					if (SearchBytes(types_to_write.ToStream(), dependency) == -1) {
-						types_to_write.Add(dependency);
+					// Add the dependencies that don't exist already
+					for (unsigned int index = 0; index < type_dependencies.size; index++) {
+						const ReflectionType* dependency = reflection_manager->GetType(type_dependencies[index]);
+						if (SearchBytes(types_to_write.ToStream(), dependency) == -1) {
+							types_to_write.Add(dependency);
+						}
 					}
 				}
 			}
@@ -2392,7 +2632,7 @@ namespace ECSEngine {
 		// Write the header firstly
 		SerializeReflectionManagerHeader header;
 		ZeroOut(&header);
-		header.version = SERIALIZE_VERSION;
+		header.version = REFLECTION_MANAGER_SERIALIZE_VERSION;
 		header.type_count = types_to_write.size;
 
 		if (!write_instrument->Write(&header)) {
@@ -2416,20 +2656,60 @@ namespace ECSEngine {
 		// Can return the stack allocator to the marker
 		stack_allocator.ReturnToMarker();
 
-		if (options->hierarchy_indices.size > 0) {
-
+		// Write each individual type, and then we are done
+		for (size_t index = 0; index < types_to_write.size; index++) {
+			// Always write tags
+			if (!WriteTypeTable(reflection_manager, types_to_write[index], write_instrument, options->omit_fields, true)) {
+				return false;
+			}
 		}
 
-		return false;
+		return true;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
 	bool DeserializeReflectionManager(
 		ReflectionManager* reflection_manager,
-		ReadInstrument* read_instrument
+		ReadInstrument* read_instrument,
+		AllocatorPolymorphic temporary_allocator,
+		DeserializeFieldTable* field_table
 	) {
-		return false;
+		// Read the header
+		SerializeReflectionManagerHeader header;
+		if (!read_instrument->Read(&header)) {
+			return false;
+		}
+		
+		// Fail if the version are different
+		if (header.version != REFLECTION_MANAGER_SERIALIZE_VERSION) {
+			return false;
+		}
+		
+		// Read the custom serializer section first. We will keep a DeserializeFieldTable separate to hold this information
+		// Always read the type tags
+		DeserializeFieldTableOptions deserialize_options;
+		deserialize_options.read_type_tags = true;
+
+		if (!DeserializeFieldTableCustomInterfacesInfo(read_instrument, temporary_allocator, *field_table, &deserialize_options)) {
+			return false;
+		}
+
+		deserialize_options.version = field_table->serialize_version;
+		field_table->types.Initialize(temporary_allocator, header.type_count);
+
+		// Read each type one by one
+		for (size_t index = 0; index < header.type_count; index++) {
+			if (!DeserializeFieldTableFromDataImplementation(read_instrument, field_table->types.buffer + index, temporary_allocator, &deserialize_options)) {
+				return false;
+			}
+		}
+
+		// After all types have been successfully read, add them to the reflection manager. Don't use the allocate_all flag
+		// Since the types that have been read will be valid outside the function while this is alive.
+		field_table->ToNormalReflection(reflection_manager, temporary_allocator);
+
+		return true;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
@@ -2739,8 +3019,7 @@ namespace ECSEngine {
 		bool check_for_insertion
 	) const
 	{
-		// Commit all types and then calculate the byte size and the alignment for them
-		// + is_trivially copyable
+		// Commit all types and then calculate the byte size and the alignment for them + is_blittable
 
 		auto add_type = [=](size_t index) {
 			ReflectionType type;

@@ -22,7 +22,9 @@ namespace ECSEngine {
 	struct Footer {
 		// The total size of the footer data without this footer structure, basically the offset to go back to
 		// To get to the start of the footer
-		unsigned int size;
+		size_t size;
+		// The amount of bytes used by the header write function portion
+		size_t header_write_function_size;
 		unsigned char version;
 		// Not used at the moment, should be all 0s
 		unsigned char reserved[7];
@@ -44,7 +46,7 @@ namespace ECSEngine {
 	}
 
 	bool DeltaStateWriter::Flush(bool write_frame_elapsed_seconds) {
-		// Write the footer in a reversed fashion, such that sizes appear after the data itself, so when reading we can read the
+		// Write the footer in a reversed fashion, such that sizes appear after the data itself
 		size_t footer_start_write_offset = write_instrument->GetOffset();
 
 		// Write the state infos first
@@ -89,6 +91,16 @@ namespace ECSEngine {
 			}
 		}
 
+		// Write the header function, if there is one
+		size_t header_write_function_size = 0;
+		if (header_write_function != nullptr) {
+			size_t current_instrument_offset = write_instrument->GetOffset();
+			if (!header_write_function(user_data.buffer, write_instrument)) {
+				return false;
+			}
+			header_write_function_size = write_instrument->GetOffset() - current_instrument_offset;
+		}
+
 		// Write the footer now
 		size_t footer_end_write_offset = write_instrument->GetOffset();
 		size_t footer_size = footer_end_write_offset - footer_start_write_offset;
@@ -96,6 +108,7 @@ namespace ECSEngine {
 		Footer footer;
 		memset(&footer, 0, sizeof(footer));
 		footer.size = footer_size;
+		footer.header_write_function_size = header_write_function_size;
 		footer.version = VERSION;
 		if (!write_instrument->Write(&footer)) {
 			return false;
@@ -130,6 +143,7 @@ namespace ECSEngine {
 		delta_function = initialize_info.functor_info.delta_function;
 		entire_function = initialize_info.functor_info.entire_function;
 		extract_function = initialize_info.functor_info.self_contained_extract;
+		header_write_function = initialize_info.functor_info.header_write_function;
 		entire_state_write_seconds_tick = initialize_info.entire_state_write_seconds_tick;
 		is_failed = false;
 		
@@ -512,20 +526,7 @@ namespace ECSEngine {
 			}
 		}
 
-		// Seek to the beginning of the instrument, such that it starts on the first state.
-		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, 0)) {
-			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the start of the read instrument after reading the initialize data.");
-			state_infos.Deallocate(allocator);
-			entire_state_indices.Deallocate(allocator);
-			frame_elapsed_seconds.Deallocate(allocator);
-			header.Deallocate(allocator);
-			return false;
-		}
-
-		is_failed = false;
-		current_state_index = 0;
-		delta_function = initialize_info.functor_info.delta_function;
-		entire_function = initialize_info.functor_info.entire_function;
+		// Setup the user data, such that we can call the variable length header read function on it
 		if (initialize_info.functor_info.user_data.size > 0) {
 			user_data.Initialize(allocator, initialize_info.functor_info.user_data.size);
 			if (initialize_info.functor_info.user_data.buffer != nullptr) {
@@ -544,6 +545,38 @@ namespace ECSEngine {
 			initialize_info.functor_info.user_data_allocator_initialize(user_data.buffer, allocator);
 		}
 		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;
+
+		// Read the user defined variable length header
+		if (initialize_info.functor_info.header_read_function != nullptr) {
+			DeltaStateReaderHeaderReadFunctionData header_read_data;
+			header_read_data.header = header;
+			header_read_data.read_instrument = read_instrument;
+			header_read_data.user_data = user_data.buffer;
+			header_read_data.write_size = footer.header_write_function_size;
+			if (!initialize_info.functor_info.header_read_function(&header_read_data)) {
+				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not read variable length header or the header itself is invalid.");
+				state_infos.Deallocate(allocator);
+				entire_state_indices.Deallocate(allocator);
+				frame_elapsed_seconds.Deallocate(allocator);
+				header.Deallocate(allocator);
+				return false;
+			}
+		}
+
+		// Seek to the beginning of the instrument, such that it starts on the first state.
+		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, 0)) {
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the start of the read instrument after reading the initialize data.");
+			state_infos.Deallocate(allocator);
+			entire_state_indices.Deallocate(allocator);
+			frame_elapsed_seconds.Deallocate(allocator);
+			header.Deallocate(allocator);
+			return false;
+		}
+
+		is_failed = false;
+		current_state_index = 0;
+		delta_function = initialize_info.functor_info.delta_function;
+		entire_function = initialize_info.functor_info.entire_function;
 		return true;
 	}
 

@@ -859,15 +859,9 @@ namespace ECSEngine {
 	}
 
 	void SetInputDeltaWriterWorldInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const World* world, CapacityStream<void>& stack_memory) {
-		// We can use the same delta, entire, initialize and deallocate functions since it is the same at base
-		info.delta_function = InputDeltaWriterDeltaFunction;
-		info.entire_function = InputDeltaWriterEntireFunction;
+		// Call the base function, and override the user data and extract function
+		SetInputDeltaWriterInitializeInfo(info, world->mouse, world->keyboard, stack_memory);
 		info.self_contained_extract = InputDeltaWriterExtractFunction;
-		info.user_data_allocator_initialize = InputDeltaWriterInitialize;
-		info.user_data_allocator_deallocate = InputDeltaWriterDeallocate;
-
-		InputSerializationHeader serialization_header = GetInputSerializeHeader();
-		info.header = stack_memory.Add(&serialization_header);
 
 		DeltaStateWriterWorldData writer_data;
 		ZeroOut(&writer_data);

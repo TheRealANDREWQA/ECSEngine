@@ -40,6 +40,12 @@ namespace ECSEngine {
 	// Returns the current moment in time for the given data
 	typedef float (*DeltaStateWriterSelfContainedExtractFunction)(void* data);
 
+	// This functor can be used to write more complicated headers, that cannot be simply added
+	// To a flat buffer, or that would be expensive to do so. For this reason, you can use the
+	// Write instrument directly to write the necessary extra header data
+	// The functor returns true if it succeeded, else false
+	typedef bool (*DeltaStateWriterHeaderWriteFunction)(void* data, WriteInstrument* write_instrument);
+
 	// The functor must know the read instrument type as well
 	struct DeltaStateReaderDeltaFunctionData {
 		Stream<void> header;
@@ -66,6 +72,20 @@ namespace ECSEngine {
 	// Should return true if it succeeded reading the values, else false
 	typedef bool (*DeltaStateReaderEntireFunction)(DeltaStateReaderEntireFunctionData* data);
 
+	struct DeltaStateReaderHeaderReadFunctionData {
+		// This is the static header that was written
+		Stream<void> header;
+		void* user_data;
+		ReadInstrument* read_instrument;
+		// How many bytes the writer used for this extra header data
+		size_t write_size;
+	};
+
+	// This is the reverse of the HeaderWriteFunction, which allows reading that extra data and
+	// Performing operations on the user data to reflect this written data
+	// Should return true if it succeeded reading the extra header data and that the data is valid, else false
+	typedef bool (*DeltaStateReaderHeaderReadFunction)(DeltaStateReaderHeaderReadFunctionData* data);
+
 	struct DeltaStateInfo {
 		float elapsed_seconds;
 		size_t write_size;
@@ -88,6 +108,10 @@ namespace ECSEngine {
 		DeltaStateUserDataAllocatorInitialize user_data_allocator_initialize = nullptr;
 		// Must be set when the initialize function was specified
 		DeltaStateUserDataAllocatorDeallocate user_data_allocator_deallocate = nullptr;
+		// This functor can be used to write more complicated headers, that cannot be simply added
+		// To a flat buffer, or that would be expensive to do so. For this reason, you can use the
+		// Write instrument directly to write the necessary extra header data
+		DeltaStateWriterHeaderWriteFunction header_write_function = nullptr;
 	};
 
 	struct DeltaStateWriterInitializeInfo {
@@ -134,6 +158,7 @@ namespace ECSEngine {
 		DeltaStateWriterEntireFunction entire_function;
 		DeltaStateWriterSelfContainedExtractFunction extract_function;
 		DeltaStateUserDataAllocatorDeallocate user_deallocate_function;
+		DeltaStateWriterHeaderWriteFunction header_write_function;
 		Stream<void> user_data;
 		// This a header that can be added before the actual data to write
 		Stream<void> header;
@@ -165,6 +190,9 @@ namespace ECSEngine {
 		DeltaStateUserDataAllocatorInitialize user_data_allocator_initialize = nullptr;
 		// Must be set when the initialize function was specified
 		DeltaStateUserDataAllocatorDeallocate user_data_allocator_deallocate = nullptr;
+		// This is the reverse of the HeaderWriteFunction, which allows reading that extra data and
+		// Performing operations on the user data to reflect this written data
+		DeltaStateReaderHeaderReadFunction header_read_function = nullptr;
 	};
 
 	struct DeltaStateReaderInitializeInfo {

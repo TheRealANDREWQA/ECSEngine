@@ -329,10 +329,17 @@ namespace ECSEngine {
 
 	// Streams will be written into the memory allocator
 	// A good default capacity should be ECS_KB * 8 for it
-	// If the type size is 0 it means that the table has been corrupted
+	// If the types size is 0 it means that the table has been corrupted or an error occured
 	ECSENGINE_API DeserializeFieldTable DeserializeFieldTableFromData(
 		uintptr_t& data,
-		AllocatorPolymorphic memory,
+		AllocatorPolymorphic temporary_allocator,
+		const DeserializeFieldTableOptions* options = nullptr
+	);
+
+	// If the types size is 0 it means that the table has been corrupted or an error occured
+	ECSENGINE_API DeserializeFieldTable DeserializeFieldTableFromData(
+		ReadInstrument* read_instrument,
+		AllocatorPolymorphic temporary_allocator,
 		const DeserializeFieldTableOptions* options = nullptr
 	);
 
@@ -368,6 +375,11 @@ namespace ECSEngine {
 		// If specified, only these hierarchies will be written. By default, all hierarchies are considered (even types that
 		// Are outside all hierarchies). If you want to include types that do not belong to any hierarchy, include -1.
 		Stream<unsigned int> hierarchy_indices = {};
+		// In case you want to omit some extra fields, you can do that with this field
+		Stream<SerializeOmitField> omit_fields = {};
+		// If this flag is set to true, then if you have specified a selection of types to be written,
+		// It will not include the type dependencies of the types you specified
+		bool direct_types_only = false;
 	};
 
 	// Writes the types this reflection manager contains to a specified write instrument. With the options
@@ -380,10 +392,16 @@ namespace ECSEngine {
 	);
 
 	// Reads a previous serialization into the given reflection manager. The added types will not belong to any folder hierarchy.
+	// It will fill in the output field table with all the types that have been read, including the custom serializer versions.
+	// The fields allocated for the field table will come from the temporary allocator given. If the deserialization fails,
+	// It will not deallocate the buffers that it has used, this is why it is important for the allocator to be temporary, such
+	// That it can be discarded if that happens.
 	// Returns true if it succeeded, else false
 	ECSENGINE_API bool DeserializeReflectionManager(
 		Reflection::ReflectionManager* reflection_manager,
-		ReadInstrument* read_instrument
+		ReadInstrument* read_instrument,
+		AllocatorPolymorphic temporary_allocator,
+		DeserializeFieldTable* field_table
 	);
 
 #pragma region String versions
