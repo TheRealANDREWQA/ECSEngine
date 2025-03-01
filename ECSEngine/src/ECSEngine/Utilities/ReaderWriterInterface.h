@@ -24,6 +24,11 @@ namespace ECSEngine {
 
 		virtual bool Flush() = 0;
 
+		// Should return true if this writer is used to determine how much memory the writing requires for a particular
+		// Structure, else false. The function that uses this information should ideally cache this call, to not induce
+		// A function call every time this is called
+		virtual bool IsSizeDetermination() const = 0;
+
 		// Returns true if it succeeded, else false
 		template<typename T>
 		ECS_INLINE bool Write(const T* data) {
@@ -60,6 +65,10 @@ namespace ECSEngine {
 
 		virtual bool Read(void* data, size_t data_size) = 0;
 
+		// This function should be called when you always want to read into data - this distinction
+		// Is relevant only for size determination instruments, which for read simply skip the data
+		virtual bool ReadAlways(void* data, size_t data_size) = 0;
+
 		virtual bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) = 0;
 
 		// Returns a valid pointer if the data size can be directly referenced in the reader, without having you to allocate
@@ -71,10 +80,21 @@ namespace ECSEngine {
 		// Returns the total byte size of the written data
 		virtual size_t TotalSize() const = 0;
 
+		// Similarly to the writer, this function indicates whether or not this call is used to determine the byte size
+		// Read for a particular structure, without intending to actually read all data (some data might still be read, the data
+		// that is required to know how much to advance)
+		virtual bool IsSizeDetermination() const = 0;
+
 		// Returns true if it succeeded, else false
 		template<typename T>
 		ECS_INLINE bool Read(T* data) {
 			return Read(data, sizeof(*data));
+		}
+
+		// Returns true if it succeeded, else false
+		template<typename T>
+		ECS_INLINE bool ReadAlways(T* data) {
+			return ReadAlways(data, sizeof(*data));
 		}
 
 		// Returns true if it succeeded, else false
@@ -83,7 +103,7 @@ namespace ECSEngine {
 		template<typename IntegerType>
 		ECS_INLINE bool ReadWithSize(void* data, IntegerType& size, size_t data_capacity) {
 			static_assert(std::is_integral_v<IntegerType>, "ReadWithSize template parameter must be an integer!");
-			if (!Read(&size)) {
+			if (!ReadAlways(&size)) {
 				return false;
 			}
 			if ((size_t)size > data_capacity) {
@@ -118,7 +138,7 @@ namespace ECSEngine {
 		template<typename IntegerType>
 		ECS_INLINE bool ReadWithSize(Stream<void>& data, AllocatorPolymorphic allocator, size_t max_allowed_capacity = UINT64_MAX) {
 			IntegerType integer_size = 0;
-			if (!Read(&integer_size)) {
+			if (!ReadAlways(&integer_size)) {
 				return false;
 			}
 			if ((size_t)integer_size > max_allowed_capacity) {
@@ -187,6 +207,49 @@ namespace ECSEngine {
 			}
 
 			return result;
+		}
+
+		// Tries to read or reference a stream of data, with the specified integer type range.
+		// IMPORTANT: It assumes that the reference data can be natively reported by this structure, meaning
+		// That it can provide stable pointers. If always can't, like a typical buffered file reader, you shouldn't
+		// Call this function, as it will always fail
+		template<typename IntegerType, typename ElementType>
+		ECS_INLINE bool ReferenceDataWithSize(Stream<ElementType>& data) {
+			IntegerType byte_size;
+			if (!ReadAlways(&byte_size)) {
+				return false;
+			}
+
+			bool is_out_of_bounds = false;
+			void* buffer = ReferenceData(byte_size, is_out_of_bounds);
+			if (buffer == nullptr) {
+				return false;
+			}
+
+			data.InitializeFromBuffer(buffer, byte_size / sizeof(ElementType));
+			return true;
+		}
+		
+		// Convenience function which omits the out of range flag
+		ECS_INLINE void* ReferenceData(size_t data_size) {
+			bool is_out_of_range = false;
+			return ReferenceData(data_size, is_out_of_range);
+		}
+
+		// Ignores the following bytes, the number being describes by the parameter.
+		// Returns true if it succeeded, else false
+		ECS_INLINE bool Ignore(size_t byte_size) {
+			return Seek(ECS_INSTRUMENT_SEEK_CURRENT, byte_size);
+		}
+
+		template<typename IntegerType>
+		ECS_INLINE bool IgnoreWithSize() {
+			IntegerType byte_size;
+			if (!ReadAlways(&byte_size)) {
+				return false;
+			}
+
+			return Ignore(byte_size);
 		}
 
 	};

@@ -50,6 +50,10 @@ namespace ECSEngine {
 			return true;
 		}
 
+		ECS_INLINE bool IsSizeDetermination() const override {
+			return false;
+		}
+
 		uintptr_t initial_buffer;
 		size_t initial_capacity;
 		uintptr_t* buffer;
@@ -75,6 +79,11 @@ namespace ECSEngine {
 			memcpy(data, (const void*)*buffer, data_size);
 			*buffer += data_size;
 			return true;
+		}
+
+		ECS_INLINE bool ReadAlways(void* data, size_t data_size) override {
+			// Same as normal read
+			return ReadAlways(data, data_size);
 		}
 
 		bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
@@ -110,13 +119,18 @@ namespace ECSEngine {
 				return nullptr;
 			}
 			is_out_of_range = false;
+			void* data_pointer = (void*)*buffer;
 			*buffer += data_size;
 			*buffer_capacity -= data_size;
-			return nullptr;
+			return data_pointer;
 		}
 
 		ECS_INLINE size_t TotalSize() const override {
 			return initial_buffer_capacity;
+		}
+
+		ECS_INLINE bool IsSizeDetermination() const override {
+			return false;
 		}
 
 		// This is the value stored at construction time

@@ -13,6 +13,7 @@
 
 #define DESERIALIZE_FIELD_TABLE_MAX_TYPES (32)
 
+#define SERIALIZE_FIELD_TABLE_VERSION 0
 #define REFLECTION_MANAGER_SERIALIZE_VERSION 0
 
 namespace ECSEngine {
@@ -80,46 +81,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	struct UintptrWriteInstrument {
-		template<typename T>
-		ECS_INLINE bool Write(const T* data) const {
-			ECSEngine::Write<true>(ptr, data);
-			return true;
-		}
-
-		template<typename IntegerType>
-		ECS_INLINE bool WriteWithSize(Stream<void> data) const {
-			IntegerType size = data.size;
-			Write(&size);
-			ECSEngine::Write<true>(ptr, data.buffer, size);
-			return true;
-		}
-
-		uintptr_t* ptr;
-	};
-
-	struct UintptrSizeDeterminationWriteInstrument {
-		template<typename T>
-		ECS_INLINE bool Write(const T* data) const {
-			*size += sizeof(T);
-			return true;
-		}
-
-		template<typename IntegerType>
-		ECS_INLINE bool WriteWithSize(Stream<void> data) const {
-			*size += sizeof(IntegerType) + data.size;
-			return true;
-		}
-
-		size_t* size;
-	};
-
 	// It will write only the fields of this type, the user defined types are only specified by name
 	// The custom fields should be filled in with the fields which have a custom serializer
 	// The reflection manager is needed for blittable exceptions. The write instrument is a template parameter
 	// Such that we force the compiler to not use virtual calls for the common case of a uintptr_t instrument.
 	// Returns true if it succeeded, else false.
-	template<typename WriteInstrument>
 	static bool WriteTypeTable(
 		const ReflectionManager* reflection_manager, 
 		const ReflectionType* type,
@@ -137,10 +103,11 @@ namespace ECSEngine {
 		ECS_ASSERT(type->alignment < UINT_MAX);
 		unsigned int byte_size = type->byte_size;
 		unsigned int alignment = type->alignment;
-		write_instrument->Write(&byte_size);
-		write_instrument->Write(&alignment);
-		write_instrument->Write(&type->is_blittable);
-		if (!write_instrument->Write(&type->is_blittable_with_pointer)) {
+		bool write_success = write_instrument->Write(&byte_size);
+		write_success &= write_instrument->Write(&alignment);
+		write_success &= write_instrument->Write(&type->is_blittable);
+		write_success &= write_instrument->Write(&type->is_blittable_with_pointer);
+		if (!write_success) {
 			return false;
 		}
 
@@ -169,7 +136,8 @@ namespace ECSEngine {
 			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 
 			if (!skip_serializable) {
-				bool write_success = true;
+				// Gather multiple writes into the same success, such that we don't check on every single one of them
+				write_success = true;
 
 				if (omit_fields.size > 0) {
 					skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
@@ -229,49 +197,22 @@ namespace ECSEngine {
 		return true;
 	}
 
-	// A wrapper that maintains the previous behavior of the write type table, before the introduction of a generic WriteInstrument
-	// It will write only the fields of this type, the user defined types are only specified by name
-	// The custom fields should be filled in with the fields which have a custom serializer
-	// The reflection manager is needed for blittable exceptions.
-	template<bool write_data>
-	static size_t WriteTypeTable(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		uintptr_t& stream,
-		Stream<SerializeOmitField> omit_fields,
-		bool write_tags
-	) {
-		if constexpr (write_data) {
-			UintptrWriteInstrument write_instrument;
-			write_instrument.ptr = &stream;
-			WriteTypeTable(reflection_manager, type, &write_instrument, omit_fields, write_tags);
-			return 0;
-		}
-		else {
-			size_t write_size = 0;
-			UintptrSizeDeterminationWriteInstrument write_instrument;
-			write_instrument.size = &write_size;
-			WriteTypeTable(reflection_manager, type, &write_instrument, omit_fields, write_tags);
-			return write_size;
-		}
-	}
-
-	template<bool write_data>
+	// This function will write the current type, plus all the recursive type dependencies that it has
 	static size_t WriteTypeTable(
 		const ReflectionManager* reflection_manager, 
 		const ReflectionType* type, 
-		uintptr_t& stream,
+		WriteInstrument* write_instrument,
 		CapacityStream<Stream<char>>& deserialized_type_names,
 		Stream<SerializeOmitField> omit_fields,
 		bool write_tags
 	) {
-		size_t write_total = 0;
-
 		// Add it to the written types
 		deserialized_type_names.Add(type->name);
 
 		// Write the top most type first
-		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, omit_fields, write_tags);
+		if (!WriteTypeTable(reflection_manager, type, write_instrument, omit_fields, write_tags)) {
+			return false;
+		}
 
 		const size_t STACK_STORAGE = 128;
 		Stream<char> _custom_dependent_types_storage[STACK_STORAGE];
@@ -327,7 +268,9 @@ namespace ECSEngine {
 			if (nested_type != nullptr) {
 				bool is_missing = FindString(current_dependent_type, deserialized_type_names) == -1;
 				if (is_missing) {
-					write_total += WriteTypeTable<write_data>(reflection_manager, nested_type, stream, deserialized_type_names, omit_fields, write_tags);
+					if (!WriteTypeTable(reflection_manager, nested_type, write_instrument, deserialized_type_names, omit_fields, write_tags)) {
+						return false;
+					}
 				}
 			}
 			else {
@@ -348,55 +291,49 @@ namespace ECSEngine {
 			}
 		}
 
-		if constexpr (write_data) {
-			return 0;
-		}
-		else {
-			return write_total;
-		}
+		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
 	// Writes the necessary information about custom type interfaces, such that the user can version them
-	template<bool write_data>
-	static size_t WriteTypeTableCustomInterfacesInfo(uintptr_t& stream) {
-		size_t write_total = 0;
+	static bool WriteTypeTableCustomInterfacesInfo(WriteInstrument* write_instrument) {
+		bool write_success = true;
 
 		// Write the version first
-		unsigned int serialize_version = SERIALIZE_VERSION;
-		write_total += Write<write_data>(&stream, &serialize_version, sizeof(serialize_version));
+		unsigned int serialize_version = SERIALIZE_FIELD_TABLE_VERSION;
+		write_success &= write_instrument->Write(&serialize_version);
 
 		// Write the custom serializer versions
 		unsigned int serializers_count = SerializeCustomTypeCount();
-		write_total += Write<write_data>(&stream, &serializers_count, sizeof(serializers_count));
+		write_success &= write_instrument->Write(&serializers_count);
 
 		for (size_t index = 0; index < serializers_count; index++) {
-			write_total += WriteWithSizeShort<write_data>(&stream, ECS_SERIALIZE_CUSTOM_TYPES[index].name);
-			write_total += Write<write_data>(&stream, &ECS_SERIALIZE_CUSTOM_TYPES[index].version, sizeof(unsigned int));
+			write_success &= write_instrument->WriteWithSize<unsigned short>(ECS_SERIALIZE_CUSTOM_TYPES[index].name);
+			write_success &= write_instrument->Write(&ECS_SERIALIZE_CUSTOM_TYPES[index].version);
 		}
 
-		return write_total;
+		return write_success;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	template<bool write_data>
-	static size_t WriteTypeTableWithSerializers(
+	// Combines the custom type interfaces info with the recursive type write
+	static bool WriteTypeTableWithSerializers(
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
-		uintptr_t& stream,
+		WriteInstrument* write_instrument,
 		Stream<SerializeOmitField> omit_fields,
 		bool write_tags
 	) {
-		size_t write_total = 0;
+		bool write_success = true;
 
-		write_total += WriteTypeTableCustomInterfacesInfo<write_data>(stream);
+		write_success &= WriteTypeTableCustomInterfacesInfo(write_instrument);
 
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, deserialized_type_names, DESERIALIZE_FIELD_TABLE_MAX_TYPES);
-		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, deserialized_type_names, omit_fields, write_tags);
+		write_success &= WriteTypeTable(reflection_manager, type, write_instrument, deserialized_type_names, omit_fields, write_tags);
 
-		return write_total;
+		return write_success;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -444,7 +381,7 @@ namespace ECSEngine {
 				*file_data = nullptr;
 			}
 		}
-		// Deallocate the file data if the deserialization failed or if a  field allocator is specified
+		// Deallocate the file data if the deserialization failed or if a field allocator is specified
 		else if (code != ECS_DESERIALIZE_OK || (options != nullptr && options->field_allocator.allocator != nullptr)) {
 			DeallocateEx(file_allocator, file_allocation);
 			if (file_data != nullptr) {
@@ -572,24 +509,22 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
 		const void* data,
-		Stream<wchar_t> file,
+		uintptr_t& stream,
 		SerializeOptions* options
 	) {
-		return SerializeFileImpl(SerializeSize(reflection_manager, type, data, options), file, options, [&](uintptr_t& buffer) {
-			return Serialize(reflection_manager, type, data, buffer, options);
-		});
+		size_t dummy = 0;
+		//return SerializeImplementation<true>(reflection_manager, type, data, stream, options, &dummy);
+		return ECS_SERIALIZE_OK;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	template<bool write_data>
-	ECS_SERIALIZE_CODE SerializeImplementation(
+	ECS_SERIALIZE_CODE Serialize(
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
 		const void* data,
-		uintptr_t& stream,
-		SerializeOptions* options,
-		size_t* total_size
+		WriteInstrument* write_instrument,
+		SerializeOptions* options
 	) {
 		bool has_options = options != nullptr;
 
@@ -613,12 +548,16 @@ namespace ECSEngine {
 
 		// Write the header if it has one
 		if (has_options && options->header.size > 0) {
-			*total_size += WriteWithSize<write_data>(&stream, options->header.buffer, options->header.size);
+			if (!write_instrument->WriteWithSize<size_t>(options->header)) {
+				return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+			}
 		}
 
 		if (!has_options || (has_options && options->write_type_table)) {
 			// The type table must be written
-			*total_size += WriteTypeTableWithSerializers<write_data>(reflection_manager, type, stream, omit_fields, write_tags);
+			if (!WriteTypeTableWithSerializers(reflection_manager, type, write_instrument, omit_fields, write_tags)) {
+				return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+			}
 		}
 
 		SerializeOptions _nested_options;
@@ -647,19 +586,19 @@ namespace ECSEngine {
 				const ReflectionTypeMiscAllocator& allocator_field = type->misc_info[index].allocator_info;
 				if (!HasFlag(allocator_field.modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE)) {
 					const ReflectionField& field = type->fields[allocator_field.field_index];
-					
+
 					SerializeCustomTypeWriteFunctionData allocator_write_data;
 					// The function GetReflectionTypeAllocatorPointerAndDefinition requires a void* out parameter, use a stack variable for this
 					void* write_data_pointer = nullptr;
 					GetReflectionTypeAllocatorPointerAndDefinition(type, allocator_field.field_index, data, write_data_pointer, allocator_write_data.definition);
-					
+
 					allocator_write_data.data = write_data_pointer;
 					allocator_write_data.tags = field.tag;
 					allocator_write_data.options = nested_options;
 					allocator_write_data.reflection_manager = reflection_manager;
 					allocator_write_data.stream = &stream;
 					allocator_write_data.write_data = write_data;
-					
+
 					*total_size += ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].write(&allocator_write_data);
 				}
 			}
@@ -681,7 +620,7 @@ namespace ECSEngine {
 				const void* field_data = OffsetPointer(data, field->info.pointer_offset);
 				ReflectionStreamFieldType stream_type = field->info.stream_type;
 				ReflectionBasicFieldType basic_type = field->info.basic_type;
-				
+
 				// If the field is a pointer reference key, add it now
 				nested_options->passdown_info->AddPointerReferencesFromField(&type->fields[index], field_data, field_data);
 
@@ -743,7 +682,7 @@ namespace ECSEngine {
 									// If it is missing the pointer reference argument, skip it
 									if (pointer_reference.size > 0) {
 										size_t token = 0;
-										if constexpr (!write_data) {
+										if constexpr (write_data) {
 											token = nested_options->passdown_info->GetPointerTargetToken(reflection_manager, pointer_reference, pointer_reference_custom_element, *(void**)field_data, true);
 											ECS_ASSERT(token != -1);
 										}
@@ -794,13 +733,13 @@ namespace ECSEngine {
 								*total_size += Write<write_data>(&stream, &field_stream.size, sizeof(field_stream.size));
 								for (size_t subindex = 0; subindex < field_stream.size; subindex++) {
 									SerializeImplementation<write_data>(
-										reflection_manager, 
-										nested_type, 
+										reflection_manager,
+										nested_type,
 										OffsetPointer(field_data, subindex * type_byte_size),
-										stream, 
-										nested_options, 
+										stream,
+										nested_options,
 										total_size
-									);
+										);
 								}
 							}
 							else {
@@ -814,17 +753,6 @@ namespace ECSEngine {
 		}
 
 		return ECS_SERIALIZE_OK;
-	}
-
-	ECS_SERIALIZE_CODE Serialize(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		const void* data,
-		uintptr_t& stream,
-		SerializeOptions* options
-	) {
-		size_t dummy = 0;
-		return SerializeImplementation<true>(reflection_manager, type, data, stream, options, &dummy);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------

@@ -64,6 +64,11 @@ namespace ECSEngine {
 			return WriteFile(file, buffering);
 		}
 
+		ECS_INLINE bool IsSizeDetermination() const override {
+			// Always false
+			return false;
+		}
+
 		ECS_FILE_HANDLE file;
 		size_t initial_file_offset;
 		CapacityStream<void> buffering;
@@ -98,10 +103,52 @@ namespace ECSEngine {
 			return ReadFileExact(file, { data, data_size }, buffering);
 		}
 
-		ECS_INLINE bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
-			// Discard the buffering, since we changed the location
-			buffering.size = 0;
-			return SetFileCursorBool(file, offset, InstrumentSeekToFileSeek(seek_type));
+		ECS_INLINE bool ReadAlways(void* data, size_t data_size) override {
+			// Same as normal read
+			return Read(data, data_size);
+		}
+
+		bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
+			// Seeking relative to the current offset needs to be handled separately
+			if (seek_type == ECS_INSTRUMENT_SEEK_CURRENT) {
+				// For example, if we read 4 bytes from a file and then we are seeking 4 bytes ahead,
+				// That would mean to actually drop 4 bytes from the buffering, if there is enough space,
+				// Or if there aren't enough bytes in the buffering, to seek with the remaining bytes ahead.
+				// That is for the ahead offset, but it is similar for the seeking with negative values
+				if (offset >= 0) {
+					if (buffering.size >= offset) {
+						// Simply discard some of the buffering
+						buffering.size -= offset;
+						return true;
+					}
+					else {
+						// Discard the entire buffering, and seek ahead in the file
+						offset -= buffering.size;
+						buffering.size = 0;
+						return SetFileCursorBool(file, offset, ECS_FILE_SEEK_CURRENT);
+					}
+				}
+				else {
+					if (buffering.size + offset <= buffering.capacity) {
+						// We fit into the buffering, simply move back the buffering read end
+						buffering.size += offset;
+						return true;
+					}
+					else {
+						// We need to seek for the amount of surplus offset bytes compared to the buffering,
+						// Plus one entire buffering capacity, to account for this buffering that was read
+						offset = offset - (int64_t)(buffering.capacity - buffering.size) - (int64_t)buffering.capacity;
+						// Discard the buffering, and seek into the file
+						buffering.size = 0;
+						return SetFileCursorBool(file, offset, ECS_FILE_SEEK_CURRENT);
+					}
+				}
+			}
+			else {
+				// Discard the buffering, since we changed the location
+				buffering.size = 0;
+				return SetFileCursorBool(file, offset, InstrumentSeekToFileSeek(seek_type));
+			}
 		}
 
 		ECS_INLINE void* ReferenceData(size_t data_size, bool& is_out_of_range) override {
@@ -114,6 +161,11 @@ namespace ECSEngine {
 
 		ECS_INLINE size_t TotalSize() const override {
 			return total_data_size;
+		}
+
+		ECS_INLINE bool IsSizeDetermination() const override {
+			// Always false
+			return false;
 		}
 
 		ECS_FILE_HANDLE file;
