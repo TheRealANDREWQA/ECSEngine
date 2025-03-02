@@ -5,6 +5,8 @@
 #include "../Utilities/Serialization/Binary/Serialization.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Utilities/Reflection/ReflectionCustomTypes.h"
+#include "../Utilities/Serialization/SerializeIntVariableLength.h"
+#include "../Utilities/ReaderWriterInterface.h"
 
 namespace ECSEngine {
 
@@ -58,6 +60,9 @@ namespace ECSEngine {
 	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(MaterialAsset) {
 		const void* user_data = ECS_SERIALIZE_CUSTOM_TYPES[Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET].user_data;
 		ECS_ASSERT(user_data != nullptr);
+
+		bool success = true;
+		WriteInstrument* write_instrument = data->write_instrument;
 		
 		const AssetDatabase* database = (const AssetDatabase*)user_data;
 		const MaterialAsset* asset = (const MaterialAsset*)data->data;
@@ -71,21 +76,21 @@ namespace ECSEngine {
 
 		ECS_ASSERT(!has_reflection_buffers || asset->reflection_manager != nullptr);
 
-		// Write the sizes of the streams as unsigned shorts to not consume too much memory
-		size_t write_size = 0;
-		
-		auto write_size_for_stream = [&write_size, data](auto stream) {
+		auto write_size_for_stream = [write_instrument, &success, data](auto stream) {
 			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
-				write_size += Write(data->stream, &stream[index].size, sizeof(unsigned short), data->write_data);
+				success &= SerializeIntVariableLengthBool(write_instrument, stream[index].size);
 			}
 		};
 
-		write_size += WriteWithSizeShort(data->stream, asset->name.buffer, asset->name.size * sizeof(char), data->write_data);
+		success &= write_instrument->WriteWithSizeVariableLength(asset->name);
 		write_size_for_stream(asset->textures);
 		write_size_for_stream(asset->samplers);
 		write_size_for_stream(asset->buffers);
-		write_size += Write(data->stream, &asset->vertex_shader_handle, sizeof(asset->vertex_shader_handle), data->write_data);
-		write_size += Write(data->stream, &asset->pixel_shader_handle, sizeof(asset->pixel_shader_handle), data->write_data);
+		success &= write_instrument->Write(&asset->vertex_shader_handle);
+		success &= write_instrument->Write(&asset->pixel_shader_handle);
+		if (!success) {
+			return false;
+		}
 
 		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
 			// Get the names of the resources being referenced and serialize these as well
@@ -100,15 +105,15 @@ namespace ECSEngine {
 					file = texture_metadata->file;
 				}
 
-				write_size += Write(data->stream, &texture.slot, sizeof(texture.slot), data->write_data);
+				success &= write_instrument->Write(&texture.slot);
 
 				// This is the name of the assigned texture
-				write_size += WriteWithSizeShort(data->stream, current_name, data->write_data);
-				write_size += WriteWithSizeShort(data->stream, file, data->write_data);
+				success &= write_instrument->WriteWithSizeVariableLength(current_name);
+				success &= write_instrument->WriteWithSizeVariableLength(file);
 
 				// This is the name in the file as variable (i.e. Texture2D my_texture -> my_texture; it is not
 				// the name of the texture assigned through the UI). This is written last because it helps on deserialization
-				write_size += WriteWithSizeShort(data->stream, texture.name, data->write_data);
+				success &= write_instrument->WriteWithSizeVariableLength(texture.name);
 			}
 
 			// Get the names of the resources being referenced and serialize these as well
@@ -120,12 +125,12 @@ namespace ECSEngine {
 					current_name = sampler_metadata->name;
 				}
 
-				write_size += Write(data->stream, &sampler.slot, sizeof(sampler.slot), data->write_data);
-				write_size += WriteWithSizeShort(data->stream, current_name, data->write_data);
+				success &= write_instrument->Write(&sampler.slot);
+				success &= write_instrument->WriteWithSizeVariableLength(current_name);
 
 				// This is the name in the file as variable (i.e. SamplerState my_sampler -> my_sampler; it is not
 				// the name of the sampler assigned through the UI). This is written last because it helps on deserialization
-				write_size += WriteWithSizeShort(data->stream, sampler.name, data->write_data);
+				success &= write_instrument->WriteWithSizeVariableLength(sampler.name);
 			}
 
 			// Returns -1 if it fails, else 0
@@ -134,64 +139,62 @@ namespace ECSEngine {
 				SerializeOptions serialize_options;
 				serialize_options.write_type_table_tags = true;
 				
-				auto serialize = [&]() {
-					if (data->write_data) {
-						ECS_SERIALIZE_CODE code = Serialize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer, *data->stream, &serialize_options);
-						if (code != ECS_SERIALIZE_OK) {
-							return -1;
-						}
-					}
-					else {
-						write_size += SerializeSize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer, &serialize_options);
-					}
-					return 0;
-				};
+				//auto serialize = [&]() {
+				//	if (data->write_data) {
+				//		ECS_SERIALIZE_CODE code = Serialize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer, *data->stream, &serialize_options);
+				//		if (code != ECS_SERIALIZE_OK) {
+				//			return -1;
+				//		}
+				//	}
+				//	else {
+				//		write_size += SerializeSize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer, &serialize_options);
+				//	}
+				//	return 0;
+				//};
 
 				bool has_reflection_type = buffer.reflection_type != nullptr;
 				// Write a boolean indicating
-				write_size += Write(data->stream, &has_reflection_type, sizeof(has_reflection_type), data->write_data);
+				success &= write_instrument->Write(&has_reflection_type);
 				if (has_reflection_type) {
 					if (!buffer.dynamic) {
 						ECS_ASSERT(buffer.data.buffer != nullptr);
-						if (serialize() == -1) {
-							return -1;
-						}
+						success &= Serialize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer, write_instrument, &serialize_options) == ECS_SERIALIZE_OK;
 					}
 					else {
 						bool has_data = buffer.data.buffer != nullptr;
-						write_size += Write(data->stream, &has_data, sizeof(has_data), data->write_data);
+						success &= write_instrument->Write(&has_data);
 						if (has_data) {
-							if (serialize() == -1) {
-								return -1;
-							}
+							success &= Serialize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer, write_instrument, &serialize_options) == ECS_SERIALIZE_OK;
 						}
 					}
 				}
 				else {
 					bool has_data = buffer.data.buffer != nullptr;
 					// Write a bool indicating whether or not it has data
-					write_size += Write(data->stream, &has_data, sizeof(has_data), data->write_data);
+					success &= write_instrument->Write(&has_data);
 					if (has_data) {
-						write_size += WriteWithSizeShort(data->stream, buffer.data, data->write_data);
+						success &= write_instrument->WriteWithSizeVariableLength(buffer.data);
 					}
 				}
-				return 0;
 			};
 
 			for (size_t index = 0; index < asset->buffers[type].size; index++) {
 				MaterialAssetBuffer buffer = asset->buffers[type][index];
-				write_size += Write(data->stream, &buffer.slot, sizeof(buffer.slot), data->write_data);
-				write_size += Write(data->stream, &buffer.dynamic, sizeof(buffer.dynamic), data->write_data);
+				success &= write_instrument->Write(&buffer.slot);
+				success &= write_instrument->Write(&buffer.dynamic);
 				if (buffer.reflection_type != nullptr) {
-					write_size += WriteWithSizeShort(data->stream, buffer.reflection_type->name, data->write_data);
+					success &= write_instrument->WriteWithSizeVariableLength(buffer.reflection_type->name);
 				}
 				else {
 					// This is the name in the file as variable (i.e. cbuffer my_buf -> my_buf)
-					write_size += WriteWithSizeShort(data->stream, buffer.name, data->write_data);
+					success &= write_instrument->WriteWithSizeVariableLength(buffer.name);
 				}
-				if (write_buffer_data(index) == -1) {
-					return -1;
-				}
+				write_buffer_data(index);
+			}
+
+			// Perform an intermediary check after some handful operations were done
+			if (!success) {
+				return false;
 			}
 		}
 		
@@ -202,8 +205,8 @@ namespace ECSEngine {
 			vertex_name = vertex_shader->name;
 			vertex_file = vertex_shader->file;
 		}
-		write_size += WriteWithSizeShort(data->stream, vertex_name, data->write_data);
-		write_size += WriteWithSizeShort(data->stream, vertex_file, data->write_data);
+		success &= write_instrument->WriteWithSizeVariableLength(vertex_name);
+		success &= write_instrument->WriteWithSizeVariableLength(vertex_file);
 
 		Stream<char> pixel_name = { nullptr, 0 };
 		Stream<wchar_t> pixel_file = { nullptr, 0 };
@@ -212,53 +215,60 @@ namespace ECSEngine {
 			pixel_name = pixel_shader->name;
 			pixel_file = pixel_shader->file;
 		}
-		write_size += WriteWithSizeShort(data->stream, pixel_name, data->write_data);
-		write_size += WriteWithSizeShort(data->stream, pixel_file, data->write_data);
+		success &= write_instrument->WriteWithSizeVariableLength(pixel_name);
+		success &= write_instrument->WriteWithSizeVariableLength(pixel_file);
 
-		return write_size;
+		return success;
 	}
 
 	// --------------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(MaterialAsset) {
 		if (data->version != ECS_SERIALIZE_CUSTOM_TYPE_MATERIAL_ASSET_VERSION) {
-			return -1;
+			return false;
 		}
+
+		bool success = true;
+		ReadInstrument* read_instrument = data->read_instrument;
+		bool is_not_size_determination = !read_instrument->IsSizeDetermination();
 
 		void* user_data = ECS_SERIALIZE_CUSTOM_TYPES[Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET].user_data;
 		bool do_not_increment_dependencies = ECS_SERIALIZE_CUSTOM_TYPES[Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET].switches[ECS_ASSET_MATERIAL_SERIALIZE_DO_NOT_INCREMENT_DEPENDENCIES];
-		if (data->read_data) {
+		if (is_not_size_determination) {
 			ECS_ASSERT(user_data != nullptr);
 		}
 
 		AssetDatabase* database = (AssetDatabase*)user_data;
 		MaterialAsset* asset = (MaterialAsset*)data->data;
 
-		size_t read_size = 0;
 		AllocatorPolymorphic allocator = data->options->field_allocator;
 
-		if (data->read_data && (asset->reflection_manager == nullptr || data->was_allocated)) {
+		if (is_not_size_determination && (asset->reflection_manager == nullptr || data->was_allocated)) {
 			asset->reflection_manager = (Reflection::ReflectionManager*)Allocate(allocator, sizeof(Reflection::ReflectionManager));
 			*asset->reflection_manager = Reflection::ReflectionManager(allocator, 0, 0);
 		}
 
 		Stream<char> asset_name = { nullptr, 0 };
-		if (data->read_data) {
-			asset_name = ReadAllocateDataShort<true>(data->stream, allocator).As<char>();
+		if (is_not_size_determination) {
+			success &= read_instrument->ReadWithSizeVariableLength(asset_name, allocator);
 		}
 		else {
-			read_size += IgnoreWithSizeShort(data->stream);
+			success &= read_instrument->IgnoreWithSizeVariableLength<char>();
 		}
 		
 		unsigned short counts[ECS_MATERIAL_SHADER_COUNT * 3];
-		Read<true>(data->stream, counts, sizeof(counts));
+		success &= read_instrument->ReadAlways(counts, sizeof(counts));
+		// Early exit after reading the counts if those could not be determined
+		if (!success) {
+			return false;
+		}
 
 		ECS_STACK_CAPACITY_STREAM(char, name_buffer, 256);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, file_buffer, 256);
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 		AllocatorPolymorphic temp_allocator = &stack_allocator;
 
-		if (data->read_data) {
+		if (is_not_size_determination) {
 			unsigned int int_counts[ECS_MATERIAL_SHADER_COUNT * 3];
 			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT * 3; index++) {
 				int_counts[index] = counts[index];
@@ -272,23 +282,23 @@ namespace ECSEngine {
 			asset->name = asset_name;
 		}
 
-		Read(data->stream, &asset->vertex_shader_handle, sizeof(asset->vertex_shader_handle), data->read_data);
-		Read(data->stream, &asset->pixel_shader_handle, sizeof(asset->pixel_shader_handle), data->read_data);
+		success &= read_instrument->Read(&asset->vertex_shader_handle);
+		success &= read_instrument->Read(&asset->pixel_shader_handle);
 
 		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
 			// Read the names now. Then use the database to get the handles for those resources
 			for (unsigned short index = 0; index < asset->textures[type].size; index++) {
 				unsigned char slot = 0;
-				Read(data->stream, &slot, sizeof(slot), data->read_data);
+				success &= read_instrument->Read(&slot);
 
-				if (data->read_data) {
-					unsigned short name_size = 0;
-					read_size += ReadWithSizeShort<true>(data->stream, name_buffer.buffer, name_size);
-					name_buffer.size = name_size / sizeof(char);
-
-					unsigned short file_size = 0;
-					read_size += ReadWithSizeShort<true>(data->stream, file_buffer.buffer, file_size);
-					file_buffer.size = file_size / sizeof(wchar_t);
+				if (is_not_size_determination) {
+					name_buffer.size = 0;
+					file_buffer.size = 0;
+					success &= read_instrument->ReadWithSizeVariableLength(name_buffer);
+					success &= read_instrument->ReadWithSizeVariableLength(file_buffer);
+					if (!success) {
+						return false;
+					}
 
 					unsigned int handle = -1;
 					if (name_buffer.size > 0 && file_buffer.size > 0) {
@@ -301,25 +311,27 @@ namespace ECSEngine {
 					}
 					asset->textures[type][index].metadata_handle = handle;
 					asset->textures[type][index].slot = slot;
-					asset->textures[type][index].name = ReadAllocateDataShort<true>(data->stream, allocator).As<char>();
+					success &= read_instrument->ReadWithSizeVariableLength(asset->textures[type][index].name, allocator);
 				}
 				else {
 					// Ignoring the name and the file of the target texture
-					IgnoreWithSizeShort(data->stream);
-					IgnoreWithSizeShort(data->stream);
+					success &= read_instrument->IgnoreWithSizeVariableLength(name_buffer.ToStream());
+					success &= read_instrument->IgnoreWithSizeVariableLength(file_buffer.ToStream());
 					// Ignoring the source code name
-					read_size += IgnoreWithSizeShort(data->stream);
+					success &= read_instrument->IgnoreWithSizeVariableLength(asset->textures[type][index].name);
 				}
 			}
 
 			for (unsigned short index = 0; index < asset->samplers[type].size; index++) {
 				unsigned char slot = 0;
-				Read(data->stream, &slot, sizeof(slot), data->read_data);
+				success &= read_instrument->Read(&slot);
 
-				if (data->read_data) {
-					unsigned short name_size = 0;
-					read_size += ReadWithSizeShort<true>(data->stream, name_buffer.buffer, name_size);
-					name_buffer.size = name_size / sizeof(char);
+				if (is_not_size_determination) {
+					name_buffer.size = 0;
+					success &= read_instrument->ReadWithSizeVariableLength(name_buffer);
+					if (!success) {
+						return false;
+					}
 
 					unsigned int handle = -1;
 					if (name_buffer.size > 0) {
@@ -332,44 +344,46 @@ namespace ECSEngine {
 					}
 					asset->samplers[type][index].metadata_handle = handle;
 					asset->samplers[type][index].slot = slot;
-					asset->samplers[type][index].name = ReadAllocateDataShort<true>(data->stream, allocator).As<char>();
+					success &= read_instrument->ReadWithSizeVariableLength(asset->samplers[type][index].name, allocator);
 				}
 				else {
 					// Ignoring the sampler metadata name
-					IgnoreWithSizeShort(data->stream);
+					success &= read_instrument->IgnoreWithSizeVariableLength(name_buffer.ToStream());
 					// Ignoring the source code name
-					read_size += IgnoreWithSizeShort(data->stream);
+					success &= read_instrument->IgnoreWithSizeVariableLength(asset->samplers[type][index].name);
 				}
 			}
 
 			for (unsigned short index = 0; index < asset->buffers[type].size; index++) {
 				unsigned char slot;
 				bool dynamic;
-				Read<true>(data->stream, &slot, sizeof(slot));
-				Read<true>(data->stream, &dynamic, sizeof(dynamic));
+				success &= read_instrument->Read(&slot);
+				success &= read_instrument->Read(&dynamic);
 				
-				if (data->read_data) {
+				if (is_not_size_determination) {
 					// Read the name
-					asset->buffers[type][index].name = ReadAllocateDataShort<true>(data->stream, allocator).As<char>();
+					success &= read_instrument->ReadWithSizeVariableLength(asset->buffers[type][index].name, allocator);
 					asset->buffers[type][index].dynamic = dynamic;
 					asset->buffers[type][index].slot = slot;
-
-					read_size += asset->buffers[type][index].name.size;
 				}
 				else {
-					read_size += IgnoreWithSizeShort(data->stream);
+					success &= read_instrument->IgnoreWithSizeVariableLength(asset->buffers[type][index].name);
 				}
 
 				// Read the bool indicating whether or not it has the reflection type
 				bool has_reflection_type;
-				Read<true>(data->stream, &has_reflection_type, sizeof(has_reflection_type));
+				success &= read_instrument->ReadAlways(&has_reflection_type);
+
+				if (!success) {
+					return false;
+				}
 
 				auto read_data_with_reflection_type = [&]() {
-					if (data->read_data) {
+					if (is_not_size_determination) {
 						// Read the deserialize field table
 						DeserializeFieldTableOptions field_options;
 						field_options.read_type_tags = true;
-						DeserializeFieldTable field_table = DeserializeFieldTableFromData(*data->stream, temp_allocator, &field_options);
+						DeserializeFieldTable field_table = DeserializeFieldTableFromData(read_instrument, temp_allocator, &field_options);
 						void* allocation = nullptr;
 						size_t byte_size = ECS_KB;
 						Reflection::ReflectionType* type_to_be_deserialized = nullptr;
@@ -394,7 +408,7 @@ namespace ECSEngine {
 							options.read_type_table = false;
 							options.field_allocator = allocator;
 							options.field_table = &field_table;
-							ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, type_to_be_deserialized, allocation, *data->stream, &options);
+							ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, type_to_be_deserialized, allocation, read_instrument, &options);
 							if (code != ECS_DESERIALIZE_OK) {
 								// Just set the data to defaults
 								reflection_manager->SetInstanceDefaultData(type_to_be_deserialized, allocation);
@@ -411,19 +425,17 @@ namespace ECSEngine {
 					}
 					else {
 						// Ignore the serialize field
-						IgnoreDeserialize(*data->stream);
+						success &= IgnoreDeserialize(read_instrument);
 					}
 				};
 
 				auto read_data_without_reflection_type = [&]() {
-					if (data->read_data) {
-						asset->buffers[type][index].data = ReadAllocateDataShort<true>(data->stream, allocator);
+					if (is_not_size_determination) {
+						success &= read_instrument->ReadWithSizeVariableLength(asset->buffers[type][index].data, allocator);
 						asset->buffers[type][index].reflection_type = nullptr;
-
-						read_size += asset->buffers[type][index].data.size;
 					}
 					else {
-						read_size += IgnoreWithSizeShort(data->stream);
+						success &= read_instrument->IgnoreWithSizeVariableLength(asset->buffers[type][index].data);
 					}
 				};
 
@@ -433,7 +445,10 @@ namespace ECSEngine {
 						read_data_with_reflection_type();
 					}
 					else {
-						Read<true>(data->stream, &has_data, sizeof(has_data));
+						success &= read_instrument->ReadAlways(&has_data);
+						if (!success) {
+							return false;
+						}
 						if (has_data) {
 							read_data_with_reflection_type();
 						}
@@ -444,23 +459,32 @@ namespace ECSEngine {
 						read_data_without_reflection_type();
 					}
 					else {
-						Read<true>(data->stream, &has_data, sizeof(has_data));
+						success &= read_instrument->ReadAlways(&has_data);
+						if (!success) {
+							return false;
+						}
 						if (has_data) {
 							read_data_without_reflection_type();
 						}
 					}
 				}
+
+				if (!success) {
+					return false;
+				}
 			}
 		}
 
-		if (data->read_data) {
-			unsigned short vertex_shader_name_size = 0;
-			read_size += ReadWithSizeShort<true>(data->stream, name_buffer.buffer, vertex_shader_name_size);
-			name_buffer.size = vertex_shader_name_size / sizeof(char);
+		if (is_not_size_determination) {
+			name_buffer.size = 0;
+			success &= read_instrument->ReadWithSizeVariableLength(name_buffer);
 
-			unsigned short vertex_shader_file_size = 0;
-			read_size += ReadWithSizeShort<true>(data->stream, file_buffer.buffer, vertex_shader_file_size);
-			file_buffer.size = vertex_shader_file_size / sizeof(wchar_t);
+			file_buffer.size = 0;
+			success &= read_instrument->ReadWithSizeVariableLength(file_buffer);
+
+			if (!success) {
+				return false;
+			}
 
 			unsigned int vertex_handle = -1;
 			if (name_buffer.size > 0 && file_buffer.size > 0) {
@@ -473,13 +497,15 @@ namespace ECSEngine {
 			}
 			asset->vertex_shader_handle = vertex_handle;
 
-			unsigned short pixel_shader_name_size = 0;
-			read_size += ReadWithSizeShort<true>(data->stream, name_buffer.buffer, pixel_shader_name_size);
-			name_buffer.size = pixel_shader_name_size;
+			name_buffer.size = 0;
+			success &= read_instrument->ReadWithSizeVariableLength(name_buffer);
 
-			unsigned short pixel_shader_file_size = 0;
-			read_size += ReadWithSizeShort<true>(data->stream, file_buffer.buffer, pixel_shader_file_size);
-			file_buffer.size = pixel_shader_file_size / sizeof(wchar_t);
+			file_buffer.size = 0;
+			success &= read_instrument->ReadWithSizeVariableLength(file_buffer);
+
+			if (!success) {
+				return false;
+			}
 
 			unsigned int pixel_handle = -1;
 			if (name_buffer.size > 0 && file_buffer.size > 0) {
@@ -494,14 +520,14 @@ namespace ECSEngine {
 		}
 		else {
 			// The vertex shader name + file
-			read_size += IgnoreWithSizeShort(data->stream);
-			read_size += IgnoreWithSizeShort(data->stream);
+			success &= read_instrument->IgnoreWithSizeVariableLength(name_buffer.ToStream());
+			success &= read_instrument->IgnoreWithSizeVariableLength(file_buffer.ToStream());
 			// The pixel shader name + file
-			read_size += IgnoreWithSizeShort(data->stream);
-			read_size += IgnoreWithSizeShort(data->stream);
+			success &= read_instrument->IgnoreWithSizeVariableLength(name_buffer.ToStream());
+			success &= read_instrument->IgnoreWithSizeVariableLength(file_buffer.ToStream());
 		}
 
-		return read_size;
+		return success;
 	}
 
 	// --------------------------------------------------------------------------------------------

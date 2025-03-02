@@ -94,7 +94,7 @@ namespace ECSEngine {
 		bool write_tags
 	) {
 		// Write the name of the type first
-		if (!write_instrument->WriteWithSize<unsigned short>(type->name)) {
+		if (!write_instrument->WriteWithSizeVariableLength(type->name)) {
 			return false;
 		}
 
@@ -112,7 +112,7 @@ namespace ECSEngine {
 		}
 
 		if (write_tags) {
-			if (!write_instrument->WriteWithSize<unsigned short>(type->tag)) {
+			if (!write_instrument->WriteWithSizeVariableLength(type->tag)) {
 				return false;
 			}
 		}
@@ -147,10 +147,10 @@ namespace ECSEngine {
 					const ReflectionField* field = &type->fields[index];
 
 					// Write the field name
-					write_success &= write_instrument->WriteWithSize<unsigned short>(field->name);
+					write_success &= write_instrument->WriteWithSizeVariableLength(field->name);
 
 					if (write_tags) {
-						write_success &= write_instrument->WriteWithSize<unsigned short>(field->tag);
+						write_success &= write_instrument->WriteWithSizeVariableLength(field->tag);
 					}
 
 					// Write the field type - the stream type, basic type, basic type count, stream byte size and the byte size all
@@ -184,7 +184,7 @@ namespace ECSEngine {
 					// If user defined, write the definition as well
 					if (field->info.basic_type == ReflectionBasicFieldType::UserDefined || field->info.basic_type == ReflectionBasicFieldType::Enum) {
 						Stream<char> definition_stream = field->definition;
-						write_success &= write_instrument->WriteWithSize<unsigned short>(definition_stream);
+						write_success &= write_instrument->WriteWithSizeVariableLength(definition_stream);
 					}
 
 					if (!write_success) {
@@ -309,7 +309,7 @@ namespace ECSEngine {
 		write_success &= write_instrument->Write(&serializers_count);
 
 		for (size_t index = 0; index < serializers_count; index++) {
-			write_success &= write_instrument->WriteWithSize<unsigned short>(ECS_SERIALIZE_CUSTOM_TYPES[index].name);
+			write_success &= write_instrument->WriteWithSizeVariableLength(ECS_SERIALIZE_CUSTOM_TYPES[index].name);
 			write_success &= write_instrument->Write(&ECS_SERIALIZE_CUSTOM_TYPES[index].version);
 		}
 
@@ -578,6 +578,8 @@ namespace ECSEngine {
 			nested_options->passdown_info = &passdown_info;
 		}
 
+		bool is_not_size_determination = !write_instrument->IsSizeDetermination();
+
 		// Before writing the normal type fields, proceed by writing all the standalone type allocators
 		// Such that they can be reconstructed before all the other fields
 		for (size_t index = 0; index < type->misc_info.size; index++) {
@@ -596,15 +598,17 @@ namespace ECSEngine {
 					allocator_write_data.tags = field.tag;
 					allocator_write_data.options = nested_options;
 					allocator_write_data.reflection_manager = reflection_manager;
-					allocator_write_data.stream = &stream;
-					allocator_write_data.write_data = write_data;
+					allocator_write_data.write_instrument = write_instrument;
 
-					*total_size += ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].write(&allocator_write_data);
+					if (!ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].write(&allocator_write_data)) {
+						return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+					}
 				}
 			}
 		}
 
 		for (size_t index = 0; index < type->fields.size; index++) {
+			bool success = true;
 			const ReflectionField* field = &type->fields[index];
 
 			bool skip_serializable = field->Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
@@ -639,7 +643,10 @@ namespace ECSEngine {
 
 					if (blittable_size.x != -1) {
 						// Write the data as is and continue to the next field
-						*total_size += Write<write_data>(&stream, field_data, blittable_size.x * field->info.basic_type_count);
+						success &= write_instrument->Write(field_data, blittable_size.x * field->info.basic_type_count);
+						if (!success) {
+							return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+						}
 						continue;
 					}
 
@@ -655,21 +662,23 @@ namespace ECSEngine {
 					custom_write_data.definition = definition_stream;
 					custom_write_data.options = nested_options;
 					custom_write_data.reflection_manager = reflection_manager;
-					custom_write_data.stream = &stream;
-					custom_write_data.write_data = write_data;
+					custom_write_data.write_instrument = write_instrument;
 					custom_write_data.tags = field->tag;
 
-					*total_size += ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].write(&custom_write_data);
+					success &= ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].write(&custom_write_data);
 				}
 				else {
 					if (stream_type == ReflectionStreamFieldType::Basic && !is_user_defined) {
-						*total_size += Write<write_data>(&stream, field_data, field->info.byte_size);
+						success &= write_instrument->Write(field_data, field->info.byte_size);
 					}
 					else {
 						// User defined, call the serialization for it
 						if (stream_type == ReflectionStreamFieldType::Basic && is_user_defined) {
 							// No need to test the return code since it cannot fail if it gets to here
-							SerializeImplementation<write_data>(reflection_manager, nested_type, field_data, stream, nested_options, total_size);
+							ECS_SERIALIZE_CODE serialize_code = Serialize(reflection_manager, nested_type, field_data, write_instrument, nested_options);
+							if (serialize_code != ECS_SERIALIZE_OK) {
+								return serialize_code;
+							}
 						}
 						// Determine if it is a pointer, basic array or stream
 						// If pointer, only do it for 1 level of indirection and ASCII or wide char strings
@@ -682,21 +691,24 @@ namespace ECSEngine {
 									// If it is missing the pointer reference argument, skip it
 									if (pointer_reference.size > 0) {
 										size_t token = 0;
-										if constexpr (write_data) {
+										if (is_not_size_determination) {
 											token = nested_options->passdown_info->GetPointerTargetToken(reflection_manager, pointer_reference, pointer_reference_custom_element, *(void**)field_data, true);
 											ECS_ASSERT(token != -1);
 										}
-										*total_size += Write<write_data>(&stream, &token);
+										success &= write_instrument->Write(&token);
 									}
 								}
 								else {
 									// Treat user defined pointers as pointers to a single entity
 									if (is_user_defined) {
 										// No need to test the return code since it cannot fail if it gets to here
-										SerializeImplementation<write_data>(reflection_manager, nested_type, *(void**)field_data, stream, nested_options, total_size);
+										ECS_SERIALIZE_CODE serialize_code = Serialize(reflection_manager, nested_type, *(void**)field_data, write_instrument, nested_options);
+										if (serialize_code != ECS_SERIALIZE_OK) {
+											return serialize_code;
+										}
 									}
 									else {
-										*total_size += WriteFundamentalType<write_data>(type->fields[index].info, field_data, stream);
+										success &= WriteFundamentalType(type->fields[index].info, field_data, write_instrument);
 									}
 								}
 							}
@@ -713,12 +725,15 @@ namespace ECSEngine {
 
 								for (size_t subindex = 0; subindex < basic_count; subindex++) {
 									// No need to test the return code since if it gets to here it cannot fail
-									SerializeImplementation<write_data>(reflection_manager, nested_type, OffsetPointer(field_data, subindex * element_byte_size), stream, nested_options, total_size);
+									ECS_SERIALIZE_CODE serialize_code = Serialize(reflection_manager, nested_type, OffsetPointer(field_data, subindex * element_byte_size), write_instrument, nested_options);
+									if (serialize_code != ECS_SERIALIZE_OK) {
+										return serialize_code;
+									}
 								}
 							}
 							else {
 								// Write the whole data at once
-								*total_size += Write<write_data>(&stream, field_data, field->info.byte_size);
+								success &= write_instrument->Write(field_data, field->info.byte_size);
 							}
 						}
 						// Streams of user defined types should be handled by the custom serializer					
@@ -730,21 +745,23 @@ namespace ECSEngine {
 								size_t type_byte_size = GetReflectionTypeByteSize(nested_type);
 
 								// Write the size first and then the user defined
-								*total_size += Write<write_data>(&stream, &field_stream.size, sizeof(field_stream.size));
+								success &= write_instrument->Write(&field_stream.size);
 								for (size_t subindex = 0; subindex < field_stream.size; subindex++) {
-									SerializeImplementation<write_data>(
+									ECS_SERIALIZE_CODE serialize_code = Serialize(
 										reflection_manager,
 										nested_type,
 										OffsetPointer(field_data, subindex * type_byte_size),
-										stream,
-										nested_options,
-										total_size
-										);
+										write_instrument,
+										nested_options
+									);
+									if (serialize_code != ECS_SERIALIZE_OK) {
+										return serialize_code;
+									}
 								}
 							}
 							else {
 								field_stream.size *= GetReflectionFieldStreamElementByteSize(field->info);
-								*total_size += WriteWithSize<write_data>(&stream, field_stream.buffer, field_stream.size);
+								success &= write_instrument->WriteWithSize<size_t>(field_stream);
 							}
 						}
 					}
@@ -763,10 +780,11 @@ namespace ECSEngine {
 		const void* data,
 		SerializeOptions* options
 	) {
-		size_t total_size = 0;
+		return 0;
+		/*size_t total_size = 0;
 		uintptr_t dummy_stream = 0;
 		ECS_SERIALIZE_CODE code = SerializeImplementation<false>(reflection_manager, type, data, dummy_stream, options, &total_size);
-		return code != ECS_SERIALIZE_OK ? -1 : total_size;
+		return code != ECS_SERIALIZE_OK ? -1 : total_size;*/
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -779,7 +797,18 @@ namespace ECSEngine {
 		bool write_tags
 	)
 	{
-		WriteTypeTableWithSerializers<true>(reflection_manager, type, stream, omit_fields, write_tags);
+		//WriteTypeTableWithSerializers<true>(reflection_manager, type, stream, omit_fields, write_tags);
+	}
+
+	bool SerializeFieldTable(
+		const ReflectionManager* reflection_manager,
+		const ReflectionType* type,
+		WriteInstrument* write_instrument,
+		Stream<SerializeOmitField> omit_fields,
+		bool write_tags
+	)
+	{
+		return WriteTypeTableWithSerializers(reflection_manager, type, write_instrument, omit_fields, write_tags);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -813,8 +842,8 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------
 
 	// Forward declaration
-	static void IgnoreType(
-		uintptr_t& stream,
+	static bool IgnoreType(
+		ReadInstrument* read_instrument,
 		const DeserializeFieldTable& deserialize_table,
 		unsigned int type_index,
 		const ReflectionManager* deserialized_manager,
@@ -822,18 +851,20 @@ namespace ECSEngine {
 	);
 
 	// Function to skip only a certain field of the type
-	static void IgnoreTypeField(
-		uintptr_t& stream,
+	static bool IgnoreTypeField(
+		ReadInstrument* read_instrument,
 		const DeserializeFieldTable& deserialize_table,
 		unsigned int type_index,
 		unsigned int field_index,
 		const ReflectionManager* deserialized_manager
 	) {
+		bool success = true;
+
 		const DeserializeFieldInfo* info = &deserialize_table.types[type_index].fields[field_index];
 		// If the field is not user defined, can handle it now
 		if (info->basic_type != ReflectionBasicFieldType::UserDefined) {
 			if (info->stream_type == ReflectionStreamFieldType::Basic || info->stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-				Ignore(&stream, info->byte_size);
+				success &= read_instrument->Ignore(info->byte_size);
 			}
 			else if (info->stream_type == ReflectionStreamFieldType::Pointer) {
 				// Check to see if this pointer is a reference or not. If it is, treat it differently
@@ -842,32 +873,32 @@ namespace ECSEngine {
 				if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
 					// If the tag is empty, nothing was written
 					if (pointer_reference_key.size > 0) {
-						Ignore(&stream, sizeof(ReflectionCustomTypeGetElementIndexOrToken));
+						success &= read_instrument->Ignore(sizeof(ReflectionCustomTypeGetElementIndexOrToken));
 					}
 				}
 				else {
 					if (info->basic_type == ReflectionBasicFieldType::Int8) {
-						IgnoreWithSize(&stream);
+						success &= read_instrument->IgnoreWithSize<size_t>();
 					}
 					else if (info->basic_type == ReflectionBasicFieldType::Wchar_t) {
-						IgnoreWithSize(&stream);
+						success &= read_instrument->IgnoreWithSize<size_t>();
 					}
 					else {
 						ECS_ASSERT(info->basic_type != ReflectionBasicFieldType::UserDefined, "Unhandled deserialize ignore case!");
 						size_t byte_size = GetReflectionBasicFieldTypeByteSize(info->basic_type);
-						Ignore(&stream, byte_size);
+						success &= read_instrument->Ignore(byte_size);
 					}
 				}
 			}
 			else {
 				// All the other stream types or pointerSoA can be aliased
-				IgnoreWithSize(&stream);
+				success &= read_instrument->IgnoreWithSize<size_t>();
 			}
 		}
 		else {
 			// Verify blittable exception
 			if (info->flags.user_defined_as_blittable) {
-				Ignore(&stream, info->byte_size);
+				success &= read_instrument->Ignore(info->byte_size);
 			}
 			else {
 				Stream<char> field_definition = info->definition;
@@ -887,21 +918,20 @@ namespace ECSEngine {
 					read_data.data = nullptr;
 					read_data.definition = field_definition;
 					read_data.options = &options;
-					read_data.read_data = false;
 					read_data.was_allocated = false;
 					read_data.reflection_manager = deserialized_manager;
-					read_data.stream = &stream;
+					read_data.read_instrument = read_instrument;
 					read_data.version = deserialize_table.custom_serializers[custom_serializer_index];
 					read_data.tags = info->tag;
 
-					ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].read(&read_data);
+					success &= ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].read(&read_data);
 				}
 				else {
 					unsigned int nested_type = deserialize_table.TypeIndex(field_definition);
 					ECS_ASSERT(nested_type != -1);
 
 					if (info->stream_type == ReflectionStreamFieldType::Basic) {
-						IgnoreType(stream, deserialize_table, nested_type, deserialized_manager);
+						success &= IgnoreType(read_instrument, deserialize_table, nested_type, deserialized_manager);
 					}
 					// Indirection 1
 					else if (info->stream_type == ReflectionStreamFieldType::Pointer) {
@@ -912,11 +942,11 @@ namespace ECSEngine {
 							if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
 								// If the tag is empty, nothing was written
 								if (pointer_reference_key.size > 0) {
-									Ignore(&stream, sizeof(ReflectionCustomTypeGetElementIndexOrToken));
+									success &= read_instrument->Ignore(sizeof(ReflectionCustomTypeGetElementIndexOrToken));
 								}
 							}
 							else {
-								IgnoreType(stream, deserialize_table, nested_type, deserialized_manager);
+								success &= IgnoreType(read_instrument, deserialize_table, nested_type, deserialized_manager);
 							}
 						}
 						else {
@@ -924,13 +954,13 @@ namespace ECSEngine {
 						}
 					}
 					else if (info->stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-						IgnoreType(stream, deserialize_table, nested_type, deserialized_manager, info->basic_type_count);
+						success &= IgnoreType(read_instrument, deserialize_table, nested_type, deserialized_manager, info->basic_type_count);
 					}
 					// The stream types or PointerSoA
 					else {
 						size_t stream_count = 0;
-						Read<true>(&stream, &stream_count, sizeof(stream_count));
-						IgnoreType(stream, deserialize_table, nested_type, deserialized_manager, stream_count);
+						success &= read_instrument->ReadAlways(&stream_count);
+						success &= IgnoreType(read_instrument, deserialize_table, nested_type, deserialized_manager, stream_count);
 					}
 				}
 			}
@@ -938,57 +968,80 @@ namespace ECSEngine {
 	}
 
 	// Function to skip a type, or a number of type instances
-	void IgnoreType(
-		uintptr_t& stream,
+	static bool IgnoreType(
+		ReadInstrument* read_instrument,
 		const DeserializeFieldTable& deserialize_table,
 		unsigned int type_index,
 		const ReflectionManager* deserialized_manager,
 		unsigned int count
 	) {
+		bool success = true;
 		for (unsigned int counter = 0; counter < count; counter++) {
 			for (unsigned int index = 0; index < deserialize_table.types[type_index].fields.size; index++) {
-				IgnoreTypeField(stream, deserialize_table, type_index, index, deserialized_manager);
+				success &= IgnoreTypeField(read_instrument, deserialize_table, type_index, index, deserialized_manager);
+			}
+
+			// Early exit if after an instance we failed to ignore it
+			if (!success) {
+				return success;
 			}
 		}
+
+		return success;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	template<bool read_data>
-	ECS_DESERIALIZE_CODE DeserializeImplementation(
+	ECS_DESERIALIZE_CODE Deserialize(
+		const ReflectionManager* reflection_manager,
+		const ReflectionType* type,
+		void* address, 
+		uintptr_t& stream,
+		DeserializeOptions* options
+	)
+	{
+		return ECS_DESERIALIZE_CORRUPTED_FILE;
+		//size_t buffer_size = 0;
+		//return DeserializeImplementation<true>(reflection_manager, type, address, stream, options, &buffer_size);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	ECS_DESERIALIZE_CODE Deserialize(
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
 		void* address,
-		uintptr_t& stream,
-		DeserializeOptions* options,
-		size_t* buffer_size
-	) {
+		ReadInstrument* read_instrument,
+		DeserializeOptions* options
+	)
+	{
 		bool has_options = options != nullptr;
 
 		Stream<SerializeOmitField> omit_fields = has_options ? options->omit_fields : Stream<SerializeOmitField>(nullptr, 0);
 
 		Stream<char> type_name = type->name;
+		CapacityStream<char>* error_message = has_options ? options->error_message : nullptr;
 
 		if (!has_options || (has_options && options->verify_dependent_types)) {
 			// Verify that it has its dependencies met
 			bool has_dependencies = SerializeHasDependentTypes(reflection_manager, type, omit_fields);
 			if (!has_dependencies) {
-				if (has_options) {
-					ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not deserialize type {#} because it doesn't have its dependencies met.", type_name);
-				}
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Could not deserialize type \"{#}\" because it doesn't have its dependencies met.", type_name);
 				return ECS_DESERIALIZE_MISSING_DEPENDENT_TYPES;
 			}
 		}
 
-		if (has_options && options->header.buffer != nullptr) {
+		if (has_options && options->header.size > 0 && options->header.buffer != nullptr) {
 			// Read the header
-			options->header.buffer = (void*)stream;
-			Read<true>(&stream, options->header.buffer, options->header.size);
+			if (!read_instrument->ReadWithSize<size_t>(options->header.buffer, options->header.size, options->header.size)) {
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "Could not deserialize type \"{#}\" because the header could not be read.", type_name);
+				return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+			}
 
 			if (options->validate_header != nullptr) {
 				bool is_valid = options->validate_header(options->header, options->validate_header_data);
 				if (!is_valid) {
-					ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not deserialize type {#} because the header is not valid.", type_name);
+					ECS_FORMAT_ERROR_MESSAGE(error_message, "Could not deserialize type \"{#}\" because the header is not valid.", type_name);
 					return ECS_DESERIALIZE_INVALID_HEADER;
 				}
 			}
@@ -1006,6 +1059,7 @@ namespace ECSEngine {
 		bool default_initialize_missing_fields = has_options && options->default_initialize_missing_fields;
 		bool initialize_type_allocators = has_options && options->initialize_type_allocators;
 		bool use_field_allocators = has_options && options->use_type_field_allocators;
+		bool is_not_size_determination = !read_instrument->IsSizeDetermination();
 
 		//bool use_deserialize_table = !has_options || (options->field_table != nullptr);
 		// At the moment allow only table deserialization
@@ -1014,14 +1068,12 @@ namespace ECSEngine {
 		size_t field_count = type->fields.size;
 
 		auto read_type_table_from_file = [&]() {
-			deserialize_table = DeserializeFieldTableFromData(stream, &table_linear_allocator);
+			deserialize_table = DeserializeFieldTableFromData(read_instrument, &table_linear_allocator);
 			// Check to see if the table is valid
 			if (deserialize_table.types.size == 0) {
 				// The file was corrupted
-				if (has_options) {
-					ECS_FORMAT_ERROR_MESSAGE(options->error_message, "The field table has been corrupted when trying to deserialize type {#}."
-						" The deserialization cannot continue.", type_name);
-				}
+				ECS_FORMAT_ERROR_MESSAGE(error_message, "The field table has been corrupted when trying to deserialize type \"{#}\"."
+					" The deserialization cannot continue.", type_name);
 				return ECS_DESERIALIZE_CORRUPTED_FILE;
 			}
 			unsigned int type_index = deserialize_table.TypeIndex(type_name);
@@ -1029,10 +1081,10 @@ namespace ECSEngine {
 			field_count = deserialize_table.types[type_index].fields.size;
 			return ECS_DESERIALIZE_OK;
 		};
- 
+
 		AllocatorPolymorphic initial_field_allocator = { nullptr };
 
-		if (has_options) {		
+		if (has_options) {
 			if (options->field_table != nullptr) {
 				deserialize_table = *options->field_table;
 
@@ -1083,22 +1135,26 @@ namespace ECSEngine {
 			initial_field_allocator = GetReflectionTypeOverallAllocator(type, address, initial_field_allocator);
 		}
 
-		auto deserialize_incompatible_basic = [](uintptr_t& data, void* field_data, const DeserializeFieldInfo& file_info, const ReflectionFieldInfo& type_info) {
+		// Returns true if it succeeded, else false
+		auto deserialize_incompatible_basic = [read_instrument](void* field_data, const DeserializeFieldInfo& file_info, const ReflectionFieldInfo& type_info) -> bool {
 			// Read the data from file into a double and then convert the double into the appropriate type
 			unsigned int file_basic_component_count = BasicTypeComponentCount(file_info.basic_type);
 			unsigned int type_basic_component_count = BasicTypeComponentCount(type_info.basic_type);
+			unsigned int iteration_count = ClampMin(file_basic_component_count, type_basic_component_count);
+			unsigned int per_component_byte_size = file_info.byte_size / file_basic_component_count;
 
 			double file_data[4];
 
-			unsigned int iteration_count = ClampMin(file_basic_component_count, type_basic_component_count);
+			if (!read_instrument->ReadAlways(file_data, per_component_byte_size * iteration_count)) {
+				return false;
+			}
+			
 			unsigned int pointer_increment = type_info.byte_size / type_basic_component_count;
-			unsigned int per_component_byte_size = file_info.byte_size / file_basic_component_count;
 			for (unsigned int index = 0; index < iteration_count; index++) {
 				void* type_data = OffsetPointer(field_data, (size_t)pointer_increment * (size_t)index);
-				Read<true>(&data, &file_data, per_component_byte_size);
-
 				ConvertReflectionBasicField(file_info.basic_type, type_info.basic_type, file_data, type_data);
 			}
+			return true;
 		};
 
 		auto deserialize_with_table = [&]() {
@@ -1124,8 +1180,8 @@ namespace ECSEngine {
 				if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
 					if (deserialized_type.FindField(type->fields[type->misc_info[index].allocator_info.field_index].name) == -1) {
 						// It doesn't exist, fail
-						ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
-							" Allocator field {#} was added, but the serialization does not have that field. ",
+						ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+							" Allocator field \"{#}\" was added, but the serialization does not have that field. ",
 							type->name,
 							type->fields[type->misc_info[index].allocator_info.field_index].name
 						);
@@ -1152,7 +1208,7 @@ namespace ECSEngine {
 			// But there is a catch. If an allocator has another allocator as a field allocator, we must initialize
 			// The referenced field allocator before the main entry. In order to do this, gather the indices of the
 			// Current type allocators, and initialize them in the increasing order of their indices.
-			
+
 			struct DeserializedAllocatorEntry {
 				unsigned int current_type_field_index;
 				unsigned int deserialized_type_field_index;
@@ -1166,7 +1222,7 @@ namespace ECSEngine {
 			unsigned int deserialized_type_allocator_count = 0;
 			for (size_t index = 0; index < deserialized_type.fields.size; index++) {
 				if (deserialized_type.fields[index].custom_serializer_index == ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR) {
-					if constexpr (read_data) {
+					if (is_not_size_determination) {
 						if (initialize_type_allocators) {
 							// Check to see if the field still exists
 							for (size_t current_type_field_index = 0; current_type_field_index < type->fields.size; current_type_field_index++) {
@@ -1204,14 +1260,14 @@ namespace ECSEngine {
 				}
 			}
 
-			if constexpr (read_data) {
+			if (is_not_size_determination) {
 				if (initialize_type_allocators) {
 					// Create the allocators now
 					for (size_t index = 0; index < allocators_to_initialize_entries.size; index++) {
 						// Use a temporary to seek to that location
-						uintptr_t allocator_stream = stream;
+						size_t instrument_offset = read_instrument->GetOffset();
 						for (unsigned int subindex = 0; subindex < allocators_to_initialize_entries[index].deserialized_type_allocator_count; subindex++) {
-							IgnoreTypeField(allocator_stream, deserialize_table, type_index, deserialized_type_allocator_indices[subindex], deserialized_manager);
+							IgnoreTypeField(read_instrument, deserialize_table, type_index, deserialized_type_allocator_indices[subindex], deserialized_manager);
 						}
 
 						// Once we reached the location, we can read the actual allocator entry
@@ -1224,26 +1280,31 @@ namespace ECSEngine {
 						SerializeCustomTypeReadFunctionData custom_read_data;
 						GetReflectionTypeAllocatorPointerAndDefinition(type, current_type_field_index, address, custom_read_data.data, custom_read_data.definition);
 						custom_read_data.options = nested_options;
-						custom_read_data.read_data = read_data;
 						custom_read_data.reflection_manager = reflection_manager;
-						custom_read_data.stream = &allocator_stream;
+						custom_read_data.read_instrument = read_instrument;
 						custom_read_data.tags = type->fields[current_type_field_index].tag;
 						custom_read_data.version = deserialize_table.custom_serializers[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR];
 						custom_read_data.was_allocated = false;
 
-						size_t read_size = ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].read(&custom_read_data);
-						if (read_size == -1) {
-							if (has_options) {
-								ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
-									" Reading the allocator field {#} failed.",
-									type->name,
-									type->fields[current_type_field_index].name
-								);
-							}
+						if (!ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].read(&custom_read_data)) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+								" Reading the allocator field \"{#}\" failed.",
+								type->name,
+								type->fields[current_type_field_index].name
+							);
 							return ECS_DESERIALIZE_CORRUPTED_FILE;
 						}
 
 						nested_options->field_allocator = previous_field_allocator;
+						// Restore the read instrument to the initial offset
+						if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, instrument_offset)) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+								" Reading the allocator field \"{#}\" failed (seeking after deserialization failed).",
+								type->name,
+								type->fields[current_type_field_index].name
+							);
+							return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+						}
 					}
 
 					// For all type allocators that are references, initialize them now, if the initialize type allocators is specified
@@ -1260,7 +1321,13 @@ namespace ECSEngine {
 
 			// Skip the allocator entries now, for the actual stream
 			for (size_t index = 0; index < deserialized_type_allocator_indices.size; index++) {
-				IgnoreTypeField(stream, deserialize_table, type_index, deserialized_type_allocator_indices[index], deserialized_manager);
+				if (!IgnoreTypeField(read_instrument, deserialize_table, type_index, deserialized_type_allocator_indices[index], deserialized_manager)) {
+					ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+						" Skipping allocator fields failed.",
+						type->name
+					);
+					return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+				}
 			}
 
 			// We need to keep track of the SoA streams that have been allocated such that when going
@@ -1291,13 +1358,27 @@ namespace ECSEngine {
 				if (subindex == type->fields.size) {
 					// Just go to the next field
 					// But first the data inside the stream must be skipped
-					IgnoreTypeField(stream, deserialize_table, type_index, deserialize_field_index, deserialized_manager);
+					if (!IgnoreTypeField(read_instrument, deserialize_table, type_index, deserialize_field_index, deserialized_manager)) {
+						ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+							" Skipping field \"{#}\" failed.",
+							type->name,
+							deserialized_type.fields[deserialize_field_index].name
+						);
+						return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+					}
 					continue;
 				}
 
 				// Check to see if it is omitted
 				if (SerializeShouldOmitField(type->name, type->fields[subindex].name, omit_fields)) {
-					IgnoreTypeField(stream, deserialize_table, type_index, deserialize_field_index, deserialized_manager);
+					if (!IgnoreTypeField(read_instrument, deserialize_table, type_index, deserialize_field_index, deserialized_manager)) {
+						ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+							" Skipping omitted field \"{#}\" failed.",
+							type->name,
+							type->fields[subindex].name
+						);
+						return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+					}
 					continue;
 				}
 
@@ -1317,13 +1398,24 @@ namespace ECSEngine {
 					}
 
 					// Read the type as a blittable value only if the byte sizes actually match
+					bool success = true;
 					if (file_field_info.byte_size == field_given_size.x) {
-						Read<read_data>(&stream, field_data, file_field_info.byte_size);
+						success = read_instrument->Read(field_data, file_field_info.byte_size);
 					}
 					else {
 						// Ignore this field with the given byte size since the blittable size has changed
 						// Or it is no longer a blittable type
-						Ignore(&stream, file_field_info.byte_size);
+						success = read_instrument->Ignore(file_field_info.byte_size);
+					}
+
+					if (!success) {
+						ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+							" User defined as blittable field \"{#}\" with name \"{#}\" could not be read/skipped.",
+							type->name,
+							field_definition,
+							type->fields[subindex].name
+						);
+						return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
 					}
 					continue;
 				}
@@ -1336,7 +1428,7 @@ namespace ECSEngine {
 				// Returns the allocation, if we are reading the data
 				auto handle_soa_allocation = [&](size_t element_count) {
 					void* allocation = nullptr;
-					if constexpr (read_data) {
+					if (is_not_size_determination) {
 						size_t soa_index = GetReflectionTypeSoaIndex(type, subindex);
 						// Verify we need to make the allocation or not
 						bool is_soa_initialized = soa_initialized_indices.Find(soa_index) != -1;
@@ -1384,20 +1476,25 @@ namespace ECSEngine {
 						// Check for the type to be the same
 						if (file_field_info.definition != field_definition) {
 							if (fail_if_mismatch) {
-								if (has_options) {
-									ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
-										" User defined field mismatch for {#}. In file found definition {#}, current type {#}.",
-										type_name,
-										type->fields[subindex].name,
-										file_field_info.definition,
-										field_definition
-									);
-								}
+								ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+									" User defined field mismatch for \"{#}\". In file found definition \"{#}\", current type \"{#}\".",
+									type_name,
+									type->fields[subindex].name,
+									file_field_info.definition,
+									field_definition
+								);
 								return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 							}
 
 							// Ignore the data
-							IgnoreTypeField(stream, deserialize_table, type_index, deserialize_field_index, deserialized_manager);
+							if (!IgnoreTypeField(read_instrument, deserialize_table, type_index, deserialize_field_index, deserialized_manager)) {
+								ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+									" Could not skip field \"{#}\".",
+									type_name,
+									type->fields[subindex].name
+								);
+								return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+							}
 							continue;
 						}
 						// Good to go, read the data using the nested type, or custom serializer
@@ -1407,7 +1504,7 @@ namespace ECSEngine {
 							switch (type_field_info.stream_type) {
 							case ReflectionStreamFieldType::Basic:
 							{
-								ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(reflection_manager, nested_type, field_data, stream, nested_options, buffer_size);
+								ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, nested_type, field_data, read_instrument, nested_options);
 								if (code != ECS_DESERIALIZE_OK) {
 									return code;
 								}
@@ -1416,23 +1513,21 @@ namespace ECSEngine {
 							case ReflectionStreamFieldType::Pointer:
 							{
 								if (GetReflectionFieldPointerIndirection(type_field_info) == 1) {
-									ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(reflection_manager, nested_type, *(void**)field_data, stream, nested_options, buffer_size);
+									ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, nested_type, *(void**)field_data, read_instrument, nested_options);
 									if (code != ECS_DESERIALIZE_OK) {
 										return code;
 									}
 								}
 								else {
 									if (fail_if_mismatch) {
-										if (has_options) {
-											ECS_FORMAT_ERROR_MESSAGE(
-												options->error_message,
-												"Could not deserialize type {#}, field {#} with nested type as {#}. "
-												"The pointer level indirection is different.",
-												type_name,
-												type->fields[subindex].name,
-												field_definition
-											);
-										}
+										ECS_FORMAT_ERROR_MESSAGE(
+											error_message,
+											"Could not deserialize type \"{#}\", field \"{#}\" with nested type as \"{#}\". "
+											"The pointer level indirection is different.",
+											type_name,
+											type->fields[subindex].name,
+											field_definition
+										);
 										return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 									}
 								}
@@ -1445,28 +1540,33 @@ namespace ECSEngine {
 								// Or it has been made already
 								size_t element_count = 0;
 								// This will read the byte size
-								Read<true>(&stream, &element_count, sizeof(element_count));
-
-								*buffer_size += element_count;
+								if (!read_instrument->ReadAlways(&element_count)) {
+									ECS_FORMAT_ERROR_MESSAGE(
+										error_message,
+										"Deserialization for type \"{#}\" failed. Could not read pointer SoA size for field \"{#}\".",
+										type_name,
+										type->fields[subindex].name
+									);
+									return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+								}
 
 								// Must divide by the byte size of each element
 								element_count /= file_field_info.stream_byte_size;
 
 								size_t nested_type_byte_size = GetReflectionTypeByteSize(nested_type);
 
-								void* allocation = handle_soa_allocation(element_count);								
+								void* allocation = handle_soa_allocation(element_count);
 
 								// Now deserialize each instance
 								// If the read_data is false, then the offset here does nothing
 								for (size_t element_index = 0; element_index < element_count; element_index++) {
-									ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(
+									ECS_DESERIALIZE_CODE code = Deserialize(
 										reflection_manager,
 										nested_type,
 										OffsetPointer(allocation, element_index * nested_type_byte_size),
-										stream,
-										nested_options,
-										buffer_size
-										);
+										read_instrument,
+										nested_options
+									);
 									if (code != ECS_DESERIALIZE_OK) {
 										return code;
 									}
@@ -1481,13 +1581,12 @@ namespace ECSEngine {
 
 								size_t element_byte_size = GetBasicTypeArrayElementSize(type_field_info);
 								for (unsigned short element_index = 0; element_index < elements_to_read; element_index++) {
-									ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(
+									ECS_DESERIALIZE_CODE code = Deserialize(
 										reflection_manager,
 										nested_type,
 										OffsetPointer(field_data, element_byte_size * element_index),
-										stream,
-										nested_options,
-										buffer_size
+										read_instrument,
+										nested_options
 									);
 									if (code != ECS_DESERIALIZE_OK) {
 										return code;
@@ -1496,7 +1595,15 @@ namespace ECSEngine {
 
 								if (elements_to_ignore > 0) {
 									unsigned int nested_type_table_index = deserialize_table.TypeIndex(file_field_info.definition);
-									IgnoreType(stream, deserialize_table, nested_type_table_index, deserialized_manager, elements_to_ignore);
+									if (!IgnoreType(read_instrument, deserialize_table, nested_type_table_index, deserialized_manager, elements_to_ignore)) {
+										ECS_FORMAT_ERROR_MESSAGE(
+											error_message,
+											"Deserialization for type \"{#}\" failed. Could not ignore extra basic array entries for field \"{#}\".",
+											type_name,
+											type->fields[subindex].name
+										);
+										return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+									}
 								}
 							}
 							break;
@@ -1506,9 +1613,15 @@ namespace ECSEngine {
 							{
 								size_t element_count = 0;
 								// This will read the byte size
-								Read<true>(&stream, &element_count, sizeof(element_count));
-
-								*buffer_size += element_count;
+								if (!read_instrument->ReadAlways(&element_count)) {
+									ECS_FORMAT_ERROR_MESSAGE(
+										error_message,
+										"Deserialization for type \"{#}\" failed. Could not read stream size for field \"{#}\".",
+										type_name,
+										type->fields[subindex].name
+									);
+									return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+								}
 
 								// Must divide by the byte size of each element
 								element_count /= file_field_info.stream_byte_size;
@@ -1517,7 +1630,7 @@ namespace ECSEngine {
 								size_t allocation_size = nested_type_byte_size * element_count;
 
 								void* allocation = nullptr;
-								if constexpr (read_data) {
+								if (is_not_size_determination) {
 									// Check resizable stream allocator
 									if (type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream && use_resizable_stream_allocator) {
 										ResizableStream<void>* resizable_stream = (ResizableStream<void>*)field_data;
@@ -1548,14 +1661,13 @@ namespace ECSEngine {
 								// Now deserialize each instance
 								// If the read_data is false, then the offset here does nothing
 								for (size_t element_index = 0; element_index < element_count; element_index++) {
-									ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(
+									ECS_DESERIALIZE_CODE code = Deserialize(
 										reflection_manager,
 										nested_type,
 										OffsetPointer(allocation, element_index * nested_type_byte_size),
-										stream,
-										nested_options,
-										buffer_size
-										);
+										read_instrument,
+										nested_options
+									);
 									if (code != ECS_DESERIALIZE_OK) {
 										return code;
 									}
@@ -1573,52 +1685,55 @@ namespace ECSEngine {
 						// There might be a need for this in the future tho
 						if (field_definition != file_field_info.definition) {
 							if (fail_if_mismatch) {
-								if (has_options) {
-									ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
-										" User defined field mismatch for {#}. In file found definition {#}, current type {#}.",
-										type_name,
-										type->fields[subindex].name,
-										file_field_info.definition,
-										field_definition
-									);
-								}
+								ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type {#} failed."
+									" User defined field mismatch for {#}. In file found definition {#}, current type {#}.",
+									type_name,
+									type->fields[subindex].name,
+									file_field_info.definition,
+									field_definition
+								);
 								return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 							}
 
 							// Ignore the data
-							IgnoreTypeField(stream, deserialize_table, type_index, deserialize_field_index, deserialized_manager);
+							if (!IgnoreTypeField(read_instrument, deserialize_table, type_index, deserialize_field_index, deserialized_manager)) {
+								ECS_FORMAT_ERROR_MESSAGE(
+									error_message,
+									"Deserialization for type \"{#}\" failed. Could not skip custom type interface field \"{#}\" with file definition \"{#}\", current definition \"{#}\".",
+									type_name,
+									type->fields[subindex].name,
+									file_field_info.definition,
+									field_definition
+								);
+								return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+							}
 							continue;
 						}
 
 						// Verify that a serializer binds to it
 						unsigned int current_custom_serializer_index = FindSerializeCustomType(field_definition);
 						ECS_ASSERT(current_custom_serializer_index != -1, "No custom serializer was found when deserializing.");
-					
+
 						// Get the version
 						SerializeCustomTypeReadFunctionData custom_data;
 						custom_data.data = field_data;
 						custom_data.definition = field_definition;
 						custom_data.options = nested_options;
-						custom_data.read_data = read_data;
 						custom_data.was_allocated = false;
 						custom_data.reflection_manager = reflection_manager;
-						custom_data.stream = &stream;
+						custom_data.read_instrument = read_instrument;
 						custom_data.tags = type->fields[subindex].tag;
 						custom_data.version = deserialize_table.custom_serializers[current_custom_serializer_index];
 
-						size_t custom_buffer_size = ECS_SERIALIZE_CUSTOM_TYPES[current_custom_serializer_index].read(&custom_data);
-						if (custom_buffer_size == -1) {
-							if (has_options) {
-								ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
-									" Reading custom serialization field {#} with definition {#} failed.",
-									type->name,
-									type->fields[subindex].name,
-									field_definition
-								);
-							}
+						if (!ECS_SERIALIZE_CUSTOM_TYPES[current_custom_serializer_index].read(&custom_data)) {
+							ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
+								" Reading custom serialization field \"{#}\" with definition \"{#}\" failed.",
+								type->name,
+								type->fields[subindex].name,
+								field_definition
+							);
 							return ECS_DESERIALIZE_CORRUPTED_FILE;
 						}
-						*buffer_size += custom_buffer_size;
 					}
 					// Good to go, read the data - no user defined type here
 					else {
@@ -1626,18 +1741,43 @@ namespace ECSEngine {
 						if (has_options) {
 							field_allocator = options->GetFieldAllocator(type_field_info.stream_type, field_data, initial_field_allocator);
 						}
-						
+
 						if (type_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 							size_t byte_size;
-							Read<true>(&stream, &byte_size, sizeof(byte_size));
+							if (!read_instrument->Read(&byte_size)) {
+								ECS_FORMAT_ERROR_MESSAGE(
+									error_message,
+									"Deserialization for type \"{#}\" failed. Could not read pointer SoA size for field \"{#}\".",
+									type_name,
+									type->fields[subindex].name
+								);
+								return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+							}
 							// We don't want to advance this, as the read or reference fundamental type
 							// Will need that value
-							stream -= sizeof(byte_size);
+							if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_CURRENT, -(int64_t)sizeof(byte_size))) {
+								ECS_FORMAT_ERROR_MESSAGE(
+									error_message,
+									"Deserialization for type \"{#}\" failed. Could not seek back after pointer SoA size read for field \"{#}\".",
+									type_name,
+									type->fields[subindex].name
+								);
+								return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+							}
 
 							size_t element_count = byte_size / file_field_info.stream_byte_size;
 							handle_soa_allocation(element_count);
 						}
-						ReadOrReferenceFundamentalType<read_data>(type_field_info, field_data, stream, file_field_info.basic_type_count, field_allocator, false);
+
+						if (!ReadOrReferenceFundamentalType(type_field_info, field_data, read_instrument, file_field_info.basic_type_count, field_allocator, false)) {
+							ECS_FORMAT_ERROR_MESSAGE(
+								error_message,
+								"Deserialization for type \"{#}\" failed. Could not read fundamental field \"{#}\".",
+								type_name,
+								type->fields[subindex].name
+							);
+							return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+						}
 					}
 				}
 				// Mismatch - try to solve it
@@ -1645,34 +1785,63 @@ namespace ECSEngine {
 					// If the stream type has changed, then keep in mind that
 					// If the discrepency is the basic type only, try to solve it
 					if (type_field_info.stream_type == ReflectionStreamFieldType::Basic && file_field_info.stream_type == ReflectionStreamFieldType::Basic) {
-						if constexpr (read_data) {
-							deserialize_incompatible_basic(stream, field_data, file_field_info, type_field_info);
+						if (is_not_size_determination) {
+							if (!deserialize_incompatible_basic(field_data, file_field_info, type_field_info)) {
+								ECS_FORMAT_ERROR_MESSAGE(
+									error_message,
+									"Deserialization for type \"{#}\" failed. Could not read field \"{#}\" (mismatched basic field type).",
+									type_name,
+									type->fields[subindex].name
+								);
+								return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+							}
+						}
+						else {
+							ECS_ASSERT(false, "Unimplemented code path");
 						}
 					}
 					else {
+						bool success = true;
+
 						if (type_field_info.stream_type != ReflectionStreamFieldType::Basic) {
 							if (file_field_info.stream_type == ReflectionStreamFieldType::Basic) {
 								// Just skip the field - cannot deserialize basic types into stream types
-								Ignore(&stream, file_field_info.byte_size);
+								success &= read_instrument->Ignore(file_field_info.byte_size);
 							}
 							else {
 								// Stream type mismatch - this is fine, can deserialize any stream type into any other
 								if (file_field_info.stream_type == ReflectionStreamFieldType::Pointer) {
 									// Too difficult to handle this case, at the moment, just leave it be
 									// Ignore the data
-									Ignore(&stream, file_field_info.stream_byte_size);
+									success &= read_instrument->Ignore(file_field_info.stream_byte_size);
 								}
 								else if (file_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 									// Too difficult to handle this case, at the moment, just leave it be
 									// Ignore the data
 									size_t pointer_data_byte_size = 0;
-									Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
-									Ignore(&stream, pointer_data_byte_size);
+									if (!read_instrument->ReadAlways(&pointer_data_byte_size)) {
+										ECS_FORMAT_ERROR_MESSAGE(
+											error_message,
+											"Deserialization for type \"{#}\" failed. Could not read pointer SoA size for field \"{#}\" (mismatched field).",
+											type_name,
+											type->fields[subindex].name
+										);
+										return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+									}
+									success &= read_instrument->Ignore(pointer_data_byte_size);
 								}
 								else {
 									size_t pointer_data_byte_size = 0;
 									if (file_field_info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
-										Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
+										if (!read_instrument->ReadAlways(&pointer_data_byte_size)) {
+											ECS_FORMAT_ERROR_MESSAGE(
+												error_message,
+												"Deserialization for type \"{#}\" failed. Could not read stream size for field \"{#}\" (mismatched field).",
+												type_name,
+												type->fields[subindex].name
+											);
+											return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+										}
 									}
 									else {
 										pointer_data_byte_size = file_field_info.byte_size;
@@ -1682,33 +1851,33 @@ namespace ECSEngine {
 									if (type_field_info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 										size_t elements_to_read = ClampMin(element_count, (size_t)type_field_info.basic_type_count);
 										if (type_field_info.basic_type != file_field_info.basic_type) {
-											if constexpr (read_data) {
+											if (is_not_size_determination) {
 												for (size_t element_index = 0; element_index < elements_to_read; element_index++) {
-													deserialize_incompatible_basic(stream, field_data, file_field_info, type_field_info);
+													success &= deserialize_incompatible_basic(field_data, file_field_info, type_field_info);
 												}
 											}
 											else {
-												Ignore(&stream, pointer_data_byte_size);
+												success &= read_instrument->Ignore(pointer_data_byte_size);
 											}
 										}
 										else {
 											// Just read the data
-											if constexpr (read_data) {
-												Read<true>(&stream, field_data, elements_to_read * file_field_info.stream_byte_size);
+											if (is_not_size_determination) {
+												success &= read_instrument->Read(field_data, elements_to_read * file_field_info.stream_byte_size);
 											}
 											else {
-												Ignore(&stream, pointer_data_byte_size);
+												success &= read_instrument->Ignore(pointer_data_byte_size);
 											}
 										}
 
 										// Ignore the rest elements
-										Ignore(&stream, file_field_info.stream_byte_size * (element_count - elements_to_read));
+										success &= read_instrument->Ignore(file_field_info.stream_byte_size * (element_count - elements_to_read));
 									}
 									else {
 										// Normal streams
 
 										// If basic mismatch as well, need to check the allocator
-										if constexpr (read_data) {
+										if (is_not_size_determination) {
 											void* allocation = nullptr;
 											if (type_field_info.basic_type != file_field_info.basic_type) {
 												if (has_options) {
@@ -1727,13 +1896,15 @@ namespace ECSEngine {
 												}
 
 												for (size_t element_index = 0; element_index < element_count; element_index++) {
-													deserialize_incompatible_basic(stream, OffsetPointer(allocation, element_index), file_field_info, type_field_info);
+													success &= deserialize_incompatible_basic(OffsetPointer(allocation, element_index), file_field_info, type_field_info);
 												}
 											}
 											else {
 												if (!has_options) {
+													// TODO: Use backup in case this fails?
 													// Just reference the data
-													ReferenceData<true>(&stream, &allocation, pointer_data_byte_size);
+													allocation = read_instrument->ReferenceData(pointer_data_byte_size);
+													success &= allocation != nullptr;
 												}
 												else {
 													if (options->use_resizable_stream_allocator && type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
@@ -1745,8 +1916,10 @@ namespace ECSEngine {
 														allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
 													}
 													else {
+														// TODO: Use backup in case this fails?
 														// Just reference the data
-														ReferenceData<true>(&stream, &allocation, pointer_data_byte_size);
+														allocation = read_instrument->ReferenceData(pointer_data_byte_size);
+														success &= allocation != nullptr;
 													}
 												}
 											}
@@ -1796,10 +1969,8 @@ namespace ECSEngine {
 												if (GetReflectionFieldPointerIndirection(type_field_info) != 1) {
 													ECS_ASSERT(false, "Cannot deserialize pointers of indirection greater than 1");
 
-													if (has_options) {
-														ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Cannot deserialize field {#} which is a "
-															"pointer of indirection greater than 1.", type->fields[subindex].name);
-													}
+													ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot deserialize field {#} which is a "
+														"pointer of indirection greater than 1.", type->fields[subindex].name);
 													return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 												}
 
@@ -1814,10 +1985,8 @@ namespace ECSEngine {
 												else {
 													ECS_ASSERT(false, "Cannot deserialize pointers of indirection greater than 1");
 
-													if (has_options) {
-														ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Cannot deserialize field {#} which is a "
-															"pointer of indirection greater than 1.", type->fields[subindex].name);
-													}
+													ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot deserialize field {#} which is a "
+														"pointer of indirection greater than 1.", type->fields[subindex].name);
 													return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 												}
 											}
@@ -1830,7 +1999,7 @@ namespace ECSEngine {
 											}
 										}
 										else {
-											*buffer_size += element_count * (size_t)type_field_info.stream_byte_size;
+											success &= read_instrument->Ignore(element_count * (size_t)type_field_info.stream_byte_size);
 										}
 									}
 								}
@@ -1839,20 +2008,46 @@ namespace ECSEngine {
 						else {
 							// Just ignore the data
 							if (file_field_info.stream_type == ReflectionStreamFieldType::Pointer) {
-								Ignore(&stream, file_field_info.stream_byte_size);
+								success &= read_instrument->Ignore(file_field_info.stream_byte_size);
 							}
 							else if (file_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 								size_t pointer_data_byte_size = 0;
-								Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
+								if (!read_instrument->ReadAlways(&pointer_data_byte_size)) {
+									ECS_FORMAT_ERROR_MESSAGE(
+										error_message,
+										"Deserialization for type \"{#}\" failed. Could not read pointer SoA size for field \"{#}\" (mismatched field).",
+										type_name,
+										type->fields[subindex].name
+									);
+									return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+								}
 
-								Ignore(&stream, pointer_data_byte_size);
+								success &= read_instrument->Ignore(pointer_data_byte_size);
 							}
 							else {
 								size_t pointer_data_byte_size = 0;
-								Read<true>(&stream, &pointer_data_byte_size, sizeof(pointer_data_byte_size));
+								if (!read_instrument->ReadAlways(&pointer_data_byte_size)) {
+									ECS_FORMAT_ERROR_MESSAGE(
+										error_message,
+										"Deserialization for type \"{#}\" failed. Could not read stream size for field \"{#}\" (mismatched field).",
+										type_name,
+										type->fields[subindex].name
+									);
+									return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+								}
 
-								Ignore(&stream, pointer_data_byte_size);
+								success &= read_instrument->Ignore(pointer_data_byte_size);
 							}
+						}
+
+						if (!success) {
+							ECS_FORMAT_ERROR_MESSAGE(
+								error_message,
+								"Deserialization for type \"{#}\" failed. Could not read field \"{#}\" (mismatched field).",
+								type_name,
+								type->fields[subindex].name
+							);
+							return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
 						}
 					}
 				}
@@ -1915,20 +2110,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	ECS_DESERIALIZE_CODE Deserialize(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		void* address, 
-		uintptr_t& stream,
-		DeserializeOptions* options
-	)
-	{
-		size_t buffer_size = 0;
-		return DeserializeImplementation<true>(reflection_manager, type, address, stream, options, &buffer_size);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
 	size_t DeserializeSize(
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
@@ -1936,77 +2117,20 @@ namespace ECSEngine {
 		DeserializeOptions* options,
 		ECS_DESERIALIZE_CODE* code
 	) {
-		size_t buffer_size = 0;
-		ECS_DESERIALIZE_CODE deserialize_code = DeserializeImplementation<false>(reflection_manager, type, nullptr, data, options, &buffer_size);
-		if (deserialize_code != ECS_DESERIALIZE_OK) {
-			buffer_size = -1;
-		}
+		return -1;
+		//size_t buffer_size = 0;
+		//ECS_DESERIALIZE_CODE deserialize_code = DeserializeImplementation<false>(reflection_manager, type, nullptr, data, options, &buffer_size);
+		//if (deserialize_code != ECS_DESERIALIZE_OK) {
+		//	buffer_size = -1;
+		//}
 
-		if (code != nullptr) {
-			*code = deserialize_code;
-		}
-		return buffer_size;
+		//if (code != nullptr) {
+		//	*code = deserialize_code;
+		//}
+		//return buffer_size;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
-
-	struct UintptrReadInstrument {
-		template<typename T>
-		ECS_INLINE bool Read(T* data) const {
-			ECSEngine::Read(ptr, data);
-			return true;
-		}
-
-		template<typename IntegerType, typename ElementType>
-		ECS_INLINE bool ReadWithSize(CapacityStream<ElementType>& data) const {
-			IntegerType size;
-			Read(&size);
-			data.AssertCapacity(size);
-			ECSEngine::Read(ptr, data.buffer + data.size, size);
-			return true;
-		}
-
-		template<typename IntegerType, typename ElementType>
-		ECS_INLINE bool ReferenceDataWithSize(Stream<ElementType>& data) const {
-			IntegerType size;
-			Read(&size);
-			data.size = size / sizeof(ElementType);
-			ECSEngine::ReferenceData(ptr, (void**)&data.buffer, size);
-			return true;
-		}
-
-		uintptr_t* ptr;
-	};
-
-	struct UintptrSizeDeterminationReadInstrument {
-		template<typename T>
-		ECS_INLINE bool Read(T* data) const {
-			*size += sizeof(T);
-			*ptr += sizeof(T);
-			return true;
-		}
-
-		template<typename IntegerType, typename ElementType>
-		ECS_INLINE bool ReadWithSize(CapacityStream<ElementType>& data) const {
-			IntegerType read_size;
-			ECSEngine::Read<true>(ptr, &read_size);
-			*size += ECSEngine::Read<false>(ptr, data.buffer, read_size);
-			*size += sizeof(read_size);
-			return true;
-		}
-
-		template<typename IntegerType, typename ElementType>
-		ECS_INLINE bool ReferenceDataWithSize(Stream<ElementType>& data) const {
-			IntegerType read_size;
-			ECSEngine::Read<true>(ptr, &read_size);
-			*size += ECSEngine::Read<false>(ptr, data.buffer, read_size);
-			*size += sizeof(read_size);
-			return true;
-		}
-
-		uintptr_t* ptr;
-		size_t* size;
-	};
 
 	static bool ValidateDeserializeFieldInfo(const DeserializeFieldInfo& field_info) {
 		if ((unsigned char)field_info.stream_type >= (unsigned char)ReflectionStreamFieldType::COUNT) {
@@ -2034,7 +2158,6 @@ namespace ECSEngine {
 
 	// One type read, doesn't go recursive
 	// Returns true if it succeeded, else false
-	template<typename ReadInstrument>
 	static bool DeserializeFieldTableFromDataImplementation(
 		ReadInstrument* read_instrument,
 		DeserializeFieldTable::Type* type,
@@ -2048,7 +2171,7 @@ namespace ECSEngine {
 		void* main_type_name = nullptr;
 
 		// Read the type name
-		if (!read_instrument->ReferenceDataWithSize<unsigned short>(type->name)) {
+		if (!read_instrument->ReferenceDataWithSizeVariableLength(type->name)) {
 			return false;
 		}
 
@@ -2072,7 +2195,7 @@ namespace ECSEngine {
 		}
 		
 		if (options->read_type_tags) {
-			if (!read_instrument->ReferenceDataWithSize<unsigned short>(type->tag)) {
+			if (!read_instrument->ReferenceDataWithSizeVariableLength(type->tag)) {
 				return false;
 			}
 		}
@@ -2094,26 +2217,25 @@ namespace ECSEngine {
 			bool read_success = true;
 
 			// The name first
-			read_success &= read_instrument->ReferenceDataWithSize<unsigned short>(type->fields[index].name);
+			read_success &= read_instrument->ReferenceDataWithSizeVariableLength(type->fields[index].name);
 
 			// The tag now
 			if (options->read_type_tags) {
-				unsigned short tag_name_size = 0;
-				read_success &= read_instrument->ReferenceDataWithSize<unsigned short>(type->fields[index].tag);
+				read_success &= read_instrument->ReferenceDataWithSizeVariableLength(type->fields[index].tag);
 			}
 			else {
 				type->fields[index].tag = { nullptr, 0 };
 			}
 
-			read_success &= read_instrument->(&type->fields[index].stream_type);
-			read_success &= read_instrument->(&type->fields[index].stream_byte_size);
-			read_success &= read_instrument->(&type->fields[index].stream_alignment);
-			read_success &= read_instrument->(&type->fields[index].basic_type);
-			read_success &= read_instrument->(&type->fields[index].basic_type_count);
-			read_success &= read_instrument->(&type->fields[index].byte_size);
-			read_success &= read_instrument->(&type->fields[index].custom_serializer_index);
-			read_success &= read_instrument->(&type->fields[index].flags);
-			read_success &= read_instrument->(&type->fields[index].pointer_offset);
+			read_success &= read_instrument->Read(&type->fields[index].stream_type);
+			read_success &= read_instrument->Read(&type->fields[index].stream_byte_size);
+			read_success &= read_instrument->Read(&type->fields[index].stream_alignment);
+			read_success &= read_instrument->Read(&type->fields[index].basic_type);
+			read_success &= read_instrument->Read(&type->fields[index].basic_type_count);
+			read_success &= read_instrument->Read(&type->fields[index].byte_size);
+			read_success &= read_instrument->Read(&type->fields[index].custom_serializer_index);
+			read_success &= read_instrument->Read(&type->fields[index].flags);
+			read_success &= read_instrument->Read(&type->fields[index].pointer_offset);
 
 			if (!read_success) {
 				return false;
@@ -2126,7 +2248,7 @@ namespace ECSEngine {
 
 			// The definition
 			if (type->fields[index].basic_type == ReflectionBasicFieldType::UserDefined || type->fields[index].basic_type == ReflectionBasicFieldType::Enum) {
-				if (!read_instrument->ReferenceDataWithSize<unsigned short>(type->fields[index].definition)) {
+				if (!read_instrument->ReferenceDataWithSizeVariableLength(type->fields[index].definition)) {
 					return false;
 				}
 			}
@@ -2138,34 +2260,6 @@ namespace ECSEngine {
 		return true;
 	}
 
-	// One type read, doesn't go recursive
-	// It returns -1 if the type has been corrupted (i.e. the stream type or basic type is out of bounds)
-	// else 0 if the read_data is specified as true. Else returns the total read size
-	// This is an adapter over the read instrument such that the previous behavior is maintained
-	template<bool read_data>
-	static size_t DeserializeFieldTableFromDataImplementation(
-		uintptr_t& stream,
-		DeserializeFieldTable::Type* type,
-		AllocatorPolymorphic allocator,
-		const DeserializeFieldTableOptions* options
-	) {
-		if constexpr (read_data) {
-			UintptrReadInstrument read_instrument;
-			read_instrument.ptr = &stream;
-			DeserializeFieldTableFromDataImplementation(&read_instrument, type, allocator, options);
-			return 0;
-		}
-		else {
-			size_t write_size = 0;
-			UintptrSizeDeterminationReadInstrument read_instrument;
-			read_instrument.size = &write_size;
-			read_instrument.ptr = &stream;
-			DeserializeFieldTableFromDataImplementation(&read_instrument, type, allocator, options);
-			return write_size;
-		}
-	}
-
-	template<typename ReadInstrument>
 	static bool DeserializeFieldTableCustomInterfacesInfo(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, DeserializeFieldTable& field_table, const DeserializeFieldTableOptions* options) {
 		// Firstly the serialize version
 		if (!read_instrument->Read(&field_table.serialize_version)) {
@@ -2193,7 +2287,7 @@ namespace ECSEngine {
 		// We need to map the version now
 		for (unsigned int index = 0; index < custom_serializer_count; index++) {
 			// Firstly the name and then the version
-			if (!read_instrument->ReadWithSize<unsigned short>(serializer_name)) {
+			if (!read_instrument->ReadWithSizeVariableLength(serializer_name)) {
 				return false;
 			}
 
@@ -2217,40 +2311,17 @@ namespace ECSEngine {
 		return true;
 	}
 
-	// Wrapper around the instrument read function, to better work with the previous APIs
-	template<bool read_data>
-	static size_t DeserializeFieldTableCustomInterfacesInfo(uintptr_t& stream, AllocatorPolymorphic temporary_allocator, DeserializeFieldTable& field_table, const DeserializeFieldTableOptions* options) {
-		if constexpr (read_data) {
-			UintptrReadInstrument read_instrument;
-			read_instrument.ptr = &stream;
-			if (!DeserializeFieldTableCustomInterfacesInfo(&read_instrument, temporary_allocator, field_table, options)) {
-				return -1;
-			}
-			return 0;
-		}
-		else {
-			size_t write_size = 0;
-			UintptrSizeDeterminationReadInstrument read_instrument;
-			read_instrument.size = &write_size;
-			read_instrument.ptr = &stream;
-			DeserializeFieldTableCustomInterfacesInfo(&read_instrument, temporary_allocator, field_table, options);
-			return write_size;
-		}
-	}
 
 	// Goes recursive. The memory needs to be specified anyway, even if the read_data is false
-	template<bool read_data>
 	static DeserializeFieldTable DeserializeFieldTableFromDataRecursive(
-		uintptr_t& data, 
+		ReadInstrument* read_instrument, 
 		AllocatorPolymorphic allocator,
 		const DeserializeFieldTableOptions* options
 	)
 	{
 		DeserializeFieldTable field_table;
 
-		size_t total_read_size = DeserializeFieldTableCustomInterfacesInfo<read_data>(data, allocator, field_table, options);
-		// Check for error
-		if (total_read_size == -1) {
+		if (!DeserializeFieldTableCustomInterfacesInfo(read_instrument, allocator, field_table, options)) {
 			field_table.types.size = 0;
 			return field_table;
 		}
@@ -2260,32 +2331,30 @@ namespace ECSEngine {
 
 		struct ScopeDeallocator {
 			void operator() () {
-				if constexpr (!read_data) {
+				if (is_size_determination) {
 					// Need to deallocate these
 					Deallocate(allocator, type_buffer);
 					Deallocate(allocator, custom_serializer_buffer);
 				}
 			}
 
+			bool is_size_determination;
 			void* type_buffer;
 			void* custom_serializer_buffer;
 			AllocatorPolymorphic allocator;
 		};
 
-		StackScope<ScopeDeallocator> scope_deallocator({ field_table.types.buffer, field_table.custom_serializers.buffer, allocator });
+		StackScope<ScopeDeallocator> scope_deallocator({ read_instrument->IsSizeDetermination(), field_table.types.buffer, field_table.custom_serializers.buffer, allocator });
 
 		DeserializeFieldTableOptions temp_options;
 		temp_options.version = field_table.serialize_version;
 		temp_options.read_type_tags = DeserializeFieldTableReadTags(options);
 
 		field_table.types.size = 1;
-		size_t read_size = DeserializeFieldTableFromDataImplementation<read_data>(data, field_table.types.buffer, allocator, &temp_options);
-		if (read_size == -1) {
+		if (!DeserializeFieldTableFromDataImplementation(read_instrument, field_table.types.buffer, allocator, &temp_options)) {
 			field_table.types.size = 0;
 			return field_table;
 		}
-
-		total_read_size += read_size;
 
 		// Now go recursive
 		DeserializeFieldTable::Type* current_type = field_table.types.buffer;
@@ -2365,13 +2434,10 @@ namespace ECSEngine {
 
 			// Only if the type was not yet read do it
 			if (index == field_table.types.size) {
-				read_size = DeserializeFieldTableFromDataImplementation<read_data>(data, field_table.types.buffer + field_table.types.size, allocator, &temp_options);
-				if (read_size == -1) {
-					field_table.types.size = -1;
+				if (!DeserializeFieldTableFromDataImplementation(read_instrument, field_table.types.buffer + field_table.types.size, allocator, &temp_options)) {
+					field_table.types.size = 0;
 					return field_table;
 				}
-
-				total_read_size += read_size;
 
 				field_table.types.size++;
 				ECS_ASSERT(field_table.types.size <= DESERIALIZE_FIELD_TABLE_MAX_TYPES);
@@ -2383,10 +2449,6 @@ namespace ECSEngine {
 			}
 		}
 
-		if constexpr (!read_data) {
-			field_table.types.size = total_read_size;
-		}
-
 		return field_table;
 	}
 
@@ -2394,38 +2456,11 @@ namespace ECSEngine {
 
 	DeserializeFieldTable DeserializeFieldTableFromData(uintptr_t& data, AllocatorPolymorphic temporary_allocator, const DeserializeFieldTableOptions* options)
 	{
-		return DeserializeFieldTableFromDataRecursive<true>(data, temporary_allocator, options);
+		return DeserializeFieldTable();
+		//return DeserializeFieldTableFromDataRecursive<true>(data, temporary_allocator, options);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
-
-	// This structure acts as a wrapper over a read instrument in order to add the ReferenceDataWithSize function
-	struct ReadInstrumentWrapper {
-		template<typename T>
-		ECS_INLINE bool Read(T* data) const {
-			return read_instrument->Read(data);
-		}
-
-		template<typename IntegerType, typename ElementType>
-		ECS_INLINE bool ReadWithSize(CapacityStream<ElementType>& data) const {
-			return read_instrument->ReadWithSize(data);
-		}
-
-		template<typename IntegerType, typename ElementType>
-		ECS_INLINE bool ReferenceDataWithSize(Stream<ElementType>& data) const {
-			IntegerType data_size;
-			if (!Read(&data_size)) {
-				return false;
-			}
-
-			// Allocate a buffer, since the read instrument is not guaranteed to return stable memory
-			data.Initialize(temporary_allocator, data_size / sizeof(ElementType));
-			return Read(data.buffer, data_size);
-		}
-
-		ReadInstrument* read_instrument;
-		AllocatorPolymorphic temporary_allocator;
-	};
 
 	DeserializeFieldTable DeserializeFieldTableFromData(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, const DeserializeFieldTableOptions* options) {
 		DeserializeFieldTable field_table;
@@ -2436,8 +2471,7 @@ namespace ECSEngine {
 		// Allocate DESERIALIZE_FIELD_TABLE_MAX_TYPES and fail if there are more
 		field_table.types.buffer = (DeserializeFieldTable::Type*)Allocate(temporary_allocator, sizeof(DeserializeFieldTable::Type) * DESERIALIZE_FIELD_TABLE_MAX_TYPES);
 
-		ReadInstrumentWrapper wrapper = { read_instrument, temporary_allocator };
-		if (!DeserializeFieldTableFromDataImplementation(&wrapper, field_table.types.buffer, temporary_allocator, options)) {
+		if (!DeserializeFieldTableFromDataImplementation(read_instrument, field_table.types.buffer, temporary_allocator, options)) {
 			field_table.types.size = 0;
 		}
 		return field_table;
@@ -2447,32 +2481,70 @@ namespace ECSEngine {
 
 	size_t DeserializeFieldTableFromDataSize(uintptr_t data, const DeserializeFieldTableOptions* options)
 	{
-		const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 8;
+		return -1;
+		/*const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 8;
 
 		void* stack_allocation = ECS_STACK_ALLOC(sizeof(char) * STACK_ALLOCATION_CAPACITY);
 		LinearAllocator allocator(stack_allocation, STACK_ALLOCATION_CAPACITY);
 
-		return DeserializeFieldTableFromDataRecursive<false>(data, &allocator, options).types.size;
+		return DeserializeFieldTableFromDataRecursive<false>(data, &allocator, options).types.size;*/
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	void IgnoreDeserialize(uintptr_t& data, const DeserializeFieldTableOptions* options)
+	//void IgnoreDeserialize(uintptr_t& data, const DeserializeFieldTableOptions* options)
+	//{
+	//	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+
+	//	DeserializeFieldTable field_table;
+	//	field_table = DeserializeFieldTableFromData(data, &stack_allocator);
+	//	IgnoreDeserialize(data, field_table, options);
+	//}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	bool IgnoreDeserialize(ReadInstrument* read_instrument, const DeserializeFieldTableOptions* options)
 	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 
 		DeserializeFieldTable field_table;
-		field_table = DeserializeFieldTableFromData(data, &stack_allocator);
-		IgnoreDeserialize(data, field_table, options);
+		field_table = DeserializeFieldTableFromData(read_instrument, &stack_allocator);
+		return IgnoreDeserialize(read_instrument, field_table, options);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	void IgnoreDeserialize(
-		uintptr_t& data, 
+	//void IgnoreDeserialize(
+	//	uintptr_t& data, 
+	//	DeserializeFieldTable field_table,
+	//	const DeserializeFieldTableOptions* options,
+	//	const ReflectionManager* deserialized_manager, 
+	//	Stream<DeserializeTypeNameRemapping> name_remappings
+	//)
+	//{
+	//	field_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
+
+	//	ReflectionManager temp_manager;
+	//	size_t stack_allocation_size = deserialized_manager == nullptr ? ECS_KB * 32 : 0;
+	//	void* stack_allocation = ECS_STACK_ALLOC(stack_allocation_size);
+	//	LinearAllocator linear_allocator(stack_allocation, stack_allocation_size);
+	//	if (deserialized_manager == nullptr) {
+	//		deserialized_manager = &temp_manager;
+	//		temp_manager.type_definitions.Initialize(&linear_allocator, 32);
+	//		field_table.ToNormalReflection(&temp_manager, &linear_allocator);
+	//	}
+
+	//	// The type to be ignored is the first one from the field table
+	//	IgnoreType(data, field_table, 0, deserialized_manager);
+	//}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	bool IgnoreDeserialize(
+		ReadInstrument* read_instrument,
 		DeserializeFieldTable field_table,
 		const DeserializeFieldTableOptions* options,
-		const ReflectionManager* deserialized_manager, 
+		const ReflectionManager* deserialized_manager,
 		Stream<DeserializeTypeNameRemapping> name_remappings
 	)
 	{
@@ -2489,7 +2561,7 @@ namespace ECSEngine {
 		}
 
 		// The type to be ignored is the first one from the field table
-		IgnoreType(data, field_table, 0, deserialized_manager);
+		return IgnoreType(read_instrument, field_table, 0, deserialized_manager);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
@@ -2567,22 +2639,10 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// Write the custom type interface serialization
-		stack_allocator.SetMarker();
-
-		uintptr_t custom_interfaces_info_allocation_ptr;
-		size_t custom_interfaces_info_allocation_size = WriteTypeTableCustomInterfacesInfo<false>(custom_interfaces_info_allocation_ptr);
-		void* custom_interfaces_info_allocation = stack_allocator.Allocate(custom_interfaces_info_allocation_size);
-		custom_interfaces_info_allocation_ptr = (uintptr_t)custom_interfaces_info_allocation_ptr;
-		WriteTypeTableCustomInterfacesInfo<true>(custom_interfaces_info_allocation_ptr);
-
-		// Commit this to the type instrument
-		if (!write_instrument->Write(custom_interfaces_info_allocation, custom_interfaces_info_allocation_size)) {
+		// We must write the custom interfaces info first
+		if (!WriteTypeTableCustomInterfacesInfo(write_instrument)) {
 			return false;
 		}
-
-		// Can return the stack allocator to the marker
-		stack_allocator.ReturnToMarker();
 
 		// Write each individual type, and then we are done
 		for (size_t index = 0; index < types_to_write.size; index++) {
@@ -2646,20 +2706,20 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, Stream<wchar_t> file, SerializeOptions* options, Stream<char> tags)
+	/*ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, Stream<wchar_t> file, SerializeOptions* options, Stream<char> tags)
 	{
 		return SerializeFileImpl(SerializeSizeEx(reflection_manager, definition, data, options), file, options, [&](uintptr_t& buffer) {
 			return SerializeEx(reflection_manager, definition, data, buffer, options, tags);
 		});
-	}
+	}*/
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, uintptr_t& ptr, SerializeOptions* options, Stream<char> tags)
+	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, WriteInstrument* write_instrument, SerializeOptions* options, Stream<char> tags)
 	{
 		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
 		if (reflection_type != nullptr) {
-			return Serialize(reflection_manager, reflection_type, data, ptr, options);
+			return Serialize(reflection_manager, reflection_type, data, write_instrument, options);
 		}
 		else {
 			// Try a custom type
@@ -2672,41 +2732,40 @@ namespace ECSEngine {
 			write_data.data = data;
 			write_data.definition = definition;
 			write_data.options = options;
-			write_data.stream = &ptr;
-			write_data.write_data = true;
+			write_data.write_instrument = write_instrument;
 			write_data.tags = tags;
-			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].write(&write_data) == -1 ? ECS_SERIALIZE_CUSTOM_TYPE_FAILED : ECS_SERIALIZE_OK;
+			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].write(&write_data) ? ECS_SERIALIZE_OK : ECS_SERIALIZE_CUSTOM_TYPE_FAILED;
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t SerializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, SerializeOptions* options, Stream<char> tags)
-	{
-		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
-		if (reflection_type != nullptr) {
-			return SerializeSize(reflection_manager, reflection_type, data, options);
-		}
-		else {
-			// Try a custom type
-			unsigned int custom_index = FindSerializeCustomType(definition);
-			ECS_ASSERT(custom_index != -1);
+	//size_t SerializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, SerializeOptions* options, Stream<char> tags)
+	//{
+	//	const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
+	//	if (reflection_type != nullptr) {
+	//		return SerializeSize(reflection_manager, reflection_type, data, options);
+	//	}
+	//	else {
+	//		// Try a custom type
+	//		unsigned int custom_index = FindSerializeCustomType(definition);
+	//		ECS_ASSERT(custom_index != -1);
 
-			SerializeCustomTypeWriteFunctionData write_data;
-			write_data.reflection_manager = reflection_manager;
-			write_data.data = data;
-			write_data.definition = definition;
-			write_data.options = options;
-			write_data.stream = nullptr;
-			write_data.write_data = false;
-			write_data.tags = tags;
-			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].write(&write_data);
-		}
-	}
+	//		SerializeCustomTypeWriteFunctionData write_data;
+	//		write_data.reflection_manager = reflection_manager;
+	//		write_data.data = data;
+	//		write_data.definition = definition;
+	//		write_data.options = options;
+	//		write_data.stream = nullptr;
+	//		write_data.write_data = false;
+	//		write_data.tags = tags;
+	//		return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].write(&write_data);
+	//	}
+	//}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	ECS_DESERIALIZE_CODE DeserializeEx(
+	/*ECS_DESERIALIZE_CODE DeserializeEx(
 		const ReflectionManager* reflection_manager, 
 		Stream<char> definition,
 		void* address, 
@@ -2719,15 +2778,15 @@ namespace ECSEngine {
 		return DeserializeFileImpl(file, options, file_data, [&](uintptr_t& buffer) {
 			return DeserializeEx(reflection_manager, definition, address, buffer, options, tags);
 		});
-	}
+	}*/
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	ECS_DESERIALIZE_CODE DeserializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, void* address, uintptr_t& stream, DeserializeOptions* options, Stream<char> tags)
+	ECS_DESERIALIZE_CODE DeserializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, void* address, ReadInstrument* read_instrument, DeserializeOptions* options, Stream<char> tags)
 	{
 		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
 		if (reflection_type != nullptr) {
-			return Deserialize(reflection_manager, reflection_type, address, stream, options);
+			return Deserialize(reflection_manager, reflection_type, address, read_instrument, options);
 		}
 		else {
 			unsigned int custom_index = FindSerializeCustomType(definition);
@@ -2739,17 +2798,16 @@ namespace ECSEngine {
 			read_data.definition = definition;
 			read_data.reflection_manager = reflection_manager;
 			read_data.options = options;
-			read_data.stream = &stream;
-			read_data.read_data = true;
+			read_data.read_instrument = read_instrument;
 			read_data.version = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].version;
 			read_data.tags = tags;
-			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) == -1 ? ECS_DESERIALIZE_CORRUPTED_FILE : ECS_DESERIALIZE_OK;
+			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) ? ECS_DESERIALIZE_OK : ECS_DESERIALIZE_CORRUPTED_FILE;
 		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> string, uintptr_t& stream, DeserializeOptions* options, Stream<char> tags)
+	/*size_t DeserializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> string, uintptr_t& stream, DeserializeOptions* options, Stream<char> tags)
 	{
 		Stream<char> definition = string;
 
@@ -2773,7 +2831,7 @@ namespace ECSEngine {
 			read_data.tags = tags;
 			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) == -1 ? ECS_DESERIALIZE_CORRUPTED_FILE : ECS_DESERIALIZE_OK;
 		}
-	}
+	}*/
 
 	// ------------------------------------------------------------------------------------------------------------------
 

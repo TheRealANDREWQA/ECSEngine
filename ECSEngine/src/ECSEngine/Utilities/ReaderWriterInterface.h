@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "../Containers/Stream.h"
+#include "Serialization/SerializeIntVariableLength.h"
 
 namespace ECSEngine {
 
@@ -53,6 +54,17 @@ namespace ECSEngine {
 			static_assert(std::is_integral_v<IntegerType>, "WriteWithSizeCheck template parameter must be an integer!");
 			ECS_ASSERT(IsUnsignedIntInRange<IntegerType>(data.size), "WriteWithSizeCheck of a write instrument failed because the data size does not fit in the integer range.");
 			return WriteWithSize<IntegerType>(data);
+		}
+
+		// Returns true if it succeeded, else false. It uses variable length encoding for the size
+		template<typename ElementType>
+		ECS_INLINE bool WriteWithSizeVariableLength(Stream<ElementType> data) {
+			// Don't write data.size * sizeof(ElementType), since that can enlarge the size
+			// And make it more likely that more bytes are used
+			if (!SerializeIntVariableLengthBool(this, data.size)) {
+				return false;
+			}
+			return Write(data.buffer, data.size * sizeof(ElementType));
 		}
 	};
 
@@ -136,7 +148,7 @@ namespace ECSEngine {
 		// The last argument allows to limit the maximum number of bytes, by failing with a false
 		// If it surpasses that value
 		template<typename IntegerType>
-		ECS_INLINE bool ReadWithSize(Stream<void>& data, AllocatorPolymorphic allocator, size_t max_allowed_capacity = UINT64_MAX) {
+		bool ReadWithSize(Stream<void>& data, AllocatorPolymorphic allocator, size_t max_allowed_capacity = UINT64_MAX) {
 			IntegerType integer_size = 0;
 			if (!ReadAlways(&integer_size)) {
 				return false;
@@ -151,7 +163,7 @@ namespace ECSEngine {
 
 		// It will dynamically allocate the data with an optional maximum capacity (expressed in element counts)
 		template<typename IntegerType, typename ElementType>
-		ECS_INLINE bool ReadWithSize(CapacityStream<ElementType>& data, AllocatorPolymorphic allocator, size_t max_allowed_capacity = UINT64_MAX) {
+		bool ReadWithSize(CapacityStream<ElementType>& data, AllocatorPolymorphic allocator, size_t max_allowed_capacity = UINT64_MAX) {
 			Stream<void> stream_data;
 			if (!ReadWithSize<IntegerType>(stream_data, allocator, max_allowed_capacity == UINT64_MAX ? UINT64_MAX : max_allowed_capacity * sizeof(ElementType))) {
 				return false;
@@ -165,7 +177,7 @@ namespace ECSEngine {
 		// It will dynamically allocate the data with an optional maximum capacity (expressed in element counts)
 		// The data parameter must be empty! (it will not clear it first)
 		template<typename IntegerType, typename ElementType>
-		ECS_INLINE bool ReadWithSize(ResizableStream<ElementType>& data, size_t max_allowed_capacity = UINT64_MAX) {
+		bool ReadWithSize(ResizableStream<ElementType>& data, size_t max_allowed_capacity = UINT64_MAX) {
 			Stream<void> stream_data;
 			if (!ReadWithSize<IntegerType>(stream_data, data.allocator, max_allowed_capacity == UINT64_MAX ? UINT64_MAX : max_allowed_capacity * sizeof(ElementType))) {
 				return false;
@@ -174,6 +186,57 @@ namespace ECSEngine {
 			data.size = stream_data.size / sizeof(ElementType);
 			data.capacity = data.size;
 			return true;
+		}
+
+		// It reads a stream written with a variable length size, by adding it to the provided argument
+		// Returns true if it succeeded, else false
+		template<typename ElementType>
+		bool ReadWithSizeVariableLength(CapacityStream<ElementType>& data) {
+			size_t data_size = 0;
+			if (!DeserializeIntVariableLengthBool(this, data_size)) {
+				return false;
+			}
+
+			if (data.size + data_size > (size_t)data.capacity) {
+				return false;
+			}
+
+			if (!Read(data.buffer + data.size, data_size * sizeof(ElementType))) {
+				return false;
+			}
+
+			data.size += data_size;
+			return true;
+		}
+
+		// Reads a written stream with a variable length size by allocating the necessary data size from the allocator
+		// Returns true if it succeeded, else false
+		template<typename ElementType>
+		bool ReadWithSizeVariableLength(CapacityStream<ElementType>& data, AllocatorPolymorphic allocator) {
+			size_t data_size = 0;
+			if (!DeserializeIntVariableLengthBool(this, data_size)) {
+				return false;
+			}
+
+			if (!EnsureUnsignedIntegerIsInRange<unsigned int>(data_size)) {
+				return false;
+			}
+
+			data.Initialize(allocator, data_size, data_size);
+			return Read(data.buffer, data.CopySize());
+		}
+
+		// Reads a written stream with a variable length size by allocating the necessary data size from the allocator
+		// Returns true if it succeeded, else false
+		template<typename ElementType>
+		bool ReadWithSizeVariableLength(Stream<ElementType>& data, AllocatorPolymorphic allocator) {
+			size_t data_size = 0;
+			if (!DeserializeIntVariableLengthBool(this, data_size)) {
+				return false;
+			}
+
+			data.Initialize(allocator, data_size);
+			return Read(data.buffer, data.CopySize());
 		}
 
 		// A structure returned by the ReadInstrument::ReadOrReferenceData
@@ -214,7 +277,7 @@ namespace ECSEngine {
 		// That it can provide stable pointers. If always can't, like a typical buffered file reader, you shouldn't
 		// Call this function, as it will always fail
 		template<typename IntegerType, typename ElementType>
-		ECS_INLINE bool ReferenceDataWithSize(Stream<ElementType>& data) {
+		bool ReferenceDataWithSize(Stream<ElementType>& data) {
 			IntegerType byte_size;
 			if (!ReadAlways(&byte_size)) {
 				return false;
@@ -230,6 +293,20 @@ namespace ECSEngine {
 			return true;
 		}
 		
+		// References a stream written with variable length size
+		// Returns true if it succeeded (including obtaining the reference), else false
+		template<typename ElementType>
+		bool ReferenceDataWithSizeVariableLength(Stream<ElementType>& data) {
+			size_t data_size = 0;
+			if (!DeserializeIntVariableLengthBool(this, data_size)) {
+				return false;
+			}
+
+			data.buffer = ReferenceData(data_size * sizeof(ElementType));
+			data.size = data_size;
+			return data.buffer != nullptr;
+		}
+
 		// Convenience function which omits the out of range flag
 		ECS_INLINE void* ReferenceData(size_t data_size) {
 			bool is_out_of_range = false;
@@ -242,6 +319,7 @@ namespace ECSEngine {
 			return Seek(ECS_INSTRUMENT_SEEK_CURRENT, byte_size);
 		}
 
+		// Returns true if it succeeded, else false
 		template<typename IntegerType>
 		ECS_INLINE bool IgnoreWithSize() {
 			IntegerType byte_size;
@@ -250,6 +328,35 @@ namespace ECSEngine {
 			}
 
 			return Ignore(byte_size);
+		}
+
+		// Can use void as template parameter in order to indicate that these are untyped bytes
+		// Returns true if it succeeded, else false
+		template<typename ElementType>
+		ECS_INLINE bool IgnoreWithSizeVariableLength() {
+			size_t data_size = 0;
+			if (!DeserializeIntVariableLengthBool(this, data_size)) {
+				return false;
+			}
+
+			size_t element_byte_size = 0;
+			if constexpr (std::is_same_v<ElementType, void>) {
+				element_byte_size = 1;
+			}
+			else {
+				element_byte_size = sizeof(ElementType);
+			}
+
+			// We must receive the template parameter, because otherwise we don't know
+			// How many bytes each element takes
+			return Ignore(data_size * element_byte_size);
+		}
+
+		// Does not use the parameter in any runtime capacity, it is used only to deduce the type of the template parameter
+		// Returns true if it succeeded, else false
+		template<typename ElementType>
+		ECS_INLINE bool IgnoreWithSizeVariableLength(Stream<ElementType> stream_type) {
+			return IgnoreWithSizeVariableLength<ElementType>();
 		}
 
 	};

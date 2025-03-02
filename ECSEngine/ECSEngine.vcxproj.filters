@@ -296,6 +296,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionCustomTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionAllocatorHandling.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Tokenize.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\SizeDeterminationReaderWriter.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

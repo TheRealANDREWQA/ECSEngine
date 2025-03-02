@@ -218,6 +218,7 @@ namespace ECSEngine {
 		// This value signals that a new allocator entry was added, and we don't know how to initialize it
 		// For the moment, this is not possible
 		ECS_DESERIALIZE_NEW_ALLOCATOR_ENTRY,
+		ECS_DESERIALIZE_INSTRUMENT_FAILURE,
 		ECS_DESERIALIZE_CORRUPTED_FILE
 	};
 
@@ -273,6 +274,14 @@ namespace ECSEngine {
 		bool write_tags = false
 	);
 
+	ECSENGINE_API bool SerializeFieldTable(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		WriteInstrument* write_instrument,
+		Stream<SerializeOmitField> omit_fields = {},
+		bool write_tags = false
+	);
+
 	ECSENGINE_API size_t SerializeFieldTableSize(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
@@ -306,6 +315,14 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* type,
 		void* address,
 		uintptr_t& stream,
+		DeserializeOptions* options = nullptr
+	);
+
+	ECSENGINE_API ECS_DESERIALIZE_CODE Deserialize(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		void* address,
+		ReadInstrument* read_instrument,
 		DeserializeOptions* options = nullptr
 	);
 
@@ -368,11 +385,30 @@ namespace ECSEngine {
 		const DeserializeFieldTableOptions* options = nullptr
 	);
 
+	// It will ignore the current type + the deserialize field table
+	// Suitable for ignoring a single type at a time
+	// If the version is left at -1, it will use the version from the field table
+	ECSENGINE_API bool IgnoreDeserialize(
+		ReadInstrument* read_instrument,
+		const DeserializeFieldTableOptions* options = nullptr
+	);
+	
 	// It will ignore the current type. It must be placed after the deserialize table has been called on the
 	// the data. If the deserialized manager is not available, it will create it inside (useful for ignoring
 	// multiple elements from the same time). Can optionally give an array of name_remappings
 	ECSENGINE_API void IgnoreDeserialize(
 		uintptr_t& data,
+		DeserializeFieldTable field_table,
+		const DeserializeFieldTableOptions* options = nullptr,
+		const Reflection::ReflectionManager* deserialized_manager = nullptr,
+		Stream<DeserializeTypeNameRemapping> name_remapping = { nullptr, 0 }
+	);
+
+	// It will ignore the current type. It must be placed after the deserialize table has been called on the
+	// the data. If the deserialized manager is not available, it will create it inside (useful for ignoring
+	// multiple elements from the same time). Can optionally give an array of name_remappings
+	ECSENGINE_API bool IgnoreDeserialize(
+		ReadInstrument* read_instrument,
 		DeserializeFieldTable field_table,
 		const DeserializeFieldTableOptions* options = nullptr,
 		const Reflection::ReflectionManager* deserialized_manager = nullptr,
@@ -437,6 +473,16 @@ namespace ECSEngine {
 	);
 
 	// Determines if it is a reflected type or a custom type and call the function appropriately
+	ECSENGINE_API ECS_SERIALIZE_CODE SerializeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> definition,
+		const void* data,
+		WriteInstrument* write_instrument,
+		SerializeOptions* options = nullptr,
+		Stream<char> tags = {}
+	);
+
+	// Determines if it is a reflected type or a custom type and call the function appropriately
 	ECSENGINE_API size_t SerializeSizeEx(
 		const Reflection::ReflectionManager* reflection_manager,
 		Stream<char> definition,
@@ -462,6 +508,16 @@ namespace ECSEngine {
 		Stream<char> definition,
 		void* address,
 		uintptr_t& stream,
+		DeserializeOptions* options = nullptr,
+		Stream<char> tags = {}
+	);
+
+	// Determines if it is a reflected type or a custom type and call the function appropriately
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> definition,
+		void* address,
+		ReadInstrument* read_instrument,
 		DeserializeOptions* options = nullptr,
 		Stream<char> tags = {}
 	);
