@@ -324,14 +324,15 @@ namespace ECSEngine {
 		Stream<char> tags = {};
 	};
 
-	// If write data is false, just determine how many buffer bytes are needed
-	typedef size_t (*SerializeCustomTypeWriteFunction)(SerializeCustomTypeWriteFunctionData* data);
+	// Returns true if it succeeded, else false
+	typedef bool (*SerializeCustomTypeWriteFunction)(SerializeCustomTypeWriteFunctionData* data);
 
-#define ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name) size_t SerializeCustomTypeWrite_##name(SerializeCustomTypeWriteFunctionData* data)
+#define ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name) bool SerializeCustomTypeWrite_##name(SerializeCustomTypeWriteFunctionData* data)
 
 	struct DeserializeOptions;
 
 	struct SerializeCustomTypeReadFunctionData {
+		// TODO: Enhance this to contain the versions for each custom serializer type
 		unsigned int version;
 		// This can be used by custom serializers to take into consideration that this field
 		// was allocated prior - fields should be considered invalid
@@ -349,10 +350,10 @@ namespace ECSEngine {
 		Stream<char> tags = {};
 	};
 
-	// If read_data is false, it determines how many buffer bytes are needed
-	typedef size_t (*SerializeCustomTypeReadFunction)(SerializeCustomTypeReadFunctionData* data);
+	// Returns true if it succeeded, else false
+	typedef bool (*SerializeCustomTypeReadFunction)(SerializeCustomTypeReadFunctionData* data);
 
-#define ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name) size_t SerializeCustomTypeRead_##name(SerializeCustomTypeReadFunctionData* data)
+#define ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name) bool SerializeCustomTypeRead_##name(SerializeCustomTypeReadFunctionData* data)
 
 #define ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(name) ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name); \
 														ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name);
@@ -395,7 +396,7 @@ namespace ECSEngine {
 	// Element_byte_size should be for stream_type different from basic
 	// the byte size of the target, not of the stream's
 	// It does not prefix the stream with its size - should be done outside. Returns the number of bytes written
-	ECSENGINE_API size_t SerializeCustomWriteHelper(SerializeCustomWriteHelperData* data);
+	ECSENGINE_API bool SerializeCustomWriteHelper(SerializeCustomWriteHelperData* data);
 
 	struct ECSENGINE_API DeserializeCustomReadHelperData {
 		// Initializes the 2 fields alongside the definition info
@@ -423,7 +424,7 @@ namespace ECSEngine {
 	// Field data should be initialized with the element count to be read
 	// Can provide an allocator such that it will allocate from it instead 
 	// of the backup allocator. Can be useful for resizable containers
-	ECSENGINE_API size_t DeserializeCustomReadHelper(DeserializeCustomReadHelperData* data);
+	ECSENGINE_API bool DeserializeCustomReadHelper(DeserializeCustomReadHelperData* data);
 
 	ECSENGINE_API void SerializeCustomTypeCopyBlit(Reflection::ReflectionCustomTypeCopyData* data, size_t byte_size);
 

@@ -13,6 +13,8 @@ namespace ECSEngine {
 		// Find the last bit set, we need to write up to its byte
 		unsigned int last_bit_set = FirstMSB64(value);
 
+		bool success = true;
+
 		size_t byte_count = 0;
 		// If it is -1, then there are no bits set, and must not enter the while
 		if (last_bit_set != -1) {
@@ -20,9 +22,7 @@ namespace ECSEngine {
 			while (last_bit_set >= 7) {
 				if constexpr (write_data) {
 					unsigned char byte = ECS_BIT(7) | (unsigned char)value;
-					if (!write_instrument->Write(&byte)) {
-						return 0;
-					}
+					success &= write_instrument->Write(&byte);
 				}
 				last_bit_set -= 7;
 				value >>= 7;
@@ -33,12 +33,10 @@ namespace ECSEngine {
 		// There is one more byte to write
 		if constexpr (write_data) {
 			unsigned char byte = (unsigned char)value;
-			if (!write_instrument->Write(&byte)) {
-				return 0;
-			}
+			success &= write_instrument->Write(&byte);
 		}
 		byte_count++;
-		return byte_count;
+		return success ? byte_count : 0;
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(size_t, SerializeIntVariableLengthUnsigned, WriteInstrument*, size_t);
@@ -66,15 +64,14 @@ namespace ECSEngine {
 			sign_bit = ECS_BIT_SIGNED(6);
 		}
 
+		bool success = true;
 		// We can write 7 value bits per byte for all bytes except the last one
 		size_t byte_count = 0;
 		if (last_bit >= 7) {
 			while (last_bit >= 7) {
 				if constexpr (write_data) {
 					char byte = ECS_BIT_SIGNED(7) | (char)extended_value;
-					if (!write_instrument->Write(&byte)) {
-						return 0;
-					}
+					success &= write_instrument->Write(&byte);
 				}
 				last_bit -= 7;
 				extended_value >>= 7;
@@ -86,9 +83,7 @@ namespace ECSEngine {
 		if (last_bit == 6) {
 			if constexpr (write_data) {
 				char byte = ECS_BIT_SIGNED(7) | (char)extended_value;
-				if (!write_instrument->Write(&byte)) {
-					return false;
-				}
+				success &= write_instrument->Write(&byte);
 			}
 			// Here, the shift must be done with a 7 as well, in order for the last bit
 			// To be completely removed.
@@ -100,22 +95,19 @@ namespace ECSEngine {
 		if constexpr (write_data) {
 			// Make sure to zero out the MSB, since it may be 1 with signed integers
 			char byte = (sign_bit | (char)extended_value) & (~(ECS_BIT_SIGNED(7)));
-			if (!write_instrument->Write(&byte)) {
-				return 0;
-			}
+			success &= write_instrument->Write(&byte);
 		}
 		byte_count++;
-		return byte_count;
+		return success ? byte_count : 0;
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(size_t, SerializeIntVariableLengthSigned, WriteInstrument*, int64_t);
 
-	template<bool read_data>
 	size_t DeserializeIntVariableLengthUnsigned(ReadInstrument* read_instrument, size_t& value) {
 		size_t read_count = 0;
 		// Read until the MSB is 0
 		unsigned char current_byte = 0;
-		if (!read_instrument->Read(&current_byte)) {
+		if (!read_instrument->ReadAlways(&current_byte)) {
 			return 0;
 		}
 
@@ -128,7 +120,7 @@ namespace ECSEngine {
 		while ((current_byte & byte_MSB) != 0) {
 			value |= (size_t)(current_byte & negated_byte_MSB) << shift_count;
 			shift_count += 7;
-			if (!read_instrument->Read(&current_byte)) {
+			if (!read_instrument->ReadAlways(&current_byte)) {
 				return 0;
 			}
 			read_count++;
@@ -139,13 +131,10 @@ namespace ECSEngine {
 		return read_count;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(size_t, DeserializeIntVariableLengthUnsigned, ReadInstrument*, size_t&);
-
-	template<bool read_data>
 	size_t DeserializeIntVariableLengthSigned(ReadInstrument* read_instrument, int64_t& value) {
 		size_t read_count = 0;
 		char current_byte = 0;
-		if (!read_instrument->Read(&current_byte)) {
+		if (!read_instrument->ReadAlways(&current_byte)) {
 			return 0;
 		}
 		read_count++;
@@ -163,7 +152,7 @@ namespace ECSEngine {
 		while ((current_byte & byte_MSB) != 0) {
 			value |= (int64_t)(current_byte & negated_byte_MSB) << shift_count;
 			shift_count += 7;
-			if (!read_instrument->Read(&current_byte)) {
+			if (!read_instrument->ReadAlways(&current_byte)) {
 				return 0;
 			}
 			read_count++;
@@ -182,7 +171,5 @@ namespace ECSEngine {
 		}
 		return read_count;
 	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(size_t, DeserializeIntVariableLengthSigned, ReadInstrument*, int64_t&);
 
 }

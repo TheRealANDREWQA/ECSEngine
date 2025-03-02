@@ -2,9 +2,11 @@
 #include "../../Core.h"
 #include "../Reflection/ReflectionTypes.h"
 #include "../Utilities.h"
-#include "../ReaderWriterInterface.h"
 
 namespace ECSEngine {
+
+	struct WriteInstrument;
+	struct ReadInstrument;
 
 	// Returns the number of written bytes or 0 if the write_instrument returned false
 	// If the template parameter write_data is false, it will ignore the first parameter
@@ -75,32 +77,28 @@ namespace ECSEngine {
 	}
 
 	// Returns the number of bytes read or 0 if the capacity functor returned false
-	// If the template parameter write_data is false, it will ignore the last 2 parameters
-	template<bool write_data>
 	ECSENGINE_API size_t DeserializeIntVariableLengthUnsigned(ReadInstrument* read_instrument, size_t& value);
 
 	// Returns the number of bytes read or 0 if the capacity functor returned false
-	// If the template parameter write_data is false, it will ignore the last 2 parameters
-	template<bool write_data>
 	ECSENGINE_API size_t DeserializeIntVariableLengthSigned(ReadInstrument* read_instrument, int64_t& value);
 
 	// Returns the number of bytes read or 0 if the capacity functor returned false
 	// The boolean parameter is an out parameter that is set to true if a value was parsed, but it lies outside the integer 
 	// Boundaries of the given integer range.
-	template<bool read_data, typename IntType>
+	template<typename IntType>
 	size_t DeserializeIntVariableLength(ReadInstrument* read_instrument, bool& is_out_of_range, IntType& value) {
 		static_assert(std::is_integral_v<IntType>, "DeserializeIntVariableLength accepts only integers");
 
 		if constexpr (std::is_unsigned_v<IntType>) {
 			size_t large_unsigned = 0;
-			size_t read_count = DeserializeIntVariableLengthUnsigned<read_data>(read_instrument, large_unsigned);
+			size_t read_count = DeserializeIntVariableLengthUnsigned(read_instrument, large_unsigned);
 			is_out_of_range |= EnsureUnsignedIntegerIsInRange<IntType>(large_unsigned);
 			value = large_unsigned;
 			return read_count;
 		}
 		else {
 			int64_t large_signed = 0;
-			size_t read_count = DeserializeIntVariableLengthSigned<read_data>(read_instrument, large_signed);
+			size_t read_count = DeserializeIntVariableLengthSigned(read_instrument, large_signed);
 			is_out_of_range |= EnsureSignedIntegerIsInRange<IntType>(large_signed);
 			value = large_signed;
 			return read_count;
@@ -111,7 +109,7 @@ namespace ECSEngine {
 	template<typename IntType>
 	ECS_INLINE bool DeserializeIntVariableLengthBool(ReadInstrument* read_instrument, bool& is_out_of_range, IntType& value) {
 		return BasicTypeLogicalOpEarlyExitMutable<ECS_BASIC_TYPE_LOGIC_AND>(value, [read_instrument, &is_out_of_range](auto& scalar_value) {
-			return DeserializeIntVariableLength<true>(read_instrument, is_out_of_range, scalar_value);
+			return DeserializeIntVariableLength(read_instrument, is_out_of_range, scalar_value);
 			});
 	}
 
