@@ -4,6 +4,7 @@
 #include "Reflection/ReflectionCustomTypes.h"
 #include "Serialization/Binary/Serialization.h"
 #include "Serialization/SerializationHelpers.h"
+#include "ReaderWriterInterface.h"
 
 namespace ECSEngine {
 
@@ -85,26 +86,30 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 	
 	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(ReferenceCounted) {
+		WriteInstrument* write_instrument = data->write_instrument;
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 
 		SerializeCustomWriteHelperData ex_data;
 		ex_data.Set(data, template_type, data->tags);
 		ex_data.data_to_write = { data->data, 1 };
-		size_t written_size = SerializeCustomWriteHelper(&ex_data);
+		if (!SerializeCustomWriteHelper(&ex_data)) {
+			return false;
+		}
 
 		// We need the helper to tell us the byte size of the original type
 		// In order to write the reference count
 		unsigned int* reference_count = (unsigned int*)OffsetPointer(data->data, ex_data.definition_info.byte_size);
-		return written_size + Write(data->stream, reference_count, sizeof(unsigned int), data->write_data);
+		return write_instrument->Write(reference_count);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(ReferenceCounted) {
 		if (data->version != ECS_SERIALIZE_CUSTOM_TYPE_REFERENCE_COUNTED_VERSION) {
-			return -1;
+			return false;
 		}
 
+		ReadInstrument* read_instrument = data->read_instrument;
 		// Determine if it is a trivial type - including streams
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 
@@ -114,12 +119,12 @@ namespace ECSEngine {
 		ex_data.elements_to_allocate = 0;
 		ex_data.element_count = 1;
 
-		size_t buffer_size = DeserializeCustomReadHelper(&ex_data);
+		if (!DeserializeCustomReadHelper(&ex_data)) {
+			return false;
+		}
 
 		// We need the byte size of the template type in order to read the reference count
-		buffer_size += Read(data->stream, OffsetPointer(data->data, ex_data.definition_info.byte_size), sizeof(unsigned int), data->read_data);
-
-		return buffer_size;
+		return read_instrument->Read(OffsetPointer(data->data, ex_data.definition_info.byte_size), sizeof(unsigned int));
 	}
 
 	// --------------------------------------------------------------------------------------

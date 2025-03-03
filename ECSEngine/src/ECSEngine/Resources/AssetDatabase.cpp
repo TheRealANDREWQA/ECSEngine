@@ -8,6 +8,7 @@
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Utilities/ForEachFiles.h"
 #include "../Utilities/StreamUtilities.h"
+#include "../Utilities/BufferedFileReaderWriter.h"
 
 #include "AssetMetadataSerialize.h"
 
@@ -2650,10 +2651,10 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	template<typename Functor>
-	size_t SerializeAssetDatabaseImpl(const AssetDatabase* database, Functor&& functor) {
+	ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, WriteInstrument* write_instrument)
+	{
 		ECS_STACK_CAPACITY_STREAM(SerializeOmitField, omit_fields, 64);
-		Stream<char> fields_to_keep[] = { 
+		Stream<char> fields_to_keep[] = {
 			STRING(name),
 			STRING(file)
 		};
@@ -2662,61 +2663,36 @@ namespace ECSEngine {
 		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(GPUSamplerMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
 		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(ShaderMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
 		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(MiscAsset), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
-		
+
 		// The material asset is not reflected - the omits must not be listed
 
 		SerializeOptions options;
 		options.omit_fields = omit_fields;
 
 		SetSerializeCustomMaterialAssetDatabase(database);
-		size_t return_value = functor(&options);
+		ECS_SERIALIZE_CODE return_value = Serialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, write_instrument, &options);
 		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET);
 
 		return return_value;
 	}
 
-	ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, Stream<wchar_t> file)
-	{
-		return (ECS_SERIALIZE_CODE)SerializeAssetDatabaseImpl(database, [&](SerializeOptions* options) {
-			return (size_t)Serialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, file, options);
-		});
-	}
-
 	// --------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, uintptr_t& ptr)
+	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, ReadInstrument* read_instrument, DeserializeAssetDatabaseOptions options)
 	{
-		return (ECS_SERIALIZE_CODE)SerializeAssetDatabaseImpl(database, [&](SerializeOptions* options) {
-			return (size_t)Serialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, ptr, options);
-		});
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	size_t SerializeAssetDatabaseSize(const AssetDatabase* database)
-	{
-		return SerializeAssetDatabaseImpl(database, [&](SerializeOptions* options) {
-			return SerializeSize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, options);
-		});
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	template<typename Functor>
-	ECS_DESERIALIZE_CODE DeserializeAssetDatabaseImpl(AssetDatabase* database, DeserializeAssetDatabaseOptions database_options, Functor&& functor) {
-		DeserializeOptions options;
-		options.file_allocator = database->Allocator();
-		options.field_allocator = database->Allocator();
+		DeserializeOptions deserialize_options;
+		deserialize_options.file_allocator = database->Allocator();
+		deserialize_options.field_allocator = database->Allocator();
 
 		SetSerializeCustomMaterialAssetDatabase(database);
 		SetSerializeCustomMaterialDoNotIncrementDependencies(true);
 
-		ECS_DESERIALIZE_CODE code = functor(&options);
+		ECS_DESERIALIZE_CODE code = Deserialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, read_instrument, &deserialize_options);
 
 		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET);
 		SetSerializeCustomMaterialDoNotIncrementDependencies(false);
 
-		if (database_options.default_initialize_other_fields) {
+		if (options.default_initialize_other_fields) {
 			ECS_ASSET_TYPE current_type = ECS_ASSET_MESH;
 			auto basic_functor = [&](unsigned int handle) {
 				void* asset = database->GetAsset(handle, current_type);
@@ -2748,29 +2724,6 @@ namespace ECSEngine {
 		}
 
 		return code;
-	}
-
-	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file, DeserializeAssetDatabaseOptions options)
-	{
-		return DeserializeAssetDatabaseImpl(database, options, [&](DeserializeOptions* options) {
-			return Deserialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, file, options);
-		});
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& ptr, DeserializeAssetDatabaseOptions options)
-	{
-		return DeserializeAssetDatabaseImpl(database, options, [&](DeserializeOptions* options) {
-			return Deserialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, ptr, options);
-		});
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	size_t DeserializeAssetDatabaseSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr)
-	{
-		return DeserializeSize(reflection_manager, reflection_manager->GetType(STRING(AssetDatabase)), ptr);
 	}
 
 	// --------------------------------------------------------------------------------------

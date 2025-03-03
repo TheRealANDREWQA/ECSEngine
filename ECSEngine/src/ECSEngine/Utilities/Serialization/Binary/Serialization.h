@@ -203,7 +203,6 @@ namespace ECSEngine {
 
 	enum ECS_SERIALIZE_CODE : unsigned char {
 		ECS_SERIALIZE_OK,
-		ECS_SERIALIZE_COULD_NOT_OPEN_OR_WRITE_FILE,
 		ECS_SERIALIZE_MISSING_DEPENDENT_TYPES,
 		ECS_SERIALIZE_CUSTOM_TYPE_FAILED,
 		ECS_SERIALIZE_INSTRUMENT_FAILURE
@@ -211,7 +210,6 @@ namespace ECSEngine {
 
 	enum ECS_DESERIALIZE_CODE : unsigned char {
 		ECS_DESERIALIZE_OK,
-		ECS_DESERIALIZE_COULD_NOT_OPEN_OR_READ_FILE,
 		ECS_DESERIALIZE_MISSING_DEPENDENT_TYPES,
 		ECS_DESERIALIZE_INVALID_HEADER,
 		ECS_DESERIALIZE_FIELD_TYPE_MISMATCH,
@@ -229,27 +227,6 @@ namespace ECSEngine {
 		Stream<SerializeOmitField> omit_fields = { nullptr, 0 }
 	);
 
-	// Serializes into a temporary memory buffer, then commits to the file
-	// SettingsAllocator nullptr means use Malloc
-	ECSENGINE_API ECS_SERIALIZE_CODE Serialize(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		const void* data,
-		Stream<wchar_t> file,
-		SerializeOptions* options = nullptr
-	);
-
-	// Serializes into memory
-	// The stream is taken as uintptr_t because for aggregate serialization this will point at the end
-	// of the written data
-	ECSENGINE_API ECS_SERIALIZE_CODE Serialize(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		const void* data,
-		uintptr_t& stream,
-		SerializeOptions* options = nullptr
-	);
-
 	// NEW: This function supersedes the previous variants, since the write instrument is abstracted away
 	ECSENGINE_API ECS_SERIALIZE_CODE Serialize(
 		const Reflection::ReflectionManager* reflection_manager,
@@ -257,21 +234,6 @@ namespace ECSEngine {
 		const void* data,
 		WriteInstrument* write_instrument,
 		SerializeOptions* options = nullptr
-	);
-
-	ECSENGINE_API size_t SerializeSize(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		const void* data,
-		SerializeOptions* options = nullptr
-	);
-
-	ECSENGINE_API void SerializeFieldTable(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		uintptr_t& stream,
-		Stream<SerializeOmitField> omit_fields = {},
-		bool write_tags = false
 	);
 
 	ECSENGINE_API bool SerializeFieldTable(
@@ -282,59 +244,12 @@ namespace ECSEngine {
 		bool write_tags = false
 	);
 
-	ECSENGINE_API size_t SerializeFieldTableSize(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		Stream<SerializeOmitField> omit_fields = {},
-		bool write_tags = false
-	);
-
-	// It reads the whole file into a temporary buffer and then deserializes from memory
-	// If the fields reference data from the file, then the file data will be kept alive
-	// To get the file pointer allocated, provide a file_data. It must be deallocated manually
-	// if it is not nullptr. If some data is referenced but no file_data is provided and no field allocator
-	// is specified, then the data will be deallocated and lost if allocated from Malloc, from an allocator
-	// it should still be valid
-	ECSENGINE_API ECS_DESERIALIZE_CODE Deserialize(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		void* address,
-		Stream<wchar_t> file,
-		DeserializeOptions* options = nullptr,
-		void** file_data = nullptr
-	);
-
-	// The stream is taken as uintptr_t because for aggregate serialization this will point at the end
-	// of the written data. The pointer data will point to the values inside the stream - are not stable
-	// The user defined allocator is used to allocate when you have streams of user defined types
-	// Since the types are not stored as they are, they cannot be referenced inside the stream
-	// or for types which are incompatible
-	// This allocator can be nullptr if an option is specified with a field allocator set
-	ECSENGINE_API ECS_DESERIALIZE_CODE Deserialize(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		void* address,
-		uintptr_t& stream,
-		DeserializeOptions* options = nullptr
-	);
-
 	ECSENGINE_API ECS_DESERIALIZE_CODE Deserialize(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
 		void* address,
 		ReadInstrument* read_instrument,
 		DeserializeOptions* options = nullptr
-	);
-
-	// Returns the amount of pointer data bytes
-	// Returns -1 if the deserialize failed
-	// Can get the actual code by providing a pointer to a ECS_DESERIALIZE_CODE
-	ECSENGINE_API size_t DeserializeSize(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		uintptr_t& data,
-		DeserializeOptions* options = nullptr,
-		ECS_DESERIALIZE_CODE* code = nullptr
 	);
 
 	struct DeserializeFieldTableOptions {
@@ -354,34 +269,10 @@ namespace ECSEngine {
 		return options != nullptr ? options->read_type_tags : false;
 	}
 
-	// Streams will be written into the memory allocator
-	// A good default capacity should be ECS_KB * 8 for it
-	// If the types size is 0 it means that the table has been corrupted or an error occured
-	ECSENGINE_API DeserializeFieldTable DeserializeFieldTableFromData(
-		uintptr_t& data,
-		AllocatorPolymorphic temporary_allocator,
-		const DeserializeFieldTableOptions* options = nullptr
-	);
-
 	// If the types size is 0 it means that the table has been corrupted or an error occured
 	ECSENGINE_API DeserializeFieldTable DeserializeFieldTableFromData(
 		ReadInstrument* read_instrument,
 		AllocatorPolymorphic temporary_allocator,
-		const DeserializeFieldTableOptions* options = nullptr
-	);
-
-	// Returns how many bytes from the data are occupied by the type table in order to skip it
-	// If it returns -1 then the field table is corrupted and the data size cannot be determined
-	ECSENGINE_API size_t DeserializeFieldTableFromDataSize(
-		uintptr_t data,
-		const DeserializeFieldTableOptions* options = nullptr
-	);
-
-	// It will ignore the current type + the deserialize field table
-	// Suitable for ignoring a single type at a time
-	// If the version is left at -1, it will use the version from the field table
-	ECSENGINE_API void IgnoreDeserialize(
-		uintptr_t& data,
 		const DeserializeFieldTableOptions* options = nullptr
 	);
 
@@ -391,18 +282,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool IgnoreDeserialize(
 		ReadInstrument* read_instrument,
 		const DeserializeFieldTableOptions* options = nullptr
-	);
-	
-	// It will ignore the current type. It must be placed after the deserialize table has been called on the
-	// the data. If the deserialized manager is not available, it will create it inside (useful for ignoring
-	// multiple elements from the same time). Can optionally give an array of name_remappings
-	ECSENGINE_API void IgnoreDeserialize(
-		uintptr_t& data,
-		DeserializeFieldTable field_table,
-		const DeserializeFieldTableOptions* options = nullptr,
-		const Reflection::ReflectionManager* deserialized_manager = nullptr,
-		Stream<DeserializeTypeNameRemapping> name_remapping = { nullptr, 0 }
-	);
+	);;
 
 	// It will ignore the current type. It must be placed after the deserialize table has been called on the
 	// the data. If the deserialized manager is not available, it will create it inside (useful for ignoring
@@ -457,61 +337,10 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		Stream<char> definition,
 		const void* data,
-		Stream<wchar_t> file,
-		SerializeOptions* options = nullptr,
-		Stream<char> tags = {}
-	);
-
-	// Determines if it is a reflected type or a custom type and call the function appropriately
-	ECSENGINE_API ECS_SERIALIZE_CODE SerializeEx(
-		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> definition,
-		const void* data,
-		uintptr_t& ptr,
-		SerializeOptions* options = nullptr,
-		Stream<char> tags = {}
-	);
-
-	// Determines if it is a reflected type or a custom type and call the function appropriately
-	ECSENGINE_API ECS_SERIALIZE_CODE SerializeEx(
-		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> definition,
-		const void* data,
 		WriteInstrument* write_instrument,
 		SerializeOptions* options = nullptr,
 		Stream<char> tags = {}
 	);
-
-	// Determines if it is a reflected type or a custom type and call the function appropriately
-	ECSENGINE_API size_t SerializeSizeEx(
-		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> definition,
-		const void* data,
-		SerializeOptions* options = nullptr,
-		Stream<char> tags = {}
-	);
-
-	// Determines if it is a reflected type or a custom type and call the function appropriately
-	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
-		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> definition,
-		void* address,
-		Stream<wchar_t> file,
-		DeserializeOptions* options = nullptr,
-		void** file_data = nullptr,
-		Stream<char> tags = {}
-	);
-
-	// Determines if it is a reflected type or a custom type and call the function appropriately
-	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
-		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> definition,
-		void* address,
-		uintptr_t& stream,
-		DeserializeOptions* options = nullptr,
-		Stream<char> tags = {}
-	);
-
 	// Determines if it is a reflected type or a custom type and call the function appropriately
 	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
 		const Reflection::ReflectionManager* reflection_manager,
@@ -522,15 +351,6 @@ namespace ECSEngine {
 		Stream<char> tags = {}
 	);
 	
-	// Determines if it is a reflected type or a custom type and call the function appropriately
-	ECSENGINE_API size_t DeserializeSizeEx(
-		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> definition,
-		uintptr_t& stream,
-		DeserializeOptions* options = nullptr,
-		Stream<char> tags = {}
-	);
-
 #pragma endregion
 
 }

@@ -1757,14 +1757,20 @@ namespace ECSEngine {
 
 		template<typename Allocator>
 		ECS_INLINE void Initialize(Allocator* allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			buffer = allocator->Allocate(_capacity, 8, debug_info);
+			buffer = allocator->Allocate(_capacity, alignof(void*), debug_info);
 			size = 0;
 			capacity = _capacity;
 		}
 
 		ECS_INLINE void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			buffer = Allocate(allocator, _capacity, 8, debug_info);
+			buffer = Allocate(allocator, _capacity, alignof(void*), debug_info);
 			size = 0;
+			capacity = _capacity;
+		}
+
+		ECS_INLINE void InitializeFromBuffer(void* _buffer, unsigned int _size, unsigned int _capacity) {
+			buffer = _buffer;
+			size = _size;
 			capacity = _capacity;
 		}
 
@@ -2513,6 +2519,17 @@ namespace ECSEngine {
 		return std::is_same_v<ContainerType, Stream<ElementType>> ||
 			std::is_same_v<ContainerType, CapacityStream<ElementType>> ||
 			std::is_same_v<ContainerType, ResizableStream<ElementType>>;
+	}
+
+	// Returns the byte size of the structure, or 1 for void
+	template<typename ElementType>
+	constexpr size_t GetStructureByteSize() {
+		if constexpr (std::is_same_v<ElementType, void>) {
+			return 1;
+		}
+		else {
+			return sizeof(ElementType);
+		}
 	}
 
 	ECS_INLINE ECS_ALLOCATOR_TYPE AllocatorTypeFromString(Stream<char> string) {
