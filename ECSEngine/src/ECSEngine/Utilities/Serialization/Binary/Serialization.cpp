@@ -198,7 +198,7 @@ namespace ECSEngine {
 	}
 
 	// This function will write the current type, plus all the recursive type dependencies that it has
-	static size_t WriteTypeTable(
+	static bool WriteTypeTable(
 		const ReflectionManager* reflection_manager, 
 		const ReflectionType* type, 
 		WriteInstrument* write_instrument,
@@ -338,70 +338,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	// The functor must take as parameter a uintptr_t& and write into it and return an ECS_SERIALIZE_CODE
-	template<typename Functor>
-	static ECS_SERIALIZE_CODE SerializeFileImpl(size_t serialize_size, Stream<wchar_t> file, SerializeOptions* options, Functor&& functor) {
-		AllocatorPolymorphic file_allocator = options == nullptr ? AllocatorPolymorphic{ nullptr } : options->allocator;
-
-		ECS_SERIALIZE_CODE code = ECS_SERIALIZE_OK;
-		bool serialize_status = SerializeWriteFile(file, file_allocator, serialize_size, true, [&](uintptr_t& buffer) {
-			code = functor(buffer);
-			});
-
-		if (!serialize_status) {
-			if (options != nullptr) {
-				ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not open file {#} for serialization.", file);
-			}
-			return ECS_SERIALIZE_COULD_NOT_OPEN_OR_WRITE_FILE;
-		}
-
-		return code;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	// The functor must take as parameter a uintptr_t& and read from it and return an ECS_DESERIALIZE_CODE
-	template<typename Functor>
-	ECS_DESERIALIZE_CODE DeserializeFileImpl(Stream<wchar_t> file, DeserializeOptions* options, void** file_data, Functor&& functor) {
-		ECS_DESERIALIZE_CODE code = ECS_DESERIALIZE_OK;
-
-		AllocatorPolymorphic file_allocator = options != nullptr ? options->file_allocator : AllocatorPolymorphic{ nullptr };
-
-		void* file_allocation = DeserializeReadBinaryFileAndKeepMemory(file, file_allocator, [&](uintptr_t& buffer) {
-			code = functor(buffer);
-			});
-
-		// Could not open file
-		if (file_allocation == nullptr) {
-			code = ECS_DESERIALIZE_COULD_NOT_OPEN_OR_READ_FILE;
-			if (options != nullptr) {
-				ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not open file {#} for deserialization.", file);
-			}
-			if (file_data != nullptr) {
-				*file_data = nullptr;
-			}
-		}
-		// Deallocate the file data if the deserialization failed or if a field allocator is specified
-		else if (code != ECS_DESERIALIZE_OK || (options != nullptr && options->field_allocator.allocator != nullptr)) {
-			DeallocateEx(file_allocator, file_allocation);
-			if (file_data != nullptr) {
-				*file_data = nullptr;
-			}
-		}
-		else {
-			if (file_data != nullptr) {
-				*file_data = file_allocation;
-			}
-			else {
-				DeallocateEx(file_allocator, file_allocation);
-			}
-		}
-
-		return code;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
 	bool SerializeHasDependentTypesCustomSerializerRecurse(
 		const ReflectionManager* reflection_manager, 
 		Stream<char> definition, 
@@ -501,20 +437,6 @@ namespace ECSEngine {
 		}
 
 		return true;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CODE Serialize(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		const void* data,
-		uintptr_t& stream,
-		SerializeOptions* options
-	) {
-		size_t dummy = 0;
-		//return SerializeImplementation<true>(reflection_manager, type, data, stream, options, &dummy);
-		return ECS_SERIALIZE_OK;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -774,32 +696,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t SerializeSize(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		const void* data,
-		SerializeOptions* options
-	) {
-		return 0;
-		/*size_t total_size = 0;
-		uintptr_t dummy_stream = 0;
-		ECS_SERIALIZE_CODE code = SerializeImplementation<false>(reflection_manager, type, data, dummy_stream, options, &total_size);
-		return code != ECS_SERIALIZE_OK ? -1 : total_size;*/
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	void SerializeFieldTable(
-		const ReflectionManager* reflection_manager, 
-		const ReflectionType* type, 
-		uintptr_t& stream, 
-		Stream<SerializeOmitField> omit_fields,
-		bool write_tags
-	)
-	{
-		//WriteTypeTableWithSerializers<true>(reflection_manager, type, stream, omit_fields, write_tags);
-	}
-
 	bool SerializeFieldTable(
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
@@ -809,34 +705,6 @@ namespace ECSEngine {
 	)
 	{
 		return WriteTypeTableWithSerializers(reflection_manager, type, write_instrument, omit_fields, write_tags);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	size_t SerializeFieldTableSize(
-		const ReflectionManager* reflection_manager, 
-		const ReflectionType* type, 
-		Stream<SerializeOmitField> omit_fields,
-		bool write_tags
-	)
-	{
-		uintptr_t dummy = 0;
-		return WriteTypeTableWithSerializers<false>(reflection_manager, type, dummy, omit_fields, write_tags);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	ECS_DESERIALIZE_CODE Deserialize(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		void* address,
-		Stream<wchar_t> file,
-		DeserializeOptions* options,
-		void** file_data
-	) {
-		return DeserializeFileImpl(file, options, file_data, [&](uintptr_t& buffer) {
-			return Deserialize(reflection_manager, type, address, buffer, options);
-		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -988,21 +856,6 @@ namespace ECSEngine {
 		}
 
 		return success;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	ECS_DESERIALIZE_CODE Deserialize(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		void* address, 
-		uintptr_t& stream,
-		DeserializeOptions* options
-	)
-	{
-		return ECS_DESERIALIZE_CORRUPTED_FILE;
-		//size_t buffer_size = 0;
-		//return DeserializeImplementation<true>(reflection_manager, type, address, stream, options, &buffer_size);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -2110,28 +1963,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeSize(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		uintptr_t& data,
-		DeserializeOptions* options,
-		ECS_DESERIALIZE_CODE* code
-	) {
-		return -1;
-		//size_t buffer_size = 0;
-		//ECS_DESERIALIZE_CODE deserialize_code = DeserializeImplementation<false>(reflection_manager, type, nullptr, data, options, &buffer_size);
-		//if (deserialize_code != ECS_DESERIALIZE_OK) {
-		//	buffer_size = -1;
-		//}
-
-		//if (code != nullptr) {
-		//	*code = deserialize_code;
-		//}
-		//return buffer_size;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
 	static bool ValidateDeserializeFieldInfo(const DeserializeFieldInfo& field_info) {
 		if ((unsigned char)field_info.stream_type >= (unsigned char)ReflectionStreamFieldType::COUNT) {
 			return false;
@@ -2454,14 +2285,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	DeserializeFieldTable DeserializeFieldTableFromData(uintptr_t& data, AllocatorPolymorphic temporary_allocator, const DeserializeFieldTableOptions* options)
-	{
-		return DeserializeFieldTable();
-		//return DeserializeFieldTableFromDataRecursive<true>(data, temporary_allocator, options);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
 	DeserializeFieldTable DeserializeFieldTableFromData(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, const DeserializeFieldTableOptions* options) {
 		DeserializeFieldTable field_table;
 		if (!DeserializeFieldTableCustomInterfacesInfo(read_instrument, temporary_allocator, field_table, options)) {
@@ -2479,30 +2302,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeFieldTableFromDataSize(uintptr_t data, const DeserializeFieldTableOptions* options)
-	{
-		return -1;
-		/*const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 8;
-
-		void* stack_allocation = ECS_STACK_ALLOC(sizeof(char) * STACK_ALLOCATION_CAPACITY);
-		LinearAllocator allocator(stack_allocation, STACK_ALLOCATION_CAPACITY);
-
-		return DeserializeFieldTableFromDataRecursive<false>(data, &allocator, options).types.size;*/
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	//void IgnoreDeserialize(uintptr_t& data, const DeserializeFieldTableOptions* options)
-	//{
-	//	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-
-	//	DeserializeFieldTable field_table;
-	//	field_table = DeserializeFieldTableFromData(data, &stack_allocator);
-	//	IgnoreDeserialize(data, field_table, options);
-	//}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
 	bool IgnoreDeserialize(ReadInstrument* read_instrument, const DeserializeFieldTableOptions* options)
 	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
@@ -2511,32 +2310,6 @@ namespace ECSEngine {
 		field_table = DeserializeFieldTableFromData(read_instrument, &stack_allocator);
 		return IgnoreDeserialize(read_instrument, field_table, options);
 	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	//void IgnoreDeserialize(
-	//	uintptr_t& data, 
-	//	DeserializeFieldTable field_table,
-	//	const DeserializeFieldTableOptions* options,
-	//	const ReflectionManager* deserialized_manager, 
-	//	Stream<DeserializeTypeNameRemapping> name_remappings
-	//)
-	//{
-	//	field_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
-
-	//	ReflectionManager temp_manager;
-	//	size_t stack_allocation_size = deserialized_manager == nullptr ? ECS_KB * 32 : 0;
-	//	void* stack_allocation = ECS_STACK_ALLOC(stack_allocation_size);
-	//	LinearAllocator linear_allocator(stack_allocation, stack_allocation_size);
-	//	if (deserialized_manager == nullptr) {
-	//		deserialized_manager = &temp_manager;
-	//		temp_manager.type_definitions.Initialize(&linear_allocator, 32);
-	//		field_table.ToNormalReflection(&temp_manager, &linear_allocator);
-	//	}
-
-	//	// The type to be ignored is the first one from the field table
-	//	IgnoreType(data, field_table, 0, deserialized_manager);
-	//}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
@@ -2706,15 +2479,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	/*ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, Stream<wchar_t> file, SerializeOptions* options, Stream<char> tags)
-	{
-		return SerializeFileImpl(SerializeSizeEx(reflection_manager, definition, data, options), file, options, [&](uintptr_t& buffer) {
-			return SerializeEx(reflection_manager, definition, data, buffer, options, tags);
-		});
-	}*/
-
-	// ------------------------------------------------------------------------------------------------------------------
-
 	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, WriteInstrument* write_instrument, SerializeOptions* options, Stream<char> tags)
 	{
 		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
@@ -2740,48 +2504,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	//size_t SerializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> definition, const void* data, SerializeOptions* options, Stream<char> tags)
-	//{
-	//	const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
-	//	if (reflection_type != nullptr) {
-	//		return SerializeSize(reflection_manager, reflection_type, data, options);
-	//	}
-	//	else {
-	//		// Try a custom type
-	//		unsigned int custom_index = FindSerializeCustomType(definition);
-	//		ECS_ASSERT(custom_index != -1);
-
-	//		SerializeCustomTypeWriteFunctionData write_data;
-	//		write_data.reflection_manager = reflection_manager;
-	//		write_data.data = data;
-	//		write_data.definition = definition;
-	//		write_data.options = options;
-	//		write_data.stream = nullptr;
-	//		write_data.write_data = false;
-	//		write_data.tags = tags;
-	//		return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].write(&write_data);
-	//	}
-	//}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	/*ECS_DESERIALIZE_CODE DeserializeEx(
-		const ReflectionManager* reflection_manager, 
-		Stream<char> definition,
-		void* address, 
-		Stream<wchar_t> file, 
-		DeserializeOptions* options, 
-		void** file_data,
-		Stream<char> tags
-	)
-	{
-		return DeserializeFileImpl(file, options, file_data, [&](uintptr_t& buffer) {
-			return DeserializeEx(reflection_manager, definition, address, buffer, options, tags);
-		});
-	}*/
-
-	// ------------------------------------------------------------------------------------------------------------------
-
 	ECS_DESERIALIZE_CODE DeserializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, void* address, ReadInstrument* read_instrument, DeserializeOptions* options, Stream<char> tags)
 	{
 		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
@@ -2804,34 +2526,6 @@ namespace ECSEngine {
 			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) ? ECS_DESERIALIZE_OK : ECS_DESERIALIZE_CORRUPTED_FILE;
 		}
 	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	/*size_t DeserializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> string, uintptr_t& stream, DeserializeOptions* options, Stream<char> tags)
-	{
-		Stream<char> definition = string;
-
-		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
-		if (reflection_type != nullptr) {
-			return DeserializeSize(reflection_manager, reflection_type, stream, options);
-		}
-		else {
-			unsigned int custom_index = FindSerializeCustomType(definition);
-			ECS_ASSERT(custom_index != -1);
-
-			SerializeCustomTypeReadFunctionData read_data;
-			read_data.data = nullptr;
-			read_data.definition = definition;
-			read_data.reflection_manager = reflection_manager;
-			read_data.options = options;
-			read_data.stream = &stream;
-			read_data.read_data = false;
-			read_data.was_allocated = false;
-			read_data.version = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].version;
-			read_data.tags = tags;
-			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) == -1 ? ECS_DESERIALIZE_CORRUPTED_FILE : ECS_DESERIALIZE_OK;
-		}
-	}*/
 
 	// ------------------------------------------------------------------------------------------------------------------
 

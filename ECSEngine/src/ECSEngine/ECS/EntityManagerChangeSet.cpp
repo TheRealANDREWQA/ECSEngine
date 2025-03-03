@@ -254,6 +254,8 @@ namespace ECSEngine {
 	) {
 		// Firstly, write the change set itself, the structure that describes what changes need to be performed,
 		// Then write the component data that was changed
+
+		return false;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------

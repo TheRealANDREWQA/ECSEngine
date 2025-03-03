@@ -1921,7 +1921,7 @@ namespace ECSEngine {
 								void** pointer = (void**)data;
 								if (byte_size > 0) {
 									void* allocation = AllocateEx(allocator, byte_size, info.stream_alignment);
-									success &= read_instrument->ReadAlways(byte_size);
+									success &= read_instrument->ReadAlways(allocation, byte_size);
 
 									*pointer = allocation;
 								}

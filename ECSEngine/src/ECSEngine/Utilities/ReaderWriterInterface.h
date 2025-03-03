@@ -64,7 +64,8 @@ namespace ECSEngine {
 			if (!SerializeIntVariableLengthBool(this, data.size)) {
 				return false;
 			}
-			return Write(data.buffer, data.size * sizeof(ElementType));
+			size_t element_size = 0;
+			return Write(data.buffer, data.size * GetStructureByteSize<ElementType>());
 		}
 	};
 
@@ -165,11 +166,11 @@ namespace ECSEngine {
 		template<typename IntegerType, typename ElementType>
 		bool ReadWithSize(CapacityStream<ElementType>& data, AllocatorPolymorphic allocator, size_t max_allowed_capacity = UINT64_MAX) {
 			Stream<void> stream_data;
-			if (!ReadWithSize<IntegerType>(stream_data, allocator, max_allowed_capacity == UINT64_MAX ? UINT64_MAX : max_allowed_capacity * sizeof(ElementType))) {
+			if (!ReadWithSize<IntegerType>(stream_data, allocator, max_allowed_capacity == UINT64_MAX ? UINT64_MAX : max_allowed_capacity * GetStructureByteSize<ElementType>())) {
 				return false;
 			}
 			data.buffer = (ElementType*)stream_data.buffer;
-			data.size = stream_data.size / sizeof(ElementType);
+			data.size = stream_data.size / GetStructureByteSize<ElementType>();
 			data.capacity = data.size;
 			return true;
 		}
@@ -179,11 +180,11 @@ namespace ECSEngine {
 		template<typename IntegerType, typename ElementType>
 		bool ReadWithSize(ResizableStream<ElementType>& data, size_t max_allowed_capacity = UINT64_MAX) {
 			Stream<void> stream_data;
-			if (!ReadWithSize<IntegerType>(stream_data, data.allocator, max_allowed_capacity == UINT64_MAX ? UINT64_MAX : max_allowed_capacity * sizeof(ElementType))) {
+			if (!ReadWithSize<IntegerType>(stream_data, data.allocator, max_allowed_capacity == UINT64_MAX ? UINT64_MAX : max_allowed_capacity * GetStructureByteSize<ElementType>())) {
 				return false;
 			}
 			data.buffer = (ElementType*)stream_data.buffer;
-			data.size = stream_data.size / sizeof(ElementType);
+			data.size = stream_data.size / GetStructureByteSize<ElementType>();
 			data.capacity = data.size;
 			return true;
 		}
@@ -201,7 +202,7 @@ namespace ECSEngine {
 				return false;
 			}
 
-			if (!Read(data.buffer + data.size, data_size * sizeof(ElementType))) {
+			if (!Read(data.buffer + data.size, data_size * GetStructureByteSize<ElementType>())) {
 				return false;
 			}
 
@@ -289,7 +290,7 @@ namespace ECSEngine {
 				return false;
 			}
 
-			data.InitializeFromBuffer(buffer, byte_size / sizeof(ElementType));
+			data.InitializeFromBuffer(buffer, byte_size / GetStructureByteSize<ElementType>());
 			return true;
 		}
 		
@@ -302,7 +303,7 @@ namespace ECSEngine {
 				return false;
 			}
 
-			data.buffer = ReferenceData(data_size * sizeof(ElementType));
+			data.buffer = ReferenceData(data_size * GetStructureByteSize<ElementType>());
 			data.size = data_size;
 			return data.buffer != nullptr;
 		}
@@ -339,17 +340,9 @@ namespace ECSEngine {
 				return false;
 			}
 
-			size_t element_byte_size = 0;
-			if constexpr (std::is_same_v<ElementType, void>) {
-				element_byte_size = 1;
-			}
-			else {
-				element_byte_size = sizeof(ElementType);
-			}
-
 			// We must receive the template parameter, because otherwise we don't know
 			// How many bytes each element takes
-			return Ignore(data_size * element_byte_size);
+			return Ignore(data_size * GetStructureByteSize<ElementType>());
 		}
 
 		// Does not use the parameter in any runtime capacity, it is used only to deduce the type of the template parameter

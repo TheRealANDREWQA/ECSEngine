@@ -762,27 +762,20 @@ namespace ECSEngine {
 
 	enum ECS_DESERIALIZE_CODE : unsigned char;
 
+	struct WriteInstrument;
+	struct ReadInstrument;
+
 	struct DeserializeAssetDatabaseOptions {
 		// This flag will set to 0 all the fields which are not loaded
 		bool default_initialize_other_fields = true;
 	};
 
 	// It writes only the names and the paths of the resources that need to be written
-	ECSENGINE_API ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, Stream<wchar_t> file);
-
-	ECSENGINE_API ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, uintptr_t& ptr);
-
-	ECSENGINE_API size_t SerializeAssetDatabaseSize(const AssetDatabase* database);
+	ECSENGINE_API ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, WriteInstrument* write_instrument);
 
 	// The corresponding metadata files are not loaded - only the necessary information to load them
 	// Is actually loaded (file and name mostly, materials are different)
-	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file, DeserializeAssetDatabaseOptions options = {});
-
-	// The corresponding metadata files are not loaded - only the necessary information to load them
-	// Is actually loaded (file and name mostly, materials are different)
-	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& ptr, DeserializeAssetDatabaseOptions options = {});
-
-	ECSENGINE_API size_t DeserializeAssetDatabaseSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr);
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, ReadInstrument* read_instrument, DeserializeAssetDatabaseOptions options = {});
 
 	// ------------------------------------------------------------------------------------------------------------
 
