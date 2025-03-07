@@ -18,6 +18,9 @@ namespace ECSEngine {
 	struct AssetDatabaseReferencePointerRemap;
 	struct EntityManager;
 
+	struct WriteInstrument;
+	struct ReadInstrument;
+
 	namespace Reflection {
 		struct ReflectionManager;
 		struct ReflectionType;
@@ -52,7 +55,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager;
 		size_t chunk_index;
 		size_t file_version;
-		Stream<void> chunk_data;
+		ReadInstrument* read_instrument;
 		void* user_data;
 	};
 	
@@ -96,14 +99,10 @@ namespace ECSEngine {
 
 		// ----------------------- Mandatory -----------------------------
 		EntityManager* entity_manager;
-		// When using in memory data reading, it will advance the pointer
-		// By the amount necessary to read all the scene information
-		// You specify which of these options is active with the is_file_data boolean
-		union {
-			Stream<wchar_t> file;
-			Stream<void> in_memory_data;
-		};
-		bool is_file_data = true;
+		// This is data source that will be used to read the scene from.
+		// It assumes that the read instrument is limited only to the scene data beforehand,
+		// The caller must ensure this property
+		ReadInstrument* read_instrument;
 		// The reflection manager must have the SceneModule type reflected
 		const Reflection::ReflectionManager* reflection_manager;
 		Stream<ModuleComponentFunctions> module_component_functions;
@@ -154,7 +153,7 @@ namespace ECSEngine {
 
 	struct SaveSceneData {
 		// ------------------------- Mandatory ---------------------------
-		Stream<wchar_t> file;
+		WriteInstrument* write_instrument;
 		const EntityManager* entity_manager;
 		// The reflection manager must have the SceneModule type reflected
 		const Reflection::ReflectionManager* reflection_manager;

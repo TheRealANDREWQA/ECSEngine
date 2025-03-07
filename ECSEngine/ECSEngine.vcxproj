@@ -710,6 +710,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\BasicTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Benchmark.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\BufferedFileReaderWriter.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ByteUnits.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />

@@ -73,30 +73,174 @@ namespace ECSEngine {
 #define ECS_WRITE_INSTRUMENT_HELPER using WriteInstrument::Write
 
 	struct ReadInstrument {
-		// Returns the offset from the beginning of the read range up until the current read location
-		virtual size_t GetOffset() const = 0;
+		ECS_INLINE ReadInstrument(size_t _total_size) : total_size(_total_size) {}
 
-		virtual bool Read(void* data, size_t data_size) = 0;
+		// This structure will remove the subinstrument in the destructor
+		struct SubinstrumentDeallocator {
+			ECS_INLINE ~SubinstrumentDeallocator() {
+				instrument->PopSubinstrument();
+			}
+
+			ReadInstrument* instrument;
+		};
+
+		constexpr static size_t MAX_SUBINSTRUMENT_COUNT = 8;
+
+		struct SubinstrumentData {
+			size_t start_offset;
+			size_t range_size;
+		};
+
+	protected:
+		// These functions are protected because the front facing functions do a little bit more to handle subinstruments
+
+		// Returns the offset from the beginning of the read range up until the current read location
+		virtual size_t GetOffsetImpl() const = 0;
+
+		// This function can assume that the read is in bounds, since the upstream ReadInstrument function ensures this property
+		virtual bool ReadImpl(void* data, size_t data_size) = 0;
+
+		// This function can assume that the read is in bounds, since the upstream ReadInstrument function ensures this property
+		// This function should be called when you always want to read into data - this distinction
+		// Is relevant only for size determination instruments, which for read simply skips the data
+		virtual bool ReadAlwaysImpl(void* data, size_t data_size) = 0;
+
+		// This function can assume that the read is in bounds, since the upstream ReadInstrument function ensures this property
+		virtual bool SeekImpl(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) = 0;
+
+		// This function can assume that the read is in bounds, since the upstream ReadInstrument function ensures this property
+		// Returns a valid pointer if the data size can be directly referenced in the reader, without having you to allocate
+		// A buffer and then read into it. The out boolean parameter will be set to true if the current data size is out of bounds
+		// For the serialized range, else it will be set to false. In case it can reference the data but it is out of bounds, it will return nullptr,
+		// But if it cannot reference the data and the data size is out of bounds, the out parameter won't be set to true.
+		virtual void* ReferenceDataImpl(size_t data_size) = 0;
+
+	private:
+		// ReadFunctor must be a lambda that returns the provided return type and takes no parameters
+		// And performs the actual read. At the moment, it should be either the function ReadImpl, ReadAlwaysImpl, ReferenceDataImpl.
+		// is_out_of_range is set to true for the case where there are subinstruments and the read falls outside the subinstrument range
+		template<typename ReturnType, typename ReadFunctor>
+		ReturnType ReadImplementation(size_t data_size, bool& is_out_of_range, ReadFunctor&& read_functor) {
+			is_out_of_range = false;
+			// If we have a subinstrument, we must ensure that the data size fits in the subrange
+			size_t offset = GetOffset();
+			size_t instrument_range = subinstrument_count == 0 ? total_size : subinstruments[subinstrument_count - 1]->range_size;
+			if (offset + data_size > instrument_range) {
+				is_out_of_range = true;
+				if constexpr (std::is_same_v<bool, ReturnType>) {
+					return false;
+				}
+				else if constexpr (std::is_same_v<void*, ReturnType>) {
+					return nullptr;
+				}
+				else {
+					static_assert(false, "Invalid ReadInstrument ReadImplementation parameters!");
+				}
+			}
+		
+			return read_functor();
+		}
+
+	public:
+		// Similarly to the writer, this function indicates whether or not this call is used to determine the byte size
+		// Read for a particular structure, without intending to actually read all data (some data might still be read, the data
+		// that is required to know how much to advance)
+		virtual bool IsSizeDetermination() const = 0;
+
+		// Returns the offset from the beginning of the read range up until the current read location
+		size_t GetOffset() const {
+			size_t offset = GetOffsetImpl();
+			// If we have a subinstrument, we must deduct the start offset for that subinstrument
+			size_t subinstrument_offset = 0;
+			if (subinstrument_count > 0) {
+				subinstrument_offset = subinstruments[subinstrument_count - 1]->start_offset;
+			}
+			return offset - subinstrument_offset;
+		}
+
+		// Returns true if it succeeded, else false
+		ECS_INLINE bool Read(void* data, size_t data_size) {
+			bool is_out_of_range;
+			return ReadImplementation<bool>(data_size, is_out_of_range, [this, data, data_size]() -> bool {
+				return ReadImpl(data, data_size);
+			});
+		}
 
 		// This function should be called when you always want to read into data - this distinction
-		// Is relevant only for size determination instruments, which for read simply skip the data
-		virtual bool ReadAlways(void* data, size_t data_size) = 0;
-
-		virtual bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) = 0;
+		// Is relevant only for size determination instruments, which for read simply skips the data.
+		// Returns true if it succeeded, else false
+		ECS_INLINE bool ReadAlways(void* data, size_t data_size) {
+			bool is_out_of_range;
+			return ReadImplementation<bool>(data_size, is_out_of_range, [this, data, data_size]() -> bool {
+				return ReadAlwaysImpl(data, data_size);
+			});
+		}
 
 		// Returns a valid pointer if the data size can be directly referenced in the reader, without having you to allocate
 		// A buffer and then read into it. The out boolean parameter will be set to true if the current data size is out of bounds
 		// For the serialized range, else it will be set to false. In case it can reference the data but it is out of bounds, it will return nullptr,
 		// But if it cannot reference the data and the data size is out of bounds, the out parameter won't be set to true.
-		virtual void* ReferenceData(size_t data_size, bool& out_of_bounds) = 0;
+		ECS_INLINE void* ReferenceData(size_t data_size, bool& is_out_of_bounds) {
+			return ReadImplementation<void*>(data_size, is_out_of_bounds, [this, data_size, &is_out_of_bounds]() -> void* {
+				return ReferenceDataImpl(data_size);
+			});
+		}
+
+		bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) {
+			// Ensure that the provided seek is in bounds.
+			size_t range_size = subinstrument_count == 0 ? total_size : subinstruments[subinstrument_count - 1]->range_size;
+			size_t range_offset = subinstrument_count == 0 ? 0 : subinstruments[subinstrument_count - 1]->start_offset;
+			switch (seek_type) {
+			case ECS_INSTRUMENT_SEEK_START:
+			{
+				// The check for offset > 0 is a bit redundant, since that checks
+				// That the integer is not negative, but the previous offset < 0 check ensures that,
+				// But leave it nonetheless for better clarity
+				if (offset < 0 || (offset > 0 && offset > range_size)) {
+					return false;
+				}
+
+				// The call can be forwarded, while adding the subinstrument offset
+				return SeekImpl(seek_type, offset + (int64_t)range_offset);
+			}
+			break;
+			case ECS_INSTRUMENT_SEEK_CURRENT:
+			{
+				size_t current_offset = GetOffset();
+				if ((offset < 0 && offset < -(int64_t)current_offset) || (offset > 0 && (size_t)offset > range_size - current_offset)) {
+					return false;
+				}
+
+				// Can forward the call as is, without modifying the offset
+				return SeekImpl(seek_type, offset);
+			}
+			break;
+			case ECS_INSTRUMENT_SEEK_END:
+			{
+				if (offset > 0 || (offset < 0 && offset < -(int64_t)range_size)) {
+					return false;
+				}
+
+				// The call needs to be transformed into a start seek, because it's easier to compute
+				// The offset has to be negative, and the addition is the way to compose them
+				return SeekImpl(ECS_INSTRUMENT_SEEK_START, (int64_t)(range_offset + range_size) + offset);
+			}
+			break;
+			default:
+				ECS_ASSERT(false, "Invalid ReadInstrument code path!");
+			}
+
+			// Shouldn't be reached
+			return false;
+		}
 
 		// Returns the total byte size of the written data
-		virtual size_t TotalSize() const = 0;
-
-		// Similarly to the writer, this function indicates whether or not this call is used to determine the byte size
-		// Read for a particular structure, without intending to actually read all data (some data might still be read, the data
-		// that is required to know how much to advance)
-		virtual bool IsSizeDetermination() const = 0;
+		ECS_INLINE size_t TotalSize() const {
+			if (subinstrument_count == 0) {
+				return total_size;
+			}
+			return subinstruments[subinstrument_count - 1]->range_size;
+		}
 
 		// Returns true if it succeeded, else false
 		template<typename T>
@@ -273,6 +417,70 @@ namespace ECSEngine {
 			return result;
 		}
 
+		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
+		// And sets the output boolean was_allocated to false. Else, it will allocate a buffer, read the data into it and return that pointer.
+		// There extra output boolean parameters can help you handle failure cases. In case the read failed altogether, the returned stream is empty
+		template<typename IntegerType>
+		Stream<void> ReadOrReferenceDataWithSize(AllocatorPolymorphic allocator, bool* was_allocated = nullptr, bool* is_reference_failure = nullptr) {
+			Stream<void> data;
+
+			IntegerType byte_size;
+			if (!ReadAlways(&byte_size)) {
+				if (was_allocated) {
+					*was_allocated = false;
+				}
+				if (is_reference_failure) {
+					*is_reference_failure = false;
+				}
+				return data;
+			}
+
+			ReadOrReferenceBuffer result = ReadOrReferenceData(allocator, byte_size);
+			if (result.buffer != nullptr) {
+				data = { result.buffer, byte_size };
+			}
+			
+			if (was_allocated) {
+				*was_allocated = result.was_allocated;
+			}
+			if (is_reference_failure) {
+				*is_reference_failure = result.is_reference_failure;
+			}
+			return data;
+		}
+
+		// The same as the other overload, with the exception that the size is written with a variable length instead.
+		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
+		// And sets the output boolean was_allocated to false. Else, it will allocate a buffer, read the data into it and return that pointer.
+		// There extra output boolean parameters can help you handle failure cases. In case the read failed altogether, the returned stream is empty
+		Stream<void> ReadOrReferenceDataWithSizeVariableLength(AllocatorPolymorphic allocator, bool* was_allocated = nullptr, bool* is_reference_failure = nullptr) {
+			Stream<void> data;
+
+			size_t byte_size;
+			if (!DeserializeIntVariableLengthBool(this, byte_size)) {
+				if (was_allocated) {
+					*was_allocated = false;
+				}
+				if (is_reference_failure) {
+					*is_reference_failure = false;
+				}
+				return data;
+			}
+
+			ReadOrReferenceBuffer result = ReadOrReferenceData(allocator, byte_size);
+			if (result.buffer != nullptr) {
+				data = { result.buffer, byte_size };
+			}
+
+			if (was_allocated) {
+				*was_allocated = result.was_allocated;
+			}
+			if (is_reference_failure) {
+				*is_reference_failure = result.is_reference_failure;
+			}
+			return data;
+		}
+
 		// Tries to read or reference a stream of data, with the specified integer type range.
 		// IMPORTANT: It assumes that the reference data can be natively reported by this structure, meaning
 		// That it can provide stable pointers. If always can't, like a typical buffered file reader, you shouldn't
@@ -352,6 +560,44 @@ namespace ECSEngine {
 			return IgnoreWithSizeVariableLength<ElementType>();
 		}
 
+		// The subinstrument data will be used as storage to hold some extra information that is used internally.
+		// You shouldn't modify this data, only provide it and ensure it is valid for the entire duration of the
+		// Subinstrument. It will limit this instrument to a particular range, "virtualizing" all calls as if
+		// The instrument knows about only that range.
+		ECS_INLINE SubinstrumentDeallocator PushSubinstrument(SubinstrumentData* data_storage, size_t subrange_size) {
+			ECS_ASSERT(subinstrument_count < MAX_SUBINSTRUMENT_COUNT, "The maximum amount of ReadInstrument subinstruments was reached!");
+			// If there is another subinstrument in effect, we need to be relative to that one.
+			if (subinstrument_count > 0) {
+				SubinstrumentData last_subinstrument = *subinstruments[subinstrument_count - 1];
+				// This offset is relative to the last subinstrument
+				size_t offset = GetOffset();
+				ECS_ASSERT(subrange_size < last_subinstrument.range_size - offset, "Invalid ReadInstrument subinstrument call - the subrange exceeds the previous subinstrument range!");
+				data_storage->start_offset = last_subinstrument.start_offset + offset;
+				data_storage->range_size = subrange_size;
+			}
+			else {
+				data_storage->start_offset = GetOffset();
+				ECS_ASSERT(total_size - data_storage->start_offset >= subrange_size, "Invalid ReadInstrument subinstrument call - the subrange exceeds the current state!");
+				data_storage->range_size = subrange_size;
+			}
+			subinstrument_count++;
+		}
+
+		// Removes the last subinstrument used. Should not be generally called manually, it should be done
+		// Through the destructor of SubinstrumentDeallocator.
+		ECS_INLINE void PopSubinstrument() {
+			ECS_ASSERT(subinstrument_count > 0);
+			subinstrument_count--;
+		}
+
+		// This field must be initialized by the derived struct, such that we have this information readily available
+		size_t total_size = 0;
+		// These field implement the ability of creating subinstruments, which act as if there is currently another active read instrument
+		// Inside the current read instrument. Multiple nested subinstruments are allowed, up to a reasonable limit.
+		// Use a small embedded buffer where subinstrument pointers are recorded, force the user to provide the SubinstrumentData
+		// Storage, such that we reduce the byte size of this structure, since these subinstruments are temporary in nature.
+		size_t subinstrument_count = 0;
+		SubinstrumentData* subinstruments[MAX_SUBINSTRUMENT_COUNT];
 	};
 
 	// Should be added to the structure that inherits from ReadInstrumentHelper
