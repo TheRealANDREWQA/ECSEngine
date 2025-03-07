@@ -55,14 +55,15 @@ namespace ECSEngine {
 	struct SizeDeterminationReadInstrument : ReadInstrument {
 		ECS_READ_INSTRUMENT_HELPER;
 
-		ECS_INLINE SizeDeterminationReadInstrument(ReadInstrument* _backing_instrument, bool _ignore_seek_modifications) : backing_instrument(_backing_instrument), ignore_seek_modifications(_ignore_seek_modifications),
-			read_size(0) {}
+		ECS_INLINE SizeDeterminationReadInstrument(ReadInstrument* _backing_instrument, bool _ignore_seek_modifications) : ReadInstrument(_backing_instrument->total_size), backing_instrument(_backing_instrument),
+			ignore_seek_modifications(_ignore_seek_modifications), read_size(0) {}
 
-		ECS_INLINE size_t GetOffset() const override {
+	protected:
+		ECS_INLINE size_t GetOffsetImpl() const override {
 			return backing_instrument->GetOffset();
 		}
 
-		ECS_INLINE bool Read(void* data, size_t data_size) override {
+		ECS_INLINE bool ReadImpl(void* data, size_t data_size) override {
 			// In this function, don't actually read into data
 			if (!backing_instrument->Ignore(data_size)) {
 				return false;
@@ -71,15 +72,15 @@ namespace ECSEngine {
 			return true;
 		}
 
-		ECS_INLINE bool ReadAlways(void* data, size_t data_size) override {
-			if (!backing_instrument->Read(data, data_size)) {
+		ECS_INLINE bool ReadAlwaysImpl(void* data, size_t data_size) override {
+			if (!backing_instrument->ReadAlways(data, data_size)) {
 				return false;
 			}
 			read_size += data_size;
 			return true;
 		}
 
-		bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
+		bool SeekImpl(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
 			if (!backing_instrument->Seek(seek_type, offset)) {
 				return false;
 			}
@@ -115,7 +116,7 @@ namespace ECSEngine {
 			return true;
 		}
 
-		void* ReferenceData(size_t data_size, bool& is_out_of_range) override {
+		ECS_INLINE void* ReferenceDataImpl(size_t data_size) override {
 			// The backing instrument can skip over the current data
 			if (!backing_instrument->Ignore(data_size)) {
 				return nullptr;
@@ -126,9 +127,7 @@ namespace ECSEngine {
 			return (void*)0x1;
 		}
 
-		ECS_INLINE size_t TotalSize() const override {
-			return backing_instrument->TotalSize();
-		}
+	public:
 
 		ECS_INLINE bool IsSizeDetermination() const override {
 			return true;

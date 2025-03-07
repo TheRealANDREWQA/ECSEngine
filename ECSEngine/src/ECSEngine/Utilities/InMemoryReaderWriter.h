@@ -63,47 +63,40 @@ namespace ECSEngine {
 	struct InMemoryReadInstrument : ReadInstrument {
 		ECS_READ_INSTRUMENT_HELPER;
 
-		ECS_INLINE InMemoryReadInstrument() : buffer(nullptr), buffer_capacity(nullptr), initial_buffer(0), initial_buffer_capacity(0) {}
-		ECS_INLINE InMemoryReadInstrument(uintptr_t& _buffer, size_t& _buffer_capacity) : buffer(&_buffer), buffer_capacity(&_buffer_capacity), initial_buffer(_buffer),
-			initial_buffer_capacity(_buffer_capacity) {}
+		ECS_INLINE InMemoryReadInstrument() : ReadInstrument(0), buffer(nullptr), initial_buffer(0) {}
+		ECS_INLINE InMemoryReadInstrument(uintptr_t& _buffer, size_t buffer_capacity) : ReadInstrument(buffer_capacity), buffer(&_buffer), initial_buffer(_buffer) {}
 
-		ECS_INLINE size_t GetOffset() const override {
+	protected:
+		ECS_INLINE size_t GetOffsetImpl() const override {
 			return *buffer - initial_buffer;
 		}
 
-		ECS_INLINE bool Read(void* data, size_t data_size) override {
-			if (*buffer_capacity < data_size) {
-				return false;
-			}
-			*buffer_capacity -= data_size;
+		ECS_INLINE bool ReadImpl(void* data, size_t data_size) override {
 			memcpy(data, (const void*)*buffer, data_size);
 			*buffer += data_size;
 			return true;
 		}
 
-		ECS_INLINE bool ReadAlways(void* data, size_t data_size) override {
+		ECS_INLINE bool ReadAlwaysImpl(void* data, size_t data_size) override {
 			// Same as normal read
-			return ReadAlways(data, data_size);
+			return ReadImpl(data, data_size);
 		}
 
-		bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
+		bool SeekImpl(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
 			switch (seek_type) {
 			case ECS_INSTRUMENT_SEEK_START:
 			{
 				*buffer = initial_buffer + offset;
-				*buffer_capacity = initial_buffer_capacity - offset;
 			}
 				break;
 			case ECS_INSTRUMENT_SEEK_CURRENT:
 			{
 				*buffer = *buffer + offset;
-				*buffer_capacity = *buffer_capacity - offset;
 			}
 				break;
 			case ECS_INSTRUMENT_SEEK_END:
 			{
-				*buffer = initial_buffer + initial_buffer_capacity + offset;
-				*buffer_capacity = -offset;
+				*buffer = initial_buffer + total_size + offset;
 			}
 				break;
 			default:
@@ -113,21 +106,13 @@ namespace ECSEngine {
 			return true;
 		}
 
-		void* ReferenceData(size_t data_size, bool& is_out_of_range) override {
-			if (*buffer_capacity < data_size) {
-				is_out_of_range = true;
-				return nullptr;
-			}
-			is_out_of_range = false;
+		ECS_INLINE void* ReferenceDataImpl(size_t data_size) override {
 			void* data_pointer = (void*)*buffer;
 			*buffer += data_size;
-			*buffer_capacity -= data_size;
 			return data_pointer;
 		}
 
-		ECS_INLINE size_t TotalSize() const override {
-			return initial_buffer_capacity;
-		}
+	public:
 
 		ECS_INLINE bool IsSizeDetermination() const override {
 			return false;
@@ -135,9 +120,7 @@ namespace ECSEngine {
 
 		// This is the value stored at construction time
 		uintptr_t initial_buffer;
-		size_t initial_buffer_capacity;
 		uintptr_t* buffer;
-		size_t* buffer_capacity;
 	};
 
 }

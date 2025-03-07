@@ -3,6 +3,9 @@
 #include "../OS/Cursor.h"
 #include "../Utilities/Assert.h"
 
+// Imagine Microsoft having proper defines!
+typedef __int64 QWORD;
+
 namespace ECSEngine {
 
 	Mouse::Mouse() {
@@ -242,12 +245,12 @@ namespace ECSEngine {
 	}
 
 	void HandleMouseRawInput(Mouse* mouse, void* raw_input_structures, size_t structure_count) {
-		RAWINPUT* raw_inputs = (RAWINPUT*)raw_input_structures;
+		RAWINPUT* raw_input = (RAWINPUT*)raw_input_structures;
 		for (size_t index = 0; index < structure_count; index++) {
-			if (raw_inputs[index].header.dwType == RIM_TYPEMOUSE) {
+			if (raw_input->header.dwType == RIM_TYPEMOUSE) {
 				// Handle the raw input
-				if (raw_inputs[index].data.mouse.lLastX != 0 || raw_inputs[index].data.mouse.lLastY != 0) {
-					mouse->AddDelta(raw_inputs[index].data.mouse.lLastX, raw_inputs[index].data.mouse.lLastY);
+				if (raw_input->data.mouse.lLastX != 0 || raw_input->data.mouse.lLastY != 0) {
+					mouse->AddDelta(raw_input[index].data.mouse.lLastX, raw_input[index].data.mouse.lLastY);
 					if (mouse->m_wrap_position) {
 						HandleWrapping(mouse);
 					}
@@ -255,7 +258,7 @@ namespace ECSEngine {
 
 				// Handle the button states
 				auto handle_flag = [&](int os_flag, ECS_MOUSE_BUTTON button, bool is_released) {
-					if (raw_inputs[index].data.mouse.usButtonFlags & os_flag) {
+					if (raw_input->data.mouse.usButtonFlags & os_flag) {
 						mouse->UpdateButton(button, is_released);
 					}
 				};
@@ -272,10 +275,12 @@ namespace ECSEngine {
 				handle_flag(RI_MOUSE_BUTTON_5_UP, ECS_MOUSE_X2, true);
 
 				// Handle the scroll wheel
-				if (raw_inputs[index].data.mouse.usButtonFlags & RI_MOUSE_WHEEL) {
-					mouse->AddWheelDelta((short)raw_inputs[index].data.mouse.usButtonData);
+				if (raw_input->data.mouse.usButtonFlags & RI_MOUSE_WHEEL) {
+					mouse->AddWheelDelta((short)raw_input->data.mouse.usButtonData);
 				}
 			}
+
+			raw_input = NEXTRAWINPUTBLOCK(raw_input);
 		}
 	}
 

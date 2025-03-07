@@ -10,6 +10,9 @@ namespace ECSEngine {
 	struct AssetDatabase;
 	struct AssetDatabaseRemoveInfo;
 
+	struct WriteInstrument;
+	struct ReadInstrument;
+
 	namespace Reflection {
 		struct ReflectionManager;
 	}
@@ -263,30 +266,13 @@ namespace ECSEngine {
 		// Creates a standalone database from the referenced assets.
 		void ToStandalone(AllocatorPolymorphic allocator, AssetDatabase* database) const;
 
-		bool SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file) const;
+		// Returns true if it succeeded, else false
+		bool SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, WriteInstrument* write_instrument) const;
 
-		bool SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr) const;
-
-		// It will determine the serialization size and then allocate a buffer and write into it and returns it.
-		// It returns { nullptr, 0 } if it fails
-		Stream<void> SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, AllocatorPolymorphic allocator) const;
-
-		// Returns the amount of bytes needed to write the data. Returns -1 an error occurs
-		size_t SerializeStandaloneSize(const Reflection::ReflectionManager* reflection_manager) const;
-
-		// A handle_remapping can be specified.When adding the assets from the given database
-		// into the master database that this reference is referring to, the handle can change their values
+		// A handle_remapping can be specified. When adding the assets from the given database
+		// into the master database that this reference is referring to, the handles can change their values
 		// The pairs are { original_handle, new_handle_value }
-		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file, AssetDatabaseReferenceFromStandaloneOptions options = {});
-
-		// Assumes a valid allocator was set before hand on this database
-		// A handle_remapping can be specified.When adding the assets from the given database
-		// into the master database that this reference is referring to, the handle can change their values
-		// The pairs are { original_handle, new_handle_value }
-		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr, AssetDatabaseReferenceFromStandaloneOptions options = {});
-
-		// Returns the amount of bytes needed for the buffers. Returns -1 in case an error occurs
-		static size_t DeserializeSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr);
+		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, ReadInstrument* read_instrument, AssetDatabaseReferenceFromStandaloneOptions options = {});
 
 		ECS_FIELDS_START_REFLECT;
 

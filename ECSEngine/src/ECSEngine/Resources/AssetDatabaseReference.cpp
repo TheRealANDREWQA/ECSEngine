@@ -536,71 +536,20 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	template<typename ReturnType, typename Functor>
-	ReturnType SerializeStandalone(
-		const AssetDatabaseReference* reference,
-		const Reflection::ReflectionManager* reflection_manager, 
-		Functor&& functor
-	) {
+	bool AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, WriteInstrument* write_instrument) const {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temp_allocator, ECS_KB * 256, ECS_MB);
 		AssetDatabase temp_database;
 
 		temp_database.reflection_manager = reflection_manager;
 		AllocatorPolymorphic allocator_polymorphic = &temp_allocator;
-		reference->ToStandalone(allocator_polymorphic, &temp_database);
+		ToStandalone(allocator_polymorphic, &temp_database);
 
-		return functor(&temp_database);
-	}
-
-	bool AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file) const {
-		return ECSEngine::SerializeStandalone<bool>(this, reflection_manager, [&](const AssetDatabase* out_database) {
-			return SerializeAssetDatabase(out_database, file) == ECS_SERIALIZE_OK;
-		});
+		return SerializeAssetDatabase(&temp_database, write_instrument) == ECS_SERIALIZE_OK;
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr) const {
-		return ECSEngine::SerializeStandalone<bool>(this, reflection_manager, [&](const AssetDatabase* out_database) {
-			return SerializeAssetDatabase(out_database, ptr) == ECS_SERIALIZE_OK;
-		});
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	Stream<void> AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, AllocatorPolymorphic allocator) const {
-		return ECSEngine::SerializeStandalone<Stream<void>>(this, reflection_manager, [&](const AssetDatabase* out_database) {
-			size_t serialize_size = SerializeAssetDatabaseSize(out_database);
-			if (serialize_size == -1) {
-				return Stream<void>(nullptr, 0);
-			}
-
-			void* allocation = AllocateEx(allocator, serialize_size);
-			uintptr_t ptr = (uintptr_t)allocation;
-			ECS_SERIALIZE_CODE serialize_code = SerializeAssetDatabase(out_database, ptr);
-			if (serialize_code == ECS_SERIALIZE_OK) {
-				return Stream<void>(allocation, serialize_size);
-			}
-			else {
-				// Deallocate the buffer and return nullptr
-				DeallocateEx(allocator, allocation);
-				return Stream<void>(nullptr, 0);
-			}
-		});
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	size_t AssetDatabaseReference::SerializeStandaloneSize(const Reflection::ReflectionManager* reflection_manager) const {
-		return ECSEngine::SerializeStandalone<size_t>(this, reflection_manager, [&](const AssetDatabase* out_database) {
-			return SerializeAssetDatabaseSize(out_database);
-		});
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	template<typename Functor>
-	size_t DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Functor&& functor) {
+	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, ReadInstrument* read_instrument, AssetDatabaseReferenceFromStandaloneOptions options) {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temp_allocator, ECS_KB * 64, ECS_MB * 4);
 		AssetDatabase temp_database;
 		temp_database.reflection_manager = reflection_manager;
@@ -608,40 +557,12 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator_polymorphic = &temp_allocator;
 		temp_database.SetAllocator(allocator_polymorphic);
 
-		return functor(&temp_database);
+		bool success = DeserializeAssetDatabase(database, read_instrument) == ECS_DESERIALIZE_OK;
+		if (success) {
+			FromStandalone(database, options);
+		}
+		return success;
 	}
-
-	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file, AssetDatabaseReferenceFromStandaloneOptions options) {
-		return (bool)ECSEngine::DeserializeStandalone(reflection_manager, [&](AssetDatabase* database) {
-			bool success = DeserializeAssetDatabase(database, file) == ECS_DESERIALIZE_OK;
-			if (success) {
-				FromStandalone(database, options);
-			}
-			return success;
-		});
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr, AssetDatabaseReferenceFromStandaloneOptions options) {
-		return (bool)ECSEngine::DeserializeStandalone(reflection_manager, [&](AssetDatabase* database) {
-			bool success = DeserializeAssetDatabase(database, ptr) == ECS_DESERIALIZE_OK;
-			if (success) {
-				FromStandalone(database, options);
-			}
-			return success;
-		});
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	size_t AssetDatabaseReference::DeserializeSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr) {
-		return ECSEngine::DeserializeStandalone(reflection_manager, [&](AssetDatabase* database) {
-			return DeserializeAssetDatabaseSize(reflection_manager, ptr);
-		});
-	}
-
-	// ------------------------------------------------------------------------------------------------
 
 	// ------------------------------------------------------------------------------------------------
 
