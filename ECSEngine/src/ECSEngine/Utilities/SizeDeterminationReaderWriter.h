@@ -19,7 +19,17 @@ namespace ECSEngine {
 			return true;
 		}
 
-		bool ResetAndSeekTo(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
+		ECS_INLINE bool AppendUninitialized(size_t data_size) override {
+			write_size += data_size;
+			return true;
+		}
+
+		ECS_INLINE bool DiscardData() override {
+			// Nothing to be done here
+			return true;
+		}
+
+		bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
 			switch (seek_type) {
 			case ECS_INSTRUMENT_SEEK_START:
 			{

@@ -16,8 +16,8 @@ namespace DirectX {
 // It will allocate a buffer from the stack if it is bellow
 // The threshold, else it will use the allocator. You must deallocate
 // This using ECS_FREEA_ALLOCATOR in order to not leak the allocation
-#define ECS_MALLOCA_ALLOCATOR(size, stack_size, allocator) ((size) <= (stack_size) ? ECS_STACK_ALLOC(size) : ECSEngine::Allocate(allocator, size))
-#define ECS_FREEA_ALLOCATOR(allocation, size, stack_size, allocator) do { if ((size) > (stack_size)) { ECSEngine::Deallocate(allocator, allocation); } } while (0) 
+#define ECS_MALLOCA_ALLOCATOR(size, stack_size, allocator) ((size) <= (stack_size) ? ECS_STACK_ALLOC(size) : ECSEngine::AllocateEx(allocator, size))
+#define ECS_FREEA_ALLOCATOR(allocation, size, stack_size, allocator) do { if ((size) > (stack_size)) { ECSEngine::DeallocateEx(allocator, allocation); } } while (0) 
 
 // It will allocate a buffer from the stack if it is bellow
 // The threshold, else it will use the allocator. You must deallocate

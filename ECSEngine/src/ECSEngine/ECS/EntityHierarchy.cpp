@@ -2,6 +2,7 @@
 #include "EntityHierarchy.h"
 #include "../Utilities/Crash.h"
 #include "../Utilities/Serialization/SerializationHelpers.h"
+#include "../Utilities/ReaderWriterInterface.h"
 
 #define ROOT_STARTING_SIZE ECS_KB
 #define CHILDREN_TABLE_INITIAL_SIZE ECS_KB
@@ -385,7 +386,7 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    bool SerializeEntityHierarchy(const EntityHierarchy* hierarchy, ECS_FILE_HANDLE file)
+    bool SerializeEntityHierarchy(const EntityHierarchy* hierarchy, WriteInstrument* write_instrument)
     {
         // Write the header first
         SerializeEntityHierarchyHeader header;
@@ -399,98 +400,35 @@ namespace ECSEngine {
             header.children_data_size += children.count * sizeof(Entity);
         });
 
-        bool success = WriteFile(file, { &header, sizeof(header) });
-        if (!success) {
+        if (!write_instrument->Write(&header)) {
             return false;
         }
 
         // Now write the roots
-        success = WriteFile(file, { hierarchy->roots.buffer, hierarchy->roots.size * sizeof(Entity) });
-        if (!success) {
+        if (!write_instrument->Write(hierarchy->roots.buffer, hierarchy->roots.CopySize())) {
             return false;
         }
 
         // Now the children table
-        void* temp_buffer = ECS_STACK_ALLOC(sizeof(unsigned char) * ECS_KB * 64);
-        uintptr_t temp_ptr = (uintptr_t)temp_buffer;
-
-        // The parent table can be deduced from the children table
-        // Return the negation since this will return true if it early exited
-        return !hierarchy->children_table.ForEachConst<true>([&](const auto children, const auto parent) {
-            temp_ptr = (uintptr_t)temp_buffer;
-
-            Write<true>(&temp_ptr, &parent, sizeof(Entity));
-            // The 32 bits with the count, root index and is_root
-            Write<true>(&temp_ptr, OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
-            Write<true>(&temp_ptr, children.Entities(), sizeof(Entity) * children.count);
-
-            success = WriteFile(file, { temp_buffer, temp_ptr - (uintptr_t)temp_buffer });
-            if (!success) {
-                return true;
-            }
+        if (hierarchy->children_table.ForEachConst<true>([&](const auto children, const auto parent) {
+            bool success = true;
+            success &= write_instrument->Write(&parent, sizeof(Entity));
+            success &= write_instrument->Write(&children.count, sizeof(unsigned int));
+            success &= write_instrument->Write(children.Entities(), sizeof(Entity) * children.count);
+            return !success;
+        })) {
             return false;
-        });
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------------------
-
-    void SerializeEntityHierarchy(const EntityHierarchy* hierarchy, uintptr_t& ptr)
-    {
-        // Write the header first
-        SerializeEntityHierarchyHeader header;
-        header.version = SERIALIZE_VERSION;
-        header.root_count = hierarchy->roots.size;
-        header.parent_count = hierarchy->parent_table.GetCount();
-        header.children_count = hierarchy->children_table.GetCount();
-        header.children_data_size = (sizeof(Entity) + sizeof(unsigned int)) * header.children_count;
-
-        hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
-            header.children_data_size += children.count * sizeof(Entity);
-        });
-
-        Write<true>(&ptr, &header, sizeof(header));
-
-        // Now write the roots
-        Write<true>(&ptr, hierarchy->roots.buffer, hierarchy->roots.size);
-
-        // Now the children table
-        hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
-            Write<true>(&ptr, &parent, sizeof(Entity));
-            Write<true>(&ptr, OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
-            Write<true>(&ptr, children.Entities(), sizeof(Entity) * children.count);
-        });
-        // The parent table can be deduced from the children table
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------------------
-
-    size_t SerializeEntityHierarchySize(const EntityHierarchy* hierarchy)
-    {
-        // The roots need to be written
-        size_t size = sizeof(Entity) * hierarchy->roots.size + sizeof(SerializeEntityHierarchyHeader);
-
-        // First determine how many entries in the children are and how much memory they require
-        unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
-        hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
-            // The entities must be written aswell. The final entity represents the key which will be used
-            // when reinserting the values back on deserialization
-            // The unsigned int contains all the necessary extra data
-            size += children.count * sizeof(Entity) + sizeof(unsigned int) + sizeof(Entity);
-        });
+        }
 
         // The parent table can be deduced from the children table
-        return size;
+        return true;
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
     // Returns false if the header contains invalid values
-    bool DeserializeEntityHierarchyPostHeaderOps(EntityHierarchy* hierarchy, const SerializeEntityHierarchyHeader* header) {
+    static bool DeserializeEntityHierarchyPostHeaderOps(EntityHierarchy* hierarchy, const SerializeEntityHierarchyHeader* header) {
         if (header->version != SERIALIZE_VERSION) {
-            return false;
-        }
-
-        if (header->root_count > ECS_MB_10 || header->children_count > ECS_MB_10 || header->parent_count > ECS_MB_10) {
             return false;
         }
 
@@ -519,32 +457,37 @@ namespace ECSEngine {
             hierarchy->parent_table.m_capacity = 0;
         }
 
-        // Read the roots now
         hierarchy->roots.Resize(header->root_count);
         return true;
     }
     
     // Returns true if the data is valid
-    bool DeserializeEntityHierarchyChildTable(EntityHierarchy* hierarchy, unsigned int children_count, uintptr_t& ptr) {
+    static bool DeserializeEntityHierarchyChildTable(EntityHierarchy* hierarchy, unsigned int children_count, ReadInstrument* read_instrument) {
         // Read the children table now
         for (unsigned int index = 0; index < children_count; index++) {
             EntityHierarchy::Children children;
-            Entity current_parent = *(Entity*)ptr;
-            ptr += sizeof(Entity);
-            unsigned int count = *(unsigned int*)ptr;
-            ptr += sizeof(unsigned int);
-
+            Entity current_parent;
+            unsigned int count = 0;
+            if (!read_instrument->Read(&current_parent)) {
+                return false;
+            }
+            if (!read_instrument->Read(&count)) {
+                return false;
+            }
             children.count = count;
 
+            Entity* children_entities = nullptr;
             if (count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
                 Entity* children_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children.count);
                 children.entities = children_allocation;
-                memcpy(children.entities, (void*)ptr, sizeof(Entity) * children.count);
+                children_entities = children.entities;
             }
             else {
-                memcpy(children.static_children, (void*)ptr, sizeof(Entity) * children.count);
+                children_entities = children.static_children;
             }
-            ptr += sizeof(Entity) * children.count;
+            if (!read_instrument->Read(children_entities, sizeof(Entity) * children.count)) {
+                return false;
+            }
 
             if (hierarchy->children_table.Find(current_parent) != -1) {
                 return false;
@@ -553,7 +496,6 @@ namespace ECSEngine {
             hierarchy->children_table.Insert(children, current_parent);
 
             // Iterate through the list of children and insert them into the parent table as well
-            const Entity* children_entities = children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children;
             for (unsigned int child_index = 0; child_index < children.count; child_index++) {
                 if (hierarchy->parent_table.Find(children_entities[child_index]) != -1) {
                     return false;
@@ -573,84 +515,31 @@ namespace ECSEngine {
         return true;
     }
 
-    bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ECS_FILE_HANDLE file)
-    {
-        // Firstly read the header
-        SerializeEntityHierarchyHeader header;
-        bool success = ReadFileExact(file, { &header, sizeof(header) });
-        if (!success) {
-            return false;
-        }
-
-        if (!DeserializeEntityHierarchyPostHeaderOps(hierarchy, &header)) {
-            return false;
-        }
-        
-        success = ReadFileExact(file, { hierarchy->roots.buffer, sizeof(Entity) * header.root_count });
-        hierarchy->roots.size = header.root_count;
-        if (!success) {
-            return false;
-        }
-
-        void* temp_buffer = nullptr;
-        size_t STACK_LIMIT = ECS_KB * 128;
-        if (header.children_data_size > STACK_LIMIT) {
-            temp_buffer = Malloc(header.children_data_size);
-        }
-        else {
-            temp_buffer = ECS_STACK_ALLOC(header.children_data_size);
-        }
-
-        success = ReadFileExact(file, { temp_buffer, header.children_data_size });
-        if (!success) {
-            if (header.children_data_size > STACK_LIMIT) {
-                Free(temp_buffer);
-            }
-            return false;
-        }
-        uintptr_t temp_ptr = (uintptr_t)temp_buffer;
-
-        success = DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, temp_ptr);
-        if (header.children_data_size > STACK_LIMIT) {
-            Free(temp_buffer);
-        }
-        return success;
-    }
-
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, uintptr_t& ptr)
+    bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ReadInstrument* read_instrument)
     {
+        // Don't allow size determination instruments for now
+        if (read_instrument->IsSizeDetermination()) {
+            return false;
+        }
+
         // Firstly read the header
         SerializeEntityHierarchyHeader header;
-        Read<true>(&ptr, &header, sizeof(header));
+        if (!read_instrument->ReadAlways(&header)) {
+            return false;
+        }
        
         if (!DeserializeEntityHierarchyPostHeaderOps(hierarchy, &header)) {
             return false;
         }
 
-        Read<true>(&ptr, hierarchy->roots.buffer, sizeof(Entity) * header.root_count);
+        if (!read_instrument->Read(hierarchy->roots.buffer, sizeof(Entity) * header.root_count)) {
+            return false;
+        }
         hierarchy->roots.size = header.root_count;
 
-        DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, ptr);
-        return true;
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------------------
-
-    size_t DeserializeEntityHierarchySize(uintptr_t ptr)
-    {
-        SerializeEntityHierarchyHeader header;
-        Read<true>(&ptr, &header, sizeof(header));
-        if (header.version != SERIALIZE_VERSION || header.root_count > header.children_count) {
-            return -1;
-        }
-
-        if (header.root_count > ECS_MB_10 || header.children_count > ECS_MB_10 || header.parent_count > ECS_MB_10) {
-            return -1;
-        }
-
-        return header.children_data_size;
+        return DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, read_instrument);
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------

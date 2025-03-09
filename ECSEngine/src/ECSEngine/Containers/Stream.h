@@ -1763,7 +1763,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			buffer = Allocate(allocator, _capacity, alignof(void*), debug_info);
+			buffer = AllocateEx(allocator, _capacity, alignof(void*), debug_info);
 			size = 0;
 			capacity = _capacity;
 		}

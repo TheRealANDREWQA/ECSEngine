@@ -133,7 +133,7 @@ static bool FinishSandboxRecording(
 			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
 
 			// Try once more. If we fail this time as well, then remove the file and report to the user
-			if (!write_instrument->ResetAndSeekTo(ECS_INSTRUMENT_SEEK_START, before_flush_offset)) {
+			if (!write_instrument->Seek(ECS_INSTRUMENT_SEEK_START, before_flush_offset) || !write_instrument->DiscardData()) {
 				ECS_FORMAT_TEMP_STRING(console_error, "Failed to finish {#} recording. Could not seek for a retry", info.type_string);
 				EditorSetConsoleError(console_error);
 

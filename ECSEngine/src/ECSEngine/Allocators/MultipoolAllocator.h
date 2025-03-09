@@ -22,6 +22,11 @@ namespace ECSEngine {
 		
 		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		template<typename T>
+		ECS_INLINE T* Allocate(DebugInfo debug_info = ECS_DEBUG_INFO) {
+			return (T*)Allocate(sizeof(T), alignof(T), debug_info);
+		}
+
 		// The return value is only useful when using assert_if_not_found set to false
 		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>

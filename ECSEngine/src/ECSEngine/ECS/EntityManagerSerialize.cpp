@@ -13,10 +13,13 @@
 
 #include "../Utilities/CrashHandler.h"
 #include "../Utilities/Crash.h"
+#include "../Utilities/ReaderWriterInterface.h"
+#include "../Utilities/InMemoryReaderWriter.h"
 
 #define ENTITY_MANAGER_SERIALIZE_VERSION 0
 
-#define ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY ECS_MB * 100
+// This is a large value that is used to buffer the header writes, which require a bit of buffering
+#define ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY ECS_MB * 64
 
 namespace ECSEngine {
 
@@ -26,8 +29,6 @@ namespace ECSEngine {
 		unsigned short component_count;
 		unsigned short shared_component_count;
 		unsigned short global_component_count;
-		// This is the total byte size of the global data that was written
-		unsigned int global_component_data_byte_size;
 
 		// These are additional bytes that can be used in the future to add stuff to the header 
 		// without having to invalidate the older version - these bytes need to be set to 0 in versions
@@ -112,63 +113,40 @@ namespace ECSEngine {
 
 	bool SerializeEntityManager(
 		const EntityManager* entity_manager,
-		Stream<wchar_t> filename,
+		const FileWriteInstrumentTarget& target,
 		SerializeEntityManagerOptions* options
 	)
 	{
-		ECS_FILE_HANDLE file_handle = -1;
-		ECS_FILE_STATUS_FLAGS status = FileCreate(filename, &file_handle, ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE);
-		if (status != ECS_FILE_STATUS_OK) {
+		// Try to create the write instrument first, in case it fails, early exit
+		// Don't use buffering in case we must create the instrument. We are maintaining our own buffering
+		// In this function
+		ECS_STACK_VOID_STREAM(instrument_storage, 512);
+		WriteInstrument* write_instrument = target.GetInstrument(instrument_storage, 0, { nullptr });
+		if (write_instrument == nullptr) {
 			return false;
 		}
 
-		bool success = SerializeEntityManager(entity_manager, file_handle, options);
-		CloseFile(file_handle);
-		if (!success) {
-			RemoveFile(filename);
-		}
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 32);
 
-		return success;
-	}
+		CapacityStream<void> buffering;
+		buffering.Initialize({ nullptr }, ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 
-	// ------------------------------------------------------------------------------------------------------------------------------------------
-
-	bool SerializeEntityManager(
-		const EntityManager* entity_manager, 
-		ECS_FILE_HANDLE file_handle, 
-		SerializeEntityManagerOptions* options
-	)
-	{
-		void* buffering = Malloc(ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
-		unsigned int buffering_size = 0;
-
-		struct DeallocateResources {
-			void operator() () const {
-				Free(component_buffering);
-			}
-
-			void* component_buffering;
-		};
-
-		StackScope<DeallocateResources> deallocate_resources({ buffering });
+		// Create a stack scope to release this automatically
+		auto deallocate_resources = StackScope([&]() {
+			buffering.Deallocate({ nullptr });
+		});
 
 		// Write the header first
-		SerializeEntityManagerHeader* header = (SerializeEntityManagerHeader*)buffering;
-		buffering_size = sizeof(*header);
-
+		SerializeEntityManagerHeader* header = buffering.Reserve<SerializeEntityManagerHeader>();
 		header->version = ENTITY_MANAGER_SERIALIZE_VERSION;
 		header->archetype_count = entity_manager->m_archetypes.size;
 		header->component_count = 0;
 		header->shared_component_count = 0;
-		header->global_component_data_byte_size = 0;
 		header->global_component_count = entity_manager->m_global_component_count;
-
 		memset(header->reserved, 0, sizeof(header->reserved));
 
-		ComponentPair* component_pairs = (ComponentPair*)OffsetPointer(buffering, buffering_size);
-
-		// Determine the component count
-		ComponentPair* current_unique_pair = component_pairs;
+		// Determine the component count and initialize the base component pairs
+		ComponentPair* component_pairs = (ComponentPair*)OffsetPointer(buffering);
 		for (unsigned int index = 0; index < entity_manager->m_unique_components.size; index++) {
 			Component component = { (short)index };
 
@@ -176,6 +154,7 @@ namespace ECSEngine {
 			header->component_count += exists;
 
 			if (exists) {
+				ComponentPair* current_unique_pair = buffering.Reserve<ComponentPair>();
 				// Check to see if it has a name and get its version
 				SerializeEntityManagerComponentInfo component_info = options->component_table->GetValue(component);
 
@@ -185,15 +164,10 @@ namespace ECSEngine {
 				current_unique_pair->component_byte_size = entity_manager->m_unique_components[index].size;
 				current_unique_pair->component = component;
 				current_unique_pair->header_data_size = 0;
-
-				current_unique_pair++;
-				buffering_size += sizeof(ComponentPair);
 			}
 		}
 
-		SharedComponentPair* shared_component_pairs = (SharedComponentPair*)OffsetPointer(buffering, buffering_size);
-
-		SharedComponentPair* current_shared_pair = shared_component_pairs;
+		SharedComponentPair* shared_component_pairs = (SharedComponentPair*)OffsetPointer(buffering);
 		for (unsigned int index = 0; index < entity_manager->m_shared_components.size; index++) {
 			Component component = { (short)index };
 
@@ -201,6 +175,8 @@ namespace ECSEngine {
 			header->shared_component_count += exists;
 
 			if (exists) {
+				SharedComponentPair* current_shared_pair = buffering.Reserve<SharedComponentPair>();
+
 				// Check to see if it has a name and get its version
 				SerializeEntityManagerSharedComponentInfo component_info = options->shared_component_table->GetValue(component);
 
@@ -212,19 +188,13 @@ namespace ECSEngine {
 				current_shared_pair->instance_count = (unsigned short)entity_manager->m_shared_components[index].instances.stream.size;
 				current_shared_pair->named_instance_count = (unsigned short)entity_manager->m_shared_components[index].named_instances.GetCount();
 				current_shared_pair->header_data_size = 0;
-
-				current_shared_pair++;
-				buffering_size += sizeof(SharedComponentPair);
 			}
 		}
 
-		ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
-
-		GlobalComponentPair* global_component_pairs = (GlobalComponentPair*)OffsetPointer(buffering, buffering_size);
-
 		// Determine the component count
-		GlobalComponentPair* current_global_pair = global_component_pairs;
+		GlobalComponentPair* global_component_pairs = (GlobalComponentPair*)OffsetPointer(buffering);
 		for (unsigned int index = 0; index < entity_manager->m_global_component_count; index++) {
+			GlobalComponentPair* current_global_pair = buffering.Reserve<GlobalComponentPair>();
 			Component component = entity_manager->m_global_components[index];
 
 			// Check to see if it has a name and get its version
@@ -236,15 +206,12 @@ namespace ECSEngine {
 			current_global_pair->component_byte_size = entity_manager->m_global_components_info[index].size;
 			current_global_pair->component = component;
 			current_global_pair->header_data_size = 0;
-
-			current_global_pair++;
-			buffering_size += sizeof(GlobalComponentPair);
 		}
 
 		// Keep a stack copy of the components and shared_components that are registered such that it will make the iteration over the components faster
-		Component* registered_components = (Component*)ECS_STACK_ALLOC(sizeof(Component) * header->component_count);
-		Component* registered_shared_components = (Component*)ECS_STACK_ALLOC(sizeof(Component) * header->shared_component_count);
-		
+		Component* registered_components = (Component*)stack_allocator.Allocate(sizeof(Component) * header->component_count);
+		Component* registered_shared_components = (Component*)stack_allocator.Allocate(sizeof(Component) * header->shared_component_count);
+
 		for (unsigned short index = 0; index < header->component_count; index++) {
 			registered_components[index] = component_pairs[index].component;
 		}
@@ -258,12 +225,10 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < components.size; index++) {
 				Component component = components[index];
 
-				// Check to see if it has a name and get its version
+				// Check to see if it has a name
 				auto component_info = component_table->GetValue(component);
-
 				if (component_info.name.size > 0) {
-					memcpy(OffsetPointer(buffering, buffering_size), component_info.name.buffer, component_info.name.size);
-					buffering_size += component_info.name.size;
+					memcpy(buffering.Reserve(component_info.name.size), component_info.name.buffer, component_info.name.size);
 				}
 			}
 		};
@@ -272,44 +237,45 @@ namespace ECSEngine {
 		register_component_names({ registered_shared_components, header->shared_component_count }, options->shared_component_table);
 		register_component_names({ entity_manager->m_global_components, entity_manager->m_global_component_count }, options->global_component_table);
 
-		ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
-
 		// Write the shared instances for each shared component now
 		for (unsigned int index = 0; index < header->shared_component_count; index++) {
-			CapacityStream<SharedInstance> instances = { OffsetPointer(buffering, buffering_size), 0, ECS_KB * 64 };
+			CapacityStream<SharedInstance> instances = { OffsetPointer(buffering), 0, ECS_KB * 64 };
 			entity_manager->GetSharedComponentInstanceAll(shared_component_pairs[index].component, instances);
-			buffering_size += instances.MemoryOf(instances.size);
+			buffering.Reserve(instances.MemoryOf(instances.size));
 		}
 
-		ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
-		
+		// Tell the instrument to leave space for the header structures that we will be finalizing later on
+		if (!write_instrument->AppendUninitialized(buffering.size)) {
+			return false;
+		}
+
 		// Now write the headers data for each component
 		// component_pairs_stream need to be a stream with the component_pairs as the buffer
 		// The header_data is used to have the correct type to be passed to the header function
 		// It will be filled with the same fields as the unique component (at the moment all header
 		// data is the same)
 		auto write_header_component_data = [&](auto component_pairs_stream, auto component_table, auto* header_data) {
-			void* header_component_data = OffsetPointer(buffering, buffering_size);
+			size_t write_offset = write_instrument->GetOffset();
 			for (size_t index = 0; index < component_pairs_stream.size; index++) {
 				auto component_info = component_table->GetValue(component_pairs_stream[index].component);
 				if (component_info.header_function != nullptr) {
-					header_data->buffer = header_component_data;
-					header_data->buffer_capacity = ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY - buffering_size;
+					header_data->write_instrument = write_instrument;
 					header_data->extra_data = component_info.extra_data;
-
-					unsigned int write_size = component_info.header_function(header_data);
-					if (write_size == -1) {
+					if (!component_info.header_function(header_data)) {
 						return false;
 					}
-					ECS_ASSERT(write_size <= header_data->buffer_capacity);
 
-					component_pairs_stream[index].header_data_size = write_size;
-					header_component_data = OffsetPointer(header_component_data, write_size);
-					buffering_size += write_size;
+					size_t new_write_offset = write_instrument->GetOffset();
+					size_t header_data_size = new_write_offset - write_offset;
+					// Ensure that the header data size fits
+					if (!EnsureUnsignedIntegerIsInRange<unsigned int>(header_data_size)) {
+						return false;
+					}
+					component_pairs_stream[index].header_data_size = header_data_size;
+					write_offset = new_write_offset;
 				}
 			}
 
-			ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 			return true;
 		};
 
@@ -318,12 +284,12 @@ namespace ECSEngine {
 		if (!success) {
 			return false;
 		}
-		
+
 		SerializeEntityManagerHeaderSharedComponentData shared_header_data;
 		success = write_header_component_data(Stream<SharedComponentPair>(
-			shared_component_pairs, 
-			header->shared_component_count), 
-			options->shared_component_table, 
+			shared_component_pairs,
+			header->shared_component_count),
+			options->shared_component_table,
 			&shared_header_data
 		);
 		if (!success) {
@@ -332,114 +298,135 @@ namespace ECSEngine {
 
 		SerializeEntityManagerHeaderGlobalComponentData global_header_data;
 		success = write_header_component_data(Stream<GlobalComponentPair>(
-			global_component_pairs, 
-			header->global_component_count), 
-			options->global_component_table, 
+			global_component_pairs,
+			header->global_component_count),
+			options->global_component_table,
 			&global_header_data
 		);
 		if (!success) {
 			return false;
 		}
 
-		uintptr_t shared_component_buffering_instances_ptr = (uintptr_t)OffsetPointer(buffering, buffering_size);
+		// The buffering can be flushed now - the header_data_size field is determined
+		if (!write_instrument->WriteUninitializedData(0, buffering.buffer, buffering.size)) {
+			return false;
+		}
+		// We can clear the size, in case we need this for later on
+		buffering.size = 0;
 
-		// Now write the named shared instances
+		// Now write the named shared instances - firstly the instance and the identifier size
 		for (unsigned int index = 0; index < header->shared_component_count; index++) {
 			Component current_component = registered_shared_components[index];
 			// Write the pairs as shared instance, identifier size and at the end the buffers
 			// This is done like this in order to avoid on deserialization to read small chunks
 			// In this way all the pairs can be read at a time and then the identifiers
 			entity_manager->m_shared_components[current_component].named_instances.ForEachConst([&](SharedInstance instance, ResourceIdentifier identifier) {
-				Write<true>(&shared_component_buffering_instances_ptr, &instance, sizeof(instance));
 				// It will make it easier to access them as a pair of unsigned shorts when deserializing
-				unsigned short short_size = (unsigned short)identifier.size;
-				Write<true>(&shared_component_buffering_instances_ptr, &short_size, sizeof(short_size));
-				buffering_size += sizeof(instance) + sizeof(short_size);
+				success &= write_instrument->Write(&instance);
+				success &= EnsureUnsignedIntegerIsInRange<unsigned short>(identifier.size);
+				unsigned short reduced_size = (unsigned short)identifier.size;
+				success &= write_instrument->Write(&reduced_size);
 			});
+		}
+		if (!success) {
+			return false;
 		}
 
 		// Write the identifiers pointer data now
 		for (unsigned int index = 0; index < header->shared_component_count; index++) {
 			Component current_component = registered_shared_components[index];
 			entity_manager->m_shared_components[current_component].named_instances.ForEachConst([&](SharedInstance instance, ResourceIdentifier identifier) {
-				Write<true>(&shared_component_buffering_instances_ptr, identifier.ptr, identifier.size);
-				buffering_size += identifier.size;
+				success &= write_instrument->Write(identifier.ptr, identifier.size);
 			});
 		}
-		ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
+		if (!success) {
+			return false;
+		}
 
 		// The instance data sizes for each shared component must be written before the actual data if the extract function is used
 		// Because otherwise the data cannot be recovered
 		for (unsigned int index = 0; index < header->shared_component_count; index++) {
 			Component current_component = registered_shared_components[index];
 			SerializeEntityManagerSharedComponentInfo component_info = options->shared_component_table->GetValue(current_component);
-			unsigned int* instance_data_sizes = (unsigned int*)OffsetPointer(buffering, buffering_size);
-			buffering_size += sizeof(unsigned int) * entity_manager->m_shared_components[current_component].instances.stream.size;
+			
+			// Prefix the actual instance data size with the write size of each instance. Use the buffering to hold
+			// The integer sizes and also append into the write instrument, such that we don't have to shift the actual
+			// Instance writes.
+			buffering.size = 0;
+			size_t instance_data_size_instrument_offset = write_instrument->GetOffset();
+			size_t instance_data_sizes_byte_size = sizeof(unsigned int) * entity_manager->m_shared_components[current_component].instances.stream.size;
+			unsigned int* instance_data_sizes = (unsigned int*)buffering.Reserve(instance_data_sizes_byte_size);
+			if (!write_instrument->AppendUninitialized(instance_data_sizes_byte_size)) {
+				return false;
+			}
 
+			size_t shared_component_write_offset = write_instrument->GetOffset();
 			unsigned int write_index = 0;
-			bool write_success = true;
-			entity_manager->m_shared_components[current_component].instances.stream.ForEachIndex([&](unsigned int instance_index) {
+			if (entity_manager->m_shared_components[current_component].instances.stream.ForEachIndex<true>([&](unsigned int instance_index) {
 				SerializeEntityManagerSharedComponentData function_data;
-				function_data.buffer = OffsetPointer(buffering, buffering_size);
-				function_data.buffer_capacity = ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY - buffering_size;
+				function_data.write_instrument = write_instrument;
 				function_data.component_data = entity_manager->m_shared_components[current_component].instances[instance_index];
 				function_data.extra_data = component_info.extra_data;
 				function_data.instance = { (short)instance_index };
 
-				unsigned int write_count = component_info.function(&function_data);
-				if (write_count == -1) {
-					write_success = false;
-					return;
+				if (!component_info.function(&function_data)) {
+					return true;
 				}
 
-				// Assert that the buffering is enough - otherwise it complicates things a lot
-				ECS_ASSERT(write_count + buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
-				buffering_size += write_count;
-				// Write the count into the the header of sizes
-				instance_data_sizes[write_index++] = write_count;
-			});
+				size_t current_instrument_offset = write_instrument->GetOffset();
+				size_t current_write_size = current_instrument_offset - shared_component_write_offset;
+				if (!EnsureUnsignedIntegerIsInRange<unsigned int>(current_write_size)) {
+					return true;
+				}
 
-			if (!write_success) {
+				// Write the count into the the header of sizes
+				instance_data_sizes[write_index++] = (unsigned int)current_write_size;
+				shared_component_write_offset = current_instrument_offset;
+				return false;
+			})) 
+			{
+				return false;
+			}
+
+			// Go back and write the instance data sizes
+			if (!write_instrument->WriteUninitializedData(instance_data_size_instrument_offset, buffering.buffer, buffering.size)) {
 				return false;
 			}
 		}
 
 		// We must serialize the global components now
 		// Write before each serialization the size of the data
+		size_t global_component_write_offset = write_instrument->GetOffset();
 		for (unsigned int index = 0; index < entity_manager->m_global_component_count; index++) {
 			SerializeEntityManagerGlobalComponentInfo component_info = options->global_component_table->GetValue(entity_manager->m_global_components[index]);
-			unsigned int* global_component_size = (unsigned int*)OffsetPointer(buffering, buffering_size);
-			buffering_size += sizeof(unsigned int);
+			unsigned int global_component_size = 0;
+			if (!write_instrument->AppendUninitialized(sizeof(global_component_size))) {
+				return false;
+			}
 
 			SerializeEntityManagerGlobalComponentData function_data;
-			function_data.buffer = OffsetPointer(buffering, buffering_size);
-			function_data.buffer_capacity = ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY - buffering_size;
+			function_data.write_instrument = write_instrument;
 			function_data.components = entity_manager->m_global_components_data[index];
 			function_data.extra_data = component_info.extra_data;
 			function_data.count = 1;
 
-			unsigned int write_count = component_info.function(&function_data);
-			if (write_count == -1) {
+			if (!component_info.function(&function_data)) {
 				return false;
 			}
 
-			// Assert that the buffering is enough - otherwise it complicates things a lot
-			ECS_ASSERT(write_count + buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
-			buffering_size += write_count;
+			size_t current_write_offset = write_instrument->GetOffset();
+			// Subtract the size of the component size that is included in the difference
+			size_t write_difference = current_write_offset - global_component_write_offset - sizeof(global_component_size);
+			if (!EnsureUnsignedIntegerIsInRange<unsigned int>(write_difference)) {
+				return false;
+			}
 			// Write the count into the prefix size
-			*global_component_size = write_count;
-			header->global_component_data_byte_size += write_count;
-		}
-
-		success = true;
-
-		// Flush the buffering - this includes everything from the header up to the global data size
-		if (buffering_size > 0) {
-			success = WriteFile(file_handle, { buffering, buffering_size });
-			if (!success) {
+			global_component_size = (unsigned int)write_difference;
+			if (!write_instrument->WriteUninitializedData(global_component_write_offset, &global_component_size, sizeof(global_component_size))) {
 				return false;
 			}
-			buffering_size = 0;
+
+			global_component_write_offset = current_write_offset;
 		}
 
 		// For each archetype, we must serialize the shared and unique components, and then each base archetype
@@ -453,13 +440,14 @@ namespace ECSEngine {
 			ComponentSignature shared = archetype->GetSharedSignature();
 			unsigned int base_count = archetype->GetBaseCount();
 
-			ArchetypeHeader* archetype_header = (ArchetypeHeader*)OffsetPointer(buffering, buffering_size);
+			ArchetypeHeader archetype_header;
+			archetype_header.base_count = base_count;
+			archetype_header.shared_count = shared.count;
+			archetype_header.unique_count = unique.count;
 
-			archetype_header->base_count = base_count;
-			archetype_header->shared_count = shared.count;
-			archetype_header->unique_count = unique.count;
-
-			buffering_size += sizeof(*archetype_header);
+			if (!write_instrument->Write(&archetype_header)) {
+				return false;
+			}
 		}
 
 		// The unique and shared components can be written now
@@ -468,13 +456,12 @@ namespace ECSEngine {
 			ComponentSignature unique = archetype->GetUniqueSignature();
 			ComponentSignature shared = archetype->GetSharedSignature();
 
-			uintptr_t temp_ptr = (uintptr_t)OffsetPointer(buffering, buffering_size);
-
-			Write<true>(&temp_ptr, unique.indices, sizeof(Component) * unique.count);
-			Write<true>(&temp_ptr, shared.indices, sizeof(Component) * shared.count);
-
-			// Reset the size
-			buffering_size += sizeof(Component) * (unique.count + shared.count);
+			if (!write_instrument->Write(unique.indices, unique.count * sizeof(unique.indices[0]))) {
+				return false;
+			}
+			if (!write_instrument->Write(shared.indices, shared.count * sizeof(shared.indices[0]))) {
+				return false;
+			}
 		}
 
 		// The shared instances can be written now
@@ -484,12 +471,11 @@ namespace ECSEngine {
 			ComponentSignature shared = archetype->GetSharedSignature();
 			unsigned int base_count = archetype->GetBaseCount();
 
-			uintptr_t temp_ptr = (uintptr_t)OffsetPointer(buffering, buffering_size);
-
 			// Write the shared instances for each base archetype in a single stream
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
-				Write<true>(&temp_ptr, archetype->GetBaseInstances(base_index), sizeof(SharedInstance) * shared.count);
-				buffering_size += sizeof(SharedInstance) * shared.count;
+				if (!write_instrument->Write(archetype->GetBaseInstances(base_index), sizeof(SharedInstance) * shared.count)) {
+					return false;
+				}
 			}
 		}
 
@@ -498,19 +484,18 @@ namespace ECSEngine {
 			const Archetype* archetype = entity_manager->GetArchetype(index);
 			unsigned int base_count = archetype->GetBaseCount();
 
-			uintptr_t temp_ptr = (uintptr_t)OffsetPointer(buffering, buffering_size);
 			// Write the size of each base archetype
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
 				const ArchetypeBase* base = archetype->GetBase(base_index);
 				ECS_ASSERT(base->m_size > 0);
-				Write<true>(&temp_ptr, &base->m_size, sizeof(base->m_size));
-				buffering_size += sizeof(base->m_size);
+				if (!write_instrument->Write(&base->m_size)) {
+					return false;
+				}
 			}
 		}
 
-		ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
-
 		// Now serialize the actual unique components - finally!
+		size_t unique_component_write_offset = write_instrument->GetOffset();
 		for (size_t index = 0; index < entity_manager->m_archetypes.size; index++) {
 			const Archetype* archetype = entity_manager->GetArchetype(index);
 			ComponentSignature unique = archetype->GetUniqueSignature();
@@ -521,60 +506,45 @@ namespace ECSEngine {
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
 				ArchetypeBase* base = (ArchetypeBase*)archetype->GetBase(base_index);
 				for (size_t component_index = 0; component_index < unique.count; component_index++) {
-					unsigned int* current_write_count = (unsigned int*)OffsetPointer(buffering, buffering_size);;
-					buffering_size += sizeof(unsigned int);
-
-					SerializeEntityManagerComponentInfo component_info = options->component_table->GetValue(unique.indices[component_index]);
-					SerializeEntityManagerComponentData function_data;
-					function_data.buffer = OffsetPointer(current_write_count, sizeof(unsigned int));
-					function_data.buffer_capacity = ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY - buffering_size;
-					function_data.components = base->GetComponentByIndex(0, component_index);
-					function_data.count = base->m_size;
-					function_data.extra_data = component_info.extra_data;
-
-					unsigned int write_count = component_info.function(&function_data);
-					if (write_count == -1) {
+					// Add a prefix size for how long the serialization of these components is
+					unsigned int current_write_count = 0;
+					if (!write_instrument->AppendUninitialized(sizeof(current_write_count))) {
 						return false;
 					}
-					ECS_ASSERT(write_count <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 
-					*current_write_count = write_count;
+					const SerializeEntityManagerComponentInfo* component_info = options->component_table->GetValuePtr(unique.indices[component_index]);
+					SerializeEntityManagerComponentData function_data;
+					function_data.write_instrument = write_instrument;
+					function_data.components = base->GetComponentByIndex(0, component_index);
+					function_data.count = base->m_size;
+					function_data.extra_data = component_info->extra_data;
 
-					if (write_count + buffering_size > ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY) {
-						// Commit to file now
-						success = WriteFile(file_handle, { buffering, buffering_size });
-						if (!success) {
-							return false;
-						}
-						buffering_size = 0;
-						// Recall the function again
-						write_count = component_info.function(&function_data);
-						ECS_ASSERT(write_count <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
-						buffering_size += write_count;
+					if (!component_info->function(&function_data)) {
+						return false;
 					}
-					else {
-						buffering_size += write_count;
+
+					size_t current_offset = write_instrument->GetOffset();
+					// Don't forget to subtract the write count from the write difference
+					size_t write_difference = current_offset - unique_component_write_offset - sizeof(current_write_count);
+					if (!EnsureUnsignedIntegerIsInRange<unsigned int>(write_difference)) {
+						return false;
 					}
+
+					current_write_count = (unsigned int)write_difference;
+					if (!write_instrument->WriteUninitializedData(unique_component_write_offset, &current_write_count, sizeof(current_write_count))) {
+						return false;
+					}
+					unique_component_write_offset = current_offset;
 				}
 			}
 		}
 
-		// If there is still data left in the component buffering - commit it
-		if (buffering_size > 0) {
-			success = WriteFile(file_handle, { buffering, buffering_size });
-			if (!success) {
-				return false;
-			}
-			buffering_size = 0;
-		}
-
 		// Write the entity pool
-		success = SerializeEntityPool(entity_manager->m_entity_pool, file_handle);
-		if (!success) {
+		if (!SerializeEntityPool(entity_manager->m_entity_pool, write_instrument)) {
 			return false;
 		}
 
-		return SerializeEntityHierarchy(&entity_manager->m_hierarchy, file_handle);
+		return SerializeEntityHierarchy(&entity_manager->m_hierarchy, write_instrument);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -634,46 +604,46 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------------------
 
-	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
+	//ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
+	//	EntityManager* entity_manager,
+	//	Stream<wchar_t> filename,
+	//	DeserializeEntityManagerOptions* options
+	//)
+	//{
+	//	ECS_FILE_HANDLE file_handle = -1;
+	//	ECS_FILE_STATUS_FLAGS status = OpenFile(filename, &file_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL);
+	//	if (status != ECS_FILE_STATUS_OK) {
+	//		return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_OPEN_FILE;
+	//	}
+
+	//	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_status = DeserializeEntityManager(
+	//		entity_manager, 
+	//		file_handle, 
+	//		options
+	//	);
+	//	CloseFile(file_handle);
+	//	return deserialize_status;
+	//}
+
+	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManagerImpl(
 		EntityManager* entity_manager,
-		Stream<wchar_t> filename,
+		const FileReadInstrumentTarget& read_target,
 		DeserializeEntityManagerOptions* options
-	)
-	{
-		ECS_FILE_HANDLE file_handle = -1;
-		ECS_FILE_STATUS_FLAGS status = OpenFile(filename, &file_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL);
-		if (status != ECS_FILE_STATUS_OK) {
-			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_OPEN_FILE;
-		}
-
-		ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_status = DeserializeEntityManager(
-			entity_manager, 
-			file_handle, 
-			options
-		);
-		CloseFile(file_handle);
-		return deserialize_status;
-	}
-
-	// The functor must implement the functions:
-	// void* AllocateAndRead(size_t size, bool* allocation_failure); Return nullptr if the read failed or the allocation
-	// bool ReadInto(void* ptr, size_t size);
-	// void FreeBuffering();
-	// void MarkBufferingResetPoint();
-	// void ResetBuffering();
-	// void ClearBuffering();
-	// bool HasBuffering();
-	// auto ReadInstrument(); Must be uintptr_t for the in memory version and ECS_FILE_HANDLE for the file version
-	// void SetReadInstrument(auto instrument); Useful only for the in memory version, since when using auto the reference is dropped
-	// So for that case we need to manually call this function to update the value
-	template<typename Functor>
-	static ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManagerImpl(
-		EntityManager* entity_manager,
-		DeserializeEntityManagerOptions* options,
-		Functor&& functor
 	) {
 		ECS_ASSERT(options->component_table && options->shared_component_table && options->global_component_table, "Deserialize Entity Manager requires"
 			" all component tables to be specified");
+
+		ECS_STACK_VOID_STREAM(read_instrument_storage, 256);
+		ReadInstrument* read_instrument = read_target.GetInstrument(read_instrument_storage, ECS_KB * 64, { nullptr }, options->detailed_error_string);
+		if (read_instrument == nullptr) {
+			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_OPEN_FILE;
+		}
+
+		// If the read instrument is size determination, fail, we don't support that
+		if (read_instrument->IsSizeDetermination()) {
+			ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Deserialize Entity Manager does not accept size determination ReadInstrument");
+			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
+		}
 
 		bool previous_assert_crash = ECS_GLOBAL_ASSERT_CRASH;
 		ECS_GLOBAL_ASSERT_CRASH = true;
@@ -681,52 +651,46 @@ namespace ECSEngine {
 		// Call the crash handler recovery such that it won't try to crash the entire editor
 		ECS_SET_RECOVERY_CRASH_HANDLER(false) {
 			ResetRecoveryCrashHandler();
-			functor.FreeBuffering();
 			ECS_GLOBAL_ASSERT_CRASH = previous_assert_crash;
-			if (options->detailed_error_string) {
-				options->detailed_error_string->AddStreamAssert("Unknown error - corrupt data");
-			}
+			ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Unknown error - corrupt data");
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FILE_IS_CORRUPT;
 		}
 
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 8);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
+
+		// We will also need a large buffering allocator, because we might need to read a lot of data at once
+		ResizableLinearAllocator buffering_allocator(ECS_MB * 50, ECS_MB * 100, { nullptr });
 
 		struct Deallocator {
-			void operator()() {
+			ECS_INLINE void operator()() {
 				// Don't forget to reset the crash handler
-				functor.FreeBuffering();
+				buffering_allocator->Free();
 				ResetRecoveryCrashHandler();
 				ECS_GLOBAL_ASSERT_CRASH = assert_crash_value;
 			}
 
-			Functor functor;
+			ResizableLinearAllocator* buffering_allocator;
 			bool assert_crash_value;
 		};
 
-		StackScope<Deallocator> scope_deallocator({ functor, previous_assert_crash });
+		StackScope<Deallocator> scope_deallocator({ &buffering_allocator, previous_assert_crash });
 
 		// Read the header first
 		SerializeEntityManagerHeader header;
-		bool success = functor.ReadInto(&header, sizeof(header));
-		if (!success) {
-			if (options->detailed_error_string) {
-				options->detailed_error_string->AddStreamAssert("Failed to read deserialize header");
-			}
+		if (!read_instrument->ReadAlways(&header)) {
+			ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Failed to read deserialize header");
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 		}
 
+		// Validate the header parameters
 		if (header.version != ENTITY_MANAGER_SERIALIZE_VERSION || header.archetype_count > ECS_MAIN_ARCHETYPE_MAX_COUNT) {
-			if (options->detailed_error_string) {
-				options->detailed_error_string->AddStreamAssert("The deserialize header is corrupted");
-			}
+			ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The deserialize header is invalid/corrupted (invalid version/archetype count)");
 			return ECS_DESERIALIZE_ENTITY_MANAGER_HEADER_IS_INVALID;
 		}
 
 		// Too many components
 		if (header.component_count > SHORT_MAX || header.shared_component_count > SHORT_MAX || header.global_component_count > SHORT_MAX) {
-			if (options->detailed_error_string) {
-				options->detailed_error_string->AddStreamAssert("The deserialize header is corrupted");
-			}
+			ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The deserialize header is invalid/corrupted (component counts are too large)");
 			return ECS_DESERIALIZE_ENTITY_MANAGER_HEADER_IS_INVALID;
 		}
 
@@ -739,19 +703,21 @@ namespace ECSEngine {
 		auto allocate_and_read_failure = [&](Stream<char> data_section_name) {
 			if (options->detailed_error_string) {
 				if (allocation_failure) {
-					ECS_FORMAT_TEMP_STRING(message, "The data section {#} does not fit into the buffering", data_section_name);
+					ECS_FORMAT_TEMP_STRING(message, "The data section \"{#}\" does not fit into the buffering", data_section_name);
 					options->detailed_error_string->AddStreamAssert(message);
 				}
 				else {
-					ECS_FORMAT_TEMP_STRING(message, "The data section {#} could not be read from disk", data_section_name);
+					ECS_FORMAT_TEMP_STRING(message, "The data section \"{#}\" could not be read from disk", data_section_name);
 					options->detailed_error_string->AddStreamAssert(message);
 				}
 			}
 			return allocation_failure ? ECS_DESERIALIZE_ENTITY_MANAGER_TOO_MUCH_DATA : ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 		};
 
-		ComponentPair* component_pairs = (ComponentPair*)functor.AllocateAndRead(
-			component_pair_size + shared_component_pair_size + global_component_pair_size, 
+		ComponentPair* component_pairs = (ComponentPair*)read_instrument->ReadOrReferenceDataPointer(
+			&buffering_allocator,
+			component_pair_size + shared_component_pair_size + global_component_pair_size,
+			nullptr,
 			&allocation_failure
 		);
 		if (component_pairs == nullptr) {
@@ -796,7 +762,7 @@ namespace ECSEngine {
 		unsigned int total_size_to_read = sizeof(NamedSharedInstanceHeader) * named_shared_instances_count + component_name_total_size
 			+ shared_component_name_total_size + header_component_total_size + header_shared_component_total_size 
 			+ sizeof(SharedInstance) * shared_instance_total_count + global_name_total_size + header_global_component_total_size;
-		void* unique_name_characters = functor.AllocateAndRead(total_size_to_read, &allocation_failure);
+		void* unique_name_characters = read_instrument->ReadOrReferenceDataPointer(&buffering_allocator, total_size_to_read, &allocation_failure);
 		if (unique_name_characters == nullptr) {
 			return allocate_and_read_failure("Component Headers");
 		}
@@ -992,18 +958,21 @@ namespace ECSEngine {
 					cached_component_infos[index] = search_matching_component(component_pair_stream[index].component);
 					if (cached_component_infos[index].info != nullptr) {
 						if (cached_component_infos[index].info->header_function != nullptr) {
+							// TODO: Determine if reading all the component data in bulk is more advantageous
+							// Than relying on a reasonable buffering from the read instrument itself
+							// Create an in memory instrument of the data that it corresponds to this component.
+							uintptr_t header_component_data_ptr = (uintptr_t)header_component_data;
+							InMemoryReadInstrument local_read_instrument(header_component_data_ptr, component_pair_stream[index].header_data_size);
+
 							header_data->extra_data = cached_component_infos[index].info->extra_data;
-							header_data->file_data = *header_component_data;
+							header_data->read_instrument = &local_read_instrument;
 							header_data->size = component_pair_stream[index].header_data_size;
 							header_data->version = cached_component_infos[index].version;
 
 							bool is_valid = cached_component_infos[index].info->header_function(header_data);
 							if (!is_valid) {
-								if (options->detailed_error_string) {
-									ECS_FORMAT_TEMP_STRING(message, "The {#} component {#} header is invalid", component_type_string,
-										get_name_functor(index));
-									options->detailed_error_string->AddStreamAssert(message);
-								}
+								ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The {#} component {#} header is invalid", component_type_string,
+									get_name_functor(index));
 								return ECS_DESERIALIZE_ENTITY_MANAGER_HEADER_IS_INVALID;
 							}
 						}
@@ -1065,7 +1034,11 @@ namespace ECSEngine {
 			named_shared_instances_identifier_total_size += named_headers[index].identifier_size;
 		}
 
-		void* named_shared_instances_identifiers = functor.AllocateAndRead(named_shared_instances_identifier_total_size, &allocation_failure);
+		void* named_shared_instances_identifiers = read_instrument->ReadOrReferenceDataPointer(
+			&buffering_allocator, 
+			named_shared_instances_identifier_total_size, 
+			&allocation_failure
+		);
 		if (named_shared_instances_identifiers == nullptr) {
 			return allocate_and_read_failure("Named shared instance identifiers");
 		}
@@ -1093,10 +1066,7 @@ namespace ECSEngine {
 
 				// The byte size cannot be 0
 				if (component_fixup->component_byte_size == 0) {
-					if (options->detailed_error_string) {
-						ECS_FORMAT_TEMP_STRING(message, "Illegal byte size of 0 for unique component {#} fixup", get_unique_component_name(index));
-						options->detailed_error_string->AddStreamAssert(message);
-					}
+					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Illegal byte size of 0 for unique component {#} fixup", get_unique_component_name(index));
 					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
 				}
 
@@ -1119,10 +1089,7 @@ namespace ECSEngine {
 			if (cached_shared_infos[index].info == nullptr && (shared_component_pairs[index].instance_count > 0 ||
 				shared_component_pairs[index].named_instance_count > 0)) {
 				if (!options->remove_missing_components) {
-					if (options->detailed_error_string) {
-						ECS_FORMAT_TEMP_STRING(message, "The shared component fixup for {#} is missing", get_shared_component_name(index));
-						options->detailed_error_string->AddStreamAssert(message);
-					}
+					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The shared component fixup for {#} is missing", get_shared_component_name(index));
 					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
 				}
 			}
@@ -1134,10 +1101,7 @@ namespace ECSEngine {
 
 				// If even after this call the component byte size is still 0, then fail
 				if (component_fixup->component_byte_size == 0) {
-					if (options->detailed_error_string) {
-						ECS_FORMAT_TEMP_STRING(message, "Illegal byte size of 0 for shared component {#} fixup", get_shared_component_name(index));
-						options->detailed_error_string->AddStreamAssert(message);
-					}
+					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Illegal byte size of 0 for shared component {#} fixup", get_shared_component_name(index));
 					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
 				}
 
@@ -1159,10 +1123,7 @@ namespace ECSEngine {
 			if (cached_global_infos[index].info == nullptr) {
 				if (!options->remove_missing_components) {
 					// Fail, there is a component missing
-					if (options->detailed_error_string) {
-						ECS_FORMAT_TEMP_STRING(message, "The global component fixup for {#} is missing", get_global_component_name(index));
-						options->detailed_error_string->AddStreamAssert(message);
-					}
+					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The global component fixup for {#} is missing", get_global_component_name(index));
 					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
 				}
 			}
@@ -1173,10 +1134,7 @@ namespace ECSEngine {
 
 				// The byte size cannot be 0
 				if (component_fixup->component_byte_size == 0) {
-					if (options->detailed_error_string) {
-						ECS_FORMAT_TEMP_STRING(message, "Illegal byte size of 0 for global component {#} fixup", get_global_component_name(index));
-						options->detailed_error_string->AddStreamAssert(message);
-					}
+					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Illegal byte size of 0 for global component {#} fixup", get_global_component_name(index));
 					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
 				}
 
@@ -1195,10 +1153,14 @@ namespace ECSEngine {
 		// Now the shared component data
 		for (unsigned int index = 0; index < header.shared_component_count; index++) {
 			bool exists_shared_component = entity_manager->ExistsSharedComponent(shared_component_pairs[index].component);
-			functor.MarkBufferingResetPoint();
+			buffering_allocator.SetMarker();
 
 			// Read the header of sizes
-			unsigned int* instances_sizes = (unsigned int*)functor.AllocateAndRead(sizeof(unsigned int) * shared_component_pairs[index].instance_count, &allocation_failure);
+			unsigned int* instances_sizes = (unsigned int*)read_instrument->ReadOrReferenceDataPointer(
+				&buffering_allocator, 
+				sizeof(unsigned int) * shared_component_pairs[index].instance_count, 
+				&allocation_failure
+			);
 			if (instances_sizes == nullptr) {
 				ECS_FORMAT_TEMP_STRING(section_name, "Instance byte sizes for shared component {#}", get_shared_component_name(index));
 				return allocate_and_read_failure(section_name);
@@ -1211,7 +1173,7 @@ namespace ECSEngine {
 			}
 
 			// Read in bulk now the instance data
-			void* instances_data = functor.AllocateAndRead(total_instance_size, &allocation_failure);
+			void* instances_data = read_instrument->ReadOrReferenceDataPointer(&buffering_allocator, total_instance_size, &allocation_failure);
 			if (instances_data == nullptr) {
 				ECS_FORMAT_TEMP_STRING(section_name, "Instance byte data for shared component {#}", get_shared_component_name(index));
 				return allocate_and_read_failure(section_name);
@@ -1228,10 +1190,16 @@ namespace ECSEngine {
 
 				unsigned int current_instance_offset = 0;
 				for (unsigned int shared_instance = 0; shared_instance < shared_component_pairs[index].instance_count; shared_instance++) {
+					// TODO: Determine if reading the instances in bulk like we do now is more effective
+					// Than relying on the internal buffering of the read instrument.
+					// Create an in memory instrument for the data of this instance
+					uintptr_t instance_data_ptr = (uintptr_t)OffsetPointer(instances_data, current_instance_offset);
+					InMemoryReadInstrument instance_read_instrument(instance_data_ptr, instances_sizes[shared_instance]);
+
 					DeserializeEntityManagerSharedComponentData function_data;
 					function_data.data_size = instances_sizes[shared_instance];
 					function_data.component = component_storage.buffer;
-					function_data.file_data = OffsetPointer(instances_data, current_instance_offset);
+					function_data.read_instrument = &instance_read_instrument;
 					function_data.extra_data = component_info->extra_data;
 					function_data.instance = { (short)shared_instance };
 					function_data.version = shared_component_pairs[index].serialize_version;
@@ -1240,10 +1208,7 @@ namespace ECSEngine {
 					// Now call the extract function
 					bool is_data_valid = component_info->function(&function_data);
 					if (!is_data_valid) {
-						if (options->detailed_error_string) {
-							ECS_FORMAT_TEMP_STRING(message, "A shared instance for component {#} has corrupted data", get_shared_component_name(index));
-							options->detailed_error_string->AddStreamAssert(message);
-						}
+						ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "A shared instance for component {#} has corrupted data", get_shared_component_name(index));
 						return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
 					}
 
@@ -1256,7 +1221,7 @@ namespace ECSEngine {
 
 			// The size doesn't need to be updated - the data is commited right away - this will ensure that the 
 			// data is always hot in cache
-			functor.ResetBuffering();
+			buffering_allocator.ReturnToMarker();
 		}
 
 		// After the instances have been created, we can now bind the named tags to them
@@ -1285,22 +1250,14 @@ namespace ECSEngine {
 		// Now we need to read the global components
 		for (unsigned short index = 0; index < header.global_component_count; index++) {
 			bool exists = entity_manager->ExistsGlobalComponent(global_component_pairs[index].component);
-			functor.MarkBufferingResetPoint();
 
-			unsigned int* write_size = (unsigned int*)functor.AllocateAndRead(sizeof(unsigned int), &allocation_failure);
-			if (write_size == nullptr) {
+			unsigned int write_size = 0;
+			if (!read_instrument->Read(&write_size)) {
 				ECS_FORMAT_TEMP_STRING(section, "Byte size for global component {#}", get_global_component_name(index));
 				return allocate_and_read_failure(section);
 			}
 
-			void* component_data = functor.AllocateAndRead(*write_size, &allocation_failure);
-			if (component_data == nullptr) {
-				ECS_FORMAT_TEMP_STRING(section, "Data for global component {#}", get_global_component_name(index));
-				return allocate_and_read_failure(section);
-			}
-
-			// At the steps beforehand need to be performed no matter if the component is ignored or not
-			
+			// The steps beforehand need to be performed no matter if the component is ignored or not		
 			if (exists) {
 				// If it has a name, search for its match
 				const DeserializeEntityManagerGlobalComponentInfo* component_info = cached_global_infos[index].info;
@@ -1308,9 +1265,14 @@ namespace ECSEngine {
 				// Allocate the data from the entity manager allocator
 				void* global_data = entity_manager->GetGlobalComponent(cached_global_infos[index].found_at);
 
+				// Push a new subinstrument, such that the component can reason about itself and we prevent
+				// The component from reading overbounds
+				ReadInstrument::SubinstrumentData subinstrument_data;
+				auto subinstrument = read_instrument->PushSubinstrument(&subinstrument_data, write_size);
+
 				DeserializeEntityManagerComponentData function_data;
 				function_data.components = global_data;
-				function_data.file_data = component_data;
+				function_data.read_instrument = read_instrument;
 				function_data.extra_data = component_info->extra_data;
 				function_data.version = global_component_pairs[index].serialize_version;
 				// Global components have their allocator as the main entity manager allocator, since they
@@ -1328,14 +1290,24 @@ namespace ECSEngine {
 					return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
 				}
 			}
-
-			functor.ResetBuffering();
 		}
 
-		// The buffering can be cleared now - all the unique, shared and global data was read and commited into the entity manager
-		functor.ClearBuffering();
+		// Before bumping back the buffering size we need to copy the unique names because they will be used in
+		// the search matching component function again, can't rely on the cached versions because it is based on the component
+		// and the cached infos don't have that.
+		// Another thing that we need to keep is the base archetype sizes.
+		unsigned int unique_name_total_size = current_unique_name_offset;
+		char* stable_unique_name_characters = (char*)stack_allocator.Allocate(unique_name_total_size);
+		memcpy(stable_unique_name_characters, unique_name_characters, unique_name_total_size);
 
-		ArchetypeHeader* archetype_headers = (ArchetypeHeader*)functor.AllocateAndRead(sizeof(ArchetypeHeader) * header.archetype_count, &allocation_failure);
+		// The buffering can be cleared now - all the unique, shared and global data was read and commited into the entity manager
+		buffering_allocator.Clear();
+
+		ArchetypeHeader* archetype_headers = (ArchetypeHeader*)read_instrument->ReadOrReferenceDataPointer(
+			&buffering_allocator, 
+			sizeof(ArchetypeHeader) * header.archetype_count, 
+			&allocation_failure
+		);
 		if (archetype_headers == nullptr) {
 			return allocate_and_read_failure("Archetype Headers");
 		}
@@ -1354,8 +1326,11 @@ namespace ECSEngine {
 			base_archetypes_counts_size += sizeof(unsigned int) * archetype_headers[index].base_count;
 		}
 
-		Component* archetype_component_signatures = (Component*)functor.AllocateAndRead(archetypes_component_signature_size 
-			+ base_archetypes_instance_size + base_archetypes_counts_size, &allocation_failure);
+		Component* archetype_component_signatures = (Component*)read_instrument->ReadOrReferenceDataPointer(
+			&buffering_allocator, 
+			archetypes_component_signature_size + base_archetypes_instance_size + base_archetypes_counts_size, 
+			&allocation_failure
+		);
 		if (archetype_component_signatures == nullptr) {
 			return allocate_and_read_failure("Archetype Signatures and Counts");
 		}
@@ -1365,7 +1340,7 @@ namespace ECSEngine {
 		// This is used to map from the header index to the actual entity manager index
 		unsigned int* archetype_mappings = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.archetype_count);
 		// This is used to map from the archetype base index to the actual archetype base index (since it can be found
-		// when a component was removed
+		// when a component was removed)
 		unsigned int* archetype_base_mappings = (unsigned int*)stack_allocator.Allocate(base_archetypes_counts_size);
 		// This is used to remap the entities stream index when some entities are moved to another base archetype when there are
 		// Missing components. We record the base size when that base is found such that we can offset the stream index with that value
@@ -1412,9 +1387,7 @@ namespace ECSEngine {
 			if (unique.count != original_unique_count || shared.count != original_shared_count) {
 				if (!options->remove_missing_components) {
 					// Fail
-					if (options->detailed_error_string) {
-						options->detailed_error_string->AddStreamAssert("An archetype has missing unique components");
-					}
+					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "An archetype has missing unique components");
 					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
 				}
 			}
@@ -1466,20 +1439,8 @@ namespace ECSEngine {
 			component_signature_offset += original_unique_count + original_shared_count;
 		}
 
-		// Before bumping back the buffering size we need to copy the unique names because they will be used in
-		// the search matching component function again, can't rely on the cached versions because it is based on the component
-		// and the cached infos don't have that.
-		// Another thing that we need to keep is the base archetype sizes.
-		unsigned int unique_name_total_size = current_unique_name_offset;
-		if (functor.HasBuffering()) {
-			// This uses _alloca, which is tied to function scope instead of block scope
-			ECS_STACK_CAPACITY_STREAM_DYNAMIC(char, stack_unique_component_names, unique_name_total_size);
-			memcpy(stack_unique_component_names.buffer, unique_name_characters, unique_name_total_size);
-			unique_name_characters = stack_unique_component_names.buffer;
-		}
-
 		// The buffering can be bumped back, it is no longer needed
-		functor.ClearBuffering();
+		buffering_allocator.Clear();
 
 		component_signature_offset = 0;
 		base_archetype_sizes_offset = 0;
@@ -1507,14 +1468,9 @@ namespace ECSEngine {
 					}
 
 					// Use the buffering to read in. Read the write count first
-					unsigned int* data_size = (unsigned int*)functor.AllocateAndRead(sizeof(unsigned int), &allocation_failure);
-					if (data_size == nullptr) {
+					unsigned int data_size = 0;
+					if (!read_instrument->Read(&data_size)) {
 						ECS_FORMAT_TEMP_STRING(section, "Data size for component {#} while reading an archetype could not be read", component_info.info->name);
-						return allocate_and_read_failure(section);
-					}
-					const void* starting_component_data = functor.AllocateAndRead(*data_size, &allocation_failure);
-					if (starting_component_data == nullptr) {
-						ECS_FORMAT_TEMP_STRING(section, "Data for component {#} while reading an archetype could not be read", component_info.info->name);
 						return allocate_and_read_failure(section);
 					}
 
@@ -1526,17 +1482,14 @@ namespace ECSEngine {
 						DeserializeEntityManagerComponentData function_data;
 						function_data.count = base->m_size;
 						function_data.extra_data = component_info.info->extra_data;
-						function_data.file_data = starting_component_data;
+						function_data.read_instrument = read_instrument;
 						function_data.components = archetype_buffer;
 						function_data.version = component_info.version;
 						function_data.component_allocator = entity_manager->GetComponentAllocator(current_component);
 
 						bool is_data_valid = component_info.info->function(&function_data);
 						if (!is_data_valid) {
-							if (options->detailed_error_string) {
-								ECS_FORMAT_TEMP_STRING(message, "Data for component {#} for an archetype is corrupted", component_info.info->name);
-								options->detailed_error_string->AddStreamAssert(message);
-							}
+							ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Data for component {#} for an archetype is corrupted", component_info.info->name);
 							return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
 						}
 					}
@@ -1547,8 +1500,6 @@ namespace ECSEngine {
 
 			component_signature_offset += archetype_headers[index].unique_count + archetype_headers[index].shared_count;
 		}
-
-		functor.ClearBuffering();
 
 		// We need to record the signatures because when updating components we need to match the old signatures
 		// We can't place the archetype signatures on the stack because of the alignment bug of the stack trace
@@ -1661,18 +1612,10 @@ namespace ECSEngine {
 
 #pragma endregion
 
-		// C++ gotcha here, when returning uintptr_t&, it will actually receive only
-		// uintptr_t by value. So we must manually call SetReadInstrument
-		auto read_instrument = functor.ReadInstrument();
-
 		// The base archetypes are missing their entities, but these will be restored after reading the entity pool,
 		// which can be read now
-		success = DeserializeEntityPool(entity_manager->m_entity_pool, read_instrument);
-		functor.SetReadInstrument(read_instrument);
-		if (!success) {
-			if (options->detailed_error_string) {
-				options->detailed_error_string->AddStreamAssert("Failed to deserialize the entity pool");
-			}
+		if (!DeserializeEntityPool(entity_manager->m_entity_pool, read_instrument)) {
+			ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Failed to deserialize the entity pool");
 			return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
 		}
 
@@ -1721,126 +1664,13 @@ namespace ECSEngine {
 
 		entity_manager->m_hierarchy_allocator->Clear();
 		entity_manager->m_hierarchy = EntityHierarchy(entity_manager->m_hierarchy_allocator);
-		success = DeserializeEntityHierarchy(&entity_manager->m_hierarchy, read_instrument);
-		functor.SetReadInstrument(read_instrument);
-
-		if (!success) {
-			if (options->detailed_error_string) {
-				options->detailed_error_string->AddStreamAssert("Failed to deserialize the entity hierarchy");
-			}
+		if (!DeserializeEntityHierarchy(&entity_manager->m_hierarchy, read_instrument)) {
+			ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Failed to deserialize the entity hierarchy");
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 		}
 
 		// Everything should be reconstructed now
 		return ECS_DESERIALIZE_ENTITY_MANAGER_OK;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------------------------
-
-	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
-		EntityManager* entity_manager, 
-		ECS_FILE_HANDLE file_handle, 
-		DeserializeEntityManagerOptions* options
-	)
-	{
-		void* buffering = Malloc(ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
-		struct Functor {
-			ECS_INLINE bool ReadInto(void* ptr, size_t size) {
-				return ReadFileExact(file_handle, { ptr, size });
-			}
-
-			void* AllocateAndRead(size_t size, bool* allocation_has_failed) {
-				if (buffering_size + size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY) {
-					void* pointer = OffsetPointer(buffering, buffering_size);
-					buffering_size += size;
-					bool success = ReadInto(pointer, size);
-					return success ? pointer : nullptr;
-				}
-				else {
-					*allocation_has_failed = true;
-					return nullptr;
-				}
-			}
-
-			ECS_INLINE void FreeBuffering() {
-				Free(buffering);
-			}
-			
-			ECS_INLINE void MarkBufferingResetPoint() {
-				buffering_marker = buffering_size;
-			}
-
-			ECS_INLINE void ResetBuffering() {
-				buffering_size = buffering_marker;
-			}
-
-			ECS_INLINE void ClearBuffering() {
-				buffering_size = 0;
-			}
-
-			ECS_INLINE bool HasBuffering() const {
-				return true;
-			}
-
-			ECS_INLINE ECS_FILE_HANDLE ReadInstrument() const {
-				return file_handle;
-			}
-
-			ECS_INLINE void SetReadInstrument(ECS_FILE_HANDLE handle) {}
-
-			void* buffering;
-			unsigned int buffering_size;
-			unsigned int buffering_marker;
-			ECS_FILE_HANDLE file_handle;
-		};
-
-		return DeserializeEntityManagerImpl(entity_manager, options, Functor{ buffering, 0, 0, file_handle });
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------------------------
-
-	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
-		EntityManager* entity_manager, 
-		uintptr_t& ptr, 
-		DeserializeEntityManagerOptions* options
-	)
-	{
-		struct Functor {
-			ECS_INLINE bool ReadInto(void* write_pointer, size_t size) {
-				Read<true>(ptr, write_pointer, size);
-				return true;
-			}
-
-			ECS_INLINE void* AllocateAndRead(size_t size, bool* allocation_has_failed) {
-				void* pointer = (void*)*ptr;
-				*ptr += size;
-				return pointer;
-			}
-
-			ECS_INLINE void FreeBuffering() {}
-
-			ECS_INLINE void MarkBufferingResetPoint() {}
-
-			ECS_INLINE void ResetBuffering() {}
-
-			ECS_INLINE void ClearBuffering() {}
-
-			ECS_INLINE bool HasBuffering() const {
-				return false;
-			}
-
-			ECS_INLINE uintptr_t& ReadInstrument() const {
-				return *ptr;
-			}
-
-			ECS_INLINE void SetReadInstrument(uintptr_t new_value) {
-				*ptr = new_value;
-			}
-
-			uintptr_t* ptr;
-		};
-
-		return DeserializeEntityManagerImpl(entity_manager, options, Functor{ &ptr });
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -1855,60 +1685,36 @@ namespace ECSEngine {
 		bool is_blittable;
 	};
 
-	unsigned int ReflectionSerializeEntityManagerComponent(SerializeEntityManagerComponentData* data) {
+	bool ReflectionSerializeEntityManagerComponent(SerializeEntityManagerComponentData* data) {
 		ReflectionSerializeComponentData* functor_data = (ReflectionSerializeComponentData*)data->extra_data;
 		
 		size_t type_byte_size = Reflection::GetReflectionTypeByteSize(functor_data->type);
 		if (functor_data->is_blittable) {
 			size_t write_size = type_byte_size * data->count;
-			if (data->buffer_capacity < write_size) {
-				return write_size;
-			}
-			memcpy(data->buffer, data->components, write_size);
-			return write_size;
+			return data->write_instrument->Write(data->components, write_size);
 		}
 		else {
 			SerializeOptions options;
 			options.write_type_table = false;
 
-			// Do a prescan to determine the total write size
 			const void* current_component = data->components;
-			size_t total_write_size = 0;
 			for (unsigned int index = 0; index < data->count; index++) {
-				size_t serialize_size = SerializeSize(functor_data->reflection_manager, functor_data->type, current_component, &options);
-				if (serialize_size == -1) {
-					return -1;
+				if (!Serialize(functor_data->reflection_manager, functor_data->type, current_component, data->write_instrument, &options)) {
+					return false;
 				}
 
 				current_component = OffsetPointer(current_component, type_byte_size);
-				total_write_size += serialize_size;
 			}
 
-			if (total_write_size <= data->buffer_capacity) {
-				current_component = data->components;
-				uintptr_t ptr = (uintptr_t)data->buffer;
-				for (unsigned int index = 0; index < data->count; index++) {
-					ECS_SERIALIZE_CODE code = Serialize(functor_data->reflection_manager, functor_data->type, current_component, ptr, &options);
-					if (code != ECS_SERIALIZE_OK) {
-						return -1;
-					}
-
-					current_component = OffsetPointer(current_component, type_byte_size);
-				}
-			}
-
-			return total_write_size;
+			return true;
 		}
 	}
 
-	unsigned int ReflectionSerializeEntityManagerHeaderComponent(SerializeEntityManagerHeaderComponentData* data) {
+	bool ReflectionSerializeEntityManagerHeaderComponent(SerializeEntityManagerHeaderComponentData* data) {
 		ReflectionSerializeComponentData* functor_data = (ReflectionSerializeComponentData*)data->extra_data;
 		// Write the type table
-		uintptr_t ptr = (uintptr_t)data->buffer;
 		functor_data->is_blittable = IsBlittable(functor_data->type);
-		SerializeFieldTable(functor_data->reflection_manager, functor_data->type, ptr);
-
-		return ptr - (uintptr_t)data->buffer;
+		return SerializeFieldTable(functor_data->reflection_manager, functor_data->type, data->write_instrument);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -1921,8 +1727,7 @@ namespace ECSEngine {
 	unsigned int ReflectionSerializeEntityManagerSharedComponent(SerializeEntityManagerSharedComponentData* data) {
 		// The same as the unique version, just the count is 1. The extra data is type punned to the unique data
 		SerializeEntityManagerComponentData unique_data;
-		unique_data.buffer = data->buffer;
-		unique_data.buffer_capacity = data->buffer_capacity;
+		unique_data.write_instrument = data->write_instrument;
 		unique_data.components = data->component_data;
 		unique_data.count = 1;
 		unique_data.extra_data = data->extra_data;
@@ -1932,8 +1737,7 @@ namespace ECSEngine {
 	unsigned int ReflectionSerializeEntityManagerHeaderSharedComponent(SerializeEntityManagerHeaderSharedComponentData* data) {
 		// At the moment can call the unique componet variant
 		SerializeEntityManagerHeaderComponentData unique_data;
-		unique_data.buffer = data->buffer;
-		unique_data.buffer_capacity = data->buffer_capacity;
+		unique_data.write_instrument = data->write_instrument;
 		unique_data.extra_data = data->extra_data;
 
 		// Could have type punned the data with the unique data, but this is "safer"
@@ -1964,9 +1768,7 @@ namespace ECSEngine {
 
 		size_t type_byte_size = Reflection::GetReflectionTypeByteSize(functor_data->type);
 		if (functor_data->is_unchanged_and_blittable) {
-			memcpy(data->components, data->file_data, data->count * type_byte_size);
-			// This line is useful for linked components
-			data->file_data = OffsetPointer(data->file_data, data->count * type_byte_size);
+			return data->read_instrument->Read(data->components, data->count * type_byte_size);
 		}
 		else {
 			// Must use the deserialize to take care of the data that can be read
@@ -1981,7 +1783,6 @@ namespace ECSEngine {
 				options.use_type_field_allocators = true;
 			}
 
-			uintptr_t ptr = (uintptr_t)data->file_data;
 			void* current_component = data->components;
 
 			// Hoist the if outside the for
@@ -1998,31 +1799,46 @@ namespace ECSEngine {
 				// the bulk blittable with byte size of 8, then if
 				// We are to use the deserialize, it will be skipping
 				// Only 6 bytes per entry, instead of the full 8. So
-				// We need to account for this fact
-				for (unsigned int index = 0; index < data->count; index++) {
-					uintptr_t initial_ptr = ptr;
-					ECS_DESERIALIZE_CODE code = Deserialize(functor_data->reflection_manager, functor_data->type, current_component, ptr, &options);
-					if (code != ECS_DESERIALIZE_OK) {
+				// We need to account for this fact.
+				// Perform a separate single iteration to determine how many bytes
+				// A single iteration uses, such that we know how much to ignore per iteration
+				if (data->count == 0) {
+					return true;
+				}
+
+				size_t initial_instrument_offset = data->read_instrument->GetOffset();
+				if (Deserialize(functor_data->reflection_manager, functor_data->type, current_component, data->read_instrument, &options) != ECS_DESERIALIZE_OK) {
+					return false;
+				}
+				size_t final_instrument_offset = data->read_instrument->GetOffset();
+				size_t per_iteration_read_size = final_instrument_offset - initial_instrument_offset;
+				ECS_ASSERT(per_iteration_read_size <= type_byte_size, "Unexpected code path - component file blittable structure during deserialization "
+					"used more bytes than in file!");
+
+				size_t per_iteration_ignore_size = type_byte_size - per_iteration_read_size;
+				if (!data->read_instrument->Ignore(per_iteration_ignore_size)) {
+					return false;
+				}
+				for (unsigned int index = 0; index < data->count - 1; index++) {
+					bool success = true;
+					success &= Deserialize(functor_data->reflection_manager, functor_data->type, current_component, data->read_instrument, &options) != ECS_DESERIALIZE_OK;
+					success &= data->read_instrument->Ignore(per_iteration_ignore_size);
+					if (!success) {
 						return false;
 					}
 
 					current_component = OffsetPointer(current_component, type_byte_size);
-					// We can directly assign to it
-					ptr = initial_ptr + functor_data->file_byte_size;
 				}
 			}
 			else {
 				for (unsigned int index = 0; index < data->count; index++) {
-					ECS_DESERIALIZE_CODE code = Deserialize(functor_data->reflection_manager, functor_data->type, current_component, ptr, &options);
-					if (code != ECS_DESERIALIZE_OK) {
+					if (Deserialize(functor_data->reflection_manager, functor_data->type, current_component, data->read_instrument, &options) != ECS_DESERIALIZE_OK) {
 						return false;
 					}
 
 					current_component = OffsetPointer(current_component, type_byte_size);
 				}
 			}
-			// This line is useful for linked components
-			data->file_data = (void*)ptr;
 		}
 
 		return true;
@@ -2032,8 +1848,7 @@ namespace ECSEngine {
 		ReflectionDeserializeComponentData* functor_data = (ReflectionDeserializeComponentData*)data->extra_data;
 
 		// Extract the field table
-		uintptr_t ptr = (uintptr_t)data->file_data;
-		functor_data->field_table = DeserializeFieldTableFromData(ptr, functor_data->allocator);
+		functor_data->field_table = DeserializeFieldTableFromData(data->read_instrument, functor_data->allocator);
 		if (functor_data->field_table.types.size == 0) {
 			return false;
 		}
@@ -2083,7 +1898,7 @@ namespace ECSEngine {
 		unique_data.components = data->component;
 		unique_data.count = 1;
 		unique_data.extra_data = data->extra_data;
-		unique_data.file_data = data->file_data;
+		unique_data.read_instrument = data->read_instrument;
 		unique_data.version = data->version;
 		unique_data.component_allocator = data->component_allocator;
 		return ReflectionDeserializeEntityManagerComponent(&unique_data);
@@ -2094,7 +1909,7 @@ namespace ECSEngine {
 		// ReflectionDeserializeSharedComponentData into a ReflectionDeserializeComponentData
 		DeserializeEntityManagerHeaderComponentData unique_data;
 		unique_data.extra_data = data->extra_data;
-		unique_data.file_data = data->file_data;
+		unique_data.read_instrument = data->read_instrument;
 		unique_data.size = data->size;
 		unique_data.version = data->version;
 		return ReflectionDeserializeEntityManagerHeaderComponent(&unique_data);
@@ -2114,8 +1929,6 @@ namespace ECSEngine {
 		ModuleLinkComponentFunction function;
 		const Reflection::ReflectionType* target_type;
 		Stream<LinkComponentAssetField> asset_fields;
-		unsigned int written_count_before;
-		unsigned int skipped_count_before;
 	};
 
 	struct ReflectionSerializeLinkComponentData {
@@ -2130,14 +1943,8 @@ namespace ECSEngine {
 		unsigned int target_byte_size = Reflection::GetReflectionTypeByteSize(functor_data->link_base_data.target_type);
 
 		unsigned int initial_count = data->count;
+		// Set the count to 1, such that the normal component serialize will write a single component at a time
 		data->count = 1;
-
-		// The serialize function is not dependent on the buffer capacity, so we can decrement it accordingly
-		unsigned int total_write_size = 0;
-		unsigned int starting_index = functor_data->link_base_data.skipped_count_before > 0 ? functor_data->link_base_data.written_count_before : 0;
-
-		functor_data->link_base_data.skipped_count_before = 0;
-		functor_data->link_base_data.written_count_before = 0;
 
 		ConvertToAndFromLinkBaseData convert_base_data;
 		convert_base_data.link_type = functor_data->normal_base_data.type;
@@ -2150,7 +1957,7 @@ namespace ECSEngine {
 
 		const void* initial_components = data->components;
 
-		for (unsigned int index = starting_index; index < initial_count; index++) {
+		for (unsigned int index = 0; index < initial_count; index++) {
 			const void* source = OffsetPointer(initial_components, index * target_byte_size);
 
 			bool success = ConvertFromTargetToLinkComponent(
@@ -2161,24 +1968,17 @@ namespace ECSEngine {
 				nullptr
 			);
 			if (!success) {
-				return -1;
+				return false;
 			}
 
 			data->extra_data = &functor_data->normal_base_data;
 			data->components = link_component_storage;
-			unsigned int current_write_size = ReflectionSerializeEntityManagerComponent(data);
-			if (current_write_size <= data->buffer_capacity) {
-				data->buffer_capacity -= current_write_size;
-				data->buffer = OffsetPointer(data->buffer, current_write_size);
-				functor_data->link_base_data.skipped_count_before++;
+			if (!ReflectionSerializeEntityManagerComponent(data)) {
+				return false;
 			}
-			else {
-				functor_data->link_base_data.written_count_before++;
-			}
-			total_write_size += current_write_size;
 		}
 
-		return total_write_size;
+		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------

@@ -479,6 +479,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionAllocatorHandling.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Tokenize.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\BufferedFileReaderWriter.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\ReaderWriterInterface.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

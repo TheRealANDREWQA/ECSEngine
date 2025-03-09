@@ -3,34 +3,32 @@
 
 namespace ECSEngine {
 
+	struct WriteInstrument;
+	struct ReadInstrument;
+
 	struct SerializeEntityManagerComponentData {
+		WriteInstrument* write_instrument;
 		const void* components;
-		unsigned int count;
-		void* buffer;
-		size_t buffer_capacity;
 		void* extra_data;
+		unsigned int count;
 	};
 
 	// This functor can be used to extract only some fields or write some others for serialization out of components
-	// It receives the buffer capacity and must check that the write size is contained inside the buffer capacity. If it doesn't,
-	// It must return how many bytes it wants to write and it will be recalled with a new buffer
-	// Must return how many bytes were written. Can return -1 to signal an error
-	// This function receives the component data for an entire base archetype
-	typedef unsigned int (*SerializeEntityManagerComponent)(SerializeEntityManagerComponentData* data);
+	// This function receives the component data for an entire base archetype. Should return true if it succeeded, else false
+	typedef bool (*SerializeEntityManagerComponent)(SerializeEntityManagerComponentData* data);
 
 	struct SerializeEntityManagerHeaderComponentData {
-		void* buffer;
-		size_t buffer_capacity;
+		WriteInstrument* write_instrument;
 		void* extra_data;
 	};
 
-	// It shared the extra data with the extract function
+	// It shares the extra data with the extract function
 	// Used to write a header in the file
-	// Must return how many bytes were written. Can return -1 to signal an error
-	typedef unsigned int (*SerializeEntityManagerHeaderComponent)(SerializeEntityManagerHeaderComponentData* data);
+	// Should return true if it succeeded, else false
+	typedef bool (*SerializeEntityManagerHeaderComponent)(SerializeEntityManagerHeaderComponentData* data);
 
 	struct DeserializeEntityManagerComponentData {
-		const void* file_data;
+		ReadInstrument* read_instrument;
 		unsigned int count;
 		unsigned char version;
 		void* components;
@@ -43,7 +41,7 @@ namespace ECSEngine {
 	typedef bool (*DeserializeEntityManagerComponent)(DeserializeEntityManagerComponentData* data);
 
 	struct DeserializeEntityManagerHeaderComponentData {
-		const void* file_data;
+		ReadInstrument* read_instrument;
 		unsigned int size;
 		unsigned char version;
 		void* extra_data;
@@ -55,33 +53,28 @@ namespace ECSEngine {
 	typedef bool (*DeserializeEntityManagerHeaderComponent)(DeserializeEntityManagerHeaderComponentData* data);
 
 	struct SerializeEntityManagerSharedComponentData {
+		WriteInstrument* write_instrument;
 		SharedInstance instance;
 		const void* component_data;
-		void* buffer;
-		size_t buffer_capacity;
 		void* extra_data;
 	};
 
 	// This functor can be used to extract only some fields or write some other for serialization out of shared components
-	// It receives the buffer capacity and must check that the write size is contained inside the buffer capacity. If it doesn't,
-	// It must return how many bytes it wants to write and it will be recalled with a new buffer
-	// Must returns how many bytes were written
-	typedef unsigned int (*SerializeEntityManagerSharedComponent)(SerializeEntityManagerSharedComponentData* data);
+	// Should return true if it succeeded, else false
+	typedef bool (*SerializeEntityManagerSharedComponent)(SerializeEntityManagerSharedComponentData* data);
 
 	struct SerializeEntityManagerHeaderSharedComponentData {
-		void* buffer;
-		size_t buffer_capacity;
+		WriteInstrument* write_instrument;
 		void* extra_data;
 	};
 
-	// It shared the extra data with the extract function
-	// Used to write a header in the file
-	// Must return how many bytes were written.
-	typedef unsigned int (*SerializeEntityManagerHeaderSharedComponent)(SerializeEntityManagerHeaderSharedComponentData* data);
+	// It shares the extra data with the extract function
+	// Should return true if it succeeded, else false
+	typedef bool (*SerializeEntityManagerHeaderSharedComponent)(SerializeEntityManagerHeaderSharedComponentData* data);
 
 	struct DeserializeEntityManagerSharedComponentData {
 		SharedInstance instance;
-		const void* file_data;
+		ReadInstrument* read_instrument;
 		unsigned int data_size;
 		unsigned char version;
 		void* component;
@@ -93,7 +86,7 @@ namespace ECSEngine {
 	typedef bool (*DeserializeEntityManagerSharedComponent)(DeserializeEntityManagerSharedComponentData* data);
 
 	struct DeserializeEntityManagerHeaderSharedComponentData {
-		const void* file_data;
+		ReadInstrument* read_instrument;
 		unsigned int size;
 		unsigned char version;
 		void* extra_data;

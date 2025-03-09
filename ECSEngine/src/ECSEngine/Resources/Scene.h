@@ -6,6 +6,7 @@
 #include "../ECS/EntityManagerSerializeTypes.h"
 #include "../Tools/Modules/ModuleDefinition.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
+#include "../Utilities/ReaderWriterInterface.h"
 
 // These are some chunks that can be used to fill in various information
 // Without a predefined connotation
@@ -78,10 +79,7 @@ namespace ECSEngine {
 		const EntityManager* entity_manager;
 		const Reflection::ReflectionManager* reflection_manager;
 		size_t chunk_index;
-		union {
-			Stream<void> write_data;
-			ECS_FILE_HANDLE write_handle;
-		};
+		WriteInstrument* write_instrument;
 		void* user_data;
 	};
 
@@ -90,8 +88,6 @@ namespace ECSEngine {
 	struct SaveSceneChunkFunctor {
 		SaveSceneChunkFunction function;
 		void* user_data;
-		// If this is specified, it will use the file handle directly to make the write
-		bool file_handle_write;
 	};
 
 	struct LoadSceneData {
@@ -153,7 +149,7 @@ namespace ECSEngine {
 
 	struct SaveSceneData {
 		// ------------------------- Mandatory ---------------------------
-		WriteInstrument* write_instrument;
+		FileWriteInstrumentTarget write_target;
 		const EntityManager* entity_manager;
 		// The reflection manager must have the SceneModule type reflected
 		const Reflection::ReflectionManager* reflection_manager;

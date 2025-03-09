@@ -37,20 +37,14 @@ namespace ECSEngine {
 		// ------------------------ Optional --------------------------------------
 	};
 
+	struct FileWriteInstrumentTarget;
+	struct FileReadInstrumentTarget;
+
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API bool SerializeEntityManager(
 		const EntityManager* entity_manager,
-		Stream<wchar_t> filename,
-		SerializeEntityManagerOptions* options
-	);
-
-	// -------------------------------------------------------------------------------------------------------------------------------------
-
-	// It does not close the file handle if it fails. It leave it open
-	ECSENGINE_API bool SerializeEntityManager(
-		const EntityManager* entity_manager,
-		ECS_FILE_HANDLE file_handle,
+		const FileWriteInstrumentTarget& write_target,
 		SerializeEntityManagerOptions* options
 	);
 
@@ -58,24 +52,7 @@ namespace ECSEngine {
 
 	ECSENGINE_API ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
 		EntityManager* entity_manager,
-		Stream<wchar_t> filename,
-		DeserializeEntityManagerOptions* options
-	);
-
-	// -------------------------------------------------------------------------------------------------------------------------------------
-
-	// It does not close the file handle if it fails. It leaves it open
-	ECSENGINE_API ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
-		EntityManager* entity_manager,
-		ECS_FILE_HANDLE file_handle,
-		DeserializeEntityManagerOptions* options
-	);
-
-	// -------------------------------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
-		EntityManager* entity_manager,
-		uintptr_t& ptr,
+		const FileReadInstrumentTarget& read_target,
 		DeserializeEntityManagerOptions* options
 	);
 

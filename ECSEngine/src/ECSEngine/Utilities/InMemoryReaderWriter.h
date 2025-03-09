@@ -13,7 +13,7 @@ namespace ECSEngine {
 			return *buffer - initial_buffer;
 		}
 
-		ECS_INLINE bool Write(const void* data, size_t data_size) override {
+		bool Write(const void* data, size_t data_size) override {
 			if (*buffer_capacity < data_size) {
 				return false;
 			}
@@ -23,7 +23,21 @@ namespace ECSEngine {
 			return true;
 		}
 
-		bool ResetAndSeekTo(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
+		ECS_INLINE bool AppendUninitialized(size_t data_size) override {
+			if (*buffer_capacity < data_size) {
+				return false;
+			}
+			*buffer_capacity -= data_size;
+			*buffer += data_size;
+			return true;
+		}
+
+		ECS_INLINE bool DiscardData() override {
+			// We don't have to do anything special
+			return true;
+		}
+
+		bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) override {
 			switch (seek_type) {
 			case ECS_INSTRUMENT_SEEK_START:
 			{

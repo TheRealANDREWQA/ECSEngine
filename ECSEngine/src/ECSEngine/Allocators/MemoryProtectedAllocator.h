@@ -19,6 +19,11 @@ namespace ECSEngine {
 
 		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		template<typename T>
+		ECS_INLINE T* Allocate(DebugInfo debug_info = ECS_DEBUG_INFO) {
+			return (T*)Allocate(sizeof(T), alignof(T), debug_info);
+		}
+
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
 

@@ -20,8 +20,20 @@ namespace ECSEngine {
 
 		virtual bool Write(const void* data, size_t data_size) = 0;
 
-		// It will discard any data that was written after that point
-		virtual bool ResetAndSeekTo(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) = 0;
+		// This function instructs the instrument to advance the given parameter size,
+		// Without writing anything specific for these bytes. Useful if you want to write some
+		// Data later on, but you want to write some other data first, like for example adding
+		// A prefix size before a variable length field. The cursor must be at the end of the write
+		// Range, otherwise the results might be unexpected!
+		// Can use the function WriteUninitializedData() to easily write this data back
+		virtual bool AppendUninitialized(size_t data_size) = 0;
+
+		// Call this function if you seeked to a location other than the end of the instrument
+		// And you want to discard the data that comes after
+		virtual bool DiscardData() = 0;
+
+		// Moves the write cursor to the specified location
+		virtual bool Seek(ECS_INSTRUMENT_SEEK_TYPE seek_type, int64_t offset) = 0;
 
 		virtual bool Flush() = 0;
 
@@ -29,6 +41,23 @@ namespace ECSEngine {
 		// Structure, else false. The function that uses this information should ideally cache this call, to not induce
 		// A function call every time this is called
 		virtual bool IsSizeDetermination() const = 0;
+
+		// This function can be called to let the instrument know what the overall success of the operation is
+		// With this information, it can change its behavior, for example, like performing some extra cleanup if
+		// The write has failed
+		virtual void SetSuccess(bool success) {}
+
+		// This function seeks to that offset, writes the data, and then seeks back to the end of the instrument
+		// It is a helper function for this use case
+		bool WriteUninitializedData(size_t offset, const void* data, size_t data_size) {
+			if (!Seek(ECS_INSTRUMENT_SEEK_START, offset)) {
+				return false;
+			}
+			if (!Write(data, data_size)) {
+				return false;
+			}
+			return Seek(ECS_INSTRUMENT_SEEK_END, 0);
+		}
 
 		// Returns true if it succeeded, else false
 		template<typename T>
@@ -209,6 +238,11 @@ namespace ECSEngine {
 				size_t current_offset = GetOffset();
 				if ((offset < 0 && offset < -(int64_t)current_offset) || (offset > 0 && (size_t)offset > range_size - current_offset)) {
 					return false;
+				}
+
+				// If the offset is 0, then we can simply return, since it doesn't do anything
+				if (offset == 0) {
+					return true;
 				}
 
 				// Can forward the call as is, without modifying the offset
@@ -417,6 +451,22 @@ namespace ECSEngine {
 			return result;
 		}
 
+		// Same as the other overload, what differs is the way the data is returned, this allows for a more friendly
+		// Approach where you can define the pointer directly.
+		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
+		// And sets the output boolean to false. Else, it will allocate a buffer, read the data into it and return that pointer.
+		// There are boolean parameters to help you handle failure cases.
+		void* ReadOrReferenceDataPointer(AllocatorPolymorphic allocator, size_t data_size, bool* is_reference_failure = nullptr, bool* was_allocated = nullptr) {
+			ReadOrReferenceBuffer buffer = ReadOrReferenceData(allocator, data_size);
+			if (is_reference_failure != nullptr) {
+				*is_reference_failure = buffer.is_reference_failure;
+			}
+			if (was_allocated != nullptr) {
+				*was_allocated = buffer.was_allocated;
+			}
+			return buffer.buffer;
+		}
+
 		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
 		// And sets the output boolean was_allocated to false. Else, it will allocate a buffer, read the data into it and return that pointer.
 		// There extra output boolean parameters can help you handle failure cases. In case the read failed altogether, the returned stream is empty
@@ -602,5 +652,127 @@ namespace ECSEngine {
 
 	// Should be added to the structure that inherits from ReadInstrumentHelper
 #define ECS_READ_INSTRUMENT_HELPER using ReadInstrument::Read
+
+	// This structure contains either a write instrument or a file path to use to write into a file.
+	// Can be used with the auxiliary functions to perform some common tasks that might be needed
+	struct ECSENGINE_API FileWriteInstrumentTarget {
+		ECS_INLINE void SetWriteInstrument(WriteInstrument* write_instrument) {
+			instrument = write_instrument;
+			is_instrument = true;
+		}
+
+		// Instructs the target that it should write to a file using a temporary rename if the file exists
+		// And a restore in case the write fails. The provided file path must be stable
+		ECS_INLINE void SetTemporaryRenameFile(Stream<wchar_t> absolute_file_path, Stream<wchar_t> _rename_extension, bool _is_binary) {
+			file = absolute_file_path;
+			rename_extension = _rename_extension;
+			is_binary = _is_binary;
+			is_instrument = false;
+		}
+
+		// The file path can be absolute or relative. The provided file path must be stable. 
+		// It instructs the target to use a normal owning file instrument 
+		ECS_INLINE void SetFile(Stream<wchar_t> file_path, bool _is_binary) {
+			file = file_path;
+			rename_extension = {};
+			is_binary = _is_binary;
+			is_instrument = false;
+		}
+
+		// Returns the appropriate write instrument for the provided target. If the target already
+		// Contains a write instrument, it will return that write instrument. In case a file path is
+		// Specified, then it will attempt to initialize a proper write instrument specified by the target 
+		// Parameters and returns back the initialized write instrument if it succeeded. If the initialization 
+		// Failed, it returns nullptr.
+		// IMPORTANT: Don't forget to set the success status to true if the write was successful!
+		WriteInstrument* GetInstrument(
+			CapacityStream<void>& stack_memory,
+			size_t buffering_capacity,
+			AllocatorPolymorphic buffering_allocator,
+			CapacityStream<char>* error_message = nullptr
+		) const;
+
+		// This overload is the same as the other function, with the difference in the way the instrument
+		// Storage is allocated.
+		// Returns the appropriate write instrument for the provided target. If the target already
+		// Contains a write instrument, it will return that write instrument. In case a file path is
+		// Specified, then it will attempt to initialize a proper write instrument specified by the target 
+		// Parameters and returns back the initialized write instrument if it succeeded. If the initialization 
+		// Failed, it returns nullptr.
+		// IMPORTANT: Don't forget to set the success status to true if the write was successful!
+		WriteInstrument* GetInstrument(
+			AllocatorPolymorphic instrument_allocator,
+			size_t buffering_capacity,
+			AllocatorPolymorphic buffering_allocator,
+			CapacityStream<char>* error_message = nullptr
+		) const;
+
+		union {
+			WriteInstrument* instrument;
+			// This structure is active if is_instrument is set to false
+			struct {
+				Stream<wchar_t> file;
+				// If not empty, then it will assume that the TemporaryRename
+				// instrument should be used, else the Owning instrument is used
+				Stream<wchar_t> rename_extension;
+				bool is_binary;
+			};
+		};
+		bool is_instrument;
+	};
+
+
+	// This structure contains either a write instrument or a file path to use to write into a file.
+	// Can be used with the auxiliary functions to perform some common tasks that might be needed
+	struct ECSENGINE_API FileReadInstrumentTarget {
+		ECS_INLINE void SetReadInstrument(ReadInstrument* read_instrument) {
+			instrument = read_instrument;
+			is_instrument = true;
+		}
+
+		// The file path can be absolute or relative. The provided file path must be stable. 
+		// It instructs the target to use a normal owning file instrument 
+		ECS_INLINE void SetFile(Stream<wchar_t> file_path, bool _is_binary) {
+			file = file_path;
+			is_binary = _is_binary;
+			is_instrument = false;
+		}
+
+		// Returns the appropriate read instrument for the provided target. If the target already
+		// Contains a read instrument, it will return that read instrument. In case a file path is
+		// Specified, then it will attempt to initialize a proper read instrument specified by the target 
+		// Parameters and returns back the initialized read instrument if it succeeded. If the initialization 
+		// Failed, it returns nullptr.
+		ReadInstrument* GetInstrument(
+			CapacityStream<void>& stack_memory,
+			size_t buffering_capacity,
+			AllocatorPolymorphic buffering_allocator,
+			CapacityStream<char>* error_message = nullptr
+		) const;
+
+		// This overload is the same as the other function, with the difference in the way the instrument
+		// Storage is allocated.
+		// Returns the appropriate read instrument for the provided target. If the target already
+		// Contains a read instrument, it will return that read instrument. In case a file path is
+		// Specified, then it will attempt to initialize a proper read instrument specified by the target 
+		// Parameters and returns back the initialized read instrument if it succeeded. If the initialization 
+		// Failed, it returns nullptr.
+		ReadInstrument* GetInstrument(
+			AllocatorPolymorphic instrument_allocator,
+			size_t buffering_capacity,
+			AllocatorPolymorphic buffering_allocator,
+			CapacityStream<char>* error_message = nullptr
+		) const;
+
+		union {
+			ReadInstrument* instrument;
+			// This structure is active if is_instrument is set to false
+			struct {
+				Stream<wchar_t> file;
+				bool is_binary;
+			};
+		};
+		bool is_instrument;
+	};
 
 }

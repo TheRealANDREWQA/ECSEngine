@@ -40,6 +40,11 @@ namespace ECSEngine {
 
 		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		template<typename T>
+		ECS_INLINE T* Allocate(DebugInfo debug_info = ECS_DEBUG_INFO) {
+			return (T*)Allocate(sizeof(T), alignof(T), debug_info);
+		}
+
 		bool Belongs(const void* buffer) const;
 
 		// Deallocates everything (as if nothing is allocated)
