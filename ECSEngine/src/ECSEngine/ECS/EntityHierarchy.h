@@ -147,32 +147,19 @@ namespace ECSEngine {
 		HashTable<Entity, Entity, HashFunctionPowerOfTwo, EntityHierarchyHash> parent_table;
 	};
 
-	// -----------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API bool SerializeEntityHierarchy(const EntityHierarchy* hierarchy, ECS_FILE_HANDLE file);
-
-	// -----------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API void SerializeEntityHierarchy(const EntityHierarchy* hierarchy, uintptr_t& ptr);
+	struct WriteInstrument;
+	struct ReadInstrument;
 
 	// -----------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API size_t SerializeEntityHierarchySize(const EntityHierarchy* hierarchy);
-
-	// -----------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ECS_FILE_HANDLE file);
+	// Returns true if it succeeded, else false
+	ECSENGINE_API bool SerializeEntityHierarchy(const EntityHierarchy* hierarchy, WriteInstrument* write_instrument);
 
 	// -----------------------------------------------------------------------------------------------------
 
 	// The hierarchy must have its allocator set
 	// Returns true if the data was valid, else false if the data was corrupted
-	ECSENGINE_API bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, uintptr_t& ptr);
-
-	// -----------------------------------------------------------------------------------------------------
-
-	// Returns the amount of pointer data required for the children table entries
-	ECSENGINE_API size_t DeserializeEntityHierarchySize(uintptr_t ptr);
+	ECSENGINE_API bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ReadInstrument* read_instrument);
 
 	// -----------------------------------------------------------------------------------------------------
 

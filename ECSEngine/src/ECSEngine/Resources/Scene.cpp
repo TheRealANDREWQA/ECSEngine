@@ -278,93 +278,28 @@ namespace ECSEngine {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 256, ECS_MB * 8);
 		AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
-		// Rename the file to a temporary name such that if we fail to serialize we don't lose the previous data
-		// Do this only if the file exists at that location
-		ECS_STACK_CAPACITY_STREAM(wchar_t, renamed_file, 512);
-		if (ExistsFileOrFolder(save_data->file)) {
-			renamed_file.CopyOther(save_data->file);
-			renamed_file.AddStream(L".temp");
-			if (!RenameFileAbsolute(save_data->file, renamed_file)) {
-				// If we fail, then return now.
-				return false;
-			}
-		}
-
-		struct StackDeallocator {
-			void operator()() {
-				renamed_file.CopyOther(original_file);
-				renamed_file.AddStream(L".temp");
-
-				// Here we can skip checking if the renaming file exists or not,
-				// the calls will simply fail and we don't care about that
-				if (file_handle != -1) {
-					CloseFile(file_handle);
-
-					if (!destroy_temporary) {
-						RemoveFile(original_file);
-
-						// Try to rename the previous file to this name
-						RenameFile(renamed_file, original_file);
-					}
-					else {
-						RemoveFile(renamed_file);
-					}
-				}
-				else {
-					RenameFileAbsolute(renamed_file, original_file);
-				}
-			}
-
-			Stream<wchar_t> original_file;
-			Stream<wchar_t> renamed_file;
-			ECS_FILE_HANDLE file_handle;
-			bool destroy_temporary;
-		};
-
-		StackScope<StackDeallocator> stack_deallocator({ save_data->file, renamed_file, -1, false });
-
-		// Start with writing the entity manager first
-		// Open the file first
-		ECS_FILE_HANDLE file_handle = -1;
-		ECS_FILE_STATUS_FLAGS status = FileCreate(save_data->file, &file_handle, ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE);
-		if (status != ECS_FILE_STATUS_OK) {
+		// A buffering of 64KB should generally be enough
+		WriteInstrument* write_instrument = save_data->write_target.GetInstrument(stack_allocator, ECS_KB * 64, stack_allocator);
+		if (write_instrument == nullptr) {
+			// If the instrument creation failed, exit
 			return false;
 		}
-		stack_deallocator.deallocator.file_handle = file_handle;
 
-		size_t file_write_size = 0;
 		SceneFileHeader header;
 		memset(&header, 0, sizeof(header));
 		header.version = FILE_VERSION;
 		header.header_size = sizeof(header);
 		// Write the unitialized header first
-		bool success = WriteFile(file_handle, &header);
-		if (!success) {
+		if (!write_instrument->Write(&header)) {
 			return false;
 		}
-		file_write_size += sizeof(header);
+		header.chunk_offsets[ASSET_DATABASE_CHUNK] = sizeof(header);
 
-		header.chunk_offsets[ASSET_DATABASE_CHUNK] = file_write_size;
-		AssetDatabase final_database;
-		size_t database_serialize_size = SerializeAssetDatabaseSize(save_data->asset_database);
-
-		void* asset_database_allocation = Malloc(database_serialize_size);
-		uintptr_t ptr = (uintptr_t)asset_database_allocation;
-
-		success = SerializeAssetDatabase(save_data->asset_database, ptr) == ECS_SERIALIZE_OK;
-		if (!success) {
-			Free(asset_database_allocation);
+		if (SerializeAssetDatabase(save_data->asset_database, write_instrument) != ECS_SERIALIZE_OK) {
 			return false;
 		}
-
-		success = WriteFile(file_handle, { asset_database_allocation, database_serialize_size });
-		Free(asset_database_allocation);
-		if (!success) {
-			return false;
-		}
-		file_write_size += database_serialize_size;
-
-		header.chunk_offsets[ENTITY_MANAGER_CHUNK] = file_write_size;
+		header.chunk_offsets[ENTITY_MANAGER_CHUNK] = write_instrument->GetOffset();
+		
 		// Create the deserialize tables firstly
 		SerializeEntityManagerComponentTable component_table;
 		CreateSerializeEntityManagerComponentTableAddOverrides(component_table, save_data->reflection_manager, stack_allocator, save_data->unique_overrides);
@@ -379,68 +314,38 @@ namespace ECSEngine {
 		serialize_options.component_table = &component_table;
 		serialize_options.shared_component_table = &shared_component_table;
 		serialize_options.global_component_table = &global_component_table;
-		success = SerializeEntityManager(save_data->entity_manager, file_handle, &serialize_options);
-		if (!success) {
+		if (!SerializeEntityManager(save_data->entity_manager, write_instrument, &serialize_options)) {
 			return false;
 		}
-		file_write_size = GetFileCursor(file_handle);
-		header.chunk_offsets[TIME_CHUNK] = file_write_size;
+		header.chunk_offsets[TIME_CHUNK] = write_instrument->GetOffset();
 		
 		// Write the final float value
 		float2 world_time_values = { save_data->delta_time, save_data->speed_up_factor };
-		success = WriteFile(file_handle, &world_time_values);
-		if (!success) {
+		if (!write_instrument->Write(&world_time_values)) {
 			return false;
 		}
-
-		_stack_allocator.Clear();
-		file_write_size += sizeof(world_time_values);
-		header.chunk_offsets[MODULES_CHUNK] = file_write_size;
+		header.chunk_offsets[MODULES_CHUNK] = write_instrument->GetOffset();
 
 		// Retrieve the module serialize size firstly such that we can make a stack allocation for it and write it to the file then
 		// Use the reflection manager to write the scene modules
 		const Reflection::ReflectionType* scene_modules_type = save_data->reflection_manager->TryGetType(STRING(SceneModules));
 		ECS_ASSERT(scene_modules_type, "Saving scene requires the SceneModules type to be reflected!");
-		size_t serialize_modules_size = SerializeSize(save_data->reflection_manager, scene_modules_type, &save_data->modules);
-		if (serialize_modules_size == 0) {
-			// An error has occured
-			return false;
-		}
-
-		size_t modules_allocation_total_size = serialize_modules_size + save_data->source_code_branch_name.CopySize() + save_data->source_code_commit_hash.CopySize()
-			+ sizeof(unsigned short) * 2;
-		void* modules_allocation = _stack_allocator.Allocate(modules_allocation_total_size);
-		uintptr_t modules_allocation_ptr = (uintptr_t)modules_allocation;
 
 		// Write the source code branch and commit hash first
-		WriteWithSizeShort<true>(&modules_allocation_ptr, save_data->source_code_branch_name);
-		WriteWithSizeShort<true>(&modules_allocation_ptr, save_data->source_code_commit_hash);
-
-		ECS_SERIALIZE_CODE serialize_modules_status = Serialize(save_data->reflection_manager, scene_modules_type, &save_data->modules, modules_allocation_ptr);
-		if (serialize_modules_status != ECS_SERIALIZE_OK) {
-			// An error has occured
+		if (!write_instrument->WriteWithSizeVariableLength(save_data->source_code_branch_name)) {
 			return false;
 		}
-
-		success = WriteFile(file_handle, { modules_allocation, modules_allocation_total_size });
-		if (!success) {
+		if (!write_instrument->WriteWithSizeVariableLength(save_data->source_code_commit_hash)) {
+			return false;
+		}
+		if (Serialize(save_data->reflection_manager, scene_modules_type, &save_data->modules, write_instrument) != ECS_SERIALIZE_OK) {
+			// An error has occured
 			return false;
 		}
 
 		// Now write all the chunk functors
-		// Have a global memory manager to make allocations from it, if necessary
-		// But instantiate it lazily such that we don't create it for nothing
-		GlobalMemoryManager extra_chunk_allocator;
-		bool is_extra_chunk_allocator_initialized = false;
-
-		auto deallocate_extra_chunk_allocator = StackScope([&]() {
-			if (is_extra_chunk_allocator_initialized) {
-				extra_chunk_allocator.Free();
-			}
-		});
-
 		for (size_t index = 0; index < ECS_SCENE_EXTRA_CHUNKS; index++) {
-			size_t chunk_start_offset = GetFileCursor(file_handle);
+			size_t chunk_start_offset = write_instrument->GetOffset();
 			ECS_ASSERT(chunk_start_offset != -1);
 			header.chunk_offsets[CHUNK_COUNT + index] = chunk_start_offset;
 			if (save_data->chunk_functors[index].function != nullptr) {
@@ -449,54 +354,20 @@ namespace ECSEngine {
 				functor_data.entity_manager = save_data->entity_manager;
 				functor_data.reflection_manager = save_data->reflection_manager;
 				functor_data.user_data = save_data->chunk_functors[index].user_data;
-				if (save_data->chunk_functors[index].file_handle_write) {
-					functor_data.write_handle = file_handle;
-					if (!save_data->chunk_functors[index].function(&functor_data)) {
-						// We should fail as well if the function told us so
-						return false;
-					}
-				}
-				else {
-					if (!is_extra_chunk_allocator_initialized) {
-						is_extra_chunk_allocator_initialized = true;
-						extra_chunk_allocator = CreateGlobalMemoryManager(ECS_GB, ECS_KB, ECS_GB * 10);
-					}
-					functor_data.write_data = {};
-					if (!save_data->chunk_functors[index].function(&functor_data)) {
-						// For some reason the function failed (here we were requesting the write size only), we should fail as well
-						return false;
-					}
-
-					void* allocation = extra_chunk_allocator.Allocate(functor_data.write_data.size);
-					functor_data.write_data.buffer = allocation;
-					if (!save_data->chunk_functors[index].function(&functor_data)) {
-						// We should fail as well if the function told us so
-						return false;
-					}
-					
-					// We should commit directly to the file handle
-					if (!WriteFile(file_handle, functor_data.write_data)) {
-						return false;
-					}
-
-					// We should also free the allocation now
-					extra_chunk_allocator.Deallocate(allocation);
+				functor_data.write_instrument = write_instrument;
+				if (!save_data->chunk_functors[index].function(&functor_data)) {
+					// We should fail as well if the function told us so
+					return false;
 				}
 			}
 		}
 
-		success = SetFileCursorBool(file_handle, 0, ECS_FILE_SEEK_BEG);
-		if (!success) {
+		// Seek to the beginning, such that we write the proper header
+		if (!write_instrument->Seek(ECS_INSTRUMENT_SEEK_START, 0) || !write_instrument->Write(&header)) {
 			return false;
 		}
 
-		// Write the header at the end
-		success = WriteFile(file_handle, &header);
-		if (!success) {
-			return false;
-		}
-
-		stack_deallocator.deallocator.destroy_temporary = true;
+		write_instrument->SetSuccess(true);
 		return true;
 	}
 

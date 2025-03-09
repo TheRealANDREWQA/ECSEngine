@@ -3,8 +3,8 @@
 
 namespace ECSEngine {
 
-	OwningBufferedFileWriteInstrument::OwningBufferedFileWriteInstrument(Stream<wchar_t> file_path, Stream<void> _buffering, bool binary_file, CapacityStream<char>* error_message) 
-		: is_buffering_allocated(false) 
+	OwningBufferedFileWriteInstrument::OwningBufferedFileWriteInstrument(Stream<wchar_t> _file_path, Stream<void> _buffering, bool binary_file, CapacityStream<char>* error_message) 
+		: is_buffering_allocated(false), is_failed(true), file_path(_file_path)
 	{
 		ECS_FILE_HANDLE file_handle = -1;
 		ECS_FILE_ACCESS_FLAGS access_flags = ECS_FILE_ACCESS_WRITE_ONLY;
@@ -17,8 +17,15 @@ namespace ECSEngine {
 		buffering.InitializeFromBuffer(_buffering.buffer, 0, _buffering.size);
 	}
 
-	OwningBufferedFileWriteInstrument::OwningBufferedFileWriteInstrument(Stream<wchar_t> file_path, AllocatorPolymorphic _buffering_allocator, size_t _buffering_size, bool binary_file, CapacityStream<char>* error_message)
-		: OwningBufferedFileWriteInstrument(file_path, Stream<void>(AllocateEx(_buffering_allocator, _buffering_size), _buffering_size), binary_file, error_message) {
+	OwningBufferedFileWriteInstrument::OwningBufferedFileWriteInstrument(
+		Stream<wchar_t> file_path, 
+		AllocatorPolymorphic _buffering_allocator, 
+		size_t _buffering_size, 
+		bool binary_file, 
+		CapacityStream<char>* error_message
+	)
+		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
+		: OwningBufferedFileWriteInstrument(file_path, Stream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, _buffering_size), binary_file, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;
@@ -29,8 +36,11 @@ namespace ECSEngine {
 		}
 	}
 
-	TemporaryRenameBufferedFileWriteInstrument::TemporaryRenameBufferedFileWriteInstrument(Stream<wchar_t> absolute_file_path, Stream<wchar_t> _rename_extension, Stream<void> _buffering, bool binary_file, CapacityStream<char>* error_message)
-		: is_buffering_allocated(false), rename_extension(_rename_extension), original_file(absolute_file_path), is_initialization_failed(true), is_failed(false) {
+	TemporaryRenameBufferedFileWriteInstrument::TemporaryRenameBufferedFileWriteInstrument(Stream<wchar_t> absolute_file_path, Stream<wchar_t> _rename_extension, Stream<void> _buffering, 
+		bool binary_file, CapacityStream<char>* error_message)
+		: is_buffering_allocated(false), rename_extension(_rename_extension), original_file(absolute_file_path), is_initialization_failed(true), is_failed(true),
+		is_renaming_performed(false)
+	{
 		// Perform the renaming first
 		ECS_STACK_CAPACITY_STREAM(wchar_t, renamed_file, 1024);
 		GetRenamedFile(renamed_file);
@@ -40,11 +50,10 @@ namespace ECSEngine {
 				ECS_FORMAT_ERROR_MESSAGE(error_message, "Could not rename file from {#} to temporary", absolute_file_path);
 				return;
 			}
+
+			is_renaming_performed = true;
 		}
-		else {
-			ECS_FORMAT_ERROR_MESSAGE(error_message, "The file {#} doesn't exist", absolute_file_path);
-			return;
-		}
+		// In case the file didn't exist already, that is not an error
 
 		// Create the new file
 		ECS_FILE_HANDLE file_handle = -1;
@@ -59,8 +68,11 @@ namespace ECSEngine {
 
 		if (status != ECS_FILE_STATUS_OK) {
 			// Perform the rename back to the previous name, since creating the file failed
-			if (!RenameFileAbsolute(renamed_file, absolute_file_path)) {
-				ECS_FORMAT_ERROR_MESSAGE(error_message, "\nCould not rename temporary file {#} back to its original path", renamed_file);
+			if (is_renaming_performed) {
+				if (!RenameFileAbsolute(renamed_file, absolute_file_path)) {
+					ECS_FORMAT_ERROR_MESSAGE(error_message, "\nCould not rename temporary file {#} back to its original path", renamed_file);
+				}
+				is_renaming_performed = false;
 			}
 		}
 		else {
@@ -68,9 +80,16 @@ namespace ECSEngine {
 		}
 	}
 
-	TemporaryRenameBufferedFileWriteInstrument::TemporaryRenameBufferedFileWriteInstrument(Stream<wchar_t> absolute_file_path, Stream<wchar_t> _rename_extension, AllocatorPolymorphic _buffering_allocator, size_t _buffering_size,
-		bool binary_file, CapacityStream<char>* error_message)
-		: TemporaryRenameBufferedFileWriteInstrument(absolute_file_path, _rename_extension, Stream<void>(AllocateEx(_buffering_allocator, _buffering_size), _buffering_size), binary_file, error_message) {
+	TemporaryRenameBufferedFileWriteInstrument::TemporaryRenameBufferedFileWriteInstrument(
+		Stream<wchar_t> absolute_file_path, 
+		Stream<wchar_t> _rename_extension, 
+		AllocatorPolymorphic _buffering_allocator, 
+		size_t _buffering_size,
+		bool binary_file, 
+		CapacityStream<char>* error_message
+	)
+		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
+		: TemporaryRenameBufferedFileWriteInstrument(absolute_file_path, _rename_extension, Stream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, _buffering_size), binary_file, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;
@@ -93,16 +112,25 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, renamed_file, 1024);
 			GetRenamedFile(renamed_file);
 			if (is_failed) {
-				// We must delete the current file and rename the temporary back to its original name
-				if (!RemoveFile(original_file)) {
-					ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to remove failed file {#} before renaming the original file back", renamed_file);
-					has_errors = true;
-				}
+				if (is_renaming_performed) {
+					// We must delete the current file and rename the temporary back to its original name
+					if (!RemoveFile(original_file)) {
+						ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to remove file {#} before renaming the original file back", renamed_file);
+						has_errors = true;
+					}
 
-				// No matter if the previous remove succeeded, perform the rename anyways
-				if (!RenameFileAbsolute(renamed_file, original_file)) {
-					ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to restore temporary file {#} to its original path", renamed_file);
-					has_errors = true;
+					// No matter if the previous remove succeeded, perform the rename anyways
+					if (!RenameFileAbsolute(renamed_file, original_file)) {
+						ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to restore temporary file {#} to its original path", renamed_file);
+						has_errors = true;
+					}
+				}
+				else {
+					// The original file didn't exist, we must remove the current one only
+					if (!RemoveFile(original_file)) {
+						ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to remove file {#} after unsuccessful write", renamed_file);
+						has_errors = true;
+					}
 				}
 			}
 			else {
@@ -207,7 +235,8 @@ namespace ECSEngine {
 	}
 
 	OwningBufferedFileReadInstrument::OwningBufferedFileReadInstrument(Stream<wchar_t> file_path, AllocatorPolymorphic _buffering_allocator, size_t _buffering_size, bool binary_file, CapacityStream<char>* error_message)
-		: OwningBufferedFileReadInstrument(file_path, Stream<void>(AllocateEx(_buffering_allocator, _buffering_size), _buffering_size), binary_file, error_message) {
+		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
+		: OwningBufferedFileReadInstrument(file_path, Stream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, _buffering_size), binary_file, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;

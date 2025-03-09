@@ -20,18 +20,24 @@ namespace ECSEngine {
 	template<typename Deallocator>
 	StackScope(Deallocator&&) -> StackScope<Deallocator>;
 
-	struct ReleaseMalloca {
-		void operator() () const {
+	struct ScopedMalloca {
+		ECS_INLINE ~ScopedMalloca() {
+			ECS_FREEA(buffer);
+		}
+
+		ECS_INLINE void operator() () const {
 			ECS_FREEA(buffer);
 		}
 
 		void* buffer;
 	};
 
-	typedef StackScope<ReleaseMalloca> ScopedMalloca;
+	// The same as ECS_MALLOCA_ALLOCATOR, with the difference in that it creates a ScopedMalloc object
+	// That automatically releases the allocation. In order to access the allocation value, use object_name.buffer
+#define ECS_MALLOCA_ALLOCATOR_SCOPED(object_name, size, stack_size, allocator) ScopedMalloca object_name{ ECS_MALLOCA_ALLOCATOR(size, stack_size, allocator) }
 
 	struct NullTerminate {
-		void operator()() {
+		ECS_INLINE void operator()() {
 			if (previous_character != '\0') {
 				stream[stream.size] = previous_character;
 			}
@@ -44,7 +50,7 @@ namespace ECSEngine {
 	typedef StackScope<NullTerminate> ScopedNullTerminate;
 
 	struct NullTerminateWide {
-		void operator() () {
+		ECS_INLINE void operator() () {
 			if (previous_character != L'\0') {
 				stream[stream.size] = previous_character;
 			}
@@ -57,7 +63,7 @@ namespace ECSEngine {
 	typedef StackScope<NullTerminateWide> ScopedNullTerminateWide;
 
 	struct StackClearAllocator {
-		void operator() () {
+		ECS_INLINE void operator() () {
 			ClearAllocator(allocator);
 		}
 
@@ -67,7 +73,7 @@ namespace ECSEngine {
 	typedef StackScope<StackClearAllocator> ScopedClearAllocator;
 
 	struct StackFreeAllocator {
-		void operator() () {
+		ECS_INLINE void operator() () {
 			FreeAllocator(allocator);
 		}
 

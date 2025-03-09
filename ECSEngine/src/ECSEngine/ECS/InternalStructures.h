@@ -586,31 +586,16 @@ namespace ECSEngine {
 		unsigned int m_pool_power_of_two;
 	};
 
-	// -------------------------------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API bool SerializeEntityPool(const EntityPool* entity_pool, ECS_FILE_HANDLE file);
-
-	// -------------------------------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API void SerializeEntityPool(const EntityPool* entity_pool, uintptr_t& stream);
+	struct WriteInstrument;
+	struct ReadInstrument;
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API size_t SerializeEntityPoolSize(const EntityPool* entity_pool);
+	ECSENGINE_API bool SerializeEntityPool(const EntityPool* entity_pool, WriteInstrument* write_instrument);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool DeserializeEntityPool(EntityPool* entity_pool, ECS_FILE_HANDLE file);
-
-	// -------------------------------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API bool DeserializeEntityPool(EntityPool* entity_pool, uintptr_t& stream);
-
-	// -------------------------------------------------------------------------------------------------------------------------------------
-
-	// Returns the number of entities in the data
-	// If the version is incorrect, it will return -1
-	ECSENGINE_API size_t DeserializeEntityPoolSize(uintptr_t stream);
+	ECSENGINE_API bool DeserializeEntityPool(EntityPool* entity_pool, ReadInstrument* read_instrument);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 

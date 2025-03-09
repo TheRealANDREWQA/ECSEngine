@@ -4,6 +4,7 @@
 #include "../Utilities/Crash.h"
 #include "../Utilities/Serialization/SerializationHelpers.h"
 #include "../Math/MathHelpers.h"
+#include "../Utilities/ReaderWriterInterface.h"
 
 namespace ECSEngine {
 
@@ -644,30 +645,8 @@ namespace ECSEngine {
 		unsigned int entity_count;
 	};
 
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	bool SerializeEntityPool(const EntityPool* entity_pool, ECS_FILE_HANDLE file)
+	bool SerializeEntityPool(const EntityPool* entity_pool, WriteInstrument* write_instrument)
 	{
-		size_t serialize_size = SerializeEntityPoolSize(entity_pool);
-		void* buffering = Malloc(serialize_size);
-
-		uintptr_t ptr = (uintptr_t)buffering;
-		SerializeEntityPool(entity_pool, ptr);
-
-		bool success = WriteFile(file, { buffering, serialize_size });
-
-		Free(buffering);
-
-		return success;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	template<bool write_data>
-	size_t SerializeEntityPoolImpl(const EntityPool* entity_pool, uintptr_t& stream) {
-		size_t total_write_size = 0;
-		
 		// Write the header first
 		SerializeEntityPoolHeader header;
 		header.version = ENTITY_POOL_SERIALIZE_VERSION;
@@ -679,7 +658,9 @@ namespace ECSEngine {
 		}
 		header.entity_count = entity_count;
 
-		total_write_size += Write<write_data>(&stream, &header, sizeof(header));
+		if (!write_instrument->Write(&header)) {
+			return false;
+		}
 
 		// Write the compacted entities now
 		for (unsigned int index = 0; index < entity_pool->m_entity_infos.size; index++) {
@@ -688,107 +669,43 @@ namespace ECSEngine {
 					SerializeEntityInfo info;
 					info.entity = entity_pool->GetEntityFromPosition(index, entity_index);
 					info.info = entity_pool->m_entity_infos[index].stream[entity_index];
-					total_write_size += Write<write_data>(&stream, &info, sizeof(info));
+					if (!write_instrument->Write(&info)) {
+						return false;
+					}
 				});
 			}
 		}
 
-		return total_write_size;
-	}
-
-	void SerializeEntityPool(const EntityPool* entity_pool, uintptr_t& stream)
-	{
-		SerializeEntityPoolImpl<true>(entity_pool, stream);
+		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	size_t SerializeEntityPoolSize(const EntityPool* entity_pool)
-	{
-		uintptr_t dummy;
-		return SerializeEntityPoolImpl<false>(entity_pool, dummy);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	bool DeserializeEntityPool(EntityPool* entity_pool, ECS_FILE_HANDLE file)
+	bool DeserializeEntityPool(EntityPool* entity_pool, ReadInstrument* read_instrument)
 	{
 		// Read the header first
 		SerializeEntityPoolHeader header;
-		bool success = ReadFileExact(file, { &header, sizeof(header) });
-
-		if (!success || header.version != ENTITY_POOL_SERIALIZE_VERSION || (header.entity_count > ECS_MB * 100)) {
+		if (!read_instrument->ReadAlways(&header)) {
 			return false;
 		}
 
-		// Deallocate all currently pools in use
+		if (header.version != ENTITY_POOL_SERIALIZE_VERSION || (header.entity_count > ECS_ENTITY_MAX_COUNT)) {
+			return false;
+		}
+
+		// Deallocate all pools in use
 		for (unsigned int index = 0; index < entity_pool->m_entity_infos.size; index++) {
 			entity_pool->DeallocatePool(index);
 		}
 		entity_pool->m_entity_infos.FreeBuffer();
 
-		SerializeEntityInfo* serialize_infos = (SerializeEntityInfo*)Malloc(sizeof(SerializeEntityInfo) * header.entity_count);
-		success = ReadFileExact(file, { serialize_infos, sizeof(SerializeEntityInfo) * header.entity_count });
-
-		if (success) {
-			// Walk through the entities and determine the "biggest one" in order to preallocate the streams
-			Entity highest_entity = { 0 };
-			for (unsigned int index = 0; index < header.entity_count; index++) {
-				highest_entity.index = max(highest_entity.index, serialize_infos[index].entity.index);
-			}
-
-			// Create the necessary pools - add a pool if the modulo is different from 0
-			unsigned int divident = highest_entity.index >> entity_pool->m_pool_power_of_two;
-			unsigned int remainder = ((highest_entity.index % (1 << entity_pool->m_pool_power_of_two)) != 0) ? 1 : 0;
-			unsigned int necessary_pool_count = divident + remainder;
-			for (unsigned int index = 0; index < necessary_pool_count; index++) {
-				entity_pool->CreatePool();
-			}
-
-			// Update the entity infos
-			for (unsigned int index = 0; index < header.entity_count; index++) {
-				uint2 stream_index = GetPoolAndEntityIndex(entity_pool, serialize_infos[index].entity);
-				// Need to allocate the index
-				entity_pool->m_entity_infos[stream_index.x].stream.AllocateIndex(stream_index.y);
-
-				EntityInfo* info = entity_pool->GetInfoPtrNoChecks(serialize_infos[index].entity);
-				*info = serialize_infos[index].info;
-			}
-
-			// Set the is_in_use status for the chunks
-			for (unsigned int index = 0; index < necessary_pool_count; index++) {
-				entity_pool->m_entity_infos[index].is_in_use = entity_pool->m_entity_infos[index].stream.size > 0;
-				if (!entity_pool->m_entity_infos[index].is_in_use) {
-					entity_pool->DeallocatePool(index);
-				}
-			}
-		}
-
-		Free(serialize_infos);
-		return success;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	bool DeserializeEntityPool(EntityPool* entity_pool, uintptr_t& stream)
-	{
-		// Read the header first
-		SerializeEntityPoolHeader header;
-		Read<true>(&stream, &header, sizeof(header));
-
-		if (header.version != ENTITY_POOL_SERIALIZE_VERSION || (header.entity_count > ECS_MB * 100)) {
+		size_t serialize_infos_size = sizeof(SerializeEntityInfo) * header.entity_count;
+		ECS_MALLOCA_ALLOCATOR_SCOPED(scoped_allocation, serialize_infos_size, ECS_KB * 64, { nullptr });
+		SerializeEntityInfo* serialize_infos = (SerializeEntityInfo*)scoped_allocation.buffer;
+		if (!read_instrument->Read(serialize_infos, serialize_infos_size)) {
 			return false;
 		}
 
-		// Deallocate all currently pools in use
-		for (unsigned int index = 0; index < entity_pool->m_entity_infos.size; index++) {
-			entity_pool->DeallocatePool(index);
-		}
-		entity_pool->m_entity_infos.FreeBuffer();
-
-		SerializeEntityInfo* serialize_infos = (SerializeEntityInfo*)stream;
-		stream += sizeof(SerializeEntityInfo) * header.entity_count;
-			
 		// Walk through the entities and determine the "biggest one" in order to preallocate the streams
 		Entity highest_entity = { 0 };
 		for (unsigned int index = 0; index < header.entity_count; index++) {
@@ -822,18 +739,6 @@ namespace ECSEngine {
 		}
 
 		return true;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	size_t DeserializeEntityPoolSize(uintptr_t stream) {
-		SerializeEntityPoolHeader header;
-		Read<true>(&stream, &header, sizeof(header));
-
-		if (header.version != ENTITY_POOL_SERIALIZE_VERSION || header.entity_count > ECS_MB * 100) {
-			return -1;
-		}
-		return header.entity_count;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
