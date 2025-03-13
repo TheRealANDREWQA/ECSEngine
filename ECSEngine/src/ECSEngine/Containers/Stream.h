@@ -799,6 +799,13 @@ namespace ECSEngine {
 			size++;
 		}
 
+		void Insert(unsigned int index, Stream<T> values) {
+			AssertCapacity(values.size);
+			DisplaceElements(index, values.size);
+			values.CopyTo(buffer + index);
+			size += values.size;
+		}
+
 		ECS_INLINE T& Last() {
 			return buffer[size - 1];
 		}

@@ -98,7 +98,7 @@ namespace ECSEngine {
 		// This is data source that will be used to read the scene from.
 		// It assumes that the read instrument is limited only to the scene data beforehand,
 		// The caller must ensure this property
-		ReadInstrument* read_instrument;
+		FileReadInstrumentTarget read_target;
 		// The reflection manager must have the SceneModule type reflected
 		const Reflection::ReflectionManager* reflection_manager;
 		Stream<ModuleComponentFunctions> module_component_functions;

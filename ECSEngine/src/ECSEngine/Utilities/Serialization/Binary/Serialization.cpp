@@ -10,6 +10,7 @@
 #include "../../../Math/MathHelpers.h"
 #include "SerializationMacro.h"
 #include "../../ReaderWriterInterface.h"
+#include "../../BufferedFileReaderWriter.h"
 
 #define DESERIALIZE_FIELD_TABLE_MAX_TYPES (32)
 
@@ -696,6 +697,24 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	ECS_SERIALIZE_CODE Serialize(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		const void* data,
+		Stream<wchar_t> file,
+		SerializeOptions* options
+	) {
+		ECS_STACK_VOID_STREAM(file_buffering, ECS_KB * 64);
+		ECS_SERIALIZE_CODE result;
+		OwningBufferedFileWriteInstrument::WriteTo(file, file_buffering, [&](WriteInstrument* write_instrument) {
+			result = Serialize(reflection_manager, type, data, write_instrument, options);
+			return result == ECS_SERIALIZE_OK;
+		});
+		return result;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
 	bool SerializeFieldTable(
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
@@ -833,6 +852,8 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		return success;
 	}
 
 	// Function to skip a type, or a number of type instances
@@ -901,10 +922,7 @@ namespace ECSEngine {
 		}
 
 		// The type table now
-		const size_t STACK_DESERIALIZE_TABLE_BUFFER_CAPACITY = ECS_KB * 8;
-		void* deserialize_table_stack_allocation = ECS_STACK_ALLOC(STACK_DESERIALIZE_TABLE_BUFFER_CAPACITY);
-
-		LinearAllocator table_linear_allocator(deserialize_table_stack_allocation, STACK_DESERIALIZE_TABLE_BUFFER_CAPACITY);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(table_linear_allocator, ECS_KB * 8, ECS_MB * 32);
 		DeserializeFieldTable deserialize_table;
 
 		bool fail_if_mismatch = has_options && options->fail_if_field_mismatch;
@@ -921,7 +939,11 @@ namespace ECSEngine {
 		size_t field_count = type->fields.size;
 
 		auto read_type_table_from_file = [&]() {
-			deserialize_table = DeserializeFieldTableFromData(read_instrument, &table_linear_allocator);
+			DeserializeFieldTableOptions field_table_options;
+			field_table_options.read_type_tags = has_options && options->read_type_table_tags;
+			field_table_options.version = -1;
+
+			deserialize_table = DeserializeFieldTableFromData(read_instrument, &table_linear_allocator, &field_table_options);
 			// Check to see if the table is valid
 			if (deserialize_table.types.size == 0) {
 				// The file was corrupted
@@ -1963,6 +1985,24 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	ECS_DESERIALIZE_CODE Deserialize(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		void* address,
+		Stream<wchar_t> file,
+		DeserializeOptions* options
+	) {
+		ECS_STACK_VOID_STREAM(file_buffering, ECS_KB * 64);
+		Optional<OwningBufferedFileReadInstrument> read_instrument = OwningBufferedFileReadInstrument::Initialize(file, file_buffering);
+		if (!read_instrument.has_value) {
+			return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+		}
+
+		return Deserialize(reflection_manager, type, address, &read_instrument.value, options);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
 	static bool ValidateDeserializeFieldInfo(const DeserializeFieldInfo& field_info) {
 		if ((unsigned char)field_info.stream_type >= (unsigned char)ReflectionStreamFieldType::COUNT) {
 			return false;
@@ -2002,7 +2042,7 @@ namespace ECSEngine {
 		void* main_type_name = nullptr;
 
 		// Read the type name
-		if (!read_instrument->ReferenceDataWithSizeVariableLength(type->name)) {
+		if (!read_instrument->ReadOrReferenceDataWithSizeVariableLength(type->name, allocator)) {
 			return false;
 		}
 
@@ -2026,7 +2066,7 @@ namespace ECSEngine {
 		}
 		
 		if (options->read_type_tags) {
-			if (!read_instrument->ReferenceDataWithSizeVariableLength(type->tag)) {
+			if (!read_instrument->ReadOrReferenceDataWithSizeVariableLength(type->tag, allocator)) {
 				return false;
 			}
 		}
@@ -2048,11 +2088,11 @@ namespace ECSEngine {
 			bool read_success = true;
 
 			// The name first
-			read_success &= read_instrument->ReferenceDataWithSizeVariableLength(type->fields[index].name);
+			read_success &= read_instrument->ReadOrReferenceDataWithSizeVariableLength(type->fields[index].name, allocator);
 
 			// The tag now
 			if (options->read_type_tags) {
-				read_success &= read_instrument->ReferenceDataWithSizeVariableLength(type->fields[index].tag);
+				read_success &= read_instrument->ReadOrReferenceDataWithSizeVariableLength(type->fields[index].tag, allocator);
 			}
 			else {
 				type->fields[index].tag = { nullptr, 0 };
@@ -2079,7 +2119,7 @@ namespace ECSEngine {
 
 			// The definition
 			if (type->fields[index].basic_type == ReflectionBasicFieldType::UserDefined || type->fields[index].basic_type == ReflectionBasicFieldType::Enum) {
-				if (!read_instrument->ReferenceDataWithSizeVariableLength(type->fields[index].definition)) {
+				if (!read_instrument->ReadOrReferenceDataWithSizeVariableLength(type->fields[index].definition, allocator)) {
 					return false;
 				}
 			}
@@ -2286,18 +2326,12 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------
 
 	DeserializeFieldTable DeserializeFieldTableFromData(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, const DeserializeFieldTableOptions* options) {
-		DeserializeFieldTable field_table;
-		if (!DeserializeFieldTableCustomInterfacesInfo(read_instrument, temporary_allocator, field_table, options)) {
-			return field_table;
+		DeserializeFieldTableOptions default_options;
+		if (options == nullptr) {
+			options = &default_options;
 		}
 
-		// Allocate DESERIALIZE_FIELD_TABLE_MAX_TYPES and fail if there are more
-		field_table.types.buffer = (DeserializeFieldTable::Type*)Allocate(temporary_allocator, sizeof(DeserializeFieldTable::Type) * DESERIALIZE_FIELD_TABLE_MAX_TYPES);
-
-		if (!DeserializeFieldTableFromDataImplementation(read_instrument, field_table.types.buffer, temporary_allocator, options)) {
-			field_table.types.size = 0;
-		}
-		return field_table;
+		return DeserializeFieldTableFromDataRecursive(read_instrument, temporary_allocator, options);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -2337,7 +2371,7 @@ namespace ECSEngine {
 		return IgnoreType(read_instrument, field_table, 0, deserialized_manager);
 	}
 
-	// ----------------------------------------------------------------------------------------------------------------------------
+	// ------------------------------------------------------------------------------------------------------------------
 
 	struct SerializeReflectionManagerHeader {
 		unsigned char version;
@@ -2428,7 +2462,7 @@ namespace ECSEngine {
 		return true;
 	}
 
-	// ----------------------------------------------------------------------------------------------------------------------------
+	// ------------------------------------------------------------------------------------------------------------------
 
 	bool DeserializeReflectionManager(
 		ReflectionManager* reflection_manager,
@@ -2473,7 +2507,7 @@ namespace ECSEngine {
 		return true;
 	}
 
-	// ----------------------------------------------------------------------------------------------------------------------------
+	// ------------------------------------------------------------------------------------------------------------------
 
 #pragma region String versions
 
@@ -2504,6 +2538,27 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	ECS_SERIALIZE_CODE SerializeEx(
+		const ReflectionManager* reflection_manager,
+		Stream<char> definition,
+		const void* address,
+		Stream<wchar_t> file,
+		SerializeOptions* options,
+		Stream<char> tags
+	) {
+		ECS_STACK_VOID_STREAM(file_buffering, ECS_KB * 64);
+		
+		ECS_SERIALIZE_CODE code;
+		OwningBufferedFileWriteInstrument::WriteTo(file, file_buffering, [&](WriteInstrument* write_instrument) {
+			code = SerializeEx(reflection_manager, definition, address, write_instrument, options, tags);
+			return code == ECS_SERIALIZE_OK;
+		});
+
+		return code;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
 	ECS_DESERIALIZE_CODE DeserializeEx(const ReflectionManager* reflection_manager, Stream<char> definition, void* address, ReadInstrument* read_instrument, DeserializeOptions* options, Stream<char> tags)
 	{
 		const ReflectionType* reflection_type = reflection_manager->TryGetType(definition);
@@ -2525,6 +2580,25 @@ namespace ECSEngine {
 			read_data.tags = tags;
 			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) ? ECS_DESERIALIZE_OK : ECS_DESERIALIZE_CORRUPTED_FILE;
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	ECS_DESERIALIZE_CODE DeserializeEx(
+		const ReflectionManager* reflection_manager, 
+		Stream<char> definition, 
+		void* address, 
+		Stream<wchar_t> file,
+		DeserializeOptions* options, 
+		Stream<char> tags
+	) {
+		ECS_STACK_VOID_STREAM(file_buffering, ECS_KB * 64);
+		Optional<OwningBufferedFileReadInstrument> read_instrument = OwningBufferedFileReadInstrument::Initialize(file, file_buffering);
+		if (!read_instrument.has_value) {
+			return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+		}
+
+		return DeserializeEx(reflection_manager, definition, address, &read_instrument.value, options, tags);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------

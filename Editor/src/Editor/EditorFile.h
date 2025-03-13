@@ -10,7 +10,9 @@ constexpr const wchar_t* EDITOR_FILE = L"Resources/.ecseditor";
 
 struct EditorState;
 
-bool LoadEditorFile(EditorState* editor_state);
+// Can provide an optional error message to be filled in case an error is encountered. It can be filled in even when
+// It doesn't return false, in case the error is skippable
+bool LoadEditorFile(EditorState* editor_state, CapacityStream<char>* error_message = nullptr);
 
 bool SaveEditorFile(EditorState* editor_state);
 

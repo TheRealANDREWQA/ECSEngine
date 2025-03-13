@@ -123,7 +123,6 @@ namespace ECSEngine {
 	// Write_Type_Table: write at the beginning of the section the field names and the corresponding types
 	// Write_Type_Table_Tags: write type tags and fields tags to the file in the header table
 	// Verify_Dependent_Types: if you want to skip the check, set this to false
-	// SettingsAllocator: an allocator to be used for writing the whole data in memory for commiting then into a file
 	// OmitFields: optionally tell the serializer to omit fields of certain types
 	// Error_Message: a stream where the error message will be written if an error occurs
 	// Passdown_Info: a structure where information is accumulated about prior fields when iterating.
@@ -134,7 +133,6 @@ namespace ECSEngine {
 		bool write_type_table_tags = false;
 		bool verify_dependent_types = true;
 
-		AllocatorPolymorphic allocator = { nullptr };
 		Stream<SerializeOmitField> omit_fields = { nullptr, 0 };
 
 		CapacityStream<char>* error_message = nullptr;
@@ -194,7 +192,6 @@ namespace ECSEngine {
 
 		Stream<SerializeOmitField> omit_fields = { nullptr, 0 };
 		
-		AllocatorPolymorphic file_allocator = { nullptr };
 		AllocatorPolymorphic field_allocator = { nullptr };
 
 		CapacityStream<char>* error_message = nullptr;
@@ -227,12 +224,20 @@ namespace ECSEngine {
 		Stream<SerializeOmitField> omit_fields = { nullptr, 0 }
 	);
 
-	// NEW: This function supersedes the previous variants, since the write instrument is abstracted away
 	ECSENGINE_API ECS_SERIALIZE_CODE Serialize(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
 		const void* data,
 		WriteInstrument* write_instrument,
+		SerializeOptions* options = nullptr
+	);
+
+	// Convenience function that uses a buffered file writer for the given file
+	ECSENGINE_API ECS_SERIALIZE_CODE Serialize(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		const void* data,
+		Stream<wchar_t> file,
 		SerializeOptions* options = nullptr
 	);
 
@@ -249,6 +254,15 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* type,
 		void* address,
 		ReadInstrument* read_instrument,
+		DeserializeOptions* options = nullptr
+	);
+
+	// Convenience function that uses a buffered file reader for the given file
+	ECSENGINE_API ECS_DESERIALIZE_CODE Deserialize(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		void* address,
+		Stream<wchar_t> file,
 		DeserializeOptions* options = nullptr
 	);
 
@@ -341,12 +355,35 @@ namespace ECSEngine {
 		SerializeOptions* options = nullptr,
 		Stream<char> tags = {}
 	);
+
+	// Determines if it is a reflected type or a custom type and call the function appropriately
+	// Convenience function that uses a buffered file writer to write to the provided file
+	ECSENGINE_API ECS_SERIALIZE_CODE SerializeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> definition,
+		const void* data,
+		Stream<wchar_t> file,
+		SerializeOptions* options = nullptr,
+		Stream<char> tags = {}
+	);
+
 	// Determines if it is a reflected type or a custom type and call the function appropriately
 	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
 		const Reflection::ReflectionManager* reflection_manager,
 		Stream<char> definition,
 		void* address,
 		ReadInstrument* read_instrument,
+		DeserializeOptions* options = nullptr,
+		Stream<char> tags = {}
+	);
+
+	// Determines if it is a reflected type or a custom type and call the function appropriately
+	// Convenience function that uses a buffered file reader to read from the provided file
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> definition,
+		void* address,
+		Stream<wchar_t> file,
 		DeserializeOptions* options = nullptr,
 		Stream<char> tags = {}
 	);

@@ -78,15 +78,21 @@ void AutoDetectCompilers(AllocatorPolymorphic allocator, AdditionStream<Compiler
 									default_path.AddStreamAssert(L"\\MSBuild\\Current\\Bin");
 
 									CapacityStream<char> aggregated;
-									// use a small capacity
-									aggregated.Initialize(allocator, 0, sizeof(char) * 40);
+									// Use a small capacity
+									aggregated.Initialize(allocator, 0, sizeof(char) * 128);
+
+									// At the moment, the only compiler is Visual Studio
+									aggregated.AddStreamAssert("Visual Studio");
+									Stream<char> compiler_name = aggregated;
+									aggregated.AddAssert(' ');
+									unsigned int tier_start_character = aggregated.size;
 									ConvertWideCharsToASCII(available_tiers[subindex], aggregated);
-									Stream<char> tier = aggregated;
+									Stream<char> tier = aggregated.SliceAt(tier_start_character);
 									aggregated.AddAssert(' ');
 
 									size_t written_count = ConvertIntToChars(aggregated, year);
 									Stream<char> year_string = aggregated.SliceAt(aggregated.size - written_count);
-									compiler_versions.Add({ aggregated, year_string, tier, default_path.Copy(allocator) });
+									compiler_versions.Add({ aggregated, year_string, tier, compiler_name, default_path.Copy(allocator)});
 								}
 							};
 						}
@@ -99,7 +105,7 @@ void AutoDetectCompilers(AllocatorPolymorphic allocator, AdditionStream<Compiler
 	// Search the x64 path
 	search_folder();
 	
-	// Search the x96 path
+	// Search the x86 path
 	stack_allocator.Clear();
 	folders.size = 0;
 	default_path.CopyOther(L"C:\\Program Files (x86)\\Microsoft Visual Studio");

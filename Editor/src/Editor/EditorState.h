@@ -49,10 +49,6 @@ struct EditorState {
 		return (ECSEngine::GlobalMemoryManager*)editor_allocator->m_backup.allocator;
 	}
 
-	ECS_INLINE ECSEngine::AllocatorPolymorphic GlobalMemoryManagerPolymorphic() const {
-		return editor_allocator->m_backup;
-	}
-
 	ECS_INLINE ECSEngine::Reflection::ReflectionManager* ModuleReflectionManager() {
 		return module_reflection;
 	}

@@ -276,6 +276,11 @@ namespace ECSEngine {
 			return subinstruments[subinstrument_count - 1]->range_size;
 		}
 
+		// Returns true if the end of the read instrument was reached
+		ECS_INLINE bool IsEndReached() const {
+			return GetOffset() >= TotalSize();
+		}
+
 		// Returns true if it succeeded, else false
 		template<typename T>
 		ECS_INLINE bool Read(T* data) {
@@ -428,12 +433,50 @@ namespace ECSEngine {
 			bool is_reference_failure = false;
 		};
 
+		struct ReadOrReferenceBufferDeallocate : ReadOrReferenceBuffer {
+		private:
+			// Make this constructor public, such that only this structure can create it
+			ECS_INLINE ReadOrReferenceBufferDeallocate() {}
+			friend ReadInstrument;
+
+		public:
+			ECS_INLINE ReadOrReferenceBufferDeallocate(ReadOrReferenceBufferDeallocate&& other) {
+				memcpy(this, &other, sizeof(*this));
+				memset(&other, 0, sizeof(other));
+			}
+
+			ECS_INLINE ReadOrReferenceBufferDeallocate& operator =(ReadOrReferenceBufferDeallocate&& other) {
+				memcpy(this, &other, sizeof(*this));
+				memset(&other, 0, sizeof(other));
+				return *this;
+			}
+
+			ECS_INLINE ~ReadOrReferenceBufferDeallocate() {
+				if (buffer != nullptr && was_allocated) {
+					DeallocateEx(allocator, buffer);
+				}
+			}
+
+			ECS_INLINE operator bool() const {
+				return buffer != nullptr;
+			}
+
+			// Returns the buffer type casted to the provided type, ensure that the buffer is readable before using it
+			template<typename T>
+			ECS_INLINE T* As() const {
+				return (T*)buffer;
+			}
+
+			AllocatorPolymorphic allocator;
+		};
+
 		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
 		// And sets the output boolean to false. Else, it will allocate a buffer, read the data into it and return that pointer.
 		// There are boolean parameters to help you handle failure cases.
 		ReadOrReferenceBuffer ReadOrReferenceData(AllocatorPolymorphic allocator, size_t data_size) {
 			ReadOrReferenceBuffer result;
 
+			// TODO: Determine how the handle the case with data_size of 0
 			result.buffer = ReferenceData(data_size, result.is_reference_failure);
 			// If we have a reference failure, it indicate that the instrument could reference the data
 			// But the given range is outside the bounds
@@ -447,6 +490,21 @@ namespace ECSEngine {
 					result.was_allocated = true;
 				}
 			}
+
+			return result;
+		}
+
+		// Same as with the other overload, the difference being in that it will deallocate the buffer in the destructor if it was allocated
+		// From the given allocator.
+		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
+		// And sets the output boolean to false. Else, it will allocate a buffer, read the data into it and return that pointer.
+		// There are boolean parameters to help you handle failure cases.
+		ECS_INLINE ReadOrReferenceBufferDeallocate ReadOrReferenceDataWithDeallocate(AllocatorPolymorphic allocator, size_t data_size) {
+			ReadOrReferenceBufferDeallocate result;
+
+			// Assign into the base directly, it's safe
+			reinterpret_cast<ReadOrReferenceBuffer&>(result) = ReadOrReferenceData(allocator, data_size);
+			result.allocator = allocator;
 
 			return result;
 		}
@@ -500,12 +558,11 @@ namespace ECSEngine {
 		}
 
 		// The same as the other overload, with the exception that the size is written with a variable length instead.
-		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
-		// And sets the output boolean was_allocated to false. Else, it will allocate a buffer, read the data into it and return that pointer.
-		// There extra output boolean parameters can help you handle failure cases. In case the read failed altogether, the returned stream is empty
-		Stream<void> ReadOrReferenceDataWithSizeVariableLength(AllocatorPolymorphic allocator, bool* was_allocated = nullptr, bool* is_reference_failure = nullptr) {
-			Stream<void> data;
-
+		// It will try to reference the data. If that succeeds, it fills in the data without making an allocation
+		// And sets the output boolean was_allocated to false. Else, it will allocate a buffer, read the data into it and fill in the output parameter.
+		// There extra output boolean parameters can help you handle failure cases. In case the read failed altogether, it returns false, else true
+		template<typename ElementType>
+		bool ReadOrReferenceDataWithSizeVariableLength(Stream<ElementType>& data, AllocatorPolymorphic allocator, bool* was_allocated = nullptr, bool* is_reference_failure = nullptr) {
 			size_t byte_size;
 			if (!DeserializeIntVariableLengthBool(this, byte_size)) {
 				if (was_allocated) {
@@ -514,12 +571,13 @@ namespace ECSEngine {
 				if (is_reference_failure) {
 					*is_reference_failure = false;
 				}
-				return data;
+				data.size = 0;
+				return false;
 			}
 
 			ReadOrReferenceBuffer result = ReadOrReferenceData(allocator, byte_size);
 			if (result.buffer != nullptr) {
-				data = { result.buffer, byte_size };
+				data = { result.buffer, byte_size / sizeof(ElementType) };
 			}
 
 			if (was_allocated) {
@@ -528,7 +586,7 @@ namespace ECSEngine {
 			if (is_reference_failure) {
 				*is_reference_failure = result.is_reference_failure;
 			}
-			return data;
+			return true;
 		}
 
 		// Tries to read or reference a stream of data, with the specified integer type range.
@@ -561,9 +619,12 @@ namespace ECSEngine {
 				return false;
 			}
 
-			data.buffer = ReferenceData(data_size * GetStructureByteSize<ElementType>());
-			data.size = data_size;
-			return data.buffer != nullptr;
+			data.buffer = (ElementType*)ReferenceData(data_size * GetStructureByteSize<ElementType>());
+			if (data.buffer != nullptr) {
+				data.size = data_size;
+				return true;
+			}
+			return false;
 		}
 
 		// Convenience function which omits the out of range flag
@@ -631,6 +692,8 @@ namespace ECSEngine {
 				data_storage->range_size = subrange_size;
 			}
 			subinstrument_count++;
+
+			return { this };
 		}
 
 		// Removes the last subinstrument used. Should not be generally called manually, it should be done
@@ -656,6 +719,15 @@ namespace ECSEngine {
 	// This structure contains either a write instrument or a file path to use to write into a file.
 	// Can be used with the auxiliary functions to perform some common tasks that might be needed
 	struct ECSENGINE_API FileWriteInstrumentTarget {
+		ECS_INLINE FileWriteInstrumentTarget() : instrument(nullptr), is_instrument(true) {}
+		ECS_INLINE FileWriteInstrumentTarget(WriteInstrument* write_instrument) {
+			SetWriteInstrument(write_instrument);
+		}
+		// The provided path must be stable
+		ECS_INLINE FileWriteInstrumentTarget(Stream<wchar_t> file_path, bool _is_binary) {
+			SetFile(file_path, _is_binary);
+		}
+
 		ECS_INLINE void SetWriteInstrument(WriteInstrument* write_instrument) {
 			instrument = write_instrument;
 			is_instrument = true;
@@ -663,7 +735,7 @@ namespace ECSEngine {
 
 		// Instructs the target that it should write to a file using a temporary rename if the file exists
 		// And a restore in case the write fails. The provided file path must be stable
-		ECS_INLINE void SetTemporaryRenameFile(Stream<wchar_t> absolute_file_path, Stream<wchar_t> _rename_extension, bool _is_binary) {
+		ECS_INLINE void SetTemporaryRenameFile(Stream<wchar_t> absolute_file_path, bool _is_binary, Stream<wchar_t> _rename_extension = L".temp") {
 			file = absolute_file_path;
 			rename_extension = _rename_extension;
 			is_binary = _is_binary;
@@ -725,6 +797,14 @@ namespace ECSEngine {
 	// This structure contains either a write instrument or a file path to use to write into a file.
 	// Can be used with the auxiliary functions to perform some common tasks that might be needed
 	struct ECSENGINE_API FileReadInstrumentTarget {
+		ECS_INLINE FileReadInstrumentTarget() : instrument(nullptr), is_instrument(true) {}
+		ECS_INLINE FileReadInstrumentTarget(ReadInstrument* read_instrument) {
+			SetReadInstrument(read_instrument);
+		}
+		ECS_INLINE FileReadInstrumentTarget(Stream<wchar_t> file_path, bool _is_binary) {
+			SetFile(file_path, _is_binary);
+		}
+
 		ECS_INLINE void SetReadInstrument(ReadInstrument* read_instrument) {
 			instrument = read_instrument;
 			is_instrument = true;

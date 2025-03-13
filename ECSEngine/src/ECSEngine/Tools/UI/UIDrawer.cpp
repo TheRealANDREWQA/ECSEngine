@@ -6963,6 +6963,9 @@ namespace ECSEngine {
 								float align_offset = (current_row_y_scale - text_span.y) / 2.0f;
 								float initial_row_scale = current_row_y_scale < text_span.y ? text_span.y : current_row_y_scale - align_offset;
 								finalize_span = initial_row_scale + (float)(needed_rows - 1) * text_span.y;
+								// We also need to update the row scale to be the text span's value, because the word by word draw
+								// Will set this row y scale to the text span after the first row
+								current_row_y_scale = text_span.y;
 							}
 							else {
 								finalize_span = text_span.y * (float)needed_rows;

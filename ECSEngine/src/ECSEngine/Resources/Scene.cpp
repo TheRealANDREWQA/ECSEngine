@@ -43,7 +43,14 @@ namespace ECSEngine {
 		bool normal_database = load_data->database != nullptr;
 		AssetDatabase* database = normal_database ? load_data->database : load_data->database_reference->database;
 
-		ReadInstrument* read_instrument = load_data->read_instrument;
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
+		AllocatorPolymorphic stack_allocator = &_stack_allocator;
+
+		ReadInstrument* read_instrument = load_data->read_target.GetInstrument(stack_allocator, ECS_KB * 32, stack_allocator, load_data->detailed_error_string);
+		if (read_instrument == nullptr) {
+			return false;
+		}
+
 		// If the data source is empty, then we consider the scene as empty as well
 		if (read_instrument->TotalSize() == 0) {
 			// Just reset the entity manager and database reference
@@ -56,9 +63,6 @@ namespace ECSEngine {
 			}
 			return true;
 		}
-
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
-		AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 		SceneFileHeader file_header;
 		if (!read_instrument->Read(&file_header)) {
@@ -181,15 +185,15 @@ namespace ECSEngine {
 		}
 
 		// Before retrieving the modules themselves, get the source code branch and commit hash.
-		Stream<char> source_code_branch_name = read_instrument->ReadOrReferenceDataWithSizeVariableLength(stack_allocator).As<char>();
-		if (source_code_branch_name.size == 0) {
+		Stream<char> source_code_branch_name;
+		if (!read_instrument->ReadOrReferenceDataWithSizeVariableLength(source_code_branch_name, stack_allocator)) {
 			database->RestoreSnapshot(asset_database_snapshot);
 			ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "Could not read the source code branch name");
 			return false;
 		}
 
-		Stream<char> source_code_commit_hash = read_instrument->ReadOrReferenceDataWithSizeVariableLength(stack_allocator).As<char>();
-		if (source_code_commit_hash.size == 0) {
+		Stream<char> source_code_commit_hash;
+		if (!read_instrument->ReadOrReferenceDataWithSizeVariableLength(source_code_commit_hash, stack_allocator)) {
 			database->RestoreSnapshot(asset_database_snapshot);
 			ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "Could not read the source code commit hash");
 			return false;

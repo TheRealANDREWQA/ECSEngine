@@ -4,7 +4,7 @@
 namespace ECSEngine {
 
 	OwningBufferedFileWriteInstrument::OwningBufferedFileWriteInstrument(Stream<wchar_t> _file_path, Stream<void> _buffering, bool binary_file, CapacityStream<char>* error_message) 
-		: is_buffering_allocated(false), is_failed(true), file_path(_file_path)
+		: is_buffering_allocated(false), is_failed(true), file_path(_file_path), is_set_success_called(false)
 	{
 		ECS_FILE_HANDLE file_handle = -1;
 		ECS_FILE_ACCESS_FLAGS access_flags = ECS_FILE_ACCESS_WRITE_ONLY;
@@ -36,10 +36,10 @@ namespace ECSEngine {
 		}
 	}
 
-	TemporaryRenameBufferedFileWriteInstrument::TemporaryRenameBufferedFileWriteInstrument(Stream<wchar_t> absolute_file_path, Stream<wchar_t> _rename_extension, Stream<void> _buffering, 
-		bool binary_file, CapacityStream<char>* error_message)
+	TemporaryRenameBufferedFileWriteInstrument::TemporaryRenameBufferedFileWriteInstrument(Stream<wchar_t> absolute_file_path, Stream<void> _buffering, 
+		bool binary_file, Stream<wchar_t> _rename_extension, CapacityStream<char>* error_message)
 		: is_buffering_allocated(false), rename_extension(_rename_extension), original_file(absolute_file_path), is_initialization_failed(true), is_failed(true),
-		is_renaming_performed(false)
+		is_renaming_performed(false), is_set_success_called(false)
 	{
 		// Perform the renaming first
 		ECS_STACK_CAPACITY_STREAM(wchar_t, renamed_file, 1024);
@@ -82,14 +82,14 @@ namespace ECSEngine {
 
 	TemporaryRenameBufferedFileWriteInstrument::TemporaryRenameBufferedFileWriteInstrument(
 		Stream<wchar_t> absolute_file_path, 
-		Stream<wchar_t> _rename_extension, 
 		AllocatorPolymorphic _buffering_allocator, 
 		size_t _buffering_size,
 		bool binary_file, 
+		Stream<wchar_t> _rename_extension,
 		CapacityStream<char>* error_message
 	)
 		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
-		: TemporaryRenameBufferedFileWriteInstrument(absolute_file_path, _rename_extension, Stream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, _buffering_size), binary_file, error_message) {
+		: TemporaryRenameBufferedFileWriteInstrument(absolute_file_path, Stream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, _buffering_size), binary_file, _rename_extension, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;
@@ -104,6 +104,12 @@ namespace ECSEngine {
 		bool has_errors = false;
 
 		if (!IsInitializationFailed()) {
+			// Ensure that the success status was called, to avoid programming errors
+			ECS_ASSERT(is_set_success_called);
+
+			if (!is_failed) {
+				Flush();
+			}
 			if (is_buffering_allocated) {
 				buffering.Deallocate(buffering_allocator);
 			}
@@ -232,6 +238,10 @@ namespace ECSEngine {
 		file = status == ECS_FILE_STATUS_OK ? file_handle : -1;
 		initial_file_offset = 0;
 		buffering.InitializeFromBuffer(_buffering.buffer, 0, _buffering.size);
+
+		if (status == ECS_FILE_STATUS_OK) {
+			total_size = GetFileByteSize(file);
+		}
 	}
 
 	OwningBufferedFileReadInstrument::OwningBufferedFileReadInstrument(Stream<wchar_t> file_path, AllocatorPolymorphic _buffering_allocator, size_t _buffering_size, bool binary_file, CapacityStream<char>* error_message)

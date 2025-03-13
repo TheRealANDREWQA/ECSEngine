@@ -18,16 +18,23 @@ namespace ECSEngine {
 
 		if (target.rename_extension.size == 0) {
 			// No extension, use a normal owning file instrument
-			OwningBufferedFileWriteInstrument* file_instrument = (OwningBufferedFileWriteInstrument*)allocate_functor(sizeof(OwningBufferedFileWriteInstrument));
-			new (file_instrument) OwningBufferedFileWriteInstrument(target.file, buffering_allocator, buffering_capacity, target.is_binary, error_message);
-			return file_instrument->IsInitializationFailed() ? nullptr : file_instrument;
+			Optional<OwningBufferedFileWriteInstrument> instrument = OwningBufferedFileWriteInstrument::Initialize(target.file, buffering_allocator, buffering_capacity, target.is_binary, error_message);
+			if (instrument.has_value) {
+				OwningBufferedFileWriteInstrument* file_instrument = (OwningBufferedFileWriteInstrument*)allocate_functor(sizeof(OwningBufferedFileWriteInstrument));
+				*file_instrument = std::move(instrument.value);
+				return file_instrument;
+			}
+			return nullptr;
 		}
 		else {
 			// Use a temporary rename file instrument
-			TemporaryRenameBufferedFileWriteInstrument* file_instrument = (TemporaryRenameBufferedFileWriteInstrument*)allocate_functor(sizeof(TemporaryRenameBufferedFileWriteInstrument));
-			new (file_instrument) TemporaryRenameBufferedFileWriteInstrument(target.file, target.rename_extension, buffering_allocator, buffering_capacity,
-				target.is_binary, error_message);
-			return file_instrument->IsInitializationFailed() ? nullptr : file_instrument;
+			Optional<TemporaryRenameBufferedFileWriteInstrument> instrument = TemporaryRenameBufferedFileWriteInstrument::Initialize(target.file, buffering_allocator, buffering_capacity, target.is_binary, target.rename_extension, error_message);
+			if (instrument.has_value) {
+				TemporaryRenameBufferedFileWriteInstrument* file_instrument = (TemporaryRenameBufferedFileWriteInstrument*)allocate_functor(sizeof(TemporaryRenameBufferedFileWriteInstrument));
+				*file_instrument = std::move(instrument.value);
+				return file_instrument;
+			}
+			return nullptr;
 		}
 	}
 
@@ -44,9 +51,13 @@ namespace ECSEngine {
 		}
 
 		// Initialize a file instrument
-		OwningBufferedFileReadInstrument* file_instrument = (OwningBufferedFileReadInstrument*)allocate_functor(sizeof(OwningBufferedFileReadInstrument));
-		new (file_instrument) OwningBufferedFileReadInstrument(target.file, buffering_allocator, buffering_capacity, target.is_binary, error_message);
-		return file_instrument->IsInitializationFailed() ? nullptr : file_instrument;
+		Optional<OwningBufferedFileReadInstrument> instrument = OwningBufferedFileReadInstrument::Initialize(target.file, buffering_allocator, buffering_capacity, target.is_binary, error_message);
+		if (instrument.has_value) {
+			OwningBufferedFileReadInstrument* file_instrument = (OwningBufferedFileReadInstrument*)allocate_functor(sizeof(OwningBufferedFileReadInstrument));
+			*file_instrument = std::move(instrument.value);
+			return file_instrument;
+		}
+		return nullptr;
 	}
 
 	WriteInstrument* FileWriteInstrumentTarget::GetInstrument(
