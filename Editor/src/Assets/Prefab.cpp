@@ -267,7 +267,7 @@ void TickPrefabFileChange(EditorState* editor_state) {
 
 									// We need to apply the changes to all sandboxes
 									SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-										AllocatorPolymorphic entities_allocator = editor_state->GlobalMemoryManagerPolymorphic();
+										AllocatorPolymorphic entities_allocator = editor_state->GlobalMemoryManager();
 										// Do the update for the scene data every time.
 										// For the runtime version, update it only if the sandbox is paused or running
 										for (size_t viewport_index = 0; viewport_index < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport_index++) {

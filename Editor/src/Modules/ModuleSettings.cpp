@@ -265,9 +265,9 @@ bool LoadModuleSettings(
 
 	if (indices.size > 0) {
 		AllocatorPolymorphic editor_allocator = editor_state->editor_allocator;
-
-		Stream<void> file_data = ReadWholeFileBinary(path, editor_allocator);
-		if (file_data.buffer == nullptr) {
+		ECS_STACK_VOID_STREAM(file_buffering, ECS_KB * 16);
+		Optional<OwningBufferedFileReadInstrument> read_instrument = OwningBufferedFileReadInstrument::Initialize(path, file_buffering);
+		if (!read_instrument.has_value) {
 			return false;
 		}
 
@@ -275,21 +275,17 @@ bool LoadModuleSettings(
 		deserialize_options.field_allocator = allocator;
 		
 		const Reflection::ReflectionManager* reflection = editor_state->GlobalReflectionManager();
-		uintptr_t file_ptr = (uintptr_t)file_data.buffer;
+		//uintptr_t file_ptr = (uintptr_t)file_data.buffer;
 
 		// Need the deserialize table in order to determine the setting index
-		ECS_STACK_CAPACITY_STREAM(char, table_memory, ECS_KB * 8);
-		const size_t STACK_ALLOCATION = ECS_KB * 8;
-		LinearAllocator stack_allocator(ECS_STACK_ALLOC(STACK_ALLOCATION), STACK_ALLOCATION);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB * 8);
 
 		// Need to continue deserializing while the file_ptr is smaller than the limit of the file
-		uintptr_t file_ptr_limit = file_ptr + file_data.size;
-		while (file_ptr < file_ptr_limit) {
+		while (!read_instrument.value.IsEndReached()) {
 			stack_allocator.Clear();
-			DeserializeFieldTable field_table = DeserializeFieldTableFromData(file_ptr, &stack_allocator);
+			DeserializeFieldTable field_table = DeserializeFieldTableFromData(&read_instrument.value, &stack_allocator);
 			// It failed
 			if (field_table.types.size == 0) {
-				editor_state->editor_allocator->Deallocate(file_data.buffer);
 				return false;
 			}
 
@@ -297,7 +293,7 @@ bool LoadModuleSettings(
 
 			if (settings_index == -1) {
 				// The type no longer exists, just skip it
-				IgnoreDeserialize(file_ptr, field_table);
+				IgnoreDeserialize(&read_instrument.value, field_table);
 			}
 			else {
 				deserialize_options.field_table = &field_table;
@@ -305,20 +301,16 @@ bool LoadModuleSettings(
 					reflection,
 					reflection->GetType(settings[settings_index].name),
 					settings[settings_index].data,
-					file_ptr,
+					&read_instrument.value,
 					&deserialize_options
 				);
 
 				// An error has occured - cannot recover the data from the file.
 				if (code != ECS_DESERIALIZE_OK) {
-					editor_state->editor_allocator->Deallocate(file_data.buffer);
 					return false;
 				}
 			}
 		}
-
-		// Deallocate the file content
-		editor_state->editor_allocator->Deallocate(file_data.buffer);
 	}
 	return true;
 }
@@ -344,44 +336,27 @@ bool SaveModuleSettings(const EditorState* editor_state, unsigned int module_ind
 	editor_state->ui_reflection->GetHierarchyTypes(hierarchy_index, options);
 
 	if (indices.size > 0) {
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(const ReflectionType*, module_types, indices.size);
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, instance_memory, indices.size);
+		ECS_STACK_VOID_STREAM(file_buffering, ECS_KB * 16);
+		return OwningBufferedFileWriteInstrument::WriteTo(path, file_buffering, [&](WriteInstrument* write_instrument) {
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(const ReflectionType*, module_types, indices.size);
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, instance_memory, indices.size);
 
-		// Get the reflection types in order to serialize
-		ReflectionManager* reflection = editor_state->ui_reflection->reflection;
-		for (size_t index = 0; index < indices.size; index++) {
-			module_types[index] = reflection->GetType(editor_state->module_reflection->GetType(indices[index])->name);
-			size_t setting_index = SearchSetting(settings, module_types[index]->name);
-			instance_memory[index] = settings[setting_index].data;
-		}
+			// Get the reflection types in order to serialize
+			ReflectionManager* reflection = editor_state->ui_reflection->reflection;
+			for (size_t index = 0; index < indices.size; index++) {
+				module_types[index] = reflection->GetType(editor_state->module_reflection->GetType(indices[index])->name);
+				size_t setting_index = SearchSetting(settings, module_types[index]->name);
+				instance_memory[index] = settings[setting_index].data;
+			}
 
-		// Now determine how much memory is needed in order to allocate a single buffer and serialize into it
-		size_t buffer_size = 0;
-		for (size_t index = 0; index < indices.size; index++) {
-			size_t serialize_size = SerializeSize(reflection, module_types[index], instance_memory[index]);
-			ECS_ASSERT(serialize_size != -1);
-			buffer_size += serialize_size;
-		}
-
-		// Allocate a buffer of the corresponding size
-		void* buffer_allocation = editor_state->editor_allocator->Allocate(buffer_size);
-
-		// Write the data into the buffer
-		uintptr_t buffer = (uintptr_t)buffer_allocation;
-		for (size_t index = 0; index < indices.size; index++) {
-			// The check for the code can be omitted since it would fail at the SerializeSize pass
-			Serialize(reflection, module_types[index], instance_memory[index], buffer);
-		}
-
-		size_t difference = buffer - (uintptr_t)buffer_allocation;
-		ECS_ASSERT(difference <= buffer_size);
-
-		// Now write the buffer to the file
-		bool success = WriteBufferToFileBinary(path, { buffer_allocation, difference }) == ECS_FILE_STATUS_OK;
-
-		// Deallocate the buffer
-		editor_state->editor_allocator->Deallocate(buffer_allocation);
-		return success;
+			// Write the data into the buffer
+			for (size_t index = 0; index < indices.size; index++) {
+				if (!Serialize(reflection, module_types[index], instance_memory[index], write_instrument)) {
+					return false;
+				}
+			}
+			return true;
+		});
 	}
 
 	return true;

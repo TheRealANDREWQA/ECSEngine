@@ -7,11 +7,13 @@ struct EditorSettings {
 
 struct CompilerVersion {
 	ECSEngine::Stream<char> aggregated;
-	// This will reference inside the aggregated
+	// This will reference characters inside the aggregated
 	ECSEngine::Stream<char> year;
-	// Type is related to Community, Professional and Enterprise
-	// This will reference inside the aggregated
+	// Type is related to Community, Professional and Enterprise (Visual Studio)
+	// This will reference characters inside the aggregated
 	ECSEngine::Stream<char> type;
+	// It will reference characters inside the aggregated
+	ECSEngine::Stream<char> compiler_name;
 	ECSEngine::Stream<wchar_t> path;
 };
 

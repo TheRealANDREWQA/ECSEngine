@@ -26,19 +26,19 @@
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -112,7 +112,7 @@
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
     <PostBuildEvent>
-      <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
+      <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
     </PostBuildEvent>
     <FxCompile>
       <ObjectFileOutput>$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
@@ -161,7 +161,7 @@
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
     <PostBuildEvent>
-      <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
+      <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
     </PostBuildEvent>
     <FxCompile>
       <ObjectFileOutput>$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
@@ -207,7 +207,7 @@
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
     <PostBuildEvent>
-      <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
+      <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
     </PostBuildEvent>
     <FxCompile>
       <ObjectFileOutput>$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>

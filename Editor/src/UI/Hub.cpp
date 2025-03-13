@@ -105,7 +105,12 @@ void LoadHubProjectsInfo(EditorState* editor_state)
 
 void ReloadHubProjects(EditorState* editor_state) {
 	ResetHubData(editor_state);
-	LoadEditorFile(editor_state);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+	bool success = LoadEditorFile(editor_state, &error_message);
+	if (!success || error_message.size > 0) {
+		error_message.Insert(0, "Failed to read editor settings. ");
+		CreateErrorMessageWindow(editor_state->ui_system, error_message);
+	}
 	LoadHubProjectsInfo(editor_state);
 	SortHubProjects(editor_state);
 }
@@ -190,39 +195,61 @@ static void AutoDetectCompilerAction(ActionData* action_data) {
 	const size_t MAX_COMPILERS = 64;
 
 	EditorState* editor_state = (EditorState*)_data;
-	ECS_STACK_CAPACITY_STREAM(wchar_t, compiler_path, 512);
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 8);
 	ECS_STACK_CAPACITY_STREAM(CompilerVersion, versions, MAX_COMPILERS);
 	AutoDetectCompilers(&stack_allocator, &versions);
 
 	if (versions.size > 0) {
-		auto select_action = [](ActionData* action_data) {
-			UI_UNPACK_ACTION_DATA;
+		if (versions.size == 1) {
+			struct SelectData {
+				EditorState* editor_state;
+				Stream<wchar_t> path;
+			};
+			
+			auto select_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
 
-			EditorState* editor_state = (EditorState*)_data;
-			ChooseElementCallbackData* callback_data = (ChooseElementCallbackData*)_additional_data;
-			if (!ChangeCompilerVersion(editor_state, callback_data->additional_data.As<wchar_t>())) {
-				CreateErrorMessageWindow(system, "Failed to save editor file after changing compiler version");
-			}
-		};
-		
-		ECS_STACK_CAPACITY_STREAM(Stream<char>, version_display_names, MAX_COMPILERS);
-		ECS_STACK_CAPACITY_STREAM(Stream<void>, paths, MAX_COMPILERS);
-		for (size_t index = 0; index < versions.size; index++) {
-			version_display_names[index] = versions[index].aggregated;
-			paths[index] = versions[index].path;
+				SelectData* data = (SelectData*)_data;
+				if (!ChangeCompilerVersion(data->editor_state, data->path)) {
+					CreateErrorMessageWindow(system, "Failed to save editor file after changing compiler version");
+				}
+				data->path.Deallocate(data->editor_state->EditorAllocator());
+			};
+
+			ECS_FORMAT_TEMP_STRING(confirm_window_message, "The compiler that was auto detected is {#}. Select this as the compiler?", versions[0].aggregated);
+			// Allocate the string with the editor allocator such that it is stable
+			SelectData select_data = { editor_state, versions[0].path.Copy(editor_state->EditorAllocator()) };
+			CreateConfirmWindow(system, confirm_window_message, { select_action, &select_data, sizeof(select_data), ECS_UI_DRAW_SYSTEM });
 		}
-		version_display_names.size = versions.size;
-		paths.size = versions.size;
+		else {
+			auto select_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
 
-		ChooseElementWindowData choose_data;
-		choose_data.element_labels = version_display_names;
-		choose_data.description = "Select the compiler version";
-		choose_data.window_name = "Select Compiler";
-		choose_data.select_handler = { select_action, editor_state, 0, ECS_UI_DRAW_SYSTEM };
-		choose_data.additional_data = paths;
+				EditorState* editor_state = (EditorState*)_data;
+				ChooseElementCallbackData* callback_data = (ChooseElementCallbackData*)_additional_data;
+				if (!ChangeCompilerVersion(editor_state, callback_data->additional_data.As<wchar_t>())) {
+					CreateErrorMessageWindow(system, "Failed to save editor file after changing compiler version");
+				}
+				};
 
-		CreateChooseElementWindow(system, choose_data);
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, version_display_names, MAX_COMPILERS);
+			ECS_STACK_CAPACITY_STREAM(Stream<void>, paths, MAX_COMPILERS);
+			for (size_t index = 0; index < versions.size; index++) {
+				version_display_names[index] = versions[index].aggregated;
+				paths[index] = versions[index].path;
+			}
+			version_display_names.size = versions.size;
+			paths.size = versions.size;
+
+			ChooseElementWindowData choose_data;
+			choose_data.element_labels = version_display_names;
+			choose_data.description = "Select the compiler version";
+			choose_data.window_name = "Select Compiler";
+			choose_data.select_handler = { select_action, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+			choose_data.additional_data = paths;
+
+			CreateChooseElementWindow(system, choose_data);
+		}
 	}
 	else {
 		CreateErrorMessageWindow(system, "Failed to auto detect any compiler path");
@@ -601,7 +628,8 @@ void Hub(EditorState* editor_state) {
 	window_descriptor.initial_size_x = 2.0f;
 	window_descriptor.initial_size_y = 2.0f;
 
-	bool success = LoadEditorFile(editor_state);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+	bool success = LoadEditorFile(editor_state, &error_message);
 	LoadHubProjectsInfo(editor_state);
 	SortHubProjects(editor_state);
 
@@ -612,8 +640,9 @@ void Hub(EditorState* editor_state) {
 
 	editor_state->editor_tick = EditorStateHubTick;
 
-	if (!success) {
-		CreateErrorMessageWindow(ui_system, "No editor file has been found or it has been corrupted.");
+	// Create this error message window after the hub window was created, such that it appears over the hub
+	if (!success || error_message.size > 0) {
+		CreateErrorMessageWindow(ui_system, error_message);
 	}
 }
 

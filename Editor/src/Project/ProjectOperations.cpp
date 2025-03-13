@@ -483,7 +483,6 @@ bool OpenProjectFile(ProjectOperationData data, bool info_only) {
 
 	DeserializeOptions options;
 	options.field_allocator = allocator;
-	options.file_allocator = allocator;
 	options.error_message = &error_message;
 
 	ECS_DESERIALIZE_CODE status = Deserialize(

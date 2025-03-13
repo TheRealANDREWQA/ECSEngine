@@ -458,18 +458,20 @@ void EditorComponents::RecoverData(
 	// Especially since not a lot of changes are going to be done
 	const size_t ALLOCATION_SIZE = ECS_KB * 32;
 	void* stack_allocation = ECS_STACK_ALLOC(ALLOCATION_SIZE);
-	uintptr_t ptr = (uintptr_t)stack_allocation;
+	InMemoryWriteInstrument field_table_write_instrument((uintptr_t)stack_allocation, ALLOCATION_SIZE);
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
 	AllocatorPolymorphic allocator = &stack_allocator;
+	SerializeFieldTable(internal_manager, old_type, &field_table_write_instrument);
 
-	SerializeFieldTable(internal_manager, old_type, ptr);
-	ptr = (uintptr_t)stack_allocation;
-	DeserializeFieldTable field_table = DeserializeFieldTableFromData(ptr, allocator);
+	InMemoryReadInstrument field_table_read_instrument((uintptr_t)stack_allocation, field_table_write_instrument.GetOffset());
+	DeserializeFieldTable field_table = DeserializeFieldTableFromData(&field_table_read_instrument, allocator);
 	ECS_ASSERT(field_table.types.size > 0);
 
 	// Used when needing to move buffers of data from components
-	const size_t TEMPORARY_ALLOCATION_CAPACITY = ECS_MB * 500;
+	// Choose a very large temporary allocation capacity, it's going to be in virtual space only,
+	// The physical space will be committed based on how much it is used
+	const size_t TEMPORARY_ALLOCATION_CAPACITY = ECS_GB * 8;
 	void* temporary_allocation = Malloc(TEMPORARY_ALLOCATION_CAPACITY);
 	//LinearAllocator temporary_allocator(temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
 	//AllocatorPolymorphic temporary_alloc = GetAllocatorPolymorphic(&temporary_allocator);
@@ -538,8 +540,9 @@ void EditorComponents::RecoverData(
 			}
 		}
 
-		auto has_buffer_prepass = [&]() {
-			ptr = (uintptr_t)temporary_allocation;
+		// Returns how many bytes were used to write into the temporary allocation
+		auto has_buffer_prepass = [&]() -> size_t {
+			InMemoryWriteInstrument component_write_instrument((uintptr_t)temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
 
 			// Need to go through all entities and serialize them because we need to deallocate the component allocator
 			// and then reallocate all the data
@@ -560,7 +563,8 @@ void EditorComponents::RecoverData(
 					const void* component_buffer = base->GetComponentByIndex(0, component_index);
 					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
 						const void* entity_data = OffsetPointer(component_buffer, entity_index * old_size);
-						Serialize(internal_manager, old_type, entity_data, ptr, &serialize_options);
+						// Don't handle the other error codes, they shouldn't be possible
+						ECS_ASSERT(Serialize(internal_manager, old_type, entity_data, &component_write_instrument, &serialize_options) == ECS_SERIALIZE_OK, "Editor components: recovering unique component data exceeded temporary buffer!")
 					}
 				}
 
@@ -568,8 +572,6 @@ void EditorComponents::RecoverData(
 					archetype_locks[matching_archetypes[index]].Unlock();
 				}
 			}
-
-			ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY, "Editor components: recovering unique component data exceeded temporary buffer!");
 
 			if (has_locks) {
 				// Lock the memory manager allocator
@@ -594,14 +596,16 @@ void EditorComponents::RecoverData(
 				arena.allocation_type = ECS_ALLOCATION_MULTI;
 				deserialize_options.field_allocator = arena;
 			}
+
+			return component_write_instrument.GetOffset();
 		};
 
 		if (new_size == old_size) {
 			// No need to resize the archetypes
 			if (has_buffers) {
-				has_buffer_prepass();
+				size_t temporary_allocation_usage = has_buffer_prepass();
 
-				ptr = (uintptr_t)temporary_allocation;
+				InMemoryReadInstrument component_read_instrument((uintptr_t)temporary_allocation, temporary_allocation_usage);
 
 				// Now deserialize the data
 				for (unsigned int index = 0; index < matching_archetypes.size; index++) {
@@ -624,7 +628,7 @@ void EditorComponents::RecoverData(
 								reflection_manager,
 								current_type,
 								OffsetPointer(component_buffer, entity_index * old_size),
-								ptr,
+								&component_read_instrument,
 								&deserialize_options
 							);
 							ECS_ASSERT(code == ECS_DESERIALIZE_OK);
@@ -674,12 +678,14 @@ void EditorComponents::RecoverData(
 
 						const void* component_buffer = base->GetComponentByIndex(0, component_index);
 						for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
-							ptr = (uintptr_t)temporary_allocation;
 							void* entity_data = OffsetPointer(component_buffer, entity_index * old_size);
+
 							// Copy to temporary memory and then deserialize back
-							Serialize(internal_manager, old_type, entity_data, ptr, &serialize_options);
-							ptr = (uintptr_t)temporary_allocation;
-							Deserialize(reflection_manager, current_type, entity_data, ptr, &deserialize_options);
+							InMemoryWriteInstrument component_write_instrument((uintptr_t)temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
+							ECS_ASSERT(Serialize(internal_manager, old_type, entity_data, &component_write_instrument, &serialize_options) == ECS_SERIALIZE_OK);
+							
+							InMemoryReadInstrument component_read_instrument((uintptr_t)temporary_allocation, component_write_instrument.GetOffset());
+							ECS_ASSERT(Deserialize(reflection_manager, current_type, entity_data, &component_read_instrument, &deserialize_options) == ECS_DESERIALIZE_OK);
 						}
 					}
 
@@ -726,17 +732,19 @@ void EditorComponents::RecoverData(
 						ECS_STACK_CAPACITY_STREAM(void*, previous_buffers, 64);
 						memcpy(previous_buffers.buffer, previous_base_buffers, sizeof(void*) * current_signature.count);
 
-						uintptr_t copy_ptr = ptr;
+						uintptr_t copy_ptr = (uintptr_t)temporary_allocation;
 
 						for (unsigned int component_index = 0; component_index < current_signature.count; component_index++) {
 							size_t copy_size = (size_t)component_sizes[component_index] * (size_t)entity_count;
 							if (current_signature.indices[component_index] != component) {
 								memcpy((void*)copy_ptr, previous_buffers[component_index], copy_size);
-								copy_ptr += copy_size;
 							}
 							else {
-								copy_ptr += same_component_copy((void*)copy_ptr, previous_buffers[component_index], copy_size);
+								copy_size = same_component_copy((void*)copy_ptr, previous_buffers[component_index], copy_size);
 							}
+							previous_buffers[component_index] = (void*)copy_ptr;
+							copy_ptr += copy_size;
+							ECS_ASSERT(copy_ptr - (uintptr_t)temporary_allocation, "EditorComponents resize component temporary allocation was exceeded while recovering component data!");
 						}
 
 						unsigned int previous_capacity = base->m_capacity;
@@ -761,12 +769,10 @@ void EditorComponents::RecoverData(
 						void** new_buffers = base->m_buffers;
 
 						// Now copy back
-						copy_ptr = ptr;
 						for (unsigned int component_index = 0; component_index < current_signature.count; component_index++) {
 							if (current_signature.indices[component_index] != component) {
 								size_t copy_size = (size_t)component_sizes[component_index] * (size_t)entity_count;
 								memcpy(new_buffers[component_index], previous_buffers[component_index], copy_size);
-								copy_ptr += copy_size;
 							}
 							else {
 								// Need to deserialize
@@ -791,16 +797,15 @@ void EditorComponents::RecoverData(
 				// This is kinda complicated. Need to do a prepass and serialize all the data from the current component after which
 				// we must clear the allocator, resize it if necessary. Then the new size for the component needs to be recorded and then
 				// resize each base archetype separately with a manual resize
-				has_buffer_prepass();
-
-				uintptr_t deserialized_ptr = (uintptr_t)temporary_allocation;
+				size_t temporary_allocation_usage = has_buffer_prepass();
+				InMemoryReadInstrument component_read_instrument((uintptr_t)temporary_allocation, temporary_allocation_usage);
 				// Previous buffer not used
 				auto deserialize_handler = [&](void* pointer, void* previous_data) {
 					ECS_DESERIALIZE_CODE code = Deserialize(
 						reflection_manager,
 						current_type,
 						pointer,
-						deserialized_ptr,
+						&component_read_instrument,
 						&deserialize_options
 					);
 					ECS_ASSERT(code == ECS_DESERIALIZE_OK);
@@ -842,21 +847,21 @@ void EditorComponents::RecoverData(
 				};
 
 				auto deserialized_copy = [&](void* pointer, void* previous_buffer) {
-					ptr = (uintptr_t)temporary_allocation;
-					Serialize(
+					InMemoryWriteInstrument write_instrument((uintptr_t)temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
+					ECS_ASSERT(Serialize(
 						internal_manager,
 						old_type,
 						previous_buffer,
-						ptr,
+						&write_instrument,
 						&serialize_options
-					);
+					) == ECS_SERIALIZE_OK, "EditorComponents temporary allocation during RecoverData was exceeded!");
 
-					ptr = (uintptr_t)temporary_allocation;
+					InMemoryReadInstrument read_instrument((uintptr_t)temporary_allocation, write_instrument.GetOffset());
 					ECS_DESERIALIZE_CODE code = Deserialize(
 						reflection_manager,
 						current_type,
 						pointer,
-						ptr,
+						&read_instrument,
 						&deserialize_options
 					);
 					ECS_ASSERT(code == ECS_DESERIALIZE_OK);
@@ -879,10 +884,9 @@ void EditorComponents::RecoverData(
 		if (old_size == new_size) {
 			if (has_buffers) {
 				// Must a do a prepass and serialize the components into the temporary buffer
-				ptr = (uintptr_t)temporary_allocation;
+				InMemoryWriteInstrument prepass_write_instrument((uintptr_t)temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
 				entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
-					Serialize(internal_manager, old_type, data, ptr, &serialize_options);
-					ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY, "Editor components reallocating shared component failed: temporary memory size exceeded (same size, with buffers branch)!");
+					ECS_ASSERT(Serialize(internal_manager, old_type, data, &prepass_write_instrument, &serialize_options) == ECS_SERIALIZE_OK, "EditorComponents temporary allocation during RecoverData was exceeded! (same size, with buffers branch)");
 				});
 
 				// Deallocate the arena or resize it
@@ -909,9 +913,9 @@ void EditorComponents::RecoverData(
 					deserialize_options.field_allocator = arena;
 				}
 
-				ptr = (uintptr_t)temporary_allocation;
+				InMemoryReadInstrument prepass_read_instrument((uintptr_t)temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
 				entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
-					ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, current_type, data, ptr, &deserialize_options);
+					ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, current_type, data, &prepass_read_instrument, &deserialize_options);
 					ECS_ASSERT(code == ECS_DESERIALIZE_OK);
 				});
 			}
@@ -937,12 +941,11 @@ void EditorComponents::RecoverData(
 				}
 
 				entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
-					ptr = (uintptr_t)temporary_allocation;
-					Serialize(internal_manager, old_type, data, ptr, &serialize_options);
-					ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY, "Editor components reallocating shared component failed: temporary memory size exceeded (same size, no buffers branch)!");
+					InMemoryWriteInstrument write_instrument((uintptr_t)temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
+					ECS_ASSERT(Serialize(internal_manager, old_type, data, &write_instrument, &serialize_options) == ECS_SERIALIZE_OK, "Editor components reallocating shared component failed: temporary memory size exceeded (same size, no buffers branch)!");
 
-					ptr = (uintptr_t)temporary_allocation;
-					ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, current_type, data, ptr, &deserialize_options);
+					InMemoryReadInstrument read_instrument((uintptr_t)temporary_allocation, write_instrument.GetOffset());
+					ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, current_type, data, &read_instrument, &deserialize_options);
 					ECS_ASSERT(code == ECS_DESERIALIZE_OK);
 				});
 			}
@@ -950,10 +953,9 @@ void EditorComponents::RecoverData(
 		else {
 			// Need to reallocate the shared instances
 			// First copy all of them into a temporary buffer and then deserialize from it
-			ptr = (uintptr_t)temporary_allocation;
+			InMemoryWriteInstrument prepass_write_instrument((uintptr_t)temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
 			entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
-				Serialize(internal_manager, old_type, data, ptr, &serialize_options);
-				ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY, "Editor components reallocating shared component failed: temporary memory size exceeded (different size branch)!");
+				ECS_ASSERT(Serialize(internal_manager, old_type, data, &prepass_write_instrument, &serialize_options) == ECS_SERIALIZE_OK, "Editor components reallocating shared component failed: temporary memory size exceeded (different size branch)!");
 			});
 
 			AllocatorPolymorphic arena = nullptr;
@@ -972,9 +974,9 @@ void EditorComponents::RecoverData(
 				deserialize_options.field_allocator = arena;
 			}
 
-			ptr = (uintptr_t)temporary_allocation;
+			InMemoryReadInstrument prepass_read_instrument((uintptr_t)temporary_allocation, prepass_write_instrument.GetOffset());
 			entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
-				ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, current_type, data, ptr, &deserialize_options);
+				ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, current_type, data, &prepass_read_instrument, &deserialize_options);
 				ECS_ASSERT(code == ECS_DESERIALIZE_OK);
 			});
 		}
@@ -984,8 +986,8 @@ void EditorComponents::RecoverData(
 		// Perform this operation if the global component exists only
 		if (entity_manager->ExistsGlobalComponent(component)) {
 			const void* data = entity_manager->GetGlobalComponent(component);
-			ptr = (uintptr_t)temporary_allocation;
-			Serialize(internal_manager, old_type, data, ptr, &serialize_options);
+			InMemoryWriteInstrument write_instrument((uintptr_t)temporary_allocation, TEMPORARY_ALLOCATION_CAPACITY);
+			ECS_ASSERT(Serialize(internal_manager, old_type, data, &write_instrument, &serialize_options) == ECS_SERIALIZE_OK, "Editor components reallocating global component failed: temporary memory size exceeded!");
 
 			void* new_data = entity_manager->ResizeGlobalComponent(component, new_size);
 
@@ -995,9 +997,9 @@ void EditorComponents::RecoverData(
 			// Since they might need a lot of memory
 			deserialize_options.field_allocator = entity_manager->MainAllocator();
 
-			ptr = (uintptr_t)temporary_allocation;
-			ECS_DESERIALIZE_CODE code = Deserialize(internal_manager, current_type, new_data, ptr, &deserialize_options);
-			ECS_ASSERT(code == ECS_DESERIALIZE_OK, "Failed to recover global component data after change");
+			InMemoryReadInstrument read_instrument((uintptr_t)temporary_allocation, write_instrument.GetOffset());
+			ECS_DESERIALIZE_CODE code = Deserialize(internal_manager, current_type, new_data, &read_instrument, &deserialize_options);
+			ECS_ASSERT(code == ECS_DESERIALIZE_OK, "Editor components: Failed to recover global component data after change");
 		}
 	}
 

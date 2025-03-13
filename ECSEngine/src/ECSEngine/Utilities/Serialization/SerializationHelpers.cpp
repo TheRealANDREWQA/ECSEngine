@@ -1811,7 +1811,7 @@ namespace ECSEngine {
 		else {
 			if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 				unsigned short elements_to_read = ClampMax(info.basic_type_count, basic_type_array_count);
-				if (!read_instrument->Read(&data, elements_to_read * GetBasicTypeArrayElementSize(info))) {
+				if (!read_instrument->Read(data, elements_to_read * GetBasicTypeArrayElementSize(info))) {
 					return false;
 				}
 

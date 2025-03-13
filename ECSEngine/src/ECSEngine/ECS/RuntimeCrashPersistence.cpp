@@ -4,6 +4,7 @@
 #include "../Resources/Scene.h"
 #include "../Utilities/Console.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
+#include "../Utilities/BufferedFileReaderWriter.h"
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Path.h"
 #include "../OS/Misc.h"
@@ -72,7 +73,7 @@ namespace ECSEngine {
 
 		SaveSceneData save_data = *save_scene_data;
 		save_data.entity_manager = world->entity_manager;
-		save_data.file = mutable_directory;
+		save_data.write_target.SetFile(mutable_directory, true);
 		save_data.reflection_manager = reflection_manager;
 		save_data.delta_time = world->delta_time;
 		save_data.speed_up_factor = world->speed_up_factor;
@@ -172,11 +173,10 @@ namespace ECSEngine {
 		const RuntimeCrashPersistenceWriteOptions* options
 	) {
 		RuntimeCrashPersistenceFilePath(&mutable_directory, ECS_RUNTIME_CRASH_FILE_WORLD_DESCRIPTOR);
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-
+		
 		SerializeOptions serialize_options;
 		serialize_options.error_message = options->error_message;
-		serialize_options.allocator = &stack_allocator;
+
 		ECS_SERIALIZE_CODE serialize_code = Serialize(
 			reflection_manager, 
 			reflection_manager->GetType(STRING(WorldDescriptor)), 
@@ -377,7 +377,7 @@ namespace ECSEngine {
 		load_data.detailed_error_string = options->error_message;
 		load_data.allow_missing_components = false;
 		load_data.entity_manager = world->entity_manager;
-		load_data.file = mutable_directory;
+		load_data.read_target.SetFile(mutable_directory, false);
 		load_data.randomize_assets = true;
 		load_data.reflection_manager = reflection_manager;
 
@@ -493,11 +493,9 @@ namespace ECSEngine {
 		RuntimeCrashPersistenceFilePath(directory, &descriptor_path, ECS_RUNTIME_CRASH_FILE_WORLD_DESCRIPTOR);
 
 		if (ExistsFileOrFolder(descriptor_path)) {
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 			DeserializeOptions deserialize_options;
 			deserialize_options.error_message = detailed_error;
 			deserialize_options.default_initialize_missing_fields = true;
-			deserialize_options.file_allocator = &stack_allocator;
 			ECS_DESERIALIZE_CODE deserialize_code = Deserialize(
 				reflection_manager, 
 				reflection_manager->GetType(STRING(WorldDescriptor)), 
@@ -508,9 +506,7 @@ namespace ECSEngine {
 			return deserialize_code == ECS_DESERIALIZE_OK;
 		}
 		else {
-			if (detailed_error != nullptr) {
-				detailed_error->AddStreamAssert("The world descriptor file is missing from the crash\n");
-			}
+			ECS_FORMAT_ERROR_MESSAGE(detailed_error, "The world descriptor file is missing from the crash\n");
 			return false;
 		}
 	}

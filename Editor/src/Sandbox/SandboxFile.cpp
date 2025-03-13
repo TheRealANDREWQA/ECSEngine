@@ -34,31 +34,20 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 	const Reflection::ReflectionManager* reflection_manager = editor_state->ModuleReflectionManager();
 
-	const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 128;
-	const size_t BACKUP_CAPACITY = ECS_MB;
-	void* stack_allocation = ECS_STACK_ALLOC(STACK_ALLOCATION_CAPACITY);
-
-	// Use Malloc for extra large allocations
-	ResizableLinearAllocator linear_allocator(stack_allocation, STACK_ALLOCATION_CAPACITY, BACKUP_CAPACITY, { nullptr });
-	AllocatorPolymorphic allocator = &linear_allocator;
-	Stream<void> contents = ReadWholeFileBinary(sandbox_file_path, allocator);
-
-	struct DeallocateAllocator {
-		void operator() () {
-			allocator->ClearBackup();
-		}
-
-		ResizableLinearAllocator* allocator;
-	};
-
-	StackScope<DeallocateAllocator> deallocate_scope({ &linear_allocator });
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
+	Stream<void> contents = ReadWholeFileBinary(sandbox_file_path, &stack_allocator);
 
 	if (contents.buffer != nullptr) {
 		// Read the header
-		uintptr_t ptr = (uintptr_t)contents.buffer;
+		InMemoryReadInstrument read_instrument(contents);
 
 		SandboxFileHeader header;
-		Read<true>(&ptr, &header, sizeof(header));
+		if (!read_instrument.Read(&header)) {
+			// Error invalid version
+			ECS_FORMAT_TEMP_STRING(console_error, "Failed to read sandbox file. The file is corrupted (the header could not be read).");
+			EditorSetConsoleError(console_error);
+			return false;
+		}
 
 		if (header.version != SANDBOX_FILE_HEADER_VERSION) {
 			// Error invalid version
@@ -75,7 +64,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 		}
 
 		// Deserialize the type table now
-		DeserializeFieldTable field_table = DeserializeFieldTableFromData(ptr, allocator);
+		DeserializeFieldTable field_table = DeserializeFieldTableFromData(&read_instrument, &stack_allocator);
 		if (field_table.types.size == 0) {
 			// Error
 			EditorSetConsoleError("The field table in the sandbox file is corrupted.");
@@ -85,12 +74,12 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 		EditorSandbox* sandboxes = (EditorSandbox*)ECS_STACK_ALLOC(sizeof(EditorSandbox) * header.count);
 		DeserializeOptions options;
 		options.field_table = &field_table;
-		options.field_allocator = allocator;
+		options.field_allocator = &stack_allocator;
 		options.read_type_table = false;
 
 		const Reflection::ReflectionType* type = reflection_manager->GetType(STRING(EditorSandbox));
 		for (size_t index = 0; index < header.count; index++) {
-			ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, type, sandboxes + index, ptr, &options);
+			ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, type, sandboxes + index, &read_instrument, &options);
 			if (code != ECS_DESERIALIZE_OK) {
 				ECS_STACK_CAPACITY_STREAM(char, console_error, 512);
 
@@ -200,50 +189,44 @@ bool SaveEditorSandboxFile(const EditorState* editor_state)
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 	GetProjectSandboxFile(editor_state, absolute_path);
 
-	// Allocate a buffer of ECS_KB * 128 and write into it
-	// Assert that the overall size is less
-	const size_t STACK_CAPACITY = ECS_KB * 128;
-	void* stack_buffer = ECS_STACK_ALLOC(STACK_CAPACITY);
-	uintptr_t ptr = (uintptr_t)stack_buffer;
+	ECS_STACK_VOID_STREAM(file_buffering, ECS_KB * 64);
+	return TemporaryRenameBufferedFileWriteInstrument::WriteTo(absolute_path, file_buffering, [&](WriteInstrument* write_instrument) {
+		// Exclude the temporary sandboxes from being saved
+		SandboxFileHeader header;
+		header.count = GetSandboxCount(editor_state, true);
+		header.version = SANDBOX_FILE_HEADER_VERSION;
 
-	// Exclude the temporary sandboxes from being saved
-	SandboxFileHeader header;
-	header.count = GetSandboxCount(editor_state, true);
-	header.version = SANDBOX_FILE_HEADER_VERSION;
-
-	// Write the header first
-	Write<true>(&ptr, &header, sizeof(header));
-
-	const Reflection::ReflectionManager* reflection_manager = editor_state->ui_reflection->reflection;
-
-	// Write the type table
-	const Reflection::ReflectionType* sandbox_type = reflection_manager->GetType(STRING(EditorSandbox));
-	SerializeFieldTable(reflection_manager, sandbox_type, ptr);
-
-	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-	SerializeOptions options;
-	options.write_type_table = false;
-	options.error_message = &error_message;
-
-	for (size_t index = 0; index < header.count; index++) {
-		ECS_SERIALIZE_CODE code = Serialize(reflection_manager, sandbox_type, editor_state->sandboxes.buffer + index, ptr, &options);
-		if (code != ECS_SERIALIZE_OK) {
-			ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Faulty sandbox {#}. Detailed error message: {#}.", index, error_message);
+		// Write the header first
+		if (!write_instrument->Write(&header)) {
+			ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Could not write the header.");
 			EditorSetConsoleError(console_message);
 			return false;
 		}
-	}
 
-	size_t bytes_written = ptr - (uintptr_t)stack_buffer;
-	ECS_ASSERT(bytes_written <= STACK_CAPACITY);
-	// Now commit to the file
-	ECS_FILE_STATUS_FLAGS status = WriteBufferToFileBinary(absolute_path, { stack_buffer, bytes_written });
-	if (status != ECS_FILE_STATUS_OK) {
-		ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Failed to write to path {#}.", absolute_path);
-		EditorSetConsoleError(console_message);
+		const Reflection::ReflectionManager* reflection_manager = editor_state->ui_reflection->reflection;
 
-		return false;
-	}
+		// Write the type table
+		const Reflection::ReflectionType* sandbox_type = reflection_manager->GetType(STRING(EditorSandbox));
+		if (!SerializeFieldTable(reflection_manager, sandbox_type, write_instrument)) {
+			ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Could not write the serialization type table.");
+			EditorSetConsoleError(console_message);
+			return false;
+		}
 
-	return true;
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+		SerializeOptions options;
+		options.write_type_table = false;
+		options.error_message = &error_message;
+
+		for (size_t index = 0; index < header.count; index++) {
+			ECS_SERIALIZE_CODE code = Serialize(reflection_manager, sandbox_type, editor_state->sandboxes.buffer + index, write_instrument, &options);
+			if (code != ECS_SERIALIZE_OK) {
+				ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Faulty sandbox {#}. Detailed error message: {#}.", index, error_message);
+				EditorSetConsoleError(console_message);
+				return false;
+			}
+		}
+
+		return true;
+	});
 }

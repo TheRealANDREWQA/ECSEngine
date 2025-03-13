@@ -604,28 +604,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------------------
 
-	//ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
-	//	EntityManager* entity_manager,
-	//	Stream<wchar_t> filename,
-	//	DeserializeEntityManagerOptions* options
-	//)
-	//{
-	//	ECS_FILE_HANDLE file_handle = -1;
-	//	ECS_FILE_STATUS_FLAGS status = OpenFile(filename, &file_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL);
-	//	if (status != ECS_FILE_STATUS_OK) {
-	//		return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_OPEN_FILE;
-	//	}
-
-	//	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_status = DeserializeEntityManager(
-	//		entity_manager, 
-	//		file_handle, 
-	//		options
-	//	);
-	//	CloseFile(file_handle);
-	//	return deserialize_status;
-	//}
-
-	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManagerImpl(
+	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
 		EntityManager* entity_manager,
 		const FileReadInstrumentTarget& read_target,
 		DeserializeEntityManagerOptions* options
@@ -2305,8 +2284,6 @@ namespace ECSEngine {
 			data->link_base_data.reverse_function = module_links[index].reverse_function;
 			data->link_base_data.function = module_links[index].build_function;
 			data->link_base_data.asset_fields.InitializeAndCopy(allocator, asset_fields);
-			data->link_base_data.written_count_before = 0;
-			data->link_base_data.skipped_count_before = 0;
 
 			info.extra_data = data;
 			info.name = target_type->name;
@@ -2551,8 +2528,6 @@ namespace ECSEngine {
 			// A function inside the link check verifies that both are set
 			data->link_base_data.function = module_links[index].build_function;
 			data->link_base_data.reverse_function = module_links[index].reverse_function;
-			data->link_base_data.skipped_count_before = 0;
-			data->link_base_data.written_count_before = 0;
 			data->link_base_data.target_type = target_type;
 
 			info.extra_data = data;

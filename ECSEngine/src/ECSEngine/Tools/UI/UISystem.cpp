@@ -13409,7 +13409,8 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIConvertASCIIToWideData* data = (UIConvertASCIIToWideData*)_data;
-			size_t size = strlen(data->ascii);
+			// We must include the null terminator as well
+			size_t size = strlen(data->ascii) + 1;
 			ConvertASCIIToWide(data->wide, data->ascii, size);
 		}
 
@@ -13419,7 +13420,8 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIConvertASCIIToWideStreamData* data = (UIConvertASCIIToWideStreamData*)_data;
-			size_t size = strlen(data->ascii);
+			// We must include the null terminator as well
+			size_t size = strlen(data->ascii) + 1;
 			ECS_ASSERT(data->wide->capacity >= size);
 
 			ConvertASCIIToWide(data->wide->buffer, data->ascii, size);

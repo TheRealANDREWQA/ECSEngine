@@ -1503,15 +1503,11 @@ namespace ECSEngine {
 			deserialize_options.field_allocator = allocator;
 
 			SetSerializeCustomMaterialAssetDatabase(database);
-
+			
 			ECS_DESERIALIZE_CODE serialize_code = DeserializeEx(database->reflection_manager, asset_string, asset, metadata_file, &deserialize_options);
 
 			SetSerializeCustomMaterialAssetDatabase((AssetDatabase*)nullptr);
-
-			if (serialize_code == ECS_DESERIALIZE_OK) {
-				return true;
-			}
-			return false;
+			return serialize_code == ECS_DESERIALIZE_OK;
 		}
 		return true;
 	}
@@ -2681,7 +2677,6 @@ namespace ECSEngine {
 	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, ReadInstrument* read_instrument, DeserializeAssetDatabaseOptions options)
 	{
 		DeserializeOptions deserialize_options;
-		deserialize_options.file_allocator = database->Allocator();
 		deserialize_options.field_allocator = database->Allocator();
 
 		SetSerializeCustomMaterialAssetDatabase(database);

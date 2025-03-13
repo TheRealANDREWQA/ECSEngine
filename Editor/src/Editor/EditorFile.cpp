@@ -8,7 +8,7 @@ using namespace ECSEngine;
 ECS_TOOLS;
 
 #define SAVE_FILE_ERROR_MESSAGE "Saving editor file failed."
-#define LOAD_FILE_ERROR_MESSAGE "Loading editor file failed."
+//#define LOAD_FILE_ERROR_MESSAGE "Loading editor file failed."
 
 #define COMPILER_PATH_STRING "Compiler Path: "
 #define PROJECTS_STRING "Projects:"
@@ -110,7 +110,7 @@ bool SaveEditorFile(EditorState* editor_state) {
 	return false;
 }
 
-bool LoadEditorFile(EditorState* editor_state) {
+bool LoadEditorFile(EditorState* editor_state, CapacityStream<char>* error_message) {
 	HubData* hub_data = (HubData*)editor_state->hub_data;
 
 	Stream<char> file_data = ReadWholeFileText(EDITOR_FILE, editor_state->EditorAllocator());
@@ -127,6 +127,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 		});
 
 		if (!lines[0].StartsWith(COMPILER_PATH_STRING)) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "Editor settings do not start with a compiler path.");
 			return false;
 		}
 
@@ -141,6 +142,12 @@ bool LoadEditorFile(EditorState* editor_state) {
 		editor_state->settings.compiler_path = compiler_path.Copy(editor_state->EditorAllocator());
 		// Don't include the null terminator in the path size
 		editor_state->settings.compiler_path.size--;
+
+		// Check to see if the compiler path is valid
+		compiler_path.AddStreamAssert(L"\\MSBuild.exe");
+		if (!ExistsFileOrFolder(compiler_path)) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "Editor settings contain {#} as compiler path, but it is not a valid MSBuild.exe path. Make sure the path is adequate.", editor_state->settings.compiler_path);
+		}
 
 		hub_data->projects.size = 0;
 		if (lines[1].StartsWith(PROJECTS_STRING)) {
@@ -174,6 +181,21 @@ bool LoadEditorFile(EditorState* editor_state) {
 
 		return true;
 	}
+
+	// Try to auto generate the settings. Currently, only the compiler path is needed, which we can auto-detect
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+	ResizableStream<CompilerVersion> compiler_versions;
+	AutoDetectCompilers(&stack_allocator, &compiler_versions);
+
+	if (compiler_versions.size > 0) {
+		bool success = ChangeCompilerVersion(editor_state, compiler_versions[0].path);
+		if (!success) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "No editor file was found and auto generating a default file failed. Could not save the editor file after successfully generating a default.");
+		}
+		return success;
+	}
+
+	ECS_FORMAT_ERROR_MESSAGE(error_message, "There is no editor file and auto generating a default file failed. No compilers could be detected.");
 	return false;
 }
 
@@ -200,10 +222,9 @@ void SaveEditorFileAction(ActionData* action_data) {
 void LoadEditorFileAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	bool success = LoadEditorFile((EditorState*)_data);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+	bool success = LoadEditorFile((EditorState*)_data, &error_message);
 	if (!success) {
-		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		error_message.CopyOther(LOAD_FILE_ERROR_MESSAGE);
 		EditorSetConsoleError(error_message);
 	}
 }
