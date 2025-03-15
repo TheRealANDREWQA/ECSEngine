@@ -2636,6 +2636,9 @@ namespace ECSEngine {
 								state->click_handlers[index].phase
 							};
 						}
+						else {
+							clickable.handlers[0] = { SkipAction, nullptr, 0 };
+						}
 
 						config.AddFlag(clickable);
 

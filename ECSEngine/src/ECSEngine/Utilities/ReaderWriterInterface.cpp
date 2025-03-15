@@ -49,7 +49,7 @@ namespace ECSEngine {
 		if (target.is_instrument) {
 			return target.instrument;
 		}
-
+		
 		// Initialize a file instrument
 		Optional<OwningBufferedFileReadInstrument> instrument = OwningBufferedFileReadInstrument::Initialize(target.file, buffering_allocator, buffering_capacity, target.is_binary, error_message);
 		if (instrument.has_value) {
@@ -58,6 +58,35 @@ namespace ECSEngine {
 			return file_instrument;
 		}
 		return nullptr;
+	}
+
+	bool FileWriteInstrumentTarget::Write(CapacityStream<void>& buffering, CapacityStream<char>* error_message, bool(*functor)(void* data, WriteInstrument* write_instrument), void* data) const
+	{
+		if (is_instrument) {
+			bool success = functor(data, instrument);
+			instrument->SetSuccess(success);
+			return success;
+		}
+		else {
+			if (rename_extension.size == 0) {
+				Optional<OwningBufferedFileWriteInstrument> file_instrument = OwningBufferedFileWriteInstrument::Initialize(file, buffering, is_binary, error_message);
+				if (file_instrument.has_value) {
+					bool success = functor(data, &file_instrument.value);
+					file_instrument.value.SetSuccess(success);
+					return success;
+				}
+			}
+			else {
+				Optional<TemporaryRenameBufferedFileWriteInstrument> file_instrument = TemporaryRenameBufferedFileWriteInstrument::Initialize(file, buffering, is_binary, rename_extension, error_message);
+				if (file_instrument.has_value) {
+					bool success = functor(data, &file_instrument.value);
+					file_instrument.value.SetSuccess(success);
+					return success;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	WriteInstrument* FileWriteInstrumentTarget::GetInstrument(
@@ -80,6 +109,22 @@ namespace ECSEngine {
 		return FileWriteInstrumentTargetGetInstrumentImpl(*this, buffering_capacity, buffering_allocator, error_message, [&](size_t instrument_size) {
 			return Allocate(instrument_allocator, instrument_size);
 		});
+	}
+
+	bool FileReadInstrumentTarget::Read(CapacityStream<void>& buffering, CapacityStream<char>* error_message, bool(*functor)(void* data, ReadInstrument* read_instrument), void* data) const
+	{
+		if (is_instrument) {
+			return functor(data, instrument);
+		}
+		else {
+			Optional<OwningBufferedFileReadInstrument> file_instrument = OwningBufferedFileReadInstrument::Initialize(file, buffering, is_binary, error_message);
+			if (file_instrument.has_value) {
+				// At the moment, there is no set success needed
+				return functor(data, &file_instrument.value);
+			}
+		}
+
+		return false;
 	}
 
 	ReadInstrument* FileReadInstrumentTarget::GetInstrument(

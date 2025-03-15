@@ -250,7 +250,7 @@ namespace ECSEngine {
 			if (raw_input->header.dwType == RIM_TYPEMOUSE) {
 				// Handle the raw input
 				if (raw_input->data.mouse.lLastX != 0 || raw_input->data.mouse.lLastY != 0) {
-					mouse->AddDelta(raw_input[index].data.mouse.lLastX, raw_input[index].data.mouse.lLastY);
+					mouse->AddDelta(raw_input->data.mouse.lLastX, raw_input->data.mouse.lLastY);
 					if (mouse->m_wrap_position) {
 						HandleWrapping(mouse);
 					}

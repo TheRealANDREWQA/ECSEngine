@@ -335,7 +335,7 @@ void ChangeSandboxSceneAction(ActionData* action_data) {
 			if (relative_path.size == 0) {
 				// The scene is located in another folder root - inform the user
 				ECS_FORMAT_TEMP_STRING(console_message, "Failed to change path to {#} for sandbox {#} because the given file is "
-					"not located in the assets folder of the project", relative_path, data->sandbox_index);
+					"not located in the assets folder of the project", get_file_data.path, data->sandbox_index);
 				EditorSetConsoleError(console_message);
 			}
 			else {

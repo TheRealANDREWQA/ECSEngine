@@ -691,6 +691,7 @@ namespace ECSEngine {
 				ECS_ASSERT(total_size - data_storage->start_offset >= subrange_size, "Invalid ReadInstrument subinstrument call - the subrange exceeds the current state!");
 				data_storage->range_size = subrange_size;
 			}
+			subinstruments[subinstrument_count] = data_storage;
 			subinstrument_count++;
 
 			return { this };
@@ -751,6 +752,49 @@ namespace ECSEngine {
 			is_instrument = false;
 		}
 
+		// This overload use a default value for a stack buffering.
+		// Returns true if it succeeded, else false. The error message parameter can be set to nullptr if you
+		// Don't intend on receiving a string error message for the case when a file instrument is specified. 
+		// The functor will be called with (WriteInstrument* instrument) as parameter and it is expected to return true if it succeeded, else false.
+		template<typename Functor>
+		ECS_INLINE bool Write(CapacityStream<char>* error_message, Functor&& functor) const {
+			ECS_STACK_VOID_STREAM(buffering, ECS_KB * 64);
+			return Write(buffering, error_message, functor);
+		}
+
+		// Returns true if it succeeded, else false. The error message parameter can be set to nullptr if you
+		// Don't intend on receiving a string error message for the case when a file instrument is specified. 
+		// The functor will be called with (WriteInstrument* instrument) as parameter and it is expected to return true if it succeeded, else false.
+		template<typename Functor>
+		ECS_INLINE bool Write(size_t buffering_capacity, AllocatorPolymorphic buffering_allocator, CapacityStream<char>* error_message, Functor&& functor) const {
+			CapacityStream<void> buffering;
+			// Ensure that the buffering does not exceed the capacity stream maximum value
+			ECS_ASSERT(buffering_capacity <= UINT_MAX);
+			buffering.Initialize(buffering_allocator, buffering_capacity);
+			return Write(buffering, error_message, functor);
+		}
+
+		// Returns true if it succeeded, else false. The error message parameter can be set to nullptr if you
+		// Don't intend on receiving a string error message for the case when a file instrument is specified. 
+		// The functor will be called with (WriteInstrument* instrument) as parameter and it is expected to return true if it succeeded, else false.
+		template<typename Functor>
+		ECS_INLINE bool Write(CapacityStream<void>& buffering, CapacityStream<char>* error_message, Functor functor) const {
+			auto wrapper = [](void* data, WriteInstrument* write_instrument) -> bool {
+				Functor* functor = (Functor*)data;
+				return (*functor)(write_instrument);
+			};
+
+			return Write(buffering, error_message, wrapper, &functor);
+		}
+
+	private:
+		// This is the internal function that the template variants call, such that we can include the buffered file writers in the .cpp
+		// In order to avoid a cyclical reference in the headers
+		bool Write(CapacityStream<void>& buffering, CapacityStream<char>* error_message, bool (*functor)(void* data, WriteInstrument* write_instrument), void* data) const;
+
+		// TODO: Maybe these functions should be dropped? The best API is to provide a functor that is executed
+		// With a write instrument
+
 		// Returns the appropriate write instrument for the provided target. If the target already
 		// Contains a write instrument, it will return that write instrument. In case a file path is
 		// Specified, then it will attempt to initialize a proper write instrument specified by the target 
@@ -778,6 +822,8 @@ namespace ECSEngine {
 			AllocatorPolymorphic buffering_allocator,
 			CapacityStream<char>* error_message = nullptr
 		) const;
+
+	public:
 
 		union {
 			WriteInstrument* instrument;
@@ -818,6 +864,49 @@ namespace ECSEngine {
 			is_instrument = false;
 		}
 
+		// This overload use a default value for a stack buffering.
+		// Returns true if it succeeded, else false. The error message parameter can be set to nullptr if you
+		// Don't intend on receiving a string error message for the case when a file instrument is specified. 
+		// The functor will be called with (ReadInstrument* instrument) as parameter and it is expected to return true if it succeeded, else false.
+		template<typename Functor>
+		ECS_INLINE bool Read(CapacityStream<char>* error_message, Functor&& functor) const {
+			ECS_STACK_VOID_STREAM(buffering, ECS_KB * 64);
+			return Read(buffering, error_message, functor);
+		}
+
+		// Returns true if it succeeded, else false. The error message parameter can be set to nullptr if you
+		// Don't intend on receiving a string error message for the case when a file instrument is specified. 
+		// The functor will be called with (ReadInstrument* instrument) as parameter and it is expected to return true if it succeeded, else false.
+		template<typename Functor>
+		ECS_INLINE bool Read(size_t buffering_capacity, AllocatorPolymorphic buffering_allocator, CapacityStream<char>* error_message, Functor&& functor) const {
+			CapacityStream<void> buffering;
+			// Ensure that the buffering capacity fits into the integer range of the capacity stream
+			ECS_ASSERT(buffering_capacity <= UINT_MAX);
+			buffering.Initialize(buffering_allocator, buffering_capacity);
+			return Read(buffering, error_message, functor);
+		}
+
+		// Returns true if it succeeded, else false. The error message parameter can be set to nullptr if you
+		// Don't intend on receiving a string error message for the case when a file instrument is specified. 
+		// The functor will be called with (ReadInstrument* instrument) as parameter and it is expected to return true if it succeeded, else false.
+		template<typename Functor>
+		ECS_INLINE bool Read(CapacityStream<void>& buffering, CapacityStream<char>* error_message, Functor functor) const {
+			auto wrapper = [](void* data, ReadInstrument* read_instrument) -> bool {
+				Functor* functor_pointer = (Functor*)data;
+				return (*functor_pointer)(read_instrument);
+			};
+
+			return Read(buffering, error_message, wrapper, &functor);
+		}
+
+	private:
+		// This is the internal function that the template variants call, such that we can include the buffered file readers in the .cpp
+		// In order to avoid a cyclical reference in the headers
+		bool Read(CapacityStream<void>& buffering, CapacityStream<char>* error_message, bool (*functor)(void* data, ReadInstrument* read_instrument), void* data) const;
+
+		// TODO: Maybe these functions should be dropped? The best API is to provide a functor that is executed
+		// With a read instrument
+
 		// Returns the appropriate read instrument for the provided target. If the target already
 		// Contains a read instrument, it will return that read instrument. In case a file path is
 		// Specified, then it will attempt to initialize a proper read instrument specified by the target 
@@ -843,6 +932,8 @@ namespace ECSEngine {
 			AllocatorPolymorphic buffering_allocator,
 			CapacityStream<char>* error_message = nullptr
 		) const;
+
+	public:
 
 		union {
 			ReadInstrument* instrument;

@@ -3,7 +3,7 @@
 
 namespace ECSEngine {
 
-	OwningBufferedFileWriteInstrument::OwningBufferedFileWriteInstrument(Stream<wchar_t> _file_path, Stream<void> _buffering, bool binary_file, CapacityStream<char>* error_message) 
+	OwningBufferedFileWriteInstrument::OwningBufferedFileWriteInstrument(Stream<wchar_t> _file_path, CapacityStream<void> _buffering, bool binary_file, CapacityStream<char>* error_message) 
 		: is_buffering_allocated(false), is_failed(true), file_path(_file_path), is_set_success_called(false)
 	{
 		ECS_FILE_HANDLE file_handle = -1;
@@ -14,7 +14,7 @@ namespace ECSEngine {
 
 		file = status == ECS_FILE_STATUS_OK ? file_handle : -1;
 		initial_file_offset = 0;
-		buffering.InitializeFromBuffer(_buffering.buffer, 0, _buffering.size);
+		buffering = _buffering;
 	}
 
 	OwningBufferedFileWriteInstrument::OwningBufferedFileWriteInstrument(
@@ -25,7 +25,7 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message
 	)
 		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
-		: OwningBufferedFileWriteInstrument(file_path, Stream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, _buffering_size), binary_file, error_message) {
+		: OwningBufferedFileWriteInstrument(file_path, CapacityStream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, 0, _buffering_size), binary_file, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;
@@ -36,7 +36,7 @@ namespace ECSEngine {
 		}
 	}
 
-	TemporaryRenameBufferedFileWriteInstrument::TemporaryRenameBufferedFileWriteInstrument(Stream<wchar_t> absolute_file_path, Stream<void> _buffering, 
+	TemporaryRenameBufferedFileWriteInstrument::TemporaryRenameBufferedFileWriteInstrument(Stream<wchar_t> absolute_file_path, CapacityStream<void> _buffering, 
 		bool binary_file, Stream<wchar_t> _rename_extension, CapacityStream<char>* error_message)
 		: is_buffering_allocated(false), rename_extension(_rename_extension), original_file(absolute_file_path), is_initialization_failed(true), is_failed(true),
 		is_renaming_performed(false), is_set_success_called(false)
@@ -64,7 +64,7 @@ namespace ECSEngine {
 
 		file = status == ECS_FILE_STATUS_OK ? file_handle : -1;
 		initial_file_offset = 0;
-		buffering.InitializeFromBuffer(_buffering.buffer, 0, _buffering.size);
+		buffering = _buffering;
 
 		if (status != ECS_FILE_STATUS_OK) {
 			// Perform the rename back to the previous name, since creating the file failed
@@ -89,7 +89,7 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message
 	)
 		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
-		: TemporaryRenameBufferedFileWriteInstrument(absolute_file_path, Stream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, _buffering_size), binary_file, _rename_extension, error_message) {
+		: TemporaryRenameBufferedFileWriteInstrument(absolute_file_path, CapacityStream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, 0, _buffering_size), binary_file, _rename_extension, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;
@@ -228,7 +228,7 @@ namespace ECSEngine {
 		}
 	}
 
-	OwningBufferedFileReadInstrument::OwningBufferedFileReadInstrument(Stream<wchar_t> file_path, Stream<void> _buffering, bool binary_file, CapacityStream<char>* error_message) : is_buffering_allocated(false) {
+	OwningBufferedFileReadInstrument::OwningBufferedFileReadInstrument(Stream<wchar_t> file_path, CapacityStream<void> _buffering, bool binary_file, CapacityStream<char>* error_message) : is_buffering_allocated(false) {
 		ECS_FILE_HANDLE file_handle = -1;
 		ECS_FILE_ACCESS_FLAGS access_flags = ECS_FILE_ACCESS_READ_ONLY;
 		access_flags |= binary_file ? ECS_FILE_ACCESS_BINARY : ECS_FILE_ACCESS_TEXT;
@@ -237,7 +237,7 @@ namespace ECSEngine {
 
 		file = status == ECS_FILE_STATUS_OK ? file_handle : -1;
 		initial_file_offset = 0;
-		buffering.InitializeFromBuffer(_buffering.buffer, 0, _buffering.size);
+		buffering = _buffering;
 
 		if (status == ECS_FILE_STATUS_OK) {
 			total_size = GetFileByteSize(file);
@@ -246,7 +246,7 @@ namespace ECSEngine {
 
 	OwningBufferedFileReadInstrument::OwningBufferedFileReadInstrument(Stream<wchar_t> file_path, AllocatorPolymorphic _buffering_allocator, size_t _buffering_size, bool binary_file, CapacityStream<char>* error_message)
 		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
-		: OwningBufferedFileReadInstrument(file_path, Stream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, _buffering_size), binary_file, error_message) {
+		: OwningBufferedFileReadInstrument(file_path, CapacityStream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, 0, _buffering_size), binary_file, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;
