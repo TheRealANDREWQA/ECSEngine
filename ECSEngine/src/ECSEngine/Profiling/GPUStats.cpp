@@ -11,7 +11,7 @@
 namespace ECSEngine {
 
 	/*
-		At the moment, this works only for Nvidia cards only
+		At the moment, this works only for Nvidia cards only.
 	*/
 	static NvPhysicalGpuHandle gpu_handle;
 

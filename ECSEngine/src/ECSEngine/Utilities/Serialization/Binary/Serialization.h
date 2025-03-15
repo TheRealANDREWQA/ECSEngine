@@ -173,7 +173,7 @@ namespace ECSEngine {
 
 		const DeserializeFieldTable* field_table = nullptr;
 		// It is used for skipping fields. It can be specified such that it won't need to be recreated multiple times
-		Reflection::ReflectionManager* deserialized_field_manager = nullptr;
+		const Reflection::ReflectionManager* deserialized_field_manager = nullptr;
 
 		bool read_type_table = true;
 		bool read_type_table_tags = false;
@@ -298,15 +298,25 @@ namespace ECSEngine {
 		const DeserializeFieldTableOptions* options = nullptr
 	);;
 
-	// It will ignore the current type. It must be placed after the deserialize table has been called on the
-	// the data. If the deserialized manager is not available, it will create it inside (useful for ignoring
-	// multiple elements from the same time). Can optionally give an array of name_remappings
+	// It will ignore the current type (the first type in the field table). If the deserialized manager is not available, 
+	// it will create it inside (useful for ignoring multiple elements from the same time). Can optionally give an array of name_remappings
 	ECSENGINE_API bool IgnoreDeserialize(
 		ReadInstrument* read_instrument,
-		DeserializeFieldTable field_table,
+		const DeserializeFieldTable& field_table,
 		const DeserializeFieldTableOptions* options = nullptr,
 		const Reflection::ReflectionManager* deserialized_manager = nullptr,
-		Stream<DeserializeTypeNameRemapping> name_remapping = { nullptr, 0 }
+		Stream<DeserializeTypeNameRemapping> name_remapping = {}
+	);
+
+	// It will ignore a type identified by the index inside the field table. If the deserialized manager is not available, 
+	// it will create it inside (useful for ignoring multiple elements from the same time). Can optionally give an array of name_remappings
+	ECSENGINE_API bool IgnoreDeserialize(
+		ReadInstrument* read_instrument,
+		const DeserializeFieldTable& field_table,
+		unsigned int field_table_type_index,
+		const DeserializeFieldTableOptions* options = nullptr,
+		const Reflection::ReflectionManager* deserialized_manager = nullptr,
+		Stream<DeserializeTypeNameRemapping> name_remappings = {}
 	);
 
 	struct SerializeReflectionManagerOptions {

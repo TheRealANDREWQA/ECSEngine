@@ -799,6 +799,7 @@ namespace ECSEngine {
 					DeserializeOptions options;
 					options.read_type_table = false;
 					options.field_table = &deserialize_table;
+					options.deserialized_field_manager = deserialized_manager;
 
 					// Use the read with the read data set to false.
 					SerializeCustomTypeReadFunctionData read_data;
@@ -810,6 +811,7 @@ namespace ECSEngine {
 					read_data.read_instrument = read_instrument;
 					read_data.version = deserialize_table.custom_serializers[custom_serializer_index];
 					read_data.tags = info->tag;
+					read_data.ignore_data = true;
 
 					success &= ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].read(&read_data);
 				}
@@ -1038,7 +1040,7 @@ namespace ECSEngine {
 			LinearAllocator temp_allocator(temp_allocator_buffer, temp_allocator_size);
 
 			ReflectionManager _temporary_manager;
-			ReflectionManager* deserialized_manager = has_options ? options->deserialized_field_manager : nullptr;
+			const ReflectionManager* deserialized_manager = has_options ? options->deserialized_field_manager : nullptr;
 			if (deserialized_manager == nullptr) {
 				// Create a temporary deserialized manager that can be used with the ignore calls
 				_temporary_manager.type_definitions.Initialize(&temp_allocator, HashTableCapacityForElements(deserialize_table.types.size));
@@ -2138,6 +2140,10 @@ namespace ECSEngine {
 		}
 		field_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
 
+		if (field_table.serialize_version != SERIALIZE_FIELD_TABLE_VERSION) {
+			return false;
+		}
+
 		unsigned int custom_serializer_count = 0;
 		if (!read_instrument->Read(&custom_serializer_count)) {
 			return false;
@@ -2349,13 +2355,27 @@ namespace ECSEngine {
 
 	bool IgnoreDeserialize(
 		ReadInstrument* read_instrument,
-		DeserializeFieldTable field_table,
+		const DeserializeFieldTable& field_table,
+		const DeserializeFieldTableOptions* options,
+		const ReflectionManager* deserialized_manager,
+		Stream<DeserializeTypeNameRemapping> name_remappings
+	) {
+		return IgnoreDeserialize(read_instrument, field_table, 0, options, deserialized_manager, name_remappings);
+	}
+
+	bool IgnoreDeserialize(
+		ReadInstrument* read_instrument,
+		const DeserializeFieldTable& field_table,
+		unsigned int field_table_type_index,
 		const DeserializeFieldTableOptions* options,
 		const ReflectionManager* deserialized_manager,
 		Stream<DeserializeTypeNameRemapping> name_remappings
 	)
 	{
-		field_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
+		// TODO: At the moment, the name_remappings is not used. Should it be removed?
+
+		DeserializeFieldTable versioned_table = field_table;
+		versioned_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
 
 		ReflectionManager temp_manager;
 		size_t stack_allocation_size = deserialized_manager == nullptr ? ECS_KB * 32 : 0;
@@ -2364,11 +2384,11 @@ namespace ECSEngine {
 		if (deserialized_manager == nullptr) {
 			deserialized_manager = &temp_manager;
 			temp_manager.type_definitions.Initialize(&linear_allocator, 32);
-			field_table.ToNormalReflection(&temp_manager, &linear_allocator);
+			versioned_table.ToNormalReflection(&temp_manager, &linear_allocator);
 		}
 
 		// The type to be ignored is the first one from the field table
-		return IgnoreType(read_instrument, field_table, 0, deserialized_manager);
+		return IgnoreType(read_instrument, versioned_table, field_table_type_index, deserialized_manager);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------

@@ -23,7 +23,7 @@ namespace ECSEngine {
 	struct BufferedFileWriteInstrument : WriteInstrument {
 		ECS_WRITE_INSTRUMENT_HELPER;
 
-		ECS_INLINE BufferedFileWriteInstrument() : buffering(), file(-1), initial_file_offset(0), buffering_entire_write_size(0), maximum_file_size(0) {}
+		ECS_INLINE BufferedFileWriteInstrument() : buffering(), file(-1), initial_file_offset(0), buffering_entire_write_size(0), maximum_file_size(0), overall_file_offset(0) {}
 		// Force the user to specify the initial file offset
 		ECS_INLINE BufferedFileWriteInstrument(ECS_FILE_HANDLE _file, CapacityStream<void> _buffering, size_t _initial_file_offset) : file(_file), buffering(_buffering), 
 			initial_file_offset(_initial_file_offset), overall_file_offset(_initial_file_offset), buffering_entire_write_size(_buffering.size), maximum_file_size(_initial_file_offset) {}
@@ -111,8 +111,10 @@ namespace ECSEngine {
 			break;
 			case ECS_INSTRUMENT_SEEK_END:
 			{
-				// For seeking at the end, we must use maximum_file_size
-				relative_offset_seek_difference = (int64_t)(maximum_file_size - GetOffset()) + offset;
+				// For seeking at the end, we must use maximum_file_size. The order is reversed,
+				// Current offset - maximum_file_size because a positive offset means go back,
+				// A negative offset means go forward
+				relative_offset_seek_difference = (int64_t)(GetOffset() - maximum_file_size) - offset;
 			}
 			break;
 			default:
@@ -126,6 +128,8 @@ namespace ECSEngine {
 					// To record the maximum buffering capacity
 					buffering_entire_write_size = max(buffering_entire_write_size, buffering.size);
 					buffering.size -= relative_offset_seek_difference;
+					// Don't forget about updating the file offset
+					overall_file_offset -= relative_offset_seek_difference;
 					return true;
 				}
 			}
@@ -134,6 +138,8 @@ namespace ECSEngine {
 				if (-relative_offset_seek_difference <= (int64_t)(buffering_entire_write_size - buffering.size)) {
 					// We can move forward
 					buffering.size += (unsigned int)-relative_offset_seek_difference;
+					// Don't forget about updating the file offset
+					overall_file_offset -= relative_offset_seek_difference;
 					return true;
 				}
 			}
@@ -222,7 +228,7 @@ namespace ECSEngine {
 	private:
 		// The provided path must be stable, until this instance is destroyed
 		// The error message pointer is optional, in case there is an error in opening the file, it will fill in that array
-		OwningBufferedFileWriteInstrument(Stream<wchar_t> file_path, Stream<void> _buffering, bool binary_file = true, CapacityStream<char>* error_message = nullptr);
+		OwningBufferedFileWriteInstrument(Stream<wchar_t> file_path, CapacityStream<void> _buffering, bool binary_file = true, CapacityStream<char>* error_message = nullptr);
 
 		// The provided path must be stable, until this instance is destroyed
 		// The error message pointer is optional, in case there is an error in opening the file, it will fill in that array
@@ -280,7 +286,7 @@ namespace ECSEngine {
 		}
 
 		// Returns an empty optional if the initialization failed, else the properly initialized instrument
-		ECS_INLINE static Optional<OwningBufferedFileWriteInstrument> Initialize(Stream<wchar_t> file_path, Stream<void> _buffering, bool binary_file = true, CapacityStream<char>* error_message = nullptr) {
+		ECS_INLINE static Optional<OwningBufferedFileWriteInstrument> Initialize(Stream<wchar_t> file_path, CapacityStream<void> _buffering, bool binary_file = true, CapacityStream<char>* error_message = nullptr) {
 			Optional<OwningBufferedFileWriteInstrument> instrument = OwningBufferedFileWriteInstrument(file_path, _buffering, binary_file, error_message);
 			if (instrument.value.IsInitializationFailed()) {
 				instrument.has_value = false;
@@ -300,7 +306,7 @@ namespace ECSEngine {
 		// Calls the functor with a OwningBufferedFileWriteInstrument* argument and expects the functor to return true, if the write operation
 		// Succeeded, else false. It handles the proper initialization and final SetSuccess calls, such that you don't miss them
 		template<typename Functor>
-		static bool WriteTo(Stream<wchar_t> file_path, Stream<void> buffering, Functor&& functor, bool binary_file = true, CapacityStream<char>* error_message = nullptr) {
+		static bool WriteTo(Stream<wchar_t> file_path, CapacityStream<void> buffering, Functor&& functor, bool binary_file = true, CapacityStream<char>* error_message = nullptr) {
 			Optional<OwningBufferedFileWriteInstrument> instrument = Initialize(file_path, buffering, binary_file, error_message);
 			if (!instrument.has_value) {
 				return false;
@@ -334,7 +340,7 @@ namespace ECSEngine {
 		// The file path and the rename extension must be stable until this instance is destroyed. The provided file path
 		// Must be absolute, not relative. By default, if the file doesn't exist, it will not fail, it will continue normally
 		// The error message pointer is optional, in case there is an error in opening the file, it will fill in that array
-		TemporaryRenameBufferedFileWriteInstrument(Stream<wchar_t> absolute_file_path, Stream<void> _buffering, bool binary_file, Stream<wchar_t> _rename_extension, CapacityStream<char>* error_message);
+		TemporaryRenameBufferedFileWriteInstrument(Stream<wchar_t> absolute_file_path, CapacityStream<void> _buffering, bool binary_file, Stream<wchar_t> _rename_extension, CapacityStream<char>* error_message);
 
 		// The file path and the rename extension must be stable until this instance is destroyed. The provided file path
 		// Must be absolute, not relative. By default, if the file doesn't exist, it will not fail, it will continue normally
@@ -387,7 +393,7 @@ namespace ECSEngine {
 		}
 
 		// Returns an empty optional if the initialization failed, else the properly initialized instrument
-		ECS_INLINE static Optional<TemporaryRenameBufferedFileWriteInstrument> Initialize(Stream<wchar_t> absolute_file_path, Stream<void> _buffering, bool binary_file = true, Stream<wchar_t> _rename_extension = L".temp", CapacityStream<char>* error_message = nullptr) {
+		ECS_INLINE static Optional<TemporaryRenameBufferedFileWriteInstrument> Initialize(Stream<wchar_t> absolute_file_path, CapacityStream<void> _buffering, bool binary_file = true, Stream<wchar_t> _rename_extension = L".temp", CapacityStream<char>* error_message = nullptr) {
 			Optional<TemporaryRenameBufferedFileWriteInstrument> instrument = TemporaryRenameBufferedFileWriteInstrument(absolute_file_path, _buffering, binary_file, _rename_extension, error_message);
 			if (instrument.value.IsInitializationFailed()) {
 				instrument.has_value = false;
@@ -408,7 +414,7 @@ namespace ECSEngine {
 		// Calls the functor with a TemporaryRenameBufferedFileWriteInstrument* argument and expects the functor to return true, if the write operation
 		// Succeeded, else false. It handles the proper initialization and final SetSuccess calls, such that you don't miss them
 		template<typename Functor>
-		static bool WriteTo(Stream<wchar_t> file_path, Stream<void> buffering, Functor&& functor, bool binary_file = true, Stream<wchar_t> rename_extension = L".temp", CapacityStream<char>* error_message = nullptr) {
+		static bool WriteTo(Stream<wchar_t> file_path, CapacityStream<void> buffering, Functor&& functor, bool binary_file = true, Stream<wchar_t> rename_extension = L".temp", CapacityStream<char>* error_message = nullptr) {
 			Optional<TemporaryRenameBufferedFileWriteInstrument> instrument = Initialize(file_path, buffering, binary_file, rename_extension, error_message);
 			if (!instrument.has_value) {
 				return false;
@@ -498,7 +504,7 @@ namespace ECSEngine {
 	struct ECSENGINE_API OwningBufferedFileReadInstrument : BufferedFileReadInstrument {
 	private:
 		// The error message pointer is optional, in case there is an error in opening the file, it will fill in that array
-		OwningBufferedFileReadInstrument(Stream<wchar_t> file_path, Stream<void> _buffering, bool binary_file = true, CapacityStream<char>* error_message = nullptr);
+		OwningBufferedFileReadInstrument(Stream<wchar_t> file_path, CapacityStream<void> _buffering, bool binary_file = true, CapacityStream<char>* error_message = nullptr);
 
 		// The error message pointer is optional, in case there is an error in opening the file, it will fill in that array
 		OwningBufferedFileReadInstrument(Stream<wchar_t> file_path, AllocatorPolymorphic _buffering_allocator, size_t _buffering_size, bool binary_file = true, CapacityStream<char>* error_message = nullptr);
@@ -537,7 +543,7 @@ namespace ECSEngine {
 		}
 
 		// Returns an empty optional if the initialization failed, else the properly initialized instrument
-		ECS_INLINE static Optional<OwningBufferedFileReadInstrument> Initialize(Stream<wchar_t> file_path, Stream<void> _buffering, bool binary_file = true, CapacityStream<char>* error_message = nullptr) {
+		ECS_INLINE static Optional<OwningBufferedFileReadInstrument> Initialize(Stream<wchar_t> file_path, CapacityStream<void> _buffering, bool binary_file = true, CapacityStream<char>* error_message = nullptr) {
 			Optional<OwningBufferedFileReadInstrument> instrument = OwningBufferedFileReadInstrument(file_path, _buffering, binary_file, error_message);
 			if (instrument.value.IsInitializationFailed()) {
 				instrument.has_value = false;

@@ -230,11 +230,11 @@ namespace ECSEngine {
 
 		bool success = true;
 		ReadInstrument* read_instrument = data->read_instrument;
-		bool is_not_size_determination = !read_instrument->IsSizeDetermination();
+		bool read_data = !data->ShouldIgnoreData();
 
 		void* user_data = ECS_SERIALIZE_CUSTOM_TYPES[Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET].user_data;
 		bool do_not_increment_dependencies = ECS_SERIALIZE_CUSTOM_TYPES[Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET].switches[ECS_ASSET_MATERIAL_SERIALIZE_DO_NOT_INCREMENT_DEPENDENCIES];
-		if (is_not_size_determination) {
+		if (read_data) {
 			ECS_ASSERT(user_data != nullptr);
 		}
 
@@ -243,13 +243,13 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic allocator = data->options->field_allocator;
 
-		if (is_not_size_determination && (asset->reflection_manager == nullptr || data->was_allocated)) {
+		if (read_data && (asset->reflection_manager == nullptr || data->was_allocated)) {
 			asset->reflection_manager = (Reflection::ReflectionManager*)Allocate(allocator, sizeof(Reflection::ReflectionManager));
 			*asset->reflection_manager = Reflection::ReflectionManager(allocator, 0, 0);
 		}
 
 		Stream<char> asset_name = { nullptr, 0 };
-		if (is_not_size_determination) {
+		if (read_data) {
 			success &= read_instrument->ReadWithSizeVariableLength(asset_name, allocator);
 		}
 		else {
@@ -268,7 +268,7 @@ namespace ECSEngine {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 		AllocatorPolymorphic temp_allocator = &stack_allocator;
 
-		if (is_not_size_determination) {
+		if (read_data) {
 			unsigned int int_counts[ECS_MATERIAL_SHADER_COUNT * 3];
 			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT * 3; index++) {
 				int_counts[index] = counts[index];
@@ -291,7 +291,7 @@ namespace ECSEngine {
 				unsigned char slot = 0;
 				success &= read_instrument->Read(&slot);
 
-				if (is_not_size_determination) {
+				if (read_data) {
 					name_buffer.size = 0;
 					file_buffer.size = 0;
 					success &= read_instrument->ReadWithSizeVariableLength(name_buffer);
@@ -326,7 +326,7 @@ namespace ECSEngine {
 				unsigned char slot = 0;
 				success &= read_instrument->Read(&slot);
 
-				if (is_not_size_determination) {
+				if (read_data) {
 					name_buffer.size = 0;
 					success &= read_instrument->ReadWithSizeVariableLength(name_buffer);
 					if (!success) {
@@ -360,7 +360,7 @@ namespace ECSEngine {
 				success &= read_instrument->Read(&slot);
 				success &= read_instrument->Read(&dynamic);
 				
-				if (is_not_size_determination) {
+				if (read_data) {
 					// Read the name
 					success &= read_instrument->ReadWithSizeVariableLength(asset->buffers[type][index].name, allocator);
 					asset->buffers[type][index].dynamic = dynamic;
@@ -379,7 +379,7 @@ namespace ECSEngine {
 				}
 
 				auto read_data_with_reflection_type = [&]() {
-					if (is_not_size_determination) {
+					if (read_data) {
 						// Read the deserialize field table
 						DeserializeFieldTableOptions field_options;
 						field_options.read_type_tags = true;
@@ -430,7 +430,7 @@ namespace ECSEngine {
 				};
 
 				auto read_data_without_reflection_type = [&]() {
-					if (is_not_size_determination) {
+					if (read_data) {
 						success &= read_instrument->ReadWithSizeVariableLength(asset->buffers[type][index].data, allocator);
 						asset->buffers[type][index].reflection_type = nullptr;
 					}
@@ -475,7 +475,7 @@ namespace ECSEngine {
 			}
 		}
 
-		if (is_not_size_determination) {
+		if (read_data) {
 			name_buffer.size = 0;
 			success &= read_instrument->ReadWithSizeVariableLength(name_buffer);
 

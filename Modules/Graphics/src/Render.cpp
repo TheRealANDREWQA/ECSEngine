@@ -262,7 +262,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 						float3 camera_distance = translation_midpoint - camera.translation;
 						float distance = Length(camera_distance);			
 
-						float constant_viewport_size = GetConstantObjectSizeInPerspective(camera.fov, distance, 0.25f);
+						float constant_viewport_size = GetConstantObjectSizeInPerspective(camera.fov, distance, 0.2f);
 
 						// Now display the aggregate tool
 						DebugDrawOptions debug_options;

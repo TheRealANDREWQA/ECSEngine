@@ -331,12 +331,19 @@ namespace ECSEngine {
 
 	struct DeserializeOptions;
 
-	struct SerializeCustomTypeReadFunctionData {
+	struct ECSENGINE_API SerializeCustomTypeReadFunctionData {
+		// Returns true if the functor should ignore the data, meaning it shouldn't
+		// Actually write into the deserialize target
+		bool ShouldIgnoreData() const;
+
 		// TODO: Enhance this to contain the versions for each custom serializer type
 		unsigned int version;
 		// This can be used by custom serializers to take into consideration that this field
 		// was allocated prior - fields should be considered invalid
 		bool was_allocated;
+		// This flag can be set even for instruments that are not size determination, in order
+		// To skip the data, not to actual read it
+		bool ignore_data = false;
 
 		ReadInstrument* read_instrument;
 		const Reflection::ReflectionManager* reflection_manager;
@@ -456,13 +463,21 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
+	enum class ReadOrReferenceFundamentalTypeFlag : unsigned char {
+		None,
+		ForceAllocation,
+		IgnoreData
+	};
+
+	ECS_ENUM_BITWISE_OPERATIONS(ReadOrReferenceFundamentalTypeFlag);
+
 	// If the allocator is nullptr, then it will just reference the data
 	// If the type is basic type array, the number elements to be read needs to be specified
 	// because if reading from a file and the number of elements has changed, then we need to adjust
 	// the reading as well. If the allocate_soa_pointer is set to true, then it will allocate
 	// All SoA pointers, else it will let you perform the allocation and assignment, and write directly
 	// Into it
-	template<bool force_allocation = false>
+	template<ReadOrReferenceFundamentalTypeFlag flag = ReadOrReferenceFundamentalTypeFlag::None>
 	ECSENGINE_API bool ReadOrReferenceFundamentalType(
 		const Reflection::ReflectionFieldInfo& info,
 		void* data,
