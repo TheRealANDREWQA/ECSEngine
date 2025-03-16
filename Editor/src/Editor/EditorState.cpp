@@ -662,8 +662,14 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// Change the dump type to none during the hub phase
 	console->SetDumpType(ECS_CONSOLE_DUMP_NONE);
 
-	bool gpu_stats_success = InitializeGPUStatsRecording();
-	if (!gpu_stats_success) {
+	size_t gpu_vendor_id;
+	size_t gpu_device_id;
+	ECS_STACK_CAPACITY_STREAM(char, gpu_description, 512);
+	editor_state->graphics->GetPhysicalDeviceDescription(gpu_description, &gpu_vendor_id, &gpu_device_id);
+
+	ECS_INITIALIZE_GPU_STATS_STATUS gpu_stats_status = InitializeGPUStatsRecording(gpu_description, gpu_vendor_id, gpu_device_id);
+	// In case the gpu stats could not be initialized because of the vendor not being supported, don't emit an error message
+	if (gpu_stats_status == ECS_INITIALIZE_GPU_STATS_FAILURE) {
 		EditorSetConsoleError("Failed to initialize GPU stats recording support");
 	}
 

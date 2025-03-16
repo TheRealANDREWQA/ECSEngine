@@ -926,6 +926,12 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 		characters[characters.size] = '\0';
 	}
 
+	// Converts hex characters (both uppercase and lowercase letters) into their decimal value
+	ECSENGINE_API unsigned char ConvertHexCharacterToDecimal(char character);
+
+	// Converts a hex string into an integer. It handles both cases, hex numbers that start with 0x and those that do not
+	ECSENGINE_API size_t ConvertHexToInt(Stream<char> characters);
+
 	namespace Internal {
 		// Returns how many total characters have been written in the x component
 		// and in the y component the offset into the base characters where the string was found

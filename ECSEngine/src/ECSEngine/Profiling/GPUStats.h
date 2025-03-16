@@ -7,6 +7,17 @@
 
 namespace ECSEngine {
 
+	enum GraphicsVendor : unsigned char {
+		ECS_GRAPHICS_VENDOR_NVIDIA,
+		ECS_GRAPHICS_VENDOR_AMD,
+		ECS_GRAPHICS_VENDOR_INTEL,
+		ECS_GRAPHICS_VENDOR_COUNT
+	};
+
+	// Tries to determine the GPU vendor for the a device identified with a string description
+	// And a vendor_id.
+	ECSENGINE_API GraphicsVendor DetermineGraphicsVendor(Stream<char> description, size_t vendor_id);
+
 	struct ECS_REFLECT GPUStats {
 		ECS_INLINE GPUStats() {
 			memset(this, 0, sizeof(*this));
@@ -29,7 +40,13 @@ namespace ECSEngine {
 		float power_draw;
 	};
 
-	ECSENGINE_API bool InitializeGPUStatsRecording();
+	enum ECS_INITIALIZE_GPU_STATS_STATUS : unsigned char {
+		ECS_INITIALIZE_GPU_STATS_OK,
+		ECS_INITIALIZE_GPU_STATS_FAILURE,
+		ECS_INITIALIZE_GPU_STATS_UNSUPPORTED_VENDOR
+	};
+
+	ECSENGINE_API ECS_INITIALIZE_GPU_STATS_STATUS InitializeGPUStatsRecording(Stream<char> gpu_description, size_t vendor_id, size_t device_id);
 
 	ECSENGINE_API void FreeGPUStatsRecording();
 

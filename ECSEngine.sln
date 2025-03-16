@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.28729.10
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35825.156
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ECSEngine", "ECSEngine\ECSEngine.vcxproj", "{762CF8CA-E296-AC41-2BD5-5DE7977E8A96}"
 EndProject
@@ -19,6 +19,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Graphics", "Modules\Graphics\Graphics.vcxproj", "{737DA5FD-1447-4B07-B900-2FC298AD259B}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Physics", "Modules\Physics\Physics.vcxproj", "{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ADLX", "ECSEngine\Dependencies\ADLX\ADLX.vcxproj", "{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -63,6 +65,12 @@ Global
 		{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}.Distribution|x64.Build.0 = Distribution|x64
 		{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}.Release|x64.ActiveCfg = Release|x64
 		{5822B6CC-2C20-4F24-AEFC-A0DF6C62853D}.Release|x64.Build.0 = Release|x64
+		{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}.Debug|x64.ActiveCfg = Debug|x64
+		{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}.Debug|x64.Build.0 = Debug|x64
+		{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}.Distribution|x64.ActiveCfg = Release|x64
+		{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}.Distribution|x64.Build.0 = Release|x64
+		{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}.Release|x64.ActiveCfg = Release|x64
+		{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

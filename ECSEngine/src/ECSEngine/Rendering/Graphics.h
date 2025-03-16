@@ -1239,6 +1239,12 @@ namespace ECSEngine {
 
 		uint2 GetWindowSize() const;
 
+		// Fills in a string description of the GPU device as returned by underlying interface, with optional
+		// vendor ID and device ID out parameters that you can provide if you want the values to be retrieved.
+		// It is up to you to interpret these ID values.
+		// Returns true if it succeeded, else false
+		bool GetPhysicalDeviceDescription(CapacityStream<char>& description, size_t* vendor_id = nullptr, size_t* device_id = nullptr) const;
+
 		// Validates the resources which are being tracked with the ID3D11Debug output to see if they match
 		// This is not const since it will commit internal resources to be freed
 		bool IsInternalStateValid();

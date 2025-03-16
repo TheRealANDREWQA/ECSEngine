@@ -1802,7 +1802,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename CharacterType>
-	Stream<CharacterType> IsolateStringImpl(Stream<CharacterType> string, Stream<CharacterType> token, Stream<CharacterType> delimiter) {
+	static Stream<CharacterType> IsolateStringImpl(Stream<CharacterType> string, Stream<CharacterType> token, Stream<CharacterType> delimiter) {
 		Stream<CharacterType> existing_string = FindFirstToken(string, token);
 		if (existing_string.size > 0) {
 			Stream<CharacterType> next_delimiter = FindFirstToken(existing_string, delimiter);
@@ -1830,7 +1830,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename CharacterType>
-	Stream<CharacterType> StringsPrefixImpl(Stream<Stream<CharacterType>> strings) {
+	static Stream<CharacterType> StringsPrefixImpl(Stream<Stream<CharacterType>> strings) {
 		if (strings.size == 0) {
 			return {};
 		}
@@ -1870,7 +1870,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename FloatingPoint, bool strict_parsing, typename CharacterType>
-	FloatingPoint ConvertCharactersToFloatingPoint(Stream<CharacterType> stream, bool& success) {
+	static FloatingPoint ConvertCharactersToFloatingPoint(Stream<CharacterType> stream, bool& success) {
 		// Check for the special case of nan and inf
 		if (stream.size == 3 || stream.size == 4) {
 			// Check for nan and inf
@@ -2668,7 +2668,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------
 
 	template<typename CharacterType>
-	bool ConvertCharactersToBoolStrictImpl(Stream<CharacterType> string, bool& success) {
+	static bool ConvertCharactersToBoolStrictImpl(Stream<CharacterType> string, bool& success) {
 		char value = ConvertCharactersToBool(string);
 		if (value == -1) {
 			success = false;
@@ -2688,6 +2688,42 @@ namespace ECSEngine {
 	bool ConvertCharactersToBoolStrict(Stream<wchar_t> string, bool& success)
 	{
 		return ConvertCharactersToBoolStrictImpl(string, success);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------
+
+	unsigned char ConvertHexCharacterToDecimal(char character) {
+		if (character >= '0' && character <= '9') {
+			return character - '0';
+		}
+
+		if (character >= 'A' && character <= 'F') {
+			return character - 'A' + 10;
+		}
+
+		if (character >= 'a' && character <= 'f') {
+			return character - 'a' + 10;
+		}
+
+		// Return a default of 0 for characters that could not be matched
+		return 0;
+	}
+
+	size_t ConvertHexToInt(Stream<char> characters) {
+		if (characters.size >= 3) {
+			// If it starts with 0x, don't parse that part
+			if (characters[0] == '0' && characters[1] == 'x') {
+				characters = characters.SliceAt(2);
+			}
+		}
+
+		size_t number = 0;
+		size_t digit_power = 1;
+		for (size_t index = 0; index < characters.size; index++) {
+			number += digit_power * ConvertHexCharacterToDecimal(characters[characters.size - 1 - index]);
+			digit_power *= 16;
+		}
+		return number;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------
