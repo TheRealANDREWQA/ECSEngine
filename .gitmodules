@@ -1,0 +1,3 @@
+[submodule "ECSEngine/Dependencies/ADLX"]
+	path = ECSEngine/Dependencies/ADLX
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/ADLX.git
