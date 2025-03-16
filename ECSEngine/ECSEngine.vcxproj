@@ -857,6 +857,9 @@
     <Text Include="src\TODO.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="Dependencies\ADLX\ADLX.vcxproj">
+      <Project>{d19283b0-bdb4-47b7-b8bb-532bb3e777d3}</Project>
+    </ProjectReference>
     <ProjectReference Include="Dependencies\DirectXTex\DirectXTex\DirectXTex_Desktop_2019_Win10.vcxproj">
       <Project>{371b9fa9-4c90-4ac6-a123-aced756d6c77}</Project>
     </ProjectReference>

@@ -3560,6 +3560,36 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	bool Graphics::GetPhysicalDeviceDescription(CapacityStream<char>& description, size_t* vendor_id, size_t* device_id) const
+	{
+		Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_device;
+		if (FAILED(m_device->QueryInterface(__uuidof(IDXGIDevice), &dxgi_device))) {
+			return false;
+		}
+
+		// Get the IDXGIAdapter from IDXGIDevice interface
+		Microsoft::WRL::ComPtr<IDXGIAdapter> dxgi_adapter;
+		if (FAILED(dxgi_device->GetAdapter(&dxgi_adapter))) {
+			return false;
+		}
+
+		DXGI_ADAPTER_DESC adapter_descriptor;
+		if (FAILED(dxgi_adapter->GetDesc(&adapter_descriptor))) {
+			return false;
+		}
+
+		if (vendor_id != nullptr) {
+			*vendor_id = adapter_descriptor.VendorId;
+		}
+		if (device_id != nullptr) {
+			*device_id = adapter_descriptor.DeviceId;
+		}
+		ConvertWideCharsToASCII(adapter_descriptor.Description, description);
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	GraphicsPipelineBlendState Graphics::GetBlendState() const
 	{
 		return ECSEngine::GetBlendState(m_context);
