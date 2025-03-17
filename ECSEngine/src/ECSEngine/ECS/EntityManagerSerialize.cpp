@@ -1705,7 +1705,7 @@ namespace ECSEngine {
 
 			const void* current_component = data->components;
 			for (unsigned int index = 0; index < data->count; index++) {
-				if (!Serialize(functor_data->reflection_manager, functor_data->type, current_component, data->write_instrument, &options)) {
+				if (Serialize(functor_data->reflection_manager, functor_data->type, current_component, data->write_instrument, &options) != ECS_SERIALIZE_OK) {
 					return false;
 				}
 

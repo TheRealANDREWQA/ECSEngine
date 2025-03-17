@@ -150,4 +150,16 @@ namespace ECSEngine {
 		return is_out_of_range;
 	}
 
+	// Ignores one entry of a variable length unsigned integer - any original width. Returns true if it succeeded, else false
+	ECS_INLINE bool IgnoreUnsignedIntVariableLengthBool(ReadInstrument* read_instrument) {
+		size_t value = 0;
+		return DeserializeIntVariableLengthBool(read_instrument, value);
+	}
+
+	// Ignores one entry of a variable length signed integer - any original width. Returns true if it succeeded, else false
+	ECS_INLINE bool IgnoreSignedIntVariableLengthBool(ReadInstrument* read_instrument) {
+		int64_t value = 0;
+		return DeserializeIntVariableLengthBool(read_instrument, value);
+	}
+
 }
