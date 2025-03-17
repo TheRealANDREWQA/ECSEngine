@@ -249,15 +249,21 @@ namespace ECSEngine {
 		}
 
 		Stream<char> asset_name = { nullptr, 0 };
+		unsigned int stream_integer_counts[ECS_MATERIAL_SHADER_COUNT * 3];
 		if (read_data) {
 			success &= read_instrument->ReadWithSizeVariableLength(asset_name, allocator);
+			// Helper function that reads the stream sizes for the
+			for (size_t index = 0; index < ECS_COUNTOF(stream_integer_counts); index++) {
+				success &= DeserializeIntVariableLengthBool(read_instrument, stream_integer_counts[index]);
+			}
 		}
 		else {
 			success &= read_instrument->IgnoreWithSizeVariableLength<char>();
+			for (size_t index = 0; index < ECS_COUNTOF(stream_integer_counts); index++) {
+				success &= IgnoreUnsignedIntVariableLengthBool(read_instrument);
+			}
 		}
-		
-		unsigned short counts[ECS_MATERIAL_SHADER_COUNT * 3];
-		success &= read_instrument->ReadAlways(counts, sizeof(counts));
+
 		// Early exit after reading the counts if those could not be determined
 		if (!success) {
 			return false;
@@ -265,20 +271,16 @@ namespace ECSEngine {
 
 		ECS_STACK_CAPACITY_STREAM(char, name_buffer, 256);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, file_buffer, 256);
+
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 		AllocatorPolymorphic temp_allocator = &stack_allocator;
 
 		if (read_data) {
-			unsigned int int_counts[ECS_MATERIAL_SHADER_COUNT * 3];
-			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT * 3; index++) {
-				int_counts[index] = counts[index];
-			}
-
 			// Allocate the buffers
 			Reflection::ReflectionManager* reflection_manager = asset->reflection_manager;
 			memset(asset, 0, sizeof(*asset));
 			asset->reflection_manager = reflection_manager;
-			asset->Resize(int_counts, allocator, true);
+			asset->Resize(stream_integer_counts, allocator, true);
 			asset->name = asset_name;
 		}
 
