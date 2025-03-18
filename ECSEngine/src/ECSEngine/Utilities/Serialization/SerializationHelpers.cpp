@@ -1859,12 +1859,12 @@ namespace ECSEngine {
 					if (info.basic_type == ReflectionBasicFieldType::Int8) {
 						const char* characters = *(const char**)data;
 						size_t character_count = strlen(characters) + 1;
-						return write_instrument->WriteWithSize<size_t>(Stream<void>(characters, character_count * sizeof(char)));
+						return write_instrument->WriteWithSizeVariableLength(Stream<char>(characters, character_count));
 					}
 					else if (info.basic_type == ReflectionBasicFieldType::Wchar_t) {
 						const wchar_t* characters = *(const wchar_t**)data;
 						size_t character_count = wcslen(characters) + 1;
-						return write_instrument->WriteWithSize<size_t>(Stream<void>(characters, character_count * sizeof(wchar_t)));
+						return write_instrument->WriteWithSizeVariableLength(Stream<wchar_t>(characters, character_count));
 					}
 					else {
 						ECS_ASSERT(info.basic_type != ReflectionBasicFieldType::UserDefined, "WriteFundamentalType does not accept user defined pointers!");
@@ -1884,7 +1884,8 @@ namespace ECSEngine {
 				// The SoA case can be handled here as well
 				Stream<void> void_stream = GetReflectionFieldStreamVoid(info, data);
 				size_t element_byte_size = GetReflectionFieldStreamElementByteSize(info);
-				bool write_success = write_instrument->WriteWithSize<size_t>(Stream<void>(void_stream.buffer, void_stream.size * element_byte_size));
+				void_stream.size *= element_byte_size;
+				bool write_success = write_instrument->WriteWithSizeVariableLength<void>(void_stream);
 
 				// For strings, add a '\0' such that if the data is later on changed to a const char* or const wchar_t* it can still reference it
 				if (info.basic_type == ReflectionBasicFieldType::Int8) {
@@ -1935,7 +1936,7 @@ namespace ECSEngine {
 				if (pointer_indirection == 1) {
 					if (info.basic_type == ReflectionBasicFieldType::Int8 || info.basic_type == ReflectionBasicFieldType::Wchar_t) {
 						size_t byte_size = 0;
-						success &= read_instrument->ReadAlways(&byte_size);
+						success &= DeserializeIntVariableLengthBool(read_instrument, byte_size);
 						if (should_read_data) {
 							size_t element_byte_size = info.basic_type == ReflectionBasicFieldType::Int8 ? sizeof(char) : sizeof(wchar_t);
 							size_t allocate_size = byte_size + element_byte_size;
@@ -2010,7 +2011,7 @@ namespace ECSEngine {
 				size_t byte_size = 0;
 				bool success = true;
 
-				success &= read_instrument->ReadAlways(&byte_size, sizeof(byte_size));
+				success &= DeserializeIntVariableLengthBool(read_instrument, byte_size);
 				if (should_read_data) {
 					if (allocate_soa_pointer) {
 						if (allocator.allocator != nullptr) {
@@ -2055,7 +2056,7 @@ namespace ECSEngine {
 				bool success = true;
 
 				size_t byte_size = 0;
-				success &= read_instrument->ReadAlways(&byte_size);
+				success &= DeserializeIntVariableLengthBool(read_instrument, byte_size);
 
 				bool update_stream_capacity = false;
 				if (should_read_data) {

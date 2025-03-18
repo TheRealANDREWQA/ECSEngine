@@ -684,7 +684,7 @@ namespace ECSEngine {
 							}
 							else {
 								field_stream.size *= GetReflectionFieldStreamElementByteSize(field->info);
-								success &= write_instrument->WriteWithSize<size_t>(field_stream);
+								success &= write_instrument->WriteWithSizeVariableLength(field_stream);
 							}
 						}
 					}
@@ -765,10 +765,10 @@ namespace ECSEngine {
 				}
 				else {
 					if (info->basic_type == ReflectionBasicFieldType::Int8) {
-						success &= read_instrument->IgnoreWithSize<size_t>();
+						success &= read_instrument->IgnoreWithSizeVariableLength<char>();
 					}
 					else if (info->basic_type == ReflectionBasicFieldType::Wchar_t) {
-						success &= read_instrument->IgnoreWithSize<size_t>();
+						success &= read_instrument->IgnoreWithSizeVariableLength<wchar_t>();
 					}
 					else {
 						ECS_ASSERT(info->basic_type != ReflectionBasicFieldType::UserDefined, "Unhandled deserialize ignore case!");
@@ -779,7 +779,7 @@ namespace ECSEngine {
 			}
 			else {
 				// All the other stream types or pointerSoA can be aliased
-				success &= read_instrument->IgnoreWithSize<size_t>();
+				success &= read_instrument->IgnoreWithSizeVariableLength<void>();
 			}
 		}
 		else {
