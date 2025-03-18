@@ -1620,8 +1620,9 @@ namespace ECSEngine {
 						}
 
 						if (type_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+							size_t read_instrument_offset = read_instrument->GetOffset();
 							size_t byte_size;
-							if (!read_instrument->Read(&byte_size)) {
+							if (!DeserializeIntVariableLengthBool(read_instrument, byte_size)) {
 								ECS_FORMAT_ERROR_MESSAGE(
 									error_message,
 									"Deserialization for type \"{#}\" failed. Could not read pointer SoA size for field \"{#}\".",
@@ -1632,7 +1633,7 @@ namespace ECSEngine {
 							}
 							// We don't want to advance this, as the read or reference fundamental type
 							// Will need that value
-							if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_CURRENT, -(int64_t)sizeof(byte_size))) {
+							if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, read_instrument_offset)) {
 								ECS_FORMAT_ERROR_MESSAGE(
 									error_message,
 									"Deserialization for type \"{#}\" failed. Could not seek back after pointer SoA size read for field \"{#}\".",
@@ -1696,7 +1697,7 @@ namespace ECSEngine {
 									// Too difficult to handle this case, at the moment, just leave it be
 									// Ignore the data
 									size_t pointer_data_byte_size = 0;
-									if (!read_instrument->ReadAlways(&pointer_data_byte_size)) {
+									if (!DeserializeIntVariableLengthBool(read_instrument, pointer_data_byte_size)) {
 										ECS_FORMAT_ERROR_MESSAGE(
 											error_message,
 											"Deserialization for type \"{#}\" failed. Could not read pointer SoA size for field \"{#}\" (mismatched field).",
@@ -1710,7 +1711,7 @@ namespace ECSEngine {
 								else {
 									size_t pointer_data_byte_size = 0;
 									if (file_field_info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
-										if (!read_instrument->ReadAlways(&pointer_data_byte_size)) {
+										if (!DeserializeIntVariableLengthBool(read_instrument, pointer_data_byte_size)) {
 											ECS_FORMAT_ERROR_MESSAGE(
 												error_message,
 												"Deserialization for type \"{#}\" failed. Could not read stream size for field \"{#}\" (mismatched field).",
@@ -1889,7 +1890,7 @@ namespace ECSEngine {
 							}
 							else if (file_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 								size_t pointer_data_byte_size = 0;
-								if (!read_instrument->ReadAlways(&pointer_data_byte_size)) {
+								if (!DeserializeIntVariableLengthBool(read_instrument, pointer_data_byte_size)) {
 									ECS_FORMAT_ERROR_MESSAGE(
 										error_message,
 										"Deserialization for type \"{#}\" failed. Could not read pointer SoA size for field \"{#}\" (mismatched field).",
@@ -1903,7 +1904,7 @@ namespace ECSEngine {
 							}
 							else {
 								size_t pointer_data_byte_size = 0;
-								if (!read_instrument->ReadAlways(&pointer_data_byte_size)) {
+								if (!DeserializeIntVariableLengthBool(read_instrument, pointer_data_byte_size)) {
 									ECS_FORMAT_ERROR_MESSAGE(
 										error_message,
 										"Deserialization for type \"{#}\" failed. Could not read stream size for field \"{#}\" (mismatched field).",

@@ -632,24 +632,22 @@ namespace ECSEngine {
 				return false;
 			}
 
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
-
 			// We will also need a large buffering allocator, because we might need to read a lot of data at once
-			ResizableLinearAllocator buffering_allocator(ECS_MB * 50, ECS_MB * 100, { nullptr });
+			ResizableLinearAllocator temporary_allocator(ECS_MB * 50, ECS_MB * 100, { nullptr });
 
 			struct Deallocator {
 				ECS_INLINE void operator()() {
 					// Don't forget to reset the crash handler
-					buffering_allocator->Free();
+					temporary_allocator->Free();
 					ResetRecoveryCrashHandler();
 					ECS_GLOBAL_ASSERT_CRASH = assert_crash_value;
 				}
 
-				ResizableLinearAllocator* buffering_allocator;
+				ResizableLinearAllocator* temporary_allocator;
 				bool assert_crash_value;
 			};
 
-			StackScope<Deallocator> scope_deallocator({ &buffering_allocator, previous_assert_crash });
+			StackScope<Deallocator> scope_deallocator({ &temporary_allocator, previous_assert_crash });
 
 			// Read the header first
 			SerializeEntityManagerHeader header;
@@ -694,7 +692,7 @@ namespace ECSEngine {
 				};
 
 			ComponentPair* component_pairs = (ComponentPair*)read_instrument->ReadOrReferenceDataPointer(
-				&buffering_allocator,
+				&temporary_allocator,
 				component_pair_size + shared_component_pair_size + global_component_pair_size,
 				nullptr,
 				&allocation_failure
@@ -742,7 +740,7 @@ namespace ECSEngine {
 			unsigned int total_size_to_read = sizeof(NamedSharedInstanceHeader) * named_shared_instances_count + component_name_total_size
 				+ shared_component_name_total_size + header_component_total_size + header_shared_component_total_size
 				+ sizeof(SharedInstance) * shared_instance_total_count + global_name_total_size + header_global_component_total_size;
-			void* unique_name_characters = read_instrument->ReadOrReferenceDataPointer(&buffering_allocator, total_size_to_read, &allocation_failure);
+			void* unique_name_characters = read_instrument->ReadOrReferenceDataPointer(&temporary_allocator, total_size_to_read, &allocation_failure);
 			if (unique_name_characters == nullptr) {
 				status = allocate_and_read_failure("Component Headers");
 				return false;
@@ -756,9 +754,9 @@ namespace ECSEngine {
 			void* header_shared_component_data = OffsetPointer(header_component_data, header_component_total_size);
 			void* header_global_component_data = OffsetPointer(header_shared_component_data, header_shared_component_total_size);
 
-			unsigned int* component_name_offsets = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.component_count);
-			unsigned int* shared_component_name_offsets = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.shared_component_count);
-			unsigned int* global_component_name_offsets = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.global_component_count);
+			unsigned int* component_name_offsets = (unsigned int*)temporary_allocator.Allocate(sizeof(unsigned int) * header.component_count);
+			unsigned int* shared_component_name_offsets = (unsigned int*)temporary_allocator.Allocate(sizeof(unsigned int) * header.shared_component_count);
+			unsigned int* global_component_name_offsets = (unsigned int*)temporary_allocator.Allocate(sizeof(unsigned int) * header.global_component_count);
 
 			// Construct the name lookup tables
 			auto construct_name_offsets = [](unsigned int* name_offsets, auto component_pair_stream) {
@@ -916,9 +914,9 @@ namespace ECSEngine {
 				);
 				};
 
-			CachedComponentInfo* cached_component_infos = (CachedComponentInfo*)stack_allocator.Allocate(sizeof(CachedComponentInfo) * header.component_count);
-			CachedSharedComponentInfo* cached_shared_infos = (CachedSharedComponentInfo*)stack_allocator.Allocate(sizeof(CachedSharedComponentInfo) * header.shared_component_count);
-			CachedGlobalComponentInfo* cached_global_infos = (CachedGlobalComponentInfo*)stack_allocator.Allocate(sizeof(CachedGlobalComponentInfo) * header.global_component_count);
+			CachedComponentInfo* cached_component_infos = (CachedComponentInfo*)temporary_allocator.Allocate(sizeof(CachedComponentInfo) * header.component_count);
+			CachedSharedComponentInfo* cached_shared_infos = (CachedSharedComponentInfo*)temporary_allocator.Allocate(sizeof(CachedSharedComponentInfo) * header.shared_component_count);
+			CachedGlobalComponentInfo* cached_global_infos = (CachedGlobalComponentInfo*)temporary_allocator.Allocate(sizeof(CachedGlobalComponentInfo) * header.global_component_count);
 
 			// Set cached infos pointers to nullptr to indicate that they have not yet been determined
 			memset(cached_component_infos, 0, sizeof(*cached_component_infos) * header.component_count);
@@ -1019,7 +1017,7 @@ namespace ECSEngine {
 			}
 
 			void* named_shared_instances_identifiers = read_instrument->ReadOrReferenceDataPointer(
-				&buffering_allocator,
+				&temporary_allocator,
 				named_shared_instances_identifier_total_size,
 				&allocation_failure
 			);
@@ -1143,11 +1141,11 @@ namespace ECSEngine {
 			// Now the shared component data
 			for (unsigned int index = 0; index < header.shared_component_count; index++) {
 				bool exists_shared_component = entity_manager->ExistsSharedComponent(shared_component_pairs[index].component);
-				buffering_allocator.SetMarker();
+				temporary_allocator.SetMarker();
 
 				// Read the header of sizes
 				unsigned int* instances_sizes = (unsigned int*)read_instrument->ReadOrReferenceDataPointer(
-					&buffering_allocator,
+					&temporary_allocator,
 					sizeof(unsigned int) * shared_component_pairs[index].instance_count,
 					&allocation_failure
 				);
@@ -1164,7 +1162,7 @@ namespace ECSEngine {
 				}
 
 				// Read in bulk now the instance data
-				void* instances_data = read_instrument->ReadOrReferenceDataPointer(&buffering_allocator, total_instance_size, &allocation_failure);
+				void* instances_data = read_instrument->ReadOrReferenceDataPointer(&temporary_allocator, total_instance_size, &allocation_failure);
 				if (instances_data == nullptr) {
 					ECS_FORMAT_TEMP_STRING(section_name, "Instance byte data for shared component {#}", get_shared_component_name(index));
 					status = allocate_and_read_failure(section_name);
@@ -1214,7 +1212,7 @@ namespace ECSEngine {
 
 				// The size doesn't need to be updated - the data is commited right away - this will ensure that the 
 				// data is always hot in cache
-				buffering_allocator.ReturnToMarker();
+				temporary_allocator.ReturnToMarker();
 			}
 
 			// After the instances have been created, we can now bind the named tags to them
@@ -1292,14 +1290,13 @@ namespace ECSEngine {
 			// and the cached infos don't have that.
 			// Another thing that we need to keep is the base archetype sizes.
 			unsigned int unique_name_total_size = current_unique_name_offset;
-			char* stable_unique_name_characters = (char*)stack_allocator.Allocate(unique_name_total_size);
+			char* stable_unique_name_characters = (char*)temporary_allocator.Allocate(unique_name_total_size);
 			memcpy(stable_unique_name_characters, unique_name_characters, unique_name_total_size);
 
-			// The buffering can be cleared now - all the unique, shared and global data was read and commited into the entity manager
-			buffering_allocator.Clear();
+			// The buffering cannot cleared now - the component pairs are still needed later on
 
 			ArchetypeHeader* archetype_headers = (ArchetypeHeader*)read_instrument->ReadOrReferenceDataPointer(
-				&buffering_allocator,
+				&temporary_allocator,
 				sizeof(ArchetypeHeader) * header.archetype_count,
 				&allocation_failure
 			);
@@ -1323,7 +1320,7 @@ namespace ECSEngine {
 			}
 
 			Component* archetype_component_signatures = (Component*)read_instrument->ReadOrReferenceDataPointer(
-				&buffering_allocator,
+				&temporary_allocator,
 				archetypes_component_signature_size + base_archetypes_instance_size + base_archetypes_counts_size,
 				&allocation_failure
 			);
@@ -1335,13 +1332,13 @@ namespace ECSEngine {
 			unsigned int* base_archetypes_sizes = (unsigned int*)OffsetPointer(base_archetypes_instances, base_archetypes_instance_size);
 
 			// This is used to map from the header index to the actual entity manager index
-			unsigned int* archetype_mappings = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.archetype_count);
+			unsigned int* archetype_mappings = (unsigned int*)temporary_allocator.Allocate(sizeof(unsigned int) * header.archetype_count);
 			// This is used to map from the archetype base index to the actual archetype base index (since it can be found
 			// when a component was removed)
-			unsigned int* archetype_base_mappings = (unsigned int*)stack_allocator.Allocate(base_archetypes_counts_size);
+			unsigned int* archetype_base_mappings = (unsigned int*)temporary_allocator.Allocate(base_archetypes_counts_size);
 			// This is used to remap the entities stream index when some entities are moved to another base archetype when there are
 			// Missing components. We record the base size when that base is found such that we can offset the stream index with that value
-			unsigned int* archetype_base_count_mappings = (unsigned int*)stack_allocator.Allocate(base_archetypes_counts_size);
+			unsigned int* archetype_base_count_mappings = (unsigned int*)temporary_allocator.Allocate(base_archetypes_counts_size);
 
 			unsigned int component_signature_offset = 0;
 			unsigned int base_archetype_instances_offset = 0;
@@ -1437,8 +1434,7 @@ namespace ECSEngine {
 				component_signature_offset += original_unique_count + original_shared_count;
 			}
 
-			// The buffering can be bumped back, it is no longer needed
-			buffering_allocator.Clear();
+			// The buffering cannot be bumped back, the component pairs are still needed
 
 			component_signature_offset = 0;
 			base_archetype_sizes_offset = 0;
@@ -1622,7 +1618,7 @@ namespace ECSEngine {
 
 			// Construct a helper array with the offsets of the base mappings such that they can be easily referenced by the
 			// Loop down bellow
-			unsigned int* archetype_base_mappings_offsets = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.archetype_count);
+			unsigned int* archetype_base_mappings_offsets = (unsigned int*)temporary_allocator.Allocate(sizeof(unsigned int) * header.archetype_count);
 			if (header.archetype_count > 0) {
 				archetype_base_mappings_offsets[0] = 0;
 				for (unsigned int index = 1; index < header.archetype_count; index++) {
