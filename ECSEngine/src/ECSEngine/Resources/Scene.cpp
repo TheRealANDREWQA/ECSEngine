@@ -147,7 +147,7 @@ namespace ECSEngine {
 			if (deserialize_entity_manager_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
 				// Reset the database
 				database->RestoreSnapshot(asset_database_snapshot);
-				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "Failed to deserialize the entity manager");
+				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, ". Failed to deserialize the entity manager");
 				return false;
 			}
 

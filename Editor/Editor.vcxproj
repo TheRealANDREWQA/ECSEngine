@@ -61,19 +61,19 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
     <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
-    <TargetName>Editor</TargetName>
+    <TargetName>Editor-$(Configuration)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
     <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
-    <TargetName>Editor</TargetName>
+    <TargetName>Editor-$(Configuration)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
     <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
-    <TargetName>Editor</TargetName>
+    <TargetName>Editor-$(Configuration)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
