@@ -21,17 +21,17 @@ namespace ECSEngine {
 		// Rectangle must have 6 vertices that represent a rectangle filled in with SetTransformForRectangle
 		ECSENGINE_API Rectangle2D GetRectangleFromVertices(const UISpriteVertex* vertices);
 
-		ECSENGINE_API void SetTransformForLine(float2 position1, float2 position2, size_t count, UIVertexColor* buffer);
+		ECSENGINE_API void SetTransformForLine(float2 position1, float2 position2, CapacityStream<void> buffer);
 
-		ECSENGINE_API void SetTransformForLine(float2 position1, float2 position2, size_t* counts, void** buffers, unsigned int material_offset = 0);
+		ECSENGINE_API void SetTransformForLine(float2 position1, float2 position2, Stream<CapacityStream<void>> buffers, unsigned int material_offset = 0);
 
-		ECSENGINE_API void SetColorForLine(Color color, size_t count, UIVertexColor* buffer);
+		ECSENGINE_API void SetColorForLine(Color color, CapacityStream<void> buffer);
 
-		ECSENGINE_API void SetColorForLine(Color color, size_t* counts, void** buffers, unsigned int material_offset = 0);
+		ECSENGINE_API void SetColorForLine(Color color, Stream<CapacityStream<void>> buffers, unsigned int material_offset = 0);
 
-		ECSENGINE_API void SetLine(float2 position1, float2 position2, Color color, size_t& count, UIVertexColor* buffer);
+		ECSENGINE_API void SetLine(float2 position1, float2 position2, Color color, CapacityStream<void>& buffer);
 
-		ECSENGINE_API void SetLine(float2 position1, float2 position2, Color color, size_t* counts, void** buffers, unsigned int material_offset = 0);
+		ECSENGINE_API void SetLine(float2 position1, float2 position2, Color color, Stream<CapacityStream<void>> buffers, unsigned int material_offset = 0);
 
 		ECSENGINE_API float GetDockspaceMaskFromType(DockspaceType type);
 
@@ -94,16 +94,14 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			Color color,
-			UIVertexColor* buffer,
-			size_t& count
+			CapacityStream<void>& buffer
 		);
 
 		ECSENGINE_API void SetSolidColorRectangle(
 			float2 position,
 			float2 scale,
 			Color color,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_offset = 0
 		);
 
@@ -114,8 +112,7 @@ namespace ECSEngine {
 			Color top_right,
 			Color bottom_left,
 			Color bottom_right,
-			UIVertexColor* buffer,
-			size_t* count
+			CapacityStream<void>& buffer
 		);
 
 		ECSENGINE_API void SetVertexColorRectangle(
@@ -125,8 +122,7 @@ namespace ECSEngine {
 			Color top_right,
 			Color bottom_left,
 			Color bottom_right,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_offset = 0
 		);
 
@@ -134,16 +130,14 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			const Color* colors,
-			UIVertexColor* buffer,
-			size_t* count
+			CapacityStream<void>& buffer
 		);
 
 		ECSENGINE_API void SetVertexColorRectangle(
 			float2 position,
 			float2 scale,
 			const Color* colors,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_offset = 0
 		);
 
@@ -153,8 +147,7 @@ namespace ECSEngine {
 			Color color,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			UISpriteVertex* buffer,
-			size_t& count
+			CapacityStream<void>& buffer
 		);
 
 		ECSENGINE_API void SetSpriteRectangle(
@@ -163,8 +156,7 @@ namespace ECSEngine {
 			Color color,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_index,
 			unsigned int material_offset = 0
 		);
@@ -175,8 +167,7 @@ namespace ECSEngine {
 			const Color* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			UISpriteVertex* buffer,
-			size_t& count
+			CapacityStream<void>& buffer
 		);
 
 		ECSENGINE_API void SetVertexColorSpriteRectangle(
@@ -185,8 +176,7 @@ namespace ECSEngine {
 			const Color* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_index,
 			unsigned int material_offset
 		);
@@ -197,8 +187,7 @@ namespace ECSEngine {
 			const ColorFloat* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			UISpriteVertex* buffer,
-			size_t& count
+			CapacityStream<void>& buffer
 		);
 
 		ECSENGINE_API void SetVertexColorSpriteRectangle(
@@ -207,8 +196,7 @@ namespace ECSEngine {
 			const ColorFloat* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_index,
 			unsigned int material_offset
 		);
@@ -383,6 +371,10 @@ namespace ECSEngine {
 			}
 		}
 
+		ECS_INLINE unsigned int GetDrawPhaseMaterialOffset(ECS_UI_DRAW_PHASE draw_phase) {
+			return draw_phase == ECS_UI_DRAW_LATE ? ECS_TOOLS_UI_MATERIALS : 0;
+		}
+
 		template<typename Element>
 		float GetMinXRectangle(const Element* element, size_t size);
 
@@ -437,8 +429,8 @@ namespace ECSEngine {
 			float2 scale,
 			float2 border_scale,
 			Color color,
-			size_t* counts,
-			void** buffers
+			Stream<CapacityStream<void>> buffers,
+			ECS_UI_DRAW_PHASE draw_phase
 		);
 
 		template<bool is_inner = true>
@@ -447,8 +439,8 @@ namespace ECSEngine {
 			float2 scale,
 			float2 border_scale,
 			Color color,
-			size_t* counts,
-			void** buffers,
+			Stream<CapacityStream<void>> buffers,
+			ECS_UI_DRAW_PHASE draw_phase,
 			float2* results
 		);
 
@@ -457,8 +449,8 @@ namespace ECSEngine {
 			float2 scale,
 			float2 new_scale_factor,
 			Color color,
-			size_t* counts,
-			void** buffers
+			Stream<CapacityStream<void>> buffers,
+			ECS_UI_DRAW_PHASE draw_phase = ECS_UI_DRAW_NORMAL
 		);
 
 		template<bool horizontal, typename Buffer>
@@ -515,6 +507,20 @@ namespace ECSEngine {
 					position_offset += scale.y + spacing;
 				}
 			}
+		}
+
+		template<bool horizontal, typename Buffer>
+		ECS_INLINE void CreateDottedLine(
+			CapacityStream<void>& buffer,
+			size_t line_count,
+			float2 starting_point,
+			float end_point,
+			float spacing,
+			float width,
+			Color color
+		) {
+			CreateDottedLine<horizontal>((Buffer*)buffer.buffer, buffer.size, line_count, starting_point, end_point, spacing, width, color);
+			buffer.size += line_count * 6;
 		}
 
 		template<typename Stream>

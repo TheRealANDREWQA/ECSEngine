@@ -721,8 +721,7 @@ namespace ECSEngine {
 			unsigned int DetectActiveHandler(const UIHandler* handler, float2 mouse_position, unsigned int offset) const;
 
 			bool DetectHoverables(
-				size_t* counts,
-				void** buffers,
+				Stream<CapacityStream<void>> buffers,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				DockspaceType type,
@@ -731,8 +730,7 @@ namespace ECSEngine {
 			);
 
 			bool DetectClickables(
-				size_t* counts,
-				void** buffers,
+				Stream<CapacityStream<void>> buffers,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				DockspaceType type,
@@ -742,8 +740,7 @@ namespace ECSEngine {
 			);
 
 			bool DetectGenerals(
-				size_t* counts,
-				void** buffers,
+				Stream<CapacityStream<void>> buffers,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				DockspaceType type,
@@ -753,11 +750,10 @@ namespace ECSEngine {
 
 			ECS_UI_FRAME_PACING DoFrame(UISystemDoFrameOptions options = {});
 
-			void Draw(float2 mouse_position, void** system_buffers, size_t* system_counts, UISystemDoFrameOptions options);
+			void Draw(float2 mouse_position, UISystemDoFrameOptions options);
 
 			void DrawCollapseTriangleHeader(
-				void** buffers,
-				size_t* counts,
+				Stream<CapacityStream<void>> buffers,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float mask,
@@ -767,16 +763,14 @@ namespace ECSEngine {
 
 			void DrawDockingGizmo(
 				float2 region_position,
-				size_t* counts,
-				void** buffers,
+				Stream<CapacityStream<void>> buffers,
 				bool draw_central_rectangle
 			);
 
 			// left - top - right - bottom - central fill order of the transforms
 			void DrawDockingGizmo(
 				float2 region_position,
-				size_t* counts,
-				void** buffers,
+				Stream<CapacityStream<void>> buffers,
 				bool draw_central_rectangle,
 				float2* transforms
 			);
@@ -785,7 +779,7 @@ namespace ECSEngine {
 				CapacityStream<VertexBuffer> buffers,
 				CapacityStream<UIDynamicStream<UISpriteTexture>> sprite_textures,
 				ConstantBuffer& viewport_buffer,
-				const size_t* counts,
+				Stream<CapacityStream<void>> buffers_mapping_data,
 				GraphicsContext* context,
 				Stream<UIDynamicStream<unsigned int>> sprite_cluster_counts,
 				unsigned int material_offset
@@ -795,7 +789,7 @@ namespace ECSEngine {
 			template<ECS_UI_DRAW_PHASE phase>
 			ECSENGINE_API void DrawPass(
 				UIDrawResources& resources,
-				const size_t* counts,
+				Stream<CapacityStream<void>> buffers_mapping_data,
 				float2 viewport_position,
 				float2 viewport_scale,
 				GraphicsContext* context
@@ -815,8 +809,7 @@ namespace ECSEngine {
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float offset_mask,
-				void** buffers,
-				size_t* vertex_count
+				Stream<CapacityStream<void>> buffers
 			);
 
 			void DrawDockspaceRegionBorders(
@@ -1304,7 +1297,7 @@ namespace ECSEngine {
 			// It will call all the drag handlers that want to be notified when they exit a region
 			void HandleDragExitRegions();
 
-			void HandleHoverable(float2 mouse_position, void** buffers, size_t* counts);
+			void HandleHoverable(float2 mouse_position, Stream<CapacityStream<void>> buffers);
 
 			void HandleFocusedWindowClickable(float2 mouse_position, ECS_MOUSE_BUTTON button_type);
 
@@ -1324,9 +1317,7 @@ namespace ECSEngine {
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 rectangle_position, 
-				float2 rectangle_scale, 
-				void** system_buffers, 
-				size_t* counts
+				float2 rectangle_scale
 			);
 
 			// addition type legend is the same as the DrawDockingGizmo transform:
@@ -1909,6 +1900,9 @@ namespace ECSEngine {
 			//private:
 			Application* m_application;
 			UIToolsAllocator* m_memory;
+			// This allocator is used to allocate the draw buffers, since they can get quite large, and we don't
+			// Want to force the user to provide a large UI allocator.
+			GlobalMemoryManager m_draw_buffers_allocator;
 			Keyboard* m_keyboard;
 			Mouse* m_mouse;
 			Graphics* m_graphics;
@@ -1965,8 +1959,7 @@ namespace ECSEngine {
 			void (*m_event)(
 				UISystem*,
 				void*,
-				void**,
-				size_t*,
+				Stream<CapacityStream<void>>,
 				float,
 				float,
 				const Mouse*,
@@ -2032,67 +2025,6 @@ namespace ECSEngine {
 		ECSENGINE_API void DragDockspaceAction(ActionData* action_data);
 
 		ECSENGINE_API void RegionHeaderAction(ActionData* action_data);
-
-#pragma endregion
-
-#pragma region Events
-
-		// ---------------------------------------------------- Events ---------------------------------------------------------
-
-		void MoveDockspaceBorderEvent(
-			UISystem* system,
-			void* parameter,
-			void** buffers,
-			size_t* counts,
-			float normalized_mouse_x,
-			float normalized_mouse_y,
-			const Mouse* mouse,
-			const Keyboard* keyboard
-		);
-
-		void ResizeDockspaceEvent(
-			UISystem* system,
-			void* parameter,
-			void** buffers,
-			size_t* counts,
-			float normalized_mouse_x,
-			float normalized_mouse_y,
-			const Mouse* mouse,
-			const Keyboard* keyboard
-		);
-
-		void HoverOuterDockspaceBorderEvent(
-			UISystem* system,
-			void* parameter,
-			void** buffers,
-			size_t* counts,
-			float normalized_mouse_x,
-			float normalized_mouse_y,
-			const Mouse* mouse,
-			const Keyboard* keyboard
-		);
-
-		void HoverInnerDockspaceBorderEvent(
-			UISystem* system,
-			void* parameter,
-			void** buffers,
-			size_t* counts,
-			float normalized_mouse_x,
-			float normalized_mouse_y,
-			const Mouse* mouse,
-			const Keyboard* keyboard
-		);
-
-		ECSENGINE_API void SkipEvent(
-			UISystem* system,
-			void* parameter,
-			void** buffers,
-			size_t* counts,
-			float normalized_mouse_x,
-			float normalized_mouse_y,
-			const Mouse* mouse,
-			const Keyboard* keyboard
-		);
 
 #pragma endregion
 	

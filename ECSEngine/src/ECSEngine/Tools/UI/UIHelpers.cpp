@@ -49,53 +49,52 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void SetTransformForLine(float2 position1, float2 position2, size_t count, UIVertexColor* buffer) {
-			buffer[count].SetTransform(position1);
-			buffer[count + 1].SetTransform(position2);
+		void SetTransformForLine(float2 position1, float2 position2, CapacityStream<void> buffer) {
+			CapacityStream<UIVertexColor> vertices = buffer.AsIs<UIVertexColor>();
+			vertices[vertices.size - 2].SetTransform(position1);
+			vertices[vertices.size - 1].SetTransform(position2);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void SetTransformForLine(float2 position1, float2 position2, size_t* counts, void** buffers, unsigned int material_offset) {
+		void SetTransformForLine(float2 position1, float2 position2, Stream<CapacityStream<void>> buffers, unsigned int material_offset) {
 			SetTransformForLine(
 				position1,
 				position2,
-				counts[ECS_TOOLS_UI_LINE + ECS_TOOLS_UI_MATERIALS * material_offset],
-				(UIVertexColor*)buffers[ECS_TOOLS_UI_LINE + ECS_TOOLS_UI_MATERIALS * material_offset]
+				buffers[ECS_TOOLS_UI_LINE + ECS_TOOLS_UI_MATERIALS * material_offset]
 			);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void SetColorForLine(Color color, size_t count, UIVertexColor* buffer) {
-			buffer[count].SetColor(color);
-			buffer[count + 1].SetColor(color);
+		void SetColorForLine(Color color, CapacityStream<void> buffer) {
+			CapacityStream<UIVertexColor> vertices = buffer.AsIs<UIVertexColor>();
+			vertices[vertices.size - 2].SetColor(color);
+			vertices[vertices.size - 1].SetColor(color);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void SetColorForLine(Color color, size_t* counts, void** buffers, unsigned int material_offset) {
+		void SetColorForLine(Color color, Stream<CapacityStream<void>> buffers, unsigned int material_offset) {
 			SetColorForLine(
 				color,
-				counts[ECS_TOOLS_UI_LINE + ECS_TOOLS_UI_MATERIALS * material_offset],
-				(UIVertexColor*)buffers[ECS_TOOLS_UI_LINE + ECS_TOOLS_UI_MATERIALS * material_offset]
+				buffers[ECS_TOOLS_UI_LINE + ECS_TOOLS_UI_MATERIALS * material_offset]
 			);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void SetLine(float2 position1, float2 position2, Color color, size_t& count, UIVertexColor* buffer) {
-			SetTransformForLine(position1, position2, count, buffer);
-			SetColorForLine(color, count, buffer);
-			count += 2;
+		void SetLine(float2 position1, float2 position2, Color color, CapacityStream<void>& buffer) {
+			buffer.AssertCapacity(2);
+			buffer.size += 2;
+			SetTransformForLine(position1, position2, buffer);
+			SetColorForLine(color, buffer);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void SetLine(float2 position1, float2 position2, Color color, size_t* counts, void** buffers, unsigned int material_offset) {
-			SetTransformForLine(position1, position2, counts, buffers, material_offset);
-			SetColorForLine(color, counts, buffers, material_offset);
-			counts[ECS_TOOLS_UI_LINE + ECS_TOOLS_UI_MATERIALS * material_offset] += 2;
+		void SetLine(float2 position1, float2 position2, Color color, Stream<CapacityStream<void>> buffers, unsigned int material_offset) {
+			SetLine(position1, position2, color, buffers[ECS_TOOLS_UI_LINE + ECS_TOOLS_UI_MATERIALS * material_offset]);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -273,12 +272,12 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			Color color,
-			UIVertexColor* buffer,
-			size_t& count
+			CapacityStream<void>& buffer
 		) {
-			SetTransformForRectangle(position, scale, count, buffer);
-			SetColorForRectangle(color, count, buffer);
-			count += 6;
+			buffer.AssertCapacity(6);
+			SetTransformForRectangle(position, scale, buffer.size, (UIVertexColor*)buffer.buffer);
+			SetColorForRectangle(color, buffer.size, (UIVertexColor*)buffer.buffer);
+			buffer.size += 6;
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -287,14 +286,11 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			Color color,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_offset
 		) {
 			unsigned int material_index = ECS_TOOLS_UI_SOLID_COLOR + material_offset * ECS_TOOLS_UI_MATERIALS;
-			SetTransformForRectangle(position, scale, counts[material_index], (UIVertexColor*)buffers[material_index]);
-			SetColorForRectangle(color, counts[material_index], (UIVertexColor*)buffers[material_index]);
-			counts[material_index] += 6;
+			SetSolidColorRectangle(position, scale, color, buffers[material_index]);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -306,12 +302,12 @@ namespace ECSEngine {
 			Color top_right,
 			Color bottom_left,
 			Color bottom_right,
-			UIVertexColor* buffer,
-			size_t* count
+			CapacityStream<void>& buffer
 		) {
-			SetTransformForRectangle(position, scale, *count, buffer);
-			SetVertexColorForRectangle(top_left, top_right, bottom_left, bottom_right, *count, buffer);
-			*count += 6;
+			buffer.AssertCapacity(6);
+			SetTransformForRectangle(position, scale, buffer.size, (UIVertexColor*)buffer.buffer);
+			SetVertexColorForRectangle(top_left, top_right, bottom_left, bottom_right, buffer.size, (UIVertexColor*)buffer.buffer);
+			buffer.size += 6;
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -323,14 +319,11 @@ namespace ECSEngine {
 			Color top_right,
 			Color bottom_left,
 			Color bottom_right,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_offset
 		) {
 			unsigned int material_index = ECS_TOOLS_UI_SOLID_COLOR + material_offset * ECS_TOOLS_UI_MATERIALS;
-			SetTransformForRectangle(position, scale, counts[material_index], (UIVertexColor*)buffers[material_index]);
-			SetVertexColorForRectangle(top_left, top_right, bottom_left, bottom_right, counts[material_index], (UIVertexColor*)buffers[material_index]);
-			counts[material_index] += 6;
+			SetVertexColorRectangle(position, scale, top_left, top_right, bottom_left, bottom_right, buffers[material_index]);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -339,12 +332,12 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			const Color* colors,
-			UIVertexColor* buffer,
-			size_t* count
+			CapacityStream<void>& buffer
 		) {
-			SetTransformForRectangle(position, scale, *count, buffer);
-			SetVertexColorForRectangle(colors, *count, buffer);
-			*count += 6;
+			buffer.AssertCapacity(6);
+			SetTransformForRectangle(position, scale, buffer.size, (UIVertexColor*)buffer.buffer);
+			SetVertexColorForRectangle(colors, buffer.size, (UIVertexColor*)buffer.buffer);
+			buffer.size += 6;
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -353,14 +346,11 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			const Color* colors,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_offset
 		) {
 			unsigned int material_index = ECS_TOOLS_UI_SOLID_COLOR + material_offset * ECS_TOOLS_UI_MATERIALS;
-			SetTransformForRectangle(position, scale, counts[material_index], (UIVertexColor*)buffers[material_index]);
-			SetVertexColorForRectangle(colors, counts[material_index], (UIVertexColor*)buffers[material_index]);
-			counts[material_index] += 6;
+			SetVertexColorRectangle(position, scale, colors, buffers[material_index]);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -371,13 +361,13 @@ namespace ECSEngine {
 			Color color,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			UISpriteVertex* buffer,
-			size_t& count
+			CapacityStream<void>& buffer
 		) {
-			SetTransformForRectangle(position, scale, count, buffer);
-			SetColorForRectangle(color, count, buffer);
-			SetUVForRectangle(top_left_uv, bottom_right_uv, count, buffer);
-			count += 6;
+			buffer.AssertCapacity(6);
+			SetTransformForRectangle(position, scale, buffer.size, (UISpriteVertex*)buffer.buffer);
+			SetColorForRectangle(color, buffer.size, (UISpriteVertex*)buffer.buffer);
+			SetUVForRectangle(top_left_uv, bottom_right_uv, buffer.size, (UISpriteVertex*)buffer.buffer);
+			buffer.size += 6;
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -388,16 +378,12 @@ namespace ECSEngine {
 			Color color,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_index,
 			unsigned int material_offset
 		) {
 			unsigned int compound_index = material_index + material_offset * ECS_TOOLS_UI_MATERIALS;
-			SetTransformForRectangle(position, scale, counts[compound_index], (UISpriteVertex*)buffers[compound_index]);
-			SetColorForRectangle(color, counts[compound_index], (UISpriteVertex*)buffers[compound_index]);
-			SetUVForRectangle(top_left_uv, bottom_right_uv, counts[compound_index], (UISpriteVertex*)buffers[compound_index]);
-			counts[compound_index] += 6;
+			SetSpriteRectangle(position, scale, color, top_left_uv, bottom_right_uv, buffers[compound_index]);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -408,13 +394,13 @@ namespace ECSEngine {
 			const Color* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			UISpriteVertex* buffer,
-			size_t& count
+			CapacityStream<void>& buffer
 		) {
-			SetTransformForRectangle(position, scale, count, buffer);
-			SetVertexColorForRectangle(colors, count, buffer);
-			SetUVForRectangle(top_left_uv, bottom_right_uv, count, buffer);
-			count += 6;
+			buffer.AssertCapacity(6);
+			SetTransformForRectangle(position, scale, buffer.size, (UISpriteVertex*)buffer.buffer);
+			SetVertexColorForRectangle(colors, buffer.size, (UISpriteVertex*)buffer.buffer);
+			SetUVForRectangle(top_left_uv, bottom_right_uv, buffer.size, (UISpriteVertex*)buffer.buffer);
+			buffer.size += 6;
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -425,16 +411,12 @@ namespace ECSEngine {
 			const Color* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_index,
 			unsigned int material_offset
 		) {
 			unsigned int compound_index = material_index + material_offset * ECS_TOOLS_UI_MATERIALS;
-			SetTransformForRectangle(position, scale, counts[compound_index], (UISpriteVertex*)buffers[compound_index]);
-			SetVertexColorForRectangle(colors, counts[compound_index], (UISpriteVertex*)buffers[compound_index]);
-			SetUVForRectangle(top_left_uv, bottom_right_uv, counts[compound_index], (UISpriteVertex*)buffers[compound_index]);
-			counts[compound_index] += 6;
+			SetVertexColorSpriteRectangle(position, scale, colors, top_left_uv, bottom_right_uv, buffers[compound_index]);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -445,13 +427,13 @@ namespace ECSEngine {
 			const ColorFloat* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			UISpriteVertex* buffer,
-			size_t& count
+			CapacityStream<void>& buffer
 		) {
-			SetTransformForRectangle(position, scale, count, buffer);
-			SetVertexColorForRectangle(Color(colors[0]), Color(colors[1]), Color(colors[2]), Color(colors[3]), count, buffer);
-			SetUVForRectangle(top_left_uv, bottom_right_uv, count, buffer);
-			count += 6;
+			buffer.AssertCapacity(6);
+			SetTransformForRectangle(position, scale, buffer.size, (UISpriteVertex*)buffer.buffer);
+			SetVertexColorForRectangle(Color(colors[0]), Color(colors[1]), Color(colors[2]), Color(colors[3]), buffer.size, (UISpriteVertex*)buffer.buffer);
+			SetUVForRectangle(top_left_uv, bottom_right_uv, buffer.size, (UISpriteVertex*)buffer.buffer);
+			buffer.size += 6;
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -462,16 +444,12 @@ namespace ECSEngine {
 			const ColorFloat* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			unsigned int material_index,
 			unsigned int material_offset
 		) {
 			unsigned int compound_index = material_index + material_offset * ECS_TOOLS_UI_MATERIALS;
-			SetTransformForRectangle(position, scale, counts[compound_index], (UISpriteVertex*)buffers[compound_index]);
-			SetVertexColorForRectangle(Color(colors[0]), Color(colors[1]), Color(colors[2]), Color(colors[3]), counts[compound_index], (UISpriteVertex*)buffers[compound_index]);
-			SetUVForRectangle(top_left_uv, bottom_right_uv, counts[compound_index], (UISpriteVertex*)buffers[compound_index]);
-			counts[compound_index] += 6;
+			SetVertexColorSpriteRectangle(position, scale, colors, top_left_uv, bottom_right_uv, buffers[compound_index]);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -768,55 +746,15 @@ namespace ECSEngine {
 			float2 scale,
 			float2 border_scale,
 			Color color,
-			size_t* counts,
-			void** buffers
+			Stream<CapacityStream<void>> buffers,
+			ECS_UI_DRAW_PHASE draw_phase
 		) {
 			float2 results[8];
-			UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
-			if constexpr (is_inner)
-				CreateRectangleBorder(position, scale, border_scale, results);
-			else
-				CreateRectangleOuterBorder(position, scale, border_scale, results);
-
-			// top
-			SetSolidColorRectangle(
-				results[0],
-				results[1],
-				color,
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR]
-			);
-
-			// left
-			SetSolidColorRectangle(
-				results[2],
-				results[3],
-				color,
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR]
-			);
-
-			// bottom
-			SetSolidColorRectangle(
-				results[4],
-				results[5],
-				color,
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR]
-			);
-
-			// right
-			SetSolidColorRectangle(
-				results[6],
-				results[7],
-				color,
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR]
-			);
+			CreateSolidColorRectangleBorder<is_inner>(position, scale, border_scale, color, buffers, draw_phase, results);
 		}
 
-		template void ECSENGINE_API CreateSolidColorRectangleBorder<true>(float2, float2, float2, Color, size_t*, void**);
-		template void ECSENGINE_API CreateSolidColorRectangleBorder<false>(float2, float2, float2, Color, size_t*, void**);
+		template void ECSENGINE_API CreateSolidColorRectangleBorder<true>(float2, float2, float2, Color, Stream<CapacityStream<void>>, ECS_UI_DRAW_PHASE);
+		template void ECSENGINE_API CreateSolidColorRectangleBorder<false>(float2, float2, float2, Color, Stream<CapacityStream<void>>, ECS_UI_DRAW_PHASE);
 
 		// -------------------------------------------------------------------------------------------------------
 
@@ -826,23 +764,23 @@ namespace ECSEngine {
 			float2 scale,
 			float2 border_scale,
 			Color color,
-			size_t* counts,
-			void** buffers,
+			Stream<CapacityStream<void>> buffers,
+			ECS_UI_DRAW_PHASE draw_phase,
 			float2* results
 		) {
-			UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
 			if constexpr (is_inner)
 				CreateRectangleBorder(position, scale, border_scale, results);
 			else
 				CreateRectangleOuterBorder(position, scale, border_scale, results);
 
+			unsigned int material_offset = GetDrawPhaseMaterialOffset(draw_phase);
 			// top
 			SetSolidColorRectangle(
 				results[0],
 				results[1],
 				color,
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR]
+				buffers,
+				material_offset
 			);
 
 			// left
@@ -850,8 +788,8 @@ namespace ECSEngine {
 				results[2],
 				results[3],
 				color,
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR]
+				buffers,
+				material_offset
 			);
 
 			// bottom
@@ -859,8 +797,8 @@ namespace ECSEngine {
 				results[4],
 				results[5],
 				color,
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR]
+				buffers,
+				material_offset
 			);
 
 			// right
@@ -868,13 +806,13 @@ namespace ECSEngine {
 				results[6],
 				results[7],
 				color,
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR]
+				buffers,
+				material_offset
 			);
 		}
 
-		template void ECSENGINE_API CreateSolidColorRectangleBorder<false>(float2, float2, float2, Color, size_t*, void**, float2*);
-		template void ECSENGINE_API CreateSolidColorRectangleBorder<true>(float2, float2, float2, Color, size_t*, void**, float2*);
+		template void ECSENGINE_API CreateSolidColorRectangleBorder<false>(float2, float2, float2, Color, Stream<CapacityStream<void>>, ECS_UI_DRAW_PHASE, float2*);
+		template void ECSENGINE_API CreateSolidColorRectangleBorder<true>(float2, float2, float2, Color, Stream<CapacityStream<void>>, ECS_UI_DRAW_PHASE, float2*);
 
 		// -------------------------------------------------------------------------------------------------------
 
@@ -883,13 +821,12 @@ namespace ECSEngine {
 			float2 scale,
 			float2 new_scale_factor,
 			Color color,
-			size_t* counts,
-			void** buffers
+			Stream<CapacityStream<void>> buffers,
+			ECS_UI_DRAW_PHASE draw_phase
 		) {
 			float2 old_scale = scale;
 			float2 new_position = ExpandRectangle(position, old_scale, new_scale_factor, scale);
-			UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
-			SetSolidColorRectangle(new_position, scale, color, solid_color, counts[ECS_TOOLS_UI_SOLID_COLOR]);
+			SetSolidColorRectangle(new_position, scale, color, buffers, GetDrawPhaseMaterialOffset(draw_phase));
 		}
 
 		// -------------------------------------------------------------------------------------------------------

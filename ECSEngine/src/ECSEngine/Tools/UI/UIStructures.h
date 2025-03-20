@@ -63,8 +63,7 @@ namespace ECSEngine {
 			float2 scale;
 			void* data;
 			void* additional_data;
-			size_t* counts;
-			void** buffers;
+			Stream<CapacityStream<void>> buffers;
 			Keyboard* keyboard;
 			Mouse* mouse;
 		};
@@ -373,20 +372,27 @@ namespace ECSEngine {
 #pragma region Render Resources
 
 		struct ECSENGINE_API UIDrawResources {
-			void Map(void** buffers, GraphicsContext* context);
+			// Commits the buffer data for the normal pass into the GPU buffers
+			void UpdateNormalBuffers(Graphics* graphics);
 
-			void UnmapNormal(GraphicsContext* context);
+			// Commits the buffer data for the late pass into the GPU buffers
+			void UpdateLateBuffers(Graphics* graphics);
 
-			void UnmapLate(GraphicsContext* context);
-
-			void UnmapAll(GraphicsContext* context);
-
-			void Unmap(GraphicsContext* context, unsigned int starting_index, unsigned int end_index);
+			// Resets all CPU buffer sizes
+			void ResetCPUBuffers();
 
 			void ReleaseSpriteTextures();
 			void Release(Graphics* graphics);
 
 			CapacityStream<VertexBuffer> buffers;
+			// These are buffers that are filled in during the draw call, which is then used to update the GPU buffers.
+			// The reason for adding this new buffer is that the CPU buffer that the GPU driver returns for mapping
+			// Has memory pages with PAGE_WRITECOMBINED as flag, which tanks the performance in situations where there
+			// Are reads into the vertex data. For this reason, keep a buffer that mirrors the capacity of the GPU buffer
+			// Where we actually write our data, and then use a UpdateResource call to make the update. Since these buffers
+			// Might have a decent size, use a separate allocator for them. The capacity and the size are expressed in
+			// Byte sizes, not in vertex counts
+			CapacityStream<CapacityStream<void>> buffers_mapping_data;
 			CapacityStream<UIDynamicStream<UISpriteTexture>> sprite_textures;
 			CapacityStream<UIDynamicStream<unsigned int>> sprite_cluster_subtreams;
 			ConstantBuffer region_viewport_info;
@@ -681,7 +687,7 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawDockspaceRegionData {
-			void* system;
+			UISystem* system;
 			UIDockspace* dockspace;
 			unsigned int border_index;
 			DockspaceType type;
@@ -691,8 +697,7 @@ namespace ECSEngine {
 			unsigned int draw_index;
 			unsigned int last_index;
 			unsigned int active_region_index;
-			void** system_buffers;
-			size_t* system_count;
+			Stream<CapacityStream<void>> system_buffers;
 			UIDockspaceRegion mouse_region;
 			float2 mouse_position;
 			Semaphore* texture_semaphore;
@@ -892,8 +897,7 @@ namespace ECSEngine {
 			bool clean_up_call_general;
 			unsigned char locked_window;
 
-			void** buffers;
-			size_t* counts;
+			Stream<CapacityStream<void>> buffers;
 
 			void* additional_hoverable_data;
 			void* additional_general_data;

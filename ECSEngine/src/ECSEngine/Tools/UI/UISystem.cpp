@@ -44,6 +44,56 @@ namespace ECSEngine {
 
 		static void ProcessTexture(unsigned int thread_index, World* world, void* data);
 
+		static void MoveDockspaceBorderEvent(
+			UISystem* system,
+			void* parameter,
+			Stream<CapacityStream<void>>,
+			float normalized_mouse_x,
+			float normalized_mouse_y,
+			const Mouse* mouse,
+			const Keyboard* keyboard
+		);
+
+		static void ResizeDockspaceEvent(
+			UISystem* system,
+			void* parameter,
+			Stream<CapacityStream<void>>,
+			float normalized_mouse_x,
+			float normalized_mouse_y,
+			const Mouse* mouse,
+			const Keyboard* keyboard
+		);
+
+		static void HoverOuterDockspaceBorderEvent(
+			UISystem* system,
+			void* parameter,
+			Stream<CapacityStream<void>>,
+			float normalized_mouse_x,
+			float normalized_mouse_y,
+			const Mouse* mouse,
+			const Keyboard* keyboard
+		);
+
+		static void HoverInnerDockspaceBorderEvent(
+			UISystem* system,
+			void* parameter,
+			Stream<CapacityStream<void>>,
+			float normalized_mouse_x,
+			float normalized_mouse_y,
+			const Mouse* mouse,
+			const Keyboard* keyboard
+		);
+
+		static void SkipEvent(
+			UISystem* system,
+			void* parameter,
+			Stream<CapacityStream<void>>,
+			float normalized_mouse_x,
+			float normalized_mouse_y,
+			const Mouse* mouse,
+			const Keyboard* keyboard
+		);
+
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<typename RollbackFunction>
@@ -136,6 +186,9 @@ namespace ECSEngine {
 			m_memory(memory), m_resource_manager(resource), m_task_manager(task_manager), m_application(application), m_frame_index(0),
 			m_texture_evict_count(0), m_texture_evict_target(60), m_window_os_size(window_os_size), m_monitor_size(monitor_size), m_aspect_ratio_factor(1.0f, 1.0f)
 		{
+			// We can use a pretty large value, since it's going to be virtual memory
+			m_draw_buffers_allocator = CreateGlobalMemoryManager(ECS_MB * 50, ECS_KB, ECS_MB * 50);
+
 			// Set the pixel size early on, since the descriptors will reference it
 			m_pixel_size.x = 2.0f / (float)m_window_os_size.x;
 			m_pixel_size.y = 2.0f / (float)m_window_os_size.y;
@@ -172,6 +225,7 @@ namespace ECSEngine {
 			total_memory += sizeof(InputLayout) * m_descriptors.materials.count;
 			total_memory += sizeof(SamplerState) * m_descriptors.materials.sampler_count;
 			total_memory += sizeof(VertexBuffer) * m_descriptors.materials.count;
+			total_memory += sizeof(CapacityStream<void>) * m_descriptors.materials.count;
 			total_memory += sizeof(UIDynamicStream<UISpriteTexture>) * ECS_TOOLS_UI_PASSES;
 
 			// for alignment
@@ -224,19 +278,28 @@ namespace ECSEngine {
 			buffer = AlignPointer(buffer, alignof(SamplerState));
 			m_resources.texture_samplers.InitializeFromBuffer(buffer, 0, m_descriptors.materials.sampler_count);
 
-
 			buffer = AlignPointer(buffer, alignof(VertexBuffer));
-			m_resources.system_draw.buffers = CapacityStream<VertexBuffer>((void*)buffer, m_descriptors.materials.count, m_descriptors.materials.count);
+			m_resources.system_draw.buffers.InitializeFromBuffer(buffer, m_descriptors.materials.count, m_descriptors.materials.count);
+
+			buffer = AlignPointer(buffer, alignof(CapacityStream<void>));
+			m_resources.system_draw.buffers_mapping_data.InitializeFromBuffer(buffer, m_descriptors.materials.count, m_descriptors.materials.count);
+
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
+				size_t vertex_byte_size = 0;
 				if (index == ECS_TOOLS_UI_SOLID_COLOR || index == ECS_TOOLS_UI_LINE) {
-					m_resources.system_draw.buffers[index] = m_graphics->CreateVertexBuffer(sizeof(UIVertexColor), m_descriptors.misc.system_vertex_buffers[index]);
+					vertex_byte_size = sizeof(UIVertexColor);
 				}
 				else if (index == ECS_TOOLS_UI_TEXT_SPRITE || index == ECS_TOOLS_UI_SPRITE || index == ECS_TOOLS_UI_SPRITE_CLUSTER) {
-					m_resources.system_draw.buffers[index] = m_graphics->CreateVertexBuffer(sizeof(UISpriteVertex), m_descriptors.misc.system_vertex_buffers[index]);
+					vertex_byte_size = sizeof(UISpriteVertex);
 				}
+				else {
+					ECS_ASSERT(false);
+				}
+				
+				m_resources.system_draw.buffers[index] = m_graphics->CreateVertexBuffer(vertex_byte_size, m_descriptors.misc.system_vertex_buffers[index]);
+				m_resources.system_draw.buffers_mapping_data[index].Initialize(&m_draw_buffers_allocator, vertex_byte_size * m_descriptors.misc.system_vertex_buffers[index]);
 			}
 
-			buffer += sizeof(VertexBuffer) * m_resources.system_draw.buffers.size;
 			m_resources.system_draw.region_viewport_info = m_graphics->CreateConstantBuffer(sizeof(float) * ECS_TOOLS_UI_CONSTANT_BUFFER_FLOAT_SIZE);
 
 			m_resources.system_draw.sprite_textures = CapacityStream<UIDynamicStream<UISpriteTexture>>((void*)buffer, 1, ECS_TOOLS_UI_PASSES);
@@ -3008,6 +3071,9 @@ namespace ECSEngine {
 		{
 			// releasing graphics objects
 			dockspace->borders[border_index].draw_resources.Release(m_graphics);
+			for (size_t index = 0; index < dockspace->borders[border_index].draw_resources.buffers_mapping_data.size; index++) {
+				dockspace->borders[border_index].draw_resources.buffers_mapping_data[index].Deallocate(&m_draw_buffers_allocator);
+			}
 
 			AllocatorPolymorphic allocator = Allocator();
 
@@ -3045,6 +3111,7 @@ namespace ECSEngine {
 			unsigned int vertex_buffer_count = m_descriptors.materials.count * ECS_TOOLS_UI_PASSES;
 			total_memory += sizeof(unsigned short) * m_descriptors.dockspaces.max_windows_border;
 			total_memory += sizeof(VertexBuffer) * vertex_buffer_count;
+			total_memory += sizeof(CapacityStream<void>) * vertex_buffer_count;
 			total_memory += sizeof(UIDynamicStream<UISpriteTexture>) * ECS_TOOLS_UI_PASSES * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS;
 			total_memory += sizeof(UIDynamicStream<unsigned int>) * ECS_TOOLS_UI_PASSES;
 			total_memory += alignof(void*);
@@ -3061,6 +3128,7 @@ namespace ECSEngine {
 				vertex_buffer_count
 				);
 			buffer += sizeof(VertexBuffer) * vertex_buffer_count;
+			border.draw_resources.buffers_mapping_data.InitializeFromBuffer(buffer, vertex_buffer_count, vertex_buffer_count);
 
 			border.draw_resources.sprite_textures = CapacityStream<UIDynamicStream<UISpriteTexture>>(
 				(void*)buffer,
@@ -3073,7 +3141,7 @@ namespace ECSEngine {
 				border.draw_resources.sprite_textures[index] = UIDynamicStream<UISpriteTexture>(
 					m_memory,
 					m_descriptors.dockspaces.border_default_sprite_texture_count
-					);
+				);
 			}
 
 			for (size_t index = 0; index < vertex_buffer_count; index++) {
@@ -3081,6 +3149,7 @@ namespace ECSEngine {
 					m_descriptors.materials.strides[index],
 					m_descriptors.materials.vertex_buffer_count[index]
 				);
+				border.draw_resources.buffers_mapping_data[index].Initialize(&m_draw_buffers_allocator, m_descriptors.materials.strides[index] * m_descriptors.materials.vertex_buffer_count[index]);
 			}
 
 			border.draw_resources.sprite_cluster_subtreams.InitializeFromBuffer(
@@ -3602,8 +3671,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::DetectHoverables(
-			size_t* counts,
-			void** buffers,
+			Stream<CapacityStream<void>> buffers,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			DockspaceType type,
@@ -3655,7 +3723,7 @@ namespace ECSEngine {
 
 				if (hoverable_handler->action[hoverable_index].phase == ECS_UI_DRAW_NORMAL) {
 					m_focused_window_data.additional_hoverable_data = additional_data;
-					HandleHoverable(mouse_position, buffers, counts);
+					HandleHoverable(mouse_position, buffers);
 				}
 				return true;
 			}
@@ -3668,8 +3736,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::DetectClickables(
-			size_t* counts,
-			void** buffers,
+			Stream<CapacityStream<void>> buffers,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			DockspaceType type,
@@ -3697,7 +3764,6 @@ namespace ECSEngine {
 
 				if (clickable_handler->action[clickable_index].phase == ECS_UI_DRAW_NORMAL) {
 					m_focused_window_data.buffers = buffers;
-					m_focused_window_data.counts = counts;
 					HandleFocusedWindowClickable(mouse_position, button_type);
 				}
 				return_value = true;
@@ -3711,8 +3777,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::DetectGenerals(
-			size_t* counts,
-			void** buffers,
+			Stream<CapacityStream<void>> buffers,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			DockspaceType type,
@@ -3762,7 +3827,6 @@ namespace ECSEngine {
 				if (general_handler->action[general_index].phase == ECS_UI_DRAW_NORMAL) {
 					m_focused_window_data.additional_general_data = additional_data;
 					m_focused_window_data.buffers = buffers;
-					m_focused_window_data.counts = counts;
 					HandleFocusedWindowGeneral(mouse_position);
 				}
 				return true;
@@ -3775,7 +3839,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::Draw(float2 mouse_position, void** system_buffers, size_t* system_counts, UISystemDoFrameOptions options)
+		void UISystem::Draw(float2 mouse_position, UISystemDoFrameOptions options)
 		{
 			PushBackgroundDockspace();
 
@@ -3813,8 +3877,7 @@ namespace ECSEngine {
 					data->is_fixed_default_when_border_zero = system->IsEmptyFixedDockspace(regions[index].dockspace);
 					data->mouse_region = { mouse_dockspace, mouse_dockspace_region, mouse_type };
 					data->mouse_position = mouse_position;
-					data->system_buffers = system_buffers;
-					data->system_count = system_counts;
+					data->system_buffers = m_resources.system_draw.buffers_mapping_data;
 					data->active_region_index = active_region_index;
 
 					unsigned int active_window_index = GetWindowIndexFromBorder(data->dockspace, data->border_index);
@@ -3902,11 +3965,7 @@ namespace ECSEngine {
 
 			m_graphics->DisableDepth();
 
-			// 2 times for hoverable and clickable/general system phase
-			void* buffers[ECS_TOOLS_UI_MATERIALS * 2];
-			size_t counts[ECS_TOOLS_UI_MATERIALS * 2] = { 0 };
-
-			m_resources.system_draw.Map(buffers, m_graphics->GetContext());
+			m_resources.system_draw.ResetCPUBuffers();
 			m_resources.system_draw.sprite_textures[0].Reset();
 			m_frame_pacing = ECS_UI_FRAME_PACING_NONE;
 
@@ -3916,13 +3975,12 @@ namespace ECSEngine {
 
 			m_resources.system_temp_allocator.Clear();
 
-			Draw(mouse_position, buffers, counts, options);
+			Draw(mouse_position, options);
 
-			m_focused_window_data.buffers = buffers;
-			m_focused_window_data.counts = counts;
+			m_focused_window_data.buffers = m_resources.system_draw.buffers_mapping_data;
 
 			if (m_focused_window_data.hoverable_handler.phase == ECS_UI_DRAW_SYSTEM) {
-				HandleHoverable(mouse_position, buffers, counts);
+				HandleHoverable(mouse_position, m_resources.system_draw.buffers_mapping_data);
 				SetFramePacing(ECS_UI_FRAME_PACING_LOW);
 			}
 			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
@@ -3956,16 +4014,16 @@ namespace ECSEngine {
 				m_event(
 					this,
 					m_event_data,
-					buffers,
-					counts,
+					m_resources.system_draw.buffers_mapping_data,
 					mouse_position.x,
 					mouse_position.y,
 					m_mouse,
 					m_keyboard
 				);
 			}
-
-			m_resources.system_draw.UnmapAll(m_graphics->GetContext());
+			
+			m_resources.system_draw.UpdateNormalBuffers(m_graphics);
+			m_resources.system_draw.UpdateLateBuffers(m_graphics);
 			SetViewport(
 				{ -1.0f, -1.0f },
 				{ 2.0f, 2.0f },
@@ -3973,7 +4031,7 @@ namespace ECSEngine {
 			);
 			DrawPass<ECS_UI_DRAW_SYSTEM>(
 				m_resources.system_draw,
-				counts,
+				m_resources.system_draw.buffers_mapping_data,
 				{ -1.0f, -1.0f },
 				{ 2.0f, 2.0f },
 				m_graphics->GetContext()
@@ -4053,8 +4111,7 @@ namespace ECSEngine {
 
 		void UISystem::DrawDockingGizmo(
 			float2 position,
-			size_t* counts,
-			void** buffers,
+			Stream<CapacityStream<void>> buffers,
 			bool draw_central_rectangle,
 			float2* transforms
 		)
@@ -4099,75 +4156,68 @@ namespace ECSEngine {
 			transforms[8] = central_rectangle_position;
 			transforms[9] = scale;
 
-			UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
-			if (draw_central_rectangle)
-				SetSolidColorRectangle(central_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, solid_color, counts[ECS_TOOLS_UI_SOLID_COLOR]);
+			if (draw_central_rectangle) {
+				SetSolidColorRectangle(central_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, buffers);
+			}
 
-			SetSolidColorRectangle(left_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, solid_color, counts[ECS_TOOLS_UI_SOLID_COLOR]);
-			SetSolidColorRectangle(right_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, solid_color, counts[ECS_TOOLS_UI_SOLID_COLOR]);
-			SetSolidColorRectangle(bottom_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, solid_color, counts[ECS_TOOLS_UI_SOLID_COLOR]);
-			SetSolidColorRectangle(top_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, solid_color, counts[ECS_TOOLS_UI_SOLID_COLOR]);
+			SetSolidColorRectangle(left_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, buffers);
+			SetSolidColorRectangle(right_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, buffers);
+			SetSolidColorRectangle(bottom_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, buffers);
+			SetSolidColorRectangle(top_rectangle_position, scale, m_descriptors.color_theme.docking_gizmo_background, buffers);
 
 			float2 border_scale = m_pixel_size;
-			if (draw_central_rectangle)
-				CreateSolidColorRectangleBorder<false>(central_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, counts, buffers);
+			if (draw_central_rectangle) {
+				CreateSolidColorRectangleBorder<false>(central_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
+			}
 
-			CreateSolidColorRectangleBorder<false>(left_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, counts, buffers);
-			CreateSolidColorRectangleBorder<false>(right_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, counts, buffers);
-			CreateSolidColorRectangleBorder<false>(bottom_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, counts, buffers);
-			CreateSolidColorRectangleBorder<false>(top_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, counts, buffers);
+			CreateSolidColorRectangleBorder<false>(left_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
+			CreateSolidColorRectangleBorder<false>(right_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
+			CreateSolidColorRectangleBorder<false>(bottom_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
+			CreateSolidColorRectangleBorder<false>(top_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
 
 			// left
-			CreateDottedLine<false>(
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR],
+			CreateDottedLine<false, UIVertexColor>(
+				buffers[ECS_TOOLS_UI_SOLID_COLOR],
 				ECS_TOOLS_UI_DOCKING_GIZMO_LINE_COUNT,
 				{ left_rectangle_position.x + half_scale.x - gizmo_line_width * 0.5f, left_rectangle_position.y },
 				left_rectangle_position.y + scale.y,
 				ECS_TOOLS_UI_DOCKING_GIZMO_SPACING,
 				normalized_width,
 				m_descriptors.color_theme.docking_gizmo_border
-				);
-			counts[ECS_TOOLS_UI_SOLID_COLOR] += ECS_TOOLS_UI_DOCKING_GIZMO_LINE_COUNT * 6;
+			);
 
 			// top
-			CreateDottedLine<true>(
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR],
+			CreateDottedLine<true, UIVertexColor>(
+				buffers[ECS_TOOLS_UI_SOLID_COLOR],
 				ECS_TOOLS_UI_DOCKING_GIZMO_LINE_COUNT,
 				{ top_rectangle_position.x, top_rectangle_position.y + half_scale.y - normalized_width * 0.5f },
 				top_rectangle_position.x + scale.x,
 				normalized_spacing,
 				gizmo_line_width,
 				m_descriptors.color_theme.docking_gizmo_border
-				);
-			counts[ECS_TOOLS_UI_SOLID_COLOR] += ECS_TOOLS_UI_DOCKING_GIZMO_LINE_COUNT * 6;
+			);
 
 			// right
-			CreateDottedLine<false>(
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR],
+			CreateDottedLine<false, UIVertexColor>(
+				buffers[ECS_TOOLS_UI_SOLID_COLOR],
 				ECS_TOOLS_UI_DOCKING_GIZMO_LINE_COUNT,
 				{ right_rectangle_position.x + half_scale.x - gizmo_line_width * 0.5f, right_rectangle_position.y },
 				right_rectangle_position.y + scale.y,
 				ECS_TOOLS_UI_DOCKING_GIZMO_SPACING,
 				normalized_width,
 				m_descriptors.color_theme.docking_gizmo_border
-				);
-			counts[ECS_TOOLS_UI_SOLID_COLOR] += ECS_TOOLS_UI_DOCKING_GIZMO_LINE_COUNT * 6;
+			);
 
 			// bottom
-			CreateDottedLine<true>(
-				solid_color,
-				counts[ECS_TOOLS_UI_SOLID_COLOR],
+			CreateDottedLine<true, UIVertexColor>(
+				buffers[ECS_TOOLS_UI_SOLID_COLOR],
 				ECS_TOOLS_UI_DOCKING_GIZMO_LINE_COUNT,
 				{ bottom_rectangle_position.x, bottom_rectangle_position.y + half_scale.y - normalized_width * 0.5f },
 				bottom_rectangle_position.x + scale.x,
 				normalized_spacing,
 				gizmo_line_width,
 				m_descriptors.color_theme.docking_gizmo_border
-				);
-			counts[ECS_TOOLS_UI_SOLID_COLOR] += ECS_TOOLS_UI_DOCKING_GIZMO_LINE_COUNT * 6;
+			);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -4195,10 +4245,8 @@ namespace ECSEngine {
 
 			float2 region_half_scale = { region_scale.x * 0.5f, region_scale.y * 0.5f };
 
-			size_t vertex_count[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES] = { 0 };
-			void* buffers[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES];
-
-			border.draw_resources.Map(buffers, m_graphics->GetContext());
+			border.draw_resources.ResetCPUBuffers();
+			Stream<CapacityStream<void>> border_buffers = border.draw_resources.buffers_mapping_data;
 
 			bool has_snapshot_mode = data->snapshot_mode;
 			bool is_retained = false;
@@ -4660,7 +4708,6 @@ namespace ECSEngine {
 				ActionData window_handler;
 				window_handler.border_index = data->border_index;
 				window_handler.buffers = data->system_buffers;
-				window_handler.counts = data->system_count;
 				window_handler.data = m_windows[window_index].default_handler.data;
 				window_handler.dockspace = data->dockspace;
 				window_handler.keyboard = m_keyboard;
@@ -4920,11 +4967,9 @@ namespace ECSEngine {
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			float offset_mask,
-			void** buffers,
-			size_t* vertex_count
+			Stream<CapacityStream<void>> buffers
 		)
 		{
-			UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
 			unsigned int window_index = GetWindowIndexFromBorder(dockspace, border_index);
 			Color background_color = m_windows[window_index].descriptors->color_theme.background;
 			float2 dockspace_region_position = GetDockspaceRegionPosition(dockspace, border_index, offset_mask);
@@ -4933,8 +4978,7 @@ namespace ECSEngine {
 				dockspace_region_position,
 				dockspace_region_scale,
 				background_color,
-				solid_color,
-				vertex_count[ECS_TOOLS_UI_SOLID_COLOR]
+				buffers[ECS_TOOLS_UI_SOLID_COLOR]
 			);
 			UIDragDockspaceData drag_dockspace_data;
 			drag_dockspace_data.floating_dockspace = nullptr;
@@ -5474,7 +5518,7 @@ namespace ECSEngine {
 			CapacityStream<VertexBuffer> buffers,
 			CapacityStream<UIDynamicStream<UISpriteTexture>> sprite_textures,
 			ConstantBuffer& viewport_buffer,
-			const size_t* counts,
+			Stream<CapacityStream<void>> buffers_mapping_data,
 			GraphicsContext* context,
 			Stream<UIDynamicStream<unsigned int>> sprite_cluster_counts,
 			unsigned int material_offset
@@ -5483,22 +5527,22 @@ namespace ECSEngine {
 
 			m_graphics->DisableCulling();
 
-			if (counts[ECS_TOOLS_UI_SOLID_COLOR + material_offset] > 0) {
+			if (buffers_mapping_data[ECS_TOOLS_UI_SOLID_COLOR + material_offset].size > 0) {
 				BindVertexBuffer(buffers[ECS_TOOLS_UI_SOLID_COLOR + material_offset], context);
 				SetSolidColorRenderState(context);
-				ECSEngine::Draw(counts[ECS_TOOLS_UI_SOLID_COLOR + material_offset], context);
+				ECSEngine::Draw(buffers_mapping_data[ECS_TOOLS_UI_SOLID_COLOR + material_offset].size, context);
 			}
 
-			if (counts[ECS_TOOLS_UI_LINE + material_offset] > 0) {
+			if (buffers_mapping_data[ECS_TOOLS_UI_LINE + material_offset].size > 0) {
 				BindVertexBuffer(buffers[ECS_TOOLS_UI_LINE + material_offset], context);
 				SetSolidColorRenderState(context);
 
 				Topology topology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 				BindTopology(topology, context);
-				ECSEngine::Draw(counts[ECS_TOOLS_UI_LINE + material_offset], context);
+				ECSEngine::Draw(buffers_mapping_data[ECS_TOOLS_UI_LINE + material_offset].size, context);
 			}
 
-			if (counts[ECS_TOOLS_UI_SPRITE + material_offset] > 0) {
+			if (buffers_mapping_data[ECS_TOOLS_UI_SPRITE + material_offset].size > 0) {
 				BindVertexBuffer(buffers[ECS_TOOLS_UI_SPRITE + material_offset], context);
 				SetSpriteRenderState(context);
 
@@ -5513,7 +5557,7 @@ namespace ECSEngine {
 				}
 			}
 
-			if (counts[ECS_TOOLS_UI_SPRITE_CLUSTER + material_offset] > 0) {
+			if (buffers_mapping_data[ECS_TOOLS_UI_SPRITE_CLUSTER + material_offset].size > 0) {
 				BindVertexBuffer(buffers[ECS_TOOLS_UI_SPRITE_CLUSTER + material_offset], context);
 				SetSpriteRenderState(context);
 
@@ -5529,10 +5573,10 @@ namespace ECSEngine {
 				}
 			}
 
-			if (counts[ECS_TOOLS_UI_TEXT_SPRITE + material_offset] > 0) {
+			if (buffers_mapping_data[ECS_TOOLS_UI_TEXT_SPRITE + material_offset].size > 0) {
 				BindVertexBuffer(buffers[ECS_TOOLS_UI_TEXT_SPRITE + material_offset], context);
 				SetTextSpriteRenderState(context);
-				ECSEngine::Draw(counts[ECS_TOOLS_UI_TEXT_SPRITE + material_offset], context);
+				ECSEngine::Draw(buffers_mapping_data[ECS_TOOLS_UI_TEXT_SPRITE + material_offset].size, context);
 			}
 
 			m_graphics->EnableCulling();
@@ -5544,7 +5588,7 @@ namespace ECSEngine {
 		template<ECS_UI_DRAW_PHASE phase>
 		void UISystem::DrawPass(
 			UIDrawResources& resources,
-			const size_t* counts,
+			Stream<CapacityStream<void>> buffers_mapping_data,
 			float2 viewport_position,
 			float2 viewport_scale,
 			GraphicsContext* context
@@ -5562,16 +5606,16 @@ namespace ECSEngine {
 			UnmapBuffer(resources.region_viewport_info.buffer, context);
 
 			if constexpr (phase == ECS_UI_DRAW_SYSTEM) {
-				DrawPass(resources.buffers, resources.sprite_textures, resources.region_viewport_info, counts, context, resources.sprite_cluster_subtreams, 0);
+				DrawPass(resources.buffers, resources.sprite_textures, resources.region_viewport_info, buffers_mapping_data, context, resources.sprite_cluster_subtreams, 0);
 			}
 			else {
-				DrawPass(resources.buffers, resources.sprite_textures, resources.region_viewport_info, counts, context, resources.sprite_cluster_subtreams, (unsigned int)phase * ECS_TOOLS_UI_MATERIALS);
+				DrawPass(resources.buffers, resources.sprite_textures, resources.region_viewport_info, buffers_mapping_data, context, resources.sprite_cluster_subtreams, (unsigned int)phase * ECS_TOOLS_UI_MATERIALS);
 			}
 		}
 
-		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_NORMAL>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
-		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_LATE>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
-		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_SYSTEM>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
+		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_NORMAL>(UIDrawResources&, Stream<CapacityStream<void>>, float2, float2, GraphicsContext*);
+		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_LATE>(UIDrawResources&, Stream<CapacityStream<void>>, float2, float2, GraphicsContext*);
+		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_SYSTEM>(UIDrawResources&, Stream<CapacityStream<void>>, float2, float2, GraphicsContext*);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -7459,14 +7503,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::HandleHoverable(float2 mouse_position, void** buffers, size_t* counts)
+		void UISystem::HandleHoverable(float2 mouse_position, Stream<CapacityStream<void>> buffers)
 		{
 			ActionData action_data;
 			action_data.system = this;
 			action_data.dockspace = m_focused_window_data.hovered_location.dockspace;
 			action_data.border_index = m_focused_window_data.hovered_location.border_index;
 			action_data.buffers = buffers;
-			action_data.counts = counts;
 			action_data.type = m_focused_window_data.hovered_location.type;
 			action_data.mouse_position = mouse_position;
 			action_data.keyboard = m_keyboard;
@@ -7606,9 +7649,7 @@ namespace ECSEngine {
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			float2 rectangle_position,
-			float2 rectangle_scale,
-			void** system_buffers,
-			size_t* system_counts
+			float2 rectangle_scale
 		)
 		{
 			Color lightened_color = LightenColorClamp(m_descriptors.color_theme.docking_gizmo_background, 1.3f);
@@ -7618,8 +7659,7 @@ namespace ECSEngine {
 				ECS_TOOLS_UI_TEXTURE_MASK,
 				rectangle_position,
 				rectangle_scale,
-				system_buffers,
-				system_counts,
+				m_resources.system_draw.buffers_mapping_data,
 				Color(
 					lightened_color.red,
 					lightened_color.green,
@@ -13484,8 +13524,7 @@ namespace ECSEngine {
 		void MoveDockspaceBorderEvent(
 			UISystem* system,
 			void* parameter,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
 			const Mouse* mouse,
@@ -13513,7 +13552,6 @@ namespace ECSEngine {
 					}
 					system->SetNewFocusedDockspace(floating_dockspace, floating_type);
 					system->SearchAndSetNewFocusedDockspaceRegion(data->dockspace, data->border_index, data->type);
-					UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
 
 					float2 position = system->GetInnerDockspaceBorderPosition(data->dockspace, data->border_index, data->type);
 					float2 scale = system->GetInnerDockspaceBorderScale(data->dockspace, data->border_index, data->type);
@@ -13521,17 +13559,13 @@ namespace ECSEngine {
 						position,
 						scale,
 						DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-						solid_color,
-						counts[ECS_TOOLS_UI_SOLID_COLOR]
+						buffers
 					);
 					system->MoveDockspaceBorder(data->dockspace->borders.buffer, data->border_index, delta_x, delta_y);
 				}
 				else {
 					system->DeallocateEventData();
 					system->m_event = SkipEvent;
-					UIVertexColor* solid_color = nullptr;
-
-					solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
 
 					float2 position = system->GetInnerDockspaceBorderPosition(data->dockspace, data->border_index, data->type);
 					float2 scale = system->GetInnerDockspaceBorderScale(data->dockspace, data->border_index, data->type);
@@ -13539,8 +13573,7 @@ namespace ECSEngine {
 						position,
 						scale,
 						DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-						solid_color,
-						counts[ECS_TOOLS_UI_SOLID_COLOR]
+						buffers
 					);
 				}
 
@@ -13559,8 +13592,7 @@ namespace ECSEngine {
 		void ResizeDockspaceEvent(
 			UISystem* system,
 			void* parameter,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
 			const Mouse* mouse,
@@ -13593,7 +13625,6 @@ namespace ECSEngine {
 					float delta_x = mouse_delta.x;
 					float delta_y = mouse_delta.y;
 
-					UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
 					if (data->border_hover.IsTop()) {
 						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, ECS_UI_BORDER_TOP);
 						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, ECS_UI_BORDER_TOP);
@@ -13601,8 +13632,7 @@ namespace ECSEngine {
 							border_position,
 							border_scale,
 							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
+							buffers
 						);
 						system->ResizeDockspace(data->dockspace_index, delta_y, ECS_UI_BORDER_TOP, data->dockspace_type);
 					}
@@ -13613,8 +13643,7 @@ namespace ECSEngine {
 							border_position,
 							border_scale,
 							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
+							buffers
 						);
 						system->ResizeDockspace(data->dockspace_index, delta_y, ECS_UI_BORDER_BOTTOM, data->dockspace_type);
 					}
@@ -13625,8 +13654,7 @@ namespace ECSEngine {
 							border_position,
 							border_scale,
 							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
+							buffers
 						);
 						system->ResizeDockspace(data->dockspace_index, delta_x, ECS_UI_BORDER_RIGHT, data->dockspace_type);
 					}
@@ -13637,8 +13665,7 @@ namespace ECSEngine {
 							border_position,
 							border_scale,
 							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
+							buffers
 						);
 						system->ResizeDockspace(data->dockspace_index, delta_x, ECS_UI_BORDER_LEFT, data->dockspace_type);
 					}
@@ -13694,8 +13721,7 @@ namespace ECSEngine {
 		void HoverOuterDockspaceBorderEvent(
 			UISystem* system,
 			void* parameter,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
 			const Mouse* mouse,
@@ -13711,7 +13737,6 @@ namespace ECSEngine {
 			const UIDockspace* dockspace = &dockspaces[(unsigned int)data->dockspace_type][data->dockspace_index];
 
 			if (system->m_focused_window_data.locked_window == 0 || (system->m_focused_window_data.active_location.dockspace == dockspace)) {
-				UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
 				if (data->border_hover.IsTop()) {
 					float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, ECS_UI_BORDER_TOP);
 					float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, ECS_UI_BORDER_TOP);
@@ -13719,8 +13744,7 @@ namespace ECSEngine {
 						border_position,
 						border_scale,
 						system->m_descriptors.color_theme.hovered_borders,
-						solid_color,
-						counts[ECS_TOOLS_UI_SOLID_COLOR]
+						buffers
 					);
 				}
 				else if (data->border_hover.IsBottom()) {
@@ -13730,8 +13754,7 @@ namespace ECSEngine {
 						border_position,
 						border_scale,
 						system->m_descriptors.color_theme.hovered_borders,
-						solid_color,
-						counts[ECS_TOOLS_UI_SOLID_COLOR]
+						buffers
 					);
 				}
 				if (data->border_hover.IsRight()) {
@@ -13741,8 +13764,7 @@ namespace ECSEngine {
 						border_position,
 						border_scale,
 						system->m_descriptors.color_theme.hovered_borders,
-						solid_color,
-						counts[ECS_TOOLS_UI_SOLID_COLOR]
+						buffers
 					);
 				}
 				else if (data->border_hover.IsLeft()) {
@@ -13752,8 +13774,7 @@ namespace ECSEngine {
 						border_position,
 						border_scale,
 						system->m_descriptors.color_theme.hovered_borders,
-						solid_color,
-						counts[ECS_TOOLS_UI_SOLID_COLOR]
+						buffers
 					);
 				}
 
@@ -13794,8 +13815,7 @@ namespace ECSEngine {
 		void HoverInnerDockspaceBorderEvent(
 			UISystem* system,
 			void* parameter,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
 			const Mouse* mouse,
@@ -13803,8 +13823,6 @@ namespace ECSEngine {
 		) {
 			UIMoveDockspaceBorderEventData* data = (UIMoveDockspaceBorderEventData*)parameter;
 			const float masks[4] = { 1.0f, 0.0f, 1.0f, 0.0f };
-
-			UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
 
 			if (system->m_focused_window_data.locked_window == 0 || (system->m_focused_window_data.active_location.dockspace == data->dockspace &&
 				system->m_focused_window_data.active_location.border_index == data->border_index)) {
@@ -13814,8 +13832,7 @@ namespace ECSEngine {
 					position,
 					scale,
 					system->m_descriptors.color_theme.hovered_borders,
-					solid_color,
-					counts[ECS_TOOLS_UI_SOLID_COLOR]
+					buffers
 				);
 
 				if (data->type == DockspaceType::FloatingHorizontal || data->type == DockspaceType::Horizontal) {
@@ -13835,8 +13852,7 @@ namespace ECSEngine {
 		void SkipEvent(
 			UISystem* system,
 			void* parameter,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
 			const Mouse* mouse,
