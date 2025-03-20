@@ -10,8 +10,7 @@
 								ECSEngine::float2 scale = action_data->scale; \
 								void* _data = action_data->data; \
 								void* _additional_data = action_data->additional_data; \
-								void** buffers = action_data->buffers; \
-								size_t* counts = action_data->counts; \
+								Stream<CapacityStream<void>> buffers = action_data->buffers; \
 								ECSEngine::Keyboard* keyboard = action_data->keyboard; \
 								ECSEngine::Mouse* mouse = action_data->mouse; \
 								ECSEngine::float2 mouse_delta = system != nullptr ? system->GetMouseDelta(mouse_position) : ECSEngine::float2(0.0f, 0.0f);

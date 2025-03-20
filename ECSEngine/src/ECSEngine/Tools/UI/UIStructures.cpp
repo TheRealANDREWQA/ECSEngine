@@ -371,31 +371,22 @@ namespace ECSEngine {
 			);
 		}
 
-		void UIDrawResources::Map(void** void_buffers, GraphicsContext* context)
-		{
-			for (size_t index = 0; index < buffers.size; index++) {
-				void_buffers[index] = MapBuffer(buffers[index].buffer, context);
-			}
-		}
-
-		void UIDrawResources::UnmapNormal(GraphicsContext* context) {
+		void UIDrawResources::UpdateNormalBuffers(Graphics* graphics) {
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-				UnmapBuffer(buffers[index].buffer, context);
+				graphics->UpdateBuffer(buffers[index].buffer, buffers_mapping_data[index].buffer, buffers_mapping_data[index].size);
 			}
 		}
 
-		void UIDrawResources::UnmapLate(GraphicsContext* context) {
-			Unmap(context, ECS_TOOLS_UI_MATERIALS, ECS_TOOLS_UI_MATERIALS * 2);
+		void UIDrawResources::UpdateLateBuffers(Graphics* graphics) {
+			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
+				size_t final_index = index + ECS_TOOLS_UI_MATERIALS;
+				graphics->UpdateBuffer(buffers[final_index].buffer, buffers_mapping_data[final_index].buffer, buffers_mapping_data[final_index].size);
+			}
 		}
 
-		void UIDrawResources::UnmapAll(GraphicsContext* context) {
-			Unmap(context, 0, buffers.size);
-		}
-
-		void UIDrawResources::Unmap(GraphicsContext* context, unsigned int starting_index, unsigned int end_index)
-		{
-			for (size_t index = starting_index; index < end_index; index++) {
-				UnmapBuffer(buffers[index].buffer, context);
+		void UIDrawResources::ResetCPUBuffers() {
+			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS * 2; index++) {
+				buffers_mapping_data[index].size = 0;
 			}
 		}
 
