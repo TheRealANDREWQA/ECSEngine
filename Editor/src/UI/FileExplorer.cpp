@@ -2788,10 +2788,6 @@ data->file_functors.Insert(action, identifier);
 	average_count++;
 	average_values /= average_count;
 #endif
-
-	if (!drawer.initializer) {
-		ClearAllocator(drawer.SnapshotRunnableAllocator());
-	}
 }
 
 void InitializeFileExplorer(EditorState* editor_state)
@@ -2886,7 +2882,7 @@ void FileExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* edit
 
 	descriptor.draw = FileExplorerDraw;
 	descriptor.private_action = FileExplorerPrivateAction;
-	//descriptor.retained_mode = FileExplorerRetainedMode;
+	descriptor.retained_mode = FileExplorerRetainedMode;
 }
 
 void CreateFileExplorer(EditorState* editor_state) {
