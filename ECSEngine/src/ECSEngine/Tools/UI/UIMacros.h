@@ -22,7 +22,7 @@
 							); 
 
 #define UI_ACTION_IS_THE_SAME_AS_PREVIOUS data->IsTheSameData(additional_data)
-#define UI_ACTION_IS_NOT_CLEAN_UP_CALL (buffers != nullptr && counts != nullptr)
+#define UI_ACTION_IS_NOT_CLEAN_UP_CALL (buffers.size > 0)
 
 #define ECS_TOOLS_UI_RESIZABLE_MEMORY_ARENA
 

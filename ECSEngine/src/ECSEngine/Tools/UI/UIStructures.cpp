@@ -372,21 +372,43 @@ namespace ECSEngine {
 		}
 
 		void UIDrawResources::UpdateNormalBuffers(Graphics* graphics) {
+			size_t vertex_byte_size[ECS_TOOLS_UI_MATERIALS] = {
+				sizeof(UIVertexColor),
+				sizeof(UISpriteVertex),
+				sizeof(UISpriteVertex),
+				sizeof(UISpriteVertex),
+				sizeof(UIVertexColor)
+			};
+
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-				graphics->UpdateBuffer(buffers[index].buffer, buffers_mapping_data[index].buffer, buffers_mapping_data[index].size);
+				graphics->UpdateBuffer(buffers[index].buffer, buffers_mapping_data[index].buffer, buffers_mapping_data[index].size * vertex_byte_size[index]);
 			}
 		}
 
 		void UIDrawResources::UpdateLateBuffers(Graphics* graphics) {
+			size_t vertex_byte_size[ECS_TOOLS_UI_MATERIALS] = {
+				sizeof(UIVertexColor),
+				sizeof(UISpriteVertex),
+				sizeof(UISpriteVertex),
+				sizeof(UISpriteVertex),
+				sizeof(UIVertexColor)
+			};
+
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
 				size_t final_index = index + ECS_TOOLS_UI_MATERIALS;
-				graphics->UpdateBuffer(buffers[final_index].buffer, buffers_mapping_data[final_index].buffer, buffers_mapping_data[final_index].size);
+				graphics->UpdateBuffer(buffers[final_index].buffer, buffers_mapping_data[final_index].buffer, buffers_mapping_data[final_index].size * vertex_byte_size[index]);
 			}
 		}
 
-		void UIDrawResources::ResetCPUBuffers() {
-			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS * 2; index++) {
+		void UIDrawResources::ResetCPUBuffersNormal() {
+			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
 				buffers_mapping_data[index].size = 0;
+			}
+		}
+
+		void UIDrawResources::ResetCPUBuffersLate() {
+			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
+				buffers_mapping_data[index + ECS_TOOLS_UI_MATERIALS].size = 0;
 			}
 		}
 
@@ -815,7 +837,7 @@ namespace ECSEngine {
 		bool UIDockspaceBorderDrawOutputSnapshot::IsValid() const
 		{
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS * (ECS_TOOLS_UI_PASSES + 1); index++) {
-				if (counts[index] != 0) {
+				if (buffers[index].size > 0) {
 					return true;
 				}
 			}
@@ -836,24 +858,23 @@ namespace ECSEngine {
 			for (size_t pass_index = 0; pass_index < ECS_TOOLS_UI_PASSES; pass_index++) {
 				size_t offset = pass_index * ECS_TOOLS_UI_MATERIALS;
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					if (counts[offset + index] > 0) {
-						memcpy(restore_info->buffers[offset + index], buffers[offset + index], vertex_byte_sizes[index] * counts[offset + index]);
+					if (buffers[offset + index].size > 0) {
+						restore_info->buffers[offset + index].CopyOther(buffers[offset + index], vertex_byte_sizes[index]);
 					}
-					restore_info->counts[offset + index] = counts[offset + index];
 				}
 			}
 
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
 				size_t offset = ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES;
-				if (counts[offset + index] > 0) {
-					size_t previous_count = restore_info->system_counts[index];
+				if (buffers[offset + index].size > 0) {
+					size_t previous_count = restore_info->system_buffers[index].size;
 					memcpy(
-						OffsetPointer(restore_info->system_buffers[index], previous_count * vertex_byte_sizes[index]),
-						buffers[offset + index],
-						vertex_byte_sizes[index] * counts[offset + index]
+						OffsetPointer(restore_info->system_buffers[index].buffer, previous_count * vertex_byte_sizes[index]),
+						buffers[offset + index].buffer,
+						vertex_byte_sizes[index] * buffers[offset + index].size
 					);
 				}
-				restore_info->system_counts[index] += counts[offset + index];
+				restore_info->system_buffers[index].size += buffers[offset + index].size;
 			}
 
 			
@@ -899,15 +920,13 @@ namespace ECSEngine {
 			for (size_t index = 0; index < runnables.size; index++) {
 				if (runnables[index].draw_phase == ECS_UI_DRAW_SYSTEM) {
 					restore_info->runnable_data.buffers = restore_info->system_buffers;
-					restore_info->runnable_data.counts = restore_info->system_counts;
 				}
 				else if (runnables[index].draw_phase == ECS_UI_DRAW_LATE) {
-					restore_info->runnable_data.buffers = restore_info->buffers + ECS_TOOLS_UI_MATERIALS;
-					restore_info->runnable_data.counts = restore_info->counts + ECS_TOOLS_UI_MATERIALS;
+					restore_info->runnable_data.buffers = restore_info->buffers.SliceAt(ECS_TOOLS_UI_MATERIALS);
+
 				}
 				else {
 					restore_info->runnable_data.buffers = restore_info->buffers;
-					restore_info->runnable_data.counts = restore_info->counts;
 				}
 				should_redraw |= runnables[index].function(runnables[index].data, &restore_info->runnable_data);
 			}
@@ -957,31 +976,26 @@ namespace ECSEngine {
 			for (size_t pass_index = 0; pass_index < ECS_TOOLS_UI_PASSES; pass_index++) {
 				size_t offset = pass_index * ECS_TOOLS_UI_MATERIALS;
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					size_t allocation_size = vertex_byte_sizes[index] * info->counts[offset + index];
-					if (allocation_size > 0) {
-						buffers[offset + index] = AllocateEx(allocator, allocation_size);
-						memcpy(buffers[offset + index], info->buffers[offset + index], allocation_size);
-					}
-					else {
-						buffers[offset + index] = nullptr;
-					}
-					counts[offset + index] = info->counts[offset + index];
+					buffers[offset + index].Initialize(allocator, info->buffers[offset + index].size * vertex_byte_sizes[index]);
+					buffers[offset + index].capacity /= vertex_byte_sizes[index];
+					buffers[offset + index].CopyOther(info->buffers[offset + index], vertex_byte_sizes[index]);
 				}
 			}
 
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
 				size_t offset = ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES;
-				size_t count = info->system_counts[index] - info->previous_system_counts[index];
+				size_t count = info->system_buffers[index].size - info->previous_system_counts[index];
 				size_t allocation_size = vertex_byte_sizes[index] * count;
 				if (allocation_size > 0) {
-					buffers[offset + index] = AllocateEx(allocator, allocation_size);
+					buffers[offset + index].buffer = AllocateEx(allocator, allocation_size);
 					size_t buffer_offset = vertex_byte_sizes[index] * info->previous_system_counts[index];
-					memcpy(buffers[offset + index], OffsetPointer(info->system_buffers[index], buffer_offset), allocation_size);
+					memcpy(buffers[offset + index].buffer, OffsetPointer(info->system_buffers[index].buffer, buffer_offset), allocation_size);
 				}
 				else {
-					buffers[offset + index] = nullptr;
+					buffers[offset + index] = {};
 				}
-				counts[offset + index] = count;
+				buffers[offset + index].size = count;
+				buffers[offset + index].capacity = count;
 			}
 
 			auto copy_sprite_textures = [&](size_t sprite_count, size_t sprite_offset, size_t pass_index, size_t texture_index_offset) {
@@ -1006,7 +1020,7 @@ namespace ECSEngine {
 			};
 
 			for (size_t pass_index = 0; pass_index < ECS_TOOLS_UI_PASSES; pass_index++) {
-				size_t sprite_count = info->counts[pass_index * ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE] / 6;
+				size_t sprite_count = info->buffers[pass_index * ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE].size / 6;
 				copy_sprite_textures(sprite_count, 0, pass_index, ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFER_INDEX);
 
 				cluster_sprite_counts[pass_index] = {};
@@ -1020,7 +1034,7 @@ namespace ECSEngine {
 			}
 
 			// For the system draw, just copy the sprite textures
-			size_t system_sprite_count = (info->system_counts[ECS_TOOLS_UI_SPRITE] - info->previous_system_counts[ECS_TOOLS_UI_SPRITE]) / 6;
+			size_t system_sprite_count = (info->system_buffers[ECS_TOOLS_UI_SPRITE].size - info->previous_system_counts[ECS_TOOLS_UI_SPRITE]) / 6;
 			copy_sprite_textures(
 				system_sprite_count, 
 				info->previous_system_counts[ECS_TOOLS_UI_SPRITE] / 6, 
@@ -1031,7 +1045,7 @@ namespace ECSEngine {
 			// Copy the sprite cluster information
 			cluster_sprite_counts[ECS_TOOLS_UI_PASSES] = {};
 			sprites[ECS_TOOLS_UI_PASSES * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX] = {};
-			if (info->system_counts[ECS_TOOLS_UI_SPRITE_CLUSTER] - info->previous_system_counts[ECS_TOOLS_UI_SPRITE_CLUSTER] > 0) {
+			if (info->system_buffers[ECS_TOOLS_UI_SPRITE_CLUSTER].size - info->previous_system_counts[ECS_TOOLS_UI_SPRITE_CLUSTER] > 0) {
 				Stream<unsigned int> added_clusters_slice = info->system_cluster_sprite_count[0].SliceAt(info->previous_system_cluster_count);
 				cluster_sprite_counts[ECS_TOOLS_UI_PASSES].InitializeAndCopy(allocator, added_clusters_slice);
 				copy_sprite_textures(added_clusters_slice.size, info->previous_system_cluster_count, 0, ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX);
@@ -1054,10 +1068,8 @@ namespace ECSEngine {
 
 		void UIDockspaceBorderDrawOutputSnapshot::Deallocate(AllocatorPolymorphic allocator, AllocatorPolymorphic runnable_allocator, bool deallocate_runnable_data)
 		{
-			for (size_t index = 0; index < ECS_COUNTOF(counts); index++) {
-				if (counts[index] != 0 && buffers[index] != nullptr) {
-					DeallocateEx(allocator, buffers[index]);
-				}
+			for (size_t index = 0; index < ECS_COUNTOF(buffers); index++) {
+				buffers[index].Deallocate(allocator);
 			}
 
 			for (size_t index = 0; index < ECS_COUNTOF(sprites); index++) {

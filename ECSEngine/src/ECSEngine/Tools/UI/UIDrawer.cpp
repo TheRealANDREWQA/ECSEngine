@@ -482,150 +482,114 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIVertexColor* UIDrawer::HandleSolidColorBuffer(size_t configuration) const {
+		CapacityStream<void>& UIDrawer::HandleSolidColorBuffer(size_t configuration) {
+			return (CapacityStream<void>&)(((const UIDrawer*)this)->HandleSolidColorBuffer(configuration));
+		}
+
+		const CapacityStream<void>& UIDrawer::HandleSolidColorBuffer(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return (UIVertexColor*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SOLID_COLOR];
+				return buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SOLID_COLOR];
 			}
 			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return (UIVertexColor*)system_buffers[ECS_TOOLS_UI_SOLID_COLOR];
+				return system_buffers[ECS_TOOLS_UI_SOLID_COLOR];
 			}
 			else {
-				return (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
+				return buffers[ECS_TOOLS_UI_SOLID_COLOR];
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+		
+		CapacityStream<void>& UIDrawer::HandleTextSpriteBuffer(size_t configuration) {
+			return (CapacityStream<void>&)(((const UIDrawer*)this)->HandleTextSpriteBuffer(configuration));
+		}
+
+		const CapacityStream<void>& UIDrawer::HandleTextSpriteBuffer(size_t configuration) const {
+			if (configuration & UI_CONFIG_LATE_DRAW) {
+				return buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_TEXT_SPRITE];
+			}
+			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
+				return system_buffers[ECS_TOOLS_UI_TEXT_SPRITE];
+			}
+			else {
+				return buffers[ECS_TOOLS_UI_TEXT_SPRITE];
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t* UIDrawer::HandleSolidColorCount(size_t configuration) const {
+		CapacityStream<void>& UIDrawer::HandleSpriteBuffer(size_t configuration) {
+			return (CapacityStream<void>&)(((const UIDrawer*)this)->HandleSpriteBuffer(configuration));
+		}
+
+		const CapacityStream<void>& UIDrawer::HandleSpriteBuffer(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SOLID_COLOR;
+				return buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE];
 			}
 			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return system_counts + ECS_TOOLS_UI_SOLID_COLOR;
+				return system_buffers[ECS_TOOLS_UI_SPRITE];
 			}
 			else {
-				return counts + ECS_TOOLS_UI_SOLID_COLOR;
+				return buffers[ECS_TOOLS_UI_SPRITE];
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UISpriteVertex* UIDrawer::HandleTextSpriteBuffer(size_t configuration) const {
+		CapacityStream<void>& UIDrawer::HandleSpriteClusterBuffer(size_t configuration) {
+			return (CapacityStream<void>&)(((const UIDrawer*)this)->HandleSpriteClusterBuffer(configuration));
+		}
+
+		const CapacityStream<void>& UIDrawer::HandleSpriteClusterBuffer(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return (UISpriteVertex*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_TEXT_SPRITE];
+				return buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE_CLUSTER];
 			}
 			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return (UISpriteVertex*)system_buffers[ECS_TOOLS_UI_TEXT_SPRITE];
+				return system_buffers[ECS_TOOLS_UI_SPRITE_CLUSTER];
 			}
 			else {
-				return (UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE];
+				return buffers[ECS_TOOLS_UI_SPRITE_CLUSTER];
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t* UIDrawer::HandleTextSpriteCount(size_t configuration) const {
+		CapacityStream<void>& UIDrawer::HandleLineBuffer(size_t configuration) {
+			return (CapacityStream<void>&)(((const UIDrawer*)this)->HandleLineBuffer(configuration));
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		const CapacityStream<void>& UIDrawer::HandleLineBuffer(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_TEXT_SPRITE;
+				return buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_LINE];
 			}
 			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return system_counts + ECS_TOOLS_UI_TEXT_SPRITE;
+				return system_buffers[ECS_TOOLS_UI_LINE];
 			}
 			else {
-				return counts + ECS_TOOLS_UI_TEXT_SPRITE;
+				return buffers[ECS_TOOLS_UI_LINE];
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UISpriteVertex* UIDrawer::HandleSpriteBuffer(size_t configuration) const {
+		Stream<CapacityStream<void>> UIDrawer::HandleBuffers(size_t configuration) const {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return (UISpriteVertex*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE];
+				return buffers.SliceAt(ECS_TOOLS_UI_MATERIALS);
 			}
 			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return (UISpriteVertex*)system_buffers[ECS_TOOLS_UI_SPRITE];
+				return system_buffers;
 			}
 			else {
-				return (UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE];
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		size_t* UIDrawer::HandleSpriteCount(size_t configuration) const {
-			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE;
-			}
-			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return system_counts + ECS_TOOLS_UI_SPRITE;
-			}
-			else {
-				return counts + ECS_TOOLS_UI_SPRITE;
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UISpriteVertex* UIDrawer::HandleSpriteClusterBuffer(size_t configuration) const {
-			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return (UISpriteVertex*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE_CLUSTER];
-			}
-			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return (UISpriteVertex*)system_buffers[ECS_TOOLS_UI_SPRITE_CLUSTER];
-			}
-			else {
-				return (UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE_CLUSTER];
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		size_t* UIDrawer::HandleSpriteClusterCount(size_t configuration) const {
-			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE_CLUSTER;
-			}
-			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return system_counts + ECS_TOOLS_UI_SPRITE_CLUSTER;
-			}
-			else {
-				return counts + ECS_TOOLS_UI_SPRITE_CLUSTER;
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UIVertexColor* UIDrawer::HandleLineBuffer(size_t configuration) const {
-			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return (UIVertexColor*)buffers[ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_LINE];
-			}
-			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return (UIVertexColor*)system_buffers[ECS_TOOLS_UI_LINE];
-			}
-			else {
-				return (UIVertexColor*)buffers[ECS_TOOLS_UI_LINE];
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		size_t* UIDrawer::HandleLineCount(size_t configuration) const {
-			if (configuration & UI_CONFIG_LATE_DRAW) {
-				return counts + ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_LINE;
-			}
-			else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-				return system_counts + ECS_TOOLS_UI_LINE;
-			}
-			else {
-				return counts + ECS_TOOLS_UI_LINE;
+				return buffers;
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::Line(size_t configuration, float2 positions1, float2 positions2, Color color) {
-			auto buffer = HandleLineBuffer(configuration);
-			auto count = HandleLineCount(configuration);
-			SetLine(positions1, positions2, color, *count, buffer);
+			SetLine(positions1, positions2, color, HandleLineBuffer(configuration));
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -843,22 +807,19 @@ namespace ECSEngine {
 				border_size.y *= zoom_ptr->y;
 
 				// Late phase or system phase always in order to have the border drawn upon the hovered effect
-				void** phase_buffers = buffers + ECS_TOOLS_UI_MATERIALS;
-				size_t* phase_counts = counts + ECS_TOOLS_UI_MATERIALS;
+				Stream<CapacityStream<void>> phase_buffers = buffers.SliceAt(ECS_TOOLS_UI_MATERIALS);
 				if (parameters->draw_phase == ECS_UI_DRAW_SYSTEM) {
 					phase_buffers = system_buffers;
-					phase_counts = system_counts;
 				}
 				else if (parameters->draw_phase == ECS_UI_DRAW_NORMAL) {
 					phase_buffers = buffers;
-					phase_counts = counts;
 				}
 
 				if (parameters->is_interior) {
-					CreateSolidColorRectangleBorder(position, scale, border_size, parameters->color, phase_counts, phase_buffers);
+					CreateSolidColorRectangleBorder(position, scale, border_size, parameters->color, phase_buffers);
 				}
 				else {
-					CreateSolidColorRectangleBorder<false>(position, scale, border_size, parameters->color, phase_counts, phase_buffers);
+					CreateSolidColorRectangleBorder<false>(position, scale, border_size, parameters->color, phase_buffers);
 				}
 			}
 		}
@@ -976,8 +937,7 @@ namespace ECSEngine {
 				HandleFitSpaceRectangle(configuration, position, *element->TextScale());
 			}
 
-			size_t* text_count = HandleTextSpriteCount(configuration);
-			UISpriteVertex* current_buffer = HandleTextSpriteBuffer(configuration) + *text_count;
+			CapacityStream<void>& current_buffer = HandleTextSpriteBuffer(configuration);
 
 			HandleTextStreamColorUpdate(font_color, *element->TextStream());
 
@@ -995,13 +955,13 @@ namespace ECSEngine {
 
 			if (element->GetZoomX() == zoom_ptr->x && element->GetZoomY() == zoom_ptr->y) {
 				if (ValidatePosition(configuration, *element->TextPosition(), *element->TextScale())) {
-					memcpy(current_buffer, element->TextBuffer(), sizeof(UISpriteVertex) * *element->TextSize());
-					*text_count += *element->TextSize();
+					memcpy(current_buffer.Get(current_buffer.size, sizeof(UISpriteVertex)), element->TextBuffer(), sizeof(UISpriteVertex) * *element->TextSize());
+					current_buffer.size += *element->TextSize();
 				}
 			}
 			else {
-				ScaleText(element, current_buffer - *text_count, text_count, zoom_ptr, font.character_spacing);
-				memcpy(element->TextBuffer(), current_buffer, sizeof(UISpriteVertex) * *element->TextSize());
+				ScaleText(element, current_buffer, zoom_ptr, font.character_spacing);
+				memcpy(element->TextBuffer(), current_buffer.Get(current_buffer.size - *element->TextSize(), sizeof(UISpriteVertex)), sizeof(UISpriteVertex) * *element->TextSize());
 				element->TextScale()->x *= element->GetInverseZoomX() * zoom_ptr->x;
 				element->TextScale()->y *= element->GetInverseZoomY() * zoom_ptr->y;
 				element->SetZoomFactor(*zoom_ptr);
@@ -1074,9 +1034,7 @@ namespace ECSEngine {
 				}
 			}
 
-			size_t* text_count = HandleTextSpriteCount(configuration);
-			auto text_buffer = HandleTextSpriteBuffer(configuration);
-			UISpriteVertex* current_buffer = text_buffer + *text_count;
+			CapacityStream<void>& text_buffer = HandleTextSpriteBuffer(configuration);
 			copy_count = *info->TextSize();
 
 			float2 font_size;
@@ -1085,7 +1043,7 @@ namespace ECSEngine {
 			HandleText(configuration, config, font_color, font_size, character_spacing);
 			HandleTextStreamColorUpdate(font_color, *info->TextStream());
 
-			Stream<UISpriteVertex> current_stream = Stream<UISpriteVertex>(current_buffer, copy_count);
+			Stream<UISpriteVertex> current_stream = Stream<UISpriteVertex>(text_buffer.Get(text_buffer.size, sizeof(UISpriteVertex)), copy_count);
 			CapacityStream<UISpriteVertex> text_stream = *info->TextStream();
 			ECS_UI_ALIGN horizontal_alignment, vertical_alignment;
 			GetTextLabelAlignment(configuration, config, horizontal_alignment, vertical_alignment);
@@ -1350,7 +1308,8 @@ namespace ECSEngine {
 			}
 			copy_count = current_stream.size;
 
-			*text_count += copy_count;
+			text_buffer.AssertCapacity(copy_count);
+			text_buffer.size += copy_count;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1537,7 +1496,7 @@ namespace ECSEngine {
 					action_data->system->AcquireDragDrop(data->position, data->scale, data->region_name, action_data->window_index, data->names, &should_highlight);
 					if (should_highlight && data->highlight_border) {
 						float2 border_scale = { data->system->GetPixelSizeX() * data->border_thickness, data->system->GetPixelSizeY() * data->border_thickness };
-						CreateSolidColorRectangleBorder<true>(data->position, data->scale, border_scale, data->border_color, action_data->counts, action_data->buffers);
+						CreateSolidColorRectangleBorder<true>(data->position, data->scale, border_scale, data->border_color, action_data->buffers);
 					}
 					return false;
 				};
@@ -1572,8 +1531,7 @@ namespace ECSEngine {
 					position,
 					scale,
 					color,
-					HandleSolidColorBuffer(configuration),
-					*HandleSolidColorCount(configuration)
+					HandleSolidColorBuffer(configuration)
 				);
 			}
 		}
@@ -1601,11 +1559,10 @@ namespace ECSEngine {
 
 		// it will finalize the rectangle
 		void UIDrawer::TextLabel(size_t configuration, const UIDrawConfig& config, Stream<char> text, float2& position, float2& scale) {
-			Stream<UISpriteVertex> current_text = GetTextStream(configuration, ParseStringIdentifier(text) * 6);
-			float2 text_span;
-
 			float2 temp_position = position + element_descriptor.label_padd;
+			float2 text_span;
 			Text(configuration | UI_CONFIG_DO_NOT_FIT_SPACE, config, text, temp_position, text_span);
+			Stream<UISpriteVertex> current_text = HandleTextSpriteBuffer(configuration).AsIs<UISpriteVertex>().GetLastElements(ParseStringIdentifier(text) * 6);
 
 			if (!initializer) {
 				float2 label_scale = HandleLabelSize(text_span);
@@ -1773,10 +1730,7 @@ namespace ECSEngine {
 			float2 top_left_uv,
 			float2 bottom_right_uv
 		) {
-			auto buffer = HandleSpriteClusterBuffer(configuration);
-			auto count = HandleSpriteClusterCount(configuration);
-
-			SetSpriteRectangle(position, scale, color, top_left_uv, bottom_right_uv, buffer, *count);
+			SetSpriteRectangle(position, scale, color, top_left_uv, bottom_right_uv, HandleSpriteClusterBuffer(configuration));
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1789,10 +1743,7 @@ namespace ECSEngine {
 			float2 top_left_uv,
 			float2 bottom_right_uv
 		) {
-			auto buffer = HandleSpriteClusterBuffer(configuration);
-			auto count = HandleSpriteClusterCount(configuration);
-
-			SetVertexColorSpriteRectangle(position, scale, colors, top_left_uv, bottom_right_uv, buffer, *count);
+			SetVertexColorSpriteRectangle(position, scale, colors, top_left_uv, bottom_right_uv, HandleSpriteClusterBuffer(configuration));
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1805,10 +1756,7 @@ namespace ECSEngine {
 			float2 top_left_uv,
 			float2 bottom_right_uv
 		) {
-			auto buffer = HandleSpriteClusterBuffer(configuration);
-			auto count = HandleSpriteClusterCount(configuration);
-
-			SetVertexColorSpriteRectangle(position, scale, colors, top_left_uv, bottom_right_uv, buffer, *count);
+			SetVertexColorSpriteRectangle(position, scale, colors, top_left_uv, bottom_right_uv, HandleSpriteClusterBuffer(configuration));
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1834,7 +1782,6 @@ namespace ECSEngine {
 			AlignToRowY(this, configuration, position, scale);
 
 			size_t text_count = ParseStringIdentifier(text);
-			Stream<UISpriteVertex> current_text = GetTextStream(configuration, text_count * 6);
 			ECS_UI_ALIGN horizontal_alignment, vertical_alignment;
 			GetTextLabelAlignment(configuration, config, horizontal_alignment, vertical_alignment);
 
@@ -1847,8 +1794,7 @@ namespace ECSEngine {
 			HandleText(configuration, config, color, font_size, character_spacing);
 			float2 text_span;
 
-			auto text_sprites = HandleTextSpriteBuffer(configuration);
-			auto text_sprite_count = HandleTextSpriteCount(configuration);
+			CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
 			bool horizontal = (configuration & UI_CONFIG_VERTICAL) == 0;
 			bool invert_order = (vertical_alignment == ECS_UI_ALIGN_BOTTOM) || (horizontal_alignment == ECS_UI_ALIGN_RIGHT);
@@ -1882,12 +1828,13 @@ namespace ECSEngine {
 				{ x_text_position, y_text_position },
 				text_sprites,
 				color,
-				*text_sprite_count,
 				font_size,
 				character_spacing,
 				horizontal,
 				invert_order
 			);
+
+			Stream<UISpriteVertex> current_text = text_sprites.AsIs<UISpriteVertex>().GetLastElements(text_count * 6);
 
 			/*size_t vertex_count = 0;
 			if (~configuration & UI_CONFIG_VERTICAL) {
@@ -1959,7 +1906,6 @@ namespace ECSEngine {
 				AlignVerticalText(current_text);
 			}
 
-			*text_sprite_count += text_count * 6;
 			if (~configuration & UI_CONFIG_LABEL_TRANSPARENT) {
 				Color label_color = HandleColor(configuration, config);
 				SolidColorRectangle(
@@ -2074,7 +2020,6 @@ namespace ECSEngine {
 
 					size_t copy_count;
 					float2 text_span;
-					Stream<UISpriteVertex> vertices = GetTextStream(configuration, 0);
 
 					if (*type == ECS_UI_WINDOW_DEPENDENT_HORIZONTAL) {
 						HandleLabelTextCopyFromResourceWithCull(
@@ -2375,7 +2320,7 @@ namespace ECSEngine {
 				UIConfigTextAlignment previous_text_alignment;
 				SetConfigParameter(configuration, label_config, text_alignment, previous_text_alignment);
 
-				size_t* text_count = HandleTextSpriteCount(configuration);
+				CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
 				// This is needed such that it will cull the sprites
 				UIConfigWindowDependentSize dependent_size;
@@ -2389,17 +2334,14 @@ namespace ECSEngine {
 					float2 caret_position = input->GetCaretPosition(system);
 					caret_position.y = AlignMiddle(position.y, scale.y, y_sprite_size);
 
-					UISpriteVertex* text_buffer = HandleTextSpriteBuffer(configuration);
 					system->ConvertCharactersToTextSprites(
 						{ "|", 1 },
 						caret_position,
-						text_buffer,
+						text_sprites,
 						input->text_color,
-						*text_count,
 						input->font_size,
 						input->character_spacing
 					);
-					*text_count += 6;
 				}
 
 				input->position = position;
@@ -2445,19 +2387,15 @@ namespace ECSEngine {
 
 						float2 caret_position = input->GetCaretPosition(system);
 						caret_position.y = AlignMiddle(position.y, scale.y, y_sprite_size);
-						UISpriteVertex* text_buffer = HandleTextSpriteBuffer(configuration);
 
-						*text_count -= 6;
 						system->ConvertCharactersToTextSprites(
 							{ "|", 1 },
 							caret_position,
-							text_buffer,
+							text_sprites,
 							input->text_color,
-							*text_count,
 							input->font_size,
 							input->character_spacing
 						);
-						*text_count += 6;
 					}
 				}
 
@@ -6587,8 +6525,6 @@ namespace ECSEngine {
 					int64_t line_count = (end_index - starting_index - 1) * (sample_count - 1);
 					SetSpriteClusterTexture(configuration, ECS_TOOLS_UI_TEXTURE_MASK, line_count);
 					drop_color_stream = GetSpriteClusterStream(configuration, line_count * 6);
-					auto sprite_count = HandleSpriteClusterCount(configuration);
-					*sprite_count += line_count * 6;
 				}
 
 				for (index = starting_index; index < end_index - 1; index++) {
@@ -6792,8 +6728,7 @@ namespace ECSEngine {
 							data->base.vertices[index].color = font_color;
 						}
 					}
-					auto text_sprite_buffer = HandleTextSpriteBuffer(configuration);
-					auto text_sprite_counts = HandleTextSpriteCount(configuration);
+					auto text_sprites = HandleTextSpriteBuffer(configuration);
 
 					size_t word_end_index = 0;
 					size_t word_start_index = 0;
@@ -6811,9 +6746,10 @@ namespace ECSEngine {
 							temp_stream.size = (word_end_index - word_start_index + 1 + keep_token) * 6;
 
 							if (is_zoom_different) {
-								auto text_sprite_stream = GetTextStream(configuration, 0);
-								ScaleText(temp_stream, data->zoom, data->inverse_zoom, text_sprite_buffer, text_sprite_counts, zoom_ptr, character_spacing);
+								Stream<UISpriteVertex> text_sprite_stream = GetTextStream(configuration, 0);
+								ScaleText(temp_stream, data->zoom, data->inverse_zoom, text_sprites, zoom_ptr, character_spacing);
 								memcpy(temp_stream.buffer, text_sprite_stream.buffer, sizeof(UISpriteVertex) * temp_stream.size);
+								text_sprites.size -= temp_stream.size;
 							}
 							text_span = GetTextSpan(temp_stream);
 
@@ -6825,8 +6761,9 @@ namespace ECSEngine {
 							if (position.x != temp_stream[0].position.x || position.y != -temp_stream[0].position.y) {
 								TranslateText(position.x, position.y, temp_stream, 0, 0);
 							}
-							memcpy(text_sprite_buffer + *text_sprite_counts, temp_stream.buffer, sizeof(UISpriteVertex) * temp_stream.size);
-							*text_sprite_counts += temp_stream.size;
+							text_sprites.AssertCapacity(temp_stream.size);
+							memcpy(text_sprites.Get(text_sprites.size, sizeof(UISpriteVertex)), temp_stream.buffer, sizeof(UISpriteVertex) * temp_stream.size);
+							text_sprites.size += temp_stream.size;
 
 							FinalizeRectangle(0, position, text_span);
 							position.x += text_span.x;
@@ -7084,7 +7021,7 @@ namespace ECSEngine {
 			}
 
 			if (zoom_ptr->x != data->zoom.x || zoom_ptr->y != data->zoom.y) {
-				auto text_sprite_stream = GetTextStream(configuration, 0);
+				CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
 				Color font_color;
 				float character_spacing;
@@ -7096,8 +7033,9 @@ namespace ECSEngine {
 				}
 
 				for (size_t index = 0; index < data->labels.size; index++) {
-					ScaleText(data->labels[index], data->zoom, data->inverse_zoom, text_sprite_stream.buffer, &text_sprite_stream.size, zoom_ptr, character_spacing);
-					memcpy(data->labels[index].buffer, text_sprite_stream.buffer, sizeof(UISpriteVertex) * data->labels[index].size);
+					ScaleText(data->labels[index], data->zoom, data->inverse_zoom, text_sprites, zoom_ptr, character_spacing);
+					text_sprites.size -= data->labels[index].size;
+					memcpy(data->labels[index].buffer, text_sprites.Get(text_sprites.size, sizeof(UISpriteVertex)), sizeof(UISpriteVertex) * data->labels[index].size);
 				}
 				float zoom_factor = zoom_ptr->x * data->inverse_zoom.x;
 				for (size_t index = 0; index < columns; index++) {
@@ -7114,8 +7052,7 @@ namespace ECSEngine {
 			}
 
 			float2 initial_position = position;
-			auto text_sprite_buffer = HandleTextSpriteBuffer(configuration);
-			auto text_sprite_count = HandleTextSpriteCount(configuration);
+			CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
 			Color border_color;
 			float2 border_size;
@@ -7134,7 +7071,7 @@ namespace ECSEngine {
 			}
 			for (size_t row = 0; row < rows; row++) {
 				if (((configuration & UI_CONFIG_TEXT_TABLE_NO_BORDER) != 0) && ((configuration & UI_CONFIG_TEXT_TABLE_DYNAMIC_SCALE) == 0)) {
-					CreateSolidColorRectangleBorder<false>(position, { scale.x * columns, scale.y }, border_size, border_color, counts, buffers);
+					CreateSolidColorRectangleBorder<false>(position, { scale.x * columns, scale.y }, border_size, border_color, HandleBuffers(configuration));
 				}
 
 				for (size_t column = 0; column < columns; column++) {
@@ -7149,8 +7086,7 @@ namespace ECSEngine {
 						HandleTextLabelAlignment(text_span, scale, position, x_position, y_position, ECS_UI_ALIGN_MIDDLE, ECS_UI_ALIGN_MIDDLE);
 
 						TranslateText(x_position, y_position, data->labels[cell_index], 0, 0);
-						memcpy(text_sprite_buffer + *text_sprite_count, data->labels[cell_index].buffer, sizeof(UISpriteVertex) * data->labels[cell_index].size);
-						*text_sprite_count += data->labels[cell_index].size;
+						text_sprites.AddElements(data->labels[cell_index]);
 
 						if (configuration & UI_CONFIG_COLOR) {
 							SolidColorRectangle(configuration, config, position, scale);
@@ -7169,7 +7105,7 @@ namespace ECSEngine {
 					if (configuration & UI_CONFIG_TEXT_TABLE_DYNAMIC_SCALE) {
 						scale.x = data->column_scales[column];
 					}
-					CreateSolidColorRectangleBorder<false>(position, { scale.x, scale.y * rows }, border_size, border_color, counts, buffers);
+					CreateSolidColorRectangleBorder<false>(position, { scale.x, scale.y * rows }, border_size, border_color, buffers);
 					position.x += scale.x;
 				}
 			}
@@ -7181,7 +7117,7 @@ namespace ECSEngine {
 					total_column_length += data->column_scales[column];
 				}
 				for (size_t row = 0; row < rows; row++) {
-					CreateSolidColorRectangleBorder<false>(position, { total_column_length, scale.y }, border_size, border_color, counts, buffers);
+					CreateSolidColorRectangleBorder<false>(position, { total_column_length, scale.y }, border_size, border_color, buffers);
 					position.y += scale.y;
 				}
 			}
@@ -7238,8 +7174,8 @@ namespace ECSEngine {
 				}
 
 				float y_text_span;
-				auto text_sprite_count = HandleTextSpriteCount(configuration);
-				size_t before_count = *text_sprite_count;
+				CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
+				size_t before_count = text_sprites.size;
 				for (size_t row = 0; row < rows; row++) {
 					for (size_t column = 0; column < columns; column++) {
 						unsigned int index = row * columns + column;
@@ -7259,11 +7195,10 @@ namespace ECSEngine {
 						cell_scales[index] = text_span.x;
 						y_text_span = text_span.y;
 						scale.y = text_span.y + ECS_TOOLS_UI_TEXT_TABLE_ENLARGE_CELL_FACTOR * element_descriptor.label_padd.y;
-						*text_sprite_count += cells[index].size;
 					}
 				}
 
-				*text_sprite_count = before_count;
+				text_sprites.size = before_count;
 				unsigned int validated_cell_index = 0;
 
 				auto text_sprite_buffer = HandleTextSpriteBuffer(configuration);
@@ -7273,14 +7208,16 @@ namespace ECSEngine {
 						if (ValidatePosition(0, position, scale)) {
 							unsigned int cell_index = row * columns + column;
 							float x_position, y_position;
-							HandleTextLabelAlignment({ cell_scales[cell_index], y_text_span }, scale, position, x_position, y_position, ECS_UI_ALIGN::ECS_UI_ALIGN_MIDDLE, ECS_UI_ALIGN::ECS_UI_ALIGN_MIDDLE);
+							HandleTextLabelAlignment({ cell_scales[cell_index], y_text_span }, scale, position, x_position, y_position, ECS_UI_ALIGN_MIDDLE, ECS_UI_ALIGN_MIDDLE);
 
 							TranslateText(x_position, y_position, cells[cell_index], 0, 0);
 							if (validated_cell_index != cell_index) {
-								memcpy(text_sprite_buffer + *text_sprite_count, cells[cell_index].buffer, sizeof(UISpriteVertex) * cells[cell_index].size);
+								text_sprites.AddElements(cells[cell_index]);
+							}
+							else {
+								text_sprites.size += cells[cell_index].size;
 							}
 							validated_cell_index++;
-							*text_sprite_count += cells[cell_index].size;
 
 							if (configuration & UI_CONFIG_COLOR) {
 								SolidColorRectangle(configuration, config, position, scale);
@@ -7301,7 +7238,7 @@ namespace ECSEngine {
 						total_column_length += column_biggest_scale[column];
 					}
 					for (size_t row = 0; row < rows; row++) {
-						CreateSolidColorRectangleBorder<false>(position, { total_column_length, scale.y }, border_size, border_color, counts, buffers);
+						CreateSolidColorRectangleBorder<false>(position, { total_column_length, scale.y }, border_size, border_color, buffers);
 						position.y += scale.y;
 					}
 				}
@@ -7313,7 +7250,7 @@ namespace ECSEngine {
 					if (configuration & UI_CONFIG_TEXT_TABLE_DYNAMIC_SCALE) {
 						scale.x = column_biggest_scale[column];
 					}
-					CreateSolidColorRectangleBorder<false>(position, { scale.x, scale.y * rows }, border_size, border_color, counts, buffers);
+					CreateSolidColorRectangleBorder<false>(position, { scale.x, scale.y * rows }, border_size, border_color, buffers);
 					position.x += scale.x;
 				}
 			}
@@ -7341,25 +7278,22 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, temp_float_stream, 128);
 			ConvertFloatToChars(temp_float_stream, max_y, y_axis_precision);
 
-			size_t* text_count = HandleTextSpriteCount(configuration);
-			auto text_buffer = HandleTextSpriteBuffer(configuration);
+			CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
 			float2 top_text_position = { position.x + element_descriptor.graph_padding.x, position.y + element_descriptor.graph_padding.y };
 			float max_x_scale = 0.0f;
 			system->ConvertCharactersToTextSprites(
 				temp_float_stream,
 				top_text_position,
-				text_buffer,
+				text_sprites,
 				font_color,
-				*text_count,
 				font_size,
 				character_spacing
 			);
 
-			auto top_vertices_stream = GetTextStream(configuration, temp_float_stream.size * 6);
+			auto top_vertices_stream = text_sprites.AsIs<UISpriteVertex>().GetLastElements(temp_float_stream.size * 6);
 			float2 text_span = GetTextSpan(top_vertices_stream);
 			max_x_scale = ClampMin(max_x_scale, text_span.x);
-			*text_count += 6 * temp_float_stream.size;
 
 			float2 bottom_text_position = { top_text_position.x, position.y + scale.y - y_sprite_scale - element_descriptor.graph_padding.y };
 			temp_float_stream.size = 0;
@@ -7367,14 +7301,13 @@ namespace ECSEngine {
 			system->ConvertCharactersToTextSprites(
 				temp_float_stream,
 				bottom_text_position,
-				text_buffer,
+				text_sprites,
 				font_color,
-				*text_count,
 				font_size,
 				character_spacing
 			);
 
-			auto bottom_vertices_stream = GetTextStream(configuration, temp_float_stream.size * 6);
+			auto bottom_vertices_stream = text_sprites.AsIs<UISpriteVertex>().GetLastElements(temp_float_stream.size * 6);
 			text_span = GetTextSpan(bottom_vertices_stream);
 			if (max_x_scale < text_span.x) {
 				float top_scale = max_x_scale;
@@ -7384,7 +7317,6 @@ namespace ECSEngine {
 			else {
 				TranslateText(bottom_text_position.x + max_x_scale - text_span.x, bottom_text_position.y, bottom_vertices_stream, 0, 0);
 			}
-			*text_count += temp_float_stream.size * 6;
 
 			// top text strip
 			SpriteRectangle(
@@ -7416,20 +7348,18 @@ namespace ECSEngine {
 				temp_float_stream.size = 0;
 				ConvertFloatToChars(temp_float_stream, value, y_axis_precision);
 
-				auto temp_vertices = GetTextStream(configuration, temp_float_stream.size * 6);
+				Stream<UISpriteVertex> temp_vertices = GetTextStream(configuration, temp_float_stream.size * 6);
 				system->ConvertCharactersToTextSprites(
 					temp_float_stream,
 					sprite_position,
-					text_buffer,
+					temp_vertices.buffer,
 					font_color,
-					*text_count,
+					0,
 					font_size,
 					character_spacing
 				);
 				float2 current_span = GetTextSpan(temp_vertices);
 				TranslateText(sprite_position.x + max_x_scale - current_span.x, sprite_position.y, temp_vertices, 0, 0);
-
-				*text_count += 6 * temp_float_stream.size;
 
 				SpriteRectangle(
 					configuration,
@@ -7480,24 +7410,21 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, temp_float_stream, 128);
 			ConvertFloatToChars(temp_float_stream, min_x, x_axis_precision);
 
-			size_t* text_count = HandleTextSpriteCount(configuration);
-			auto text_buffer = HandleTextSpriteBuffer(configuration);
+			CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
 			float text_y = position.y + scale.y - y_sprite_scale - element_descriptor.graph_padding.y;
 
 			system->ConvertCharactersToTextSprites(
 				temp_float_stream,
 				{ position.x, text_y },
-				text_buffer,
+				text_sprites,
 				font_color,
-				*text_count,
 				font_size,
 				character_spacing
 			);
 
-			auto left_vertices_stream = GetTextStream(configuration, temp_float_stream.size * 6);
+			auto left_vertices_stream = text_sprites.AsIs<UISpriteVertex>().GetLastElements(temp_float_stream.size * 6);
 			float2 left_span = GetTextSpan(left_vertices_stream);
-			*text_count += 6 * temp_float_stream.size;
 
 			float2 vertical_line_scale = { element_descriptor.graph_axis_value_line_size.x, scale.y - 2 * element_descriptor.graph_padding.y - y_sprite_scale - element_descriptor.graph_axis_bump.y };
 			if (!disable_horizontal_line) {
@@ -7518,14 +7445,11 @@ namespace ECSEngine {
 			system->ConvertCharactersToTextSprites(
 				temp_float_stream,
 				right_text_position,
-				text_buffer,
+				text_sprites,
 				font_color,
-				*text_count,
 				font_size,
 				character_spacing
 			);
-
-			*text_count += temp_float_stream.size * 6;
 
 			SpriteRectangle(
 				configuration,
@@ -7574,16 +7498,14 @@ namespace ECSEngine {
 					system->ConvertCharactersToTextSprites(
 						temp_float_stream,
 						sprite_position,
-						text_buffer,
+						text_sprites,
 						font_color,
-						*text_count,
 						font_size,
 						character_spacing
 					);
 
-					auto current_vertices = GetTextStream(configuration, temp_float_stream.size * 6);
+					Stream<UISpriteVertex> current_vertices = text_sprites.AsIs<UISpriteVertex>().GetLastElements(temp_float_stream.size * 6);
 					float2 text_span = GetTextSpan(current_vertices);
-					*text_count += 6 * temp_float_stream.size;
 
 					float line_x = AlignMiddle(sprite_position.x, text_span.x, element_descriptor.graph_axis_value_line_size.x);
 					SpriteRectangle(
@@ -7962,18 +7884,14 @@ namespace ECSEngine {
 						int64_t line_count = end_index - starting_index - 1;
 						SetSpriteClusterTexture(configuration, ECS_TOOLS_UI_TEXTURE_MASK, line_count);
 						drop_color_stream = GetSpriteClusterStream(configuration, line_count * 6);
-						auto sprite_count = HandleSpriteClusterCount(configuration);
-						*sprite_count += line_count * 6;
 					}
 				}
-				Stream<UISpriteVertex> sample_circle_stream;
+				CapacityStream<void> sample_circle_stream;
 				if (configuration & UI_CONFIG_GRAPH_SAMPLE_CIRCLES) {
 					if (end_index > starting_index) {
 						int64_t circle_count = end_index - starting_index;
 						SetSpriteClusterTexture(configuration, ECS_TOOLS_UI_TEXTURE_FILLED_CIRCLE, circle_count);
-						sample_circle_stream = GetSpriteClusterStream(configuration, circle_count * 6);
-						auto sprite_count = HandleSpriteClusterCount(configuration);
-						*sprite_count += circle_count * 6;
+						sample_circle_stream = GetSpriteClusterStreamUntyped(configuration, circle_count * 6);
 					}
 				}
 
@@ -8007,15 +7925,13 @@ namespace ECSEngine {
 					}
 					if (configuration & UI_CONFIG_GRAPH_SAMPLE_CIRCLES) {
 						float2 sprite_scale = GetSquareScale(element_descriptor.graph_sample_circle_size);
-						size_t temp_index = (index - starting_index) * 6;
 						SetSpriteRectangle(
 							{ previous_point_position.x - sprite_scale.x * 0.5f, previous_point_position.y - sprite_scale.y * 0.5f }, 
 							sprite_scale, 
 							color_theme.graph_sample_circle, 
 							{ 0.0f, 0.0f }, 
 							{ 1.0f, 1.0f }, 
-							sample_circle_stream.buffer, 
-							temp_index
+							sample_circle_stream
 						);
 					}
 
@@ -8025,15 +7941,13 @@ namespace ECSEngine {
 				if (configuration & UI_CONFIG_GRAPH_SAMPLE_CIRCLES) {
 					if (end_index > starting_index + 1) {
 						float2 sprite_scale = GetSquareScale(element_descriptor.graph_sample_circle_size);
-						size_t temp_index = (end_index - 1 - starting_index) * 6;
 						SetSpriteRectangle(
 							{ previous_point_position.x - sprite_scale.x * 0.5f, previous_point_position.y - sprite_scale.y * 0.5f }, 
 							sprite_scale, 
 							color_theme.graph_sample_circle, 
 							{ 0.0f, 0.0f }, 
 							{ 1.0f, 1.0f }, 
-							sample_circle_stream.buffer, 
-							temp_index
+							sample_circle_stream
 						);
 					}
 				}
@@ -8164,37 +8078,37 @@ namespace ECSEngine {
 		void UIDrawer::FixedScaleTextLabel(size_t configuration, const UIDrawConfig& config, Stream<char> text, float2 position, float2 scale) {
 			AlignToRowY(this, configuration, position, scale);
 
-			Stream<UISpriteVertex> current_text = GetTextStream(configuration, ParseStringIdentifier(text) * 6);
 			float2 text_span;
 
 			float2 temp_position = position + element_descriptor.label_padd;
 			Text(configuration | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_VALIDATE_POSITION, config, text, temp_position, text_span);
+			Stream<UISpriteVertex> current_text = HandleTextSpriteBuffer(configuration).AsIs<UISpriteVertex>().GetLastElements(ParseStringIdentifier(text) * 6);
 
 			ECS_UI_ALIGN horizontal_alignment = ECS_UI_ALIGN_MIDDLE, vertical_alignment = ECS_UI_ALIGN_TOP;
 			GetTextLabelAlignment(configuration, config, horizontal_alignment, vertical_alignment);
 			bool translate = true;
 
-			auto text_sprite_count = HandleTextSpriteCount(configuration);
+			CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 			if (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 				const ECS_UI_WINDOW_DEPENDENT_SIZE* type = (const ECS_UI_WINDOW_DEPENDENT_SIZE*)config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
 				if (*type == ECS_UI_WINDOW_DEPENDENT_BOTH) {
 					if (configuration & UI_CONFIG_VERTICAL) {
 						if (text_span.x > scale.x - 2 * element_descriptor.label_padd.x) {
 							translate = false;
-							*text_sprite_count -= current_text.size;
+							text_sprites.size -= current_text.size;
 						}
 						else {
 							if (text_span.y > scale.y - 2 * element_descriptor.label_padd.y) {
 								size_t valid_sprites;
 								if (vertical_alignment == ECS_UI_ALIGN_BOTTOM) {
 									valid_sprites = CullTextSprites<3>(current_text, -position.y - scale.y + element_descriptor.label_padd.x);
-									*text_sprite_count -= current_text.size - valid_sprites;
+									text_sprites.size -= current_text.size - valid_sprites;
 									current_text.size = valid_sprites;
 									text_span = GetTextSpan(current_text, false, true);
 								}
 								else {
 									valid_sprites = CullTextSprites<2>(current_text, -position.y - scale.y + element_descriptor.label_padd.y);
-									*text_sprite_count -= current_text.size - valid_sprites;
+									text_sprites.size -= current_text.size - valid_sprites;
 									current_text.size = valid_sprites;
 									text_span = GetTextSpan(current_text, false);
 								}
@@ -8204,20 +8118,20 @@ namespace ECSEngine {
 					else {
 						if (text_span.y > scale.y - 2 * element_descriptor.label_padd.y) {
 							translate = false;
-							*text_sprite_count -= current_text.size;
+							text_sprites.size -= current_text.size;
 						}
 						else {
 							if (text_span.x > scale.x - 2 * element_descriptor.label_padd.x) {
 								size_t valid_sprites;
 								if (horizontal_alignment == ECS_UI_ALIGN_RIGHT) {
 									valid_sprites = CullTextSprites<1>(current_text, position.x + element_descriptor.label_padd.x);
-									*text_sprite_count -= current_text.size - valid_sprites;
+									text_sprites.size -= current_text.size - valid_sprites;
 									current_text.size = valid_sprites;
 									text_span = GetTextSpan(current_text, true, true);
 								}
 								else {
 									valid_sprites = CullTextSprites<0>(current_text, position.x + scale.x - element_descriptor.label_padd.x);
-									*text_sprite_count -= current_text.size - valid_sprites;
+									text_sprites.size -= current_text.size - valid_sprites;
 									current_text.size = valid_sprites;
 									text_span = GetTextSpan(current_text, true, false);
 								}
@@ -8232,13 +8146,13 @@ namespace ECSEngine {
 							size_t valid_sprites;
 							if (vertical_alignment == ECS_UI_ALIGN_BOTTOM) {
 								valid_sprites = CullTextSprites<3>(current_text, -position.y - scale.y + element_descriptor.label_padd.y);
-								*text_sprite_count -= current_text.size - valid_sprites;
+								text_sprites.size -= current_text.size - valid_sprites;
 								current_text.size = valid_sprites;
 								text_span = GetTextSpan(current_text, false, true);
 							}
 							else {
 								valid_sprites = CullTextSprites<2>(current_text, -position.y - scale.y + element_descriptor.label_padd.y);
-								*text_sprite_count -= current_text.size - valid_sprites;
+								text_sprites.size -= current_text.size - valid_sprites;
 								current_text.size = valid_sprites;
 								text_span = GetTextSpan(current_text, false, false);
 							}
@@ -8249,13 +8163,13 @@ namespace ECSEngine {
 							size_t valid_sprites;
 							if (horizontal_alignment == ECS_UI_ALIGN_RIGHT) {
 								valid_sprites = CullTextSprites<1>(current_text, position.x + element_descriptor.label_padd.x);
-								*text_sprite_count -= current_text.size - valid_sprites;
+								text_sprites.size -= current_text.size - valid_sprites;
 								current_text.size = valid_sprites;
 								text_span = GetTextSpan(current_text, true, true);
 							}
 							else {
 								valid_sprites = CullTextSprites<0>(current_text, position.x + scale.x - element_descriptor.label_padd.x);
-								*text_sprite_count -= current_text.size - valid_sprites;
+								text_sprites.size -= current_text.size - valid_sprites;
 								current_text.size = valid_sprites;
 								text_span = GetTextSpan(current_text, true, false);
 							}
@@ -8516,18 +8430,15 @@ namespace ECSEngine {
 		) {
 			if (!initializer) {
 				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL;
-				void** current_buffers = buffers;
-				size_t* current_counts = counts;
+				Stream<CapacityStream<void>> current_buffers = buffers;
 				if (configuration & UI_CONFIG_LATE_DRAW) {
 					phase = ECS_UI_DRAW_LATE;
-					current_buffers = buffers + ECS_TOOLS_UI_MATERIALS;
-					current_counts = counts + ECS_TOOLS_UI_MATERIALS;
+					current_buffers = buffers.SliceAt(ECS_TOOLS_UI_MATERIALS);
 				}
 				else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
 					phase = ECS_UI_DRAW_SYSTEM;
 					current_buffers = system_buffers;
-					current_counts = system_counts;
-				}
+				}			
 
 				system->SetSprite(
 					dockspace,
@@ -8536,7 +8447,6 @@ namespace ECSEngine {
 					position,
 					scale,
 					current_buffers,
-					current_counts,
 					color,
 					top_left_uv,
 					bottom_right_uv,
@@ -8563,18 +8473,14 @@ namespace ECSEngine {
 		{
 			if (!initializer) {
 				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL;
-				void** current_buffers = buffers;
-				size_t* current_counts = counts;
-
+				Stream<CapacityStream<void>> current_buffers = buffers;
 				if (configuration & UI_CONFIG_LATE_DRAW) {
 					phase = ECS_UI_DRAW_LATE;
-					current_buffers = buffers + ECS_TOOLS_UI_MATERIALS;
-					current_counts = counts + ECS_TOOLS_UI_MATERIALS;
+					current_buffers = buffers.SliceAt(ECS_TOOLS_UI_MATERIALS);
 				}
 				else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
 					phase = ECS_UI_DRAW_SYSTEM;
 					current_buffers = system_buffers;
-					current_counts = system_counts;
 				}
 
 				system->SetSprite(
@@ -8584,7 +8490,6 @@ namespace ECSEngine {
 					position,
 					scale,
 					current_buffers,
-					current_counts,
 					color,
 					top_left_uv,
 					bottom_right_uv,
@@ -8605,10 +8510,7 @@ namespace ECSEngine {
 			Color bottom_right
 		) {
 			if (!initializer) {
-				auto buffer = HandleSolidColorBuffer(configuration);
-				auto count = HandleSolidColorCount(configuration);
-
-				SetVertexColorRectangle(position, scale, top_left, top_right, bottom_left, bottom_right, buffer, count);
+				SetVertexColorRectangle(position, scale, top_left, top_right, bottom_left, bottom_right, HandleSolidColorBuffer(configuration));
 			}
 		}
 
@@ -8624,10 +8526,7 @@ namespace ECSEngine {
 			ColorFloat bottom_right
 		) {
 			if (!initializer) {
-				auto buffer = HandleSolidColorBuffer(configuration);
-				auto count = HandleSolidColorCount(configuration);
-
-				SetVertexColorRectangle(position, scale, Color(top_left), Color(top_right), Color(bottom_left), Color(bottom_right), buffer, count);
+				SetVertexColorRectangle(position, scale, Color(top_left), Color(top_right), Color(bottom_left), Color(bottom_right), HandleSolidColorBuffer(configuration));
 			}
 		}
 
@@ -8640,10 +8539,7 @@ namespace ECSEngine {
 			const Color* colors
 		) {
 			if (!initializer) {
-				auto buffer = HandleSolidColorBuffer(configuration);
-				auto count = HandleSolidColorCount(configuration);
-
-				SetVertexColorRectangle(position, scale, colors, buffer, count);
+				SetVertexColorRectangle(position, scale, colors, HandleSolidColorBuffer(configuration));
 			}
 		}
 
@@ -8656,10 +8552,7 @@ namespace ECSEngine {
 			const ColorFloat* colors
 		) {
 			if (!initializer) {
-				auto buffer = HandleSolidColorBuffer(configuration);
-				auto count = HandleSolidColorCount(configuration);
-
-				SetVertexColorRectangle(position, scale, Color(colors[0]), Color(colors[1]), Color(colors[2]), Color(colors[3]), buffer, count);
+				SetVertexColorRectangle(position, scale, Color(colors[0]), Color(colors[1]), Color(colors[2]), Color(colors[3]), HandleSolidColorBuffer(configuration));
 			}
 		}
 
@@ -8673,7 +8566,8 @@ namespace ECSEngine {
 			const float2* uvs,
 			ECS_UI_DRAW_PHASE phase
 		) {
-			system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, counts, colors, uvs[0], uvs[1], phase);
+			// TODO: We probably need to handle the correct buffers?
+			system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, colors, uvs[0], uvs[1], phase);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -8687,7 +8581,8 @@ namespace ECSEngine {
 			float2 bottom_right_uv,
 			ECS_UI_DRAW_PHASE phase
 		) {
-			system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, counts, colors, top_left_uv, bottom_right_uv, phase);
+			// TODO: We probably need to handle the correct buffers?
+			system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, colors, top_left_uv, bottom_right_uv, phase);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -8700,7 +8595,8 @@ namespace ECSEngine {
 			const float2* uvs,
 			ECS_UI_DRAW_PHASE phase
 		) {
-			system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, counts, colors, uvs[0], uvs[1], phase);
+			// TODO: We probably need to handle the correct buffers?
+			system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, colors, uvs[0], uvs[1], phase);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -8714,7 +8610,8 @@ namespace ECSEngine {
 			float2 bottom_right_uv,
 			ECS_UI_DRAW_PHASE phase
 		) {
-			system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, counts, colors, top_left_uv, bottom_right_uv, phase);
+			// TODO: We probably need to handle the correct buffers?
+			system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, colors, top_left_uv, bottom_right_uv, phase);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -8726,25 +8623,57 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		Stream<UIVertexColor> UIDrawer::GetSolidColorStream(size_t configuration, size_t size) {
-			return Stream<UIVertexColor>(HandleSolidColorBuffer(configuration) + *HandleSolidColorCount(configuration), size);
+			CapacityStream<void>& solid_color = HandleSolidColorBuffer(configuration);
+			solid_color.AssertCapacity(size);
+			solid_color.size += size;
+			return Stream<UIVertexColor>(solid_color.Get(solid_color.size - size, sizeof(UIVertexColor)), size);
+		}
+
+		CapacityStream<void> UIDrawer::GetSolidColorStreamUntyped(size_t configuration, size_t size) {
+			Stream<UIVertexColor> stream = GetSolidColorStream(configuration, size);
+			return { stream.buffer, 0, (unsigned int)stream.size };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		Stream<UISpriteVertex> UIDrawer::GetTextStream(size_t configuration, size_t size) {
-			return Stream<UISpriteVertex>(HandleTextSpriteBuffer(configuration) + *HandleTextSpriteCount(configuration), size);
+			CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
+			text_sprites.AssertCapacity(size);
+			text_sprites.size += size;
+			return Stream<UISpriteVertex>(text_sprites.Get(text_sprites.size - size, sizeof(UISpriteVertex)), size);
+		}
+
+		CapacityStream<void> UIDrawer::GetTextStreamUntyped(size_t configuration, size_t size) {
+			Stream<UISpriteVertex> stream = GetTextStream(configuration, size);
+			return { stream.buffer, 0, (unsigned int)stream.size };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		Stream<UISpriteVertex> UIDrawer::GetSpriteStream(size_t configuration, size_t size) {
-			return Stream<UISpriteVertex>(HandleSpriteBuffer(configuration) + *HandleSpriteCount(configuration), size);
+			CapacityStream<void>& sprites = HandleSpriteBuffer(configuration);
+			sprites.AssertCapacity(size);
+			sprites.size += size;
+			return Stream<UISpriteVertex>(sprites.Get(sprites.size - size, sizeof(UISpriteVertex)), size);
+		}
+
+		CapacityStream<void> UIDrawer::GetSpriteStreamUntyped(size_t configuration, size_t size) {
+			Stream<UISpriteVertex> stream = GetSpriteStream(configuration, size);
+			return { stream.buffer, 0, (unsigned int)stream.size };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		Stream<UISpriteVertex> UIDrawer::GetSpriteClusterStream(size_t configuration, size_t size) {
-			return Stream<UISpriteVertex>(HandleSpriteClusterBuffer(configuration) + *HandleSpriteClusterCount(configuration), size);
+			CapacityStream<void>& sprite_cluster = HandleSpriteClusterBuffer(configuration);
+			sprite_cluster.AssertCapacity(size);
+			sprite_cluster.size += size;
+			return Stream<UISpriteVertex>(sprite_cluster.Get(sprite_cluster.size - size, sizeof(UISpriteVertex)), size);
+		}
+
+		CapacityStream<void> UIDrawer::GetSpriteClusterStreamUntyped(size_t configuration, size_t size) {
+			Stream<UISpriteVertex> stream = GetSpriteClusterStream(configuration, size);
+			return { stream.buffer, 0, (unsigned int)stream.size };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -8953,9 +8882,9 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		bool UIDrawer::VerifyFitSpaceNonRectangle(size_t vertex_count) const {
-			UIVertexColor* vertices = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
-			size_t last_index = counts[ECS_TOOLS_UI_SOLID_COLOR] + vertex_count;
-			for (size_t index = counts[ECS_TOOLS_UI_SOLID_COLOR]; index < last_index; index++) {
+			UIVertexColor* vertices = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR].buffer;
+			size_t last_index = buffers[ECS_TOOLS_UI_SOLID_COLOR].size + vertex_count;
+			for (size_t index = buffers[ECS_TOOLS_UI_SOLID_COLOR].size; index < last_index; index++) {
 				if (vertices[index].position.x > region_limit.x - region_render_offset.x) {
 					return false;
 				}
@@ -9163,10 +9092,10 @@ namespace ECSEngine {
 				}
 				else {
 					if (!omit_text) {
-						Stream<UISpriteVertex> text_vertices = drawer->GetTextStream(label_configuration, text.size * 6);
 						if (!omit_text) {
 							drawer->TextLabel(label_configuration, label_config, text, position, scale);
 						}
+						Stream<UISpriteVertex> text_vertices = drawer->HandleTextSpriteBuffer(label_configuration).AsIs<UISpriteVertex>().GetLastElements(text.size * 6);
 						if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
 							if (~configuration & UI_CONFIG_NAME_PADDING) {
 								if (!omit_text) {
@@ -9274,9 +9203,8 @@ namespace ECSEngine {
 			bool _initializer
 		) : dockspace(descriptor.dockspace), window_index(descriptor.window_index),
 			border_index(descriptor.border_index), dockspace_type(descriptor.dockspace_type), buffers(descriptor.buffers),
-			counts(descriptor.counts), system_buffers(descriptor.system_buffers), system_counts(descriptor.system_counts),
-			window_data(_window_data), mouse_position(descriptor.mouse_position), color_theme(descriptor.color_theme),
-			font(descriptor.font), layout(descriptor.layout), element_descriptor(descriptor.element_descriptor),
+			system_buffers(descriptor.system_buffers), window_data(_window_data), mouse_position(descriptor.mouse_position), 
+			color_theme(descriptor.color_theme), font(descriptor.font), layout(descriptor.layout), element_descriptor(descriptor.element_descriptor),
 			export_scale(descriptor.export_scale), initializer(_initializer), record_actions(descriptor.record_handlers),
 			record_snapshot_runnables(descriptor.record_snapshot_runnables), window_dependent_size_offsets(0.0f, 0.0f)
 		{
@@ -9901,11 +9829,9 @@ namespace ECSEngine {
 			ActionData action_data = GetDummyActionData();
 			if (runnable.draw_phase == ECS_UI_DRAW_SYSTEM) {
 				action_data.buffers = system_buffers;
-				action_data.counts = system_counts;
 			}
 			else {
 				action_data.buffers = buffers;
-				action_data.counts = counts;
 			}
 			runnable.function(runnable.data, &action_data);
 			AddSnapshotRunnable(runnable);
@@ -10143,7 +10069,7 @@ namespace ECSEngine {
 				configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
 				size_t label_configuration = ClearFlag(configuration, UI_CONFIG_TOOL_TIP);
 
-				size_t previous_text_sprite_count = *HandleTextSpriteCount(configuration);
+				size_t previous_text_sprite_count = HandleTextSpriteBuffer(configuration).size;
 				if (~configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 					TextLabel(label_configuration, config, text, position, scale);
 				}
@@ -10170,17 +10096,15 @@ namespace ECSEngine {
 							AddDefaultClickable(configuration, position, scale, { DefaultHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 						}
 						else {
-							UISpriteVertex* sprite_vertex = HandleTextSpriteBuffer(configuration);
-							size_t* count = HandleTextSpriteCount(configuration);
-
-							if (*count > previous_text_sprite_count) {
+							CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
+							if (text_sprites.size > previous_text_sprite_count) {
 								if (record_actions) {
-									size_t text_vertex_count = *count - previous_text_sprite_count;
+									size_t text_vertex_count = text_sprites.size - previous_text_sprite_count;
 
 									UIDefaultTextHoverableData hoverable_data;
 									hoverable_data.color = label_color;
 
-									float2 text_position = sprite_vertex[*count - text_vertex_count].position;
+									float2 text_position = text_sprites.AsIs<UISpriteVertex>()[text_sprites.size - text_vertex_count].position;
 									text_position.y = -text_position.y;
 									float2 offset = text_position - position;
 									hoverable_data.text_offset = offset;
@@ -11550,11 +11474,11 @@ namespace ECSEngine {
 			};
 
 			size_t configuration = state.configuration;
-			handle_rectangle_type(state.buffer_state.solid_color_count, *HandleSolidColorCount(configuration), HandleSolidColorBuffer(configuration));
-			handle_rectangle_type(state.buffer_state.text_sprite_count, *HandleTextSpriteCount(configuration), HandleTextSpriteBuffer(configuration));
-			handle_rectangle_type(state.buffer_state.sprite_count, *HandleSpriteCount(configuration), HandleSpriteBuffer(configuration));
-			handle_rectangle_type(state.buffer_state.sprite_cluster_count, *HandleSpriteClusterCount(configuration), HandleSpriteClusterBuffer(configuration));
-			ECS_ASSERT(state.buffer_state.line_count == *HandleLineCount(configuration), "UI Line clipping is not yet supported.");
+			handle_rectangle_type(state.buffer_state.solid_color_count, HandleSolidColorBuffer(configuration).size, (UIVertexColor*)HandleSolidColorBuffer(configuration).buffer);
+			handle_rectangle_type(state.buffer_state.text_sprite_count, HandleTextSpriteBuffer(configuration).size, (UISpriteVertex*)HandleTextSpriteBuffer(configuration).buffer);
+			handle_rectangle_type(state.buffer_state.sprite_count, HandleSpriteBuffer(configuration).size, (UISpriteVertex*)HandleSpriteBuffer(configuration).buffer);
+			handle_rectangle_type(state.buffer_state.sprite_cluster_count, HandleSpriteClusterBuffer(configuration).size, (UISpriteVertex*)HandleSpriteClusterBuffer(configuration).buffer);
+			ECS_ASSERT(state.buffer_state.line_count == HandleLineBuffer(configuration).size, "UI Line clipping is not yet supported.");
 
 			system->ClipHoverables(dockspace, border_index, state.handler_state.hoverable_count, -1, clip_rectangle);
 			for (size_t index = 0; index < ECS_MOUSE_BUTTON_COUNT; index++) {
@@ -12452,11 +12376,11 @@ namespace ECSEngine {
 			UIDrawerBufferState state;
 
 			if (!initializer) {
-				state.solid_color_count = *HandleSolidColorCount(configuration);
-				state.sprite_count = *HandleSpriteCount(configuration);
-				state.text_sprite_count = *HandleTextSpriteCount(configuration);
-				state.sprite_cluster_count = *HandleSpriteClusterCount(configuration);
-				state.line_count = *HandleLineCount(configuration);
+				state.solid_color_count = HandleSolidColorBuffer(configuration).size;
+				state.sprite_count = HandleSpriteBuffer(configuration).size;
+				state.text_sprite_count = HandleTextSpriteBuffer(configuration).size;
+				state.sprite_cluster_count = HandleSpriteClusterBuffer(configuration).size;
+				state.line_count = HandleLineBuffer(configuration).size;
 			}
 			else {
 				memset(&state, 0, sizeof(state));
@@ -12487,11 +12411,11 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UIDrawer::GetLastSolidColorRectanglePosition(size_t configuration, unsigned int previous_rectangle) {
-			UIVertexColor* buffer = HandleSolidColorBuffer(configuration);
-			size_t* count = HandleSolidColorCount(configuration);
+			UIVertexColor* buffer = (UIVertexColor*)HandleSolidColorBuffer(configuration).buffer;
+			size_t count = HandleSolidColorBuffer(configuration).size;
 
-			if (*count > 6 * previous_rectangle) {
-				size_t new_index = *count - previous_rectangle * 6 - 6;
+			if (count > 6 * previous_rectangle) {
+				size_t new_index = count - previous_rectangle * 6 - 6;
 				return { buffer[new_index].position.x, -buffer[new_index].position.y };
 			}
 			return float2(0.0f, 0.0f);
@@ -12500,11 +12424,11 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UIDrawer::GetLastSolidColorRectangleScale(size_t configuration, unsigned int previous_rectangle) {
-			UIVertexColor* buffer = HandleSolidColorBuffer(configuration);
-			size_t* count = HandleSolidColorCount(configuration);
+			UIVertexColor* buffer = (UIVertexColor*)HandleSolidColorBuffer(configuration).buffer;
+			size_t count = HandleSolidColorBuffer(configuration).size;
 
-			if (*count > 6 * previous_rectangle) {
-				size_t new_index = *count - previous_rectangle * 6;
+			if (count > 6 * previous_rectangle) {
+				size_t new_index = count - previous_rectangle * 6;
 				return { buffer[new_index - 5].position.x - buffer[new_index - 6].position.x, buffer[new_index - 3].position.y - buffer[new_index - 1].position.y };
 			}
 			return float2(0.0f, 0.0f);
@@ -12513,11 +12437,11 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UIDrawer::GetLastSpriteRectanglePosition(size_t configuration, unsigned int previous_rectangle) {
-			UISpriteVertex* buffer = HandleSpriteBuffer(configuration);
-			size_t* count = HandleSpriteCount(configuration);
+			UISpriteVertex* buffer = (UISpriteVertex*)HandleSpriteBuffer(configuration).buffer;
+			size_t count = HandleSpriteBuffer(configuration).size;
 
-			if (*count > 6 * previous_rectangle) {
-				size_t new_index = *count - previous_rectangle * 6 - 6;
+			if (count > 6 * previous_rectangle) {
+				size_t new_index = count - previous_rectangle * 6 - 6;
 				return { buffer[new_index].position.x, -buffer[new_index].position.y };
 			}
 			return float2(0.0f, 0.0f);
@@ -12526,11 +12450,11 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UIDrawer::GetLastSpriteRectangleScale(size_t configuration, unsigned int previous_rectangle) {
-			UISpriteVertex* buffer = HandleSpriteBuffer(configuration);
-			size_t* count = HandleSpriteCount(configuration);
+			UISpriteVertex* buffer = (UISpriteVertex*)HandleSpriteBuffer(configuration).buffer;
+			size_t count = HandleSpriteBuffer(configuration).size;
 
-			if (*count > 6 * previous_rectangle) {
-				size_t new_index = *count - previous_rectangle * 6;
+			if (count > 6 * previous_rectangle) {
+				size_t new_index = count - previous_rectangle * 6;
 				return { buffer[new_index - 5].position.x - buffer[new_index - 6].position.x, buffer[new_index - 3].position.y - buffer[new_index - 1].position.y };
 			}
 			return float2(0.0f, 0.0f);
@@ -13621,7 +13545,6 @@ namespace ECSEngine {
 										position,
 										scale,
 										action_data->buffers,
-										action_data->counts,
 										runnable_data->drag_highlight_color
 									);
 									return true;
@@ -14658,7 +14581,7 @@ namespace ECSEngine {
 					ConvertFloatToChars(temp_stream, percent_value, 0);
 					temp_stream.Add('%');
 					temp_stream[temp_stream.size] = '\0';
-					auto text_stream = GetTextStream(configuration, temp_stream.size * 6);
+					Stream<UISpriteVertex> text_stream = GetTextStream(configuration, temp_stream.size * 6);
 					float2 text_position = { position.x + scale.x * percentage, position.y };
 
 					Color text_color;
@@ -14674,8 +14597,6 @@ namespace ECSEngine {
 						font_size,
 						character_spacing
 					);
-					auto text_count = HandleTextSpriteCount(configuration);
-					*text_count += text_stream.size;
 					float2 text_span = GetTextSpan(text_stream);
 
 					float x_position, y_position;
@@ -14841,14 +14762,14 @@ namespace ECSEngine {
 
 		void UIDrawer::RestoreBufferState(size_t configuration, const UIDrawerBufferState& state) {
 			if (!initializer) {
-				size_t* solid_color_count = HandleSolidColorCount(configuration);
-				size_t* text_sprite_count = HandleTextSpriteCount(configuration);
-				size_t* sprite_count = HandleSpriteCount(configuration);
-				size_t* sprite_cluster_count = HandleSpriteClusterCount(configuration);
-				size_t* line_count = HandleLineCount(configuration);
+				CapacityStream<void>& solid_color_buffer = HandleSolidColorBuffer(configuration);
+				CapacityStream<void>& text_sprite_buffer = HandleTextSpriteBuffer(configuration);
+				CapacityStream<void>& sprite_buffer = HandleSpriteBuffer(configuration);
+				CapacityStream<void>& sprite_cluster_buffer = HandleSpriteClusterBuffer(configuration);
+				CapacityStream<void>& line_buffer = HandleLineBuffer(configuration);
 
-				size_t sprite_difference = *sprite_count - state.sprite_count;
-				size_t sprite_cluster_difference = *sprite_cluster_count - state.sprite_cluster_count;
+				size_t sprite_difference = sprite_buffer.size - state.sprite_count;
+				size_t sprite_cluster_difference = sprite_cluster_buffer.size - state.sprite_cluster_count;
 
 				sprite_difference /= 6;
 				sprite_cluster_difference /= 6;
@@ -14872,11 +14793,11 @@ namespace ECSEngine {
 				}
 				sprite_cluster_substream.size = current_cluster_index;
 
-				*solid_color_count = state.solid_color_count;
-				*text_sprite_count = state.text_sprite_count;
-				*sprite_count = state.sprite_count;
-				*sprite_cluster_count = state.sprite_cluster_count;
-				*line_count = state.line_count;
+				solid_color_buffer.size = state.solid_color_count;
+				text_sprite_buffer.size = state.text_sprite_count;
+				sprite_buffer.size = state.sprite_count;
+				sprite_cluster_buffer.size = state.sprite_cluster_count;
+				line_buffer.size = state.line_count;
 			}
 		}
 
@@ -16179,7 +16100,6 @@ namespace ECSEngine {
 						{ 0.0f, 0.0f },
 						{ 1.0f, 1.0f },
 						buffers,
-						counts,
 						ECS_TOOLS_UI_SPRITE
 					);
 				};
@@ -17050,15 +16970,13 @@ namespace ECSEngine {
 			float2 font_size;
 			float character_spacing;
 			HandleText(configuration, config, color, font_size, character_spacing);
-			auto text_sprites = HandleTextSpriteBuffer(configuration);
-			auto text_sprite_count = HandleTextSpriteCount(configuration);
+			CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
 			float2 text_span = TextSpan(characters, font_size, character_spacing);
 			if (~configuration & UI_CONFIG_DO_NOT_FIT_SPACE) {
 				HandleFitSpaceRectangle(configuration, position, text_span);
 			}
 
-			Stream<UISpriteVertex> vertices = Stream<UISpriteVertex>(text_sprites + *text_sprite_count, characters.size * 6);
 			ECS_UI_ALIGN horizontal_alignment, vertical_alignment;
 			GetTextLabelAlignment(configuration, config, horizontal_alignment, vertical_alignment);
 
@@ -17083,13 +17001,12 @@ namespace ECSEngine {
 							position,
 							text_sprites,
 							color,
-							*text_sprite_count,
 							font_size,
 							character_spacing,
 							false,
 							invert_order
 						);
-						Stream<UISpriteVertex> current_text = GetTextStream(configuration, characters.size * 6);
+						Stream<UISpriteVertex> current_text = text_sprites.AsIs<UISpriteVertex>().GetLastElements(characters.size * 6);
 						text_span = GetTextSpan(current_text, false, invert_order);
 						AlignVerticalText(current_text);
 					}
@@ -17099,7 +17016,6 @@ namespace ECSEngine {
 							position,
 							text_sprites,
 							color,
-							*text_sprite_count,
 							font_size,
 							character_spacing,
 							true,
@@ -17114,12 +17030,11 @@ namespace ECSEngine {
 							position,
 							text_sprites,
 							color,
-							*text_sprite_count,
 							font_size,
 							character_spacing,
 							false
 						);
-						Stream<UISpriteVertex> current_text = GetTextStream(configuration, characters.size * 6);
+						Stream<UISpriteVertex> current_text = text_sprites.AsIs<UISpriteVertex>().GetLastElements(characters.size * 6);
 						text_span = GetTextSpan(current_text, false);
 						AlignVerticalText(current_text);
 					}
@@ -17129,14 +17044,11 @@ namespace ECSEngine {
 							position,
 							text_sprites,
 							color,
-							*text_sprite_count,
 							font_size,
 							character_spacing
 						);
 					}
 				}
-
-				*text_sprite_count += characters.size * 6;
 			}
 
 			FinalizeRectangle(configuration, position, text_span);
@@ -17165,9 +17077,7 @@ namespace ECSEngine {
 					if (ValidatePositionY(configuration, position, { 100.0f, text_y_span })) {
 						size_t text_count = ParseStringIdentifier(text);
 
-						auto text_stream = GetTextStream(configuration, text_count * 6);
-						auto text_sprites = HandleTextSpriteBuffer(configuration);
-						auto text_sprite_count = HandleTextSpriteCount(configuration);
+						CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
 						bool horizontal = (configuration & UI_CONFIG_VERTICAL) == 0;
 						system->ConvertCharactersToTextSprites(
@@ -17175,13 +17085,13 @@ namespace ECSEngine {
 							position,
 							text_sprites,
 							color,
-							*text_sprite_count,
 							font_size,
 							character_spacing,
 							horizontal
 						);
+
+						Stream<UISpriteVertex> text_stream = text_sprites.AsIs<UISpriteVertex>().GetLastElements(text_count * 6);
 						text_span = GetTextSpan(text_stream, horizontal);
-						*text_sprite_count += 6 * text_count;
 
 						bool is_moved = HandleFitSpaceRectangle(configuration, position, text_span);
 						if (is_moved) {
@@ -17194,7 +17104,7 @@ namespace ECSEngine {
 						}
 
 						if (!ValidatePosition(configuration, { text_stream[0].position.x, -text_stream[0].position.y }, text_span)) {
-							*text_sprite_count -= 6 * text_count;
+							text_sprites.size -= 6 * text_count;
 						}
 					}
 					// Still have to fill in the text span
@@ -17447,10 +17357,7 @@ namespace ECSEngine {
 				}
 
 				if (ValidatePosition(configuration, position, scale)) {
-					auto buffer = HandleSolidColorBuffer(configuration);
-					auto count = HandleSolidColorCount(configuration);
-
-					SetVertexColorRectangle(position, scale, top_left, top_right, bottom_left, bottom_right, buffer, count);
+					SetVertexColorRectangle(position, scale, top_left, top_right, bottom_left, bottom_right, HandleSolidColorBuffer(configuration));
 
 					HandleBorder(configuration, config, position, scale);
 
@@ -17484,10 +17391,7 @@ namespace ECSEngine {
 				}
 
 				if (ValidatePosition(configuration, position, scale)) {
-					auto buffer = HandleSolidColorBuffer(configuration);
-					auto count = HandleSolidColorCount(configuration);
-
-					SetVertexColorRectangle(position, scale, Color(top_left), Color(top_right), Color(bottom_left), Color(bottom_right), buffer, count);
+					SetVertexColorRectangle(position, scale, Color(top_left), Color(top_right), Color(bottom_left), Color(bottom_right), HandleSolidColorBuffer(configuration));
 					HandleBorder(configuration, config, position, scale);
 
 					HandleLateAndSystemDrawActionNullify(configuration, position, scale);

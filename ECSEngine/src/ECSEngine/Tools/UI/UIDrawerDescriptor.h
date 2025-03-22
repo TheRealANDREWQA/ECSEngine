@@ -27,10 +27,8 @@ namespace ECSEngine {
 			bool record_handlers;
 			bool record_snapshot_runnables;
 			float2 mouse_position;
-			void** buffers;
-			size_t* counts;
-			void** system_buffers;
-			size_t* system_counts;
+			Stream<CapacityStream<void>> buffers;
+			Stream<CapacityStream<void>> system_buffers;
 			UIColorThemeDescriptor& color_theme;
 			UIFontDescriptor& font;
 			UILayoutDescriptor& layout;

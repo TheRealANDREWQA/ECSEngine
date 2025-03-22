@@ -934,8 +934,7 @@ namespace ECSEngine {
 			// Check the callback
 			if (monitor_selection.callback.action != nullptr) {
 				ActionData dummy_data;
-				dummy_data.buffers = nullptr;
-				dummy_data.counts = nullptr;
+				dummy_data.buffers = {};
 				dummy_data.system = nullptr;
 				// We can reference it directly
 				dummy_data.data = monitor_selection.callback.data;

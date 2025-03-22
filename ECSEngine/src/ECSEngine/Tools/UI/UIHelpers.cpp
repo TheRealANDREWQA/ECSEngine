@@ -746,15 +746,14 @@ namespace ECSEngine {
 			float2 scale,
 			float2 border_scale,
 			Color color,
-			Stream<CapacityStream<void>> buffers,
-			ECS_UI_DRAW_PHASE draw_phase
+			Stream<CapacityStream<void>> buffers
 		) {
 			float2 results[8];
-			CreateSolidColorRectangleBorder<is_inner>(position, scale, border_scale, color, buffers, draw_phase, results);
+			CreateSolidColorRectangleBorder<is_inner>(position, scale, border_scale, color, buffers, results);
 		}
 
-		template void ECSENGINE_API CreateSolidColorRectangleBorder<true>(float2, float2, float2, Color, Stream<CapacityStream<void>>, ECS_UI_DRAW_PHASE);
-		template void ECSENGINE_API CreateSolidColorRectangleBorder<false>(float2, float2, float2, Color, Stream<CapacityStream<void>>, ECS_UI_DRAW_PHASE);
+		template void ECSENGINE_API CreateSolidColorRectangleBorder<true>(float2, float2, float2, Color, Stream<CapacityStream<void>>);
+		template void ECSENGINE_API CreateSolidColorRectangleBorder<false>(float2, float2, float2, Color, Stream<CapacityStream<void>>);
 
 		// -------------------------------------------------------------------------------------------------------
 
@@ -765,7 +764,6 @@ namespace ECSEngine {
 			float2 border_scale,
 			Color color,
 			Stream<CapacityStream<void>> buffers,
-			ECS_UI_DRAW_PHASE draw_phase,
 			float2* results
 		) {
 			if constexpr (is_inner)
@@ -773,14 +771,12 @@ namespace ECSEngine {
 			else
 				CreateRectangleOuterBorder(position, scale, border_scale, results);
 
-			unsigned int material_offset = GetDrawPhaseMaterialOffset(draw_phase);
 			// top
 			SetSolidColorRectangle(
 				results[0],
 				results[1],
 				color,
-				buffers,
-				material_offset
+				buffers
 			);
 
 			// left
@@ -788,8 +784,7 @@ namespace ECSEngine {
 				results[2],
 				results[3],
 				color,
-				buffers,
-				material_offset
+				buffers
 			);
 
 			// bottom
@@ -797,8 +792,7 @@ namespace ECSEngine {
 				results[4],
 				results[5],
 				color,
-				buffers,
-				material_offset
+				buffers
 			);
 
 			// right
@@ -806,13 +800,12 @@ namespace ECSEngine {
 				results[6],
 				results[7],
 				color,
-				buffers,
-				material_offset
+				buffers
 			);
 		}
 
-		template void ECSENGINE_API CreateSolidColorRectangleBorder<false>(float2, float2, float2, Color, Stream<CapacityStream<void>>, ECS_UI_DRAW_PHASE, float2*);
-		template void ECSENGINE_API CreateSolidColorRectangleBorder<true>(float2, float2, float2, Color, Stream<CapacityStream<void>>, ECS_UI_DRAW_PHASE, float2*);
+		template void ECSENGINE_API CreateSolidColorRectangleBorder<false>(float2, float2, float2, Color, Stream<CapacityStream<void>>, float2*);
+		template void ECSENGINE_API CreateSolidColorRectangleBorder<true>(float2, float2, float2, Color, Stream<CapacityStream<void>>, float2*);
 
 		// -------------------------------------------------------------------------------------------------------
 
@@ -917,8 +910,7 @@ namespace ECSEngine {
 		template<typename Stream>
 		void ScaleTextX(
 			const Stream& input,
-			UISpriteVertex* output_buffer,
-			size_t* output_count,
+			CapacityStream<void>& buffer,
 			bool is_vertical,
 			bool is_inverted,
 			float inverted_current_scale,
@@ -937,8 +929,7 @@ namespace ECSEngine {
 						input[index].color,
 						input[index].uvs,
 						input[index + 4].uvs,
-						output_buffer,
-						*output_count
+						buffer
 					);
 
 					x_position += new_x_scale + character_spacing;
@@ -964,8 +955,7 @@ namespace ECSEngine {
 						input[index].color,
 						input[index].uvs,
 						input[index + 4].uvs,
-						output_buffer,
-						*output_count
+						buffer
 					);
 				};
 				for (size_t index = 0; index < input.size; index += 6) {
@@ -974,15 +964,14 @@ namespace ECSEngine {
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, ScaleTextX, const Stream<UISpriteVertex>&, const CapacityStream<UISpriteVertex>&, UISpriteVertex*, size_t*, bool, bool, float, float, float);
+		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, ScaleTextX, const Stream<UISpriteVertex>&, const CapacityStream<UISpriteVertex>&, CapacityStream<void>&, bool, bool, float, float, float);
 
 		// -------------------------------------------------------------------------------------------------------
 
 		template<typename Stream>
 		void ScaleTextY(
 			const Stream& input,
-			UISpriteVertex* output_buffer,
-			size_t* output_count,
+			CapacityStream<void>& buffer,
 			bool is_vertical,
 			bool is_inverted,
 			float inverted_current_scale,
@@ -1000,8 +989,7 @@ namespace ECSEngine {
 						input[index].color,
 						input[index].uvs,
 						input[index + 4].uvs,
-						output_buffer,
-						*output_count
+						buffer
 					);
 				};
 
@@ -1020,8 +1008,7 @@ namespace ECSEngine {
 						input[index].color,
 						input[index].uvs,
 						input[index + 4].uvs,
-						output_buffer,
-						*output_count
+						buffer
 					);
 
 					y_position += new_y_scale + new_character_spacing;
@@ -1040,15 +1027,14 @@ namespace ECSEngine {
 			}
 		}
 	
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, ScaleTextY, const Stream<UISpriteVertex>&, const CapacityStream<UISpriteVertex>&, UISpriteVertex*, size_t*, bool, bool, float, float, float);
+		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, ScaleTextY, const Stream<UISpriteVertex>&, const CapacityStream<UISpriteVertex>&, CapacityStream<void>&, bool, bool, float, float, float);
 	
 		// -------------------------------------------------------------------------------------------------------
 
 		template<typename Stream>
 		void ScaleTextXY(
 			const Stream& input,
-			UISpriteVertex* output_buffer,
-			size_t* output_count,
+			CapacityStream<void>& buffer,
 			bool is_vertical,
 			bool is_inverted,
 			float2 inverted_current_scale,
@@ -1070,8 +1056,7 @@ namespace ECSEngine {
 						input[index].color,
 						input[index].uvs,
 						input[index + 4].uvs,
-						output_buffer,
-						*output_count
+						buffer
 					);
 
 					x_position += new_x_scale + character_spacing;
@@ -1101,8 +1086,7 @@ namespace ECSEngine {
 						input[index].color,
 						input[index].uvs,
 						input[index + 4].uvs,
-						output_buffer,
-						*output_count
+						buffer
 					);
 
 					y_position += new_y_scale + new_character_spacing;
@@ -1121,17 +1105,16 @@ namespace ECSEngine {
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, ScaleTextXY, const Stream<UISpriteVertex>&, const CapacityStream<UISpriteVertex>&, UISpriteVertex*, size_t*, bool, bool, float2, float2, float);
+		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, ScaleTextXY, const Stream<UISpriteVertex>&, const CapacityStream<UISpriteVertex>&, CapacityStream<void>&, bool, bool, float2, float2, float);
 
 		// -------------------------------------------------------------------------------------------------------
 
 		template<typename Stream>
 		void ScaleText(
-			Stream& input,
+			const Stream& input,
 			float2 input_zoom,
 			float2 input_inverse_zoom,
-			UISpriteVertex* output_buffer,
-			size_t* output_count,
+			CapacityStream<void>& buffer,
 			const float2* zoom_ptr,
 			float character_spacing
 		) {
@@ -1148,17 +1131,17 @@ namespace ECSEngine {
 			}
 
 			if (is_x_different && !is_y_different) {
-				ScaleTextX(input, output_buffer, output_count, is_vertical, is_inverted, input_inverse_zoom.x, zoom_ptr->x, character_spacing);
+				ScaleTextX(input, buffer, is_vertical, is_inverted, input_inverse_zoom.x, zoom_ptr->x, character_spacing);
 			}
 			else if (is_x_different && is_y_different) {
-				ScaleTextXY(input, output_buffer, output_count, is_vertical, is_inverted, input_inverse_zoom, { zoom_ptr->x, zoom_ptr->y }, character_spacing);
+				ScaleTextXY(input, buffer, is_vertical, is_inverted, input_inverse_zoom, { zoom_ptr->x, zoom_ptr->y }, character_spacing);
 			}
 			else if (is_y_different) {
-				ScaleTextY(input, output_buffer, output_count, is_vertical, is_inverted, input_inverse_zoom.y, zoom_ptr->y, character_spacing);
+				ScaleTextY(input, buffer, is_vertical, is_inverted, input_inverse_zoom.y, zoom_ptr->y, character_spacing);
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, ScaleText, Stream<UISpriteVertex>&, CapacityStream<UISpriteVertex>&, float2, float2, UISpriteVertex*, size_t*, const float2*, float);
+		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, ScaleText, const Stream<UISpriteVertex>&, const CapacityStream<UISpriteVertex>&, float2, float2, CapacityStream<void>&, const float2*, float);
 
 		// -------------------------------------------------------------------------------------------------------
 

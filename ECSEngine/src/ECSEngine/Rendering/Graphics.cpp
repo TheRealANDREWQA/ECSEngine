@@ -5884,6 +5884,11 @@ namespace ECSEngine {
 		unsigned int subresource_index
 	)
 	{
+		// If the mapping type is discard and the size is 0, we can skip the call
+		if (map_type == ECS_GRAPHICS_MAP_WRITE_DISCARD && data_size == 0) {
+			return;
+		}
+
 		HRESULT result;
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;

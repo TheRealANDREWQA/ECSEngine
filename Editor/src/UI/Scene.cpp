@@ -1091,7 +1091,6 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 						selection_top_left,
 						selection_scale,
 						buffers,
-						counts,
 						selection_color,
 						{ 0.0f, 0.0f },
 						{ 1.0f, 1.0f },
@@ -1104,7 +1103,6 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 						selection_scale,
 						border_scale,
 						selection_color,
-						counts,
 						buffers
 					);
 				}

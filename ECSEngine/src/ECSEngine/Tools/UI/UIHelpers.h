@@ -178,7 +178,7 @@ namespace ECSEngine {
 			float2 bottom_right_uv,
 			Stream<CapacityStream<void>> buffers,
 			unsigned int material_index,
-			unsigned int material_offset
+			unsigned int material_offset = 0
 		);
 
 		ECSENGINE_API void SetVertexColorSpriteRectangle(
@@ -198,7 +198,7 @@ namespace ECSEngine {
 			float2 bottom_right_uv,
 			Stream<CapacityStream<void>> buffers,
 			unsigned int material_index,
-			unsigned int material_offset
+			unsigned int material_offset = 0
 		);
 
 		ECSENGINE_API bool IsPointInRectangle(
@@ -429,8 +429,7 @@ namespace ECSEngine {
 			float2 scale,
 			float2 border_scale,
 			Color color,
-			Stream<CapacityStream<void>> buffers,
-			ECS_UI_DRAW_PHASE draw_phase
+			Stream<CapacityStream<void>> buffers
 		);
 
 		template<bool is_inner = true>
@@ -440,7 +439,6 @@ namespace ECSEngine {
 			float2 border_scale,
 			Color color,
 			Stream<CapacityStream<void>> buffers,
-			ECS_UI_DRAW_PHASE draw_phase,
 			float2* results
 		);
 
@@ -586,8 +584,7 @@ namespace ECSEngine {
 		template<typename Stream>
 		void ScaleTextX(
 			const Stream& input,
-			UISpriteVertex* output_buffer,
-			size_t* output_count,
+			CapacityStream<void>& buffer,
 			bool is_vertical,
 			bool is_inverted,
 			float inverted_current_scale,
@@ -598,8 +595,7 @@ namespace ECSEngine {
 		template<typename Stream>
 		void ScaleTextY(
 			const Stream& input,
-			UISpriteVertex* output_buffer,
-			size_t* output_count,
+			CapacityStream<void>& buffer,
 			bool is_vertical,
 			bool is_inverted,
 			float inverted_current_scale,
@@ -610,8 +606,7 @@ namespace ECSEngine {
 		template<typename Stream>
 		void ScaleTextXY(
 			const Stream& input,
-			UISpriteVertex* output_buffer,
-			size_t* output_count,
+			CapacityStream<void>& buffer,
 			bool is_vertical,
 			bool is_inverted,
 			float2 inverted_current_scale,
@@ -623,8 +618,7 @@ namespace ECSEngine {
 		template<typename TextElement>
 		void ScaleText(
 			TextElement* element,
-			UISpriteVertex* output_buffer, 
-			size_t* output_count, 
+			CapacityStream<void>& buffer,
 			const float2* zoom_ptr,
 			float character_spacing
 		) {
@@ -643,24 +637,23 @@ namespace ECSEngine {
 			}
 
 			if (is_x_different && !is_y_different) {
-				ScaleTextX(*vertices, output_buffer, output_count, is_vertical, is_inverted, element->GetInverseZoomX(), zoom_ptr->x, character_spacing);
+				ScaleTextX(*vertices, buffer, is_vertical, is_inverted, element->GetInverseZoomX(), zoom_ptr->x, character_spacing);
 			}
 			else if (is_x_different && is_y_different) {
-				ScaleTextXY(*vertices, output_buffer, output_count, is_vertical, is_inverted, element->GetInverseZoom(), { zoom_ptr->x, zoom_ptr->y }, character_spacing);
+				ScaleTextXY(*vertices, buffer, is_vertical, is_inverted, element->GetInverseZoom(), { zoom_ptr->x, zoom_ptr->y }, character_spacing);
 			}
 			else if (is_y_different) {
-				ScaleTextY(*vertices, output_buffer, output_count, is_vertical, is_inverted, element->GetInverseZoomY(), zoom_ptr->y, character_spacing);
+				ScaleTextY(*vertices, buffer, is_vertical, is_inverted, element->GetInverseZoomY(), zoom_ptr->y, character_spacing);
 			}
 		}
 
 		// it only scales the sprites, it does not translate them
 		template<typename Stream>
 		void ScaleText(
-			Stream& input,
+			const Stream& input,
 			float2 input_zoom,
 			float2 input_inverse_zoom,
-			UISpriteVertex* output_buffer,
-			size_t* output_count,
+			CapacityStream<void>& buffer,
 			const float2* zoom_ptr,
 			float character_spacing
 		);

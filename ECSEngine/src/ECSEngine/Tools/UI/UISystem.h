@@ -481,6 +481,34 @@ namespace ECSEngine {
 				bool invert_order = false
 			);
 
+			ECS_INLINE void ConvertCharactersToTextSprites(
+				Stream<char> characters,
+				float2 position,
+				CapacityStream<void>& vertex_buffer,
+				Color color,
+				float2 font_size,
+				float character_spacing,
+				bool horizontal = true,
+				bool invert_order = false
+			) {
+				vertex_buffer.AssertCapacity(characters.size * 6);
+				ConvertCharactersToTextSprites(characters, position, (UISpriteVertex*)vertex_buffer.buffer, color, vertex_buffer.size, font_size, character_spacing, horizontal, invert_order);
+				vertex_buffer.size += characters.size * 6;
+			}
+
+			ECS_INLINE void ConvertCharactersToTextSprites(
+				Stream<char> characters,
+				float2 position,
+				Stream<CapacityStream<void>> vertex_buffers,
+				Color color,
+				float2 font_size,
+				float character_spacing,
+				bool horizontal = true,
+				bool invert_order = false
+			) {
+				ConvertCharactersToTextSprites(characters, position, vertex_buffers[ECS_TOOLS_UI_TEXT_SPRITE], color, font_size, character_spacing, horizontal, invert_order);
+			}
+
 			void ConvertFloatToTextSprites(
 				UISpriteVertex* vertices,
 				size_t& count,
@@ -659,8 +687,7 @@ namespace ECSEngine {
 				unsigned int window_index_in_region,
 				float offset_mask,
 				Stream<float2> sizes,
-				void** buffers,
-				size_t* counts
+				Stream<CapacityStream<void>> buffers
 			);
 
 			void CullHandler(
@@ -801,8 +828,7 @@ namespace ECSEngine {
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float offset_mask,
-				void** buffers,
-				size_t* vertex_count
+				Stream<CapacityStream<void>> buffers
 			);
 
 			void DrawDockspaceRegionBackground(
@@ -815,8 +841,7 @@ namespace ECSEngine {
 			void DrawDockspaceRegionBorders(
 				float2 region_position,
 				float2 region_scale,
-				void** buffers,
-				size_t* vertex_count
+				Stream<CapacityStream<void>> buffers
 			);
 
 			void DrawFixedDockspaceRegionBackground(
@@ -824,8 +849,7 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				void** buffers,
-				size_t* vertex_count
+				Stream<CapacityStream<void>> buffers
 			);
 
 			// returns the size of the window
@@ -1598,8 +1622,7 @@ namespace ECSEngine {
 				UISpriteTexture texture,
 				float2 position,
 				float2 scale,
-				void** buffers,
-				size_t* counts,
+				Stream<CapacityStream<void>> buffers,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = float2(0.0f, 0.0f),
 				float2 bottom_right_uv = float2(1.0f, 1.0f),
@@ -1613,8 +1636,7 @@ namespace ECSEngine {
 				Stream<wchar_t> texture,
 				float2 position,
 				float2 scale,
-				void** buffers,
-				size_t* counts,
+				Stream<CapacityStream<void>> buffers,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = {0.0f, 0.0f},
 				float2 bottom_right_uv = {1.0f, 1.0f},
@@ -1628,8 +1650,7 @@ namespace ECSEngine {
 				Stream<wchar_t> texture,
 				float2 position,
 				float2 scale,
-				void** buffers,
-				size_t* counts,
+				Stream<CapacityStream<void>> buffers,
 				const Color* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
@@ -1643,8 +1664,7 @@ namespace ECSEngine {
 				Stream<wchar_t> texture,
 				float2 position,
 				float2 scale,
-				void** buffers,
-				size_t* counts,
+				Stream<CapacityStream<void>> buffers,
 				const ColorFloat* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
