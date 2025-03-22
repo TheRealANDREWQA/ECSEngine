@@ -303,11 +303,11 @@ namespace ECSEngine {
 			m_resources.system_draw.region_viewport_info = m_graphics->CreateConstantBuffer(sizeof(float) * ECS_TOOLS_UI_CONSTANT_BUFFER_FLOAT_SIZE);
 
 			m_resources.system_draw.sprite_textures = CapacityStream<UIDynamicStream<UISpriteTexture>>((void*)buffer, 1, ECS_TOOLS_UI_PASSES);
+			buffer += sizeof(UIDynamicStream<UISpriteTexture>) * ECS_TOOLS_UI_PASSES;
+
 			m_resources.system_draw.sprite_textures[0] = UIDynamicStream<UISpriteTexture>(m_memory, 0);
 			m_resources.system_draw.sprite_cluster_subtreams.Initialize(m_memory, 1, 1);
 			m_resources.system_draw.sprite_cluster_subtreams[0].Initialize(m_memory, ECS_TOOLS_UI_CLUSTER_SPRITE_SUBSTREAM_INITIAL_COUNT);
-
-			buffer += sizeof(UIDynamicStream<UISpriteTexture>) * ECS_TOOLS_UI_PASSES;
 
 			m_frame_handlers.InitializeFromBuffer(buffer, 0, ECS_TOOLS_UI_SYSTEM_HANDLER_FRAME_COUNT);
 			m_global_resources.Initialize(m_memory, 0);
@@ -2622,29 +2622,25 @@ namespace ECSEngine {
 
 			// Implement fit to content window
 			if ((HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT) || HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE)) != 0) {
-				// create dummy buffers for the drawer
-				void* buffers[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES];
-				void* system_buffers[ECS_TOOLS_UI_MATERIALS];
-				size_t counts[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES] = { 0 };
-				size_t system_counts[ECS_TOOLS_UI_MATERIALS] = { 0 };
+				// Create dummy buffers for the drawer
+				CapacityStream<void> buffers[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES];
+				CapacityStream<void> system_buffers[ECS_TOOLS_UI_MATERIALS];
 
 				// normal and late buffers
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES; index++) {
-					buffers[index] = m_memory->Allocate(m_descriptors.materials.vertex_buffer_count[ECS_TOOLS_UI_SOLID_COLOR] * sizeof(UISpriteVertex));
+					buffers[index].Initialize(&m_draw_buffers_allocator, m_descriptors.materials.vertex_buffer_count[ECS_TOOLS_UI_SOLID_COLOR] * sizeof(UISpriteVertex));
 				}
 				// system buffers
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					system_buffers[index] = m_memory->Allocate(m_descriptors.materials.vertex_buffer_count[ECS_TOOLS_UI_SOLID_COLOR] * sizeof(UISpriteVertex));
+					system_buffers[index].Initialize(&m_draw_buffers_allocator, m_descriptors.materials.vertex_buffer_count[ECS_TOOLS_UI_SOLID_COLOR] * sizeof(UISpriteVertex));
 				}
 
 				// set drawer parameters; GetDrawerDescriptor gives nullptrs
 				float2 new_scale;
 				UIDrawerDescriptor drawer_descriptor = GetDrawerDescriptor(window_index);
 				drawer_descriptor.export_scale = &new_scale;
-				drawer_descriptor.buffers = buffers;
-				drawer_descriptor.counts = counts;
-				drawer_descriptor.system_buffers = system_buffers;
-				drawer_descriptor.system_counts = system_counts;
+				drawer_descriptor.buffers = { buffers, ECS_COUNTOF(buffers) };
+				drawer_descriptor.system_buffers = { system_buffers, ECS_COUNTOF(system_buffers) };
 
 				m_windows[window_index].descriptors->layout.next_row_padding *= 0.5f;
 				m_windows[window_index].descriptors->layout.next_row_y_offset *= 0.5f;
@@ -2669,12 +2665,12 @@ namespace ECSEngine {
 
 				// deallocate normal and late buffers
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES; index++) {
-					m_memory->Deallocate(buffers[index]);
+					buffers[index].Deallocate(&m_draw_buffers_allocator);
 				}
 
 				// deallocate system buffers
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					m_memory->Deallocate(system_buffers[index]);
+					system_buffers[index].Deallocate(&m_draw_buffers_allocator);
 				}
 			}
 
@@ -2984,11 +2980,9 @@ namespace ECSEngine {
 			unsigned int window_index_in_region,
 			float offset_mask,
 			Stream<float2> sizes,
-			void** buffers,
-			size_t* counts
+			Stream<CapacityStream<void>> buffers
 		)
 		{
-			UISpriteVertex* reinterpretation = (UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE];
 			int64_t index = 0;
 			const UIWindow& window = m_windows[dockspace->borders[border_index].window_indices[window_index_in_region]];
 			float vertex_added_scale = m_descriptors.dockspaces.region_header_added_scale * 0.5f;
@@ -3009,13 +3003,11 @@ namespace ECSEngine {
 			ConvertCharactersToTextSprites(
 				{ window.name.buffer, character_count },
 				{ region_position.x + sizes[window_index_in_region].x + vertex_added_scale, vertex_y_position },
-				reinterpretation,
+				buffers,
 				m_descriptors.color_theme.text,
-				counts[ECS_TOOLS_UI_TEXT_SPRITE],
 				m_descriptors.font.size,
 				m_descriptors.font.character_spacing
 			);
-			counts[ECS_TOOLS_UI_TEXT_SPRITE] += character_count * 6;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3965,7 +3957,7 @@ namespace ECSEngine {
 
 			m_graphics->DisableDepth();
 
-			m_resources.system_draw.ResetCPUBuffers();
+			m_resources.system_draw.ResetCPUBuffersNormal();
 			m_resources.system_draw.sprite_textures[0].Reset();
 			m_frame_pacing = ECS_UI_FRAME_PACING_NONE;
 
@@ -4023,7 +4015,6 @@ namespace ECSEngine {
 			}
 			
 			m_resources.system_draw.UpdateNormalBuffers(m_graphics);
-			m_resources.system_draw.UpdateLateBuffers(m_graphics);
 			SetViewport(
 				{ -1.0f, -1.0f },
 				{ 2.0f, 2.0f },
@@ -4050,8 +4041,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DrawCollapseTriangleHeader(
-			void** buffers,
-			size_t* vertex_count,
+			Stream<CapacityStream<void>> buffers,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			float mask,
@@ -4072,7 +4062,6 @@ namespace ECSEngine {
 					position,
 					expanded_scale,
 					buffers,
-					vertex_count,
 					m_descriptors.color_theme.collapse_triangle,
 					{ 0.0f, 0.0f },
 					{ 1.0f, 1.0f },
@@ -4087,7 +4076,6 @@ namespace ECSEngine {
 					position,
 					expanded_scale,
 					buffers,
-					vertex_count,
 					m_descriptors.color_theme.collapse_triangle,
 					{ 1.0f, 0.0f },
 					{ 0.0f, 1.0f },
@@ -4101,10 +4089,10 @@ namespace ECSEngine {
 
 		// it will call the transform variant which is slightly more expensive in order to have propragation of changes accross 
 		// functions
-		void UISystem::DrawDockingGizmo(float2 position, size_t* counts, void** buffers, bool draw_central_rectangle)
+		void UISystem::DrawDockingGizmo(float2 position, Stream<CapacityStream<void>> buffers, bool draw_central_rectangle)
 		{
-			float2 transforms_useless[10];
-			DrawDockingGizmo(position, counts, buffers, draw_central_rectangle, transforms_useless);
+			float2 transforms_unused[10];
+			DrawDockingGizmo(position, buffers, draw_central_rectangle, transforms_unused);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -4167,13 +4155,13 @@ namespace ECSEngine {
 
 			float2 border_scale = m_pixel_size;
 			if (draw_central_rectangle) {
-				CreateSolidColorRectangleBorder<false>(central_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
+				CreateSolidColorRectangleBorder<false>(central_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers);
 			}
 
-			CreateSolidColorRectangleBorder<false>(left_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
-			CreateSolidColorRectangleBorder<false>(right_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
-			CreateSolidColorRectangleBorder<false>(bottom_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
-			CreateSolidColorRectangleBorder<false>(top_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers, ECS_UI_DRAW_NORMAL);
+			CreateSolidColorRectangleBorder<false>(left_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers);
+			CreateSolidColorRectangleBorder<false>(right_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers);
+			CreateSolidColorRectangleBorder<false>(bottom_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers);
+			CreateSolidColorRectangleBorder<false>(top_rectangle_position, scale, border_scale, m_descriptors.color_theme.docking_gizmo_border, buffers);
 
 			// left
 			CreateDottedLine<false, UIVertexColor>(
@@ -4245,7 +4233,8 @@ namespace ECSEngine {
 
 			float2 region_half_scale = { region_scale.x * 0.5f, region_scale.y * 0.5f };
 
-			border.draw_resources.ResetCPUBuffers();
+			border.draw_resources.ResetCPUBuffersNormal();
+			border.draw_resources.ResetCPUBuffersLate();
 			Stream<CapacityStream<void>> border_buffers = border.draw_resources.buffers_mapping_data;
 
 			bool has_snapshot_mode = data->snapshot_mode;
@@ -4306,7 +4295,7 @@ namespace ECSEngine {
 				size_t previous_system_counts[ECS_TOOLS_UI_MATERIALS];
 				if (has_snapshot_mode) {
 					for (size_t index = 0; index < ECS_COUNTOF(previous_system_counts); index++) {
-						previous_system_counts[index] = data->system_count[index];
+						previous_system_counts[index] = data->system_buffers[index].size;
 					}
 
 					// We will need to record a new snapshot
@@ -4319,8 +4308,7 @@ namespace ECSEngine {
 						data->dockspace,
 						data->border_index,
 						dockspace_mask,
-						buffers,
-						vertex_count
+						border_buffers
 					);
 				}
 				else {
@@ -4329,8 +4317,7 @@ namespace ECSEngine {
 						data->border_index,
 						data->dockspace->transform.position,
 						data->dockspace->transform.scale,
-						buffers,
-						vertex_count
+						border_buffers
 					);
 				}
 
@@ -4338,13 +4325,11 @@ namespace ECSEngine {
 					UIDrawerDescriptor drawer_descriptor = InitializeDrawerDescriptorReferences(window_index);
 					drawer_descriptor.border_index = data->border_index;
 					drawer_descriptor.dockspace = data->dockspace;
-					drawer_descriptor.buffers = buffers;
-					drawer_descriptor.counts = vertex_count;
+					drawer_descriptor.buffers = border_buffers;
 					drawer_descriptor.dockspace_type = data->type;
 					drawer_descriptor.system = this;
 					drawer_descriptor.window_index = window_index;
 					drawer_descriptor.system_buffers = data->system_buffers;
-					drawer_descriptor.system_counts = data->system_count;
 					drawer_descriptor.mouse_position = data->mouse_position;
 					drawer_descriptor.export_scale = nullptr;
 					drawer_descriptor.do_not_initialize_viewport_sliders = false;
@@ -4358,24 +4343,20 @@ namespace ECSEngine {
 						data->dockspace,
 						data->border_index,
 						dockspace_mask,
-						buffers + ECS_TOOLS_UI_MATERIALS,
-						vertex_count + ECS_TOOLS_UI_MATERIALS
+						border_buffers.SliceAt(ECS_TOOLS_UI_MATERIALS)
 					);
 				}
 
 				DrawDockspaceRegionBorders(
 					region_position,
 					region_scale,
-					buffers + ECS_TOOLS_UI_MATERIALS,
-					vertex_count + ECS_TOOLS_UI_MATERIALS
+					border_buffers.SliceAt(ECS_TOOLS_UI_MATERIALS)
 				);
 
 				if (has_snapshot_mode) {
 					UIDockspaceBorderDrawOutputSnapshotCreateInfo snapshot_info;
-					snapshot_info.buffers = (const void**)buffers;
-					snapshot_info.counts = vertex_count;
-					snapshot_info.system_buffers = (const void**)data->system_buffers;
-					snapshot_info.system_counts = data->system_count;
+					snapshot_info.buffers = border_buffers;
+					snapshot_info.system_buffers = data->system_buffers;
 					snapshot_info.previous_system_counts = previous_system_counts;
 					snapshot_info.border_cluster_sprite_count = border.draw_resources.sprite_cluster_subtreams;
 					snapshot_info.system_cluster_sprite_count = m_resources.system_draw.sprite_cluster_subtreams;
@@ -4409,10 +4390,8 @@ namespace ECSEngine {
 			}
 			else {
 				UIDockspaceBorderDrawOutputSnapshotRestoreInfo restore_info;
-				restore_info.buffers = buffers;
-				restore_info.counts = vertex_count;
+				restore_info.buffers = border_buffers;
 				restore_info.system_buffers = data->system_buffers;
-				restore_info.system_counts = data->system_count;
 				restore_info.border_cluster_sprite_count = border.draw_resources.sprite_cluster_subtreams;
 				restore_info.border_sprite_textures = border.draw_resources.sprite_textures;
 				restore_info.system_sprite_textures = m_resources.system_draw.sprite_textures;
@@ -4492,8 +4471,7 @@ namespace ECSEngine {
 					});
 				if ((active_click_handler /*|| m_focused_window_data.always_hoverable*/) && border.hoverable_handler.position_x.buffer != nullptr) {
 					is_hoverable = DetectHoverables(
-						vertex_count,
-						buffers,
+						border_buffers,
 						data->dockspace,
 						data->border_index,
 						data->type,
@@ -4508,8 +4486,7 @@ namespace ECSEngine {
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 					if (m_mouse->Get(button_type) == ECS_BUTTON_PRESSED) {
 						is_clickable = DetectClickables(
-							vertex_count,
-							buffers,
+							border_buffers,
 							data->dockspace,
 							data->border_index,
 							data->type,
@@ -4520,8 +4497,7 @@ namespace ECSEngine {
 						is_general = false;
 						if (button_type == ECS_MOUSE_LEFT) {
 							is_general = DetectGenerals(
-								vertex_count,
-								buffers,
+								border_buffers,
 								data->dockspace,
 								data->border_index,
 								data->type,
@@ -4551,8 +4527,7 @@ namespace ECSEngine {
 			}
 
 			if (active_region) {
-				m_focused_window_data.buffers = buffers;
-				m_focused_window_data.counts = vertex_count;
+				m_focused_window_data.buffers = border_buffers;
 
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 					if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_NORMAL) {
@@ -4574,7 +4549,7 @@ namespace ECSEngine {
 			// threads use the immediate context
 			m_resources.texture_semaphore.SpinWait();
 
-			border.draw_resources.UnmapNormal(m_graphics->GetContext());
+			border.draw_resources.UpdateNormalBuffers(m_graphics);
 
 			//if (data->snapshot_mode && !snapshot_mode) {
 			//	Texture2D window_texture = m_windows[window_index].output_texture.Interface() == nullptr ? Texture2D() : Texture2D(m_windows[window_index].output_texture.GetResource());
@@ -4620,18 +4595,17 @@ namespace ECSEngine {
 
 			DrawPass<ECS_UI_DRAW_NORMAL>(
 				border.draw_resources,
-				vertex_count,
+				border_buffers,
 				region_position,
 				region_scale,
 				m_graphics->GetContext()
 			);
 
 			if (is_hoverable && m_focused_window_data.hoverable_handler.phase == ECS_UI_DRAW_LATE) {
-				HandleHoverable(data->mouse_position, buffers + ECS_TOOLS_UI_MATERIALS, vertex_count + ECS_TOOLS_UI_MATERIALS);
+				HandleHoverable(data->mouse_position, border_buffers.SliceAt(ECS_TOOLS_UI_MATERIALS));
 			}
 			if (active_region) {
-				m_focused_window_data.buffers = buffers + ECS_TOOLS_UI_MATERIALS;
-				m_focused_window_data.counts = vertex_count + ECS_TOOLS_UI_MATERIALS;
+				m_focused_window_data.buffers = border_buffers.SliceAt(ECS_TOOLS_UI_MATERIALS);
 
 				// This version uses IsDown instead of IsHeld as the ECS_UI_DRAW_NORMAL phase up above
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
@@ -4650,11 +4624,11 @@ namespace ECSEngine {
 				}
 			}
 
-			border.draw_resources.UnmapLate(m_graphics->GetContext());
+			border.draw_resources.UpdateLateBuffers(m_graphics);
 
 			DrawPass<ECS_UI_DRAW_LATE>(
 				border.draw_resources,
-				vertex_count,
+				border_buffers,
 				region_position,
 				region_scale,
 				m_graphics->GetContext()
@@ -4736,12 +4710,8 @@ namespace ECSEngine {
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			float offset_mask,
-			void** buffers,
-			size_t* vertex_count
+			Stream<CapacityStream<void>> buffers
 		) {
-			UIVertexColor* solid_color = (UIVertexColor*)(buffers[ECS_TOOLS_UI_SOLID_COLOR]);
-			UISpriteVertex* text_sprites = (UISpriteVertex*)(buffers[ECS_TOOLS_UI_TEXT_SPRITE]);
-
 			float2 dockspace_region_position = GetDockspaceRegionPosition(dockspace, border_index, offset_mask);
 			float2 dockspace_region_scale = GetDockspaceRegionScale(dockspace, border_index, offset_mask);
 
@@ -4793,8 +4763,7 @@ namespace ECSEngine {
 					{ dockspace_region_position.x, dockspace_region_position.y },
 					float2(dockspace_region_scale.x, GetTitleYSize() - m_descriptors.dockspaces.border_size),
 					title_color,
-					solid_color,
-					vertex_count[ECS_TOOLS_UI_SOLID_COLOR]
+					buffers
 				);
 				AddHoverableToDockspaceRegion(
 					dockspace,
@@ -4822,7 +4791,7 @@ namespace ECSEngine {
 				ECS_STACK_CAPACITY_STREAM(float2, sizes, 128);
 				CalculateDockspaceRegionHeaders(dockspace, border_index, offset_mask, sizes);
 
-				DrawCollapseTriangleHeader(buffers, vertex_count, dockspace, border_index, offset_mask, true);
+				DrawCollapseTriangleHeader(buffers, dockspace, border_index, offset_mask, true);
 				AddDefaultClickable(collapse_triangle_data);
 
 				for (size_t index = 0; index < dockspace->borders[border_index].window_indices.size; index++) {
@@ -4837,8 +4806,7 @@ namespace ECSEngine {
 						header_position,
 						header_scale,
 						region_header_color,
-						solid_color,
-						vertex_count[ECS_TOOLS_UI_SOLID_COLOR]
+						buffers
 					);
 
 					UIRegionHeaderData region_header_data;
@@ -4870,8 +4838,7 @@ namespace ECSEngine {
 						index,
 						offset_mask,
 						sizes,
-						buffers,
-						vertex_count
+						buffers
 					);
 
 					if (sizes[index].y >= close_x_scale.x * 1.25f) {
@@ -4887,8 +4854,8 @@ namespace ECSEngine {
 							m_descriptors.color_theme.region_header_x,
 							m_font_character_uvs[2 * x_sprite_offset],
 							m_font_character_uvs[2 * x_sprite_offset + 1],
-							text_sprites,
-							vertex_count[ECS_TOOLS_UI_TEXT_SPRITE]
+							buffers,
+							ECS_TOOLS_UI_TEXT_SPRITE
 						);
 
 						UICloseXClickData click_data = { index };
@@ -4914,7 +4881,7 @@ namespace ECSEngine {
 				}
 			}
 			else if (dockspace->borders[border_index].draw_elements) {
-				DrawCollapseTriangleHeader(buffers, vertex_count, dockspace, border_index, offset_mask, false);
+				DrawCollapseTriangleHeader(buffers, dockspace, border_index, offset_mask, false);
 				UIDefaultHoverableData hoverable_data;
 				hoverable_data.colors[0] = m_descriptors.color_theme.background;
 				hoverable_data.percentages[0] = 6.0f;
@@ -4936,8 +4903,8 @@ namespace ECSEngine {
 					m_descriptors.color_theme.region_header_x,
 					m_font_character_uvs[2 * x_sprite_offset],
 					m_font_character_uvs[2 * x_sprite_offset + 1],
-					text_sprites,
-					vertex_count[ECS_TOOLS_UI_TEXT_SPRITE]
+					buffers,
+					ECS_TOOLS_UI_TEXT_SPRITE
 				);
 
 				UIDefaultHoverableData close_x_hoverable_data;
@@ -5009,12 +4976,9 @@ namespace ECSEngine {
 			unsigned int border_index,
 			float2 position,
 			float2 scale,
-			void** buffers,
-			size_t* vertex_count
+			Stream<CapacityStream<void>> buffers
 		)
 		{
-			// draw background and borders
-			UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
 			Color background_color = m_descriptors.color_theme.background;
 			if (dockspace->borders[border_index].window_indices.size > 0) {
 				unsigned int window_index = GetWindowIndexFromBorder(dockspace, border_index);
@@ -5024,8 +4988,7 @@ namespace ECSEngine {
 				position,
 				scale,
 				background_color,
-				solid_color,
-				vertex_count[ECS_TOOLS_UI_SOLID_COLOR]
+				buffers
 			);
 		}
 
@@ -5045,8 +5008,6 @@ namespace ECSEngine {
 			float2 position = action_data->position;
 			float2 scale = action_data->scale;
 
-			void** buffers = action_data->buffers;
-			size_t* counts = action_data->counts;
 			float2 mouse_position = action_data->mouse_position;
 			position += data->offset;
 			position.x += data->offset_scale.x ? scale.x : 0.0f;
@@ -5075,8 +5036,8 @@ namespace ECSEngine {
 			position.y += data->next_row_offset;
 			float2 max_bounds = position;
 
-			UISpriteVertex* text_vertices = (UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE];
-			size_t* count = &counts[ECS_TOOLS_UI_TEXT_SPRITE];
+			UISpriteVertex* text_vertices = (UISpriteVertex*)action_data->buffers[ECS_TOOLS_UI_TEXT_SPRITE].buffer;
+			unsigned int* count = &action_data->buffers[ECS_TOOLS_UI_TEXT_SPRITE].size;
 			size_t initial_vertex_count = *count;
 
 			float2 row_position = initial_position;
@@ -5160,8 +5121,8 @@ namespace ECSEngine {
 			initial_position -= translation;
 			max_bounds -= translation;
 
-			SetSolidColorRectangle(initial_position, tooltip_scale, data->background_color, buffers, counts);
-			CreateSolidColorRectangleBorder<false>(initial_position, tooltip_scale, data->border_size, data->border_color, counts, buffers);
+			SetSolidColorRectangle(initial_position, tooltip_scale, data->background_color, action_data->buffers);
+			CreateSolidColorRectangleBorder<false>(initial_position, tooltip_scale, data->border_size, data->border_color, action_data->buffers);
 
 			return max_bounds - initial_position;
 		}
@@ -5202,8 +5163,6 @@ namespace ECSEngine {
 			float2 position = action_data->position;
 			float2 scale = action_data->scale;
 
-			void** buffers = action_data->buffers;
-			size_t* counts = action_data->counts;
 			float2 mouse_position = action_data->mouse_position;
 			position += data->offset;
 			position.x += data->offset_scale.x ? scale.x : 0.0f;
@@ -5223,8 +5182,8 @@ namespace ECSEngine {
 			position.y += data->next_row_offset;
 			float2 max_bounds = position;
 
-			UISpriteVertex* text_vertices = (UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE];
-			size_t* count = &counts[ECS_TOOLS_UI_TEXT_SPRITE];
+			UISpriteVertex* text_vertices = (UISpriteVertex*)action_data->buffers[ECS_TOOLS_UI_TEXT_SPRITE].buffer;
+			unsigned int* count = &action_data->buffers[ECS_TOOLS_UI_TEXT_SPRITE].size;
 			size_t initial_vertex_count = *count;
 
 			float2 row_position = initial_position;
@@ -5367,8 +5326,8 @@ namespace ECSEngine {
 
 #pragma endregion
 
-			SetSolidColorRectangle(initial_position, tooltip_scale, data->background_color, buffers, counts);
-			CreateSolidColorRectangleBorder<false>(initial_position, tooltip_scale, data->border_size, data->border_color, counts, buffers);
+			SetSolidColorRectangle(initial_position, tooltip_scale, data->background_color, action_data->buffers);
+			CreateSolidColorRectangleBorder<false>(initial_position, tooltip_scale, data->border_size, data->border_color, action_data->buffers);
 
 			return max_bounds - initial_position;
 		}
@@ -5496,8 +5455,7 @@ namespace ECSEngine {
 		void UISystem::DrawDockspaceRegionBorders(
 			float2 region_position,
 			float2 region_scale,
-			void** buffers,
-			size_t* vertex_count
+			Stream<CapacityStream<void>> buffers
 		) {
 			float2 border_transforms[8];
 			// add small offsets in order to avoid random culling of the borders by the viewport
@@ -5506,10 +5464,9 @@ namespace ECSEngine {
 				{ region_scale.x - 0.0000f, region_scale.y - 0.000f },
 				{ NormalizeHorizontalToWindowDimensions(m_descriptors.dockspaces.border_size), m_descriptors.dockspaces.border_size },
 				m_descriptors.color_theme.borders,
-				vertex_count,
 				buffers,
 				border_transforms
-				);
+			);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -5732,20 +5689,20 @@ namespace ECSEngine {
 				// handler initialization with render sliders
 				Action data_initializer = (Action)m_window_handler.data;
 
-				UIWindowDescriptor window_descriptor;
-				window_descriptor.window_name = m_windows[index].name;
+				UIWindowHandlerAfterFileLoadAdditionalData after_load_data;
+				after_load_data.window_index = index;
+				after_load_data.window_descriptor.window_name = m_windows[index].name;
 
 				ActionData initializer_data;
 				initializer_data.border_index = 0;
 				initializer_data.data = m_windows[index].default_handler.data;
 				initializer_data.system = this;
 				initializer_data.dockspace = &m_floating_horizontal_dockspaces[0];
-				initializer_data.counts = &index;
-				initializer_data.buffers = (void**)&window_descriptor;
+				initializer_data.buffers = {};
+				initializer_data.additional_data = &after_load_data;
 				initializer_data.window_index = GetWindowIndexFromBorder(initializer_data.dockspace, initializer_data.border_index);
 
 				data_initializer(&initializer_data);
-
 			}
 		}
 
@@ -7282,14 +7239,12 @@ namespace ECSEngine {
 			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
 
 			descriptor.border_index = border_index;
-			descriptor.buffers = nullptr;
-			descriptor.counts = nullptr;
+			descriptor.buffers = {};
 			descriptor.dockspace = dockspace;
 			descriptor.dockspace_type = type;
 			descriptor.mouse_position = { 1.0f, 1.0f };
 			descriptor.system = this;
-			descriptor.system_buffers = nullptr;
-			descriptor.system_counts = nullptr;
+			descriptor.system_buffers = {};
 			descriptor.window_index = window_index;
 			descriptor.export_scale = nullptr;
 			descriptor.do_not_initialize_viewport_sliders = false;
@@ -7406,8 +7361,7 @@ namespace ECSEngine {
 			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
 			result.additional_data = nullptr;
 			result.border_index = border_index;
-			result.buffers = nullptr;
-			result.counts = nullptr;
+			result.buffers = {};
 			result.data = nullptr;
 			result.dockspace = dockspace;
 			result.window_index = window_index;
@@ -7539,7 +7493,6 @@ namespace ECSEngine {
 			action_data.dockspace = m_focused_window_data.active_location.dockspace;
 			action_data.border_index = m_focused_window_data.active_location.border_index;
 			action_data.buffers = m_focused_window_data.buffers;
-			action_data.counts = m_focused_window_data.counts;
 			action_data.type = m_focused_window_data.active_location.type;
 			action_data.mouse_position = mouse_position;
 			action_data.keyboard = m_keyboard;
@@ -7570,7 +7523,6 @@ namespace ECSEngine {
 			action_data.dockspace = m_focused_window_data.active_location.dockspace;
 			action_data.border_index = m_focused_window_data.active_location.border_index;
 			action_data.buffers = m_focused_window_data.buffers;
-			action_data.counts = m_focused_window_data.counts;
 			action_data.type = m_focused_window_data.active_location.type;
 			action_data.mouse_position = mouse_position;
 			action_data.keyboard = m_keyboard;
@@ -7601,8 +7553,7 @@ namespace ECSEngine {
 				action_data.additional_data = additional_data;
 				action_data.border_index = m_focused_window_data.cleanup_general_location.border_index;
 				action_data.dockspace = m_focused_window_data.cleanup_general_location.dockspace;
-				action_data.buffers = nullptr;
-				action_data.counts = nullptr;
+				action_data.buffers = {};
 				action_data.data = m_focused_window_data.general_handler.data;
 				action_data.keyboard = m_keyboard;
 				action_data.mouse = m_mouse;
@@ -7627,8 +7578,7 @@ namespace ECSEngine {
 				action_data.additional_data = additional_data;
 				action_data.border_index = m_focused_window_data.cleanup_hoverable_location.border_index;
 				action_data.dockspace = m_focused_window_data.cleanup_hoverable_location.dockspace;
-				action_data.buffers = nullptr;
-				action_data.counts = nullptr;
+				action_data.buffers = {};
 				action_data.data = m_focused_window_data.hoverable_handler.data;
 				action_data.keyboard = m_keyboard;
 				action_data.mouse = m_mouse;
@@ -8618,8 +8568,7 @@ namespace ECSEngine {
 			if (m_frame_handlers.size > 0) {
 				ActionData data;
 				data.border_index = 0;
-				data.buffers = nullptr;
-				data.counts = nullptr;
+				data.buffers = {};
 				data.dockspace = nullptr;
 				data.window_index = -1;
 				data.keyboard = m_keyboard;
@@ -8838,12 +8787,11 @@ namespace ECSEngine {
 
 		void UISystem::InitializeWindowDraw(unsigned int index, WindowDraw initialize)
 		{
-			void* buffers[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES] = { nullptr };
-			size_t counts[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES] = { 0 };
+			CapacityStream<void> buffers[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES];
+			memset(buffers, 0, sizeof(buffers));
 
 			UIDrawerDescriptor drawer_descriptor = InitializeDrawerDescriptorReferences(index);
-			drawer_descriptor.buffers = buffers;
-			drawer_descriptor.counts = counts;
+			drawer_descriptor.buffers = { buffers, ECS_COUNTOF(buffers) };
 			drawer_descriptor.system = this;
 			drawer_descriptor.window_index = index;
 			drawer_descriptor.do_not_initialize_viewport_sliders = false;
@@ -8868,14 +8816,18 @@ namespace ECSEngine {
 		{
 			Action data_initializer = (Action)m_window_handler.data;
 
+			UIWindowHandlerAfterFileLoadAdditionalData additional_data;
+			additional_data.window_descriptor = descriptor;
+			additional_data.window_index = window_index;
+
 			ActionData initializer_data;
 			initializer_data.border_index = 0;
 			initializer_data.data = m_windows[window_index].default_handler.data;
 			initializer_data.system = this;
 			initializer_data.dockspace = &m_floating_horizontal_dockspaces[0];
-			initializer_data.counts = &window_index;
 			initializer_data.additional_data = (void**)&descriptor;
 			initializer_data.window_index = window_index;
+			initializer_data.additional_data = &additional_data;
 
 			data_initializer(&initializer_data);
 		}
@@ -9651,8 +9603,7 @@ namespace ECSEngine {
 			UISpriteTexture texture,
 			float2 position,
 			float2 scale,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			Color color,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
@@ -9664,8 +9615,8 @@ namespace ECSEngine {
 				color,
 				top_left_uv,
 				bottom_right_uv,
-				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
-				counts[ECS_TOOLS_UI_SPRITE]
+				buffers,
+				ECS_TOOLS_UI_SPRITE
 			);
 			SetSpriteTextureToDraw(dockspace, border_index, texture, ECS_UI_SPRITE_NORMAL, phase);
 		}
@@ -9678,8 +9629,7 @@ namespace ECSEngine {
 			Stream<wchar_t> texture,
 			float2 position,
 			float2 scale,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			Color color,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
@@ -9692,8 +9642,8 @@ namespace ECSEngine {
 				color,
 				top_left_uv,
 				bottom_right_uv,
-				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
-				counts[ECS_TOOLS_UI_SPRITE]
+				buffers,
+				ECS_TOOLS_UI_SPRITE
 			);
 			SetSpriteTextureToDraw(dockspace, border_index, texture, ECS_UI_SPRITE_NORMAL, phase);
 		}
@@ -9706,8 +9656,7 @@ namespace ECSEngine {
 			Stream<wchar_t> texture,
 			float2 position,
 			float2 scale,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			const Color* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
@@ -9720,8 +9669,8 @@ namespace ECSEngine {
 				colors,
 				top_left_uv,
 				bottom_right_uv,
-				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
-				counts[ECS_TOOLS_UI_SPRITE]
+				buffers,
+				ECS_TOOLS_UI_SPRITE
 			);
 			SetSpriteTextureToDraw(dockspace, border_index, texture, ECS_UI_SPRITE_NORMAL, phase);
 		}
@@ -9734,8 +9683,7 @@ namespace ECSEngine {
 			Stream<wchar_t> texture,
 			float2 position,
 			float2 scale,
-			void** buffers,
-			size_t* counts,
+			Stream<CapacityStream<void>> buffers,
 			const ColorFloat* colors,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
@@ -9748,8 +9696,8 @@ namespace ECSEngine {
 				colors,
 				top_left_uv,
 				bottom_right_uv,
-				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
-				counts[ECS_TOOLS_UI_SPRITE]
+				buffers,
+				ECS_TOOLS_UI_SPRITE
 			);
 			SetSpriteTextureToDraw(dockspace, border_index, texture, ECS_UI_SPRITE_NORMAL, phase);
 		}
@@ -12595,8 +12543,8 @@ namespace ECSEngine {
 				system->m_descriptors.color_theme.region_header_x,
 				system->m_font_character_uvs[2 * x_sprite_offset],
 				system->m_font_character_uvs[2 * x_sprite_offset + 1],
-				(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
-				counts[ECS_TOOLS_UI_TEXT_SPRITE]
+				buffers,
+				ECS_TOOLS_UI_TEXT_SPRITE
 			);
 		}
 
@@ -12639,8 +12587,7 @@ namespace ECSEngine {
 						data->positions[index],
 						data->scales[index],
 						new_color,
-						(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
-						counts[ECS_TOOLS_UI_SOLID_COLOR]
+						buffers
 					);
 				}
 			}
@@ -12655,8 +12602,7 @@ namespace ECSEngine {
 					position,
 					scale,
 					new_color,
-					(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
-					counts[ECS_TOOLS_UI_SOLID_COLOR]
+					buffers
 				);
 			}
 		}
@@ -12679,42 +12625,39 @@ namespace ECSEngine {
 				position,
 				scale,
 				new_color,
-				(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
-				counts[ECS_TOOLS_UI_SOLID_COLOR]
+				buffers
 			);
 
-			size_t before_count = counts[ECS_TOOLS_UI_TEXT_SPRITE];
+			size_t before_count = buffers[ECS_TOOLS_UI_TEXT_SPRITE].size;
 			system->ConvertCharactersToTextSprites(
 				data->text,
 				{ position.x + data->text_offset.x, position.y + data->text_offset.y },
-				(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
+				buffers,
 				data->text_color,
-				counts[ECS_TOOLS_UI_TEXT_SPRITE],
 				data->font_size,
 				data->character_spacing,
 				!data->vertical_text
 			);
-			counts[ECS_TOOLS_UI_TEXT_SPRITE] += data->text.size * 6;
 			if (data->horizontal_cull || data->vertical_cull) {
-				Stream<UISpriteVertex> vertices = Stream<UISpriteVertex>((UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE] + before_count, data->text.size * 6);
+				Stream<UISpriteVertex> vertices = Stream<UISpriteVertex>((UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE].buffer + before_count, data->text.size * 6);
 				float2 text_span;
 				if (data->vertical_text) {
 					text_span = GetTextSpan(vertices, false);
 					if (data->horizontal_cull) {
 						if (position.x + data->text_offset.x + text_span.x > data->horizontal_cull_bound) {
-							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6;
+							buffers[ECS_TOOLS_UI_TEXT_SPRITE].size -= data->text.size * 6;
 						}
 					}
 					if (data->vertical_cull) {
 						size_t validated_vertices = CullTextSprites<3>(vertices, data->vertical_cull_bound);
-						counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6 - validated_vertices;
+						buffers[ECS_TOOLS_UI_TEXT_SPRITE].size -= data->text.size * 6 - validated_vertices;
 					}
 				}
 				else {
 					text_span = GetTextSpan(vertices);
 					if (data->horizontal_cull) {
 						size_t validated_vertices = CullTextSprites<0>(vertices, data->horizontal_cull_bound);
-						counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6 - validated_vertices;
+						buffers[ECS_TOOLS_UI_TEXT_SPRITE].size -= data->text.size * 6 - validated_vertices;
 					}
 				}
 
@@ -12746,8 +12689,7 @@ namespace ECSEngine {
 				new_top_right,
 				new_bottom_left,
 				new_bottom_right,
-				(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
-				&counts[ECS_TOOLS_UI_SOLID_COLOR]
+				buffers
 			);
 		}
 
@@ -12968,7 +12910,6 @@ namespace ECSEngine {
 							if (is_single_windowed) {
 								system->DrawDockingGizmo(
 									{ hovered_region_position.x + hovered_region_scale.x * 0.5f, hovered_region_position.y + hovered_region_scale.y * 0.5f },
-									counts,
 									buffers,
 									true,
 									rectangle_transforms
@@ -12977,7 +12918,6 @@ namespace ECSEngine {
 							else {
 								system->DrawDockingGizmo(
 									{ hovered_region_position.x + hovered_region_scale.x * 0.5f, hovered_region_position.y + hovered_region_scale.y * 0.5f },
-									counts,
 									buffers,
 									false,
 									rectangle_transforms
@@ -12995,9 +12935,7 @@ namespace ECSEngine {
 										hovered_dockspace,
 										border_indices[index],
 										hovered_region_position,
-										{ hovered_region_scale.x * 0.5f, hovered_region_scale.y },
-										buffers,
-										counts
+										{ hovered_region_scale.x * 0.5f, hovered_region_scale.y }
 									);
 								}
 								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -13023,9 +12961,7 @@ namespace ECSEngine {
 										hovered_dockspace,
 										border_indices[index],
 										hovered_region_position,
-										{ hovered_region_scale.x, hovered_region_scale.y * 0.5f },
-										buffers,
-										counts
+										{ hovered_region_scale.x, hovered_region_scale.y * 0.5f }
 									);
 								}
 								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -13051,9 +12987,7 @@ namespace ECSEngine {
 										hovered_dockspace,
 										border_indices[index],
 										{ hovered_region_position.x + hovered_region_scale.x * 0.5f, hovered_region_position.y },
-										{ hovered_region_scale.x * 0.5f, hovered_region_scale.y },
-										buffers,
-										counts
+										{ hovered_region_scale.x * 0.5f, hovered_region_scale.y }
 									);
 								}
 								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -13079,9 +13013,7 @@ namespace ECSEngine {
 										hovered_dockspace,
 										border_indices[index],
 										{ hovered_region_position.x, hovered_region_position.y + hovered_region_scale.y * 0.5f },
-										{ hovered_region_scale.x, hovered_region_scale.y * 0.5f },
-										buffers,
-										counts
+										{ hovered_region_scale.x, hovered_region_scale.y * 0.5f }
 									);
 								}
 								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -13107,9 +13039,7 @@ namespace ECSEngine {
 										hovered_dockspace,
 										border_indices[index],
 										{ hovered_region_position.x, hovered_region_position.y + system->GetTitleYSize() },
-										{ hovered_region_scale.x, hovered_region_scale.y - system->GetTitleYSize() },
-										buffers,
-										counts
+										{ hovered_region_scale.x, hovered_region_scale.y - system->GetTitleYSize() }
 									);
 								}
 								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -13275,9 +13205,9 @@ namespace ECSEngine {
 
 							float2 region_position = system->GetDockspaceRegionPosition(dockspace, border_index, dockspace_mask);
 							float2 region_scale = system->GetDockspaceRegionScale(dockspace, border_index, dockspace_mask);
-							system->DrawDockspaceRegionHeader(dockspace, border_index, dockspace_mask, buffers, counts);
-							system->DrawDockspaceRegionBorders(region_position, region_scale, buffers, counts);
-							system->DrawCollapseTriangleHeader(buffers, counts, dockspace, border_index, dockspace_mask, dockspace->borders[border_index].draw_region_header, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM);
+							system->DrawDockspaceRegionHeader(dockspace, border_index, dockspace_mask, buffers);
+							system->DrawDockspaceRegionBorders(region_position, region_scale, buffers);
+							system->DrawCollapseTriangleHeader(buffers, dockspace, border_index, dockspace_mask, dockspace->borders[border_index].draw_region_header, ECS_UI_DRAW_SYSTEM);
 							has_moved = true;
 							break;
 						}
@@ -13296,8 +13226,7 @@ namespace ECSEngine {
 							data->window_index,
 							dockspace_mask,
 							sizes,
-							buffers,
-							counts
+							buffers
 						);
 						float2 close_x_scale = float2(
 							system->m_descriptors.dockspaces.close_x_position_x_left - system->m_descriptors.dockspaces.close_x_position_x_right,
@@ -13314,8 +13243,8 @@ namespace ECSEngine {
 							system->m_descriptors.color_theme.region_header_x,
 							system->m_font_character_uvs[2 * x_sprite_offset],
 							system->m_font_character_uvs[2 * x_sprite_offset + 1],
-							(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
-							counts[ECS_TOOLS_UI_TEXT_SPRITE]
+							buffers,
+							ECS_TOOLS_UI_TEXT_SPRITE
 						);
 					}
 				}
@@ -13358,12 +13287,11 @@ namespace ECSEngine {
 
 			size_t initial_counts[ECS_TOOLS_UI_MATERIALS];
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-				initial_counts[index] = counts[index];
+				initial_counts[index] = buffers[index].size;
 			}
 
 			UITooltipDrawData draw_data;
 			draw_data.buffers = buffers;
-			draw_data.counts = counts;
 			draw_data.character_spacing = data->base.character_spacing;
 			draw_data.font_color = data->base.font_color;
 			draw_data.font_size = data->base.font_size;
@@ -13385,16 +13313,16 @@ namespace ECSEngine {
 
 			if (translation.x != 0.0f || translation.y != 0.0f) {
 				for (size_t material = 0; material < ECS_TOOLS_UI_MATERIALS; material++) {
-					if (material == 0) {
-						UIVertexColor* vertices = (UIVertexColor*)buffers[material];
-						for (size_t index = initial_counts[material]; index < counts[material]; index++) {
+					if (material == ECS_TOOLS_UI_SOLID_COLOR) {
+						UIVertexColor* vertices = (UIVertexColor*)buffers[material].buffer;
+						for (size_t index = initial_counts[material]; index < buffers[material].size; index++) {
 							vertices[index].position.x -= translation.x;
 							vertices[index].position.y += translation.y;
 						}
 					}
-					else if (material == 1 || material == 2) {
-						UISpriteVertex* vertices = (UISpriteVertex*)buffers[material];
-						for (size_t index = initial_counts[material]; index < counts[material]; index++) {
+					else if (material == ECS_TOOLS_UI_TEXT_SPRITE || material == ECS_TOOLS_UI_SPRITE) {
+						UISpriteVertex* vertices = (UISpriteVertex*)buffers[material].buffer;
+						for (size_t index = initial_counts[material]; index < buffers[material].size; index++) {
 							vertices[index].position.x -= translation.x;
 							vertices[index].position.y += translation.y;
 						}
@@ -13404,13 +13332,12 @@ namespace ECSEngine {
 			draw_data.initial_position -= translation;
 			draw_data.max_bounds -= translation;
 
-			SetSolidColorRectangle(draw_data.initial_position, draw_data.max_bounds - draw_data.initial_position, data->base.background_color, buffers, counts);
+			SetSolidColorRectangle(draw_data.initial_position, draw_data.max_bounds - draw_data.initial_position, data->base.background_color, buffers);
 			CreateSolidColorRectangleBorder<false>(
 				draw_data.initial_position, 
 				draw_data.max_bounds - draw_data.initial_position, 
 				data->base.border_size, 
-				data->base.border_color, 
-				counts, 
+				data->base.border_color,
 				buffers
 			);
 

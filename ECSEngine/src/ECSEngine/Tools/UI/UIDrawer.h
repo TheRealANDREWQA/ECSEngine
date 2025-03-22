@@ -216,43 +216,37 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIVertexColor* HandleSolidColorBuffer(size_t configuration) const;
+			CapacityStream<void>& HandleSolidColorBuffer(size_t configuration);
+			
+			const CapacityStream<void>& HandleSolidColorBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* HandleSolidColorCount(size_t configuration) const;
+			CapacityStream<void>& HandleTextSpriteBuffer(size_t configuration);
+			
+			const CapacityStream<void>& HandleTextSpriteBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UISpriteVertex* HandleTextSpriteBuffer(size_t configuration) const;
+			CapacityStream<void>& HandleSpriteBuffer(size_t configuration);
+
+			const CapacityStream<void>& HandleSpriteBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* HandleTextSpriteCount(size_t configuration) const;
+			CapacityStream<void>& HandleSpriteClusterBuffer(size_t configuration);
+			
+			const CapacityStream<void>& HandleSpriteClusterBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UISpriteVertex* HandleSpriteBuffer(size_t configuration) const;
+			CapacityStream<void>& HandleLineBuffer(size_t configuration);
+			
+			const CapacityStream<void>& HandleLineBuffer(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* HandleSpriteCount(size_t configuration) const;
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			UISpriteVertex* HandleSpriteClusterBuffer(size_t configuration) const;
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			size_t* HandleSpriteClusterCount(size_t configuration) const;
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			UIVertexColor* HandleLineBuffer(size_t configuration) const;
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			size_t* HandleLineCount(size_t configuration) const;
+			Stream<CapacityStream<void>> HandleBuffers(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -900,7 +894,7 @@ namespace ECSEngine {
 						}
 					}
 
-					size_t text_count_before = *HandleTextSpriteCount(configuration);
+					size_t text_count_before = HandleTextSpriteBuffer(configuration).size;
 					// The callback will still be triggered. In this way we avoid having the text input recopying the data
 					TextInputDrawer(ClearFlag(configuration, UI_CONFIG_TEXT_INPUT_CALLBACK), config, input, position, scale, UIDrawerTextInputFilterNumbers);
 
@@ -908,35 +902,33 @@ namespace ECSEngine {
 					Stream<char> identifier = HandleResourceIdentifier(name);
 					ECS_STACK_CAPACITY_STREAM(char, tool_tip_name, 512);
 					tool_tip_name.CopyOther(identifier);
-					tool_tip_name.AddStream("tool tip");
-					tool_tip_name.AssertCapacity();
+					tool_tip_name.AddStreamAssert("tool tip");
 
 					tool_tip_characters = (char*)FindWindowResource(tool_tip_name);
 					tool_tip_stream = Stream<char>(tool_tip_characters, 0);
 
 					lambda(input, tool_tip_stream);
 
-					UISpriteVertex* text_buffer = HandleTextSpriteBuffer(configuration);
-					size_t* text_count = HandleTextSpriteCount(configuration);
+					CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
 					// Only add the actions if it is visible in the y dimension
-					if (text_count_before != *text_count) {
+					if (text_count_before != text_sprites.size) {
 						// If it has name alignment and some name vertices get culled, this won't work correctly
 						// So we need to deduce the name vertex count from the difference of drawn text sprites
 						// And the input text sprite count
-						size_t name_length = *text_count - text_count_before - input->text->size * 6;
+						size_t name_length = text_sprites.size - text_count_before - input->text->size * 6;
 						Stream<UISpriteVertex> stream;
 
 						float2 text_span = { 0.0f, 0.0f };
 						float2 text_position = { 0.0f, 0.0f };
 						if (IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
-							name_length = ClampMax(name_length, *text_count);
-							stream = Stream<UISpriteVertex>(text_buffer + *text_count - name_length, name_length);
+							name_length = ClampMax<size_t>(name_length, text_sprites.size);
+							stream = text_sprites.AsIs<UISpriteVertex>().GetLastElements(name_length);
 							text_span = GetTextSpan(stream);
 							text_position = { stream[0].position.x, -stream[0].position.y };
 						}
 						else if (IsElementNameFirst(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
-							stream = Stream<UISpriteVertex>(text_buffer + text_count_before, name_length);
+							stream = Stream<UISpriteVertex>((UISpriteVertex*)text_sprites.buffer + text_count_before, name_length);
 							text_span = GetTextSpan(stream);
 							text_position = { stream[0].position.x, -stream[0].position.y };
 						}
@@ -1478,19 +1470,39 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// It will reserve the size, you don't have to add it to the underlying buffer
 			Stream<UIVertexColor> GetSolidColorStream(size_t configuration, size_t size);
+			
+			// It will reserve the size, you don't have to add it to the underlying buffer
+			// Returns a copy that can be used with CapacityStream<void>& APIs
+			CapacityStream<void> GetSolidColorStreamUntyped(size_t configuration, size_t size);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 			
+			// It will reserve the size, you don't have to add it to the underlying buffer
 			Stream<UISpriteVertex> GetTextStream(size_t configuration, size_t size);
 
+			// It will reserve the size, you don't have to add it to the underlying buffer
+			// Returns a copy that can be used with CapacityStream<void>& APIs
+			CapacityStream<void> GetTextStreamUntyped(size_t configuration, size_t size);
+
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// It will reserve the size, you don't have to add it to the underlying buffer
 			Stream<UISpriteVertex> GetSpriteStream(size_t configuration, size_t size);
+			
+			// It will reserve the size, you don't have to add it to the underlying buffer
+			// Returns a copy that can be used with CapacityStream<void>& APIs
+			CapacityStream<void> GetSpriteStreamUntyped(size_t configuration, size_t size);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// It will reserve the size, you don't have to add it to the underlying buffer
 			Stream<UISpriteVertex> GetSpriteClusterStream(size_t configuration, size_t size);
+
+			// It will reserve the size, you don't have to add it to the underlying buffer
+			// Returns a copy that can be used with CapacityStream<void>& APIs
+			CapacityStream<void> GetSpriteClusterStreamUntyped(size_t configuration, size_t size);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3723,12 +3735,6 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			ECS_INLINE void** GetBuffers() {
-				return buffers;
-			}
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
 			ECS_INLINE float GetPixelSizeX() const {
 				return system->GetPixelSizeX();
 			}
@@ -3752,24 +3758,6 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			UIDrawerHandlerState GetHandlerState() const;
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			ECS_INLINE size_t* GetCounts() const {
-				return counts;
-			}
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			ECS_INLINE void** GetSystemBuffers() const {
-				return system_buffers;
-			}
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			ECS_INLINE size_t* GetSystemCounts() const {
-				return system_counts;
-			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -5158,10 +5146,8 @@ namespace ECSEngine {
 			UIFontDescriptor& font;
 			UIColorThemeDescriptor& color_theme;
 			UIElementDescriptor& element_descriptor;
-			void** buffers;
-			size_t* counts;
-			void** system_buffers;
-			size_t* system_counts;
+			Stream<CapacityStream<void>> buffers;
+			Stream<CapacityStream<void>> system_buffers;
 			void* window_data;
 			Stream<unsigned char> identifier_stack;
 			Stream<char> current_identifier;

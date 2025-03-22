@@ -911,6 +911,11 @@ namespace ECSEngine {
 			return { buffer + offset, size - offset, capacity - offset };
 		}
 
+		// Returns a stream that contains the last elements
+		ECS_INLINE Stream<T> GetLastElements(unsigned int count) const {
+			return SliceAt(size - count);
+		}
+
 		ECS_INLINE bool StartsWith(Stream<T> other) const {
 			if (other.size <= size) {
 				return memcmp(buffer, other.buffer, other.MemoryOf(other.size)) == 0;
@@ -1635,6 +1640,14 @@ namespace ECSEngine {
 			ECS_ASSERT(size < capacity);
 			SetElement(size, data, byte_size);
 			size++;
+		}
+
+		// The size of the capacity stream must be the number of elements, not the byte size
+		template<typename T>
+		ECS_INLINE void AddElements(Stream<T> elements) {
+			AssertCapacity(elements.size);
+			CopySlice(size * sizeof(T), elements.buffer, elements.CopySize());
+			size += elements.size;
 		}
 
 		ECS_INLINE void AssertCapacity(unsigned int extra_size) const {

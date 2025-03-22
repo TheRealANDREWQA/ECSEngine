@@ -378,8 +378,10 @@ namespace ECSEngine {
 			// Commits the buffer data for the late pass into the GPU buffers
 			void UpdateLateBuffers(Graphics* graphics);
 
-			// Resets all CPU buffer sizes
-			void ResetCPUBuffers();
+			// Resets all CPU buffer sizes - only for the normal pass
+			void ResetCPUBuffersNormal();
+			// Resets all CPU buffer sizes - only for the late pass
+			void ResetCPUBuffersLate();
 
 			void ReleaseSpriteTextures();
 			void Release(Graphics* graphics);
@@ -518,10 +520,8 @@ namespace ECSEngine {
 		};
 
 		struct UIDockspaceBorderDrawOutputSnapshotCreateInfo {
-			const void** buffers;
-			const size_t* counts;
-			const void** system_buffers;
-			const size_t* system_counts;
+			Stream<CapacityStream<void>> buffers;
+			Stream<CapacityStream<void>> system_buffers;
 			const size_t* previous_system_counts;
 			unsigned int previous_system_cluster_count;
 			Stream<Stream<UISpriteTexture>> border_sprite_textures;
@@ -540,10 +540,8 @@ namespace ECSEngine {
 		};
 
 		struct UIDockspaceBorderDrawOutputSnapshotRestoreInfo {
-			void** buffers;
-			size_t* counts;
-			void** system_buffers;
-			size_t* system_counts;
+			Stream<CapacityStream<void>> buffers;
+			Stream<CapacityStream<void>> system_buffers;
 			Stream<UIDynamicStream<UISpriteTexture>> border_sprite_textures;
 			Stream<UIDynamicStream<UISpriteTexture>> system_sprite_textures;
 			Stream<UIDynamicStream<unsigned int>> border_cluster_sprite_count;
@@ -584,9 +582,8 @@ namespace ECSEngine {
 
 			// This is the draw state
 			struct {
-				void* buffers[ECS_TOOLS_UI_MATERIALS * (ECS_TOOLS_UI_PASSES + 1)];
 				// Normal draw, late draw, system draw
-				size_t counts[ECS_TOOLS_UI_MATERIALS * (ECS_TOOLS_UI_PASSES + 1)];
+				CapacityStream<void> buffers[ECS_TOOLS_UI_MATERIALS * (ECS_TOOLS_UI_PASSES + 1)];
 
 				Stream<UISpriteTexture> sprites[ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS * (ECS_TOOLS_UI_PASSES + 1)];
 				Stream<unsigned int> cluster_sprite_counts[ECS_TOOLS_UI_PASSES + 1];
@@ -852,6 +849,11 @@ namespace ECSEngine {
 			size_t destroy_action_data_size = 0;
 		};
 
+		struct UIWindowHandlerAfterFileLoadAdditionalData {
+			unsigned int window_index;
+			UIWindowDescriptor window_descriptor;
+		};
+
 #pragma endregion
 
 #pragma region Event data
@@ -1060,8 +1062,7 @@ namespace ECSEngine {
 			void Indent();
 			void FinalizeRectangle(float2 position, float2 scale);
 
-			void** buffers;
-			size_t* counts;
+			Stream<CapacityStream<void>> buffers;
 			float2 initial_position;
 			float2 position;
 			float2 current_scale;

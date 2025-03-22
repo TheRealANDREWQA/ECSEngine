@@ -177,7 +177,7 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				if (buffering.size + offset <= buffering.capacity) {
+				if (buffering.size + offset <= buffering.capacity && buffering.size + offset >= 0) {
 					// We fit into the buffering, simply move back the buffering read end
 					buffering.size += offset;
 					overall_file_offset += offset;

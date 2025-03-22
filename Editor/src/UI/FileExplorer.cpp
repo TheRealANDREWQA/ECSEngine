@@ -641,11 +641,9 @@ static void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, Select
 	char* allocation = (char*)data->temporary_allocator.Allocate((path_filename.size + 1) * sizeof(char), alignof(char));
 	CapacityStream<char> ascii_stream(allocation, 0, 512);
 	ConvertWideCharsToASCII(path_filename, ascii_stream);
-	ascii_stream[ascii_stream.size] = '\0';
 	
 	// Draw the stem
 	path_filename.size -= extension_size;
-	ascii_stream[path_filename.size] = '\0';
 
 	constexpr size_t LABEL_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X
 		| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_TEXT_PARAMETERS;
@@ -670,11 +668,11 @@ static void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, Select
 		border.draw_phase = ECS_UI_DRAW_NORMAL;
 		config->AddFlag(border);
 
-		drawer->TextLabel(LABEL_CONFIGURATION | UI_CONFIG_BORDER, *config, ascii_stream.buffer);
+		drawer->TextLabel(LABEL_CONFIGURATION | UI_CONFIG_BORDER, *config, ascii_stream);
 		config->flag_count--;
 	}
 	else {
-		drawer->TextLabel(LABEL_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT, *config, ascii_stream.buffer);
+		drawer->TextLabel(LABEL_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT, *config, ascii_stream);
 	}
 
 	drawer->element_descriptor.label_padd.x *= 2.0f;
@@ -699,7 +697,7 @@ static void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, Select
 
 	float2 font_size = drawer->GetFontSize();
 	UITextTooltipHoverableData tooltip_data;
-	tooltip_data.characters = ascii_stream.buffer;
+	tooltip_data.characters = ascii_stream;
 	tooltip_data.base.offset_scale.y = true;
 	tooltip_data.base.offset.y = TOOLTIP_OFFSET;
 	tooltip_data.base.center_horizontal_x = true;
@@ -1222,7 +1220,6 @@ static void FileExplorerDrag(ActionData* action_data) {
 					hover_position,
 					hover_scale,
 					buffers,
-					counts,
 					theme_color,
 					{ 0.0f, 0.0f },
 					{ 1.0f, 1.0f },
@@ -1255,7 +1252,6 @@ static void FileExplorerDrag(ActionData* action_data) {
 										hover_position,
 										hover_scale,
 										buffers,
-										counts,
 										transparent_color,
 										{ 0.0f, 0.0f },
 										{ 1.0f, 1.0f },
@@ -1279,9 +1275,7 @@ static void FileExplorerDrag(ActionData* action_data) {
 							drawer.SetCurrentX(hover_position.x);
 							drawer.SetCurrentY(hover_position.y);
 							drawer.buffers = buffers;
-							drawer.counts = counts;
 							drawer.system_buffers = buffers;
-							drawer.system_counts = counts;
 							drawer.system = system;
 							drawer.min_region_render_limit = { -FLT_MAX, -FLT_MAX };
 							drawer.max_region_render_limit = { FLT_MAX, FLT_MAX };
@@ -1332,7 +1326,6 @@ static void FileExplorerDrag(ActionData* action_data) {
 						hover_position,
 						hover_scale,
 						buffers,
-						counts,
 						transparent_color,
 						{ 0.0f, 0.0f },
 						{ 1.0f, 1.0f },
@@ -1986,11 +1979,15 @@ struct CreateAssetFileStruct {
 	}
 };
 
+//#define MEASURE_DURATION
+
 void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
+#ifdef MEASURE_DURATION
 	static float average_values = 0.0f;
 	static int average_count = 0;
 	Timer my_timer;
 	my_timer.SetNewStart();
+#endif
 
 	UI_PREPARE_DRAWER(initialize);
 
@@ -2785,10 +2782,16 @@ data->file_functors.Insert(action, identifier);
 
 	}
 
+#ifdef MEASURE_DURATION
 	float microseconds = my_timer.GetDuration(ECS_TIMER_DURATION_US);
 	average_values = average_values * average_count + microseconds;
 	average_count++;
 	average_values /= average_count;
+#endif
+
+	if (!drawer.initializer) {
+		ClearAllocator(drawer.SnapshotRunnableAllocator());
+	}
 }
 
 void InitializeFileExplorer(EditorState* editor_state)
@@ -2883,7 +2886,7 @@ void FileExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* edit
 
 	descriptor.draw = FileExplorerDraw;
 	descriptor.private_action = FileExplorerPrivateAction;
-	descriptor.retained_mode = FileExplorerRetainedMode;
+	//descriptor.retained_mode = FileExplorerRetainedMode;
 }
 
 void CreateFileExplorer(EditorState* editor_state) {

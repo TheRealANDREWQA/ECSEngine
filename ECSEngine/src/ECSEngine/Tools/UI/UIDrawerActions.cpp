@@ -100,8 +100,7 @@ namespace ECSEngine {
 				// Make the buffers and counts nullptr to signal that this is a clean-up call
 				ActionData clean_up;
 				clean_up.border_index = window_index;
-				clean_up.buffers = nullptr;
-				clean_up.counts = nullptr;
+				clean_up.buffers = {};
 				clean_up.system = system;
 				clean_up.data = deallocate_data.handler.data;
 				deallocate_data.handler.action(&clean_up);
@@ -789,7 +788,7 @@ namespace ECSEngine {
 			UIDrawerGraphHoverableData* data = (UIDrawerGraphHoverableData*)_data;
 
 			// Draw the line
-			SetLine(data->line_start, data->line_end, data->line_color, counts, buffers);
+			SetLine(data->line_start, data->line_end, data->line_color, buffers);
 
 			char tool_tip_characters[tool_tip_character_count];
 			Stream<char> tool_tip_stream = Stream<char>(tool_tip_characters, 0);
@@ -851,8 +850,7 @@ namespace ECSEngine {
 				position,
 				scale,
 				data->bar_color,
-				buffers,
-				counts
+				buffers
 			);
 
 			action_data->data = &tool_tip_data;
@@ -2659,19 +2657,15 @@ namespace ECSEngine {
 					}
 
 					if (state->row_has_submenu != nullptr && state->row_has_submenu[index]) {
-						auto buffers = drawer.GetBuffers();
-						auto counts = drawer.GetCounts();
 						float2 sign_scale = system->GetTextSpan<char>(">", system->m_descriptors.font.size, system->m_descriptors.font.character_spacing);
 						system->ConvertCharactersToTextSprites(
 							">",
 							{ current_position.x + region_scale.x - sign_scale.x * 2.0f, AlignMiddle(current_position.y, default_element_scale.y, sign_scale.y) },
-							(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
+							drawer.buffers,
 							arrow_color,
-							counts[ECS_TOOLS_UI_TEXT_SPRITE],
 							system->m_descriptors.font.size,
 							system->m_descriptors.font.character_spacing
 						);
-						counts[ECS_TOOLS_UI_TEXT_SPRITE] += 6;
 					}
 
 					if (current_line_index < state->separation_line_count) {
@@ -2848,13 +2842,11 @@ namespace ECSEngine {
 					system->ConvertCharactersToTextSprites(
 						{ state->left_characters.buffer + first_character, state->left_row_substreams[data->row_index] - first_character },
 						text_position,
-						(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
+						buffers,
 						system->m_descriptors.color_theme.text,
-						counts[ECS_TOOLS_UI_TEXT_SPRITE],
 						font_size,
 						system->m_descriptors.font.character_spacing
 					);
-					counts[ECS_TOOLS_UI_TEXT_SPRITE] += (state->left_row_substreams[data->row_index] - first_character) * 6;
 
 					if (state->right_characters.size > 0) {
 						first_character = 0;
@@ -2874,13 +2866,11 @@ namespace ECSEngine {
 						system->ConvertCharactersToTextSprites(
 							{ state->right_characters.buffer + first_character, state->right_row_substreams[data->row_index] - first_character },
 							right_text_position,
-							(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
+							buffers,
 							system->m_descriptors.color_theme.text,
-							counts[ECS_TOOLS_UI_TEXT_SPRITE],
 							font_size,
 							system->m_descriptors.font.character_spacing
 						);
-						counts[ECS_TOOLS_UI_TEXT_SPRITE] += (state->right_row_substreams[data->row_index] - first_character) * 6;
 					}
 
 					if (state->row_has_submenu != nullptr && state->row_has_submenu[data->row_index]) {
@@ -2893,14 +2883,11 @@ namespace ECSEngine {
 						system->ConvertCharactersToTextSprites(
 							">",
 							arrow_position,
-							(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
+							buffers,
 							ECS_TOOLS_UI_MENU_HOVERED_ARROW_COLOR,
-							counts[ECS_TOOLS_UI_TEXT_SPRITE],
 							font_size,
 							system->m_descriptors.font.character_spacing
 						);
-
-						counts[ECS_TOOLS_UI_TEXT_SPRITE] += 6;
 					}
 
 					UIDefaultHoverableData hoverable_data;
@@ -2931,8 +2918,7 @@ namespace ECSEngine {
 									{ position.x + system->m_descriptors.misc.tool_tip_padding.x, position.y },
 									{ scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x, system->GetPixelSizeY() },
 									system->m_descriptors.color_theme.borders,
-									(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
-									counts[ECS_TOOLS_UI_SOLID_COLOR]
+									buffers
 								);
 							}
 							if (line_position == data->row_index) {
@@ -2940,8 +2926,7 @@ namespace ECSEngine {
 									{ position.x + system->m_descriptors.misc.tool_tip_padding.x, position.y + scale.y },
 									{ scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x, system->GetPixelSizeY() },
 									system->m_descriptors.color_theme.borders,
-									(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
-									counts[ECS_TOOLS_UI_SOLID_COLOR]
+									buffers
 								);
 							}
 							line_index++;
