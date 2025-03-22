@@ -1777,13 +1777,13 @@ namespace ECSEngine {
 
 		template<typename Allocator>
 		ECS_INLINE void Initialize(Allocator* allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			buffer = allocator->Allocate(_capacity, alignof(void*), debug_info);
+			buffer = _capacity == 0 ? nullptr : allocator->Allocate(_capacity, alignof(void*), debug_info);
 			size = 0;
 			capacity = _capacity;
 		}
 
 		ECS_INLINE void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			buffer = AllocateEx(allocator, _capacity, alignof(void*), debug_info);
+			buffer = _capacity == 0 ? nullptr : AllocateEx(allocator, _capacity, alignof(void*), debug_info);
 			size = 0;
 			capacity = _capacity;
 		}

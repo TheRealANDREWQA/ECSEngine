@@ -184,9 +184,8 @@ namespace ECSEngine {
 					return true;
 				}
 				else {
-					// We need to seek for the amount of surplus offset bytes compared to the buffering,
-					// Plus one entire buffering capacity, to account for this buffering that was read
-					offset = offset - (int64_t)(buffering.capacity - buffering.size) - (int64_t)buffering.capacity;
+					// We need to seek for the amount of surplus buffering bytes, equal to the current buffering size
+					offset = offset - (int64_t)buffering.size;
 					// Discard the buffering, and seek into the file
 					buffering.size = 0;
 					bool success = SetFileCursorBool(file, offset, ECS_FILE_SEEK_CURRENT);
