@@ -53,6 +53,8 @@ namespace ECSEngine {
 		else {
 			if (restore_position) {
 				SetPosition(m_restore_position.x, m_restore_position.y);
+				// Set the previous mouse position to the same value, otherwise we might get a huge delta
+				m_previous_position = m_restore_position;
 			}
 			// Disable clipping
 			OS::ClipCursorToRectangle({ 0,0 }, { 0, 0 });
@@ -117,17 +119,23 @@ namespace ECSEngine {
 
 	void Mouse::Procedure(const MouseProcedureInfo& info) {
 		// Raw input handled separately
-		if (info.message == WM_INPUT && m_get_raw_input) {
-			// We still need to process raw input messages in the message pump because it can happen that
-			// After the raw input retrieval new raw input messages are being added. In order to not add filtering to the message pump,
-			// Process them here
-			RAWINPUT raw_input;
-			unsigned int size = sizeof(raw_input);
-			if (GetRawInputData((HRAWINPUT)info.lParam, RID_INPUT, &raw_input, &size, sizeof(RAWINPUTHEADER)) != size) {
+		if (m_get_raw_input) {
+			// When using raw input, ignore all the other messages
+			if (info.message != WM_INPUT) {
 				return;
 			}
-			HandleMouseRawInput(this, &raw_input, 1);
 
+			if (info.message == WM_INPUT) {
+				// We still need to process raw input messages in the message pump because it can happen that
+				// After the raw input retrieval new raw input messages are being added. In order to not add filtering to the message pump,
+				// Process them here
+				RAWINPUT raw_input;
+				unsigned int size = sizeof(raw_input);
+				if (GetRawInputData((HRAWINPUT)info.lParam, RID_INPUT, &raw_input, &size, sizeof(RAWINPUTHEADER)) != size) {
+					return;
+				}
+				HandleMouseRawInput(this, &raw_input, 1);
+			}
 		}
 		else {
 			if (info.message != WM_CHAR || !m_get_raw_input) {
