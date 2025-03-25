@@ -60,7 +60,19 @@ namespace ECSEngine {
 		Stream<wchar_t> stream;
 	};
 
+	struct NullTerminateWidePotentialEmpty {
+		ECS_INLINE void operator() () {
+			if (stream.size > 0 && previous_character != L'\0') {
+				stream[stream.size] = previous_character;
+			}
+		}
+
+		wchar_t previous_character;
+		Stream<wchar_t> stream;
+	};
+
 	typedef StackScope<NullTerminateWide> ScopedNullTerminateWide;
+	typedef StackScope<NullTerminateWidePotentialEmpty> ScopedNullTerminateWidePotentialEmpty;
 
 	struct StackClearAllocator {
 		ECS_INLINE void operator() () {
@@ -97,5 +109,13 @@ namespace ECSEngine {
 									stream[stream.size] = L'\0'; \
 								} \
 								ECSEngine::ScopedNullTerminateWide scope##stream({ _null_terminator_before##stream, stream });
+
+	// The same as NULL_TERMINATE_WIDE, but if the given stream is empty,
+	// It won't do anything, as to not cause an incorrect access
+#define NULL_TERMINATE_WIDE_POTENTIAL_EMPTY(stream) wchar_t _null_terminator_before##stream = stream.size > 0 ? stream[stream.size] : L'\0'; \
+								if (_null_terminator_before##stream != L'\0') { \
+									stream[stream.size] = L'\0'; \
+								} \
+								ECSEngine::ScopedNullTerminateWidePotentialEmpty scope##stream({ _null_terminator_before##stream, stream });
 
 }
