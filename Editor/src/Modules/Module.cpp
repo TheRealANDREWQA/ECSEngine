@@ -484,6 +484,17 @@ static void ForEachProjectModule(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+// Fills in the absolute compiler path (and escaped)
+static void GetAbsoluteCompilerExecutablePath(const EditorState* editor_state, CapacityStream<wchar_t>& string) {
+	string.AddAssert(L"\"");
+	string.AddStreamAssert(editor_state->settings.compiler_path);
+	string.AddAssert(ECS_OS_PATH_SEPARATOR);
+	string.AddStreamAssert(CMD_BUILD_SYSTEM_WIDE);
+	string.AddAssert(L"\"");
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 static void CommandLineString(
 	const EditorState* editor_state,
 	CapacityStream<wchar_t>& string,
@@ -494,7 +505,7 @@ static void CommandLineString(
 ) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 
-	string.AddStreamAssert(CMD_BUILD_SYSTEM_WIDE);
+	GetAbsoluteCompilerExecutablePath(editor_state, string);
 	string.AddAssert(L' ');
 	string.AddStreamAssert(modules->buffer[module_index].solution_path);
 	string.AddAssert(L' ');
@@ -834,7 +845,10 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 
 	// Ensure that the last character is a null terminator
 	ECS_ASSERT(editor_state->settings.compiler_path[editor_state->settings.compiler_path.size] == L'\0', "Editor compiler path does not end with a null terminator!");
-	bool success = OS::ShellRunCommand(command_string, editor_state->settings.compiler_path);
+	//bool success = OS::ShellRunCommand(command_string, editor_state->settings.compiler_path);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_compiler_executable_path, 512);
+	GetAbsoluteCompilerExecutablePath(editor_state, absolute_compiler_executable_path);
+	bool success = OS::ShellRunCommand(command_string, {});
 	if (!success) {
 		if (!disable_logging) {
 			EditorSetConsoleError("An error occured when creating the command prompt that builds the module.");
