@@ -19,7 +19,6 @@ constexpr const char* CLEAN_PROJECT_STRING = "/t:clean";
 constexpr const char* REBUILD_PROJECT_STRING = "/t:rebuild";
 constexpr const char* CMD_BUILD_SYSTEM_LOG_FILE_COMMAND = "/out";
 constexpr const wchar_t* CMD_BUILD_SYSTEM_LOG_FILE_PATH = L"\\Debug\\";
-constexpr const wchar_t* CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION = L".log";
 
 constexpr const wchar_t* CMD_BUILD_SYSTEM_WIDE = L"MSBuild.exe";
 constexpr const wchar_t* BUILD_PROJECT_STRING_WIDE = L"/t:build";
@@ -121,7 +120,7 @@ static void OpenModuleLogFile(Stream<wchar_t> log_path) {
 static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, bool disable_logging) {
 	Stream<char> contents = ReadWholeFileText(log_path, editor_state->MultithreadedEditorAllocator());
 
-	if (contents.buffer != nullptr) {
+	if (contents.buffer != nullptr && contents.size > 0) {
 		auto contents_deallocator = StackScope([editor_state, contents]() {
 			contents.Deallocate(editor_state->MultithreadedEditorAllocator());
 		});
@@ -139,7 +138,7 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 					Stream<wchar_t> underscore_after_configuration = FindFirstCharacter(configuration_start, L'_');
 					if (underscore_after_configuration.size > 0) {
 						if (!disable_logging) {
-							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} with configuration {#} has failed to build. Check the {#} log.",
+							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} with configuration {#} has compilation errors. Check the {#} log.",
 								Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer),
 								Stream<wchar_t>(configuration_start.buffer, underscore_after_configuration.buffer - configuration_start.buffer),
 								CMD_BUILD_SYSTEM
@@ -151,7 +150,7 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 					}
 					else {
 						if (!disable_logging) {
-							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} has failed to build. Check the {#} log.",
+							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} has compilation errors. Check the {#} log.",
 								Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer), CMD_BUILD_SYSTEM);
 							EditorSetConsoleError(error_message);
 							OpenModuleLogFile(log_path);
@@ -323,12 +322,14 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 
 struct CheckBuildStatusEventData {
 	EditorState* editor_state;
-	Stream<wchar_t> path;
+	Stream<wchar_t> log_path;
 	// This was previously atomic since it ran on a background thread
 	// But now it has been switched to an event
 	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status;
 	bool disable_logging;
 	Timer timer;
+
+	OS::ProcessHandle compiler_process;
 };
 
 EDITOR_EVENT(CheckBuildStatusEvent) {
@@ -336,7 +337,8 @@ EDITOR_EVENT(CheckBuildStatusEvent) {
 
 	if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) >= CHECK_FILE_STATUS_THREAD_SLEEP_TICK) {
 		data->timer.SetNewStart();
-		if (!ExistsFileOrFolder(data->path)) {
+		Optional<bool> is_finished = data->compiler_process.CheckIsFinished();
+		if (!is_finished.has_value || !is_finished.value) {
 			return true;
 		}
 	}
@@ -344,23 +346,14 @@ EDITOR_EVENT(CheckBuildStatusEvent) {
 		return true;
 	}
 
-	// Change the extension from .build/.rebuild/.clean to txt
-	Stream<wchar_t> extension = PathExtension(data->path);
-	ECS_STACK_CAPACITY_STREAM(wchar_t, log_path, 512);
-
-	log_path.CopyOther(data->path);
-	Stream<wchar_t> log_extension = PathExtension(log_path);
-	// Make the dot into an underscore
-	log_extension[0] = L'_';
-	log_path.AddStream(CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION);
-
-	bool succeded = PrintCommandStatus(data->editor_state, log_path, data->disable_logging);
 	// Extract the library name and the configuration
-	Stream<wchar_t> filename = PathFilename(data->path);
-	const wchar_t* underscore = wcschr(filename.buffer, '_');
+	Stream<wchar_t> filename = PathFilename(data->log_path);
+	Stream<wchar_t> underscore = FindFirstCharacter(filename, L'_');
 
-	Stream<wchar_t> library_name(filename.buffer, underscore - filename.buffer);
-	Stream<wchar_t> configuration(underscore + 1, extension.buffer - underscore - 1);
+	Stream<wchar_t> library_name = filename.StartDifference(underscore);
+	Stream<wchar_t> extension_dot = PathExtension(filename);
+	Stream<wchar_t> configuration = underscore.AdvanceReturn();
+	configuration = configuration.StartDifference(extension_dot);
 	EDITOR_MODULE_CONFIGURATION int_configuration = EDITOR_MODULE_CONFIGURATION_COUNT;
 
 	if (configuration == L"Debug") {
@@ -379,7 +372,42 @@ EDITOR_EVENT(CheckBuildStatusEvent) {
 		}
 	}
 
-	if (succeded) {
+	auto remove_project_from_launched_compilation = [&]() -> void {
+		if (int_configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
+			Stream<wchar_t> launched_compilation_string(library_name.buffer, configuration.buffer - library_name.buffer - 1);
+			// Remove the module from the launched compilation stream
+			bool was_found = RemoveProjectModuleFromLaunchedCompilation(data->editor_state, launched_compilation_string, int_configuration);
+
+			// Warn if the module could not be found in the launched module compilation
+			if (!was_found && !data->disable_logging) {
+				ECS_FORMAT_TEMP_STRING(console_string, "Module {#} with configuration {#} could not be found in the compilation list", library_name, configuration);
+				EditorSetConsoleWarn(console_string);
+			}
+		}
+	};
+
+	// Retrieve the exit code. If it is not 0, notify the user that the compilation failed
+	Optional<int> exit_code = data->compiler_process.GetExitCode();
+	data->compiler_process.Close();
+	bool is_exit_code_failed = !exit_code || exit_code.value != 0;
+	
+
+	// This can succeed even when the build overall failed, like when there is a compilation error.
+	// If the exit code is failed and there is no log path, it means that something related to the
+	// Command line parameters failed, else it is a normal compilation failure where the output is
+	// Sent to the log path.
+	bool succeeded = false;
+	if (!is_exit_code_failed || ExistsFileOrFolder(data->log_path)) {
+		succeeded = PrintCommandStatus(data->editor_state, data->log_path, data->disable_logging);
+	}
+	else {
+		// This branch is hit when the exit code is failed and when there is no log path. 
+		// Print a message to let the user know that the command has failed
+		ECS_FORMAT_TEMP_STRING(console_string, "Compiler command execution failed for module {#} with configuration {#}", library_name, configuration);
+		EditorSetConsoleError(console_string);
+	}
+
+	if (succeeded) {
 		// Release the project streams and handle and reload it if is a build or rebuild command
 		unsigned int module_index = GetModuleIndexFromName(data->editor_state, library_name);
 		if (module_index != -1) {
@@ -395,27 +423,19 @@ EDITOR_EVENT(CheckBuildStatusEvent) {
 			}
 		}
 
-		if (underscore != nullptr) {
-			Stream<wchar_t> command(extension.buffer + 1, extension.size - 1);
+		Stream<wchar_t> command = extension_dot.AdvanceReturn();
 
-			if (!data->disable_logging) {
-				ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} with configuration {#} completed successfully", command, library_name, configuration);
-				EditorSetConsoleInfo(console_string);
-			}
-			if (command ==  L"build" || command == L"rebuild") {
-				bool success = LoadEditorModule(data->editor_state, module_index, int_configuration);
-				if (!success) {
-					if (!data->disable_logging) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Could not reload module {#} with configuration {#}, command {#} after successfully executing the command", library_name, configuration, command);
-						EditorSetConsoleError(error_message);
-					}
-				}
-			}
+		if (!data->disable_logging) {
+			ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} with configuration {#} completed successfully", command, library_name, configuration);
+			EditorSetConsoleInfo(console_string);
 		}
-		else {
-			if (!data->disable_logging) {
-				EditorSetConsoleWarn("Could not deduce build command type, library name or configuration for a module compilation");
-				EditorSetConsoleInfo("A module finished building successfully");
+		if (exit_code.has_value && exit_code.value == 0 && command ==  L"build" || command == L"rebuild") {
+			bool success = LoadEditorModule(data->editor_state, module_index, int_configuration);
+			if (!success) {
+				if (!data->disable_logging) {
+					ECS_FORMAT_TEMP_STRING(error_message, "Could not reload module {#} with configuration {#}, command {#} after successfully executing the command", library_name, configuration, command);
+					EditorSetConsoleError(error_message);
+				}
 			}
 		}
 
@@ -428,21 +448,10 @@ EDITOR_EVENT(CheckBuildStatusEvent) {
 		data->report_status->store(EDITOR_FINISH_BUILD_COMMAND_FAILED, ECS_RELAXED);
 	}
 
-	if (int_configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
-		Stream<wchar_t> launched_compilation_string(library_name.buffer, configuration.buffer - library_name.buffer - 1);
-		// Remove the module from the launched compilation stream
-		bool was_found = RemoveProjectModuleFromLaunchedCompilation(data->editor_state, launched_compilation_string, int_configuration);
-
-		// Warn if the module could not be found in the launched module compilation
-		if (!was_found && !data->disable_logging) {
-			ECS_FORMAT_TEMP_STRING(console_string, "Module {#} with configuration {#} could not be found in the compilation list", library_name, configuration);
-			EditorSetConsoleWarn(console_string);
-		}
-	}
+	remove_project_from_launched_compilation();
 
 	// The path must be deallocated
-	data->editor_state->editor_allocator->Deallocate(data->path.buffer);
-	ECS_ASSERT(RemoveFile(data->path));
+	data->editor_state->editor_allocator->Deallocate(data->log_path.buffer);
 	return false;
 }
 
@@ -486,11 +495,9 @@ static void ForEachProjectModule(
 
 // Fills in the absolute compiler path (and escaped)
 static void GetAbsoluteCompilerExecutablePath(const EditorState* editor_state, CapacityStream<wchar_t>& string) {
-	string.AddAssert(L"\"");
 	string.AddStreamAssert(editor_state->settings.compiler_path);
 	string.AddAssert(ECS_OS_PATH_SEPARATOR);
 	string.AddStreamAssert(CMD_BUILD_SYSTEM_WIDE);
-	string.AddAssert(L"\"");
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -505,21 +512,29 @@ static void CommandLineString(
 ) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 
+	// Escape the compiler path
+	string.AddAssert(L"\"");
 	GetAbsoluteCompilerExecutablePath(editor_state, string);
+	string.AddAssert(L"\"");
 	string.AddAssert(L' ');
+	// Escape the solution path
+	string.AddAssert(L'\"');
 	string.AddStreamAssert(modules->buffer[module_index].solution_path);
+	string.AddAssert(L'\"');
 	string.AddAssert(L' ');
 	string.AddStreamAssert(command);
 	string.AddStreamAssert(L" /p:Configuration=");
 	string.AddStreamAssert(MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration]);
-	string.AddStreamAssert(L" /p:OutDir=");
+	// Escape the modules folder
+	string.AddStreamAssert(L" /p:OutDir=\"");
 	GetProjectModulesFolder(editor_state, string);
-	string.AddStreamAssert(L" /p:Platform=x64 /flp:logfile=");
+	string.AddAssert(L'\"');
+	// Escape the log file
+	string.AddStreamAssert(L" /p:Platform=x64 /flp:logfile=\"");
 	string.AddStreamAssert(log_file);
-	string.AddStreamAssert(L";verbosity=normal & cd . > ");
-	GetProjectDebugFolder(editor_state, string);
-	string.AddAssert(ECS_OS_PATH_SEPARATOR);
-	GetModuleBuildFlagFile(editor_state, module_index, configuration, command, string);
+	string.AddAssert(L'\"');
+	string.AddStreamAssert(L";verbosity=normal");
+
 	string.AssertCapacity(1);
 	string[string.size] = L'\0';
 }
@@ -828,28 +843,23 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 ) {
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
 
-	ECS_STACK_CAPACITY_STREAM(wchar_t, log_path, 512);
-	GetModuleBuildLogPath(editor_state, index, configuration, command, log_path);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, log_file, 512);
+	GetModuleBuildLogPath(editor_state, index, configuration, command, log_file);
 
-	ECS_STACK_CAPACITY_STREAM(wchar_t, command_string, 512);
-	CommandLineString(editor_state, command_string, index, command, log_path, configuration);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, command_string, 1024);
+	CommandLineString(editor_state, command_string, index, command, log_file, configuration);
 
-	ECS_STACK_CAPACITY_STREAM(wchar_t, flag_file, 256);
-	GetProjectDebugFolder(editor_state, flag_file);
-	flag_file.Add(ECS_OS_PATH_SEPARATOR);
-	GetModuleBuildFlagFile(editor_state, index, configuration, command, flag_file);
-
-	// Remove the flag file, if it exists, such that the check loop does not believe the compilation has finished when it did not
+	// Remove the log file, if it exists
 	// Don't assert that it succeeded, since it may not be there
-	RemoveFile(flag_file);
+	RemoveFile(log_file);
 
 	// Ensure that the last character is a null terminator
 	ECS_ASSERT(editor_state->settings.compiler_path[editor_state->settings.compiler_path.size] == L'\0', "Editor compiler path does not end with a null terminator!");
-	//bool success = OS::ShellRunCommand(command_string, editor_state->settings.compiler_path);
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_compiler_executable_path, 512);
 	GetAbsoluteCompilerExecutablePath(editor_state, absolute_compiler_executable_path);
-	bool success = OS::ShellRunCommand(command_string, {});
-	if (!success) {
+	Optional<OS::ProcessHandle> compiler_process = OS::CreateProcessWithHandle(absolute_compiler_executable_path, command_string, {}, false);
+	
+	if (!compiler_process.has_value) {
 		if (!disable_logging) {
 			EditorSetConsoleError("An error occured when creating the command prompt that builds the module.");
 		}
@@ -862,11 +872,11 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		// Log the command status
 		CheckBuildStatusEventData check_data;
 		check_data.editor_state = editor_state;
-		check_data.path.buffer = (wchar_t*)Allocate(editor_state->EditorAllocator(), sizeof(wchar_t) * flag_file.size);
-		check_data.path.CopyOther(flag_file);
+		check_data.log_path = log_file.Copy(editor_state->EditorAllocator());
 		check_data.report_status = report_status;
 		check_data.disable_logging = disable_logging;
 		check_data.timer.SetUninitialized();
+		check_data.compiler_process = compiler_process.value;
 
 		EditorAddEvent(editor_state, CheckBuildStatusEvent, &check_data, sizeof(check_data));
 	}
@@ -1480,29 +1490,6 @@ unsigned int GetModuleIndexFromName(const EditorState* editor_state, Stream<wcha
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetModuleBuildFlagFile(
-	const EditorState* editor_state,
-	unsigned int module_index,
-	EDITOR_MODULE_CONFIGURATION configuration,
-	Stream<wchar_t> command,
-	CapacityStream<wchar_t>& temp_file
-)
-{
-	command.buffer++;
-	command.size--;
-
-	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
-	temp_file.AddStreamAssert(modules->buffer[module_index].library_name);
-	temp_file.AddAssert(L'_');
-	temp_file.AddStreamAssert(MODULE_CONFIGURATIONS_WIDE[configuration]);
-	temp_file.AddAssert(L'.');
-	temp_file.AddStreamAssert(Stream<wchar_t>(command.buffer + 2, command.size - 2));
-	temp_file.AddAssert(L'\0');
-	temp_file.size--;
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
 void GetModuleBuildLogPath(
 	const EditorState* editor_state,
 	unsigned int index,
@@ -1518,10 +1505,8 @@ void GetModuleBuildLogPath(
 	log_path.AddStreamAssert(modules->buffer[index].library_name);
 	log_path.AddAssert(L'_');
 	log_path.AddStreamAssert(MODULE_CONFIGURATIONS_WIDE[configuration]);
-	wchar_t* replace_slash_with_underscore = log_path.buffer + log_path.size;
-	log_path.AddStreamAssert(Stream<wchar_t>(command.buffer + 2, command.size - 2));
-	*replace_slash_with_underscore = L'_';
-	log_path.AddStreamAssert(CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION);
+	log_path.AddAssert(L'.');
+	log_path.AddStreamAssert(command.AdvanceReturn(3));
 	log_path.AddAssert(L'\0');
 	log_path.size--;
 }
