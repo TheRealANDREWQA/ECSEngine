@@ -10,3 +10,4 @@
 #include "../ECSEngine/OS/PhysicalMemory.h"
 #include "../ECSEngine/OS/Monitor.h"
 #include "../ECSEngine/OS/Shell.h"
+#include "../ECSEngine/OS/Process.h"

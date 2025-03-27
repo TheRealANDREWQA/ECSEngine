@@ -197,14 +197,6 @@ unsigned int GetModuleIndex(const EditorState* editor_state, Stream<wchar_t> sol
 
 unsigned int GetModuleIndexFromName(const EditorState* editor_state, Stream<wchar_t> library_name);
 
-void GetModuleBuildFlagFile(
-	const EditorState* editor_state,
-	unsigned int module_index,
-	EDITOR_MODULE_CONFIGURATION configuration,
-	Stream<wchar_t> command,
-	CapacityStream<wchar_t>& temp_file
-);
-
 void GetModuleBuildLogPath(
 	const EditorState* editor_state,
 	unsigned int module_index,

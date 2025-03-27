@@ -37,7 +37,8 @@ namespace ECSEngine {
 			STARTUPINFO info;
 			memset(&info, 0, sizeof(info));
 			info.cb = sizeof(info);
-			info.wShowWindow = show_cmd_window ? SW_SHOWDEFAULT : SW_HIDE;
+			info.wShowWindow = show_cmd_window ? SW_SHOW : SW_HIDE;
+			info.dwFlags = STARTF_USESHOWWINDOW;
 
 			PROCESS_INFORMATION process_information;
 			memset(&process_information, 0, sizeof(process_information));
@@ -47,7 +48,7 @@ namespace ECSEngine {
 				NULL,
 				NULL,
 				FALSE,
-				STARTF_USESHOWWINDOW,
+				0,
 				NULL,
 				starting_directory.size == 0 ? NULL : starting_directory.buffer,
 				&info,
