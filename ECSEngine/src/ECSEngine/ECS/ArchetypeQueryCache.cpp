@@ -238,15 +238,15 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	MemoryManager ArchetypeQueryCache::DefaultAllocator(AllocatorPolymorphic initial_allocator)
+	void ArchetypeQueryCache::DefaultAllocator(MemoryManager* allocator, AllocatorPolymorphic initial_allocator)
 	{
 		// Get an allocator for about 512 queries
-		return DetermineAllocator(initial_allocator, 512);
+		DetermineAllocator(allocator, initial_allocator, 512);
 	}
 
 	// -----------------------------------------------------------------------------------------------
 
-	MemoryManager ArchetypeQueryCache::DetermineAllocator(AllocatorPolymorphic initial_allocator, unsigned int total_query_count)
+	void ArchetypeQueryCache::DetermineAllocator(MemoryManager* allocator, AllocatorPolymorphic initial_allocator, unsigned int total_query_count)
 	{
 		// Use a memory manager as the type of the allocator
 
@@ -255,7 +255,7 @@ namespace ECSEngine {
 		size_t total_size = total_query_count * 64 * sizeof(unsigned short);
 		total_size += (sizeof(Stream<unsigned short>) * 2 + sizeof(ArchetypeQuery) + sizeof(ArchetypeQueryExclude)) * total_query_count;
 
-		return MemoryManager(total_size, ARENA_BLOCK_COUNT, total_size, initial_allocator);
+		new (allocator) MemoryManager(total_size, ARENA_BLOCK_COUNT, total_size, initial_allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------

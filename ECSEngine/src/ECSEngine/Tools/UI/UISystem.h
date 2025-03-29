@@ -30,7 +30,8 @@ namespace ECSEngine {
 		// Bool acts as a placeholder, only interested to see if the resource existed previously
 		typedef HashTableDefault<bool> UISystemAddDynamicWindowElementTable;
 
-		ECSENGINE_API UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager);
+		// It will initialize the first parameter with memory from the second parameter
+		ECSENGINE_API void DefaultUISystemAllocator(UIToolsAllocator* allocator, GlobalMemoryManager* global_manager);
 
 		// If the windows_to_draw are given, then it will use the draw function only for those,
 		// All the other ones being used with a snapshot. When that mode is engaged, you can
@@ -929,6 +930,9 @@ namespace ECSEngine {
 			void* FindWindowResource(unsigned int window_index, Stream<char> name) const;
 
 			void* FindWindowResource(unsigned int window_index, const void* identifier, unsigned int identifier_size) const;
+
+			// Returns a nullptr value if the resource doesn't exist, else a valid resource for the given name identifier
+			void* TryFindWindowResource(unsigned int window_index, Stream<char> name) const;
 
 			// Returns -1 if it doesn't find it. If the data is nullptr, then it will return the first frame handler
 			// that has that function

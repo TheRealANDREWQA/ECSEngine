@@ -222,7 +222,7 @@ namespace ECSEngine {
 		size_t size;
 		Read<true>(stream, &size, sizeof(size));
 		if constexpr (read_data) {
-			void* allocation = AllocateEx(allocator, size);
+			void* allocation = Allocate(allocator, size);
 			Read<true>(stream, allocation, size);
 			return { allocation, size };
 		}
@@ -243,7 +243,7 @@ namespace ECSEngine {
 		unsigned short size;
 		Read<true>(stream, &size, sizeof(size));
 		if constexpr (read_data) {
-			void* allocation = AllocateEx(allocator, size);
+			void* allocation = Allocate(allocator, size);
 			Read<true>(stream, allocation, size);
 			return { allocation, size };
 		}
@@ -423,7 +423,7 @@ namespace ECSEngine {
 			void** allocated_buffer;
 			void* deserialize_target;
 		};
-		AllocatorPolymorphic override_allocator = { nullptr };
+		AllocatorPolymorphic override_allocator = nullptr;
 		Stream<size_t> indices = { nullptr, 0 };
 	};
 
@@ -521,7 +521,7 @@ namespace ECSEngine {
 		if (flags == ECS_FILE_STATUS_OK) {
 			ScopedFile scoped_file({ file_handle });
 
-			void* allocation = AllocateEx(allocator, allocation_size);
+			void* allocation = Allocate(allocator, allocation_size);
 			uintptr_t buffer = (uintptr_t)allocation;
 			functor(buffer);
 
@@ -533,7 +533,7 @@ namespace ECSEngine {
 			else {
 				success = WriteFile(file_handle, { allocation, difference });
 			}
-			DeallocateEx(allocator, allocation);
+			Deallocate(allocator, allocation);
 			return success;
 		}
 
@@ -554,7 +554,7 @@ namespace ECSEngine {
 		if (contents.buffer != nullptr) {
 			uintptr_t buffer = (uintptr_t)contents.buffer;
 			size_t pointer_bytes = functor(buffer);
-			DeallocateEx(allocator, contents.buffer);
+			Deallocate(allocator, contents.buffer);
 			return pointer_bytes;
 		}
 		return -1;

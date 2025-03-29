@@ -37,7 +37,7 @@ namespace ECSEngine {
 			user_deallocate_function(user_data.buffer, allocator);
 		}
 		if (user_data.size > 0) {
-			DeallocateEx(allocator, user_data.buffer);
+			ECSEngine::Deallocate(allocator, user_data.buffer);
 		}
 		header.Deallocate(allocator);
 		state_infos.FreeBuffer();
@@ -149,7 +149,7 @@ namespace ECSEngine {
 		
 		size_t user_header_size = initialize_info.functor_info.header.size;
 		if (user_header_size > 0) {
-			header.buffer = AllocateEx(allocator, user_header_size);
+			header.buffer = Allocate(allocator, user_header_size);
 			memcpy(header.buffer, initialize_info.functor_info.header.buffer, user_header_size);
 			header.size = user_header_size;
 		}
@@ -369,7 +369,7 @@ namespace ECSEngine {
 			user_deallocate_function(user_data.buffer, allocator);
 		}
 		if (user_data.size > 0) {
-			DeallocateEx(allocator, user_data.buffer);
+			ECSEngine::Deallocate(allocator, user_data.buffer);
 		}
 		header.Deallocate(allocator);
 		state_infos.Deallocate(allocator);
@@ -515,7 +515,7 @@ namespace ECSEngine {
 		}
 
 		if (header.size > 0) {
-			header.buffer = AllocateEx(allocator, header.size);
+			header.buffer = Allocate(allocator, header.size);
 			if (!read_instrument->Read(header.buffer, header.size)) {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user header data.");
 				state_infos.Deallocate(allocator);

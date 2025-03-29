@@ -127,11 +127,11 @@ namespace ECSEngine {
 			size_t initial_write_instrument_offset = write_instrument->GetOffset();
 
 			CapacityStream<void> buffering;
-			buffering.Initialize({ nullptr }, ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
+			buffering.Initialize(ECS_MALLOC_ALLOCATOR, ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 
 			// Create a stack scope to release this automatically
 			auto deallocate_resources = StackScope([&]() {
-				buffering.Deallocate({ nullptr });
+				buffering.Deallocate(ECS_MALLOC_ALLOCATOR);
 			});
 
 			// Write the header first
@@ -633,7 +633,7 @@ namespace ECSEngine {
 			}
 
 			// We will also need a large buffering allocator, because we might need to read a lot of data at once
-			ResizableLinearAllocator temporary_allocator(ECS_MB * 50, ECS_MB * 100, { nullptr });
+			ResizableLinearAllocator temporary_allocator(ECS_MB * 50, ECS_MB * 100, ECS_MALLOC_ALLOCATOR);
 
 			struct Deallocator {
 				ECS_INLINE void operator()() {

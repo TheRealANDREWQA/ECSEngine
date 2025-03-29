@@ -1598,6 +1598,8 @@ namespace ECSEngine {
 
 		// It will create an enum rule matcher that will have callbacks to process the tokens
 		static void CreateTokenizeEnumMatcher(TokenizeRuleMatcher* matcher, AllocatorPolymorphic temporary_allocator) {
+			matcher->Initialize(temporary_allocator);
+
 			const char* enum_rule_string = R"DELIMITER( $G. ,? )DELIMITER";
 
 			TokenizeRule enum_rule = CreateTokenizeRule(enum_rule_string, temporary_allocator, true);
@@ -1688,6 +1690,7 @@ namespace ECSEngine {
 		}
 
 		static void CreateTokenizeStructMatcher(TokenizeRuleMatcher* matcher, AllocatorPolymorphic temporary_allocator) {
+			matcher->Initialize(temporary_allocator);
 			CreateTokenizeStructExcludeRules(matcher, temporary_allocator);
 			CreateTokenizeGeneralMacrosAction(matcher, temporary_allocator);
 			CreateTokenizeFunctionAction(matcher, temporary_allocator);
@@ -1698,7 +1701,7 @@ namespace ECSEngine {
 		static void InitializeRuleMatchers() {
 			if (!AreRuleMatchersInitialized) {
 				AreRuleMatchersInitialized = true;
-				RuleMatchersAllocator = ResizableLinearAllocator(ECS_KB * 64, ECS_MB, { nullptr });
+				RuleMatchersAllocator = ResizableLinearAllocator(ECS_KB * 64, ECS_MB, ECS_MALLOC_ALLOCATOR);
 				CreateTokenizeStructMatcher(&StructRuleMatcher, &RuleMatchersAllocator);
 				CreateTokenizeEnumMatcher(&EnumRuleMatcher, &RuleMatchersAllocator);
 			}
@@ -4186,7 +4189,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Allocate memory for the type and enum stream; speculate some reasonable numbers
 			const size_t INITIAL_ALLOCATOR_CAPACITY = ECS_KB * 256 + thread_memory_capacity;
 			const size_t BACKUP_ALLOCATOR_CAPACITY = ECS_MB * 32;
-			data.allocator = ResizableLinearAllocator(INITIAL_ALLOCATOR_CAPACITY, BACKUP_ALLOCATOR_CAPACITY, { nullptr });
+			new (&data.allocator) ResizableLinearAllocator(INITIAL_ALLOCATOR_CAPACITY, BACKUP_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
 
 			// Initialize the arrays with a decent small size
 			data.types.Initialize(&data.allocator, 32);
@@ -6282,7 +6285,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 				else if (stream_type == ReflectionStreamFieldType::PointerSoA) {
 					void** destination_ptr = (void**)destination;
-					DeallocateEx(allocator, *destination_ptr);
+					Deallocate(allocator, *destination_ptr);
 
 					// Set the size to 0
 					SetReflectionFieldPointerSoASize(*info, OffsetPointer(destination, -(int64_t)info->pointer_offset), 0);
@@ -6385,14 +6388,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return_value.buffer = stream->buffer;
 				return_value.size = stream->size;
 				return_value.capacity = stream->size;
-				return_value.allocator = { nullptr };
+				// The allocator doesn't make sense for this case
+				return_value.allocator = nullptr;
 			}
 			else if (info.stream_type == ReflectionStreamFieldType::CapacityStream) {
 				CapacityStream<void>* stream = (CapacityStream<void>*)stream_field;
 				return_value.buffer = stream->buffer;
 				return_value.size = stream->size;
 				return_value.capacity = stream->capacity;
-				return_value.allocator = { nullptr };
+				// The allocator doesn't make sense for this case
+				return_value.allocator = nullptr;
 			}
 			else if (info.stream_type == ReflectionStreamFieldType::ResizableStream) {
 				ResizableStream<void>* stream = (ResizableStream<void>*)stream_field;
@@ -6405,14 +6410,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// TODO: Insert the offset for the capacity field into the info?
 				// At the moment, this does not return the appropriate capacity value
 				return_value.capacity = return_value.size;
-				return_value.allocator = { nullptr };
+				// The allocator doesn't make sense for this case
+				return_value.allocator = nullptr;
 			}
 			if constexpr (basic_array) {
 				if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 					return_value.buffer = (void*)stream_field;
 					return_value.size = info.basic_type_count;
 					return_value.capacity = info.basic_type_count;
-					return_value.allocator = { nullptr };
+					// The allocator doesn't make sense for this case
+					return_value.allocator = nullptr;
 				}
 			}
 			return return_value;
@@ -6502,7 +6509,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			size_t per_element_size = GetReflectionPointerSoAPerElementSize(type, soa_index);
 			size_t soa_size = GetReflectionPointerSoASize(type, soa_index, data);
 			size_t total_allocation_size = per_element_size * soa_size;
-			void* allocation = total_allocation_size == 0 ? nullptr : AllocateEx(allocator, total_allocation_size, GetReflectionTypeSoaAllocationAlignment(type, soa));
+			void* allocation = total_allocation_size == 0 ? nullptr : Allocate(allocator, total_allocation_size, GetReflectionTypeSoaAllocationAlignment(type, soa));
 			
 			for (unsigned int index = 0; index < soa->parallel_stream_count; index++) {
 				const ReflectionFieldInfo* current_field = &type->fields[soa->parallel_streams[index]].info;
@@ -6511,7 +6518,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				size_t current_copy_size = soa_size * GetReflectionFieldStreamElementByteSize(*current_field);
 				memcpy(allocation, *current_ptr, current_copy_size);
 				if (*current_ptr != nullptr) {
-					DeallocateEx(allocator, *current_ptr);
+					Deallocate(allocator, *current_ptr);
 				}
 				*current_ptr = allocation;
 				allocation = OffsetPointer(allocation, current_copy_size);
@@ -6542,7 +6549,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		bool DeallocateReflectionPointerSoAAllocation(const ReflectionType* type, unsigned int field_index, void* data, AllocatorPolymorphic allocator) {
 			if (IsReflectionPointerSoAAllocationHolder(type, field_index)) {
 				void* pointer = *(void**)OffsetPointer(data, type->fields[field_index].info.pointer_offset);
-				DeallocateEx(allocator, pointer);
+				Deallocate(allocator, pointer);
 				return true;
 			}
 			return false;
@@ -8481,7 +8488,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						// We don't have to set this to nullptr since
 						// We are overriding this field anyway
 						if (current_data.buffer != nullptr) {
-							DeallocateEx(options->allocator, current_data.buffer);
+							Deallocate(options->allocator, current_data.buffer);
 						}
 						// Reset the buffer - needed for the ResizeNoCopy call
 						// Later on to not think that we have data
@@ -8874,7 +8881,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Keep track of the dependencies that were already processed, such that we don't process
 			// A type once more if it appears multiple times. Use an array instead of a hash table since
 			// There should be few entries, and a hash table at small sizes is not that beneficial.
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 4, ECS_MB);
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 5, ECS_MB);
 			ResizableStream<Stream<char>> processed_dependencies(&stack_allocator, 256);
 			
 			// Processes a single Stream<char> definition

@@ -70,23 +70,18 @@ namespace ECSEngine {
 		return (void*)allocation;
 	}
 
-	template<bool trigger_error_if_not_found>
-	bool MultipoolAllocator::Deallocate(const void* block, DebugInfo debug_info) {
+	bool MultipoolAllocator::DeallocateNoAssert(const void* block, DebugInfo debug_info) {
 		// Calculating the start index of the block by reading the byte metadata 
 		uintptr_t byte_offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
 		unsigned char byte_offset = m_buffer[byte_offset_position];
-		if constexpr (trigger_error_if_not_found) {
-			ECS_ASSERT(byte_offset < ECS_CACHE_LINE_SIZE);
+		if (byte_offset >= ECS_CACHE_LINE_SIZE) {
+			// Exit if the alignment is very high
+			return false;
 		}
-		else {
-			if (byte_offset >= ECS_CACHE_LINE_SIZE) {
-				// Exit if the alignment is very high
-				return false;
-			}
-		}
+
 		// We need to take into account the power of two factor
 		size_t block_start = (byte_offset_position - byte_offset) >> m_power_of_two_factor;
-		bool was_deallocated = m_range.Free<trigger_error_if_not_found>(block_start);
+		bool was_deallocated = m_range.Free<false>(block_start);
 		if (was_deallocated) {
 			if (m_debug_mode) {
 				TrackedAllocation tracked;
@@ -101,8 +96,6 @@ namespace ECSEngine {
 		}
 		return was_deallocated;
 	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MultipoolAllocator::Deallocate, const void*, DebugInfo);
 
 	void* MultipoolAllocator::Reallocate(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
@@ -190,37 +183,13 @@ namespace ECSEngine {
 		return BlockRange::MemoryOf(pool_count);
 	}
 
-	size_t MultipoolAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	size_t MultipoolAllocator::GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
 	{
 		if (pointer_capacity >= 1) {
 			*region_start = GetAllocatedBuffer();
 			*region_size = GetSize();
 		}
 		return 1;
-	}
-
-	// ---------------------- Thread safe variants -----------------------------
-
-	void* MultipoolAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_lock, [&]() {
-			return Allocate(size, alignment, debug_info);
-		});
-	}
-
-	template<bool trigger_error_if_not_found>
-	bool MultipoolAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_lock, [&]() {
-			return Deallocate<trigger_error_if_not_found>(block, debug_info);
-		});
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MultipoolAllocator::Deallocate_ts, const void*, DebugInfo);
-
-	void* MultipoolAllocator::Reallocate_ts(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
-	{
-		return ThreadSafeFunctorReturn(&m_lock, [&]() {
-			return Reallocate(block, new_size, alignment, debug_info);
-		});
 	}
 
 }

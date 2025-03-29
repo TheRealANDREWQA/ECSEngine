@@ -75,10 +75,11 @@ namespace ECSEngine {
 		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE;
 		ECS_TEXTURE_COMPRESSION_EX compression = ECS_TEXTURE_COMPRESSION_EX_NONE;
 		bool srgb = false;
-		AllocatorPolymorphic allocator = { nullptr };
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
 	};
 
-	ECSENGINE_API ResourceManagerAllocator DefaultResourceManagerAllocator(GlobalMemoryManager* global_allocator);
+	// Initializes the first parameter with memory from the second parameter
+	ECSENGINE_API void DefaultResourceManagerAllocator(ResourceManagerAllocator* allocator, GlobalMemoryManager* global_allocator);
 
 	ECSENGINE_API size_t DefaultResourceManagerAllocatorSize();
 
@@ -155,7 +156,7 @@ namespace ECSEngine {
 		// This is an optional field that is used only when either source code or byte code is specified.
 		// If it is left as nullptr, the allocation for those buffers will be made from the 
 		// ResourceManager's multithreaded allocator, else from this allocator
-		AllocatorPolymorphic allocator = { nullptr };
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
 		// This will be used only when the shader type is the vertex shader, else it will be ignored
 		InputLayout* input_layout = nullptr;
 	};
@@ -549,9 +550,9 @@ namespace ECSEngine {
 		// If it fails, it returns { nullptr, 0 }. This is the same as reading a binary file and storing it
 		// Such that it doesn't get loaded multiple times.
 		template<bool reference_counted = false>
-		ResizableStream<void>* LoadMisc(Stream<wchar_t> filename, AllocatorPolymorphic allocator = { nullptr }, const ResourceManagerLoadDesc& load_descriptor = {});
+		ResizableStream<void>* LoadMisc(Stream<wchar_t> filename, AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR, const ResourceManagerLoadDesc& load_descriptor = {});
 		
-		ResizableStream<void> LoadMiscImplementation(Stream<wchar_t> filename, AllocatorPolymorphic allocator = { nullptr }, const ResourceManagerLoadDesc& load_descriptor = {});
+		ResizableStream<void> LoadMiscImplementation(Stream<wchar_t> filename, AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR, const ResourceManagerLoadDesc& load_descriptor = {});
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 

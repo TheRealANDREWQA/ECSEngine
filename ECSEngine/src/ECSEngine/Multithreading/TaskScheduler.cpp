@@ -701,9 +701,9 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	MemoryManager TaskScheduler::DefaultAllocator(GlobalMemoryManager* memory)
+	void TaskScheduler::DefaultAllocator(MemoryManager* allocator, GlobalMemoryManager* memory)
 	{
-		return MemoryManager(ECS_KB * 32, 1024, ECS_KB * 32, memory);
+		new (allocator) MemoryManager(ECS_KB * 32, 1024, ECS_KB * 32, memory);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

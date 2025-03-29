@@ -23,7 +23,7 @@ namespace ECSEngine {
 			}
 		}
 
-		AllocatorPolymorphic allocator = { nullptr };
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
 		ECS_TEXTURE_COMPRESS_FLAGS flags = ECS_TEXTURE_COMPRESS_NONE;
 		CapacityStream<char>* error_message = nullptr;
 		// If set, it will acquire lock it to synchronize the access to the immediate context

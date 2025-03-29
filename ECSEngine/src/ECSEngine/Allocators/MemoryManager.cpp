@@ -10,19 +10,17 @@
 
 namespace ECSEngine {
 
-	template<bool thread_safe, bool trigger_error_if_not_found>
+	template<bool thread_safe>
 	bool DeallocateImpl(MemoryManager* memory_manager, const void* block, DebugInfo debug_info) {
 		size_t allocator_count = memory_manager->m_allocator_count;
 		for (size_t index = 0; index < allocator_count; index++) {
 			AllocatorPolymorphic current_allocator = memory_manager->GetAllocator(index);
+			if constexpr (thread_safe) {
+				current_allocator = current_allocator.AsMulti();
+			}
+
 			if (ECSEngine::BelongsToAllocator(current_allocator, block)) {
-				bool was_deallocated;
-				if constexpr (thread_safe) {
-					was_deallocated = ECSEngine::DeallocateTs<trigger_error_if_not_found>(current_allocator, block);
-				}
-				else {
-					was_deallocated = ECSEngine::Deallocate<trigger_error_if_not_found>(current_allocator, block);
-				}
+				bool was_deallocated = ECSEngine::DeallocateNoAssert(current_allocator, block);
 
 				if constexpr (!thread_safe) {
 					// We cannot perform the removal in multithreaded context
@@ -51,9 +49,6 @@ namespace ECSEngine {
 				return was_deallocated;
 			}
 		}
-		if constexpr (trigger_error_if_not_found) {
-			ECS_ASSERT(false, "Invalid deallocate block for Memory Manager");
-		}
 		return false;
 	}
 	
@@ -71,13 +66,11 @@ namespace ECSEngine {
 		size_t allocator_count = memory_manager->m_allocator_count;
 		for (size_t index = 0; index < allocator_count; index++) {
 			AllocatorPolymorphic current_allocator = memory_manager->GetAllocator(index);
-			void* allocation;
 			if constexpr (thread_safe) {
-				allocation = ECSEngine::AllocateTs(current_allocator.allocator, current_allocator.allocator_type, size, alignment);
+				current_allocator = current_allocator.AsMulti();
 			}
-			else {
-				allocation = ECSEngine::Allocate(current_allocator, size, alignment);
-			}
+
+			void* allocation = ECSEngine::Allocate(current_allocator, size, alignment);
 
 			if (allocation != nullptr) {
 				if constexpr (!disable_debug_info) {
@@ -116,15 +109,13 @@ namespace ECSEngine {
 				memory_manager->m_lock.WaitLocked();
 			}
 		}
+		
 		AllocatorPolymorphic last_allocator = memory_manager->GetAllocator(allocator_count);
-		void* allocation;
 		if constexpr (thread_safe) {
-			allocation = ECSEngine::AllocateTs(last_allocator.allocator, last_allocator.allocator_type, size, alignment);
-		}
-		else {
-			allocation = ECSEngine::Allocate(last_allocator, size, alignment);
+			last_allocator = last_allocator.AsMulti();
 		}
 
+		void* allocation = ECSEngine::Allocate(last_allocator, size, alignment);
 		if (allocation == nullptr) {
 			ECS_ASSERT(!memory_manager->m_crash_on_allocation_failure, "MemoryManager allocation cannot be fulfilled");
 			return nullptr;
@@ -196,56 +187,13 @@ namespace ECSEngine {
 		return nullptr;
 	}
 
-	template<bool thread_safe>
-	bool DeallocateIfBelongsImpl(MemoryManager* memory_manager, const void* block, DebugInfo debug_info) {
-		size_t allocator_count = memory_manager->m_allocator_count;
-		for (size_t index = 0; index < allocator_count; index++) {
-			AllocatorPolymorphic current_allocator = memory_manager->GetAllocator(index);
-			if (ECSEngine::BelongsToAllocator(current_allocator, block)) {
-				bool was_deallocated;
-				if constexpr (thread_safe) {
-					current_allocator.allocation_type = ECS_ALLOCATION_MULTI;
-				}
-				was_deallocated = ECSEngine::DeallocateNoAssert(current_allocator, block);
-
-				if constexpr (!thread_safe) {
-					// We cannot perform the removal in multithreaded context
-					// Because it will update the m_allocator_count which would
-					// Not be visible to other threads
-					if (index > 0 && ECSEngine::IsAllocatorEmpty(current_allocator)) {
-						FreeAllocatorFrom(current_allocator, memory_manager->m_backup);
-						Stream<void> untyped_allocator = { memory_manager->m_allocators, memory_manager->m_allocator_count };
-						untyped_allocator.RemoveSwapBack(index, memory_manager->m_base_allocator_byte_size);
-						memory_manager->m_allocator_count--;
-					}
-				}
-
-				if (was_deallocated) {
-					if (memory_manager->m_debug_mode) {
-						TrackedAllocation tracked;
-						tracked.allocated_pointer = block;
-						tracked.debug_info = debug_info;
-						tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
-						DebugAllocatorManagerAddEntry(memory_manager, ECS_ALLOCATOR_MANAGER, &tracked);
-					}
-					if (memory_manager->m_profiling_mode) {
-						AllocatorProfilingAddDeallocation(memory_manager);
-					}
-				}
-				return was_deallocated;
-			}
-		}
-
-		return false;
-	}
-
 	void Init(MemoryManager* manager, CreateBaseAllocatorInfo initial_info, CreateBaseAllocatorInfo backup_info, AllocatorPolymorphic backup) {
 		ECS_ASSERT(initial_info.allocator_type == backup_info.allocator_type);
 
 		manager->m_allocator_count = 0;
 		manager->m_backup = backup;
 		size_t base_allocator_size = BaseAllocatorByteSize(initial_info.allocator_type);
-		void* allocation = AllocateTsEx(backup, (base_allocator_size) * ECS_MEMORY_MANAGER_SIZE);
+		void* allocation = Allocate(backup, (base_allocator_size) * ECS_MEMORY_MANAGER_SIZE);
 		manager->m_allocators = allocation;
 		manager->m_backup_info = backup_info;
 		manager->m_base_allocator_byte_size = base_allocator_size;
@@ -319,11 +267,12 @@ namespace ECSEngine {
 		}
 	}
 
-	void MemoryManager::Free(DebugInfo debug_info) {
+	void MemoryManager::Free(bool assert_that_is_standalone, DebugInfo debug_info) {
+		// The boolean parameter doesn't matter, we are standalone
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			FreeAllocatorFrom(GetAllocator(index), m_backup);
 		}
-		ECSEngine::DeallocateEx(m_backup, m_allocators);
+		ECSEngine::Deallocate(m_backup, m_allocators);
 
 		if (m_debug_mode) {
 			TrackedAllocation tracked;
@@ -348,21 +297,13 @@ namespace ECSEngine {
 		return AllocateImpl<false, false>(this, size, alignment, debug_info);
 	}
 
-	template<bool trigger_error_if_not_found>
-	bool MemoryManager::Deallocate(const void* block, DebugInfo debug_info) {
-		return DeallocateImpl<false, trigger_error_if_not_found>(this, block, debug_info);
+	bool MemoryManager::DeallocateNoAssert(const void* block, DebugInfo debug_info) {
+		return DeallocateImpl<false>(this, block, debug_info);
 	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryManager::Deallocate, const void*, DebugInfo);
 
 	void* MemoryManager::Reallocate(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
 		return ReallocateImpl<false>(this, block, new_size, alignment, debug_info);
-	}
-
-	bool MemoryManager::DeallocateIfBelongs(const void* block, DebugInfo debug_info)
-	{
-		return DeallocateIfBelongsImpl<false>(this, block, debug_info);
 	}
 
 	size_t MemoryManager::GetCurrentUsage() const
@@ -388,7 +329,7 @@ namespace ECSEngine {
 
 	void MemoryManager::Trim()
 	{
-		size_t allocator_byte_size = BaseAllocatorByteSize(m_backup.allocator_type);
+		size_t allocator_byte_size = BaseAllocatorByteSize(m_backup.allocator->m_allocator_type);
 		for (size_t index = 1; index < m_allocator_count; index++) {
 			AllocatorPolymorphic current_allocator = GetAllocator(index);
 			if (IsAllocatorEmpty(current_allocator)) {
@@ -415,7 +356,7 @@ namespace ECSEngine {
 
 	AllocatorPolymorphic MemoryManager::GetAllocator(size_t index) const
 	{
-		return { OffsetPointer(m_allocators, m_base_allocator_byte_size * index), m_backup_info.allocator_type, ECS_ALLOCATION_SINGLE };
+		return { (AllocatorBase*)OffsetPointer(m_allocators, m_base_allocator_byte_size * index), ECS_ALLOCATION_SINGLE };
 	}
 
 	void* MemoryManager::GetAllocatorBasePointer(size_t index) const
@@ -446,7 +387,7 @@ namespace ECSEngine {
 		}
 	}
 
-	size_t MemoryManager::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	size_t MemoryManager::GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
 	{
 		if (pointer_capacity >= (size_t)m_allocator_count) {
 			for (unsigned char index = 0; index < m_allocator_count; index++) {
@@ -489,30 +430,21 @@ namespace ECSEngine {
 		return allocator_info;
 	}
 
-	// ---------------------- Thread safe variants -----------------------------
-
-	void* MemoryManager::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
+	void* MemoryManager::AllocateTs(size_t size, size_t alignment, DebugInfo debug_info) {
 		return AllocateImpl<true, false>(this, size, alignment, debug_info);
 	}
 
-	template<bool trigger_error_if_not_found>
-	bool MemoryManager::Deallocate_ts(const void* block, DebugInfo debug_info) {
-		return DeallocateImpl<true, trigger_error_if_not_found>(this, block, debug_info);
+	bool MemoryManager::DeallocateNoAssertTs(const void* block, DebugInfo debug_info) {
+		return DeallocateImpl<true>(this, block, debug_info);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryManager::Deallocate_ts, const void*, DebugInfo);
-
-	void* MemoryManager::Reallocate_ts(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
+	void* MemoryManager::ReallocateTs(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
 		return ReallocateImpl<true>(this, block, new_size, alignment, debug_info);
 	}
 
-	bool MemoryManager::DeallocateIfBelongs_ts(const void* block, DebugInfo debug_info)
-	{
-		return DeallocateIfBelongsImpl<true>(this, block, debug_info);
-	}
-
-	GlobalMemoryManager CreateGlobalMemoryManager(
+	void CreateGlobalMemoryManager(
+		GlobalMemoryManager* allocator,
 		size_t size, 
 		size_t maximum_pool_count, 
 		size_t new_allocation_size
@@ -524,10 +456,11 @@ namespace ECSEngine {
 		initial_info.multipool_capacity = size;
 		CreateBaseAllocatorInfo backup_info = initial_info;
 		backup_info.multipool_capacity = new_allocation_size;
-		return MemoryManager(initial_info, backup_info, { nullptr });
+		new (allocator) MemoryManager(initial_info, backup_info, ECS_MALLOC_ALLOCATOR);
 	}
 
-	ResizableMemoryArena CreateResizableMemoryArena(
+	void CreateResizableMemoryArena(
+		ResizableMemoryArena* allocator,
 		size_t initial_arena_capacity, 
 		size_t initial_allocator_count, 
 		size_t initial_blocks_per_allocator,
@@ -551,7 +484,7 @@ namespace ECSEngine {
 		backup_info.arena_capacity = arena_capacity;
 		backup_info.arena_multipool_block_count = blocks_per_allocator;
 		backup_info.arena_allocator_count = allocator_count;
-		return MemoryManager(initial_info, backup_info, backup);
+		new (allocator) MemoryManager(initial_info, backup_info, backup);
 	}
 
 }

@@ -574,7 +574,7 @@ namespace ECSEngine {
 	template<typename Buffer>
 	Stream<void> GetGPUBufferDataToCPU(Graphics* graphics, Buffer buffer, AllocatorPolymorphic allocator, SpinLock* lock) {
 		size_t allocation_size = GetBufferCPUDataSize(buffer);
-		void* allocation = AllocateEx(allocator, allocation_size);
+		void* allocation = Allocate(allocator, allocation_size);
 
 		Buffer temporary_buffer = buffer;
 		temporary_buffer.buffer = nullptr;
@@ -595,7 +595,7 @@ namespace ECSEngine {
 				temporary_buffer.Release();
 			}
 			if (AbnormalTermination()) {
-				DeallocateEx(allocator, allocation);
+				Deallocate(allocator, allocation);
 			}
 		}
 		return { allocation, allocation_size };
@@ -612,7 +612,7 @@ namespace ECSEngine {
 	template<typename Texture>
 	TextureCPUData GetTextureDataToCPU(Graphics* graphics, Texture texture, unsigned int mip_level, AllocatorPolymorphic allocator, SpinLock* lock) {
 		TextureCPUData data = GetTextureCPUDataSize(texture, mip_level);
-		data.bytes.buffer = AllocateEx(allocator, data.bytes.size);
+		data.bytes.buffer = Allocate(allocator, data.bytes.size);
 
 		Texture temporary_texture;
 		temporary_texture.tex = nullptr;
@@ -634,7 +634,7 @@ namespace ECSEngine {
 				temporary_texture.Release();
 			}
 			if (AbnormalTermination()) {
-				DeallocateEx(allocator, data.bytes.buffer);
+				Deallocate(allocator, data.bytes.buffer);
 			}
 		}
 

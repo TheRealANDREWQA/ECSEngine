@@ -8,7 +8,7 @@
 
 namespace ECSEngine {
 
-	struct ECSENGINE_API MemoryArena : public AllocatorBase
+	struct ECSENGINE_API MemoryArena final : public AllocatorBase
 	{
 		ECS_INLINE MemoryArena() : AllocatorBase(ECS_ALLOCATOR_ARENA) {
 			memset(this, 0, sizeof(*this));
@@ -36,27 +36,50 @@ namespace ECSEngine {
 		MemoryArena(void* buffer, size_t allocator_count, size_t arena_capacity, size_t blocks_per_allocator);
 
 		MemoryArena(const MemoryArena& other) = default;
-		MemoryArena& operator = (const MemoryArena& other) = default;
-
-		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		template<typename T>
-		ECS_INLINE T* Allocate(DebugInfo debug_info = ECS_DEBUG_INFO) {
-			return (T*)Allocate(sizeof(T), alignof(T), debug_info);
+		// Override the operator such that the vtable is always copied
+		ECS_INLINE MemoryArena& operator = (const MemoryArena& other) {
+			memcpy(this, &other, sizeof(*this));
+			return *this;
 		}
 
-		bool Belongs(const void* buffer) const;
+		virtual void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
+		
+		virtual void* AllocateTs(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		virtual bool DeallocateNoAssert(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		virtual bool DeallocateNoAssertTs(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		virtual void* Reallocate(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
+		
+		virtual void* ReallocateTs(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		virtual bool Belongs(const void* buffer) const override;
 
 		// Deallocates everything (as if nothing is allocated)
-		void Clear(DebugInfo debug_info = ECS_DEBUG_INFO);
+		virtual void Clear(DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		ECS_INLINE virtual void Free(bool assert_that_is_standalone = false, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+			ECS_ASSERT(!assert_that_is_standalone, "MemoryArena is not standalone!");
+		}
+
+		ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+			backup_allocator->Deallocate(GetAllocatedBuffer(), debug_info);
+		}
 
 		// Return the original buffer given
-		ECS_INLINE void* GetAllocatedBuffer() const {
+		ECS_INLINE virtual void* GetAllocatedBuffer() const override {
 			return m_allocators;
 		}
 
-		bool IsEmpty() const;
+		virtual bool IsEmpty() const override;
 
+		virtual size_t GetCurrentUsage() const override;
+
+		// Region start and region size are parallel arrays. Returns the count of regions
+		// Pointer capacity must represent the count of valid entries for the given pointers
+		virtual size_t GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const override;
+		
 		ECS_INLINE size_t InitialArenaCapacity() const {
 			return m_size_per_allocator * (size_t)m_allocator_count;
 		}
@@ -65,30 +88,6 @@ namespace ECSEngine {
 
 		// Returns the base allocator info with which this instance was initialized with
 		CreateBaseAllocatorInfo GetInitialBaseAllocatorInfo() const;
-
-		size_t GetCurrentUsage() const;
-
-		// The return value is only useful when using assert_if_not_found set to false
-		// in which case it will return true if the deallocation was performed, else false
-		template<bool trigger_error_if_not_found = true>
-		bool Deallocate(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		void* Reallocate(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		// Region start and region size are parallel arrays. Returns the count of regions
-		// Pointer capacity must represent the count of valid entries for the given pointers
-		size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const;
-
-		// ----------------------------------------  Thread safe --------------------------------------------------------
-
-		void* Allocate_ts(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
-		
-		// The return value is only useful when using assert_if_not_found set to false
-		// in which case it will return true if the deallocation was performed, else false
-		template<bool trigger_error_if_not_found = true>
-		bool Deallocate_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		static size_t MemoryOf(size_t allocator_count, CreateBaseAllocatorInfo info);
 

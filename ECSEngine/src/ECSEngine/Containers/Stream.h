@@ -170,12 +170,6 @@ namespace ECSEngine {
 			}
 		}
 
-		ECS_INLINE void DeallocateEx(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
-			if (size > 0 && buffer != nullptr) {
-				ECSEngine::DeallocateEx(allocator, buffer, debug_info);
-			}
-		}
-
 		// Does not change the size or the pointer
 		// It only deallocates if the size is greater than 0
 		template<typename Allocator>
@@ -335,7 +329,7 @@ namespace ECSEngine {
 
 			void* allocation = nullptr;
 			if (new_size > 0) {
-				allocation = AllocateEx(allocator, MemoryOf(new_size), alignof(T), debug_info);
+				allocation = Allocate(allocator, MemoryOf(new_size), alignof(T), debug_info);
 			}
 			if (copy_old_elements) {
 				size_t copy_size = new_size > size ? size : new_size;
@@ -343,7 +337,7 @@ namespace ECSEngine {
 			}
 
 			if (deallocate_old) {
-				DeallocateEx(allocator, debug_info);
+				Deallocate(allocator, debug_info);
 			}
 
 			InitializeFromBuffer(allocation, new_size);
@@ -456,18 +450,6 @@ namespace ECSEngine {
 			size_t memory_size = MemoryOf(_size);
 			if (memory_size > 0) {
 				void* allocation = Allocate(allocator, memory_size, alignof(T), debug_info);
-				buffer = (T*)allocation;
-			}
-			else {
-				buffer = nullptr;
-			}
-			size = _size;
-		}
-
-		void InitializeEx(AllocatorPolymorphic allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			size_t memory_size = MemoryOf(_size);
-			if (memory_size > 0) {
-				void* allocation = AllocateEx(allocator, memory_size, alignof(T), debug_info);
 				buffer = (T*)allocation;
 			}
 			else {
@@ -670,14 +652,6 @@ namespace ECSEngine {
 		}
 
 		// Does not change the size or the pointer
-		// It only deallocates if the size is greater than 0 and the pointer is not nullptr
-		ECS_INLINE void DeallocateEx(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
-			if (size > 0 && buffer != nullptr) {
-				ECSEngine::DeallocateEx(allocator, buffer, debug_info);
-			}
-		}
-
-		// Does not change the size or the pointer
 		// It only deallocates if the size is greater than 0
 		template<typename Allocator>
 		ECS_INLINE void Deallocate(Allocator* allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
@@ -816,7 +790,7 @@ namespace ECSEngine {
 
 		void Resize(AllocatorPolymorphic allocator, unsigned int new_capacity) {
 			if (capacity > 0) {
-				void* allocation = ReallocateEx(allocator, buffer, MemoryOf(new_capacity), alignof(T));
+				void* allocation = Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T));
 				if (allocation != buffer) {
 					unsigned int copy_size = min(size, new_capacity);
 					memcpy(allocation, buffer, MemoryOf(copy_size));
@@ -824,7 +798,7 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				buffer = (T*)AllocateEx(allocator, MemoryOf(new_capacity), alignof(T));
+				buffer = (T*)Allocate(allocator, MemoryOf(new_capacity), alignof(T));
 			}
 
 			size = min(size, new_capacity);
@@ -1008,19 +982,6 @@ namespace ECSEngine {
 			}
 		}
 
-		void InitializeEx(AllocatorPolymorphic allocator, unsigned int _size, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			size_t memory_size = MemoryOf(_capacity);
-			if (memory_size > 0) {
-				void* allocation = AllocateEx(allocator, memory_size, alignof(T), debug_info);
-				InitializeFromBuffer(allocation, _size, _capacity);
-			}
-			else {
-				buffer = nullptr;
-				size = _size;
-				capacity = _capacity;
-			}
-		}
-
 		ECS_INLINE StreamIterator<const T> ConstIterator(unsigned int starting_index = 0) const {
 			return { buffer, size, starting_index };
 		}
@@ -1142,7 +1103,7 @@ namespace ECSEngine {
 
 		void FreeBuffer(DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (buffer != nullptr) {
-				DeallocateEx(allocator, buffer, debug_info);
+				Deallocate(allocator, buffer, debug_info);
 				buffer = nullptr;
 				size = 0;
 				capacity = 0;
@@ -1263,7 +1224,7 @@ namespace ECSEngine {
 				if (new_capacity != 0) {
 					if (buffer != nullptr && size > 0) {
 						unsigned int copy_size = size < new_capacity ? size : new_capacity;
-						new_buffer = ECSEngine::ReallocateEx(allocator, buffer, MemoryOf(new_capacity), alignof(T), debug_info);
+						new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T), debug_info);
 						ECS_ASSERT(new_buffer != nullptr);
 						if constexpr (copy_old_data) {
 							// When using realloc, the data is copied by default
@@ -1273,7 +1234,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						new_buffer = ECSEngine::AllocateEx(allocator, MemoryOf(new_capacity), alignof(T), debug_info);
+						new_buffer = ECSEngine::Allocate(allocator, MemoryOf(new_capacity), alignof(T), debug_info);
 					}
 				}
 				else {
@@ -1512,7 +1473,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
 			if (size > 0 && buffer != nullptr) {
-				ECSEngine::DeallocateEx(allocator, buffer);
+				ECSEngine::Deallocate(allocator, buffer);
 				buffer = nullptr;
 				size = 0;
 			}
@@ -1584,7 +1545,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Initialize(AllocatorPolymorphic allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (_size > 0) {
-				buffer = AllocateEx(allocator, _size, alignof(void*), debug_info);
+				buffer = Allocate(allocator, _size, alignof(void*), debug_info);
 			}
 			else {
 				buffer = nullptr;
@@ -1689,7 +1650,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
 			if (buffer != nullptr && capacity > 0) {
-				DeallocateEx(allocator, buffer);
+				ECSEngine::Deallocate(allocator, buffer);
 				buffer = nullptr;
 				size = 0;
 				capacity = 0;
@@ -1783,7 +1744,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			buffer = _capacity == 0 ? nullptr : AllocateEx(allocator, _capacity, alignof(void*), debug_info);
+			buffer = _capacity == 0 ? nullptr : Allocate(allocator, _capacity, alignof(void*), debug_info);
 			size = 0;
 			capacity = _capacity;
 		}
@@ -1811,7 +1772,7 @@ namespace ECSEngine {
 	struct ResizableStream<void> {
 		typedef void T;
 
-		ECS_INLINE ResizableStream() : buffer(nullptr), allocator({ nullptr }), capacity(0), size(0) {}
+		ECS_INLINE ResizableStream() : buffer(nullptr), allocator(nullptr), capacity(0), size(0) {}
 		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) : allocator(_allocator), 
 			capacity(_capacity), size(0) {
 			if (_capacity != 0) {
@@ -1905,7 +1866,7 @@ namespace ECSEngine {
 
 		void FreeBuffer(DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (buffer != nullptr) {
-				DeallocateEx(allocator, buffer, debug_info);
+				Deallocate(allocator, buffer, debug_info);
 				buffer = nullptr;
 				size = 0;
 				capacity = 0;
@@ -1945,10 +1906,10 @@ namespace ECSEngine {
 				// Use a default of max element alignment
 				void* new_buffer = 0;
 				if (capacity > 0 && buffer != nullptr) {
-					new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, alignof(void*), debug_info);
+					new_buffer = Reallocate(allocator, buffer, new_capacity * element_byte_size, alignof(void*), debug_info);
 				}
 				else {
-					new_buffer = AllocateEx(allocator, new_capacity * element_byte_size, alignof(void*), debug_info);
+					new_buffer = Allocate(allocator, new_capacity * element_byte_size, alignof(void*), debug_info);
 				}
 				ECS_ASSERT(new_buffer != nullptr);
 
@@ -1960,7 +1921,7 @@ namespace ECSEngine {
 			}
 			else {
 				if (buffer != nullptr) {
-					DeallocateEx(allocator, buffer, debug_info);
+					Deallocate(allocator, buffer, debug_info);
 					buffer = nullptr;
 				}
 			}
@@ -1974,14 +1935,14 @@ namespace ECSEngine {
 		void ResizeNoCopy(unsigned int new_capacity, unsigned int element_byte_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			void* new_buffer = nullptr;
 			if (new_capacity > 0 && size > 0) {
-				new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, alignof(void*), debug_info);
+				new_buffer = Reallocate(allocator, buffer, new_capacity * element_byte_size, alignof(void*), debug_info);
 				ECS_ASSERT(new_buffer != nullptr);
 			}
 			else if (size > 0) {
-				DeallocateEx(allocator, buffer, debug_info);
+				Deallocate(allocator, buffer, debug_info);
 			}
 			else if (new_capacity > 0) {
-				new_buffer = AllocateEx(allocator, new_capacity * element_byte_size, alignof(void*), debug_info);
+				new_buffer = Allocate(allocator, new_capacity * element_byte_size, alignof(void*), debug_info);
 				ECS_ASSERT(new_buffer != nullptr);
 			}
 
@@ -2082,7 +2043,7 @@ namespace ECSEngine {
 		result.Initialize(allocator, input.size, debug_info);
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
-			void* allocation = AllocateEx(allocator, copy_size, alignof(typename Stream::T), debug_info);
+			void* allocation = Allocate(allocator, copy_size, alignof(typename Stream::T), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			result[index] = input[index].CopyTo(ptr);
 		}
@@ -2101,7 +2062,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			auto index_projection = projection(input[index]);
 			size_t copy_size = index_projection.CopySize();
-			void* allocation = AllocateEx(allocator, copy_size, alignof(ProjectedType), debug_info);
+			void* allocation = Allocate(allocator, copy_size, alignof(ProjectedType), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			result[index] = index_projection.CopyTo(ptr);
 		}
@@ -2125,7 +2086,7 @@ namespace ECSEngine {
 	void StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
-			void* allocation = AllocateEx(allocator, copy_size, alignof(typename Stream::T), debug_info);
+			void* allocation = Allocate(allocator, copy_size, alignof(typename Stream::T), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			input[index] = input[index].CopyTo(ptr);
 		}
@@ -2168,7 +2129,7 @@ namespace ECSEngine {
 				}
 			}
 
-			void* allocation = AllocateEx(allocator, total_size, alignof(typename Stream::T), debug_info);
+			void* allocation = Allocate(allocator, total_size, alignof(typename Stream::T), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			new_stream.InitializeAndCopy(ptr, input);
 
@@ -2219,7 +2180,7 @@ namespace ECSEngine {
 				}
 			}
 
-			void* allocation = AllocateEx(allocator, total_size, alignof(ProjectedType), debug_info);
+			void* allocation = Allocate(allocator, total_size, alignof(ProjectedType), debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			new_stream.InitializeAndCopy(ptr, input);
 
@@ -2336,7 +2297,7 @@ namespace ECSEngine {
 	template<typename Stream>
 	void StreamCoalescedInplaceDeepCopy(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		size_t allocation_size = StreamCoalescedInplaceDeepCopySize(input);
-		void* allocation = allocation_size > 0 ? AllocateEx(allocator, allocation_size, alignof(typename Stream::T), debug_info) : nullptr;
+		void* allocation = allocation_size > 0 ? Allocate(allocator, allocation_size, alignof(typename Stream::T), debug_info) : nullptr;
 		uintptr_t ptr = (uintptr_t)allocation;
 		return StreamCoalescedInplaceDeepCopy(input, ptr);
 	}
@@ -2352,7 +2313,7 @@ namespace ECSEngine {
 		DebugInfo debug_info = ECS_DEBUG_INFO
 	) {
 		size_t allocation_size = StreamCoalescedInplaceDeepCopySize(input);
-		void* allocation = allocation_size > 0 ? AllocateEx(allocation_allocator, allocation_size, alignof(typename Stream::T), debug_info) : nullptr;
+		void* allocation = allocation_size > 0 ? Allocate(allocation_allocator, allocation_size, alignof(typename Stream::T), debug_info) : nullptr;
 		uintptr_t ptr = (uintptr_t)allocation;
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();

@@ -60,7 +60,7 @@ namespace ECSEngine {
 		Texture2D texture,
 		size_t new_width,
 		size_t new_height,
-		AllocatorPolymorphic allocator = { nullptr },
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR,
 		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR,
 		bool temporary = false
 	);
@@ -74,7 +74,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_FORMAT format,
 		size_t new_width,
 		size_t new_height,
-		AllocatorPolymorphic allocator = { nullptr },
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR,
 		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR
 	);
 
@@ -101,7 +101,7 @@ namespace ECSEngine {
 		Stream<Stream<void>> mip_data,
 		size_t width,
 		size_t height,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// Convert a texture from ECS_GRAPHICS_FORMAT_R8_UNORM to ECS_GRAPHICS_FORMAT_RGBA8_UNORM texture
@@ -111,7 +111,7 @@ namespace ECSEngine {
 		Stream<Stream<void>> mip_data,
 		size_t width,
 		size_t height,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// Convert a texture from 2, 3 or 4 8 bit channels into a single 8 bit channel texture
@@ -125,7 +125,7 @@ namespace ECSEngine {
 		size_t height,
 		size_t channel_count = 4,
 		size_t channel_to_copy = 0,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 	
 	// Convert a texture from 2, 3 or 4 8 bit channels into a single 8 bit channel texture
@@ -139,7 +139,7 @@ namespace ECSEngine {
 		size_t height,
 		size_t channel_count = 4,
 		size_t channel_to_copy = 0,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// Converts a texture with 3 8 bit channels into 4 8 bit channels with the alpha set to 255
@@ -149,7 +149,7 @@ namespace ECSEngine {
 		Stream<Stream<void>> mip_data,
 		size_t width,
 		size_t height,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// Converts a texture with 3 8 bit channels into 4 8 bit channels with the alpha set to 255
@@ -159,7 +159,7 @@ namespace ECSEngine {
 		Stream<Stream<void>> mip_data,
 		size_t width,
 		size_t height,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// It will use the immediate context if none specified. If a deffered context is specified, the copy calls

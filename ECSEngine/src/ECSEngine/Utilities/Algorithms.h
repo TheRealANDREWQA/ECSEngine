@@ -270,7 +270,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		ExtractKey&& extract_key
 	) {
-		unsigned int* counts = (unsigned int*)AllocateEx(allocator, sizeof(unsigned int) * (bucket_count + 1));
+		unsigned int* counts = (unsigned int*)Allocate(allocator, sizeof(unsigned int) * (bucket_count + 1));
 		CountingSortExtended(buffer, size, result, counts, bucket_count + 1, extract_key);
 		return counts;
 	}
@@ -343,7 +343,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		ExtractKey&& extract_key
 	) {
-		unsigned int* counts = (unsigned int*)AllocateEx(allocator, sizeof(unsigned int) * (bucket_count + 1));
+		unsigned int* counts = (unsigned int*)Allocate(allocator, sizeof(unsigned int) * (bucket_count + 1));
 		CountingSortExtended(buffer, size, result, reduction, counts, bucket_count + 1, extract_key);
 		return counts;
 	}

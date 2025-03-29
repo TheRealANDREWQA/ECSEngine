@@ -30,7 +30,7 @@ namespace ECSEngine {
 		void* allocation = nullptr;
 		if (count > 0) {
 			size_t allocation_size = SoACalculateSize(count, first_pointer, pointers...);
-			allocation = AllocateEx(allocator, allocation_size);
+			allocation = Allocate(allocator, allocation_size);
 		}
 
 		uintptr_t ptr = (uintptr_t)allocation;
@@ -73,7 +73,7 @@ namespace ECSEngine {
 		if (capacity > 0) {
 			size_t allocation_size = SoACalculateSize(capacity, first_pointer, pointers...);
 
-			void* allocation = AllocateEx(allocator, allocation_size);
+			void* allocation = Allocate(allocator, allocation_size);
 			uintptr_t ptr = (uintptr_t)allocation;
 
 			internal::SoACopyImpl(ptr, size, capacity, first_pointer, pointers...);
@@ -91,7 +91,7 @@ namespace ECSEngine {
 		if (capacity > 0) {
 			size_t allocation_size = SoACalculateSize(capacity, first_pointer, pointers...);
 			
-			// Unfortunately, we cannot use ReallocateEx because of the aliasing reason
+			// Unfortunately, we cannot use Reallocate because of the aliasing reason
 			// Since the buffers are coalesced, we would need to write the pointers in reverse
 			// Order using memmove. We could probably write that, by inversing the logic
 			// Inside SoACopyImpl, but it is probably not worth the effort. At the moment, stick
@@ -99,17 +99,17 @@ namespace ECSEngine {
 			void* allocation = nullptr;
 			void* initial_pointer = *first_pointer;
 
-			allocation = AllocateEx(allocator, allocation_size);
+			allocation = Allocate(allocator, allocation_size);
 			uintptr_t ptr = (uintptr_t)allocation;
 
 			internal::SoACopyImpl(ptr, size, capacity, first_pointer, pointers...);
 			if (initial_pointer != nullptr) {
-				DeallocateEx(allocator, initial_pointer);
+				Deallocate(allocator, initial_pointer);
 			}
 		}
 		else {
 			if (*first_pointer != nullptr) {
-				DeallocateEx(allocator, *first_pointer);
+				Deallocate(allocator, *first_pointer);
 			}
 		}
 	}
@@ -128,14 +128,14 @@ namespace ECSEngine {
 
 	template<typename FirstPointer, typename... Pointers>
 	void SoAResize(AllocatorPolymorphic allocator, size_t size, size_t new_size, FirstPointer** first_pointer, Pointers... pointers) {
-		// We can use the copy function - we cannot use the ReallocateEx since we have to copy from the last pointer
+		// We can use the copy function - we cannot use the Reallocate since we have to copy from the last pointer
 		// to the first one if we want to do that, and without some weird template magic (that I do not know yet), that cannot
 		// be done and is not worth wasting time on that
 		size_t copy_size = min(size, new_size);
 		void* previous_allocation = *first_pointer;
 		SoACopy(allocator, copy_size, new_size, first_pointer, pointers...);
 		if (size > 0 && first_pointer != nullptr) {
-			DeallocateEx(allocator, previous_allocation);
+			Deallocate(allocator, previous_allocation);
 		}
 	}
 

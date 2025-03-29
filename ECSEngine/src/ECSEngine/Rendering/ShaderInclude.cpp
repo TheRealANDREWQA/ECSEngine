@@ -69,7 +69,7 @@ namespace ECSEngine {
 
 	HRESULT ShaderIncludeFiles::Close(LPCVOID data)
 	{
-		memory->Deallocate_ts(data);
+		memory->DeallocateTs(data);
 		return S_OK;
 	}
 

@@ -192,7 +192,8 @@ namespace ECSEngine {
 
 		Stream<SerializeOmitField> omit_fields = { nullptr, 0 };
 		
-		AllocatorPolymorphic field_allocator = { nullptr };
+		// Setting it to nullptr to force the user specify it properly
+		AllocatorPolymorphic field_allocator = nullptr;
 
 		CapacityStream<char>* error_message = nullptr;
 		Reflection::ReflectionPassdownInfo* passdown_info = nullptr;

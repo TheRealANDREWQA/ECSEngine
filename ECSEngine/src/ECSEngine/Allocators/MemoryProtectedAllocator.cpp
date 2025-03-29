@@ -45,11 +45,11 @@ namespace ECSEngine {
 	static void* AllocateFromBaseTs(MemoryProtectedAllocator* allocator, size_t size, size_t alignment) {
 		if (allocator->linear_allocators) {
 			LinearAllocator* current_allocator = (LinearAllocator*)allocator->allocators[allocator->count - 1];
-			return current_allocator->Allocate_ts(size, alignment);
+			return current_allocator->AllocateTs(size, alignment);
 		}
 		else {
 			MultipoolAllocator* current_allocator = (MultipoolAllocator*)allocator->allocators[allocator->count - 1];
-			return current_allocator->Allocate_ts(size, alignment);
+			return current_allocator->AllocateTs(size, alignment);
 		}
 	}
 
@@ -174,8 +174,7 @@ namespace ECSEngine {
 		return allocation;
 	}
 
-	template<bool trigger_error_if_not_found>
-	bool MemoryProtectedAllocator::Deallocate(const void* block, DebugInfo debug_info)
+	bool MemoryProtectedAllocator::DeallocateNoAssert(const void* block, DebugInfo debug_info)
 	{
 		bool was_deallocated = false;
 		if (chunk_size > 0) {
@@ -185,7 +184,7 @@ namespace ECSEngine {
 				for (; index < count; index++) {
 					MultipoolAllocator* allocator_pointer = (MultipoolAllocator*)allocators[index];
 					if (allocator_pointer->Belongs(block)) {
-						was_deallocated = allocator_pointer->Deallocate<trigger_error_if_not_found>(block);
+						was_deallocated = allocator_pointer->DeallocateNoAssert(block);
 						if (was_deallocated && allocator_pointer->IsEmpty()) {
 							// Swap back the current buffer and deallocate the virtual allocation
 							count--;
@@ -199,10 +198,9 @@ namespace ECSEngine {
 					}
 				}
 
-				if constexpr (trigger_error_if_not_found) {
-					if (index == count) {
-						ECS_ASSERT(false, "Invalid block for deallocation to MemoryProtectedAllocator");
-					}
+				if (index == count) {
+					//ECS_ASSERT(false, "Invalid block for deallocation to MemoryProtectedAllocator");
+					return false;
 				}
 			}
 		}
@@ -217,10 +215,9 @@ namespace ECSEngine {
 				allocation_pointers[search_index] = allocation_pointers[count];
 			}
 
-			if constexpr (trigger_error_if_not_found) {
-				if (!was_deallocated) {
-					ECS_ASSERT(false, "Invalid block for deallocation to MemoryProtectedAllocator");
-				}
+			if (!was_deallocated) {
+				//ECS_ASSERT(false, "Invalid block for deallocation to MemoryProtectedAllocator");
+				return false;
 			}
 		}
 
@@ -236,8 +233,6 @@ namespace ECSEngine {
 
 		return was_deallocated;
 	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryProtectedAllocator::Deallocate, const void*, DebugInfo);
 
 	void* MemoryProtectedAllocator::Reallocate(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
@@ -363,8 +358,10 @@ namespace ECSEngine {
 		}
 	}
 
-	void MemoryProtectedAllocator::Free(DebugInfo debug_info)
+	void MemoryProtectedAllocator::Free(bool assert_that_is_standalone, DebugInfo debug_info)
 	{
+		// No need to handle the standalone boolean, we are standalone
+
 		bool previous_debug_mode = m_debug_mode;
 		m_debug_mode = false;
 		Clear();
@@ -479,30 +476,6 @@ namespace ECSEngine {
 			return OS::EnableVirtualWriteProtection(GetOriginalPointerFromVirtualAllocation(allocation_pointers[search_index]));
 		}
 		return false;
-	}
-
-	// ----------------------------------------- Thread Safe functions -------------------------------------------------------
-
-	void* MemoryProtectedAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_lock, [&]() {
-			return Allocate(size, alignment, debug_info);
-		});
-	}
-
-	template<bool trigger_error_if_not_found>
-	bool MemoryProtectedAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_lock, [&]() {
-			return Deallocate<trigger_error_if_not_found>(block, debug_info);
-		});
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryProtectedAllocator::Deallocate_ts, const void*, DebugInfo);
-
-	void* MemoryProtectedAllocator::Reallocate_ts(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
-	{
-		return ThreadSafeFunctorReturn(&m_lock , [&]() {
-			return Reallocate(block, new_size, alignment, debug_info);
-		});
 	}
 
 }

@@ -28,10 +28,10 @@ namespace ECSEngine {
 	World::World(const WorldDescriptor& descriptor) {
 		// first the global allocator
 		memory = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
-		*memory = CreateGlobalMemoryManager(descriptor.global_memory_size, descriptor.global_memory_pool_count, descriptor.global_memory_new_allocation_size);
+		CreateGlobalMemoryManager(memory, descriptor.global_memory_size, descriptor.global_memory_pool_count, descriptor.global_memory_new_allocation_size);
 		if (descriptor.graphics_descriptor) {
 			MemoryManager* graphics_allocator = (MemoryManager*)memory->Allocate(sizeof(MemoryManager) + sizeof(Graphics));
-			*graphics_allocator = DefaultGraphicsAllocator(memory);
+			DefaultGraphicsAllocator(graphics_allocator, memory);
 
 			GraphicsDescriptor new_descriptor;
 			memcpy(&new_descriptor, descriptor.graphics_descriptor, sizeof(new_descriptor));
@@ -86,7 +86,7 @@ namespace ECSEngine {
 		
 		if (descriptor.resource_manager == nullptr) {
 			MemoryManager* resource_manager_allocator = (MemoryManager*)allocation;
-			*resource_manager_allocator = DefaultResourceManagerAllocator(memory);
+			DefaultResourceManagerAllocator(resource_manager_allocator, memory);
 			allocation = OffsetPointer(allocation, sizeof(MemoryManager));
 
 			// resource manager
@@ -127,7 +127,7 @@ namespace ECSEngine {
 
 			MemoryManager* debug_drawer_allocator = (MemoryManager*)allocation;
 			allocation = OffsetPointer(allocation, sizeof(MemoryManager));
-			*debug_drawer_allocator = DebugDrawer::DefaultAllocator(memory);
+			DebugDrawer::DefaultAllocator(debug_drawer_allocator, memory);
 
 			debug_drawer = (DebugDrawer*)allocation;
 			allocation = OffsetPointer(allocation, sizeof(DebugDrawer));

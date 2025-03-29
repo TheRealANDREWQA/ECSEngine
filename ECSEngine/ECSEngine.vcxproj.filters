@@ -298,6 +298,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\Tokenize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\SizeDeterminationReaderWriter.h" />
     <ClInclude Include="src\ECSEngine\OS\Process.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\MallocAllocator.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -482,6 +483,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\BufferedFileReaderWriter.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ReaderWriterInterface.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Process.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\MallocAllocator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

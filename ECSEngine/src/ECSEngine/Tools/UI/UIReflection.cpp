@@ -2549,7 +2549,7 @@ namespace ECSEngine {
 				field_value.resizable->buffer = nullptr;
 				field_value.resizable->size = 0;
 				field_value.resizable->capacity = 0;
-				field_value.resizable->allocator = { nullptr };
+				field_value.resizable->allocator = ECS_MALLOC_ALLOCATOR;
 
 				if (stream_type == ReflectionStreamFieldType::Stream) {
 					field_value.has_size = true;
@@ -2582,7 +2582,7 @@ namespace ECSEngine {
 			field_value.element_byte_size = element_byte_size;
 			if (!disable_writes) {
 				field_value.CopyTarget();
-				field_value.standalone_data.Initialize({ nullptr }, 0);
+				field_value.standalone_data.Initialize(ECS_MALLOC_ALLOCATOR, 0);
 				field_value.use_standalone_mode = false;
 			}
 			else {
@@ -2658,7 +2658,7 @@ namespace ECSEngine {
 			field_value.element_byte_size = element_byte_size;
 			if (!disable_writes) {
 				field_value.CopyTarget();
-				field_value.standalone_data.Initialize({ nullptr }, 0);
+				field_value.standalone_data.Initialize(ECS_MALLOC_ALLOCATOR, 0);
 				field_value.use_standalone_mode = false;
 			}
 			else {
@@ -4609,7 +4609,7 @@ namespace ECSEngine {
 			
 			if (overrides[override_index].deallocate_function != nullptr) {
 				if (override_allocator.allocator == nullptr) {
-					override_allocator = (allocator);
+					override_allocator = allocator;
 				}
 				overrides[override_index].deallocate_function(override_allocator, data, overrides[override_index].global_data);
 			}
@@ -5041,8 +5041,7 @@ namespace ECSEngine {
 			size_t configuration,
 			UIDrawConfig* config,
 			Stream<char> name,
-			UIReflectionStreamType stream_type,
-			AllocatorPolymorphic allocator
+			UIReflectionStreamType stream_type
 		)
 		{
 			unsigned int override_index = FindFieldOverride(tag);

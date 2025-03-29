@@ -768,7 +768,7 @@ namespace ECSEngine {
 				passdown_info = custom_data->passdown_info;
 			}
 
-			AllocatorPolymorphic allocator = { nullptr };
+			AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
 			bool always_allocate_for_buffers = false;
 			bool set_padding_bytes_to_zero = false;
 			// For field copies, if this is set to true, it will offset
@@ -1040,7 +1040,7 @@ namespace ECSEngine {
 		};
 
 		struct SetReflectionTypeInstanceBufferOptions {
-			AllocatorPolymorphic allocator = { nullptr };
+			AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
 			// If this value is set, it will perform a copy operation
 			// Only if the data has changed
 			bool checked_copy = false;

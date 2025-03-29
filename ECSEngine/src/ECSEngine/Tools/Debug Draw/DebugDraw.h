@@ -1043,8 +1043,9 @@ namespace ECSEngine {
 			dispatch_call_type = call_type;
 		}
 
-		ECS_INLINE static MemoryManager DefaultAllocator(GlobalMemoryManager* global_memory) {
-			return MemoryManager(DefaultAllocatorSize(), ECS_KB * 16, DefaultAllocatorSize(), global_memory);
+		// Initializes the first parameter with memory from the second parameter
+		ECS_INLINE static void DefaultAllocator(MemoryManager* allocator, GlobalMemoryManager* global_memory) {
+			new (allocator) MemoryManager(DefaultAllocatorSize(), ECS_KB * 16, DefaultAllocatorSize(), global_memory);
 		}
 
 		ECS_INLINE static size_t DefaultAllocatorSize() {

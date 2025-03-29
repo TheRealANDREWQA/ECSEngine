@@ -11,7 +11,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------
 
 	ResizableLinearAllocator::ResizableLinearAllocator(size_t capacity, size_t backup_size, AllocatorPolymorphic allocator)
-		: ResizableLinearAllocator(ECSEngine::AllocateEx(allocator, capacity), capacity, backup_size, allocator) {
+		: ResizableLinearAllocator(ECSEngine::Allocate(allocator, capacity), capacity, backup_size, allocator) {
 		m_initial_allocation_from_backup = true;
 	}
 
@@ -47,7 +47,7 @@ namespace ECSEngine {
 				return nullptr;
 			}
 
-			void* allocation = AllocateEx(m_backup, m_backup_size);
+			void* allocation = ECSEngine::Allocate(m_backup, m_backup_size);
 			m_allocated_buffers[0] = allocation;
 			m_allocated_buffer_size++;
 
@@ -78,7 +78,7 @@ namespace ECSEngine {
 					return nullptr;
 				}
 
-				void* allocation = AllocateEx(m_backup, m_backup_size);
+				void* allocation = ECSEngine::Allocate(m_backup, m_backup_size);
 				m_allocated_buffers[m_allocated_buffer_size++] = allocation;
 				current_buffer_allocated_size = 0;
 			}
@@ -108,13 +108,10 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------
 
 	// Do nothing
-	template<bool trigger_error_if_not_found>
-	bool ResizableLinearAllocator::Deallocate(const void* block, DebugInfo debug_info) {
+	bool ResizableLinearAllocator::DeallocateNoAssert(const void* block, DebugInfo debug_info) {
 		// Don't record deallocations for this type of allocator
 		return true;
 	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, ResizableLinearAllocator::Deallocate, const void*, DebugInfo);
 
 	// ---------------------------------------------------------------------------------
 
@@ -127,9 +124,9 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------
 
 	template<bool disable_debug_info>
-	void ClearBackupImpl(ResizableLinearAllocator* allocator, DebugInfo debug_info) {
+	static void ClearBackupImpl(ResizableLinearAllocator* allocator, DebugInfo debug_info) {
 		for (size_t index = 0; index < allocator->m_allocated_buffer_size; index++) {
-			DeallocateEx(allocator->m_backup, allocator->m_allocated_buffers[index]);
+			Deallocate(allocator->m_backup, allocator->m_allocated_buffers[index]);
 		}
 
 		allocator->m_allocated_buffer_size = 0;
@@ -172,12 +169,14 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------
 
-	void ResizableLinearAllocator::Free(DebugInfo debug_info)
+	void ResizableLinearAllocator::Free(bool assert_that_is_standalone, DebugInfo debug_info)
 	{
+		// Can ignore the boolean parameter, since we are standalone
+
 		ClearBackupImpl<true>(this, debug_info);
 		// This is the buffer that was received in the constructor
 		if (m_initial_allocation_from_backup) {
-			DeallocateEx(m_backup, m_allocated_buffers);
+			ECSEngine::Deallocate(m_backup, m_allocated_buffers);
 		}
 
 		if (m_debug_mode) {
@@ -215,7 +214,7 @@ namespace ECSEngine {
 			size_t difference = marker - m_initial_capacity;
 			size_t allocators_to_keep = difference / m_backup_size + ((difference % m_backup_size) != 0);
 			for (size_t index = allocators_to_keep; index < m_allocated_buffer_size; index++) {
-				DeallocateEx(m_backup, m_allocated_buffers[index]);
+				ECSEngine::Deallocate(m_backup, m_allocated_buffers[index]);
 			}
 
 			m_allocated_buffer_size = allocators_to_keep;
@@ -253,7 +252,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------
 
-	size_t ResizableLinearAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	size_t ResizableLinearAllocator::GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
 	{
 		if (pointer_capacity >= (size_t)m_allocated_buffer_size + 1) {
 			region_start[0] = m_initial_buffer;
@@ -266,28 +265,7 @@ namespace ECSEngine {
 		return m_allocated_buffer_size + 1;
 	}
 
-	// ---------------------------------------------------------------------------------
-
-	void* ResizableLinearAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info)
-	{
-		return ThreadSafeFunctorReturn(&m_lock, [&]() {
-			return Allocate(size, alignment, debug_info);
-		});
-	}
-
-	// ---------------------------------------------------------------------------------
-
-	// Do nothing
-	template<bool trigger_error_if_not_found>
-	bool ResizableLinearAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) {
-		return true;
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, ResizableLinearAllocator::Deallocate_ts, const void*, DebugInfo);
-
-	// ---------------------------------------------------------------------------------
-
-	void ResizableLinearAllocator::SetMarker_ts()
+	void ResizableLinearAllocator::SetMarkerTs()
 	{
 		return ThreadSafeFunctor(&m_lock, [&]() {
 			SetMarker();

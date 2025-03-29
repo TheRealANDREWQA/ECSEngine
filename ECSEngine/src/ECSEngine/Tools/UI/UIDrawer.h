@@ -1617,7 +1617,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// It will composite the name with the resource identifier
 			bool ExistsResource(Stream<char> name);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// It does not composite the name with the resource identifier. Returns a nullptr if the
+			// Resource doesn't exist, else a valid resource
+			void* TryFindWindowResource(Stream<char> identifier_name) const;
+			
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 		public:
 
@@ -1778,7 +1787,7 @@ namespace ECSEngine {
 				Stream<char> name, 
 				const UIDrawerMenuState* menu_state, 
 				UIActionHandler custom_handler = { nullptr },
-				AllocatorPolymorphic override_allocator = { nullptr }
+				AllocatorPolymorphic override_allocator = nullptr
 			);
 
 			// If the override allocator is specified, it will use that allocator for the memory
@@ -1786,7 +1795,7 @@ namespace ECSEngine {
 				Stream<char> name, 
 				const UIDrawerMenuState* menu_state, 
 				UIActionHandler custom_handler = { nullptr },
-				AllocatorPolymorphic override_allocator = { nullptr }
+				AllocatorPolymorphic override_allocator = nullptr
 			);
 
 			// This will always have the system phase

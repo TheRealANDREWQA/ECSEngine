@@ -436,7 +436,7 @@ namespace ECSEngine {
 	CPUInstanceFramebuffer TransferInstancesFramebufferToCPUAndAllocate(Graphics* graphics, RenderTargetView render_target, AllocatorPolymorphic allocator)
 	{
 		size_t byte_size = GetInstancesFramebufferAllocateSize(render_target);
-		void* allocation = AllocateEx(allocator, byte_size);
+		void* allocation = Allocate(allocator, byte_size);
 		return TransferInstancesFramebufferToCPU(graphics, render_target, (unsigned int*)allocation);
 	}
 
@@ -463,7 +463,7 @@ namespace ECSEngine {
 
 	void CPUInstanceFramebuffer::Deallocate(AllocatorPolymorphic allocator) const
 	{
-		ECSEngine::DeallocateEx(allocator, values);
+		ECSEngine::Deallocate(allocator, values);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

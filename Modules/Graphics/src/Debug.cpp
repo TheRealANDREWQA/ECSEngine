@@ -38,7 +38,7 @@ struct Iterator : IteratorInterface<const Entity> {
 	}
 
 	IteratorInterface<const Entity>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
-		Iterator* iterator = (Iterator*)AllocateEx(allocator, sizeof(Iterator));
+		Iterator* iterator = (Iterator*)Allocate(allocator, sizeof(Iterator));
 		*iterator = Iterator(data);
 		iterator->group_index = group_index;
 		iterator->stream_index = stream_index;

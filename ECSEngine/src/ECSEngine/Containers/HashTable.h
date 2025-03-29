@@ -400,10 +400,10 @@ namespace ECSEngine {
 				unsigned int old_capacity = GetCapacity();
 
 				unsigned int new_capacity = NextCapacity(GetCapacity());
-				void* new_allocation = AllocateEx(allocator, MemoryOf(new_capacity), alignof(void*), debug_info);
+				void* new_allocation = Allocate(allocator, MemoryOf(new_capacity), alignof(void*), debug_info);
 				void* old_allocation = Resize(new_allocation, new_capacity);
 				if (old_capacity > 0) {
-					DeallocateEx(allocator, old_allocation, debug_info);
+					ECSEngine::Deallocate(allocator, old_allocation, debug_info);
 				}
 			};
 
@@ -828,7 +828,7 @@ namespace ECSEngine {
 		// Equivalent to memcpy'ing the data from the other table
 		void Copy(AllocatorPolymorphic allocator, const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>* table, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t table_size = MemoryOf(table->GetCapacity());
-			void* allocation = AllocateEx(allocator, table_size, alignof(void*), debug_info);
+			void* allocation = Allocate(allocator, table_size, alignof(void*), debug_info);
 
 			InitializeFromBuffer(allocation, table->GetCapacity(), 0);
 			m_function = table->m_function;
@@ -890,9 +890,9 @@ namespace ECSEngine {
 			unsigned int new_capacity = NextCapacity(GetCount());
 			if (new_capacity < GetCapacity()) {
 				// We can't use reallocate since it interferes with the process of adding the new values
-				void* new_allocation = AllocateEx(allocator, MemoryOf(new_capacity), alignof(void*), debug_info);
+				void* new_allocation = Allocate(allocator, MemoryOf(new_capacity), alignof(void*), debug_info);
 				void* old_allocation = Resize(new_allocation, new_capacity);
-				DeallocateEx(allocator, old_allocation, debug_info);
+				ECSEngine::Deallocate(allocator, old_allocation, debug_info);
 			}
 		}
 
@@ -1030,8 +1030,7 @@ namespace ECSEngine {
 			}
 
 			IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
-				ValueIterator<HashTableType, ValueType>* iterator = (ValueIterator<HashTableType, ValueType>*)AllocateEx(allocator, sizeof(ValueIterator<HashTableType, ValueType>));
-				*iterator = ValueIterator<HashTableType, ValueType>(&table);
+				ValueIterator<HashTableType, ValueType>* iterator = AllocateAndConstruct<ValueIterator<HashTableType, ValueType>>(allocator, &table);
 				iterator->index = index;
 				index = table.SkipElements(index, count);
 				ECS_ASSERT(index != -1, "Creating hash table sub iterator failed! The given subrange is too large.");
@@ -1062,8 +1061,7 @@ namespace ECSEngine {
 			}
 
 			IteratorInterface<IdentifierType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
-				IdentifierIterator<HashTableType, IdentifierType>* iterator = (IdentifierIterator<HashTableType, IdentifierType>*)AllocateEx(allocator, sizeof(IdentifierIterator<HashTableType, IdentifierType>));
-				new (iterator) IdentifierIterator<HashTableType, IdentifierType>(&table);
+				IdentifierIterator<HashTableType, IdentifierType>* iterator = AllocateAndConstruct<IdentifierIterator<HashTableType, IdentifierType>>(allocator, &table);
 				iterator->index = index;
 				index = table.SkipElements(index, count);
 				ECS_ASSERT(index != -1, "Creating hash table sub iterator failed! The given subrange is too large.");
@@ -1094,8 +1092,7 @@ namespace ECSEngine {
 			}
 
 			IteratorInterface<PairType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
-				PairIterator<HashTableType, PairType>* iterator = (PairIterator<HashTableType, PairType>*)AllocateEx(allocator, sizeof(PairIterator<HashTableType, PairType>));
-				new (iterator) PairIterator<HashTableType, PairType>(&table);
+				PairIterator<HashTableType, PairType>* iterator = AllocateAndConstruct<PairIterator<HashTableType, PairType>>(allocator, &table);
 				iterator->index = index;
 				index = table.SkipElements(index, count);
 				ECS_ASSERT(index != -1, "Creating hash table sub iterator failed! The given subrange is too large.");

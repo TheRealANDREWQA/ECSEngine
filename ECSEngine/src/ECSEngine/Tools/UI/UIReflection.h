@@ -456,7 +456,7 @@ namespace ECSEngine {
 				Stream<char> tag, 
 				UIReflectionInstanceModifyOverride modify_override, 
 				void* user_data,
-				AllocatorPolymorphic allocator = { nullptr }
+				AllocatorPolymorphic allocator = nullptr
 			);
 
 			void ConvertTypeResizableStream(Stream<char> type_name, Stream<Stream<char>> field_names);
@@ -485,7 +485,7 @@ namespace ECSEngine {
 			// By default it will pass on the allocator of this UIReflectionDrawer. It will store this allocator and give
 			// it back to the deallocate function unless overriden. The allocation of the field overrides actually happens
 			// when the function BindInstancePtrs is called - not on this call
-			UIReflectionInstance* CreateInstance(Stream<char> name, Stream<char> type_name, AllocatorPolymorphic user_defined_allocator = { nullptr });
+			UIReflectionInstance* CreateInstance(Stream<char> name, Stream<char> type_name, AllocatorPolymorphic user_defined_allocator = nullptr);
 			// If the identifier name is specified, it will use that as the type_name instead of type->name
 			// Can optionally give a user defined allocator to be used for allocations inside the user defined fields.
 			// By default it will pass on the allocator of this UIReflectionDrawer. It will store this allocator and give
@@ -495,7 +495,7 @@ namespace ECSEngine {
 				Stream<char> name, 
 				const UIReflectionType* type, 
 				Stream<char> identifier_name = { nullptr, 0 }, 
-				AllocatorPolymorphic user_defined_allocator = { nullptr }
+				AllocatorPolymorphic user_defined_allocator = nullptr
 			);
 
 			// It will create a type for each reflected type from the given hierarchy.
@@ -539,7 +539,7 @@ namespace ECSEngine {
 			// User facing method. If the allocator is left unspecified then it will use the
 			// allocator from the UIReflectionDrawer. Be careful what allocator you give (the same one
 			// as when initializing)
-			void DeallocateFieldOverride(Stream<char> tag, void* data, AllocatorPolymorphic allocator = { nullptr });
+			void DeallocateFieldOverride(Stream<char> tag, void* data, AllocatorPolymorphic allocator = nullptr);
 
 			void DeallocateInstance(UIReflectionInstance* instance);
 			void DeallocateInstanceFields(UIReflectionInstance* instance);
@@ -575,8 +575,7 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig* config,
 				Stream<char> name,
-				UIReflectionStreamType stream_type = UIReflectionStreamType::None,
-				AllocatorPolymorphic allocator = { nullptr }
+				UIReflectionStreamType stream_type = UIReflectionStreamType::None
 			);
 
 			// Destroys all instances and types that originate from the given hierarchy
@@ -667,7 +666,7 @@ namespace ECSEngine {
 			// User facing method
 			// Can optionally give a user defined allocator to be used for allocations inside the user defined fields.
 			// By default it will pass on the allocator of this UIReflectionDrawer
-			void* InitializeFieldOverride(Stream<char> tag, Stream<char> name, AllocatorPolymorphic allocator = { nullptr });
+			void* InitializeFieldOverride(Stream<char> tag, Stream<char> name, AllocatorPolymorphic allocator = nullptr);
 
 			// It will set the buffer of the standalone inputs to { nullptr, 0 }
 			// This is useful if you want to deactivate the deallocation for the field

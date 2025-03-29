@@ -749,7 +749,7 @@ namespace ECSEngine {
 	void ForEachGroup(Stream<IntegerType> group_indices, AllocatorPolymorphic temporary_allocator, EntryFunctor&& entry_functor, GroupFunctor&& group_functor)
 	{
 		size_t allocation_size = BooleanBitField::MemoryOf(group_indices.size);
-		void* allocation = AllocateEx(temporary_allocator, allocation_size);
+		void* allocation = Allocate(temporary_allocator, allocation_size);
 		memset(allocation, 0, allocation_size);
 		BooleanBitField bit_field(allocation, group_indices.size);
 
@@ -778,7 +778,7 @@ namespace ECSEngine {
 			}
 		}
 
-		DeallocateEx(temporary_allocator, allocation);
+		Deallocate(temporary_allocator, allocation);
 	}
 
 	// A helper function that helps you write an entry with an arbitrary number of bits.

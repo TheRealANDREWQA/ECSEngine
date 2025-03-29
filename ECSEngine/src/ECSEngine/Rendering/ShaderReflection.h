@@ -153,7 +153,7 @@ namespace ECSEngine {
 		// Used to extract macros from the file
 		CapacityStream<Stream<char>>* defined_macros = nullptr;
 		CapacityStream<Stream<char>>* conditional_macros = nullptr;
-		AllocatorPolymorphic macro_allocator = { nullptr };
+		AllocatorPolymorphic macro_allocator = ECS_MALLOC_ALLOCATOR;
 	};
 
 	struct ECSENGINE_API ShaderReflection {
@@ -269,7 +269,7 @@ namespace ECSEngine {
 		Stream<char> source,
 		unsigned int default_slot_position,
 		Reflection::ReflectionType* reflection_type = nullptr,
-		AllocatorPolymorphic allocator = { nullptr },
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR,
 		Stream<ShaderReflectionBufferMatrixField>* matrix_types = nullptr,
 		CapacityStream<char>* matrix_type_name_storage = nullptr
 	);

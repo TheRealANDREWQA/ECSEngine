@@ -639,9 +639,9 @@ namespace ECSEngine {
 	)
 	{
 		return TextDeserializeFieldsImplementation<false, false>(fields, stream, [=](size_t byte_size) {
-			return AllocateEx(pointer_allocator, byte_size);
+			return Allocate(pointer_allocator, byte_size);
 		}, [=](void* buffer, size_t byte_size) {
-				DeallocateEx(pointer_allocator, buffer);
+				Deallocate(pointer_allocator, buffer);
 		}, [](size_t byte_size, unsigned int in_file_field_index, bool array_entry) {});
 	}
 

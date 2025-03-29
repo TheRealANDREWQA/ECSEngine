@@ -166,7 +166,7 @@ namespace ECSEngine {
 	template<typename FirstStream, typename... Streams>
 	void CoalesceStreamsEmpty(AllocatorPolymorphic allocator, FirstStream* first_stream, Streams... streams) {
 		size_t total_size = StreamsTotalSize(first_stream, streams...);
-		void* allocation = AllocateEx(allocator, total_size);
+		void* allocation = Allocate(allocator, total_size);
 
 		CoalesceStreamsEmptyImplementation(allocation, first_stream, streams...);
 	}
@@ -188,7 +188,7 @@ namespace ECSEngine {
 	template<typename FirstStream, typename... Streams>
 	void CoalesceStreams(AllocatorPolymorphic allocator, FirstStream* first_stream, Streams... streams) {
 		size_t total_size = StreamsTotalSize(first_stream, streams...);
-		void* allocation = AllocateEx(allocator, total_size);
+		void* allocation = Allocate(allocator, total_size);
 
 		CoalesceStreamsImplementation(allocation, first_stream, streams...);
 	}

@@ -42,7 +42,7 @@ namespace ECSEngine {
 	struct Deck {
 		typedef T T;
 
-		ECS_INLINE Deck() : buffers({ nullptr }, 0), chunk_size(0), miscellaneous(0) {}
+		ECS_INLINE Deck() : buffers(nullptr, 0), chunk_size(0), miscellaneous(0) {}
 
 		// Disregard the template argument, it is used only to avoid a compilation error to distinguish between this overload
 		// And the overload for the power of two
@@ -187,7 +187,7 @@ namespace ECSEngine {
 
 		void Deallocate() {
 			for (unsigned int index = 0; index < buffers.size; index++) {
-				ECSEngine::DeallocateEx(buffers.allocator, buffers[index].buffer);
+				ECSEngine::Deallocate(buffers.allocator, buffers[index].buffer);
 			}
 			buffers.FreeBuffer();
 			size = 0;
@@ -518,7 +518,7 @@ namespace ECSEngine {
 				deck.buffers.buffer = (CapacityStream<T>*)temp_buffer;
 				deck.buffers.capacity = 1;
 				deck.buffers.size = 1;
-				deck.buffers.allocator = { nullptr };
+				deck.buffers.allocator = ECS_MALLOC_ALLOCATOR;
 				temp_buffer = OffsetPointer(temp_buffer, sizeof(deck.buffers.buffer[0]));
 
 				deck.buffers[0] = { data.buffer, (unsigned int)data.size, (unsigned int)data.size };

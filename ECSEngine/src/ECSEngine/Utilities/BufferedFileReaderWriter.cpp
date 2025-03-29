@@ -25,7 +25,7 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message
 	)
 		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
-		: OwningBufferedFileWriteInstrument(file_path, CapacityStream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, 0, _buffering_size), binary_file, error_message) {
+		: OwningBufferedFileWriteInstrument(file_path, CapacityStream<void>(_buffering_size > 0 ? Allocate(_buffering_allocator, _buffering_size) : nullptr, 0, _buffering_size), binary_file, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;
@@ -89,7 +89,7 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message
 	)
 		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
-		: TemporaryRenameBufferedFileWriteInstrument(absolute_file_path, CapacityStream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, 0, _buffering_size), binary_file, _rename_extension, error_message) {
+		: TemporaryRenameBufferedFileWriteInstrument(absolute_file_path, CapacityStream<void>(_buffering_size > 0 ? Allocate(_buffering_allocator, _buffering_size) : nullptr, 0, _buffering_size), binary_file, _rename_extension, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;
@@ -245,7 +245,7 @@ namespace ECSEngine {
 
 	OwningBufferedFileReadInstrument::OwningBufferedFileReadInstrument(Stream<wchar_t> file_path, AllocatorPolymorphic _buffering_allocator, size_t _buffering_size, bool binary_file, CapacityStream<char>* error_message)
 		// In case the buffering size is 0, don't call the allocate function, to not generate an empty allocation
-		: OwningBufferedFileReadInstrument(file_path, CapacityStream<void>(_buffering_size > 0 ? AllocateEx(_buffering_allocator, _buffering_size) : nullptr, 0, _buffering_size), binary_file, error_message) {
+		: OwningBufferedFileReadInstrument(file_path, CapacityStream<void>(_buffering_size > 0 ? Allocate(_buffering_allocator, _buffering_size) : nullptr, 0, _buffering_size), binary_file, error_message) {
 		if (!IsInitializationFailed()) {
 			buffering_allocator = buffering_allocator;
 			is_buffering_allocated = true;

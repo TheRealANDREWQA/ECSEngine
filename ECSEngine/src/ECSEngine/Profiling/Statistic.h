@@ -31,7 +31,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
-			DeallocateEx(allocator, entries.GetAllocatedBuffer());
+			ECSEngine::Deallocate(allocator, entries.GetAllocatedBuffer());
 		}
 
 		T GetValue(ECS_STATISTIC_VALUE_TYPE value_type) const {
@@ -73,7 +73,7 @@ namespace ECSEngine {
 
 			entries_capacity = entries_capacity == 0 ? 1 : entries_capacity;
 			size_t allocation_size = entries.MemoryOf(entries_capacity);
-			void* allocation = AllocateEx(allocator, allocation_size);
+			void* allocation = Allocate(allocator, allocation_size);
 			uintptr_t allocation_ptr = (uintptr_t)allocation;
 			entries.InitializeFromBuffer(allocation_ptr, entries_capacity);
 		}

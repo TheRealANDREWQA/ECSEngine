@@ -286,7 +286,7 @@ namespace ECSEngine {
 
 		void Initialize(AllocatorPolymorphic allocator, unsigned int capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(capacity);
-			void* allocation = ECSEngine::AllocateEx(allocator, memory_size, alignof(T), debug_info);
+			void* allocation = ECSEngine::Allocate(allocator, memory_size, alignof(T), debug_info);
 			InitializeFromBuffer(allocation, capacity);
 		}
 

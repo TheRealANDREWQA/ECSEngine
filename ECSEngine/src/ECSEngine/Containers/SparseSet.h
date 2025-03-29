@@ -74,7 +74,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
 			if (buffer != nullptr && capacity > 0) {
-				ECSEngine::DeallocateEx(allocator, buffer);
+				ECSEngine::Deallocate(allocator, buffer);
 				memset(this, 0, sizeof(*this));
 			}
 		}
@@ -266,7 +266,7 @@ namespace ECSEngine {
 
 		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (_capacity > 0) {
-				void* buffer = AllocateEx(allocator, MemoryOf(_capacity), alignof(void*), debug_info);
+				void* buffer = Allocate(allocator, MemoryOf(_capacity), alignof(void*), debug_info);
 				InitializeFromBuffer(buffer, _capacity);
 			}
 			else {
@@ -383,7 +383,7 @@ namespace ECSEngine {
 		// Deallocates the buffer and clears the set
 		ECS_INLINE void FreeBuffer(DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (set.buffer != nullptr) {
-				DeallocateEx(allocator, set.buffer, debug_info);
+				Deallocate(allocator, set.buffer, debug_info);
 			}
 			set.InitializeFromBuffer(nullptr, 0);
 		}
@@ -459,14 +459,14 @@ namespace ECSEngine {
 		// Does not copy the elements
 		ECS_INLINE void ResizeNoCopy(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (set.buffer != nullptr) {
-				DeallocateEx(allocator, set.buffer, debug_info);
+				Deallocate(allocator, set.buffer, debug_info);
 			}
-			set.InitializeFromBuffer(AllocateEx(allocator, set.MemoryOf(new_capacity), alignof(void*), debug_info), new_capacity);
+			set.InitializeFromBuffer(Allocate(allocator, set.MemoryOf(new_capacity), alignof(void*), debug_info), new_capacity);
 		}
 
 		// Copies the elements before that
 		void Resize(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			void* new_buffer = AllocateEx(allocator, set.MemoryOf(new_capacity), alignof(void*), debug_info);
+			void* new_buffer = Allocate(allocator, set.MemoryOf(new_capacity), alignof(void*), debug_info);
 			uint2* new_indirection_buffer = (uint2*)OffsetPointer(new_buffer, sizeof(T) * new_capacity);
 
 			if (new_capacity < set.capacity) {
@@ -530,14 +530,14 @@ namespace ECSEngine {
 			set.capacity = new_capacity;
 
 			if (buffer_to_deallocate != nullptr) {
-				DeallocateEx(allocator, buffer_to_deallocate, debug_info);
+				Deallocate(allocator, buffer_to_deallocate, debug_info);
 			}
 		}
 
 		void Initialize(AllocatorPolymorphic _allocator, unsigned int initial_capacity = 0, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			allocator = _allocator;
 			if (initial_capacity > 0) {
-				set = SparseSet<T>(AllocateEx(allocator, set.MemoryOf(initial_capacity), alignof(void*), debug_info), initial_capacity);
+				set = SparseSet<T>(Allocate(allocator, set.MemoryOf(initial_capacity), alignof(void*), debug_info), initial_capacity);
 			}
 			else {
 				set = SparseSet<T>(nullptr, 0);

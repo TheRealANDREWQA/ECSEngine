@@ -1090,7 +1090,7 @@ namespace ECSEngine {
 
 	ShaderMetadata::ShaderMetadata(Stream<char> _name, Stream<ShaderMacro> _macros, AllocatorPolymorphic allocator)
 	{
-		macros.buffer = (ShaderMacro*)AllocateEx(allocator, _macros.size * sizeof(ShaderMacro));
+		macros.buffer = (ShaderMacro*)Allocate(allocator, _macros.size * sizeof(ShaderMacro));
 		
 		// Now allocate every string separately
 		macros.size = _macros.size;
@@ -1114,10 +1114,10 @@ namespace ECSEngine {
 		
 		if (macros.size > 0) {
 			memcpy(temp_macros, macros.buffer, sizeof(ShaderMacro) * macros.size);
-			DeallocateEx(allocator, macros.buffer);
+			Deallocate(allocator, macros.buffer);
 		}
 
-		macros.buffer = (ShaderMacro*)AllocateEx(allocator, sizeof(ShaderMacro) * (macros.size + 1));
+		macros.buffer = (ShaderMacro*)Allocate(allocator, sizeof(ShaderMacro) * (macros.size + 1));
 		memcpy(macros.buffer, temp_macros, sizeof(ShaderMacro) * macros.size);
 
 		// Allocate the name and the definition separately
@@ -1245,9 +1245,9 @@ namespace ECSEngine {
 		macros.RemoveSwapBack(index);
 		ShaderMacro* temp_macros = (ShaderMacro*)ECS_STACK_ALLOC(sizeof(ShaderMacro) * macros.size);
 		macros.CopyTo(temp_macros);
-		DeallocateEx(allocator, macros.buffer);
+		Deallocate(allocator, macros.buffer);
 		
-		macros.buffer = (ShaderMacro*)AllocateEx(allocator, sizeof(ShaderMacro) * macros.size);
+		macros.buffer = (ShaderMacro*)Allocate(allocator, sizeof(ShaderMacro) * macros.size);
 		memcpy(macros.buffer, temp_macros, sizeof(ShaderMacro) * macros.size);
 	}
 

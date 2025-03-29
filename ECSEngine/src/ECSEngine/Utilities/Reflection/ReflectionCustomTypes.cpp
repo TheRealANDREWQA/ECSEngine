@@ -11,6 +11,7 @@
 #include "../../Allocators/StackAllocator.h"
 #include "../../Allocators/MultipoolAllocator.h"
 #include "../../Allocators/MemoryProtectedAllocator.h"
+#include "../../Allocators/MallocAllocator.h"
 
 namespace ECSEngine {
 
@@ -244,7 +245,7 @@ namespace ECSEngine {
 					for (size_t index = 0; index < destination_size; index++) {
 						DeallocateReflectionInstanceBuffers(data->reflection_manager, template_type, element_info, OffsetPointer(*destination, index * element_info.byte_size), data->allocator, false);
 					}
-					ECSEngine::DeallocateEx(data->allocator, *destination);
+					ECSEngine::Deallocate(data->allocator, *destination);
 				}
 			}
 
@@ -309,7 +310,7 @@ namespace ECSEngine {
 			// And the reset
 
 			//if (stream_data.buffer != nullptr) {
-			//	DeallocateEx(data->allocator, stream_data.buffer);
+			//	Deallocate(data->allocator, stream_data.buffer);
 			//}
 			//// For the resizable stream, we need to memset only the first 3 fields
 			//static_assert(sizeof(Stream<void>) == sizeof(CapacityStream<void>));
@@ -586,7 +587,7 @@ namespace ECSEngine {
 			unsigned short source_size = source->GetData();
 			void* allocation = nullptr;
 			if (source_size > 0) {
-				allocation = AllocateEx(data->allocator, source_size);
+				allocation = Allocate(data->allocator, source_size);
 				memcpy(allocation, source->GetPointer(), source_size);
 			}
 
@@ -612,7 +613,7 @@ namespace ECSEngine {
 				DataPointer* data_pointer = (DataPointer*)current_source;
 				void* pointer = data_pointer->GetPointer();
 				if (pointer != nullptr) {
-					DeallocateEx(data->allocator, pointer);
+					ECSEngine::Deallocate(data->allocator, pointer);
 				}
 
 				// Make this pointer empty
@@ -634,11 +635,11 @@ namespace ECSEngine {
 		// Inside it. Should we use it to make the determination of the allocator type faster (although that doesn't help with AllocatorPolymorphic)?
 
 		// Returns the allocator type, taking into account allocator polymorphic. It can return ECS_ALLOCATOR_TYPE_COUNT
-		// If it is a polymorphic allocator that targets Malloc/Free, or the allocator type is not identified
+		// If the allocator type is not identified
 		static ECS_ALLOCATOR_TYPE AllocatorTypeFromStringWithPolymorphic(const void* allocator, Stream<char> definition) {
 			if (definition == STRING(AllocatorPolymorphic)) {
 				const AllocatorPolymorphic* allocator_polymorphic = (const AllocatorPolymorphic*)allocator;
-				return allocator_polymorphic->allocator == nullptr ? ECS_ALLOCATOR_TYPE_COUNT : allocator_polymorphic->allocator_type;
+				return allocator_polymorphic->allocator->m_allocator_type;
 			}
 			else {
 				return AllocatorTypeFromString(definition);
@@ -655,14 +656,17 @@ namespace ECSEngine {
 #define MACRO(allocator) sizeof(allocator),
 
 			// We only need the byte size, the alignment is going to be the maximum for all types
+			// For the interface type, we can't handle it
 			static size_t byte_sizes[] = {
 				ECS_EXPAND_ALLOCATOR_MACRO(MACRO)
+				0,
 				sizeof(AllocatorPolymorphic)
 			};
 
 #undef MACRO
 
 			static_assert(ECS_COUNTOF(byte_sizes) == ECS_ALLOCATOR_TYPE_COUNT + 1);
+			ECS_ASSERT(type != ECS_ALLOCATOR_INTERFACE);
 			return { byte_sizes[type], alignof(void*) };
 		}
 
@@ -682,51 +686,65 @@ namespace ECSEngine {
 				{
 					LinearAllocator* destination = (LinearAllocator*)destination_untyped;
 					const LinearAllocator* source = (const LinearAllocator*)source_untyped;
-					*destination = LinearAllocator(AllocateEx(data->allocator, source->m_capacity), source->m_capacity);
+					new (destination) LinearAllocator(Allocate(data->allocator, source->m_capacity), source->m_capacity);
 				}
 				break;
 				case ECS_ALLOCATOR_STACK:
 				{
 					StackAllocator* destination = (StackAllocator*)destination_untyped;
 					const StackAllocator* source = (const StackAllocator*)source_untyped;
-					*destination = StackAllocator(AllocateEx(data->allocator, source->m_capacity), source->m_capacity);
+					new (destination) StackAllocator(Allocate(data->allocator, source->m_capacity), source->m_capacity);
 				}
 				break;
 				case ECS_ALLOCATOR_MULTIPOOL:
 				{
 					MultipoolAllocator* destination = (MultipoolAllocator*)destination_untyped;
 					const MultipoolAllocator* source = (const MultipoolAllocator*)source_untyped;
-					*destination = MultipoolAllocator(AllocateEx(data->allocator, MultipoolAllocator::MemoryOf(source->GetBlockCount(), source->GetSize())), source->GetSize(), source->GetBlockCount());
+					new (destination) MultipoolAllocator(Allocate(data->allocator, MultipoolAllocator::MemoryOf(source->GetBlockCount(), source->GetSize())), source->GetSize(), source->GetBlockCount());
 				}
 				break;
 				case ECS_ALLOCATOR_ARENA:
 				{
 					MemoryArena* destination = (MemoryArena*)destination_untyped;
 					const MemoryArena* source = (const MemoryArena*)source_untyped;
-					*destination = MemoryArena(data->allocator, source->m_allocator_count, source->GetInitialBaseAllocatorInfo());
+					new (destination) MemoryArena(data->allocator, source->m_allocator_count, source->GetInitialBaseAllocatorInfo());
 				}
 				break;
 				case ECS_ALLOCATOR_MANAGER:
 				{
 					MemoryManager* destination = (MemoryManager*)destination_untyped;
 					const MemoryManager* source = (const MemoryManager*)source_untyped;
-					*destination = MemoryManager(source->GetInitialAllocatorInfo(), source->m_backup_info, data->allocator);
+					new (destination) MemoryManager(source->GetInitialAllocatorInfo(), source->m_backup_info, data->allocator);
 				}
 				break;
 				case ECS_ALLOCATOR_RESIZABLE_LINEAR:
 				{
 					ResizableLinearAllocator* destination = (ResizableLinearAllocator*)destination_untyped;
 					const ResizableLinearAllocator* source = (const ResizableLinearAllocator*)source_untyped;
-					*destination = ResizableLinearAllocator(source->m_initial_capacity, source->m_backup_size, data->allocator);
+					new (destination) ResizableLinearAllocator(source->m_initial_capacity, source->m_backup_size, data->allocator);
 				}
 				break;
 				case ECS_ALLOCATOR_MEMORY_PROTECTED:
 				{
 					MemoryProtectedAllocator* destination = (MemoryProtectedAllocator*)destination_untyped;
 					const MemoryProtectedAllocator* source = (const MemoryProtectedAllocator*)source_untyped;
-					*destination = MemoryProtectedAllocator(source->chunk_size, source->linear_allocators);
+					new (destination) MemoryProtectedAllocator(source->chunk_size, source->linear_allocators);
 				}
 				break;
+				case ECS_ALLOCATOR_MALLOC:
+				{
+					// Just initialize the vtable for the destination
+					MallocAllocator* destination = (MallocAllocator*)destination_untyped;
+					new (destination) MallocAllocator();
+				}
+				break;
+				case ECS_ALLOCATOR_INTERFACE:
+				{
+					ECS_ASSERT(false, "Unimplemented Interface allocator copy code path");
+				}
+				break;
+				default:
+					ECS_ASSERT(false);
 				}
 			};
 
@@ -738,8 +756,8 @@ namespace ECSEngine {
 					AllocatorPolymorphic* destination = (AllocatorPolymorphic*)data->destination;
 					const AllocatorPolymorphic* source = (const AllocatorPolymorphic*)data->source;
 					*destination = *source;
-					destination->allocator = AllocateEx(data->allocator, AllocatorStructureByteSize(source->allocator_type));
-					initialize_implementation(source->allocator_type, destination->allocator, source->allocator);
+					destination->allocator = (AllocatorBase*)Allocate(data->allocator, AllocatorStructureByteSize(source->allocator->m_allocator_type));
+					initialize_implementation(source->allocator->m_allocator_type, destination->allocator, source->allocator);
 				}
 				else {
 					initialize_implementation(allocator_type, data->destination, data->source);
@@ -757,7 +775,7 @@ namespace ECSEngine {
 			// TODO: Determine if this appropriate or not
 			ECS_ALLOCATOR_TYPE allocator_type = AllocatorTypeFromStringWithPolymorphic(data->source, data->definition);
 			ECS_ASSERT(allocator_type != ECS_ALLOCATOR_TYPE_COUNT, "Unknown reflection custom allocator!");
-			FreeAllocatorFrom({ data->source, allocator_type, ECS_ALLOCATION_SINGLE }, data->allocator);
+			FreeAllocatorFrom({ (AllocatorBase*)data->source, ECS_ALLOCATION_SINGLE }, data->allocator);
 		}
 
 		// The allocator doesn't need to implement the Element family of functions
@@ -908,7 +926,7 @@ namespace ECSEngine {
 			if (is_soa) {
 				// Compute the total byte size for the destination. We must use the extended capacity
 				size_t total_allocation_size = (value_definition_info.byte_size + identifier_definition_info.byte_size + sizeof(unsigned char)) * extended_capacity;
-				void* allocation = AllocateEx(allocator, total_allocation_size);
+				void* allocation = Allocate(allocator, total_allocation_size);
 
 				// The metadata buffer is set last
 				typed_table->m_buffer = (decltype(typed_table->m_buffer))allocation;
@@ -919,7 +937,7 @@ namespace ECSEngine {
 			else {
 				ulong2 pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
 				size_t total_allocation_size = (pair_size.x + sizeof(unsigned char)) * extended_capacity;
-				void* allocation = AllocateEx(allocator, total_allocation_size);
+				void* allocation = Allocate(allocator, total_allocation_size);
 
 				// The metadata buffer is set last
 				typed_table->m_buffer = (decltype(typed_table->m_buffer))allocation;
@@ -1565,7 +1583,7 @@ namespace ECSEngine {
 			destination->buffers.size = source->buffers.size;
 			
 			for (size_t index = 0; index < source->buffers.size; index++) {
-				destination->buffers[index].buffer = (char*)AllocateEx(data->allocator, element_info.byte_size * source->buffers[index].capacity, element_info.alignment);
+				destination->buffers[index].buffer = (char*)Allocate(data->allocator, element_info.byte_size * source->buffers[index].capacity, element_info.alignment);
 
 				CopyReflectionDataOptions copy_options = data;
 				CopyReflectionTypeInstance(data->reflection_manager, template_arguments[0], element_info, source->buffers[index].buffer, destination->buffers[index].buffer, source->buffers[index].size, &copy_options, data->tags);

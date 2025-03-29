@@ -308,7 +308,7 @@ void TickPendingTasks(EditorState* editor_state) {
 		while (editor_state->pending_background_tasks.Pop(background_task)) {
 			editor_state->task_manager->AddDynamicTaskAndWake(background_task);
 			if (background_task.data_size > 0) {
-				editor_state->multithreaded_editor_allocator->Deallocate_ts(background_task.data);
+				editor_state->multithreaded_editor_allocator->DeallocateTs(background_task.data);
 			}
 		}
 	}
@@ -413,10 +413,10 @@ void EditorStateAddGPUTask(EditorState* editor_state, ThreadTask task)
 void PreinitializeRuntime(EditorState* editor_state) {
 	// Use separate allocators for them. Coallesce all the types into a single allocation
 	// The resizable memory arena is for the asset database
-	MemoryManager* runtime_resource_manager_allocator = (MemoryManager*)editor_state->multithreaded_editor_allocator->Allocate_ts(sizeof(MemoryManager)
+	MemoryManager* runtime_resource_manager_allocator = (MemoryManager*)editor_state->multithreaded_editor_allocator->AllocateTs(sizeof(MemoryManager)
 		+ sizeof(ResourceManager) + sizeof(ResizableMemoryArena) + sizeof(AssetDatabase));
 
-	*runtime_resource_manager_allocator = DefaultResourceManagerAllocator(editor_state->GlobalMemoryManager());
+	DefaultResourceManagerAllocator(runtime_resource_manager_allocator, editor_state->GlobalMemoryManager());
 
 	// Create the resource manager - it already has the shader directory set for the ECSEngine Shaders
 	editor_state->runtime_resource_manager = (ResourceManager*)OffsetPointer(runtime_resource_manager_allocator, sizeof(*runtime_resource_manager_allocator));
@@ -424,7 +424,7 @@ void PreinitializeRuntime(EditorState* editor_state) {
 
 	// And the asset database
 	ResizableMemoryArena* database_arena = (ResizableMemoryArena*)OffsetPointer(editor_state->runtime_resource_manager, sizeof(*editor_state->runtime_resource_manager));
-	*database_arena = CreateResizableMemoryArena(ECS_MB, 4, ECS_KB * 4, editor_state->GlobalMemoryManager(), ECS_MB * 5, 4, ECS_KB * 4);
+	CreateResizableMemoryArena(database_arena, ECS_MB, 4, ECS_KB * 4, editor_state->GlobalMemoryManager(), ECS_MB * 5, 4, ECS_KB * 4);
 
 	AssetDatabase* database = (AssetDatabase*)OffsetPointer(database_arena, sizeof(*database_arena));
 	*database = AssetDatabase(database_arena, editor_state->ui_reflection->reflection);
@@ -442,7 +442,7 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 	OS::InitializePhysicalMemoryPageSize();
 
 	GlobalMemoryManager* hub_allocator = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
-	*hub_allocator = CreateGlobalMemoryManager(ECS_KB * 16, 512, ECS_KB * 16);
+	CreateGlobalMemoryManager(hub_allocator, ECS_KB * 16, 512, ECS_KB * 16);
 
 	HubData* hub_data = (HubData*)Malloc(sizeof(HubData));
 	hub_data->projects.Initialize(hub_allocator, 0, EDITOR_HUB_PROJECT_CAPACITY);
@@ -451,9 +451,9 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 	editor_state->hub_data = hub_data;
 
 	GlobalMemoryManager* console_global_memory = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
-	*console_global_memory = CreateGlobalMemoryManager(ECS_MB * 10, 64, ECS_MB * 5);
+	CreateGlobalMemoryManager(console_global_memory, ECS_MB * 10, 64, ECS_MB * 5);
 	MemoryManager* console_memory_manager = (MemoryManager*)Malloc(sizeof(MemoryManager));
-	*console_memory_manager = DefaultConsoleStableAllocator(console_global_memory);
+	DefaultConsoleStableAllocator(console_memory_manager, console_global_memory);
 	AtomicStream<char> console_message_allocator = DefaultConsoleMessageAllocator(console_global_memory);
 	SetConsole(console_memory_manager, console_message_allocator, L"TempDump.txt");
 
@@ -478,7 +478,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	memset(editor_state->flags, 0, sizeof(editor_state->flags));
 
 	GlobalMemoryManager* global_memory_manager = (GlobalMemoryManager*)Malloc(sizeof(GlobalMemoryManager));
-	*global_memory_manager = CreateGlobalMemoryManager(GLOBAL_MEMORY_COUNT, 512, GLOBAL_MEMORY_RESERVE_COUNT);
+	CreateGlobalMemoryManager(global_memory_manager, GLOBAL_MEMORY_COUNT, 512, GLOBAL_MEMORY_RESERVE_COUNT);
 	Graphics* graphics = (Graphics*)Malloc(sizeof(Graphics));
 	CreateGraphicsForProcess(graphics, hWnd, global_memory_manager, true);
 	editor_state->graphics = graphics;
@@ -513,9 +513,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_task_manager->m_world = task_manager_world;
 
 	MemoryManager* ui_resource_manager_allocator = (MemoryManager*)Malloc(sizeof(MemoryManager));
-	*ui_resource_manager_allocator = DefaultResourceManagerAllocator(global_memory_manager);
+	DefaultResourceManagerAllocator(ui_resource_manager_allocator, global_memory_manager);
 	ResourceManager* ui_resource_manager = (ResourceManager*)Malloc(sizeof(ResourceManager));
-	*ui_resource_manager = ResourceManager(ui_resource_manager_allocator, graphics);
+	new (ui_resource_manager) ResourceManager(ui_resource_manager_allocator, graphics);
 
 	editor_state->ui_resource_manager = ui_resource_manager;
 
@@ -527,8 +527,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_LOW);
 	render_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_VERY_LOW);
 
-	ResizableMemoryArena* resizable_arena = (ResizableMemoryArena*)Malloc(sizeof(ResizableMemoryArena));
-	*resizable_arena = DefaultUISystemAllocator(global_memory_manager);
+	UIToolsAllocator* resizable_arena = (UIToolsAllocator*)Malloc(sizeof(UIToolsAllocator));
+	DefaultUISystemAllocator(resizable_arena, global_memory_manager);
 
 	UISystem* ui = (UISystem*)Malloc(sizeof(UISystem));
 	new (ui) UISystem(
@@ -654,6 +654,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->loading_assets.Initialize(editor_state->EditorAllocator(), 0);
 	editor_state->prefabs.Initialize(editor_state->EditorAllocator(), 16);
 	editor_state->prefabs_allocator = MemoryManager(ECS_MB * 2, ECS_KB * 4, ECS_MB * 8, editor_state->EditorAllocator());
+	editor_state->tick_processing_events.Initialize(editor_state->EditorAllocator(), 8);
 
 	// This will be run asynchronously for the graphics object
 	InitializeRuntime(editor_state);
@@ -810,8 +811,8 @@ void EditorRegisterMainThreadID() {
 
 void EditorRegisterBackgroundThreadsID(const EditorState* editor_state) {
 	unsigned int thread_count = editor_state->task_manager->GetThreadCount();
-	BACKGROUND_THREADS_ID.Resize({ nullptr }, thread_count);
-	BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER.Resize({ nullptr }, thread_count);
+	BACKGROUND_THREADS_ID.Resize(ECS_MALLOC_ALLOCATOR, thread_count);
+	BACKGROUND_THREAD_SPECIFIC_CRASH_HANDLER.Resize(ECS_MALLOC_ALLOCATOR, thread_count);
 	for (unsigned int index = 0; index < editor_state->task_manager->GetThreadCount(); index++) {
 		BACKGROUND_THREADS_ID[index] = OS::GetThreadID(editor_state->task_manager->m_thread_handles[index]);
 	}

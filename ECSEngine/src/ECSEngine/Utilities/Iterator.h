@@ -73,7 +73,7 @@ namespace ECSEngine {
 			if (count != nullptr) {
 				*count = remaining_count;
 			}
-			std::remove_const_t<ValueType>* buffer = (std::remove_const_t<ValueType>*)AllocateEx(allocator, allocation_size);
+			std::remove_const_t<ValueType>* buffer = (std::remove_const_t<ValueType>*)Allocate(allocator, allocation_size);
 			WriteTo(buffer);
 			return buffer;
 		}
@@ -144,7 +144,7 @@ namespace ECSEngine {
 		}
 
 		IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
-			StreamIterator<ValueType>* iterator = (StreamIterator<ValueType>*)AllocateEx(allocator, sizeof(StreamIterator<ValueType>));
+			StreamIterator<ValueType>* iterator = (StreamIterator<ValueType>*)Allocate(allocator, sizeof(StreamIterator<ValueType>));
 			new (iterator) StreamIterator<ValueType>(buffer + index, count, 0);
 			index += count;
 			return iterator;
@@ -162,11 +162,11 @@ namespace ECSEngine {
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
 			void* buffer_pointer = buffer.GetPointer();
 			if (buffer_pointer != nullptr) {
-				ECSEngine::DeallocateEx(allocator, buffer_pointer);
+				ECSEngine::Deallocate(allocator, buffer_pointer);
 				buffer = nullptr;
 			}
 			// The iterator is always allocated
-			ECSEngine::DeallocateEx(allocator, iterator);
+			ECSEngine::Deallocate(allocator, iterator);
 		}
 
 		// Creates a stable iterator starting at the current location for the given count of elements.
@@ -213,8 +213,8 @@ namespace ECSEngine {
 			stable_iterator.iterator = iterator->CreateSubIterator(allocator, iterator->remaining_count);
 		}
 		else {
-			stable_iterator.buffer.SetPointer(AllocateEx(allocator, sizeof(ValueType) * iterator->remaining_count));
-			StreamIterator<ValueType>* stream_iterator = (StreamIterator<ValueType>*)AllocateEx(allocator, sizeof(StreamIterator<ValueType>));
+			stable_iterator.buffer.SetPointer(Allocate(allocator, sizeof(ValueType) * iterator->remaining_count));
+			StreamIterator<ValueType>* stream_iterator = (StreamIterator<ValueType>*)Allocate(allocator, sizeof(StreamIterator<ValueType>));
 			*stream_iterator = StreamIterator<ValueType>((std::remove_const_t<ValueType>*)stable_iterator.buffer.GetPointer(), iterator->remaining_count, 0);
 			stable_iterator.iterator = stream_iterator;
 

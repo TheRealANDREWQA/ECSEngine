@@ -1687,7 +1687,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Submesh Copy(AllocatorPolymorphic allocator) const {
-			void* allocation = AllocateEx(allocator, CopySize());
+			void* allocation = Allocate(allocator, CopySize());
 			uintptr_t ptr = (uintptr_t)allocation;
 			return CopyTo(ptr);
 		}
@@ -1701,7 +1701,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
 			if (name.size > 0) {
-				DeallocateEx(allocator, name.buffer);
+				ECSEngine::Deallocate(allocator, name.buffer);
 			}
 		}
 

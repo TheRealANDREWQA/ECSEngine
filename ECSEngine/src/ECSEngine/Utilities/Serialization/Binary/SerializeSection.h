@@ -16,7 +16,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool SerializeSection(
 		Stream<SerializeSectionData> data,
 		Stream<wchar_t> stream, 
-		AllocatorPolymorphic allocator = { nullptr },
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR,
 		Stream<void> header = { nullptr, 0 }
 	);
 
@@ -35,7 +35,7 @@ namespace ECSEngine {
 	ECSENGINE_API void* DeserializeSection(
 		CapacityStream<SerializeSectionData>& sections,
 		Stream<wchar_t> file,
-		AllocatorPolymorphic allocator = { nullptr },
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR,
 		CapacityStream<void>* header = nullptr
 	);
 
@@ -45,7 +45,7 @@ namespace ECSEngine {
 	ECSENGINE_API void* DeserializeSectionWithMatch(
 		Stream<SerializeSectionData> sections,
 		Stream<wchar_t> file,
-		AllocatorPolymorphic allocator = { nullptr },
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR,
 		CapacityStream<void>* header = nullptr
 	);
 

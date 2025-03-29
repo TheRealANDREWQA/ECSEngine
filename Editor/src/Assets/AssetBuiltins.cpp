@@ -45,7 +45,7 @@ void FillShaderBuiltin(EDITOR_SHADER_BUILTIN builtin_index, const ShaderMetadata
 	builtin_metadata->name = current_metadata->name;
 	builtin_metadata->compile_flag = ECS_SHADER_COMPILE_NONE;
 
-	ShaderMacro* macros = (ShaderMacro*)AllocateEx(temporary_allocator, sizeof(ShaderMacro) * 3);
+	ShaderMacro* macros = (ShaderMacro*)Allocate(temporary_allocator, sizeof(ShaderMacro) * 3);
 	switch (builtin_index) {
 	case EDITOR_SHADER_BUILTIN_VERTEX_PBR:
 	{
@@ -106,7 +106,7 @@ AssetDatabase* FillMaterialBuiltin(
 {
 	ECS_ASSERT(builtin_index < EDITOR_MATERIAL_BUILTIN_COUNT);
 
-	AssetDatabase* database = (AssetDatabase*)AllocateEx(temporary_allocator, sizeof(AssetDatabase));
+	AssetDatabase* database = (AssetDatabase*)Allocate(temporary_allocator, sizeof(AssetDatabase));
 	*database = { temporary_allocator, editor_state->ui_reflection->reflection };
 	database->SetFileLocation(editor_state->asset_database->metadata_file_location);
 
