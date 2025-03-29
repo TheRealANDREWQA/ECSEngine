@@ -2164,6 +2164,8 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, serializer_name, 512);
 		// We need to map the version now
 		for (unsigned int index = 0; index < custom_serializer_count; index++) {
+			serializer_name.size = 0;
+
 			// Firstly the name and then the version
 			if (!read_instrument->ReadWithSizeVariableLength(serializer_name)) {
 				return false;

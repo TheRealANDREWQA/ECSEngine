@@ -22,19 +22,24 @@ namespace ECSEngine {
 
 	struct ScopedMalloca {
 		ECS_INLINE ~ScopedMalloca() {
-			ECS_FREEA(buffer);
+			if (!is_stack_allocated) {
+				ECS_FREEA(buffer);
+			}
 		}
 
 		ECS_INLINE void operator() () const {
-			ECS_FREEA(buffer);
+			if (!is_stack_allocated) {
+				ECS_FREEA(buffer);
+			}
 		}
 
 		void* buffer;
+		bool is_stack_allocated;
 	};
 
 	// The same as ECS_MALLOCA_ALLOCATOR, with the difference in that it creates a ScopedMalloc object
 	// That automatically releases the allocation. In order to access the allocation value, use object_name.buffer
-#define ECS_MALLOCA_ALLOCATOR_SCOPED(object_name, size, stack_size, allocator) ScopedMalloca object_name{ ECS_MALLOCA_ALLOCATOR(size, stack_size, allocator) }
+#define ECS_MALLOCA_ALLOCATOR_SCOPED(object_name, size, stack_size, allocator) ScopedMalloca object_name{ ECS_MALLOCA_ALLOCATOR(size, stack_size, allocator), (size) <= (stack_size) }
 
 	struct NullTerminate {
 		ECS_INLINE void operator()() {
