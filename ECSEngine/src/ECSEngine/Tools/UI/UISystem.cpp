@@ -164,9 +164,9 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager)
+		void DefaultUISystemAllocator(UIToolsAllocator* allocator, GlobalMemoryManager* global_manager)
 		{
-			return CreateResizableMemoryArena(20'000'000, 8, ECS_KB * 4, global_manager, 25'000'000, 4, ECS_KB * 4);
+			CreateResizableMemoryArena(allocator, 20'000'000, 8, ECS_KB * 4, global_manager, 25'000'000, 4, ECS_KB * 4);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -187,7 +187,7 @@ namespace ECSEngine {
 			m_texture_evict_count(0), m_texture_evict_target(60), m_window_os_size(window_os_size), m_monitor_size(monitor_size), m_aspect_ratio_factor(1.0f, 1.0f)
 		{
 			// We can use a pretty large value, since it's going to be virtual memory
-			m_draw_buffers_allocator = CreateGlobalMemoryManager(ECS_MB * 50, ECS_KB, ECS_MB * 50);
+			CreateGlobalMemoryManager(&m_draw_buffers_allocator, ECS_MB * 50, ECS_KB, ECS_MB * 50);
 
 			// Set the pixel size early on, since the descriptors will reference it
 			m_pixel_size.x = 2.0f / (float)m_window_os_size.x;
@@ -367,7 +367,7 @@ namespace ECSEngine {
 			m_snapshot_mode_timer.SetUninitialized();
 			// Use large sizes since those will be virtual allocations calls - they won't actually
 			// Take that amount of memory (for most of the time)
-			m_snapshot_allocator = CreateGlobalMemoryManager(ECS_MB * 10, ECS_KB * 4, ECS_MB * 25);
+			CreateGlobalMemoryManager(&m_snapshot_allocator, ECS_MB * 10, ECS_KB * 4, ECS_MB * 25);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -5775,6 +5775,14 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void* UISystem::TryFindWindowResource(unsigned int window_index, Stream<char> name) const {
+			void* resource = nullptr;
+			m_windows[window_index].table.TryGetValue(name, resource);
+			return resource;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::FindFrameHandler(Action action, void* data) const
 		{
 			for (unsigned int index = 0; index < m_frame_handlers.size; index++) {
@@ -10487,7 +10495,7 @@ namespace ECSEngine {
 			ECS_ASSERT(index != -1);
 			Stream<void> data = m_global_resources.GetValueFromIndex(index);
 			if (m_memory->Belongs(data.buffer)) {
-				m_memory->Deallocate<false>(data.buffer);
+				m_memory->DeallocateNoAssert(data.buffer);
 			}
 
 			m_global_resources.EraseFromIndex(index);

@@ -648,7 +648,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 				if (keyboard->IsPressed(ECS_KEY_C)) {
 					// Make a new allocation and deallocate the old
 					Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-					copied_entities.DeallocateEx(editor_state->EditorAllocator());
+					copied_entities.Deallocate(editor_state->EditorAllocator());
 					copied_entities.InitializeAndCopy(editor_state->EditorAllocator(), current_selected_entities);
 				}
 				else if (keyboard->IsPressed(ECS_KEY_X)) {
@@ -932,7 +932,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 
 			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 				RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
-				data->cpu_framebuffer = TransferInstancesFramebufferToCPUAndAllocate(editor_state->RuntimeGraphics(), instanced_view, { nullptr });
+				data->cpu_framebuffer = TransferInstancesFramebufferToCPUAndAllocate(editor_state->RuntimeGraphics(), instanced_view, ECS_MALLOC_ALLOCATOR);
 
 				// Get an initial entity selected and see if a gizmo was selected
 				// Only a single selection
@@ -1005,7 +1005,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			if (data->cpu_framebuffer.values == nullptr) {
 				if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
-					data->cpu_framebuffer = TransferInstancesFramebufferToCPUAndAllocate(editor_state->RuntimeGraphics(), instanced_view, { nullptr });
+					data->cpu_framebuffer = TransferInstancesFramebufferToCPUAndAllocate(editor_state->RuntimeGraphics(), instanced_view, ECS_MALLOC_ALLOCATOR);
 				}
 			}
 
@@ -1166,7 +1166,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 		if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 			data->original_selection.Deallocate(editor_state->EditorAllocator());
 			if (data->cpu_framebuffer.values != nullptr) {
-				data->cpu_framebuffer.Deallocate({ nullptr });
+				data->cpu_framebuffer.Deallocate(ECS_MALLOC_ALLOCATOR);
 			}
 
 			// We need to reset any selected tool info

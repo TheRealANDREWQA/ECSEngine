@@ -212,16 +212,16 @@ namespace ECSEngine {
 		}
 
 		// Now read the whole data into a buffer - the string and the actual table
-		void* allocation = AllocateEx(allocator, header.table_size + header.string_total_size);
+		void* allocation = Allocate(allocator, header.table_size + header.string_total_size);
 		status = SetFileCursor(file_handle, -(int64_t)sizeof(header) - header.table_size - header.string_total_size, ECS_FILE_SEEK_END);
 		if (status == -1) {
-			DeallocateEx(allocator, allocation);
+			Deallocate(allocator, allocation);
 			return table;
 		}
 
 		bytes_read = ReadFromFile(file_handle, { allocation, header.table_size + header.string_total_size });
 		if (bytes_read == -1) {
-			DeallocateEx(allocator, allocation);
+			Deallocate(allocator, allocation);
 			return table;
 		}
 
@@ -235,7 +235,7 @@ namespace ECSEngine {
 			// Check to see if the identifier is still valid
 			if ((uintptr_t)identifier.ptr + identifier.size > header.string_total_size) {
 				memset(&table, 0, sizeof(table));
-				DeallocateEx(allocator, allocation);
+				Deallocate(allocator, allocation);
 				// Fail
 				return true;
 			}
@@ -376,14 +376,14 @@ namespace ECSEngine {
 			}
 
 			// Read the data now
-			void* allocation = AllocateEx(allocator, size_t_size);
+			void* allocation = Allocate(allocator, size_t_size);
 			if (allocation == nullptr) {
 				return { nullptr, 0 };
 			}
 
 			unsigned int bytes_read = ReadFromFile(packed_file->file_handle, { allocation, size_t_size });
 			if (bytes_read != file_offsets.y) {
-				DeallocateEx(allocator, allocation);
+				Deallocate(allocator, allocation);
 				return { nullptr , 0 };
 			}
 

@@ -42,8 +42,7 @@ namespace ECSEngine {
 		return pointer;
 	}
 
-	template<bool trigger_error_if_not_found>
-	bool StackAllocator::Deallocate(const void* block, DebugInfo debug_info) {
+	bool StackAllocator::DeallocateNoAssert(const void* block, DebugInfo debug_info) {
 		ECS_ASSERT(block != nullptr);
 
 		uintptr_t offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
@@ -61,8 +60,6 @@ namespace ECSEngine {
 
 		return true;
 	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, StackAllocator::Deallocate, const void*, DebugInfo);
 
 	void StackAllocator::Deallocate(DebugInfo debug_info) {
 		m_top = m_last_top;
@@ -96,11 +93,6 @@ namespace ECSEngine {
 		return ptr >= (uintptr_t)m_buffer && ptr < (uintptr_t)m_buffer + m_capacity;
 	}
 
-	void* StackAllocator::GetAllocatedBuffer() const
-	{
-		return m_buffer;
-	}
-
 	void StackAllocator::SetMarker() {
 		m_marker = m_top;
 	}
@@ -117,11 +109,7 @@ namespace ECSEngine {
 		}
 	}
 
-	size_t StackAllocator::GetCapacity() const {
-		return m_capacity;
-	}
-
-	size_t StackAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	size_t StackAllocator::GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
 	{
 		if (pointer_capacity >= 1) {
 			*region_start = GetAllocatedBuffer();
@@ -130,34 +118,13 @@ namespace ECSEngine {
 		return 1;
 	}
 
-	size_t StackAllocator::GetTop() const {
-		return m_top;
-	}
-	
-	// ---------------------- Thread safe variants -----------------------------
-
-	void* StackAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_lock, [&]() {
-			return Allocate(size, alignment, debug_info);
-		});
-	}
-
-	template<bool trigger_error_if_not_found>
-	bool StackAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_lock, [&]() {
-			return Deallocate<trigger_error_if_not_found>(block, debug_info);
-		});
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, StackAllocator::Deallocate_ts, const void*, DebugInfo);
-
-	void StackAllocator::SetMarker_ts() {
+	void StackAllocator::SetMarkerTs() {
 		ThreadSafeFunctor(&m_lock, [&]() {
 			SetMarker();
 		});
 	}
 
-	void StackAllocator::ReturnToMarker_ts(DebugInfo debug_info) {	
+	void StackAllocator::ReturnToMarkerTs(DebugInfo debug_info) {	
 		ThreadSafeFunctor(&m_lock, [&]() {
 			ReturnToMarker(debug_info);
 		});

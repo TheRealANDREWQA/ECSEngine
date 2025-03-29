@@ -126,7 +126,7 @@ namespace ECSEngine {
 		return allocation;
 	}
 
-	template<bool thread_safe, bool trigger_error_if_not_found>
+	template<bool thread_safe>
 	bool DeallocateImpl(MemoryArena* arena, const void* block, DebugInfo debug_info) {
 		size_t arena_index = GetAllocatorIndex(arena, block);
 		ECS_ASSERT(arena_index < arena->m_allocator_count, "Invalid deallocate block for memory arena");
@@ -134,7 +134,7 @@ namespace ECSEngine {
 		if constexpr (thread_safe) {
 			current_allocator.allocation_type = ECS_ALLOCATION_MULTI;
 		}
-		bool was_deallocated = ECSEngine::Deallocate<trigger_error_if_not_found>(current_allocator, block);
+		bool was_deallocated = ECSEngine::DeallocateNoAssert(current_allocator, block);
 		if (was_deallocated) {
 			if (arena->m_debug_mode) {
 				TrackedAllocation tracked;
@@ -213,7 +213,7 @@ namespace ECSEngine {
 		ECS_ASSERT(allocator_count < UCHAR_MAX);
 
 		size_t allocation_size = MemoryOf(allocator_count, base_info);
-		void* allocation = AllocateEx(buffer_allocator, allocation_size);
+		void* allocation = ECSEngine::Allocate(buffer_allocator, allocation_size);
 		Init(this, allocation, allocator_count, base_info);
 	}
 
@@ -264,7 +264,7 @@ namespace ECSEngine {
 
 	AllocatorPolymorphic MemoryArena::GetAllocator(size_t index) const
 	{
-		return { OffsetPointer(m_allocators, index * m_base_allocator_byte_size), m_base_allocator_type, ECS_ALLOCATION_SINGLE };
+		return { (AllocatorBase*)OffsetPointer(m_allocators, index * m_base_allocator_byte_size), ECS_ALLOCATION_SINGLE };
 	}
 
 	CreateBaseAllocatorInfo MemoryArena::GetInitialBaseAllocatorInfo() const
@@ -315,20 +315,17 @@ namespace ECSEngine {
 		return offset / arena->m_size_per_allocator;
 	}
 
-	template<bool trigger_error_if_not_found>
-	bool MemoryArena::Deallocate(const void* block, DebugInfo debug_info)
+	bool MemoryArena::DeallocateNoAssert(const void* block, DebugInfo debug_info)
 	{
-		return DeallocateImpl<false, trigger_error_if_not_found>(this, block, debug_info);
+		return DeallocateImpl<false>(this, block, debug_info);
 	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryArena::Deallocate, const void*, DebugInfo);
 
 	void* MemoryArena::Reallocate(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
 		return ReallocateImpl<false>(this, block, new_size, alignment, debug_info);
 	}
 
-	size_t MemoryArena::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	size_t MemoryArena::GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
 	{
 		if (pointer_capacity >= 1) {
 			*region_start = GetAllocatedBuffer();
@@ -337,18 +334,15 @@ namespace ECSEngine {
 		return 1;
 	}
 
-	void* MemoryArena::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
+	void* MemoryArena::AllocateTs(size_t size, size_t alignment, DebugInfo debug_info) {
 		return AllocateImpl<true, false>(this, size, alignment, debug_info);
 	}
 
-	template<bool trigger_error_if_not_found>
-	bool MemoryArena::Deallocate_ts(const void* block, DebugInfo debug_info) {
-		return DeallocateImpl<true, trigger_error_if_not_found>(this, block, debug_info);
+	bool MemoryArena::DeallocateNoAssertTs(const void* block, DebugInfo debug_info) {
+		return DeallocateImpl<true>(this, block, debug_info);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryArena::Deallocate_ts, const void*, DebugInfo);
-
-	void* MemoryArena::Reallocate_ts(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
+	void* MemoryArena::ReallocateTs(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
 		return ReallocateImpl<true>(this, block, new_size, alignment, debug_info);
 	}

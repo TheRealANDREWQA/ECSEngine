@@ -307,7 +307,7 @@ namespace ECSEngine {
 		// Use a conservative small value
 		global_allocator_info.multipool_capacity += ECS_MB * 32;
 
-		delta_state->previous_state_allocator = CreateGlobalMemoryManager(global_allocator_info, delta_state->current_state->m_memory_manager->m_backup_info);
+		CreateGlobalMemoryManager(&delta_state->previous_state_allocator, global_allocator_info, delta_state->current_state->m_memory_manager->m_backup_info);
 		EntityManagerDescriptor previous_state_descriptor;
 		// We can use as memory manager the global allocator directly
 		previous_state_descriptor.memory_manager = &delta_state->previous_state_allocator;

@@ -444,7 +444,7 @@ namespace ECSEngine {
 				unsigned int added_handle = reference_metadata[last_index];
 
 				// If it is the first time it is added, then also copy the pointer
-				if (database->GetReferenceCount(reference_metadata[last_index], asset_type) == 1) {
+				if (database->GetReferenceCount(added_handle, asset_type) == 1) {
 					// Copy the pointer
 					Stream<void> standalone_asset = GetAssetFromMetadata(&stream[index].value, asset_type);
 					if (!IsAssetPointerFromMetadataValid(standalone_asset)) {
@@ -462,7 +462,7 @@ namespace ECSEngine {
 
 				if (options.handle_remapping != nullptr) {
 					// Add the remapping even when the values are identical
-					options.handle_remapping[asset_type].AddAssert({ original_handle, reference_metadata[last_index] });
+					options.handle_remapping[asset_type].AddAssert({ original_handle, added_handle });
 				}
 			}
 		};

@@ -107,7 +107,7 @@ namespace ECSEngine {
 		void* allocated_data = CoalesceStreamWithData(system_manager->Allocator(), entities, entities.MemoryOf(1));
 		if (allocated_data == nullptr) {
 			// Allocate with Malloc
-			allocated_data = CoalesceStreamWithData({ nullptr }, entities, entities.MemoryOf(1));
+			allocated_data = CoalesceStreamWithData(ECS_MALLOC_ALLOCATOR, entities, entities.MemoryOf(1));
 		}
 		system_manager->BindData(SELECTED_ENTITIES_IDENTIFIER, allocated_data);
 	}

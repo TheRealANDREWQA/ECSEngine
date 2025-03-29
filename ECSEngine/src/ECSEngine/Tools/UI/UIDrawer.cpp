@@ -311,6 +311,36 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		// Helper function that handles a generic copyable debouncing value. It takes into account the current state and returns
+		// An opaque pointer with the data that it was stored previously using the copyable. If no copyable data exists, it will
+		// Insert a new separate resource that will be dynamic and auto removed using reference counting.
+		static void* HandleDebouncing(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, Stream<char> identifier_name, Copyable* copyable_data) {
+			struct DebouncingData {
+				Timer timer;
+				Copyable* data;
+			};
+
+			// Add a suffix to the identifier name such that we don't force the resource that is being debounced to include
+			// Our debouncing data and for resources without any stored data whatsoever, to not force them to store.
+			static const Stream<char> DEBOUNCING_NAME_SUFFIX = "__Debouncing";
+
+			if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+				ECS_STACK_CAPACITY_STREAM(char, debouncing_resource_name, 1024);
+				debouncing_resource_name.CopyOther(identifier_name);
+				debouncing_resource_name.AddStreamAssert(DEBOUNCING_NAME_SUFFIX);
+				
+				DebouncingData* debouncing_data = (DebouncingData*)drawer->TryFindWindowResource(debouncing_resource_name);
+				if (debouncing_data == nullptr) {
+					// Insert this entry
+					DebouncingData insert_data;
+					//insert_data.data = copyable_data->CopySize();
+					//drawer->AddWindowResourceToTable()
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void UIDrawer::CalculateRegionParameters(float2 position, float2 scale, const float2* render_offset) {
 			region_position = position;
 			region_scale = scale;
@@ -3993,7 +4023,7 @@ namespace ECSEngine {
 		};
 
 		template<typename NameType>
-		void CheckBoxDrawerImplementation(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, NameType name, CheckBoxValue value, float2 position, float2 scale) {
+		static void CheckBoxDrawerImplementation(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, NameType name, CheckBoxValue value, float2 position, float2 scale) {
 			struct DefaultActionData {
 				CheckBoxValue value;
 				UIConfigCheckBoxDefault default_value;
@@ -9182,6 +9212,12 @@ namespace ECSEngine {
 		bool UIDrawer::ExistsResource(Stream<char> name) {
 			Stream<char> string_identifier = HandleResourceIdentifier(name);
 			return system->ExistsWindowResource(window_index, string_identifier);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void* UIDrawer::TryFindWindowResource(Stream<char> identifier_name) const {
+			return system->TryFindWindowResource(window_index, identifier_name);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

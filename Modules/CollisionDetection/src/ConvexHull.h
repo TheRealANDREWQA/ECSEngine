@@ -196,7 +196,9 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	unsigned int GetFaceEdgeIndex(unsigned int face_index, unsigned int face_edge_index) const;
 
 	// It merges coplanar triangles into quads. It does not merge quads further
-	void MergeCoplanarTriangles(float coplanarity_degrees, AllocatorPolymorphic allocator, AllocatorPolymorphic previous_face_allocator = { nullptr });
+	// If the previous face allocator is specified, it will deallocate the buffers
+	// That are currently stored in this instance
+	void MergeCoplanarTriangles(float coplanarity_degrees, AllocatorPolymorphic allocator, AllocatorPolymorphic previous_face_allocator = nullptr);
 
 	ECS_INLINE void SetPoint(float3 point, unsigned int index) {
 		vertices_x[index] = point.x;
@@ -212,7 +214,7 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// Triangles being considered. Increasing the area_factor will result in more
 	// Triangles being eliminated, while reducing it will result in fewer triangles
 	// Being collapsed. The center of the hull needs to be set beforehand!
-	void SimplifyTrianglesAndQuads(float area_factor = 1.0f, AllocatorPolymorphic allocator = { nullptr });
+	void SimplifyTrianglesAndQuads(float area_factor = 1.0f, AllocatorPolymorphic allocator = nullptr);
 
 	// Returns the support point for that face in the given direction
 	// It returns the index inside the face, not inside the vertex array!
@@ -275,14 +277,14 @@ struct COLLISIONDETECTION_API ECS_REFLECT ConvexHull {
 	// We have a vertex with a single incoming edge in the middle
 	// Of a face. You can optionally pass an allocator to resize the
 	// Buffers to the new smaller size
-	void RemoveDegenerateEdges(AllocatorPolymorphic allocator = { nullptr });
+	void RemoveDegenerateEdges(AllocatorPolymorphic allocator = nullptr);
 
 	// In case some algorithm was applied to the faces that did not
 	// Correctly collapse the edges, this will recompletely construct
 	// The edges such that they match the face. If the allocator is specified,
 	// It will reallocate the buffer if the edge capacity is exceeded. Else, it
 	// Will assert that there are enough slots
-	void RegenerateEdges(AllocatorPolymorphic allocator = { nullptr });
+	void RegenerateEdges(AllocatorPolymorphic allocator = nullptr);
 
 	// It will copy the existing data
 	void Resize(AllocatorPolymorphic allocator, unsigned int new_vertex_capacity, unsigned int new_edge_capacity, unsigned int new_face_capacity);

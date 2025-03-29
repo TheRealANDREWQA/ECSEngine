@@ -20,7 +20,7 @@ namespace ECSEngine {
 	SystemManager::SystemManager(GlobalMemoryManager* global_memory)
 	{
 		MemoryManager* memory_manager = (MemoryManager*)global_memory->Allocate(sizeof(MemoryManager));
-		*memory_manager = MemoryManager(MEMORY_MANAGER_SIZE, MEMORY_MANAGER_CHUNK_COUNT, MEMORY_MANAGER_NEW_ALLOCATION_SIZE, global_memory);
+		new (memory_manager) MemoryManager(MEMORY_MANAGER_SIZE, MEMORY_MANAGER_CHUNK_COUNT, MEMORY_MANAGER_NEW_ALLOCATION_SIZE, global_memory);
 
 		temporary_allocator = LinearAllocator::InitializeFrom(global_memory, TEMPORARY_ALLOCATOR_SIZE);
 

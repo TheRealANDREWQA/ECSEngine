@@ -93,8 +93,8 @@ struct InspectorDrawEntityData {
 		return &allocator;
 	}
 
-	ECS_INLINE MemoryManager CreateLinkTargetAllocator(EditorState* editor_state) {
-		return MemoryManager(ECS_KB * 32, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
+	ECS_INLINE void CreateLinkTargetAllocator(MemoryManager* allocator, EditorState* editor_state) {
+		new (allocator) MemoryManager(ECS_KB * 32, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
 	}
 
 	ECS_INLINE AllocatorPolymorphic TargetAllocator(unsigned int link_index) {
@@ -203,7 +203,7 @@ struct InspectorDrawEntityData {
 		link_components[write_index].previous_data = allocator.Allocate(byte_size);
 		link_components[write_index].apply_modifier_initial_target_data = nullptr;
 		link_components[write_index].is_apply_modifier_in_progress = false;
-		link_components[write_index].target_allocator = CreateLinkTargetAllocator(editor_state);
+		CreateLinkTargetAllocator(&link_components[write_index].target_allocator, editor_state);
 		link_components[write_index].is_ui_change_triggered = false;
 
 		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(name);
@@ -1004,7 +1004,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 		// Check to see if it has buffers and copy them if they have changed
 		unsigned int ui_input_count = data->draw_data->matching_inputs[matching_index].capacity_inputs.size;
 		if (ui_input_count > 0) {
-			AllocatorPolymorphic allocator = { nullptr };
+			AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
 			void* component_data = nullptr;
 			if (data->draw_data->is_global_component) {
 				component_data = active_manager->GetGlobalComponent(component);

@@ -51,7 +51,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool TextSerializeFields(
 		Stream<TextSerializeField> fields,
 		Stream<wchar_t> file,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// -----------------------------------------------------------------------------------------
@@ -85,7 +85,7 @@ namespace ECSEngine {
 		CapacityStream<TextDeserializeField>& fields,
 		CapacityStream<void>& memory_pool,
 		Stream<wchar_t> file,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// -----------------------------------------------------------------------------------------
@@ -99,7 +99,7 @@ namespace ECSEngine {
 		CapacityStream<TextDeserializeField>& fields,
 		AllocatorPolymorphic pointer_allocator,
 		Stream<wchar_t> file,
-		AllocatorPolymorphic file_allocator = { nullptr }
+		AllocatorPolymorphic file_allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// -----------------------------------------------------------------------------------------

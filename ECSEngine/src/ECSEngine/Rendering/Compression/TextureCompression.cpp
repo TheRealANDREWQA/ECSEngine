@@ -332,7 +332,7 @@ namespace ECSEngine {
 			}
 			__finally {
 				// Release the memory for the compressed texture - even when faced with a crash
-				DeallocateEx(descriptor.allocator, new_data[0].buffer);
+				Deallocate(descriptor.allocator, new_data[0].buffer);
 			}
 		}
 		else {

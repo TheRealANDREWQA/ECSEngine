@@ -798,10 +798,10 @@ namespace ECSEngine {
 		}
 
 		void* allocation = nullptr;
-		allocation = AllocateEx(allocator, file_size);
+		allocation = Allocate(allocator, file_size);
 		unsigned int read_bytes = ReadFromFile(file_handle, { allocation, file_size });
 		if (read_bytes != file_size) {
-			DeallocateEx(allocator, allocation);
+			Deallocate(allocator, allocation);
 			return { nullptr, 0 };
 		}
 
@@ -833,10 +833,10 @@ namespace ECSEngine {
 		}
 
 		// Add a '\0' at the end of the file in order to help with C functions parsing
-		void* allocation = AllocateEx(allocator, file_size + 1);
+		void* allocation = Allocate(allocator, file_size + 1);
 		unsigned int read_bytes = ReadFromFile(file_handle, { allocation, file_size });
 		if (read_bytes == -1) {
-			DeallocateEx(allocator, allocation);
+			Deallocate(allocator, allocation);
 			return { nullptr, 0 };
 		}
 

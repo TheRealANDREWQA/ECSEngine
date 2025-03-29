@@ -35,7 +35,7 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 	// Load into a temporary entity manager and asset database
 	// And then commit into the main scene
 	// We can use large sizes since these will be virtual memory allocations anyways
-	MemoryManager temporary_memory = MemoryManager(ECS_MB * 500, ECS_KB * 4, ECS_GB, { nullptr });
+	MemoryManager temporary_memory(ECS_MB * 500, ECS_KB * 4, ECS_GB, ECS_MALLOC_ALLOCATOR);
 	EntityPool temporary_entity_pool(&temporary_memory, 4);
 
 	EntityManagerDescriptor temporary_descriptor;
@@ -98,7 +98,7 @@ bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index,
 	// Create a subset of the entity manager containing just that entity
 	// And use the normal scene serialize function
 	// We can use large allocator sizes since these are virtual allocations anwyays
-	MemoryManager temp_memory_manager = MemoryManager(ECS_GB, ECS_KB * 4, ECS_GB, { nullptr });
+	MemoryManager temp_memory_manager(ECS_GB, ECS_KB * 4, ECS_GB, ECS_MALLOC_ALLOCATOR);
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 

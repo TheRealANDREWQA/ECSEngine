@@ -213,7 +213,7 @@ static bool InitializeSandboxRecording(
 	// Create an allocator just for the recorder, such that we can wink it at the end
 	GlobalMemoryManager* sandbox_allocator = sandbox->GlobalMemoryManager();
 	MemoryManager* recorder_allocator = (MemoryManager*)sandbox_allocator->Allocate(sizeof(MemoryManager));
-	*recorder_allocator = MemoryManager(allocator_size, ECS_KB * 4, allocator_size, sandbox_allocator);
+	new (recorder_allocator) MemoryManager(allocator_size, ECS_KB * 4, allocator_size, sandbox_allocator);
 
 	// Allocate the write instrument out of it
 	CapacityStream<void> write_instrument_buffering;

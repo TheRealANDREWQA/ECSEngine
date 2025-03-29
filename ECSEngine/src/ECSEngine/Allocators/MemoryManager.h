@@ -7,48 +7,62 @@
 
 namespace ECSEngine {
 	
-	struct ECSENGINE_API MemoryManager : public AllocatorBase
+	struct ECSENGINE_API MemoryManager final : public AllocatorBase
 	{
-		ECS_INLINE MemoryManager() : AllocatorBase(ECS_ALLOCATOR_MANAGER), m_backup({ nullptr }), m_allocators(nullptr), m_allocator_count(0) {}
+		ECS_INLINE MemoryManager() : AllocatorBase(ECS_ALLOCATOR_MANAGER), m_backup(nullptr), m_allocators(nullptr), m_allocator_count(0) {}
 		// This is a short hand for the multipool version
 		MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, AllocatorPolymorphic backup);
 		MemoryManager(CreateBaseAllocatorInfo initial_info, CreateBaseAllocatorInfo backup_info, AllocatorPolymorphic backup);
 		
-		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(MemoryManager);
-		
-		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		template<typename T>
-		ECS_INLINE T* Allocate(DebugInfo debug_info = ECS_DEBUG_INFO) {
-			return (T*)Allocate(sizeof(T), alignof(T), debug_info);
+		MemoryManager(const MemoryManager& other) = default;
+		// Override the operator such that the vtable is always copied
+		ECS_INLINE MemoryManager& operator = (const MemoryManager& other) {
+			memcpy(this, &other, sizeof(*this));
+			return *this;
 		}
+		
+		virtual void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
-		void CreateAllocator(CreateBaseAllocatorInfo info);
+		virtual void* AllocateTs(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
-		// The return value is only useful when using assert_if_not_found set to false
-		// in which case it will return true if the deallocation was performed, else false
-		template<bool trigger_error_if_not_found = true>
-		bool Deallocate(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
+		virtual bool DeallocateNoAssert(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
-		// Returns true if it did deallocate it
-		bool DeallocateIfBelongs(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
+		virtual bool DeallocateNoAssertTs(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
-		void* Reallocate(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
+		virtual void* Reallocate(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		virtual void* ReallocateTs(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
 		// Deallocates all the extra buffers, keeps only the first one and resets the allocations such that there are none
-		void Clear(DebugInfo debug_info = ECS_DEBUG_INFO);
+		virtual void Clear(DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
 		// Deallocates all of its buffers
-		void Free(DebugInfo debug_info = ECS_DEBUG_INFO);
+		virtual void Free(bool assert_that_is_standalone = false, DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
-		size_t GetCurrentUsage() const;
+		ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info) override {
+			// Simply ignore the parameter, use the backup that we have recorded
+			Free(false, debug_info);
+		}
 
-		bool IsEmpty() const;
+		virtual size_t GetCurrentUsage() const override;
+
+		virtual bool IsEmpty() const override;
+
+		virtual void* GetAllocatedBuffer() const override {
+			// It doesn't make sense for this allocator
+			return nullptr;
+		}
+
+		virtual bool Belongs(const void* buffer) const override;
+
+		// Region start and region size are parallel arrays. Returns the count of regions
+		// Pointer capacity must represent the count of valid entries for the given pointers
+		virtual size_t GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const override;
 
 		// Removes the last allocators if they have currently no allocations active
 		void Trim();
-
-		bool Belongs(const void* buffer) const;
+		
+		void CreateAllocator(CreateBaseAllocatorInfo info);
 
 		AllocatorPolymorphic GetAllocator(size_t index) const;
 
@@ -62,26 +76,9 @@ namespace ECSEngine {
 		// Else 0
 		size_t GetHighestOffsetInUse(size_t allocator_index) const;
 
-		// Region start and region size are parallel arrays. Returns the count of regions
-		// Pointer capacity must represent the count of valid entries for the given pointers
-		size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const;
-
 		// Returns the base allocator info with which this instance was initialized with
 		CreateBaseAllocatorInfo GetInitialAllocatorInfo() const;
 
-		// ---------------------------------------------------- Thread safe --------------------------------------------------
-
-		void* Allocate_ts(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		// The return value is only useful when using assert_if_not_found set to false
-		// in which case it will return true if the deallocation was performed, else false
-		template<bool trigger_error_if_not_found = true>
-		bool Deallocate_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		bool DeallocateIfBelongs_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
-	
 		// This field is not needed for this to function, it is used only for serialization/deserialization purposes
 		// It is placed here to reduce the waste coming from padding bytes
 		ECS_ALLOCATOR_TYPE m_initial_allocator_type;
@@ -109,18 +106,20 @@ namespace ECSEngine {
 	typedef MemoryManager GlobalMemoryManager;
 	typedef MemoryManager ResizableMemoryArena;
 
-	ECS_INLINE GlobalMemoryManager CreateGlobalMemoryManager(CreateBaseAllocatorInfo initial_info, CreateBaseAllocatorInfo backup_info) {
-		return MemoryManager(initial_info, backup_info, { nullptr });
+	ECS_INLINE void CreateGlobalMemoryManager(GlobalMemoryManager* allocator, CreateBaseAllocatorInfo initial_info, CreateBaseAllocatorInfo backup_info) {
+		new (allocator) GlobalMemoryManager(initial_info, backup_info, ECS_MALLOC_ALLOCATOR);
 	}
 
-	ECSENGINE_API GlobalMemoryManager CreateGlobalMemoryManager(
+	ECSENGINE_API void CreateGlobalMemoryManager(
+		GlobalMemoryManager* allocator,
 		size_t size,
 		size_t maximum_pool_count,
 		size_t new_allocation_size
 	);
 
 	// If left the values are left at 0, then it will use the initial values as backup as well
-	ECSENGINE_API ResizableMemoryArena CreateResizableMemoryArena(
+	ECSENGINE_API void CreateResizableMemoryArena(
+		ResizableMemoryArena* allocator,
 		size_t initial_arena_capacity,
 		size_t initial_allocator_count,
 		size_t initial_blocks_per_allocator,

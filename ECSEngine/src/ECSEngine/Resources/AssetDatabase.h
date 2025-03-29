@@ -379,11 +379,11 @@ namespace ECSEngine {
 
 		// It does not set the name or the file. Can optionally provide an allocator for the buffers that are used
 		// otherwise the allocator from this database will be used.
-		bool ReadShaderFile(Stream<char> name, ShaderMetadata* metadata, AllocatorPolymorphic allocator = { nullptr }, bool default_initialize_if_missing = false) const;
+		bool ReadShaderFile(Stream<char> name, ShaderMetadata* metadata, AllocatorPolymorphic allocator = nullptr, bool default_initialize_if_missing = false) const;
 
 		// It does not set the name or the file. Can optionally provide an allocator for the buffers that are used
 		// otherwise the allocator from this database will be used.
-		bool ReadMaterialFile(Stream<char> name, MaterialAsset* asset, AllocatorPolymorphic allocator = { nullptr }, bool default_initialize_if_missing = false) const;
+		bool ReadMaterialFile(Stream<char> name, MaterialAsset* asset, AllocatorPolymorphic allocator = nullptr, bool default_initialize_if_missing = false) const;
 
 		// It does not set the name or the file
 		bool ReadMiscFile(Stream<char> name, Stream<wchar_t> file, MiscAsset* asset, bool default_initialize_if_missing = false) const;
@@ -395,7 +395,7 @@ namespace ECSEngine {
 			Stream<wchar_t> file, 
 			void* metadata, 
 			ECS_ASSET_TYPE asset_type, 
-			AllocatorPolymorphic allocator = { nullptr }, 
+			AllocatorPolymorphic allocator = nullptr,
 			bool default_initialize_if_missing = false
 		) const;
 
@@ -406,7 +406,7 @@ namespace ECSEngine {
 			Stream<wchar_t> metadata_file,
 			void* metadata,
 			ECS_ASSET_TYPE asset_type,
-			AllocatorPolymorphic allocator = { nullptr }
+			AllocatorPolymorphic allocator = nullptr
 		);
 
 		// Changes the name of the asset and also modifies the metadata file if present

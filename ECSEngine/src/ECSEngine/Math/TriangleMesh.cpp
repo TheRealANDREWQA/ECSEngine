@@ -143,7 +143,7 @@ namespace ECSEngine {
 
 	void TriangleMesh::Deallocate(AllocatorPolymorphic allocator) {
 		if (position_capacity > 0 && position_x != nullptr) {
-			DeallocateEx(allocator, position_x);
+			ECSEngine::Deallocate(allocator, position_x);
 		}
 		triangles.Deallocate(allocator);
 		memset(this, 0, sizeof(*this));
@@ -222,7 +222,7 @@ namespace ECSEngine {
 
 	TriangleMesh ECS_VECTORCALL TriangleMesh::Transform(Matrix matrix, AllocatorPolymorphic allocator) const
 	{
-		float* position_storage = (float*)AllocateEx(allocator, sizeof(float3) * position_size);
+		float* position_storage = (float*)Allocate(allocator, sizeof(float3) * position_size);
 		return Transform(matrix, position_storage);
 	}
 

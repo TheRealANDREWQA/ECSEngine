@@ -1867,6 +1867,15 @@ namespace ECSEngine {
 			UIActionHandler handler;
 		};
 
+		struct UIConfigDebouncing {
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_DEBOUNCING;
+			}
+
+			// How many milliseconds should pass until the new value is updated
+			float milliseconds;
+		};
+
 	}
 
 }

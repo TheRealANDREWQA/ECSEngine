@@ -94,7 +94,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
 			if (buffer != nullptr && capacity > 0) {
-				DeallocateEx(allocator, buffer);
+				ECSEngine::Deallocate(allocator, buffer);
 			}
 		}
 
@@ -256,7 +256,7 @@ namespace ECSEngine {
 		}
 
 		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			void* allocation = AllocateEx(allocator, MemoryOf(_capacity), alignof(T), debug_info);
+			void* allocation = Allocate(allocator, MemoryOf(_capacity), alignof(T), debug_info);
 			InitializeFromBuffer(allocation, 0, _capacity);
 		}
 

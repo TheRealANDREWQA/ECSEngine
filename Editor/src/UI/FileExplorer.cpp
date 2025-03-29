@@ -910,7 +910,7 @@ ECS_THREAD_TASK(MeshExportAllTask) {
 	MeshExportAllTaskData* data = (MeshExportAllTaskData*)_data;
 
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-	GLTFData gltf_data = LoadGLTFFile(data->mesh_path, { nullptr }, &error_message);
+	GLTFData gltf_data = LoadGLTFFile(data->mesh_path, ECS_MALLOC_ALLOCATOR, &error_message);
 	if (gltf_data.data == nullptr) {
 		// Failed, print the error message
 		EditorSetConsoleError(error_message);
@@ -949,7 +949,7 @@ ECS_THREAD_TASK(MeshExportAllTask) {
 			MonitorMeshExportAllEvent(data->editor_state, &monitor_data);
 		}
 	}
-	data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->mesh_path.buffer);
+	data->editor_state->multithreaded_editor_allocator->DeallocateTs(data->mesh_path.buffer);
 }
 
 struct MeshExportAllActionData {
@@ -1095,7 +1095,7 @@ void MeshExportSelectionDestroyWindow(ActionData* action_data) {
 	if (window_data->gltf_data.data != nullptr) {
 		FreeGLTFFile(window_data->gltf_data);
 	}
-	window_data->editor_state->multithreaded_editor_allocator->Deallocate_ts(window_data->mesh_path.buffer);
+	window_data->editor_state->multithreaded_editor_allocator->DeallocateTs(window_data->mesh_path.buffer);
 	for (unsigned int index = 0; index < window_data->export_textures.size; index++) {
 		window_data->export_textures[index].texture.Deallocate(window_data->editor_state->EditorAllocator());
 	}
@@ -1142,11 +1142,11 @@ ECS_THREAD_TASK(MeshExportSelectionTask) {
 	MeshExportSelectionTaskData* data = (MeshExportSelectionTaskData*)_data;
 
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-	GLTFData gltf_data = LoadGLTFFile(data->mesh_path, { nullptr }, &error_message);
+	GLTFData gltf_data = LoadGLTFFile(data->mesh_path, ECS_MALLOC_ALLOCATOR, &error_message);
 	if (gltf_data.data == nullptr) {
 		// Failed, print the error message
 		EditorSetConsoleError(error_message);
-		data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->mesh_path.buffer);
+		data->editor_state->multithreaded_editor_allocator->DeallocateTs(data->mesh_path.buffer);
 	}
 	else {
 		// Determine if there are textures at all in this file
@@ -1571,7 +1571,8 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
 
 	// Create a temporary global allocator
-	GlobalMemoryManager allocator = CreateGlobalMemoryManager(FILE_EXPLORER_PRELOAD_TEXTURE_ALLOCATOR_SIZE_PER_THREAD, 128, FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE);
+	GlobalMemoryManager allocator;
+	CreateGlobalMemoryManager(&allocator, FILE_EXPLORER_PRELOAD_TEXTURE_ALLOCATOR_SIZE_PER_THREAD, 128, FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE);
 
 	// Load the texture normally - don't generate mip maps as that will require the immediate context
 	ResourceManagerTextureDesc descriptor;

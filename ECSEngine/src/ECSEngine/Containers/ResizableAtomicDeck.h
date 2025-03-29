@@ -157,7 +157,7 @@ namespace ECSEngine {
 
 		void Clear() {
 			for (unsigned int index = 1; index < stream.size; index++) {
-				DeallocateEx(allocator, stream[index].buffer);
+				Deallocate(allocator, stream[index].buffer);
 			}
 			stream[0].Reset();
 			stream.size = 1;
@@ -167,15 +167,15 @@ namespace ECSEngine {
 		void Expand(unsigned int new_chunk_count) {
 			ECS_ASSERT(stream.size + new_chunk_count <= stream.capacity);
 			for (unsigned int index = 0; index < new_chunk_count; index++) {
-				void* allocation = AllocateEx(allocator, ChunkByteSize(chunk_size));
+				void* allocation = Allocate(allocator, ChunkByteSize(chunk_size));
 				stream.Add({ allocation, 0, chunk_size });
 			}
 		}
 
 		void Free() {
 			Clear();
-			DeallocateEx(allocator, stream[0].buffer);
-			DeallocateEx(allocator, stream.buffer);
+			Deallocate(allocator, stream[0].buffer);
+			Deallocate(allocator, stream.buffer);
 			memset(this, 0, sizeof(*this));
 		}
 
@@ -371,7 +371,7 @@ namespace ECSEngine {
 			initial_chunks = max(initial_chunks, (unsigned int)1);
 
 			for (unsigned int index = 0; index < initial_chunks; index++) {
-				void* allocation = AllocateEx(allocator, ChunkByteSize(chunk_size));
+				void* allocation = Allocate(allocator, ChunkByteSize(chunk_size));
 				stream.Add(AtomicStream<T>(allocation, 0, chunk_size));
 			}
 		}

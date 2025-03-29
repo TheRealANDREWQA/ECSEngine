@@ -39,10 +39,7 @@ namespace ECSEngine {
 	}
 
 	// For this allocator, do not record the profiling deallocations
-	template<bool trigger_error_if_not_found>
-	bool LinearAllocator::Deallocate(const void* block, DebugInfo debug_info) { return true; }
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, LinearAllocator::Deallocate, const void*, DebugInfo);
+	bool LinearAllocator::DeallocateNoAssert(const void* block, DebugInfo debug_info) { return true; }
 
 	void LinearAllocator::Clear(DebugInfo debug_info) {
 		m_top = 0;
@@ -60,11 +57,6 @@ namespace ECSEngine {
 	size_t LinearAllocator::GetMarker() const
 	{
 		return m_top;
-	}
-
-	void* LinearAllocator::GetAllocatedBuffer() const
-	{
-		return m_buffer;
 	}
 
 	void LinearAllocator::ReturnToMarker(size_t marker, DebugInfo debug_info)
@@ -86,7 +78,7 @@ namespace ECSEngine {
 		return IsPointerRange(m_buffer, m_top, buffer);
 	}
 
-	size_t LinearAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	size_t LinearAllocator::GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
 	{
 		if (pointer_capacity >= 1) {
 			*region_start = GetAllocatedBuffer();
@@ -113,20 +105,7 @@ namespace ECSEngine {
 		return return_value;
 	}
 
-	// ---------------------- Thread safe variants -----------------------------
-
-	void* LinearAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
-		return ThreadSafeFunctorReturn(&m_lock, [&]() {
-			return Allocate(size, alignment, debug_info);
-		});
-	}
-
-	template<bool trigger_error_if_not_found>
-	bool LinearAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) { return true; }
-
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, LinearAllocator::Deallocate_ts, const void*, DebugInfo);
-
-	void LinearAllocator::SetMarker_ts() {
+	void LinearAllocator::SetMarkerTs() {
 		ThreadSafeFunctor(&m_lock, [&]() {
 			SetMarker();
 		});

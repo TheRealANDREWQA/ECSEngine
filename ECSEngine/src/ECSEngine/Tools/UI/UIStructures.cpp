@@ -83,7 +83,7 @@ namespace ECSEngine {
 
 				void* allocation = nullptr;
 				if (total_data_size > 0) {
-					allocation = AllocateEx(allocator, total_data_size);
+					allocation = Allocate(allocator, total_data_size);
 					uintptr_t ptr = (uintptr_t)allocation;
 					for (unsigned int index = 0; index < copy.position_x.size; index++) {
 						if (copy.action[index].data_size > 0) {
@@ -987,7 +987,7 @@ namespace ECSEngine {
 				size_t count = info->system_buffers[index].size - info->previous_system_counts[index];
 				size_t allocation_size = vertex_byte_sizes[index] * count;
 				if (allocation_size > 0) {
-					buffers[offset + index].buffer = AllocateEx(allocator, allocation_size);
+					buffers[offset + index].buffer = Allocate(allocator, allocation_size);
 					size_t buffer_offset = vertex_byte_sizes[index] * info->previous_system_counts[index];
 					memcpy(buffers[offset + index].buffer, OffsetPointer(info->system_buffers[index].buffer, buffer_offset), allocation_size);
 				}
@@ -1002,7 +1002,7 @@ namespace ECSEngine {
 				Stream<UISpriteTexture>* current_sprites = &sprites[pass_index * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + texture_index_offset];
 				if (sprite_count > 0) {
 					size_t allocation_size = sizeof(UISpriteTexture) * sprite_count;
-					current_sprites->buffer = (UISpriteTexture*)AllocateEx(allocator, allocation_size);
+					current_sprites->buffer = (UISpriteTexture*)Allocate(allocator, allocation_size);
 					Stream<UISpriteTexture> textures = {};
 					if (pass_index == ECS_TOOLS_UI_PASSES) {
 						textures = info->system_sprite_textures[texture_index_offset];
@@ -1059,7 +1059,7 @@ namespace ECSEngine {
 			generals = info->general_handler->Copy(allocator, &generals_action_allocated_data);
 
 			// At last the runnables
-			runnables.InitializeEx(allocator, info->runnables.size);
+			runnables.Initialize(allocator, info->runnables.size);
 			for (size_t index = 0; index < runnables.size; index++) {
 				runnables[index] = info->runnables[index];
 				runnables[index].data = CopyNonZeroEx(info->runnable_allocator, runnables[index].data, runnables[index].data_size);
@@ -1073,46 +1073,42 @@ namespace ECSEngine {
 			}
 
 			for (size_t index = 0; index < ECS_COUNTOF(sprites); index++) {
-				if (sprites[index].size > 0 && sprites[index].buffer != nullptr) {
-					DeallocateEx(allocator, sprites[index].buffer);
-				}
+				sprites[index].Deallocate(allocator);
 			}
 
 			for (size_t index = 0; index < ECS_COUNTOF(cluster_sprite_counts); index++) {
-				if (cluster_sprite_counts[index].size > 0 && cluster_sprite_counts[index].buffer != nullptr) {
-					DeallocateEx(allocator, cluster_sprite_counts[index].buffer);
-				}
+				cluster_sprite_counts->Deallocate(allocator);
 			}
 
 			hoverables.Deallocate(allocator);
 			if (hoverables_action_allocated_data != nullptr) {
-				DeallocateEx(allocator, hoverables_action_allocated_data);
+				ECSEngine::Deallocate(allocator, hoverables_action_allocated_data);
 			}
 			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 				clickables[button_type].Deallocate(allocator);
 				if (clickables_action_allocated_data[button_type] != nullptr) {
-					DeallocateEx(allocator, clickables_action_allocated_data[button_type]);
+					ECSEngine::Deallocate(allocator, clickables_action_allocated_data[button_type]);
 				}
 				});
 			generals.Deallocate(allocator);
 			if (generals_action_allocated_data != nullptr) {
-				DeallocateEx(allocator, generals_action_allocated_data);
+				ECSEngine::Deallocate(allocator, generals_action_allocated_data);
 			}
 
 			if (deallocate_runnable_data) {
 				for (size_t index = 0; index < runnables.size; index++) {
 					if (runnables[index].data_size > 0) {
-						DeallocateEx(runnable_allocator, runnables[index].data);
+						ECSEngine::Deallocate(runnable_allocator, runnables[index].data);
 					}
 				}
 			}
-			runnables.DeallocateEx(allocator);
+			runnables.Deallocate(allocator);
 		
 			InitializeEmpty();
 		}
 
 		template<typename UpdateXFunctor, typename UpdateYFunctor>
-		void ChangeStructureDimensionRatio(UpdateXFunctor&& update_x, UpdateYFunctor&& update_y, float2 current_ratio, float2 new_ratio) {
+		static void ChangeStructureDimensionRatio(UpdateXFunctor&& update_x, UpdateYFunctor&& update_y, float2 current_ratio, float2 new_ratio) {
 			float2 factor_inverse = current_ratio / new_ratio;
 			if (factor_inverse.x != 1.0f) {
 				update_x(factor_inverse.x);

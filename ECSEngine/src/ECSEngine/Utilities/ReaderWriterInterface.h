@@ -341,7 +341,7 @@ namespace ECSEngine {
 				return false;
 			}
 			data.size = (size_t)integer_size;
-			data.buffer = data.size == 0 ? nullptr : AllocateEx(allocator, data.size);
+			data.buffer = data.size == 0 ? nullptr : Allocate(allocator, data.size);
 			return Read(data.buffer, data.size);
 		}
 
@@ -453,7 +453,7 @@ namespace ECSEngine {
 
 			ECS_INLINE ~ReadOrReferenceBufferDeallocate() {
 				if (buffer != nullptr && was_allocated) {
-					DeallocateEx(allocator, buffer);
+					Deallocate(allocator, buffer);
 				}
 			}
 
@@ -481,9 +481,9 @@ namespace ECSEngine {
 			// If we have a reference failure, it indicate that the instrument could reference the data
 			// But the given range is outside the bounds
 			if (result.buffer == nullptr && !result.is_reference_failure) {
-				result.buffer = AllocateEx(allocator, data_size);
+				result.buffer = Allocate(allocator, data_size);
 				if (!Read(result.buffer, data_size)) {
-					DeallocateEx(allocator, result.buffer);
+					Deallocate(allocator, result.buffer);
 					result.buffer = nullptr;
 				}
 				else {

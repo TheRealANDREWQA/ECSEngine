@@ -134,7 +134,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Entity EntityPool::AllocateEx(unsigned int archetype, unsigned int base_archetype, unsigned int stream_index)
+	Entity EntityPool::Allocate(unsigned int archetype, unsigned int base_archetype, unsigned int stream_index)
 	{
 		return EntityPoolAllocateImplementation(this, archetype, base_archetype, stream_index);
 	}
@@ -229,14 +229,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void EntityPool::AllocateEx(Stream<Entity> entities, unsigned int archetype, unsigned int base_archetype, const unsigned int* stream_indices)
+	void EntityPool::Allocate(Stream<Entity> entities, unsigned int archetype, unsigned int base_archetype, const unsigned int* stream_indices)
 	{
 		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_INFOS>(this, entities, { stream_indices, { archetype, base_archetype } });
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void EntityPool::AllocateEx(Stream<Entity> entities, uint2 archetype_indices, unsigned int copy_position)
+	void EntityPool::Allocate(Stream<Entity> entities, uint2 archetype_indices, unsigned int copy_position)
 	{
 		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_POSITION>(this, entities, { nullptr, archetype_indices, copy_position });
 	}
@@ -700,7 +700,7 @@ namespace ECSEngine {
 		entity_pool->m_entity_infos.FreeBuffer();
 
 		size_t serialize_infos_size = sizeof(SerializeEntityInfo) * header.entity_count;
-		ECS_MALLOCA_ALLOCATOR_SCOPED(scoped_allocation, serialize_infos_size, ECS_KB * 64, { nullptr });
+		ECS_MALLOCA_ALLOCATOR_SCOPED(scoped_allocation, serialize_infos_size, ECS_KB * 64, ECS_MALLOC_ALLOCATOR);
 		SerializeEntityInfo* serialize_infos = (SerializeEntityInfo*)scoped_allocation.buffer;
 		if (!read_instrument->Read(serialize_infos, serialize_infos_size)) {
 			return false;

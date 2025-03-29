@@ -932,7 +932,7 @@ namespace ECSEngine {
 		ResizableLinearAllocator temporary_allocator;
 		if (!allocator_is_temporary) {
 			// Stack alloc survives the scope block
-			temporary_allocator = ResizableLinearAllocator(ECS_STACK_ALLOC(ECS_KB * 32), ECS_KB * 32, ECS_MB * 32, { nullptr });
+			temporary_allocator = ResizableLinearAllocator(ECS_STACK_ALLOC(ECS_KB * 32), ECS_KB * 32, ECS_MB * 32, ECS_MALLOC_ALLOCATOR);
 			allocator_to_use = &temporary_allocator;
 		}
 		

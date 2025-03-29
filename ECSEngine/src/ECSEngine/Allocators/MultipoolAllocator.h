@@ -12,34 +12,40 @@ namespace ECSEngine {
 	* allocations as low as possible. The parameter pool_count given to the constructor represents the maximum 
 	* number of pools that it can track of, including the ones occupied.
 	*/
-	struct ECSENGINE_API MultipoolAllocator : public AllocatorBase
+	struct ECSENGINE_API MultipoolAllocator final : public AllocatorBase
 	{
 		ECS_INLINE MultipoolAllocator() : AllocatorBase(ECS_ALLOCATOR_MULTIPOOL), m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0), m_power_of_two_factor(0) {}
 		MultipoolAllocator(void* buffer, size_t size, size_t pool_count);
 		MultipoolAllocator(void* buffer, void* block_range_buffer, size_t size, size_t pool_count);
 		
-		MultipoolAllocator& operator = (const MultipoolAllocator& other) = default;
+		// Override the operator such that the vtable is always copied
+		ECS_INLINE MultipoolAllocator& operator = (const MultipoolAllocator& other) {
+			memcpy(this, &other, sizeof(*this));
+			return *this;
+		}
 		
-		void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The Ts functions can use the default
 
-		template<typename T>
-		ECS_INLINE T* Allocate(DebugInfo debug_info = ECS_DEBUG_INFO) {
-			return (T*)Allocate(sizeof(T), alignof(T), debug_info);
+		virtual void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		virtual bool DeallocateNoAssert(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		virtual void* Reallocate(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		virtual void Clear(DebugInfo debug_info = ECS_DEBUG_INFO) override;
+
+		ECS_INLINE virtual void Free(bool assert_that_is_standalone = false, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+			ECS_ASSERT(!assert_that_is_standalone, "MultipoolAllocator is not standalone!");
 		}
 
-		// The return value is only useful when using assert_if_not_found set to false
-		// in which case it will return true if the deallocation was performed, else false
-		template<bool trigger_error_if_not_found = true>
-		bool Deallocate(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		void* Reallocate(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		void Clear(DebugInfo debug_info = ECS_DEBUG_INFO);
+		ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+			backup_allocator->Deallocate(GetAllocatedBuffer(), debug_info);
+		}
 
 		// Returns whether or not there is something currently allocated from this allocator
-		bool IsEmpty() const;
+		virtual bool IsEmpty() const override;
 
-		ECS_INLINE void* GetAllocatedBuffer() const {
+		ECS_INLINE virtual void* GetAllocatedBuffer() const override {
 			return m_buffer;
 		}
 
@@ -47,9 +53,9 @@ namespace ECSEngine {
 			return m_size;
 		}
 
-		bool Belongs(const void* buffer) const;
+		virtual bool Belongs(const void* buffer) const override;
 
-		ECS_INLINE size_t GetCurrentUsage() const {
+		ECS_INLINE virtual size_t GetCurrentUsage() const override {
 			return m_range.GetCurrentUsage();
 		}
 
@@ -63,21 +69,12 @@ namespace ECSEngine {
 
 		// Region start and region size are parallel arrays. Returns the count of regions
 		// Pointer capacity must represent the count of valid entries for the given pointers
-		size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const;
-
-		// --------------------------------------------------- Thread safe variants ------------------------------------------
-
-		void* Allocate_ts(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		// The return value is only useful when using assert_if_not_found set to false
-		// in which case it will return true if the deallocation was performed, else false
-		template<bool trigger_error_if_not_found = true>
-		bool Deallocate_ts(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
+		virtual size_t GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const override;
 
 		static size_t MemoryOf(size_t pool_count);
+
 		static size_t MemoryOf(size_t pool_count, size_t size);
+	
 		// From a fixed size and a number of known block count, calculate the amount of memory it can reference
 		static size_t CapacityFromFixedSize(size_t fixed_size, size_t pool_count);
 

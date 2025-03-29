@@ -83,7 +83,7 @@ static bool InitializeSandboxReplayImpl(
 	// Can create the allocator now. It doesn't need to be extremely large, since it is not used to read the actual scene in memory.
 	AllocatorPolymorphic sandbox_allocator = sandbox->GlobalMemoryManager();
 	MemoryManager* replay_allocator = (MemoryManager*)Allocate(sandbox_allocator, sizeof(MemoryManager));
-	*replay_allocator = MemoryManager(allocator_size, ECS_KB * 4, allocator_size, sandbox_allocator);
+	new (replay_allocator) MemoryManager(allocator_size, ECS_KB * 4, allocator_size, sandbox_allocator);
 
 	CapacityStream<void> read_instrument_buffering;
 	read_instrument_buffering.Initialize(replay_allocator, buffering_size);

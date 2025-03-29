@@ -551,7 +551,7 @@ namespace ECSEngine {
 		misc_block_pointer->time_stamp = OS::GetFileLastWrite(file_path);
 
 		ResizableStream<void> misc_data_resizable;
-		misc_data_resizable.allocator = { nullptr };
+		misc_data_resizable.allocator = ECS_MALLOC_ALLOCATOR;
 		misc_data_resizable.buffer = file_data.buffer;
 		misc_data_resizable.size = file_data.size;
 		misc_data_resizable.capacity = file_data.size;
@@ -628,7 +628,7 @@ namespace ECSEngine {
 		PreloadMeshHelper(world, _data, thread_id, [](Stream<wchar_t> file_path, AllocatorPolymorphic allocator, AssetLoadingControlBlock* control_block) {
 			Stream<void> data = UnpackFile(file_path, control_block->extra.packed_file, allocator);
 			GLTFData gltf_data = LoadGLTFFileFromMemory(data, allocator);
-			DeallocateEx(allocator, data.buffer);
+			Deallocate(allocator, data.buffer);
 			return gltf_data;
 		});
 	}
@@ -673,7 +673,7 @@ namespace ECSEngine {
 			unsigned int packed_index = GetMultiPackedFileIndex(file_path, control_block->extra.multi_packed_file);
 			Stream<void> data = UnpackFile(file_path, &control_block->extra.multi_packed_inputs[packed_index], allocator);
 			GLTFData gltf_data = LoadGLTFFileFromMemory(data, allocator);
-			DeallocateEx(allocator, data.buffer);
+			Deallocate(allocator, data.buffer);
 			return gltf_data;
 		});
 	}
@@ -1019,7 +1019,7 @@ namespace ECSEngine {
 		// Create the global allocators
 		control_block->global_managers = (GlobalMemoryManager*)persistent_allocator.Allocate(sizeof(GlobalMemoryManager) * thread_count);
 		for (unsigned int index = 0; index < thread_count; index++) {
-			control_block->global_managers[index] = CreateGlobalMemoryManager(ALLOCATOR_SIZE, ECS_KB * 8, ALLOCATOR_BACKUP);
+			CreateGlobalMemoryManager(&control_block->global_managers[index], ALLOCATOR_SIZE, ECS_KB * 8, ALLOCATOR_BACKUP);
 		}
 
 		return control_block;

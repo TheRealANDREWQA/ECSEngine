@@ -53,10 +53,10 @@ namespace ECSEngine {
 
 		// Returns an appropriately sized allocator for a default use case.
 		// It is the same as calling DetermineAllocator with a size of 512
-		static MemoryManager DefaultAllocator(AllocatorPolymorphic initial_allocator);
+		static void DefaultAllocator(MemoryManager* allocator, AllocatorPolymorphic initial_allocator);
 
 		// The total query count will adjust the allocator such that it will be the most suitable
-		static MemoryManager DetermineAllocator(AllocatorPolymorphic initial_allocator, unsigned int total_query_count);
+		static void DetermineAllocator(MemoryManager* allocator, AllocatorPolymorphic initial_allocator, unsigned int total_query_count);
 
 		// SoA split of a resizable stream in order
 		// to have better cache utilization when updating the query_results

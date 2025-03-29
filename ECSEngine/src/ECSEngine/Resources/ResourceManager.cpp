@@ -2043,12 +2043,12 @@ namespace ECSEngine {
 					}
 					else {
 						// Deallocate the byte code
-						DeallocateEx(allocator_polymorphic, byte_code.buffer);
+						Deallocate(allocator_polymorphic, byte_code.buffer);
 					}
 				}
 				else {
 					// Deallocate the byte code
-					DeallocateEx(allocator_polymorphic, byte_code.buffer);
+					Deallocate(allocator_polymorphic, byte_code.buffer);
 				}
 			}
 		}
@@ -2087,12 +2087,12 @@ namespace ECSEngine {
 					}
 					else {
 						// Deallocate the source code
-						DeallocateEx(allocator_polymorphic, source_code.buffer);
+						Deallocate(allocator_polymorphic, source_code.buffer);
 					}
 				}
 				else {
 					// Deallocate the source code
-					DeallocateEx(allocator_polymorphic, source_code.buffer);
+					Deallocate(allocator_polymorphic, source_code.buffer);
 				}
 
 				if (byte_code.size > 0) {
@@ -2100,7 +2100,7 @@ namespace ECSEngine {
 						*extra_information.byte_code = byte_code;
 					}
 					else {
-						DeallocateEx(allocator_polymorphic, byte_code.buffer);
+						Deallocate(allocator_polymorphic, byte_code.buffer);
 					}
 				}
 			}
@@ -2148,7 +2148,7 @@ namespace ECSEngine {
 					*extra_information.byte_code = byte_code;
 				}
 				else {
-					DeallocateEx(byte_code_allocator, byte_code.buffer);
+					Deallocate(byte_code_allocator, byte_code.buffer);
 				}
 			}
 		}
@@ -2800,9 +2800,9 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	MemoryManager DefaultResourceManagerAllocator(GlobalMemoryManager* global_allocator)
+	void DefaultResourceManagerAllocator(ResourceManagerAllocator* allocator, GlobalMemoryManager* global_allocator)
 	{
-		return MemoryManager(
+		new (allocator) ResourceManagerAllocator(
 			ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_INITIAL_SIZE, 
 			2048, 
 			ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE, 

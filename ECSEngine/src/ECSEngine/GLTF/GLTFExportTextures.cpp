@@ -40,7 +40,7 @@ namespace ECSEngine {
 	void GLTFExportTexturesOptionsAllocateAll(GLTFExportTexturesOptions* options, size_t failure_string_capacity, AllocatorPolymorphic allocator)
 	{
 		size_t allocation_size = sizeof(AtomicStream<char>) + sizeof(Semaphore) + sizeof(char) * failure_string_capacity;
-		void* allocation = AllocateEx(allocator, allocation_size);
+		void* allocation = Allocate(allocator, allocation_size);
 		uintptr_t allocation_ptr = (uintptr_t)allocation;
 
 		AtomicStream<char>* write_error_message = (AtomicStream<char>*)allocation_ptr;
@@ -57,7 +57,7 @@ namespace ECSEngine {
 
 	void GLTFExportTexturesOptionsDeallocateAll(const GLTFExportTexturesOptions* options, AllocatorPolymorphic allocator) 
 	{
-		DeallocateEx(allocator, options->failure_string);
+		Deallocate(allocator, options->failure_string);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -88,7 +88,7 @@ namespace ECSEngine {
 							if (export_texture.texture_index == ECS_PBR_MATERIAL_METALLIC || export_texture.texture_index == ECS_PBR_MATERIAL_ROUGHNESS
 								|| export_texture.texture_index == ECS_PBR_MATERIAL_OCCLUSION) {
 								if (orm_texture.data.size == 0) {
-									orm_texture = DecodeTexture(texture_data[index], texture_extensions[index], { nullptr });
+									orm_texture = DecodeTexture(texture_data[index], texture_extensions[index], ECS_MALLOC_ALLOCATOR);
 								}
 
 								size_t channel_to_copy = 0;
@@ -113,7 +113,7 @@ namespace ECSEngine {
 								channel_count = 1;
 							}
 							else {
-								current_decoded_texture = DecodeTexture(texture_data[index], texture_extensions[index], { nullptr });
+								current_decoded_texture = DecodeTexture(texture_data[index], texture_extensions[index], ECS_MALLOC_ALLOCATOR);
 							}
 
 							export_texture.dimensions.x = current_decoded_texture.width;
@@ -246,7 +246,7 @@ namespace ECSEngine {
 	ECS_THREAD_TASK(ExportOrmTexture) {
 		ExportOrmTextureData* data = (ExportOrmTextureData*)_data;
 
-		DecodedTexture decoded_texture = DecodeTexture(data->texture_data, data->texture_extension, { nullptr });
+		DecodedTexture decoded_texture = DecodeTexture(data->texture_data, data->texture_extension, ECS_MALLOC_ALLOCATOR);
 
 		WriteJPGTextureOptions write_options;
 		write_options.compression_quality = DEFAULT_COMPRESSION_QUALITY;

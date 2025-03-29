@@ -171,16 +171,16 @@ namespace ECSEngine {
 		WORLD_GLOBAL_DATA.descriptor = *descriptor;
 		WORLD_GLOBAL_DATA.is_abort_handler = is_abort;
 
-		WORLD_GLOBAL_DATA.descriptor.crash_directory.InitializeEx({ nullptr }, descriptor->crash_directory.size);
+		WORLD_GLOBAL_DATA.descriptor.crash_directory.Initialize(ECS_MALLOC_ALLOCATOR, descriptor->crash_directory.size);
 		WORLD_GLOBAL_DATA.descriptor.crash_directory.CopyOther(descriptor->crash_directory);
 
 		WORLD_GLOBAL_DATA.descriptor.pre_callback.data = CopyNonZeroMalloc(descriptor->pre_callback.data, descriptor->pre_callback.data_size);
 		WORLD_GLOBAL_DATA.descriptor.post_callback.data = CopyNonZeroMalloc(descriptor->post_callback.data, descriptor->post_callback.data_size);
 
 		if (!descriptor->infos_are_stable) {
-			WORLD_GLOBAL_DATA.descriptor.unique_infos = StreamCoalescedDeepCopy(descriptor->unique_infos, { nullptr });
-			WORLD_GLOBAL_DATA.descriptor.shared_infos = StreamCoalescedDeepCopy(descriptor->shared_infos, { nullptr });
-			WORLD_GLOBAL_DATA.descriptor.global_infos = StreamCoalescedDeepCopy(descriptor->global_infos, { nullptr });
+			WORLD_GLOBAL_DATA.descriptor.unique_infos = StreamCoalescedDeepCopy(descriptor->unique_infos, ECS_MALLOC_ALLOCATOR);
+			WORLD_GLOBAL_DATA.descriptor.shared_infos = StreamCoalescedDeepCopy(descriptor->shared_infos, ECS_MALLOC_ALLOCATOR);
+			WORLD_GLOBAL_DATA.descriptor.global_infos = StreamCoalescedDeepCopy(descriptor->global_infos, ECS_MALLOC_ALLOCATOR);
 		}
 
 		return { WorldCrashHandlerFunction, nullptr };

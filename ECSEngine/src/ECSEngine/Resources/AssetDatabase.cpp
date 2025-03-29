@@ -25,7 +25,7 @@ namespace ECSEngine {
 	{
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			if (stream_sizes[index] > 0) {
-				ECSEngine::DeallocateEx(allocator, reference_counts[index]);
+				ECSEngine::Deallocate(allocator, reference_counts[index]);
 			}
 		}
 	}
@@ -1217,7 +1217,7 @@ namespace ECSEngine {
 			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
 			snapshot.stream_sizes[index] = GetAssetCount(current_type);
 			if (snapshot.stream_sizes[index] > 0) {
-				snapshot.reference_counts[index] = (unsigned int*)AllocateEx(allocator, sizeof(unsigned int) * snapshot.stream_sizes[index]);
+				snapshot.reference_counts[index] = (unsigned int*)Allocate(allocator, sizeof(unsigned int) * snapshot.stream_sizes[index]);
 				for (unsigned int subindex = 0; subindex < snapshot.stream_sizes[index]; subindex++) {
 					snapshot.reference_counts[index][subindex] = GetReferenceCount(GetAssetHandleFromIndex(subindex, current_type), current_type);
 				}
@@ -1536,19 +1536,19 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata, bool default_initialize_if_missing) const {
-		return ReadAssetFileImpl(this, name, file, metadata, STRING(MeshMetadata), ECS_ASSET_MESH, { nullptr }, default_initialize_if_missing);
+		return ReadAssetFileImpl(this, name, file, metadata, STRING(MeshMetadata), ECS_ASSET_MESH, ECS_MALLOC_ALLOCATOR, default_initialize_if_missing);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::ReadTextureFile(Stream<char> name, Stream<wchar_t> file, TextureMetadata* metadata, bool default_initialize_if_missing) const {
-		return ReadAssetFileImpl(this, name, file, metadata, STRING(TextureMetadata), ECS_ASSET_TEXTURE, { nullptr }, default_initialize_if_missing);
+		return ReadAssetFileImpl(this, name, file, metadata, STRING(TextureMetadata), ECS_ASSET_TEXTURE, ECS_MALLOC_ALLOCATOR, default_initialize_if_missing);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::ReadGPUSamplerFile(Stream<char> name, GPUSamplerMetadata* metadata, bool default_initialize_if_missing) const {
-		return ReadAssetFileImpl(this, name, {}, metadata, STRING(GPUSamplerMetadata), ECS_ASSET_GPU_SAMPLER, { nullptr }, default_initialize_if_missing);
+		return ReadAssetFileImpl(this, name, {}, metadata, STRING(GPUSamplerMetadata), ECS_ASSET_GPU_SAMPLER, ECS_MALLOC_ALLOCATOR, default_initialize_if_missing);
 	}
 
 	// --------------------------------------------------------------------------------------

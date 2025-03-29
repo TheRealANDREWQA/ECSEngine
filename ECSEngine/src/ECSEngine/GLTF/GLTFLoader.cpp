@@ -23,7 +23,7 @@ namespace ECSEngine {
 		) {
 			Stream<float> values;
 
-			values.buffer = (float*)AllocateEx(allocator, component_count * accessor->count * sizeof(float));
+			values.buffer = (float*)Allocate(allocator, component_count * accessor->count * sizeof(float));
 			ECS_ASSERT(values.buffer != nullptr);
 
 			values.size = accessor->count * component_count;
@@ -503,13 +503,13 @@ namespace ECSEngine {
 	
 	void* cgltf_allocate(void* user_data, size_t size) {
 		AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)user_data;
-		return AllocateEx(*allocator, size);
+		return Allocate(*allocator, size);
 	}
 
 	void cgltf_free(void* user_data, void* buffer) {
 		AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)user_data;
 		if (buffer != nullptr) {
-			DeallocateEx(*allocator, buffer);
+			Deallocate(*allocator, buffer);
 		}
 	}
 
@@ -649,7 +649,7 @@ namespace ECSEngine {
 			if (primitive->indices != nullptr) {
 				unsigned int index_count = primitive->indices->count;
 
-				mesh.indices = Stream<unsigned int>(AllocateEx(allocator, (sizeof(unsigned int) * index_count)), index_count);
+				mesh.indices = Stream<unsigned int>(Allocate(allocator, (sizeof(unsigned int) * index_count)), index_count);
 				for (unsigned int index_index = 0; index_index < index_count; index_index++) {
 					mesh.indices[index_index] = cgltf_accessor_read_index(primitive->indices, index_index);
 				}
@@ -854,8 +854,8 @@ namespace ECSEngine {
 		bool coallesce_names = false;
 		bool determine_submesh_bounding_box = true;
 		CapacityStream<char>* error_message = nullptr;
-		AllocatorPolymorphic temporary_allocator = { nullptr };
-		AllocatorPolymorphic permanent_allocator = { nullptr };
+		AllocatorPolymorphic temporary_allocator = ECS_MALLOC_ALLOCATOR;
+		AllocatorPolymorphic permanent_allocator = ECS_MALLOC_ALLOCATOR;
 		float scale_factor = 1.0f;
 
 		if (options != nullptr) {
@@ -877,7 +877,7 @@ namespace ECSEngine {
 		total_bytes_to_allocate += sizes->index_count * sizeof(unsigned int);
 		total_bytes_to_allocate += sizes->name_count * sizeof(char);
 
-		void* allocation = AllocateEx(temporary_allocator, total_bytes_to_allocate);
+		void* allocation = Allocate(temporary_allocator, total_bytes_to_allocate);
 		uintptr_t ptr = (uintptr_t)allocation;
 		mesh->positions.InitializeFromBuffer(ptr, sizes->count[ECS_MESH_POSITION]);
 		mesh->normals.InitializeFromBuffer(ptr, sizes->count[ECS_MESH_NORMAL]);
@@ -890,7 +890,7 @@ namespace ECSEngine {
 		void* submesh_name_allocation = nullptr;
 		if (allocate_names) {
 			if (coallesce_names) {
-				submesh_name_allocation = AllocateEx(permanent_allocator, sizes->submesh_name_count * sizeof(char));
+				submesh_name_allocation = Allocate(permanent_allocator, sizes->submesh_name_count * sizeof(char));
 			}
 		}
 		uintptr_t submesh_name_ptr = (uintptr_t)submesh_name_allocation;
@@ -911,7 +911,7 @@ namespace ECSEngine {
 				Stream<char> name = nodes[index].name;
 				if (allocate_names) {
 					if (!coallesce_names) {
-						submesh_name_allocation = AllocateEx(permanent_allocator, strlen(nodes[index].name) * sizeof(char));
+						submesh_name_allocation = Allocate(permanent_allocator, strlen(nodes[index].name) * sizeof(char));
 						submesh_name_ptr = (uintptr_t)submesh_name_allocation;
 					}
 					submesh.name.InitializeFromBuffer(submesh_name_ptr, name.size);
@@ -1516,11 +1516,11 @@ namespace ECSEngine {
 
 		GLTFMesh gltf_mesh;
 
-		AllocatorPolymorphic temporary_buffer_allocator = { nullptr };
+		AllocatorPolymorphic temporary_buffer_allocator = ECS_MALLOC_ALLOCATOR;
 		CapacityStream<char>* error_message = nullptr;
 		bool allocate_submesh_names = false;
 		bool coalesced_submesh_names = true;
-		AllocatorPolymorphic previous_permanent_allocator = { nullptr };
+		AllocatorPolymorphic previous_permanent_allocator = ECS_MALLOC_ALLOCATOR;
 
 		if (options != nullptr) {
 			temporary_buffer_allocator = options->temporary_buffer_allocator;
@@ -1561,7 +1561,7 @@ namespace ECSEngine {
 		GLTFMesh gltf_mesh;
 
 		CapacityStream<char>* error_message = nullptr;
-		AllocatorPolymorphic temporary_buffer_allocator = { nullptr };
+		AllocatorPolymorphic temporary_buffer_allocator = ECS_MALLOC_ALLOCATOR;
 		if (options != nullptr) {
 			error_message = options->error_message;
 			temporary_buffer_allocator = options->temporary_buffer_allocator;
@@ -1588,22 +1588,22 @@ namespace ECSEngine {
 
 	void FreeGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator) {
 		if (mesh.positions.buffer != nullptr) {
-			DeallocateEx(allocator, mesh.positions.buffer);
+			Deallocate(allocator, mesh.positions.buffer);
 		}
 		if (mesh.indices.buffer != nullptr) {
-			DeallocateEx(allocator, mesh.indices.buffer);
+			Deallocate(allocator, mesh.indices.buffer);
 		}
 		if (mesh.normals.buffer != nullptr) {
-			DeallocateEx(allocator, mesh.normals.buffer);
+			Deallocate(allocator, mesh.normals.buffer);
 		}
 		if (mesh.skin_influences.buffer != nullptr) {
-			DeallocateEx(allocator, mesh.skin_influences.buffer);
+			Deallocate(allocator, mesh.skin_influences.buffer);
 		}
 		if (mesh.skin_weights.buffer != nullptr) {
-			DeallocateEx(allocator, mesh.skin_weights.buffer);
+			Deallocate(allocator, mesh.skin_weights.buffer);
 		}
 		if (mesh.uvs.buffer != nullptr) {
-			DeallocateEx(allocator, mesh.uvs.buffer);
+			Deallocate(allocator, mesh.uvs.buffer);
 		}
 	}
 
@@ -1621,7 +1621,7 @@ namespace ECSEngine {
 	{
 		// Everything is coalesced into a single big allocation
 		if (mesh.positions.buffer != nullptr) {
-			DeallocateEx(allocator, mesh.positions.buffer);
+			Deallocate(allocator, mesh.positions.buffer);
 		}
 	}
 

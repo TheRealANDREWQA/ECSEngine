@@ -140,7 +140,8 @@ namespace ECSEngine {
 		// It will set the wrapper for the task manager such that it will respect the scheduling
 		static void SetTaskManagerWrapper(TaskManager* task_manager);
 
-		static MemoryManager DefaultAllocator(GlobalMemoryManager* memory);
+		// Initializes the first parameter with memory from the second parameter
+		static void DefaultAllocator(MemoryManager* allocator, GlobalMemoryManager* memory);
 
 		ResizableStream<TaskSchedulerElement> elements;
 		Stream<ECS_TASK_SCHEDULER_BARRIER_TYPE> task_barriers;

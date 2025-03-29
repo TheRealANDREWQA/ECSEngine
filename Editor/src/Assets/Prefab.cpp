@@ -194,7 +194,8 @@ void TickPrefabFileChange(EditorState* editor_state) {
 						// Have been removed, which have been added and which need to be updated
 						
 						// We need a large allocator size since the components might have large allocator sizes
-						GlobalMemoryManager temporary_global_manager = CreateGlobalMemoryManager(ECS_MB * 500, ECS_KB * 4, ECS_GB);
+						GlobalMemoryManager temporary_global_manager;
+						CreateGlobalMemoryManager(&temporary_global_manager, ECS_MB * 500, ECS_KB * 4, ECS_GB);
 						auto temporary_manager_deallocate = StackScope([&]() {
 							temporary_global_manager.Free();
 						});

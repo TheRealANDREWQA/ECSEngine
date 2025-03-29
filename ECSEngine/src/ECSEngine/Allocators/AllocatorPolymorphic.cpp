@@ -7,314 +7,12 @@
 #include "MemoryManager.h"
 #include "MultipoolAllocator.h"
 #include "PoolAllocator.h"
-#include "StackAllocator.h"
 #include "ResizableLinearAllocator.h"
 #include "MemoryProtectedAllocator.h"
+#include "MallocAllocator.h"
 #include "../Utilities/PointerUtilities.h"
 
 namespace ECSEngine {
-
-	template<typename Allocator>
-	void* AllocateFunctionAllocator(void* _allocator, size_t size, size_t alignment, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Allocate(size, alignment, debug_info);
-	}
-
-	template<typename Allocator>
-	void* AllocateFunctionSizeAllocator(void* _allocator, size_t size) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Allocate(size, 8);
-	}
-
-	template<typename Allocator>
-	void* AllocateFunctionAllocatorTs(void* _allocator, size_t size, size_t alignment, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Allocate_ts(size, alignment, debug_info);
-	}
-
-	template<typename Allocator>
-	void* AllocateFunctionSizeAllocatorTs(void* _allocator, size_t size) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Allocate_ts(size, 8);
-	}
-
-	template<typename Allocator>
-	void DeallocateFunctionAllocator(void* _allocator, const void* buffer, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Deallocate(buffer, debug_info);
-	}
-
-	template<typename Allocator>
-	void DeallocateMutableFunctionAllocator(void* _allocator, void* buffer) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Deallocate(buffer);
-	}
-
-	template<typename Allocator>
-	void DeallocateFunctionAllocatorTs(void* _allocator, const void* buffer, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Deallocate_ts(buffer, debug_info);
-	}
-
-	template<typename Allocator>
-	bool DeallocateNoAssertFunctionAllocator(void* _allocator, const void* buffer, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Deallocate<false>(buffer, debug_info);
-	}
-
-	template<typename Allocator>
-	bool DeallocateTsNoAssertFunctionAllocator(void* _allocator, const void* buffer, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Deallocate_ts<false>(buffer, debug_info);
-	}
-
-	template<typename Allocator>
-	void DeallocateMutableFunctionAllocatorTs(void* _allocator, void* buffer) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Deallocate_ts(buffer);
-	}
-
-	template<typename Allocator>
-	bool BelongsToAllocator(void* _allocator, const void* buffer) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Belongs(buffer);
-	}
-
-	template<typename Allocator>
-	bool DeallocateIfBelongsAllocator(void* _allocator, const void* buffer, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		if (buffer != nullptr && allocator->Belongs(buffer)) {
-			if constexpr (std::is_same_v<Allocator, LinearAllocator> || std::is_same_v<Allocator, StackAllocator>
-				|| std::is_same_v<Allocator, ResizableLinearAllocator>) {
-				// These are special cases of deallocation and for them it doesn't make sense - so handle it here
-				allocator->Deallocate(buffer, debug_info);
-				return true;
-			}
-			else {
-				return allocator->Deallocate<false>(buffer, debug_info);
-			}
-		}
-		return false;
-	}
-
-	template<typename Allocator>
-	bool DeallocateIfBelongsErrorAllocator(void* _allocator, const void* buffer, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		if (allocator->Belongs(buffer)) {
-			if constexpr (std::is_same_v<Allocator, LinearAllocator> || std::is_same_v<Allocator, StackAllocator>
-				|| std::is_same_v<Allocator, ResizableLinearAllocator>) {
-				// These are special cases of deallocation and for them it doesn't make sense - so handle it here
-				allocator->Deallocate(buffer, debug_info);
-				return true;
-			}
-			else {
-				return allocator->Deallocate(buffer, debug_info);
-			}
-		}
-		return false;
-	}
-
-	template<typename Allocator>
-	void ClearAllocator(void* _allocator, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Clear(debug_info);
-	}
-
-	template<typename Allocator>
-	void FreeAllocator(void* _allocator, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Free(debug_info);
-	}
-
-	// Do nothing for these types that do not support that
-	void FreeAllocatorDummy(void* _allocator, DebugInfo debug_info) {}
-
-	template<typename Allocator>
-	void* GetAllocatorBuffer(void* _allocator) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->GetAllocatedBuffer();
-	}
-
-	void* GetAllocatorBufferDummy(void* _allocator) {
-		return nullptr;
-	}
-
-	template<typename Allocator>
-	void FreeAllocatorFromOtherResizable(void* _allocator, AllocatorPolymorphic initial_allocator) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Free();
-	}
-
-	template<typename Allocator>
-	void FreeAllocatorFromOtherWithBuffer(void* _allocator, AllocatorPolymorphic initial_allocator) {
-		Allocator* allocator = (Allocator*)_allocator;
-		// The GetAllocatedBuffer returns a const void*, but ECS_ALIGNED_FREE wants void* ...
-		DeallocateEx(initial_allocator, (void*)allocator->GetAllocatedBuffer());
-	}
-
-	template<typename Allocator>
-	void* ReallocateFunctionAllocator(void* _allocator, const void* block, size_t new_size, size_t alignment, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		if constexpr (std::is_same_v<Allocator, LinearAllocator> || std::is_same_v<Allocator, StackAllocator>
-			|| std::is_same_v<Allocator, ResizableLinearAllocator>) {
-			return allocator->Allocate(new_size, alignment, debug_info);
-		}
-		else {
-			return allocator->Reallocate(block, new_size, alignment, debug_info);
-		}
-	}
-
-	template<typename Allocator>
-	void* ReallocateFunctionAllocatorTs(void* _allocator, const void* block, size_t new_size, size_t alignment, DebugInfo debug_info) {
-		Allocator* allocator = (Allocator*)_allocator;
-		if constexpr (std::is_same_v<Allocator, LinearAllocator> || std::is_same_v<Allocator, StackAllocator>
-			|| std::is_same_v<Allocator, ResizableLinearAllocator>) {
-			return allocator->Allocate_ts(new_size, alignment, debug_info);
-		}
-		else {
-			return allocator->Reallocate_ts(block, new_size, alignment, debug_info);
-		}
-	}
-
-	template<typename Allocator>
-	bool IsAllocatorEmptyFunctionAllocator(const void* _allocator) {
-		const Allocator* allocator = (const Allocator*)_allocator;
-		return allocator->IsEmpty();
-	}
-
-	template<typename Allocator>
-	size_t GetAllocatorCurrentUsageAllocator(const void* _allocator) {
-		const Allocator* allocator = (const Allocator*)_allocator;
-		return allocator->GetCurrentUsage();
-	}
-
-	template<typename Allocator>
-	size_t GetAllocatorRegionsAllocator(const void* _allocator, void** region_pointers, size_t* region_size, size_t pointer_capacity) {
-		const Allocator* allocator = (const Allocator*)_allocator;
-		return allocator->GetAllocatedRegions(region_pointers, region_size, pointer_capacity);
-	}
-
-#define ECS_JUMP_TABLE(function_name)	function_name<LinearAllocator>, \
-										function_name<StackAllocator>, \
-										function_name<MultipoolAllocator>, \
-										function_name<MemoryManager>, \
-										function_name<MemoryArena>, \
-										function_name<ResizableLinearAllocator>, \
-										function_name<MemoryProtectedAllocator>
-
-#define ECS_JUMP_TABLE_FOR_RESIZABLE(resizable_function, fixed_function)	fixed_function, \
-																			fixed_function, \
-																			fixed_function, \
-																			resizable_function<MemoryManager>, \
-																			fixed_function, \
-																			resizable_function<ResizableLinearAllocator>, \
-																			resizable_function<MemoryProtectedAllocator>
-
-#define ECS_JUMP_TABLE_FOR_FIXED(fixed_function, resizable_function)	fixed_function<LinearAllocator>, \
-																		fixed_function<StackAllocator>, \
-																		fixed_function<MultipoolAllocator>, \
-																		resizable_function, \
-																		fixed_function<MemoryArena>, \
-																		resizable_function, \
-																		resizable_function
-
-#define ECS_JUMP_TABLE_FOR_FIXED_AND_RESIZABLE(fixed_function, resizable_function)	fixed_function<LinearAllocator>, \
-																					fixed_function<StackAllocator>, \
-																					fixed_function<MultipoolAllocator>, \
-																					resizable_function<MemoryManager>, \
-																					fixed_function<MemoryArena>, \
-																					resizable_function<ResizableLinearAllocator>, \
-																					resizable_function<MemoryProtectedAllocator>
-
-
-
-	AllocateFunction ECS_ALLOCATE_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(AllocateFunctionAllocator)
-	};
-
-	AllocateSizeFunction ECS_ALLOCATE_SIZE_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(AllocateFunctionSizeAllocator)
-	};
-
-	AllocateFunction ECS_ALLOCATE_TS_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(AllocateFunctionAllocatorTs)
-	};
-
-	AllocateSizeFunction ECS_ALLOCATE_SIZE_TS_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(AllocateFunctionSizeAllocatorTs)
-	};
-
-	DeallocateFunction ECS_DEALLOCATE_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(DeallocateFunctionAllocator)
-	};
-
-	DeallocateNoAssertFunction ECS_DEALLOCATE_NO_ASSERT_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(DeallocateNoAssertFunctionAllocator)
-	};
-
-	DeallocateMutableFunction ECS_DEALLOCATE_MUTABLE_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(DeallocateMutableFunctionAllocator)
-	};
-
-	DeallocateFunction ECS_DEALLOCATE_TS_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(DeallocateFunctionAllocatorTs)
-	};
-
-	DeallocateNoAssertFunction ECS_DEALLOCATE_TS_NO_ASSERT_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(DeallocateTsNoAssertFunctionAllocator)
-	};
-
-	DeallocateMutableFunction ECS_DEALLOCATE_MUTABLE_TS_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(DeallocateMutableFunctionAllocatorTs)
-	};
-
-	BelongsToAllocatorFunction ECS_BELONGS_TO_ALLOCATOR_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(BelongsToAllocator)
-	};
-
-	DeallocateIfBelongsFunction ECS_DEALLOCATE_IF_BELONGS_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(DeallocateIfBelongsAllocator)
-	};
-
-	DeallocateIfBelongsFunction ECS_DEALLOCATE_IF_BELONGS_WITH_ERROR_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(DeallocateIfBelongsErrorAllocator)
-	};
-
-	ClearAllocatorFunction ECS_CLEAR_ALLOCATOR_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(ClearAllocator)
-	};
-
-	FreeAllocatorFunction ECS_FREE_ALLOCATOR_FUNCTIONS[] = {
-		ECS_JUMP_TABLE_FOR_RESIZABLE(FreeAllocator, FreeAllocatorDummy)
-	};
-
-	GetAllocatorBufferFunction ECS_GET_ALLOCATOR_BUFFER_FUNCTIONS[] = {
-		ECS_JUMP_TABLE_FOR_FIXED(GetAllocatorBuffer, GetAllocatorBufferDummy)
-	};
-
-	FreeAllocatorFromFunction ECS_FREE_ALLOCATOR_FROM_FUNCTIONS[] = {
-		ECS_JUMP_TABLE_FOR_FIXED_AND_RESIZABLE(FreeAllocatorFromOtherWithBuffer, FreeAllocatorFromOtherResizable)
-	};
-
-	ReallocateFunction ECS_REALLOCATE_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(ReallocateFunctionAllocator)
-	};
-
-	ReallocateFunction ECS_REALLOCATE_TS_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(ReallocateFunctionAllocatorTs)
-	};
-
-	IsAllocatorEmptyFunction ECS_IS_ALLOCATOR_EMPTY_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(IsAllocatorEmptyFunctionAllocator)
-	};
-
-	GetAllocatorCurrentUsageFunction ECS_ALLOCATOR_CURRENT_USAGE_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(GetAllocatorCurrentUsageAllocator)
-	};
-
-	GetAllocatorRegionsFunction ECS_ALLOCATOR_GET_REGIONS_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(GetAllocatorRegionsAllocator)
-	};
 
 	size_t AllocatorStructureByteSize(ECS_ALLOCATOR_TYPE type) {
 		switch (type) {
@@ -413,11 +111,11 @@ namespace ECSEngine {
 
 	size_t AllocatorPolymorphicBlockCount(AllocatorPolymorphic allocator)
 	{
-		if (allocator.allocator_type == ECS_ALLOCATOR_MULTIPOOL) {
+		if (allocator.allocator->m_allocator_type == ECS_ALLOCATOR_MULTIPOOL) {
 			const MultipoolAllocator* multipool_allocator = (const MultipoolAllocator*)allocator.allocator;
 			return multipool_allocator->GetBlockCount();
 		}
-		else if (allocator.allocator_type == ECS_ALLOCATOR_ARENA) {
+		else if (allocator.allocator->m_allocator_type == ECS_ALLOCATOR_ARENA) {
 			// For arenas that have multipool allocators as base, we are interested in the total
 			// Sum of the block count
 			const MemoryArena* arena = (const MemoryArena*)allocator.allocator;
@@ -436,7 +134,7 @@ namespace ECSEngine {
 
 	void CreateBaseAllocator(AllocatorPolymorphic buffer_allocator, CreateBaseAllocatorInfo info, void* pointer_to_be_constructed)
 	{
-		void* allocation = AllocateEx(buffer_allocator, BaseAllocatorBufferSize(info));
+		void* allocation = Allocate(buffer_allocator, BaseAllocatorBufferSize(info));
 		CreateBaseAllocator(allocation, info, pointer_to_be_constructed);
 	}
 
@@ -446,25 +144,25 @@ namespace ECSEngine {
 		case ECS_ALLOCATOR_LINEAR:
 		{
 			LinearAllocator* allocator = (LinearAllocator*)pointer_to_be_constructed;
-			*allocator = LinearAllocator(buffer, info.linear_capacity);
+			new (allocator) LinearAllocator(buffer, info.linear_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_STACK:
 		{
 			StackAllocator* allocator = (StackAllocator*)pointer_to_be_constructed;
-			*allocator = StackAllocator(buffer, info.stack_capacity);
+			new (allocator) StackAllocator(buffer, info.stack_capacity);
 		}
 		break;
 		case ECS_ALLOCATOR_MULTIPOOL:
 		{
 			MultipoolAllocator* allocator = (MultipoolAllocator*)pointer_to_be_constructed;
-			*allocator = MultipoolAllocator(buffer, info.multipool_capacity, info.multipool_block_count);
+			new (allocator) MultipoolAllocator(buffer, info.multipool_capacity, info.multipool_block_count);
 		}
 		break;
 		case ECS_ALLOCATOR_ARENA:
 		{
 			MemoryArena* allocator = (MemoryArena*)pointer_to_be_constructed;
-			*allocator = MemoryArena(buffer, info.arena_allocator_count, info);
+			new (allocator) MemoryArena(buffer, info.arena_allocator_count, info);
 		}
 		break;
 		default:
@@ -476,7 +174,7 @@ namespace ECSEngine {
 	{
 		// Add alignof(void*) such that we align each buffer to a maximal fundamental type boundary
 		size_t allocation_size = BaseAllocatorBufferSize(info, count);
-		void* allocation = AllocateEx(buffer_allocator, allocation_size);
+		void* allocation = Allocate(buffer_allocator, allocation_size);
 		CreateBaseAllocators(allocation, info, pointers_to_be_constructed, count);
 	}
 
@@ -487,7 +185,7 @@ namespace ECSEngine {
 		{
 			LinearAllocator* allocators = (LinearAllocator*)pointers_to_be_constructed;
 			for (size_t index = 0; index < count; index++) {
-				allocators[index] = LinearAllocator(buffer, info.linear_capacity);
+				new (allocators + index) LinearAllocator(buffer, info.linear_capacity);
 				buffer = OffsetPointer(buffer, info.linear_capacity);
 			}
 		}
@@ -496,7 +194,7 @@ namespace ECSEngine {
 		{
 			StackAllocator* allocators = (StackAllocator*)pointers_to_be_constructed;
 			for (size_t index = 0; index < count; index++) {
-				allocators[index] = StackAllocator(buffer, info.stack_capacity);
+				new (allocators + index) StackAllocator(buffer, info.stack_capacity);
 				buffer = OffsetPointer(buffer, info.stack_capacity);
 			}
 		}
@@ -506,7 +204,7 @@ namespace ECSEngine {
 			size_t allocator_size = MultipoolAllocator::MemoryOf(info.multipool_block_count, info.multipool_capacity);
 			MultipoolAllocator* allocators = (MultipoolAllocator*)pointers_to_be_constructed;
 			for (size_t index = 0; index < count; index++) {
-				allocators[index] = MultipoolAllocator(buffer, info.multipool_capacity, info.multipool_block_count);
+				new (allocators + index) MultipoolAllocator(buffer, info.multipool_capacity, info.multipool_block_count);
 				buffer = OffsetPointer(buffer, allocator_size);
 			}
 		}
@@ -516,7 +214,7 @@ namespace ECSEngine {
 			size_t allocator_size = MemoryArena::MemoryOf(info.arena_allocator_count, info.arena_capacity, info.arena_nested_type);
 			MemoryArena* allocators = (MemoryArena*)pointers_to_be_constructed;
 			for (size_t index = 0; index < count; index++) {
-				allocators[index] = MemoryArena(buffer, info.arena_allocator_count, info);
+				new (allocators + index) MemoryArena(buffer, info.arena_allocator_count, info);
 				buffer = OffsetPointer(buffer, allocator_size);
 			}
 		}
@@ -547,7 +245,7 @@ namespace ECSEngine {
 		}*/
 
 		// No need to type cast the pointers
-		return AllocatorPolymorphic((void*)pointer, type);
+		return AllocatorPolymorphic((AllocatorBase*)pointer);
 	}
 
 	AllocatorPolymorphic ConvertPointerToAllocatorPolymorphicEx(const void* pointer, ECS_ALLOCATOR_TYPE type) {
@@ -558,23 +256,18 @@ namespace ECSEngine {
 		return ConvertPointerToAllocatorPolymorphic(pointer, type);
 	}
 
-	template<typename Allocator>
-	static void* DirectXTexAllocator(void* _allocator, size_t size, size_t alignment) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Allocate(size, alignment);
+	static void* DirectX_Allocate(void* allocator, size_t size, size_t alignment) {
+		return ((AllocatorBase*)allocator)->Allocate(size, alignment);
 	}
 
-	static DirectX::Tex_AllocateFunction DIRECTX_ALLOCATE_FUNCTIONS[] = {
-		ECS_JUMP_TABLE(DirectXTexAllocator)
-	};
-
-	static_assert(ECS_COUNTOF(DIRECTX_ALLOCATE_FUNCTIONS) == ECS_ALLOCATOR_TYPE_COUNT);
+	static void DirectX_Deallocate(void* allocator, void* buffer) {
+		((AllocatorBase*)allocator)->Deallocate(buffer);
+	}
 
 	void SetInternalImageAllocator(DirectX::ScratchImage* image, AllocatorPolymorphic allocator)
     {
         if (allocator.allocator != nullptr) {
-			ECS_ASSERT(allocator.allocator_type < ECS_ALLOCATOR_TYPE_COUNT);
-            image->SetAllocator(allocator.allocator, DIRECTX_ALLOCATE_FUNCTIONS[allocator.allocator_type], GetDeallocateMutableFunction(allocator));
+            image->SetAllocator(allocator.allocator, DirectX_Allocate, DirectX_Deallocate);
         }
 		else {
 			image->SetAllocator(nullptr, DirectX::ECSDefaultAllocation, DirectX::ECSDefaultDeallocation);
@@ -588,7 +281,9 @@ namespace ECSEngine {
 		STRING(MemoryManager),
 		STRING(MemoryArena),
 		STRING(ResizableLinearAllocator),
-		STRING(MemoryProtectedAllocator)
+		STRING(MemoryProtectedAllocator),
+		STRING(MallocAllocator),
+		STRING(InterfaceAllocator)
 	};
 
 	static_assert(ECS_COUNTOF(ALLOCATOR_NAMES) == ECS_ALLOCATOR_TYPE_COUNT);
@@ -616,7 +311,7 @@ namespace ECSEngine {
 	}
 
 	Copyable* Copyable::Copy(AllocatorPolymorphic allocator) const {
-		Copyable* allocation = (Copyable*)AllocateEx(allocator, CopySize());
+		Copyable* allocation = (Copyable*)Allocate(allocator, CopySize());
 		// This will correctly copy the virtual table pointer
 		memcpy(allocation, this, sizeof(Copyable));
 		allocation->CopyImpl(this, allocator);
@@ -637,7 +332,7 @@ namespace ECSEngine {
 	void CopyableDeallocate(Copyable* copyable, AllocatorPolymorphic allocator) {
 		if (copyable != nullptr) {
 			copyable->DeallocateImpl(allocator);
-			DeallocateEx(allocator, copyable);
+			Deallocate(allocator, copyable);
 		}
 	}
 

@@ -258,7 +258,7 @@ void ChangeInspectorToRecordingFile(EditorState* editor_state, Stream<wchar_t> p
 			DrawWindowData* draw_data = (DrawWindowData*)data;
 
 			// Initialize the allocator - a resizable linear allocator is sufficient for reading the header
-			draw_data->temporary_allocator = ResizableLinearAllocator(ECS_MB, ECS_MB * 128, { nullptr });
+			draw_data->temporary_allocator = ResizableLinearAllocator(ECS_MB, ECS_MB * 128, ECS_MALLOC_ALLOCATOR);
 			ReadFileInfo(draw_data);
 		});
 	}

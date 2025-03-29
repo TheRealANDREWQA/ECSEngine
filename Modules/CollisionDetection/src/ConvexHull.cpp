@@ -499,10 +499,10 @@ void ConvexHull::Copy(const ConvexHull* other, AllocatorPolymorphic allocator, b
 void ConvexHull::Deallocate(AllocatorPolymorphic allocator)
 {
 	if (vertex_size > 0 && vertices_x != nullptr) {
-		ECSEngine::DeallocateEx(allocator, vertices_x);
+		ECSEngine::Deallocate(allocator, vertices_x);
 	}
-	edges.DeallocateEx(allocator);
-	faces.DeallocateEx(allocator);
+	edges.Deallocate(allocator);
+	faces.Deallocate(allocator);
 	memset(this, 0, sizeof(*this));
 }
 

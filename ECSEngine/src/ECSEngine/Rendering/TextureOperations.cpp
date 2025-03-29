@@ -72,7 +72,7 @@ namespace ECSEngine {
 	{
 		Texture2D staging_texture = TextureToStaging(graphics, texture);
 		MappedTexture first_mip = MapTexture(staging_texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
-		Texture2D new_texture = ResizeTexture(graphics, first_mip.data, texture, new_width, new_height, { nullptr }, resize_flag, temporary);
+		Texture2D new_texture = ResizeTexture(graphics, first_mip.data, texture, new_width, new_height, ECS_MALLOC_ALLOCATOR, resize_flag, temporary);
 		UnmapTexture(staging_texture, graphics->GetContext());
 		staging_texture.Release();
 		return new_texture;
@@ -85,7 +85,7 @@ namespace ECSEngine {
 		Texture2D result;
 
 		MappedTexture first_mip = MapTexture(texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
-		result = ResizeTexture(graphics, first_mip.data, texture, new_width, new_height, { nullptr }, resize_flag, temporary);
+		result = ResizeTexture(graphics, first_mip.data, texture, new_width, new_height, ECS_MALLOC_ALLOCATOR, resize_flag, temporary);
 		UnmapTexture(texture, graphics->GetContext());
 		return result;
 	}
@@ -328,7 +328,7 @@ namespace ECSEngine {
 		uintptr_t buffer;
 		if (!in_place) {
 			total_data_size += sizeof(Stream<void>) * mip_data.size;
-			streams = (Stream<void>*)AllocateEx(allocator, total_data_size);
+			streams = (Stream<void>*)Allocate(allocator, total_data_size);
 			buffer = (uintptr_t)streams;
 			buffer += sizeof(Stream<void>) * mip_data.size;
 		}
@@ -336,7 +336,7 @@ namespace ECSEngine {
 			ECS_ASSERT(mip_data.size <= new_data.capacity);
 
 			streams = new_data.buffer;
-			void* allocation = AllocateEx(allocator, total_data_size);
+			void* allocation = Allocate(allocator, total_data_size);
 			buffer = (uintptr_t)allocation;
 		}
 

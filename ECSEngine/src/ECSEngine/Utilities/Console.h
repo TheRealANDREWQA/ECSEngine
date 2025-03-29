@@ -8,8 +8,9 @@ namespace ECSEngine {
 
 	enum ECS_FORMAT_DATE_FLAGS : size_t;
 
-	// This is a small memory manager used for smaller allocations
-	ECSENGINE_API MemoryManager DefaultConsoleStableAllocator(GlobalMemoryManager* global_manager);
+	// This is a small memory manager used for smaller allocations. It will initialize the first parameter
+	// With memory from the second parameter
+	ECSENGINE_API void DefaultConsoleStableAllocator(MemoryManager* allocator, GlobalMemoryManager* global_manager);
 
 	// This is a an atomic stream "allocator" that is used for the message allocations
 	// This allows extremely fast allocations since it is essentially a single atomic add

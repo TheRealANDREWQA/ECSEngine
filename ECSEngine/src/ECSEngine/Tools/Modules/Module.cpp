@@ -353,7 +353,7 @@ namespace ECSEngine {
 		size_t total_memory = sizeof(Tools::UIWindowDescriptor) * window_descriptors.size;
 		total_memory += stack_allocator.m_top;
 
-		Tools::UIWindowDescriptor* descriptors = (Tools::UIWindowDescriptor*)AllocateEx(allocator, total_memory);
+		Tools::UIWindowDescriptor* descriptors = (Tools::UIWindowDescriptor*)Allocate(allocator, total_memory);
 		void* buffer = OffsetPointer(descriptors, sizeof(Tools::UIWindowDescriptor) * window_descriptors.size);
 		// Copy all the data allocated from the allocator
 		memcpy(buffer, stack_allocation, stack_allocator.m_top);
@@ -409,7 +409,7 @@ namespace ECSEngine {
 
 		size_t total_memory = sizeof(ModuleBuildAssetType) * asset_types.size + extra_memory.m_top;
 
-		ModuleBuildAssetType* types = (ModuleBuildAssetType*)AllocateEx(allocator, total_memory);
+		ModuleBuildAssetType* types = (ModuleBuildAssetType*)Allocate(allocator, total_memory);
 		asset_type_stream.CopyTo(types);
 		void* buffer = OffsetPointer(types, sizeof(ModuleBuildAssetType) * asset_type_stream.size);
 		// Memcpy all the data from the allocator
@@ -478,7 +478,7 @@ namespace ECSEngine {
 			+ StreamCoalescedDeepCopySize(deserialize_shared_components);
 
 		ModuleSerializeComponentStreams streams;
-		void* allocation = AllocateEx(allocator, total_memory);
+		void* allocation = Allocate(allocator, total_memory);
 		uintptr_t buffer = (uintptr_t)allocation;
 
 		streams.serialize_components = StreamCoalescedDeepCopy(serialize_components, buffer);
@@ -531,7 +531,7 @@ namespace ECSEngine {
 
 		// Calculate the total byte size
 		size_t total_memory = sizeof(ModuleLinkComponentTarget) * valid_links.size + temp_allocator.m_top;
-		ModuleLinkComponentTarget* targets = (ModuleLinkComponentTarget*)AllocateEx(allocator, total_memory);
+		ModuleLinkComponentTarget* targets = (ModuleLinkComponentTarget*)Allocate(allocator, total_memory);
 		valid_links.CopyTo(targets);
 		void* buffer = OffsetPointer(targets, sizeof(ModuleLinkComponentTarget) * valid_links.size);
 		memcpy(buffer, temp_allocator.m_buffer, temp_allocator.m_top);

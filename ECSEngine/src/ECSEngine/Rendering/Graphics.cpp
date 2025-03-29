@@ -590,6 +590,9 @@ namespace ECSEngine {
 
 		ChangeMainRenderTargetToInitial(true);
 
+		// Must be called before creating any GPU state resource
+		InitializeGraphicsCachedResources(this);
+
 		DepthStencilState depth_stencil_state = CreateDepthStencilState({});
 		RasterizerState rasterizer_state = CreateRasterizerState({});
 		BlendDescriptor blend_descriptor;
@@ -607,8 +610,8 @@ namespace ECSEngine {
 		void* allocation = m_allocator->Allocate(memory_size);
 		m_shader_reflection = new ShaderReflection(allocation);
 
+		// This function must be called after the shader reflection is initialized
 		InitializeGraphicsHelpers(this);
-		InitializeGraphicsCachedResources(this);
 	}
 
 	Graphics::Graphics(const Graphics& other) {
@@ -1585,7 +1588,7 @@ namespace ECSEngine {
 			return { nullptr, 0 };
 		}
 
-		void* allocation = AllocateTs(allocator.allocator, allocator.allocator_type, blob->GetBufferSize());
+		void* allocation = Allocate(allocator.AsMulti(), blob->GetBufferSize());
 		size_t byte_code_size = blob->GetBufferSize();
 		memcpy(allocation, blob->GetBufferPointer(), byte_code_size);
 		blob->Release();
@@ -3604,7 +3607,7 @@ namespace ECSEngine {
 
 	void Graphics::FreeAllocatedBufferTs(const void* buffer)
 	{
-		m_allocator->Deallocate_ts(buffer);
+		m_allocator->DeallocateTs(buffer);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3618,7 +3621,7 @@ namespace ECSEngine {
 
 	void* Graphics::GetAllocatorBufferTs(size_t size)
 	{
-		return m_allocator->Allocate_ts(size);
+		return m_allocator->AllocateTs(size);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4443,9 +4446,9 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	MemoryManager DefaultGraphicsAllocator(GlobalMemoryManager* manager)
+	void DefaultGraphicsAllocator(MemoryManager* allocator, GlobalMemoryManager* global_memory)
 	{
-		return MemoryManager(DefaultGraphicsAllocatorSize(), ECS_KB * 4, DefaultGraphicsAllocatorSize(), manager);
+		new (allocator) MemoryManager(DefaultGraphicsAllocatorSize(), ECS_KB * 4, DefaultGraphicsAllocatorSize(), global_memory);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

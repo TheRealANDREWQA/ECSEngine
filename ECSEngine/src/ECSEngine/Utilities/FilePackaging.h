@@ -37,7 +37,7 @@ namespace ECSEngine {
 	// The file handle should be opened in binary mode
 	// If the call fails or if the data has been corrupted, the table will have the capacity 0
 	// The caller is responsible for freeing up the memory of the table after it has finished using it
-	ECSENGINE_API PackFilesLookupTable GetPackedFileLookupTable(ECS_FILE_HANDLE file_handle, AllocatorPolymorphic allocator = { nullptr });
+	ECSENGINE_API PackFilesLookupTable GetPackedFileLookupTable(ECS_FILE_HANDLE file_handle, AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR);
 
 	ECSENGINE_API unsigned int GetMultiPackedFileIndex(Stream<wchar_t> file, const MultiPackedFile* multi_packed_file);
 
@@ -72,7 +72,7 @@ namespace ECSEngine {
 	ECSENGINE_API Stream<void> UnpackFile(
 		Stream<wchar_t> file,
 		const PackedFile* packed_file,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	struct MultiPackedFileElement {

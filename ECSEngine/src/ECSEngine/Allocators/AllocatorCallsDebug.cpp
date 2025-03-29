@@ -71,7 +71,7 @@ namespace ECSEngine {
 			tracked_allocator.queue_allocations.Initialize(&AllocatorManager.global_allocator, AllocatorManager.default_ring_buffer_capacity);
 		}
 		else {
-			tracked_allocator.resizable_allocations.Initialize({ nullptr }, 0);
+			tracked_allocator.resizable_allocations.Initialize(ECS_MALLOC_ALLOCATOR, 0);
 		}
 
 		if (name != nullptr) {
@@ -104,7 +104,7 @@ namespace ECSEngine {
 			break;
 		}
 
-		AllocatorManager.global_allocator = CreateGlobalMemoryManager(global_allocator_capacity, ECS_KB * 16, backup_allocator_capacity);
+		CreateGlobalMemoryManager(&AllocatorManager.global_allocator, global_allocator_capacity, ECS_KB * 16, backup_allocator_capacity);
 		const wchar_t* log_file = descriptor->log_file ? descriptor->log_file : ECS_DEBUG_ALLOCATOR_DEFAULT_FILE;
 		if (descriptor->enable_global_write_to_file || descriptor->log_file) {
 			ECS_HARD_ASSERT(FileCreate(log_file, &AllocatorManager.file_handle, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK);
@@ -144,7 +144,7 @@ namespace ECSEngine {
 				if (!tracked_allocator->is_resizable) {
 					ThreadSafeQueue<TrackedAllocation> queue_allocations = tracked_allocator->queue_allocations;
 					unsigned int entries_count = queue_allocations.GetSize();
-					tracked_allocator->resizable_allocations.Initialize({ nullptr }, entries_count);
+					tracked_allocator->resizable_allocations.Initialize(ECS_MALLOC_ALLOCATOR, entries_count);
 					if (entries_count > 0) {
 						queue_allocations.CopyTo(tracked_allocator->resizable_allocations.stream.buffer);
 						tracked_allocator->resizable_allocations.stream.size = queue_allocations.GetSize();
@@ -152,7 +152,7 @@ namespace ECSEngine {
 					// We can use thread safe deallocate since there can be multiple readers
 					// The allocation which is made when an entry is pushed is made under write lock
 					// so it doesn't conflict with this one
-					AllocatorManager.global_allocator.Deallocate_ts(queue_allocations.GetQueue()->GetAllocatedBuffer());
+					AllocatorManager.global_allocator.DeallocateTs(queue_allocations.GetQueue()->GetAllocatedBuffer());
 				}
 			}
 			if (name) {

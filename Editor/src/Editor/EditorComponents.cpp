@@ -641,7 +641,7 @@ void EditorComponents::RecoverData(
 				}
 			}
 			else {
-				AllocatorPolymorphic arena = { nullptr };
+				AllocatorPolymorphic arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
 						entity_manager_lock->Lock();
@@ -818,7 +818,7 @@ void EditorComponents::RecoverData(
 				resize_archetype(no_copy, deserialize_handler);
 			}
 			else {
-				AllocatorPolymorphic arena = { nullptr };
+				AllocatorPolymorphic arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
 						entity_manager_lock->Lock();
@@ -2281,7 +2281,7 @@ void EditorComponents::UpdateComponent(const ReflectionManager* reflection_manag
 void EditorComponents::Initialize(void* buffer)
 {
 	MemoryArena* arena = (MemoryArena*)buffer;
-	*arena = MemoryArena(OffsetPointer(arena, sizeof(*arena)), ARENA_COUNT, ARENA_CAPACITY, ARENA_BLOCK_COUNT);
+	new (arena) MemoryArena(OffsetPointer(arena, sizeof(*arena)), ARENA_COUNT, ARENA_CAPACITY, ARENA_BLOCK_COUNT);
 	InitializeAllocator(arena);
 }
 
@@ -2905,7 +2905,7 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 		EditorAddEvent(data->editor_state, FinalExecuteComponentEvent, &final_event_data, sizeof(final_event_data));
 
 		// We are the final ones
-		data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->semaphore);
+		data->editor_state->multithreaded_editor_allocator->DeallocateTs(data->semaphore);
 	}
 	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_LAUNCH);
 }
@@ -3081,7 +3081,7 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 			total_allocation_size += EditorComponents::ResolveEventOptionsSize(&GetSandbox(editor_state, sandbox_index)->scene_entities);
 		});
 
-		void* allocation = editor_state->multithreaded_editor_allocator->Allocate_ts(total_allocation_size);
+		void* allocation = editor_state->multithreaded_editor_allocator->AllocateTs(total_allocation_size);
 		Semaphore* semaphore = (Semaphore*)allocation;
 		uintptr_t ptr = (uintptr_t)allocation;
 		ptr += sizeof(*semaphore);

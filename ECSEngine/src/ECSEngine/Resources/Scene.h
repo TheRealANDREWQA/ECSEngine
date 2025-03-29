@@ -128,7 +128,7 @@ namespace ECSEngine {
 
 		// This is the allocator used to allocate the buffers needed for the modules' streams
 		// This must not be Malloc. Each entry will be allocated individually.
-		AllocatorPolymorphic scene_modules_allocator = { nullptr };
+		AllocatorPolymorphic scene_modules_allocator = ECS_MALLOC_ALLOCATOR;
 		AdditionStream<SceneModule> scene_modules = {};
 		// These 2 fields help you identify the source code such that a faithful reconstruction can be made
 		// They will be allocated from scene_modules_allocator

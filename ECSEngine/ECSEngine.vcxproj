@@ -220,6 +220,7 @@
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorPolymorphic.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorTypes.h" />
     <ClInclude Include="src\ECSEngine\Allocators\LinearAllocator.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\MallocAllocator.h" />
     <ClInclude Include="src\ECSEngine\Allocators\MemoryArena.h" />
     <ClInclude Include="src\ECSEngine\Allocators\MemoryManager.h" />
     <ClInclude Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.h" />
@@ -498,6 +499,7 @@
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorCallsDebug.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\MallocAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MemoryArena.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MemoryManager.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.cpp" />

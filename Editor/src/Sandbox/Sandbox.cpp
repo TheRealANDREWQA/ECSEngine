@@ -2181,7 +2181,8 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	GlobalMemoryManager* allocator = (GlobalMemoryManager*)editor_state->editor_allocator->Allocate(sizeof(GlobalMemoryManager));
 
 	// The debug allocator size must be multiplied by 2 to account for the redirect allocator as well
-	*allocator = CreateGlobalMemoryManager(
+	CreateGlobalMemoryManager(
+		allocator,
 		sandbox->runtime_descriptor.entity_manager_memory_size + SANDBOX_ALLOCATOR_EXTRA_CAPACITY + profiling_reserve_size + 
 			DebugDrawer::DefaultAllocatorSize() * 2,
 		ECS_KB * 4,
@@ -2235,7 +2236,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 
 	TaskScheduler* task_scheduler = (TaskScheduler*)allocator->Allocate(sizeof(TaskScheduler) + sizeof(MemoryManager));
 	MemoryManager* task_scheduler_allocator = (MemoryManager*)OffsetPointer(task_scheduler, sizeof(TaskScheduler));
-	*task_scheduler_allocator = TaskScheduler::DefaultAllocator(allocator);
+	TaskScheduler::DefaultAllocator(task_scheduler_allocator, allocator);
 
 	new (task_scheduler) TaskScheduler(task_scheduler_allocator);
 	sandbox->runtime_descriptor.task_scheduler = task_scheduler;
@@ -2270,7 +2271,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	// Create a separate allocator for it, we don't need to store it
 	// Inside the sandbox
 	MemoryManager* redirect_drawer_allocator = (MemoryManager*)Allocate(sandbox_allocator, sizeof(MemoryManager));
-	*redirect_drawer_allocator = DebugDrawer::DefaultAllocator(allocator);
+	DebugDrawer::DefaultAllocator(redirect_drawer_allocator, allocator);
 	sandbox->redirect_drawer.InitializeRedirect(redirect_drawer_allocator, std::thread::hardware_concurrency());
 
 	// Initialize the runtime module snapshots and their allocator
@@ -2597,7 +2598,8 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		EntityManager* runtime_entity_manager = sandbox->sandbox_world.entity_manager;
 
 		// Create a temporary task scheduler that will be bound to the sandbox world
-		MemoryManager viewport_task_scheduler_allocator = TaskScheduler::DefaultAllocator(editor_state->GlobalMemoryManager());
+		MemoryManager viewport_task_scheduler_allocator;
+		TaskScheduler::DefaultAllocator(&viewport_task_scheduler_allocator, editor_state->GlobalMemoryManager());
 		TaskScheduler viewport_task_scheduler(&viewport_task_scheduler_allocator);
 
 		// Use the editor state task_manage in order to run the commands - at the end reset the static tasks
@@ -2616,7 +2618,8 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			SetTaskManagerPhysicalMemoryProfilingExceptionHandler(sandbox->sandbox_world.task_manager);
 		}
 
-		MemoryManager runtime_query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(editor_state->GlobalMemoryManager());
+		MemoryManager runtime_query_cache_allocator;
+		ArchetypeQueryCache::DefaultAllocator(&runtime_query_cache_allocator, editor_state->GlobalMemoryManager());
 		ArchetypeQueryCache runtime_query_cache;
 
 		// We need to record the query cache to restore it later

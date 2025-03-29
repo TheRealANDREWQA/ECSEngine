@@ -462,7 +462,7 @@ namespace ECSEngine {
 		Entity Allocate();
 
 		// Allocates a single Entity and assigns the info to that entity
-		Entity AllocateEx(unsigned int archetype, unsigned int base_archetype, unsigned int stream_index);
+		Entity Allocate(unsigned int archetype, unsigned int base_archetype, unsigned int stream_index);
 
 		// Allocates multiple entities
 		// It will fill in the buffer with the entities generated
@@ -470,10 +470,10 @@ namespace ECSEngine {
 
 		// Allocates multiple entities and it will assign to them the values from infos
 		// It will fill in the buffer with entities generated
-		void AllocateEx(Stream<Entity> entities, unsigned int archetype, unsigned int base_archetype, const unsigned int* stream_indices);
+		void Allocate(Stream<Entity> entities, unsigned int archetype, unsigned int base_archetype, const unsigned int* stream_indices);
 
 		// It will set the infos according to the archetype indices and chunk positions
-		void AllocateEx(Stream<Entity> entities, uint2 archetype_indices, unsigned int copy_position);
+		void Allocate(Stream<Entity> entities, uint2 archetype_indices, unsigned int copy_position);
 
 		void CreatePool();
 

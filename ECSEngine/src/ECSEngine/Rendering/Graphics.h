@@ -294,7 +294,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API void FreeGraphicsResourceInterface(void* interface_pointer, ECS_GRAPHICS_RESOURCE_TYPE type);
 
-	ECSENGINE_API MemoryManager DefaultGraphicsAllocator(GlobalMemoryManager* manager);
+	// Initializes the first parameter with memory from the second parameter
+	ECSENGINE_API void DefaultGraphicsAllocator(MemoryManager* allocator, GlobalMemoryManager* global_memory);
 
 	// Returns how much memory it allocates in its initial allocation
 	ECSENGINE_API size_t DefaultGraphicsAllocatorSize();
@@ -557,7 +558,7 @@ namespace ECSEngine {
 			ID3DInclude* include_policy, 
 			ShaderCompileOptions options = {},
 			Stream<void>* byte_code = nullptr,
-			AllocatorPolymorphic byte_code_allocator = { nullptr },
+			AllocatorPolymorphic byte_code_allocator = ECS_MALLOC_ALLOCATOR,
 			bool temporary = false,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
@@ -623,7 +624,7 @@ namespace ECSEngine {
 			ID3DInclude* include_policy,
 			ShaderCompileOptions options = {},
 			Stream<void>* byte_code = nullptr,
-			AllocatorPolymorphic byte_code_allocator = { nullptr },
+			AllocatorPolymorphic byte_code_allocator = ECS_MALLOC_ALLOCATOR,
 			bool temporary = false, 
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
@@ -634,7 +635,7 @@ namespace ECSEngine {
 			Stream<char> source_code,
 			ECS_SHADER_TYPE type,
 			ID3DInclude* include_policy,
-			AllocatorPolymorphic allocator = { nullptr },
+			AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR,
 			ShaderCompileOptions options = {}
 		);
 

@@ -48,6 +48,7 @@ namespace ECSEngine {
 		Stream<char> elif_token = { nullptr, 0 };
 		CapacityStream<Stream<char>>* conditional_macros = nullptr;
 
+		// If this is different from nullptr, it will copy the string instead of simply referencing it
 		AllocatorPolymorphic allocator = { nullptr };
 	};
 

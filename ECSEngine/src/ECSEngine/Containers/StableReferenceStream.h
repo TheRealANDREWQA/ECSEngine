@@ -506,8 +506,7 @@ namespace ECSEngine {
 			}
 
 			IteratorInterface<ValueType>* GetSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
-				Iterator<ContainerType, ValueType>* iterator = (Iterator<ContainerType, ValueType>*)AllocateEx(allocator, sizeof(Iterator<ContainerType, ValueType>));
-				new (iterator) Iterator<ContainerType, ValueType>(&container);
+				Iterator<ContainerType, ValueType>* iterator = AllocateAndConstruct<Iterator<ContainerType, ValueType>>(allocator, &container);
 				iterator->index = index;
 				index += count;
 				return iterator;

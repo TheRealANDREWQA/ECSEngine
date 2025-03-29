@@ -37,13 +37,13 @@ namespace ECSEngine {
 
 	// If it fails, it returns a data pointer nullptr
 	// Cgltf uses const char* internally, so a conversion must be done
-	ECSENGINE_API GLTFData LoadGLTFFile(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr }, CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API GLTFData LoadGLTFFile(Stream<wchar_t> path, AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR, CapacityStream<char>* error_message = nullptr);
 
 	// If it fails it returns a data pointer nullptr
-	ECSENGINE_API GLTFData LoadGLTFFile(Stream<char> path, AllocatorPolymorphic allocator = { nullptr }, CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API GLTFData LoadGLTFFile(Stream<char> path, AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR, CapacityStream<char>* error_message = nullptr);
 
 	// If it fails it returns a data pointer nullptr
-	ECSENGINE_API GLTFData LoadGLTFFileFromMemory(Stream<void> file_data, AllocatorPolymorphic allocator = { nullptr }, CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API GLTFData LoadGLTFFileFromMemory(Stream<void> file_data, AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR, CapacityStream<char>* error_message = nullptr);
 
 	ECSENGINE_API bool LoadMeshFromGLTF(
 		GLTFData data,
@@ -85,8 +85,8 @@ namespace ECSEngine {
 	);
 
 	struct LoadCoalescedMeshFromGLTFOptions {
-		AllocatorPolymorphic temporary_buffer_allocator = { nullptr };
-		AllocatorPolymorphic permanent_allocator = { nullptr };
+		AllocatorPolymorphic temporary_buffer_allocator = ECS_MALLOC_ALLOCATOR;
+		AllocatorPolymorphic permanent_allocator = ECS_MALLOC_ALLOCATOR;
 		CapacityStream<char>* error_message = nullptr;
 		bool allocate_submesh_name = false;
 		bool coalesce_submesh_name_allocations = true;

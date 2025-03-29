@@ -13,7 +13,7 @@ namespace ECSEngine {
 		Reflection::ReflectionType type,
 		const void* data,
 		Stream<wchar_t> file,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// -----------------------------------------------------------------------------------------
@@ -38,7 +38,7 @@ namespace ECSEngine {
 		void* address,
 		CapacityStream<void>& memory_pool,
 		Stream<wchar_t> file,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// -----------------------------------------------------------------------------------------
@@ -63,7 +63,7 @@ namespace ECSEngine {
 		void* address,
 		AllocatorPolymorphic pointer_allocator,
 		Stream<wchar_t> file,
-		AllocatorPolymorphic file_allocator = { nullptr }
+		AllocatorPolymorphic file_allocator = ECS_MALLOC_ALLOCATOR
 	);
 
 	// -----------------------------------------------------------------------------------------

@@ -11,7 +11,8 @@ namespace ECSEngine {
 		};
 	};
 	
-	ECSENGINE_API MemoryManager DefaultEntityHierarchyAllocator(AllocatorPolymorphic global_memory);
+	// Initializes the first parameter with memory from the second parameter
+	ECSENGINE_API void DefaultEntityHierarchyAllocator(MemoryManager* allocator, AllocatorPolymorphic global_memory);
 
 #define ECS_ENTITY_HIERARCHY_STATIC_STORAGE (3)
 #define ECS_ENTITY_HIERARCHY_MAX_CHILDREN (1 << 11)
@@ -191,10 +192,10 @@ namespace ECSEngine {
 	typedef BFSIterator<EntityHierarchyIteratorImpl> BFSEntityHierarchyIterator;
 
 	// Preferably a temporary allocator. If nullptr it uses the internal allocator
-	ECSENGINE_API BFSEntityHierarchyIterator GetEntityHierarchyBFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator = { nullptr });
+	ECSENGINE_API BFSEntityHierarchyIterator GetEntityHierarchyBFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR);
 
 	// Preferably a temporary allocator. If nullptr it uses the internal allocator
-	ECSENGINE_API DFSEntityHierarchyIterator GetEntityHierarchyDFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator = { nullptr });
+	ECSENGINE_API DFSEntityHierarchyIterator GetEntityHierarchyDFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR);
 
 	// -----------------------------------------------------------------------------------------------------
 

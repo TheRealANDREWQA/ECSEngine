@@ -95,7 +95,7 @@ namespace ECSEngine {
 				entry_data[index].custom_exit(addresses[index]);
 			}
 			else {
-				ExitAllocatorProfilingMode({ addresses[index], entry_data[index].allocator_type });
+				ExitAllocatorProfilingMode({ (AllocatorBase*)addresses[index] });
 			}
 
 			entry_data[index].name.Deallocate(allocator);
@@ -114,7 +114,7 @@ namespace ECSEngine {
 				entry_data[index].custom_exit(addresses[index]);
 			}
 			else {
-				ExitAllocatorProfilingMode({ addresses[index], entry_data[index].allocator_type });
+				ExitAllocatorProfilingMode({ (AllocatorBase*)addresses[index] });
 			}
 		}
 	}
@@ -128,7 +128,7 @@ namespace ECSEngine {
 				current_usage = entry_data[index].custom_usage(addresses[index]);
 			}
 			else {
-				current_usage = GetAllocatorCurrentUsage(AllocatorPolymorphic{ addresses[index], entry_data[index].allocator_type });
+				current_usage = GetAllocatorCurrentUsage(AllocatorPolymorphic{ (AllocatorBase*)addresses[index] });
 			}
 			entry_data[index].current_usage.Add(current_usage);
 			entry_data[index].allocations.Add(entry_data[index].current_frame_allocations);

@@ -57,7 +57,7 @@ namespace ECSEngine {
 	struct CreateLinkTypesForComponentsOptions {
 		Stream<Stream<char>> exceptions = { nullptr, 0 };
 		CapacityStream<Stream<char>>* link_type_names = nullptr;
-		AllocatorPolymorphic allocator = { nullptr };
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
 	};
 
 	// It will create the link types for all components (unique and shared) that require such a type and insert them
@@ -361,7 +361,7 @@ namespace ECSEngine {
 
 
 		// ------------------ Optional ---------------------------
-		AllocatorPolymorphic allocator = { nullptr };
+		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
 		Stream<LinkComponentAssetField> asset_fields = { nullptr, 0 };	
 	};
 

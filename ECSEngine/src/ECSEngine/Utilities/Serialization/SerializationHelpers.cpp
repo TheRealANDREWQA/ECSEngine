@@ -15,6 +15,7 @@
 #include "../../Allocators/MemoryManager.h"
 #include "../../Allocators/MemoryProtectedAllocator.h"
 #include "../../Allocators/ResizableLinearAllocator.h"
+#include "../../Allocators/MallocAllocator.h"
 #include "../ReaderWriterInterface.h"
 
 #include "SerializeIntVariableLength.h"
@@ -261,7 +262,7 @@ namespace ECSEngine {
 		bool success = true;
 
 		ReadInstrument* read_instrument = data->read_data->read_instrument;
-		AllocatorPolymorphic field_allocator = { nullptr };
+		AllocatorPolymorphic field_allocator = ECS_MALLOC_ALLOCATOR;
 
 		if (data->override_allocator.allocator != nullptr) {
 			field_allocator = data->override_allocator;
@@ -282,7 +283,7 @@ namespace ECSEngine {
 		
 		AllocatorPolymorphic deallocate_allocator = field_allocator;
 		auto deallocate_buffer = [&]() {
-			DeallocateEx(deallocate_allocator, *data->allocated_buffer);
+			Deallocate(deallocate_allocator, *data->allocated_buffer);
 			*data->allocated_buffer = nullptr;
 		};
 
@@ -295,7 +296,7 @@ namespace ECSEngine {
 			if (!ignore_data) {
 				data->read_data->was_allocated = true;
 				void* buffer = data->elements_to_allocate > 0 ?
-					AllocateEx(field_allocator, data->elements_to_allocate * element_byte_size, data->definition_info.alignment) : nullptr;
+					Allocate(field_allocator, data->elements_to_allocate * element_byte_size, data->definition_info.alignment) : nullptr;
 				*data->allocated_buffer = buffer;
 			}
 		}
@@ -616,7 +617,7 @@ namespace ECSEngine {
 					field_info.stream_byte_size = data->definition_info.field_stream_byte_size;
 					field_info.stream_alignment = data->definition_info.field_stream_alignment;
 
-					AllocatorPolymorphic allocator = { nullptr };
+					AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
 					bool has_options = data->read_data->options != nullptr;
 					if (has_options) {
 						allocator = data->read_data->options->field_allocator;
@@ -978,7 +979,7 @@ namespace ECSEngine {
 			void* pointer = nullptr;
 
 			if (data->options->field_allocator.allocator != nullptr) {
-				void* allocation = AllocateEx(data->options->field_allocator, byte_size);
+				void* allocation = Allocate(data->options->field_allocator, byte_size);
 				success &= read_instrument->Read(allocation, byte_size);
 				pointer = allocation;
 			}
@@ -1160,6 +1161,16 @@ namespace ECSEngine {
 				success &= write_instrument->Write(&allocator->linear_allocators);
 			}
 			break;
+			case ECS_ALLOCATOR_MALLOC:
+			{
+				// Nothing to write for malloc
+			}
+			break;
+			case ECS_ALLOCATOR_INTERFACE:
+			{
+				ECS_ASSERT(false, "Unimplemented Interface allocator serialize code path");
+			}
+			break;
 			default:
 				ECS_ASSERT(false);
 			}
@@ -1174,11 +1185,9 @@ namespace ECSEngine {
 			
 			// Serialize the nested type once more. If the target allocator is nullptr, make the type as COUNT
 			// Once more to signal that it is malloc
-			ECS_ALLOCATOR_TYPE polymorphic_type = allocator->allocator == nullptr ? ECS_ALLOCATOR_TYPE_COUNT : allocator->allocator_type;
+			ECS_ALLOCATOR_TYPE polymorphic_type = allocator->allocator->m_allocator_type;
 			success &= write_instrument->Write(&polymorphic_type);
-			if (polymorphic_type != ECS_ALLOCATOR_TYPE_COUNT) {
-				serialize(polymorphic_type, allocator->allocator);
-			}
+			serialize(polymorphic_type, allocator->allocator);
 		}
 
 		return success;
@@ -1229,7 +1238,7 @@ namespace ECSEngine {
 					// If it failed, don't continue, since the value is probably corrupted
 					if (read_data && success) {
 						LinearAllocator* allocator = (LinearAllocator*)allocator_pointer;
-						*allocator = LinearAllocator(AllocateEx(field_allocator, capacity), capacity);
+						new (allocator) LinearAllocator(Allocate(field_allocator, capacity), capacity);
 					}
 				}
 			}
@@ -1241,7 +1250,7 @@ namespace ECSEngine {
 				if (is_allocator_matched) {
 					if (read_data && success) {
 						StackAllocator* allocator = (StackAllocator*)allocator_pointer;
-						*allocator = StackAllocator(AllocateEx(field_allocator, capacity), capacity);
+						new (allocator) StackAllocator(Allocate(field_allocator, capacity), capacity);
 					}
 				}
 			}
@@ -1257,7 +1266,7 @@ namespace ECSEngine {
 				if (is_allocator_matched) {
 					if (read_data && success) {
 						MultipoolAllocator* allocator = (MultipoolAllocator*)allocator_pointer;
-						*allocator = MultipoolAllocator(AllocateEx(field_allocator, allocate_size), capacity, block_count);
+						new (allocator) MultipoolAllocator(Allocate(field_allocator, allocate_size), capacity, block_count);
 					}
 				}
 			}
@@ -1271,7 +1280,7 @@ namespace ECSEngine {
 				if (is_allocator_matched) {
 					if (read_data && success) {
 						MemoryArena* allocator = (MemoryArena*)allocator_pointer;
-						*allocator = MemoryArena(field_allocator, allocator_count, base_allocator_info);
+						new (allocator) MemoryArena(field_allocator, allocator_count, base_allocator_info);
 					}
 				}
 			}
@@ -1285,7 +1294,7 @@ namespace ECSEngine {
 				if (is_allocator_matched) {
 					if (read_data && success) {
 						MemoryManager* allocator = (MemoryManager*)allocator_pointer;
-						*allocator = MemoryManager(initial_allocator_info, backup_allocator_info, field_allocator);
+						new (allocator) MemoryManager(initial_allocator_info, backup_allocator_info, field_allocator);
 					}
 				}
 			}
@@ -1299,7 +1308,7 @@ namespace ECSEngine {
 				if (is_allocator_matched) {
 					if (read_data && success) {
 						ResizableLinearAllocator* allocator = (ResizableLinearAllocator*)allocator_pointer;
-						*allocator = ResizableLinearAllocator(initial_capacity, backup_capacity, field_allocator);
+						new (allocator) ResizableLinearAllocator(initial_capacity, backup_capacity, field_allocator);
 					}
 				}
 			}
@@ -1313,9 +1322,24 @@ namespace ECSEngine {
 				if (is_allocator_matched) {
 					if (read_data && success) {
 						MemoryProtectedAllocator* allocator = (MemoryProtectedAllocator*)allocator_pointer;
-						*allocator = MemoryProtectedAllocator(chunk_size, linear_allocators);
+						new (allocator) MemoryProtectedAllocator(chunk_size, linear_allocators);
 					}
 				}
+			}
+			break;
+			case ECS_ALLOCATOR_MALLOC:
+			{
+				// Nothing to be done for malloc, just to initialize the vtable
+				if (read_data) {
+					MallocAllocator* allocator = (MallocAllocator*)allocator_pointer;
+					new (allocator) MallocAllocator();
+				}
+			}
+			break;
+			case ECS_ALLOCATOR_INTERFACE:
+			{
+				// This is an incorrect type, can't handle it
+				return false;
 			}
 			break;
 			default:
@@ -1347,9 +1371,6 @@ namespace ECSEngine {
 				// Make this nullptr in order to not trigger a read when we are not supposed to
 				if (!deserialize(polymorphic_type, read_data ? allocator->allocator : nullptr)) {
 					return false;
-				}
-				if (read_data) {
-					allocator->allocator_type = polymorphic_type;
 				}
 			}
 		}
@@ -1960,7 +1981,7 @@ namespace ECSEngine {
 								}
 								else {
 									if (byte_size > 0) {
-										void* allocation = AllocateEx(allocator, allocate_size, info.stream_alignment);
+										void* allocation = Allocate(allocator, allocate_size, info.stream_alignment);
 										success &= read_instrument->ReadAlways(allocation, byte_size);
 
 										void* null_terminator = OffsetPointer(allocation, byte_size);
@@ -1992,7 +2013,7 @@ namespace ECSEngine {
 									success &= pointer != nullptr;
 								}
 								else {
-									*pointer = AllocateEx(allocator, fundamental_byte_size, GetReflectionFieldTypeAlignment(info.basic_type));
+									*pointer = Allocate(allocator, fundamental_byte_size, GetReflectionFieldTypeAlignment(info.basic_type));
 									success &= read_instrument->Read(*pointer, fundamental_byte_size);
 								}
 							}
@@ -2032,7 +2053,7 @@ namespace ECSEngine {
 							else {
 								void** pointer = (void**)data;
 								if (byte_size > 0) {
-									void* allocation = AllocateEx(allocator, byte_size, info.stream_alignment);
+									void* allocation = Allocate(allocator, byte_size, info.stream_alignment);
 									success &= read_instrument->ReadAlways(allocation, byte_size);
 
 									*pointer = allocation;
@@ -2083,7 +2104,7 @@ namespace ECSEngine {
 						else {
 							void** pointer = (void**)data;
 							if (byte_size > 0) {
-								void* allocation = AllocateEx(allocator, byte_size, info.stream_alignment);
+								void* allocation = Allocate(allocator, byte_size, info.stream_alignment);
 								success &= read_instrument->ReadAlways(allocation, byte_size);
 
 								*pointer = allocation;

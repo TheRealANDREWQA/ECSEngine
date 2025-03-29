@@ -959,7 +959,7 @@ namespace ECSEngine {
 			return ECS_DESERIALIZE_OK;
 		};
 
-		AllocatorPolymorphic initial_field_allocator = { nullptr };
+		AllocatorPolymorphic initial_field_allocator = ECS_MALLOC_ALLOCATOR;
 
 		if (has_options) {
 			if (options->field_table != nullptr) {

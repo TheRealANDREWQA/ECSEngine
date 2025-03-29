@@ -355,7 +355,7 @@ namespace ECSEngine {
 			size_t total_allocation_size = sizeof(MemoryArena) + MemoryArena::MemoryOf(COMPONENT_ALLOCATOR_ARENA_COUNT, create_info);
 			void* allocation = entity_manager->m_memory_manager->Allocate(total_allocation_size);
 			info.allocator = (MemoryArena*)allocation;
-			*info.allocator = MemoryArena(
+			new (info.allocator) MemoryArena(
 				OffsetPointer(allocation, sizeof(MemoryArena)),
 				COMPONENT_ALLOCATOR_ARENA_COUNT,
 				create_info
@@ -955,7 +955,7 @@ namespace ECSEngine {
 		unsigned int copy_position = base_archetype->Reserve(data->count);
 
 		// Create the entities from the entity pool - their infos will already be set
-		manager->m_entity_pool->AllocateEx({ entities, data->count }, archetype_indices, copy_position);
+		manager->m_entity_pool->Allocate({ entities, data->count }, archetype_indices, copy_position);
 		
 		// Copy the entities into the archetype entity reference
 		base_archetype->SetEntities({ entities, data->count }, copy_position);
@@ -1983,13 +1983,13 @@ namespace ECSEngine {
 		);
 
 		m_hierarchy_allocator = (MemoryManager*)m_memory_manager->Allocate(sizeof(MemoryManager));
-		*m_hierarchy_allocator = DefaultEntityHierarchyAllocator(m_memory_manager->m_backup);
+		DefaultEntityHierarchyAllocator(m_hierarchy_allocator, m_memory_manager->m_backup);
 		m_hierarchy = EntityHierarchy(m_hierarchy_allocator, 0, 0, 0);
 
 		// Allocate the query cache now - use a separate allocation
 		// Get a default allocator for it for the moment
-		MemoryManager* query_cache_allocator = (MemoryManager*)AllocateEx(m_memory_manager->m_backup, sizeof(MemoryManager));
-		*query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(descriptor.memory_manager->m_backup);
+		MemoryManager* query_cache_allocator = (MemoryManager*)Allocate(m_memory_manager->m_backup, sizeof(MemoryManager));
+		ArchetypeQueryCache::DefaultAllocator(query_cache_allocator, descriptor.memory_manager->m_backup);
 		m_query_cache = (ArchetypeQueryCache*)m_memory_manager->Allocate(sizeof(ArchetypeQueryCache));
 		*m_query_cache = ArchetypeQueryCache(this, query_cache_allocator);
 	}
@@ -2006,7 +2006,7 @@ namespace ECSEngine {
 
 	void* EntityManager::AllocateTemporaryBuffer(size_t size, size_t alignment)
 	{
-		return m_temporary_allocator.Allocate_ts(size, alignment);
+		return m_temporary_allocator.AllocateTs(size, alignment);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2613,7 +2613,7 @@ namespace ECSEngine {
 				// We need to copy all the entities from the other archetype base now
 				unsigned int copy_position = base_archetype->Reserve(copy_count);
 				Entity* allocated_entities = (Entity*)m_memory_manager->Allocate(sizeof(Entity) * copy_count);
-				m_entity_pool->AllocateEx({ allocated_entities, copy_count }, { main_index, base_index }, copy_position);
+				m_entity_pool->Allocate({ allocated_entities, copy_count }, { main_index, base_index }, copy_position);
 				// Here we need to specify the entities of the other alongside the other entity pool
 				base_archetype->CopyFromAnotherArchetype({ copy_position, copy_count }, other_archetype_base, other_archetype_base->m_entities, other->m_entity_pool);
 
@@ -3319,7 +3319,7 @@ namespace ECSEngine {
 		}
 
 		m_hierarchy_allocator = (MemoryManager*)m_memory_manager->Allocate(sizeof(MemoryManager));
-		*m_hierarchy_allocator = DefaultEntityHierarchyAllocator(m_memory_manager->m_backup);
+		DefaultEntityHierarchyAllocator(m_hierarchy_allocator, m_memory_manager->m_backup);
 		m_hierarchy = EntityHierarchy(
 			m_hierarchy_allocator,
 			entity_manager->m_hierarchy.roots.capacity,
@@ -4583,10 +4583,10 @@ namespace ECSEngine {
 
 	AllocatorPolymorphic EntityManager::GetGlobalComponentAllocator(Component component) const {
 		size_t component_index = SearchBytes(Stream<Component>(m_global_components, m_global_component_count), component);
-		ECS_CRASH_CONDITION_RETURN(component_index != -1, { nullptr }, "The global component {#} doesn't exist when retrieving its allocator.", component);
+		ECS_CRASH_CONDITION_RETURN(component_index != -1, nullptr, "The global component {#} doesn't exist when retrieving its allocator.", component);
 		if (m_global_components_info[component_index].type_allocator_pointer_offset == -1) {
 			// No allocator can be deduced
-			return { nullptr };
+			return nullptr;
 		}
 
 		const void* allocator_pointer = OffsetPointer(m_global_components_data[component_index], m_global_components_info[component_index].type_allocator_pointer_offset);
@@ -6385,7 +6385,7 @@ namespace ECSEngine {
 		// Share the allocator between the memory pool and the entity manager
 		// The entity pool will make few allocations
 		MemoryManager* entity_manager_allocator = (MemoryManager*)allocation;
-		*entity_manager_allocator = MemoryManager(allocator_size, allocator_pool_count, allocator_new_size, global_memory_manager);
+		new (entity_manager_allocator) MemoryManager(allocator_size, allocator_pool_count, allocator_new_size, global_memory_manager);
 
 		allocation = OffsetPointer(allocation, sizeof(MemoryManager));
 		EntityPool* entity_pool = (EntityPool*)allocation;

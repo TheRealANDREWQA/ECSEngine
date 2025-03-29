@@ -38,7 +38,7 @@ namespace ECSEngine {
 					// Wait for all writes to finish
 					unsigned int capacity = stream.SpinWaitCapacity();
 					unsigned int new_capacity = (float)capacity * 1.5f + 16;
-					void* allocation = AllocateEx(allocator, sizeof(T) * new_capacity, alignof(T));
+					void* allocation = Allocate(allocator, sizeof(T) * new_capacity, alignof(T));
 					stream.CopyTo(allocation);
 					stream.buffer = (T*)allocation;
 					stream.capacity = new_capacity;
@@ -70,7 +70,7 @@ namespace ECSEngine {
 					unsigned int capacity = stream.SpinWaitCapacity();
 					unsigned int new_capacity = (float)capacity * 1.5f + 16;
 					new_capacity = new_capacity < capacity + elements.size ? capacity + elements.size + 16 : new_capacity;
-					void* allocation = AllocateEx(allocator, sizeof(T) * new_capacity, alignof(T));
+					void* allocation = Allocate(allocator, sizeof(T) * new_capacity, alignof(T));
 					ECS_HARD_ASSERT(allocation != nullptr, "Allocation failed for ResizableAtomicStream");
 					stream.CopyTo(allocation);
 					stream.buffer = (T*)allocation;
@@ -133,14 +133,14 @@ namespace ECSEngine {
 
 		// It does not lock
 		ECS_INLINE void Resize(unsigned int new_capacity, bool copy_old_data = true) {
-			void* allocation = AllocateEx(allocator, new_capacity * sizeof(T), alignof(T));
+			void* allocation = Allocate(allocator, new_capacity * sizeof(T), alignof(T));
 			if (copy_old_data) {
 				if (stream.capacity > 0) {
 					stream.CopyTo(allocation);
 				}
 			}
 			if (stream.capacity > 0) {
-				DeallocateEx(allocator, stream.buffer);
+				Deallocate(allocator, stream.buffer);
 			}
 			stream.capacity = new_capacity;
 		}

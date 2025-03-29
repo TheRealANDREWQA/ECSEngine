@@ -36,8 +36,9 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_GET_TRANSFORM = (size_t)1 << 26;
 		constexpr size_t UI_CONFIG_INITIALIZER_DO_NOT_BEGIN = (size_t)1 << 27;
 		constexpr size_t UI_CONFIG_TOOL_TIP = (size_t)1 << 28;
+		constexpr size_t UI_CONFIG_DEBOUNCING = (size_t)1 << 29;
 		
-		// Low slots available 29
+		// No low slots available (all from 1-29 are in use now)
 
 		// High slots available 60, 61, 62, 63 (60 aliases with an array config)
 		
