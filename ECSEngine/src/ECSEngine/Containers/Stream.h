@@ -1034,6 +1034,10 @@ namespace ECSEngine {
 			return write_index;
 		}
 
+		ECS_INLINE void Clear() {
+			size = 0;
+		}
+
 		ECS_INLINE ResizableStream<T> Copy(AllocatorPolymorphic allocator) const {
 			ResizableStream<T> result;
 			result.InitializeAndCopy(allocator, ToStream());
@@ -1150,10 +1154,6 @@ namespace ECSEngine {
 
 		ECS_INLINE const T& Last() const {
 			return buffer[size - 1];
-		}
-
-		ECS_INLINE void Reset() {
-			size = 0;	
 		}
 
 		// Set the count to the number of elements that you want to be removed
@@ -1471,9 +1471,9 @@ namespace ECSEngine {
 			return size;
 		}
 
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (size > 0 && buffer != nullptr) {
-				ECSEngine::Deallocate(allocator, buffer);
+				ECSEngine::Deallocate(allocator, buffer, debug_info);
 				buffer = nullptr;
 				size = 0;
 			}
@@ -1648,9 +1648,9 @@ namespace ECSEngine {
 			memcpy(memory, buffer, size);
 		}
 
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (buffer != nullptr && capacity > 0) {
-				ECSEngine::Deallocate(allocator, buffer);
+				ECSEngine::Deallocate(allocator, buffer, debug_info);
 				buffer = nullptr;
 				size = 0;
 				capacity = 0;
@@ -1881,7 +1881,7 @@ namespace ECSEngine {
 			return (const void*)((uintptr_t)buffer + (size_t)index * (size_t)byte_size);
 		}
 
-		ECS_INLINE void Reset() {
+		ECS_INLINE void Clear() {
 			size = 0;
 		}
 

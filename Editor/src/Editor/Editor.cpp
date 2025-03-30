@@ -290,6 +290,10 @@ public:
 					}
 					__except (handle_physical_memory_guards(GetExceptionInformation())) {}
 
+					//if (mouse.IsDown(ECS_MOUSE_X1)) {
+					//	__debugbreak();
+					//}
+
 					// Use milliseconds as unit of measure
 					float frame_duration_ms = timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 					frame_pacing = max(frame_pacing, editor_state.elevated_frame_pacing);

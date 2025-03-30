@@ -84,7 +84,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 	}
 	else {
 		success = false;
-		editor_state->project_modules->Reset();
+		editor_state->project_modules->Clear();
 	}
 
 	// Delete the locked files

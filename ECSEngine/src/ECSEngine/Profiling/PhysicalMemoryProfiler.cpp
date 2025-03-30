@@ -168,7 +168,7 @@ namespace ECSEngine {
 					// Of pages for some threads
 					//thread_pages.ResizeNoCopy(GUARD_REGIONS_INITIAL_CAPACITY);
 				}
-				thread_pages.Reset();
+				thread_pages.Clear();
 			}
 		}
 	}

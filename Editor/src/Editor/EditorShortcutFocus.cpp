@@ -63,7 +63,7 @@ void EditorShortcutFocus::HandleActionEntries(EditorState* editor_state)
 	for (unsigned int index = 0; index < action_entries.size; index++) {
 		CopyableDeallocate(action_entries[index].action_data, &allocator);
 	}
-	action_entries.Reset();
+	action_entries.Clear();
 }
 
 void EditorShortcutFocus::Initialize(AllocatorPolymorphic _allocator) {

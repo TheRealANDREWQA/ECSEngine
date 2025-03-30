@@ -1761,7 +1761,7 @@ namespace ECSEngine {
 			// Retokenize the string. The characters that are added by the tag handlers can introduce more than one token, and it simpler
 			// To just create the compound string and then retokenize.
 			tokenized_body.string = final_string;
-			tokenized_body.tokens.resizable_stream->Reset();
+			tokenized_body.tokens.resizable_stream->Clear();
 			TokenizeString(tokenized_body, GetCppFileTokenSeparators(), false);
 		}
 

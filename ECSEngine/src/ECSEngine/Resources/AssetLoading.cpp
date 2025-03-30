@@ -907,7 +907,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator = &stack_allocator;
 
 		// For the packed case, we need to copy the hash table and the packed file
-		ResizableLinearAllocator persistent_allocator{ ECS_MB, ECS_MB * 24, {nullptr} };
+		ResizableLinearAllocator persistent_allocator{ ECS_MB, ECS_MB * 24, ECS_MALLOC_ALLOCATOR };
 
 		AssetDatabaseSameTargetAll same_target = database->SameTargetAll(allocator);
 		// Go through all current assets and check to see if they exist already in the resource manager

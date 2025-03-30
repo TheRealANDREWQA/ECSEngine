@@ -758,7 +758,7 @@ void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbo
 
 void ClearSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sandbox_index) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->enabled_debug_draw.Reset();
+	sandbox->enabled_debug_draw.Clear();
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
