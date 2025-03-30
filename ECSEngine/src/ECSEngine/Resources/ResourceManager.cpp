@@ -258,7 +258,7 @@ namespace ECSEngine {
 
 	static void UnloadMaterialsHandler(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {
 		Stream<PBRMaterial>* data = (Stream<PBRMaterial>*)parameter;
-		AllocatorPolymorphic allocator = multithreaded_allocation ? resource_manager->AllocatorTs() : resource_manager->AllocatorTs();
+		AllocatorPolymorphic allocator = multithreaded_allocation ? resource_manager->AllocatorTs() : resource_manager->Allocator();
 
 		for (size_t index = 0; index < data->size; index++) {
 			FreePBRMaterial(data->buffer[index], allocator);
@@ -1709,8 +1709,9 @@ namespace ECSEngine {
 		}
 
 		auto code_deallocator = StackScope([&]() {
-			source_code.Deallocate(resource_manager->Allocator());
-			byte_code.Deallocate(resource_manager->Allocator());
+			AllocatorPolymorphic load_allocator = load_extra_information.GetAllocator(resource_manager, false);
+			source_code.Deallocate(load_allocator);
+			byte_code.Deallocate(load_allocator);
 		});
 
 		converted_material->vertex_shader = vertex_shader;

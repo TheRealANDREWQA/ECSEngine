@@ -2489,7 +2489,7 @@ void ResetModules(EditorState* editor_state)
 	for (size_t index = 0; index < project_modules->size; index++) {
 		ReleaseModule(editor_state, index);
 	}
-	project_modules->Reset();
+	project_modules->Clear();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

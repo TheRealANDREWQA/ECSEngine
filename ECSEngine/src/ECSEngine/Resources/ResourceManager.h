@@ -156,7 +156,7 @@ namespace ECSEngine {
 		// This is an optional field that is used only when either source code or byte code is specified.
 		// If it is left as nullptr, the allocation for those buffers will be made from the 
 		// ResourceManager's multithreaded allocator, else from this allocator
-		AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
+		AllocatorPolymorphic allocator = nullptr;
 		// This will be used only when the shader type is the vertex shader, else it will be ignored
 		InputLayout* input_layout = nullptr;
 	};

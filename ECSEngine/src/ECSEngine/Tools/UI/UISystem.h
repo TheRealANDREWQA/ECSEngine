@@ -727,7 +727,7 @@ namespace ECSEngine {
 			// this is the safe way of destroying dockspaces since if in the same frame have been destroyed
 			// other dockspaces of the same type they will change position and can results in not detecting
 			// or false detecting.
-			template<bool destroy_internal_dockspaces = false, bool deallocate_borders = false>
+			template<bool destroy_internal_dockspaces = false, bool deallocate_borders = true>
 			void DestroyDockspace(UIDockspaceBorder* border, DockspaceType type);
 
 			// it returns wheter or not it found a match; if using delete non referenced this can lead to
@@ -1061,8 +1061,7 @@ namespace ECSEngine {
 				unsigned int dockspace_index,
 				DockspaceType dockspace_type,
 				CapacityStream<unsigned int>* subindicies,
-				CapacityStream<DockspaceType>* subtypes,
-				unsigned int& children_count
+				CapacityStream<DockspaceType>* subtypes
 			) const;
 
 			// if the given dockspace is already a floating one, the type will not be set

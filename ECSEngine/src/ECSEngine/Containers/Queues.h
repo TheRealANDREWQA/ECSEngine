@@ -541,7 +541,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Reset() {
 			m_first_item = 0;
-			m_queue.Reset();
+			m_queue.Clear();
 		}
 
 		ECS_INLINE void ResizeNoCopy(unsigned int capacity) {

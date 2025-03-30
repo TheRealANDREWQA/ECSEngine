@@ -2208,9 +2208,9 @@ namespace ECSEngine {
 					AppendDockspaceResize(
 						element,
 						&m_horizontal_dockspaces,
-						dockspace_stream[dockspace_index].transform.scale.y,
-						m_horizontal_dockspaces[element].transform.scale.y,
 						dockspace_stream[dockspace_index].transform.scale.x,
+						m_horizontal_dockspaces[element].transform.scale.x,
+						dockspace_stream[dockspace_index].transform.scale.y,
 						1.0f
 					);
 				}
@@ -3329,15 +3329,6 @@ namespace ECSEngine {
 			auto deallocate_buffers = [this](UIDockspace* dockspace) {
 				if constexpr (deallocate_borders) {
 					for (size_t subindex = 0; subindex < dockspace->borders.size - 1; subindex++) {
-						if (!dockspace->borders[subindex].is_dock) {
-							for (size_t window_index = 0; window_index < dockspace->borders[subindex].window_indices.size; window_index++) {
-								DestroyWindow(dockspace->borders[subindex].window_indices[window_index]);
-								// The border then must have it's index made an invalid one in order to not affect the 
-								// repairing of the window indices - set it to the window size so not other border
-								// will be affected
-								dockspace->borders[subindex].window_indices[window_index] = m_windows.size;
-							}
-						}
 						DeallocateDockspaceBorderResources(dockspace, subindex);
 					}
 				}
@@ -3958,7 +3949,7 @@ namespace ECSEngine {
 			m_graphics->DisableDepth();
 
 			m_resources.system_draw.ResetCPUBuffersNormal();
-			m_resources.system_draw.sprite_textures[0].Reset();
+			m_resources.system_draw.sprite_textures[0].Clear();
 			m_frame_pacing = ECS_UI_FRAME_PACING_NONE;
 
 			float2 mouse_position = GetNormalizeMousePosition();
@@ -6217,8 +6208,7 @@ namespace ECSEngine {
 			unsigned int dockspace_index,
 			DockspaceType dockspace_type,
 			CapacityStream<unsigned int>* subindicies,
-			CapacityStream<DockspaceType>* subtypes,
-			unsigned int& children_count
+			CapacityStream<DockspaceType>* subtypes
 		) const {
 			if (dockspace_type == DockspaceType::Horizontal) {
 				for (size_t index = 0; index < m_horizontal_dockspaces[dockspace_index].borders.size - 1; index++) {
@@ -6227,12 +6217,10 @@ namespace ECSEngine {
 							m_horizontal_dockspaces[dockspace_index].borders[index].window_indices[0],
 							DockspaceType::Vertical,
 							subindicies,
-							subtypes,
-							children_count
+							subtypes
 						);
 						subindicies->AddAssert(m_horizontal_dockspaces[dockspace_index].borders[index].window_indices[0]);
 						subtypes->AddAssert(DockspaceType::Vertical);
-						children_count++;
 					}
 				}
 			}
@@ -6243,12 +6231,10 @@ namespace ECSEngine {
 							m_vertical_dockspaces[dockspace_index].borders[index].window_indices[0],
 							DockspaceType::Horizontal,
 							subindicies,
-							subtypes,
-							children_count
+							subtypes
 						);
 						subindicies->AddAssert(m_vertical_dockspaces[dockspace_index].borders[index].window_indices[0]);
 						subtypes->AddAssert(DockspaceType::Horizontal);
-						children_count++;
 					}
 				}
 			}
@@ -6259,12 +6245,10 @@ namespace ECSEngine {
 							m_floating_horizontal_dockspaces[dockspace_index].borders[index].window_indices[0],
 							DockspaceType::Vertical,
 							subindicies,
-							subtypes,
-							children_count
+							subtypes
 						);
 						subindicies->AddAssert(m_floating_horizontal_dockspaces[dockspace_index].borders[index].window_indices[0]);
 						subtypes->AddAssert(DockspaceType::Vertical);
-						children_count++;
 					}
 				}
 			}
@@ -6275,12 +6259,10 @@ namespace ECSEngine {
 							m_floating_vertical_dockspaces[dockspace_index].borders[index].window_indices[0],
 							DockspaceType::Horizontal,
 							subindicies,
-							subtypes,
-							children_count
+							subtypes
 						);
 						subindicies->AddAssert(m_floating_vertical_dockspaces[dockspace_index].borders[index].window_indices[0]);
 						subtypes->AddAssert(DockspaceType::Horizontal);
-						children_count++;
 					}
 				}
 			}
@@ -6585,10 +6567,11 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(DockspaceType, children_types, 64);
 
 			for (size_t index = 0; index < m_dockspace_layers.size; index++) {
-				unsigned int children_dockspace_count = 0;
-				GetDockspacesFromParent(m_dockspace_layers[index].index, m_dockspace_layers[index].type, &children_dockspace_indices, &children_types, children_dockspace_count);
+				children_dockspace_indices.Clear();
+				children_types.Clear();
+				GetDockspacesFromParent(m_dockspace_layers[index].index, m_dockspace_layers[index].type, &children_dockspace_indices, &children_types);
 				// children dockspaces windows
-				for (size_t subindex = 0; subindex < children_dockspace_count; subindex++) {
+				for (size_t subindex = 0; subindex < children_dockspace_indices.size; subindex++) {
 					UIDockspace* dockspace = &dockspaces[(unsigned int)children_types[subindex]][children_dockspace_indices[subindex]];
 					for (size_t border_index = 0; border_index < dockspace->borders.size - 1; border_index++) {
 						if (!dockspace->borders[border_index].is_dock) {
@@ -6626,7 +6609,10 @@ namespace ECSEngine {
 						if (!current_dockspace->borders[border_index].is_dock) {
 							size_t floating_dockspace_index = 0;
 							for (; floating_dockspace_index < dockspace_count; floating_dockspace_index++) {
-								UIElementTransform transform = { GetDockspaceRegionPosition(current_dockspace, border_index, offset_mask[(unsigned int)m_dockspace_layers[index].index]), GetDockspaceRegionScale(current_dockspace, border_index, offset_mask[(unsigned int)m_dockspace_layers[index].type]) };
+								UIElementTransform transform = { 
+									GetDockspaceRegionPosition(current_dockspace, border_index, offset_mask[(unsigned int)m_dockspace_layers[index].type]), 
+									GetDockspaceRegionScale(current_dockspace, border_index, offset_mask[(unsigned int)m_dockspace_layers[index].type]) 
+								};
 								if (
 									IsRectangleInRectangle(
 										transform,
@@ -8561,6 +8547,11 @@ namespace ECSEngine {
 				unsigned int window_count = dockspace_receiver->borders[border_index_receiver].window_indices.size;
 				copy_multiple_windows(dockspace_receiver, border_index_receiver, element_to_add, 0);
 				dockspace_receiver->borders[border_index_receiver].window_indices.size = window_count;
+
+				// If only one window was added, make this one as the focused window for the border
+				if (element_to_add->borders[0].window_indices.size == 1) {
+					dockspace_receiver->borders[border_index_receiver].active_window = dockspace_receiver->borders[border_index_receiver].window_indices.size - 1;
+				}
 
 				// Deallocate the border snapshot, if there is one
 				DeallocateDockspaceBorderSnapshot(dockspace_receiver, border_index_receiver, false);
@@ -11387,9 +11378,10 @@ namespace ECSEngine {
 				}
 			}
 
-			if (!is_fixed || dockspace->borders.size > 2) {
-				DeallocateDockspaceBorderResources(dockspace, border_index);
+			// Some code paths destroy the entire dockspace, so don't deallocate the border upfront
 
+			bool should_dockspace_border_be_deallocated = !is_fixed || dockspace->borders.size > 2;
+			if (!is_fixed || dockspace->borders.size > 2) {
 				if (border_index == 0) {
 					if (dockspace->borders[border_index + 1].is_dock) {
 						if (type == DockspaceType::Horizontal || type == DockspaceType::FloatingHorizontal) {
@@ -11475,14 +11467,24 @@ namespace ECSEngine {
 					has_been_destroyed = true;
 				}
 			}
+
 			if (is_fixed && dockspace->borders.size == 2) {
-				dockspace->borders[border_index].hoverable_handler.Reset();
-				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
-					dockspace->borders[border_index].clickable_handler[button_type].Reset();
-					});
-				dockspace->borders[border_index].general_handler.Reset();
+				if (should_dockspace_border_be_deallocated) {
+					DeallocateDockspaceBorderResources(dockspace, border_index);
+				}
+				else {
+					dockspace->borders[border_index].hoverable_handler.Reset();
+					ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+						dockspace->borders[border_index].clickable_handler[button_type].Reset();
+						});
+					dockspace->borders[border_index].general_handler.Reset();
+				}
 			}
 			else if (!has_been_destroyed) {
+				if (should_dockspace_border_be_deallocated) {
+					DeallocateDockspaceBorderResources(dockspace, border_index);
+				}
+
 				float border_offset = dockspace->borders[border_index].position;
 				for (size_t index = border_index; index < dockspace->borders.size - 1; index++) {
 					dockspace->borders[index] = dockspace->borders[index + 1];

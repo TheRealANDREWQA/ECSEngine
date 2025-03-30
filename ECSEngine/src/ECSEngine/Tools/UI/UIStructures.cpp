@@ -499,10 +499,10 @@ namespace ECSEngine {
 			general_handler.Reset();
 			//draw_resources.ReleaseSpriteTextures();
 			for (size_t index = 0; index < draw_resources.sprite_textures.size; index++) {
-				draw_resources.sprite_textures[index].Reset();
+				draw_resources.sprite_textures[index].Clear();
 			}
 			for (size_t index = 0; index < draw_resources.sprite_cluster_subtreams.size; index++) {
-				draw_resources.sprite_cluster_subtreams[index].Reset();
+				draw_resources.sprite_cluster_subtreams[index].Clear();
 			}
 			// We don't need to deallocate the data pointers since they were allocated
 			// Using the temporary allocator

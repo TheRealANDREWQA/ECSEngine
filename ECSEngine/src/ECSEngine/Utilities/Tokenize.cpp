@@ -401,7 +401,7 @@ namespace ECSEngine {
 
 		auto reset_string_buildup = [&]() {
 			string_buildup.size = 1;
-			string_buildup[0].Reset();
+			string_buildup[0].Clear();
 		};
 
 		auto reserve_token = [&]() {
@@ -2332,7 +2332,7 @@ namespace ECSEngine {
 		ResizableStream<MatchedEntries> matched_entries(&stack_allocator, 32);
 
 		while (subrange.count > 0) {
-			matched_entries.Reset();
+			matched_entries.Clear();
 
 			for (size_t index = 0; index < pre_exclude_actions.size; index++) {
 				unsigned int set_index = 0;

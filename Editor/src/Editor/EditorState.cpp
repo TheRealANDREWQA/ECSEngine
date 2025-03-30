@@ -244,8 +244,8 @@ void TickModuleStatus(EditorState* editor_state) {
 void TickEvents(EditorState* editor_state) {
 	// Get the event count and do the events that are now in the queue. Because some events might push them back
 	// in the event queue and doing that will generate an infinite loop
-	editor_state->readd_events.Reset();
-	editor_state->tick_processing_events.Reset();
+	editor_state->readd_events.Clear();
+	editor_state->tick_processing_events.Clear();
 	unsigned int event_count = editor_state->event_queue.PopRangeAll(&editor_state->tick_processing_events);
 	editor_state->tick_processing_events_index = 0;
 	
