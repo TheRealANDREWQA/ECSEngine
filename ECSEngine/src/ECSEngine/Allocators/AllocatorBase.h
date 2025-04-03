@@ -146,6 +146,37 @@ namespace ECSEngine {
 		bool m_crash_on_allocation_failure;
 		ECS_ALLOCATOR_TYPE m_allocator_type;
 	};
+	
+	/*
+		This represents a copy paste helper, with the minimum number of functions that must be implemented for a new allocator interface.
+
+		struct AllocatorInterface final : public AllocatorBase {
+			ECS_INLINE AllocatorInterface() : AllocatorBase(ECS_ALLOCATOR_INTERFACE) {}
+
+			virtual void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override {
+
+			}
+
+			virtual bool DeallocateNoAssert(const void* buffer, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				ECS_ASSERT(false, "Unimplemented function");
+				return false;
+			}
+
+			virtual void* Reallocate(const void* buffer, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				ECS_ASSERT(false, "Unimplemented function");
+				return nullptr;
+			}
+
+			virtual bool Belongs(const void* buffer) const override {
+				ECS_ASSERT(false, "Unimplemented function");
+				return false;
+			}
+
+			virtual void Clear(DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				ECS_ASSERT(false, "Unimplemented function");
+			}
+		};
+	*/
 
 	// Declare the global malloc allocator here such that is accessible everywhere.
 	// Implemented in MallocAllocator.cpp

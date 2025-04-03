@@ -112,7 +112,7 @@ namespace ECSEngine {
 			is_global_component = other_data->is_global_component;
 		}
 
-		void DeallocateImpl(AllocatorPolymorphic allocator) override {
+		void Deallocate(AllocatorPolymorphic allocator) override {
 			type.DeallocateCoalesced(allocator);
 		}
 

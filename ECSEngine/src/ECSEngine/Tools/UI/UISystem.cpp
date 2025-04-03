@@ -8594,11 +8594,12 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::IncrementWindowDynamicResource(unsigned int window_index, Stream<char> name)
+		unsigned int UISystem::IncrementWindowDynamicResource(unsigned int window_index, Stream<char> name)
 		{
-			ResourceIdentifier identifier(name);
-			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtr(identifier);
-			resource->reference_count++;
+			unsigned int dynamic_index = m_windows[window_index].dynamic_resources.Find(name);
+			ECS_ASSERT(dynamic_index != -1);
+			m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(dynamic_index)->reference_count++;
+			return dynamic_index;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

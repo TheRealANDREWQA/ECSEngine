@@ -331,7 +331,7 @@ namespace ECSEngine {
 
 	void CopyableDeallocate(Copyable* copyable, AllocatorPolymorphic allocator) {
 		if (copyable != nullptr) {
-			copyable->DeallocateImpl(allocator);
+			copyable->Deallocate(allocator);
 			Deallocate(allocator, copyable);
 		}
 	}

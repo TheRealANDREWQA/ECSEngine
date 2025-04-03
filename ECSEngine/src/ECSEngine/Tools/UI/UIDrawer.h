@@ -3402,6 +3402,9 @@ namespace ECSEngine {
 
 			void EndClip(const UIDrawerClipState& state);
 
+			// Ensures that following calls to add memory resources or table entries do not get assigned to the last dynamic element
+			void EndDynamicElement();
+
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 #pragma region File Input
@@ -3873,6 +3876,21 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// Returns an allocator that wraps GetMainAllocatorBuffer().
+			ECS_INLINE AllocatorPolymorphic GetMainAllocator() {
+				return &main_allocator_interface;
+			}
+
+			// Returns an allocator that wraps GetMainAllocatorBufferDynamic() for a given dynamic_index.
+			// Only a single instance of this can be active at any point (otherwise incorrect results will happen,
+			// Since the index is cached per this drawer instance).
+			ECS_INLINE AllocatorPolymorphic GetDynamicAllocator(unsigned int dynamic_index) {
+				dynamic_allocator_interface.SetDynamicIndex(dynamic_index);
+				return &dynamic_allocator_interface;
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<typename T>
 			ECS_INLINE T* GetMainAllocatorBuffer() {
 				return (T*)GetMainAllocatorBuffer(sizeof(T), alignof(T));
@@ -4235,7 +4253,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			// Should be used in initializers only, it will set the initializer dynamic index such that functions can use
+			// When used by initializers, it will set the initializer dynamic index such that functions can use
 			// Agnostically the allocate functions. Returns the initializer index.
 			unsigned int StartDynamicElement(Stream<char> name);
 
@@ -5174,6 +5192,78 @@ namespace ECSEngine {
 			ResizableStream<unsigned int> late_clickables[ECS_MOUSE_BUTTON_COUNT];
 			ResizableStream<unsigned int> late_generals;
 			ActionData cached_filled_action_data;
+
+			// This is an interface that encapsulates the GetMainAllocatorBuffer() call
+		// Such that it can be used with AllocatorPolymorphic calls
+			struct MainAllocatorInterface final : public AllocatorBase {
+				ECS_INLINE MainAllocatorInterface(UIDrawer* _drawer) : AllocatorBase(ECS_ALLOCATOR_INTERFACE), drawer(_drawer) {}
+
+				virtual void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override {
+					return drawer->GetMainAllocatorBuffer(size, alignment);
+				}
+
+				virtual bool DeallocateNoAssert(const void* buffer, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+					drawer->RemoveAllocation(buffer);
+					return true;
+				}
+
+				virtual void* Reallocate(const void* buffer, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override {
+					ECS_ASSERT(false, "Unimplemented function");
+					return nullptr;
+				}
+
+				virtual bool Belongs(const void* buffer) const override {
+					ECS_ASSERT(false, "Unimplemented function");
+					return false;
+				}
+
+				virtual void Clear(DebugInfo debug_info = ECS_DEBUG_INFO) override {
+					ECS_ASSERT(false, "Unimplemented function");
+				}
+
+				UIDrawer* drawer;
+			};
+
+			struct DynamicAllocatorInterface final : public AllocatorBase {
+				ECS_INLINE DynamicAllocatorInterface(UIDrawer* _drawer) : AllocatorBase(ECS_ALLOCATOR_INTERFACE), drawer(_drawer), dynamic_index(-1) {}
+
+				ECS_INLINE void SetDynamicIndex(unsigned int _dynamic_index) {
+					dynamic_index = _dynamic_index;
+				}
+
+				virtual void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override {
+					return drawer->GetMainAllocatorBufferDynamic(dynamic_index, size, alignment);
+				}
+
+				virtual bool DeallocateNoAssert(const void* buffer, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+					drawer->RemoveDynamicAllocation(buffer, dynamic_index);
+					return true;
+				}
+
+				virtual void* Reallocate(const void* buffer, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override {
+					ECS_ASSERT(false, "Unimplemented function");
+					return nullptr;
+				}
+
+				virtual bool Belongs(const void* buffer) const override {
+					ECS_ASSERT(false, "Unimplemented function");
+					return false;
+				}
+
+				virtual void Clear(DebugInfo debug_info = ECS_DEBUG_INFO) override {
+					ECS_ASSERT(false, "Unimplemented function");
+				}
+
+				UIDrawer* drawer;
+				unsigned int dynamic_index;
+			};
+
+			// This contains an opaque allocator that can be used instead of the GetMainAllocatorBuffer()
+			// Such that it works with the AllocatorPolymorphic APIs
+			MainAllocatorInterface main_allocator_interface;
+			// This interface represents an opaque allocator that handles dynamic allocations through an
+			// Allocator interface
+			DynamicAllocatorInterface dynamic_allocator_interface;
 		};
 
 		typedef void (*UIDrawerInitializeFunction)(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
