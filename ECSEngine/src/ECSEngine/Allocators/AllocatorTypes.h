@@ -52,9 +52,16 @@ namespace ECSEngine {
 	struct ECSENGINE_API Copyable {
 		ECS_INLINE Copyable(size_t _byte_size) : byte_size(_byte_size) {}
 
+	protected:
+		// Make this function friend in order to allow it to call deallocate
+		friend ECSENGINE_API void CopyableDeallocate(Copyable* copyable, AllocatorPolymorphic allocator);
+
 		virtual void CopyImpl(const void* other, AllocatorPolymorphic allocator) = 0;
 
-		virtual void DeallocateImpl(AllocatorPolymorphic allocator) = 0;
+		virtual void Deallocate(AllocatorPolymorphic allocator) = 0;
+
+	public:
+		// In order to deallocate, use CopyableDeallocate, since it handles the nullptr case as well
 
 		ECS_INLINE void* GetChildData() const {
 			return (void*)((uintptr_t)this + sizeof(Copyable));
@@ -103,10 +110,10 @@ namespace ECSEngine {
 
 		void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
 			// Blit the blittable data contained by this type
-			memcpy(&((BlittableCopyable*)other)->data, &data, sizeof(data));
+			memcpy(&data, &((BlittableCopyable*)other)->data, sizeof(data));
 		}
 
-		void DeallocateImpl(AllocatorPolymorphic allocator) override {}
+		void Deallocate(AllocatorPolymorphic allocator) override {}
 
 		BlittableType data;
 	};

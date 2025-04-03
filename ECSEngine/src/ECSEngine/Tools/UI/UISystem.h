@@ -1364,7 +1364,8 @@ namespace ECSEngine {
 
 			void HandleFrameHandlers();
 
-			void IncrementWindowDynamicResource(unsigned int window_index, Stream<char> name);
+			// Returns the dynamic index of that resource (the index is temporary, should not be stored as a long time value)
+			unsigned int IncrementWindowDynamicResource(unsigned int window_index, Stream<char> name);
 
 			void InitializeDefaultDescriptors();
 

@@ -310,33 +310,173 @@ namespace ECSEngine {
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
+		
+		struct DebouncingEntry {
+			Timer timer;
+			Copyable* data;
+			unsigned int dynamic_index;
+		};
+
+		// Helper function that handles a generic copyable debouncing value. It takes into account the current state and returns
+		// An opaque pointer with the data that it was stored previously using the copyable. If no copyable data exists, it will
+		// Insert a new separate resource that will be dynamic and auto removed using reference counting. It uses the pointer
+		// As a unique key to lookup the debouncing data into an internal structure.
+		static Copyable* HandleDebouncing(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, const void* pointer_key, Copyable* copyable_data) {
+			static const Stream<char> INTERNAL_DEBOUNCING_DATA_NAME = "___InternalDebouncingData";
+
+			struct InternalDebouncingData {
+				// This table maps a unique pointer key to its debouncing data.
+				// In order to know whether an entry is stale or not, we can check
+				// To see if the dynamic resource still exists in the window dynamic resources.
+				// If it doesn't, it means that the pointer is reused, and its previous debouncing
+				// Data can be ignored.
+				HashTable<DebouncingEntry, const void*, HashFunctionPowerOfTwo> table;
+			};
+			if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+				const UIConfigDebouncing* debouncing_config = (const UIConfigDebouncing*)config.GetParameter(UI_CONFIG_DEBOUNCING);
+
+				// Don't use a dynamic resource for this data, it should be persistent
+				InternalDebouncingData* internal_data = (InternalDebouncingData*)drawer->TryFindWindowResource(INTERNAL_DEBOUNCING_DATA_NAME);
+				if (internal_data == nullptr) {
+					internal_data = drawer->GetMainAllocatorBuffer<InternalDebouncingData>();
+					// Initialize this data with a small decent initial capacity
+					internal_data->table.Initialize(drawer->GetMainAllocator(), 64);
+					drawer->AddWindowResourceToTable(internal_data, INTERNAL_DEBOUNCING_DATA_NAME);
+				}
+
+				ECS_STACK_CAPACITY_STREAM(char, entry_name, 512);
+				static const Stream<char> INTERNAL_ENTRY_NAME = "___InternalDebouncingEntry";
+				entry_name.CopyOther(INTERNAL_ENTRY_NAME);
+				// Simply append the pointer value to the base entry name
+				ConvertIntToChars(entry_name, (int64_t)pointer_key);
+
+				DebouncingEntry* entry_data = internal_data->table.TryGetValuePtr(pointer_key);
+				if (entry_data == nullptr) {
+					// Insert a new entry.
+					// Create a dynamic entry with that name
+					unsigned int dynamic_index = drawer->StartDynamicElement(entry_name);
+
+					DebouncingEntry new_entry;
+					new_entry.timer.SetNewStart();
+					new_entry.data = CopyableCopy(copyable_data, drawer->GetDynamicAllocator(dynamic_index));
+					new_entry.dynamic_index = dynamic_index;
+					internal_data->table.InsertDynamic(drawer->GetMainAllocator(), new_entry, pointer_key);
+					entry_data = internal_data->table.GetValuePtr(pointer_key);
+
+					drawer->EndDynamicElement();
+				}
+				else {
+					// Check to see if the dynamic entry still exists in the window data
+					unsigned int dynamic_index = drawer->system->GetWindowDynamicElement(drawer->window_index, entry_name);
+					if (dynamic_index == -1) {
+						// The entry no longer exists, we have to recreate it
+						dynamic_index = drawer->StartDynamicElement(entry_name);
+
+						entry_data->timer.SetNewStart();
+						entry_data->data = CopyableCopy(copyable_data, drawer->GetDynamicAllocator(dynamic_index));
+						entry_data->dynamic_index = dynamic_index;
+
+						drawer->EndDynamicElement();
+					}
+					else {
+						// Increment the reference count for this entry
+						entry_data->dynamic_index = drawer->system->IncrementWindowDynamicResource(drawer->window_index, entry_name);
+					}
+				}
+
+				// Check the timer
+				float timer_elapsed_milliseconds = entry_data->timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
+				if (timer_elapsed_milliseconds > debouncing_config->milliseconds) {
+					entry_data->timer.SetNewStart();
+					// Deallocate the existing data
+					CopyableDeallocate(entry_data->data, drawer->GetDynamicAllocator(entry_data->dynamic_index));
+
+					// Copy the new data
+					entry_data->data = CopyableCopy(copyable_data, drawer->GetDynamicAllocator(entry_data->dynamic_index));
+				}
+
+				// Return back the user data
+				return entry_data->data;
+			}
+
+			return copyable_data;
+		}
+
+		// The same as the other overload, but it will create a temporary UIDrawer and forward to the other function.
+		static Copyable* HandleDebouncing(UISystem* system, unsigned int window_index, size_t configuration, const UIDrawConfig& config, const void* pointer_key, Copyable* copyable_data) {
+			// Add an optimization, if the configuration does not use debouncing, don't even bother creating the drawer.
+			if (!HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+				return copyable_data;
+			}
+
+			UIDrawer drawer = UIDrawer(system->GetDrawerDescriptor(window_index), nullptr, false);
+			return HandleDebouncing(&drawer, configuration, config, pointer_key, copyable_data);
+		}
 
 		// Helper function that handles a generic copyable debouncing value. It takes into account the current state and returns
 		// An opaque pointer with the data that it was stored previously using the copyable. If no copyable data exists, it will
 		// Insert a new separate resource that will be dynamic and auto removed using reference counting.
-		static void* HandleDebouncing(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, Stream<char> identifier_name, Copyable* copyable_data) {
-			struct DebouncingData {
-				Timer timer;
-				Copyable* data;
-			};
-
+		static Copyable* HandleDebouncing(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, Stream<char> identifier_name, Copyable* copyable_data) {
 			// Add a suffix to the identifier name such that we don't force the resource that is being debounced to include
 			// Our debouncing data and for resources without any stored data whatsoever, to not force them to store.
 			static const Stream<char> DEBOUNCING_NAME_SUFFIX = "__Debouncing";
 
 			if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+				const UIConfigDebouncing* debouncing_config = (const UIConfigDebouncing*)config.GetParameter(UI_CONFIG_DEBOUNCING);
+
 				ECS_STACK_CAPACITY_STREAM(char, debouncing_resource_name, 1024);
 				debouncing_resource_name.CopyOther(identifier_name);
 				debouncing_resource_name.AddStreamAssert(DEBOUNCING_NAME_SUFFIX);
-				
-				DebouncingData* debouncing_data = (DebouncingData*)drawer->TryFindWindowResource(debouncing_resource_name);
+
+				DebouncingEntry* debouncing_data = (DebouncingEntry*)drawer->TryFindWindowResource(debouncing_resource_name);
 				if (debouncing_data == nullptr) {
 					// Insert this entry
-					DebouncingData insert_data;
-					//insert_data.data = copyable_data->CopySize();
-					//drawer->AddWindowResourceToTable()
+					unsigned int dynamic_index = drawer->StartDynamicElement(debouncing_resource_name);
+					DebouncingEntry* insert_data = drawer->GetMainAllocatorBufferDynamic<DebouncingEntry>(dynamic_index);
+					insert_data->data = CopyableCopy(copyable_data, drawer->GetDynamicAllocator(dynamic_index));
+					insert_data->dynamic_index = dynamic_index;
+					insert_data->timer.SetNewStart();
+					drawer->AddWindowResourceToTable(insert_data, debouncing_resource_name.ToStream());
+					// If this is an initializer, the above call will add this resource, otherwise we need to do it
+					if (!drawer->initializer) {
+						drawer->system->AddWindowDynamicElementTableResource(drawer->window_index, dynamic_index, debouncing_resource_name.ToStream(), false);
+					}
+
+					debouncing_data = insert_data;
+					drawer->EndDynamicElement();
 				}
+				else {
+					// Increment the dynamic resource, such that we hold onto it
+					debouncing_data->dynamic_index = drawer->system->IncrementWindowDynamicResource(drawer->window_index, debouncing_resource_name);
+				}
+
+				// Check the timer
+				float timer_elapsed_milliseconds = debouncing_data->timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
+				if (timer_elapsed_milliseconds > debouncing_config->milliseconds) {
+					debouncing_data->timer.SetNewStart();
+					// Deallocate the existing data
+					CopyableDeallocate(debouncing_data->data, drawer->GetDynamicAllocator(debouncing_data->dynamic_index));
+
+					// Copy the new data
+					debouncing_data->data = CopyableCopy(copyable_data, drawer->GetDynamicAllocator(debouncing_data->dynamic_index));
+				}
+
+				// Return back the user data
+				return debouncing_data->data;
 			}
+
+			return copyable_data;
+		}
+
+		// The same as the other overload, but it will create a temporary UIDrawer and forward to the other function.
+		static Copyable* HandleDebouncing(UISystem* system, unsigned int window_index, size_t configuration, const UIDrawConfig& config, Stream<char> identifier_name, Copyable* copyable_data) {
+			// Add an optimization, if the configuration does not use debouncing, don't even bother creating the drawer.
+			if (!HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+				return copyable_data;
+			}
+
+			UIDrawer drawer = UIDrawer(system->GetDrawerDescriptor(window_index), nullptr, false);
+			return HandleDebouncing(&drawer, configuration, config, identifier_name, copyable_data);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3399,7 +3539,18 @@ namespace ECSEngine {
 
 				if (~configuration & UI_CONFIG_SLIDER_NO_TEXT) {
 					auto text_label_lambda = [&]() {
-						functions.to_string(slider->characters, value_to_modify, functions.extra_data);
+						struct SliderDebouncingData final : BlittableCopyable<char[8]> {
+							SliderDebouncingData(const void* value, const UIDrawerSlider* slider) {
+								ECS_ASSERT(slider->value_byte_size <= ECS_COUNTOF(data));
+								memcpy(data, value, slider->value_byte_size);
+							}
+						};
+						
+						SliderDebouncingData current_debouncing_data(value_to_modify, slider);
+						SliderDebouncingData* debouncing_data = (SliderDebouncingData*)HandleDebouncing(this, configuration, config, slider, &current_debouncing_data);
+
+						// Use the value from the debouncing data as the current value
+						functions.to_string(slider->characters, debouncing_data->data, functions.extra_data);
 						slider->characters[slider->characters.size] = '\0';
 						FixedScaleTextLabel(
 							ClearFlag(configuration, UI_CONFIG_DO_CACHE),
@@ -3425,7 +3576,8 @@ namespace ECSEngine {
 								slider->text_input->current_sprite_position = slider->characters.size;
 							}
 							slider->text_input_counter++;
-							TextInputDrawer(configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_DO_NOT_ADVANCE, config, slider->text_input, position, scale, filter);
+							// Don't use debouncing for this drawer
+							TextInputDrawer(ClearFlag(configuration, UI_CONFIG_DEBOUNCING) | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_DO_NOT_ADVANCE, config, slider->text_input, position, scale, filter);
 							Indent(-1.0f);
 						}
 					}
@@ -5650,9 +5802,14 @@ namespace ECSEngine {
 					struct RunnableData {
 						UIDrawerTextInput* input;
 						bool callback_on_release;
+						size_t configuration;
+						UIConfigDebouncing debouncing;
 					};
 
-					RunnableData runnable_data = { input, drag_data.callback_on_release };
+					RunnableData runnable_data = { input, drag_data.callback_on_release, configuration };
+					if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+						runnable_data.debouncing = *(const UIConfigDebouncing*)config.GetParameter(UI_CONFIG_DEBOUNCING);
+					}
 					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
 						RunnableData* runnable_data = (RunnableData*)_data;
 						UIDrawerTextInput* input = runnable_data->input;
@@ -5671,6 +5828,24 @@ namespace ECSEngine {
 							return_value = true;
 						}
 
+						float current_value = *data->number;
+						if (HasFlag(runnable_data->configuration, UI_CONFIG_DEBOUNCING)) {
+							UIDrawConfig debouncing_config;
+							debouncing_config.AddFlag(runnable_data->debouncing);
+							BlittableCopyable<float> current_debouncing_data(current_value);
+							// Use the input as a pointer key.
+							BlittableCopyable<float>* debouncing_data = (BlittableCopyable<float>*)HandleDebouncing(
+								action_data->system,
+								action_data->window_index,
+								runnable_data->configuration,
+								debouncing_config,
+								runnable_data->input,
+								&current_debouncing_data
+							);
+
+							current_value = debouncing_data->data;
+						}
+
 						unsigned int digit_count = 0;
 						Stream<char> dot = FindFirstCharacter(*input->text, '.');
 						if (dot.size > 0) {
@@ -5682,13 +5857,13 @@ namespace ECSEngine {
 						}
 
 						// If the value changed, update the input stream
-						float current_value = ConvertCharactersToFloat(*input->text);
+						float text_value = ConvertCharactersToFloat(*input->text);
 						if (!input->is_currently_selected) {
-							float difference = abs(current_value - *data->number);
+							float difference = abs(text_value - current_value);
 
 							auto has_changed_action = [&]() {
 								input->DeleteAllCharacters();
-								ConvertFloatToChars(temp_stream, *data->number, 3);
+								ConvertFloatToChars(temp_stream, current_value, 3);
 								input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
 								data->number_data.external_value_change = true;
 
@@ -5698,9 +5873,9 @@ namespace ECSEngine {
 							};
 
 							if (isnan(difference)) {
-								bool current_nan = isnan(current_value);
-								bool number_nan = isnan(*data->number);
-								if ((!current_nan && number_nan) || (current_nan && !number_nan)) {
+								bool text_nan = isnan(text_value);
+								bool number_nan = isnan(current_value);
+								if ((!text_nan && number_nan) || (text_nan && !number_nan)) {
 									has_changed_action();
 									return_value = true;
 								}
@@ -5764,9 +5939,14 @@ namespace ECSEngine {
 					struct RunnableData {
 						UIDrawerTextInput* input;
 						bool callback_on_release;
+						size_t configuration;
+						UIConfigDebouncing debouncing;
 					};
 
-					RunnableData runnable_data = { input, drag_data.callback_on_release };
+					RunnableData runnable_data = { input, drag_data.callback_on_release, configuration };
+					if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+						runnable_data.debouncing = *(const UIConfigDebouncing*)config.GetParameter(UI_CONFIG_DEBOUNCING);
+					}
 					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
 						RunnableData* runnable_data = (RunnableData*)_data;
 						UIDrawerTextInput* input = runnable_data->input;
@@ -5786,6 +5966,24 @@ namespace ECSEngine {
 							return_value = true;
 						}
 
+						double current_value = *data->number;
+						if (HasFlag(runnable_data->configuration, UI_CONFIG_DEBOUNCING)) {
+							UIDrawConfig debouncing_config;
+							debouncing_config.AddFlag(runnable_data->debouncing);
+							BlittableCopyable<double> current_debouncing_data(current_value);
+							// Use the input as a pointer key.
+							BlittableCopyable<double>* debouncing_data = (BlittableCopyable<double>*)HandleDebouncing(
+								action_data->system,
+								action_data->window_index,
+								runnable_data->configuration,
+								debouncing_config,
+								runnable_data->input,
+								&current_debouncing_data
+							);
+
+							current_value = debouncing_data->data;
+						}
+
 						unsigned int digit_count = 0;
 						Stream<char> dot = FindFirstCharacter(*input->text, '.');
 						if (dot.size > 0) {
@@ -5797,13 +5995,13 @@ namespace ECSEngine {
 						}
 
 						// If the value changed, update the input stream
-						double current_value = ConvertCharactersToDouble(*input->text);
+						double text_value = ConvertCharactersToDouble(*input->text);
 						if (!input->is_currently_selected) {
-							double difference = abs(current_value - *data->number);
+							double difference = abs(text_value - current_value);
 
 							auto has_changed_action = [&]() {
 								input->DeleteAllCharacters();
-								ConvertDoubleToChars(temp_stream, *data->number, 3);
+								ConvertDoubleToChars(temp_stream, current_value, 3);
 								input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
 								data->number_data.external_value_change = true;
 
@@ -5813,9 +6011,9 @@ namespace ECSEngine {
 							};
 
 							if (isnan(difference)) {
-								bool current_nan = isnan(current_value);
-								bool number_nan = isnan(*data->number);
-								if ((!current_nan && number_nan) || (current_nan && !number_nan)) {
+								bool text_nan = isnan(text_value);
+								bool number_nan = isnan(current_value);
+								if ((!text_nan && number_nan) || (text_nan && !number_nan)) {
 									has_changed_action();
 									return_value = true;
 								}
@@ -5877,9 +6075,14 @@ namespace ECSEngine {
 					struct RunnableData {
 						UIDrawerTextInput* input;
 						bool callback_on_release;
+						size_t configuration;
+						UIConfigDebouncing debouncing;
 					};
 
-					RunnableData runnable_data = { input, drag_data.callback_on_release };
+					RunnableData runnable_data = { input, drag_data.callback_on_release, configuration };
+					if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+						runnable_data.debouncing = *(const UIConfigDebouncing*)config.GetParameter(UI_CONFIG_DEBOUNCING);
+					}
 					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
 						RunnableData* runnable_data = (RunnableData*)_data;
 						UIDrawerTextInput* input = runnable_data->input;
@@ -5901,13 +6104,31 @@ namespace ECSEngine {
 							return_value = true;
 						}
 
+						Integer current_value = *data->number;
+						if (HasFlag(runnable_data->configuration, UI_CONFIG_DEBOUNCING)) {
+							UIDrawConfig debouncing_config;
+							debouncing_config.AddFlag(runnable_data->debouncing);
+							BlittableCopyable<Integer> current_debouncing_data(current_value);
+							// Use the input as a pointer key.
+							BlittableCopyable<Integer>* debouncing_data = (BlittableCopyable<Integer>*)HandleDebouncing(
+								action_data->system,
+								action_data->window_index,
+								runnable_data->configuration,
+								debouncing_config,
+								runnable_data->input,
+								&current_debouncing_data
+							);
+
+							current_value = debouncing_data->data;
+						}
+
 						// If the value changed, update the input stream
 						if (!input->is_currently_selected) {
 							bool dummy;
-							Integer current_value = ConvertCharactersToIntImpl<Integer, char, false>(*input->text, dummy);
-							if (current_value != *data->number) {
+							Integer text_value = ConvertCharactersToIntImpl<Integer, char, false>(*input->text, dummy);
+							if (text_value != current_value) {
 								input->DeleteAllCharacters();
-								ConvertIntToChars(temp_stream, (int64_t)*data->number);
+								ConvertIntToChars(temp_stream, (int64_t)current_value);
 								input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
 								data->number_data.external_value_change = true;
 
@@ -9229,7 +9450,8 @@ namespace ECSEngine {
 			UIElementDescriptor& _element_descriptor,
 			bool _initializer
 		) : color_theme(_color_theme), font(_font), layout(_layout), element_descriptor(_element_descriptor),
-			export_scale(nullptr), initializer(_initializer), window_dependent_size_offsets(0.0f, 0.0f), record_actions(false) {}
+			export_scale(nullptr), initializer(_initializer), window_dependent_size_offsets(0.0f, 0.0f), record_actions(false),
+			main_allocator_interface(this), dynamic_allocator_interface(this) {}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -9242,7 +9464,8 @@ namespace ECSEngine {
 			system_buffers(descriptor.system_buffers), window_data(_window_data), mouse_position(descriptor.mouse_position), 
 			color_theme(descriptor.color_theme), font(descriptor.font), layout(descriptor.layout), element_descriptor(descriptor.element_descriptor),
 			export_scale(descriptor.export_scale), initializer(_initializer), record_actions(descriptor.record_handlers),
-			record_snapshot_runnables(descriptor.record_snapshot_runnables), window_dependent_size_offsets(0.0f, 0.0f)
+			record_snapshot_runnables(descriptor.record_snapshot_runnables), window_dependent_size_offsets(0.0f, 0.0f),
+			main_allocator_interface(this), dynamic_allocator_interface(this)
 		{
 			if (record_snapshot_runnables) {
 				// In order to have an accurate snapshot, we need to record actions as well
@@ -11525,6 +11748,12 @@ namespace ECSEngine {
 			// Restore the min and max region render limits
 			max_region_render_limit = state.max_region_limit;
 			min_region_render_limit = state.min_region_limit;
+		}
+		
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::EndDynamicElement() {
+			last_initialize_dynamic_index = -1;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -14853,7 +15082,6 @@ namespace ECSEngine {
 
 		unsigned int UIDrawer::StartDynamicElement(Stream<char> name)
 		{
-			ECS_ASSERT(initializer);
 			system->AddWindowDynamicElement(window_index, name, {}, {});
 			last_initialize_dynamic_index = system->GetWindowDynamicElement(window_index, name);
 			return last_initialize_dynamic_index;
