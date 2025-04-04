@@ -982,7 +982,7 @@ namespace ECSEngine {
 					monitor_selection.capacity_selection->CopyOther(final_selection, label_size);
 				}
 				else {
-					monitor_selection.resizable_selection->CopyOther(final_selection, label_size);
+					monitor_selection.resizable_selection->CopyOther(final_selection, label_size, alignof(void*));
 				}
 			}
 

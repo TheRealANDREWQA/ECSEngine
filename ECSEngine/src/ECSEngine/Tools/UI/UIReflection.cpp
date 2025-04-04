@@ -489,8 +489,12 @@ namespace ECSEngine {
 					if (has_capacity) {
 						unsigned int current_capacity = GetTargetCapacity();
 						if (current_capacity != resizable->capacity) {
-							resizable->ResizeNoCopy(current_capacity, element_byte_size);
-							memcpy(resizable->buffer, *(void**)GetFinalTarget(), current_capacity * element_byte_size);
+							resizable->ResizeNoCopy(current_capacity, element_byte_size, element_alignment);
+							const void* final_target = *(void**)GetFinalTarget();
+							// Check for identical pointers, in which case it means that the reallocation could be enlarged
+							if (final_target != resizable->buffer) {
+								memcpy(resizable->buffer, final_target, current_capacity * element_byte_size);
+							}
 						}
 					}
 
@@ -501,8 +505,12 @@ namespace ECSEngine {
 						}
 
 						if (size > resizable->capacity) {
-							resizable->ResizeNoCopy(size, element_byte_size);
-							memcpy(resizable->buffer, *(void**)GetFinalTarget(), size * element_byte_size);
+							resizable->ResizeNoCopy(size, element_byte_size, element_alignment);
+							const void* final_target = *(void**)GetFinalTarget();
+							// Check for identical pointers, in which case it means that the reallocation could be enlarged
+							if (final_target != resizable->buffer) {
+								memcpy(resizable->buffer, final_target, size * element_byte_size);
+							}
 						}
 						resizable->size = size;
 					}
@@ -527,9 +535,12 @@ namespace ECSEngine {
 						if (standalone_data.size != target_size) {
 							// It changed
 							capacity->size = target_size;
-							memcpy(capacity->buffer, *final_target_buffer, unsigned_element_byte_size * target_size);
+							if (*final_target_buffer != capacity->buffer) {
+								memcpy(capacity->buffer, *final_target_buffer, unsigned_element_byte_size * target_size);
+							}
+
 							// Resize the standalone data
-							standalone_data.ResizeNoCopy(target_size, unsigned_element_byte_size);
+							standalone_data.ResizeNoCopy(target_size, unsigned_element_byte_size, element_alignment);
 							standalone_data.size = target_size;
 							memcpy(standalone_data.buffer, *final_target_buffer, unsigned_element_byte_size * target_size);
 						}
@@ -537,7 +548,9 @@ namespace ECSEngine {
 							if (memcmp(standalone_data.buffer, *final_target_buffer, unsigned_element_byte_size * target_size) != 0) {
 								// It changed
 								capacity->size = target_size;
-								memcpy(capacity->buffer, *final_target_buffer, unsigned_element_byte_size * target_size);
+								if (capacity->buffer != *final_target_buffer) {
+									memcpy(capacity->buffer, *final_target_buffer, unsigned_element_byte_size * target_size);
+								}
 
 								// Copy the new data
 								memcpy(standalone_data.buffer, *final_target_buffer, unsigned_element_byte_size * target_size);
@@ -547,10 +560,15 @@ namespace ECSEngine {
 					else {
 						if (target_size != standalone_data.size) {
 							// It changed
-							resizable->ResizeNoCopy(target_size, unsigned_element_byte_size);
+							if (target_size > resizable->capacity) {
+								resizable->ResizeNoCopy(target_size, unsigned_element_byte_size, element_alignment);
+							}
 							resizable->size = target_size;
-							memcpy(resizable->buffer, *final_target_buffer, target_size * unsigned_element_byte_size);
-							standalone_data.ResizeNoCopy(target_size, unsigned_element_byte_size);
+							if (resizable->buffer != *final_target_buffer) {
+								memcpy(resizable->buffer, *final_target_buffer, target_size * unsigned_element_byte_size);
+							}
+
+							standalone_data.ResizeNoCopy(target_size, unsigned_element_byte_size, element_alignment);
 							standalone_data.size = target_size;
 							memcpy(standalone_data.buffer, *final_target_buffer, target_size * unsigned_element_byte_size);
 						}
@@ -561,11 +579,13 @@ namespace ECSEngine {
 								// Which would wipe the resizable data. For this reason, perform another check here
 								// To ensure that the resizable has enough space
 								if (resizable->capacity < target_size) {
-									resizable->ResizeNoCopy(target_size, unsigned_element_byte_size);
+									resizable->ResizeNoCopy(target_size, unsigned_element_byte_size, element_alignment);
 								}
 								
 								// It changed
-								memcpy(resizable->buffer, *final_target_buffer, unsigned_element_byte_size * target_size);
+								if (resizable->buffer != *final_target_buffer) {
+									memcpy(resizable->buffer, *final_target_buffer, unsigned_element_byte_size * target_size);
+								}
 
 								// Copy the new data
 								memcpy(standalone_data.buffer, *final_target_buffer, unsigned_element_byte_size * target_size);
@@ -2218,7 +2238,8 @@ namespace ECSEngine {
 				{
 					UIReflectionStreamBaseData* data = (UIReflectionStreamBaseData*)instance->data[index];
 					if (data->stream.is_resizable) {
-						if (data->stream.resizable->allocator.allocator != nullptr) {
+						// Free the buffer only if the allocator is different - if it is the same, don't do anything
+						if (data->stream.resizable->allocator.allocator != nullptr && data->stream.resizable->allocator.allocator != allocator.allocator) {
 							data->stream.resizable->FreeBuffer();
 						}
 						else {
@@ -2242,7 +2263,8 @@ namespace ECSEngine {
 				else if (type->fields[index].stream_type == UIReflectionStreamType::Resizable) {
 					UIReflectionStreamBaseData* data = (UIReflectionStreamBaseData*)instance->data[index];
 					
-					if (data->stream.resizable->allocator.allocator != nullptr) {
+					// Free the buffer only if the allocator is different - if it is the same, don't do anything
+					if (data->stream.resizable->allocator.allocator != nullptr && data->stream.resizable->allocator.allocator != allocator.allocator) {
 						data->stream.resizable->FreeBuffer();
 					}
 					else {
@@ -2516,6 +2538,7 @@ namespace ECSEngine {
 			const ReflectionField& reflection_field,
 			uintptr_t ptr,
 			unsigned int element_byte_size,
+			unsigned int element_alignment,
 			bool disable_writes,
 			unsigned char pointer_indirection_count
 		) {
@@ -2578,8 +2601,10 @@ namespace ECSEngine {
 				//field_value.WriteTarget();
 			}
 
+			ECS_ASSERT(element_byte_size <= USHORT_MAX && element_alignment <= USHORT_MAX);
 			field_value.previous_size = 0;
 			field_value.element_byte_size = element_byte_size;
+			field_value.element_alignment = element_alignment;
 			if (!disable_writes) {
 				field_value.CopyTarget();
 				field_value.standalone_data.Initialize(ECS_MALLOC_ALLOCATOR, 0);
@@ -2598,6 +2623,7 @@ namespace ECSEngine {
 			const ReflectionField& reflection_field, 
 			uintptr_t ptr,
 			unsigned int element_byte_size,
+			unsigned int element_alignment,
 			bool disable_writes,
 			unsigned char pointer_indirection_count
 		) {
@@ -2654,8 +2680,10 @@ namespace ECSEngine {
 				}
 			}
 
+			ECS_ASSERT(element_byte_size <= USHORT_MAX && element_alignment <= USHORT_MAX);
 			field_value.previous_size = 0;
 			field_value.element_byte_size = element_byte_size;
+			field_value.element_alignment = element_alignment;
 			if (!disable_writes) {
 				field_value.CopyTarget();
 				field_value.standalone_data.Initialize(ECS_MALLOC_ALLOCATOR, 0);
@@ -2741,6 +2769,7 @@ namespace ECSEngine {
 								reflect->fields[reflected_type_index],
 								ptr, 
 								field_value->element_byte_size,
+								field_value->element_alignment,
 								HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM),
 								field_value->pointer_indirection_count
 							);
@@ -2805,6 +2834,7 @@ namespace ECSEngine {
 							reflect->fields[reflected_type_index],
 							ptr,
 							field_value->element_byte_size,
+							field_value->element_alignment,
 							HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM),
 							field_value->pointer_indirection_count
 						);
@@ -2815,6 +2845,7 @@ namespace ECSEngine {
 							reflect->fields[reflected_type_index],
 							ptr,
 							field_value->element_byte_size,
+							field_value->element_alignment,
 							HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM),
 							field_value->pointer_indirection_count
 						);
@@ -3553,7 +3584,6 @@ namespace ECSEngine {
 			UIReflectionDrawer* reflection, 
 			const ReflectionField& reflection_field,
 			UIReflectionTypeField& field,
-			unsigned int type_byte_size,
 			UIReflectionElement element_index,
 			unsigned int int_flags = 0
 		) {
@@ -3564,7 +3594,7 @@ namespace ECSEngine {
 
 			data->count = Reflection::BasicTypeComponentCount(reflection_field.info.basic_type);
 			data->input_names = BasicTypeNames;
-			data->byte_size = type_byte_size;
+			data->byte_size = Reflection::GetReflectionBasicFieldTypeByteSize(reflection_field.info.basic_type) / data->count;
 
 			// Default + lower bound + upper bound
 			void* allocation = reflection->allocator->Allocate(data->byte_size * 3 * data->count + sizeof(bool) * 3);
@@ -3687,8 +3717,7 @@ namespace ECSEngine {
 				ConvertGroupForType(
 					this, 
 					reflection_field,
-					field, 
-					1 << ((unsigned int)reflection_field.info.basic_type / 2),
+					field,
 					UIReflectionElement::IntegerInputGroup, 
 					GetIntFlags(reflection_field.info.basic_type)
 				);
@@ -3712,7 +3741,7 @@ namespace ECSEngine {
 			};
 
 			auto float_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertGroupForType(this, reflection_field, field, sizeof(float), UIReflectionElement::FloatInputGroup);
+				ConvertGroupForType(this, reflection_field, field, UIReflectionElement::FloatInputGroup);
 			};
 
 			auto double_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
@@ -3733,7 +3762,7 @@ namespace ECSEngine {
 			};
 
 			auto double_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertGroupForType(this, reflection_field, field, sizeof(double), UIReflectionElement::DoubleInputGroup);
+				ConvertGroupForType(this, reflection_field, field, UIReflectionElement::DoubleInputGroup);
 			};
 
 			auto enum_convert = [this](const ReflectionEnum& reflection_enum, UIReflectionTypeField& field) {
@@ -5312,7 +5341,7 @@ namespace ECSEngine {
 		// The functor is used to match the current field
 		// The functor receives as arguments (const UIReflectionTypeField& field)
 		template<typename Functor>
-		void GetTypeMatchingFieldsImpl(
+		static void GetTypeMatchingFieldsImpl(
 			const UIReflectionDrawer* drawer,
 			const UIReflectionType* type,
 			CapacityStream<ReflectionNestedFieldIndex>& indices,
@@ -5328,7 +5357,8 @@ namespace ECSEngine {
 					current_index.count = initial_field_count;
 				}
 				else if (recurse) {
-					if (type->fields[index].element_index == UIReflectionElement::UserDefined) {
+					// Allow at the moment only non stream types to be iterated, as allowing streams adds a lot of complexity
+					if (type->fields[index].element_index == UIReflectionElement::UserDefined && type->fields[index].stream_type == UIReflectionStreamType::None) {
 						current_index.Add(index);
 						Stream<char> type_name;
 						if (type->fields[index].stream_type == UIReflectionStreamType::None) {

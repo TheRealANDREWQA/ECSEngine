@@ -58,8 +58,9 @@ namespace ECSEngine {
 				ResizableStream<void>* resizable_data;
 			};
 			bool is_resizable_data;
-			// Used only for resizable_data to resize
+			// Used only for resizable_data to resize (both the byte size and alignment)
 			unsigned int element_byte_size;
+			unsigned int element_alignment;
 			unsigned int new_size;
 			UIDrawerArrayData* array_data;
 		};
@@ -2392,6 +2393,7 @@ namespace ECSEngine {
 					add_remove_data.array_data = data;
 					add_remove_data.new_size = elements->size + 1;
 					add_remove_data.element_byte_size = elements->MemoryOf(1);
+					add_remove_data.element_alignment = elements->AlignOf();
 					bool is_capacity_stream = sizeof(*elements) == sizeof(CapacityStream<void>);
 					if (is_capacity_stream) {
 						add_remove_data.is_resizable_data = false;
@@ -2542,6 +2544,7 @@ namespace ECSEngine {
 						callback_data.is_resizable_data = !is_capacity_stream;
 						if (callback_data.is_resizable_data) {
 							callback_data.element_byte_size = elements->MemoryOf(1);
+							callback_data.element_alignment = elements->AlignOf();
 							callback_data.resizable_data = (ResizableStream<void>*)elements;
 						}
 						else {

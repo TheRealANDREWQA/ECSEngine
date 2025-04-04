@@ -622,9 +622,9 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 	UIDrawerMenuState menu_state;
 	if (initialize) {
 		UIActionHandler set_configuration_handlers[EDITOR_MODULE_CONFIGURATION_COUNT];
-		set_configuration_handlers[0] = { ModuleExplorerSetAllDebug, editor_state, 0, ECS_UI_DRAW_SYSTEM };
-		set_configuration_handlers[1] = { ModuleExplorerSetAllRelease, editor_state, 0, ECS_UI_DRAW_SYSTEM };
-		set_configuration_handlers[2] = { ModuleExplorerSetAllDistribution, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		set_configuration_handlers[0] = { ModuleExplorerSetAllDebug, explorer_data, 0, ECS_UI_DRAW_SYSTEM };
+		set_configuration_handlers[1] = { ModuleExplorerSetAllRelease, explorer_data, 0, ECS_UI_DRAW_SYSTEM };
+		set_configuration_handlers[2] = { ModuleExplorerSetAllDistribution, explorer_data, 0, ECS_UI_DRAW_SYSTEM };
 
 		ECS_STACK_CAPACITY_STREAM(char, set_module_configuration_menu_characters, 256);
 		for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
