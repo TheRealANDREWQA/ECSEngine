@@ -114,6 +114,9 @@ namespace ECSEngine {
 		if (new_start != -1) {
 			size_t size_t_new_start = (size_t)new_start << m_power_of_two_factor;
 			uintptr_t allocation = AlignPointerStack((uintptr_t)m_buffer + size_t_new_start, alignment);
+			if (new_start == block_start) {
+				ECS_ASSERT(allocation == (uintptr_t)block, "MultipoolAllocator: a reallocate on a block was used, but with different alignment, which is not valid");
+			}
 			if (size_t_new_start != block_start) {
 				unsigned int offset = allocation - (uintptr_t)m_buffer;
 				m_buffer[offset - 1] = offset - size_t_new_start - 1;

@@ -792,7 +792,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			for (size_t index = 0; index < selected_entities.size; index++) {
 				size_t virtual_index = data->FindVirtualEntity(selected_entities[index]);
 				if (virtual_index != -1) {
-					remap_selected_entities.AddAssert({ (unsigned int)index, data->virtual_global_component[index] });
+					remap_selected_entities.AddAssert({ (unsigned int)index, data->virtual_global_component[virtual_index] });
 				}
 			}
 			RemoveSandboxVirtualEntitiesSlot(editor_state, sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);

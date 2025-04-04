@@ -401,6 +401,11 @@ namespace ECSEngine {
 			return sizeof(T) * number;
 		}
 
+		// Returns the alignment of the underlying element
+		ECS_INLINE static size_t AlignOf() {
+			return alignof(T);
+		}
+
 		ECS_INLINE void InitializeFromBuffer(void* _buffer, size_t _size) {
 			buffer = (T*)_buffer;
 			size = _size;
@@ -915,6 +920,11 @@ namespace ECSEngine {
 			return sizeof(T) * number;
 		}
 
+		// Returns the alignment of the underlying element
+		ECS_INLINE static size_t AlignOf() {
+			return alignof(T);
+		}
+
 		ECS_INLINE Stream<T> ToStream() const {
 			return { buffer, size };
 		}
@@ -1318,6 +1328,11 @@ namespace ECSEngine {
 
 		ECS_INLINE static size_t MemoryOf(unsigned int number) {
 			return sizeof(T) * number;
+		}
+
+		// Returns the alignment of the underlying element
+		ECS_INLINE static size_t AlignOf() {
+			return alignof(T);
 		}
 
 		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
@@ -1786,21 +1801,15 @@ namespace ECSEngine {
 		ECS_INLINE ResizableStream(const ResizableStream& other) = default;
 		ECS_INLINE ResizableStream<void>& operator = (const ResizableStream<void>& other) = default;
 
-		unsigned int Add(Stream<void> data) {
-			ECS_ASSERT(data.size <= UINT_MAX, "Resizable stream addition of stream overflows the integer range.");
-			if (size + (unsigned int)data.size >= capacity) {
-				Resize((unsigned int)((float)capacity * ECS_RESIZABLE_STREAM_FACTOR + 2));
-			}
-			memcpy((void*)((uintptr_t)buffer + size), data.buffer, data.size);
-			unsigned int offset = size;
-			size += (unsigned int)data.size;
-			return offset;
+		// Assumes that the element byte size and alignment is 1
+		ECS_INLINE unsigned int Add(Stream<void> data) {
+			return Add(data, 1, 1);
 		}
 
-		unsigned int Add(Stream<void> data, unsigned int element_byte_size) {
+		unsigned int Add(Stream<void> data, unsigned int element_byte_size, unsigned int element_alignment) {
 			ECS_ASSERT(data.size <= UINT_MAX, "Resizable stream addition of stream overflows the integer range.");
 			if (size + data.size >= capacity) {
-				Resize((unsigned int)((float)capacity * ECS_RESIZABLE_STREAM_FACTOR + 2), element_byte_size);
+				Resize((unsigned int)((float)capacity * ECS_RESIZABLE_STREAM_FACTOR + 2), element_byte_size, element_alignment);
 			}
 			memcpy((void*)((uintptr_t)buffer + (size_t)size * (size_t)element_byte_size), data.buffer, data.size * element_byte_size);
 			unsigned int offset = size;
@@ -1808,18 +1817,14 @@ namespace ECSEngine {
 			return offset;
 		}
 
-		// It will set the size
-		void CopyOther(const void* memory, unsigned int count) {
-			if (count != capacity) {
-				ResizeNoCopy(count);
-			}
-			memcpy(buffer, memory, count);
-			size = count;
+		// It will set the size. Assumes that the element byte size and alignment is 1
+		ECS_INLINE void CopyOther(const void* memory, unsigned int count) {
+			CopyOther(memory, count, 1, 1);
 		}
 
-		void CopyOther(const void* memory, unsigned int count, unsigned int element_byte_size) {
+		void CopyOther(const void* memory, unsigned int count, unsigned int element_byte_size, unsigned int element_alignment) {
 			if (count != capacity) {
-				ResizeNoCopy(count, element_byte_size);
+				ResizeNoCopy(count, element_byte_size, element_alignment);
 			}
 			memcpy(buffer, memory, (size_t)count * (size_t)element_byte_size);
 			size = count;
@@ -1830,14 +1835,19 @@ namespace ECSEngine {
 			CopyOther(other.buffer, other.size);
 		}
 
-		ECS_INLINE void CopyOther(Stream<void> other, unsigned int element_byte_size) {
-			CopyOther(other.buffer, other.size, element_byte_size);
+		ECS_INLINE void CopyOther(Stream<void> other, unsigned int element_byte_size, unsigned int element_alignment) {
+			CopyOther(other.buffer, other.size, element_byte_size, element_alignment);
 		}
 
-		ResizableStream<void> Copy(AllocatorPolymorphic _allocator) const {
+		// Assumes that the element byte size and alignment is 1
+		ECS_INLINE ResizableStream<void> Copy(AllocatorPolymorphic _allocator) const {
+			return Copy(_allocator, 1, 1);
+		}
+
+		ResizableStream<void> Copy(AllocatorPolymorphic _allocator, unsigned int element_byte_size, unsigned int element_alignment) const {
 			ResizableStream<void> result;
-			result.Initialize(_allocator, size);
-			result.CopyOther(buffer, size);
+			result.Initialize(_allocator, size, element_byte_size, element_alignment);
+			result.CopyOther(buffer, size, element_byte_size, element_alignment);
 			return result;
 		}
 
@@ -1885,7 +1895,7 @@ namespace ECSEngine {
 			size = 0;
 		}
 
-		// Makes sure there is enough space for extra count elements
+		// Makes sure there is enough space for extra count bytes
 		void Reserve(unsigned int byte_count) {
 			unsigned int new_size = size + byte_count;
 			if (new_size > capacity) {
@@ -1897,19 +1907,20 @@ namespace ECSEngine {
 			}
 		}
 
+		// Assumes that the element byte size and alignment is 1
 		ECS_INLINE void Resize(unsigned int new_capacity) {
-			Resize(new_capacity, 1);
+			Resize(new_capacity, 1, 1);
 		}
 
-		void Resize(unsigned int new_capacity, unsigned int element_byte_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		void Resize(unsigned int new_capacity, unsigned int element_byte_size, unsigned int element_alignment, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (new_capacity > 0) {
 				// Use a default of max element alignment
 				void* new_buffer = 0;
 				if (capacity > 0 && buffer != nullptr) {
-					new_buffer = Reallocate(allocator, buffer, new_capacity * element_byte_size, alignof(void*), debug_info);
+					new_buffer = Reallocate(allocator, buffer, new_capacity * element_byte_size, element_alignment, debug_info);
 				}
 				else {
-					new_buffer = Allocate(allocator, new_capacity * element_byte_size, alignof(void*), debug_info);
+					new_buffer = Allocate(allocator, new_capacity * element_byte_size, element_alignment, debug_info);
 				}
 				ECS_ASSERT(new_buffer != nullptr);
 
@@ -1928,21 +1939,25 @@ namespace ECSEngine {
 			capacity = new_capacity;
 		}
 
+		// Assumes the element byte size and alignment is 1
 		ECS_INLINE void ResizeNoCopy(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			ResizeNoCopy(new_capacity, 1, debug_info);
+			ResizeNoCopy(new_capacity, 1, 1, debug_info);
 		}
 
-		void ResizeNoCopy(unsigned int new_capacity, unsigned int element_byte_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		// The element alignment is mandatory in case you use a strongly typed stream
+		// That is used untyped in some other location due to the code nature, and if the
+		// Alignment is not proper, it can result in deallocation errors
+		void ResizeNoCopy(unsigned int new_capacity, unsigned int element_byte_size, unsigned int element_alignment, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			void* new_buffer = nullptr;
 			if (new_capacity > 0 && size > 0) {
-				new_buffer = Reallocate(allocator, buffer, new_capacity * element_byte_size, alignof(void*), debug_info);
+				new_buffer = Reallocate(allocator, buffer, new_capacity * element_byte_size, element_alignment, debug_info);
 				ECS_ASSERT(new_buffer != nullptr);
 			}
 			else if (size > 0) {
 				Deallocate(allocator, buffer, debug_info);
 			}
 			else if (new_capacity > 0) {
-				new_buffer = Allocate(allocator, new_capacity * element_byte_size, alignof(void*), debug_info);
+				new_buffer = Allocate(allocator, new_capacity * element_byte_size, element_alignment, debug_info);
 				ECS_ASSERT(new_buffer != nullptr);
 			}
 
@@ -1983,10 +1998,15 @@ namespace ECSEngine {
 			return { buffer, size, capacity, allocator };
 		}
 
-		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		// Assumes that the element byte size and alignment is 1
+		ECS_INLINE void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			Initialize(_allocator, _capacity, 1, 1, debug_info);
+		}
+
+		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity, unsigned int element_byte_size, unsigned int element_alignment, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			allocator = _allocator;
 			if (_capacity > 0) {
-				ResizeNoCopy(_capacity, debug_info);
+				ResizeNoCopy(_capacity, element_byte_size, element_alignment, debug_info);
 			}
 			else {
 				buffer = nullptr;

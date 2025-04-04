@@ -886,6 +886,8 @@ namespace ECSEngine {
 					}
 					else {
 						// TODO: The crash here might interfere with invalidated module
+						// TODO: This interferes with the RenderSandbox which does not contain
+						// Other tasks than the rendering ones. Determine what to do
 						ECS_CRASH_CONDITION(task_index != -1, "Failed to find task {#} to reference data", inherit_name);
 					}
 				}

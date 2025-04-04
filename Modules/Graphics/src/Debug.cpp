@@ -107,7 +107,7 @@ static void GraphicsDebugResetSolidGroups(World* world, GraphicsDebugData* data)
 		data->groups[index].entities.Deallocate(&data->allocator);
 	}
 
-	data->groups.Reset();
+	data->groups.Clear();
 	// Trim the buffer to reduce memory consumption in case there were many additions
 	data->groups.Trim(8);
 	// The entity hash table should also be cleared
