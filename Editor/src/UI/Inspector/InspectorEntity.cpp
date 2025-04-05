@@ -1587,7 +1587,8 @@ static void DrawComponents(
 				UIReflectionDrawInstanceOptions options;
 				options.drawer = drawer;
 				options.config = config;
-				options.global_configuration = UI_CONFIG_NAME_PADDING | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+				options.global_configuration = UI_CONFIG_NAME_PADDING | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_WINDOW_DEPENDENT_SIZE
+					| UI_CONFIG_DEBOUNCING;
 				options.additional_configs = valid_ui_draw_configs;
 				options.field_tag_options = field_tag_options;
 				ui_drawer->DrawInstance(instance, &options);
@@ -1932,6 +1933,12 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	UIConfigWindowDependentSize window_dependent_size;
 	config.AddFlag(window_dependent_size);
+
+	// Add debouncing, such that for very high frame rates, the user
+	// Can make sense of the values displayed
+	UIConfigDebouncing debouncing;
+	debouncing.milliseconds = 100.0f;
+	config.AddFlag(debouncing);
 
 	auto get_unique_data = [&](size_t index) {
 		return entity_manager->GetComponentWithIndex(data->entity, index);
