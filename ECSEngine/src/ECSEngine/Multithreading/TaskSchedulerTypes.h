@@ -295,11 +295,6 @@ namespace ECSEngine {
 
 		ThreadFunction task_function;
 		Stream<char> task_name;
-		// If you want to inherit the data of another task, you can do that here
-		// It will be bound at initialization time and given as parameter to the
-		// Task function. You need to set this as the name of the task that you want
-		// To inherit
-		Stream<char> initialize_data_task_name = {};
 		StaticThreadTaskInitializeFunction initialize_task_function = nullptr;
 		// This is some small embedded data that you can pass to the initialize function
 		size_t initialize_task_function_data[6];
