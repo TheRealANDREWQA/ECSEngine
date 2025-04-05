@@ -29,7 +29,6 @@ static ECS_THREAD_TASK(ChangeHandler) {
 void ModuleTaskFunction(ModuleTaskFunctionData* data) {
 	TaskSchedulerElement change_handler;
 	change_handler.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
-	change_handler.initialize_data_task_name = STRING(CollisionBroadphase);
 	ECS_REGISTER_TASK(change_handler, ChangeHandler, data);
 	
 	AddSolverCommonTasks(data);

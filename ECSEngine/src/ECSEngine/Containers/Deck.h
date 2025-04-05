@@ -186,6 +186,14 @@ namespace ECSEngine {
 		}
 
 		void Deallocate() {
+			// If the allocator is unspecified (like in the case of temp reference),
+			// Don't do anything, except for resetting the size
+			if (buffers.allocator.allocator == nullptr) {
+				buffers.Clear();
+				size = 0;
+				return;
+			}
+
 			for (unsigned int index = 0; index < buffers.size; index++) {
 				ECSEngine::Deallocate(buffers.allocator, buffers[index].buffer);
 			}
@@ -510,16 +518,16 @@ namespace ECSEngine {
 
 		// Temp buffer needs to have at least 64 bytes long
 		// You should only read from this deck, not peform any mutable operations
-		static Deck<T, RangeSelector> InitializeTempReference(Stream<T> data, void* temp_buffer) {
+		static Deck<T, RangeSelector> InitializeTempReference(Stream<T> data, CapacityStream<void>& temp_buffer) {
 			Deck<T, RangeSelector> deck;
 
 			if (data.size > 0) {
 				ulong2 next_capacity = RangeSelector::GetNextCapacity(data.size);
-				deck.buffers.buffer = (CapacityStream<T>*)temp_buffer;
+				deck.buffers.buffer = temp_buffer.Reserve<CapacityStream<T>>();
 				deck.buffers.capacity = 1;
 				deck.buffers.size = 1;
-				deck.buffers.allocator = ECS_MALLOC_ALLOCATOR;
-				temp_buffer = OffsetPointer(temp_buffer, sizeof(deck.buffers.buffer[0]));
+				// Set the allocator to nullptr, to indicate that no longer has been used
+				deck.buffers.allocator = nullptr;
 
 				deck.buffers[0] = { data.buffer, (unsigned int)data.size, (unsigned int)data.size };
 				deck.chunk_size = next_capacity.x;

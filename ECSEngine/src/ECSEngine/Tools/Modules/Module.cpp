@@ -1004,9 +1004,10 @@ namespace ECSEngine {
 			if (!elements[index].scene_only || scene_order) {
 				ModuleDebugDrawWrapperInitializeData initialize_data;
 				initialize_data.initialize_function = elements[index].base_element.initialize_task_function;
-				initialize_data.initialize_task_name = elements[index].base_element.initialize_data_task_name;
 				initialize_data.run_function = elements[index].base_element.task_function;
 				initialize_data.button_element = elements[index].input_element;
+				// The initialize data task name no longer exists
+				//initialize_data.initialize_task_name = elements[index].base_element.initialize_data_task_name;
 
 				TaskSchedulerElement element = elements[index].base_element;
 				element.initialize_task_function = ModuleDebugDrawWrapperInitialize;
@@ -1021,28 +1022,30 @@ namespace ECSEngine {
 
 	void RetrieveModuleDebugDrawTaskElementsInitializeData(TaskScheduler* scheduler, TaskManager* target_manager, const TaskManager* source_manager)
 	{
-		for (unsigned int index = 0; index < scheduler->elements.size; index++) {
-			if (scheduler->elements[index].initialize_data_task_name.size > 0) {
-				unsigned int task_index = target_manager->FindTask(scheduler->elements[index].task_name);
-				if (task_index != -1) {
-					ThreadTask* target_task = target_manager->GetTaskPtr(task_index);
-					unsigned int source_index = source_manager->FindTask(scheduler->elements[index].initialize_data_task_name);
-					if (source_index != -1) {
-						ModuleDebugDrawWrapperData* wrapper_data = (ModuleDebugDrawWrapperData*)target_task->data;
-						ThreadTask source_task = source_manager->GetTask(source_index);
-						wrapper_data->inherit_data = source_task.data;
-					}
-					else {
-						// We must remove this entry since we cannot find its initialization
-						// Data and will most likely result in a crash
-						// This same task must be removed from the target task manager as well
-						target_manager->RemoveTask(task_index);
-						scheduler->Remove(scheduler->elements[index].task_name);
-						index--;
-					}
-				}
-			}
-		}
+		// This code is temporarily disabled, as the initialize_data_task_name from the 
+
+		//for (unsigned int index = 0; index < scheduler->elements.size; index++) {
+		//	if (scheduler->elements[index].initialize_data_task_name.size > 0) {
+		//		unsigned int task_index = target_manager->FindTask(scheduler->elements[index].task_name);
+		//		if (task_index != -1) {
+		//			ThreadTask* target_task = target_manager->GetTaskPtr(task_index);
+		//			unsigned int source_index = source_manager->FindTask(scheduler->elements[index].initialize_data_task_name);
+		//			if (source_index != -1) {
+		//				ModuleDebugDrawWrapperData* wrapper_data = (ModuleDebugDrawWrapperData*)target_task->data;
+		//				ThreadTask source_task = source_manager->GetTask(source_index);
+		//				wrapper_data->inherit_data = source_task.data;
+		//			}
+		//			else {
+		//				// We must remove this entry since we cannot find its initialization
+		//				// Data and will most likely result in a crash
+		//				// This same task must be removed from the target task manager as well
+		//				target_manager->RemoveTask(task_index);
+		//				scheduler->Remove(scheduler->elements[index].task_name);
+		//				index--;
+		//			}
+		//		}
+		//	}
+		//}
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

@@ -61,22 +61,25 @@ void InitializeCollisionBroadphase(World* world, StaticThreadTaskInitializeInfo*
 }
 
 ECS_THREAD_TASK(CollisionBroadphaseEndFrame) {
-	FixedGrid* fixed_grid = (FixedGrid*)_data;
+	//FixedGrid* fixed_grid = world->entity_manager->GetGlobalComponent<FixedGrid>();
 	//fixed_grid->EndFrame();
 }
 
 ECS_THREAD_TASK(CollisionBroadphaseDisplayDebugGrid) {
-	FixedGrid* fixed_grid = (FixedGrid*)_data;
+	FixedGrid* fixed_grid = world->entity_manager->GetGlobalComponent<FixedGrid>();
 
 	DebugGrid grid;
 	grid.color = ECS_COLOR_AQUA;
 	grid.cell_size = fixed_grid->spatial_grid.half_cell_size / fixed_grid->spatial_grid.smaller_cell_size_factor;
 	grid.translation = float3::Splat(0.0f);
 	grid.dimensions = fixed_grid->spatial_grid.dimensions;
-	static size_t TEMPORARY_BUFFER[32];
+
+	// Create a temporary reference to the inserted cells, to avoid to have to copy that data
+	static size_t TEMPORARY_BUFFER_STORAGE[32];
+	CapacityStream<void> TEMPORARY_BUFFER(TEMPORARY_BUFFER_STORAGE, 0, sizeof(TEMPORARY_BUFFER_STORAGE));
 	grid.valid_cells = DeckPowerOfTwo<uint3>::InitializeTempReference(fixed_grid->spatial_grid.inserted_cells, TEMPORARY_BUFFER);
 	grid.has_valid_cells = true;
-	//world->debug_drawer->AddGrid(&grid);
+	world->debug_drawer->AddGrid(&grid);
 }
 
 void SetBroadphaseTasks(ECSEngine::ModuleTaskFunctionData* data) {
@@ -88,7 +91,6 @@ void SetBroadphaseTasks(ECSEngine::ModuleTaskFunctionData* data) {
 
 	TaskSchedulerElement broadphase_end_frame;
 	broadphase_end_frame.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
-	broadphase_end_frame.initialize_data_task_name = STRING(CollisionBroadphase);
 	ECS_REGISTER_TASK(broadphase_end_frame, CollisionBroadphaseEndFrame, data);
 }
 
@@ -96,7 +98,6 @@ void SetBroadphaseDebugTasks(ECSEngine::ModuleRegisterDebugDrawTaskElementsData*
 {
 	ModuleDebugDrawTaskElement grid_draw;
 	grid_draw.base_element.task_group = ECS_THREAD_TASK_FINALIZE_EARLY;
-	grid_draw.base_element.initialize_data_task_name = STRING(CollisionBroadphase);
 	grid_draw.input_element.SetCtrlWith(ECS_KEY_G, ECS_BUTTON_PRESSED);
 	ECS_SET_SCHEDULE_TASK_FUNCTION(grid_draw.base_element, CollisionBroadphaseDisplayDebugGrid);
 	data->elements->AddAssert(grid_draw);

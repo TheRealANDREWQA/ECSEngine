@@ -642,35 +642,39 @@ namespace ECSEngine {
 			}
 		}
 
-		// At the end, bind the initialize data from other tasks
-		for (unsigned int index = 0; index < elements.size; index++) {
-			if (elements[index].initialize_data_task_name.size > 0) {
-				unsigned int task_data_index = elements.Find(elements[index].initialize_data_task_name, [](const TaskSchedulerElement& element) {
-					return element.task_name;
-				});
+		// This code has been disabled, as the initialize_data_task_name has been removed from TaskSchedulerElement
+		
+		//// At the end, bind the initialize data from other tasks
+		//for (unsigned int index = 0; index < elements.size; index++) {
+		//	if (elements[index].initialize_data_task_name.size > 0) {
+		//		unsigned int task_data_index = elements.Find(elements[index].initialize_data_task_name, [](const TaskSchedulerElement& element) {
+		//			return element.task_name;
+		//		});
 
-				if (task_data_index == -1) {
-					if (options->assert_exists_initialize_from_other_task) {
-						ECS_CRASH("Missing initialize task data name {#} for task {#}", elements[index].initialize_data_task_name, elements[index].task_name);
-					}
-					else {
-						// We can skip this entry
-						continue;
-					}
-				}
+		//		if (task_data_index == -1) {
+		//			if (options->assert_exists_initialize_from_other_task) {
+		//				ECS_CRASH("Missing initialize task data name {#} for task {#}", elements[index].initialize_data_task_name, elements[index].task_name);
+		//			}
+		//			else {
+		//				// We can skip this entry
+		//				continue;
+		//			}
+		//		}
 
-				ThreadTask* task_ptr = task_manager->GetTaskPtr(initial_task_count + index);
-				task_ptr->data = task_manager->GetTaskPtr(initial_task_count + task_data_index)->data;
-				task_ptr->data_size = 0;
-			}
-		}
+		//		ThreadTask* task_ptr = task_manager->GetTaskPtr(initial_task_count + index);
+		//		task_ptr->data = task_manager->GetTaskPtr(initial_task_count + task_data_index)->data;
+		//		task_ptr->data_size = 0;
+		//	}
+		//}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	void TaskScheduler::SetTasksDataFromOther(TaskManager* task_manager, bool assert_if_not_found) const
 	{
-		for (size_t index = 0; index < elements.size; index++) {
+		// This has been disabled as the initialize_data_task_name was removed from TaskSchedulerElement
+
+		/*for (size_t index = 0; index < elements.size; index++) {
 			if (elements[index].initialize_data_task_name.size > 0) {
 				unsigned int element_index = task_manager->FindTask(elements[index].task_name);
 				if (element_index != -1) {
@@ -688,7 +692,7 @@ namespace ECSEngine {
 					}
 				}
 			}
-		}
+		}*/
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

@@ -3235,7 +3235,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexLineBulk(const AdditionStreamAtomic<DebugLine>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugLine> temp_deck = DeckPowerOfTwo<DebugLine>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugLine> temp_deck = DeckPowerOfTwo<DebugLine>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawStructuredDeck<DRAW_STRUCTURED_LINE_TOPOLOGY>(this, &temp_deck, 2, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID,
 			[&](InstancedVertex* positions, unsigned int index, const DebugLine* line) {
 				SetLinePositions(positions, index, line->start, line->end);
@@ -3247,7 +3247,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexSphereBulk(const AdditionStreamAtomic<DebugSphere>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugSphere> temp_deck = DeckPowerOfTwo<DebugSphere>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugSphere> temp_deck = DeckPowerOfTwo<DebugSphere>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_SPHERE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
@@ -3256,7 +3256,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexPointBulk(const AdditionStreamAtomic<DebugPoint>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugPoint> temp_deck = DeckPowerOfTwo<DebugPoint>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugPoint> temp_deck = DeckPowerOfTwo<DebugPoint>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
@@ -3265,7 +3265,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexRectangleBulk(const AdditionStreamAtomic<DebugRectangle>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugRectangle> temp_deck = DeckPowerOfTwo<DebugRectangle>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugRectangle> temp_deck = DeckPowerOfTwo<DebugRectangle>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawStructuredDeck(this, &temp_deck, 6, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [](InstancedVertex* positions, unsigned int index, const DebugRectangle* rectangle) {
 			SetRectanglePositionsFront(positions, index, rectangle->corner0, rectangle->corner1);
 		});
@@ -3276,7 +3276,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexCrossBulk(const AdditionStreamAtomic<DebugCross>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugCross> temp_deck = DeckPowerOfTwo<DebugCross>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugCross> temp_deck = DeckPowerOfTwo<DebugCross>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CROSS, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
@@ -3285,7 +3285,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexCircleBulk(const AdditionStreamAtomic<DebugCircle>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugCircle> temp_deck = DeckPowerOfTwo<DebugCircle>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugCircle> temp_deck = DeckPowerOfTwo<DebugCircle>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawTransformDeck<DRAW_TRANSFORM_CIRCLE_BUFFER>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_COUNT, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
@@ -3294,7 +3294,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexArrowBulk(const AdditionStreamAtomic<DebugArrow>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugArrow> temp_deck = DeckPowerOfTwo<DebugArrow>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugArrow> temp_deck = DeckPowerOfTwo<DebugArrow>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_ARROW, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
@@ -3303,7 +3303,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexTriangleBulk(const AdditionStreamAtomic<DebugTriangle>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugTriangle> temp_deck = DeckPowerOfTwo<DebugTriangle>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugTriangle> temp_deck = DeckPowerOfTwo<DebugTriangle>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawStructuredDeck(this, &temp_deck, 3, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [](InstancedVertex* positions, unsigned int index, const DebugTriangle* triangle) {
 			SetTrianglePositions(positions, index, triangle->point0, triangle->point1, triangle->point2);
 		});
@@ -3314,7 +3314,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexAABBBulk(const AdditionStreamAtomic<DebugAABB>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugAABB> temp_deck = DeckPowerOfTwo<DebugAABB>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugAABB> temp_deck = DeckPowerOfTwo<DebugAABB>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
@@ -3323,7 +3323,7 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexOOBBBulk(const AdditionStreamAtomic<DebugOOBB>* addition_stream, float time_delta)
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
-		DeckPowerOfTwo<DebugOOBB> temp_deck = DeckPowerOfTwo<DebugOOBB>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
+		DeckPowerOfTwo<DebugOOBB> temp_deck = DeckPowerOfTwo<DebugOOBB>::InitializeTempReference(addition_stream->ToStream(), temp_memory);
 		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
