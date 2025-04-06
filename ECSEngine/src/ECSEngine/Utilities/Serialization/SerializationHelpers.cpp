@@ -755,7 +755,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(Stream) {
-		if (data->version != SERIALIZE_CUSTOM_STREAM_VERSION) {
+		if (data->custom_types_version[ECS_REFLECTION_CUSTOM_TYPE_STREAM] != SERIALIZE_CUSTOM_STREAM_VERSION) {
 			return false;
 		}
 
@@ -861,7 +861,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(SparseSet) {
-		if (data->version != SERIALIZE_SPARSE_SET_VERSION) {
+		if (data->custom_types_version[ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET] != SERIALIZE_SPARSE_SET_VERSION) {
 			return false;
 		}
 
@@ -960,7 +960,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(DataPointer) {
-		if (data->version != SERIALIZE_CUSTOM_DATA_POINTER_VERSION) {
+		if (data->custom_types_version[ECS_REFLECTION_CUSTOM_TYPE_DATA_POINTER] != SERIALIZE_CUSTOM_DATA_POINTER_VERSION) {
 			return false;
 		}
 
@@ -1196,7 +1196,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(Allocator) {
-		if (data->version != SERIALIZE_CUSTOM_ALLOCATOR_VERSION) {
+		if (data->custom_types_version[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR] != SERIALIZE_CUSTOM_ALLOCATOR_VERSION) {
 			return false;
 		}
 
@@ -1514,7 +1514,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(HashTable) {
-		if (data->version != SERIALIZE_CUSTOM_HASH_TABLE_VERSION) {
+		if (data->custom_types_version[ECS_REFLECTION_CUSTOM_TYPE_HASH_TABLE] != SERIALIZE_CUSTOM_HASH_TABLE_VERSION) {
 			return false;
 		}
 
@@ -1722,7 +1722,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(Deck) {
-		if (data->version != SERIALIZE_CUSTOM_DECK_VERSION) {
+		if (data->custom_types_version[ECS_REFLECTION_CUSTOM_TYPE_DECK] != SERIALIZE_CUSTOM_DECK_VERSION) {
 			return false;
 		}
 

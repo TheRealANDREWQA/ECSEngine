@@ -728,6 +728,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\ReaderWriterInterface.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionAllocatorHandling.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionCustomTypes.cpp" />
+    <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionCustomTypesEnum.h" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\DeltaStateSerialization.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeIntVariableLength.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\StreamUtilities.cpp">

@@ -105,7 +105,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(ReferenceCounted) {
-		if (data->version != ECS_SERIALIZE_CUSTOM_TYPE_REFERENCE_COUNTED_VERSION) {
+		if (data->custom_types_version[ECS_REFLECTION_CUSTOM_TYPE_REFERENCE_COUNTED] != ECS_SERIALIZE_CUSTOM_TYPE_REFERENCE_COUNTED_VERSION) {
 			return false;
 		}
 

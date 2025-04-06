@@ -299,6 +299,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\SizeDeterminationReaderWriter.h" />
     <ClInclude Include="src\ECSEngine\OS\Process.h" />
     <ClInclude Include="src\ECSEngine\Allocators\MallocAllocator.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionCustomTypesEnum.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

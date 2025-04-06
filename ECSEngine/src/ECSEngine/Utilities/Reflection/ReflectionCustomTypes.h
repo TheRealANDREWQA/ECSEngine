@@ -1,6 +1,9 @@
 #pragma once
 #include "../../Core.h"
 #include "ReflectionTypes.h"
+// This include is not referenced directly here, but it is added to make it easier
+// For consumers of the API to reference that one as well
+#include "ReflectionCustomTypesEnum.h"
 
 namespace ECSEngine {
 
@@ -9,20 +12,6 @@ namespace ECSEngine {
 		struct ReflectionManager;
 
 #pragma region Reflection Container Type functions
-
-		enum ECS_REFLECTION_CUSTOM_TYPE_INDEX : unsigned char {
-			ECS_REFLECTION_CUSTOM_TYPE_STREAM,
-			ECS_REFLECTION_CUSTOM_TYPE_REFERENCE_COUNTED,
-			ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET,
-			ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET,
-			ECS_REFLECTION_CUSTOM_TYPE_DATA_POINTER,
-			// Using a single entry for the allocator in order to reduce the interface bloat that is required,
-			// This type will deal with all types of allocators
-			ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR,
-			ECS_REFLECTION_CUSTOM_TYPE_HASH_TABLE,
-			ECS_REFLECTION_CUSTOM_TYPE_DECK,
-			ECS_REFLECTION_CUSTOM_TYPE_COUNT
-		};
 
 		// Must be kept in sync with the ECS_SERIALIZE_CUSTOM_TYPES
 		extern ReflectionCustomTypeInterface* ECS_REFLECTION_CUSTOM_TYPES[];
