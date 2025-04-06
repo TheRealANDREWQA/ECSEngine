@@ -3,6 +3,7 @@
 #include "../File.h"
 #include "../../Containers/Stream.h"
 #include "../Reflection/ReflectionTypes.h"
+#include "../Reflection/ReflectionCustomTypesEnum.h"
 #include "../../Math/MathHelpers.h"
 #include "../Utilities.h"
 
@@ -336,8 +337,9 @@ namespace ECSEngine {
 		// Actually write into the deserialize target
 		bool ShouldIgnoreData() const;
 
-		// TODO: Enhance this to contain the versions for each custom serializer type
-		unsigned int version;
+		// This contains the versions for all custom types, since they might be nested
+		// And require a special version each
+		unsigned int custom_types_version[Reflection::ECS_REFLECTION_CUSTOM_TYPE_COUNT];
 		// This can be used by custom serializers to take into consideration that this field
 		// was allocated prior - fields should be considered invalid
 		bool was_allocated;

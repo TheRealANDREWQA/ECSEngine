@@ -224,7 +224,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(MaterialAsset) {
-		if (data->version != ECS_SERIALIZE_CUSTOM_TYPE_MATERIAL_ASSET_VERSION) {
+		if (data->custom_types_version[ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET] != ECS_SERIALIZE_CUSTOM_TYPE_MATERIAL_ASSET_VERSION) {
 			return false;
 		}
 

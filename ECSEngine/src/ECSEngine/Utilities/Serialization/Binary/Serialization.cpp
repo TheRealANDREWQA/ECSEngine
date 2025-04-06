@@ -809,7 +809,8 @@ namespace ECSEngine {
 					read_data.was_allocated = false;
 					read_data.reflection_manager = deserialized_manager;
 					read_data.read_instrument = read_instrument;
-					read_data.version = deserialize_table.custom_serializers[custom_serializer_index];
+					// Write the custom versions for all types
+					deserialize_table.custom_serializers.CopyTo(read_data.custom_types_version);
 					read_data.tags = info->tag;
 					read_data.ignore_data = true;
 
@@ -1160,7 +1161,7 @@ namespace ECSEngine {
 						custom_read_data.reflection_manager = reflection_manager;
 						custom_read_data.read_instrument = read_instrument;
 						custom_read_data.tags = type->fields[current_type_field_index].tag;
-						custom_read_data.version = deserialize_table.custom_serializers[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR];
+						deserialize_table.custom_serializers.CopyTo(custom_read_data.custom_types_version);
 						custom_read_data.was_allocated = false;
 
 						if (!ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_ALLOCATOR].read(&custom_read_data)) {
@@ -1600,7 +1601,7 @@ namespace ECSEngine {
 						custom_data.reflection_manager = reflection_manager;
 						custom_data.read_instrument = read_instrument;
 						custom_data.tags = type->fields[subindex].tag;
-						custom_data.version = deserialize_table.custom_serializers[current_custom_serializer_index];
+						deserialize_table.custom_serializers.CopyTo(custom_data.custom_types_version);
 
 						if (!ECS_SERIALIZE_CUSTOM_TYPES[current_custom_serializer_index].read(&custom_data)) {
 							ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
@@ -2599,7 +2600,9 @@ namespace ECSEngine {
 			read_data.reflection_manager = reflection_manager;
 			read_data.options = options;
 			read_data.read_instrument = read_instrument;
-			read_data.version = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].version;
+			for (size_t index = 0; index < ECS_REFLECTION_CUSTOM_TYPE_COUNT; index++) {
+				read_data.custom_types_version[index] = ECS_SERIALIZE_CUSTOM_TYPES[index].version;
+			}
 			read_data.tags = tags;
 			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) ? ECS_DESERIALIZE_OK : ECS_DESERIALIZE_CORRUPTED_FILE;
 		}
