@@ -13,6 +13,10 @@
 #include "ReflectionCustomTypes.h"
 #include "ReflectionAllocatorHandling.h"
 #include "../Tokenize.h"
+// Added for the Entity, EntiyInfo and EntityPair blittable exceptions
+#include "../../ECS/InternalStructures.h"
+// Added for the Color and ColorFloat blittable exceptions
+#include "../../Rendering/ColorUtilities.h"
 
 namespace ECSEngine {
 
@@ -21,6 +25,7 @@ namespace ECSEngine {
 #define MAX_PARSING_ENUM_ENTRIES 32
 #define MAX_PARSING_TYPE_ENTRIES 64
 #define MAX_PARSING_TYPE_TAG_ADDITIONAL_CHARACTERS 500
+#define NESTED_STRUCT_SEPARATORS "__"
 #define SERIALIZE_VERSION 0
 
 		// These are pending expressions to be evaluated
@@ -406,12 +411,28 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		struct StructMatcherArgumentData {
+			ECS_INLINE StructMatcherArgumentData(
+				CapacityStream<ReflectionTypeMiscNamedSoa>& _last_type_named_soa, 
+				CapacityStream<ReplaceOccurrence<char>>& _last_type_typedefs,
+				ReflectionType& _last_type
+			) : last_type_named_soa(_last_type_named_soa), last_type_typedefs(_last_type_typedefs), last_type(_last_type) {}
+
 			ReflectionManagerParseStructuresThreadTaskData* data;
-			CapacityStream<ReflectionTypeMiscNamedSoa> last_type_named_soa;
-			// Store local typedefs for the type that is being processed here
-			CapacityStream<ReplaceOccurrence<char>> last_type_typedefs;
+			// This field contains the name of the struct that is being parsed
+			Stream<char> last_type_struct_name;
+			// This references the reflection type that is being parsed. It is stored here
+			// Directly instead of referencing Last() from data->types because nested types can overwrite
+			// The last entry and the fields would falsely be attributed to the nested type instead of the OG type
+			ReflectionType& last_type;
+			CapacityStream<ReflectionTypeMiscNamedSoa>& last_type_named_soa;
+			// Store local typedefs (and also the names of the nested structs, since they need to be replaced as well) 
+			// For the type that is being processed here
+			CapacityStream<ReplaceOccurrence<char>>& last_type_typedefs;
 			bool last_type_has_omitted_fields = false;
 			unsigned short last_type_pointer_offset = 0;
+			// This is the file index of inside the data array of files to be parsed. Used for error messaging
+			// And it needs to be specified for nested structs
+			unsigned int file_index;
 
 			struct {
 				struct InsertedToken {
@@ -861,12 +882,17 @@ namespace ECSEngine {
 			return success ? ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS : ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 		}
 
+		// The last argument is an array that contains additional replacements besides the ones
+		// That exist in the struct itself. For example, if a struct has a nested struct, because
+		// We generate a new name for it such that it is unique, we will want to be able to use
+		// That nested struct in other nested structs and for this reason we need to transmit this information
 		static void AddTypeDefinition(
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			const TokenizedString& body_tokens,
 			Stream<char> inherit_type,
 			Stream<char> name,
-			unsigned int file_index
+			unsigned int file_index,
+			CapacityStream<ReplaceOccurrence<char>>& struct_replacements
 		) {
 			// Add the type directly
 			data->types.ReserveRange();
@@ -877,18 +903,16 @@ namespace ECSEngine {
 			ReflectionType& type = data->types.Last();
 			ZeroOut(&type);
 
-			type.name = name;
+			// If the name does not belong to the allocator, it might not be stable,
+			// So allocate it in that case
+			if (data->allocator.Belongs(name.buffer)) {
+				type.name = name;
+			}
+			else {
+				type.name = name.Copy(&data->allocator);
+			}
 			type.byte_size = 0;
 			data->total_memory += sizeof(ReflectionType);
-
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-
-			// find next line tokens and exclude the next after the opening paranthese and replace
-			// the closing paranthese with \0 in order to stop searching there
-			ECS_STACK_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
-
-			// semicolon positions will help in getting the field name
-			ECS_STACK_ADDITION_STREAM(unsigned int, semicolon_positions, 512);
 
 			// Check all expression evaluations
 			TokenizedString::Subrange evaluate_remaining_function_tokens = body_tokens.AsSubrange();
@@ -941,14 +965,19 @@ namespace ECSEngine {
 			}
 
 			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscNamedSoa, type_named_soa, 32);
-			ECS_STACK_CAPACITY_STREAM(ReplaceOccurrence<char>, type_typedefs, 32);
 
-			StructMatcherArgumentData struct_matcher_data;
+			// Record how many entries were in the struct replacements at first, such that when we exit from this call
+			// We restore its count such that the local replacements are removed
+			unsigned int initial_struct_replacements_count = struct_replacements.size;
+
+			StructMatcherArgumentData struct_matcher_data(type_named_soa, struct_replacements, type);
 			struct_matcher_data.last_type_has_omitted_fields = false;
 			struct_matcher_data.last_type_pointer_offset = 0;
 			struct_matcher_data.last_type_named_soa = type_named_soa;
-			struct_matcher_data.last_type_typedefs = type_typedefs;
+			struct_matcher_data.last_type_typedefs = struct_replacements;
+			struct_matcher_data.last_type_struct_name = type.name;
 			struct_matcher_data.data = data;
+			struct_matcher_data.file_index = file_index;
 
 			type.fields.Initialize(&data->allocator, MAX_PARSING_TYPE_ENTRIES);
 			type.fields.size = 0;
@@ -965,7 +994,7 @@ namespace ECSEngine {
 						fields_reflect_subrange
 					);
 					if (fields_end_macro_index == -1) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Unmatched ECS_FIELDS_START_REFLECT for type \"{#}\"", type.name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Unmatched ECS_FIELDS_START_REFLECT for type \"{#}\". Path: ", type.name);
 						WriteErrorMessage(data, error_message);
 						return;
 					}
@@ -977,7 +1006,7 @@ namespace ECSEngine {
 					ECS_TOKENIZE_MATCHER_RESULT match_result = StructRuleMatcher.MatchRulesWithFind(body_tokens, match_subrange, &struct_matcher_data);
 					if (match_result != ECS_TOKENIZE_MATCHER_SUCCESS) {
 						if (match_result == ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL) {
-							ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's \"{#}\" tokens", type.name);
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's \"{#}\" tokens. Path: ", type.name);
 							WriteErrorMessage(data, error_message);
 						}
 						return;
@@ -991,7 +1020,7 @@ namespace ECSEngine {
 				ECS_TOKENIZE_MATCHER_RESULT match_result = StructRuleMatcher.MatchRulesWithFind(body_tokens, body_tokens.AsSubrange(), &struct_matcher_data);
 				if (match_result != ECS_TOKENIZE_MATCHER_SUCCESS) {
 					if (match_result == ECS_TOKENIZE_MATCHER_FAILED_TO_MATCH_ALL) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's \"{#}\" tokens", type.name);
+						ECS_FORMAT_TEMP_STRING(error_message, "Failed to match type's \"{#}\" tokens. Path: ", type.name);
 						WriteErrorMessage(data, error_message);
 					}
 					return;
@@ -1004,11 +1033,8 @@ namespace ECSEngine {
 				return;
 			}
 
+			struct_replacements.size = initial_struct_replacements_count;
 			data->total_memory += type.fields.CopySize();
-
-			// Update these fields - since they are not taken by reference
-			type_named_soa = struct_matcher_data.last_type_named_soa;
-			type_typedefs = struct_matcher_data.last_type_typedefs;
 
 			// We can validate the SoA fields here, such that we don't continue in case there
 			// Is a mismatch between the fields
@@ -1327,6 +1353,41 @@ namespace ECSEngine {
 			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
 		}
 
+		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructInternalStructCallback(const TokenizeRuleCallbackData* data) {
+			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
+
+			// Perform the action only if this is not a type handler
+			if (call_data->type_tag_handler == -1) {
+				// There need to be at least 5 or more tokens, struct Identifier { } ;
+				ECS_ASSERT(data->subrange.count >= 5);
+				// The body starts from the 3rd token for a count - 5, 5 for the mandatory tokens
+				TokenizedString::Subrange body_tokens = data->subrange.GetSubrange(3, data->subrange.count - 5);
+				ECS_STACK_CAPACITY_STREAM(char, tokenized_string_temp_memory, 32);
+				TokenizedString tokenized_nested_struct = data->string.GetSubrangeAsTokenizedString(body_tokens, tokenized_string_temp_memory.buffer);
+
+				ECS_STACK_CAPACITY_STREAM(char, nested_struct_name, 512);
+				// Compose the final struct name
+				nested_struct_name.CopyOther(call_data->last_type_struct_name);
+				nested_struct_name.AddStreamAssert(NESTED_STRUCT_SEPARATORS);
+				// The main name of the current nested struct is the 1st token
+				nested_struct_name.AddStreamAssert(data->string[data->subrange[1]]);
+
+				// Insert a new "typedef" for this nested struct name. In order to obtain the name to be stable
+				// And be referenced outside this scope, allocate it from the data allocator
+				Stream<char> stable_nested_struct_name = nested_struct_name.Copy(&call_data->data->allocator);
+				call_data->last_type_typedefs.AddAssert({ data->string[data->subrange[1]], stable_nested_struct_name });
+
+				AddTypeDefinition(call_data->data, tokenized_nested_struct, {}, nested_struct_name, call_data->file_index, call_data->last_type_typedefs);
+				// If the parsing did not succeed, then return a failure to stop the parsing
+				if (!call_data->data->success) {
+					return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
+				}
+			}
+
+			// We always match the token sequence
+			return ECS_TOKENIZE_RULE_CALLBACK_MATCHED;
+		}
+
 		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructFunctionCallback(const TokenizeRuleCallbackData* data) {
 			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
 			ReflectionManagerParseStructuresThreadTaskData* parse_data = call_data->data;
@@ -1498,7 +1559,6 @@ namespace ECSEngine {
 		static ECS_TOKENIZE_RULE_CALLBACK_RESULT StructMatcherFieldCallback(const TokenizeRuleCallbackData* data) {
 			StructMatcherArgumentData* call_data = (StructMatcherArgumentData*)data->call_specific_data;
 			ReflectionManagerParseStructuresThreadTaskData* parse_data = call_data->data;
-			ReflectionType& type = parse_data->types.Last();
 
 			if (call_data->type_tag_handler != -1) {
 				TokenizedString::Subrange type_and_name_tokens;
@@ -1582,7 +1642,7 @@ namespace ECSEngine {
 			}
 			else {
 				// This is the normal case of parsing
-				ECS_REFLECTION_ADD_TYPE_FIELD_RESULT add_result = AddTypeField(call_data, type, data->string, data->subrange);
+				ECS_REFLECTION_ADD_TYPE_FIELD_RESULT add_result = AddTypeField(call_data, call_data->last_type, data->string, data->subrange);
 				if (add_result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
 					return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 				}
@@ -1654,6 +1714,18 @@ namespace ECSEngine {
 			struct_matcher->AddPostExcludeAction(action, false);
 		}
 
+		static void CreateTokenizeStructInternalStructAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
+			TokenizeRule internal_struct_rule = CreateTokenizeRule("struct. $G. \\{ $T* /} ;.", temporary_allocator, true);
+			ECS_ASSERT(!internal_struct_rule.IsEmpty());
+			internal_struct_rule.name = "Struct internal struct";
+
+			TokenizeRuleAction action;
+			action.callback = StructInternalStructCallback;
+			action.callback_data = {};
+			action.rule = internal_struct_rule;
+			struct_matcher->AddPreExcludeAction(action, false);
+		}
+
 		static void CreateTokenizeFunctionAction(TokenizeRuleMatcher* struct_matcher, AllocatorPolymorphic temporary_allocator) {
 			TokenizeRule function_rule = GetTokenizeRuleForFunctions(temporary_allocator, true);
 			function_rule.name = "Struct function";
@@ -1696,6 +1768,7 @@ namespace ECSEngine {
 			CreateTokenizeFunctionAction(matcher, temporary_allocator);
 			CreateTokenizeStructFieldAction(matcher, temporary_allocator);
 			CreateTokenizeStructTypedefAction(matcher, temporary_allocator);
+			CreateTokenizeStructInternalStructAction(matcher, temporary_allocator);
 		}
 
 		static void InitializeRuleMatchers() {
@@ -1710,15 +1783,25 @@ namespace ECSEngine {
 		// It will copy the contents of the tokenized body while adding new tokens such that the type tags are satisfied. The location
 		// Of the tag that are added are at the end of the string, since we can insert a token which points at a later offset, there is
 		// No hard rule that states that tokens must be sorted in their appearance order, although using TokenizeString guarantees that
-		static void ProcessTypeTagHandler(ReflectionManagerParseStructuresThreadTaskData* parse_data, size_t handler_index, TokenizedString& tokenized_body) {
-			// Use the struct matcher to process functions and the fields
-			StructMatcherArgumentData argument_data;
+		static void ProcessTypeTagHandler(ReflectionManagerParseStructuresThreadTaskData* parse_data, unsigned int file_index, size_t handler_index, TokenizedString& tokenized_body) {
+			// Use the struct matcher to process functions and the fields.
+			// This is a dummy field
+			ECS_STACK_CAPACITY_STREAM(ReplaceOccurrence<char>, last_type_typedefs, 1);
+			// This is a dummy field
+			ECS_STACK_CAPACITY_STREAM(ReflectionTypeMiscNamedSoa, last_type_named_soa, 1);
+			// This is a dummy field
+			ReflectionType dummy_type;
+			ZeroOut(&dummy_type);
+
+			StructMatcherArgumentData argument_data(last_type_named_soa, last_type_typedefs, dummy_type);
 			argument_data.type_tag_handler = handler_index;
 			argument_data.type_tag_added_characters.Initialize(&parse_data->allocator, 0, MAX_PARSING_TYPE_TAG_ADDITIONAL_CHARACTERS);
 			// Use a small initial size
 			argument_data.type_tag_added_tokens.Initialize(&parse_data->allocator, 8);
-			argument_data.last_type_named_soa = {};
 			argument_data.data = parse_data;
+			argument_data.file_index = file_index;
+			// Set this empty for the moment
+			argument_data.last_type_struct_name = {};
 
 			StructRuleMatcher.MatchRulesWithFind(tokenized_body, tokenized_body.AsSubrange(), &argument_data);
 
@@ -1758,7 +1841,7 @@ namespace ECSEngine {
 			// Ensure that we haven't gone overbounds
 			ECS_ASSERT(final_string.size == total_string_size);
 
-			// Retokenize the string. The characters that are added by the tag handlers can introduce more than one token, and it simpler
+			// Retokenize the string. The characters that are added by the tag handlers can introduce more than one token, and it's simpler
 			// To just create the compound string and then retokenize.
 			tokenized_body.string = final_string;
 			tokenized_body.tokens.resizable_stream->Clear();
@@ -1795,26 +1878,27 @@ namespace ECSEngine {
 
 		void ReflectionManager::GetKnownBlittableExceptions(CapacityStream<BlittableType>* blittable_types, AllocatorPolymorphic allocator)
 		{
-			void* color_default = Allocate(allocator, sizeof(unsigned char) * 4);
-			memset(color_default, UCHAR_MAX, sizeof(unsigned char) * 4);
-			// Don't add an additional include just for the Color and ColorFloat types
-			blittable_types->AddAssert({ STRING(Color), sizeof(unsigned char) * 4, alignof(unsigned char), color_default });
+			Color* color_default = (Color*)Allocate(allocator, sizeof(Color));
+			*color_default = ECS_COLOR_WHITE;
+			blittable_types->AddAssert({ STRING(Color), sizeof(Color), alignof(Color), color_default });
 
-			float* float_color_default = (float*)Allocate(allocator, sizeof(float) * 4);
-			for (unsigned int index = 0; index < 4; index++) {
-				float_color_default[index] = 1.0f;
-			}
-			blittable_types->AddAssert({ STRING(ColorFloat), sizeof(float) * 4, alignof(float), float_color_default });
+			ColorFloat* float_color_default = (ColorFloat*)Allocate(allocator, sizeof(ColorFloat));
+			*float_color_default = ECS_COLOR_WHITE;
+			blittable_types->AddAssert({ STRING(ColorFloat), sizeof(ColorFloat), alignof(ColorFloat), float_color_default });
 
-			// The same as with color, don't add the include for Entity and EntityPair. Set the default as -1
-			unsigned int* default_entity = (unsigned int*)Allocate(allocator, sizeof(unsigned int));
-			*default_entity = -1;
-			blittable_types->AddAssert({ STRING(Entity), sizeof(unsigned int), alignof(unsigned int), default_entity });
+			Entity* default_entity = (Entity*)Allocate(allocator, sizeof(Entity));
+			*default_entity = Entity::Invalid();
+			blittable_types->AddAssert({ STRING(Entity), sizeof(Entity), alignof(Entity), default_entity });
 
-			unsigned int* default_entity_pair = (unsigned int*)Allocate(allocator, sizeof(unsigned int) * 2);
-			default_entity_pair[0] = -1;
-			default_entity_pair[1] = -1;
-			blittable_types->AddAssert({ STRING(EntityPair), sizeof(unsigned int) * 2, alignof(unsigned int), default_entity_pair });
+			EntityPair* default_entity_pair = (EntityPair*)Allocate(allocator, sizeof(EntityPair));
+			default_entity_pair->first = Entity::Invalid();
+			default_entity_pair->second = Entity::Invalid();
+			blittable_types->AddAssert({ STRING(EntityPair), sizeof(EntityPair), alignof(EntityPair), default_entity_pair });
+
+			EntityInfo* default_entity_info = (EntityInfo*)Allocate(allocator, sizeof(EntityInfo));
+			// Set all bits to 1, such that it signals an invalid entry
+			memset(default_entity_info, UCHAR_MAX, sizeof(default_entity_info));
+			blittable_types->AddAssert({ STRING(EntityInfo), sizeof(EntityInfo), alignof(EntityInfo), default_entity_info });
 
 			// Add the math types now
 			// Don't include the headers just for the byte sizes - use the MathTypeSizes.h
@@ -5016,7 +5100,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										Stream<char> current_tag = { tag_name, PointerDifference(end_tag_name, tag_name) };
 										for (size_t handler_index = 0; handler_index < ECS_COUNTOF(ECS_REFLECTION_TYPE_TAG_HANDLER); handler_index++) {
 											if (ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].tag == current_tag) {
-												ProcessTypeTagHandler(data, handler_index, tokenized_body);
+												ProcessTypeTagHandler(data, index, handler_index, tokenized_body);
 												break;
 											}
 										}
@@ -5026,8 +5110,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									// What we need to do tho is to record the embedded array size count, since we will eliminate these if
 									// The type proves to be a template
 									size_t previous_embedded_array_size_count = data->embedded_array_size.size;
+									// This is a stack buffer that must be provided to the type definition to use as storage.
+									ECS_STACK_CAPACITY_STREAM(ReplaceOccurrence<char>, struct_typedefs, 32);
 
-									AddTypeDefinition(data, tokenized_body, inherit_type_name, structure_name, index);
+									AddTypeDefinition(data, tokenized_body, inherit_type_name, structure_name, index, struct_typedefs);
 									if (data->success == false) {
 										return;
 									}

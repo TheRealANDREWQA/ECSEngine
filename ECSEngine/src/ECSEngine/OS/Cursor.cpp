@@ -27,7 +27,7 @@ namespace ECSEngine {
 			// We need to convert from client to screen coordinates
 			POINT cursor_point = { position.x, position.y };
 			ECS_ASSERT(ClientToScreen((HWND)window_handle, &cursor_point));
-			ECS_ASSERT(SetCursorPos(cursor_point.x, cursor_point.y));
+			SetCursorPos(cursor_point.x, cursor_point.y);
 		}
 
 		uint2 SetCursorPositionRelative(void* window_handle, uint2 position) {

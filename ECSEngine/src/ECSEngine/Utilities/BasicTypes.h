@@ -75,7 +75,7 @@ namespace ECSEngine {
 		ECS_INT_TYPE_COUNT
 	};
 
-	enum ECS_CHANGE_SET_TYPE : unsigned char {
+	enum ECS_REFLECT ECS_CHANGE_SET_TYPE : unsigned char {
 		ECS_CHANGE_SET_ADD,
 		ECS_CHANGE_SET_REMOVE,
 		ECS_CHANGE_SET_UPDATE

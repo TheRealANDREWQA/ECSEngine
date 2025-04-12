@@ -377,7 +377,21 @@ namespace ECSEngine {
 		// Determine the change set
 		EntityManagerChangeSet change_set = DetermineEntityManagerChangeSet(&data->previous_state, data->current_state, data->reflection_manager, &data->change_set_allocator);
 
-		
+		// Write the change set description first
+		// Use the reflection manager for that, it should handle this successfully
+		if (Serialize(data->reflection_manager, data->reflection_manager->GetType(STRING(EntityManagerChangeSet)), &change_set, function_data->write_instrument) != ECS_SERIALIZE_OK) {
+			return false;
+		}
+
+		// Now write the actual components that need to be written. Start with the global ones
+		change_set.global_component_changes.ForEach([&](const EntityManagerChangeSet::GlobalComponentChange& change) {
+			if (change.type == ECS_CHANGE_SET_ADD || change.type == ECS_CHANGE_SET_UPDATE) {
+				const void* global_data = data->current_state->GetGlobalComponent(change.component);
+				
+			}
+
+			return false;
+		});
 
 		return true;
 	}
@@ -496,8 +510,14 @@ namespace ECSEngine {
 		DeltaStateWriterInitializeFunctorInfo& info, 
 		const EntityManager* entity_manager, 
 		const ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory
+		CapacityStream<void>& stack_memory,
+		const EntityManagerDeltaWriterInitializeInfoOptions* options
 	) {
+		EntityManagerDeltaWriterInitializeInfoOptions default_options;
+		if (options == nullptr) {
+			options = &default_options;
+		}
+
 		info.delta_function = WriterDeltaFunction;
 		info.entire_function = WriterEntireFunction;
 		info.self_contained_extract = nullptr;
@@ -517,10 +537,11 @@ namespace ECSEngine {
 		DeltaStateWriterInitializeFunctorInfo& info, 
 		const World* world, 
 		const ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory
+		CapacityStream<void>& stack_memory,
+		const EntityManagerDeltaWriterInitializeInfoOptions* options
 	) {
 		// Call the basic function and simply override the user data and the extract function, since that's what is different
-		SetEntityManagerDeltaWriterInitializeInfo(info, world->entity_manager, reflection_manager, stack_memory);
+		SetEntityManagerDeltaWriterInitializeInfo(info, world->entity_manager, reflection_manager, stack_memory, options);
 		info.self_contained_extract = WriterExtractFunction;
 
 		WriterWorldData writer_data;

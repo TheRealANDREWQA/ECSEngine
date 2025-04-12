@@ -1,9 +1,11 @@
+// ECS_REFLECT
 #pragma once
 #include "../Core.h"
 #include "../Utilities/Serialization/DeltaStateSerializationForward.h"
 #include "../Containers/Deck.h"
 #include "InternalStructures.h"
 #include "EntityChangeSet.h"
+#include "EntityManagerSerializeTypes.h"
 
 namespace ECSEngine {
 
@@ -14,7 +16,7 @@ namespace ECSEngine {
 		struct ReflectionManager;
 	}
 
-	struct ECSENGINE_API EntityManagerChangeSet {
+	struct ECSENGINE_API ECS_REFLECT EntityManagerChangeSet {
 		// This structure describes a component update/addition/removal
 		struct EntityComponentChange {
 			ECS_CHANGE_SET_TYPE change_type;
@@ -116,13 +118,32 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
+	struct ModuleComponentFunctions;
+
+	//typedef 
+
+	struct EntityManagerDeltaWriterInitializeInfoOptions {
+		Stream<SerializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
+		Stream<SerializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
+		Stream<SerializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
+	};
+
+	struct EntityManagerDeltaReaderInitializeInfoOptions {
+		Stream<ModuleComponentFunctions> module_component_functions;
+		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
+		Stream<DeserializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
+		Stream<DeserializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
+		//Stream<LoadSceneChunkFunctor> = {};
+	};
+
 	// Sets the necessary info for the writer to be initialized as an ECS state delta writer - outside the runtime context
 	// The entity manager and the reflection manager must be stable for the entire duration of the writer
 	ECSENGINE_API void SetEntityManagerDeltaWriterInitializeInfo(
 		DeltaStateWriterInitializeFunctorInfo& info, 
 		const EntityManager* entity_manager, 
-		const Reflection::ReflectionManager* reflection_manager, 
-		CapacityStream<void>& stack_memory
+		const Reflection::ReflectionManager* reflection_manager,
+		CapacityStream<void>& stack_memory,
+		const EntityManagerDeltaWriterInitializeInfoOptions* options = nullptr
 	);
 
 	// Sets the necessary info for the writer to be initialized as an ECS state delta writer - for a simulation world
@@ -131,7 +152,8 @@ namespace ECSEngine {
 		DeltaStateWriterInitializeFunctorInfo& info, 
 		const World* world, 
 		const Reflection::ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory
+		CapacityStream<void>& stack_memory,
+		const EntityManagerDeltaWriterInitializeInfoOptions* options = nullptr
 	);
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
@@ -140,6 +162,7 @@ namespace ECSEngine {
 		DeltaStateReaderInitializeFunctorInfo& info, 
 		EntityManager* entity_manager, 
 		const Reflection::ReflectionManager* reflection_manager,
+
 		CapacityStream<void>& stack_memory
 	);
 
