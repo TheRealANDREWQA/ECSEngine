@@ -24,7 +24,7 @@ namespace ECSEngine {
 	};
 
 	// A handle_remapping can be specified. When adding the assets from the given database
-	// into the master database that this reference is referring to, the handle can change their values
+	// into the master database that this reference is referring to, the handle can change its value
 	// The pairs are { original_handle, new_handle_value }.
 	// The pointer remap gives the values for the assets whose pointer values are different between the 2 asset databases
 	// There needs to be specified ECS_ASSET_TYPE_COUNT for each remapping (each asset type has its own stream)

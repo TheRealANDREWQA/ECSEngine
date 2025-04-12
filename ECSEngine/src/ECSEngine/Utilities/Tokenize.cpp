@@ -2098,10 +2098,10 @@ namespace ECSEngine {
 	}
 
 	TokenizeRule GetTokenizeRuleForStructOperators(AllocatorPolymorphic allocator, bool allocator_is_temporary) {
-		ECS_STACK_CAPACITY_STREAM(char, rule_string, 512);
+		ECS_STACK_CAPACITY_STREAM(char, rule_string, 1024);
 		AddTokenizeRuleIdentifierDefinitions(rule_string);
 		// Take into consideration normal = or ==, < or > operators, and type conversion operators
-		rule_string.AddStreamAssert("operator_signature = " FUNCTION_MODIFIERS " identifier. operator. $S. $S? \\( $T* /) const? | " FUNCTION_MODIFIERS " operator. $G. $(. $). const?\n");
+		rule_string.AddStreamAssert("operator_signature = " FUNCTION_MODIFIERS " identifier. operator. $S. =? \\( $T* /) const? | " FUNCTION_MODIFIERS " operator. $G. $(. $). const?\n");
 		rule_string.AddStreamAssert("operator_signature. (=. default.)? ;. | operator_signature. \\{ $T* /}");
 		return CreateTokenizeRule(rule_string, allocator, allocator_is_temporary);
 	}

@@ -79,6 +79,28 @@ namespace ECSEngine {
 			return { string.buffer + first_offset, tokens[subrange[subrange.count - 1]].offset - first_offset + tokens[subrange[subrange.count - 1]].size };
 		}
 
+		// Returns a reference to this internal string arrays for a given subrange that can be treated
+		// Like an individual tokenized string. It requires a few temporary bytes to write some values,
+		// These bytes must be valid for the entire duration of the returned value.
+		TokenizedString GetSubrangeAsTokenizedString(Subrange subrange, char temp_memory[32]) const {
+			TokenizedString result;
+			// Keep the string the same, since the token offsets are maintained the same
+			result.string = string;
+			result.tokens = (CapacityStream<Token>*)temp_memory;
+
+			if (subrange.count == 0) {
+				result.tokens.capacity_stream->Reset();
+				return result;
+			}
+
+			// Always use the tokens as a capacity stream for this returned string, the resizable cannot be used
+			// Because it is not standalone. Must use an explicit capacity stream, not a simple Stream<> as what
+			// SliceAt returns because this is the type that is referenced
+			*result.tokens.capacity_stream = tokens.capacity_stream->SliceAt(subrange.token_start_index, subrange.count);
+
+			return result;
+		}
+
 		Stream<char> string;
 		AdditionStream<Token> tokens;
 	};
@@ -438,7 +460,7 @@ namespace ECSEngine {
 
 	ECS_INLINE Stream<char> GetCppFileTokenSeparators() {
 		// Must be kept in sync with the above enum
-		return "+-*%^/|&.,:;=()<>{}[]";
+		return "+-*%^/|&.,:;=()<>{}[]!";
 	}
 
 	ECS_INLINE Stream<char> GetCppTypeTokenSeparators() {

@@ -69,13 +69,7 @@ namespace ECSEngine {
 		void* user_data;
 	};
 
-	// The write data will be empty ({ nullptr, 0}) when the function wants to know
-	// How much there is to written, then the function will be called once again
-	// To actually write the data after an allocation was prepared. The other write
-	// Mode is to actually use the file handle directly
 	struct SaveSceneChunkFunctionData {
-		ECS_INLINE SaveSceneChunkFunctionData() {}
-
 		const EntityManager* entity_manager;
 		const Reflection::ReflectionManager* reflection_manager;
 		size_t chunk_index;
@@ -111,8 +105,8 @@ namespace ECSEngine {
 		CapacityStream<char>* detailed_error_string = nullptr;
 		bool allow_missing_components = false;
 
-		// If you want the asset database to have metadatas unique (but invalid, they don't point to valid data)
-		// after the load such that the link assets can be still identified, you must give an allocator for the temporary allocations needed
+		// If you want the asset database to have unique metadatas (but invalid, they don't point to valid data)
+		// After the load such that the link assets can be still be identified, you must give an allocator for the temporary allocations needed
 		bool randomize_assets = false;
 		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
 		Stream<DeserializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
@@ -127,7 +121,7 @@ namespace ECSEngine {
 		Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping = { nullptr, 0 };
 
 		// This is the allocator used to allocate the buffers needed for the modules' streams
-		// This must not be Malloc. Each entry will be allocated individually.
+		// Each entry will be allocated individually.
 		AllocatorPolymorphic scene_modules_allocator = ECS_MALLOC_ALLOCATOR;
 		AdditionStream<SceneModule> scene_modules = {};
 		// These 2 fields help you identify the source code such that a faithful reconstruction can be made

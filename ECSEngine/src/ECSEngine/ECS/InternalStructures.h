@@ -1,3 +1,4 @@
+// ECS_REFLECT
 #pragma once
 #include "../Core.h"
 #include "../Utilities/BasicTypes.h"
@@ -12,6 +13,7 @@
 #include "../Containers/DataPointer.h"
 #include "ComponentFunctions.h"
 #include "../Utilities/StringUtilities.h"
+#include "../Utilities/Reflection/ReflectionMacros.h"
 
 #define ECS_ARCHETYPE_MAX_COMPONENTS 15
 #define ECS_ARCHETYPE_MAX_SHARED_COMPONENTS 15
@@ -148,7 +150,7 @@ namespace ECSEngine {
 		// Can use a size_t base type in order to have the structure be copyable as a single register
 	};
 
-	struct Component {
+	struct ECS_REFLECT Component {
 		ECS_INLINE Component() : value(-1) {}
 		ECS_INLINE Component(short _value) : value(_value) {}
 
@@ -239,7 +241,7 @@ namespace ECSEngine {
 		ECS_COMPONENT_TYPE type;
 	};
 
-	struct SharedInstance {
+	struct ECS_REFLECT SharedInstance {
 		// This just returns true if the value is different from -1,
 		// And not if the entity is valid in the context of an entity manager
 		ECS_INLINE bool IsValid() const {
@@ -264,8 +266,6 @@ namespace ECSEngine {
 	ECS_INLINE bool operator != (const SharedInstance& lhs, const SharedInstance& rhs) {
 		return !(lhs == rhs);
 	}
-
-	typedef MemoryArena ComponentBufferAllocator;
 
 	struct ECSENGINE_API ComponentInfo {
 		ECS_INLINE ComponentInfo() : size(0), type_allocator_pointer_offset(-1) {}

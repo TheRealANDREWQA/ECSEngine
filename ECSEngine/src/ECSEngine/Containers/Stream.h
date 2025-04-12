@@ -376,6 +376,11 @@ namespace ECSEngine {
 			return { buffer + offset, size - offset };
 		}
 
+		// Returns the stream starting at the given offset for a given count of elements
+		ECS_INLINE Stream<T> SliceAt(size_t offset, size_t count) const {
+			return { buffer + offset, count };
+		}
+
 		ECS_INLINE bool StartsWith(Stream<T> other) const {
 			if (other.size <= size) {
 				return memcmp(buffer, other.buffer, other.MemoryOf(other.size)) == 0;
@@ -885,9 +890,14 @@ namespace ECSEngine {
 			}
 		}
 
-		// Returns the capacity stream at the given offset
+		// Returns the capacity stream at the given offset until the end of the stream
 		ECS_INLINE CapacityStream<T> SliceAt(unsigned int offset) const {
 			return { buffer + offset, size - offset, capacity - offset };
+		}
+
+		// Returns a stream at the given offset for a given count of elements
+		ECS_INLINE Stream<T> SliceAt(unsigned int offset, unsigned int count) const {
+			return { buffer + offset, count };
 		}
 
 		// Returns a stream that contains the last elements
@@ -1272,6 +1282,11 @@ namespace ECSEngine {
 			return { buffer + offset, size - offset };
 		}
 
+		// Returns the stream starting at the given offset for a given count of elements
+		ECS_INLINE Stream<T> SliceAt(unsigned int offset, unsigned int count) const {
+			return { buffer + offset, count };
+		}
+
 		ECS_INLINE void Swap(unsigned int first, unsigned int second) {
 			swap(buffer[first], buffer[second]);
 		}
@@ -1535,6 +1550,11 @@ namespace ECSEngine {
 			return { (void*)((uintptr_t)buffer + offset), size - offset };
 		}
 
+		// Returns the subrange starting at the given offset for a given count of bytes
+		ECS_INLINE Stream<void> SliceAt(size_t offset, size_t byte_size) const {
+			return { (void*)((uintptr_t)buffer + offset), byte_size };
+		}
+
 		// The size is divided by the sizeof T
 		template<typename T>
 		ECS_INLINE Stream<T> As() const {
@@ -1737,6 +1757,11 @@ namespace ECSEngine {
 		// Returns the subrange starting at the given offset until the end of the size
 		ECS_INLINE CapacityStream<void> SliceAt(unsigned int offset) const {
 			return { (void*)((uintptr_t)buffer + offset), size - offset, capacity - offset };
+		}
+
+		// Returns the subrange starting at the given offset for a given byte size
+		ECS_INLINE Stream<void> SliceAt(unsigned int offset, unsigned int byte_size) const {
+			return { (void*)((uintptr_t)buffer + offset), byte_size };
 		}
 
 		// Divides the size and the capacity by the sizeof(T)
