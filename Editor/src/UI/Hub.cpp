@@ -201,54 +201,74 @@ static void AutoDetectCompilerAction(ActionData* action_data) {
 
 	if (versions.size > 0) {
 		if (versions.size == 1) {
+			// Collocate the compiler path and editing ide path at the moment into a single call
 			struct SelectData {
 				EditorState* editor_state;
-				Stream<wchar_t> path;
+				Stream<wchar_t> compiler_path;
+				Stream<wchar_t> editing_ide_path;
 			};
 			
 			auto select_action = [](ActionData* action_data) {
 				UI_UNPACK_ACTION_DATA;
 
 				SelectData* data = (SelectData*)_data;
-				if (!ChangeCompilerVersion(data->editor_state, data->path)) {
-					CreateErrorMessageWindow(system, "Failed to save editor file after changing compiler version");
+				if (!ChangeCompilerVersionAndEditingIdeExecutablePath(data->editor_state, data->compiler_path, data->editing_ide_path)) {
+					CreateErrorMessageWindow(system, "Failed to save editor file after changing compiler version (and editing IDE executable path)");
 				}
-				data->path.Deallocate(data->editor_state->EditorAllocator());
+				data->compiler_path.Deallocate(data->editor_state->EditorAllocator());
+				data->editing_ide_path.Deallocate(data->editor_state->EditorAllocator());
 			};
 
 			ECS_FORMAT_TEMP_STRING(confirm_window_message, "The compiler that was auto detected is {#}. Select this as the compiler?", versions[0].aggregated);
 			// Allocate the string with the editor allocator such that it is stable
-			SelectData select_data = { editor_state, versions[0].path.Copy(editor_state->EditorAllocator()) };
+			SelectData select_data = { editor_state, versions[0].compiler_path.Copy(editor_state->EditorAllocator()), versions[0].editing_ide_path.Copy(editor_state->EditorAllocator()) };
 			CreateConfirmWindow(system, confirm_window_message, { select_action, &select_data, sizeof(select_data), ECS_UI_DRAW_SYSTEM });
 		}
 		else {
+			// Can't be captured in the lambda body if using constexpr, make it a macro
+			#define COLLOCATE_CHARACTER_SEPARATOR L'|'
+
 			auto select_action = [](ActionData* action_data) {
 				UI_UNPACK_ACTION_DATA;
 
 				EditorState* editor_state = (EditorState*)_data;
 				ChooseElementCallbackData* callback_data = (ChooseElementCallbackData*)_additional_data;
-				if (!ChangeCompilerVersion(editor_state, callback_data->additional_data.As<wchar_t>())) {
+				// Split the additional data into the compiler path and editor IDE path
+				Stream<wchar_t> collocated_path = callback_data->additional_data.As<wchar_t>();
+				Stream<wchar_t> separator = FindFirstCharacter(collocated_path, COLLOCATE_CHARACTER_SEPARATOR);
+
+				if (!ChangeCompilerVersionAndEditingIdeExecutablePath(editor_state, collocated_path.StartDifference(separator), separator.AdvanceReturn())) {
 					CreateErrorMessageWindow(system, "Failed to save editor file after changing compiler version");
 				}
-				};
+			};
 
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, version_display_names, MAX_COMPILERS);
-			ECS_STACK_CAPACITY_STREAM(Stream<void>, paths, MAX_COMPILERS);
+			// Collocate the compiler path and editor IDE executable path for now.
+			// Write the compiler path followed by a | as separator from the IDE path.
+			ECS_STACK_CAPACITY_STREAM(Stream<void>, compiler_and_ide_paths, MAX_COMPILERS);
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 			for (size_t index = 0; index < versions.size; index++) {
 				version_display_names[index] = versions[index].aggregated;
-				paths[index] = versions[index].path;
+				compiler_and_ide_paths[index].Initialize(&stack_allocator, versions[index].compiler_path.CopySize() + versions[index].editing_ide_path.CopySize() + sizeof(wchar_t));
+				Stream<wchar_t> reinterpretation = compiler_and_ide_paths[index].As<wchar_t>();
+				reinterpretation.size = 0;
+				reinterpretation.AddStream(versions[index].compiler_path);
+				reinterpretation.Add(COLLOCATE_CHARACTER_SEPARATOR);
+				reinterpretation.AddStream(versions[index].editing_ide_path);
 			}
 			version_display_names.size = versions.size;
-			paths.size = versions.size;
+			compiler_and_ide_paths.size = versions.size;
 
 			ChooseElementWindowData choose_data;
 			choose_data.element_labels = version_display_names;
 			choose_data.description = "Select the compiler version";
 			choose_data.window_name = "Select Compiler";
 			choose_data.select_handler = { select_action, editor_state, 0, ECS_UI_DRAW_SYSTEM };
-			choose_data.additional_data = paths;
+			choose_data.additional_data = compiler_and_ide_paths;
 
 			CreateChooseElementWindow(system, choose_data);
+
+			#undef COLLOCATE_CHARACTER_SEPARATOR
 		}
 	}
 	else {

@@ -92,6 +92,7 @@
     <ClInclude Include="src\Sandbox\SandboxCount.h" />
     <ClInclude Include="src\Editor\EditorShortcutFocus.h" />
     <ClInclude Include="src\UI\SandboxUI.h" />
+    <ClInclude Include="src\Editor\EditorTextIDE.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -174,6 +175,7 @@
     <ClCompile Include="src\Sandbox\SandboxRecordingFileExtension.cpp" />
     <ClCompile Include="src\Editor\EditorShortcutFocus.cpp" />
     <ClCompile Include="src\UI\SandboxUI.cpp" />
+    <ClCompile Include="src\Editor\EditorTextIDE.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

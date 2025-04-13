@@ -11,6 +11,7 @@ ECS_TOOLS;
 //#define LOAD_FILE_ERROR_MESSAGE "Loading editor file failed."
 
 #define COMPILER_PATH_STRING "Compiler Path: "
+#define EDITING_IDE_PATH_STRING "Editing IDE Path: "
 #define PROJECTS_STRING "Projects:"
 
 #define MISSING_PROJECTS_WINDOW_NAME "Missing Projects"
@@ -41,7 +42,7 @@ void MissingProjectsDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 	Stream<Stream<char>>* paths = (Stream<Stream<char>>*)window_data;
 
 	UIDrawConfig config;
-	drawer.Text("One or more project are missing. Their files have been deleted or moved and cannot be opened.");
+	drawer.Text("One or more projects are missing. Their files have been deleted or moved and cannot be opened.");
 	drawer.NextRow();
 	drawer.LabelList("These are:", *paths);
 
@@ -95,6 +96,13 @@ bool SaveEditorFile(EditorState* editor_state) {
 		compiler_path_ascii.AddAssert('\n');
 		bool success = WriteFile(file, Stream<char>(COMPILER_PATH_STRING));
 		success &= WriteFile(file, compiler_path_ascii);
+
+		ECS_STACK_CAPACITY_STREAM(char, editing_ide_path_ascii, 512);
+		ConvertWideCharsToASCII(editor_state->settings.editing_ide_path, editing_ide_path_ascii);
+		editing_ide_path_ascii.AddAssert('\n');
+		success &= WriteFile(file, Stream<char>(EDITING_IDE_PATH_STRING));
+		success &= WriteFile(file, editing_ide_path_ascii);
+
 		success &= WriteFile(file, Stream<char>(PROJECTS_STRING "\n"));
 		for (size_t index = 0; index < hub_data->projects.size; index++) {
 			ECS_STACK_CAPACITY_STREAM(char, project_ascii_path, 512);
@@ -126,32 +134,47 @@ bool LoadEditorFile(EditorState* editor_state, CapacityStream<char>* error_messa
 			lines.FreeBuffer();
 		});
 
+		// If there are not at least 2 lines, fail
+		if (lines.size < 2) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "Editor settings should have at least 2 lines.");
+			return false;
+		}
+
 		if (!lines[0].StartsWith(COMPILER_PATH_STRING)) {
 			ECS_FORMAT_ERROR_MESSAGE(error_message, "Editor settings do not start with a compiler path.");
 			return false;
 		}
 
-		// Use ASCII paths, even tho we internally store them as wide
-		Stream<char> compiler_path_ascii = lines[0].AdvanceReturn(strlen(COMPILER_PATH_STRING));
-		compiler_path_ascii = TrimWhitespace(compiler_path_ascii);
-
-		// Add a null terminator such that the final path contains it at the end
-		compiler_path_ascii.Add('\0');
-		ECS_STACK_CAPACITY_STREAM(wchar_t, compiler_path, 512);
-		ConvertASCIIToWide(compiler_path, compiler_path_ascii);
-		editor_state->settings.compiler_path = compiler_path.Copy(editor_state->EditorAllocator());
-		// Don't include the null terminator in the path size
-		editor_state->settings.compiler_path.size--;
-
-		// Check to see if the compiler path is valid
-		compiler_path.AddStreamAssert(L"\\MSBuild.exe");
-		if (!ExistsFileOrFolder(compiler_path)) {
-			ECS_FORMAT_ERROR_MESSAGE(error_message, "Editor settings contain {#} as compiler path, but it is not a valid MSBuild.exe path. Make sure the path is adequate.", editor_state->settings.compiler_path);
+		if (!lines[1].StartsWith(EDITING_IDE_PATH_STRING)) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "Editor settings do not contain the editing IDE executable path.");
+			return false;
 		}
 
+		auto read_single_line_path = [editor_state](Stream<char> line, Stream<char> line_identifier_string) -> Stream<wchar_t> {
+			Stream<char> compiler_path_ascii = line.AdvanceReturn(line_identifier_string.size);
+			compiler_path_ascii = TrimWhitespace(compiler_path_ascii);
+
+			// Add a null terminator such that the final path contains it at the end
+			compiler_path_ascii.Add('\0');
+			ECS_STACK_CAPACITY_STREAM(wchar_t, compiler_path, 512);
+			ConvertASCIIToWide(compiler_path, compiler_path_ascii);
+			Stream<wchar_t> compiler_path_stable = compiler_path.Copy(editor_state->EditorAllocator());
+			// Don't include the null terminator in the path size
+			compiler_path_stable.size--;
+			
+			return compiler_path_stable;
+		};
+
+		editor_state->settings.compiler_path = read_single_line_path(lines[0], COMPILER_PATH_STRING);
+		if (!ExistsFileOrFolder(editor_state->settings.compiler_path)) {
+			ECS_FORMAT_ERROR_MESSAGE(error_message, "Editor settings contain {#} as compiler path, but it is not a valid executable/CMD path. Make sure the path is adequate.", editor_state->settings.compiler_path);
+		}
+
+		editor_state->settings.editing_ide_path = read_single_line_path(lines[1], EDITING_IDE_PATH_STRING);
+
 		hub_data->projects.size = 0;
-		if (lines[1].StartsWith(PROJECTS_STRING)) {
-			for (size_t index = 2; index < lines.size; index++) {
+		if (lines[2].StartsWith(PROJECTS_STRING)) {
+			for (size_t index = 3; index < lines.size; index++) {
 				Stream<char> line = TrimWhitespace(lines[index]);
 
 				ECS_STACK_CAPACITY_STREAM(wchar_t, wide_path, 512);
@@ -188,7 +211,7 @@ bool LoadEditorFile(EditorState* editor_state, CapacityStream<char>* error_messa
 	AutoDetectCompilers(&stack_allocator, &compiler_versions);
 
 	if (compiler_versions.size > 0) {
-		bool success = ChangeCompilerVersion(editor_state, compiler_versions[0].path);
+		bool success = ChangeCompilerVersionAndEditingIdeExecutablePath(editor_state, compiler_versions[0].compiler_path, compiler_versions[0].editing_ide_path);
 		if (!success) {
 			ECS_FORMAT_ERROR_MESSAGE(error_message, "No editor file was found and auto generating a default file failed. Could not save the editor file after successfully generating a default.");
 		}

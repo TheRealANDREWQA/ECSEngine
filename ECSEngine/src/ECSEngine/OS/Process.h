@@ -40,20 +40,20 @@ namespace ECSEngine {
 		// You can optionally choose to disable the process from showing the CMD window, if it has one and choose
 		// The initial starting directory for the process, which by default is the same as the working directory.
 		// Returns true if it succeeded, else false
-		ECSENGINE_API bool CreateProcessStandalone(Stream<wchar_t> executable_path, Stream<wchar_t> command_line, Stream<wchar_t> starting_directory = {}, bool show_cmd_window = true);
+		ECSENGINE_API bool CreateProcessStandalone(Stream<wchar_t> executable_path, Stream<wchar_t> command_line, Stream<wchar_t> starting_directory = {}, bool show_cmd_window = false);
 
 		// Creates a process for the given executable with the given command line and waits for it to finish. 
 		// You can optionally choose to disable the process from showing the CMD window, if it has one and choose
 		// The initial starting directory for the process, which by default is the same as the working directory.
 		// Returns a valid optional if the initial create succeeded, which contains the return code of the process, else an empty optional.
-		ECSENGINE_API Optional<int> CreateProcessAndWait(Stream<wchar_t> executable_path, Stream<wchar_t> command_line, Stream<wchar_t> starting_directory = {}, bool show_cmd_window = true);
+		ECSENGINE_API Optional<int> CreateProcessAndWait(Stream<wchar_t> executable_path, Stream<wchar_t> command_line, Stream<wchar_t> starting_directory = {}, bool show_cmd_window = false);
 
 
 		// Creates a process for the given executable with the given command line and returns a valid process handle if it succeeded. 
 		// You can optionally choose to disable the process from showing the CMD window, if it has one and choose
 		// The initial starting directory for the process, which by default is the same as the working directory.
 		// Returns a valid process handle if it succeeded, else an empty optional
-		ECSENGINE_API Optional<ProcessHandle> CreateProcessWithHandle(Stream<wchar_t> executable_path, Stream<wchar_t> command_line, Stream<wchar_t> starting_directory = {}, bool show_cmd_window = true);
+		ECSENGINE_API Optional<ProcessHandle> CreateProcessWithHandle(Stream<wchar_t> executable_path, Stream<wchar_t> command_line, Stream<wchar_t> starting_directory = {}, bool show_cmd_window = false);
 
 	}
 }
