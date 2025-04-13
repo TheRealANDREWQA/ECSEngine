@@ -2730,16 +2730,21 @@ namespace ECSEngine {
 
 	namespace Internal {
 
-		template ECSENGINE_API ulong2 FormatStringInternal<const char*>(CapacityStream<char>&, const char*, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(CapacityStream<char>&, const char*, const wchar_t*);
-		template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(CapacityStream<char>&, const char*, Stream<char>);
-		template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(CapacityStream<char>&, const char*, Stream<wchar_t>);
-		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(CapacityStream<char>&, const char*, CapacityStream<char>);
-		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(CapacityStream<char>&, const char*, CapacityStream<wchar_t>);
-		template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(CapacityStream<char>&, const char*, unsigned int);
-		template ECSENGINE_API ulong2 FormatStringInternal<void*>(CapacityStream<char>&, const char*, void*);
-		template ECSENGINE_API ulong2 FormatStringInternal<float>(CapacityStream<char>&, const char*, float);
-		template ECSENGINE_API ulong2 FormatStringInternal<double>(CapacityStream<char>&, const char*, double);
+#define INSTANTIATE(parameter_type) template ECSENGINE_API ulong2 FormatStringInternal<char, parameter_type>(CapacityStream<char>&, const char*, parameter_type); \
+									template ECSENGINE_API ulong2 FormatStringInternal<wchar_t, parameter_type>(CapacityStream<wchar_t>&, const wchar_t*, parameter_type)
+
+		INSTANTIATE(const char*);
+		INSTANTIATE(const wchar_t*);
+		INSTANTIATE(Stream<char>);
+		INSTANTIATE(Stream<wchar_t>);
+		INSTANTIATE(CapacityStream<char>);
+		INSTANTIATE(CapacityStream<wchar_t>);
+		INSTANTIATE(unsigned int);
+		INSTANTIATE(void*);
+		INSTANTIATE(float);
+		INSTANTIATE(double);
+
+#undef INSTANTIATE
 
 	}
 

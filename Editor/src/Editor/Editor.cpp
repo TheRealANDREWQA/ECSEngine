@@ -15,6 +15,7 @@
 #include "ECSEngineBenchmark.h"
 #include "ECSEngineOSMonitor.h"
 #include <hidusage.h>
+#include "EditorTextIDE.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -280,6 +281,10 @@ public:
 						// Run the tick after the UI. At the moment, the mouse/keyboard sandbox
 						// Input is based on this ordering
 						editor_state.Tick();
+
+						if (mouse.IsPressed(ECS_MOUSE_X1)) {
+							OpenSourceFileInIDE(&editor_state, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\ECS\\EntityManagerChangeSet.h", 10);
+						}
 
 						// Release the locks
 						editor_state.frame_gpu_lock.Unlock();

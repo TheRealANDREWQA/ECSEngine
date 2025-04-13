@@ -26,7 +26,10 @@ namespace ECSEngine {
 	ECS_ENUM_BITWISE_OPERATIONS(ECS_FORMAT_DATE_FLAGS)
 
 #define ECS_FORMAT_TEMP_STRING(string_name, base_characters, ...) ECS_STACK_CAPACITY_STREAM(char, string_name, 2048); \
-FormatString(string_name, base_characters, __VA_ARGS__);
+FormatString(string_name, base_characters, __VA_ARGS__)
+
+#define ECS_FORMAT_TEMP_STRING_WIDE(string_name, base_characters, ...) ECS_STACK_CAPACITY_STREAM(wchar_t, string_name, 2048); \
+FormatString(string_name, base_characters, __VA_ARGS__)
 
 #define ECS_FORMAT_ERROR_MESSAGE(error_message, base_characters, ...) if (error_message != nullptr) { \
 	FormatString(*error_message, base_characters, __VA_ARGS__); \
@@ -871,14 +874,31 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 #define ECS_CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X (1 << 0)
 #define ECS_CONVERT_INT_TO_HEX_ADD_NORMAL_VALUE_AFTER (1 << 1)
 
-	template<size_t flags = 0, typename Integer>
-	void ConvertIntToHex(CapacityStream<char>& characters, Integer integer) {
-		static char hex_characters[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+	template<size_t flags = 0, typename Integer, typename CharacterType>
+	void ConvertIntToHex(CapacityStream<CharacterType>& characters, Integer integer) {
+		static CharacterType hex_characters[] = { 
+			Character<CharacterType>('0'), 
+			Character<CharacterType>('1'), 
+			Character<CharacterType>('2'), 
+			Character<CharacterType>('3'), 
+			Character<CharacterType>('4'), 
+			Character<CharacterType>('5'), 
+			Character<CharacterType>('6'), 
+			Character<CharacterType>('7'), 
+			Character<CharacterType>('8'), 
+			Character<CharacterType>('9'), 
+			Character<CharacterType>('A'), 
+			Character<CharacterType>('B'), 
+			Character<CharacterType>('C'), 
+			Character<CharacterType>('D'), 
+			Character<CharacterType>('E'), 
+			Character<CharacterType>('F') 
+		};
 
 		if constexpr ((flags & ECS_CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X) == 0) {
 			characters.AssertCapacity(2);
-			characters.Add('0');
-			characters.Add('x');
+			characters.Add(Character<CharacterType>('0'));
+			characters.Add(Character<CharacterType>('x'));
 		}
 		if constexpr (std::is_same_v<Integer, int8_t> || std::is_same_v<Integer, uint8_t> || std::is_same_v<Integer, char>) {
 			characters.AssertCapacity(2);
@@ -915,15 +935,15 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 
 		if constexpr ((flags & ECS_CONVERT_INT_TO_HEX_ADD_NORMAL_VALUE_AFTER) != 0) {
 			characters.AssertCapacity(2);
-			characters.Add(' ');
-			characters.Add('(');
+			characters.Add(Character<CharacterType>(' '));
+			characters.Add(Character<CharacterType>('('));
 			ConvertIntToCharsFormatted(characters, static_cast<int64_t>(integer));
 			characters.AssertCapacity(2);
-			characters.Add(')');
-			characters.Add(' ');
+			characters.Add(Character<CharacterType>(')'));
+			characters.Add(Character<CharacterType>(' '));
 		}
 		characters.AssertCapacity(1);
-		characters[characters.size] = '\0';
+		characters[characters.size] = Character<CharacterType>('\0');
 	}
 
 	// Converts hex characters (both uppercase and lowercase letters) into their decimal value
@@ -935,17 +955,24 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 	namespace Internal {
 		// Returns how many total characters have been written in the x component
 		// and in the y component the offset into the base characters where the string was found
-		template<typename Parameter>
+		template<typename CharacterType, typename Parameter>
 		ulong2 FormatStringInternal(
-			CapacityStream<char>& end_characters,
-			const char* base_characters,
+			CapacityStream<CharacterType>& end_characters,
+			const CharacterType* base_characters,
 			Parameter parameter
 		) {
-			const char* string_ptr = strstr(base_characters, ECS_FORMAT_SPECIFIER);
+			const CharacterType* string_ptr = nullptr;
+			if constexpr (std::is_same_v<CharacterType, char>) {
+				string_ptr = strstr(base_characters, ECS_FORMAT_SPECIFIER);
+			}
+			else {
+				string_ptr = wcsstr(base_characters, TEXT(ECS_FORMAT_SPECIFIER));
+			}
+
 			if (string_ptr != nullptr) {
 				unsigned int initial_end_characters_count = end_characters.size;
-				size_t copy_count = (uintptr_t)string_ptr - (uintptr_t)base_characters;
-				end_characters.AddStreamAssert(Stream<char>(base_characters, copy_count));
+				size_t copy_count = string_ptr - base_characters;
+				end_characters.AddStreamAssert(Stream<CharacterType>(base_characters, copy_count));
 
 				if constexpr (std::is_floating_point_v<Parameter>) {
 					if constexpr (std::is_same_v<Parameter, float>) {
@@ -961,27 +988,51 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 				else if constexpr (std::is_pointer_v<Parameter>) {
 					if constexpr (std::is_same_v<Parameter, const char*>) {
 						size_t substring_size = strlen(parameter);
-						end_characters.AddStreamAssert(Stream<char>(parameter, substring_size));
+						if constexpr (std::is_same_v<CharacterType, char>) {
+							end_characters.AddStreamAssert(Stream<char>(parameter, substring_size));
+						}
+						else {
+							ConvertASCIIToWide(end_characters, Stream<char>(parameter, substring_size));
+						}
 						end_characters.AssertCapacity(1);
 					}
 					else if constexpr (std::is_same_v<Parameter, const wchar_t*>) {
 						size_t wide_count = wcslen(parameter);
 						end_characters.AssertCapacity(wide_count + 1);
-						ConvertWideCharsToASCII(Stream<wchar_t>(parameter, wide_count + 1), end_characters);
+						if constexpr (std::is_same_v<CharacterType, char>) {
+							ConvertWideCharsToASCII(Stream<wchar_t>(parameter, wide_count), end_characters);
+						}
+						else {
+							end_characters.AddStreamAssert(Stream<wchar_t>(parameter, wide_count));
+						}
 					}
 					else {
 						ConvertIntToHex(end_characters, (int64_t)parameter);
 					}
 				}
 				else if constexpr (IsStreamType<wchar_t, Parameter>()) {
-					end_characters.AssertCapacity(parameter.size);
-					ConvertWideCharsToASCII(parameter, end_characters);
+					if constexpr (std::is_same_v<CharacterType, char>) {
+						ConvertWideCharsToASCII(parameter, end_characters);
+					}
+					else {
+						end_characters.AddStreamAssert(parameter);
+					}
 				}
 				else if constexpr (IsStreamType<char, Parameter>()) {
-					end_characters.AddStreamAssert(parameter);
+					if constexpr (std::is_same_v<CharacterType, char>) {
+						end_characters.AddStreamAssert(parameter);
+					}
+					else {
+						ConvertASCIIToWide(end_characters, parameter);
+					}
 				}
 				else if constexpr (IsStreamType<void, Parameter>()) {
-					end_characters.AddStreamAssert(parameter.As<char>());
+					if constexpr (std::is_same_v<CharacterType, char>) {
+						end_characters.AddStreamAssert(parameter.As<char>());
+					}
+					else {
+						end_characters.AddStreamAssert(parameter.As<wchar_t>());
+					}
 				}
 				else {
 					parameter.ToString(end_characters);
@@ -992,19 +1043,24 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 			return { 0, 0 };
 		}
 
-		extern template ECSENGINE_API ulong2 FormatStringInternal<const char*>(CapacityStream<char>&, const char*, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(CapacityStream<char>&, const char*, const wchar_t*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(CapacityStream<char>&, const char*, Stream<char>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(CapacityStream<char>&, const char*, Stream<wchar_t>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(CapacityStream<char>&, const char*, CapacityStream<char>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(CapacityStream<char>&, const char*, CapacityStream<wchar_t>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(CapacityStream<char>&, const char*, unsigned int);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<void*>(CapacityStream<char>&, const char*, void*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<float>(CapacityStream<char>&, const char*, float);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<double>(CapacityStream<char>&, const char*, double);
+#define INSTANTIATE(parameter_type) extern template ECSENGINE_API ulong2 FormatStringInternal<char, parameter_type>(CapacityStream<char>&, const char*, parameter_type); \
+									extern template ECSENGINE_API ulong2 FormatStringInternal<wchar_t, parameter_type>(CapacityStream<wchar_t>&, const wchar_t*, parameter_type)
 
-		template<typename FirstParameter, typename... Parameters>
-		void FormatStringImpl(CapacityStream<char>& destination, const char* base_characters, ulong2& written_characters, const FirstParameter& first_parameter, Parameters... parameters) {
+		INSTANTIATE(const char*);
+		INSTANTIATE(const wchar_t*);
+		INSTANTIATE(Stream<char>);
+		INSTANTIATE(Stream<wchar_t>);
+		INSTANTIATE(CapacityStream<char>);
+		INSTANTIATE(CapacityStream<wchar_t>);
+		INSTANTIATE(unsigned int);
+		INSTANTIATE(void*);
+		INSTANTIATE(float);
+		INSTANTIATE(double);
+
+#undef INSTANTIATE
+
+		template<typename CharacterType, typename FirstParameter, typename... Parameters>
+		void FormatStringImpl(CapacityStream<CharacterType>& destination, const CharacterType* base_characters, ulong2& written_characters, const FirstParameter& first_parameter, Parameters... parameters) {
 			ulong2 current_written_characters = FormatStringInternal(destination, base_characters + written_characters.y, first_parameter);
 			written_characters.y += current_written_characters.y + 3;
 
@@ -1015,12 +1071,12 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 
 	}
 
-	template<typename... Parameters>
-	void FormatString(CapacityStream<char>& destination, const char* base_characters, Parameters... parameters) {
+	template<typename CharacterType, typename... Parameters>
+	void FormatString(CapacityStream<CharacterType>& destination, const CharacterType* base_characters, Parameters... parameters) {
 		if constexpr (sizeof...(Parameters) == 0) {
 			destination.AddStreamAssert(base_characters);
 			destination.AssertCapacity(1);
-			destination[destination.size] = '\0';
+			destination[destination.size] = Character<CharacterType>('\0');
 			return;
 		}
 		else {
@@ -1028,15 +1084,21 @@ FormatString(string_name, base_characters, __VA_ARGS__);
 			Internal::FormatStringImpl(destination, base_characters, written_characters, parameters...);
 
 			// The remaining characters still need to be copied
-			size_t base_character_count = strlen(base_characters);
+			size_t base_character_count = 0;
+			if constexpr (std::is_same_v<CharacterType, char>) {
+				base_character_count = strlen(base_characters);
+			}
+			else {
+				base_character_count = wcslen(base_characters);
+			}
 			size_t characters_to_be_written = base_character_count - written_characters.y;
 			if (characters_to_be_written > 0) {
 				destination.AssertCapacity(characters_to_be_written);
-				memcpy(destination.buffer + destination.size, base_characters + written_characters.y, characters_to_be_written);
+				memcpy(destination.buffer + destination.size, base_characters + written_characters.y, characters_to_be_written * sizeof(CharacterType));
 				destination.size += characters_to_be_written;
 			}
 			destination.AssertCapacity(1);
-			destination[destination.size] = '\0';
+			destination[destination.size] = Character<CharacterType>('\0');
 		}
 	}
 

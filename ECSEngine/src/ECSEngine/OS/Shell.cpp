@@ -20,6 +20,13 @@ namespace ECSEngine {
 			return (size_t)value >= 32;
 		}
 
+		bool ShellOpenCommand(Stream<wchar_t> executable_path, Stream<wchar_t> command) {
+			NULL_TERMINATE_WIDE(executable_path);
+			NULL_TERMINATE_WIDE(command);
+
+			return ShellExecute(NULL, L"open", executable_path.buffer, command.buffer, NULL, SW_HIDE);
+		}
+
 	}
 
 }

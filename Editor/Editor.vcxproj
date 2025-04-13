@@ -199,6 +199,7 @@
     <ClInclude Include="src\Editor\EditorSettings.h" />
     <ClInclude Include="src\Editor\EditorShortcutFocus.h" />
     <ClInclude Include="src\Editor\EditorSourceCode.h" />
+    <ClInclude Include="src\Editor\EditorTextIDE.h" />
     <ClInclude Include="src\Project\ProjectRenameFile.h" />
     <ClInclude Include="src\Project\ProjectSettings.h" />
     <ClInclude Include="src\Sandbox\Sandbox.h" />
@@ -297,6 +298,7 @@
     <ClCompile Include="src\Editor\EditorSettings.cpp" />
     <ClCompile Include="src\Editor\EditorShortcutFocus.cpp" />
     <ClCompile Include="src\Editor\EditorSourceCode.cpp" />
+    <ClCompile Include="src\Editor\EditorTextIDE.cpp" />
     <ClCompile Include="src\Project\ProjectRenameFile.cpp" />
     <ClCompile Include="src\Project\ProjectSettings.cpp" />
     <ClCompile Include="src\Sandbox\Sandbox.cpp" />

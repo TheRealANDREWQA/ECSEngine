@@ -12,15 +12,12 @@
 
 using namespace ECSEngine;
 
-constexpr const char* CMB_BUILD_SYSTEM_PATH = "cd C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\IDE";
-constexpr const char* CMD_BUILD_SYSTEM = "MSBuild.exe";
 constexpr const char* BUILD_PROJECT_STRING = "/t:build";
 constexpr const char* CLEAN_PROJECT_STRING = "/t:clean";
 constexpr const char* REBUILD_PROJECT_STRING = "/t:rebuild";
 constexpr const char* CMD_BUILD_SYSTEM_LOG_FILE_COMMAND = "/out";
 constexpr const wchar_t* CMD_BUILD_SYSTEM_LOG_FILE_PATH = L"\\Debug\\";
 
-constexpr const wchar_t* CMD_BUILD_SYSTEM_WIDE = L"MSBuild.exe";
 constexpr const wchar_t* BUILD_PROJECT_STRING_WIDE = L"/t:build";
 constexpr const wchar_t* CLEAN_PROJECT_STRING_WIDE = L"/t:clean";
 constexpr const wchar_t* REBUILD_PROJECT_STRING_WIDE = L"/t:rebuild";
@@ -138,10 +135,9 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 					Stream<wchar_t> underscore_after_configuration = FindFirstCharacter(configuration_start, L'_');
 					if (underscore_after_configuration.size > 0) {
 						if (!disable_logging) {
-							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} with configuration {#} has compilation errors. Check the {#} log.",
+							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} with configuration {#} has compilation errors. Check the compiler log.",
 								Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer),
-								Stream<wchar_t>(configuration_start.buffer, underscore_after_configuration.buffer - configuration_start.buffer),
-								CMD_BUILD_SYSTEM
+								Stream<wchar_t>(configuration_start.buffer, underscore_after_configuration.buffer - configuration_start.buffer)
 							);
 							EditorSetConsoleError(error_message);
 							
@@ -150,8 +146,8 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 					}
 					else {
 						if (!disable_logging) {
-							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} has compilation errors. Check the {#} log.",
-								Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer), CMD_BUILD_SYSTEM);
+							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} has compilation errors. Check the compiler log.",
+								Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer));
 							EditorSetConsoleError(error_message);
 							OpenModuleLogFile(log_path);
 						}
@@ -160,17 +156,15 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 				}
 				else {
 					if (!disable_logging) {
-						ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name (it's missing the underscore)."
-							" Check the {#} log.", CMD_BUILD_SYSTEM);
-						EditorSetConsoleError(error_message);
+						EditorSetConsoleError("A module failed to build. Could not deduce library name (it's missing the underscore)."
+							" Check the compiler log.");
 					}
 					return false;
 				}
 			}
 			else {
 				if (!disable_logging) {
-					ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name. Check the {#} log.", CMD_BUILD_SYSTEM);
-					EditorSetConsoleError(error_message);
+					EditorSetConsoleError("A module failed to build. Could not deduce library name. Check the compiler log.");
 					OpenModuleLogFile(log_path);
 				}
 				return false;
@@ -496,8 +490,6 @@ static void ForEachProjectModule(
 // Fills in the absolute compiler path (and escaped)
 static void GetAbsoluteCompilerExecutablePath(const EditorState* editor_state, CapacityStream<wchar_t>& string) {
 	string.AddStreamAssert(editor_state->settings.compiler_path);
-	string.AddAssert(ECS_OS_PATH_SEPARATOR);
-	string.AddStreamAssert(CMD_BUILD_SYSTEM_WIDE);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

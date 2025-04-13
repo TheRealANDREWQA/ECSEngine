@@ -12,6 +12,24 @@ bool ChangeCompilerVersion(EditorState* editor_state, Stream<wchar_t> path) {
 	return SaveEditorFile(editor_state);
 }
 
+bool ChangeEditingIdeExecutablePath(EditorState* editor_state, Stream<wchar_t> path) {
+	editor_state->settings.editing_ide_path.Deallocate(editor_state->EditorAllocator());
+	// It needs to have an ending null terminator character
+	editor_state->settings.editing_ide_path = StringCopy(editor_state->EditorAllocator(), path);
+	return SaveEditorFile(editor_state);
+}
+
+bool ChangeCompilerVersionAndEditingIdeExecutablePath(EditorState* editor_state, Stream<wchar_t> compiler_path, Stream<wchar_t> editing_ide_executable_path) {
+	editor_state->settings.compiler_path.Deallocate(editor_state->EditorAllocator());
+	// It needs to have an ending null terminator character
+	editor_state->settings.compiler_path = StringCopy(editor_state->EditorAllocator(), compiler_path);
+
+	editor_state->settings.editing_ide_path.Deallocate(editor_state->EditorAllocator());
+	// It needs to have an ending null terminator character
+	editor_state->settings.editing_ide_path = StringCopy(editor_state->EditorAllocator(), editing_ide_executable_path);
+	return SaveEditorFile(editor_state);
+}
+
 void AutoDetectCompilers(AllocatorPolymorphic allocator, AdditionStream<CompilerVersion> compiler_versions) {
 	// Use the default installation path
 	// Start with the latest version of MSVC, which is 2022
@@ -75,7 +93,12 @@ void AutoDetectCompilers(AllocatorPolymorphic allocator, AdditionStream<Compiler
 							if (available_tiers.size > 0) {
 								for (size_t subindex = 0; subindex < available_tiers.size; subindex++) {
 									default_path.AddStreamAssert(available_tiers[subindex]);
-									default_path.AddStreamAssert(L"\\MSBuild\\Current\\Bin");
+
+									ECS_STACK_CAPACITY_STREAM(wchar_t, editing_ide_executable_path, 1024);
+									editing_ide_executable_path.CopyOther(default_path);
+
+									default_path.AddStreamAssert(L"\\MSBuild\\Current\\Bin\\MSBuild.exe");
+									editing_ide_executable_path.AddStreamAssert(L"\\Common7\\IDE\\devenv.exe");
 
 									CapacityStream<char> aggregated;
 									// Use a small capacity
@@ -92,7 +115,7 @@ void AutoDetectCompilers(AllocatorPolymorphic allocator, AdditionStream<Compiler
 
 									size_t written_count = ConvertIntToChars(aggregated, year);
 									Stream<char> year_string = aggregated.SliceAt(aggregated.size - written_count);
-									compiler_versions.Add({ aggregated, year_string, tier, compiler_name, default_path.Copy(allocator)});
+									compiler_versions.Add({ aggregated, year_string, tier, compiler_name, default_path.Copy(allocator), editing_ide_executable_path.Copy(allocator) });
 								}
 							};
 						}
