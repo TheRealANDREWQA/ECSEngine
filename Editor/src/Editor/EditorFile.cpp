@@ -207,7 +207,7 @@ bool LoadEditorFile(EditorState* editor_state, CapacityStream<char>* error_messa
 
 	// Try to auto generate the settings. Currently, only the compiler path is needed, which we can auto-detect
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-	ResizableStream<CompilerVersion> compiler_versions;
+	ResizableStream<CompilerVersion> compiler_versions(&stack_allocator, 4);
 	AutoDetectCompilers(&stack_allocator, &compiler_versions);
 
 	if (compiler_versions.size > 0) {

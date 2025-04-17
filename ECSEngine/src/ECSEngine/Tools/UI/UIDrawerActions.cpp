@@ -1116,6 +1116,7 @@ namespace ECSEngine {
 					}
 
 					*data->number = number;
+					DebouncingEntryForceUpdate(data->debouncing_entry);
 				}
 				else {
 					data->number_data.external_value_change = false;
@@ -1153,6 +1154,7 @@ namespace ECSEngine {
 					}
 
 					*data->number = number;
+					DebouncingEntryForceUpdate(data->debouncing_entry);
 				}
 				else {
 					data->number_data.external_value_change = false;
@@ -1199,6 +1201,7 @@ namespace ECSEngine {
 							action_data->data = data->number_data.GetUserData();
 							data->number_data.user_action(action_data);
 						}
+						DebouncingEntryForceUpdate(data->debouncing_entry);
 					}
 				}
 				else {

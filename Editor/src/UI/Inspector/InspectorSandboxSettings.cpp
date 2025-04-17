@@ -219,7 +219,8 @@ static void CreateAddSandboxWindow(ActionData* action_data) {
 	window_data.editor_state = data->editor_state;
 	window_data.selection = -1;
 	window_data.sandbox_index = data->sandbox_index;
-	window_data.configuration = EDITOR_MODULE_CONFIGURATION_DEBUG;
+	// Set the default configuration as release
+	window_data.configuration = EDITOR_MODULE_CONFIGURATION_RELEASE;
 
 	descriptor.window_name = "Select a Module";
 

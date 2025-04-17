@@ -628,7 +628,7 @@ void GiftWrappingImpl(Stream<float3> vertex_positions, Functor&& functor) {
 	float3 mesh_center = CalculateFloat3Midpoint(vertex_positions);
 	functor.SetMeshCenter(mesh_center);
 
-	ResizableLinearAllocator function_allocator{ ECS_MB * 16, ECS_MB * 64, {nullptr} };
+	ResizableLinearAllocator function_allocator{ ECS_MB * 16, ECS_MB * 64, ECS_MALLOC_ALLOCATOR };
 	ScopedFreeAllocator scoped_free{ { &function_allocator } };
 	Stream<unsigned int> indices_to_iterate;
 	indices_to_iterate.Initialize(&function_allocator, vertex_positions.size);

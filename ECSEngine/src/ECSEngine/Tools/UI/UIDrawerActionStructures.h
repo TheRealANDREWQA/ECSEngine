@@ -233,6 +233,10 @@ namespace ECSEngine {
 			void* default_value;
 			UIActionHandler changed_value_callback;
 			std::chrono::high_resolution_clock::time_point enter_value_click;
+
+			// Can use the void template parameter since we are not interested in that data directly, 
+			// Only to set the force update flag
+			DebouncingEntry* debouncing_entry;
 		};
 
 		struct ECSENGINE_API UIDrawerColorInput {
@@ -482,6 +486,9 @@ namespace ECSEngine {
 			float default_value;
 			float min;
 			float max;
+			// Can use the void template parameter since we are not interested in that data directly, 
+			// Only to set the force update flag
+			DebouncingEntry* debouncing_entry;
 		};
 
 		// input, return_to_default and display_range must be the first data members
@@ -492,6 +499,9 @@ namespace ECSEngine {
 			double default_value;
 			double min;
 			double max;
+			// Can use the void template parameter since we are not interested in that data directly, 
+			// Only to set the force update flag
+			DebouncingEntry* debouncing_entry;
 		};
 
 		// input, return_to_default and display_range must be the first data members
@@ -503,6 +513,9 @@ namespace ECSEngine {
 			Integer default_value;
 			Integer min;
 			Integer max;
+			// Can use the void template parameter since we are not interested in that data directly, 
+			// Only to set the force update flag
+			DebouncingEntry* debouncing_entry;
 		};
 
 		// Type pun the types - all have UITextTooltipHoverableData as first field

@@ -561,7 +561,8 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 		explorer_data->configurations = (EDITOR_MODULE_CONFIGURATION*)drawer.GetMainAllocatorBuffer(
 			sizeof(EDITOR_MODULE_CONFIGURATION) * ALLOCATE_COUNT
 		);
-		memset(explorer_data->configurations, 0, sizeof(EDITOR_MODULE_CONFIGURATION) * ALLOCATE_COUNT);
+		// Initialize the configurations to release, since that's the most common one
+		memset(explorer_data->configurations, EDITOR_MODULE_CONFIGURATION_RELEASE, sizeof(EDITOR_MODULE_CONFIGURATION) * ALLOCATE_COUNT);
 	}
 	else {
 		explorer_data = (ModuleExplorerData*)drawer.GetResource(MODULE_EXPLORER_DATA_NAME);
