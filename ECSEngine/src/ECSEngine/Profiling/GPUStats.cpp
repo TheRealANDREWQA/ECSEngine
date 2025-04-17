@@ -108,7 +108,8 @@ namespace ECSEngine {
 			NvU32 current_revision_id;
 			NvU32 current_ext_device_id;
 			if (NvAPI_GPU_GetPCIIdentifiers(gpu_handles[index], &current_device_id, &current_subsys_id, &current_revision_id, &current_ext_device_id) == NVAPI_OK) {
-				if (device_id == current_device_id) {
+				// The external device ID is the one we are interested in
+				if (device_id == current_ext_device_id) {
 					NVIDIA.gpu_handle = gpu_handles[index];
 					was_found = true;
 					break;

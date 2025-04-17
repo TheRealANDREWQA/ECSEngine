@@ -3,6 +3,7 @@
 #include "EditorState.h"
 
 bool OpenSourceFileInIDE(const EditorState* editor_state, Stream<wchar_t> absolute_file_path, unsigned int file_line, bool wait_for_command) {
+	return false;
 	//ECS_FORMAT_TEMP_STRING_WIDE(command_line, L"/edit \"{#}\" /command \"Edit.GoTo {#}\"", absolute_file_path, file_line);
 	//return OS::ShellOpenCommand(editor_state->settings.editing_ide_path, command_line);
 	//Optional<OS::ProcessHandle> process_handle = OS::CreateProcessWithHandle(editor_state->settings.editing_ide_path, command_line, {}, true);

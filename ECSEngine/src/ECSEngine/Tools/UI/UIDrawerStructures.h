@@ -26,6 +26,28 @@ namespace ECSEngine {
 		typedef void (*UIDrawerSliderConvertTextInput)(CapacityStream<char>& characters, void* data);
 		typedef bool (*UIDrawerSliderIsSmaller)(const void* left, const void* right);
 
+		struct DebouncingEntry {
+			// Returns the data casted to the template type
+			template<typename T>
+			ECS_INLINE T* Data() const {
+				return (T*)data;
+			}
+
+			Timer timer;
+			void* data;
+			unsigned int dynamic_index;
+			// Set this flag to true when the debouncing value should be updated
+			// Immediately the next call, even tho the update period has not been exceeded
+			bool force_update;
+		};
+
+		// Sets the force update flag to true only if the pointer is non null
+		ECS_INLINE void DebouncingEntryForceUpdate(DebouncingEntry* entry) {
+			if (entry != nullptr) {
+				entry->force_update = true;
+			}
+		}
+
 		enum ECS_UI_DRAWER_MODE : unsigned char {
 			ECS_UI_DRAWER_INDENT,
 			ECS_UI_DRAWER_NEXT_ROW,
@@ -1402,6 +1424,9 @@ namespace ECSEngine {
 			}
 		
 			UIActionHandler handler;
+			// When this value is set to true, it means that the boolean
+			// Value is not changed when a click is triggered, only this callback
+			// Will be called
 			bool disable_value_to_modify = false;
 		};
 
