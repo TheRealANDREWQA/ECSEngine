@@ -7,7 +7,43 @@
 
 using namespace ECSEngine;
 
-#define WINDOW_SIZE float2(0.4f, 0.7f)
+#define WINDOW_SIZE float2(0.55f, 0.9f)
+#define REFRESH_DURATION_MS 500
+
+struct PathEntry {
+	ECS_INLINE bool operator < (const PathEntry& entry) const {
+		return creation_time < entry.creation_time;
+	}
+
+	ECS_INLINE bool operator == (const PathEntry& entry) const {
+		return creation_time == entry.creation_time;
+	}
+
+	Stream<wchar_t> path;
+	size_t creation_time;
+};
+
+struct BackupsWindowData {
+	EditorState* editor_state;
+	Timer refresh_timer;
+
+	ResizableLinearAllocator temporary_allocator;
+	ResizableStream<PathEntry> paths;
+};
+
+// ----------------------------------------------------------------------------------------------------------------
+
+static bool BackupsWindowRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+	BackupsWindowData* data = (BackupsWindowData*)window_data;
+	return !data->refresh_timer.HasPassedAndReset(ECS_TIMER_DURATION_MS, REFRESH_DURATION_MS);
+}
+
+static void BackupsWindowDestroy(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	BackupsWindowData* data = (BackupsWindowData*)_additional_data;
+	data->temporary_allocator.Free();
+}
 
 // ----------------------------------------------------------------------------------------------------------------
 
@@ -15,16 +51,24 @@ void BackupsWindowSetDescriptor(UIWindowDescriptor& descriptor, EditorState* edi
 {
 	descriptor.window_name = BACKUPS_WINDOW_NAME;
 
+	BackupsWindowData* window_data = stack_memory->Reserve<BackupsWindowData>();
+	window_data->editor_state = editor_state;
+	window_data->refresh_timer.DelayStart(REFRESH_DURATION_MS, ECS_TIMER_DURATION_MS);
+	window_data->temporary_allocator = ResizableLinearAllocator(ECS_MB, ECS_MB, ECS_MALLOC_ALLOCATOR);
+	window_data->paths = {};
+
+	descriptor.retained_mode = BackupsWindowRetainedMode;
 	descriptor.draw = BackupsDraw;
-	descriptor.window_data = editor_state;
-	descriptor.window_data_size = 0;
+	descriptor.destroy_action = BackupsWindowDestroy;
+	descriptor.window_data = window_data;
+	descriptor.window_data_size = sizeof(*window_data);
 }
 
 // ----------------------------------------------------------------------------------------------------------------
 
 struct DeleteBackupActionData {
 	EditorState* editor_state;
-	const wchar_t* path;
+	Stream<wchar_t> path;
 };
 
 void DeleteBackupAction(ActionData* action_data) {
@@ -43,12 +87,11 @@ void DeleteBackupAction(ActionData* action_data) {
 	}
 }
 
-
 // ----------------------------------------------------------------------------------------------------------------
 
 struct RestoreBackupActionData {
 	EditorState* editor_state;
-	const wchar_t* path;
+	Stream<wchar_t> path;
 };
 
 void RestoreBackupAction(ActionData* action_data) {
@@ -68,23 +111,12 @@ void RestoreBackupAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------
 
-#define LINEAR_ALLOCATOR_NAME "Allocator"
-#define LINEAR_ALLOCATOR_SIZE ECS_KB * 16
-
 void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
-	EditorState* editor_state = (EditorState*)window_data;
-
-	LinearAllocator* allocator = nullptr;
-	if (initialize) {
-		allocator = (LinearAllocator*)drawer.GetMainAllocatorBufferAndStoreAsResource(LINEAR_ALLOCATOR_NAME, sizeof(LinearAllocator));
-		*allocator = LinearAllocator(drawer.GetMainAllocatorBuffer(LINEAR_ALLOCATOR_SIZE), LINEAR_ALLOCATOR_SIZE);
-	}
-	else {
-		allocator = (LinearAllocator*)drawer.GetResource(LINEAR_ALLOCATOR_NAME);
-		allocator->Clear();
-	}
+	BackupsWindowData* data = (BackupsWindowData*)window_data;
+	data->paths.allocator = &data->temporary_allocator;
+	data->paths.Clear();
 
 	auto recover_last_backup = [](ActionData* action_data) {
 		UI_UNPACK_ACTION_DATA;
@@ -136,99 +168,92 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 	UIDrawConfig config;
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, backup_folder, 512);
-	GetProjectBackupFolder(editor_state, backup_folder);
+	GetProjectBackupFolder(data->editor_state, backup_folder);
 
-	struct FunctorData {
-		EditorState* editor_state;
-		UIDrawer* drawer;
-		UIDrawConfig* config;
-		UIConfigAbsoluteTransform* restore_transform;
-		UIConfigAbsoluteTransform* delete_transform;
-		LinearAllocator* allocator;
-		size_t backup_total_byte_size = 0;
-	};
+	// Display all the available backups. Keep the list sorted by their date, such that the user
+	// Can quickly find the latest entries
+	ForEachDirectory(backup_folder, data, [](Stream<wchar_t> path, void* _data) {
+		BackupsWindowData* data = (BackupsWindowData*)_data;
+		
+		PathEntry path_entry;
+		path_entry.path = path.Copy(&data->temporary_allocator);
+		path_entry.creation_time = 0;
+		OS::GetFileTimes(path, &path_entry.creation_time, nullptr, nullptr);
+		data->paths.Add(path_entry);
+
+		return true;
+	});
+
+	// Sort the entries, by their creation date
+	InsertionSort<false>(data->paths.buffer, data->paths.size);
 
 	UIConfigAbsoluteTransform restore_transform;
 	restore_transform.scale = drawer.GetLabelScale("Restore");
 	UIConfigAbsoluteTransform delete_transform;
 	delete_transform.scale = drawer.GetLabelScale("Delete");
+	size_t backup_total_byte_size = 0;
 
-	FunctorData functor_data;
-	functor_data.editor_state = editor_state;
-	functor_data.config = &config;
-	functor_data.drawer = &drawer;
-	functor_data.restore_transform = &restore_transform;
-	functor_data.delete_transform = &delete_transform;
-	functor_data.allocator = allocator;
-
-	// Display all the available backups
-	ForEachDirectory(backup_folder, &functor_data, [](Stream<wchar_t> path, void* _data) {
-		FunctorData* data = (FunctorData*)_data;
-		if (data->backup_total_byte_size == 0) {
-			data->drawer->Text("Backups at: ");
-			data->drawer->NextRow();
+	for (unsigned int index = 0; index < data->paths.size; index++) {
+		if (backup_total_byte_size == 0) {
+			drawer.Text("Backups at: ");
+			drawer.NextRow();
 		}
-		
-		data->drawer->Indent(2.0f);
-		Stream<wchar_t> filename = PathFilename(path);
+
+		drawer.Indent(2.0f);
+		Stream<wchar_t> filename = PathFilename(data->paths[index].path);
 		ECS_STACK_CAPACITY_STREAM(char, ascii_filename, 512);
 		ConvertWideCharsToASCII(filename, ascii_filename);
 		ascii_filename[ascii_filename.size] = '\0';
-		data->drawer->Text(ascii_filename.buffer);
+		drawer.Text(ascii_filename.buffer);
 
 		// Display the total size of that backup
-		size_t folder_size = GetFileByteSize(path);
+		size_t folder_size = GetFileByteSize(data->paths[index].path);
 		ECS_STACK_CAPACITY_STREAM(char, byte_size_string, 64);
 		ConvertByteSizeToString(folder_size, byte_size_string);
-		data->drawer->Text(byte_size_string.buffer);
-		data->backup_total_byte_size += folder_size;
-		
-		data->restore_transform->position = data->drawer->GetAlignedToRight(data->restore_transform->scale.x);
-		if (data->restore_transform->position.x - data->drawer->layout.element_indentation * 2 - data->delete_transform->scale.x < data->drawer->current_x) {
-			data->restore_transform->position.x = data->drawer->current_x + data->drawer->layout.element_indentation * 2 + data->delete_transform->scale.x;
+		drawer.Text(byte_size_string.buffer);
+		backup_total_byte_size += folder_size;
+
+		restore_transform.position = drawer.GetAlignedToRight(restore_transform.scale.x);
+		if (restore_transform.position.x - drawer.layout.element_indentation * 2 - delete_transform.scale.x < drawer.current_x) {
+			restore_transform.position.x = drawer.current_x + drawer.layout.element_indentation * 2 + delete_transform.scale.x;
 		}
-		data->config->AddFlag(*data->restore_transform);
+		config.AddFlag(restore_transform);
 
 		// Draw the restore button to the right border
 		RestoreBackupActionData restore_data;
 		restore_data.editor_state = data->editor_state;
-		wchar_t* restore_path = (wchar_t*)data->allocator->Allocate(sizeof(wchar_t) * (filename.size + 1));
-		filename.CopyTo(restore_path);
-		restore_path[filename.size] = L'\0';
+		restore_data.path = data->paths[index].path;
 
-		float current_row_y_scale = data->drawer->current_row_y_scale;
+		float current_row_y_scale = drawer.current_row_y_scale;
 
-		restore_data.path = restore_path;
-		data->drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ALIGN_TO_ROW_Y, *data->config, "Restore", { RestoreBackupAction, &restore_data, sizeof(restore_data) });
-		data->config->flag_count--;
-		
+		drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ALIGN_TO_ROW_Y, config, "Restore", { RestoreBackupAction, &restore_data, sizeof(restore_data) });
+		config.flag_count--;
+
 		// Draw the delete button to the left of the restore button
-		data->delete_transform->position = data->restore_transform->position;
-		data->delete_transform->position.x -= data->delete_transform->scale.x + data->drawer->layout.element_indentation;
+		delete_transform.position = restore_transform.position;
+		delete_transform.position.x -= delete_transform.scale.x + drawer.layout.element_indentation;
 		DeleteBackupActionData delete_data;
 		delete_data.editor_state = data->editor_state;
-		delete_data.path = restore_path;
+		delete_data.path = data->paths[index].path;
 
-		data->drawer->current_row_y_scale = current_row_y_scale;
+		drawer.current_row_y_scale = current_row_y_scale;
 
-		data->config->AddFlag(*data->delete_transform);
-		data->drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ALIGN_TO_ROW_Y, *data->config, "Delete", { DeleteBackupAction, &delete_data, sizeof(delete_data) });
-		data->config->flag_count--;
+		config.AddFlag(delete_transform);
+		drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ALIGN_TO_ROW_Y, config, "Delete", { DeleteBackupAction, &delete_data, sizeof(delete_data) });
+		config.flag_count--;
 
-		data->drawer->NextRow();
-
-		return true;
-	});
+		drawer.NextRow();
+	}
 	
-	if (functor_data.backup_total_byte_size == 0) {
+	if (backup_total_byte_size == 0) {
 		drawer.Text("There are no backups.");
 		drawer.NextRow();
 	}
 	else {
 		ECS_STACK_CAPACITY_STREAM(char, total_backup_size, 128);
 		total_backup_size.CopyOther("Total backup byte size: ");
-		ConvertByteSizeToString(functor_data.backup_total_byte_size, total_backup_size);
-		drawer.Text(total_backup_size.buffer);
+		ConvertByteSizeToString(backup_total_byte_size, total_backup_size);
+		drawer.Text(total_backup_size);
 		drawer.NextRow();
 	}
 
@@ -236,9 +261,9 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 	config.AddFlag(window_size);
 
 	UIConfigActiveState active_state;
-	active_state.state = functor_data.backup_total_byte_size > 0;
+	active_state.state = backup_total_byte_size > 0;
 	config.AddFlag(active_state);
-	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ACTIVE_STATE, config, "Restore last backup", { recover_last_backup, editor_state, 0 });
+	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ACTIVE_STATE, config, "Restore last backup", { recover_last_backup, data->editor_state, 0 });
 	config.flag_count--;
 	drawer.NextRow();
 
@@ -262,7 +287,7 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 	ConvertDateToString(current_date, backup_folder, ECS_FORMAT_DATE_ALL_FROM_MINUTES);
 	active_state.state = !ExistsFileOrFolder(backup_folder);
 	config.AddFlag(active_state);
-	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ACTIVE_STATE, config, "Manual backup", { manual_backup, editor_state, 0 });
+	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ACTIVE_STATE, config, "Manual backup", { manual_backup, data->editor_state, 0 });
 }
 
 // ----------------------------------------------------------------------------------------------------------------

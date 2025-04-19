@@ -254,6 +254,21 @@ namespace ECSEngine {
 	) {
 		// Firstly, write the change set itself, the structure that describes what changes need to be performed,
 		// Then write the component data that was changed
+		
+		// Use the reflection manager for that, it should handle this successfully
+		if (Serialize(reflection_manager, reflection_manager->GetType(STRING(EntityManagerChangeSet)), &change_set, write_instrument) != ECS_SERIALIZE_OK) {
+			return false;
+		}
+
+		// Now write the actual components that need to be written. Start with the global ones
+		change_set->global_component_changes.ForEach([&](const EntityManagerChangeSet::GlobalComponentChange& change) {
+			if (change.type == ECS_CHANGE_SET_ADD || change.type == ECS_CHANGE_SET_UPDATE) {
+				const void* global_data = new_entity_manager->GetGlobalComponent(change.component);
+
+			}
+
+			return false;
+		});
 
 		return false;
 	}
@@ -353,7 +368,18 @@ namespace ECSEngine {
 	static bool WriterHeaderWriteFunction(void* user_data, WriteInstrument* write_instrument) {
 		WriterData* data = (WriterData*)user_data;
 
-		// We need to write the reflection manager types, such that they are stored only once in the file
+		// Ensure that the EntityManagerChangeSet exists among these types
+		const ReflectionType* entity_manager_change_set_reflection_type = data->reflection_manager->TryGetType(STRING(EntityManagerChangeSet));
+		ECS_ASSERT(entity_manager_change_set_reflection_type != nullptr,
+			"In order to write scene deltas the EntityManagerChangeSet needs to be reflected");
+
+		// Write the entity manager change set reflectable type, such that we can recover it for this file type
+		if (!SerializeFieldTable(data->reflection_manager, entity_manager_change_set_reflection_type, write_instrument)) {
+			return false;
+		}
+
+		// We need to write an entity manager header section, this will contain all the reflection data needed for
+		// Deserializing all entire and delta states.
 		return SerializeReflectionManager(data->reflection_manager, write_instrument);
 	}
 
@@ -366,7 +392,17 @@ namespace ECSEngine {
 		ReaderData* data = (ReaderData*)functor_data->user_data;
 
 		// Read the reflection manager stored in the file
-		return DeserializeReflectionManager(&data->reflection_manager, functor_data->read_instrument, &data->previous_state_allocator, &data->file_field_table);
+		bool success = DeserializeReflectionManager(&data->reflection_manager, functor_data->read_instrument, &data->previous_state_allocator, &data->file_field_table);
+		if (!success) {
+			return false;
+		}
+
+		// Ensure that the entity manager change set structure exists among them
+		if (data->reflection_manager.TryGetType(STRING(EntityManagerChangeSet)) == nullptr) {
+			return false;
+		}
+
+		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -374,26 +410,9 @@ namespace ECSEngine {
 	static bool WriterDeltaFunction(DeltaStateWriterDeltaFunctionData* function_data) {
 		WriterData* data = (WriterData*)function_data->user_data;
 
-		// Determine the change set
+		// Determine the change set and forward the call
 		EntityManagerChangeSet change_set = DetermineEntityManagerChangeSet(&data->previous_state, data->current_state, data->reflection_manager, &data->change_set_allocator);
-
-		// Write the change set description first
-		// Use the reflection manager for that, it should handle this successfully
-		if (Serialize(data->reflection_manager, data->reflection_manager->GetType(STRING(EntityManagerChangeSet)), &change_set, function_data->write_instrument) != ECS_SERIALIZE_OK) {
-			return false;
-		}
-
-		// Now write the actual components that need to be written. Start with the global ones
-		change_set.global_component_changes.ForEach([&](const EntityManagerChangeSet::GlobalComponentChange& change) {
-			if (change.type == ECS_CHANGE_SET_ADD || change.type == ECS_CHANGE_SET_UPDATE) {
-				const void* global_data = data->current_state->GetGlobalComponent(change.component);
-				
-			}
-
-			return false;
-		});
-
-		return true;
+		return SerializeEntityManagerChangeSet(&change_set, data->current_state, data->reflection_manager, function_data->write_instrument);
 	}
 
 	static bool WriterEntireFunction(DeltaStateWriterEntireFunctionData* function_data) {

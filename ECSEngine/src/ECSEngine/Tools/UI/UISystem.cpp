@@ -361,6 +361,7 @@ namespace ECSEngine {
 			m_monitor_size = uint2(ECS_TOOLS_UI_DESIGN_WIDTH, ECS_TOOLS_UI_DESIGN_HEIGHT);
 			m_window_os_size = m_monitor_size;
 			SetWindowOSSize(previous_os_window_size, previous_monitor_size);
+			m_drag_exit_regions.Initialize(m_memory, 4);
 
 			// Unitialize the timer
 			m_frame_timer.SetUninitialized();

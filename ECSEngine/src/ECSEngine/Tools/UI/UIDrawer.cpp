@@ -1777,8 +1777,16 @@ namespace ECSEngine {
 		void UIDrawer::TextLabel(size_t configuration, const UIDrawConfig& config, Stream<char> text, float2& position, float2& scale) {
 			float2 temp_position = position + element_descriptor.label_padd;
 			float2 text_span;
+
+			size_t previous_text_sprite_count = HandleTextSpriteBuffer(configuration).AsIs<UISpriteVertex>().size;
 			Text(configuration | UI_CONFIG_DO_NOT_FIT_SPACE, config, text, temp_position, text_span);
-			Stream<UISpriteVertex> current_text = HandleTextSpriteBuffer(configuration).AsIs<UISpriteVertex>().GetLastElements(ParseStringIdentifier(text) * 6);
+			CapacityStream<UISpriteVertex> text_sprite_buffer = HandleTextSpriteBuffer(configuration).AsIs<UISpriteVertex>();
+			Stream<UISpriteVertex> current_text;
+
+			// In case the text is out of bounds, don't retrieve the elements
+			if (text_sprite_buffer.size != previous_text_sprite_count) {
+				current_text = text_sprite_buffer.GetLastElements(ParseStringIdentifier(text) * 6);
+			}
 
 			if (!initializer) {
 				float2 label_scale = HandleLabelSize(text_span);
@@ -1797,36 +1805,39 @@ namespace ECSEngine {
 				float2 position_copy = position;
 				bool is_moved = HandleFitSpaceRectangle(configuration, position, scale);
 
-				ECS_UI_ALIGN horizontal_alignment = ECS_UI_ALIGN_MIDDLE, vertical_alignment = ECS_UI_ALIGN_TOP;
-				float x_text_position, y_text_position;
-				HandleTextLabelAlignment(
-					configuration,
-					config,
-					text_span,
-					scale,
-					position,
-					x_text_position,
-					y_text_position,
-					horizontal_alignment,
-					vertical_alignment
-				);
+				// If no text entries are present, don't perform this call
+				if (current_text.size > 0) {
+					ECS_UI_ALIGN horizontal_alignment = ECS_UI_ALIGN_MIDDLE, vertical_alignment = ECS_UI_ALIGN_TOP;
+					float x_text_position, y_text_position;
+					HandleTextLabelAlignment(
+						configuration,
+						config,
+						text_span,
+						scale,
+						position,
+						x_text_position,
+						y_text_position,
+						horizontal_alignment,
+						vertical_alignment
+					);
 
-				if (is_moved) {
-					TranslateText(x_text_position, y_text_position, current_text);
-				}
-				else if (horizontal_alignment != ECS_UI_ALIGN_LEFT || vertical_alignment != ECS_UI_ALIGN_TOP) {
-					float x_translation = x_text_position - current_text[0].position.x;
-					float y_translation = y_text_position + current_text[0].position.y;
-					if (x_translation != 0.0f || y_translation != 0.0f) {
-						for (size_t index = 0; index < current_text.size; index++) {
-							current_text[index].position.x += x_translation;
-							current_text[index].position.y -= y_translation;
+					if (is_moved) {
+						TranslateText(x_text_position, y_text_position, current_text);
+					}
+					else if (horizontal_alignment != ECS_UI_ALIGN_LEFT || vertical_alignment != ECS_UI_ALIGN_TOP) {
+						float x_translation = x_text_position - current_text[0].position.x;
+						float y_translation = y_text_position + current_text[0].position.y;
+						if (x_translation != 0.0f || y_translation != 0.0f) {
+							for (size_t index = 0; index < current_text.size; index++) {
+								current_text[index].position.x += x_translation;
+								current_text[index].position.y -= y_translation;
+							}
 						}
 					}
-				}
 
-				if (configuration & UI_CONFIG_VERTICAL) {
-					AlignVerticalText(current_text);
+					if (configuration & UI_CONFIG_VERTICAL) {
+						AlignVerticalText(current_text);
+					}
 				}
 
 				HandleBorder(configuration, config, position, scale);
