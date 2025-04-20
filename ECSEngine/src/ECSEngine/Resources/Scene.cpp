@@ -195,8 +195,8 @@ namespace ECSEngine {
 				return false;
 			}
 
-			const Reflection::ReflectionType* scene_modules_type = load_data->reflection_manager->TryGetType(STRING(SceneModules));
-			ECS_ASSERT(scene_modules_type != nullptr, "Loading scene requires the ReflectionManager to have the type SceneModules reflected!");
+			const Reflection::ReflectionType* scene_modules_type = load_data->reflection_manager->TryGetType(STRING(ModulesSourceCode));
+			ECS_ASSERT(scene_modules_type != nullptr, "Loading scene requires the ReflectionManager to have the type ModulesSourceCode reflected!");
 			if (load_data->scene_modules.IsInitialized()) {
 				ECS_ASSERT(load_data->scene_modules_allocator.allocator != nullptr, "Loading a scene with module retrieval but no allocator is specified.");
 
@@ -204,7 +204,7 @@ namespace ECSEngine {
 				options.field_allocator = load_data->scene_modules_allocator;
 				options.default_initialize_missing_fields = true;
 
-				SceneModules scene_modules;
+				ModulesSourceCode scene_modules;
 				ECS_DESERIALIZE_CODE deserialize_status = Deserialize(load_data->reflection_manager, scene_modules_type, &scene_modules, read_instrument, &options);
 				if (deserialize_status != ECS_DESERIALIZE_OK) {
 					if (load_data->detailed_error_string) {
@@ -324,8 +324,8 @@ namespace ECSEngine {
 
 			// Retrieve the module serialize size firstly such that we can make a stack allocation for it and write it to the file then
 			// Use the reflection manager to write the scene modules
-			const Reflection::ReflectionType* scene_modules_type = save_data->reflection_manager->TryGetType(STRING(SceneModules));
-			ECS_ASSERT(scene_modules_type, "Saving scene requires the SceneModules type to be reflected!");
+			const Reflection::ReflectionType* scene_modules_type = save_data->reflection_manager->TryGetType(STRING(ModulesSourceCode));
+			ECS_ASSERT(scene_modules_type, "Saving scene requires the ModulesSourceCode type to be reflected!");
 
 			// Write the source code branch and commit hash first
 			if (!write_instrument->WriteWithSizeVariableLength(save_data->source_code_branch_name)) {

@@ -1,16 +1,13 @@
 // ECS_REFLECT
 #pragma once
 #include "../Core.h"
-#include "../Utilities/Serialization/DeltaStateSerializationForward.h"
 #include "../Containers/Deck.h"
 #include "InternalStructures.h"
 #include "EntityChangeSet.h"
-#include "EntityManagerSerializeTypes.h"
 
 namespace ECSEngine {
 
 	struct EntityManager;
-	struct World;
 
 	namespace Reflection {
 		struct ReflectionManager;
@@ -87,13 +84,6 @@ namespace ECSEngine {
 		DeckPowerOfTwo<GlobalComponentChange> global_component_changes;
 	};
 
-	typedef DeltaStateGenericHeader EntityManagerDeltaSerializationHeader;
-
-	// -----------------------------------------------------------------------------------------------------------------------------
-
-	// Returns the current input serialization version. It will be at max a byte.
-	ECSENGINE_API unsigned char SerializeEntityManagerDeltaVersion();
-
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// The allocator will be used to allocate the buffers needed. It computes the necessary changes that should be applied to the previous entity manager
@@ -112,67 +102,9 @@ namespace ECSEngine {
 	ECSENGINE_API bool SerializeEntityManagerChangeSet(
 		const EntityManagerChangeSet* change_set,
 		const EntityManager* new_entity_manager,
+		//const SerializeEntityManagerOptions* serialize_options,
 		const Reflection::ReflectionManager* reflection_manager,
 		WriteInstrument* write_instrument
-	);
-
-	// -----------------------------------------------------------------------------------------------------------------------------
-
-	struct ModuleComponentFunctions;
-
-	//typedef 
-
-	struct EntityManagerDeltaWriterInitializeInfoOptions {
-		Stream<SerializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
-		Stream<SerializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
-		Stream<SerializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
-	};
-
-	struct EntityManagerDeltaReaderInitializeInfoOptions {
-		Stream<ModuleComponentFunctions> module_component_functions;
-		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
-		Stream<DeserializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
-		Stream<DeserializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
-		//Stream<LoadSceneChunkFunctor> = {};
-	};
-
-	// Sets the necessary info for the writer to be initialized as an ECS state delta writer - outside the runtime context
-	// The entity manager and the reflection manager must be stable for the entire duration of the writer
-	ECSENGINE_API void SetEntityManagerDeltaWriterInitializeInfo(
-		DeltaStateWriterInitializeFunctorInfo& info, 
-		const EntityManager* entity_manager, 
-		const Reflection::ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory,
-		const EntityManagerDeltaWriterInitializeInfoOptions* options = nullptr
-	);
-
-	// Sets the necessary info for the writer to be initialized as an ECS state delta writer - for a simulation world
-	// The reflection manager must be stable for the entire duration of the writer
-	ECSENGINE_API void SetEntityManagerDeltaWriterWorldInitializeInfo(
-		DeltaStateWriterInitializeFunctorInfo& info, 
-		const World* world, 
-		const Reflection::ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory,
-		const EntityManagerDeltaWriterInitializeInfoOptions* options = nullptr
-	);
-
-	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
-	// The entity manager and the reflection manager must be stable for the entire duration of the reader
-	ECSENGINE_API void SetEntityManagerDeltaReaderInitializeInfo(
-		DeltaStateReaderInitializeFunctorInfo& info, 
-		EntityManager* entity_manager, 
-		const Reflection::ReflectionManager* reflection_manager,
-
-		CapacityStream<void>& stack_memory
-	);
-
-	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
-	// The reflection manager must be stable for the entire duration of the reader
-	ECSENGINE_API void SetEntityManagerDeltaReaderWorldInitializeInfo(
-		DeltaStateReaderInitializeFunctorInfo& info, 
-		World* world,
-		const Reflection::ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory
 	);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
