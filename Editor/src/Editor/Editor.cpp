@@ -282,10 +282,6 @@ public:
 						// Input is based on this ordering
 						editor_state.Tick();
 
-						if (mouse.IsPressed(ECS_MOUSE_X1)) {
-							OpenSourceFileInIDE(&editor_state, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\ECS\\EntityManagerChangeSet.h", 10);
-						}
-
 						// Release the locks
 						editor_state.frame_gpu_lock.Unlock();
 						editor_state.RuntimeResourceManager()->Unlock();

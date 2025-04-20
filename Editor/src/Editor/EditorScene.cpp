@@ -169,8 +169,8 @@ static bool SaveScenePrefabChunk(SaveSceneChunkFunctionData* function_data) {
 // ----------------------------------------------------------------------------------------------
 
 // Determines the scene modules that should be set on the
-static Stream<SceneModule> GetSaveSceneModules(const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) {
-	Stream<SceneModule> modules;
+static Stream<ModuleSourceCode> GetSaveSceneModules(const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) {
+	Stream<ModuleSourceCode> modules;
 
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	unsigned int module_count = sandbox->modules_in_use.size;
@@ -180,7 +180,7 @@ static Stream<SceneModule> GetSaveSceneModules(const EditorState* editor_state, 
 
 	for (unsigned int index = 0; index < module_count; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated) {
-			SceneModule current_module;
+			ModuleSourceCode current_module;
 
 			unsigned int module_index = sandbox->modules_in_use[index].module_index;
 			const EditorModule* module = editor_state->project_modules->buffer + module_index;
@@ -374,7 +374,7 @@ bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, 
 
 // ----------------------------------------------------------------------------------------------
 
-bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_manager, const AssetDatabaseReference* database, Stream<wchar_t> filename, Stream<SceneModule> modules)
+bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_manager, const AssetDatabaseReference* database, Stream<wchar_t> filename, Stream<ModuleSourceCode> modules)
 {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
 	AllocatorPolymorphic stack_allocator = &_stack_allocator;
@@ -413,7 +413,7 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 	save_data.unique_overrides = unique_overrides;
 	save_data.shared_overrides = shared_overrides;
 	save_data.global_overrides = global_overrides;
-	save_data.modules = modules;
+	save_data.modules.values = modules;
 	save_data.source_code_branch_name = editor_state->source_code_branch_name;
 	save_data.source_code_commit_hash = editor_state->source_code_commit_hash;
 

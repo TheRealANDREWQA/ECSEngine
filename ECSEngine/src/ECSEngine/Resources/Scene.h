@@ -5,6 +5,7 @@
 #include "../Rendering/RenderingStructures.h"
 #include "../ECS/EntityManagerSerializeTypes.h"
 #include "../Tools/Modules/ModuleDefinition.h"
+#include "../Tools/Modules/ModuleSourceCode.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/ReaderWriterInterface.h"
 
@@ -26,30 +27,6 @@ namespace ECSEngine {
 		struct ReflectionManager;
 		struct ReflectionType;
 	}
-
-	struct ECS_REFLECT SceneModule {
-		// Deallocates each individual field
-		void Deallocate(AllocatorPolymorphic allocator) {
-			solution_path.Deallocate(allocator);
-			library_name.Deallocate(allocator);
-			branch_name.Deallocate(allocator);
-			commit_hash.Deallocate(allocator);
-			configuration.Deallocate(allocator);
-		}
-
-		Stream<wchar_t> solution_path;
-		Stream<wchar_t> library_name;
-		// These fields are added to help identify the source code for the file
-		// In case they match the main repository, these can be left empty.
-		Stream<char> branch_name;
-		Stream<char> commit_hash;
-		// This is the configuration used for the module, i.e. Debug/Release/Distribution
-		Stream<char> configuration;
-	};
-
-	struct ECS_REFLECT SceneModules {
-		Stream<SceneModule> values;
-	};
 	
 	struct LoadSceneChunkFunctionData {
 		EntityManager* entity_manager;
@@ -123,7 +100,7 @@ namespace ECSEngine {
 		// This is the allocator used to allocate the buffers needed for the modules' streams
 		// Each entry will be allocated individually.
 		AllocatorPolymorphic scene_modules_allocator = ECS_MALLOC_ALLOCATOR;
-		AdditionStream<SceneModule> scene_modules = {};
+		AdditionStream<ModuleSourceCode> scene_modules = {};
 		// These 2 fields help you identify the source code such that a faithful reconstruction can be made
 		// They will be allocated from scene_modules_allocator
 		Stream<char> source_code_branch_name = {};
@@ -152,7 +129,7 @@ namespace ECSEngine {
 		const AssetDatabase* asset_database;
 
 		// The list of active modules that are used for this scene
-		Stream<SceneModule> modules;
+		ModulesSourceCode modules;
 
 		// ------------------------- Optional ----------------------------
 		Stream<SerializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };

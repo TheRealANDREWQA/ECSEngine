@@ -8,7 +8,7 @@ namespace ECSEngine {
 	struct EntityManager;
 	struct AssetDatabaseReference;
 	struct AssetDatabaseReferencePointerRemap;
-	struct SceneModule;
+	struct ModuleSourceCode;
 }
 
 // Returns true if it could create the scene, else false.
@@ -56,7 +56,7 @@ bool SaveEditorScene(
 	ECSEngine::EntityManager* entity_manager,
 	const ECSEngine::AssetDatabaseReference* database,
 	ECSEngine::Stream<wchar_t> filename,
-	ECSEngine::Stream<ECSEngine::SceneModule> modules = {}
+	ECSEngine::Stream<ECSEngine::ModuleSourceCode> modules = {}
 );
 
 // Saves the normal editor scene
