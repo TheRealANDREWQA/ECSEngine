@@ -8,7 +8,8 @@
 #define CHILDREN_TABLE_INITIAL_SIZE ECS_KB
 #define PARENT_TABLE_INITIAL_SIZE ECS_KB * 4
 
-#define ENTITY_HIERARCHY_ALLOCATOR_SIZE ECS_MB * 2
+#define ENTITY_HIERARCHY_ALLOCATOR_SIZE ECS_MB * 10
+#define ENTITY_HIERARCHY_BACKUP_ALLOCATOR_SIZE ECS_MB * 50
 #define ENTITY_HIERARCHY_ALLOCATOR_CHUNKS 2048
 
 #define SERIALIZE_VERSION 1
@@ -344,7 +345,7 @@ namespace ECSEngine {
     Entity EntityHierarchy::GetParent(Entity entity) const
     {
         Entity parent;
-        parent.value = -1;
+        parent.value = Entity::Invalid();
         parent_table.TryGetValue(entity, parent);
         return parent;
     }
@@ -356,7 +357,7 @@ namespace ECSEngine {
         Entity parent;
         parent.value = 0;
         parent_table.TryGetValue(entity, parent);
-        while (parent.value != -1) {
+        while (parent.value != Entity::Invalid()) {
             entity = parent;
             if (!parent_table.TryGetValue(entity, parent)) {
                 break;
@@ -374,14 +375,14 @@ namespace ECSEngine {
         if (entity_index == -1) {
             return false;
         }
-        return parent_table.GetValueFromIndex(entity_index).value == -1;
+        return parent_table.GetValueFromIndex(entity_index) == Entity::Invalid();
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
     void DefaultEntityHierarchyAllocator(MemoryManager* allocator, AllocatorPolymorphic global_memory)
     {
-        new (allocator) MemoryManager(ENTITY_HIERARCHY_ALLOCATOR_SIZE, ENTITY_HIERARCHY_ALLOCATOR_CHUNKS, ENTITY_HIERARCHY_ALLOCATOR_SIZE, global_memory);
+        new (allocator) MemoryManager(ENTITY_HIERARCHY_ALLOCATOR_SIZE, ENTITY_HIERARCHY_ALLOCATOR_CHUNKS, ENTITY_HIERARCHY_BACKUP_ALLOCATOR_SIZE, global_memory);
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
@@ -540,6 +541,66 @@ namespace ECSEngine {
         hierarchy->roots.size = header.root_count;
 
         return DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, read_instrument);
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    EntityHierarchyChangeSet DetermineEntityHierarchyChangeSet(
+        const EntityHierarchy* previous_hierarchy,
+        const EntityHierarchy* new_hierarchy,
+        AllocatorPolymorphic temporary_allocator
+    ) {
+        EntityHierarchyChangeSet change_set;
+        change_set.added_roots.Initialize(temporary_allocator, 128);
+        change_set.removed_roots.Initialize(temporary_allocator, 128);
+        change_set.changed_parents.Initialize(temporary_allocator, 128);
+
+        // Determine the added and removed roots. For this, create a hash table
+        // With the roots of the previous hierarchy that can be used to lookup the new roots.
+        // The boolean is set to true if it was matched, such that we can determine the removals
+        // By iterating this table. Use an SoA table in order to reduce the memory required, since
+        // It can get quite large if the paddig is added.
+        HashTable<bool, Entity, HashFunctionPowerOfTwo, ObjectHashFallthrough, true> previous_hierarchy_roots;
+        // Use malloc for this hash table, because it might require a lot of memory and the temporary
+        // Allocator might be a linear one where deallocating this temporary allocation would not be possible,
+        // Only by moving the data after it has been determined
+        previous_hierarchy_roots.Initialize(ECS_MALLOC_ALLOCATOR, HashTablePowerOfTwoCapacityForElements(previous_hierarchy->roots.size));
+        for (size_t index = 0; index < previous_hierarchy->roots.size; index++) {
+            previous_hierarchy_roots.Insert(false, previous_hierarchy->roots[index]);
+        }
+
+        // To determine the new additions, iterate over the current roots and look them up in the previous roots
+        for (size_t index = 0; index < new_hierarchy->roots.size; index++) {
+            unsigned int hash_table_index = previous_hierarchy_roots.Find(new_hierarchy->roots[index]);
+            if (hash_table_index == -1) {
+                change_set.added_roots.Add(new_hierarchy->roots[index]);
+            }
+            else {
+                *previous_hierarchy_roots.GetValuePtrFromIndex(hash_table_index) = true;
+            }
+        }
+
+        // To determine the removals, iterate the table and look for the entries which have the boolean set to false
+        previous_hierarchy_roots.ForEach([&change_set](bool is_matched, Entity entity) {
+            if (!is_matched) {
+                change_set.removed_roots.Add(entity);
+            }
+        });
+
+        // Now to determine the changed parents and the added new entities (that are non root),
+        // Iterate over the new hierarchy parent table and check the previous one.
+        new_hierarchy->parent_table.ForEachConst([&change_set, previous_hierarchy](Entity parent, Entity child) {
+            Entity previous_parent = previous_hierarchy->GetParent(child);
+            if (previous_parent != parent) {
+                // This covers both cases, when it existed before and when it didn't
+                EntityPair pair;
+                pair.parent = parent;
+                pair.child = child;
+                change_set.changed_parents.Add(pair);
+            }
+        });
+
+        return change_set;
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------

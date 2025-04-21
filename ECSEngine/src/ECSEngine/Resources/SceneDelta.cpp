@@ -10,6 +10,9 @@
 // The current format version
 #define VERSION 0
 
+#define CHANGE_SET_ALLOCATOR_CAPACITY ECS_MB * 50
+#define CHANGE_SET_ALLOCATOR_BACKUP_CAPACITY ECS_MB * 100
+
 namespace ECSEngine {
 
 	using namespace Reflection;
@@ -17,7 +20,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// EntityManagerType should be EntityManager or const EntityManager
-	template<typename EntityManagerType>
+	template<typename EntityManagerType, typename AssetDatabaseType>
 	struct WriterReaderBaseData {
 		// Maintain a personal allocator for the previous state, such that we don't force the caller to do
 		// This, which can be quite a hassle
@@ -25,17 +28,22 @@ namespace ECSEngine {
 		// Use a separate allocator for the change set, that is linear in nature since it is temporary,
 		// Such that we can wink it in order to deallocate the change set
 		ResizableLinearAllocator change_set_allocator;
-		EntityManager previous_state;
-		EntityManagerType* current_state;
+		EntityManager previous_entity_manager;
+		EntityManagerType* current_entity_manager;
+		AssetDatabase previous_asset_database;
+		AssetDatabaseType* current_asset_database;
 		SerializeEntityManagerOptions serialize_options;
 	};
 
-	struct WriterData : public WriterReaderBaseData<const EntityManager> {
+	struct WriterData : public WriterReaderBaseData<const EntityManager, const AssetDatabase> {
 		// We need to record this reflection manager such that we can write the variable length header
 		const ReflectionManager* reflection_manager;
+		// These 2 floats can be nullptr, in case they are not specified
+		const float* delta_time_value;
+		const float* speed_up_time_value;
 	};
 
-	struct ReaderData : public WriterReaderBaseData<EntityManager> {
+	struct ReaderData : public WriterReaderBaseData<EntityManager, AssetDatabase> {
 		// This reflection manager will store the reflection types used for serialization
 		// In the file. It will be constructed upon initialization
 		ReflectionManager reflection_manager;
@@ -56,31 +64,33 @@ namespace ECSEngine {
 		// Create the global allocator with the info taken from the actual memory manager that is bound, such that we can handle
 		// Everything that the passed manager can. We need to augment the initial info such that it can handle the additional initial
 		// Memory that the entity manager needs.
-		CreateBaseAllocatorInfo global_allocator_info = delta_state->current_state->m_memory_manager->GetInitialAllocatorInfo();
+		CreateBaseAllocatorInfo global_allocator_info = delta_state->current_entity_manager->m_memory_manager->GetInitialAllocatorInfo();
 		// Ensure that the base allocator infos are of multipool type, such that we access the correct field
 		ECS_ASSERT(global_allocator_info.allocator_type == ECS_ALLOCATOR_MULTIPOOL);
-		ECS_ASSERT(delta_state->current_state->m_memory_manager->m_backup_info.allocator_type == ECS_ALLOCATOR_MULTIPOOL);
+		ECS_ASSERT(delta_state->current_entity_manager->m_memory_manager->m_backup_info.allocator_type == ECS_ALLOCATOR_MULTIPOOL);
 		size_t current_entity_manager_initial_size = global_allocator_info.multipool_capacity;
 		// Use a conservative small value
 		global_allocator_info.multipool_capacity += ECS_MB * 32;
 
-		CreateGlobalMemoryManager(&delta_state->previous_state_allocator, global_allocator_info, delta_state->current_state->m_memory_manager->m_backup_info);
+		CreateGlobalMemoryManager(&delta_state->previous_state_allocator, global_allocator_info, delta_state->current_entity_manager->m_memory_manager->m_backup_info);
 		EntityManagerDescriptor previous_state_descriptor;
 		// We can use as memory manager the global allocator directly
 		previous_state_descriptor.memory_manager = &delta_state->previous_state_allocator;
 		// The deferred capacity can be 0 for this entity manager, since it won't be used to run actual deferred calls
 		previous_state_descriptor.deferred_action_capacity = 0;
 		CreateEntityManagerWithPool(
-			&delta_state->previous_state,
+			&delta_state->previous_entity_manager,
 			current_entity_manager_initial_size,
 			global_allocator_info.multipool_block_count,
-			delta_state->current_state->m_memory_manager->m_backup_info.multipool_capacity,
-			delta_state->current_state->m_entity_pool->m_pool_power_of_two,
+			delta_state->current_entity_manager->m_memory_manager->m_backup_info.multipool_capacity,
+			delta_state->current_entity_manager->m_entity_pool->m_pool_power_of_two,
 			&delta_state->previous_state_allocator
 		);
 
 		// Copy the current contents
-		delta_state->previous_state.CopyOther(delta_state->current_state);
+		delta_state->previous_entity_manager.CopyOther(delta_state->current_entity_manager);
+		// Use malloc for now for the change set allocator
+		delta_state->change_set_allocator = ResizableLinearAllocator(CHANGE_SET_ALLOCATOR_CAPACITY, CHANGE_SET_ALLOCATOR_BACKUP_CAPACITY, ECS_MALLOC_ALLOCATOR);
 	}
 
 	static void WriterDeallocate(void* user_data, AllocatorPolymorphic allocator) {
@@ -122,7 +132,7 @@ namespace ECSEngine {
 
 		// We need to write an entity manager header section, this will contain all the reflection data needed for
 		// Deserializing all entire and delta states.
-		return SerializeEntityManagerHeaderSection(data->current_state, write_instrument, &data->serialize_options);
+		return SerializeEntityManagerHeaderSection(data->current_entity_manager, write_instrument, &data->serialize_options);
 	}
 
 	static bool ReaderHeaderReadFunction(DeltaStateReaderHeaderReadFunctionData* functor_data) {
@@ -152,9 +162,14 @@ namespace ECSEngine {
 	static bool WriterDeltaFunction(DeltaStateWriterDeltaFunctionData* function_data) {
 		WriterData* data = (WriterData*)function_data->user_data;
 
-		// Determine the change set and forward the call
-		EntityManagerChangeSet change_set = DetermineEntityManagerChangeSet(&data->previous_state, data->current_state, data->reflection_manager, &data->change_set_allocator);
-		return SerializeEntityManagerChangeSet(&change_set, data->current_state, data->reflection_manager, function_data->write_instrument);
+		// Determine the entity manager change set and serialize it
+		EntityManagerChangeSet change_set = DetermineEntityManagerChangeSet(&data->previous_entity_manager, data->current_entity_manager, data->reflection_manager, &data->change_set_allocator);
+		if (!SerializeEntityManagerChangeSet(&change_set, data->current_entity_manager, data->reflection_manager, function_data->write_instrument)) {
+			return false;
+		}
+
+		// Determine the asset database change set and serialize it
+		return true;
 	}
 
 	static bool WriterEntireFunction(DeltaStateWriterEntireFunctionData* function_data) {
@@ -196,12 +211,12 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	unsigned char SerializeEntityManagerDeltaVersion() {
+	unsigned char SceneDeltaVersion() {
 		return VERSION;
 	}
 
-	EntityManagerDeltaSerializationHeader GetEntityManagerDeltaSerializeHeader() {
-		EntityManagerDeltaSerializationHeader header;
+	static SceneDeltaSerializationHeader GetSceneDeltaHeader() {
+		SceneDeltaSerializationHeader header;
 		ZeroOut(&header);
 		header.version = VERSION;
 		return header;
@@ -209,18 +224,16 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	void SetEntityManagerDeltaWriterInitializeInfo(
+	void SetSceneDeltaWriterInitializeInfo(
 		DeltaStateWriterInitializeFunctorInfo& info,
 		const EntityManager* entity_manager,
 		const ReflectionManager* reflection_manager,
+		const AssetDatabase* asset_database,
+		const float* delta_time_value,
+		const float* speed_up_time_value,
 		CapacityStream<void>& stack_memory,
-		const EntityManagerDeltaWriterInitializeInfoOptions* options
+		const SceneDeltaWriterInitializeInfoOptions* options
 	) {
-		EntityManagerDeltaWriterInitializeInfoOptions default_options;
-		if (options == nullptr) {
-			options = &default_options;
-		}
-
 		info.delta_function = WriterDeltaFunction;
 		info.entire_function = WriterEntireFunction;
 		info.self_contained_extract = nullptr;
@@ -228,32 +241,48 @@ namespace ECSEngine {
 		info.user_data_allocator_deallocate = WriterDeallocate;
 		info.header_write_function = WriterHeaderWriteFunction;
 
-		EntityManagerDeltaSerializationHeader serialization_header = GetEntityManagerDeltaSerializeHeader();
+		SceneDeltaSerializationHeader serialization_header = GetSceneDeltaHeader();
 		info.header = stack_memory.Add(&serialization_header);
 
 		WriterData writer_data;
-		writer_data.current_state = entity_manager;
+		writer_data.current_entity_manager = entity_manager;
+		writer_data.current_asset_database = asset_database;
+		writer_data.delta_time_value = delta_time_value;
+		writer_data.speed_up_time_value = speed_up_time_value;
 		info.user_data = stack_memory.Add(&writer_data);
 	}
 
-	void SetEntityManagerDeltaWriterWorldInitializeInfo(
+	void SetSceneDeltaWriterWorldInitializeInfo(
 		DeltaStateWriterInitializeFunctorInfo& info,
 		const World* world,
 		const ReflectionManager* reflection_manager,
+		const AssetDatabase* asset_database,
 		CapacityStream<void>& stack_memory,
-		const EntityManagerDeltaWriterInitializeInfoOptions* options
+		const SceneDeltaWriterInitializeInfoOptions* options
 	) {
 		// Call the basic function and simply override the user data and the extract function, since that's what is different
-		SetEntityManagerDeltaWriterInitializeInfo(info, world->entity_manager, reflection_manager, stack_memory, options);
+		SetSceneDeltaWriterInitializeInfo(
+			info, 
+			world->entity_manager, 
+			reflection_manager, 
+			asset_database, 
+			&world->delta_time, 
+			&world->speed_up_factor, 
+			stack_memory, 
+			options
+		);
 		info.self_contained_extract = WriterExtractFunction;
 
-		WriterWorldData writer_data;
-		writer_data.current_state = world->entity_manager;
-		writer_data.world = world;
-		info.user_data = stack_memory.Add(&writer_data);
+		// The current info.user_data should contain a WriterData that was filled in,
+		// We only need to write the additional world field
+
+		WriterWorldData* writer_data = (WriterWorldData*)info.user_data.buffer;
+		stack_memory.Reserve(sizeof(*writer_data) - sizeof(WriterData));
+		writer_data->world = world;
+		info.user_data.size = sizeof(*writer_data);
 	}
 
-	void SetEntityManagerDeltaReaderInitializeInfo(
+	void SetSceneDeltaReaderInitializeInfo(
 		DeltaStateReaderInitializeFunctorInfo& info,
 		EntityManager* entity_manager,
 		const ReflectionManager* reflection_manager,
@@ -265,20 +294,20 @@ namespace ECSEngine {
 		info.user_data_allocator_deallocate = ReaderDeallocate;
 		info.header_read_function = ReaderHeaderReadFunction;
 
-		ReaderData reader_data;
-		ZeroOut(&reader_data);
-		reader_data.current_state = entity_manager;
-		info.user_data = stack_memory.Add(&reader_data);
+		//ReaderData reader_data;
+		//ZeroOut(&reader_data);
+		//reader_data.current_state = entity_manager;
+		//info.user_data = stack_memory.Add(&reader_data);
 	}
 
-	void SetEntityManagerDeltaReaderWorldInitializeInfo(
+	void SetSceneDeltaReaderWorldInitializeInfo(
 		DeltaStateReaderInitializeFunctorInfo& info,
 		World* world,
 		const ReflectionManager* reflection_manager,
 		CapacityStream<void>& stack_memory
 	) {
 		// Can forward to the normal initialize
-		SetEntityManagerDeltaReaderInitializeInfo(info, world->entity_manager, reflection_manager, stack_memory);
+		SetSceneDeltaReaderInitializeInfo(info, world->entity_manager, reflection_manager, stack_memory);
 	}
 
 }

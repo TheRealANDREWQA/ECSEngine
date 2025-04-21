@@ -252,7 +252,6 @@ namespace ECSEngine {
 					functor_data.reflection_manager = load_data->reflection_manager;
 					functor_data.file_version = file_header.version;
 					functor_data.user_data = load_data->chunk_functors[index].user_data;
-					functor_data.chunk_index = index;
 					functor_data.read_instrument = read_instrument;
 
 					if (!load_data->chunk_functors[index].function(&functor_data)) {
@@ -346,7 +345,6 @@ namespace ECSEngine {
 				header.chunk_offsets[CHUNK_COUNT + index] = chunk_start_offset;
 				if (save_data->chunk_functors[index].function != nullptr) {
 					SaveSceneChunkFunctionData functor_data;
-					functor_data.chunk_index = index;
 					functor_data.entity_manager = save_data->entity_manager;
 					functor_data.reflection_manager = save_data->reflection_manager;
 					functor_data.user_data = save_data->chunk_functors[index].user_data;

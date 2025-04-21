@@ -8,6 +8,7 @@
 #include "../Tools/Modules/ModuleSourceCode.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/ReaderWriterInterface.h"
+#include "SceneTypes.h"
 
 // These are some chunks that can be used to fill in various information
 // Without a predefined connotation
@@ -18,48 +19,6 @@ namespace ECSEngine {
 	struct AssetDatabase;
 	struct AssetDatabaseReference;
 	struct AssetDatabaseReferencePointerRemap;
-	struct EntityManager;
-
-	struct WriteInstrument;
-	struct ReadInstrument;
-
-	namespace Reflection {
-		struct ReflectionManager;
-		struct ReflectionType;
-	}
-	
-	struct LoadSceneChunkFunctionData {
-		EntityManager* entity_manager;
-		const Reflection::ReflectionManager* reflection_manager;
-		size_t chunk_index;
-		size_t file_version;
-		ReadInstrument* read_instrument;
-		void* user_data;
-	};
-	
-	// This function can be used to extract the extra information from the scene
-	// It must return true if it succeeded, else false (the load overall fails as well)
-	typedef bool (*LoadSceneChunkFunction)(LoadSceneChunkFunctionData* data);
-
-	struct LoadSceneChunkFunctor {
-		LoadSceneChunkFunction function;
-		void* user_data;
-	};
-
-	struct SaveSceneChunkFunctionData {
-		const EntityManager* entity_manager;
-		const Reflection::ReflectionManager* reflection_manager;
-		size_t chunk_index;
-		WriteInstrument* write_instrument;
-		void* user_data;
-	};
-
-	typedef bool (*SaveSceneChunkFunction)(SaveSceneChunkFunctionData* data);
-
-	struct SaveSceneChunkFunctor {
-		SaveSceneChunkFunction function;
-		void* user_data;
-	};
 
 	struct LoadSceneData {
 		ECS_INLINE LoadSceneData() {}
