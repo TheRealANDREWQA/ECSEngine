@@ -358,8 +358,10 @@ namespace ECSEngine {
 			size_t instance_data_size_instrument_offset = write_instrument->GetOffset();
 			size_t instance_data_sizes_byte_size = sizeof(unsigned int) * entity_manager->m_shared_components[current_component].instances.stream.size;
 			unsigned int* instance_data_sizes = (unsigned int*)buffering.Reserve(instance_data_sizes_byte_size);
-			if (!write_instrument->AppendUninitialized(instance_data_sizes_byte_size)) {
-				return false;
+			if (instance_data_sizes_byte_size > 0) {
+				if (!write_instrument->AppendUninitialized(instance_data_sizes_byte_size)) {
+					return false;
+				}
 			}
 
 			size_t shared_component_write_offset = write_instrument->GetOffset();
@@ -390,10 +392,12 @@ namespace ECSEngine {
 				return false;
 			}
 
-				// Go back and write the instance data sizes
+			// Go back and write the instance data sizes
+			if (buffering.size > 0) {
 				if (!write_instrument->WriteUninitializedData(instance_data_size_instrument_offset, buffering.buffer, buffering.size)) {
 					return false;
 				}
+			}
 		}
 
 		// We must serialize the global components now

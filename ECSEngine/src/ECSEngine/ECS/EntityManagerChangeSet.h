@@ -4,10 +4,12 @@
 #include "../Containers/Deck.h"
 #include "InternalStructures.h"
 #include "EntityChangeSet.h"
+#include "EntityHierarchy.h"
 
 namespace ECSEngine {
 
 	struct EntityManager;
+	struct SerializeEntityManagerOptions;
 
 	namespace Reflection {
 		struct ReflectionManager;
@@ -82,6 +84,8 @@ namespace ECSEngine {
 		// Otherwise the entities might reference invalid data
 		DeckPowerOfTwo<SharedComponentChanges> shared_component_changes;
 		DeckPowerOfTwo<GlobalComponentChange> global_component_changes;
+		// Record the hierarchy change set as well
+		EntityHierarchyChangeSet hierarchy_change_set;
 	};
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -97,14 +101,17 @@ namespace ECSEngine {
 
 	// Writes the delta between a previous entity manager and a new entity manager, after the change set has been computed.
 	// The previous entity manager is no longer needed, since the changes that require actual data to be written will use the
-	// New entity manager.
+	// New entity manager. The serialize options should be pre-determined such that they are not constantly re-computed for multiple
+	// Delta writes. With the write_entity_manager_header_section flag you can disable the entity manager header section, 
+	// In case that was written separately.
 	// Returns true if it succeeded, else false
 	ECSENGINE_API bool SerializeEntityManagerChangeSet(
 		const EntityManagerChangeSet* change_set,
 		const EntityManager* new_entity_manager,
-		//const SerializeEntityManagerOptions* serialize_options,
+		const SerializeEntityManagerOptions* serialize_options,
 		const Reflection::ReflectionManager* reflection_manager,
-		WriteInstrument* write_instrument
+		WriteInstrument* write_instrument,
+		bool write_entity_manager_header_section
 	);
 
 	// -----------------------------------------------------------------------------------------------------------------------------

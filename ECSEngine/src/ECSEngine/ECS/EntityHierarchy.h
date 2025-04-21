@@ -1,7 +1,9 @@
+// ECS_REFLECT
 #pragma once
 #include "InternalStructures.h"
 #include "../Containers/Stream.h"
 #include "../Utilities/TreeIterator.h"
+#include "../Utilities/Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {
 
@@ -161,6 +163,28 @@ namespace ECSEngine {
 	// The hierarchy must have its allocator set
 	// Returns true if the data was valid, else false if the data was corrupted
 	ECSENGINE_API bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ReadInstrument* read_instrument);
+	
+	// -----------------------------------------------------------------------------------------------------
+
+	// The serialization and deserialization of this change set can be done using the reflection manager
+	struct ECS_REFLECT EntityHierarchyChangeSet {
+		// The roots which have been deleted
+		ResizableStream<Entity> removed_roots;
+		// The roots which have been added
+		ResizableStream<Entity> added_roots;
+		// This includes the entities which were newly created, not as roots,
+		// But as children. Entities that are deleted are inferred from the entity manager
+		// Change set and they can be removed from that data.
+		ResizableStream<EntityPair> changed_parents;
+	};
+
+	// Determines the change set that can be applied to an entity hierarchy such that
+	// A delta can be performed later on. Allocates all buffers from the given temporary allocator
+	ECSENGINE_API EntityHierarchyChangeSet DetermineEntityHierarchyChangeSet(
+		const EntityHierarchy* previous_hierarchy, 
+		const EntityHierarchy* new_hierarchy, 
+		AllocatorPolymorphic temporary_allocator
+	);
 
 	// -----------------------------------------------------------------------------------------------------
 

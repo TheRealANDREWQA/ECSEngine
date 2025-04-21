@@ -3,6 +3,8 @@
 #include "../Utilities/Reflection/Reflection.h"
 #include "EntityManager.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
+#include "EntityManagerSerialize.h"
+#include "../Utilities/ReaderWriterInterface.h"
 
 // 256
 #define DECK_POWER_OF_TWO_EXPONENT 8
@@ -235,6 +237,7 @@ namespace ECSEngine {
 		DetermineEntityManagerUniqueComponentChangeSet(previous_entity_manager, new_entity_manager, reflection_manager, change_set);
 		DetermineEntityManagerSharedComponentChangeSet(previous_entity_manager, new_entity_manager, reflection_manager, change_set);
 		DetermineEntityManagerGlobalComponentChangeSet(previous_entity_manager, new_entity_manager, reflection_manager, change_set);
+		change_set.hierarchy_change_set = DetermineEntityHierarchyChangeSet(&previous_entity_manager->m_hierarchy, &new_entity_manager->m_hierarchy, change_set_allocator);
 	
 		return change_set;
 	}
@@ -244,28 +247,70 @@ namespace ECSEngine {
 	bool SerializeEntityManagerChangeSet(
 		const EntityManagerChangeSet* change_set,
 		const EntityManager* new_entity_manager,
-		const Reflection::ReflectionManager* reflection_manager,
-		WriteInstrument* write_instrument
+		const SerializeEntityManagerOptions* serialize_options,
+		const ReflectionManager* reflection_manager,
+		WriteInstrument* write_instrument,
+		bool write_entity_manager_header_section
 	) {
 		// Firstly, write the change set itself, the structure that describes what changes need to be performed,
 		// Then write the component data that was changed
 		
+		if (write_entity_manager_header_section) {
+			if (!SerializeEntityManagerHeaderSection(new_entity_manager, write_instrument, serialize_options)) {
+				return false;
+			}
+		}
+
 		// Use the reflection manager for that, it should handle this successfully
 		if (Serialize(reflection_manager, reflection_manager->GetType(STRING(EntityManagerChangeSet)), &change_set, write_instrument) != ECS_SERIALIZE_OK) {
 			return false;
 		}
 
 		// Now write the actual components that need to be written. Start with the global ones
-		change_set->global_component_changes.ForEach([&](const EntityManagerChangeSet::GlobalComponentChange& change) {
+		size_t global_component_write_offset = write_instrument->GetOffset();
+		if (change_set->global_component_changes.ForEach<true>([&](const EntityManagerChangeSet::GlobalComponentChange& change) {
 			if (change.type == ECS_CHANGE_SET_ADD || change.type == ECS_CHANGE_SET_UPDATE) {
 				const void* global_data = new_entity_manager->GetGlobalComponent(change.component);
 
+				SerializeEntityManagerGlobalComponentInfo component_info = serialize_options->global_component_table->GetValue(change.component);
+				unsigned int global_component_size = 0;
+				if (!write_instrument->AppendUninitialized(sizeof(global_component_size))) {
+					return true;
+				}
+
+				SerializeEntityManagerGlobalComponentData function_data;
+				function_data.write_instrument = write_instrument;
+				function_data.components = global_data;
+				function_data.extra_data = component_info.extra_data;
+				function_data.count = 1;
+
+				if (!component_info.function(&function_data)) {
+					return true;
+				}
+
+				size_t current_write_offset = write_instrument->GetOffset();
+				// Subtract the size of the component size that is included in the difference
+				size_t write_difference = current_write_offset - global_component_write_offset - sizeof(global_component_size);
+				if (!EnsureUnsignedIntegerIsInRange<unsigned int>(write_difference)) {
+					return true;
+				}
+				// Write the count into the prefix size
+				global_component_size = (unsigned int)write_difference;
+				if (!write_instrument->WriteUninitializedData(global_component_write_offset, &global_component_size, sizeof(global_component_size))) {
+					return true;
+				}
+
+				global_component_write_offset = current_write_offset;
 			}
 
 			return false;
-		});
+			})) {
+			return false;
+		}
 
-		return false;
+		// Continue with the un
+
+		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
