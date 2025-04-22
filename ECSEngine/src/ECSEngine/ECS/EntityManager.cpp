@@ -1510,13 +1510,15 @@ namespace ECSEngine {
 
 		// Allocate the memory
 		void* allocation = manager->m_small_memory_manager.Allocate(component_size);
-		memcpy(allocation, data->data, component_size);
+		if (data->data != nullptr) {
+			memcpy(allocation, data->data, component_size);
+		}
 
 		unsigned int instance_index = manager->m_shared_components[data->component.value].instances.Add(allocation);
 		ECS_CRASH_CONDITION(instance_index < ECS_SHARED_INSTANCE_MAX_VALUE, "EntityManager: Too many shared instances created for component {#}.",
 			manager->GetSharedComponentName(data->component));
 		
-		if (data->copy_buffers) {
+		if (data->data != nullptr && data->copy_buffers) {
 			// Call the copy function
 			manager->m_shared_components[data->component.value].info.TryCallCopyFunction(allocation, data->data, false);
 		}
@@ -3523,6 +3525,31 @@ namespace ECSEngine {
 		}
 		else {
 			CommitCreateEntities<CREATE_ENTITIES_TEMPLATE_BASIC>(this, &commit_data, nullptr);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::CreateSpecificEntitiesCommit(
+		Stream<Entity> entities,
+		ComponentSignature unique_components,
+		SharedComponentSignature shared_components,
+		bool exclude_from_hierarchy
+	) {
+		uint2 archetype_indices = FindOrCreateArchetypeBase(unique_components, shared_components);
+		ArchetypeBase* base_archetype = GetBase(archetype_indices.x, archetype_indices.y);
+
+		// If the chunk positions are not needed, it means we must update the entities
+		unsigned int copy_position = base_archetype->Reserve(entities.size);
+		m_entity_pool->AllocateSpecific(entities, archetype_indices, copy_position);
+
+		// Copy the entities into the archetype entity reference
+		base_archetype->SetEntities(entities, copy_position);
+		base_archetype->m_size += entities.size;
+
+		if (!exclude_from_hierarchy) {
+			// Add the entities as roots
+			AddEntitiesToParentCommit(entities, Entity(-1));
 		}
 	}
 
@@ -5631,6 +5658,28 @@ namespace ECSEngine {
 		return instance;
 	}
 
+	void EntityManager::RegisterSharedInstanceForValueCommit(Component component, SharedInstance instance, const void* data, bool copy_buffers) {
+		// If no component is allocated at that slot, fail
+		unsigned int component_size = m_shared_components[component.value].info.size;
+		ECS_CRASH_CONDITION(component_size != -1, "EntityManager: Trying to create a forced shared instance of shared component {#} failed. "
+			"There is no such component.", GetSharedComponentName(component));
+
+		// Allocate the memory
+		void* allocation = m_small_memory_manager.Allocate(component_size);
+		if (data != nullptr) {
+			memcpy(allocation, data, component_size);
+		}
+
+		ECS_CRASH_CONDITION(m_shared_components[component.value].instances.ExistsItem(instance.value), "EntityManager: Too many shared instances created for component {#}.",
+			GetSharedComponentName(component));
+		m_shared_components[component.value].instances.AllocateIndex(instance.value);
+
+		if (data != nullptr && copy_buffers) {
+			// Call the copy function
+			m_shared_components[component.value].info.TryCallCopyFunction(allocation, data, false);
+		}
+	}
+
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::RegisterSharedInstance(
@@ -5640,13 +5689,32 @@ namespace ECSEngine {
 		EntityManagerCommandStream* command_stream, 
 		DebugInfo debug_info
 	) {
-		size_t allocation_size = sizeof(DeferredCreateSharedInstance) + m_shared_components[component.value].info.size;
+		size_t allocation_size = sizeof(DeferredCreateSharedInstance) + (instance_data != nullptr ? m_shared_components[component.value].info.size : 0);
 
 		void* allocation = AllocateTemporaryBuffer(allocation_size);
 		DeferredCreateSharedInstance* data = (DeferredCreateSharedInstance*)allocation;
 		data->component = component;
-		data->data = OffsetPointer(allocation, sizeof(DeferredCreateSharedInstance));
-		memcpy((void*)data->data, instance_data, m_shared_components[component.value].info.size);
+		if (instance_data != nullptr) {
+			data->data = OffsetPointer(allocation, sizeof(DeferredCreateSharedInstance));
+			memcpy((void*)data->data, instance_data, m_shared_components[component.value].info.size);
+			if (copy_buffers) {
+				// Use the temporary allocator. Lock it now such that all allocations can be made
+				// Single threaded, without fighting for the lock.
+				if (m_shared_components[component.value].info.copy_function != nullptr) {
+					m_temporary_allocator.Lock();
+					__try {
+						m_shared_components[component.value].info.CallCopyFunction((void*)data->data, instance_data, false, TemporaryAllocatorSingleThreaded());
+					}
+					__finally {
+						m_temporary_allocator.Unlock();
+					}
+				}
+			}
+		}
+		else {
+			data->data = nullptr;
+		}
+		data->copy_buffers = copy_buffers;
 
 		DeferredActionParameters parameters = { command_stream };
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_CREATE_SHARED_INSTANCE), debug_info });
@@ -5677,8 +5745,11 @@ namespace ECSEngine {
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	) {
+		size_t allocation_size = sizeof(DeferredCreateNamedSharedInstance) + identifier.size;
 		unsigned int component_size = SharedComponentSize(component);
-		size_t allocation_size = sizeof(DeferredCreateNamedSharedInstance) + component_size + identifier.size;
+		if (instance_data != nullptr) {
+			allocation_size += component_size;
+		}
 
 		void* allocation = AllocateTemporaryBuffer(allocation_size);
 		uintptr_t allocation_ptr = (uintptr_t)allocation;
@@ -5687,11 +5758,26 @@ namespace ECSEngine {
 		allocation_ptr += sizeof(*data);
 
 		data->component = component;
-		data->data = (void*)allocation_ptr;
-		memcpy((void*)data->data, instance_data, component_size);
-		allocation_ptr += component_size;
-
 		data->identifier.InitializeAndCopy(allocation_ptr, identifier);
+
+		data->data = (void*)allocation_ptr;
+		if (instance_data != nullptr) {
+			memcpy((void*)data->data, instance_data, component_size);
+			if (copy_buffers) {
+				// Use the temporary allocator. Lock it now such that all allocations can be made
+				// Single threaded, without fighting for the lock.
+				if (m_shared_components[component.value].info.copy_function != nullptr) {
+					m_temporary_allocator.Lock();
+					__try {
+						m_shared_components[component.value].info.CallCopyFunction((void*)data->data, instance_data, false, TemporaryAllocatorSingleThreaded());
+					}
+					__finally {
+						m_temporary_allocator.Unlock();
+					}
+				}
+			}
+		}
+		data->copy_buffers = copy_buffers;
 
 		DeferredActionParameters parameters = { command_stream };
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_CREATE_NAMED_SHARED_INSTANCE), debug_info });

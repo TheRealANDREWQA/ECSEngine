@@ -128,8 +128,14 @@ namespace ECSEngine {
 			return m_memory_manager;
 		}
 
+		// The returned temporary allocator is multithreaded
 		ECS_INLINE AllocatorPolymorphic TemporaryAllocator() {
 			return AllocatorPolymorphic(&m_temporary_allocator).AsMulti();
+		}
+
+		// The returned temporary allocator is single threaded
+		ECS_INLINE AllocatorPolymorphic TemporaryAllocatorSingleThreaded() {
+			return &m_temporary_allocator;
 		}
 
 		// Use this this if you want to pass this buffer to the deferred calls with a stable flag.
@@ -565,6 +571,15 @@ namespace ECSEngine {
 			SharedComponentSignature shared_components,
 			bool exclude_from_hierarchy = false,
 			Entity* entities = nullptr
+		);
+
+		// The same as the other overload, but it creates specific entity values
+		// It will crash if any of the provided entities already exists.
+		void CreateSpecificEntitiesCommit(
+			Stream<Entity> entities,
+			ComponentSignature unique_components,
+			SharedComponentSignature shared_components,
+			bool exclude_from_hierarchy = false
 		);
 
 		// Deferred Call
@@ -1801,10 +1816,14 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// The value is stable.
+		// The value is stable. If the data pointer is nullptr, it will not copy anything
 		SharedInstance RegisterSharedInstanceCommit(Component component, const void* data, bool copy_buffers = true);
 
-		// The value is stable
+		// Registers a shared instance for a specific handle value for the provided component. The instance
+		// Must not exist already. If data pointer is nullptr, it will not copy anything
+		void RegisterSharedInstanceForValueCommit(Component component, SharedInstance instance, const void* data, bool copy_buffers = true);
+
+		// The value is stable. If the data pointer is nullptr, it will not copy anything
 		// Deferred call
 		void RegisterSharedInstance(
 			Component component, 
@@ -1816,10 +1835,10 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// The value is stable
+		// The value is stable. If the data pointer is nullptr, it will not copy anything
 		SharedInstance RegisterNamedSharedInstanceCommit(Component component, Stream<char> identifier, const void* data, bool copy_buffers = true);
 		
-		// The value is stable
+		// The value is stable. If the data pointer is nullptr, it will not copy anything
 		// Deferred call
 		void RegisterNamedSharedInstance(
 			Component component, 

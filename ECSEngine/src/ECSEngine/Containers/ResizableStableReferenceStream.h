@@ -24,6 +24,16 @@ namespace ECSEngine {
 		ResizableStableReferenceStream(const ResizableStableReferenceStream& other) = default;
 		ResizableStableReferenceStream<T, queue_indirection_list>& operator = (const ResizableStableReferenceStream<T, queue_indirection_list>& other) = default;
 
+		// Forcefully allocates an index. If the index is occupied, it will assert
+		// It increases the size as well
+		ECS_INLINE void AllocateIndex(unsigned int index) {
+			// If the index is outside the current capacity, we must resize the capacity
+			if (index >= stream.capacity) {
+				SetNewCapacity(index);
+			}
+			stream.AllocateIndex(index);
+		}
+
 		// Returns an index that can be used for the lifetime of the object to access it
 		unsigned int Add(T element) {
 			unsigned int index = ReserveOne();
@@ -40,6 +50,10 @@ namespace ECSEngine {
 
 		ECS_INLINE void AddStream(Stream<T> elements, unsigned int* indices) {
 			Reserve({ indices, elements.size });
+		}
+
+		ECS_INLINE bool ExistsItem(unsigned int index) const {
+			return stream.ExistsItem(index);
 		}
 
 		void FreeBuffer(DebugInfo debug_info = ECS_DEBUG_INFO) {
