@@ -6,6 +6,7 @@
 #include "../ECS/EntityManager.h"
 #include "../ECS/EntityManagerSerialize.h"
 #include "../ECS/World.h"
+#include "../Resources/AssetDatabase.h"
 
 // The current format version
 #define VERSION 0
@@ -163,8 +164,20 @@ namespace ECSEngine {
 		WriterData* data = (WriterData*)function_data->user_data;
 
 		// Determine the entity manager change set and serialize it
-		EntityManagerChangeSet change_set = DetermineEntityManagerChangeSet(&data->previous_entity_manager, data->current_entity_manager, data->reflection_manager, &data->change_set_allocator);
-		if (!SerializeEntityManagerChangeSet(&change_set, data->current_entity_manager, data->reflection_manager, function_data->write_instrument)) {
+		EntityManagerChangeSet change_set = DetermineEntityManagerChangeSet(
+			&data->previous_entity_manager, 
+			data->current_entity_manager, 
+			data->reflection_manager, 
+			&data->change_set_allocator
+		);
+		if (!SerializeEntityManagerChangeSet(
+			&change_set, 
+			data->current_entity_manager, 
+			&data->serialize_options, 
+			data->reflection_manager, 
+			function_data->write_instrument, 
+			false
+		)) {
 			return false;
 		}
 

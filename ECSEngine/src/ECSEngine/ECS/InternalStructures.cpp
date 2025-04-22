@@ -10,6 +10,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	static StableReferenceStream<EntityInfo, true> EntityPoolAllocatePool(EntityPool* entity_pool) {
+		unsigned int pool_capacity = 1 << entity_pool->m_pool_power_of_two;
+
+		size_t allocation_size = entity_pool->m_entity_infos.buffer->stream.MemoryOf(pool_capacity);
+		void* allocation = entity_pool->m_memory_manager->Allocate(allocation_size);
+		memset(allocation, 0, allocation_size);
+
+		return StableReferenceStream<EntityInfo, true>(allocation, pool_capacity);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	ComponentSignature ComponentSignature::Copy(uintptr_t& ptr) const
 	{
 		ComponentSignature new_signature;
@@ -46,17 +58,11 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	void EntityPool::CreatePool() {
-		unsigned int pool_capacity = 1 << m_pool_power_of_two;
-
-		size_t allocation_size = m_entity_infos.buffer->stream.MemoryOf(pool_capacity);
-		void* allocation = m_memory_manager->Allocate(allocation_size);
-		memset(allocation, 0, allocation_size);
-
 		// Walk through the entity info stream and look for an empty slot and place the allocation there
 		// Cannot remove swap back chunks because the entity index calculation takes into consideration the initial
 		// chunk position. Using reallocation tables that would offset chunk indices does not seem like a good idea
 		// since adds latency to the lookup
-		auto info_stream = StableReferenceStream<EntityInfo, true>(allocation, pool_capacity);
+		auto info_stream = EntityPoolAllocatePool(this);
 		for (size_t index = 0; index < m_entity_infos.size; index++) {
 			if (!m_entity_infos[index].is_in_use) {
 				m_entity_infos[index].is_in_use = true;
@@ -154,11 +160,10 @@ namespace ECSEngine {
 	};
 	
 	template<EntityPoolAllocateType additional_data_type>
-	void EntityPoolAllocateImplementation(EntityPool* entity_pool, Stream<Entity> entities, EntityPoolAllocateAdditionalData additional_data = {}) {
+	static void EntityPoolAllocateImplementation(EntityPool* entity_pool, Stream<Entity> entities, EntityPoolAllocateAdditionalData additional_data = {}) {
 		auto loop_iteration = [&entities, entity_pool, additional_data](unsigned int index) {
 			if constexpr (additional_data_type == ENTITY_POOL_ALLOCATE_WITH_INFOS) {
 				entity_pool->m_entity_infos[index].stream.Reserve({ entities.buffer, entities.size });
-				// Increase the generation count for those entities and generate the appropriate infos
 				for (size_t entity_index = 0; entity_index < entities.size; entity_index++) {
 					EntityInfo* info = entity_pool->m_entity_infos[index].stream.ElementPointer(entities[entity_index].value);
 					info->tags = 0;
@@ -191,7 +196,6 @@ namespace ECSEngine {
 			}
 			else {
 				entity_pool->m_entity_infos[index].stream.Reserve({ entities.buffer, entities.size });
-				// Increase the generation count for those entities and generate the appropriate infos
 				for (size_t entity_index = 0; entity_index < entities.size; entity_index++) {
 					EntityInfo* info = entity_pool->m_entity_infos[index].stream.ElementPointer(entities[entity_index].value);
 
@@ -239,6 +243,47 @@ namespace ECSEngine {
 	void EntityPool::Allocate(Stream<Entity> entities, uint2 archetype_indices, unsigned int copy_position)
 	{
 		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_POSITION>(this, entities, { nullptr, archetype_indices, copy_position });
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void EntityPool::AllocateSpecific(Stream<Entity> entities, uint2 archetype_indices, unsigned int copy_position) {
+		for (size_t index = 0; index < entities.size; index++) {
+			uint2 entity_indices = GetPoolAndEntityIndex(this, entities[index]);
+			// If it is out of bounds, resize the entity infos
+			if (entity_indices.x >= m_entity_infos.size) {
+				m_entity_infos.Reserve(entity_indices.x - m_entity_infos.size + 1);
+				for (size_t subindex = m_entity_infos.size; subindex <= entity_indices.x; subindex++) {
+					m_entity_infos[subindex].is_in_use = false;
+				}
+				m_entity_infos.size = entity_indices.x + 1;
+			}
+
+			// If the stable reference stream is not in use, allocate it
+			if (!m_entity_infos[entity_indices.x].is_in_use) {
+				m_entity_infos[entity_indices.x].stream = EntityPoolAllocatePool(this);
+				m_entity_infos[entity_indices.x].is_in_use = true;
+			}
+			else {
+				ECS_CRASH_CONDITION_RETURN_VOID(
+					m_entity_infos[entity_indices.x].stream[entity_indices.y].generation_count == entities[index].generation_count,
+					"EntityPool: Entity {#} already exists when trying to create a specific entity",
+					entities[index].value
+				);
+			}
+
+			m_entity_infos[entity_indices.x].stream.AllocateIndex(entity_indices.y);
+
+			EntityInfo* current_info = m_entity_infos[index].stream.ElementPointer(entity_indices.y);
+			current_info->base_archetype = archetype_indices.y;
+			current_info->main_archetype = archetype_indices.x;
+			current_info->stream_index = copy_position + index;
+
+			current_info->tags = 0;
+			current_info->layer = 0;
+			// Set the generation count to the one from the entity
+			current_info->generation_count = entities[index].generation_count;
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -575,10 +620,8 @@ namespace ECSEngine {
 
 		if (indices.x < m_entity_infos.size) {
 			if (m_entity_infos[indices.x].is_in_use) {
-				if (m_entity_infos[indices.x].stream[indices.y].generation_count != 0) {
-					// It exists, return its generation count
-					return m_entity_infos[indices.x].stream[indices.y].generation_count;
-				}
+				// It exists, return its generation count
+				return m_entity_infos[indices.x].stream[indices.y].generation_count;
 			}
 		}
 		return -1;

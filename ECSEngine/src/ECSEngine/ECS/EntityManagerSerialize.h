@@ -173,12 +173,24 @@ namespace ECSEngine {
 			return { OffsetPointer(unique_name_characters, unique_name_offsets[index]), component_pairs[index].name_size };
 		}
 
+		ECS_INLINE Stream<char> GetComponentName(Component component) const {
+			return cached_unique_infos.GetValuePtr(component)->info->name;
+		}
+
 		ECS_INLINE Stream<char> GetSharedComponentNameByIteration(size_t index) const {
 			return { OffsetPointer(shared_name_characters, shared_name_offsets[index]), shared_component_pairs[index].name_size };
 		}
 
+		ECS_INLINE Stream<char> GetSharedComponentName(Component component) const {
+			return cached_shared_infos.GetValuePtr(component)->info->name;
+		}
+
 		ECS_INLINE Stream<char> GetGlobalComponentNameByIteration(size_t index) const {
 			return { OffsetPointer(global_name_characters, global_name_offsets[index]), global_component_pairs[index].name_size };
+		}
+
+		ECS_INLINE Stream<char> GetGlobalComponentName(Component component) const {
+			return cached_global_infos.GetValuePtr(component)->info->name;
 		}
 
 		SerializeEntityManagerHeader header;

@@ -10,33 +10,39 @@ namespace ECSEngine {
 
 	struct EntityManager;
 	struct SerializeEntityManagerOptions;
+	struct DeserializeEntityManagerOptions;
+	struct DeserializeEntityManagerHeaderSectionData;
 
 	namespace Reflection {
 		struct ReflectionManager;
 	}
 
 	struct ECSENGINE_API ECS_REFLECT EntityManagerChangeSet {
-		// This structure describes a component update/addition/removal
+		// This structure describes a unique component update/addition/removal
 		struct EntityComponentChange {
 			ECS_CHANGE_SET_TYPE change_type;
 			Component component;
 		};
 
+		// This can contain a new component addition or the update of an existing component
+		struct EntitySharedComponentInstanceChange {
+			Component component;
+			SharedInstance instance;
+		};
+
 		// Store the changes per entity, which achieves a blend of fast entity change set runtime determination, and disk write efficiency
 		struct EntityChanges {
 			Entity entity;
-			Stream<EntityComponentChange> changes;
+			Stream<EntityComponentChange> unique_changes;
+			Stream<Component> removed_shared_components;
+			// Can contain a new component addition or the update of an existing component
+			Stream<EntitySharedComponentInstanceChange> shared_instance_changes;
 		};
 
 		// This is created when the entity info of an entity is changed
 		struct EntityInfoChange {
 			Entity entity;
 			EntityInfo info;
-		};
-
-		// When an entity is destroyed, this will record the entity that was destroyed
-		struct EntityInfoDestroy {
-			Entity entity;
 		};
 
 		// When a new entity is created, this will record the entity that was created
@@ -78,7 +84,7 @@ namespace ECSEngine {
 		DeckPowerOfTwo<EntityChanges> entity_unique_component_changes;
 		// From the EntityInfo structures we can deduce the entity pool and the entity order inside the archetypes
 		DeckPowerOfTwo<EntityInfoChange> entity_info_changes;
-		DeckPowerOfTwo<EntityInfoDestroy> entity_info_destroys;
+		DeckPowerOfTwo<Entity> entity_info_destroys;
 		DeckPowerOfTwo<EntityInfoAddition> entity_info_additions;
 		// This structure contains the modifications that shared instances went through - we need to record these as well,
 		// Otherwise the entities might reference invalid data
@@ -112,6 +118,30 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		WriteInstrument* write_instrument,
 		bool write_entity_manager_header_section
+	);
+
+	struct DeserializeEntityManagerChangeSetOptions {
+		// If the header section was serialized separately, you will need to provide it here,
+		// Otherwise it will assume that it needs to read it.
+		const DeserializeEntityManagerHeaderSectionData* deserialize_manager_header_section = nullptr;
+		// If you want to receive the change set as an output parameter, you can fill this pointer in
+		// And provide a temporary allocator such that the buffers can be allocated from it
+		EntityManagerChangeSet* change_set = nullptr;
+		AllocatorPolymorphic temporary_allocator = {};
+	};
+
+	// Reads a deserialized entity manager change set and applies it to the entity manager.
+	// The deserialize_options remove_missing_components applies here, if a component is missing,
+	// And this flag is false, it will fail the deserialization. Check the other options that are
+	// Available, including receiving the change set as an out parameter, in case you want to perform
+	// Some other operations.
+	// Returns true if it succeeded, else false.
+	ECSENGINE_API bool DeserializeEntityManagerChangeSet(
+		EntityManager* entity_manager,
+		const DeserializeEntityManagerOptions* deserialize_options,
+		const Reflection::ReflectionManager* reflection_manager,
+		ReadInstrument* read_instrument,
+		DeserializeEntityManagerChangeSetOptions* options = nullptr
 	);
 
 	// -----------------------------------------------------------------------------------------------------------------------------

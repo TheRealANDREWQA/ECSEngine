@@ -1213,7 +1213,6 @@ namespace ECSEngine {
 				}
 
 				// We can register the component directly with the new ID - such that we don't need to perform any remapping
-				ECS_STACK_CAPACITY_STREAM(size_t, dummy_data, 256);
 				entity_manager->RegisterGlobalComponentCommit(
 					cached_info->found_at,
 					component_fixup->component_byte_size,
