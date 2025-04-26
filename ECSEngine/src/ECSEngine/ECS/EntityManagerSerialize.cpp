@@ -308,7 +308,7 @@ namespace ECSEngine {
 		buffering.size = 0;
 		// Write the shared instances for each shared component now
 		for (size_t index = 0; index < registered_shared_components.size; index++) {
-			CapacityStream<SharedInstance> instances = { buffering.buffer, 0, buffering.capacity / sizeof(SharedInstance) };
+			CapacityStream<SharedInstance> instances = { buffering.buffer, 0, (unsigned int)(buffering.capacity / sizeof(SharedInstance)) };
 			entity_manager->GetSharedComponentInstanceAll(registered_shared_components[index], instances);
 			if (instances.size > 0) {
 				if (!write_instrument->Write(instances.buffer, instances.CopySize())) {

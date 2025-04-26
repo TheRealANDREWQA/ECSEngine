@@ -335,9 +335,12 @@
     <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderInclude.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
+    <ClInclude Include="src\ECSEngine\Resources\SceneDelta.h" />
+    <ClInclude Include="src\ECSEngine\Resources\SceneTypes.h" />
     <ClInclude Include="src\ECSEngine\Resources\WriteTexture.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDrawTypes.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleSourceCode.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Algorithms.h" />
@@ -678,6 +681,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ShaderInclude.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ShaderReflection.cpp" />
+    <ClCompile Include="src\ECSEngine\Resources\SceneDelta.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\WriteTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Disabled</Optimization>
