@@ -21,7 +21,8 @@ namespace ECSEngine {
 		entity_unique_component_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 		entity_info_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 		entity_info_destroys.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
-		entity_info_additions.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
+		entity_info_additions_entity.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
+		entity_info_additions_entity_info.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 		shared_component_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 		global_component_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 	}
@@ -42,7 +43,8 @@ namespace ECSEngine {
 		entity_unique_component_changes.Deallocate();
 		entity_info_changes.Deallocate();
 		entity_info_destroys.Deallocate();
-		entity_info_additions.Deallocate();
+		entity_info_additions_entity.Deallocate();
+		entity_info_additions_entity_info.Deallocate();
 		shared_component_changes.Deallocate();
 		global_component_changes.Deallocate();
 	}
@@ -70,7 +72,8 @@ namespace ECSEngine {
 
 				if (new_pool_generation_index != entity_info.generation_count) {
 					change_set.entity_info_destroys.Add({ entity });
-					change_set.entity_info_additions.Add({ entity, new_entity_info });
+					change_set.entity_info_additions_entity.Add(entity);
+					change_set.entity_info_additions_entity_info.Add(new_entity_info);
 				}
 				else {
 					// The generation is the same, then check the fields of the entity info for changes
@@ -86,7 +89,8 @@ namespace ECSEngine {
 			unsigned int previous_pool_generation_index = new_pool->IsEntityAt(entity.index);
 			if (previous_pool_generation_index == -1) {
 				// This is a new addition, register it
-				change_set.entity_info_additions.Add({ entity, entity_info });
+				change_set.entity_info_additions_entity.Add(entity);
+				change_set.entity_info_additions_entity_info.Add(entity_info);
 			}
 		});
 	}
@@ -660,7 +664,12 @@ namespace ECSEngine {
 			entity_manager->DeleteEntitiesCommit(change_set.entity_info_destroys.buffers[index]);
 		}
 
-		//entity_manager->CreateEntitiesCommit()
+		// Create the new entities
+		for (size_t index = 0; index < change_set.entity_info_additions_entity.buffers.size; index++) {
+			// Exclude these from the hierarchy, they will be handled separately by the entity hierarchy change set
+			entity_manager->CreateSpecificEntitiesCommit(change_set.entity_info_additions_entity.buffers[index], {}, {}, true);
+			// Set the entity info to the one stored
+		}
 
 		return true;
 	}
