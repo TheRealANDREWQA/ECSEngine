@@ -24,8 +24,8 @@ namespace ECSEngine {
 
 	struct AMDData {
 		ADLXHelper helper;
-		IADLXGPUPtr gpu;
-		IADLXPerformanceMonitoringServicesPtr performance_services;
+		adlx::IADLXGPUPtr gpu;
+		adlx::IADLXPerformanceMonitoringServicesPtr performance_services;
 		// These are cached at initialization time
 		bool is_gpu_usage_supported = false;
 		bool is_gpu_used_memory_supported = false;
@@ -137,7 +137,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		IADLXGPUListPtr gpu_list;
+		adlx::IADLXGPUListPtr gpu_list;
 		if (!ADLX_SUCCEEDED(AMD.helper.GetSystemServices()->GetGPUs(&gpu_list))) {
 			// Clean up the interfaces that were retrieved
 			AMD.performance_services.Release();
@@ -149,14 +149,14 @@ namespace ECSEngine {
 		bool gpu_was_found = false;
 		size_t gpu_count = gpu_list->Size();
 		for (size_t index = 0; index < gpu_count; index++) {
-			IADLXGPUPtr gpu;
+			adlx::IADLXGPUPtr gpu;
 			if (ADLX_SUCCEEDED(gpu_list->At(index, &gpu))) {
 				const char* gpu_device_id_string;
 				if (ADLX_SUCCEEDED(gpu->DeviceId(&gpu_device_id_string))) {
 					size_t current_gpu_device_id = ConvertHexToInt(Stream<char>(gpu_device_id_string));
 					if (current_gpu_device_id == device_id) {
 						// Ensure that we can retrieve the metrics support for the GPU
-						IADLXGPUMetricsSupportPtr metrics_support;
+						adlx::IADLXGPUMetricsSupportPtr metrics_support;
 						if (!ADLX_SUCCEEDED(AMD.performance_services->GetSupportedGPUMetrics(gpu, &metrics_support))) {
 							// Clean up the interfaces that were retrieved
 							AMD.performance_services.Release();
@@ -284,7 +284,7 @@ namespace ECSEngine {
 	}
 
 	static bool GetAMDStats(GPUStats* stats) {
-		IADLXGPUMetricsPtr gpu_metrics;
+		adlx::IADLXGPUMetricsPtr gpu_metrics;
 
 		if (!ADLX_SUCCEEDED(AMD.performance_services->GetCurrentGPUMetrics(AMD.gpu, &gpu_metrics))) {
 			return false;
