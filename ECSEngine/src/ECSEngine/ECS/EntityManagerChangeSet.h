@@ -39,16 +39,34 @@ namespace ECSEngine {
 			Stream<EntitySharedComponentInstanceChange> shared_instance_changes;
 		};
 
+		// Describes a new archetype that was created
+		struct NewArchetype {
+			Stream<Component> unique_signature;
+			Stream<Component> shared_signature;
+		};
+
+		// Describes an archetype whose index has changed due to different archetype change
+		struct MovedArchetype {
+			// A short suffices as indexing
+			unsigned short previous_index;
+			unsigned short current_index;
+		};
+
+		struct BaseArchetypeChanges {
+			// A short suffices as indexing
+			unsigned short archetype;
+			// Like the normal archetypes, the order in which these must be applied is critical.
+			// Firstly, those that need to be destroyed are removed, then the new ones are created
+			// And at last those that are moved are handled.
+			ResizableStream<unsigned short> destroyed_base;
+			ResizableStream<Stream<SharedInstance>> new_base;
+			ResizableStream<ushort2> moved_base;
+		};
+
 		// This is created when the entity info of an entity is changed
 		struct EntityInfoChange {
 			Entity entity;
 			EntityInfo info;
-		};
-
-		// When a new entity is created, this will record the entity that was created
-		struct EntityInfoAddition {
-			Entity entity;
-			EntityInfo entity_info;
 		};
 
 		// This structure contains information about an instance of a shared component that was added/removed/changed
@@ -85,11 +103,30 @@ namespace ECSEngine {
 		// From the EntityInfo structures we can deduce the entity pool and the entity order inside the archetypes
 		DeckPowerOfTwo<EntityInfoChange> entity_info_changes;
 		DeckPowerOfTwo<Entity> entity_info_destroys;
-		DeckPowerOfTwo<EntityInfoAddition> entity_info_additions;
+
+		// These are 2 SoA buffers. The reason for not using AoS is because on deserialization
+		// Having the entities as a buffer directly helps with the creation API
+		//struct {
+			DeckPowerOfTwo<Entity> entity_info_additions_entity;
+			DeckPowerOfTwo<EntityInfo> entity_info_additions_entity_info;
+		//};
+
 		// This structure contains the modifications that shared instances went through - we need to record these as well,
 		// Otherwise the entities might reference invalid data
 		DeckPowerOfTwo<SharedComponentChanges> shared_component_changes;
 		DeckPowerOfTwo<GlobalComponentChange> global_component_changes;
+
+		// We need to record the archetype changes as well, such that the consistency is maintained
+		// The order in which these are applied is important. Firstly, the necessary archetypes are destroyed,
+		// Then the new archetypes are created and at last the moved archetypes are handled. It is critical that
+		// These operations are done exactly in this order, otherwise the consistency is not achieved
+		DeckPowerOfTwo<unsigned int> destroyed_archetypes;
+		DeckPowerOfTwo<NewArchetype> new_archetypes;
+		DeckPowerOfTwo<MovedArchetype> moved_archetypes;
+
+		// The base archetype changes need to be recorded as well
+		DeckPowerOfTwo<BaseArchetypeChanges> base_archetype_changes;
+
 		// Record the hierarchy change set as well
 		EntityHierarchyChangeSet hierarchy_change_set;
 	};
