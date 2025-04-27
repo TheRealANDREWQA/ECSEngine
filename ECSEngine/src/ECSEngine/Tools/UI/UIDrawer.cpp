@@ -7052,7 +7052,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::SentenceDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> text, void* resource, float2 position) {
+		void UIDrawer::SentenceDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> text, void* resource, float2 position, const UIActionHandler& clickable_action) {
 			char separator_token = SentenceToken(configuration, config);
 
 			// the token might be needed to be kept always
@@ -7062,6 +7062,8 @@ namespace ECSEngine {
 			// will not disturb the final string that much
 
 			if (configuration & UI_CONFIG_DO_CACHE) {
+				ECS_ASSERT(clickable_action.action == nullptr, "Unimplemented code path");
+
 #pragma region Cached
 
 				ECS_UI_DRAWER_MODE previous_draw_mode = draw_mode;
@@ -7157,7 +7159,6 @@ namespace ECSEngine {
 			else {
 #pragma region Non cached
 
-				constexpr size_t WHITESPACE_ALLOCATION_SIZE = ECS_KB * 50;
 				ECS_STACK_CAPACITY_STREAM(unsigned int, whitespace_characters, ECS_KB * 4);
 				whitespace_characters.size = SentenceWhitespaceCharactersCount(text, whitespace_characters, separator_token);
 
@@ -7197,6 +7198,18 @@ namespace ECSEngine {
 					single_sentence = text[whitespace_characters[index]] != '\n';
 				}
 
+				// Disable the label padding if we have a clickable action, such that it mirrors 1 to 1 the normal text
+				float2 initial_label_padding = element_descriptor.label_padd;
+				if (clickable_action.action != nullptr) {
+					element_descriptor.label_padd = { 0.0f, 0.0f };
+				}
+
+				// We must also add an empty hoverable, such that it doesn't show the highlight
+				UIDrawConfig button_config = config;
+				UIConfigButtonHoverable button_empty_hoverable;
+				button_empty_hoverable.handler = { SkipAction };
+				button_config.AddFlag(button_empty_hoverable);
+
 				auto draw_word_by_word = [&]() {
 					size_t text_configuration = configuration;
 					text_configuration |= HasFlag(configuration, UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) ? UI_CONFIG_ALIGN_TO_ROW_Y : 0;
@@ -7208,7 +7221,13 @@ namespace ECSEngine {
 							unsigned int last_character_index = word_end_index + 1 + keep_token;
 							last_character_index -= last_character_index >= text.size;
 
-							Text(text_configuration, config, { text.buffer + word_start_index, last_character_index - word_start_index });
+							Stream<char> characters = { text.buffer + word_start_index, last_character_index - word_start_index };
+							if (clickable_action.action == nullptr) {
+								Text(text_configuration, config, characters);
+							}
+							else {
+								Button(text_configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_BUTTON_HOVERABLE, button_config, characters, clickable_action);
+							}
 							Indent(-1.0f);
 						}
 
@@ -7233,14 +7252,37 @@ namespace ECSEngine {
 					if (ValidatePosition(0, position, text_span)) {
 						if (draw_mode == ECS_UI_DRAWER_FIT_SPACE) {
 							if (position.x + text_span.x < region_limit.x) {
-								Text(configuration, config, text, position);
+								if (clickable_action.action == nullptr) {
+									Text(configuration, config, text, position);
+								}
+								else {
+									UIConfigAbsoluteTransform absolute_transform;
+									// We must add the render offset since it will be subtracted in the button call
+									absolute_transform.position = position + region_render_offset;
+									// The scale will be deduced from the text size
+									absolute_transform.scale = { 0.0f, 0.0f };
+									button_config.AddFlag(absolute_transform);
+									Button(configuration | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_BUTTON_HOVERABLE, button_config, text, clickable_action);
+									button_config.flag_count--;
+								}
 							}
 							else {
 								draw_word_by_word();
 							}
 						}
 						else {
-							Text(configuration, config, text, position);
+							if (clickable_action.action == nullptr) {
+								Text(configuration, config, text, position);
+							}
+							else {
+								UIDrawConfig temp_config = config;
+								UIConfigAbsoluteTransform absolute_transform;
+								absolute_transform.position = position;
+								// The scale will be deduced from the text size
+								absolute_transform.scale = { 0.0f, 0.0f };
+								temp_config.AddFlag(absolute_transform);
+								Button(configuration | UI_CONFIG_ABSOLUTE_TRANSFORM, temp_config, text, clickable_action);
+							}
 						}
 					}
 					else {
@@ -7275,6 +7317,10 @@ namespace ECSEngine {
 				}
 				else {
 					draw_word_by_word();
+				}
+
+				if (clickable_action.action != nullptr) {
+					element_descriptor.label_padd = initial_label_padding;
 				}
 
 				if (configuration & UI_CONFIG_SENTENCE_FIT_SPACE) {
@@ -15200,12 +15246,12 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::Sentence(Stream<char> text) {
+		void UIDrawer::Sentence(Stream<char> text, const UIActionHandler& clickable_action) {
 			UIDrawConfig config;
-			Sentence(0, config, text);
+			Sentence(0, config, text, clickable_action);
 		}
 
-		void UIDrawer::Sentence(size_t configuration, const UIDrawConfig& config, Stream<char> text) {
+		void UIDrawer::Sentence(size_t configuration, const UIDrawConfig& config, Stream<char> text, const UIActionHandler& clickable_action) {
 			if (!initializer) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
@@ -15214,7 +15260,7 @@ namespace ECSEngine {
 				if (configuration & UI_CONFIG_DO_CACHE) {
 					resource = GetResource(text);
 				}
-				SentenceDrawer(configuration, config, HandleResourceIdentifier(text), resource, position);
+				SentenceDrawer(configuration, config, HandleResourceIdentifier(text), resource, position, clickable_action);
 			}
 			else {
 				if (configuration & UI_CONFIG_DO_CACHE) {

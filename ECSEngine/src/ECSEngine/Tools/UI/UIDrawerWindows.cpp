@@ -1976,10 +1976,14 @@ namespace ECSEngine {
 				parameters.color = CONSOLE_COLORS[(unsigned int)console_message.type];
 
 				config.AddFlag(parameters);
+				// Use data size of 0, since the data is stable, to avoid making an extra copy
+				UIActionHandler message_clickable_handler = console_message.clickable_handler;
+				message_clickable_handler.data_size = 0;
 				drawer.Sentence(
 					UI_CONFIG_SENTENCE_FIT_SPACE | UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE | UI_CONFIG_TEXT_PARAMETERS, 
 					config, 
-					console_message.message.buffer
+					console_message.message,
+					message_clickable_handler
 				);
 				config.flag_count--;
 			};

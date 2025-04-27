@@ -183,6 +183,7 @@ namespace ECSEngine {
 		clear_on_play = false;
 
 		format = ECS_FORMAT_DATE_HOUR | ECS_FORMAT_DATE_MINUTES | ECS_FORMAT_DATE_SECONDS;
+		format_character_count = ConvertDateToStringMaxCharacterCount(format);
 		// Don't choose a power of two as chunk size to avoid cache associativity problems
 		const size_t MESSAGE_CHUNK_COUNT = 500;
 		size_t max_chunk_allocation_count = (MaxMessageCount() / MESSAGE_CHUNK_COUNT) + 1;
@@ -227,17 +228,17 @@ namespace ECSEngine {
 
 	size_t Console::GetFormatCharacterCount() const
 	{
-		return ConvertDateToStringMaxCharacterCount(format);
+		return format_character_count;
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::ConvertToMessage(Stream<char> message, ConsoleMessage& console_message)
+	void Console::ConvertToMessage(Stream<char> message, const Tools::UIActionHandler& clickable_handler, ConsoleMessage& console_message)
 	{
 		size_t format_character_count = GetFormatCharacterCount();
 
 		bool not_enough_space = false;
-		CapacityStream<char> allocation = message_allocator.Request(message.size + format_character_count + 1, not_enough_space);
+		CapacityStream<char> allocation = message_allocator.Request(message.size + format_character_count + 1 + clickable_handler.data_size, not_enough_space);
 		ECS_HARD_ASSERT(!not_enough_space, "Console message allocator ran out of space");
 
 		allocation.size = 0;
@@ -248,6 +249,13 @@ namespace ECSEngine {
 		allocation.size += message.size;
 		allocation[allocation.size] = '\0';
 		console_message.message = allocation;
+
+		console_message.clickable_handler = clickable_handler;
+		if (clickable_handler.data_size > 0) {
+			console_message.clickable_handler.data = OffsetPointer(allocation);
+			memcpy(console_message.clickable_handler.data, clickable_handler.data, clickable_handler.data_size);
+			allocation.size += clickable_handler.data_size;
+		}
 
 		message_allocator.FinishRequest(allocation.capacity);
 	}
@@ -313,14 +321,14 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
+	void Console::Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, const ConsoleMessageOptions& options) {
 		ConsoleMessage console_message;
-		console_message.verbosity = verbosity;
+		console_message.verbosity = options.verbosity;
 		console_message.type = type;
 
 		// Get the system string index if the message is different from nullptr.
-		if (system.size > 0) {
-			unsigned int system_index = FindString(system, Stream<Stream<char>>(system_filter_strings.buffer, system_filter_strings.size));
+		if (options.system.size > 0) {
+			unsigned int system_index = FindString(options.system, system_filter_strings.ToStream());
 			if (system_index != -1) {
 				console_message.system_filter = (size_t)1 << (size_t)system_index;
 			}
@@ -335,7 +343,7 @@ namespace ECSEngine {
 		bool success = false;
 		unsigned int write_index = messages.Request(success);
 		if (success) {
-			ConvertToMessage(message, console_message);
+			ConvertToMessage(message, options.clickable_action, console_message);
 			messages[write_index] = console_message;
 			messages.FinishRequest(write_index);
 		}
@@ -362,20 +370,20 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Info(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
-		Message(message, ECS_CONSOLE_INFO, system, verbosity);
+	void Console::Info(Stream<char> message, const ConsoleMessageOptions& options) {
+		Message(message, ECS_CONSOLE_INFO, options);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Warn(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
-		Message(message, ECS_CONSOLE_WARN, system, verbosity);
+	void Console::Warn(Stream<char> message, const ConsoleMessageOptions& options) {
+		Message(message, ECS_CONSOLE_WARN, options);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Error(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
-		Message(message, ECS_CONSOLE_ERROR, system, verbosity);
+	void Console::Error(Stream<char> message, const ConsoleMessageOptions& options) {
+		Message(message, ECS_CONSOLE_ERROR, options);
 		if (pause_on_error) {
 			if (on_error_trigger != nullptr) {
 				on_error_trigger(on_error_trigger_data);
@@ -385,15 +393,15 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Trace(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
-		Message(message, ECS_CONSOLE_TRACE, system, verbosity);
+	void Console::Trace(Stream<char> message, const ConsoleMessageOptions& options) {
+		Message(message, ECS_CONSOLE_TRACE, options);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Graphics(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity)
+	void Console::Graphics(Stream<char> message, const ConsoleMessageOptions& options)
 	{
-		Message(message, ECS_CONSOLE_GRAPHICS, system, verbosity);
+		Message(message, ECS_CONSOLE_GRAPHICS, options);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
@@ -422,6 +430,7 @@ namespace ECSEngine {
 	void Console::SetFormat(ECS_FORMAT_DATE_FLAGS _format)
 	{
 		format = _format;
+		format_character_count = ConvertDateToStringMaxCharacterCount(format);
 	}
 
 	// -------------------------------------------------------------------------------------------------------

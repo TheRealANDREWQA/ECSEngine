@@ -214,6 +214,12 @@ public:
 						}
 					};
 
+					if (editor_state.Mouse()->IsPressed(ECS_MOUSE_X1)) {
+						//OpenSourceFileInIDE(&editor_state, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Containers\\Stream.h", 150);
+						OpenSourceFileInIDE(&editor_state, L"C:\\Users\\Andrei\\C++\\ECSEngine\\Modules\\src\\Logging.cpp", 14);
+						//OpenSourceFileInIDE(&editor_state, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Containers\Stream.h", 150);
+					}
+
 					timer.SetNewStart();
 
 					// The main thread might run into page guards that the physical memory places

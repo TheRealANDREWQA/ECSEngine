@@ -112,30 +112,30 @@ void CreateWorldDescriptorUIReflectionType(EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorSetConsoleError(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity) {
+void EditorSetConsoleError(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity, const UIActionHandler& clickable_action) {
 	Console* console = GetConsole();
-	console->Error(error_message, EDITOR_CONSOLE_SYSTEM_NAME, verbosity);
+	console->Error(error_message, { EDITOR_CONSOLE_SYSTEM_NAME, verbosity, clickable_action });
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorSetConsoleWarn(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity) {
+void EditorSetConsoleWarn(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity, const UIActionHandler& clickable_action) {
 	Console* console = GetConsole();
-	console->Warn(error_message, EDITOR_CONSOLE_SYSTEM_NAME, verbosity);
+	console->Warn(error_message, { EDITOR_CONSOLE_SYSTEM_NAME, verbosity, clickable_action });
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorSetConsoleInfo(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity) {
+void EditorSetConsoleInfo(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity, const UIActionHandler& clickable_action) {
 	Console* console = GetConsole();
-	console->Info(error_message, EDITOR_CONSOLE_SYSTEM_NAME, verbosity);
+	console->Info(error_message, { EDITOR_CONSOLE_SYSTEM_NAME, verbosity, clickable_action });
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorSetConsoleTrace(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity) {
+void EditorSetConsoleTrace(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity, const UIActionHandler& clickable_action) {
 	Console* console = GetConsole();
-	console->Trace(error_message, EDITOR_CONSOLE_SYSTEM_NAME, verbosity);
+	console->Trace(error_message, { EDITOR_CONSOLE_SYSTEM_NAME, verbosity, clickable_action });
 }
 
 // -----------------------------------------------------------------------------------------------------------------

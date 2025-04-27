@@ -5,15 +5,15 @@
 
 using namespace ECSEngine;
 
-void LogInfo(Stream<char> message, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MEDIUM);
+void LogInfo(Stream<char> message, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MEDIUM, const Tools::UIActionHandler& clickable_action = { nullptr });
 
-void LogWarn(Stream<char> message, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MEDIUM);
+void LogWarn(Stream<char> message, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MEDIUM, const Tools::UIActionHandler& clickable_action = { nullptr });
 
-void LogError(Stream<char> message, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
+void LogError(Stream<char> message, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT, const Tools::UIActionHandler& clickable_action = { nullptr });
 
-void LogTrace(Stream<char> message, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MEDIUM);
+void LogTrace(Stream<char> message, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MEDIUM, const Tools::UIActionHandler& clickable_action = { nullptr });
 
-void Log(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
+void Log(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT, const Tools::UIActionHandler& clickable_action = { nullptr });
 
 void LogEntity(Entity entity, ECS_CONSOLE_MESSAGE_TYPE type, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
