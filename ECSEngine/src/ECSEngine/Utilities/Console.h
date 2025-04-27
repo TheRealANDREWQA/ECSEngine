@@ -3,6 +3,7 @@
 #include "File.h"
 #include "../Containers/ResizableAtomicDeck.h"
 #include "../Allocators/MemoryManager.h"
+#include "../Tools/UI/UIStructures.h"
 
 namespace ECSEngine {
 
@@ -47,9 +48,17 @@ namespace ECSEngine {
 	struct ConsoleMessage {
 		Stream<char> message;
 		size_t system_filter;
+		// This is an optional clickable action that can be added to the 
+		Tools::UIActionHandler clickable_handler = { nullptr };
 		unsigned char client_message_start;
 		ECS_CONSOLE_MESSAGE_TYPE type = ECS_CONSOLE_MESSAGE_COUNT;
 		unsigned char verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT;
+	};
+
+	struct ConsoleMessageOptions {
+		Stream<char> system = {};
+		ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT;
+		Tools::UIActionHandler clickable_action = { nullptr };
 	};
 
 	// Dump path can be allocated on the stack, it will copy to a private buffer
@@ -70,7 +79,7 @@ namespace ECSEngine {
 
 		size_t GetFormatCharacterCount() const;
 
-		void ConvertToMessage(Stream<char> message, ConsoleMessage& console_message);
+		void ConvertToMessage(Stream<char> message, const Tools::UIActionHandler& clickable_action, ConsoleMessage& console_message);
 
 		void ChangeDumpPath(Stream<wchar_t> new_path);
 
@@ -87,17 +96,17 @@ namespace ECSEngine {
 		// It does not use the background thread. Returns true if it succeeded, else false
 		bool DumpToFile(Stream<wchar_t> path, bool write_as_binary = true);
 
-		void Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
+		void Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, const ConsoleMessageOptions& options = {});
 
-		void Info(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
+		void Info(Stream<char> message, const ConsoleMessageOptions& options = {});
 
-		void Warn(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
+		void Warn(Stream<char> message, const ConsoleMessageOptions& options = {});
 
-		void Error(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
+		void Error(Stream<char> message, const ConsoleMessageOptions& options = {});
 
-		void Trace(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
+		void Trace(Stream<char> message, const ConsoleMessageOptions& options = {});
 
-		void Graphics(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
+		void Graphics(Stream<char> message, const ConsoleMessageOptions& options = {});
 
 		void WriteFormatCharacters(CapacityStream<char>& characters);
 
@@ -120,6 +129,9 @@ namespace ECSEngine {
 		bool clear_on_play;
 		unsigned char verbosity_level;
 		ECS_CONSOLE_DUMP_TYPE dump_type;
+		ECS_FORMAT_DATE_FLAGS format;
+		// Caches the amount of necessary characters for the current format option
+		unsigned char format_character_count;
 		unsigned int last_dumped_message;
 		unsigned int dump_count_for_commit;
 		ECS_FILE_HANDLE dump_file;
@@ -130,7 +142,6 @@ namespace ECSEngine {
 		
 		ResizableAtomicDeck<ConsoleMessage> messages;
 		ResizableStream<Stream<char>> system_filter_strings;
-		ECS_FORMAT_DATE_FLAGS format;
 		Stream<wchar_t> dump_path;
 
 	private:

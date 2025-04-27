@@ -9,6 +9,7 @@
 #include "ModuleSettings.h"
 #include "../UI/Inspector.h"
 #include "../Sandbox/SandboxModule.h"
+#include "../Editor/EditorTextIDE.h"
 
 using namespace ECSEngine;
 
@@ -50,13 +51,32 @@ constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-static void OpenModuleLogFile(Stream<wchar_t> log_path) {
+static void OpenModuleLogFile(const EditorState* editor_state, Stream<wchar_t> log_path) {
 	// TODO: Should we change the name of this function?
 	// Now it opens the file and determines the errors and prints
 	// Them in the ECS console
-	//OS::LaunchFileExplorerWithError(log_path);
 
-	auto print_errors = [](Stream<char> messages_start) {
+	auto print_errors = [editor_state](Stream<char> messages_start) {
+		struct OpenFileData {
+			unsigned int* Size() {
+				return &path_size;
+			}
+
+			const EditorState* editor_state;
+			unsigned int line;
+			unsigned int path_size;
+		};
+
+		auto open_source_file_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+			
+			OpenFileData* data = (OpenFileData*)_data;
+			Stream<wchar_t> file_path = GetCoalescedStreamFromType(data).As<wchar_t>();
+			OpenSourceFileInIDE(data->editor_state, file_path, data->line);
+		};
+
+		ECS_STACK_VOID_STREAM(open_file_data_storage, ECS_KB * 2);
+
 		// There are 2 or 3 \n after the messages block
 		Stream<char> messages_end = FindFirstToken(messages_start, "\n\n");
 		messages_start.Advance();
@@ -65,8 +85,33 @@ static void OpenModuleLogFile(Stream<wchar_t> log_path) {
 			Stream<char> current_line = messages_start.StartDifference(line_end);
 			Stream<char> error_token = FindFirstToken(current_line, " error ");
 			if (error_token.size > 0) {
-				// The line contains an error
-				EditorSetConsoleError(current_line);
+				// The line contains an error. Determine the file and the line where the error occured.
+				// The file are the characters up to the first (. The first number after ( is the line number.
+				// (for the MSVC output).
+				Stream<char> first_parenthese = FindFirstCharacter(current_line, '(');
+				UIActionHandler line_error_handler = { nullptr };
+
+				if (first_parenthese.size > 0) {
+					Stream<char> first_comma = FindFirstCharacter(first_parenthese, ',');
+					if (first_comma.size > 0) {
+						// We must skip the initial whitespace
+						Stream<char> error_file_path = SkipWhitespace(current_line.StartDifference(first_parenthese));
+						Stream<char> error_line_characters = first_parenthese.AdvanceReturn().StartDifference(first_comma);
+						unsigned int error_line = ConvertCharactersToInt(error_line_characters);
+
+						ECS_STACK_CAPACITY_STREAM(wchar_t, error_file_path_wide, 512);
+						ConvertASCIIToWide(error_file_path_wide, error_file_path);
+						open_file_data_storage.size = 0;
+
+						OpenFileData* open_file_data = CreateCoalescedStreamIntoType<OpenFileData>(open_file_data_storage, error_file_path_wide, &line_error_handler.data_size);
+						open_file_data->editor_state = editor_state;
+						open_file_data->line = error_line;
+						line_error_handler.data = open_file_data;
+						line_error_handler.action = open_source_file_action;
+					}
+				}
+
+				EditorSetConsoleError(current_line, ECS_CONSOLE_VERBOSITY_IMPORTANT, line_error_handler);
 			}
 			messages_start = line_end.AdvanceReturn();
 			line_end = FindFirstCharacter(messages_start, '\n');
@@ -141,7 +186,7 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 							);
 							EditorSetConsoleError(error_message);
 							
-							OpenModuleLogFile(log_path);
+							OpenModuleLogFile(editor_state, log_path);
 						}
 					}
 					else {
@@ -149,7 +194,7 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} has compilation errors. Check the compiler log.",
 								Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer));
 							EditorSetConsoleError(error_message);
-							OpenModuleLogFile(log_path);
+							OpenModuleLogFile(editor_state, log_path);
 						}
 					}
 					return false;
@@ -165,7 +210,7 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 			else {
 				if (!disable_logging) {
 					EditorSetConsoleError("A module failed to build. Could not deduce library name. Check the compiler log.");
-					OpenModuleLogFile(log_path);
+					OpenModuleLogFile(editor_state, log_path);
 				}
 				return false;
 			}
@@ -175,7 +220,7 @@ static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_pa
 		if (!disable_logging) {
 			ECS_FORMAT_TEMP_STRING(error_message, "Could not open {#} to read the log. Open the file externally to check the command status.", log_path);
 			EditorSetConsoleWarn(error_message);
-			OpenModuleLogFile(log_path);
+			OpenModuleLogFile(editor_state, log_path);
 		}
 		return false;
 	}

@@ -1228,7 +1228,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void SentenceDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> identifier, void* resource, float2 position);
+			void SentenceDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> identifier, void* resource, float2 position, const UIActionHandler& clickable_action);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4266,9 +4266,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void Sentence(Stream<char> text);
+			// If the action is provided, it will be applied to the entire sentence
+			void Sentence(Stream<char> text, const UIActionHandler& clickable_action = { nullptr });
 
-			void Sentence(size_t configuration, const UIDrawConfig& config, Stream<char> text);
+			// If the action is provided, it will be applied to the entire sentence
+			void Sentence(size_t configuration, const UIDrawConfig& config, Stream<char> text, const UIActionHandler& clickable_action = { nullptr });
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
