@@ -658,6 +658,11 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// Perform the archetype handling - which is the most complicated part.
+		// Start with the destructions that need to be performed.
+		change_set.destroyed_archetypes.ForEach([&](unsigned int archetype_index) {
+		});
+
 		// Now perform the per entity related operations.
 		// Start with destroying the entities which are for sure gone
 		for (size_t index = 0; index < change_set.entity_info_destroys.buffers.size; index++) {

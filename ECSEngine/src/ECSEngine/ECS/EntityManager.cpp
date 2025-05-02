@@ -3,6 +3,7 @@
 #include "../Utilities/Crash.h"
 #include "ArchetypeQueryCache.h"
 #include "Components.h"
+#include "../Utilities/StreamUtilities.h"
 
 #define ENTITY_MANAGER_DEFAULT_UNIQUE_COMPONENTS (1 << 7)
 #define ENTITY_MANAGER_DEFAULT_SHARED_COMPONENTS (1 << 7)
@@ -3995,17 +3996,11 @@ namespace ECSEngine {
 
 	void EntityManager::DestroyArchetypesCommit(Stream<unsigned int> indices)
 	{
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, remapping, 512);
-		remapping.CopyOther(indices);
-
-		for (size_t index = 0; index < remapping.size; index++) {
-			DestroyArchetypeCommit(remapping[index]);
-			unsigned int swapped_archetype = m_archetypes.size;
-			size_t remapping_index = SearchBytes(remapping.buffer + index, indices.size, swapped_archetype, sizeof(swapped_archetype));
-			if (remapping_index != -1) {
-				remapping[remapping_index] = remapping[index];
-			}
-		}
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB * 8);
+		auto iterator = indices.MutableIterator();
+		RemoveArrayElements(&iterator, m_archetypes.size, &stack_allocator, [&](unsigned int index) {
+			DestroyArchetypeCommit(index);
+		});
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

@@ -5,6 +5,7 @@
 #include "InternalStructures.h"
 #include "EntityChangeSet.h"
 #include "EntityHierarchy.h"
+#include "../Utilities/StreamUtilities.h"
 
 namespace ECSEngine {
 
@@ -43,13 +44,14 @@ namespace ECSEngine {
 		struct NewArchetype {
 			Stream<Component> unique_signature;
 			Stream<Component> shared_signature;
+			// A short suffices as indexing. This is the index of the archetype where it should be located at.
+			unsigned short index;
 		};
 
-		// Describes an archetype whose index has changed due to different archetype change
-		struct MovedArchetype {
-			// A short suffices as indexing
-			unsigned short previous_index;
-			unsigned short current_index;
+		struct NewArchetypeBase {
+			Stream<SharedInstance> instances;
+			// A short suffices as indexing. This is the index inside the archetype's array where it should be located at.
+			unsigned short index;
 		};
 
 		struct BaseArchetypeChanges {
@@ -59,8 +61,8 @@ namespace ECSEngine {
 			// Firstly, those that need to be destroyed are removed, then the new ones are created
 			// And at last those that are moved are handled.
 			ResizableStream<unsigned short> destroyed_base;
-			ResizableStream<Stream<SharedInstance>> new_base;
-			ResizableStream<ushort2> moved_base;
+			ResizableStream<NewArchetypeBase> new_base;
+			ResizableStream<MovedElementIndex<unsigned short>> moved_base;
 		};
 
 		// This is created when the entity info of an entity is changed
@@ -122,7 +124,7 @@ namespace ECSEngine {
 		// These operations are done exactly in this order, otherwise the consistency is not achieved
 		DeckPowerOfTwo<unsigned int> destroyed_archetypes;
 		DeckPowerOfTwo<NewArchetype> new_archetypes;
-		DeckPowerOfTwo<MovedArchetype> moved_archetypes;
+		DeckPowerOfTwo<MovedElementIndex<unsigned short>> moved_archetypes;
 
 		// The base archetype changes need to be recorded as well
 		DeckPowerOfTwo<BaseArchetypeChanges> base_archetype_changes;
