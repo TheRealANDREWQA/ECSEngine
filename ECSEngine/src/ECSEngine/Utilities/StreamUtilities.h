@@ -251,5 +251,83 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------
 
+	template<typename IntegerType>
+	struct MovedElementIndex {
+		static_assert(std::is_unsigned_v<IntegerType>, "MovedElementIndex accepts only unsigned integer types");
+
+		IntegerType previous;
+		IntegerType current;
+	};
+
+	// Moves the elements according to the provided moves, while taking into account the original indices of the elements.
+	// It will perform moves.size shuffles, without using any additional memory, except for a temporary index array, but
+	// It does not copy the original elements to a temporary buffer in order to look up the elements. This is more efficient
+	// For large types, since fewer memory is needed. If the provided temporary allocator is nullptr, it will simply use Malloc.
+	// Each element to be moved must appear only once, and there should not be any conflicts (no 2 elements should target the same index)
+	// Only unsigned integer types are allowed as template argument
+	template<typename MovedElementIntegerType>
+	ECSENGINE_API void MoveElements(void* elements, size_t element_count, size_t element_byte_size, IteratorInterface<MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator = { nullptr });
+
+	// The temporary allocator can be nullptr, in which case it will use Malloc.
+	// This function is the same as MoveElements, but instead of performing the shuffles, it instructs
+	// The functor as to what indices need to be moved where.
+	// The functor will be called with (IntegerType previous_index, IntegerType current_index)
+	template<typename MovedElementIntegerType, typename Functor>
+	void MoveElementsFunctor(size_t element_count, IteratorInterface<MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator, Functor&& functor) {
+		if (temporary_allocator.allocator == nullptr) {
+			temporary_allocator = ECS_MALLOC_ALLOCATOR;
+		}
+
+		// Allocate an array to hold the indices where the element is at for their initial position
+		Stream<MovedElementIntegerType> element_indices;
+		element_indices.Initialize(temporary_allocator, element_count);
+		MakeSequence(element_indices);
+
+		__try {
+			moves->ForEach([&](MovedElementIndex<MovedElementIntegerType> move) {
+				size_t current_index = element_indices[move.previous];
+				if (current_index != move.current) {
+					functor(current_index, move.current);
+					// Update the mapping
+					element_indices[move.current] = current_index;
+					// No need to update element_indices[moves[index].previous] since it has already been used
+				}
+			});
+		}
+		__finally {
+			element_indices.Deallocate(temporary_allocator);
+		}
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------------
+
+	// Removes a collection of indices from an "array" like container which implements RemoveSwapBack.
+	// Since RemoveSwapBack swaps elements, the initial indices might not correspond to the proper index
+	// After a few removals. This function takes care of that. The temporary allocator is needed to allocate
+	// A temporary array, if left as default, it will use Malloc. The functor will be called for each appropriate index.
+	// The integer type must be an unsigned integer. The container size is needed to know which elements get swapped.
+	template<typename IntegerType>
+	ECSENGINE_API void RemoveArrayElements(
+		IteratorInterface<IntegerType>* indices,
+		size_t container_size,
+		void (*functor)(void* user_data, IntegerType index), 
+		void* functor_data, 
+		AllocatorPolymorphic temporary_allocator = { nullptr }
+	);
+
+	// The same as the other overload, except that it takes a lambda functor instead of an untyped functor.
+	// The functor will be called with parameters (IntegerType index).
+	template<typename Functor, typename IntegerType>
+	void RemoveArrayElements(IteratorInterface<IntegerType>* indices, size_t container_size, AllocatorPolymorphic temporary_allocator, Functor&& functor) {
+		auto wrapper = [](void* user_data, IntegerType index) {
+			Functor* functor = (Functor*)user_data;
+			(*functor)(index);
+		};
+
+		RemoveArrayElements(indices, container_size, wrapper, &functor, temporary_allocator);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------------
+
 }
 

@@ -371,6 +371,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
     <ClInclude Include="src\ECSEngine\Input\InputMapping.h" />
     <ClInclude Include="src\ECSEngine\Utilities\DebugInfo.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\DeltaChange.h" />
     <ClInclude Include="src\ECSEngine\Utilities\EvaluateExpression.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FilePreprocessor.h" />
     <ClInclude Include="src\ECSEngine\Utilities\InMemoryReaderWriter.h" />
@@ -723,6 +724,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\CrashHandler.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\DeltaChange.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Encryption.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\EvaluateExpression.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />

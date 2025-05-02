@@ -303,6 +303,7 @@
     <ClInclude Include="src\ECSEngine\Resources\SceneDelta.h" />
     <ClInclude Include="src\ECSEngine\Resources\SceneTypes.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleSourceCode.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\DeltaChange.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -489,6 +490,7 @@
     <ClCompile Include="src\ECSEngine\OS\Process.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MallocAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\SceneDelta.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\DeltaChange.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />
