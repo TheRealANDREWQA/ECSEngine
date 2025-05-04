@@ -134,6 +134,11 @@ namespace ECSEngine {
 	) {
 		static_assert(std::is_unsigned_v<IntegerType>, "RemoveArrayElements accepts only unsigned integers!");
 
+		// If there are no elements, early exit
+		if (indices->remaining_count == 0) {
+			return;
+		}
+
 		if (temporary_allocator.allocator == nullptr) {
 			temporary_allocator = ECS_MALLOC_ALLOCATOR;
 		}

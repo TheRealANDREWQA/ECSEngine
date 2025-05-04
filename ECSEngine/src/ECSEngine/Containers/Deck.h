@@ -539,7 +539,7 @@ namespace ECSEngine {
 		}
 
 		template<typename DeckType, typename ValueType>
-		struct Iterator : IteratorInterface<ValueType> {
+		struct IteratorTemplate : IteratorInterface<ValueType> {
 			ValueType* Get() override {
 				size_t overall_index = chunk_index * deck->chunk_size + stream_index;
 				if (overall_index >= deck->GetElementCount()) {
@@ -554,19 +554,42 @@ namespace ECSEngine {
 				return value;
 			}
 
+			bool IsContiguous() const override {
+				return false;
+			}
+
+		protected:
+			IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
+				IteratorTemplate<DeckType, ValueType>* iterator = AllocateAndConstruct<IteratorTemplate<DeckType, ValueType>>(allocator, buffer + index, count, 0);
+				size_t chunk_forward_count = count / deck->chunk_size;
+				size_t chunk_remainder_count = count % deck->chunk_size;
+				chunk_index += chunk_forward_count;
+				stream_index += chunk_remainder_count;
+				if (stream_index >= deck->chunk_size) {
+					chunk_index++;
+					stream_index -= deck->chunk_size;
+				}
+				return iterator;
+			}
+
+		public:
+
 			DeckType* deck;
 			size_t chunk_index;
 			// The index inside the deck's chunk
 			size_t stream_index;
 		};
 
-		ECS_INLINE Iterator<const Deck<T, RangeSelector>, const T> ConstIterator(size_t starting_index = 0) const {
+		typedef IteratorTemplate<Deck<T, RangeSelector>, T> IteratorType;
+		typedef IteratorTemplate<const Deck<T, RangeSelector>, const T> ConstIteratorType;
+
+		ECS_INLINE ConstIteratorType ConstIterator(size_t starting_index = 0) const {
 			size_t chunk_index = starting_index / chunk_size;
 			size_t stream_index = starting_index % chunk_size;
 			return { this, chunk_index, stream_index };
 		}
 
-		ECS_INLINE Iterator<Deck<T, RangeSelector>, T> MutableIterator(size_t starting_index = 0) {
+		ECS_INLINE IteratorType MutableIterator(size_t starting_index = 0) {
 			size_t chunk_index = starting_index / chunk_size;
 			size_t stream_index = starting_index % chunk_size;
 			return { this, chunk_index, stream_index };

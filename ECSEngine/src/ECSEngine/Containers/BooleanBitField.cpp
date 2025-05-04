@@ -1,15 +1,32 @@
 #include "ecspch.h"
 #include "BooleanBitField.h"
 #include "../Utilities/Assert.h"
+#include "../Allocators/AllocatorPolymorphic.h"
 
 namespace ECSEngine {
 
-	ECS_INLINE size_t GetByte(size_t index) {
+	ECS_INLINE static size_t GetByte(size_t index) {
 		return index & (~(size_t)0x07);
 	}
 
-	ECS_INLINE size_t GetBit(size_t index) {
+	ECS_INLINE static size_t GetBit(size_t index) {
 		return (size_t)1 << (index & (size_t)0x07);
+	}
+
+	void BooleanBitField::Initialize(AllocatorPolymorphic allocator, size_t element_count) {
+		m_size = element_count;
+		if (element_count > 0) {
+			m_buffer = (unsigned char*)Allocate(allocator, MemoryOf(element_count), alignof(unsigned char));
+		}
+		else {
+			m_buffer = nullptr;
+		}
+	}
+
+	void BooleanBitField::Deallocate(AllocatorPolymorphic allocator) {
+		if (m_buffer != nullptr && m_size > 0) {
+			ECSEngine::Deallocate(allocator, m_buffer);
+		}
 	}
 
 	BooleanBitField::BooleanBitField(void* buffer, size_t size) : m_buffer((unsigned char*)buffer), m_size(size) {}

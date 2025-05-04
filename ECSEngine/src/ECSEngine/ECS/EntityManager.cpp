@@ -1402,6 +1402,7 @@ namespace ECSEngine {
 			*manager->GetArchetypeUniqueComponentsPtr(archetype_index) = manager->GetArchetypeUniqueComponents(manager->m_archetypes.size);
 			*manager->GetArchetypeSharedComponentsPtr(archetype_index) = manager->GetArchetypeSharedComponents(manager->m_archetypes.size);
 
+			// Update the entity archetype references
 			for (size_t base_index = 0; base_index < archetype->GetBaseCount(); base_index++) {
 				const ArchetypeBase* base = archetype->GetBase(base_index);
 				for (size_t entity_index = 0; entity_index < base->m_size; entity_index++) {
@@ -3994,13 +3995,22 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::DestroyArchetypesCommit(Stream<unsigned int> indices)
-	{
+	template<typename IntegerType>
+	static void DestroyArchetypesCommitImpl(EntityManager* entity_manager, IteratorInterface<IntegerType>* indices) {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB * 8);
-		auto iterator = indices.MutableIterator();
-		RemoveArrayElements(&iterator, m_archetypes.size, &stack_allocator, [&](unsigned int index) {
-			DestroyArchetypeCommit(index);
+		RemoveArrayElements(indices, entity_manager->m_archetypes.size, &stack_allocator, [&](unsigned int index) {
+			entity_manager->DestroyArchetypeCommit(index);
 		});
+	}
+
+	void EntityManager::DestroyArchetypesCommit(IteratorInterface<unsigned int>* indices)
+	{
+		DestroyArchetypesCommitImpl(this, indices);
+	}
+
+	void EntityManager::DestroyArchetypesCommit(IteratorInterface<unsigned int>* indices)
+	{
+		DestroyArchetypesCommitImpl(this, indices);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5294,6 +5304,12 @@ namespace ECSEngine {
 		}
 
 		return true;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::MoveArchetypeCommit(unsigned int previous_index, unsigned int new_index)
+	{
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
