@@ -122,7 +122,7 @@ namespace ECSEngine {
 		// The order in which these are applied is important. Firstly, the necessary archetypes are destroyed,
 		// Then the new archetypes are created and at last the moved archetypes are handled. It is critical that
 		// These operations are done exactly in this order, otherwise the consistency is not achieved
-		DeckPowerOfTwo<unsigned int> destroyed_archetypes;
+		DeckPowerOfTwo<unsigned short> destroyed_archetypes;
 		DeckPowerOfTwo<NewArchetype> new_archetypes;
 		DeckPowerOfTwo<MovedElementIndex<unsigned short>> moved_archetypes;
 

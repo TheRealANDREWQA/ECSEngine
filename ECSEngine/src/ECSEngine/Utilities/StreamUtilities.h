@@ -274,6 +274,11 @@ namespace ECSEngine {
 	// The functor will be called with (IntegerType previous_index, IntegerType current_index)
 	template<typename MovedElementIntegerType, typename Functor>
 	void MoveElementsFunctor(size_t element_count, IteratorInterface<MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator, Functor&& functor) {
+		// If there are no moves, early exit.
+		if (moves->remaining_count == 0) {
+			return;
+		}
+		
 		if (temporary_allocator.allocator == nullptr) {
 			temporary_allocator = ECS_MALLOC_ALLOCATOR;
 		}
@@ -325,6 +330,75 @@ namespace ECSEngine {
 		};
 
 		RemoveArrayElements(indices, container_size, wrapper, &functor, temporary_allocator);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------------
+	
+	// For an array like container, it creates new entries that must be placed at specific indices. It ensures that these
+	// New entries are at their proper location. The temporary allocator is needed to make a temporary allocation, if left
+	// As nullptr, it will use Malloc. 
+	// create_functor will be called without any parameters (it should know by itself which element it should create) 
+	// And must return the index of the entry where it should be located at.
+	// move_functor will be called with parameters (size_t previous_index, size_t new_index) and must swap the 
+	template<typename CreateFunctor, typename MoveFunctor>
+	void CreateArrayElementsWithIndexLocation(
+		size_t new_entry_count, 
+		size_t container_size, 
+		AllocatorPolymorphic temporary_allocator, 
+		CreateFunctor&& create_functor,
+		MoveFunctor&& move_functor
+	) {
+		if (new_entry_count == 0) {
+			return;
+		}
+
+		if (temporary_allocator.allocator == nullptr) {
+			temporary_allocator = ECS_MALLOC_ALLOCATOR;
+		}
+
+		// In this array the entries which cannot be moved right away are stored. For example, if element 4 is created, but it needs
+		// To be at location 6, there are only 5 elements in the array, and that can result in an incorrect memory access. For this
+		// Reason, elements that cannot be moved right away need to stored.
+		Stream<MovedElementIndex<size_t>> unmatched_entries;
+		unmatched_entries.Initialize(temporary_allocator, new_entry_count);
+		unmatched_entries.size = 0;
+
+		__try {
+			for (size_t index = 0; index < new_entry_count; index++) {
+				size_t swap_index = create_functor();
+				// If the element is not in final position, a swap is needed
+				// The swap can be performed now
+				if (swap_index < container_size) {
+					move_functor(container_size, swap_index)
+				}
+				else if (swap_index > container_size) {
+					// The swap must be postponed
+					unmatched_entries.Add({ container_size, swap_index });
+				}
+				container_size++;
+			}
+
+			// Finalize the unmatched entries now, they should all be possible to be placed at their indicated location.
+			// We could use MoveElements, but it would be a bit more inefficient since it will make another allocation.
+			// What we can do instead is to patch the index reference in the unmatched_entries_array.
+			for (size_t index = 0; index < unmatched_entries.size; index++) {
+				move_functor(unmatched_entries[index].previous, unmatched_entries[index].current);
+
+				// Can't use SearchBytes unfortunately, it might make this a little more slower than it should be,
+				// But it shouldn't be a high frequency operation anyways.
+				size_t swapped_index = unmatched_entries[index].current;
+				size_t swapped_new_index = unmatched_entries[index].previous;
+				for (size_t subindex = index + 1; subindex < unmatched_entries.size; subindex++) {
+					if (unmatched_entries[subindex].previous == swapped_index) {
+						unmatched_entries[subindex].previous = swapped_new_index;
+						break;
+					}
+				}
+			}
+		}
+		__finally {
+			unmatched_entries.Deallocate(temporary_allocator);
+		}
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------

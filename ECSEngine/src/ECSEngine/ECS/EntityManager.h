@@ -684,7 +684,12 @@ namespace ECSEngine {
 
 		// Destroys all archetypes with the given indices - it takes into account that archetypes might be swapped
 		// and the indices become different
-		void DestroyArchetypesCommit(Stream<unsigned int> indices);
+		void DestroyArchetypesCommit(IteratorInterface<unsigned int>* indices);
+
+		// Specialization to allow for smaller sized integers. The principle is the same as the other overload.
+		// Destroys all archetypes with the given indices - it takes into account that archetypes might be swapped
+		// and the indices become different
+		void DestroyArchetypesCommit(IteratorInterface<unsigned short>* indices);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1710,6 +1715,13 @@ namespace ECSEngine {
 				return HasComponent(entity, T::ID());
 			}
 		}
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// This action shouldn't be necessary for normal user code. It was added mostly for the change set
+		// Function which requires this operation type. Moves an archetype from an index to another index
+		// And patches up all references to that archetype from other internal structures.
+		void MoveArchetypeCommit(unsigned int previous_index, unsigned int new_index);
 
 		// ---------------------------------------------------------------------------------------------------
 

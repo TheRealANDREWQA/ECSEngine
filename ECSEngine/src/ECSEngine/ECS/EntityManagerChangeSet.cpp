@@ -5,9 +5,12 @@
 #include "../Utilities/Serialization/Binary/Serialization.h"
 #include "EntityManagerSerialize.h"
 #include "../Utilities/ReaderWriterInterface.h"
+#include "../Utilities/DeltaChange.h"
 
 // 256
 #define DECK_POWER_OF_TWO_EXPONENT 8
+// For containers where the expected number of entries is smaller, use a smaller exponent, in this case 64 elements
+#define DECK_POWER_OF_TWO_EXPONENT_SMALL 6
 
 #define DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY (ECS_MB * 50)
 
@@ -25,6 +28,11 @@ namespace ECSEngine {
 		entity_info_additions_entity_info.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 		shared_component_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 		global_component_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
+
+		destroyed_archetypes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT_SMALL);
+		new_archetypes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT_SMALL);
+		moved_archetypes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT_SMALL);
+		base_archetype_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT_SMALL);
 	}
 
 	void EntityManagerChangeSet::Deallocate() {
@@ -659,9 +667,46 @@ namespace ECSEngine {
 		}
 
 		// Perform the archetype handling - which is the most complicated part.
-		// Start with the destructions that need to be performed.
-		change_set.destroyed_archetypes.ForEach([&](unsigned int archetype_index) {
-		});
+		struct ApplyArchetypeChange : ApplyArrayDeltaChangeInterface<unsigned short> {
+			ApplyArchetypeChange(EntityManager* _entity_manager, const EntityManagerChangeSet* _change_set) : entity_manager(_entity_manager),
+				change_set(_change_set), new_archetype_iterator(change_set->new_archetypes.ConstIterator()) {}
+
+			virtual void RemoveEntry(unsigned short index) override {
+				entity_manager->DestroyArchetypeCommit(index);
+			}
+
+			virtual unsigned short CreateNewEntry() override {
+				const EntityManagerChangeSet::NewArchetype* new_archetype = new_archetype_iterator.Get();
+				entity_manager->CreateArchetypeCommit(new_archetype->unique_signature, new_archetype->shared_signature);
+				return new_archetype->index;
+			}
+			
+			virtual void MoveEntry(unsigned short previous_index, unsigned short new_index) override {
+				
+			}
+
+			virtual IteratorInterface<MovedElementIndex<unsigned short>>* GetMovedEntries() override {
+
+			}
+
+			virtual IteratorInterface<unsigned short>* GetRemovedEntries() override {
+
+			}
+
+			virtual unsigned short GetNewEntryCount() override {
+
+			}
+
+			virtual unsigned short GetContainerSize() override {
+
+			}
+
+			EntityManager* entity_manager;
+			const EntityManagerChangeSet* change_set;
+			// Needed for the function CreateNewEntry.
+			DeckPowerOfTwo<EntityManagerChangeSet::NewArchetype>::ConstIteratorType new_archetype_iterator;
+		};
+
 
 		// Now perform the per entity related operations.
 		// Start with destroying the entities which are for sure gone

@@ -373,6 +373,7 @@ namespace ECSEngine {
 	struct ECSENGINE_API ComponentSignature {
 		ECS_INLINE ComponentSignature() : indices(nullptr), count(0) {}
 		ECS_INLINE ComponentSignature(Component* _indices, unsigned char _count) : indices(_indices), count(_count) {}
+		ECS_INLINE ComponentSignature(Stream<Component> components) : indices(components.buffer), count((unsigned char)components.size) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentSignature);
 
