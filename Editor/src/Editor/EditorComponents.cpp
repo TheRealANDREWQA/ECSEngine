@@ -1816,7 +1816,8 @@ void EditorComponents::RemoveTypeFromManager(
 			}
 
 			// Destroy all the matched archetypes now - since they will be empty
-			entity_manager->DestroyArchetypesCommit(archetype_indices);
+			auto archetype_indices_iterator = archetype_indices.ConstIterator();
+			entity_manager->DestroyArchetypesCommit(&archetype_indices_iterator);
 
 			// Check to see if the component has assets that we should remove
 			if (has_assets) {
@@ -1859,7 +1860,8 @@ void EditorComponents::RemoveTypeFromManager(
 			}
 
 			// Destroy all matched archetypes now - since they will be empty
-			entity_manager->DestroyArchetypesCommit(archetype_indices);
+			auto iterator = archetype_indices.ConstIterator();
+			entity_manager->DestroyArchetypesCommit(&iterator);
 			entity_manager->UnregisterComponentCommit(component);
 		}
 	}

@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "StreamUtilities.h"
 #include "PointerUtilities.h"
+#include "Utilities.h"
 
 namespace ECSEngine {
 
@@ -122,6 +123,11 @@ namespace ECSEngine {
 	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<unsigned int>>*, AllocatorPolymorphic);
 	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<size_t>>*, AllocatorPolymorphic);
 
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<const unsigned char>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<const unsigned short>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<const unsigned int>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<const size_t>>*, AllocatorPolymorphic);
+
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename IntegerType>
@@ -145,7 +151,7 @@ namespace ECSEngine {
 
 		// Allocate a temporary array where the integer indices are stored. Those will be modified
 		// As we keep performing removals
-		Stream<IntegerType> remapped_indices;
+		Stream<std::remove_const_t<IntegerType>> remapped_indices;
 		remapped_indices.Initialize(temporary_allocator, indices->remaining_count);
 
 		__try {
@@ -171,6 +177,11 @@ namespace ECSEngine {
 	template ECSENGINE_API void RemoveArrayElements(IteratorInterface<unsigned short>*, size_t, void (*)(void*, unsigned short), void*, AllocatorPolymorphic);
 	template ECSENGINE_API void RemoveArrayElements(IteratorInterface<unsigned int>*, size_t, void (*)(void*, unsigned int), void*, AllocatorPolymorphic);
 	template ECSENGINE_API void RemoveArrayElements(IteratorInterface<size_t>*, size_t, void (*)(void*, size_t), void*, AllocatorPolymorphic);
+
+	template ECSENGINE_API void RemoveArrayElements<const unsigned char>(IteratorInterface<const unsigned char>*, size_t, void (*)(void*, const unsigned char), void*, AllocatorPolymorphic);
+	template ECSENGINE_API void RemoveArrayElements<const unsigned short>(IteratorInterface<const unsigned short>*, size_t, void (*)(void*, const unsigned short), void*, AllocatorPolymorphic);
+	template ECSENGINE_API void RemoveArrayElements<const unsigned int>(IteratorInterface<const unsigned int>*, size_t, void (*)(void*, const unsigned int), void*, AllocatorPolymorphic);
+	template ECSENGINE_API void RemoveArrayElements<const size_t>(IteratorInterface<const size_t>*, size_t, void (*)(void*, const size_t), void*, AllocatorPolymorphic);
 
 	// --------------------------------------------------------------------------------------------------
 

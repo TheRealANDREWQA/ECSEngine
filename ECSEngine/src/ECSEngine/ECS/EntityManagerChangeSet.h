@@ -49,6 +49,7 @@ namespace ECSEngine {
 		};
 
 		struct NewArchetypeBase {
+			// They are specified in the order of the main archetype's shared component signature
 			Stream<SharedInstance> instances;
 			// A short suffices as indexing. This is the index inside the archetype's array where it should be located at.
 			unsigned short index;

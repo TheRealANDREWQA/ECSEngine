@@ -14,6 +14,45 @@
 
 namespace ECSEngine {
 
+	AllocatorMarker GetAllocatorMarker(AllocatorPolymorphic allocator) {
+		switch (allocator.allocator->m_allocator_type) {
+		case ECS_ALLOCATOR_LINEAR:
+		{
+			LinearAllocator* linear_allocator = (LinearAllocator*)allocator.allocator;
+			return { linear_allocator->GetMarker(), 0 };
+		}
+		case ECS_ALLOCATOR_RESIZABLE_LINEAR:
+		{
+			ResizableLinearAllocator* linear_allocator = (ResizableLinearAllocator*)allocator.allocator;
+			AllocatorMarker marker;
+			linear_allocator->GetMarker(&marker.marker, &marker.marker_usage);
+			return marker;
+		}
+		default:
+			return { 0, 0 };
+		}
+
+		return { 0,0 };
+	}
+
+	void RestoreAllocatorMarker(AllocatorPolymorphic allocator, AllocatorMarker marker) {
+		switch (allocator.allocator->m_allocator_type) {
+		case ECS_ALLOCATOR_LINEAR:
+		{
+			LinearAllocator* linear_allocator = (LinearAllocator*)allocator.allocator;
+			linear_allocator->ReturnToMarker(marker.marker);
+		}
+		break;
+		case ECS_ALLOCATOR_RESIZABLE_LINEAR:
+		{
+			ResizableLinearAllocator* linear_allocator = (ResizableLinearAllocator*)allocator.allocator;
+			linear_allocator->ReturnToMarker(marker.marker, marker.marker_usage);
+		}
+		default:
+			break;
+		}
+	}
+
 	size_t AllocatorStructureByteSize(ECS_ALLOCATOR_TYPE type) {
 		switch (type) {
 		case ECS_ALLOCATOR_LINEAR:

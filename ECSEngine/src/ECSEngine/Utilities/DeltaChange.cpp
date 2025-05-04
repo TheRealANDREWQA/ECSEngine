@@ -179,4 +179,9 @@ namespace ECSEngine {
 	template ECSENGINE_API void ApplyArrayDeltaChange(ApplyArrayDeltaChangeInterface<unsigned int>*, AllocatorPolymorphic);
 	template ECSENGINE_API void ApplyArrayDeltaChange(ApplyArrayDeltaChangeInterface<size_t>*, AllocatorPolymorphic);
 
+	template ECSENGINE_API void ApplyArrayDeltaChange(ApplyArrayDeltaChangeInterface<const unsigned char>*, AllocatorPolymorphic);
+	template ECSENGINE_API void ApplyArrayDeltaChange(ApplyArrayDeltaChangeInterface<const unsigned short>*, AllocatorPolymorphic);
+	template ECSENGINE_API void ApplyArrayDeltaChange(ApplyArrayDeltaChangeInterface<const unsigned int>*, AllocatorPolymorphic);
+	template ECSENGINE_API void ApplyArrayDeltaChange(ApplyArrayDeltaChangeInterface<const size_t>*, AllocatorPolymorphic);
+
 }

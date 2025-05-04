@@ -19,13 +19,13 @@ namespace ECSEngine {
 		// Returns a handle that will be used for the lifetime of the scene
 		// to be used to access the results. Needs to be stored. It already retrieves all archetypes that match
 		// the given query.
-		unsigned int AddQuery(ArchetypeQuery query);
+		unsigned int AddQuery(const ArchetypeQuery& query);
 
 		// Thread safe
 		// Returns a handle that will be used for the lifetime of the scene
 		// to be used to access the results. Needs to be stored. It already retrieves all archetypes that match
 		// the given query.
-		unsigned int AddQuery(ArchetypeQueryExclude query);
+		unsigned int AddQuery(const ArchetypeQueryExclude& query);
 
 		void CopyOther(const ArchetypeQueryCache* other);
 
@@ -44,6 +44,11 @@ namespace ECSEngine {
 
 		// Resizes the exclude results to the new capacity (the SoA structure)
 		void ResizeExclude(unsigned int new_capacity);
+
+		// Single threaded!
+		// Moves an archetype from one index to another index, consider this as move as a swap,
+		// Where the other archetype is moved in its place.
+		void SwapArchetype(unsigned int previous_index, unsigned int new_index);
 
 		void UpdateAdd(unsigned int new_archetype_index);
 
@@ -65,7 +70,6 @@ namespace ECSEngine {
 			ArchetypeQuery* components;
 			unsigned int count;
 			unsigned int capacity;
-			SpinLock lock;
 		};
 
 		struct ExcludeQueryResults {
@@ -73,7 +77,6 @@ namespace ECSEngine {
 			ArchetypeQueryExclude* components;
 			unsigned int count;
 			unsigned int capacity;
-			SpinLock lock;
 		};
 
 		EntityManager* entity_manager;

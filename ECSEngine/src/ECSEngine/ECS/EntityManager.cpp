@@ -1406,7 +1406,10 @@ namespace ECSEngine {
 			for (size_t base_index = 0; base_index < archetype->GetBaseCount(); base_index++) {
 				const ArchetypeBase* base = archetype->GetBase(base_index);
 				for (size_t entity_index = 0; entity_index < base->m_size; entity_index++) {
-					EntityInfo* entity_info = manager->m_entity_pool->GetInfoPtr(base->m_entities[entity_index]);
+					// Use the variant without checks, since the data here should be valid
+					// (only in an insane circumstance where this memory gets corrupted that
+					// would be the case, but that is not the usual occurence)
+					EntityInfo* entity_info = manager->m_entity_pool->GetInfoPtrNoChecks(base->m_entities[entity_index]);
 					entity_info->main_archetype = archetype_index;
 				}
 			}
@@ -3996,19 +3999,19 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	template<typename IntegerType>
-	static void DestroyArchetypesCommitImpl(EntityManager* entity_manager, IteratorInterface<IntegerType>* indices) {
+	static void DestroyArchetypesCommitImpl(EntityManager* entity_manager, IteratorInterface<const IntegerType>* indices) {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB * 8);
 		RemoveArrayElements(indices, entity_manager->m_archetypes.size, &stack_allocator, [&](unsigned int index) {
 			entity_manager->DestroyArchetypeCommit(index);
 		});
 	}
 
-	void EntityManager::DestroyArchetypesCommit(IteratorInterface<unsigned int>* indices)
+	void EntityManager::DestroyArchetypesCommit(IteratorInterface<const unsigned int>* indices)
 	{
 		DestroyArchetypesCommitImpl(this, indices);
 	}
 
-	void EntityManager::DestroyArchetypesCommit(IteratorInterface<unsigned int>* indices)
+	void EntityManager::DestroyArchetypesCommit(IteratorInterface<const unsigned short>* indices)
 	{
 		DestroyArchetypesCommitImpl(this, indices);
 	}
@@ -4395,7 +4398,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	template<typename Query>
-	void ECS_VECTORCALL GetArchetypeImplementation(const EntityManager* manager, Query query, CapacityStream<unsigned int>& archetypes) {
+	void ECS_VECTORCALL GetArchetypeImplementation(const EntityManager* manager, const Query& query, CapacityStream<unsigned int>& archetypes) {
 		for (size_t index = 0; index < manager->m_archetypes.size; index++) {
 			if (query.VerifiesUnique(manager->m_archetypes[index].GetUniqueSignature())) {
 				if (query.VerifiesShared(manager->m_archetypes[index].GetSharedSignature())) {
@@ -4418,28 +4421,28 @@ namespace ECSEngine {
 		}
 	}*/
 
-	void EntityManager::GetArchetypes(ArchetypeQuery query, CapacityStream<unsigned int>& archetypes) const
+	void EntityManager::GetArchetypes(const ArchetypeQuery& query, CapacityStream<unsigned int>& archetypes) const
 	{
 		GetArchetypeImplementation(this, query, archetypes);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetArchetypes(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const
+	void EntityManager::GetArchetypes(const ArchetypeQueryExclude& query, CapacityStream<unsigned int>& archetypes) const
 	{
 		GetArchetypeImplementation(this, query, archetypes);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetArchetypes(ArchetypeQueryOptional query, CapacityStream<unsigned int>& archetypes) const
+	void EntityManager::GetArchetypes(const ArchetypeQueryOptional& query, CapacityStream<unsigned int>& archetypes) const
 	{
 		GetArchetypeImplementation(this, query, archetypes);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetArchetypes(ArchetypeQueryExcludeOptional query, CapacityStream<unsigned int>& archetypes) const
+	void EntityManager::GetArchetypes(const ArchetypeQueryExcludeOptional& query, CapacityStream<unsigned int>& archetypes) const
 	{
 		GetArchetypeImplementation(this, query, archetypes);
 	}
@@ -4846,7 +4849,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Query>
-	void ECS_VECTORCALL GetEntitiesImplementation(const EntityManager* manager, Query query, CapacityStream<Entity*>* entities) {
+	void ECS_VECTORCALL GetEntitiesImplementation(const EntityManager* manager, const Query& query, CapacityStream<Entity*>* entities) {
 		for (size_t index = 0; index < manager->m_archetypes.size; index++) {
 			if (query.VerifiesUnique(manager->m_archetypes[index].GetUniqueSignature())) {
 				if (query.VerifiesShared(manager->m_archetypes[index].GetSharedSignature())) {
@@ -4861,24 +4864,24 @@ namespace ECSEngine {
 		}
 	}
 
-	void EntityManager::GetEntities(ArchetypeQuery query, CapacityStream<Entity>* entities) const
+	void EntityManager::GetEntities(const ArchetypeQuery& query, CapacityStream<Entity>* entities) const
 	{
 		GetEntitiesImplementation(this, query, entities);
 	}
 
-	void EntityManager::GetEntities(ArchetypeQuery query, CapacityStream<Entity*>* entities) const
+	void EntityManager::GetEntities(const ArchetypeQuery& query, CapacityStream<Entity*>* entities) const
 	{
 		GetEntitiesImplementation(this, query, entities);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetEntitiesExclude(ArchetypeQueryExclude query, CapacityStream<Entity>* entities) const
+	void EntityManager::GetEntitiesExclude(const ArchetypeQueryExclude& query, CapacityStream<Entity>* entities) const
 	{
 		GetEntitiesImplementation(this, query, entities);
 	}
 
-	void EntityManager::GetEntitiesExclude(ArchetypeQueryExclude query, CapacityStream<Entity*>* entities) const
+	void EntityManager::GetEntitiesExclude(const ArchetypeQueryExclude& query, CapacityStream<Entity*>* entities) const
 	{
 		GetEntitiesImplementation(this, query, entities);
 	}
@@ -5304,12 +5307,6 @@ namespace ECSEngine {
 		}
 
 		return true;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void EntityManager::MoveArchetypeCommit(unsigned int previous_index, unsigned int new_index)
-	{
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5825,12 +5822,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned int EntityManager::RegisterQuery(ArchetypeQuery query)
+	unsigned int EntityManager::RegisterQueryCommit(const ArchetypeQuery& query)
 	{
 		return m_query_cache->AddQuery(query);
 	}
 
-	unsigned int EntityManager::RegisterQuery(ArchetypeQueryExclude query)
+	unsigned int EntityManager::RegisterQueryCommit(const ArchetypeQueryExclude& query)
 	{
 		return m_query_cache->AddQuery(query);
 	}
@@ -6065,6 +6062,82 @@ namespace ECSEngine {
 		}
 		m_auto_generate_component_functions_functor = functor;
 		m_auto_generate_component_functions_data = CopyNonZero(&m_small_memory_manager, Stream<void>(data, data_size));
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::SwapArchetypeCommit(unsigned int previous_index, unsigned int new_index)
+	{
+		// Ensure that the indices are valid
+		ECS_CRASH_CONDITION(previous_index < m_archetypes.size, "EntityManager: Trying to move an archetype with an invalid previous index");
+		ECS_CRASH_CONDITION(new_index < m_archetypes.size, "EntityManager: Trying to move an archetype with an invalid new index");
+
+		// Early exit if the indices are the same
+		if (previous_index == new_index) {
+			return;
+		}
+
+		// The entries can be swapped inside the archetypes array
+		m_archetypes.Swap(previous_index, new_index);
+
+		// We must swap the vector component signatures
+		swap(*GetArchetypeUniqueComponentsPtr(previous_index), *GetArchetypeUniqueComponentsPtr(new_index));
+		swap(*GetArchetypeSharedComponentsPtr(previous_index), *GetArchetypeSharedComponentsPtr(new_index));
+
+		// Then the archetype query cache must be updated.
+		m_query_cache->SwapArchetype(previous_index, new_index);
+
+
+		// At last, the entity infos must be updated for the entities that belongs to these archetypes.
+
+		auto patch_entity_infos = [this](unsigned int archetype_index) -> void {
+			for (unsigned int base_index = 0; base_index < m_archetypes[archetype_index].m_base_archetypes.size; base_index++) {
+				const ArchetypeBase& base_archetype = m_archetypes[archetype_index].m_base_archetypes[base_index].archetype;
+				unsigned int entity_count = base_archetype.EntityCount();
+				for (unsigned int stream_index = 0; stream_index < entity_count; stream_index++) {
+					// Use no checks call since the entities stored here should be valid, except for a weird corruption
+					// Case where its not worth considering
+					EntityInfo* entity_info = m_entity_pool->GetInfoPtrNoChecks(base_archetype.m_entities[stream_index]);
+					entity_info->main_archetype = archetype_index;
+				}
+			}
+		};
+
+		// The archetypes have already been swapped inside m_archetypes.
+		patch_entity_infos(previous_index);
+		patch_entity_infos(new_index);
+	}
+
+	void EntityManager::SwapArchetypeBaseCommit(unsigned int archetype_index, unsigned int previous_base_index, unsigned int new_base_index) {
+		// Validate the parameters
+		ECS_CRASH_CONDITION(archetype_index < m_archetypes.size, "EntityManager: Trying to swap a base archetype for an invalid main archetype!");
+		ECS_CRASH_CONDITION(previous_base_index < m_archetypes[archetype_index].GetBaseCount(), "EntityManager: Trying to swap a base archetype with an incorrect previous index!");
+		ECS_CRASH_CONDITION(new_base_index < m_archetypes[archetype_index].GetBaseCount(), "EntityManager: Trying to swap a base archetype with an incorrect new index!");
+	
+		// Early exit if the indices are the same
+		if (previous_base_index == new_base_index) {
+			return;
+		}
+
+		// Things are less involved for this case as opposed to main archetypes.
+		// They only need to be swapped inside the main archetype's array and the entity info
+		// References must be patched up.
+		m_archetypes[archetype_index].m_base_archetypes.Swap(previous_base_index, new_base_index);
+
+		auto patch_references = [this, archetype_index](unsigned int base_index) -> void {
+			const ArchetypeBase& base_archetype = m_archetypes[archetype_index].m_base_archetypes[base_index].archetype;
+			unsigned int entity_count = base_archetype.EntityCount();
+			for (unsigned int index = 0; index < entity_count; index++) {
+				// Use no checks call since the entities stored here should be valid, except for a weird corruption
+				// Case where its not worth considering
+				EntityInfo* info = m_entity_pool->GetInfoPtrNoChecks(base_archetype.m_entities[index]);
+				info->base_archetype = base_index;
+			}
+		};
+
+		// The archetypes have already been swapped inside m_archetypes.m_base_archetypes
+		patch_references(previous_base_index);
+		patch_references(new_base_index);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

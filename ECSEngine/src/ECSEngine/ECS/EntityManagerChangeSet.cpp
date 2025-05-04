@@ -666,60 +666,143 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// Perform the archetype handling - which is the most complicated part.
+		// Perform the archetype handling - which is the most complicated part. Start with the main archetypes
+		// Define an apply archetype change interface to perform the main archetype handling
 		struct ApplyArchetypeChange : ApplyArrayDeltaChangeInterface<unsigned short> {
 			ApplyArchetypeChange(EntityManager* _entity_manager, const EntityManagerChangeSet* _change_set) : entity_manager(_entity_manager),
-				change_set(_change_set), new_archetype_iterator(change_set->new_archetypes.ConstIterator()) {}
+				change_set(_change_set), new_archetypes_iterator(change_set->new_archetypes.ConstIterator()), 
+				moved_archetypes_iterator(change_set->moved_archetypes.ConstIterator()),
+				removed_archetypes_iterator(change_set->destroyed_archetypes.ConstIterator()) {}
 
 			virtual void RemoveEntry(unsigned short index) override {
 				entity_manager->DestroyArchetypeCommit(index);
 			}
 
 			virtual unsigned short CreateNewEntry() override {
-				const EntityManagerChangeSet::NewArchetype* new_archetype = new_archetype_iterator.Get();
+				const EntityManagerChangeSet::NewArchetype* new_archetype = new_archetypes_iterator.Get();
 				entity_manager->CreateArchetypeCommit(new_archetype->unique_signature, new_archetype->shared_signature);
 				return new_archetype->index;
 			}
 			
 			virtual void MoveEntry(unsigned short previous_index, unsigned short new_index) override {
-				
+				entity_manager->SwapArchetypeCommit(previous_index, new_index);
 			}
 
-			virtual IteratorInterface<MovedElementIndex<unsigned short>>* GetMovedEntries() override {
-
+			virtual IteratorInterface<const MovedElementIndex<unsigned short>>* GetMovedEntries() override {
+				return &moved_archetypes_iterator;
 			}
 
-			virtual IteratorInterface<unsigned short>* GetRemovedEntries() override {
-
+			virtual IteratorInterface<const unsigned short>* GetRemovedEntries() override {
+				return &removed_archetypes_iterator;
 			}
 
 			virtual unsigned short GetNewEntryCount() override {
-
+				return change_set->new_archetypes.size;
 			}
 
 			virtual unsigned short GetContainerSize() override {
-
+				return entity_manager->m_archetypes.size;
 			}
 
 			EntityManager* entity_manager;
 			const EntityManagerChangeSet* change_set;
 			// Needed for the function CreateNewEntry.
-			DeckPowerOfTwo<EntityManagerChangeSet::NewArchetype>::ConstIteratorType new_archetype_iterator;
+			DeckPowerOfTwo<EntityManagerChangeSet::NewArchetype>::ConstIteratorType new_archetypes_iterator;
+			DeckPowerOfTwo<MovedElementIndex<unsigned short>>::ConstIteratorType moved_archetypes_iterator;
+			DeckPowerOfTwo<unsigned short>::ConstIteratorType removed_archetypes_iterator;
 		};
 
-
-		// Now perform the per entity related operations.
-		// Start with destroying the entities which are for sure gone
-		for (size_t index = 0; index < change_set.entity_info_destroys.buffers.size; index++) {
-			entity_manager->DeleteEntitiesCommit(change_set.entity_info_destroys.buffers[index]);
+		ApplyArchetypeChange apply_archetype_change(entity_manager, &change_set);
+		AllocatorPolymorphic apply_archetype_change_allocator;
+		if (options->change_set == nullptr) {
+			if (temporary_allocator.m_initial_capacity == 0) {
+				temporary_allocator = ResizableLinearAllocator(DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
+			}
+			apply_archetype_change_allocator = &temporary_allocator;
+		}
+		else {
+			apply_archetype_change_allocator = options->temporary_allocator;
 		}
 
-		// Create the new entities
-		for (size_t index = 0; index < change_set.entity_info_additions_entity.buffers.size; index++) {
-			// Exclude these from the hierarchy, they will be handled separately by the entity hierarchy change set
-			entity_manager->CreateSpecificEntitiesCommit(change_set.entity_info_additions_entity.buffers[index], {}, {}, true);
-			// Set the entity info to the one stored
-		}
+		// Use the marker to reset the linear allocator gracefully
+		AllocatorMarker apply_archetype_change_allocator_marker = GetAllocatorMarker(apply_archetype_change_allocator);
+		ApplyArrayDeltaChange(&apply_archetype_change, apply_archetype_change_allocator);
+		RestoreAllocatorMarker(apply_archetype_change_allocator, apply_archetype_change_allocator_marker);
+
+		// Define an apply archetype base change interface to handle the base archetypes delta.
+		struct ApplyArchetypeBaseChange : ApplyArrayDeltaChangeInterface<unsigned short> {
+			ApplyArchetypeBaseChange(
+				EntityManager* _entity_manager,
+				const EntityManagerChangeSet::BaseArchetypeChanges& base_archetype_changes
+			) : entity_manager(_entity_manager), main_archetype_index(base_archetype_changes.archetype), 
+				new_entries_count(base_archetype_changes.new_base.size),
+				new_entries_iterator(base_archetype_changes.new_base.ConstIterator()),
+				moved_entries_iterator(base_archetype_changes.moved_base.ConstIterator()),
+				removed_entries_iterator(base_archetype_changes.destroyed_base.ConstIterator()) {}
+
+			virtual void RemoveEntry(unsigned short index) override {
+				entity_manager->DestroyArchetypeCommit(index);
+			}
+
+			virtual unsigned short CreateNewEntry() override {
+				const EntityManagerChangeSet::NewArchetypeBase* new_archetype = new_entries_iterator.Get();
+				ComponentSignature shared_signature = entity_manager->GetArchetype(main_archetype_index)->GetUniqueSignature();
+				entity_manager->CreateArchetypeBaseCommit(main_archetype_index, SharedComponentSignature(shared_signature.indices, new_archetype->instances.buffer, shared_signature.count));
+				return new_archetype->index;
+			}
+
+			virtual void MoveEntry(unsigned short previous_index, unsigned short new_index) override {
+				entity_manager->SwapArchetypeBaseCommit(main_archetype_index, previous_index, new_index);
+			}
+
+			virtual IteratorInterface<const MovedElementIndex<unsigned short>>* GetMovedEntries() override {
+				return &moved_entries_iterator;
+			}
+
+			virtual IteratorInterface<const unsigned short>* GetRemovedEntries() override {
+				return &removed_entries_iterator;
+			}
+
+			virtual unsigned short GetNewEntryCount() override {
+				return new_entries_count;
+			}
+
+			virtual unsigned short GetContainerSize() override {
+				return entity_manager->GetArchetype(main_archetype_index)->GetBaseCount();
+			}
+
+			EntityManager* entity_manager;
+			// This is the main index of the archetype inside entity manager's archetype array
+			unsigned int main_archetype_index;
+			// This value is cached such that the initial values is always returned, since new_entries_iterator
+			// Will advance the remaining_count as the entries are created.
+			unsigned int new_entries_count;
+			StreamIterator<const EntityManagerChangeSet::NewArchetypeBase> new_entries_iterator;
+			StreamIterator<const MovedElementIndex<unsigned short>> moved_entries_iterator;
+			StreamIterator<const unsigned short> removed_entries_iterator;
+		};
+
+		// We can reuse the apply archetype change allocator here as well
+		change_set.base_archetype_changes.ForEach([&](const EntityManagerChangeSet::BaseArchetypeChanges& base_archetype_changes) {
+			ApplyArchetypeBaseChange archetype_base_change(entity_manager, base_archetype_changes);
+
+			AllocatorMarker apply_archetype_change_allocator_marker = GetAllocatorMarker(apply_archetype_change_allocator);
+			ApplyArrayDeltaChange(&archetype_base_change, apply_archetype_change_allocator);
+			RestoreAllocatorMarker(apply_archetype_change_allocator, apply_archetype_change_allocator_marker);
+		});
+
+		//// Now perform the per entity related operations.
+		//// Start with destroying the entities which are for sure gone
+		//for (size_t index = 0; index < change_set.entity_info_destroys.buffers.size; index++) {
+		//	entity_manager->DeleteEntitiesCommit(change_set.entity_info_destroys.buffers[index]);
+		//}
+
+		//// Create the new entities
+		//for (size_t index = 0; index < change_set.entity_info_additions_entity.buffers.size; index++) {
+		//	// Exclude these from the hierarchy, they will be handled separately by the entity hierarchy change set
+		//	entity_manager->CreateSpecificEntitiesCommit(change_set.entity_info_additions_entity.buffers[index], {}, {}, true);
+		//	// Set the entity info to the one stored
+		//}
 
 		return true;
 	}

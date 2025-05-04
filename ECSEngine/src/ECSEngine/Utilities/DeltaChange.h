@@ -57,12 +57,12 @@ namespace ECSEngine {
 		virtual void MoveEntry(IntegerType previous_index, IntegerType new_index) = 0;
 
 		// Returns an iterator with the moved entries that need to be performed on this container.
-		virtual IteratorInterface<MovedElementIndex<IntegerType>>* GetMovedEntries() = 0;
+		virtual IteratorInterface<const MovedElementIndex<std::remove_const_t<IntegerType>>>* GetMovedEntries() = 0;
 
 		// Returns an iterator with the entries to be removed. The index of each entry is the index
 		// Inside the container when in the initial state, without considering the RemoveSwapBack that
 		// Take place. The ApplyDeltaChange() function takes care of adjusting the indices.
-		virtual IteratorInterface<IntegerType>* GetRemovedEntries() = 0;
+		virtual IteratorInterface<const std::remove_const_t<IntegerType>>* GetRemovedEntries() = 0;
 
 		// Returns the number of new entries that need to be created.
 		virtual IntegerType GetNewEntryCount() = 0;
