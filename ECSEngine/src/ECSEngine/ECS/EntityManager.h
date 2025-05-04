@@ -684,12 +684,12 @@ namespace ECSEngine {
 
 		// Destroys all archetypes with the given indices - it takes into account that archetypes might be swapped
 		// and the indices become different
-		void DestroyArchetypesCommit(IteratorInterface<unsigned int>* indices);
+		void DestroyArchetypesCommit(IteratorInterface<const unsigned int>* indices);
 
 		// Specialization to allow for smaller sized integers. The principle is the same as the other overload.
 		// Destroys all archetypes with the given indices - it takes into account that archetypes might be swapped
 		// and the indices become different
-		void DestroyArchetypesCommit(IteratorInterface<unsigned short>* indices);
+		void DestroyArchetypesCommit(IteratorInterface<const unsigned short>* indices);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1386,16 +1386,16 @@ namespace ECSEngine {
 		);
 
 		// It will fill in the indices of the archetypes that verify the query
-		void GetArchetypes(ArchetypeQuery query, CapacityStream<unsigned int>& archetypes) const;
+		void GetArchetypes(const ArchetypeQuery& query, CapacityStream<unsigned int>& archetypes) const;
 
 		// It will fill in the indices of the archetypes that verify the query
-		void GetArchetypes(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const;
+		void GetArchetypes(const ArchetypeQueryExclude& query, CapacityStream<unsigned int>& archetypes) const;
 
 		// It will fill in the indices of the archetypes that verify the query
-		void GetArchetypes(ArchetypeQueryOptional query, CapacityStream<unsigned int>& archetypes) const;
+		void GetArchetypes(const ArchetypeQueryOptional& query, CapacityStream<unsigned int>& archetypes) const;
 
 		// It will fill in the indices of the archetypes that verify the query
-		void GetArchetypes(ArchetypeQueryExcludeOptional query, CapacityStream<unsigned int>& archetypes) const;
+		void GetArchetypes(const ArchetypeQueryExcludeOptional& query, CapacityStream<unsigned int>& archetypes) const;
 
 		// It will fill in the indices of the archetypes that verify the query (this will check and use
 		// the appropriate query - it will perform the SIMD conversion as well)
@@ -1570,23 +1570,23 @@ namespace ECSEngine {
 		// It will fill in the entities stream
 		// Consider the other variant that only aliases the buffers so no copies are needed
 		void ECS_VECTORCALL GetEntities(
-			ArchetypeQuery query, 
+			const ArchetypeQuery& query, 
 			CapacityStream<Entity>* entities
 		) const;
 
 		// It will alias the archetype entities buffers - no need to copy
 		// Make sure the values are not modified
-		void ECS_VECTORCALL GetEntities(ArchetypeQuery query, CapacityStream<Entity*>* entities) const;
+		void ECS_VECTORCALL GetEntities(const ArchetypeQuery& query, CapacityStream<Entity*>* entities) const;
 
 		// It will fill in the entities stream
 		void ECS_VECTORCALL GetEntitiesExclude(
-			ArchetypeQueryExclude query,
+			const ArchetypeQueryExclude& query,
 			CapacityStream<Entity>* entities
 		) const;
 
 		// It will alias the archetype entities buffers - no need to copy
 		// Make sure the values are not modified
-		void ECS_VECTORCALL GetEntitiesExclude(ArchetypeQueryExclude query, CapacityStream<Entity*>* entities) const;
+		void ECS_VECTORCALL GetEntitiesExclude(const ArchetypeQueryExclude& query, CapacityStream<Entity*>* entities) const;
 
 		void* GetSharedData(Component component, SharedInstance instance);
 
@@ -1715,13 +1715,6 @@ namespace ECSEngine {
 				return HasComponent(entity, T::ID());
 			}
 		}
-
-		// ---------------------------------------------------------------------------------------------------
-
-		// This action shouldn't be necessary for normal user code. It was added mostly for the change set
-		// Function which requires this operation type. Moves an archetype from an index to another index
-		// And patches up all references to that archetype from other internal structures.
-		void MoveArchetypeCommit(unsigned int previous_index, unsigned int new_index);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1876,15 +1869,17 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Single threaded
 		// Returns a handle to be used to access the query results
 		// For queries that contain optional components, you must add the query for the mandatory part
 		// You must then handle the optional part
-		unsigned int RegisterQuery(ArchetypeQuery query);
+		unsigned int RegisterQueryCommit(const ArchetypeQuery& query);
 
+		// Single threaded
 		// Returns a handle to be used to access the query results.
 		// For queries that contain optional components, you must add the query for the mandatory part
 		// You must then handle the optional part
-		unsigned int RegisterQuery(ArchetypeQueryExclude query);
+		unsigned int RegisterQueryCommit(const ArchetypeQueryExclude& query);
 
 		// Backtracks the query cache to another state
 		void RestoreQueryCache(const ArchetypeQueryCache* query_cache);
@@ -1953,6 +1948,18 @@ namespace ECSEngine {
 		// Sets the auto generator for the component functions. The data will be copied if data_size is different
 		// From 0, else it will reference it directly.
 		void SetAutoGenerateComponentFunctionsFunctor(EntityManagerAutoGenerateComponentFunctionsFunctor functor, void* data, size_t data_size);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// This action shouldn't be necessary for normal user code. It was added mostly for the change set
+		// Function which requires this operation type. Swaps an archetype from an index to another index
+		// And patches up all references to that archetype from other internal structures.
+		void SwapArchetypeCommit(unsigned int previous_index, unsigned int new_index);
+
+		// This action shouldn't be necessary for normal user code. It was added mostly for the change set
+		// Function which requires this operation type. Swaps a base archetype from an index to another index
+		// And patches up all references of that base archetype from other internal structures.
+		void SwapArchetypeBaseCommit(unsigned int archetype_index, unsigned int previous_base_index, unsigned int new_base_index);
 
 		// ---------------------------------------------------------------------------------------------------
 

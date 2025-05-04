@@ -106,12 +106,12 @@ namespace ECSEngine {
 					ComponentSignature shared_exclude = current_query.ExcludeSharedSignature();
 
 					ArchetypeQueryExclude query{ unique, shared, unique_exclude, shared_exclude };
-					query_infos[query_infos.size++].query_handle = world->entity_manager->RegisterQuery(query);
+					query_infos[query_infos.size++].query_handle = world->entity_manager->RegisterQueryCommit(query);
 				}
 				else {
 					if (current_query.component_count > 0 || current_query.shared_component_count > 0) {
 						ArchetypeQuery query{ unique, shared };
-						query_infos[query_infos.size++].query_handle = world->entity_manager->RegisterQuery(query);
+						query_infos[query_infos.size++].query_handle = world->entity_manager->RegisterQueryCommit(query);
 					}
 				}
 			}

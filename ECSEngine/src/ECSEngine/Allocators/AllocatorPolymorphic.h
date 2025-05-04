@@ -180,6 +180,21 @@ namespace ECSEngine {
 	ECS_INLINE size_t GetAllocatorRegions(AllocatorPolymorphic allocator, void** region_pointers, size_t* region_size, size_t pointer_capacity) {
 		return allocator.allocator->GetRegions(region_pointers, region_size, pointer_capacity);
 	}
+	
+	struct AllocatorMarker {
+		size_t marker;
+		// This field is needed by the resizable linear allocator
+		size_t marker_usage;
+	};
+
+	// For allocators that support markers (i.e. linear/resizable linear), it will get the current
+	// Allocator marker in order to restore it later on. For the other types of allocators, it doesn't do
+	// Anything.
+	ECSENGINE_API AllocatorMarker GetAllocatorMarker(AllocatorPolymorphic allocator);
+
+	// Restores a marker that was recorded earlier (with function GetAllocatorMarker()). It doesn't do anything
+	// For allocators that do not support markers.
+	ECSENGINE_API void RestoreAllocatorMarker(AllocatorPolymorphic allocator, AllocatorMarker marker);
 
 	// Returns the byte size of the allocator itself, (i.e. sizeof(LinearAllocator))
 	ECSENGINE_API size_t AllocatorStructureByteSize(ECS_ALLOCATOR_TYPE type);

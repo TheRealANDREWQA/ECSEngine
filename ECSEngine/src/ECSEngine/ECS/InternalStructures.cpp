@@ -351,7 +351,7 @@ namespace ECSEngine {
 			file,
 			function,
 			line,
-			entity.index
+			entity.value
 		);
 
 		EntityInfo* info = entity_pool->m_entity_infos[entity_indices.x].stream.ElementPointer(entity_indices.y);

@@ -31,17 +31,14 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	unsigned int ArchetypeQueryCache::AddQuery(ArchetypeQuery query)
+	unsigned int ArchetypeQueryCache::AddQuery(const ArchetypeQuery& query)
 	{
-		// Just lock, add or resize and unlock
-		query_results.lock.Lock();
+		// Add or resize
 
 		// Check to see if this query already exists
 		for (unsigned int index = 0; index < query_results.count; index++) {
 			if (query_results.components[index] == query) {
 				// It matches this query - don't need to create a new one
-				// Unlock the lock
-				query_results.lock.Unlock();
 				return index;
 			}
 		}
@@ -58,24 +55,20 @@ namespace ECSEngine {
 		query_results.results[index].InitializeAndCopy(allocator, results);
 		query_results.count++;
 
-		query_results.lock.Unlock();
-
 		// Can return the index as is, only the exclude one will be offseted
 		return index;
 	}
 
 	// -----------------------------------------------------------------------------------------------
 
-	unsigned int ArchetypeQueryCache::AddQuery(ArchetypeQueryExclude query)
+	unsigned int ArchetypeQueryCache::AddQuery(const ArchetypeQueryExclude& query)
 	{
-		// Just lock, add or resize and unlock
-		exclude_query_results.lock.Lock();
+		// Add or resize
 
 		// Check to see if this query already exists
 		for (unsigned int index = 0; index < exclude_query_results.count; index++) {
 			if (exclude_query_results.components[index] == query) {
 				// It matches this query - don't need to create a new one
-				exclude_query_results.lock.Unlock();
 				return index;
 			}
 		}
@@ -92,7 +85,6 @@ namespace ECSEngine {
 		exclude_query_results.results[index].InitializeAndCopy(allocator, results);
 		exclude_query_results.count++;
 
-		exclude_query_results.lock.Unlock();
 		return index + EXCLUDE_HANDLE_OFFSET;
 	}
 
@@ -306,6 +298,28 @@ namespace ECSEngine {
 		}
 
 		exclude_query_results.capacity = new_capacity;
+	}
+
+	// -----------------------------------------------------------------------------------------------
+
+	void ArchetypeQueryCache::SwapArchetype(unsigned int previous_index, unsigned int new_index) {
+		auto patch_references = [previous_index, new_index](Stream<Stream<unsigned int>> results) -> void {
+			for (size_t index = 0; index < results.size; index++) {
+				// Lookup both values before modifying the values
+				size_t previous_index_index = SearchBytes(results[index], previous_index);
+				size_t next_index_index = SearchBytes(results[index], new_index);
+
+				if (previous_index_index != -1) {
+					results[index][previous_index_index] = new_index;
+				}
+				if (next_index_index != -1) {
+					results[index][next_index_index] = previous_index;
+				}
+			}
+			};
+
+		patch_references({ query_results.results, query_results.count });
+		patch_references({ exclude_query_results.results, exclude_query_results.count });
 	}
 
 	// -----------------------------------------------------------------------------------------------

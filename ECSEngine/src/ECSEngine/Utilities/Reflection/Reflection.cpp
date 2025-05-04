@@ -3748,7 +3748,7 @@ namespace ECSEngine {
 			type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
 				// We can catch custom types in this method as well, but it is not all that relevant, they will simply
 				// Be ignored
-				Stream<char> template_arguments = FindMatchingParenthesis(type.name, '<', '>');
+				Stream<char> template_arguments = FindMatchingParenthesesRange(type.name, '<', '>');
 				if (template_arguments.size > 0) {
 					Stream<char> definition = type.name.StartDifference(template_arguments);
 					ResizableStream<Stream<char>>* instantiations = template_to_instantiations_table.TryGetValuePtr(definition);
@@ -3893,7 +3893,7 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < hierarchy_count; index++) {
 				RemoveFolderHierarchy(0);
 			}
-			
+
 			// In case there are some entries left, it means that some sort of overrides were added, at the moment
 			// Assert that they are not encountered, such that we don't have to deal with those
 			ECS_ASSERT(type_definitions.GetCount() == 0 && enum_definitions.GetCount() == 0 && typedefs.GetCount() == 0 &&

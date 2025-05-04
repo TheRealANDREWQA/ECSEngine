@@ -1,7 +1,9 @@
+// ECS_REFLECT
 #pragma once
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "PointerUtilities.h"
+#include "Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {
 
@@ -252,7 +254,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------
 
 	template<typename IntegerType>
-	struct MovedElementIndex {
+	struct ECS_REFLECT MovedElementIndex {
 		static_assert(std::is_unsigned_v<IntegerType>, "MovedElementIndex accepts only unsigned integer types");
 
 		IntegerType previous;
@@ -284,17 +286,18 @@ namespace ECSEngine {
 		}
 
 		// Allocate an array to hold the indices where the element is at for their initial position
-		Stream<MovedElementIntegerType> element_indices;
+		// Need to remove the const in the type, if it is specified
+		Stream<std::remove_const_t<MovedElementIntegerType>> element_indices;
 		element_indices.Initialize(temporary_allocator, element_count);
 		MakeSequence(element_indices);
 
 		__try {
-			moves->ForEach([&](MovedElementIndex<MovedElementIntegerType> move) {
-				size_t current_index = element_indices[move.previous];
-				if (current_index != move.current) {
-					functor(current_index, move.current);
+			moves->ForEach([&](const MovedElementIndex<MovedElementIntegerType>* move) {
+				size_t current_index = element_indices[move->previous];
+				if (current_index != move->current) {
+					functor(current_index, move->current);
 					// Update the mapping
-					element_indices[move.current] = current_index;
+					element_indices[move->current] = current_index;
 					// No need to update element_indices[moves[index].previous] since it has already been used
 				}
 			});
@@ -323,13 +326,13 @@ namespace ECSEngine {
 	// The same as the other overload, except that it takes a lambda functor instead of an untyped functor.
 	// The functor will be called with parameters (IntegerType index).
 	template<typename Functor, typename IntegerType>
-	void RemoveArrayElements(IteratorInterface<IntegerType>* indices, size_t container_size, AllocatorPolymorphic temporary_allocator, Functor&& functor) {
+	void RemoveArrayElements(IteratorInterface<IntegerType>* indices, size_t container_size, AllocatorPolymorphic temporary_allocator, Functor functor) {
 		auto wrapper = [](void* user_data, IntegerType index) {
 			Functor* functor = (Functor*)user_data;
 			(*functor)(index);
 		};
 
-		RemoveArrayElements(indices, container_size, wrapper, &functor, temporary_allocator);
+		RemoveArrayElements<IntegerType>(indices, container_size, wrapper, &functor, temporary_allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------
@@ -369,7 +372,7 @@ namespace ECSEngine {
 				// If the element is not in final position, a swap is needed
 				// The swap can be performed now
 				if (swap_index < container_size) {
-					move_functor(container_size, swap_index)
+					move_functor(container_size, swap_index);
 				}
 				else if (swap_index > container_size) {
 					// The swap must be postponed

@@ -540,6 +540,11 @@ namespace ECSEngine {
 
 		template<typename DeckType, typename ValueType>
 		struct IteratorTemplate : IteratorInterface<ValueType> {
+			IteratorTemplate(DeckType* _deck, size_t _chunk_index, size_t _stream_index) : deck(_deck), chunk_index(_chunk_index), stream_index(_stream_index),
+				IteratorInterface<ValueType>(0) {
+				remaining_count = deck->size - deck->chunk_size * chunk_index - stream_index;
+			}
+
 			ValueType* Get() override {
 				size_t overall_index = chunk_index * deck->chunk_size + stream_index;
 				if (overall_index >= deck->GetElementCount()) {
@@ -560,7 +565,10 @@ namespace ECSEngine {
 
 		protected:
 			IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
-				IteratorTemplate<DeckType, ValueType>* iterator = AllocateAndConstruct<IteratorTemplate<DeckType, ValueType>>(allocator, buffer + index, count, 0);
+				IteratorTemplate<DeckType, ValueType>* iterator = AllocateAndConstruct<IteratorTemplate<DeckType, ValueType>>(allocator, deck, chunk_index, stream_index);
+				// Set the remaining count to the given subrange.
+				iterator->remaining_count = count;
+
 				size_t chunk_forward_count = count / deck->chunk_size;
 				size_t chunk_remainder_count = count % deck->chunk_size;
 				chunk_index += chunk_forward_count;
