@@ -1376,6 +1376,14 @@ namespace ECSEngine {
 
 		const ArchetypeBase* GetBase(unsigned int main_index, unsigned int base_index) const;
 
+		ECS_INLINE ArchetypeBase* GetBase(EntityInfo info) {
+			return GetBase(info.main_archetype, info.base_archetype);
+		}
+
+		ECS_INLINE const ArchetypeBase* GetBase(EntityInfo info) const {
+			return GetBase(info.main_archetype, info.base_archetype);
+		}
+
 		// It requires a syncronization barrier!! If the archetype does not exist, then it will commit the creation of a new one
 		Archetype* GetOrCreateArchetype(ComponentSignature unique_signature, ComponentSignature shared_signature);
 
@@ -2252,6 +2260,15 @@ namespace ECSEngine {
 		unsigned int entity_pool_power_of_two,
 		GlobalMemoryManager* global_memory_manager
 	);
+
+	// INTERNAL
+	// This is mostly an internal function to be used by the delta change set deserializer
+	// In order to move an entity to a specific archetype and location. You need to provide
+	// As an argument the components you want to copy, since the entity will be removed from
+	// The base archetype. If the entity cannot be placed at the exact stream specified in info,
+	// (because not enough entities have been created), it will return false, else true (the entity
+	// Was placed at info.stream_index).
+	ECSENGINE_API bool EntityManagerMoveEntityToEntityInfo(EntityManager* entity_manager, Entity entity, EntityInfo info, ComponentSignature components_to_copy);
 
 }
 

@@ -170,6 +170,17 @@ namespace ECSEngine {
 		void* current_component = base->GetComponentByIndex(info.stream_index, signature_index);
 		current_info->CallDeallocateFunction(current_component);
 	}
+	
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::CallEntityDeallocate(EntityInfo info, ComponentSignature signature) {
+		for (unsigned char deallocate_index = 0; deallocate_index < m_user_defined_components.count; deallocate_index++) {
+			unsigned char signature_index = signature.Find(m_unique_components[m_user_defined_components[deallocate_index]]);
+			if (signature_index != UCHAR_MAX) {
+				CallEntityDeallocate(deallocate_index, info);
+			}
+		}
+	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 

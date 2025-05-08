@@ -103,7 +103,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename MovedElementIntegerType>
-	void MoveElements(void* elements, size_t element_count, size_t element_byte_size, IteratorInterface<MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator) {
+	void MoveElements(void* elements, size_t element_count, size_t element_byte_size, IteratorInterface<const MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator) {
 		// In order to swap an element, we need some temporary untyped storage
 		ECS_STACK_VOID_STREAM(element_storage, ECS_KB * 4);
 		ECS_ASSERT(element_byte_size <= element_storage.capacity, "Element byte size is too large for MoveElements!");
@@ -118,15 +118,15 @@ namespace ECSEngine {
 		});
 	}
 	
-	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<unsigned char>>*, AllocatorPolymorphic);
-	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<unsigned short>>*, AllocatorPolymorphic);
-	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<unsigned int>>*, AllocatorPolymorphic);
-	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<size_t>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<const MovedElementIndex<unsigned char>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<const MovedElementIndex<unsigned short>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<const MovedElementIndex<unsigned int>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<const MovedElementIndex<size_t>>*, AllocatorPolymorphic);
 
-	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<const unsigned char>>*, AllocatorPolymorphic);
-	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<const unsigned short>>*, AllocatorPolymorphic);
-	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<const unsigned int>>*, AllocatorPolymorphic);
-	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<MovedElementIndex<const size_t>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<const MovedElementIndex<const unsigned char>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<const MovedElementIndex<const unsigned short>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<const MovedElementIndex<const unsigned int>>*, AllocatorPolymorphic);
+	template ECSENGINE_API void MoveElements(void*, size_t, size_t, IteratorInterface<const MovedElementIndex<const size_t>>*, AllocatorPolymorphic);
 
 	// --------------------------------------------------------------------------------------------------
 

@@ -249,6 +249,8 @@ namespace ECSEngine {
 		// Initialize the change set as the first action
 		change_set.Initialize(change_set_allocator);
 
+		// TODO: This must be changed - the way it is computed it is vastly different!
+
 		DetermineEntityManagerEntityInfoChangeSet(previous_entity_manager, new_entity_manager, change_set);
 		DetermineEntityManagerUniqueComponentChangeSet(previous_entity_manager, new_entity_manager, reflection_manager, change_set);
 		DetermineEntityManagerSharedComponentChangeSet(previous_entity_manager, new_entity_manager, reflection_manager, change_set);
@@ -276,6 +278,8 @@ namespace ECSEngine {
 				return false;
 			}
 		}
+
+		// TODO: This must be changed - the deserialization was vastly changed!
 
 		// Use the reflection manager for that, it should handle this successfully
 		if (Serialize(reflection_manager, reflection_manager->GetType(STRING(EntityManagerChangeSet)), &change_set, write_instrument) != ECS_SERIALIZE_OK) {
@@ -451,6 +455,8 @@ namespace ECSEngine {
 			header_section_data_storage = deserialized_header_section.value;
 			header_section = &header_section_data_storage;
 		}
+		
+		AllocatorPolymorphic function_temporary_allocator;
 
 		// Deserialize the change set itself
 		EntityManagerChangeSet change_set;
@@ -463,9 +469,11 @@ namespace ECSEngine {
 				temporary_allocator = ResizableLinearAllocator(DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
 			}
 			change_set_deserialize_options.field_allocator = &temporary_allocator;
+			function_temporary_allocator = &temporary_allocator;
 		}
 		else {
 			change_set_deserialize_options.field_allocator = options->temporary_allocator;
+			function_temporary_allocator = options->temporary_allocator;
 		}
 		if (Deserialize(
 			reflection_manager, 
@@ -529,7 +537,7 @@ namespace ECSEngine {
 				// Push a new subinstrument, such that the component can reason about itself and we prevent
 				// The component from reading overbounds
 				ReadInstrument::SubinstrumentData subinstrument_data;
-				auto subinstrument = read_instrument->PushSubinstrument(&subinstrument_data, write_size);
+				auto subinstrument_deallocator = read_instrument->PushSubinstrument(&subinstrument_data, write_size);
 
 				DeserializeEntityManagerComponentData function_data;
 				function_data.components = global_component_storage;
@@ -627,15 +635,13 @@ namespace ECSEngine {
 					// Push a new subinstrument, such that the component can reason about itself and we prevent
 					// The component from reading overbounds
 					ReadInstrument::SubinstrumentData subinstrument_data;
-					auto subinstrument = read_instrument->PushSubinstrument(&subinstrument_data, write_size);
+					auto subinstrument_deallocator = read_instrument->PushSubinstrument(&subinstrument_data, write_size);
 
 					DeserializeEntityManagerSharedComponentData function_data;
 					function_data.component = shared_instance_storage;
 					function_data.read_instrument = read_instrument;
 					function_data.extra_data = component_info->extra_data;
 					function_data.version = cached_info->version;
-					// Global components have their allocator as the main entity manager allocator, since they
-					// Might need a lot of memory
 					function_data.component_allocator = entity_manager->GetSharedComponentAllocator(cached_info->found_at);
 					function_data.data_size = write_size;
 					function_data.instance = current_instance;
@@ -667,15 +673,28 @@ namespace ECSEngine {
 		}
 
 		// Perform the archetype handling - which is the most complicated part. Start with the main archetypes
-		// Define an apply archetype change interface to perform the main archetype handling
+		// Define an apply archetype change interface to perform the main archetype handling.
+		// One important observation!! Instead of actually destroying the archetype directly using the
+		// entity manager destroy call, put that archetype into a temporary array and don't deallocate its buffers.
+		// The reason for this is the following: there can be entities which belong to this archetype but they have
+		// Been moved to a different archetype. Destroying the archetype would destroy these entities as well, and
+		// We will lose their data. So, just remove swap it back inside the entity manager's array.
+		ResizableStream<Archetype> archetypes_pending_deletion(entity_manager->TemporaryAllocatorSingleThreaded(), 8);
+
 		struct ApplyArchetypeChange : ApplyArrayDeltaChangeInterface<unsigned short> {
-			ApplyArchetypeChange(EntityManager* _entity_manager, const EntityManagerChangeSet* _change_set) : entity_manager(_entity_manager),
-				change_set(_change_set), new_archetypes_iterator(change_set->new_archetypes.ConstIterator()), 
+			ApplyArchetypeChange(EntityManager* _entity_manager, const EntityManagerChangeSet* _change_set, ResizableStream<Archetype>* _archetypes_pending_deletion) : entity_manager(_entity_manager),
+				change_set(_change_set), archetypes_pending_deletion(_archetypes_pending_deletion), new_archetypes_iterator(change_set->new_archetypes.ConstIterator()), 
 				moved_archetypes_iterator(change_set->moved_archetypes.ConstIterator()),
 				removed_archetypes_iterator(change_set->destroyed_archetypes.ConstIterator()) {}
 
 			virtual void RemoveEntry(unsigned short index) override {
-				entity_manager->DestroyArchetypeCommit(index);
+				archetypes_pending_deletion->Add(entity_manager->GetArchetype(index));
+				
+				entity_manager->m_archetypes.RemoveSwapBack(index);
+				unsigned int last_archetype_index = entity_manager->m_archetypes.size;
+				*entity_manager->GetArchetypeUniqueComponentsPtr(index) = *entity_manager->GetArchetypeUniqueComponentsPtr(last_archetype_index);
+				*entity_manager->GetArchetypeSharedComponentsPtr(index) = *entity_manager->GetArchetypeSharedComponentsPtr(last_archetype_index);
+				//entity_manager->DestroyArchetypeCommit(index);
 			}
 
 			virtual unsigned short CreateNewEntry() override {
@@ -706,42 +725,48 @@ namespace ECSEngine {
 
 			EntityManager* entity_manager;
 			const EntityManagerChangeSet* change_set;
+			ResizableStream<Archetype>* archetypes_pending_deletion;
 			// Needed for the function CreateNewEntry.
 			DeckPowerOfTwo<EntityManagerChangeSet::NewArchetype>::ConstIteratorType new_archetypes_iterator;
 			DeckPowerOfTwo<MovedElementIndex<unsigned short>>::ConstIteratorType moved_archetypes_iterator;
 			DeckPowerOfTwo<unsigned short>::ConstIteratorType removed_archetypes_iterator;
 		};
 
-		ApplyArchetypeChange apply_archetype_change(entity_manager, &change_set);
-		AllocatorPolymorphic apply_archetype_change_allocator;
-		if (options->change_set == nullptr) {
-			if (temporary_allocator.m_initial_capacity == 0) {
-				temporary_allocator = ResizableLinearAllocator(DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
-			}
-			apply_archetype_change_allocator = &temporary_allocator;
-		}
-		else {
-			apply_archetype_change_allocator = options->temporary_allocator;
-		}
+		ApplyArchetypeChange apply_archetype_change(entity_manager, &change_set, &archetypes_pending_deletion);
+		struct PendingArchetypeBaseDeletion {
+			// This index can be used to directly index into the appropriate archetype, since
+			// The delta change for the main archetypes has been applied.
+			unsigned int main_archetype_index;
+			Archetype::InternalBase base;
+		};
+		// Similarly to main archetypes, we must record the pending deletions but not actually perform them, only fake their deletion
+		// Such that we can recover the entity data of entities moved out this archetype.
+		ResizableStream<PendingArchetypeBaseDeletion> archetypes_base_pending_deletion(entity_manager->TemporaryAllocatorSingleThreaded(), 8);
 
 		// Use the marker to reset the linear allocator gracefully
-		AllocatorMarker apply_archetype_change_allocator_marker = GetAllocatorMarker(apply_archetype_change_allocator);
-		ApplyArrayDeltaChange(&apply_archetype_change, apply_archetype_change_allocator);
-		RestoreAllocatorMarker(apply_archetype_change_allocator, apply_archetype_change_allocator_marker);
+		AllocatorMarker apply_archetype_change_allocator_marker = GetAllocatorMarker(function_temporary_allocator);
+		ApplyArrayDeltaChange(&apply_archetype_change, function_temporary_allocator);
+		RestoreAllocatorMarker(function_temporary_allocator, apply_archetype_change_allocator_marker);
 
 		// Define an apply archetype base change interface to handle the base archetypes delta.
 		struct ApplyArchetypeBaseChange : ApplyArrayDeltaChangeInterface<unsigned short> {
 			ApplyArchetypeBaseChange(
 				EntityManager* _entity_manager,
+				ResizableStream<PendingArchetypeBaseDeletion>* _archetypes_base_pending_deletion,
 				const EntityManagerChangeSet::BaseArchetypeChanges& base_archetype_changes
-			) : entity_manager(_entity_manager), main_archetype_index(base_archetype_changes.archetype), 
+			) : entity_manager(_entity_manager), main_archetype_index(base_archetype_changes.archetype),
+				archetypes_base_pending_deletion(_archetypes_base_pending_deletion),
 				new_entries_count(base_archetype_changes.new_base.size),
 				new_entries_iterator(base_archetype_changes.new_base.ConstIterator()),
 				moved_entries_iterator(base_archetype_changes.moved_base.ConstIterator()),
 				removed_entries_iterator(base_archetype_changes.destroyed_base.ConstIterator()) {}
 
 			virtual void RemoveEntry(unsigned short index) override {
-				entity_manager->DestroyArchetypeCommit(index);
+				Archetype* archetype = entity_manager->GetArchetype(main_archetype_index);
+				archetypes_base_pending_deletion->Add({ main_archetype_index, archetype->m_base_archetypes[index] });
+				archetype->m_base_archetypes.RemoveSwapBack(index);
+
+				//entity_manager->DestroyArchetypeBaseCommit(main_archetype_index, index);
 			}
 
 			virtual unsigned short CreateNewEntry() override {
@@ -772,6 +797,7 @@ namespace ECSEngine {
 			}
 
 			EntityManager* entity_manager;
+			ResizableStream<PendingArchetypeBaseDeletion>* archetypes_base_pending_deletion;
 			// This is the main index of the archetype inside entity manager's archetype array
 			unsigned int main_archetype_index;
 			// This value is cached such that the initial values is always returned, since new_entries_iterator
@@ -784,25 +810,196 @@ namespace ECSEngine {
 
 		// We can reuse the apply archetype change allocator here as well
 		change_set.base_archetype_changes.ForEach([&](const EntityManagerChangeSet::BaseArchetypeChanges& base_archetype_changes) {
-			ApplyArchetypeBaseChange archetype_base_change(entity_manager, base_archetype_changes);
+			ApplyArchetypeBaseChange archetype_base_change(entity_manager, &archetypes_base_pending_deletion, base_archetype_changes);
 
-			AllocatorMarker apply_archetype_change_allocator_marker = GetAllocatorMarker(apply_archetype_change_allocator);
-			ApplyArrayDeltaChange(&archetype_base_change, apply_archetype_change_allocator);
-			RestoreAllocatorMarker(apply_archetype_change_allocator, apply_archetype_change_allocator_marker);
+			AllocatorMarker apply_archetype_change_allocator_marker = GetAllocatorMarker(function_temporary_allocator);
+			ApplyArrayDeltaChange(&archetype_base_change, function_temporary_allocator);
+			RestoreAllocatorMarker(function_temporary_allocator, apply_archetype_change_allocator_marker);
+			return false;
 		});
 
-		//// Now perform the per entity related operations.
-		//// Start with destroying the entities which are for sure gone
-		//for (size_t index = 0; index < change_set.entity_info_destroys.buffers.size; index++) {
-		//	entity_manager->DeleteEntitiesCommit(change_set.entity_info_destroys.buffers[index]);
-		//}
+		// Now a very complex process must be performed in order to determine the unique components which have changed for each entity
+		// And which archetype is now the proper archetype for each entity, while also taking into account pending archetype deletions. 
+		// The source of this data is the entity info change. We can take the previous archetype's components and make the delta compared to the new one.
 
-		//// Create the new entities
-		//for (size_t index = 0; index < change_set.entity_info_additions_entity.buffers.size; index++) {
-		//	// Exclude these from the hierarchy, they will be handled separately by the entity hierarchy change set
-		//	entity_manager->CreateSpecificEntitiesCommit(change_set.entity_info_additions_entity.buffers[index], {}, {}, true);
-		//	// Set the entity info to the one stored
-		//}
+		// Step 1. Reinsert the pending deleted main archetypes. Add them to the end of the array, since this will not disturb any indices.
+		for (unsigned int index = 0; index < archetypes_pending_deletion.size; index++) {
+			const Archetype* archetype = &archetypes_pending_deletion[index];
+			unsigned int reinsertion_index = entity_manager->m_archetypes.Add(archetype);
+			entity_manager->GetArchetypeUniqueComponentsPtr(reinsertion_index)->ConvertComponents(archetypes_pending_deletion[index].GetUniqueSignature());
+			entity_manager->GetArchetypeSharedComponentsPtr(reinsertion_index)->ConvertComponents(archetypes_pending_deletion[index].GetSharedSignature());
+			
+			// We must update the entity infos of all entities that belong to this archetype.
+			for (unsigned int base_index = 0; base_index < archetype->GetBaseCount(); base_index++) {
+				const ArchetypeBase* base = archetype->GetBase(base_index);
+				for (unsigned int entity_index = 0; entity_index < base->EntityCount(); entity_index++) {
+					EntityInfo* entity_info = entity_manager->m_entity_pool->GetInfoPtrNoChecks(base->m_entities[entity_index]);
+					entity_info->main_archetype = reinsertion_index;
+				}
+			}
+		}
+
+		// Step 2. Reinsert the pending deleted base archetypes. Add them to the end of the array of the archetype, since this will not disturb any indices
+		for (unsigned int index = 0; index < archetypes_base_pending_deletion.size; index++) {
+			// The order in which these were inserted guarantees that the entries from the same main archetype are consecutive
+			unsigned int initial_same_archetype_index = index;
+			while (index < archetypes_base_pending_deletion.size - 1 && archetypes_base_pending_deletion[index].main_archetype_index == archetypes_base_pending_deletion[index + 1].main_archetype_index) {
+				index++;
+			}
+
+			Archetype* archetype = entity_manager->GetArchetype(archetypes_base_pending_deletion[initial_same_archetype_index].main_archetype_index);
+			for (unsigned int subindex = initial_same_archetype_index; subindex <= index; subindex++) {
+				unsigned int reinsertion_index = archetype->m_base_archetypes.Add(archetypes_base_pending_deletion[subindex].base);
+			
+				// Similarily to main archetypes, we must update the entity infos of all entities that belong to this base archetype.
+				const ArchetypeBase* base = archetype->GetBase(reinsertion_index);
+				for (unsigned int entity_index = 0; entity_index < base->EntityCount(); entity_index++) {
+					EntityInfo* entity_info = entity_manager->m_entity_pool->GetInfoPtrNoChecks(base->m_entities[entity_index]);
+					entity_info->base_archetype = reinsertion_index;
+				}
+			}
+		}
+
+		// Step 3. After the reinsertion took place, we can perform the per entity operations.
+		// Start off with the entity deletions.
+		change_set.entity_info_destroys.ForEachChunk([&](Stream<Entity> entities) {
+			entity_manager->DeleteEntitiesCommit(entities);
+		});
+
+		// Step 4. Create the new entities that need to be created - the appropriate archetypes are all set.
+		// These new entities will be created into the archetype without components. In case it didn't exist before,
+		// We will need to destroy it at the end of the function. We need to keep track of the entities which could
+		// Not be placed at their stream index, because of the creation order. Store them and move them later, after
+		// All additions have been performed.
+		size_t entity_create_index = 0;
+		AllocatorMarker add_entities_allocator_marker = GetAllocatorMarker(function_temporary_allocator);
+		
+		struct CreatedEntityPendingStreamRepair {
+			Entity entity;
+			unsigned int desired_index;
+		};
+		ResizableStream<CreatedEntityPendingStreamRepair> created_entities_pending_stream_repair(function_temporary_allocator, 16);
+
+		// This function swaps the entity from the source to the target index, and the target to the source.
+		// You can choose if the source components should be copied to the target, thet target to source is always performed.
+		auto swap_base_archetype_entity_to_location = [](ArchetypeBase* base_archetype, unsigned int target_index, unsigned int source_index, bool copy_source_components) {
+			swap(base_archetype->m_entities[target_index], base_archetype->m_entities[source_index]);
+			if (copy_source_components) {
+				size_t temporary_memory[ECS_COMPONENT_MAX_BYTE_SIZE / sizeof(size_t)];
+				for (unsigned char component_index = 0; component_index < base_archetype->m_components.count; component_index++) {
+					unsigned int component_size = base_archetype->m_infos[base_archetype->m_components[component_index]].size;
+					swap(
+						base_archetype->GetComponentByIndex(source_index, component_index), 
+						base_archetype->GetComponentByIndex(target_index, component_index), 
+						temporary_memory, 
+						component_size
+					);
+				}
+			}
+			else {
+				for (unsigned char component_index = 0; component_index < base_archetype->m_components.count; component_index++) {
+					memcpy(
+						base_archetype->GetComponentByIndex(source_index, component_index), 
+						base_archetype->GetComponentByIndex(target_index, component_index), 
+						base_archetype->m_infos[base_archetype->m_components[component_index]].size
+					);
+				}
+			}
+		};
+
+		auto new_entity_infos_iterator = change_set.entity_info_additions_entity_info.ConstIterator();
+		change_set.entity_info_additions_entity.ForEachChunk([&](Stream<Entity> entities) {
+			// Create these entities by bypassing the entity manager - since it will force us
+			// To set the entities into an archetype that will be later on moved from. The archetype
+			// Indices passed to this function don't matter, they are used just to initialize the entity
+			// Infos, but we will update them afterwards.
+			entity_manager->m_entity_pool->AllocateSpecific(entities, { 0,0 }, 0);
+			
+			// Now that the entities are allocated, write their appropriate entity infos
+			// And write them into their respective archetypes.
+			for (size_t index = 0; index < entities.size; index++) {
+				EntityInfo current_info = change_set.entity_info_additions_entity_info[entity_create_index];
+				*entity_manager->m_entity_pool->GetInfoPtrNoChecks(index) = current_info;
+				entity_create_index++;
+
+				ArchetypeBase* base_archetype = entity_manager->GetBase(current_info);
+				unsigned int added_index = base_archetype->AddEntity(entities[index]);
+				if (added_index != current_info.stream_index) {
+					if (current_info.stream_index < base_archetype->EntityCount()) {
+						// The entity can be placed at its preferred location. Swap it there
+						swap_base_archetype_entity_to_location(base_archetype, current_info.stream_index, added_index, false);
+					}
+					else {
+						// Add this to the pending stream repair. We must use store the desired stream index
+						// Since this entity in of itself can be swapped, for this reason, update the entity info
+						// Of this entry to reflect the real current index.
+						entity_manager->m_entity_pool->GetInfoPtrNoChecks(index)->stream_index = added_index;
+						created_entities_pending_stream_repair.Add({ entities[index], (unsigned int)current_info.stream_index });
+					}
+				}
+			}
+		});
+
+		// Perform the pending stream repair now
+		for (unsigned int index = 0; index < created_entities_pending_stream_repair.size; index++) {
+			EntityInfo* entity_info = entity_manager->m_entity_pool->GetInfoPtrNoChecks(created_entities_pending_stream_repair[index].entity);
+			ArchetypeBase* base_archetype = entity_manager->GetBase(*entity_info);
+			swap_base_archetype_entity_to_location(base_archetype, created_entities_pending_stream_repair[index].desired_index, entity_info->stream_index, false);
+		}
+
+		RestoreAllocatorMarker(function_temporary_allocator, add_entities_allocator_marker);
+
+		// Step 5. After this has been done, the unique components of the newly created entities must be reconstructed.
+		// These have been written in the same order as the new entities in the change set.
+		entity_create_index = 0;
+		if (change_set.entity_info_additions_entity.ForEach<true>([&](Entity entity) {
+			// It is probably faster to access the entity info from the parallel stream than going through
+			// The entity pool since it has better locality.
+			EntityInfo entity_info = change_set.entity_info_additions_entity_info[entity_create_index];
+			entity_create_index;
+
+			ArchetypeBase* archetype_base = entity_manager->GetBase(entity_info);
+			// The components are serialized in the same order as the base.
+			for (unsigned char component_index = 0; component_index < archetype_base->m_components.count; component_index++) {
+				Component component = archetype_base->m_components[component_index];
+
+				const internal::CachedComponentInfo* cached_info = header_section->cached_unique_infos.GetValuePtr(component);
+				const DeserializeEntityManagerComponentInfo* deserialized_component_info = cached_info->info;
+
+				unsigned int write_size = 0;
+				if (!read_instrument->Read(&write_size)) {
+					ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "Write size for unique component {#} could not be read", header_section->GetComponentName(component));
+					return true;
+				}
+
+				// Push a new subinstrument, such that the component can reason about itself and we prevent
+				// The component from reading overbounds
+				ReadInstrument::SubinstrumentData subinstrument_data;
+				auto subinstrument_deallocator = read_instrument->PushSubinstrument(&subinstrument_data, write_size);
+
+				DeserializeEntityManagerComponentData function_data;
+				function_data.components = archetype_base->GetComponentByIndex(entity_info.stream_index, component_index);
+				function_data.read_instrument = read_instrument;
+				function_data.extra_data = deserialized_component_info->extra_data;
+				function_data.version = cached_info->version;
+				function_data.count = 1;
+				function_data.component_allocator = entity_manager->GetComponentAllocator(cached_info->found_at);
+
+				// Now call the extract function
+				bool is_data_valid = deserialized_component_info->function(&function_data);
+				if (!is_data_valid) {
+					ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "A unique component {#} has corrupted data", deserialized_component_info->name);
+					return true;
+				}
+			}
+
+			return false;
+		})) {
+			return false;
+		}
+
+		// Step 6.
+
 
 		return true;
 	}

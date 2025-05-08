@@ -1122,7 +1122,7 @@ namespace ECSEngine {
 			ArchetypeBase* base_archetype = manager->GetBase(info.main_archetype, info.base_archetype);
 			Archetype* main_archetype = manager->GetArchetype(info.main_archetype);
 			
-			// Dealocate any buffers this entity might have
+			// Deallocate any buffers this entity might have
 			main_archetype->CallEntityDeallocate(info);
 
 			// Remove the entities from the archetype
@@ -6567,6 +6567,74 @@ namespace ECSEngine {
 
 		*entity_manager = EntityManager(descriptor);
 		entity_manager->m_query_cache->entity_manager = entity_manager;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	bool EntityManagerMoveEntityToEntityInfo(EntityManager* entity_manager, Entity entity, EntityInfo info, ComponentSignature components_to_copy) {
+		EntityInfo* current_info = entity_manager->m_entity_pool->GetInfoPtr(entity);
+
+		// If the source and target archetypes are the same and the stream index is the same, we can stop.
+		// If either of these is not the same, the algorithm is the same.
+		if (current_info->stream_index == info.stream_index && current_info->main_archetype == info.main_archetype && current_info->base_archetype == info.base_archetype) {
+			return true;
+		}
+
+		ArchetypeBase* source_base_archetype = entity_manager->GetBase(current_info->main_archetype, current_info->base_archetype);
+		ArchetypeBase* target_base_archetype = entity_manager->GetBase(info.main_archetype, info.base_archetype);
+
+		const void* components_to_copy_data[ECS_ARCHETYPE_MAX_COMPONENTS];
+		for (decltype(components_to_copy.count) index = 0; index < components_to_copy.count; index++) {
+			components_to_copy_data[index] = source_base_archetype->GetComponent(*current_info, components_to_copy[index]);
+		}
+
+		// We must manually remove the entity from the base archetype
+		Archetype* source_main_archetype = entity_manager->GetArchetype(current_info->main_archetype);
+		// Determine the components which need to be deallocated.
+		Component components_to_deallocate[ECS_ARCHETYPE_MAX_COMPONENTS];
+		size_t components_to_deallocate_count = 0;
+		ComponentSignature source_archetype_signature = source_main_archetype->GetUniqueSignature();
+		for (decltype(source_archetype_signature.count) index = 0; index < source_archetype_signature.count; index++) {
+			if (components_to_copy.Find(source_archetype_signature[index]) == UCHAR_MAX) {
+				components_to_deallocate[components_to_deallocate_count++] = source_archetype_signature[index];
+			}
+		}
+
+		// Remove the entity from the source archetype using a stack scope, since it needs to happen after the copy of
+		// The source components has been performed.
+		auto remove_entity_scope = StackScope([&]() {
+			source_main_archetype->CallEntityDeallocate(*current_info, { components_to_deallocate, components_to_deallocate_count });
+			source_base_archetype->RemoveEntity(current_info->stream_index, entity_manager->m_entity_pool); 
+		});
+
+		// If the entity cannot be created at its desired location, create it as is and return false
+		if (info.stream_index > target_base_archetype->m_size) {
+			current_info->stream_index = target_base_archetype->AddEntity(entity, components_to_copy, components_to_copy_data);
+			current_info->main_archetype = info.main_archetype;
+			current_info->base_archetype = info.base_archetype;
+			return false;
+		}
+
+		// The entity can be created at the desired location. To avoid making an unnecessary swap, move the target index
+		// In the last place and then overwrite that index with this entity.
+
+		// Add the target entity once more, such that its components are properly copied.
+		const void* target_entity_buffer_data[ECS_ARCHETYPE_MAX_COMPONENTS];
+		ComponentSignature target_archetype_signature = entity_manager->GetArchetype(info.main_archetype)->GetUniqueSignature();
+		for (decltype(target_archetype_signature.count) index = 0; index < target_archetype_signature.count; index++) {
+			target_entity_buffer_data[index] = target_base_archetype->GetComponentByIndex(info.stream_index, index);
+		}
+		// We also need to update that entity's info stream index.
+		EntityInfo* target_entity_to_be_swapped_info = entity_manager->m_entity_pool->GetInfoPtr(target_base_archetype->m_entities[info.stream_index]);
+		target_entity_to_be_swapped_info->stream_index = target_base_archetype->AddEntity(target_base_archetype->m_entities[info.stream_index], target_archetype_signature, target_entity_buffer_data);
+
+		// Now, overwrite the components of the target with the current data.
+		target_base_archetype->m_entities[info.stream_index] = entity;
+		target_base_archetype->CopyByComponents({ info.stream_index, 1 }, components_to_copy_data, components_to_copy);
+		current_info->stream_index = info.stream_index;
+		current_info->main_archetype = info.main_archetype;
+		current_info->base_archetype = info.base_archetype;
+		return true;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

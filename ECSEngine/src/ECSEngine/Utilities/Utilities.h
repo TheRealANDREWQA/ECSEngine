@@ -51,6 +51,10 @@ namespace ECSEngine {
 		memset(structure, 0, sizeof(*structure));
 	}
 
+	// Swaps an variable length amount of bytes from a location to another location.
+	// You must ensure that all provided pointers fit the copy size
+	ECSENGINE_API void swap(void* a, void* b, void* temporary_storage, size_t copy_size);
+
 	template<typename T>
 	ECS_INLINE T IndexTexture(const T* texture_data, size_t row, size_t column, size_t width) {
 		return texture_data[row * width + column];
