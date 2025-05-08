@@ -337,6 +337,23 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// Return true to early exit, else false
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEachChunk(Functor&& functor) const {
+			for (size_t index = 0; index < buffers.size; index++) {
+				if constexpr (early_exit) {
+					if (functor(buffers[index].ToStream())) {
+						return true;
+					}
+				}
+				else {
+					functor(buffers[index].ToStream());
+				}
+			}
+			return false;
+		}
+
 		// Use this method in case you have the indices valid or from iterating and storing the values
 		ECS_INLINE T GetValue(size_t chunk_index, size_t in_chunk_index) const {
 			return buffers[chunk_index][in_chunk_index];

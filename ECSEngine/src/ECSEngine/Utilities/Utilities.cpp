@@ -5,6 +5,12 @@
 
 namespace ECSEngine {
 
+	void swap(void* a, void* b, void* temporary_storage, size_t copy_size) {
+		memcpy(temporary_storage, a, copy_size);
+		memcpy(a, b, copy_size);
+		memcpy(b, temporary_storage, copy_size);
+	}
+
 	template<typename Functor>
 	static void AddressFlagBit(void* value, unsigned char bit_index, Functor&& functor) {
 		if (bit_index < sizeof(unsigned char) * 8) {

@@ -268,14 +268,14 @@ namespace ECSEngine {
 	// Each element to be moved must appear only once, and there should not be any conflicts (no 2 elements should target the same index)
 	// Only unsigned integer types are allowed as template argument
 	template<typename MovedElementIntegerType>
-	ECSENGINE_API void MoveElements(void* elements, size_t element_count, size_t element_byte_size, IteratorInterface<MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator = { nullptr });
+	ECSENGINE_API void MoveElements(void* elements, size_t element_count, size_t element_byte_size, IteratorInterface<const MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator = { nullptr });
 
 	// The temporary allocator can be nullptr, in which case it will use Malloc.
 	// This function is the same as MoveElements, but instead of performing the shuffles, it instructs
 	// The functor as to what indices need to be moved where.
 	// The functor will be called with (IntegerType previous_index, IntegerType current_index)
 	template<typename MovedElementIntegerType, typename Functor>
-	void MoveElementsFunctor(size_t element_count, IteratorInterface<MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator, Functor&& functor) {
+	void MoveElementsFunctor(size_t element_count, IteratorInterface<const MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator, Functor&& functor) {
 		// If there are no moves, early exit.
 		if (moves->remaining_count == 0) {
 			return;

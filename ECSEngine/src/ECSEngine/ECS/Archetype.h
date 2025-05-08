@@ -33,6 +33,9 @@ namespace ECSEngine {
 		// in the m_unique_components_to_deallocate
 		void CallEntityDeallocate(unsigned char deallocate_index, EntityInfo info);
 
+		// Deallocates all buffers of the given entity for the given components
+		void CallEntityDeallocate(EntityInfo info, ComponentSignature signature);
+
 		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
 		void CallEntityCopy(EntityInfo info, unsigned char deallocate_index, const void* source_data, bool deallocate_previous);
 
