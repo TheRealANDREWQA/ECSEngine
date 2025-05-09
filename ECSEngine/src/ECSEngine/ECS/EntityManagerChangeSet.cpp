@@ -14,6 +14,8 @@
 
 #define DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY (ECS_MB * 50)
 
+#define VALIDATE_DESERIALIZE true
+
 using namespace ECSEngine::Reflection;
 
 namespace ECSEngine {
@@ -485,6 +487,35 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// For the validation of the change set deserialization, record the entity infos of all
+		// Entities that did not have their entity info changed, such that we can compare it later on.
+		struct UnchangedEntityInfo {
+			Entity entity;
+			EntityInfo info;
+		};
+		DeckPowerOfTwo<UnchangedEntityInfo> unchanged_entity_infos;
+		if constexpr (VALIDATE_DESERIALIZE) {
+			// Create a hash table with the changes, such that we can iterate all entities and look them up in this table.
+			HashTable<EntityInfo, Entity, HashFunctionPowerOfTwo> changed_entity_infos;
+			changed_entity_infos.Initialize(function_temporary_allocator, HashTablePowerOfTwoCapacityForElements(change_set.entity_info_changes.size));
+			change_set.entity_info_changes.ForEach([&](const EntityManagerChangeSet::EntityInfoChange& change) {
+				changed_entity_infos.Insert(change.info, change.entity);
+				return false;
+			});
+
+			unchanged_entity_infos.Initialize(function_temporary_allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
+			entity_manager->ForEachEntity([&](Entity entity) {
+				if (changed_entity_infos.Find(entity) == -1) {
+					unchanged_entity_infos.Add({ entity, entity_manager->GetEntityInfo(entity) });
+				}
+			});
+			// Add the new entities from the change set as well, since these have to follow the unchanged rule.
+			unchanged_entity_infos.Reserve(change_set.entity_info_additions_entity.size);
+			change_set.entity_info_additions_entity.ForEachIndex([&](uint2 indices) {
+				unchanged_entity_infos.Add({ change_set.entity_info_additions_entity.GetValue(indices), change_set.entity_info_additions_entity_info.GetValue(indices) });
+			});
+		}
+
 		// Iterate over the global components and perform all types of actions
 		if (change_set.global_component_changes.ForEach<true>([&](const EntityManagerChangeSet::GlobalComponentChange& change) -> bool {
 			switch (change.type) {
@@ -692,8 +723,21 @@ namespace ECSEngine {
 				
 				entity_manager->m_archetypes.RemoveSwapBack(index);
 				unsigned int last_archetype_index = entity_manager->m_archetypes.size;
-				*entity_manager->GetArchetypeUniqueComponentsPtr(index) = *entity_manager->GetArchetypeUniqueComponentsPtr(last_archetype_index);
-				*entity_manager->GetArchetypeSharedComponentsPtr(index) = *entity_manager->GetArchetypeSharedComponentsPtr(last_archetype_index);
+				if (last_archetype_index != index) {
+					*entity_manager->GetArchetypeUniqueComponentsPtr(index) = *entity_manager->GetArchetypeUniqueComponentsPtr(last_archetype_index);
+					*entity_manager->GetArchetypeSharedComponentsPtr(index) = *entity_manager->GetArchetypeSharedComponentsPtr(last_archetype_index);
+
+					// We must patch up the entity infos of the archetype that was swapped into this location.
+					Archetype* swapped_archetype = entity_manager->GetArchetype(index);
+					for (unsigned int base_index = 0; base_index < swapped_archetype->GetBaseCount(); base_index++) {
+						ArchetypeBase* base_archetype = swapped_archetype->GetBase(base_index);
+						for (unsigned int entity_index = 0; entity_index < base_archetype->EntityCount(); entity_index++) {
+							EntityInfo* info = entity_manager->m_entity_pool->GetInfoPtrNoChecks(base_archetype->m_entities[entity_index]);
+							info->main_archetype = index;
+						}
+					}
+				}
+
 				//entity_manager->DestroyArchetypeCommit(index);
 			}
 
@@ -765,6 +809,16 @@ namespace ECSEngine {
 				Archetype* archetype = entity_manager->GetArchetype(main_archetype_index);
 				archetypes_base_pending_deletion->Add({ main_archetype_index, archetype->m_base_archetypes[index] });
 				archetype->m_base_archetypes.RemoveSwapBack(index);
+
+				// We must patch up the entity info references of the swapped archetype
+				unsigned int last_base_index = archetype->m_base_archetypes.size;
+				if (last_base_index != index) {
+					ArchetypeBase* base_archetype = archetype->GetBase(index);
+					for (unsigned int entity_index = 0; entity_index < base_archetype->EntityCount(); entity_index++) {
+						EntityInfo* entity_info = entity_manager->m_entity_pool->GetInfoPtrNoChecks(entity_index);
+						entity_info->base_archetype = index;
+					}
+				}
 
 				//entity_manager->DestroyArchetypeBaseCommit(main_archetype_index, index);
 			}
@@ -944,7 +998,9 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < created_entities_pending_stream_repair.size; index++) {
 			EntityInfo* entity_info = entity_manager->m_entity_pool->GetInfoPtrNoChecks(created_entities_pending_stream_repair[index].entity);
 			ArchetypeBase* base_archetype = entity_manager->GetBase(*entity_info);
-			swap_base_archetype_entity_to_location(base_archetype, created_entities_pending_stream_repair[index].desired_index, entity_info->stream_index, false);
+			if (created_entities_pending_stream_repair[index].desired_index != entity_info->stream_index) {
+				swap_base_archetype_entity_to_location(base_archetype, created_entities_pending_stream_repair[index].desired_index, entity_info->stream_index, false);
+			}
 		}
 
 		RestoreAllocatorMarker(function_temporary_allocator, add_entities_allocator_marker);
@@ -998,8 +1054,90 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// Step 6.
+		// Step 6. The entities which have changed their entity info must be moved.
+		change_set.entity_info_changes.ForEach([&](const EntityManagerChangeSet::EntityInfoChange& change) {
+			EntityInfo* current_info = entity_manager->m_entity_pool->GetInfoPtr(change.entity);
+			if (change.info.main_archetype != current_info->main_archetype || change.info.base_archetype != current_info->base_archetype) {
+				Archetype* source_main_archetype = entity_manager->GetArchetype(current_info->main_archetype);
 
+				ArchetypeBase* source_archetype = entity_manager->GetBase(*current_info);
+				ArchetypeBase* target_archetype = entity_manager->GetBase(change.info);
+
+				// Add the entity to the target archetype without components at first, then swap the entity
+				// At the target stream index to this new value
+				unsigned int stream_index = target_archetype->AddEntity(change.entity);
+				if (stream_index != change.info.stream_index) {
+					swap_base_archetype_entity_to_location(target_archetype, change.info.stream_index, stream_index, false);
+				}
+				
+				// Copy the components from the source to this new location
+				const void* source_entity_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+				Component source_entity_signature_component_storage[ECS_ARCHETYPE_MAX_COMPONENTS];
+				ComponentSignature source_entity_signature;
+				if (change.info.main_archetype == current_info->main_archetype) {
+					// The unique signature is the same, we can skip checking what components are common between them.
+					source_entity_signature = source_archetype->m_components;
+					for (unsigned char index = 0; index < source_entity_signature.count; index++) {
+						source_entity_components[index] = source_archetype->GetComponentByIndex(current_info->stream_index, index);
+					}
+				}
+				else {
+					// Determine what components are destroyed, which are new and which need to be copied over.
+					source_entity_signature.indices = source_entity_signature_component_storage;
+					source_entity_signature.count = 0;
+
+					ComponentSignature target_archetype_signature = target_archetype->m_components;
+					for (unsigned char index = 0; index < source_archetype->m_components.count; index++) {
+						bool does_component_exist = target_archetype_signature.Find(source_archetype->m_components[index]) != UCHAR_MAX;
+						if (does_component_exist) {
+							source_entity_components[source_entity_signature.count] = source_archetype->GetComponentByIndex(current_info->stream_index, index);
+							source_entity_signature[source_entity_signature.count++] = source_archetype->m_components[index];
+						}
+						else {
+							// This component was deleted. Call the destroy functor on its data.
+							source_main_archetype->CallEntityDeallocate(source_main_archetype->FindCopyDeallocateComponentIndex(source_archetype->m_components[index]), *current_info);
+						}
+					}
+
+					// At the moment, don't do anything to determine the components which were added - this requires a reverse loop,
+					// But that will be done in a future pass.
+				}
+
+				// Perform the actual data copy.
+				target_archetype->CopyByEntity({ change.info.stream_index, 1 }, source_entity_components, source_entity_signature);
+
+				// Remove the entity from the source archetype
+				source_archetype->RemoveEntity(current_info->stream_index, entity_manager->m_entity_pool);
+			}
+			// If only the stream index is different, this is just a normal swap
+			else if (current_info->stream_index != change.info.stream_index) {
+				// This time, we actually want to copy the source components as well
+				swap_base_archetype_entity_to_location(entity_manager->GetBase(current_info->main_archetype, current_info->base_archetype), change.info.stream_index, current_info->stream_index, true);
+			}
+
+			// At last, update the entity info
+			*current_info = change.info;
+			return false;
+		});
+
+		// This is added just to ensure that the appropriate entity infos are established for all entities.
+		// In the future, after this has been battle tested, this code can be disabled.
+		if constexpr (VALIDATE_DESERIALIZE) {
+			// Ensure that all entities have their appropriate entity infos for the time being.
+			for (unsigned int index = 0; index < unchanged_entity_infos.size; index++) {
+				if (entity_manager->ExistsEntity(unchanged_entity_infos[index].entity)) {
+					EntityInfo current_info = entity_manager->GetEntityInfo(unchanged_entity_infos[index].entity);
+					ECS_ASSERT(current_info == unchanged_entity_infos[index].info, "Deserializing an entity manager change set failed validation check: entity info mismatched.");
+				}
+			}
+
+			// Do the same for the changed entity infos as well
+			change_set.entity_info_additions_entity.ForEachIndex([&](ulong2 indices) {
+				Entity current_entity = change_set.entity_info_additions_entity.GetValue(indices);
+				EntityInfo current_info = entity_manager->GetEntityInfo(current_entity);
+				ECS_ASSERT(current_info == change_set.entity_info_additions_entity_info.GetValue(indices), "Deserializing an entity manager change set failed validation check: entity info mismatched.");
+			});
+		}
 
 		return true;
 	}

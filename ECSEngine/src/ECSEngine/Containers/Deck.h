@@ -201,7 +201,7 @@ namespace ECSEngine {
 			size = 0;
 		}
 
-		// The functor receives a uint2 which has in the x component
+		// The functor receives a ulong2 which has in the x component
 		// the chunk index and in the y the stream index for that chunk
 		// Return true to early exit, else false
 		// Returns true if it early exited, else false
@@ -223,7 +223,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// The functor receives a uint2 which has in the x component
+		// The functor receives a ulong2 which has in the x component
 		// the chunk index and in the y the stream index for that chunk
 		// Return true when you want to delete an item, else false
 		// Don't perform the erase by yourself, this function will do it
@@ -359,12 +359,32 @@ namespace ECSEngine {
 			return buffers[chunk_index][in_chunk_index];
 		}
 
+		// Use this method in case you have the indices valid or from iterating and storing the values
+		// In the x the chunk index must be stored, while in the y the in chunk index.
+		ECS_INLINE T GetValue(ulong2 indices) const {
+			return GetValue(indices.x, indices.y);
+		}
+
+		// Use this method in case you have the indices valid or from iterating and storing the values
 		ECS_INLINE T* GetValuePtr(size_t chunk_index, size_t in_chunk_index) {
 			return &buffers[chunk_index][in_chunk_index];
 		}
 
+		// Use this method in case you have the indices valid or from iterating and storing the values
+		// In the x the chunk index must be stored, while in the y the in chunk index.
+		ECS_INLINE T* GetValuePtr(ulong2 indices) {
+			return GetValuePtr(indices.x, indices.y);
+		}
+
+		// Use this method in case you have the indices valid or from iterating and storing the values
 		ECS_INLINE const T* GetValuePtr(size_t chunk_index, size_t in_chunk_index) const {
 			return &buffers[chunk_index][in_chunk_index];
+		}
+
+		// Use this method in case you have the indices valid or from iterating and storing the values
+		// In the x the chunk index must be stored, while in the y the in chunk index.
+		ECS_INLINE const T* GetValuePtr(ulong2 indices) const {
+			return GetValuePtr(indices.x, indices.y);
 		}
 
 		ECS_INLINE size_t GetChunkCount() const {
