@@ -310,10 +310,30 @@ namespace ECSEngine {
 		// Strategy, that will not involve swaps. The default one is with swaps,
 		// And if many elements will be removed, it can result in many unneeded swaps
 		template<bool early_exit = false, bool many_erases = false, typename Functor>
-		bool ForEach(Functor&& functor) {
+		bool ForEachWithErase(Functor&& functor) {
 			return ForEachIndexWithErase<early_exit, many_erases>([&](ulong2 indices) {
 				return functor(buffers[indices.x][indices.y]);
 			});
+		}
+
+		// Return true to early exit, else false
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) {
+			for (size_t index = 0; index < buffers.size; index++) {
+				for (unsigned int subindex = 0; subindex < buffers[index].size; subindex++) {
+					T* element = &buffers[index][subindex];
+					if constexpr (early_exit) {
+						if (functor(*element)) {
+							return true;
+						}
+					}
+					else {
+						functor(*element);
+					}
+				}
+			}
+			return false;
 		}
 
 		// CONST VARIANT

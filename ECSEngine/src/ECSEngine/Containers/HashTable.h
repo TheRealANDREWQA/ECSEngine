@@ -369,6 +369,11 @@ namespace ECSEngine {
 			Insert(value, identifier, dummy);
 		}
 
+		template<typename = std::enable_if_t<std::is_same_v<T, HashTableEmptyValue>>>
+		ECS_INLINE void Insert(IdentifierParameter identifier) {
+			Insert({}, identifier);
+		}
+
 		template<typename Allocator>
 		bool InsertDynamic(Allocator* allocator, ValueParameter value, IdentifierParameter identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			auto grow = [&]() {
@@ -393,9 +398,9 @@ namespace ECSEngine {
 			return initial_capacity != GetCapacity();
 		}
 
-		// It will grow the hash table to accomodate the new entry
+		// It will grow the hash table to accomodate the new entry and outputs the insertion index into insert_location
 		// Returns true if it grew, else false
-		bool InsertDynamic(AllocatorPolymorphic allocator, ValueParameter value, IdentifierParameter identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		bool InsertDynamic(AllocatorPolymorphic allocator, ValueParameter value, IdentifierParameter identifier, unsigned int& insert_location, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			auto grow = [&]() {
 				unsigned int old_capacity = GetCapacity();
 
@@ -411,11 +416,17 @@ namespace ECSEngine {
 			if (GetCapacity() == 0) {
 				grow();
 			}
-			unsigned int insert_location;
 			if (InsertImpl<false>(value, identifier, insert_location)) {
 				grow();
 			}
 			return initial_capacity != GetCapacity();
+		}
+
+		// It will grow the hash table to accomodate the new entry
+		// Returns true if it grew, else false
+		bool InsertDynamic(AllocatorPolymorphic allocator, ValueParameter value, IdentifierParameter identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			unsigned int dummy;
+			return InsertDynamic(allocator, value, identifier, dummy, debug_info);
 		}
 
 		void Erase(IdentifierParameter identifier) {

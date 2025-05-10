@@ -154,19 +154,21 @@ namespace ECSEngine {
 		return total_size;
 	}
 
+	// Each stream parameter must be a mutable reference
 	template<typename FirstStream, typename... Streams>
-	void CoalesceStreamsEmptyImplementation(void* allocation, FirstStream* first_stream, Streams... streams) {
+	void CoalesceStreamsEmptyImplementation(void* allocation, FirstStream& first_stream, Streams... streams) {
 		// Use memcpy to assign the pointer since in this case we don't need to cast to the stream type
-		memcpy(&first_stream->buffer, &allocation, sizeof(allocation));
+		memcpy(&first_stream.buffer, &allocation, sizeof(allocation));
 
 		if constexpr (sizeof...(Streams) > 0) {
-			allocation = OffsetPointer(allocation, first_stream->MemoryOf(first_stream->size));
+			allocation = OffsetPointer(allocation, first_stream.MemoryOf(first_stream.size));
 			CoalesceStreamsEmptyImplementation(allocation, streams...);
 		}
 	}
 
+	// Each stream parameter must be a mutable reference
 	template<typename FirstStream, typename... Streams>
-	void CoalesceStreamsEmpty(AllocatorPolymorphic allocator, FirstStream* first_stream, Streams... streams) {
+	void CoalesceStreamsEmpty(AllocatorPolymorphic allocator, FirstStream& first_stream, Streams... streams) {
 		size_t total_size = StreamsTotalSize(first_stream, streams...);
 		void* allocation = Allocate(allocator, total_size);
 
@@ -175,24 +177,76 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------
 
+	// Each stream parameter must be a mutable reference
 	template<typename FirstStream, typename... Streams>
-	void CoalesceStreamsImplementation(void* allocation, FirstStream* first_stream, Streams... streams) {
+	void CoalesceStreamsImplementation(void* allocation, FirstStream& first_stream, Streams... streams) {
 		// Use memcpy to assign the pointer since in this case we don't need to cast to the stream type
-		first_stream->CopyTo(allocation);
-		memcpy(&first_stream->buffer, &allocation, sizeof(allocation));
+		first_stream.CopyTo(allocation);
+		memcpy(&first_stream.buffer, &allocation, sizeof(allocation));
 
 		if constexpr (sizeof...(Streams) > 0) {
-			allocation = OffsetPointer(allocation, first_stream->MemoryOf(first_stream->size));
+			allocation = OffsetPointer(allocation, first_stream.MemoryOf(first_stream.size));
 			CoalesceStreamsImplementation(allocation, streams...);
 		}
 	}
 
+	// Each stream parameter must be a mutable reference
 	template<typename FirstStream, typename... Streams>
-	void CoalesceStreams(AllocatorPolymorphic allocator, FirstStream* first_stream, Streams... streams) {
+	void CoalesceStreams(AllocatorPolymorphic allocator, FirstStream& first_stream, Streams... streams) {
 		size_t total_size = StreamsTotalSize(first_stream, streams...);
 		void* allocation = Allocate(allocator, total_size);
 
 		CoalesceStreamsImplementation(allocation, first_stream, streams...);
+	}
+	
+	// -----------------------------------------------------------------------------------------------------------------------
+
+	// Does not deallocate the passed stream parameters
+	template<typename ElementType, typename... Streams>
+	void CoalesceStreamsSameTypeImplementation(Stream<ElementType>& allocated_stream, Stream<ElementType> first_stream, Streams... streams) {
+		allocated_stream.AddStream(first_stream);
+
+		if constexpr (sizeof...(Streams) > 0) {
+			CoalesceStreamsSameTypeImplementation(allocated_stream, streams...);
+		}
+	}
+
+	// Does not deallocate the passed stream parameters
+	template<typename ElementType, typename... Streams>
+	Stream<ElementType> CoalesceStreamsSameType(AllocatorPolymorphic allocator, Streams... streams) {
+		size_t total_size = StreamsTotalSize(streams...);
+
+		Stream<ElementType> allocated_stream;
+		// The returned size is the byte size
+		allocated_stream.Initialize(allocator, total_size / sizeof(ElementType));
+		allocated_stream.size = 0;
+		CoalesceStreamsSameTypeImplementation(allocated_stream, streams...);
+		return allocated_stream;
+	}
+
+	// Deallocates the passed stream parameters
+	template<typename ElementType, typename FirstStream, typename... Streams>
+	void CoalesceStreamsSameTypeWithDeallocateImplementation(AllocatorPolymorphic allocator, Stream<ElementType>& allocated_stream, FirstStream& first_stream, Streams... streams) {
+		// We take in another template parameter FirstStream in case different Stream types are passed in (i.e. Stream, CapacityStream, ResizableStream)
+		allocated_stream.AddStream(first_stream);
+		first_stream.Deallocate(allocator);
+
+		if constexpr (sizeof...(Streams) > 0) {
+			CoalesceStreamsSameTypeWithDeallocateImplementation(allocator, allocated_stream, streams...);
+		}
+	}
+
+	// Deallocates all streams parameters passed in. The streams must be mutable references.
+	template<typename ElementType, typename... Streams>
+	Stream<ElementType> CoalesceStreamsSameTypeWithDeallocate(AllocatorPolymorphic allocator, Streams... streams) {
+		size_t total_size = StreamsTotalSize(streams...);
+
+		Stream<ElementType> allocated_stream;
+		// The returned size is the byte size
+		allocated_stream.Initialize(allocator, total_size / sizeof(ElementType));
+		allocated_stream.size = 0;
+		CoalesceStreamsSameTypeWithDeallocateImplementation(allocator, allocated_stream, streams...);
+		return allocated_stream;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------

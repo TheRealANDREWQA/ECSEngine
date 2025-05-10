@@ -107,6 +107,10 @@ namespace ECSEngine {
 #define ECS_STREAM_ARCHETYPE_MAX_COUNT (1 << 24)
 #define ECS_ARCHETYPE_MAX_USER_DEFINED_COMPONENT_FUNCTIONS 5
 
+#define ECS_ENTITY_INFO_GENERATION_COUNT_BITS 6
+#define ECS_ENTITY_INFO_LAYER_BITS 8
+#define ECS_ENTITY_INFO_TAG_BITS 6
+
 	struct ArchetypeUserDefinedComponents {
 		ECS_INLINE unsigned char& operator[](size_t index) {
 			return signature_indices[index];
@@ -140,12 +144,12 @@ namespace ECSEngine {
 		// 32 bits for these 4 fields
 		size_t main_archetype : 10;
 		size_t base_archetype : 10;
-		size_t generation_count : 6;
-		size_t tags : 6;
+		size_t generation_count : ECS_ENTITY_INFO_GENERATION_COUNT_BITS;
+		size_t tags : ECS_ENTITY_INFO_TAG_BITS;
 
 		// 32 bits for these 2 fields
 		size_t stream_index : 24;
-		size_t layer : 8;
+		size_t layer : ECS_ENTITY_INFO_LAYER_BITS;
 
 		// Can use a size_t base type in order to have the structure be copyable as a single register
 	};
@@ -401,6 +405,10 @@ namespace ECSEngine {
 		ECS_INLINE ComponentSignature CombineInto(ComponentSignature write_to) const {
 			WriteTo(write_to.indices + write_to.count);
 			return { write_to.indices, (unsigned char)(write_to.count + count) };
+		}
+
+		ECS_INLINE Stream<Component> ToStream() const {
+			return { indices, count };
 		}
 
 		ECS_INLINE Component& operator[](size_t index) {

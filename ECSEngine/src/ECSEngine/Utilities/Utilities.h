@@ -11,7 +11,7 @@ namespace ECSEngine {
 
 	template<typename U, typename T>
 	ECS_INLINE U BitCast(T value) {
-		// To please the C++ "Standard Comittee", use memcpy to avoid "Undefined behaviour" of using *(U*)
+		// To please the C++ Standard Comittee, use memcpy to avoid "Undefined behaviour" of using *(U*)
 		U u_value;
 		memcpy(&u_value, &value, sizeof(value));
 		return u_value;
@@ -923,6 +923,25 @@ namespace ECSEngine {
 	ECS_INLINE float RemapRange(float value, float original_range_start, float original_range_end, float new_range_start, float new_range_end) {
 		float normalized_value = NormalizedValue(value, original_range_start, original_range_end);
 		return AbsoluteValueFromNormalized(normalized_value, new_range_start, new_range_end);
+	}
+
+	// Returns the mask needed to extract a specific number of bits out of an integer.
+	ECS_INLINE size_t GetExtractBitsMask(size_t bit_count) {
+		return bit_count >= sizeof(bit_count) * 8 ? 0 : ((size_t)1 << bit_count) - 1;
+	}
+
+	// From a size_t integer, selects a range of bits from the value and returns them
+	// Shifted to the bit 0.
+	ECS_INLINE size_t ExtractBits(size_t value, size_t bit_offset, size_t bit_count) {
+		size_t bit_mask = GetExtractBitsMask(bit_count);
+		return (value >> bit_offset) & bit_mask;
+	}
+
+	// From a size_t integer, returns the integer with a specific section of it set to some other bits.
+	// Assumes that the bits to be set in value are the lowest bit_count bits.
+	ECS_INLINE size_t SetBits(size_t integer, size_t value, size_t bit_offset, size_t bit_count) {
+		size_t bit_mask = GetExtractBitsMask(bit_count);
+		return integer | ((value & bit_mask) << bit_offset);
 	}
 
 }

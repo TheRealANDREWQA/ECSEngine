@@ -322,7 +322,7 @@ namespace ECSEngine {
 
 	template<typename Element>
 	void UpdateElementDurations(DeckPowerOfTwo<Element>* deck, float time_delta) {
-		deck->ForEach<false, true>([time_delta](auto& element) {
+		deck->ForEachWithErase<false, true>([time_delta](auto& element) {
 			element.options.duration -= time_delta;
 			if (element.options.duration < 0.0f) {
 				return true;
@@ -2750,7 +2750,7 @@ namespace ECSEngine {
 
 			// Update the duration and remove those elements that expired;
 			// Also deallocate the string buffer
-			deck_pointer->ForEach<false, true>([this, time_delta](DebugString& string) {
+			deck_pointer->ForEachWithErase<false, true>([this, time_delta](DebugString& string) {
 				string.options.duration -= time_delta;
 				if (string.options.duration < 0.0f) {
 					allocator->Deallocate(string.text.buffer);
