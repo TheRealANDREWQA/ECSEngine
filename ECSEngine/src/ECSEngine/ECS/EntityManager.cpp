@@ -3535,7 +3535,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::CreateSpecificEntitiesCommit(
+	uint2 EntityManager::CreateSpecificEntitiesCommit(
 		Stream<Entity> entities,
 		ComponentSignature unique_components,
 		SharedComponentSignature shared_components,
@@ -3556,6 +3556,8 @@ namespace ECSEngine {
 			// Add the entities as roots
 			AddEntitiesToParentCommit(entities, Entity(-1));
 		}
+
+		return archetype_indices;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -6603,7 +6605,7 @@ namespace ECSEngine {
 		// Remove the entity from the source archetype using a stack scope, since it needs to happen after the copy of
 		// The source components has been performed.
 		auto remove_entity_scope = StackScope([&]() {
-			source_main_archetype->CallEntityDeallocate(*current_info, { components_to_deallocate, components_to_deallocate_count });
+			source_main_archetype->CallEntityDeallocate(*current_info, { components_to_deallocate, (unsigned char)components_to_deallocate_count });
 			source_base_archetype->RemoveEntity(current_info->stream_index, entity_manager->m_entity_pool); 
 		});
 
@@ -6630,7 +6632,7 @@ namespace ECSEngine {
 
 		// Now, overwrite the components of the target with the current data.
 		target_base_archetype->m_entities[info.stream_index] = entity;
-		target_base_archetype->CopyByComponents({ info.stream_index, 1 }, components_to_copy_data, components_to_copy);
+		target_base_archetype->CopyByComponents({ (unsigned int)info.stream_index, (unsigned int)1 }, components_to_copy_data, components_to_copy);
 		current_info->stream_index = info.stream_index;
 		current_info->main_archetype = info.main_archetype;
 		current_info->base_archetype = info.base_archetype;

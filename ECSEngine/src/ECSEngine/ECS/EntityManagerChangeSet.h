@@ -40,36 +40,49 @@ namespace ECSEngine {
 			Stream<EntitySharedComponentInstanceChange> shared_instance_changes;
 		};
 
-		// Describes a new archetype that was created
-		struct NewArchetype {
-			Stream<Component> unique_signature;
-			Stream<Component> shared_signature;
-			// A short suffices as indexing. This is the index of the archetype where it should be located at.
-			unsigned short index;
-		};
-
-		struct NewArchetypeBase {
-			// They are specified in the order of the main archetype's shared component signature
-			Stream<SharedInstance> instances;
-			// A short suffices as indexing. This is the index inside the archetype's array where it should be located at.
-			unsigned short index;
-		};
-
-		struct BaseArchetypeChanges {
-			// A short suffices as indexing
-			unsigned short archetype;
-			// Like the normal archetypes, the order in which these must be applied is critical.
-			// Firstly, those that need to be destroyed are removed, then the new ones are created
-			// And at last those that are moved are handled.
-			ResizableStream<unsigned short> destroyed_base;
-			ResizableStream<NewArchetypeBase> new_base;
-			ResizableStream<MovedElementIndex<unsigned short>> moved_base;
-		};
-
-		// This is created when the entity info of an entity is changed
+		// This is created when the entity info of an entity is changed (not the archetype related indices,
+		// But the other data - generation count, tag or layer)
 		struct EntityInfoChange {
+			ECS_INLINE size_t GetGenerationCount() const {
+				return ExtractBits(generation_count_tag_and_layer, 0, ECS_ENTITY_INFO_GENERATION_COUNT_BITS);
+			}
+
+			ECS_INLINE size_t GetTag() const {
+				return ExtractBits(generation_count_tag_and_layer, ECS_ENTITY_INFO_GENERATION_COUNT_BITS, ECS_ENTITY_INFO_TAG_BITS);
+			}
+
+			ECS_INLINE size_t GetLayer() const {
+				return ExtractBits(generation_count_tag_and_layer, ECS_ENTITY_INFO_GENERATION_COUNT_BITS + ECS_ENTITY_INFO_TAG_BITS, ECS_ENTITY_INFO_LAYER_BITS);
+			}
+
+			ECS_INLINE void SetGenerationCount(size_t generation_count) {
+				generation_count_tag_and_layer = SetBits(generation_count_tag_and_layer, generation_count, 0, ECS_ENTITY_INFO_GENERATION_COUNT_BITS);
+			}
+
+			ECS_INLINE void SetTag(size_t tag) {
+				generation_count_tag_and_layer = SetBits(generation_count_tag_and_layer, tag, ECS_ENTITY_INFO_GENERATION_COUNT_BITS, ECS_ENTITY_INFO_TAG_BITS);
+			}
+
+			ECS_INLINE void SetLayer(size_t layer) {
+				generation_count_tag_and_layer = SetBits(generation_count_tag_and_layer, layer, ECS_ENTITY_INFO_GENERATION_COUNT_BITS + ECS_ENTITY_INFO_TAG_BITS, ECS_ENTITY_INFO_LAYER_BITS);
+			}
+
 			Entity entity;
-			EntityInfo info;
+			// At the moment, the reflection system cannot parse bit fields.
+			// For this reason, use the underlying type directly. All these
+			// Fields can fit in an unsigned int for the current bit counts.
+			// Provide accessors to get/set these values. The first field is
+			// The generation count, then the tag and then the layer.
+			unsigned int generation_count_tag_and_layer;
+		};
+
+		// This structure encompasses multiple entities that were created using the same signature.
+		struct NewEntitiesContainer {
+			// Using Stream<Component> and Stream<SharedInstance> because the reflection system understands it
+			Stream<Component> unique_components;
+			Stream<Component> shared_components;
+			Stream<SharedInstance> shared_instances;
+			Stream<Entity> entities;
 		};
 
 		// This structure contains information about an instance of a shared component that was added/removed/changed
@@ -105,30 +118,13 @@ namespace ECSEngine {
 		DeckPowerOfTwo<EntityChanges> entity_unique_component_changes;
 		// From the EntityInfo structures we can deduce the entity pool and the entity order inside the archetypes
 		DeckPowerOfTwo<EntityInfoChange> entity_info_changes;
-		DeckPowerOfTwo<Entity> entity_info_destroys;
-
-		// These are 2 SoA buffers. The reason for not using AoS is because on deserialization
-		// Having the entities as a buffer directly helps with the creation API
-		//struct {
-			DeckPowerOfTwo<Entity> entity_info_additions_entity;
-			DeckPowerOfTwo<EntityInfo> entity_info_additions_entity_info;
-		//};
+		DeckPowerOfTwo<Entity> destroyed_entities;
+		DeckPowerOfTwo<NewEntitiesContainer> new_entities;
 
 		// This structure contains the modifications that shared instances went through - we need to record these as well,
 		// Otherwise the entities might reference invalid data
 		DeckPowerOfTwo<SharedComponentChanges> shared_component_changes;
 		DeckPowerOfTwo<GlobalComponentChange> global_component_changes;
-
-		// We need to record the archetype changes as well, such that the consistency is maintained
-		// The order in which these are applied is important. Firstly, the necessary archetypes are destroyed,
-		// Then the new archetypes are created and at last the moved archetypes are handled. It is critical that
-		// These operations are done exactly in this order, otherwise the consistency is not achieved
-		DeckPowerOfTwo<unsigned short> destroyed_archetypes;
-		DeckPowerOfTwo<NewArchetype> new_archetypes;
-		DeckPowerOfTwo<MovedElementIndex<unsigned short>> moved_archetypes;
-
-		// The base archetype changes need to be recorded as well
-		DeckPowerOfTwo<BaseArchetypeChanges> base_archetype_changes;
 
 		// Record the hierarchy change set as well
 		EntityHierarchyChangeSet hierarchy_change_set;

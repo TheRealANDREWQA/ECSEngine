@@ -570,11 +570,21 @@ namespace ECSEngine {
 			return Add(element);
 		}
 
+		// The same as the overload, but it determines the growth count based on the current capacity
+		ECS_INLINE unsigned int AddResizePercentage(T element, AllocatorPolymorphic allocator, float growth_percentage = ECS_RESIZABLE_STREAM_FACTOR, bool deallocate_previous = true) {
+			return AddResize(element, allocator, (unsigned int)(capacity * (growth_percentage - 1.0f)) + 1, deallocate_previous);
+		}
+
 		// Returns the index at which they were added. Can select the amount by which it grows with the growth_count
 		// (the total growth count is necessary_elements + growth_count)
 		unsigned int AddResizeStream(Stream<T> elements, AllocatorPolymorphic allocator, unsigned int growth_count = 0, bool deallocate_previous = true) {
 			Expand(allocator, elements.size, growth_count, deallocate_previous);
 			return AddStream(elements);
+		}
+
+		// The same as the overload, but it determines the growth count based on the current capacity
+		ECS_INLINE unsigned int AddResizeStreamPercentage(Stream<T> element, AllocatorPolymorphic allocator, float growth_percentage = ECS_RESIZABLE_STREAM_FACTOR, bool deallocate_previous = true) {
+			return AddResizeStream(element, allocator, (unsigned int)(capacity * (growth_percentage - 1.0f)) + 1, deallocate_previous);
 		}
 
 		ECS_INLINE void AssertCapacity() const {

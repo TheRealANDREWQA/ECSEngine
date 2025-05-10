@@ -575,7 +575,8 @@ namespace ECSEngine {
 
 		// The same as the other overload, but it creates specific entity values
 		// It will crash if any of the provided entities already exists.
-		void CreateSpecificEntitiesCommit(
+		// Returns the indices of the archetype where these entities have been added
+		uint2 CreateSpecificEntitiesCommit(
 			Stream<Entity> entities,
 			ComponentSignature unique_components,
 			SharedComponentSignature shared_components,
@@ -1149,11 +1150,41 @@ namespace ECSEngine {
 
 		// CONST VARIANT
 		// Return true to exit early, if desired.
-		// The functor receives the main archetype as Archetype*, the base archetype as ArchetypeBase*, the entity as Entity, void** unique_components
+		// The functor receives the main archetype as const Archetype*, the base archetype as const ArchetypeBase*, the entity as Entity, void** unique_components
 		// This iterates over all entities in the entity manager
 		template<bool early_exit = false, typename Functor>
 		bool ForEachEntity(Functor&& functor) const {
 			return ForEachEntity<early_exit>([](const Archetype* archetype) {}, [](const Archetype* archetype, unsigned int base_index) {}, functor);
+		}
+
+		// Return true in the functor to exit early, if desired.
+		// Returns true if it early exited, else false.
+		// The functor receives (Entity entity) as arguments
+		// This iterates over all entities in the entity manager
+		template<bool early_exit = false, typename Functor>
+		bool ForEachEntitySimple(Functor&& functor) const {
+			unsigned int archetype_count = GetArchetypeCount();
+			for (unsigned int archetype_index = 0; archetype_index < archetype_count; archetype_index++) {
+				const Archetype* archetype = GetArchetype(archetype_index);
+
+				unsigned int base_count = archetype->GetBaseCount();
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					const ArchetypeBase* base_archetype = archetype->GetBase(base_index);
+
+					unsigned int entity_count = base_archetype->EntityCount();
+					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
+						if constexpr (early_exit) {
+							if (functor(base_archetype->m_entities[entity_index])) {
+								return true;
+							}
+						}
+						else {
+							functor(base_archetype->m_entities[entity_index]);
+						}
+					}
+				}
+			}
+			return false;
 		}
 
 		// Return true to exit early, if desired.
