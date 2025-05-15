@@ -107,7 +107,9 @@ namespace ECSEngine {
 	// As functions:	Stream<StorageType> GetChildren(StorageType, AllocatorPolymorphic allocator) - returns a stream of elements to be added from a certain node 
 	// 					bool HasChildren(StorageType) const - returns true if the value has children, false otherwise
 	//					(the stream returned needs to be stable, either from an internal allocator or from the one given)
-	//					Stream<StorageType> GetRoots(AllocatorPolymorphic allocator) - returns the root nodes
+	//					IteratorInterface<[const] StorageType>* GetRoots(CapacityStream<void>& iterator_storage) - returns the root nodes
+	//					as an iterator. The interface should be allocated from the iterator storage. The const as the template argument
+	//					is optional.
 	//					ReturnType GetReturnValue(StorageType) - returns a user-facing value from a node
 	//					If bytes are allocated during GetReturnValue, its the caller's responsability to deallocate them or at the end of the iterator's usage
 	//					to clear the allocator
@@ -183,11 +185,12 @@ namespace ECSEngine {
 
 		// Retrieves a new node from the handler
 		void Roots() {
-			Stream<StorageType> roots = handler.GetRoots(resizable_storage.m_queue.allocator);
-			for (size_t index = 0; index < roots.size; index++) {
-				resizable_storage.Push({ roots[index], 0 });
-			}
-			Deallocate(roots.buffer);
+			ECS_STACK_VOID_STREAM(iterator_storage, ECS_KB);
+			// This is either a IteratorInterface<StorageType> or IteratorInterface<const StorageType>
+			auto* roots = handler.GetRoots(iterator_storage);
+			roots->ForEach([this](const StorageType* element) {
+				resizable_storage.Push({ *element, 0 });
+			});
 		}
 
 		ECS_INLINE void Deallocate(const void* buffer) {
@@ -219,7 +222,9 @@ namespace ECSEngine {
 	// As functions:	Stream<StorageType> GetChildren(StorageType, AllocatorPolymorphic allocator) - returns a stream of elements to be added from a certain node 
 	//					bool HasChildren(StorageType) const - returns true if the value has children, false otherwise
 	//					(the stream returned needs to be stable, either from an internal allocator or from the one given)
-	//					Stream<StorageType> GetRoots(AllocatorPolymorphic allocator) - returns the root nodes
+	//					IteratorInterface<[const] StorageType>* GetRoots(CapacityStream<void>& iterator_storage) - returns the root nodes
+	//					as an iterator. The interface should be allocated from the iterator storage. The const as the template argument
+	//					is optional.
 	//					ReturnType GetReturnValue(StorageType, AllocatorPolymorphic allocator) - returns a user-facing value from a node
 	//					If bytes are allocated during GetReturnValue, its the caller's responsability to deallocate them or at the end of the iterator's usage
 	//					to clear the allocator
@@ -287,11 +292,12 @@ namespace ECSEngine {
 
 		// Retrieves the root nodes
 		void Roots() {
-			Stream<StorageType> roots = handler.GetRoots(stack_frames.m_stack.allocator);
-			// After the increment the roots will have the level 0
-			PushChildren(roots, -1);
-
-			Deallocate(roots.buffer);
+			ECS_STACK_VOID_STREAM(iterator_storage, ECS_KB);
+			// This is either a IteratorInterface<StorageType> or IteratorInterface<const StorageType>
+			auto* roots = handler.GetRoots(iterator_storage);
+			stack_frames.PushReverseOrder(roots, [](const StorageType& element) {
+				return Node{ element, 0 };
+			});
 		}
 
 		void PushChildren(Stream<StorageType> children, unsigned int parent_level) {

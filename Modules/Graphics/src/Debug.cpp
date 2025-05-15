@@ -12,13 +12,13 @@
 
 // Create an iterator for the collection such that it can be used by the ForEach
 struct Iterator : IteratorInterface<const Entity> {
-	ECS_INLINE Iterator(const GraphicsDebugData* _data) : data(_data), group_index(0), stream_index(0), IteratorInterface<const Entity>(0) {
-		if (data != nullptr) {
-			ComputeRemainingCount();
-		}
-	}
+	ECS_INLINE Iterator(const GraphicsDebugData* _data) : data(_data), group_index(0), stream_index(0), is_unbounded(true), IteratorInterface<const Entity>(0) {}
 	
-	const Entity* Get() {
+	const Entity* GetImpl() override {
+		if (group_index >= data->groups.size) {
+			return nullptr;
+		}
+
 		last_color = data->groups[group_index].color;
 		const Entity* entity = data->groups[group_index].entities.buffer + stream_index;
 		stream_index++;
@@ -37,9 +37,20 @@ struct Iterator : IteratorInterface<const Entity> {
 		return false;
 	}
 
+	bool IsUnbounded() const override {
+		return is_unbounded;
+	}
+
+	IteratorInterface<const Entity>* Clone(AllocatorPolymorphic allocator) override {
+		Iterator* iterator = AllocateAndConstruct<Iterator>(allocator, data);
+		memcpy(iterator, this, sizeof(*iterator));
+		group_index = -1;
+		stream_index = -1;
+		return iterator;
+	}
+
 	IteratorInterface<const Entity>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
-		Iterator* iterator = (Iterator*)Allocate(allocator, sizeof(Iterator));
-		*iterator = Iterator(data);
+		Iterator* iterator = AllocateAndConstruct<Iterator>(allocator, data);
 		iterator->group_index = group_index;
 		iterator->stream_index = stream_index;
 		stream_index += count;
@@ -51,7 +62,7 @@ struct Iterator : IteratorInterface<const Entity> {
 	}
 
 	// Computes the remaining count of entities from the current debug data
-	void ComputeRemainingCount() {
+	virtual void ComputeRemainingCount() override {
 		remaining_count = 0;
 		for (unsigned int index = 0; index < data->groups.size; index++) {
 			remaining_count += data->groups[index].entities.size;
@@ -63,6 +74,8 @@ struct Iterator : IteratorInterface<const Entity> {
 	unsigned int stream_index;
 	// Set such that it can be returned immediately
 	Color last_color;
+	// Set to false when the remaining count was computed.
+	bool is_unbounded;
 };
 
 static GraphicsDebugSolidGroup* GraphicsDebugReserveSolidGroup(GraphicsDebugData* data, unsigned int entity_count) {

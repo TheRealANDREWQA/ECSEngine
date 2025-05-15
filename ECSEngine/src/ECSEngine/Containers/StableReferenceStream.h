@@ -487,7 +487,12 @@ namespace ECSEngine {
 		struct Iterator : IteratorInterface<ValueType> {
 			ECS_INLINE Iterator(ContainerType* container) : container(*container), index(0), IteratorInterface<ValueType>(container->size) {}
 
-			ValueType* Get() override {
+		protected:
+			ValueType* GetImpl() override {
+				if (index >= size) {
+					return nullptr;
+				}
+
 				unsigned int current_index = 0;
 				if constexpr (!queue_indirection_list) {
 					current_index = container.indirection_list[index];
@@ -501,16 +506,19 @@ namespace ECSEngine {
 				return container.buffer + current_index;
 			}
 
-			bool IsContiguous() const override {
-				return false;
-			}
-
 			IteratorInterface<ValueType>* GetSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				Iterator<ContainerType, ValueType>* iterator = AllocateAndConstruct<Iterator<ContainerType, ValueType>>(allocator, &container);
 				iterator->index = index;
 				index += count;
 				return iterator;
 			}
+
+		public:
+			bool IsContiguous() const override {
+				return false;
+			}
+
+			virtual IteratorInterface<ValueType>* Clone(AllocatorPolymorphic allocator) override { return CloneHelper<Iterator>(allocator); }
 
 			ContainerType container;
 			unsigned int index;
