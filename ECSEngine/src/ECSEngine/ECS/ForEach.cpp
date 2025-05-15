@@ -825,7 +825,7 @@ namespace ECSEngine {
 				data = allocation;
 			}
 
-			size_t entity_count = entities->remaining_count;
+			size_t entity_count = entities->GetRemainingCount();
 			AllocatorPolymorphic temporary_allocator = world->entity_manager->TemporaryAllocator();
 			// Lock it until the task creation is finished 
 			// in order to not produce many unnecessary lock and unlocks
@@ -866,7 +866,7 @@ namespace ECSEngine {
 			if (batch_size == 0) {
 				size_t_batch_size = SlotsFor(entity_count, (size_t)world->task_manager->GetThreadCount());
 			}
-			world->task_manager->AddDynamicTaskParallelFor(ForEachEntitySelectionThreadTask, functor_name, entities->remaining_count, size_t_batch_size, task_data, task_data_size, true, task_data_functor);
+			world->task_manager->AddDynamicTaskParallelFor(ForEachEntitySelectionThreadTask, functor_name, entity_count, size_t_batch_size, task_data, task_data_size, true, task_data_functor);
 			UnlockAllocator(temporary_allocator);
 		}
 

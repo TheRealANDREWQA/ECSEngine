@@ -141,7 +141,8 @@ namespace ECSEngine {
 		static_assert(std::is_unsigned_v<IntegerType>, "RemoveArrayElements accepts only unsigned integers!");
 
 		// If there are no elements, early exit
-		if (indices->remaining_count == 0) {
+		size_t iterator_count = indices->GetRemainingCount();
+		if (iterator_count == 0) {
 			return;
 		}
 
@@ -152,7 +153,7 @@ namespace ECSEngine {
 		// Allocate a temporary array where the integer indices are stored. Those will be modified
 		// As we keep performing removals
 		Stream<std::remove_const_t<IntegerType>> remapped_indices;
-		remapped_indices.Initialize(temporary_allocator, indices->remaining_count);
+		remapped_indices.Initialize(temporary_allocator, iterator_count);
 
 		__try {
 			indices->WriteTo(remapped_indices.buffer);

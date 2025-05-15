@@ -1026,12 +1026,17 @@ namespace ECSEngine {
 		struct ValueIterator : IteratorInterface<ValueType> {
 			ECS_INLINE ValueIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<ValueType>(table->GetCount()) {}
 			
-			ValueType* Get() override {
-				ValueType* value = nullptr;
-				while (!table.IsItemAt(index)) {
+			ValueType* GetImpl() override {
+				unsigned int extended_capacity = table.GetExtendedCapacity();
+				while (index < extended_capacity && !table.IsItemAt(index)) {
 					index++;
 				}
-				value = table.GetValuePtrFromIndex(index);
+
+				if (index >= extended_capacity) {
+					return nullptr;
+				}
+
+				ValueType* value = table.GetValuePtrFromIndex(index);
 				index++;
 				return value;
 			}
@@ -1039,6 +1044,8 @@ namespace ECSEngine {
 			bool IsContiguous() const override {
 				return false;
 			}
+
+			IteratorInterface<ValueType>* Clone() override { return CloneHelper<ValueIterator<HashTableType, ValueType>>(allocator); }
 
 			IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				ValueIterator<HashTableType, ValueType>* iterator = AllocateAndConstruct<ValueIterator<HashTableType, ValueType>>(allocator, &table);
@@ -1055,14 +1062,19 @@ namespace ECSEngine {
 		// Identifier type must be Identifier or const Identifier
 		template<typename HashTableType, typename IdentifierType>
 		struct IdentifierIterator : IteratorInterface<IdentifierType> {
-			ECS_INLINE IdentifierIterator(HashTableType* table) : table(*table), remaining_count(table->GetCount()), index(0) {}
+			ECS_INLINE IdentifierIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<IdentifierType>(table->GetCount()) {}
 
-			IdentifierType* Get() override {
-				IdentifierType* identifier = nullptr;
-				while (!table.IsItemAt(index)) {
+			IdentifierType* GetImpl() override {
+				unsigned int extended_capacity = table.GetExtendedCapacity();
+				while (index < extended_capacity && !table.IsItemAt(index)) {
 					index++;
 				}
-				identifier = table.GetIdentifierPtrFromIndex(index);
+
+				if (index >= extended_capacity) {
+					return nullptr;
+				}
+
+				IdentifierType* identifier = table.GetIdentifierPtrFromIndex(index);
 				index++;
 				return identifier;
 			}
@@ -1070,6 +1082,8 @@ namespace ECSEngine {
 			bool IsContiguous() const override {
 				return false;
 			}
+
+			IteratorInterface<IdentifierType>* Clone(AllocatorPolymorphic allocator) override { return CloneHelper<IdentifierIterator<HashTableType, IdentifierType>>(allocator); }
 
 			IteratorInterface<IdentifierType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				IdentifierIterator<HashTableType, IdentifierType>* iterator = AllocateAndConstruct<IdentifierIterator<HashTableType, IdentifierType>>(allocator, &table);
@@ -1086,12 +1100,18 @@ namespace ECSEngine {
 		// Pair type must be PairPtr or ConstPairPtr
 		template<typename HashTableType, typename PairType>
 		struct PairIterator : IteratorInterface<PairType> {
-			ECS_INLINE PairIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<ValueType>(table->GetCount()) {}
+			ECS_INLINE PairIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<PairType>(table->GetCount()) {}
 
-			PairType* Get() override {
-				while (!table.IsItemAt(index)) {
+			PairType* GetImpl() override {
+				unsigned int extended_capacity = table.GetExtendedCapacity();
+				while (index < extended_capacity && !table.IsItemAt(index)) {
 					index++;
 				}
+
+				if (index < extended_capacity) {
+					return nullptr;
+				}
+
 				pair.value = table.GetValuePtrFromIndex(index);
 				pair.identifier = table.GetIdentifierPtrFromIndex(index);
 				index++;
@@ -1101,6 +1121,8 @@ namespace ECSEngine {
 			bool IsContiguous() const override {
 				return false;
 			}
+
+			IteratorInterface<PairType>* Clone() override { return CloneHelper<PiarIterator<HashTableType, PairType>>(allocator); }
 
 			IteratorInterface<PairType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				PairIterator<HashTableType, PairType>* iterator = AllocateAndConstruct<PairIterator<HashTableType, PairType>>(allocator, &table);
@@ -1267,10 +1289,20 @@ namespace ECSEngine {
 			if constexpr (deallocate_values || deallocate_identifiers) {
 				source.ForEachConst([&](const auto& value, const auto& identifier) {
 					if constexpr (deallocate_values) {
-						value.Deallocate(allocator);
+						if constexpr (std::is_pointer_v<typename Table::Value>) {
+							value->Deallocate(allocator);
+						}
+						else {
+							value.Deallocate(allocator);
+						}
 					}
 					if constexpr (deallocate_identifiers) {
-						identifier.Deallocate(allocator);
+						if constexpr (std::is_pointer_v<typename Table::Identifier>) {
+							identifier->Deallocate(allocator);
+						}
+						else {
+							identifier.Deallocate(allocator);
+						}
 					}
 				});
 			}

@@ -602,7 +602,8 @@ namespace ECSEngine {
 				remaining_count = deck->size - deck->chunk_size * chunk_index - stream_index;
 			}
 
-			ValueType* Get() override {
+		protected:
+			ValueType* GetImpl() override {
 				size_t overall_index = chunk_index * deck->chunk_size + stream_index;
 				if (overall_index >= deck->GetElementCount()) {
 					return nullptr;
@@ -616,11 +617,6 @@ namespace ECSEngine {
 				return value;
 			}
 
-			bool IsContiguous() const override {
-				return false;
-			}
-
-		protected:
 			IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				IteratorTemplate<DeckType, ValueType>* iterator = AllocateAndConstruct<IteratorTemplate<DeckType, ValueType>>(allocator, deck, chunk_index, stream_index);
 				// Set the remaining count to the given subrange.
@@ -638,6 +634,12 @@ namespace ECSEngine {
 			}
 
 		public:
+
+			bool IsContiguous() const override {
+				return false;
+			}
+
+			IteratorInterface<ValueType>* Clone(AllocatorPolymorphic allocator) override { return CloneHelper<decltype(*this)>(allocator); }
 
 			DeckType* deck;
 			size_t chunk_index;

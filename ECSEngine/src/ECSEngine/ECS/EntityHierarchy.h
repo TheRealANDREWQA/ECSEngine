@@ -16,102 +16,56 @@ namespace ECSEngine {
 	// Initializes the first parameter with memory from the second parameter
 	ECSENGINE_API void DefaultEntityHierarchyAllocator(MemoryManager* allocator, AllocatorPolymorphic global_memory);
 
-#define ECS_ENTITY_HIERARCHY_STATIC_STORAGE (3)
-#define ECS_ENTITY_HIERARCHY_MAX_CHILDREN (1 << 11)
+#define ECS_ENTITY_HIERARCHY_STATIC_STORAGE (2)
+
 
 	struct ECSENGINE_API EntityHierarchy {
+		struct Node;
+
 		EntityHierarchy() = default;
-		// children and parent table initial size must be a power of two
+		// Root initialize size and node table initial size must be a power of two
 		EntityHierarchy(
 			MemoryManager* memory_manager,
 			unsigned int root_initial_size = -1, 
-			unsigned int children_table_initial_size = -1,
-			unsigned int parent_table_initial_size = -1
+			unsigned int node_table_initialize_size = -1
 		);
 
-		// If the parent doesn't exist it will insert it as well.
 		// If the parent is -1, then the child will be placed as a root
 		void AddEntry(Entity parent, Entity child);
 		
+		// TODO: Implement this - much faster than adding each child invidually
+		// If the parent is -1, the children will be placed at the root
+		void AddChildren(Entity parent, Stream<Entity> children);
+
 		// The allocator should already be initialized
 		void CopyOther(const EntityHierarchy* other);
 
-		// Updates the parent of an entity to another parent
+		// Updates the parent of an entity to another parent. It assumes that the new_parent and the child exist in the hierarchy
 		void ChangeParent(Entity new_parent, Entity child);
-
-		// Updates the parent of an entity if it already has a parent, else it parents that entity
-		// to the specified parent
-		void ChangeOrSetParent(Entity parent, Entity child);
 
 		// Returns true if the entity is a root or a child of another entity
 		bool Exists(Entity entity);
 
-		// Return true in the functor to early exit.
-		// Returns true if it early exited, else false
-		template<bool early_exit = false, typename Functor>
-		bool ForEachImpl(Entity current_entity, Entity parent, Functor&& functor) {
-			Stream<Entity> children = GetChildren(current_entity);
-			if constexpr (early_exit) {
-				if (functor(current_entity, parent, children)) {
-					return true;
-				}
-			}
-			else {
-				functor(current_entity, parent, children);
-			}
-
-			for (size_t index = 0; index < children.size; index++) {
-				bool should_early_exit = ForEachImpl<early_exit>(children[index], current_entity, functor);
-				if constexpr (early_exit) {
-					if (should_early_exit) {
-						return true;
-					}
-				}
-			}
-			return false;
-		}
-
-		// Return true in the functor to early exit.
-		// Top down traversal. The functor receives as parameters the current entity, its parent (-1 if it doesn't have one)
-		// and the its children as a Stream<Entity> (size = 0 if it doesn't have any)
-		// Returns true if it early exited, else false
-		template<bool early_exit = false, typename Functor>
-		bool ForEach(Functor&& functor) {
-			for (unsigned int index = 0; index < roots.size; index++) {
-				bool should_early_exit = ForEachImpl<early_exit>(roots[index], Entity(-1), functor);
-				if constexpr (early_exit) {
-					if (should_early_exit) {
-						return true;
-					}
-				}
-			}
-			return false;
-		}
-
-		unsigned int GetEntityCount() const;
-
 		// It will alias the children from inside the table. Do not modify !!
-		// If the static storage is provided and the stream would normally point to it,
-		// then it will copy into the given buffer (useful if wanting to read the children
-		// while doing operations like adding and removing)
-		Stream<Entity> GetChildren(Entity parent, Entity* static_storage = nullptr) const;
+		Stream<Node*> GetChildrenNodes(Entity parent) const;
 
-		// It will copy into the children stream
-		void GetChildrenCopy(Entity parent, CapacityStream<Entity>& children) const;
+		// Fills in the children of the given parent entity
+		void GetChildren(Entity parent, CapacityStream<Entity>& children) const;
+
+		// Returns the children of the entity, allocated from the given allocator
+		Stream<Entity> GetChildren(Entity parent, AllocatorPolymorphic allocator) const;
 
 		// Fills in the children stream with all the children of that entity. It will recursively go into the children.
 		// Can be used to enumerate all children and subchildren of a certain entity.
-		// It does nothing if the entity doesn't exist in the hierarchy
-		void GetAllChildrenFromEntity(Entity entity, CapacityStream<Entity>& children) const;
+		// It does nothing if the entity doesn't exist in the hierarchy.
+		void GetAllChildren(Entity entity, CapacityStream<Entity>& children) const;
 
-		// It returns an entity -1 in case the entity does not have a parent (doesn't exist, or it is a root)
+		// It returns an invalid entity in case the entity does not have a parent (doesn't exist, or it is a root)
 		Entity GetParent(Entity entity) const;
 
-		// Determines the root that contains that entity
-		// It returns an entity -1 in case the entity doesn't exist in the hierarchy at all.
-		// It can happen that if some disconnect happened inside the hierarchy it returns a valid entity
-		// that is not the root of the given entity
-		Entity GetRootFromChildren(Entity entity) const;
+		// Determines the root that contains that entity. If the entity doesn't exist in the hierarchy,
+		// It returns an invalid entity. If the given entity is already a root, it returns itself.
+		Entity GetRootFromEntity(Entity entity) const;
 
 		// Returns true if the entity is a root, else false (can return false if the entity has not yet been inserted)
 		bool IsRoot(Entity entity) const;
@@ -119,35 +73,118 @@ namespace ECSEngine {
 		// It will eliminate all the children as well
 		void RemoveEntry(Entity entity);
 
-		union Children {
-			ECS_INLINE Children() {}
+	private:
+		void AddChildToNode(Node* node, Node* child);
 
-			ECS_INLINE Entity* Entities() {
-				return IsPointer() ? entities : static_children;
+		// Changes the child's parent to be the new parent
+		void ChangeParentTo(Node* new_parent, Node* child);
+
+		void RemoveChildFromNode(Node* node, Node* child);
+
+	public:
+
+		struct Node {
+			ECS_INLINE Node** Children() {
+				return IsPointer() ? allocated_children : static_children;
 			}
 
-			ECS_INLINE const Entity* Entities() const {
-				return IsPointer() ? entities : static_children;
+			ECS_INLINE const Node** Children() const {
+				return (const Node**)(IsPointer() ? allocated_children : static_children);
+			}
+
+			ECS_INLINE Stream<Node*> ChildrenStream() const {
+				return { Children(), child_count };
 			}
 
 			ECS_INLINE bool IsPointer() const {
-				return count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE;
+				return child_count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE;
 			}
 
-			// Unfortunately, some bits need to be wasted. Only 3 static children can be stored at a time
-			Entity static_children[ECS_ENTITY_HIERARCHY_STATIC_STORAGE];
-			struct {
-				Entity* entities;
-				// Needed such that the 3 entities don't overlap the count
-				unsigned int padding;
-				unsigned int count;
+			ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+				if (child_count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
+					ECSEngine::Deallocate(allocator, allocated_children);
+				}
+			}
+
+			// The parent will be nullptr for a root node.
+			Node* parent;
+			Entity entity;
+
+			// If an entity has few children, store them in-place elements here
+			// To avoid another indirection
+			unsigned int child_count;
+			union {
+				Node** allocated_children;
+				Node* static_children[ECS_ENTITY_HIERARCHY_STATIC_STORAGE];
 			};
 		};
 
+		struct ChildIterator : IteratorInterface<Entity> {
+			ECS_INLINE ChildIterator() : IteratorInterface<Entity>(0), child_node_index(0) {}
+			ECS_INLINE ChildIterator(const Node* node) : IteratorInterface<Entity>(node->child_count), child_nodes(node->ChildrenStream()), child_node_index(0) {}
+
+			virtual bool IsContiguous() const override {
+				// The nodes are contiguous, but not the entities
+				return false;
+			}
+
+			virtual IteratorInterface<Entity>* Clone(AllocatorPolymorphic allocator) override { return CloneHelper<ChildIterator>(allocator); }
+
+			virtual IteratorInterface<Entity>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
+				ChildIterator* subiterator = AllocateAndConstruct<ChildIterator>(allocator);
+				subiterator->child_nodes = child_nodes;
+				subiterator->child_node_index = child_node_index;
+				subiterator->remaining_count = count;
+
+				child_node_index += count;
+				return subiterator;
+			}
+
+			virtual Entity* GetImpl() override {
+				return &child_nodes[child_node_index++]->entity;
+			}
+
+			Stream<Node*> child_nodes;
+			size_t child_node_index;
+		};
+
+		struct NestedChildIterator : IteratorInterface<Entity> {
+			struct Level {
+				Node* node;
+				size_t node_child_index;
+			};
+
+			ECS_INLINE NestedChildIterator() : IteratorInterface<Entity>(0), level_index(0) {}
+			//ECS_INLINE NestedChildIterator(Node* node) : IteratorInterface<Entity>()
+
+			virtual bool IsContiguous() const override {
+				return false;
+			}
+
+			virtual IteratorInterface<Entity>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
+				ECS_ASSERT(false, "NestedChildIterator for EntityHierarchy does not have subiterators");
+				return nullptr;
+			}
+
+			virtual Entity* GetImpl() override {
+				//Entity* entity = levels[level_index].node->Children()[levels[level_index].node_child_index]
+				return nullptr;
+			}
+
+			// Allow a maximum depth - should be hard to reach in practice
+			Level levels[64];
+			size_t level_index;
+		};
+
 		MemoryManager* allocator;
-		ResizableStream<Entity> roots;
-		HashTable<Children, Entity, HashFunctionPowerOfTwo, EntityHierarchyHash> children_table;
-		HashTable<Entity, Entity, HashFunctionPowerOfTwo, EntityHierarchyHash> parent_table;
+		// Performance explanation: Using HashTableEmpty because it can accelerate
+		// The removals, since if there are many roots, this can become searching through an array can become expensive.
+		// That does reduce the iteration performance, but the hash table should be reasonably packed, so there shouldn't
+		// Be too much performance lost.
+		// It also helps in answering IsRoot() calls faster, since the node data doesn't need to be accessed, resulting
+		// In fewer cache lines being touched.
+		HashTableEmpty<Entity, HashFunctionPowerOfTwo> roots;
+		HashTable<Node*, Entity, HashFunctionPowerOfTwo, EntityHierarchyHash> node_table;
 	};
 
 	struct WriteInstrument;
@@ -168,13 +205,8 @@ namespace ECSEngine {
 
 	// The serialization and deserialization of this change set can be done using the reflection manager
 	struct ECS_REFLECT EntityHierarchyChangeSet {
-		// The roots which have been deleted
-		ResizableStream<Entity> removed_roots;
-		// The roots which have been added
-		ResizableStream<Entity> added_roots;
-		// This includes the entities which were newly created, not as roots,
-		// But as children. Entities that are deleted are inferred from the entity manager
-		// Change set and they can be removed from that data.
+		ResizableStream<Entity> removed_entities;
+		// This array includes entities which were newly created, but also those that already existed.
 		ResizableStream<EntityPair> changed_parents;
 	};
 
@@ -186,6 +218,9 @@ namespace ECSEngine {
 		AllocatorPolymorphic temporary_allocator
 	);
 
+	// Applies a previously computed change set to a hierarchy.
+	ECSENGINE_API void ApplyEntityHierarchyChangeSet(EntityHierarchy* hierarchy, const EntityHierarchyChangeSet& change_set);
+
 	// -----------------------------------------------------------------------------------------------------
 
 	struct ECSENGINE_API EntityHierarchyIteratorImpl {
@@ -193,15 +228,17 @@ namespace ECSEngine {
 		using ReturnType = Entity;
 
 		ECS_INLINE Stream<StorageType> GetChildren(StorageType value, AllocatorPolymorphic allocator) const {
-			return hierarchy->GetChildren(value);
+			return hierarchy->GetChildren(value, allocator);
 		}
 
 		ECS_INLINE bool HasChildren(StorageType value) const {
-			return hierarchy->GetChildren(value).size > 0;
+			return hierarchy->GetChildrenNodes(value).size > 0;
 		}
 
-		ECS_INLINE Stream<StorageType> GetRoots(AllocatorPolymorphic allocator) const {
-			return hierarchy->roots;
+		ECS_INLINE IteratorInterface<const StorageType>* GetRoots(CapacityStream<void>& iterator_storage) const {
+			decltype(hierarchy->roots.ConstIdentifierIterator())* iterator = iterator_storage.Reserve<decltype(hierarchy->roots.ConstIdentifierIterator())>();
+			new (iterator) decltype(hierarchy->roots.ConstIdentifierIterator())(hierarchy->roots.ConstIdentifierIterator());
+			return iterator;
 		}
 
 		ECS_INLINE ReturnType GetReturnValue(StorageType value, AllocatorPolymorphic allocator) const {

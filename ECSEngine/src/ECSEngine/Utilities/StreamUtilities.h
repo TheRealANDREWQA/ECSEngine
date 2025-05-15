@@ -330,9 +330,11 @@ namespace ECSEngine {
 	// The functor will be called with (IntegerType previous_index, IntegerType current_index)
 	template<typename MovedElementIntegerType, typename Functor>
 	void MoveElementsFunctor(size_t element_count, IteratorInterface<const MovedElementIndex<MovedElementIntegerType>>* moves, AllocatorPolymorphic temporary_allocator, Functor&& functor) {
-		// If there are no moves, early exit.
-		if (moves->remaining_count == 0) {
-			return;
+		// If there are no moves, early exit. If it is unbounded, skip the perf check.
+		if (!moves->IsUnbounded()) {
+			if (moves->GetRemainingCount() == 0) {
+				return;
+			}
 		}
 		
 		if (temporary_allocator.allocator == nullptr) {

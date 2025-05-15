@@ -411,6 +411,36 @@ namespace ECSEngine {
 			m_stack.Add(element);
 		}
 
+		// Pushes the elements from the iterator in reverse order, meaning the first iterator
+		// Element will be the first one to be popped
+		void PushReverseOrder(IteratorInterface<T>* iterator) {
+			// Reserve space for the number of iterator elements
+			size_t iterate_count = iterator->GetRemainingCount();
+			m_stack.Reserve(iterate_count);
+			// Write them in reverse order
+			unsigned int write_index = m_stack.size + iterate_count - 1;
+			iterator->ForEach([&](const T* element) {
+				m_stack[write_index] = *element;
+				write_index--;
+			});
+		}
+
+		// Pushes the elements from the iterator in reverse order, but the iterator element type is
+		// Different from the one stored here, and the element functor creates a proper element of
+		// The one from the iterator. The functor receives as argument (const IteratorElementType& element)
+		template<typename IteratorElementType, typename ElementFunctor>
+		void PushReverseOrder(IteratorInterface<IteratorElementType>* iterator, ElementFunctor&& functor) {
+			// Reserve space for the number of iterator elements
+			size_t iterate_count = iterator->GetRemainingCount();
+			m_stack.Reserve(iterate_count);
+			// Write them in reverse order
+			unsigned int write_index = m_stack.size + iterate_count - 1;
+			iterator->ForEach([&](const IteratorElementType* element) {
+				m_stack[write_index] = functor(*element);
+				write_index--;
+			});
+		}
+
 		ECS_INLINE void Reset() {
 			m_stack.Reset();
 		}
