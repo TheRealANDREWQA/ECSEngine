@@ -106,7 +106,7 @@ namespace ECSEngine {
 
         if (parent.value == Entity::Invalid()) {
             node->parent = nullptr;
-            roots.Insert(child);
+            roots.InsertDynamic(allocator, {}, child);
         }
         else {
             unsigned int parent_node_table_index = node_table.Find(parent);
@@ -182,15 +182,19 @@ namespace ECSEngine {
         unsigned int child_index = node_table.Find(child);
         ECS_CRASH_CONDITION(child_index != -1, "EntityHierarchy: Could not change the parent of entity {#}. It doesn't exist in the hierarchy.", child.value);
 
-        unsigned int new_parent_index = node_table.Find(new_parent);
-        ECS_CRASH_CONDITION(new_parent_index != -1, "EntityHierarchy: Could not change the parent of entity {#} to {#}. The new parent doesn't exist.", new_parent.value);
-
-        ChangeParentTo(node_table.GetValueFromIndex(new_parent_index), node_table.GetValueFromIndex(child_index));
+        Node* parent_node = nullptr;
+        if (new_parent != Entity::Invalid()) {
+            unsigned int new_parent_index = node_table.Find(new_parent);
+            ECS_CRASH_CONDITION(new_parent_index != -1, "EntityHierarchy: Could not change the parent of entity {#} to {#}. The new parent doesn't exist.", new_parent.value);
+            parent_node = node_table.GetValueFromIndex(new_parent_index);
+        }
+        
+        ChangeParentTo(parent_node, node_table.GetValueFromIndex(child_index));
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    bool EntityHierarchy::Exists(Entity entity)
+    bool EntityHierarchy::Exists(Entity entity) const
     {
         return node_table.Find(entity) != -1;
     }
@@ -240,11 +244,11 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    void EntityHierarchy::GetChildren(Entity parent, CapacityStream<Entity>& children) const {
+    void EntityHierarchy::GetChildren(Entity parent, AdditionStream<Entity> children) const {
         Node* parent_node = nullptr;
         if (node_table.TryGetValue(parent, parent_node)) {
             Stream<Node*> parent_children = parent_node->ChildrenStream();
-            children.AssertCapacity(parent_children.size);
+            children.AssertNewItems(parent_children.size);
             for (size_t index = 0; index < parent_children.size; index++) {
                 children.Add(parent_children[index]->entity);
             }
@@ -271,15 +275,31 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    void EntityHierarchy::GetAllChildren(Entity entity, CapacityStream<Entity>& children) const {
+    void EntityHierarchy::GetAllChildren(Entity entity, AdditionStream<Entity> children) const {
         // Use an index to keep track of the entities which have been added. We don't need
         // External storage for this to work.
-        size_t children_to_search = children.size;
+        size_t children_to_search = children.Size();
         GetChildren(entity, children);
 
-        while (children_to_search < children.size) {
+        while (children_to_search < children.Size()) {
             GetChildren(children[children_to_search++], children);
         }
+    }
+    
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    EntityHierarchy::ChildIterator EntityHierarchy::GetChildIterator(Entity entity) const {
+        Node* node = nullptr;
+        ECS_CRASH_CONDITION(node_table.TryGetValue(entity, node), "EntityHierarchy: Trying to retrieve a child iterator for an entity which doesn't exist in the hierarchy");
+        return ChildIterator(node);
+    }
+    
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    EntityHierarchy::NestedChildIterator EntityHierarchy::GetNestedChildIterator(Entity entity) const {
+        Node* node = nullptr;
+        ECS_CRASH_CONDITION(node_table.TryGetValue(entity, node), "EntityHierarchy: Trying to retrieve a child iterator for an entity which doesn't exist in the hierarchy");
+        return NestedChildIterator(node);
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
@@ -434,10 +454,12 @@ namespace ECSEngine {
             // Create the nodes and insert them into the node table, and into the root table
             // If it doesn't have a parent. Because the node might not be available until
             // All nodes have been written, store in the parent pointer the actual parent entity
-            // And do the node assignment later on.
+            // And do the node assignment later on, but with an important twist! If the parent entity
+            // Is missing, i.e. it is invalid, we cannot use nullptr as the parent value, because that
+            // Is a valid entity value. For this reason, store -1 as the invalid value instead of nullptr.
             Node* node = (Node*)hierarchy->allocator->Allocate(sizeof(Node));
             node->entity = node_header.entity;
-            node->parent = node_header.parent_entity == Entity::Invalid() ? nullptr : (Node*)node_header.parent_entity.value;
+            node->parent = node_header.parent_entity == Entity::Invalid() ? (Node*)-1 : (Node*)node_header.parent_entity.value;
             node->child_count = node_header.child_count;
 
             // Allocate the children, if they exceed the static storage. Do the same as the parent pointer,
@@ -451,20 +473,25 @@ namespace ECSEngine {
                 if (!read_instrument->Read(&child_entity)) {
                     return false;
                 }
+                // This values must be set, they cannot be Entity::Invalid().
                 node_children[child_index] = (Node*)child_entity.value;
             }
 
             hierarchy->node_table.Insert(node, node->entity);
-            if (node->parent == nullptr) {
+            if (node_header.parent_entity == Entity::Invalid()) {
                 hierarchy->roots.Insert(node->entity);
             }
         }
 
         // Patch the parent references of each node - both parents and children
         hierarchy->node_table.ForEachConst([&](Node* node, Entity entity) {
-            Entity parent_entity = Entity((unsigned int)node->parent);
-            if (parent_entity != Entity::Invalid()) {
-                node->parent = hierarchy->node_table.GetValue(parent_entity);
+            // Handle the empty case for the missing parent.
+            if (node->parent != (Node*)-1) {
+                node->parent = hierarchy->node_table.GetValue(Entity((unsigned int)node->parent));
+            }
+            else {
+                // Set the node to nullptr now
+                node->parent = nullptr;
             }
 
             Stream<Node*> children = node->ChildrenStream();
@@ -567,5 +594,79 @@ namespace ECSEngine {
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
+
+    EntityHierarchy::NestedChildIterator::NestedChildIterator(Node* node) : IteratorInterface<Entity>(0), level_index(1), is_unbounded(true) { 
+        levels[0].node = node; 
+        levels[0].node_child_index = 0;
+
+        // Advance will take care of reaching the first initial entity
+        Advance(); 
+    }
+
+    void EntityHierarchy::NestedChildIterator::ComputeRemainingCount()
+    {
+        // This is basically a DFS where we count how many entries there are.
+        remaining_count = 0;
+        ECS_ASSERT(level_index == 1, "Computing the remaining count for entity hierarchy NestedChildIterator requires the initial node to be set");
+        
+        Level initial_level = levels[0];
+        while (level_index != 0) {
+            // Keep advancing
+            remaining_count++;
+            Advance();
+        }
+
+        // Restore the initial level
+        levels[0] = initial_level;
+        is_unbounded = false;
+    }
+
+    IteratorInterface<Entity>* EntityHierarchy::NestedChildIterator::CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count)
+    {
+        ECS_ASSERT(false, "NestedChildIterator for EntityHierarchy does not have subiterators");
+        return nullptr;
+    }
+
+    Entity* EntityHierarchy::NestedChildIterator::GetImpl()
+    {
+        if (level_index == 0) {
+            return nullptr;
+        }
+
+        Entity* entity = &levels[level_index].node->Children()[levels[level_index].node_child_index]->entity;
+        Advance();
+        return entity;
+    }
+
+    void EntityHierarchy::NestedChildIterator::Advance()
+    {
+        // While we have children on the node_child_index, go down
+        while (true) {
+            if (levels[level_index].node_child_index == levels[level_index].node->child_count) {
+                // Pop the current level
+                level_index--;
+                // If we popped the root, we can exit.
+                if (level_index == 0) {
+                    return;
+                }
+
+                // Advance the node child index for the parent, where we are at now
+                levels[level_index].node_child_index++;
+            }
+            else {
+                // Add a new level, even when it doesn't have children.
+                Level& last_level = levels[level_index];
+                level_index++;
+                ECS_ASSERT(level_index < ECS_COUNTOF(levels), "NestedChildIterator static storage has been exceeded!");
+                levels[level_index].node = last_level.node->Children()[last_level.node_child_index];
+                levels[level_index].node_child_index = 0;
+
+                // If the current node doesn't have children, we can exit.
+                if (levels[level_index].node->child_count == 0) {
+                    break;
+                }
+            }
+        }
+    }
 
 }

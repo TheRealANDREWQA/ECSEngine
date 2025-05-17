@@ -245,7 +245,6 @@ namespace ECSEngine {
 		DEFERRED_REMOVE_ENTITIES_FROM_HIERARCHY,
 		DEFERRED_TRY_REMOVE_ENTITIES_FROM_HIERARCHY,
 		DEFERRED_CHANGE_ENTITY_PARENT_HIERARCHY,
-		DEFERRED_CHANGE_OR_SET_ENTITY_PARENT_HIERARCHY,
 		DEFERRED_CALLBACK_COUNT
 	};
 
@@ -964,7 +963,7 @@ namespace ECSEngine {
 
 		if (!data->exclude_from_hierarchy) {
 			// Add the entities as roots
-			manager->AddEntitiesToParentCommit({ entities, data->count }, Entity(-1));
+			manager->AddEntitiesToParentCommit({ entities, data->count }, Entity::Invalid());
 		}
 
 		additional_data->copy_position = copy_position;
@@ -1062,48 +1061,43 @@ namespace ECSEngine {
 		
 		// Now copy its children recursively - if enabled
 		if (data->copy_children) {
-			Entity* temporary_entities = (Entity*)ECS_STACK_ALLOC(data->count * sizeof(Entity));
-			Entity temporary_static_entities[ECS_ENTITY_HIERARCHY_STATIC_STORAGE * 2];
-			size_t temporary_static_count = 0;
-
 			struct ParentWithChildren {
 				Entity* copied_parents;
-				Stream<Entity> children;
+				EntityHierarchy::ChildIterator child_iterator;
 			};
 			ResizableQueue<ParentWithChildren> process_queue(&manager->m_small_memory_manager, 128);
-			process_queue.Push({ entities, manager->GetHierarchyChildren(data->entity, temporary_static_entities + temporary_static_count * ECS_ENTITY_HIERARCHY_STATIC_STORAGE) });
-			temporary_static_count = 1;
+			process_queue.Push({ entities, manager->GetChildIterator(data->entity) });
 
 			ParentWithChildren current_data;
 			while (process_queue.Pop(current_data)) {
-				Stream<Entity> children = current_data.children;
+				current_data.child_iterator.ForEach([&](Entity child_entity) {
+					manager->GetEntityCompleteSignatureStable(child_entity, &unique, &shared);
+					manager->GetComponent(child_entity, unique, unique_data);
 
-				for (size_t index = 0; index < children.size; index++) {					
-					manager->GetEntityCompleteSignatureStable(children[index], &unique, &shared);
-					manager->GetComponent(children[index], unique, unique_data);
-								
-					Entity* current_entities = nullptr;
-					Stream<Entity> current_children = manager->GetHierarchyChildren(children[index], temporary_static_entities + temporary_static_count * ECS_ENTITY_HIERARCHY_STATIC_STORAGE);
-					temporary_static_count = temporary_static_count == 1 ? 0 : 1;
-					if (current_children.size > 0) {
-						// Allocate a buffer that can hold this allocation such we can reference the entities later on
-						current_entities = (Entity*)manager->m_memory_manager->Allocate(sizeof(Entity) * data->count);
+					// Allocate a buffer that can hold this allocation such we can reference the entities later on
+					Entity* current_copy_parents = (Entity*)Allocate(manager->MainAllocator(), sizeof(Entity) * data->count);
+					EntityHierarchy::ChildIterator current_children = manager->GetChildIterator(child_entity);
+					size_t current_child_count = current_children.GetRemainingCount();
+					if (current_child_count > 0) {
 						ParentWithChildren new_data;
-						new_data.children = current_children;
-						new_data.copied_parents = current_entities;
+						new_data.child_iterator = current_children;
+						new_data.copied_parents = current_copy_parents;
 						process_queue.Push(new_data);
 					}
-					else {
-						current_entities = temporary_entities;
+
+					// Exclude these entities from the creat
+					manager->CreateEntitiesCommit(data->count, unique, shared, unique, (const void**)unique_data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_SPLAT, true, true, current_copy_parents);
+					manager->AddEntityToHierarchyCommit(current_data.copied_parents, current_copy_parents, data->count);
+
+					if (current_child_count == 0) {
+						// Deallocate the allocation now
+						Deallocate(manager->MainAllocator(), current_copy_parents);
 					}
+				});
 
-					manager->CreateEntitiesCommit(data->count, unique, shared, unique, (const void**)unique_data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_SPLAT, true, true, current_entities);
-					manager->AddEntityToHierarchyCommit(current_data.copied_parents, current_entities, data->count);
-				}
-
-				// Deallocate the copied_parents buffer if it belongs
-				if (manager->m_memory_manager->Belongs(current_data.copied_parents)) {
-					manager->m_memory_manager->Deallocate(current_data.copied_parents);
+				// Deallocate the copied_parents buffer if it belongs to
+				if (manager->MainAllocator().allocator->Belongs(current_data.copied_parents)) {
+					Deallocate(manager->MainAllocator(), current_data.copied_parents);
 				}
 			}
 			process_queue.FreeBuffer();
@@ -1798,19 +1792,17 @@ namespace ECSEngine {
 			}
 		}
 		else {
-			ECS_STACK_CAPACITY_STREAM(Entity, temp_children, ECS_KB * 2);
-
 			// There is no need for batch deletion - the archetype base deletes
 			for (size_t index = 0; index < data->entities.size; index++) {
-				// Get the children first
-				temp_children.size = 0;
-				manager->m_hierarchy.GetAllChildrenFromEntity(data->entities[index], temp_children);
-
-				if (temp_children.size > 0) {
+				// Get the children first and delete them
+				EntityHierarchy::NestedChildIterator nested_child_iterator = manager->m_hierarchy.GetNestedChildIterator(data->entities[index]);
+				nested_child_iterator.ForEach([&](Entity entity) {
+					// Using a batch delete isn't all that faster - we can just delete entity by entity
 					DeferredDeleteEntities delete_data;
-					delete_data.entities = temp_children;
+					delete_data.entities = { &entity, 1 };
 					CommitDeleteEntities(manager, &delete_data, nullptr);
-				}
+				});
+
 				manager->m_hierarchy.RemoveEntry(data->entities[index]);
 			}
 		}
@@ -1836,22 +1828,20 @@ namespace ECSEngine {
 			}
 		}
 		else {
-			ECS_STACK_CAPACITY_STREAM(Entity, temp_children, ECS_KB * 2);
-
 			// There is no need for batch deletion - the archetype base deletes
 			for (size_t index = 0; index < data->entities.size; index++) {
 				bool exists = manager->m_hierarchy.Exists(data->entities[index]);
 				all_exist &= exists;
 				if (exists) {
-					// Get the children first
-					temp_children.size = 0;
-					manager->m_hierarchy.GetAllChildrenFromEntity(data->entities[index], temp_children);
-
-					if (temp_children.size > 0) {
+					// Get the children first and delete them
+					EntityHierarchy::NestedChildIterator nested_child_iterator = manager->m_hierarchy.GetNestedChildIterator(data->entities[index]);
+					nested_child_iterator.ForEach([&](Entity entity) {
+						// Using a batch delete isn't all that faster - we can just delete entity by entity
 						DeferredDeleteEntities delete_data;
-						delete_data.entities = temp_children;
+						delete_data.entities = { &entity, 1 };
 						CommitDeleteEntities(manager, &delete_data, nullptr);
-					}
+					});
+
 					manager->m_hierarchy.RemoveEntry(data->entities[index]);
 				}
 			}
@@ -1872,18 +1862,6 @@ namespace ECSEngine {
 
 		for (size_t index = 0; index < data->pairs.size; index++) {
 			manager->m_hierarchy.ChangeParent(data->pairs[index].parent, data->pairs[index].child);
-		}
-	}
-
-#pragma endregion
-
-#pragma region Change Or Set Entity Parent From Hierarchy
-
-	static void CommitChangeOrSetEntityParentHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
-		DeferredChangeOrSetEntityParentHierarchy* data = (DeferredChangeOrSetEntityParentHierarchy*)_data;
-
-		for (size_t index = 0; index < data->pairs.size; index++) {
-			manager->m_hierarchy.ChangeOrSetParent(data->pairs[index].parent, data->pairs[index].child);
 		}
 	}
 
@@ -1929,8 +1907,7 @@ namespace ECSEngine {
 		CommitAddEntitiesToParentHierarchy,
 		CommitRemoveEntitiesFromHierarchy,
 		CommitTryRemoveEntitiesFromHierarchy,
-		CommitChangeEntityParentHierarchy,
-		CommitChangeOrSetEntityParentHierarchy
+		CommitChangeEntityParentHierarchy
 	};
 
 	static_assert(ECS_COUNTOF(DEFERRED_CALLBACKS) == DEFERRED_CALLBACK_COUNT);
@@ -1991,7 +1968,7 @@ namespace ECSEngine {
 
 		m_hierarchy_allocator = (MemoryManager*)m_memory_manager->Allocate(sizeof(MemoryManager));
 		DefaultEntityHierarchyAllocator(m_hierarchy_allocator, m_memory_manager->m_backup);
-		m_hierarchy = EntityHierarchy(m_hierarchy_allocator, 0, 0, 0);
+		m_hierarchy = EntityHierarchy(m_hierarchy_allocator);
 
 		// Allocate the query cache now - use a separate allocation
 		// Get a default allocator for it for the moment
@@ -2584,11 +2561,15 @@ namespace ECSEngine {
 
 		// Now create the necessary archetypes and copy the unique data
 		// We also need to hold a remapping of the other entities to the newly created
-		// Entities such that we can recreate the entity hierarchy later on
+		// Entities such that we can recreate the entity hierarchy later on. Use a hash table for
+		// This instead of 2 parallel arrays, since we will need quite a bit of lookups to perform,
+		// And the hash table is good enough for iteration. We need to this in a separate pass because
+		// We need to create all entities from the other manager in order to assign properly the parents
 		unsigned int total_entity_count = other->GetEntityCount();
-		Entity* other_entity_remapping = (Entity*)m_memory_manager->Allocate(sizeof(Entity) * total_entity_count);
-		Entity* current_entity_remapping = (Entity*)m_memory_manager->Allocate(sizeof(Entity) * total_entity_count);
-		unsigned int remapping_count = 0;
+
+		// The value is the created new entity, the key is the entity from the other manager.
+		HashTable<Entity, Entity, HashFunctionPowerOfTwo> created_entity_remapping;
+		created_entity_remapping.Initialize(m_memory_manager, HashTablePowerOfTwoCapacityForElements(total_entity_count));
 
 		other->ForEachArchetype([&](const Archetype* other_archetype) {
 			ComponentSignature unique_signature = other_archetype->GetUniqueSignature();
@@ -2641,42 +2622,39 @@ namespace ECSEngine {
 					}
 				}
 
+				// Insert the entities into the hash table
+				for (unsigned int entity_index = 0; entity_index < copy_count; entity_index++) {
+					created_entity_remapping.Insert(allocated_entities[entity_index], other_archetype_base->m_entities[entity_index]);
+				}
+
 				base_archetype->SetEntities({ allocated_entities, copy_count }, copy_position);
 				base_archetype->m_size += copy_count;
 				m_memory_manager->Deallocate(allocated_entities);
-
-				memcpy(other_entity_remapping + remapping_count, other_archetype_base->m_entities, sizeof(Entity) * copy_count);
-				memcpy(current_entity_remapping + remapping_count, allocated_entities, sizeof(Entity) * copy_count);
-				remapping_count += copy_count;
 			}
 		});
 
 		// At last, configure the entity hierarchy
-		for (unsigned int index = 0; index < total_entity_count; index++) {
-			// For each entity, if it has a parent, configure it the same in the current entity manager
-			Entity other_parent = other->GetEntityParent(other_entity_remapping[index]);
-			if (other_parent.IsValid()) {
-				size_t parent_index = SearchBytes(Stream<Entity>(other_entity_remapping, total_entity_count), other_parent);
-				ECS_ASSERT(parent_index != -1);
-				EntityPair pair;
-				pair.parent = current_entity_remapping[parent_index];
-				pair.child = current_entity_remapping[index];
-				ChangeOrSetEntityParentCommit({ &pair, 1 });
+		created_entity_remapping.ForEachConst([&](Entity created_entity, Entity other_entity) {
+			if (other->ExistsEntityInHierarchy(other_entity)) {
+				Entity other_parent = other->GetEntityParent(other_entity);
+				if (other_parent != Entity::Invalid()) {
+					// Lookup the remapped parent created entity
+					m_hierarchy.AddEntry(created_entity_remapping.GetValue(other_parent), created_entity);
+				}
+				else {
+					// Insert the entry as a root
+					m_hierarchy.AddEntry(Entity::Invalid(), created_entity);
+				}
 			}
-			else {
-				EntityPair pair;
-				pair.parent = -1;
-				pair.child = current_entity_remapping[index];
-				ChangeOrSetEntityParentCommit({ &pair, 1 });
-			}
-		}
+		});
 
 		if (created_entities != nullptr) {
-			created_entities->AddStream({ current_entity_remapping, total_entity_count });
+			auto created_entity_remapping_iterator = created_entity_remapping.MutableValueIterator();
+			// Add the entities that were created using the value iterator
+			created_entities->AddIterator(&created_entity_remapping_iterator);
 		}
 
-		m_memory_manager->Deallocate(other_entity_remapping);
-		m_memory_manager->Deallocate(current_entity_remapping);
+		created_entity_remapping.Deallocate(m_memory_manager);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2960,32 +2938,6 @@ namespace ECSEngine {
 		}
 
 		WriteCommandStream(this, parameters, { DataPointer(data, DEFERRED_CHANGE_ENTITY_PARENT_HIERARCHY), debug_info });
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void EntityManager::ChangeOrSetEntityParentCommit(Stream<EntityPair> pairs)
-	{
-		DeferredChangeOrSetEntityParentHierarchy data;
-		data.pairs = pairs;
-		CommitChangeOrSetEntityParentHierarchy(this, &data, nullptr);
-	}
-
-	void EntityManager::ChangeOrSetEntityParent(Stream<EntityPair> pairs, DeferredActionParameters parameters, DebugInfo debug_info)
-	{
-		DeferredChangeOrSetEntityParentHierarchy* data = nullptr;
-		if (parameters.entities_are_stable) {
-			data = (DeferredChangeOrSetEntityParentHierarchy*)AllocateTemporaryBuffer(sizeof(DeferredChangeOrSetEntityParentHierarchy));
-			data->pairs = pairs;
-		}
-		else {
-			data = (DeferredChangeOrSetEntityParentHierarchy*)AllocateTemporaryBuffer(sizeof(DeferredChangeOrSetEntityParentHierarchy) + sizeof(EntityPair) * pairs.size);
-			data->pairs.buffer = (EntityPair*)OffsetPointer(data, sizeof(DeferredChangeOrSetEntityParentHierarchy));
-			pairs.CopyTo(data->pairs.buffer);
-			data->pairs.size = pairs.size;
-		}
-
-		WriteCommandStream(this, parameters, { DataPointer(data, DEFERRED_CHANGE_OR_SET_ENTITY_PARENT_HIERARCHY), debug_info });
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3329,9 +3281,8 @@ namespace ECSEngine {
 		DefaultEntityHierarchyAllocator(m_hierarchy_allocator, m_memory_manager->m_backup);
 		m_hierarchy = EntityHierarchy(
 			m_hierarchy_allocator,
-			entity_manager->m_hierarchy.roots.capacity,
-			entity_manager->m_hierarchy.children_table.GetCapacity(),
-			entity_manager->m_hierarchy.parent_table.GetCapacity()
+			entity_manager->m_hierarchy.roots.GetCapacity(),
+			entity_manager->m_hierarchy.node_table.GetCapacity()
 		);
 		m_hierarchy.CopyOther(&entity_manager->m_hierarchy);
 
@@ -3554,7 +3505,7 @@ namespace ECSEngine {
 
 		if (!exclude_from_hierarchy) {
 			// Add the entities as roots
-			AddEntitiesToParentCommit(entities, Entity(-1));
+			AddEntitiesToParentCommit(entities, Entity::Invalid());
 		}
 
 		return archetype_indices;
@@ -3862,14 +3813,14 @@ namespace ECSEngine {
 					EntityPair pair;
 					pair.parent = entity_remapping[remapping_index];
 					pair.child = entity_remapping[index];
-					subset_manager.ChangeOrSetEntityParentCommit({ &pair, 1 });
+					subset_manager.ChangeEntityParentCommit({ &pair, 1 });
 				}
 			}
 			else {
 				EntityPair pair;
-				pair.parent = -1;
+				pair.parent = Entity::Invalid();
 				pair.child = entity_remapping[index];
-				subset_manager.ChangeOrSetEntityParentCommit({ &pair, 1 });
+				subset_manager.ChangeEntityParentCommit({ &pair, 1 });
 			}
 		}
 
@@ -5086,27 +5037,28 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	Stream<Entity> EntityManager::GetHierarchyChildren(Entity parent, Entity* static_storage) const
+	void EntityManager::GetChildren(Entity parent, AdditionStream<Entity> static_storage) const
 	{
-		return m_hierarchy.GetChildren(parent, static_storage);
+		m_hierarchy.GetChildren(parent, static_storage);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetHierarchyChildrenCopy(Entity parent, CapacityStream<Entity>& children) const
+	void EntityManager::GetChildrenNested(Entity parent, AdditionStream<Entity> children) const
 	{
-		Stream<Entity> parent_children = GetHierarchyChildren(parent);
-		ECS_CRASH_CONDITION(
-			children.capacity >= parent_children.size, 
-			"EntityManager: Not enough space to copy the children for entity {#} into the capacity stream. Current capacity {#}, size needed {#}.",
-			EntityName(this, parent),
-			children.capacity,
-			parent_children.size
-		);
+		m_hierarchy.GetAllChildren(parent, children);
+	}
 
-		if (parent_children.size > 0) {
-			children.AddStream(parent_children);
-		}
+	// --------------------------------------------------------------------------------------------------------------------
+
+	EntityHierarchy::ChildIterator EntityManager::GetChildIterator(Entity parent) const {
+		return m_hierarchy.GetChildIterator(parent);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	EntityHierarchy::NestedChildIterator EntityManager::GetNestedChildIterator(Entity parent) const {
+		return m_hierarchy.GetNestedChildIterator(parent);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5959,7 +5911,6 @@ namespace ECSEngine {
 		// Change the allocator of the hierarchy allocator, is going to point to the temporary memory. The roots allocator needs to be changed too
 		// The same goes for the query cache with the entity manager reference
 		m_hierarchy.allocator = m_hierarchy_allocator;
-		m_hierarchy.roots.allocator = m_hierarchy_allocator;
 
 		// The allocator for the query cache is stable because it is allocated from the memory manager
 		m_query_cache->entity_manager = this;

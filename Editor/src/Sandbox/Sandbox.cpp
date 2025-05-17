@@ -1537,7 +1537,7 @@ Entity FindSandboxVirtualEntitySlot(
 	unsigned int slot_index = sandbox->virtual_entity_slot_type.Find(slot_type, [](EditorSandboxEntitySlot current_slot) {
 		return current_slot.slot_type;
 	});
-	return slot_index != -1 ? sandbox->virtual_entities_slots[slot_index] : Entity(-1);
+	return slot_index != -1 ? sandbox->virtual_entities_slots[slot_index] : Entity::Invalid();
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

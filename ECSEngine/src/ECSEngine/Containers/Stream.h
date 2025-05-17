@@ -69,8 +69,39 @@ namespace ECSEngine {
 		// Returns the first index
 		unsigned int AddStream(Stream<T> other) {
 			CopySlice(size, other);
-			unsigned int previous_size = size;
+			size_t previous_size = size;
 			size += other.size;
+			return previous_size;
+		}
+
+		// It assumes that the stream has enough space for the iterator to be added. If you are not sure if it fits,
+		// Use a capacity stream or a resizable stream.
+		unsigned int AddIterator(IteratorInterface<T>* iterator) {
+			struct AddInterface {
+				AddInterface(Stream<T>& _stream) : stream(_stream) {}
+
+				// This type doesn't have an assert call
+				ECS_INLINE void AddAssert(const T& value) {
+					stream.Add(value);
+				}
+
+				ECS_INLINE void Add(const T& value) {
+					stream.Add(value);
+				}
+
+				// Nothing to be done here
+				ECS_INLINE void Reserve(size_t size) {}
+
+				ECS_INLINE void AddStream(Stream<T> elements) {
+					stream.AddStream(elements);
+				}
+
+				Stream<T>& stream;
+			};
+			
+			size_t previous_size = size;
+			AddInterface add_interface{ *this };
+			AddIteratorToContainer(iterator, add_interface);
 			return previous_size;
 		}
 
@@ -521,6 +552,13 @@ namespace ECSEngine {
 			CopySlice(size, other.buffer, other.size);
 			unsigned int previous_size = size;
 			size += other.size;
+			return previous_size;
+		}
+
+		unsigned int AddIterator(IteratorInterface<T>* iterator) {
+			unsigned int previous_size = size;
+			// The CapacityStream<T> implements the static interface of a fixed size container for the add
+			AddIteratorToContainerFixed(iterator, *this);
 			return previous_size;
 		}
 
@@ -1062,6 +1100,13 @@ namespace ECSEngine {
 			unsigned int write_index = ReserveRange(other.size);
 			CopySlice(write_index, other);
 			return write_index;
+		}
+
+		unsigned int AddIterator(IteratorInterface<T>* iterator) {
+			unsigned int previous_size = size;
+			// The ResizableStream<T> implements the necessary functions for the resizable static interface
+			AddIteratorToContainerResizable(iterator, *this);
+			return previous_size;
 		}
 
 		ECS_INLINE void Clear() {
@@ -2450,6 +2495,15 @@ namespace ECSEngine {
 			}
 			else {
 				return resizable_stream->AddStream(elements);
+			}
+		}
+
+		ECS_INLINE unsigned int AddIterator(IteratorInterface<T>* iterator) {
+			if (is_capacity) {
+				return capacity_stream->AddIterator(iterator);
+			}
+			else {
+				return resizable_stream->AddIterator(iterator);
 			}
 		}
 

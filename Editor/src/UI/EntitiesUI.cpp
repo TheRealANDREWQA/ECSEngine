@@ -108,17 +108,11 @@ struct HierarchyIteratorImpl {
 		}
 	}
 	 
-	Stream<StorageType> GetRoots(AllocatorPolymorphic allocator) {
-		// Unfortunately, we need to make an allocation here just for that single addition
-		// The original roots don't need to be deallocated
-		Stream<Entity> original_roots = implementation.GetRoots(allocator);
-		Stream<Entity> new_roots;
-		new_roots.Initialize(allocator, original_roots.size + 1);
-		new_roots.size = 0;
-		// Add the global component root first
-		new_roots.Add(GlobalComponentsParent());
-		new_roots.AddStream(original_roots);
-		return new_roots;
+	IteratorInterface<const StorageType>* GetRoots(AllocatorPolymorphic allocator) {
+		// What we need to return are the underlying roots + the global components parent.
+		// We can do this by employing a combined iterator. The first iterator must be the
+		// Global components one
+		return AllocateAndConstruct<StaticCombinedIterator<const StorageType>>(allocator, GetValueIterator<const StorageType>(global_components_parent, allocator), implementation.GetRoots(allocator));
 	}
 	 
 	ReturnType GetReturnValue(StorageType value, AllocatorPolymorphic allocator) {
@@ -156,6 +150,7 @@ struct HierarchyIteratorImpl {
 		ui_data = _ui_data;
 		// Allocate the buffer here
 		entity_label.Initialize(hierarchy->allocator, 0, ITERATOR_LABEL_CAPACITY);
+		global_components_parent = GlobalComponentsParent();
 	};
 
 	void Free() {
@@ -167,6 +162,9 @@ struct HierarchyIteratorImpl {
 	const EntityManager* entity_manager;
 	Component name_component;
 	CapacityStream<char> entity_label;
+
+	// We store the entity here such that we can retrieve an iterator to it (the value must be stable)
+	Entity global_components_parent;
 };
 
 typedef DFSIterator<HierarchyIteratorImpl> DFSUIHierarchy;
@@ -1014,7 +1012,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 				AllocatorPolymorphic iterator_allocator = entity_manager->m_memory_manager;
 
 				// Use the allocator from the entity manager because the one from the hierarchy can cause deallocating the roots
-				DFSUIHierarchy iterator(iterator_allocator, implementation, hierarchy->children_table.GetCount());
+				DFSUIHierarchy iterator(iterator_allocator, implementation, 128);
 
 				LABEL_HIERARCHY_CONFIGURATION |= UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL;
 
