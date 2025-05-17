@@ -107,9 +107,9 @@ namespace ECSEngine {
 	// As functions:	Stream<StorageType> GetChildren(StorageType, AllocatorPolymorphic allocator) - returns a stream of elements to be added from a certain node 
 	// 					bool HasChildren(StorageType) const - returns true if the value has children, false otherwise
 	//					(the stream returned needs to be stable, either from an internal allocator or from the one given)
-	//					IteratorInterface<[const] StorageType>* GetRoots(CapacityStream<void>& iterator_storage) - returns the root nodes
-	//					as an iterator. The interface should be allocated from the iterator storage. The const as the template argument
-	//					is optional.
+	//					IteratorInterface<[const] StorageType>* GetRoots(AllocatorPolymorphic allocator) - returns the root nodes
+	//					as an iterator. The interface should be allocated from the allocator, but without making extra allocations,
+	//					since those are not tracked. The const as the template argument is optional.
 	//					ReturnType GetReturnValue(StorageType) - returns a user-facing value from a node
 	//					If bytes are allocated during GetReturnValue, its the caller's responsability to deallocate them or at the end of the iterator's usage
 	//					to clear the allocator
@@ -185,11 +185,11 @@ namespace ECSEngine {
 
 		// Retrieves a new node from the handler
 		void Roots() {
-			ECS_STACK_VOID_STREAM(iterator_storage, ECS_KB);
+			ECS_STACK_LINEAR_ALLOCATOR(iterator_storage, ECS_KB);
 			// This is either a IteratorInterface<StorageType> or IteratorInterface<const StorageType>
-			auto* roots = handler.GetRoots(iterator_storage);
-			roots->ForEach([this](const StorageType* element) {
-				resizable_storage.Push({ *element, 0 });
+			auto* roots = handler.GetRoots(&iterator_storage);
+			roots->ForEach([this](const StorageType& element) {
+				resizable_storage.Push({ element, 0 });
 			});
 		}
 
@@ -222,9 +222,9 @@ namespace ECSEngine {
 	// As functions:	Stream<StorageType> GetChildren(StorageType, AllocatorPolymorphic allocator) - returns a stream of elements to be added from a certain node 
 	//					bool HasChildren(StorageType) const - returns true if the value has children, false otherwise
 	//					(the stream returned needs to be stable, either from an internal allocator or from the one given)
-	//					IteratorInterface<[const] StorageType>* GetRoots(CapacityStream<void>& iterator_storage) - returns the root nodes
-	//					as an iterator. The interface should be allocated from the iterator storage. The const as the template argument
-	//					is optional.
+	//					IteratorInterface<[const] StorageType>* GetRoots(AllocatorPolymorphic allocator) - returns the root nodes
+	//					as an iterator. The interface should be allocated from the allocator, but without making extra allocations,
+	//					since those are not tracked. The const as the template argument is optional.
 	//					ReturnType GetReturnValue(StorageType, AllocatorPolymorphic allocator) - returns a user-facing value from a node
 	//					If bytes are allocated during GetReturnValue, its the caller's responsability to deallocate them or at the end of the iterator's usage
 	//					to clear the allocator
@@ -240,8 +240,8 @@ namespace ECSEngine {
 
 		ECS_INLINE DFSIterator() {}
 
-		ECS_INLINE DFSIterator(AllocatorPolymorphic allocator, Handler _handler, unsigned int default_capacity = 0) {
-			Initialize(allocator, _handler, default_capacity);
+		ECS_INLINE DFSIterator(AllocatorPolymorphic allocator, Handler _handler, unsigned int default_node_depth = 0) {
+			Initialize(allocator, _handler, default_node_depth);
 		}
 
 		ECS_INLINE bool Valid() const {
@@ -292,9 +292,9 @@ namespace ECSEngine {
 
 		// Retrieves the root nodes
 		void Roots() {
-			ECS_STACK_VOID_STREAM(iterator_storage, ECS_KB);
+			ECS_STACK_LINEAR_ALLOCATOR(iterator_storage, ECS_KB);
 			// This is either a IteratorInterface<StorageType> or IteratorInterface<const StorageType>
-			auto* roots = handler.GetRoots(iterator_storage);
+			auto* roots = handler.GetRoots(&iterator_storage);
 			stack_frames.PushReverseOrder(roots, [](const StorageType& element) {
 				return Node{ element, 0 };
 			});
@@ -317,8 +317,8 @@ namespace ECSEngine {
 			handler.Free();
 		}
 
-		void Initialize(AllocatorPolymorphic allocator, Handler _handler, unsigned int default_capacity = 0) {
-			stack_frames = ResizableStack<Node>(allocator, default_capacity);
+		void Initialize(AllocatorPolymorphic allocator, Handler _handler, unsigned int default_node_depth = 0) {
+			stack_frames = ResizableStack<Node>(allocator, default_node_depth);
 			handler = _handler;
 
 			Roots();

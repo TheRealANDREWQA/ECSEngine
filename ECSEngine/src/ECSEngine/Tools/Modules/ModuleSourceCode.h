@@ -1,3 +1,4 @@
+// ECS_REFLECT
 #pragma once
 #include "../../Containers/Stream.h"
 #include "../../Utilities/Reflection/ReflectionMacros.h"

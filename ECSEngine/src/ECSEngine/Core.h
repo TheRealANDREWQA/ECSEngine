@@ -214,6 +214,8 @@ ECS_TEMPLATE_FUNCTION_TEMPLATE_PARAMETERS_3(return_type, function_name, template
 template ECSENGINE_API return_type function_name<template_4>(__VA_ARGS__);
 
 #define ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(type) type(const type& other) = default; type& operator = (const type& other) = default;
+#define ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(type) type& operator=(const type& other) { memcpy(this, &other, sizeof(*this)); return *this; } \
+													type& operator=(type&& other) { memcpy(this, &other, sizeof(*this)); return *this; }
 
 #define ECS_ENUM_BITWISE_OPERATIONS(T) ECS_INLINE T operator~ (T a) { return (T)~(size_t)a; } \
 ECS_INLINE T operator| (T a, T b) { return (T)((size_t)a | (size_t)b); } \

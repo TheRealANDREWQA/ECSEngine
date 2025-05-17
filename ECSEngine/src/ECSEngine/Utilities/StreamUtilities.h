@@ -348,12 +348,12 @@ namespace ECSEngine {
 		MakeSequence(element_indices);
 
 		__try {
-			moves->ForEach([&](const MovedElementIndex<MovedElementIntegerType>* move) {
-				size_t current_index = element_indices[move->previous];
-				if (current_index != move->current) {
-					functor(current_index, move->current);
+			moves->ForEach([&](MovedElementIndex<MovedElementIntegerType> move) {
+				size_t current_index = element_indices[move.previous];
+				if (current_index != move.current) {
+					functor(current_index, move.current);
 					// Update the mapping
-					element_indices[move->current] = current_index;
+					element_indices[move.current] = current_index;
 					// No need to update element_indices[moves[index].previous] since it has already been used
 				}
 			});

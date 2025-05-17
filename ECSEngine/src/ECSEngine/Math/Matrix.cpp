@@ -788,6 +788,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	Matrix ECS_VECTORCALL MatrixRotation(float3 rotation) {
+		// PERFORMANCE TODO: Use the formula from wikipedia to make this faster
 		return MatrixRotationX(rotation.x) * MatrixRotationY(rotation.y) * MatrixRotationZ(rotation.z);
 	}
 

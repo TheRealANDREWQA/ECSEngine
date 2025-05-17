@@ -2071,7 +2071,7 @@ void ParentSandboxEntity(
 		EntityPair pair;
 		pair.parent = parent;
 		pair.child = child;
-		entity_manager->ChangeOrSetEntityParentCommit({ &pair, 1 });
+		entity_manager->ChangeEntityParentCommit({ &pair, 1 });
 		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	}
 }

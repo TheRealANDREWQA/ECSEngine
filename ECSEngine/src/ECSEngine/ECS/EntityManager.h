@@ -445,16 +445,6 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void ChangeOrSetEntityParentCommit(Stream<EntityPair> pairs);
-
-		void ChangeOrSetEntityParent(
-			Stream<EntityPair> pairs, 
-			DeferredActionParameters parameters = {},
-			DebugInfo debug_info = ECS_DEBUG_INFO
-		);
-
-		// ---------------------------------------------------------------------------------------------------
-
 		void ChangeComponentFunctionsCommit(Component component, const ComponentFunctions* functions);
 
 		void ChangeSharedComponentFunctionsCommit(Component component, const ComponentFunctions* functions, SharedComponentCompareEntry compare_entry);
@@ -1342,6 +1332,11 @@ namespace ECSEngine {
 			return m_entity_pool->IsValid(entity);
 		}
 
+		// Returns true if the given entity exists in the hierarchy, else false
+		ECS_INLINE bool ExistsEntityInHierarchy(Entity entity) const {
+			return m_hierarchy.Exists(entity);
+		}
+
 		// Verifies if a component already exists at that slot
 		ECS_INLINE bool ExistsComponent(Component component) const {
 			return component.value < m_unique_components.size && m_unique_components[component.value].size != -1;
@@ -1680,20 +1675,23 @@ namespace ECSEngine {
 		// These are vector components which are much faster to use than normal components
 		VectorComponentSignature* GetArchetypeSharedComponentsPtr(unsigned int archetype_index);
 
-		// Returns -1 if the entity doesn't have a parent (it is a root or doesn't exist)
+		// Returns Entity::Invalid() if the entity doesn't have a parent (it is a root or doesn't exist)
 		Entity GetEntityParent(Entity child) const;
 
 		// Adds all the entities that reference the given shared instance
 		void GetEntitiesForSharedInstance(Component component, SharedInstance instance, AdditionStream<Entity> entities) const;
 
-		// Aliases the internal structures. Do not modify, readonly. If the static_storage is provided
-		// then if the pointer is to a static storage, it will copy to it instead (useful if getting
-		// the children and then doing operations like adding/removing entities from hierarchy)
-		// If the parent does not exist in the hierarchy, { nullptr, 0 } is returned
-		Stream<Entity> GetHierarchyChildren(Entity parent, Entity* static_storage = nullptr) const;
+		// Fills in the children of the entity
+		void GetChildren(Entity parent, AdditionStream<Entity> children) const;
 
 		// It will copy the children into the stream. If the parent does not exist, nothing will be copied
-		void GetHierarchyChildrenCopy(Entity parent, CapacityStream<Entity>& children) const;
+		void GetChildrenNested(Entity parent, AdditionStream<Entity> children) const;
+
+		// Returns an iterator for the direct children of the entity
+		EntityHierarchy::ChildIterator GetChildIterator(Entity parent) const;
+
+		// Returns an iterator for all direct and indirect (children of children) of the entity
+		EntityHierarchy::NestedChildIterator GetNestedChildIterator(Entity parent) const;
 
 		// Returns the indices of the archetypes that match the given query
 		Stream<unsigned int> GetQueryResults(unsigned int handle) const;

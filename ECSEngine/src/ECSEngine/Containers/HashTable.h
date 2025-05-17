@@ -1026,6 +1026,8 @@ namespace ECSEngine {
 		struct ValueIterator : IteratorInterface<ValueType> {
 			ECS_INLINE ValueIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<ValueType>(table->GetCount()) {}
 			
+			ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(ValueIterator);
+
 			ValueType* GetImpl() override {
 				unsigned int extended_capacity = table.GetExtendedCapacity();
 				while (index < extended_capacity && !table.IsItemAt(index)) {
@@ -1045,7 +1047,7 @@ namespace ECSEngine {
 				return false;
 			}
 
-			IteratorInterface<ValueType>* Clone() override { return CloneHelper<ValueIterator<HashTableType, ValueType>>(allocator); }
+			IteratorInterface<ValueType>* Clone(AllocatorPolymorphic allocator) override { return CloneHelper<ValueIterator<HashTableType, ValueType>>(allocator); }
 
 			IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				ValueIterator<HashTableType, ValueType>* iterator = AllocateAndConstruct<ValueIterator<HashTableType, ValueType>>(allocator, &table);
@@ -1063,6 +1065,8 @@ namespace ECSEngine {
 		template<typename HashTableType, typename IdentifierType>
 		struct IdentifierIterator : IteratorInterface<IdentifierType> {
 			ECS_INLINE IdentifierIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<IdentifierType>(table->GetCount()) {}
+
+			ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(IdentifierIterator);
 
 			IdentifierType* GetImpl() override {
 				unsigned int extended_capacity = table.GetExtendedCapacity();
@@ -1102,6 +1106,8 @@ namespace ECSEngine {
 		struct PairIterator : IteratorInterface<PairType> {
 			ECS_INLINE PairIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<PairType>(table->GetCount()) {}
 
+			ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(PairIterator);
+
 			PairType* GetImpl() override {
 				unsigned int extended_capacity = table.GetExtendedCapacity();
 				while (index < extended_capacity && !table.IsItemAt(index)) {
@@ -1122,7 +1128,7 @@ namespace ECSEngine {
 				return false;
 			}
 
-			IteratorInterface<PairType>* Clone() override { return CloneHelper<PiarIterator<HashTableType, PairType>>(allocator); }
+			IteratorInterface<PairType>* Clone(AllocatorPolymorphic allocator) override { return CloneHelper<PairIterator<HashTableType, PairType>>(allocator); }
 
 			IteratorInterface<PairType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {
 				PairIterator<HashTableType, PairType>* iterator = AllocateAndConstruct<PairIterator<HashTableType, PairType>>(allocator, &table);

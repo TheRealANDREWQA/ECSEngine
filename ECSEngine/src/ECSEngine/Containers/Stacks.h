@@ -416,9 +416,9 @@ namespace ECSEngine {
 		void PushReverseOrder(IteratorInterface<T>* iterator) {
 			// Reserve space for the number of iterator elements
 			size_t iterate_count = iterator->GetRemainingCount();
-			m_stack.Reserve(iterate_count);
+			unsigned int stack_size = m_stack.ReserveRange(iterate_count);
 			// Write them in reverse order
-			unsigned int write_index = m_stack.size + iterate_count - 1;
+			unsigned int write_index = stack_size + iterate_count - 1;
 			iterator->ForEach([&](const T* element) {
 				m_stack[write_index] = *element;
 				write_index--;
@@ -432,11 +432,11 @@ namespace ECSEngine {
 		void PushReverseOrder(IteratorInterface<IteratorElementType>* iterator, ElementFunctor&& functor) {
 			// Reserve space for the number of iterator elements
 			size_t iterate_count = iterator->GetRemainingCount();
-			m_stack.Reserve(iterate_count);
+			unsigned int stack_size = m_stack.ReserveRange(iterate_count);
 			// Write them in reverse order
-			unsigned int write_index = m_stack.size + iterate_count - 1;
-			iterator->ForEach([&](const IteratorElementType* element) {
-				m_stack[write_index] = functor(*element);
+			unsigned int write_index = stack_size + iterate_count - 1;
+			iterator->ForEach([&](const IteratorElementType& element) {
+				m_stack[write_index] = functor(element);
 				write_index--;
 			});
 		}

@@ -19,6 +19,7 @@
 #include "../Sandbox/SandboxProfiling.h"
 #include "DragTargets.h"
 #include "../Assets/PrefabFile.h"
+#include "../Project/ProjectFolders.h"
 
 // These defined the bounds under which the mouse
 // is considered that it clicked and not selected yet
@@ -1266,7 +1267,14 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
 			// The scene path of this sandbox is actually the path to the prefab
 			Entity prefab_entity = GetPrefabEntityFromSingle();
-			bool success = SavePrefabFile(data->editor_state, data->sandbox_index, prefab_entity, sandbox->scene_path);
+			
+			// Construct the absolute path to the prefab, since that is relative to the project.
+			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_prefab_file_path, ECS_KB);
+			GetProjectAssetsFolder(data->editor_state, absolute_prefab_file_path);
+			absolute_prefab_file_path.AddAssert(ECS_OS_PATH_SEPARATOR);
+			absolute_prefab_file_path.AddStreamAssert(sandbox->scene_path);
+
+			bool success = SavePrefabFile(data->editor_state, data->sandbox_index, prefab_entity, absolute_prefab_file_path);
 			if (success) {
 				// Destroy this window since we succeeded - the rest of the windows will be removed
 				// By the event handler

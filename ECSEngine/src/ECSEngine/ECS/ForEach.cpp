@@ -471,14 +471,14 @@ namespace ECSEngine {
 		functor_data.base.iterator = initial_iterator;
 
 		size_t index = iteration_start_index;
-		stable_iterator.iterator->ForEach([&index, &iteration_in_group_index, world, &functor_data, &query_descriptor, functor](const Entity* entity) {
+		stable_iterator.iterator->ForEach([&index, &iteration_in_group_index, world, &functor_data, &query_descriptor, functor](Entity entity) {
 			functor_data.base.index = index;
 			functor_data.base.in_group_index = iteration_in_group_index;
 			index++;
 			iteration_in_group_index++;
 
 			// For the mandatory components, crash if the component is missing
-			Entity current_entity = *entity;
+			Entity current_entity = entity;
 			functor_data.base.entity = current_entity;
 
 			for (size_t component_index = 0; component_index < (size_t)query_descriptor.unique.count; component_index++) {
