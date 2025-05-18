@@ -503,25 +503,26 @@ namespace ECSEngine {
 				return false;
 			};
 
+			bool is_removed = false;
 			switch (type) {
 			case ECS_ASSET_MESH:
 			{
-				return remove_lambda(mesh_metadata);
+				is_removed = remove_lambda(mesh_metadata);
 			}
 			break;
 			case ECS_ASSET_TEXTURE:
 			{
-				return remove_lambda(texture_metadata);
+				is_removed = remove_lambda(texture_metadata);
 			}
 			break;
 			case ECS_ASSET_GPU_SAMPLER:
 			{
-				return remove_lambda(gpu_sampler_metadata);
+				is_removed = remove_lambda(gpu_sampler_metadata);
 			}
 			break;
 			case ECS_ASSET_SHADER:
 			{
-				return remove_lambda(shader_metadata);
+				is_removed = remove_lambda(shader_metadata);
 			}
 			break;
 			case ECS_ASSET_MATERIAL:
@@ -530,24 +531,30 @@ namespace ECSEngine {
 				// might use the handles that are dependencies.
 				MaterialAsset old_asset;
 				old_asset = *GetMaterialConst(handle);
-				bool removed = remove_lambda(material_asset);
+				is_removed = remove_lambda(material_asset);
 				if constexpr (!only_main_asset) {
-					if (removed) {
-						RemoveAssetDependencies(&old_asset, ECS_ASSET_MATERIAL);
+					if (is_removed) {
+						// We need to call RemoveAssetWithAction on the dependencies as well
+						ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, asset_dependencies, 512);
+						GetAssetDependencies(&old_asset, type, &asset_dependencies);
+						for (unsigned int index = 0; index < asset_dependencies.size; index++) {
+							// The decrement count for these should be 1, always
+							RemoveAssetWithAction<only_main_asset, before_removal>(asset_dependencies[index].handle, asset_dependencies[index].type, functor);
+						}
 					}
 				}
-				return removed;
 			}
 			break;
 			case ECS_ASSET_MISC:
 			{
-				return remove_lambda(misc_asset);
+				is_removed = remove_lambda(misc_asset);
 			}
 			break;
 			default:
 				ECS_ASSERT(false);
 			}
-			return false;
+
+			return is_removed;
 		}
 
 		void RemoveAssetDependencies(const void* asset, ECS_ASSET_TYPE type);
@@ -726,6 +733,7 @@ namespace ECSEngine {
 		// Fills in the unique assets alongside the handles that target the same asset multiple times
 		Stream<AssetDatabaseSameTargetAsset> SameTargetMiscs(AllocatorPolymorphic allocator) const;
 
+		// Fills in the unique assets alongside the handles that target the same asset multiple times
 		AssetDatabaseSameTargetAll SameTargetAll(AllocatorPolymorphic allocator) const;
 
 		// Returns the name from the given metadata file

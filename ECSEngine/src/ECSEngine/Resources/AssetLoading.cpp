@@ -915,8 +915,18 @@ namespace ECSEngine {
 				// Use the assign overload such that any discrepancies between the resource manager
 				// And the asset database are resolved here, otherwise, later on in the dependency
 				// Resolve of assets that have dependencies, they can fail because it will check the
-				// Asset database only to see if the resource is loaded
-				if (IsAssetFromMetadataLoadedAndAssign(resource_manager, database->GetAsset(elements[index].handle, type), type, load_info->mount_point)) {
+				// Asset database only to see if the resource is loaded. If we assigned the resource manager value, 
+				// We need to update all metadatas that reference the same handle - since they also might have their
+				// Value desynched.
+				void* asset_metadata = database->GetAsset(elements[index].handle, type);
+				bool has_assigned = false;
+				if (IsAssetFromMetadataLoadedAndAssign(resource_manager, asset_metadata, type, load_info->mount_point, false, &has_assigned)) {
+					if (has_assigned) {
+						Stream<void> asset_pointer_value = GetAssetFromMetadata(asset_metadata, type);
+						for (size_t subindex = 0; subindex < elements[index].other_handles.size; subindex++) {
+							SetAssetToMetadata(database->GetAsset(elements[index].other_handles[subindex], type), type, asset_pointer_value);
+						}
+					}
 					elements.RemoveSwapBack(index);
 					index--;
 				}
@@ -1238,11 +1248,6 @@ namespace ECSEngine {
 					current_count = database_reference->GetCount(current_type);
 				}
 
-				// We need to record the handles for which we have already decremented the
-				// dependencies in order to not decrement them again on a new appeareance
-				// of the handle
-				ECS_STACK_CAPACITY_STREAM(unsigned int, decremented_dependencies_handles, 512);
-
 				for (unsigned int index = 0; index < current_count; index++) {
 					unsigned int index_to_remove;
 					if constexpr (use_mask) {
@@ -1252,27 +1257,17 @@ namespace ECSEngine {
 						index_to_remove = index;
 					}
 
+					// Verify if, for some reason, the dependency loading is disabled
 					if (options->decrement_dependencies) {
-						unsigned int current_handle = database_reference->GetHandle(index_to_remove, current_type);
-						bool exists_handle = SearchBytes(decremented_dependencies_handles.ToStream(), current_handle) != -1;
-						if (!exists_handle) {
-							// Check to see if it has dependencies and try to get them
-							ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
-							GetAssetDependencies(database_reference->GetAssetByIndex(index_to_remove, current_type), current_type, &dependencies);
-							for (unsigned int dependency_index = 0; dependency_index < dependencies.size; dependency_index++) {
-								unsigned int dependency_handle = dependencies[dependency_index].handle;
-								ECS_ASSET_TYPE dependency_type = dependencies[dependency_index].type;
-								database->RemoveAssetWithAction(dependency_handle, dependency_type, [&](unsigned int handle, ECS_ASSET_TYPE type, const void* metadata) {
-									DeallocateAssetFromMetadata(resource_manager, database, metadata, type, options->mount_point);
-								});
-							}
-							decremented_dependencies_handles.AddAssert(current_handle);
-						}
+						database_reference->RemoveAssetWithAction(index_to_remove, current_type, [&](unsigned int handle, ECS_ASSET_TYPE type, const void* metadata) {
+							DeallocateAssetFromMetadata(resource_manager, database, metadata, type, options->mount_point);
+						});
 					}
-
-					database_reference->RemoveAssetWithAction(index_to_remove, current_type, [&](unsigned int handle, ECS_ASSET_TYPE type, const void* metadata) {
-						DeallocateAssetFromMetadata(resource_manager, database, metadata, type, options->mount_point);
-					});
+					else {
+						database_reference->RemoveAssetWithAction<true>(index_to_remove, current_type, [&](unsigned int handle, ECS_ASSET_TYPE type, const void* metadata) {
+							DeallocateAssetFromMetadata(resource_manager, database, metadata, type, options->mount_point);
+						});
+					}
 				}
 			}
 		};

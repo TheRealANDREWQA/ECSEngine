@@ -29,7 +29,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void Clear() {
-			value.store(false, ECS_RELAXED);
+			value.store(0, ECS_RELAXED);
 		}
 
 		void Lock();

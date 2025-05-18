@@ -731,6 +731,9 @@ namespace ECSEngine {
 	// These are all the dependencies for which their metadata is reflected here
 	ECSENGINE_API void GetAssetDependenciesForMetadata(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* handles);
 
+	// For an array of dependency handles retrieved with GetAssetDependencies of by calling ForEachAssetDependency,
+	// It will remap the dependencies of the asset with the new values provided in the array. Just change the handle
+	// Value from the previous handle value to the new one. Helpful for resetting the dependencies, if such a case is needed
 	ECSENGINE_API void RemapAssetDependencies(void* metadata, ECS_ASSET_TYPE type, Stream<AssetTypedHandle> handles);
 
 	ECSENGINE_API void RenameAsset(void* metadata, ECS_ASSET_TYPE type, Stream<char> new_name, AllocatorPolymorphic allocator);

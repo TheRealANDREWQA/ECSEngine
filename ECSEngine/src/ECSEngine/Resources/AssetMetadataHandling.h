@@ -164,11 +164,13 @@ namespace ECSEngine {
 	);
 
 	// The same as the other override, but it assigns to the metadata pointer the resource manager value
-	// In case the metadata pointer is not set, but it appears in the resource manager.
+	// In case the metadata pointer is not set, but it appears in the resource manager. You can be notified
+	// If the assignment was performed by the last out parameter
 	ECSENGINE_API bool IsMeshFromMetadataLoadedAndAssign(
 		const ResourceManager* resource_manager,
 		MeshMetadata* metadata,
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		bool* has_assigned = nullptr
 	);
 
 	// For randomized assets it will test differently
@@ -179,11 +181,13 @@ namespace ECSEngine {
 	);
 
 	// The same as the other override, but it assigns to the metadata pointer the resource manager value
-	// In case the metadata pointer is not set, but it appears in the resource manager.
+	// In case the metadata pointer is not set, but it appears in the resource manager. You can be notified
+	// If the assignment was performed by the last out parameter
 	ECSENGINE_API bool IsTextureFromMetadataLoadedAndAssign(
 		const ResourceManager* resource_manager,
 		TextureMetadata* metadata,
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		bool* has_assigned = nullptr
 	);
 
 	ECSENGINE_API bool IsGPUSamplerFromMetadataLoaded(const GPUSamplerMetadata* metadata, bool randomized_asset = false);
@@ -195,11 +199,13 @@ namespace ECSEngine {
 	);
 
 	// The same as the other override, but it assigns to the metadata pointer the resource manager value
-	// In case the metadata pointer is not set, but it appears in the resource manager.
+	// In case the metadata pointer is not set, but it appears in the resource manager. You can be notified
+	// If the assignment was performed by the last out parameter
 	ECSENGINE_API bool IsShaderFromMetadataLoadedAndAssign(
 		const ResourceManager* resource_manager,
 		ShaderMetadata* metadata,
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		bool* has_assigned = nullptr
 	);
 	
 	ECSENGINE_API bool IsMaterialFromMetadataLoaded(const MaterialAsset* metadata, bool randomized_asset = false);
@@ -241,11 +247,13 @@ namespace ECSEngine {
 	);
 
 	// The same as the other override, but it assigns to the metadata pointer the resource manager value
-	// In case the metadata pointer is not set, but it appears in the resource manager.
+	// In case the metadata pointer is not set, but it appears in the resource manager. You can be notified
+	// If the assignment was performed by the last out parameter
 	ECSENGINE_API bool IsMiscFromMetadataLoadedAndAssign(
 		const ResourceManager* resource_manager,
 		MiscAsset* metadata,
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		bool* has_assigned = nullptr
 	);
 
 	ECSENGINE_API bool IsAssetFromMetadataLoaded(
@@ -257,13 +265,15 @@ namespace ECSEngine {
 	);
 
 	// The same as the other override, but it assigns to the metadata pointer the resource manager value
-	// In case the metadata pointer is not set, but it appears in the resource manager.
+	// In case the metadata pointer is not set, but it appears in the resource manager. You can be notified
+	// If the assignment was performed by the last out parameter
 	ECSENGINE_API bool IsAssetFromMetadataLoadedAndAssign(
 		const ResourceManager* resource_manager,
 		void* metadata,
 		ECS_ASSET_TYPE type,
 		Stream<wchar_t> mount_point = { nullptr, 0 },
-		bool randomized_asset = false
+		bool randomized_asset = false,
+		bool* has_assigned = nullptr
 	);
 
 	// There must be ECS_ASSET_TYPE_COUNT missing asset streams. Every type will write into its own stream
