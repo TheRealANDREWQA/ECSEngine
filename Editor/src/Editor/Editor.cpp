@@ -199,7 +199,7 @@ public:
 									}
 								}
 							}
-							
+
 							if (index == sandbox_count) {
 								// It doesn't belong to the physical memory profiler range
 								return EXCEPTION_CONTINUE_SEARCH;
@@ -213,12 +213,6 @@ public:
 							return EXCEPTION_CONTINUE_SEARCH;
 						}
 					};
-
-					if (editor_state.Mouse()->IsPressed(ECS_MOUSE_X1)) {
-						//OpenSourceFileInIDE(&editor_state, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Containers\\Stream.h", 150);
-						OpenSourceFileInIDE(&editor_state, L"C:\\Users\\Andrei\\C++\\ECSEngine\\Modules\\src\\Logging.cpp", 14);
-						//OpenSourceFileInIDE(&editor_state, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Containers\Stream.h", 150);
-					}
 
 					timer.SetNewStart();
 

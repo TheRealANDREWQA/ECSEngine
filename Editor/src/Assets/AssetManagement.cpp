@@ -1897,6 +1897,9 @@ static LoadAssetInfo LoadInfoFromEventData(EditorState* editor_state, LoadSandbo
 	info.load_failures = event_data->failures;
 	info.mount_point = mount_point;
 	info.success = &event_data->success;
+	// We need to provide as GPU lock the frame one, otherwise the main thread
+	// Can enter a conflict with the worker threads
+	info.gpu_lock = &editor_state->frame_gpu_lock;
 
 	return info;
 }
