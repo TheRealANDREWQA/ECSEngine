@@ -135,7 +135,7 @@ namespace ECSEngine {
 		// If this is set to true, then it will decrement the reference count
 		// Of the dependencies for assets that have them even when the asset itself
 		// is not deallocated
-		bool decrement_dependencies = false;
+		bool decrement_dependencies = true;
 	};
 
 	// Releases all assets from the database. If an asset is not found, it is placed into the missing assets list if specified, else ignored
