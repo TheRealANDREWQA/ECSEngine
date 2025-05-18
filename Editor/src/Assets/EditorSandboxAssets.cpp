@@ -52,21 +52,8 @@ static EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 				ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, deallocate_dependencies, 512);
 				void* metadata = editor_state->asset_database->GetAsset(data->handles[index][subindex], current_type);
 
-				bool success = DeallocateAsset(editor_state, metadata, current_type, true, &deallocate_dependencies);
-				if (!success) {
-					Stream<wchar_t> target_file = GetAssetFile(metadata, current_type);
-					Stream<char> asset_name = GetAssetName(metadata, current_type);
-					const char* type_string = ConvertAssetTypeString(current_type);
-
-					ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
-					if (target_file.size > 0) {
-						FormatString(console_message, "Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", asset_name, type_string, target_file);
-					}
-					else {
-						FormatString(console_message, "Failed to unload asset {#}, type {#} or assets that depend on it.", asset_name, type_string);
-					}
-					EditorSetConsoleError(console_message);
-				}
+				// The function already emits an error if it fails to deallocate it
+				DeallocateAsset(editor_state, metadata, current_type, true, &deallocate_dependencies);
 
 				// Set the new_asset for those assets that have been changed
 				update_assets.Expand(&stack_allocator, deallocate_dependencies.size);
@@ -100,22 +87,9 @@ static EDITOR_EVENT(DeallocateAssetWithRemappingWithOldMetadataEvent) {
 		ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, deallocate_dependency, 256);
 
 		// Deallocate the asset and then randomize it (already done in the Deallocate function)
+		// The function already handles the case when it fails with an error message
 		bool success = DeallocateAsset(editor_state, data->old_metadata, data->type, true, &deallocate_dependency);
-		if (!success) {
-			Stream<wchar_t> target_file = GetAssetFile(data->old_metadata, data->type);
-			Stream<char> asset_name = GetAssetName(data->old_metadata, data->type);
-			const char* type_string = ConvertAssetTypeString(data->type);
-
-			ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
-			if (target_file.size > 0) {
-				FormatString(console_message, "Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", asset_name, type_string, target_file);
-			}
-			else {
-				FormatString(console_message, "Failed to unload asset {#}, type {#} or assets that depend on it.", asset_name, type_string);
-			}
-			EditorSetConsoleError(console_message);
-		}
-		else {
+		if (success) {
 			FromDeallocateAssetDependencyToUpdateAssetToComponentElement(&update_assets, deallocate_dependency);
 
 			// Update the link components
@@ -186,10 +160,7 @@ static EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 
 						// Deallocate the asset and then randomize it (already done in the Deallocate function)
 						bool deallocate_success = DeallocateAsset(editor_state, metadata, current_type, true, &external_dependencies);
-						if (!deallocate_success) {
-							fail("Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", "Failed to unload asset {#}, type {#} or assets that depend on it.");
-						}
-						else {
+						if (deallocate_success) {
 							ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, internal_dependencies, 256);
 							GetAssetDependencies(metadata, current_type, &internal_dependencies);
 
@@ -1129,13 +1100,7 @@ static EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 								ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, deallocate_dependencies, 512);
 								ECS_STACK_CAPACITY_STREAM(CreateAssetInternalDependenciesElement, create_dependencies, 512);
 
-								bool deallocate_success = DeallocateAsset(editor_state, metadata, asset_type, true, &deallocate_dependencies);
-								if (!deallocate_success) {
-									ECS_STACK_CAPACITY_STREAM(char, asset_string, 512);
-									AssetToString(metadata, asset_type, asset_string);
-									ECS_FORMAT_TEMP_STRING(console_message, "Failed to deallocate asset {#}.", asset_string);
-									EditorSetConsoleError(console_message);
-								}
+								DeallocateAsset(editor_state, metadata, asset_type, true, &deallocate_dependencies);
 								FromDeallocateAssetDependencyToUpdateAssetToComponentElement(&update_elements, deallocate_dependencies);
 
 								bool internal_success = CreateAssetInternalDependencies(editor_state, file_metadata, asset_type, &create_dependencies);

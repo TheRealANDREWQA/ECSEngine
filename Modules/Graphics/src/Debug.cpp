@@ -14,6 +14,8 @@
 struct Iterator : IteratorInterface<const Entity> {
 	ECS_INLINE Iterator(const GraphicsDebugData* _data) : data(_data), group_index(0), stream_index(0), is_unbounded(true), IteratorInterface<const Entity>(0) {}
 	
+	ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(Iterator);
+
 	const Entity* GetImpl() override {
 		if (group_index >= data->groups.size) {
 			return nullptr;

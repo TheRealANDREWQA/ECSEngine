@@ -602,7 +602,7 @@ namespace ECSEngine {
 				remaining_count = deck->size - deck->chunk_size * chunk_index - stream_index;
 			}
 
-			ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(IteratorTemplate);
+			ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(IteratorTemplate);
 
 		protected:
 			ValueType* GetImpl() override {

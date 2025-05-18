@@ -14,15 +14,12 @@ namespace ECSEngine {
 
 	MultipoolAllocator::MultipoolAllocator(void* buffer, void* block_range_buffer, size_t size, size_t pool_count)
 		: AllocatorBase(ECS_ALLOCATOR_MULTIPOOL), m_buffer((unsigned char*)buffer), m_size(size) {
-		// Determine the power of two factor necessary
-		size_t addressable_range = ECS_GB * 4;
+		// Determine the power of two factor necessary, since we want the size to be a UINT
 		m_power_of_two_factor = 0;
-		while (addressable_range < size) {
-			addressable_range <<= 1;
+		while (size > UINT32_MAX) {
+			size >>= 1;
 			m_power_of_two_factor++;
 		}
-		// We need to cap the size according to the power of two size
-		size >>= m_power_of_two_factor;
 
 		m_range = BlockRange((unsigned int*)block_range_buffer, pool_count, size);
 	}

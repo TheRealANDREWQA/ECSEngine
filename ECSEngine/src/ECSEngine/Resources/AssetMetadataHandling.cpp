@@ -643,14 +643,36 @@ namespace ECSEngine {
 
 	bool IsMeshFromMetadataLoaded(const ResourceManager* resource_manager, const MeshMetadata* metadata, Stream<wchar_t> mount_point)
 	{
-		return AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_MESH, mount_point).buffer != nullptr;
+		return IsAssetPointerValid(AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_MESH, mount_point).buffer);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool IsMeshFromMetadataLoadedAndAssign(const ResourceManager* resource_manager, MeshMetadata* metadata, Stream<wchar_t> mount_point)
+	{
+		void* resource_pointer = AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_MESH, mount_point).buffer;
+		if (metadata->Pointer() != resource_pointer) {
+			*metadata->PtrToPointer() = resource_pointer;
+		}
+		return IsAssetPointerValid(resource_pointer);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
 	bool IsTextureFromMetadataLoaded(const ResourceManager* resource_manager, const TextureMetadata* metadata, Stream<wchar_t> mount_point)
 	{
-		return AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_TEXTURE, mount_point).buffer != nullptr;
+		return IsAssetPointerValid(AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_TEXTURE, mount_point).buffer);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool IsTextureFromMetadataLoadedAndAssign(const ResourceManager* resource_manager, TextureMetadata* metadata, Stream<wchar_t> mount_point)
+	{
+		void* resource_pointer = AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_TEXTURE, mount_point).buffer;
+		if (metadata->Pointer() != resource_pointer) {
+			*metadata->PtrToPointer() = resource_pointer;
+		}
+		return IsAssetPointerValid(resource_pointer);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -661,7 +683,7 @@ namespace ECSEngine {
 			return metadata->sampler.Interface() != nullptr;
 		}
 		else {
-			return (size_t)metadata->sampler.Interface() >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
+			return IsAssetPointerValid(metadata->sampler.Interface());
 		}
 	}
 
@@ -669,7 +691,18 @@ namespace ECSEngine {
 
 	bool IsShaderFromMetadataLoaded(const ResourceManager* resource_manager, const ShaderMetadata* metadata, Stream<wchar_t> mount_point)
 	{
-		return AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_SHADER, mount_point).buffer != nullptr;
+		return IsAssetPointerValid(AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_SHADER, mount_point).buffer);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool IsShaderFromMetadataLoadedAndAssign(const ResourceManager* resource_manager, ShaderMetadata* metadata, Stream<wchar_t> mount_point)
+	{
+		void* resource_pointer = AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_SHADER, mount_point).buffer;
+		if (metadata->Pointer() != resource_pointer) {
+			*metadata->PtrToPointer() = resource_pointer;
+		}
+		return IsAssetPointerValid(resource_pointer);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -680,7 +713,7 @@ namespace ECSEngine {
 			return metadata->material_pointer != nullptr;
 		}
 		else {
-			return (size_t)metadata->material_pointer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
+			return IsAssetPointerValid(metadata->material_pointer);
 		}
 	}
 
@@ -879,7 +912,18 @@ namespace ECSEngine {
 
 	bool IsMiscFromMetadataLoaded(const ResourceManager* resource_manager, const MiscAsset* metadata, Stream<wchar_t> mount_point)
 	{
-		return AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_MISC, mount_point).buffer != nullptr;
+		return IsAssetPointerValid(AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_MISC, mount_point).buffer);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool IsMiscFromMetadataLoadedAndAssign(const ResourceManager* resource_manager, MiscAsset* metadata, Stream<wchar_t> mount_point)
+	{
+		Stream<void> resolved_asset = AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_MISC, mount_point);
+		if (metadata->data.data != resolved_asset) {
+			metadata->data.data = resolved_asset;
+		}
+		return IsAssetPointerValid(resolved_asset.buffer);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -899,6 +943,29 @@ namespace ECSEngine {
 			return IsMaterialFromMetadataLoaded((const MaterialAsset*)metadata, randomized_asset);
 		case ECS_ASSET_MISC:
 			return IsMiscFromMetadataLoaded(resource_manager, (const MiscAsset*)metadata, mount_point);
+		default:
+			ECS_ASSERT(false, "Invalid asset type");
+		}
+		return false;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool IsAssetFromMetadataLoadedAndAssign(const ResourceManager* resource_manager, void* metadata, ECS_ASSET_TYPE type, Stream<wchar_t> mount_point, bool randomized_asset)
+	{
+		switch (type) {
+		case ECS_ASSET_MESH:
+			return IsMeshFromMetadataLoadedAndAssign(resource_manager, (MeshMetadata*)metadata, mount_point);
+		case ECS_ASSET_TEXTURE:
+			return IsTextureFromMetadataLoadedAndAssign(resource_manager, (TextureMetadata*)metadata, mount_point);
+		case ECS_ASSET_GPU_SAMPLER:
+			return IsGPUSamplerFromMetadataLoaded((const GPUSamplerMetadata*)metadata, randomized_asset);
+		case ECS_ASSET_SHADER:
+			return IsShaderFromMetadataLoadedAndAssign(resource_manager, (ShaderMetadata*)metadata, mount_point);
+		case ECS_ASSET_MATERIAL:
+			return IsMaterialFromMetadataLoaded((const MaterialAsset*)metadata, randomized_asset);
+		case ECS_ASSET_MISC:
+			return IsMiscFromMetadataLoadedAndAssign(resource_manager, (MiscAsset*)metadata, mount_point);
 		default:
 			ECS_ASSERT(false, "Invalid asset type");
 		}

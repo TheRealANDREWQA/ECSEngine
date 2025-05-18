@@ -487,6 +487,8 @@ namespace ECSEngine {
 		struct Iterator : IteratorInterface<ValueType> {
 			ECS_INLINE Iterator(ContainerType* container) : container(*container), index(0), IteratorInterface<ValueType>(container->size) {}
 
+			ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(Iterator);
+
 		protected:
 			ValueType* GetImpl() override {
 				if (index >= size) {

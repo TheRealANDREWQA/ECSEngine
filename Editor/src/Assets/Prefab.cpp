@@ -195,7 +195,7 @@ void TickPrefabFileChange(EditorState* editor_state) {
 						
 						// We need a large allocator size since the components might have large allocator sizes
 						GlobalMemoryManager temporary_global_manager;
-						CreateGlobalMemoryManager(&temporary_global_manager, ECS_MB * 500, ECS_KB * 4, ECS_GB);
+						CreateGlobalMemoryManager(&temporary_global_manager, ECS_GB * 32, ECS_KB * 4, ECS_GB * 64);
 						auto temporary_manager_deallocate = StackScope([&]() {
 							temporary_global_manager.Free();
 						});
@@ -205,8 +205,8 @@ void TickPrefabFileChange(EditorState* editor_state) {
 						AssetDatabaseReference previous_data_asset_reference(editor_state->asset_database, &temporary_global_manager);
 						AssetDatabaseReference new_data_asset_reference(editor_state->asset_database, &temporary_global_manager);
 
-						CreateEntityManagerWithPool(&previous_data_manager, ECS_MB * 200, ECS_KB * 4, ECS_MB * 400, 4, &temporary_global_manager);
-						CreateEntityManagerWithPool(&new_data_manager, ECS_MB * 200, ECS_KB * 4, ECS_MB * 400, 4, &temporary_global_manager);
+						CreateEntityManagerWithPool(&previous_data_manager, ECS_GB * 15, ECS_KB * 4, ECS_GB * 31, 4, &temporary_global_manager);
+						CreateEntityManagerWithPool(&new_data_manager, ECS_GB * 15, ECS_KB * 4, ECS_GB * 31, 4, &temporary_global_manager);
 
 						// This can be reused among the 2 loads
 						ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);

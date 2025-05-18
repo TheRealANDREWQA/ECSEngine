@@ -26,6 +26,8 @@ namespace ECSEngine {
 			ECS_INLINE ChildIterator() : IteratorInterface<Entity>(0), child_node_index(0) {}
 			ECS_INLINE ChildIterator(const Node* node) : IteratorInterface<Entity>(node->child_count), child_nodes(node->ChildrenStream()), child_node_index(0) {}
 
+			ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(ChildIterator);
+
 			virtual bool IsContiguous() const override {
 				// The nodes are contiguous, but not the entities
 				return false;
@@ -44,6 +46,10 @@ namespace ECSEngine {
 			}
 
 			virtual Entity* GetImpl() override {
+				if (child_node_index >= child_nodes.size) {
+					return nullptr;
+				}
+
 				return &child_nodes[child_node_index++]->entity;
 			}
 
@@ -60,6 +66,8 @@ namespace ECSEngine {
 
 			ECS_INLINE NestedChildIterator() : IteratorInterface<Entity>(0), level_index(0), is_unbounded(true) {}
 			NestedChildIterator(Node* node);
+
+			ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(NestedChildIterator);
 
 			virtual bool IsContiguous() const override {
 				return false;
