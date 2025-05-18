@@ -22,7 +22,7 @@ static ECS_THREAD_TASK(CameraController) {
 				world->mouse,
 				world->keyboard,
 				5.0f,
-				5.0f,
+				15.0f,
 				world->delta_time,
 				camera->value.translation,
 				camera->value.rotation
