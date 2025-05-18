@@ -1108,6 +1108,22 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 			dependent_assets->buffer[previous_dependent_assets_size].new_pointer = GetAssetFromMetadata(metadata, type);
 		}
 	}
+	else {
+		// Emit an error
+		Stream<wchar_t> target_file = GetAssetFile(metadata, type);
+		Stream<char> asset_name = GetAssetName(metadata, type);
+		const char* type_string = ConvertAssetTypeString(type);
+
+		ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
+		if (target_file.size > 0) {
+			FormatString(console_message, "Failed to deallocate asset {#}, type {#} and target file {#} or assets that depend on it.", asset_name, type_string, target_file);
+		}
+		else {
+			FormatString(console_message, "Failed to deallocate asset {#}, type {#} or assets that depend on it.", asset_name, type_string);
+		}
+		EditorSetConsoleError(console_message);
+	}
+
 	return success;
 }
 
@@ -2281,8 +2297,10 @@ bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 				// Get the reference count - if it is 1, it is maintained by this asset and will be removed
 				unsigned int current_reference_count = editor_state->asset_database->GetReferenceCount(dependencies[index].handle, dependencies[index].type);
 				if (current_reference_count == 1) {
-					// The asset is already deallocated
-					EvictAssetFromDatabase(editor_state, dependencies[index].handle, dependencies[index].type);
+					// Remove the asset altogether
+					// This will print an error message inside, no need to output another one. Use the variant with handle
+					// Which handles the dependencies recursively
+					RemoveAsset(editor_state, dependencies[index].handle, dependencies[index].type);
 				}
 				else {
 					// We need to decrement the reference count

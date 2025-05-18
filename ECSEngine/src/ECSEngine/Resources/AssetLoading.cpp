@@ -91,7 +91,7 @@ namespace ECSEngine {
 
 		// Returns true if the handle was successfully loaded
 		template<typename StreamType>
-		bool FindIndex(StreamType stream, unsigned int handle, ECS_ASSET_TYPE type) const {
+		bool ExistsIndex(StreamType stream, unsigned int handle, ECS_ASSET_TYPE type) const {
 			for (size_t index = 0; index < stream.size; index++) {
 				size_t subindex = SearchBytes(stream[index].different_handles.buffer, stream[index].different_handles.size, handle, sizeof(handle));
 				if (subindex != -1) {
@@ -107,16 +107,14 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// Returns the index inside the textures stream where the given handle is located
-		// It returns -1 if the slot could not be loaded/processed
-		ECS_INLINE unsigned int FindTexture(unsigned int handle) const {
-			return FindIndex(textures, handle, ECS_ASSET_TEXTURE);
+		// Returns true if the texture for that handle is loaded successfully, else false
+		ECS_INLINE bool ExistsTexture(unsigned int handle) const {
+			return ExistsIndex(textures, handle, ECS_ASSET_TEXTURE);
 		}
 
-		// Returns the index inside the shaders stream where the given handle is located
-		// It returns -1 if the slot could not be loaded/processed
-		ECS_INLINE unsigned int FindShader(unsigned int handle) const {
-			return FindIndex(shaders, handle, ECS_ASSET_SHADER);
+		// Returns true if the shader for that handle is loaded successfully, else false
+		ECS_INLINE bool ExistsShader(unsigned int handle) const {
+			return ExistsIndex(shaders, handle, ECS_ASSET_SHADER);
 		}
 
 		GlobalMemoryManager* global_managers;
@@ -767,13 +765,13 @@ namespace ECSEngine {
 
 				if (is_valid) {
 					// Check to see that the corresponding shaders and textures have been loaded
-					bool exists_pixel_shader = data->FindShader(material_asset->pixel_shader_handle);
+					bool exists_pixel_shader = data->ExistsShader(material_asset->pixel_shader_handle);
 					if (!exists_pixel_shader) {
 						fail(index, true);
 						continue;
 					}
 
-					bool exists_vertex_shader = data->FindShader(material_asset->vertex_shader_handle);
+					bool exists_vertex_shader = data->ExistsShader(material_asset->vertex_shader_handle);
 					if (!exists_vertex_shader) {
 						fail(index, true);
 						continue;
@@ -784,7 +782,7 @@ namespace ECSEngine {
 					size_t subindex = 0;
 					for (; subindex < combined_textures.size; subindex++) {
 						if (combined_textures[subindex].metadata_handle != -1) {
-							bool exists_texture = data->FindTexture(combined_textures[subindex].metadata_handle);
+							bool exists_texture = data->ExistsTexture(combined_textures[subindex].metadata_handle);
 							if (!exists_texture) {
 								fail(index, true);
 								texture_failure = true;
@@ -914,7 +912,11 @@ namespace ECSEngine {
 		// If they do, we can skip them
 		auto remove_existing_assets = [&](Stream<AssetDatabaseSameTargetAsset>& elements, ECS_ASSET_TYPE type) {
 			for (size_t index = 0; index < elements.size; index++) {
-				if (IsAssetFromMetadataLoaded(resource_manager, database->GetAssetConst(elements[index].handle, type), type, load_info->mount_point)) {
+				// Use the assign overload such that any discrepancies between the resource manager
+				// And the asset database are resolved here, otherwise, later on in the dependency
+				// Resolve of assets that have dependencies, they can fail because it will check the
+				// Asset database only to see if the resource is loaded
+				if (IsAssetFromMetadataLoadedAndAssign(resource_manager, database->GetAsset(elements[index].handle, type), type, load_info->mount_point)) {
 					elements.RemoveSwapBack(index);
 					index--;
 				}

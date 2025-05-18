@@ -6937,7 +6937,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
-				size_t element_byte_size = field->info.byte_size;
+				// For streams, we must change the compare definition to the template argument
+				Stream<char> compare_definition = field->definition;
 
 				// The size is the actual count
 				Stream<void> first_stream;
@@ -6962,7 +6963,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				else if (field->info.stream_type == ReflectionStreamFieldType::BasicTypeArray || IsStreamWithSoA(field->info.stream_type)) {
 					first_stream = GetReflectionFieldStreamVoidEx(field->info, first, false);
 					second_stream = GetReflectionFieldStreamVoidEx(field->info, second, false);
-					element_byte_size = field->info.stream_byte_size;
+
+					// For streams, change the compare definition to that of the template argument, since we are comparing their buffers.
+					if (IsStream(field->info.stream_type)) {
+						compare_definition = ReflectionCustomTypeGetTemplateArgument(compare_definition);
+					}
 				}
 				else {
 					// Invalid type
@@ -6977,7 +6982,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					return true;
 				}
 
-				return CompareReflectionTypeInstances(reflection_manager, field->definition, first_stream.buffer, second_stream.buffer, first_stream.size, options);
+				return CompareReflectionTypeInstances(reflection_manager, compare_definition, first_stream.buffer, second_stream.buffer, first_stream.size, options);
 			}
 			else {
 				// Can forward to the field info variant

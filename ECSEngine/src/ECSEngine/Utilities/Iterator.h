@@ -6,6 +6,11 @@
 
 namespace ECSEngine {
 
+	// This macro will define the appropriate copy constructors and assignment operators. We want
+	// To define the assignment operators such that the vtable pointer gets copied during normal assignments
+#define ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(type) ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(type); \
+														 type(const type& other) : IteratorInterface(0) { memcpy(this, &other, sizeof(*this)); } \
+
 	// Helper structure that provides that allows functions to receive an iterable collection
 	// ValueType must be fully qualified for const types, meaning the const should be added to the template parameter
 	template<typename ValueType>
@@ -15,8 +20,8 @@ namespace ECSEngine {
 
 		// These assignment operators are deleted such that derived classes are forced to defines these
 		// As a memcpy such that they copy the vtable! By default, the assignment operators don't copy
-		// The vtables, which is a bit annoying. The derived classes should use ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS
-		// To define the assignment operators.
+		// The vtables, which is a bit annoying. The derived classes should use ECS_CLASS_MEMCPY_CONSTRUCTOR_AND_ASSIGNMENT_OPERATORS
+		// To define the assignment operators and the constructors.
 		IteratorInterface<ValueType>& operator=(const IteratorInterface<ValueType>& other) = delete;
 		IteratorInterface<ValueType>& operator=(IteratorInterface<ValueType>&& other) = delete;
 
@@ -199,7 +204,7 @@ namespace ECSEngine {
 		ECS_INLINE StreamIterator(ValueType* _buffer, size_t _size, size_t _starting_index) : buffer(_buffer), size(_size), index(_starting_index),
 			IteratorInterface<ValueType>(_starting_index >= _size ? 0 : _size - _starting_index) {}
 
-		ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(StreamIterator<ValueType>);
+		ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(StreamIterator);
 
 	protected:
 		ValueType* GetImpl() override {
@@ -327,7 +332,7 @@ namespace ECSEngine {
 			FinalizeInitialize();
 		}
 
-		ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(StaticCombinedIterator<ValueType>);
+		ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(StaticCombinedIterator);
 
 	protected:
 		IteratorInterface<ValueType>* CreateSubIteratorImpl(AllocatorPolymorphic allocator, size_t count) override {

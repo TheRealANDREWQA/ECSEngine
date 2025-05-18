@@ -1026,7 +1026,7 @@ namespace ECSEngine {
 		struct ValueIterator : IteratorInterface<ValueType> {
 			ECS_INLINE ValueIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<ValueType>(table->GetCount()) {}
 			
-			ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(ValueIterator);
+			ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(ValueIterator);
 
 			ValueType* GetImpl() override {
 				unsigned int extended_capacity = table.GetExtendedCapacity();
@@ -1066,7 +1066,7 @@ namespace ECSEngine {
 		struct IdentifierIterator : IteratorInterface<IdentifierType> {
 			ECS_INLINE IdentifierIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<IdentifierType>(table->GetCount()) {}
 
-			ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(IdentifierIterator);
+			ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(IdentifierIterator);
 
 			IdentifierType* GetImpl() override {
 				unsigned int extended_capacity = table.GetExtendedCapacity();
@@ -1106,7 +1106,7 @@ namespace ECSEngine {
 		struct PairIterator : IteratorInterface<PairType> {
 			ECS_INLINE PairIterator(HashTableType* table) : table(*table), index(0), IteratorInterface<PairType>(table->GetCount()) {}
 
-			ECS_CLASS_MEMCPY_ASSIGNMENT_OPERATORS(PairIterator);
+			ECS_ITERATOR_COPY_AND_ASSIGNMENT_OPERATORS(PairIterator);
 
 			PairType* GetImpl() override {
 				unsigned int extended_capacity = table.GetExtendedCapacity();
