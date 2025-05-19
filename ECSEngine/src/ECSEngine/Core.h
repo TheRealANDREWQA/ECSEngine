@@ -83,8 +83,18 @@ namespace ECSEngine {
 	}
 
 	template<typename T>
+	ECS_INLINE constexpr T min(T a, T b, T c) {
+		return min(a, min(b, c));
+	}
+
+	template<typename T>
 	ECS_INLINE constexpr T max(T a, T b) {
 		return a > b ? a : b;
+	}
+
+	template<typename T>
+	ECS_INLINE constexpr T max(T a, T b, T c) {
+		return max(a, max(b, c));
 	}
 
 	template<typename T>

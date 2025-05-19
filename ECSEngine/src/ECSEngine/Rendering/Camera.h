@@ -428,14 +428,22 @@ namespace ECSEngine {
 	template<typename CameraType>
 	ECSENGINE_API int2 PositionToViewportTexels(const CameraType* camera, uint2 viewport_size, float3 position);
 
-	// Returns the translation such that the camera can see the object from a given fixed distance
-	// Right on the given point
+	// Returns the translation such that the camera can see the object with its current rotation for a specified
+	// Screen coverage. The screen_fill_factor should be a value between [0, 1] which specifies the screen coverage:
+	// 0 means it is invisible, 0.5 it occupies half the screen, 1 the entire screen. This is just an approximation,
+	// Does not guarantee exact percentages, but it is good enough in practice.
 	template<typename CameraType>
-	ECSENGINE_API float3 FocusCameraOnObject(const CameraType* camera, float3 object_translation, float distance);
+	ECSENGINE_API float3 FocusCameraOnObjectViewSpace(
+		const CameraType* camera,
+		const AABBScalar& world_space_aabb,
+		float screen_fill_factor
+	);
 
-	// Returns the translation such that the camera can see the object with the proportion on the screen specified
-	// Only one of the X or Y proportion can be active at a time. This is helpful if you wanna focus on objects
-	// Regardless of their orientation and size. If the proportion cannot be reached, then it returns Splat(FLT_MAX)
+	// Returns the translation such that the camera can see the object with its current rotation for a specified
+	// Screen coverage. The screen_fill_factor should be a value between [0, 1] which specifies the screen coverage:
+	// 0 means it is invisible, 0.5 it occupies half the screen, 1 the entire screen. This is just an approximation,
+	// Does not guarantee exact percentages, but it is good enough in practice.
+	// Transforms the object space AABB into world space and then calls the other overload
 	template<typename CameraType>
 	ECSENGINE_API float3 FocusCameraOnObjectViewSpace(
 		const CameraType* camera, 
@@ -443,7 +451,7 @@ namespace ECSEngine {
 		QuaternionScalar object_rotation, 
 		float3 object_scale,
 		AABBScalar object_bounds,
-		float2 view_space_proportion
+		float screen_fill_factor
 	);
 
 	ECSENGINE_API float2 GetCameraFrustumPlaneDimensions(float vertical_fov, float aspect_ratio, float z_depth);
