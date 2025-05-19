@@ -372,11 +372,8 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 							// If we have at least one AABB, then focus on it
 							float3 camera_position = FocusCameraOnObjectViewSpace(
 								&scene_camera,
-								float3::Splat(0.0f),
-								QuaternionIdentityScalar(),
-								float3::Splat(1.0f),
 								selection_bounds,
-								{ 1.25f, 0.0f }
+								0.6f
 							);
 							if (camera_position != float3::Splat(FLT_MAX)) {
 								float3 displacement = camera_position - scene_camera.translation;

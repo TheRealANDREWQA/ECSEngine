@@ -1393,6 +1393,24 @@ namespace ECSEngine {
 	}
 
 	template<typename BasicType>
+	ECS_INLINE typename BasicType::T BasicTypeMax(BasicType element) {
+		typename BasicType::T max_value = max(element[0], element[1]);
+		for (size_t index = 2; index < BasicType::Count(); index++) {
+			max_value = max(max_value, element[index]);
+		}
+		return max_value;
+	}
+
+	template<typename BasicType>
+	ECS_INLINE typename BasicType::T BasicTypeMin(BasicType element) {
+		typename BasicType::T min_value = max(element[0], element[1]);
+		for (size_t index = 2; index < BasicType::Count(); index++) {
+			min_value = min(min_value, element[index]);
+		}
+		return min_value;
+	}
+
+	template<typename BasicType>
 	ECS_INLINE BasicType BasicTypeFloatCompare(BasicType a, BasicType b, BasicType epsilon) {
 		return BasicTypeLogicAnd(BasicTypeAction<BasicType>(AbsoluteDifference(a, b), epsilon, [](auto difference_value, auto epsilon_value) {
 			return difference_value < epsilon_value;
