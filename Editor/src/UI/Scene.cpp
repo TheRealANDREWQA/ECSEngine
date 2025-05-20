@@ -236,8 +236,8 @@ static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox
 	return false;
 }
 
-// For increase/decrease speed
-static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_index) {
+// Returns true if a value was changed (the camera's translation or rotation) and implicitly the sandbox is rendered, else false
+static bool HandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_index) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// Check the speed modifiers - since the camera translation will write the sandbox file once
 	// We can just modify the camera wasd speed here and it will get updated as well
@@ -295,23 +295,28 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	);
 
 	// Change the frame pacing to one a little faster
+	bool was_camera_changed = false;
 	editor_state->ui_system->SetFramePacing(ECS_UI_FRAME_PACING_HIGH);
 	if (delta != float3::Splat(0.0f)) {
 		TranslateSandboxCamera(editor_state, sandbox_index, delta, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		// Re-render the sandbox as well and increase the frame pacing
 		editor_state->ui_system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		was_camera_changed = true;
 	}
 	else if (camera_was_rotated) {
 		// Render the sandbox and save the editor file
 		editor_state->ui_system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		SaveEditorSandboxFile(editor_state);
+		was_camera_changed = true;
 	}
 	else if (changed_speed) {
 		// We need to write the editor sandbox file in order to preserve this
 		SaveEditorSandboxFile(editor_state);
 	}
+
+	return was_camera_changed;
 }
 
 static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_index) {
@@ -794,15 +799,17 @@ static void SceneRotationAction(ActionData* action_data) {
 		data->is_disabled = sandbox->transform_display_axes || sandbox->is_camera_wasd_movement;
 		if (!data->is_disabled) {
 			mouse->EnableRawInput();
+			mouse->SetCursorVisibility(false);
 			// Make the pacing instant such that we won't have a big frame difference
 			// That can cause the camera to snap
 			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		}
 	}
-	
+
 	if (!data->is_disabled) {
 		if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
 			mouse->DisableRawInput();
+			mouse->SetCursorVisibility(true);
 		}
 		else if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
 			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
@@ -810,10 +817,13 @@ static void SceneRotationAction(ActionData* action_data) {
 
 
 		if (mouse->IsHeld(ECS_MOUSE_RIGHT)) {
-			bool was_rotated = HandleCameraRotation(editor_state, data->sandbox_index, false, false);
-			if (was_rotated) {
+			// This was changed to allow for movement as well, since it makes navigating quite a bit easier
+			HandleCameraWASDMovement(editor_state, data->sandbox_index);
+			
+			//bool was_rotated = HandleCameraRotation(editor_state, data->sandbox_index, false, false);
+			/*if (was_rotated) {
 				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
-			}
+			}*/
 		}
 	}
 }

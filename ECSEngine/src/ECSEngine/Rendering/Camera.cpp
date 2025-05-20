@@ -288,10 +288,6 @@ namespace ECSEngine {
 		//const float min_distance = 0.0f;
 		//const float max_distance = 10000.0f;
 
-		//// TODO: Replace this with the formula for computing the distance of a camera
-		//// Check https://discussions.unity.com/t/fit-object-exactly-into-perspective-cameras-field-of-view-focus-the-object/677696/4.
-		//// https://stackoverflow.com/questions/71215446/how-to-focus-a-perspectie-or-orthographic-camera-on-gameobjects.
-
 		//const float BINARY_SEARCH_EPSILON = 0.25f;
 		//const float LINEAR_SEARCH_EPSILON = 0.1f;
 		//const float LINEAR_SEARCH_STEP_SIZE = 0.001f;
