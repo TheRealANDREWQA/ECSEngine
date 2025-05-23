@@ -4175,8 +4175,7 @@ namespace ECSEngine {
 					size_t current_offset = SearchBytes(
 						snapshot.interface_pointers.buffer + snapshot_index + 1,
 						snapshot.interface_pointers.size - snapshot_index - 1,
-						(size_t)interface_pointer,
-						sizeof(interface_pointer)
+						(size_t)interface_pointer
 					);
 					if (current_offset != -1) {
 						snapshot_index += current_offset + 1;
@@ -4209,12 +4208,12 @@ namespace ECSEngine {
 		if (mismatch_string == nullptr) {
 			// Now check for all the old resources to see if they have been accidentally removed
 			// If there is a false value then it means that an old resource was removed
-			size_t first_missing = SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
+			size_t first_missing = SearchBytes(was_found.buffer, snapshot.interface_pointers.size, false);
 			return first_missing == -1 && size_success;
 		}
 		else {
 			bool is_missing = false;
-			size_t missing = SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
+			size_t missing = SearchBytes(was_found.buffer, snapshot.interface_pointers.size, false);
 			while (missing < snapshot.interface_pointers.size) {
 				is_missing = true;
 				Stream<char> resource_type = GraphicsResourceTypeString(snapshot.types[missing]);
@@ -4222,7 +4221,7 @@ namespace ECSEngine {
 				DebugLocationString(snapshot.debug_infos[missing], &location_string);
 				FormatString(*mismatch_string, "Graphics resource with type {#} was removed in between snapshots. {#}\n", resource_type, location_string);
 
-				missing += SearchBytes(was_found.buffer + missing, snapshot.interface_pointers.size - missing, (size_t)false, sizeof(bool));
+				missing += SearchBytes(was_found.buffer + missing, snapshot.interface_pointers.size - missing, false);
 			}
 
 			return !is_missing && size_success;

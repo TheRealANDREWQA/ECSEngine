@@ -1302,8 +1302,7 @@ namespace ECSEngine {
 				size_t valid_index = SearchBytes(
 					randomized_values->buffer,
 					randomized_values->size,
-					randomized_value,
-					sizeof(randomized_value)
+					randomized_value
 				);
 
 				ECS_ASSERT(valid_index != -1);

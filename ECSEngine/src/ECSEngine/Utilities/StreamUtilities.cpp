@@ -163,7 +163,7 @@ namespace ECSEngine {
 				container_size--;
 
 				// Search the current container size in the following entries
-				size_t remapped_indices_index = SearchBytes(remapped_indices.buffer + index + 1, remapped_indices.size - index - 1, container_size, sizeof(IntegerType));
+				size_t remapped_indices_index = SearchBytes(remapped_indices.buffer + index + 1, remapped_indices.size - index - 1, (IntegerType)container_size);
 				if (remapped_indices_index != -1) {
 					remapped_indices[remapped_indices_index] = current_index;
 				}

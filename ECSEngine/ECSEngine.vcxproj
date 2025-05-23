@@ -642,7 +642,10 @@
     <ClCompile Include="src\ECSEngine\Rendering\Camera.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
-    <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\Rendering\SampleTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\TextureOperations.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\TransformHelpers.cpp" />
@@ -764,7 +767,12 @@
     <ClCompile Include="src\ECSEngine\Utilities\Timer.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Tokenize.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\TransformTool.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Utilities.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Utilities.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+      <SupportJustMyCode Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</SupportJustMyCode>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\Includes\ecspch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>

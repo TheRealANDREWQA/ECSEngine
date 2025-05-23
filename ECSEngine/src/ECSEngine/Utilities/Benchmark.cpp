@@ -42,7 +42,7 @@ namespace ECSEngine {
 
         //	while (benchmark_state.Run()) {
         //		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
-        //		size_t indexu = SearchBytes(current_buffer.buffer, current_buffer.size / sizeof(ptr), (size_t)ptr, sizeof(ptr));
+        //		size_t indexu = SearchBytes(current_buffer.buffer, current_buffer.size / sizeof(ptr), (size_t)ptr);
         //		benchmark_state.DoNotOptimize(indexu);
         //	}
 

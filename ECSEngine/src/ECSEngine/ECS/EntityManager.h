@@ -1361,7 +1361,7 @@ namespace ECSEngine {
 
 		// Verifies if a global component was already allocated at that slot
 		ECS_INLINE bool ExistsGlobalComponent(Component component) const {
-			return SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component)) != -1;
+			return SearchBytes(m_global_components, m_global_component_count, component.value) != -1;
 		}
 
 		// Verifies if a global component was already allocated at that slot

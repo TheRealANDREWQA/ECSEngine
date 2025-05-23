@@ -128,7 +128,7 @@ namespace ECSEngine {
 		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 		unsigned int handle = database->FindAsset(name, file, type);
 		if (handle != -1) {
-			return SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(unsigned int));
+			return SearchBytes(streams[type].buffer, streams[type].size, handle);
 		}
 		return -1;
 	}
@@ -140,7 +140,7 @@ namespace ECSEngine {
 		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 		unsigned int handle = database->FindAsset(name, file, type);
 		if (handle != -1) {
-			unsigned int main_index = (unsigned int)SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(unsigned int));
+			unsigned int main_index = (unsigned int)SearchBytes(streams[type].buffer, streams[type].size, handle);
 			if (main_index != -1) {
 				return { main_index , type };
 			}
@@ -359,13 +359,13 @@ namespace ECSEngine {
 					had_duplicates = false;
 					reference_count[index] = 1;
 					unsigned int offset = index + 1;
-					unsigned int current_find = SearchBytes(stream_copy.buffer + offset, stream_copy.size - offset, stream_copy[index], sizeof(stream_copy[index]));
+					unsigned int current_find = SearchBytes(stream_copy.buffer + offset, stream_copy.size - offset, stream_copy[index]);
 					while (current_find != -1) {
 						had_duplicates = true;
 						reference_count[index]++;
 						stream_copy.RemoveSwapBack(current_find + offset);
 						offset += current_find;
-						current_find = SearchBytes(stream_copy.buffer + offset, stream_copy.size - offset, stream_copy[index], sizeof(stream_copy[index]));
+						current_find = SearchBytes(stream_copy.buffer + offset, stream_copy.size - offset, stream_copy[index]);
 					}
 				}
 				// If the last value didn't have duplicates, then we need to initialize its reference count to 1
@@ -495,8 +495,7 @@ namespace ECSEngine {
 						unsigned int existing_index = SearchBytes(
 							asset_streams[current_type].buffer,
 							asset_streams[current_type].size,
-							this_database_handle,
-							sizeof(unsigned int)
+							this_database_handle
 						);
 						ECS_ASSERT(existing_index != -1);
 						asset_streams[current_type].RemoveSwapBack(existing_index);

@@ -296,9 +296,8 @@ namespace ECSEngine {
 	// It uses SearchBytes to locate the element
 	template<typename CapacityStream>
 	void StreamAddUniqueSearchBytes(CapacityStream& base, CapacityStream additions) {
-		size_t element_byte_size = additions.MemoryOf(1);
 		for (unsigned int index = 0; index < additions.size; index++) {
-			size_t existing_index = SearchBytes(base.buffer, base.size, *(size_t*)(&additions[index]), element_byte_size);
+			size_t existing_index = SearchBytes(base.buffer, base.size, additions[index]);
 			if (existing_index == -1) {
 				base.AddAssert(additions[index]);
 			}

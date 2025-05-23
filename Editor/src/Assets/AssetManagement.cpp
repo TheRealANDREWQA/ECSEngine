@@ -1601,8 +1601,7 @@ Stream<Stream<unsigned int>> GetOutOfDateAssetsImpl(EditorState* editor_state, A
 				unsigned int existing_index = SearchBytes(
 					current_handles[current_type].buffer,
 					current_handles[current_type].size,
-					handle,
-					sizeof(unsigned int)
+					handle
 				);
 				if (existing_index == -1) {
 					ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
@@ -1612,8 +1611,7 @@ Stream<Stream<unsigned int>> GetOutOfDateAssetsImpl(EditorState* editor_state, A
 						bool is_out_of_date = SearchBytes(
 							current_handles[dependencies[subindex].type].buffer,
 							current_handles[dependencies[subindex].type].size,
-							dependencies[subindex].handle,
-							sizeof(unsigned int)
+							dependencies[subindex].handle
 						) != -1;
 
 						if (is_out_of_date) {

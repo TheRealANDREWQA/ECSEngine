@@ -93,7 +93,7 @@ namespace ECSEngine {
 		template<typename StreamType>
 		bool ExistsIndex(StreamType stream, unsigned int handle, ECS_ASSET_TYPE type) const {
 			for (size_t index = 0; index < stream.size; index++) {
-				size_t subindex = SearchBytes(stream[index].different_handles.buffer, stream[index].different_handles.size, handle, sizeof(handle));
+				size_t subindex = SearchBytes(stream[index].different_handles.buffer, stream[index].different_handles.size, handle);
 				if (subindex != -1) {
 					return stream[index].IsValid();
 				}
