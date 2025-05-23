@@ -1068,7 +1068,7 @@ namespace ECSEngine {
 		typedef T T;
 
 		ECS_INLINE ResizableStream() : buffer(nullptr), allocator({nullptr}), capacity(0), size(0) {}
-		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : buffer(nullptr), capacity(_capacity), size(0) {
+		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : buffer(nullptr), capacity(0), size(0) {
 			Initialize(_allocator, _capacity);
 		}
 
@@ -1297,7 +1297,7 @@ namespace ECSEngine {
 				void* new_buffer = nullptr;
 
 				if (new_capacity != 0) {
-					if (buffer != nullptr && size > 0) {
+					if (buffer != nullptr && capacity > 0) {
 						unsigned int copy_size = size < new_capacity ? size : new_capacity;
 						new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T), debug_info);
 						ECS_ASSERT(new_buffer != nullptr);

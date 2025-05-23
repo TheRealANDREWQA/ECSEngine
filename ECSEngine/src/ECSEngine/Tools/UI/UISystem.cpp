@@ -4434,8 +4434,7 @@ namespace ECSEngine {
 					bool exists = SearchBytes(
 						flattened_textures,
 						total_count,
-						(size_t)texture.Interface(),
-						sizeof(texture.Interface())
+						(size_t)texture.Interface()
 					) != -1;
 					if (exists) {
 						// We need to set the reference count to at least the evict count since it can happen

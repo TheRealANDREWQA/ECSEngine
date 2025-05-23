@@ -205,7 +205,7 @@ namespace ECSEngine {
 			}
 		}
 		else {
-			size_t search_index = SearchBytes(allocation_pointers, count, (size_t)block, sizeof(block));
+			size_t search_index = SearchBytes(allocation_pointers, count, (size_t)block);
 			if (search_index != -1) {
 				void* original_pointer = GetOriginalPointerFromVirtualAllocation(allocation_pointers[search_index]);
 				OS::VirtualDeallocation(original_pointer);
@@ -318,7 +318,7 @@ namespace ECSEngine {
 			}
 		}
 		else {
-			return SearchBytes(allocation_pointers, count, (size_t)block, sizeof(block)) != -1;
+			return SearchBytes(allocation_pointers, count, (size_t)block) != -1;
 		}
 
 		return false;
@@ -433,7 +433,7 @@ namespace ECSEngine {
 		ECS_ASSERT(chunk_size == 0, "MemoryProtectedAllocator: Cannot disable write protection for a particular block in chunked mode");
 
 		// We cannot block directly to the function since we need to get the original pointer
-		size_t search_index = SearchBytes(allocation_pointers, count, (size_t)block, sizeof(block));
+		size_t search_index = SearchBytes(allocation_pointers, count, (size_t)block);
 		if (search_index != -1) {
 			return OS::DisableVirtualWriteProtection(GetOriginalPointerFromVirtualAllocation(allocation_pointers[search_index]));
 		}
@@ -471,7 +471,7 @@ namespace ECSEngine {
 		ECS_ASSERT(chunk_size == 0, "MemoryProtectedAllocator: Cannot enable write protection for a particular block in chunked mode");
 
 		// We cannot block directly to the function since we need to get the original pointer
-		size_t search_index = SearchBytes(allocation_pointers, count, (size_t)block, sizeof(block));
+		size_t search_index = SearchBytes(allocation_pointers, count, (size_t)block);
 		if (search_index != -1) {
 			return OS::EnableVirtualWriteProtection(GetOriginalPointerFromVirtualAllocation(allocation_pointers[search_index]));
 		}

@@ -29,17 +29,17 @@ namespace ECSEngine {
 				// A - used, B - free
 				if (indirection_list_start_index == 0) {
 					// AAAA BBBBBB
-					indirection_index = SearchBytes(indirection_list + size, capacity - size, index, sizeof(index));
+					indirection_index = SearchBytes(indirection_list + size, capacity - size, index);
 					indirection_index = indirection_index == -1 ? -1 : indirection_index + size;
 				}
 				else {
 					if (indirection_list_start_index + size < capacity) {
 						// BBB AAAA BBBB
 						// 2 searches, one before and one after
-						indirection_index = SearchBytes(indirection_list, indirection_list_start_index, index, sizeof(index));
+						indirection_index = SearchBytes(indirection_list, indirection_list_start_index, index);
 						if (indirection_index == -1) {
 							unsigned int offset = indirection_list_start_index + size;
-							indirection_index = SearchBytes(indirection_list + offset, capacity - offset, index, sizeof(index));
+							indirection_index = SearchBytes(indirection_list + offset, capacity - offset, index);
 							indirection_index = indirection_index == -1 ? -1 : indirection_index + offset;
 						}
 					}
@@ -47,20 +47,20 @@ namespace ECSEngine {
 						if (indirection_list_start_index + size == capacity) {
 							// BBBBBB AAAAA
 							// One search
-							indirection_index = SearchBytes(indirection_list, capacity - size, index, sizeof(index));
+							indirection_index = SearchBytes(indirection_list, capacity - size, index);
 						}
 						else {
 							// AA BBBBBB AAA
 							// 1 search in the middle of the wrap around
 							unsigned int offset = indirection_list_start_index + size - capacity;
-							indirection_index = SearchBytes(indirection_list + offset, capacity - size, index, sizeof(index));
+							indirection_index = SearchBytes(indirection_list + offset, capacity - size, index);
 							indirection_index = indirection_index == -1 ? -1 : indirection_index + offset;
 						}
 					}
 				}
 			}
 			else {
-				indirection_index = SearchBytes(indirection_list + size, capacity - size, index, sizeof(index));
+				indirection_index = SearchBytes(indirection_list + size, capacity - size, index);
 				indirection_index = indirection_index == -1 ? -1 : indirection_index + size;
 			}
 
@@ -251,7 +251,7 @@ namespace ECSEngine {
 			if constexpr (!queue_indirection_list) {
 				// Search the value in the occupied portion
 				// Swap to the end and then decrease the size
-				size_t free_list_index = SearchBytes(indirection_list, size, index, sizeof(index));
+				size_t free_list_index = SearchBytes(indirection_list, size, index);
 				ECS_ASSERT(free_list_index != -1);
 				size--;
 				unsigned int replacement = indirection_list[size];
@@ -263,16 +263,16 @@ namespace ECSEngine {
 
 				if (indirection_list_start_index + size < capacity) {
 					// No wrapping
-					free_list_index = SearchBytes(indirection_list + indirection_list_start_index, size, index, sizeof(index));
+					free_list_index = SearchBytes(indirection_list + indirection_list_start_index, size, index);
 					ECS_ASSERT(free_list_index != -1);
 					free_list_index += indirection_list_start_index;
 				}
 				else {
 					// Two checks
 					size_t first_chunk_count = capacity - indirection_list_start_index;
-					free_list_index = SearchBytes(indirection_list + indirection_list_start_index, first_chunk_count, index, sizeof(index));
+					free_list_index = SearchBytes(indirection_list + indirection_list_start_index, first_chunk_count, index);
 					if (free_list_index == -1) {
-						free_list_index = SearchBytes(indirection_list, size - first_chunk_count, index, sizeof(index));
+						free_list_index = SearchBytes(indirection_list, size - first_chunk_count, index);
 						ECS_ASSERT(free_list_index != -1);
 					}
 					else {

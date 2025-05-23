@@ -23,8 +23,7 @@ struct EntitiesUIData {
 		return SearchBytes(
 			virtual_global_component,
 			virtual_global_components_entities.size,
-			component.value,
-			sizeof(component)
+			component.value
 		);
 	}
 

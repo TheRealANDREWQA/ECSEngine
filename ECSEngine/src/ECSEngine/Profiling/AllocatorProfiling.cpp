@@ -142,7 +142,7 @@ namespace ECSEngine {
 
 	size_t AllocatorProfiling::Find(const void* address) const
 	{
-		return SearchBytes(addresses, address_size, (size_t)address, sizeof(address));
+		return SearchBytes(addresses, address_size, (size_t)address);
 	}
 
 	void AllocatorProfiling::Initialize(AllocatorPolymorphic _allocator, unsigned int _entry_capacity)

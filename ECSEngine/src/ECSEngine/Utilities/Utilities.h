@@ -56,13 +56,24 @@ namespace ECSEngine {
 	ECSENGINE_API void swap(void* a, void* b, void* temporary_storage, size_t copy_size);
 
 	template<typename T>
-	ECS_INLINE T IndexTexture(const T* texture_data, size_t row, size_t column, size_t width) {
+	ECS_INLINE const T& IndexTexture(const T* texture_data, size_t row, size_t column, size_t width) {
+		return texture_data[row * width + column];
+	}
+
+	template<typename T>
+	ECS_INLINE T& IndexTexture(T* texture_data, size_t row, size_t column, size_t width) {
 		return texture_data[row * width + column];
 	}
 
 	// This version takes the row byte size instead of the width
 	template<typename T>
-	ECS_INLINE T IndexTextureEx(const T* texture_data, size_t row, size_t column, size_t row_byte_size) {
+	ECS_INLINE const T& IndexTextureEx(const T* texture_data, size_t row, size_t column, size_t row_byte_size) {
+		return *(T*)OffsetPointer(texture_data, row * row_byte_size + column * sizeof(T));
+	}
+
+	// This version takes the row byte size instead of the width
+	template<typename T>
+	ECS_INLINE T& IndexTextureEx(T* texture_data, size_t row, size_t column, size_t row_byte_size) {
 		return *(T*)OffsetPointer(texture_data, row * row_byte_size + column * sizeof(T));
 	}
 
@@ -364,10 +375,25 @@ namespace ECSEngine {
 		}
 	}
 
+	// TODO: Make templates for individual integer types, the IF for the byte size can add quite a bit
+	// Of overhead for repeated loops that call this function.
+
+	// Uses a fast SIMD compare, in this way you don't need to rely on the
+	// compiler to generate for you the SIMD search. Returns -1 if it doesn't
+	// find the value. Only types of 1, 2, 4 or 8 bytes are accepted
+	template<typename IntegerType>
+	ECSENGINE_API size_t SearchBytes(const void* data, size_t element_count, IntegerType value_to_search);
+
 	// Uses a fast SIMD compare, in this way you don't need to rely on the
 	// compiler to generate for you the SIMD search. Returns -1 if it doesn't
 	// find the value. Only types of 1, 2, 4 or 8 bytes are accepted
 	ECSENGINE_API size_t SearchBytes(const void* data, size_t element_count, size_t value_to_search, size_t byte_size);
+
+	// Uses a fast SIMD compare, in this way you don't need to rely on the
+	// compiler to generate for you the SIMD search. Returns -1 if it doesn't
+	// find the value. Only types of 1, 2, 4 or 8 bytes are accepted
+	template<typename IntegerType>
+	ECSENGINE_API size_t SearchBytesReversed(const void* data, size_t element_count, IntegerType value_to_search);
 
 	// Uses a fast SIMD compare, in this way you don't need to rely on the
 	// compiler to generate for you the SIMD search. Returns -1 if it doesn't
@@ -384,8 +410,23 @@ namespace ECSEngine {
 
 	template<typename StreamValue>
 	ECS_INLINE size_t SearchBytes(Stream<StreamValue> stream, StreamValue value_to_search) {
-		static_assert(sizeof(StreamValue) == 1 || sizeof(StreamValue) == 2 || sizeof(StreamValue) == 4 || sizeof(StreamValue) == 8);
-		return SearchBytes(stream.buffer, stream.size, (size_t)value_to_search, sizeof(value_to_search));
+		if constexpr (sizeof(StreamValue) == 1) {
+			return SearchBytes<unsigned char>(stream.buffer, stream.size, (unsigned char)value_to_search);
+		}
+		else if constexpr (sizeof(StreamValue) == 2) {
+			return SearchBytes<unsigned short>(stream.buffer, stream.size, (unsigned short)value_to_search);
+		}
+		else if constexpr (sizeof(StreamValue) == 4) {
+			return SearchBytes<unsigned int>(stream.buffer, stream.size, (unsigned int)value_to_search);
+		}
+		else if constexpr (sizeof(StreamValue) == 8) {
+			return SearchBytes<size_t>(stream.buffer, stream.size, (size_t)value_to_search);
+		}
+		else {
+			static_assert(false, "StreamValue type for SearchBytes must be compatible with a fundamental integer type value");
+		}
+
+		return -1;
 	}
 
 	// If the data size is different from 0 and the data pointer is nullptr, it will only allocate, without copying anything
@@ -767,14 +808,14 @@ namespace ECSEngine {
 				entry_functor(ordered_index, index, group_index);
 				ordered_index++;
 
-				size_t next_entry_index = SearchBytes(group_indices.buffer + index + 1, group_indices.size - index, current_group.x, sizeof(current_group.x));
+				size_t next_entry_index = SearchBytes(group_indices.buffer + index + 1, group_indices.size - index, current_group.x);
 				while (next_entry_index != -1) {
 					current_group.y++;
 					index++;
 					entry_functor(ordered_index, next_entry_index, group_index);
 					ordered_index++;
 				
-					next_entry_index = SearchBytes(group_indices.buffer + next_entry_index + 1, group_indices.size - next_entry_index, current_group.x, sizeof(current_group.x));
+					next_entry_index = SearchBytes(group_indices.buffer + next_entry_index + 1, group_indices.size - next_entry_index, current_group.x);
 				}
 
 				group_functor(group_index, current_group);

@@ -290,7 +290,8 @@ namespace ECSEngine {
 			// Now we need to decrement the the values by one
 			// In order to preserve the right order and for pixels that don't have a match
 			// to return -1
-			for (unsigned int index = 0; index < dimensions.x * dimensions.y; index++) {
+			size_t texel_count = (size_t)dimensions.x * (size_t)dimensions.y;
+			for (size_t index = 0; index < texel_count; index++) {
 				values[index]--;
 			}
 		});
@@ -298,7 +299,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void GetInstancesFromFramebufferFilteredInSelection(
+	static void GetInstancesFromFramebufferFilteredInSelection(
 		unsigned int* texture_data,
 		uint2 start,
 		uint2 dimensions,
@@ -419,14 +420,89 @@ namespace ECSEngine {
 		
 		MappedTexture mapped_values = graphics->MapTexture(staging_texture, ECS_GRAPHICS_MAP_READ);
 		// We need to copy row by row since the texture might have padding in between rows
+
+		// We need to make a copy of these current values, in order to not have cascading updates
+		// That propagate more than they should for the post process step. We don't even have to write
+		// Into values the mapped data, we can write only to the temporary and in the post processing step
+		// The final outputs are written directly.
+		unsigned int* copied_values = (unsigned int*)Malloc(sizeof(values[0]) * texture_dimensions.x * texture_dimensions.y);
+
+		unsigned int* write_copied_values_ptr = copied_values;
 		for (unsigned int index = 0; index < texture_dimensions.y; index++) {
-			memcpy(values, mapped_values.data, sizeof(unsigned int) * texture_dimensions.x);
-			values += texture_dimensions.x;
+			memcpy(write_copied_values_ptr, mapped_values.data, sizeof(unsigned int) * texture_dimensions.x);
+			write_copied_values_ptr += texture_dimensions.x;
 			mapped_values.data = OffsetPointer(mapped_values.data, mapped_values.row_byte_size);
 		}
 
 		graphics->UnmapTexture(staging_texture);
 		staging_texture.Release();
+
+		// After reading all values, do a post processing pass where for each pixel the actual final
+		// Instance IDs are written, such that querying will be much more faster.
+
+		// We need to initialize the the values to -1, such that we override them when a match is found.
+		memset(values, 0xFF, sizeof(values[0]) * texture_dimensions.x * texture_dimensions.y);
+
+		__try {
+			size_t texture_row_byte_size = sizeof(unsigned int) * (size_t)texture_dimensions.x;
+			for (unsigned int row = 0; row < texture_dimensions.y; row++) {
+				for (unsigned int column = 0; column < texture_dimensions.x; column++) {
+					unsigned int instance_index = 0;
+					unsigned int pixel_thickness = 0;
+
+					unsigned int current_value = IndexTextureEx(copied_values, row, column, texture_row_byte_size);
+					RetrieveBlendedBits(
+						current_value,
+						32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						instance_index,
+						pixel_thickness
+					);
+
+					if (instance_index != 0) {
+						// Now we need to decrement the value by one
+						// In order to preserve the right order and for pixels that don't have a match to return -1.
+						// Only write this new value if the texture value is still -1, meaning that no other thickness
+						// Value wrote into it.
+						unsigned int& texture_value = IndexTextureEx(values, row, column, texture_row_byte_size);
+						if (texture_value == -1) {
+							texture_value = instance_index - 1;
+						}
+
+						for (unsigned int thickness_row = 0; thickness_row < pixel_thickness * 2; thickness_row++) {
+							int current_row = (int)row - pixel_thickness + thickness_row;
+							if (current_row < 0 || current_row >= texture_dimensions.y) {
+								continue;
+							}
+
+							for (unsigned int thickness_column = 0; thickness_column < pixel_thickness * 2; thickness_column++) {
+								int current_column = (int)column - pixel_thickness + thickness_column;
+								if (current_column < 0 || current_column >= texture_dimensions.x) {
+									continue;
+								}
+
+								unsigned int current_instance_index, current_pixel_thickness;
+								unsigned int thickness_set_value = IndexTextureEx(copied_values, row, column, texture_row_byte_size);
+								RetrieveBlendedBits(
+									thickness_set_value,
+									32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+									ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+									current_instance_index,
+									current_pixel_thickness
+								);
+
+								if (pixel_thickness >= current_pixel_thickness) {
+									IndexTextureEx(values, (size_t)current_row, (size_t)current_column, texture_row_byte_size) = instance_index - 1;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		__finally {
+			Free(copied_values);
+		}
 
 		return cpu_framebuffer;
 	}
@@ -449,14 +525,29 @@ namespace ECSEngine {
 		CapacityStream<unsigned int>* filtered_values
 	)
 	{
-		GetInstancesFromFramebufferFilteredInSelection(
+		// This is the version that would use the unprocessed values
+		/*GetInstancesFromFramebufferFilteredInSelection(
 			cpu_values.values, 
 			top_left, 
 			bottom_right - top_left, 
 			cpu_values.dimensions, 
 			sizeof(unsigned int) * cpu_values.dimensions.x, 
 			filtered_values
-		);
+		);*/
+
+		// The new version uses the post processed values and can simply use the instances as they are
+		uint2 dimensions = bottom_right - top_left;
+		size_t texture_row_byte_size = sizeof(cpu_values.values[0]) * cpu_values.dimensions.x;
+		for (unsigned int row = 0; row < dimensions.y; row++) {
+			for (unsigned int column = 0; column < dimensions.x; column++) {
+				unsigned int instance_index = IndexTextureEx(cpu_values.values, top_left.y + row, top_left.x + column, texture_row_byte_size);
+				if (instance_index != -1) {
+					CapacityStream<unsigned int> addition = { &instance_index, 1, 1 };
+					// Check to see if it exists and add it if not
+					StreamAddUniqueSearchBytes(*filtered_values, addition);
+				}
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

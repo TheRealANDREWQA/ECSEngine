@@ -1029,7 +1029,7 @@ namespace ECSEngine {
 				unsigned int handle = database->GetHandle(index, type);
 				const void* current_asset = main_database->GetAssetConst(handle, type);
 				// Check to see if the handle was already added
-				unsigned int existing_index = SearchBytes(missing_handles[type].buffer, missing_handles[type].size, handle, sizeof(handle));
+				unsigned int existing_index = SearchBytes(missing_handles[type].buffer, missing_handles[type].size, handle);
 				if (existing_index == -1 && !IsAssetFromMetadataLoaded(resource_manager, current_asset, type, mount_point, randomized_assets)) {
 					missing_handles[type].AddAssert(handle);
 					// Add its dependencies as well if they don't exist already
@@ -1040,8 +1040,7 @@ namespace ECSEngine {
 						existing_index = SearchBytes(
 							current_handles->buffer,
 							current_handles->size,
-							dependencies[subindex].handle,
-							sizeof(unsigned int)
+							dependencies[subindex].handle
 						);
 						current_asset = main_database->GetAssetConst(dependencies[subindex].handle, dependencies[subindex].type);
 						if (existing_index == -1 && !IsAssetFromMetadataLoaded(resource_manager, current_asset, dependencies[subindex].type, mount_point, randomized_assets)) {

@@ -520,7 +520,7 @@ namespace ECSEngine {
 
 	Stream<char> FindCharacterReverse(Stream<char> characters, char character)
 	{
-		size_t index = SearchBytesReversed(characters.buffer, characters.size, character, sizeof(character));
+		size_t index = SearchBytesReversed(characters.buffer, characters.size, character);
 		if (index == -1) {
 			return { nullptr, 0 };
 		}
@@ -531,7 +531,8 @@ namespace ECSEngine {
 
 	Stream<wchar_t> FindCharacterReverse(Stream<wchar_t> characters, wchar_t character)
 	{
-		size_t index = SearchBytesReversed(characters.buffer, characters.size, (size_t)character, sizeof(character));
+		// Type cast this since the template deduction will fail
+		size_t index = SearchBytesReversed(characters.buffer, characters.size, (unsigned short)character);
 		if (index == -1) {
 			return { nullptr, 0 };
 		}

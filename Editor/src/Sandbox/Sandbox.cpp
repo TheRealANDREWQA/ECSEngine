@@ -390,7 +390,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 
 		// Now check for asset handles that were previously in the snapshot but they are no longer
 		size_t was_found_offset = 0;
-		size_t missing_index = SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
+		size_t missing_index = SearchBytes(was_found + was_found_offset, was_found_size, false);
 		while (missing_index != -1) {
 			size_t final_index = missing_index + was_found_offset;
 			// Decrement all the reference counts from this sandbox
@@ -430,7 +430,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 			was_found_offset += missing_index;
 			was_found_size -= missing_index + 1;
 
-			missing_index = SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
+			missing_index = SearchBytes(was_found + was_found_offset, was_found_size, false);
 		}
 	}
 }

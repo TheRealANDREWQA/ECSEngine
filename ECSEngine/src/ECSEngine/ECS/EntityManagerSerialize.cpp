@@ -622,7 +622,7 @@ namespace ECSEngine {
 		unsigned char found_component_count = 0;
 
 		for (unsigned char index = 0; index < signature_count; index++) {
-			shared_pair_index[index] = SearchBytes(component_stream, shared_pair_count, shared_signature_basic[index].value, sizeof(Component));
+			shared_pair_index[index] = SearchBytes(component_stream, shared_pair_count, shared_signature_basic[index].value);
 			ECS_ASSERT(shared_pair_index[index] != -1);
 		}
 
@@ -632,7 +632,7 @@ namespace ECSEngine {
 			for (unsigned char component_index = 0; component_index < signature_count; component_index++) {
 				unsigned int component_offset = shared_instance_offsets[shared_pair_index[component_index]];
 				unsigned int instance_count = shared_instance_offsets[shared_pair_index[component_index] + 1] - component_offset;
-				size_t remapp_value = SearchBytes(shared_instances + component_offset, instance_count, base_instances[component_index].value, sizeof(SharedInstance));
+				size_t remapp_value = SearchBytes(shared_instances + component_offset, instance_count, base_instances[component_index].value);
 				ECS_ASSERT(remapp_value != -1);
 				base_instances[component_index] = { (short)remapp_value };
 			}
@@ -2273,7 +2273,7 @@ namespace ECSEngine {
 					if (override_components != nullptr) {
 						// Check the component
 						Component type_component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-						if (SearchBytes(override_components, overrides.size, type_component.value, sizeof(type_component)) == -1) {
+						if (SearchBytes(override_components, overrides.size, type_component.value) == -1) {
 							// There is no override
 							functor(type);
 						}

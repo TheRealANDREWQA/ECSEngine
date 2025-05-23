@@ -3767,7 +3767,7 @@ namespace ECSEngine {
 
 		// Validate that we do not repeat a mesh
 		for (size_t index = 0; index < submesh_count; index++) {
-			ECS_ASSERT(SearchBytes(string_submesh_mask + index + 1, submesh_count - index - 1, string_submesh_mask[index], sizeof(unsigned int)) == -1);
+			ECS_ASSERT(SearchBytes(string_submesh_mask + index + 1, submesh_count - index - 1, string_submesh_mask[index]) == -1);
 		}
 
 		// Swap the submeshes according to the mask

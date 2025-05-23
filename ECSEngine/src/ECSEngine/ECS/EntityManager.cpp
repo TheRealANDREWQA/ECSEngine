@@ -1686,8 +1686,7 @@ namespace ECSEngine {
 					size_t stream_index = SearchBytes(
 						component_instances.buffer, 
 						component_instances.size, 
-						current_instances[component_in_archetype_index].value, 
-						component_instances.MemoryOf(1)
+						current_instances[component_in_archetype_index].value
 					);
 					if (stream_index != -1) {
 						component_instances.RemoveSwapBack(stream_index);
@@ -3848,7 +3847,7 @@ namespace ECSEngine {
 
 	unsigned int EntityManager::GlobalComponentSize(Component component) const
 	{
-		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value);
 		ECS_CRASH_CONDITION_RETURN(index != -1, -1, "EntityManager: Trying to retrieve invalid global component byte size for {#}", component.value);
 		return m_global_components_info[component.value].size;
 	}
@@ -4546,7 +4545,7 @@ namespace ECSEngine {
 
 	const void* EntityManager::GetGlobalComponent(Component component) const
 	{
-		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value);
 		ECS_CRASH_CONDITION_RETURN(index != -1, nullptr, "Global component {#} was not registered!", GetGlobalComponentName(component));
 		return m_global_components_data[index];
 	}
@@ -4729,7 +4728,7 @@ namespace ECSEngine {
 
 	Stream<char> EntityManager::GetGlobalComponentName(Component component) const
 	{
-		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value);
 		return index == -1 ? "Invalid component" : m_global_components_info[index].name;
 	}
 
@@ -5559,7 +5558,7 @@ namespace ECSEngine {
 			component_name = component_name_storage;
 		}
 
-		size_t existing_index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t existing_index = SearchBytes(m_global_components, m_global_component_count, component.value);
 		ECS_CRASH_CONDITION_RETURN(existing_index == -1, "EntityManager: Trying to create global component {#} when it already exists", component_name);
 
 		// Allocate a new slot in the SoA stream
@@ -5816,7 +5815,7 @@ namespace ECSEngine {
 	void* EntityManager::ResizeGlobalComponent(Component component, unsigned int new_size) {
 		ECS_CRASH_CONDITION(ExistsGlobalComponent(component), "EntityManager: There is no global component {#} when trying to resize it.", component.value);
 
-		size_t global_component_index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t global_component_index = SearchBytes(m_global_components, m_global_component_count, component.value);
 		m_global_components_data[global_component_index] = m_small_memory_manager.Reallocate(m_global_components_data[global_component_index], new_size);
 		return m_global_components_data[global_component_index];
 	}
@@ -6154,7 +6153,7 @@ namespace ECSEngine {
 
 	const void* EntityManager::TryGetGlobalComponent(Component component) const
 	{
-		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value);
 		if (index == -1) {
 			return nullptr;
 		}
@@ -6329,7 +6328,7 @@ namespace ECSEngine {
 
 	void EntityManager::UnregisterGlobalComponentCommit(Component component)
 	{
-		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value);
 		ECS_CRASH_CONDITION(index != -1, "Missing global component {#} when trying to unregister it", component.value);
 
 		DeallocateGlobalComponent(this, index);
