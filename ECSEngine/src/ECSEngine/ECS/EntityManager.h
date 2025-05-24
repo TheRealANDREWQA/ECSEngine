@@ -99,6 +99,22 @@ namespace ECSEngine {
 		SharedComponentCompareEntry* compare_entry;
 	};
 
+	// This structure encompasses all the necessary information needed for the EntityManager::PerformEntityComponentOperations call
+	struct PerformEntityComponentOperationsData {
+		// --------------------------- Mandatory ------------------------------------
+		ComponentSignature added_unique_components;
+		ComponentSignature removed_unique_components;
+		// This field can contain both shared components that should be added, but
+		// Also those whose shared instance should be updated
+		SharedComponentSignature added_or_updated_shared_components;
+		ComponentSignature removed_shared_components;
+
+
+		// --------------------------- Optional -------------------------------------
+		// Should be parallel to added_unique_components and contain an identical count of entries as `added_unique_components`
+		Stream<const void*> added_unique_components_data = {};
+	};
+
 	// A functor that is called by the entity manager to generate component functions when a component that has missing
 	// Component functions is registered. This improves the QoL for developing inside the Editor for Global components,
 	// Since the user inside the module cannot specify auto generated component functions. For this reason, this functor
@@ -1752,6 +1768,13 @@ namespace ECSEngine {
 				return HasComponent(entity, T::ID());
 			}
 		}
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Performs a bulk of operations on a single entity such that the data is transferred across archetypes
+		// Only once. It is the most efficient way of adding/deleting unique/shared components at once. At the moment,
+		// There is only the commit version, if the deferred version will be needed, it will be added later on.
+		void PerformEntityComponentOperationsCommit(Entity entity, const PerformEntityComponentOperationsData& data);
 
 		// ---------------------------------------------------------------------------------------------------
 

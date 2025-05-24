@@ -251,7 +251,7 @@ namespace ECSEngine {
 #pragma region Helpers
 
 	ECS_INLINE static Stream<char> EntityName(const EntityManager* entity_manager, Entity entity) {
-		return GetEntityNameExtendedTempStorage(entity_manager, entity, true);
+		return GetEntityNameExtendedTempStorage(entity_manager, entity);
 	}
 
 	ECS_INLINE static Stream<char> EntityName(const EntityManager* entity_manager, EntityInfo info) {
@@ -5260,6 +5260,112 @@ namespace ECSEngine {
 		}
 
 		return true;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::PerformEntityComponentOperationsCommit(Entity entity, const PerformEntityComponentOperationsData& data) {
+		ECS_CRASH_CONDITION_RETURN_VOID(data.added_unique_components_data.size == 0 || data.added_unique_components_data.size == data.added_unique_components.count, 
+			"EntityManager: Invalid number of unique component data buffers specified for call `PerformEntityComponentOperationsCommit`");
+
+		EntityInfo* entity_info = m_entity_pool->GetInfoPtr(entity);
+
+		// Retrieve the current entity signature
+		ComponentSignature unique_signature;
+		SharedComponentSignature shared_signature;
+		GetEntityCompleteSignature(*entity_info, &unique_signature, &shared_signature);
+
+		Component final_unique_signature_storage[ECS_ARCHETYPE_MAX_COMPONENTS];
+		// These can be pointers to the data already existant in the owning archetype of the entity or the user specified
+		// Data for new components. Parallel to the unique components
+		const void* final_unique_components_data[ECS_ARCHETYPE_MAX_COMPONENTS];
+		Component final_shared_signature_storage[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+		SharedInstance final_shared_signature_instances_storage[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+
+		// These are just some buffer of bytes that can be used to copy the data from when the
+		// User hasn't specified the component data for the new unique components
+		char component_stack_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
+
+		// Compose the final signature
+		unique_signature.WriteTo(final_unique_signature_storage);
+		unique_signature.indices = final_unique_signature_storage;
+		
+		// Retrieve the unique components of the entity.
+		ArchetypeBase* original_base_archetype = GetBase(*entity_info);
+		for (size_t index = 0; index < unique_signature.count; index++) {
+			final_unique_components_data[index] = original_base_archetype->GetComponentByIndex(*entity_info, index);
+		}
+
+		shared_signature.WriteTo(final_shared_signature_storage, final_shared_signature_instances_storage);
+		shared_signature.indices = final_shared_signature_storage;
+		shared_signature.instances = final_shared_signature_instances_storage;
+			
+		// Remove the unique components
+		for (size_t index = 0; index < data.removed_unique_components.count; index++) {
+			unsigned char signature_index = unique_signature.Find(data.removed_unique_components[index]);
+			ECS_CRASH_CONDITION_RETURN_VOID(signature_index != UCHAR_MAX, "EntityManager: Trying to remove unique component {#} from entity {#} when there is no attached component of this type.",
+				GetComponentName(data.removed_unique_components[index]), EntityName(this, entity));
+			// Remove the unique component pointer as well
+			final_unique_components_data[signature_index] = final_unique_components_data[unique_signature.count - 1];
+			unique_signature.RemoveSwapBack(signature_index);
+		}
+		ECS_CRASH_CONDITION_RETURN_VOID(unique_signature.count + data.added_unique_components.count <= ECS_ARCHETYPE_MAX_COMPONENTS, "EntityManager: Trying to add too many unique components to entity {#}.", EntityName(this, entity));
+
+		// Remove the shared components
+		for (size_t index = 0; index < data.removed_shared_components.count; index++) {
+			unsigned char signature_index = shared_signature.Find(data.removed_shared_components[index]);
+			ECS_CRASH_CONDITION_RETURN_VOID(signature_index != UCHAR_MAX, "EntityManager: Trying to remove shared component {#} from entity {#} when there is no attached component of this type.",
+				GetSharedComponentName(data.removed_shared_components[index]), EntityName(this, entity));
+			shared_signature.RemoveSwapBack(signature_index);
+		}
+		// We can't do an easy check for the total number of shared components since there might be updates.
+
+		// Add the unique components
+		for (size_t index = 0; index < data.added_unique_components.count; index++) {
+			unsigned char signature_index = unique_signature.Find(data.added_unique_components[index]);
+			ECS_CRASH_CONDITION_RETURN_VOID(signature_index == UCHAR_MAX, "EntityManager: Trying to add duplicate unique component {#} for entity {#}.",
+				GetComponentName(data.added_unique_components[index]), EntityName(this, entity));
+			// Add the component data from the array, if present
+			if (data.added_unique_components_data.size > 0) {
+				final_unique_components_data[unique_signature.count] = data.added_unique_components_data[index];
+			}
+			else {
+				// Set the data to the stack storage, even tho it is a wasted copy, it allows
+				// For a single call to the copy data function
+				final_unique_components_data[unique_signature.count] = component_stack_storage;
+			}
+			unique_signature[unique_signature.count++] = data.added_unique_components[index];
+		}
+
+		// Add or update the shared components
+		for (size_t index = 0; index < data.added_or_updated_shared_components.count; index++) {
+			unsigned char signature_index = shared_signature.Find(data.added_or_updated_shared_components.indices[index]);
+			if (signature_index == UCHAR_MAX) {
+				// It is a new addition
+				ECS_CRASH_CONDITION_RETURN_VOID(shared_signature.count < ECS_ARCHETYPE_MAX_SHARED_COMPONENTS, "EntityManager: Trying to add too many shared components to entity {#}.", EntityName(this, entity));
+				shared_signature.indices[shared_signature.count] = data.added_or_updated_shared_components.indices[index];
+				shared_signature.instances[shared_signature.count] = data.added_or_updated_shared_components.instances[index];
+				shared_signature.count++;
+			}
+			else {
+				// It already existed, update the instance
+				shared_signature.instances[signature_index] = data.added_or_updated_shared_components.instances[index];
+			}
+		}
+
+		// We can now commit the changes. Find the new destination archetype and copy the new data there, before
+		// Removing the entity from the previous archetype.
+		uint2 destination_archetype_indices = FindOrCreateArchetypeBase(unique_signature, shared_signature);
+		ArchetypeBase* destination_base_archetype = GetBase(destination_archetype_indices.x, destination_archetype_indices.y);
+		unsigned int entity_new_stream_index = destination_base_archetype->AddEntity(entity);
+		destination_base_archetype->CopyByEntity({ entity_new_stream_index, 1 }, final_unique_components_data, unique_signature);
+
+		original_base_archetype->RemoveEntity(entity_info->stream_index, m_entity_pool);
+		
+		// At last, update the entity info
+		entity_info->main_archetype = destination_archetype_indices.x;
+		entity_info->base_archetype = destination_archetype_indices.y;
+		entity_info->stream_index = entity_new_stream_index;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

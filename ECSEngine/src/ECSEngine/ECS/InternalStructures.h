@@ -407,6 +407,12 @@ namespace ECSEngine {
 			return { write_to.indices, (unsigned char)(write_to.count + count) };
 		}
 
+		// Removes an entry by swapping the last one in its place
+		ECS_INLINE void RemoveSwapBack(unsigned char index) {
+			count--;
+			indices[index] = indices[count];
+		}
+
 		ECS_INLINE Stream<Component> ToStream() const {
 			return { indices, count };
 		}
@@ -437,6 +443,11 @@ namespace ECSEngine {
 			return { indices, count };
 		}
 
+		ECS_INLINE void WriteTo(Component* _components, SharedInstance* _instances) const {
+			memcpy(_components, indices, count * sizeof(indices[0]));
+			memcpy(_instances, instances, count * sizeof(instances[0]));
+		}
+
 		// Returns UCHAR_MAX when the component is not found
 		ECS_INLINE unsigned char Find(Component component) const {
 			for (unsigned char index = 0; index < count; index++) {
@@ -445,6 +456,13 @@ namespace ECSEngine {
 				}
 			}
 			return UCHAR_MAX;
+		}
+
+		// Removes an entry by swapping the last one in its place
+		ECS_INLINE void RemoveSwapBack(unsigned char index) {
+			count--;
+			indices[index] = indices[count];
+			instances[index] = instances[count];
 		}
 
 		Component* indices;

@@ -129,19 +129,19 @@ namespace ECSEngine {
 	// But the drawback is that you can reference at most one name since otherwise it might get overwritten
 	// The boolean thread safe can be used for the function to operate in the a thread safe manner. It allows a certain
 	// Number of threads at the same time.
-	ECSENGINE_API Stream<char> GetEntityNameTempStorage(const EntityManager* entity_manager, Entity entity, bool thread_safe);
+	ECSENGINE_API Stream<char> GetEntityNameTempStorage(const EntityManager* entity_manager, Entity entity);
 
 	// This version has static storage inside it such that you don't have to pass a parameter to it
 	// But the drawback is that you can reference at most one name since otherwise it might get overwritten
 	// The boolean thread safe can be used for the function to operate in the a thread safe manner. It allows a certain
 	// Number of threads at the same time.
-	ECSENGINE_API Stream<char> GetEntityNameIndexOnlyTempStorage(const EntityManager* entity_manager, Entity entity, bool thread_safe);
+	ECSENGINE_API Stream<char> GetEntityNameIndexOnlyTempStorage(const EntityManager* entity_manager, Entity entity);
 
 	// This version has static storage inside it such that you don't have to pass a parameter to it
 	// But the drawback is that you can reference at most one name since otherwise it might get overwritten
 	// The boolean thread safe can be used for the function to operate in the a thread safe manner. It allows a certain
 	// Number of threads at the same time.
-	ECSENGINE_API Stream<char> GetEntityNameExtendedTempStorage(const EntityManager* entity_manager, Entity entity, bool thread_safe);
+	ECSENGINE_API Stream<char> GetEntityNameExtendedTempStorage(const EntityManager* entity_manager, Entity entity);
 
 	// Verifies for nullptr and returns 0.0f if it is
 	ECS_INLINE float3 GetTranslation(const Translation* translation) {
