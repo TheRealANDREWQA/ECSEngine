@@ -438,8 +438,9 @@ static void ScenePrivateAction(ActionData* action_data) {
 		if (sandbox->is_camera_wasd_movement) {
 			HandleCameraWASDMovement(editor_state, sandbox_index);
 		}
-		else {
-			// Check for camera wasd activation first
+		// Check for camera wasd activation first. If the right click camera movement is active,
+		// Then don't trigger any of the following actions
+		else if (!sandbox->is_camera_right_click_movement) {
 			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CAMERA_WALK)) {
 				if (sandbox->is_camera_wasd_movement) {
 					reset_camera_wasd();
@@ -803,6 +804,7 @@ static void SceneRotationAction(ActionData* action_data) {
 			// Make the pacing instant such that we won't have a big frame difference
 			// That can cause the camera to snap
 			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
+			sandbox->is_camera_right_click_movement = true;
 		}
 	}
 
@@ -810,11 +812,11 @@ static void SceneRotationAction(ActionData* action_data) {
 		if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
 			mouse->DisableRawInput();
 			mouse->SetCursorVisibility(true);
+			GetSandbox(editor_state, data->sandbox_index)->is_camera_right_click_movement = false;
 		}
 		else if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
 			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		}
-
 
 		if (mouse->IsHeld(ECS_MOUSE_RIGHT)) {
 			// This was changed to allow for movement as well, since it makes navigating quite a bit easier
@@ -835,7 +837,7 @@ static void SceneTranslationAction(ActionData* action_data) {
 	EditorState* editor_state = data->draw_data->editor_state;
 	if (mouse->IsPressed(ECS_MOUSE_MIDDLE)) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
-		data->is_disabled = sandbox->transform_display_axes || sandbox->is_camera_wasd_movement;
+		data->is_disabled = sandbox->transform_display_axes || sandbox->is_camera_wasd_movement || sandbox->is_camera_right_click_movement;
 		if (!data->is_disabled) {
 			mouse->EnableRawInput();
 		}
@@ -872,7 +874,7 @@ static void SceneZoomAction(ActionData* action_data) {
 	EditorState* editor_state = data->draw_data->editor_state;
 	const EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
 	
-	if (!sandbox->is_camera_wasd_movement) {
+	if (!sandbox->is_camera_wasd_movement && !sandbox->is_camera_right_click_movement) {
 		int scroll_delta = mouse->GetScrollDelta();
 		if (scroll_delta != 0) {
 			float factor = GetKeyboardModifierValueCustomBoth(keyboard, 0.1f, 4.0f, 0.015f);
