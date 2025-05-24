@@ -102,37 +102,23 @@ namespace ECSEngine {
 	static Stream<char> GetEntityNameTempStorageImplementation(
 		const EntityManager* entity_manager, 
 		Entity entity, 
-		bool thread_safe, 
 		Stream<char>(*entity_function)(const EntityManager* entity_manager, Entity entity, CapacityStream<char>& storage)
 	) {
-		// Allow a maximum number of threads
-		const size_t MAX_THREADS = 4;
-		const size_t PER_THREAD_SIZE = ECS_KB;
-		static char _storage[PER_THREAD_SIZE * MAX_THREADS];
-		static std::atomic<size_t> thread_count = 0;
-
-		CapacityStream<char> storage;
-		if (thread_safe) {
-			size_t current_thread_count = thread_count.fetch_add(1, ECS_RELAXED);
-			ECS_CRASH_CONDITION(current_thread_count < MAX_THREADS, "GetEntityName: Thread safe maximum thread count exceeded!");
-			storage = { _storage + PER_THREAD_SIZE * current_thread_count, 0, PER_THREAD_SIZE };
-		}
-		else {
-			storage = { _storage, 0, sizeof(_storage) };
-		}
+		static thread_local char _storage[ECS_KB];
+		CapacityStream<char> storage = { _storage, 0, sizeof(_storage) };
 		return entity_function(entity_manager, entity, storage);
 	}
 	
-	Stream<char> GetEntityNameTempStorage(const EntityManager* entity_manager, Entity entity, bool thread_safe) {
-		return GetEntityNameTempStorageImplementation(entity_manager, entity, thread_safe, GetEntityName);
+	Stream<char> GetEntityNameTempStorage(const EntityManager* entity_manager, Entity entity) {
+		return GetEntityNameTempStorageImplementation(entity_manager, entity, GetEntityName);
 	}
 	
-	Stream<char> GetEntityNameIndexOnlyTempStorage(const EntityManager* entity_manager, Entity entity, bool thread_safe) {
-		return GetEntityNameTempStorageImplementation(entity_manager, entity, thread_safe, GetEntityNameIndexOnly);
+	Stream<char> GetEntityNameIndexOnlyTempStorage(const EntityManager* entity_manager, Entity entity) {
+		return GetEntityNameTempStorageImplementation(entity_manager, entity, GetEntityNameIndexOnly);
 	}
 
-	Stream<char> GetEntityNameExtendedTempStorage(const EntityManager* entity_manager, Entity entity, bool thread_safe) {
-		return GetEntityNameTempStorageImplementation(entity_manager, entity, thread_safe, GetEntityNameExtended);
+	Stream<char> GetEntityNameExtendedTempStorage(const EntityManager* entity_manager, Entity entity) {
+		return GetEntityNameTempStorageImplementation(entity_manager, entity, GetEntityNameExtended);
 	}
 
 	void RegisterECSLinkComponents(ModuleRegisterLinkComponentFunctionData* register_data)

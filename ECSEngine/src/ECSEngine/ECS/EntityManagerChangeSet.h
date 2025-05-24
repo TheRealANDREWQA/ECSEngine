@@ -103,7 +103,7 @@ namespace ECSEngine {
 
 		ECS_INLINE AllocatorPolymorphic Allocator() const {
 			// Any deck can go in here, they all use the same allocator
-			return entity_unique_component_changes.Allocator();
+			return entity_component_changes.Allocator();
 		}
 
 		void Initialize(AllocatorPolymorphic allocator);
@@ -115,7 +115,7 @@ namespace ECSEngine {
 		// Index, only to iterate over, the penalty is small
 
 		// These are entities that existed previously, but component data was changed about them
-		DeckPowerOfTwo<EntityChanges> entity_unique_component_changes;
+		DeckPowerOfTwo<EntityChanges> entity_component_changes;
 		// From the EntityInfo structures we can deduce the entity pool and the entity order inside the archetypes
 		DeckPowerOfTwo<EntityInfoChange> entity_info_changes;
 		DeckPowerOfTwo<Entity> destroyed_entities;

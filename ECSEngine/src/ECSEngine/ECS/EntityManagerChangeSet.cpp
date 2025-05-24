@@ -21,7 +21,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	void EntityManagerChangeSet::Initialize(AllocatorPolymorphic allocator) {
-		entity_unique_component_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
+		entity_component_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 		entity_info_changes.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 		destroyed_entities.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT);
 		new_entities.Initialize(allocator, 1, DECK_POWER_OF_TWO_EXPONENT_SMALL);
@@ -31,7 +31,7 @@ namespace ECSEngine {
 
 	void EntityManagerChangeSet::Deallocate() {
 		// The unique and shared changes have their own buffers
-		entity_unique_component_changes.ForEach([&](const EntityChanges& changes) {
+		entity_component_changes.ForEach([&](const EntityChanges& changes) {
 			changes.unique_changes.Deallocate(Allocator());
 			changes.removed_shared_components.Deallocate(Allocator());
 			changes.shared_instance_changes.Deallocate(Allocator());
@@ -46,7 +46,7 @@ namespace ECSEngine {
 			new_entities.shared_instances.Deallocate(Allocator());
 		});
 
-		entity_unique_component_changes.Deallocate();
+		entity_component_changes.Deallocate();
 		entity_info_changes.Deallocate();
 		destroyed_entities.Deallocate();
 		new_entities.Deallocate();
@@ -239,8 +239,8 @@ namespace ECSEngine {
 			[&](const Archetype* archetype, const ArchetypeBase* archetype_base, Entity entity, void** unique_components) {
 				ECS_STACK_CAPACITY_STREAM(EntityManagerChangeSet::EntityComponentChange, component_changes, ECS_ARCHETYPE_MAX_COMPONENTS);
 
-				size_t changes_deck_index = change_set.entity_unique_component_changes.ReserveAndUpdateSize();
-				EntityManagerChangeSet::EntityChanges& changes = change_set.entity_unique_component_changes[changes_deck_index];
+				size_t changes_deck_index = change_set.entity_component_changes.ReserveAndUpdateSize();
+				EntityManagerChangeSet::EntityChanges& changes = change_set.entity_component_changes[changes_deck_index];
 
 				const EntityInfo* new_entity_info = new_entity_manager->TryGetEntityInfo(entity);
 				if (new_entity_info != nullptr) {
@@ -272,7 +272,7 @@ namespace ECSEngine {
 
 					if (component_changes.size > 0) {
 						// Insert this entry
-						change_set.entity_unique_component_changes.Add({ entity, component_changes.Copy(change_set.Allocator()) });
+						change_set.entity_component_changes.Add({ entity, component_changes.Copy(change_set.Allocator()) });
 					}
 				}
 			}
@@ -479,9 +479,10 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// Now write the unique components, per entity
+		// Now write the unique components, per entity. We don't have to write anything special for the shared data,
+		// It can be handled with the info from the change set structure itself.
 		size_t unique_component_write_offset = write_instrument->GetOffset();
-		if (change_set->entity_unique_component_changes.ForEach<true>([&](const EntityManagerChangeSet::EntityChanges& changes) -> bool {
+		if (change_set->entity_component_changes.ForEach<true>([&](const EntityManagerChangeSet::EntityChanges& changes) -> bool {
 			for (size_t index = 0; index < changes.unique_changes.size; index++) {
 				if (changes.unique_changes[index].change_type == ECS_CHANGE_SET_ADD || changes.unique_changes[index].change_type == ECS_CHANGE_SET_UPDATE) {
 					// Add a prefix size for how long the serialization of these components is
@@ -565,8 +566,6 @@ namespace ECSEngine {
 			header_section = &header_section_data_storage;
 		}
 		
-		AllocatorPolymorphic function_temporary_allocator;
-
 		// Deserialize the change set itself
 		EntityManagerChangeSet change_set;
 		DeserializeOptions change_set_deserialize_options;
@@ -578,11 +577,9 @@ namespace ECSEngine {
 				temporary_allocator = ResizableLinearAllocator(DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
 			}
 			change_set_deserialize_options.field_allocator = &temporary_allocator;
-			function_temporary_allocator = &temporary_allocator;
 		}
 		else {
 			change_set_deserialize_options.field_allocator = options->temporary_allocator;
-			function_temporary_allocator = options->temporary_allocator;
 		}
 		if (Deserialize(
 			reflection_manager, 
@@ -758,7 +755,7 @@ namespace ECSEngine {
 					// Now call the extract function
 					bool is_data_valid = component_info->function(&function_data);
 					if (!is_data_valid) {
-						ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "A shared component {#} instance has corrupted data", component_info->name);
+						ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "Shared component {#} instance has corrupted data", component_info->name);
 						return true;
 					}
 
@@ -780,6 +777,8 @@ namespace ECSEngine {
 		})) {
 			return false;
 		}
+		
+		// TODO: At the moment, named shared instances are not handled. Decide if we want to stick to them or not (eliminate them that is)?
 
 		// Now the entity operations must be performed. 
 		
@@ -816,7 +815,7 @@ namespace ECSEngine {
 			// Now call the extract function
 			bool is_data_valid = deserialized_component_info->function(&function_data);
 			if (!is_data_valid) {
-				ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "A unique component {#} has corrupted data", deserialized_component_info->name);
+				ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "Unique component {#} has corrupted data", deserialized_component_info->name);
 				return false;
 			}
 
@@ -856,8 +855,75 @@ namespace ECSEngine {
 
 		// After deletions and creations, we must handle the entities that existed in both the previous and new versions. We must take
 		// Care of adding/removing/updating components.
+		if (change_set.entity_component_changes.ForEach<true>([&](const EntityManagerChangeSet::EntityChanges& changes) {
+			// To avoid having to move the entity across many archetypes because of multiple add/delete operations,
+			// Use the bulk entity manager function such that we move the entity only once directly to its final archetype.
+
+			Component added_unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+			Component removed_unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+			Component added_or_updated_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+			SharedInstance added_or_updated_shared_instances[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+			Component removed_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+
+			PerformEntityComponentOperationsData operations_data;
+			operations_data.added_unique_components = { added_unique_components, 0 };
+			operations_data.removed_unique_components = { removed_unique_components, 0 };
+			operations_data.added_or_updated_shared_components = { added_or_updated_shared_components, added_or_updated_shared_instances, 0 };
+			operations_data.removed_shared_components = { removed_shared_components, 0 };
+
+			// Perform the unique component assignment
+			for (size_t index = 0; index < changes.unique_changes.size; index++) {
+				if (changes.unique_changes[index].change_type == ECS_CHANGE_SET_ADD) {
+					operations_data.added_unique_components[operations_data.added_or_updated_shared_components.count++] = changes.unique_changes[index].component;
+				}
+				else if (changes.unique_changes[index].change_type == ECS_CHANGE_SET_REMOVE) {
+					operations_data.removed_unique_components[operations_data.removed_unique_components.count++] = changes.unique_changes[index].component;
+				}
+			}
+
+			// Perform the shared component assignment
+			for (size_t index = 0; index < changes.removed_shared_components.size; index++) {
+				operations_data.removed_shared_components[operations_data.removed_shared_components.count++] = changes.removed_shared_components[index];
+			}
+			SharedComponentSignature& added_or_updated_shared_signature = operations_data.added_or_updated_shared_components;
+			for (size_t index = 0; index < changes.shared_instance_changes.size; index++) {
+				added_or_updated_shared_signature.indices[added_or_updated_shared_signature.count] = changes.shared_instance_changes[index].component;
+				added_or_updated_shared_signature.instances[added_or_updated_shared_signature.count] = changes.shared_instance_changes[index].instance;
+				added_or_updated_shared_signature.count++;
+			}
+
+			// The unique component data for the added components will be set after the perform component call, in order to deserialize
+			// Directly into the component from the archetype
+			entity_manager->PerformEntityComponentOperationsCommit(changes.entity, operations_data);
+
+			EntityInfo entity_info = entity_manager->GetEntityInfo(changes.entity);
+			ArchetypeBase* base_archetype = entity_manager->GetBase(entity_info);
+			for (size_t index = 0; index < changes.unique_changes.size; index++) {
+				if (changes.unique_changes[index].change_type == ECS_CHANGE_SET_ADD || changes.unique_changes[index].change_type == ECS_CHANGE_SET_UPDATE) {
+					// There is a unique component to be deserialized
+					if (!deserialize_unique_components(changes.unique_changes[index].component, base_archetype->GetComponentByIndex(entity_info, base_archetype->FindComponentIndex(changes.unique_changes[index].component)), 1)) {
+						return true;
+					}
+				}
+			}
+
+			return false;
+		})) {
+			return false;
+		}
 		
-			
+		// Update the entity infos with the necessary changes
+		change_set.entity_info_changes.ForEach([&](EntityManagerChangeSet::EntityInfoChange change) {
+			// Even tho it's a little bit ugly, cast away the constness here
+			EntityInfo* entity_info = (EntityInfo*)entity_manager->TryGetEntityInfo(change.entity);
+			entity_info->generation_count = change.GetGenerationCount();
+			entity_info->layer = change.GetLayer();
+			entity_info->tags = change.GetTag();
+		});
+
+		// At last, apply the entity hierarchy change set
+		ApplyEntityHierarchyChangeSet(&entity_manager->m_hierarchy, change_set.hierarchy_change_set);
+
 		return true;
 	}
 
