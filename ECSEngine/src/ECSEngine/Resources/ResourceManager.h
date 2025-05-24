@@ -126,25 +126,37 @@ namespace ECSEngine {
 	};
 
 	struct ResourceManagerSnapshot {
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+			// Everything is allocated in a single coalesced allocation
+			ECSEngine::Deallocate(allocator, coalesced_allocation);
+		}
+
 		struct Resource {
 			void* data;
-			ResourceIdentifier identifier;
 			unsigned short reference_count;
 			unsigned short suffix_size;
 		};
 
-		ECS_INLINE size_t Find(ResourceIdentifier identifier, ResourceType type) const {
-			return resources[(unsigned int)type].Find(identifier, [](const Resource& resource) {
-				return resource.identifier;
-			});
-		}
+		void* coalesced_allocation;
+		// These are hash tables such that we can quickly lookup elements by their identifier
+		HashTable<Resource, ResourceIdentifier, HashFunctionPowerOfTwo> resources[(unsigned int)ResourceType::TypeCount];
+	};
 
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
-			// Everything is allocated in a single coalesced allocation
-			ECSEngine::Deallocate(allocator, resources[0].buffer);
-		}
+	// NOTE: We cannot implement a delta change serialize/deserialize on the ResourceManager directly, because 
+	// It doesn't store the options with which the resources were loaded. For this reason, the delta change should
+	// Be done on the AssetDatabase, which contains this information. This delta change is useful if you want to scan
+	// For resources which might have been loaded outside the AssetDatabase domain.
+	//
+	// Important! The resource identifiers for the removed resources will reference the identifiers from the resource
+	// Manager snapshot from which it was determined
+	struct ECSENGINE_API ResourceManagerDeltaChange {
+		void Deallocate(AllocatorPolymorphic allocator);
 
-		Stream<Resource> resources[(unsigned int)ResourceType::TypeCount];
+		// Both added_resources and updated_reference_count_resources arrays contain indices into the target resource manager for fast access.
+		Stream<unsigned int> added_resources[(unsigned int)ResourceType::TypeCount];
+		Stream<unsigned int> updated_reference_count_resources[(unsigned int)ResourceType::TypeCount];
+		// This resource identifiers will reference the same memory as the snapshot from which it was computed.
+		Stream<ResourceIdentifier> removed_resources[(unsigned int)ResourceType::TypeCount];
 	};
 
 	// This contains extra information that you can extract from the LoadShader functions, in case you need it
@@ -222,6 +234,10 @@ namespace ECSEngine {
 
 		// Returns true if the resource has reached a reference count of 0.
 		bool DecrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned short amount);
+
+		// Determines the delta change of this instance compared to the previous snapshot (of this instance or another resource manager).
+		// All buffers will be allocated from the given allocator, except for the resource identifiers of the 
+		ResourceManagerDeltaChange DetermineDeltaChange(const ResourceManagerSnapshot& previous_snapshot, AllocatorPolymorphic allocator) const;
 
 		unsigned int FindResourceFromPointer(void* resource, ResourceType type) const;
 

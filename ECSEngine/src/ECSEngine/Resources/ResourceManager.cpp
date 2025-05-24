@@ -405,6 +405,15 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+	void ResourceManagerDeltaChange::Deallocate(AllocatorPolymorphic allocator) {
+		for (unsigned int index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
+			added_resources[index].Deallocate(allocator);
+			removed_resources[index].Deallocate(allocator);
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	ResourceManager::ResourceManager(
 		ResourceManagerAllocator* memory,
 		Graphics* graphics
@@ -548,6 +557,49 @@ namespace ECSEngine {
 			m_resource_types[(unsigned int)type].GetIdentifierFromIndex(resource_index), ResourceTypeString(type));
 		entry->reference_count = SaturateSub(entry->reference_count, amount);
 		return entry->reference_count == 0;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	ResourceManagerDeltaChange ResourceManager::DetermineDeltaChange(const ResourceManagerSnapshot& previous_snapshot, AllocatorPolymorphic allocator) const
+	{
+		ResourceManagerDeltaChange delta_change;
+		
+		// The additions are those resources which exist in the current instance but not in the snapshot
+		for (unsigned int resource_index = 0; resource_index < (unsigned int)ResourceType::TypeCount; resource_index++) {
+			// Use resizable streams for the construction. They might consume some more memory for linear allocators,
+			// But there shouldn't be too many entries
+			ResizableStream<unsigned int> additions(allocator, 8);
+			ResizableStream<ResourceIdentifier> removals(allocator, 8);
+			ResizableStream<unsigned int> updates(allocator, 8);
+
+			m_resource_types[resource_index].ForEachIndexConst([&](unsigned int entry_index) {
+				unsigned int snapshot_index = previous_snapshot.resources[resource_index].Find(m_resource_types[resource_index].GetIdentifierFromIndex(entry_index));
+				if (snapshot_index == -1) {
+					additions.Add(entry_index);
+				}
+				else {
+					// Check the reference count, to see if it changed
+					if (previous_snapshot.resources[resource_index].GetValueFromIndex(snapshot_index).reference_count != m_resource_types[resource_index].GetValuePtrFromIndex(entry_index)->reference_count) {
+						updates.Add(entry_index);
+					}
+				}
+			});
+
+			// The removals are those that exist in the snapshot but not in this instance
+			previous_snapshot.resources[resource_index].ForEachConst([&](const ResourceManagerSnapshot::Resource& resource, ResourceIdentifier identifier) {
+				if (m_resource_types[resource_index].Find(identifier) == -1) {
+					// Add the entry directly, without making an allocation for it
+					removals.Add(identifier);
+				}
+			});
+
+			delta_change.added_resources[resource_index] = additions;
+			delta_change.removed_resources[resource_index] = removals;
+			delta_change.updated_reference_count_resources[resource_index] = updates;
+		}
+
+		return delta_change;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -749,23 +801,23 @@ namespace ECSEngine {
 		ResourceManagerSnapshot snapshot;
 
 		size_t total_size_to_allocate = 0;
-		// Determine the total byte size first
+		// Determine the total byte size first - the identifiers need to be copied separately
 		for (unsigned int index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
-			total_size_to_allocate += snapshot.resources[0].MemoryOf(m_resource_types[index].GetCount()) + alignof(void*);
+			total_size_to_allocate += m_resource_types[index].MemoryOf(HashTablePowerOfTwoCapacityForElements(m_resource_types[index].GetCount()));
 			m_resource_types[index].ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 				total_size_to_allocate += identifier.size;
 			});
 		}
 
 		void* allocation = ECSEngine::Allocate(snapshot_allocator, total_size_to_allocate);
+		snapshot.coalesced_allocation = allocation;
 		uintptr_t ptr = (uintptr_t)allocation;
 		for (unsigned int index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
 			ptr = AlignPointer(ptr, alignof(ResourceManagerSnapshot::Resource));
-			snapshot.resources[index].InitializeFromBuffer(ptr, m_resource_types[index].GetCount());
-			snapshot.resources[index].size = 0;
+			snapshot.resources[index].InitializeFromBuffer(ptr, HashTablePowerOfTwoCapacityForElements(m_resource_types[index].GetCount()));
 			m_resource_types[index].ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 				identifier = identifier.CopyTo(ptr);
-				snapshot.resources[index].Add({ entry.data, identifier, entry.reference_count, entry.suffix_size });
+				snapshot.resources[index].Insert({ entry.data, entry.reference_count, entry.suffix_size }, identifier);
 			});
 		}
 
@@ -2410,6 +2462,7 @@ namespace ECSEngine {
 			is_valid.size = 0;
 			// Mark all resources as false at the beginning
 			memset(is_valid.buffer, 0, is_valid.MemoryOf(is_valid.capacity));
+			ECS_ASSERT(is_valid.capacity >= m_resource_types[index].GetExtendedCapacity(), "ResourceManager: Restoring a snapshot with too many entries!");
 
 			m_resource_types[index].ForEachIndex([&](unsigned int resource_index) {
 				ResourceManagerEntry* entry = m_resource_types[index].GetValuePtrFromIndex(resource_index);
@@ -2419,7 +2472,7 @@ namespace ECSEngine {
 
 				// Check to see if the table resource is found in the snapshot.
 				// If it doesn't exist, then it was added in the meantime and must be deleted
-				size_t snapshot_index = snapshot.Find(identifier, current_type);
+				unsigned int snapshot_index = snapshot.resources[index].Find(identifier);
 				if (snapshot_index == -1) {
 					if (mismatch_string != nullptr) {
 						FormatString(
@@ -2434,28 +2487,28 @@ namespace ECSEngine {
 					return true;
 				}
 				else {
-					// Mark the snapshot entry is valid
+					// Mark the snapshot entry as valid
 					is_valid[snapshot_index] = true;
 				}
 				return false;
 			});
 
 			// Now verify the snapshot entries to see which are missing
-			for (size_t subindex = 0; subindex < snapshot.resources[index].size; subindex++) {
-				if (!is_valid[subindex]) {
+			snapshot.resources[index].ForEachIndexConst([&](unsigned int resource_index) {
+				if (!is_valid[resource_index]) {
 					if (mismatch_string != nullptr) {
-						ResourceIdentifier identifier_without_suffix = snapshot.resources[index][subindex].identifier;
-						identifier_without_suffix.size -= snapshot.resources[index][subindex].suffix_size;
+						ResourceIdentifier identifier_without_suffix = snapshot.resources[index].GetIdentifierFromIndex(resource_index);
+						identifier_without_suffix.size -= snapshot.resources[index].GetValueFromIndex(resource_index).suffix_size;
 						FormatString(
-							*mismatch_string, 
-							"Resource {#}, type {#}, was removed in between snapshots\n", 
+							*mismatch_string,
+							"Resource {#}, type {#}, was removed in between snapshots\n",
 							identifier_without_suffix.AsWide(),
 							current_type_string
 						);
 					}
 					return_value = false;
 				}
-			}
+			});
 		}
 
 		return return_value;
