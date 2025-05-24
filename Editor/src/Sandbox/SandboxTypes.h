@@ -284,7 +284,10 @@ struct ECS_REFLECT EditorSandbox {
 	// We need to record the transform space for the keyboard press
 	ECSEngine::ECS_TRANSFORM_SPACE transform_keyboard_space;
 
+	// Set to true when the scene binding for camera WASD movement is enabled
 	bool is_camera_wasd_movement;
+	// Set to true when the scene right click camera is currently active
+	bool is_camera_right_click_movement;
 	// We need to keep this flag in order to prevent running the simulation
 	// Once the sandbox crashed
 	bool is_crashed;
